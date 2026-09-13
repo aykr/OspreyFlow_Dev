@@ -112,10 +112,25 @@ A deployment may add entity types; it may not add POLE classes. That constraint 
 vocabulary shared.
 
 Nine entity types, nine data channels. That is not a coincidence — the design system defines
-exactly nine categorical channels checked for protanopia and deuteranopia separation, and the
-ontology loader must reject a configuration that assigns more than nine channels or reuses one.
-If a deployment needs a tenth entity type, it shares a channel and is distinguished by shape.
-Shape is always carried alongside hue so that hue never carries a distinction on its own.
+exactly nine categorical channels, checked for protanopia and deuteranopia separation, and there
+is no tenth to allocate.
+
+The loader enforces two rules, and only two:
+
+1. **A channel name must be one of the nine.** An unknown channel is a rejected configuration.
+2. **No two entity types may share a channel *and* a shape.** Sharing a hue is permitted; being
+   indistinguishable is not.
+
+Rule 2 is deliberately narrower than "no reuse". Shape is always carried alongside hue precisely
+so that hue never carries a distinction on its own, which is the recorded mitigation for
+tritanopia, where nine hues cannot be separated. That mitigation is what makes channel sharing
+safe: a deployment needing a tenth entity type gives it an existing channel and a distinct
+shape, and nothing in the visual language breaks. A loader that rejected all reuse would forbid
+the very escape hatch the design system provides, and would have to be reversed the first time a
+deployment outgrew nine types.
+
+The nine shipped types use nine distinct channels, so no sharing occurs in the default ontology.
+The rule exists for the tenth.
 
 ### Why `Endpoint` rather than `Phone`
 

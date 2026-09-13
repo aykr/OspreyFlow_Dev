@@ -486,7 +486,7 @@ class GraphPort(Protocol):
     async def expand(self, req: ExpandRequest, principal: Principal) -> Subgraph: ...
     async def paths(self, req: PathRequest, principal: Principal) -> list[Path]: ...
     async def match(self, pattern: PatternQuery, principal: Principal) -> Subgraph: ...
-    async def neighbourhood_stats(self, node_id: NodeId) -> NeighbourhoodStats: ...
+    async def neighbourhood_stats(self, node_id: NodeId, principal: Principal) -> NeighbourhoodStats: ...
     async def apply_schema(self, schema: OntologySchema) -> SchemaReport: ...
 ```
 
@@ -610,7 +610,10 @@ to be on every node and edge from the first write.
 
 - Every node and edge carries a `handling` block (see `01_DOMAIN_MODEL.md` §5).
 - The Conduit resolves a `Principal` from the session token and passes it into every
-  `GraphPort` and `AnalyticsPort` call. Adapters inject the filter into the traversal or the
+  `GraphPort` and `AnalyticsPort` read. Every read method takes one — including the aggregate
+  ones. A count is a read: `neighbourhood_stats` returns a degree, and an unfiltered degree
+  discloses the existence of neighbours the principal may not see just as plainly as returning
+  them would. Any read signature without a `Principal` is a defect, not an optimisation. Adapters inject the filter into the traversal or the
   `WHERE` clause. **No adapter may accept a call without a `Principal`** — enforced by the
   conformance suite, which asserts that an unauthorised principal cannot observe a filtered
   node's existence, not merely its properties.
