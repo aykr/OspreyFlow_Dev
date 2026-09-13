@@ -1,0 +1,19 @@
+{
+  "name": "mantisnexus",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "schemas:generate": "python3 packages/schemas/generate_ts.py",
+    "licence-check": "node scripts/licence_check.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "eslint": "^9.15.0",
+    "json-schema-to-typescript": "^15.0.3",
+    "license-checker": "^25.0.1",
+    "typescript": "^5.7.2"
+  }
+}

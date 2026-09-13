@@ -1,0 +1,93 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: uv sync
+      - run: npm ci
+      - run: uv run ruff check .
+      - run: npm run lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: uv sync
+      - run: npm ci
+      - run: uv run mypy packages
+      - run: npm run typecheck
+
+  licence-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: uv sync
+      - run: npm ci
+      - run: uv run python scripts/licence_check.py
+      - run: npm run licence-check
+      # Deterministic proof that a GPL dependency fails the build
+      # (Phase 0 exit criterion, docs/07_BUILD_PLAN.md) — see
+      # tests/licence_check/test_gpl_rejection.py.
+      - run: uv run pytest tests/licence_check
+
+  trivy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm ci
+      - uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          skip-dirs: node_modules,.venv
+
+  schemas-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: uv sync
+      - run: npm ci
+      # scripts/schemas_check.py shells out to node_modules/.bin/json2ts.
+      - run: uv run python scripts/schemas_check.py
+
+  conformance-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - run: uv run pytest tests/conformance -k test_guard
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: uv sync
+      - run: npm ci
+      - run: uv run pytest
