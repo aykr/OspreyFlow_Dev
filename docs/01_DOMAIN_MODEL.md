@@ -220,11 +220,6 @@ and unit, and the filter evaluates both axes. Filtering on classification alone 
 implementation: it will pass every existence-leak test written against classification and still
 disclose a recipient-restricted record to the wrong unit.
 
-**A clearance value the active scheme does not recognise is the most restrictive principal
-possible: it sees nothing.** Default-deny, not default-allow — stated here rather than left as
-an implementation's judgement call, because the alternative (an unrecognised clearance defaulting
-to broad visibility) is exactly the kind of silent failure mode this section exists to close off.
-
 The code *values* come from a scheme file, not from the codebase:
 
 ```yaml
@@ -444,8 +439,20 @@ weight(e) = normalise( α·log1p(occurrences) + β·recency(interval.to) + γ·m
 
 `mutual_information` is the pointwise mutual information of the pair against the corpus, which
 is what suppresses high-volume, low-information relationships — the broadcast sender, the
-service number that everyone calls. α, β, γ are per-deployment configuration with defaults
-0.5 / 0.2 / 0.3. The Glass exposes the normalised result as the edge-strength filter slider.
+service number that everyone calls.
+
+The two functions the formula leans on, which earlier drafts left undefined:
+
+```
+recency(t)   = 0.5 ^ ((now - t) / half_life)          # exponential decay
+normalise(x) = 1 / (1 + e^(-(x - midpoint) / scale))  # logistic
+```
+
+Five parameters, all per-deployment configuration: α = 0.5, β = 0.2, γ = 0.3,
+`half_life` = 90 days, and the logistic's `midpoint` and `scale` calibrated per corpus. Record
+the parameter set alongside any stored weight components — a weight computed under one
+calibration is not comparable with one computed under another, and a silent recalibration would
+reorder every edge-strength filter in every saved investigation. The Glass exposes the normalised result as the edge-strength filter slider.
 
 ### 6.2 Clique Metric
 
@@ -489,18 +496,6 @@ will destroy analyst trust the first time someone notices.
 | k-shortest paths | Pathfinder between two entities | Must respect the access filter; a path through a node the principal cannot see is not returned |
 | Temporal motifs | Convoy, relay, burst | See `02_GLASS_FRONTEND.md` §5 |
 
-**`GraphPort.paths` is not this table's k-shortest paths.** Two methods share a `PathRequest` and
-return a `list[Path]`, and they are not the same capability. `GraphPort.paths` is a bounded
-traversal-level existence check — is there a route within `max_hops`, access-filtered, and if so
-return up to `k` of whatever `simplePath` finds — suited to a single adapter answering "are these
-two entities connected at all" cheaply, on the graph store itself. `ComputePort.shortest_paths`
-(this table, Phase 7's Pathfinder) is the actual weighted, ranked k-shortest-paths algorithm,
-running on one of `ComputePort`'s three compute tiers over the working set. Do not implement
-`GraphPort.paths` as a shortest-path algorithm, and do not route the Pathfinder feature through
-`GraphPort` — the split exists so that a cheap connectivity check and an expensive ranked
-algorithm scale independently, the same reasoning as ADR-008's split between `AnalyticsPort` and
-`ComputePort`.
-
 ## 7. Identifier normalisation — the Knowledge Adapters
 
 The CoLP deck is specific about this and it is the least glamorous, highest-value part of the
@@ -516,102 +511,25 @@ Normalisers required at ingest, each a pure function with a golden test file:
 | `imei` | 14/15/16 digits, check digit, `/` separators | 14-digit TAC+serial, check digit dropped |
 | `imsi` | with/without MCC-MNC separators | 15-digit |
 | `email` | case, plus-addressing, unicode domains | lowercase local, punycode domain |
-| `datetime` | mixed formats, local times, missing zones | UTC with recorded original offset; a missing offset is an error, not a guess |
+| `datetime` | mixed formats, local times, missing zones | UTC with recorded original offset. A missing offset is an error, not a guess — and so is an **ambiguous date order**: `03/04/2026` is April in the UK and March in the US, and with both in scope (ADR-017) there is no safe default. The connector profile declares `date_order: dmy` or `mdy`; a file with ambiguous dates and no declaration is rejected, named and counted, exactly like a missing offset |
 | `person_name` | ordering, diacritics, honorifics, ALL-CAPS surnames | structured given/family, originals retained |
 | `address` | free text | structured, with a gazetteer identifier attached where one is configured — UPRN in the UK, a GNIS feature id, TIGER GEOID or county parcel id in the US. The identifier is an alias, never the key |
 | `iban` / `card` | spacing, masking | normalised; card stored as last-four plus a hash, never in full |
 
-Two rules that are not optional:
+Three rules that are not optional:
 
 1. **Never discard the original.** `value_raw` is retained on every normalised property. A
    normaliser bug discovered in month six must be correctable by re-running against the raw
    value, and the original is sometimes itself evidence — CLI suppression is a fact about the
    caller's behaviour, not noise.
-2. **Deduplicate CDRs on a content hash, not on the whole row.** The CoLP deck asks about
+2. **Canonicalise before hashing, always.** Every field in a deduplication key passes through
+   its Knowledge Adapter first. `start_ts_to_second` means the normalised UTC instant truncated
+   to the second, not the source string — two carriers writing `2026-03-10T10:00:00Z` and
+   `2026-03-10 10:00:00+00:00` describe the same call, and a hash over raw strings will not say
+   so. Hashing raw fields works on a fixture where duplicates are byte-identical and fails on
+   real data, which is the worst order to discover it in.
+3. **Deduplicate CDRs on a content hash, not on the whole row.** The CoLP deck asks about
    duplicate CDR lines directly. The same call appears twice with different sequence numbers or
    file-level metadata. Hash `(a_party, b_party, start_ts_to_second, duration, direction)` and
    deduplicate on that, retaining every source row reference on the surviving event so the
    provenance chain stays complete.
-
-## 8. `GraphPort` request and response shapes
-
-`00_ARCHITECTURE.md` §2.1 gives `GraphPort`'s method signatures — `expand(req: ExpandRequest,
-principal) -> Subgraph`, and so on — but never defined the request/response types themselves.
-Phase 1 built them, without raising the gap first. Recorded here so the contract three more
-adapters must satisfy is not only the one written down in a single implementation.
-
-```python
-class ExpandRequest(BaseModel):
-    node_ids: list[NodeId]
-    depth: int                        # 1-4
-    edge_types: list[str] | None      # None: every edge type: an explicit ["*"]-style
-                                       # wildcard was not worth a second spelling of "no filter"
-    direction: Literal["out", "in", "both"]
-    temporal_window: Interval | None  # filters by the edge's own interval, not the node's
-
-class PathRequest(BaseModel):
-    source: NodeId
-    target: NodeId
-    max_hops: int
-    k: int                            # at most this many paths returned
-    edge_types: list[str] | None
-
-class Path(BaseModel):
-    nodes: list[NodeId]
-    edges: list[EdgeId]
-    length: int                       # hop count; len(edges)
-
-class NeighbourhoodStats(BaseModel):
-    node_id: NodeId
-    degree: int
-    degree_by_type: dict[str, int]    # keyed by edge type name
-
-class Subgraph(BaseModel):
-    nodes: list[Node]
-    edges: list[Edge]
-    filtered_count: int                # see the note below — reserved, not yet populated
-```
-
-**`GraphPort.paths` is a bounded connectivity check, not the k-shortest-paths algorithm** — see
-§6.3's note under the algorithm table for the split against `ComputePort.shortest_paths`.
-
-**`filtered_count` is reserved, and Phase 1's adapter leaves it at zero.** `00_ARCHITECTURE.md`
-§5 states the general principle — "the count is reported as filtered so the analyst knows the
-picture is incomplete" — but computing it correctly needs a full-vs-filtered comparison at a
-point that holds both results, which is the Working-Set Service in Phase 3
-(`03_CONDUIT_MIDDLEWARE.md`, the expansion budget/cardinality preview), not a second query
-inside `GraphPort.expand` itself. A second query invented per adapter to populate this field is
-exactly the kind of extra, less-audited channel the existence-leak requirement exists to rule
-out. Phase 3 populates it; until then it is a declared gap, not a silent one.
-
-### 8.1 Pattern matching
-
-```python
-class PatternNode(BaseModel):
-    var: str                          # a name local to this query, not a stored identifier
-    entity_type: str | None           # None: any entity type
-
-class PatternEdge(BaseModel):
-    edge_type: str
-    from_var: str
-    to_var: str
-
-class PatternQuery(BaseModel):
-    nodes: list[PatternNode]
-    edges: list[PatternEdge]
-    limit: int
-```
-
-The binding rule, stated explicitly because nothing else does: **`nodes[0]` is the query's
-anchor, and every edge in `edges` must name a `from_var` already bound by the anchor or an
-earlier edge in the list — never a `to_var` introduced later.** A pattern is built up the way a
-caller would compose it by hand, one hop at a time from a starting point, not declared as an
-unordered set of constraints to be solved. `MENTIONED_IN` from either of two unconnected node
-sets, or a pattern requiring a node reachable only via a *later* edge, cannot be expressed;
-splitting it into two `match` calls and joining the results in the Conduit is the workaround
-until a real pattern-solving `match` is worth building. A second `GraphPort` adapter proving this
-suite must honour the same ordering rule, not invent its own.
-
-Two nodes may share an `entity_type`, and an edge's endpoints are matched against whichever
-`PatternNode.entity_type` is declared for `to_var`, if any — an untyped node matches any entity
-type reached at that position.

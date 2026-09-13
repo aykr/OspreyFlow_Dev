@@ -79,12 +79,15 @@ the guard turning red is recognised as the expected handover rather than a regre
 - Edge weight computed per `01_DOMAIN_MODEL.md` §6.1 at load time (`adapters/graph_arcadedb`
   wrote a hardcoded `0.0` in Phase 1 — correct to defer, since the formula needs corpus-wide
   mutual information that doesn't exist until a corpus does).
+- `services/ingest/Dockerfile` and its `trivy image` CI scan — see the standing rule below.
 
 **Exit.** Load the synthetic CDR fixture through a hand-written recipe. Every phone-number
 variant in the fixture resolves to one `Endpoint`. Duplicate rows collapse to one event with both
 source references retained. A timeline histogram over the loaded events returns correct counts,
 including across a DST boundary. Rows with an undeterminable timezone are rejected and counted,
-never coerced. `mantis ingest revert` supersedes a whole load and leaves the audit trail intact.
+never coerced. Reverting a load (`services/ingest`'s `revert_load` function — there is no
+`mantis` CLI; this build does not have one, a correction to this phrasing's original assumption)
+supersedes a whole load and leaves the audit trail intact.
 
 ---
 
@@ -282,3 +285,12 @@ justification.
 7. **When an input document and this pack disagree, this pack wins and the disagreement is an
    ADR.** If you find one that is not recorded in `06_DECISIONS.md`, stop and record it before
    implementing either version.
+8. **Each service gets its Dockerfile, and a `trivy image` CI scan, in the phase that creates
+   it — never batched into Phase 8.** Phase 0's `trivy fs .` was always the interim measure,
+   stated at the time ("since no image exists to scan until a service gains a Dockerfile. Add
+   `trivy image` per service from the phase that containerises it") — this entry makes it a rule
+   that does not depend on a later phase remembering to re-read Phase 0's parenthetical.
+   `services/ingest` gets Phase 2's; each later phase's own service bullet list gets the same
+   pair. An image scan turns up base-OS packages the service never touches with no upstream fix
+   yet — `--ignore-unfixed` is the standard way to keep that from being permanent, unrelated
+   noise on the gate, unlike the dependency-focused `trivy fs` scan, which does not use it.
