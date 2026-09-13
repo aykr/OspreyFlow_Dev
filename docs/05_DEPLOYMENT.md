@@ -1,0 +1,278 @@
+# 05 — Deployment and the Setup Harness
+
+Written as a runbook. Where a step could be expressed as infrastructure-as-code, it is expressed
+here as a decision made on screen, and the harness generates the code. You should be able to
+stand up and understand a deployment without reading a template language — and, apart from one
+bootstrap command, without a terminal.
+
+## 1. Profiles
+
+Three, not two. The Gemini specification proposes `local-lite` and `enterprise-cluster` and both
+are right, but the gap between them is too wide to cross in one step — the first real
+deployment is almost always a few machines in a single room, and if that case has no profile
+someone will improvise one.
+
+| Profile | Runs on | Graph | OLAP | Models | Orchestration |
+| --- | --- | --- | --- | --- | --- |
+| `local-lite` | One laptop, 16 GB | ArcadeDB | DuckDB | Ollama, CPU or one consumer GPU | Docker Compose |
+| `small` | 3 machines | ArcadeDB with Raft, or JanusGraph on a single Scylla | DuckDB or ClickHouse single node | Ollama or vLLM on one GPU | Docker Compose across hosts, or a small Kubernetes |
+| `cluster` | 10+ machines | JanusGraph + ScyllaDB + OpenSearch | ClickHouse cluster | vLLM on a GPU pool | Kubernetes |
+
+The same container images run in all three. Only configuration differs. That is the
+transportability requirement, and it is verifiable: the acceptance scenarios in
+`08_ACCEPTANCE_SCENARIOS.md` must pass unchanged on `local-lite` and on `cluster`.
+
+## 2. The setup harness
+
+The harness is a **browser application**, not a command-line tool. One bootstrap command starts
+it; everything after that happens on screen.
+
+```bash
+docker run --rm -p 7000:7000 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v "$PWD:/workspace" \
+  ghcr.io/mantisnexus/harness:latest
+# → Setup harness ready at http://localhost:7000
+```
+
+That is the only command in this document that has to be typed. It is unavoidable — something
+has to serve the page before anything is deployed — so it is kept to one line and does nothing
+except start the harness.
+
+After launch the harness does not go away. It becomes the deployment's **admin console** at
+`/admin`, which is where provider registration, gazetteer loading, upgrades and verification live
+for the life of the system. Per the brand foundations, the console carries the Nexus mark and the
+analyst workspace carries Mantis; from inside the workspace the data layer is plumbing, not a
+brand.
+
+### 2.1 What the harness does
+
+Six screens, navigable in any order once the profile is chosen, with a persistent summary rail
+showing what has been decided and what is outstanding.
+
+| Screen | Decides |
+| --- | --- |
+| **Profile** | Laptop, small or cluster. Every later screen filters its options to what is valid here |
+| **Components** | Graph store, analytics engine, and the storage roots for data, staging and backups |
+| **Models** | Local only, or local with a named hosted fallback — and if hosted, which handling codes may be sent to it. Defaults to none |
+| **Governance** | Identity provider, handling scheme, ontology. Ships with a UK law-enforcement scheme, a US criminal-intelligence scheme, and the default ontology |
+| **Geospatial** | Provider tier and basemap registry; gazetteers and boundary sets to load |
+| **Preflight** | Environment checks, then generate, review and launch |
+
+Three properties make this worth building as a UI rather than a questionnaire in a terminal.
+
+**Consequences are shown, not described.** Choosing `cluster` renders the machine count, the
+components that appear, and the estimated memory footprint, updating as later screens change.
+Enabling a hosted model draws the egress exception it creates on the deployment diagram. Nobody
+has to hold the architecture in their head to see what a choice costs.
+
+**Preflight runs live.** Each check appears as it completes — available memory against the
+profile floor, disk against the projected staging volume, GPU presence and driver version, port
+availability, container runtime version, and for `cluster` connectivity to every declared host. A
+failure explains what is wrong and what to do about it, with a **Re-check** button rather than a
+loop of edit-and-rerun. Preflight must pass before Launch is enabled.
+
+**The generated artefacts are shown before anything runs.** The final screen is a diff, not a
+progress bar: `mantis.yaml` on the left, and the files that will be written on the right —
+compose or Kubernetes manifests, environment files, `versions.lock` with every image digest
+pinned, and `RUNBOOK.md` written for *this* deployment with the real hostnames, ports and paths
+filled in. All of it is readable, all of it is downloadable, and Launch is the last click rather
+than the first.
+
+`mantis.yaml` is the deployment. Version it, review it in a pull request, and never hand-edit a
+generated artefact — regenerate instead.
+
+### 2.2 The geospatial screen
+
+Tier 1 is one button. **Build local basemap** asks for an area — Great Britain, a US state or
+region, or a custom bounding box — then downloads the extract, runs planetiler, loads the OSM
+gazetteer and registers the provider, with progress and the resulting tile size shown as it goes.
+Nothing to sign, no account, and the result works offline. The demo, the acceptance scenarios and
+CI all run on this, so the test suite never depends on anyone's entitlement.
+
+Moving up a tier is the same screen:
+
+- **Tier 2** — drop in an OS OpenData download; the harness converts it to PMTiles and registers
+  it. No account needed, because Open Government Licence data is open to anyone.
+- **Tier 3** — enter a credential *reference* (an environment variable name, never a value). The
+  harness states plainly that this enables the tile proxy's egress exception, and offers
+  **Prefetch area of operations** with a drawn or uploaded boundary. Prefetching matters: live
+  tile requests to a hosted API disclose where you are looking, and a prefetched area makes no
+  live requests during routine work.
+- **Tier 4** — paste a WMTS, WMS, WFS or OGC API endpoint. The harness fetches the capabilities
+  document and lists the available layers, projections and zoom ranges to choose from, rather
+  than asking anyone to type them.
+- **Anything else** — pick from the shipped profiles, or upload a profile YAML, which is
+  validated against the schema in `00_ARCHITECTURE.md` §1.2 on upload.
+
+**Verify** runs after any provider change and renders its result rather than printing it: sample
+tiles at three zoom levels, the coordinate reference system and zoom range asserted, and a
+fixture graph drawn over the basemap so the contrast floor is checked by eye as well as by
+measurement. It catches the two common failures — a provider whose maximum zoom stops short of
+what site analysis needs, and a basemap bright enough to swallow the entity palette.
+
+Gazetteer loading sits alongside it, with the UK and US tier tables from `00_ARCHITECTURE.md`
+§1.2 rendered as the choices. Both basemap registration and gazetteer loading are re-runnable; a
+gazetteer refresh loads a new version of the reference partition rather than merging into the old
+one, and investigations record which version was in force when a place name was resolved.
+
+### 2.3 Everything has a headless equivalent
+
+The browser is the primary path; it is not the only one. Continuous integration, air-gapped
+transfer and scripted rebuilds all need automation, so every screen maps to a subcommand with the
+same behaviour and the same validation:
+
+```bash
+mantis apply mantis.yaml          # generate and launch, non-interactive
+mantis preflight                  # the Preflight checks, exit code 0 or 1
+mantis geo build --osm great-britain
+mantis map add --profile os-zoomstack --file /data/tiles/os-open-zoomstack.pmtiles
+mantis verify map
+mantis bundle --images            # signed tarball for air-gapped transfer
+```
+
+The rule is that the UI never has a capability the headless path lacks. A deployment that was
+built by clicking must be reproducible by a script, or it is not reproducible.
+
+### 2.4 The harness drives the orchestrator, so nobody types the dangerous commands
+
+The profile choice determines the orchestrator — Compose for `local-lite` and `small`,
+Kubernetes for `cluster` — and the harness invokes it. Nobody runs
+`docker compose -f deploy/compose/docker-compose.yaml up -d` or `kubectl apply -f deploy/cluster/`
+by hand. That closes the error class where the right manifest is applied to the wrong place, or
+the wrong manifest to the right one.
+
+Five guards, each closing a specific mistake:
+
+| Guard | The mistake it prevents |
+| --- | --- |
+| **Target confirmation** | The harness shows the resolved target before every action — the Docker context, or the Kubernetes cluster, context and namespace — and requires it to be confirmed when it differs from the last action. Applying to the wrong cluster is the classic incident, and it is almost always a stale `kubectl` context nobody looked at |
+| **Drift detection** | On open, the harness compares the running deployment against `mantis.yaml` and shows any divergence. Hand-edited manifests and out-of-band `kubectl edit` are the second commonest cause of an unreproducible environment |
+| **Change preview** | Every switch shows what will be created, changed and destroyed before it runs, as a diff against the current state, not only at first generate |
+| **Ordering enforcement** | A profile switch with live data cannot skip backup and restore. The harness greys out Launch until a current backup exists, and states why |
+| **Capacity check** | A downgrade — cluster to small, small to laptop — runs preflight against the *existing data volume*, not the empty case, and refuses if it will not fit. Moving down is legitimate; discovering halfway through the restore that it cannot fit is not |
+
+The destroy path is deliberately slower than the create path. Tearing down an environment
+requires typing its name, and the confirmation states what is not recoverable from backup — the
+audit stream in particular, which by design is neither rebuildable nor deletable.
+
+Where the switch genuinely changes the architecture rather than the configuration, the harness
+says so rather than presenting it as a toggle. Compose to Kubernetes is not a setting change: it
+is a new environment, a replay from staged Parquet, and a cutover. §4 sets out that path, and the
+harness walks it as a sequence of confirmed steps with its own progress rather than a single
+button.
+
+### 2.5 What the harness deliberately does not do
+
+- **It does not hold state the repository lacks.** Everything it produces is a file in
+  `/workspace`. Delete the harness container and nothing is lost.
+- **It never sees a secret.** Credentials are entered as references — an environment variable
+  name or a secret-manager path. The harness records where to look, never what it found.
+- **It does not run as a privileged long-lived service.** During setup it needs the container
+  socket; the admin console it becomes afterwards does not, and runs with the same non-root,
+  read-only-root posture as every other component (§7).
+
+## 3. Standing it up on a laptop
+
+```bash
+docker run --rm -p 7000:7000 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v "$PWD:/workspace" \
+  ghcr.io/mantisnexus/harness:latest
+```
+
+Then open `http://localhost:7000` and work through the six screens. For a laptop: choose
+**local-lite** on Profile, accept the defaults on Components, Models and Governance, press
+**Build local basemap** on Geospatial, and let Preflight run. Review the generated files, click
+Launch, then **Seed demo data** on the screen that follows.
+
+Roughly fifteen minutes end to end, most of it pulling model weights and building tiles, with
+progress shown throughout. The workspace is then at `http://localhost:8080` and the admin console
+at `http://localhost:8080/admin`. The seeded demo credentials are displayed once and written
+nowhere.
+
+What is running afterwards: the workspace, one Conduit, three workers, ArcadeDB, DuckDB
+in-process, Valkey, MinIO, OpenSearch single-node, PostgreSQL, Keycloak, Ollama, and a
+faster-whisper container. Twelve containers, roughly 11 GB of RAM at rest.
+
+If Preflight finds less than 16 GB it offers a reduced variant that drops OpenSearch and falls
+back to PostgreSQL full-text, stating the trade-off on screen: search quality degrades and
+semantic search is unavailable, and the platform otherwise works. It is offered, not applied
+silently.
+
+## 4. Moving up a profile
+
+The migration path is the property that makes the setup-time choices safe, so it is specified
+rather than assumed.
+
+**Laptop to small, or small to cluster:**
+
+1. **Back up** from the admin console, or `mantis backup`. Writes a portable bundle: staged
+   Parquet, object store contents, Postgres dump, ontology, handling scheme, and `mantis.yaml`.
+2. **Change profile** in the harness. It loads the existing `mantis.yaml` and re-opens only the
+   screens whose answers are invalid at the new profile, marking the rest as carried forward.
+3. Review the regenerated artefacts and launch the new environment empty.
+4. **Restore** the bundle. This replays staged Parquet through load and index rather than copying
+   graph-store internals between engines.
+
+Point four is the whole reason for the staging layer. Migration is a replay of staged data
+through the ingest pipeline's final stages, so it works between any pair of engines, revalidates
+against the current ontology, and never depends on one engine's on-disk format. It is slower
+than a binary copy and it is the only version that is actually portable.
+
+**Estimate the replay before running it.** Restore opens with a dry run showing the row count and
+a projected duration, and will not proceed until that estimate is acknowledged. A national-scale
+replay is measured in days and must be planned, not discovered.
+
+## 5. Upgrades and vulnerability response
+
+The maintainability requirement, made concrete.
+
+- **Every image is independently versioned.** No service pins another's major version. The only
+  shared pin is the port contract version in `packages/ports`.
+- **Renovate** raises dependency pull requests continuously. CI runs the conformance suites on
+  every one, so an upgrade that breaks a port contract is visible before merge.
+- **Weekly** — `trivy` scans every image; anything critical or high raises an issue
+  automatically.
+- **Rolling a single component** is a screen in the admin console: pick the component, pick the
+  target version, and the console runs preflight, rolls the container or the Kubernetes
+  deployment, then runs **verify** — the port conformance suite against the *running* deployment
+  rather than a test fixture. Under two minutes, and it is what makes the upgrade safe rather
+  than hopeful. The headless equivalent is `mantis upgrade opensearch --to 3.2.1 && mantis verify
+  opensearch`.
+- **Rollback** is one click to a previous digest, then verify again. `deploy/versions.lock`
+  records every digest that has been live, so there is always a known-good target.
+- **Airgapped upgrades** — `mantis bundle --images` produces a signed tarball of every image and
+  weight file for transfer to a disconnected environment, where the harness runs from the bundle
+  rather than from a registry. This path must be tested each release, because it is the path that
+  will be needed under time pressure.
+
+## 6. Backup and recovery
+
+| What | Frequency | Method |
+| --- | --- | --- |
+| Staged Parquet | Continuous | Object store replication |
+| PostgreSQL | Hourly WAL, nightly full | `pg_basebackup` |
+| Graph store | Nightly | Engine-native snapshot |
+| OpenSearch | Nightly | Snapshot repository to object store |
+| Configuration | On change | Version control |
+
+**The graph store and the search index are both rebuildable from staged Parquet.** Their backups
+exist to shorten recovery, not to make it possible. State the recovery time for each path in
+`deploy/RUNBOOK.md` and test the long path — full rebuild from staging — at least annually.
+A backup nobody has restored is a hypothesis.
+
+Audit data is the exception: it is not rebuildable and it is not deletable. Replicate it
+separately, with its own retention policy set by the deployment's legal basis.
+
+## 7. Security posture
+
+- Every service on an internal network. Only the workspace and the Conduit are exposed, behind a
+  reverse proxy terminating TLS.
+- Default-deny egress. The model gateway is the only component with a documented exception, and
+  the exception is off by default (`04_VAULT_BACKEND.md` §4).
+- Secrets from the environment or a secret manager, never in `mantis.yaml`, never in an image.
+- Containers run as non-root, read-only root filesystem, no capabilities beyond the defaults.
+- Images signed and verified at pull; digests pinned in `deploy/versions.lock`.
+- Audit written to a separate volume with a separate retention policy and separate access.
+- No telemetry leaves the deployment. OpenTelemetry collection terminates inside it.

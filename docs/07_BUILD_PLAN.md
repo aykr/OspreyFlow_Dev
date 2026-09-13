@@ -1,0 +1,277 @@
+# 07 — Build Plan
+
+Nine phases. Each has a single demonstrable outcome and an exit criterion that is a test, not a
+judgement. Do not start a phase until the previous one's exit criterion is green in CI.
+
+The ordering is deliberate: the ports and the domain model come before any feature, because
+every decision that is expensive to reverse lives in those two phases.
+
+---
+
+## Phase 0 — Skeleton and guard rails
+
+**Outcome.** An empty monorepo that will not let you build the wrong thing.
+
+- Monorepo layout per `00_ARCHITECTURE.md` §6.
+- `packages/ports` — all four `Protocol` definitions, no implementations.
+- `packages/schemas` — Pydantic models, with TypeScript type generation wired into the build.
+- CI: lint, type-check both languages, `make licence-check` against the allowlist, and
+  `trivy fs .` — a filesystem and dependency scan, since no image exists to scan until a service
+  gains a Dockerfile. Add `trivy image` per service from the phase that containerises it.
+- Conformance suites written for real, and structurally unable to pass vacuously. Each port gets
+  a parametrised `test_suite.py` over an adapter registry that is empty in this phase, so it
+  collects zero cases, plus an always-on `test_guard.py` asserting that the suite module imports
+  cleanly and that the registry is empty. Zero collected cases is then a stated condition rather
+  than an accident, and a suite that fails to import is a red build rather than a silent no-op.
+- A single `_phase0_placeholders.py` in `packages/schemas` holding opaque stand-ins for exactly
+  the types the four `Protocol` signatures reference. The domain model is Phase 1, but a
+  `Protocol` cannot type-check against types that do not exist, and the drift gate needs a real
+  model to change. Placeholders live in one module so their removal is a single deletion.
+
+**Exit.** CI green — including the guard tests, which pass by construction here. A pull request
+adding a GPL dependency fails, proved by a committed fixture lockfile and a test asserting the
+offending package is rejected by name, not by a scratch branch or a manual check. A change to a
+Pydantic model that is not reflected in the generated TypeScript fails the build. Seeding the
+registry with a fake adapter turns a guard test red, which is what proves the empty-registry
+assertion is not vacuous.
+
+---
+
+## Phase 1 — Domain model and graph adapter
+
+**Outcome.** The ontology round-trips through a real graph store with access control working.
+
+- Ontology loader, JSON Schema validation, channel and shape allocation with the nine-channel
+  constraint enforced.
+- Node, Edge, Provenance, Handling, ResolutionState, AuditStub.
+- Handling scheme loader and the handling evaluator.
+- `adapters/graph_arcadedb` — full `GraphPort`, declaring its `dialects` capability.
+- Dialect-agnostic query builders with a `gremlin` render backend; the `GraphPort` conformance
+  suite parameterised by dialect so a second backend can be proved against the same fixtures.
+- Schema generator and migration runner, including the indexes in `04_VAULT_BACKEND.md` §1.4.
+- `GraphPort` conformance suite, complete.
+
+**Exit.** The conformance suite passes against ArcadeDB, including the existence-leak assertions:
+an unauthorised principal cannot detect a filtered node via path length, degree count or
+aggregate bucket. Two further conditions carried over from Phase 0: `_phase0_placeholders.py` no
+longer exists once any adapter is registered, enforced by its own guard test; and each port's
+`test_guard.py` empty-registry assertion is updated alongside the adapter that populates it, so
+the guard turning red is recognised as the expected handover rather than a regression.
+
+---
+
+## Phase 2 — Ingest, normalisation, staging
+
+**Outcome.** A CSV of call records becomes a queryable graph, correctly.
+
+- Connector framework as validated profiles in `connectors/`; CSV, JSON and generic delimited.
+- The ingest recipe format and its headless execution engine (`09_INGEST_STUDIO.md` §6), with
+  row templates, match-on/on-match semantics, conditional elements and deduplication keys.
+- Source profiler: type inference, null and cardinality statistics, and pattern recognition
+  against the Knowledge Adapters.
+- A throwaway prototype of the studio's Map screen over the headless recipe engine, put in front
+  of an analyst for review (ADR-018). Cheap here, expensive in Phase 5a.
+- All Knowledge Adapters from `01_DOMAIN_MODEL.md` §7, each with a golden test file.
+- CDR content-hash deduplication.
+- Parquet staging in MinIO.
+- `adapters/analytics_duckdb` — full `AnalyticsPort`, and its conformance suite.
+- Load path writing both stores in one logical transaction per document.
+
+**Exit.** Load the synthetic CDR fixture through a hand-written recipe. Every phone-number
+variant in the fixture resolves to one `Endpoint`. Duplicate rows collapse to one event with both
+source references retained. A timeline histogram over the loaded events returns correct counts,
+including across a DST boundary. Rows with an undeterminable timezone are rejected and counted,
+never coerced. `mantis ingest revert` supersedes a whole load and leaves the audit trail intact.
+
+---
+
+## Phase 3 — Conduit and the working set
+
+**Outcome.** A client can build and hold a working set.
+
+- FastAPI app, OIDC via Keycloak, `Principal` resolution.
+- Working-Set Service on Valkey: storage, caps, projection, delta computation.
+- WebSocket delta protocol including the reconnect-and-resnapshot path.
+- Expansion with cardinality preview and the expansion budget.
+- Audit stream to PostgreSQL, with write failure failing the request.
+
+**Exit.** A scripted client seeds a working set, expands three times, disconnects mid-stream,
+reconnects and arrives at a byte-identical set. Every action appears in the audit stream. An
+expansion that would breach the cap returns the typed `limit_exceeded` error with its three
+options.
+
+---
+
+## Phase 4 — The Glass, first light
+
+**Outcome.** An analyst can see and navigate a network.
+
+- Vite app, `design/tokens.css`, the twenty primitives.
+- Sigma renderer with the full node state vocabulary from `02_GLASS_FRONTEND.md` §4 —
+  all nine channels, all three provenance strokes, all six interaction states.
+- graphology working-set store, delta client.
+- Canvas interaction: pan, zoom, select, lasso, radial context menu, expand.
+- Semantic zoom (`02_GLASS_FRONTEND.md` §1.1): the four zoom bands via `nodeReducer` and
+  `edgeReducer`, band transitions that fade rather than pop, and `hideEdgesOnMove` during camera
+  movement only.
+- Edge inspection as a DOM overlay anchored to the camera: type, occurrence count, interval,
+  provenance, contributing source records.
+- Inspector with properties, provenance and source excerpt.
+- Global search.
+- Named-step history with restore.
+
+**Exit.** Load the 50k fixture. The performance budget in `02_GLASS_FRONTEND.md` §5 is met on
+target hardware, measured in CI, including a sustained pan and zoom sweep from full overview to
+link detail. Zoom never changes the working set: node and edge counts in the status bar are
+identical at every band. Keyboard navigation reaches every canvas action. Both themes
+pass automated contrast checks.
+
+---
+
+## Phase 5 — Temporal and geospatial
+
+**Outcome.** Three of the five analytical capabilities, cross-filtering.
+
+- Timeline: density strip, brush, playback, cyclical weekday × hour view, multi-track.
+- MapLibre integration with `@sigma/layer-maplibre`.
+- Basemap provider registry from `mantis.yaml`; layer control; attribution and licence notes
+  rendered with the map and carried onto exports.
+- Tier 1 shipped default: one-button local basemap build (extract download, planetiler, gazetteer
+  load), with bundled dark and light MapLibre styles built against `design/tokens.css`.
+- Tier 2 and tier 3 provider paths; the Conduit tile proxy with credential references, caching
+  and area-of-operations prefetch.
+- **Verify** parity check rendered on screen: CRS, zoom range, contrast floor over a fixture
+  graph, attribution presence.
+- Tier 4 generic OGC: WMTS, WMS, WFS and OGC API – Tiles/Features, with capabilities parsing at
+  registration and projection handling beyond Web Mercator.
+- Provider profile schema and validator; the shipped `providers/` set for the UK and the US, each
+  with a verify fixture.
+- Coordinate reference system handling: transform to WGS84 at ingest, source CRS recorded beside
+  the original coordinates, undeclared CRS rejected by name. Fixtures in EPSG:27700 (British
+  National Grid) and at least two NAD83 State Plane zones.
+- UK and US gazetteer connectors: OS Open Names / Open UPRN / Code-Point Open / Boundary-Line,
+  and USGS GNIS / Census TIGER/Line / National Address Database.
+- Licence enforcement: `redistributable` and `client_scope` on every provider; `mantis bundle`
+  refuses non-redistributable data by name; CI rejects any non-`open` provider in the demo
+  configuration.
+- Geospatial reference-data connectors and the reference partition; `mantis seed --geo`.
+- In-deployment geocoder resolving extracted place names against the gazetteer, written as
+  `inferred` with a match score.
+- Boundary overlays, and a drawn or selected boundary as a spatial filter.
+- Server-side geo-binning, heat layer, clustering.
+- Site geospatial: image upload, control points, drawn grid, grid cells as `Location` entities.
+- Offline PMTiles path.
+- Cross-filter wiring: timeline ↔ canvas ↔ map ↔ histograms, all directions.
+- Filter panel with the histogram cross-filter pattern.
+
+**Exit.** Acceptance scenario A (`08_ACCEPTANCE_SCENARIOS.md`) passes end to end on the tier 1
+default provider with no network access, including the weekend and time-of-day findings and the
+site-grid hotspot, without a code change specific to the scenario. Swapping the default provider
+to tier 2 and re-running the scenario changes nothing analytically and `mantis verify map`
+passes.
+
+---
+
+## Phase 5a — The Ingest Studio
+
+**Outcome.** Someone who knows the data, and not the schema, can onboard a new source unaided.
+
+- The five-stage studio over the Phase 2 recipe engine: Connect, Profile, Map, Verify, Publish.
+- Row template canvas on the Sigma renderer; drag and keyboard binding; profiler-proposed
+  mappings shown as proposals until confirmed; unmapped fields always visible.
+- POLE-first element creation narrowing to a concrete type.
+- Per-element match-on and on-match settings; Knowledge Adapter transform picker; no scripting.
+- Verify: dry run rendering the graph it would produce, counts, and a grouped rejection report.
+- Publish to version control with scheduling; recipe versioning with load attribution.
+- Studio roles: source author, source approver, loader. Verify runs at the author's clearance.
+
+**Exit.** A tester who has not seen the ontology maps the synthetic CDR fixture and a synthetic
+financial fixture from scratch, using the studio only, and both verify clean. Editing the
+ontology flags the affected recipes and blocks their scheduled runs. Every element loaded carries
+the recipe version that produced it.
+
+---
+
+## Phase 6 — Extraction and resolution
+
+**Outcome.** Unstructured material becomes graph, and duplicate people stop being duplicates.
+
+- `adapters/model_litellm`, LiteLLM proxy, Ollama, faster-whisper, a vision model.
+- Schema-constrained extraction for text, audio and image.
+- The golden set and the precision/recall CI gate.
+- `services/resolve` with Splink on DuckDB, configured from the ontology.
+- `SAME_AS` writing; query-time projection at τ; the threshold slider with its change summary.
+- Manual link and split; `explain` endpoint returning per-comparison match weights.
+- Confirm/retract flow promoting `inferred` to `asserted`.
+- Extraction profiles in the studio: POLE-class checklist generating the constrained-decoding
+  schema, per-type confidence floors, adapter selection for extracted values.
+- The review queue (`09_INGEST_STUDIO.md` §7): source and candidates side by side, span
+  highlighting, per-candidate accept/reject/edit, retained rejections. No bulk accept.
+
+**Exit.** Ingest a witness statement. Extracted entities appear as `inferred` with correct
+source spans. Moving τ from Strict to Broad merges the expected clusters and reports the delta.
+A manual split survives a subsequent resolution run that would have merged the pair, and the
+conflict is recorded for review.
+
+---
+
+## Phase 7 — Analytics, patterns, alerting
+
+**Outcome.** The remaining two analytical capabilities.
+
+- `adapters/compute_rustworkx` and the browser worker tier.
+- Degree, betweenness, eigenvector, clustering coefficient, Leiden, Clique Metric.
+- `ComputePort` conformance across all three tiers on the 5,000-node fixture.
+- Metrics panel with two-metric comparison; size encoding; community hull overlay.
+- Visual query builder compiling to Gremlin builders, with result estimation.
+- Hotlists, saved-pattern monitors, alert inbox with rule and evidence display.
+- Pathfinder with access-filtered k-shortest paths.
+
+**Exit.** Acceptance scenario B passes end to end. The Clique Metric ranks the insular-cluster
+fixture node above the broad-hub fixture node, and all three compute tiers return identical
+values within tolerance.
+
+---
+
+## Phase 8 — Assessment, export, and the second profile
+
+**Outcome.** The platform produces an intelligence product, and runs on more than a laptop.
+
+- Judgements, gaps and assumptions with evidence linking and the review-flag loop.
+- The probability yardstick loader.
+- Export: chart, subgraph, report. The handling gate with named blockers and recorded
+  justification. Withheld-item manifest on every export.
+- `adapters/graph_janusgraph` and `adapters/analytics_clickhouse`, both conformance-green.
+- The browser harness and the admin console it becomes: the six setup screens, live preflight,
+  the generated-artefact diff, and the backup, restore, upgrade and verify screens.
+- Harness-driven orchestration (`05_DEPLOYMENT.md` §2.4): target confirmation, drift detection,
+  change preview, enforced backup-before-switch, and downgrade capacity checks against the
+  existing data volume.
+- The headless CLI equivalent for every screen, so a deployment built by clicking is reproducible
+  by a script.
+- Generated Kubernetes manifests and the per-deployment runbook.
+
+**Exit.** Both acceptance scenarios pass unchanged on `local-lite` and on `cluster`. A
+`backup` → `restore` cycle across profiles reproduces the graph from staged Parquet. An export
+containing an `S2`-marked item is blocked, names the item, and proceeds only with a recorded
+justification.
+
+---
+
+## Standing rules for the whole build
+
+1. **Conformance suites are written before adapters.** The suite defines the contract; an
+   adapter written first will define the contract by accident.
+2. **No feature ships without its access-control test.** Every read path gets a test asserting
+   that an unauthorised principal cannot observe the data or infer its existence.
+3. **Fixtures are synthetic and in-repo.** No real intelligence data in the repository, in CI,
+   or in a demo. Generate fixtures with a seeded generator so they are reproducible. The same
+   applies to map data: the demo and CI run on tier 1 providers only, enforced by rejecting any
+   non-`open` provider in the demo configuration.
+4. **The performance budget is a CI gate, not a report.** A regression fails the build.
+5. **Every model-facing prompt is versioned and evaluated.** A prompt change runs the golden set
+   and reports the delta on the pull request.
+6. **The Glass never sees Gremlin, a raw node id from a source system, or an unfiltered count.**
+7. **When an input document and this pack disagree, this pack wins and the disagreement is an
+   ADR.** If you find one that is not recorded in `06_DECISIONS.md`, stop and record it before
+   implementing either version.

@@ -1,0 +1,170 @@
+/* MantisNexus design tokens.
+   Extracted verbatim from MantisNexus_Brand_Foundations v0.1.
+   Authoritative. Do not introduce a colour that is not defined here.
+
+   Rules that the tokens alone do not express:
+   - Hue encodes entity type. Every channel is paired with a shape, so hue never
+     carries a distinction on its own.
+   - Provenance is carried by stroke, not colour, so it composes with all nine channels:
+     asserted = 1px solid border-strong; inferred = 1.5px dashed 4 2, channel colour;
+     unresolved = 1.5px dotted, channel colour.
+   - State is an oklab mix toward the panel surface: dimmed 32%, filtered out 12%.
+   - Hairline or shadow, never both. Docked panels get a hairline; overlays get a shadow.
+   - Brass is struck out of the data palette permanently. It is the accent, not a channel.
+   - Tritanopia separation is a known limit at nine hues. Shape and label pairing is the
+     recorded mitigation; it is not optional.
+*/
+
+:root {
+  /* Neutral ramp — dark theme, the working default */
+  --n0:#090d0e;  --n1:#101314;  --n2:#161a1b;  --n3:#202425;
+  --n4:#2b2f30;  --n5:#3a3e3f;  --n6:#4d5051;  --n7:#66696a;
+  --n8:#848788;  --n9:#a2a5a6;  --n10:#c1c5c6; --n11:#e8eced;
+
+  --surface-sunken:var(--n0);
+  --surface-app:var(--n1);
+  --surface-panel:var(--n2);
+  --surface-raised:var(--n3);
+  --surface-hover:var(--n4);
+
+  --border-subtle:var(--n5);
+  --border:var(--n6);
+  --border-strong:var(--n7);
+
+  --text-disabled:var(--n8);
+  --text-tertiary:var(--n9);
+  --text-secondary:var(--n10);
+  --text-primary:var(--n11);
+
+  /* Accent — one only */
+  --brass:#c08a34;
+  --brass-hover:#d49c44;
+  --brass-press:#a97427;
+  --brass-ink:#141517;
+
+  /* Semantic */
+  --error:#e2695f;
+  --warning:#d9a63f;
+  --success:#6bab7e;
+
+  /* Data palette — nine categorical channels.
+     Channel-to-entity assignment is per deployment, set in the ontology. */
+  --ch-ochre:#b34917;   /* default: Location   · shape pin      */
+  --ch-rose:#b74b5e;    /* default: Asset      · shape diamond  */
+  --ch-plum:#916384;    /* default: Device     · shape square   */
+  --ch-violet:#8364a6;  /* default: Document   · shape page     */
+  --ch-indigo:#677bd6;  /* default: Person     · shape circle   */
+  --ch-azure:#61b1e6;   /* default: Organisation · shape square */
+  --ch-cyan:#35b9c0;    /* default: Endpoint   · shape hexagon  */
+  --ch-jade:#72b99a;    /* default: Vehicle    · shape triangle */
+  --ch-moss:#90b667;    /* default: Event      · shape diamond  */
+
+  /* Sequential ramp — magnitude. Monotonic in lightness, survives greyscale print. */
+  --seq-1:#0a3537; --seq-2:#1d575a; --seq-3:#2d787c;
+  --seq-4:#3b999e; --seq-5:#4abbc1; --seq-6:#5de1e8;
+
+  /* Diverging ramp — signed change, on the warm-cool axis dichromats keep. */
+  --div-1:#b54e21; --div-2:#bf775b; --div-3:#c49e8f; --div-4:#828788;
+  --div-5:#8cadc4; --div-6:#4e94c3; --div-7:#0079b8;
+
+  --overlay-shadow:0 8px 24px -8px rgba(0,0,0,.7);
+
+  /* Type */
+  --ui:'Atkinson Hyperlegible Next','Atkinson Hyperlegible',system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+
+  --fs-40:40px; --lh-40:46px;  /* brand surfaces only, 700 */
+  --fs-30:30px; --lh-30:36px;  /* document headings, 700 */
+  --fs-23:23px; --lh-23:30px;  /* screen title, 700 */
+  --fs-19:19px; --lh-19:26px;  /* section heading, 600 */
+  --fs-16:16px; --lh-16:22px;  /* panel title, 600 */
+  --fs-14:14px; --lh-14:20px;  /* panel body, 400 */
+  --fs-13:13px; --lh-13:18px;  /* UI base — controls, rows, 400 */
+  --fs-12:12px; --lh-12:16px;  /* table header, secondary label, 600 */
+  --fs-11:11px; --lh-11:14px;  /* dense meta, axis ticks, 400 */
+
+  /* Spacing — 4 to 6 inside a control, 8 to 12 between related controls,
+     20 to 24 between groups, 32 to 40 between regions. Floor is 3px. */
+  --sp-2:2px;  --sp-4:4px;  --sp-6:6px;  --sp-8:8px;   --sp-12:12px; --sp-16:16px;
+  --sp-20:20px; --sp-24:24px; --sp-32:32px; --sp-40:40px; --sp-56:56px;
+
+  /* Radii */
+  --r-canvas:0;      /* canvas, cells   */
+  --r-control:2px;   /* controls        */
+  --r-panel:4px;     /* panels          */
+  --r-overlay:6px;   /* overlays        */
+  --r-chip:999px;    /* status chips    */
+
+  /* Motion — spent on one thing: keeping track of where a node went. */
+  --dur-fast:90ms;    /* control state change                    */
+  --dur-base:140ms;   /* menu, tooltip, toast                    */
+  --dur-panel:180ms;  /* drawer and panel open                   */
+  --dur-graph:420ms;  /* graph re-layout, position interpolation */
+  --ease:cubic-bezier(.2,0,.3,1);        /* everything except the canvas */
+  --ease-graph:cubic-bezier(.25,.1,.25,1); /* node position only        */
+}
+
+/* Light theme — a separately tuned ramp, not an inversion.
+   Exists for screenshots pasted into reports and for print.
+   Exports destined for an intelligence product should default to this. */
+[data-theme="light"] {
+  --n0:#ffffff;  --n1:#f7fbfc;  --n2:#f1f4f5;  --n3:#e8eced;
+  --n4:#dde0e1;  --n5:#ced2d2;  --n6:#bbbebf;  --n7:#a2a5a6;
+  --n8:#a2a5a6;  --n9:#66696a;  --n10:#4b4e4e; --n11:#191b1c;
+
+  --brass:#8a6318; --brass-hover:#6f4e10; --brass-press:#573c08; --brass-ink:#ffffff;
+  --error:#a82f22; --warning:#8f6410; --success:#2f6c4a;
+
+  --ch-ochre:#83330d; --ch-rose:#7e032c; --ch-plum:#632a55;
+  --ch-violet:#562182; --ch-indigo:#5367cb; --ch-azure:#3682b2;
+  --ch-cyan:#2b9095; --ch-jade:#2f8364; --ch-moss:#6c8c4a;
+
+  --seq-1:#cfebec; --seq-2:#a0ced0; --seq-3:#6eaeb2;
+  --seq-4:#358f94; --seq-5:#007177; --seq-6:#00535b;
+
+  --div-1:#a24112; --div-2:#b97155; --div-3:#caa090; --div-4:#d5d8d9;
+  --div-5:#8cb0ca; --div-6:#478ebc; --div-7:#006aaa;
+
+  --overlay-shadow:0 6px 20px -6px rgba(25,27,28,.18);
+}
+
+html, body { margin:0; padding:0; }
+
+body {
+  background: var(--surface-app);
+  color: var(--text-primary);
+  font-family: var(--ui);
+  font-size: var(--fs-13);
+  line-height: var(--lh-13);
+  -webkit-font-smoothing: antialiased;
+}
+
+*:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+a { color: var(--brass); text-decoration: none; border-bottom: 1px solid var(--border); }
+a:hover { color: var(--brass-hover); border-bottom-color: var(--brass-hover); }
+
+p { margin: 0; text-wrap: pretty; }
+
+/* Every identifier, hash, timestamp and account number is set in mono.
+   Mono means: this is a value you can copy. */
+.value, .identifier, td.numeric { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* Graph node states — implement once, in the Sigma node program.
+   These declarations document the contract; the renderer is the implementation. */
+.node--default      { /* channel fill, 1px var(--border-subtle) */ }
+.node--hovered      { /* 1.5px var(--text-primary) */ }
+.node--selected     { /* 2px var(--brass), 1px surface gap via outline-offset */ }
+.node--on-path      { /* 2px var(--text-primary), incident edges thickened */ }
+.node--dimmed       { /* color-mix(in oklab, <channel> 32%, var(--surface-panel)) */ }
+.node--filtered-out { /* color-mix(in oklab, <channel> 12%, var(--surface-panel)); label dropped */ }
+.node--asserted     { /* 1px solid var(--border-strong) */ }
+.node--inferred     { /* 1.5px dashed 4 2, channel colour */ }
+.node--unresolved   { /* 1.5px dotted, channel colour */ }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0s !important; animation-duration: 0s !important; }
+  /* Graph re-layout becomes an instant move with a persistent control showing
+     previous positions. Removing the animation removes the only cue for what moved,
+     so something must replace it. */
+}

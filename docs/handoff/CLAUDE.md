@@ -46,6 +46,13 @@ wrong, say so and stop — do not implement an alternative and explain afterward
    the demo and CI is tier 1 only.
 10. **The performance budget in `docs/02_GLASS_FRONTEND.md` §5 is a CI gate**, not a target.
 
+## If a knowledge-graph index is available
+
+A graph index over `docs/` and the codebase may be present. Use it to find things and to
+understand how parts connect. Do not use it to decide things: when a specification section or a
+decision record governs what you are about to build, read the actual file. An index can be
+stale; `docs/` is the source of truth. Cite the document and section, never the index.
+
 ## Conventions
 
 - Python 3.12, FastAPI, async throughout. Pydantic models in `packages/schemas` are the source

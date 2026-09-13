@@ -34,7 +34,8 @@ worth more than the plan.
 
 ## 2. The `/phase` command
 
-Save as `.claude/commands/phase.md`. Then starting a phase is `/phase 1`.
+Save as `.claude/commands/phase.md` — `HANDOFF.md` Step 3 has the exact command to write it.
+Then starting a phase is `/phase 1`.
 
 ```markdown
 ---
