@@ -81,6 +81,33 @@ jobs:
       - run: uv sync
       - run: uv run pytest tests/conformance -k test_guard
 
+  # GraphPort's conformance suite (Phase 1, docs/07_BUILD_PLAN.md) runs
+  # against a live ArcadeDB — the graph store local-lite actually ships —
+  # not a fake. One container, matching local-lite's own shape.
+  conformance:
+    runs-on: ubuntu-latest
+    services:
+      arcadedb:
+        image: arcadedata/arcadedb:24.11.1
+        ports:
+          - 2480:2480
+        env:
+          JAVA_OPTS: "-Darcadedb.server.rootPassword=playwithdata123"
+        options: >-
+          --health-cmd "curl -sf -u root:playwithdata123 http://localhost:2480/api/v1/ready"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      ARCADEDB_HOST: localhost
+      ARCADEDB_HTTP_PORT: "2480"
+      ARCADEDB_ROOT_PASSWORD: playwithdata123
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - run: uv run pytest tests/conformance/graph_port
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -90,4 +117,6 @@ jobs:
         with: { node-version: "22" }
       - run: uv sync
       - run: npm ci
-      - run: uv run pytest
+      # tests/conformance/graph_port needs the live ArcadeDB in the
+      # `conformance` job above; every other test runs here.
+      - run: uv run pytest --ignore=tests/conformance/graph_port

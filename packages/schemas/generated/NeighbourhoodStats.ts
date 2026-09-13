@@ -1,11 +1,14 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: packages/schemas/_phase0_placeholders.py via generate_ts.py
-/**
- * Marks this model as Phase 0 scaffolding, not domain content.
- */
-export type Phase0Note = string;
+// Source: packages/schemas/domain.py and _pending_port_placeholders.py, via generate_ts.py
+export type NodeId = string;
+export type Degree = number;
 
 export interface NeighbourhoodStats {
-  phase0_note?: Phase0Note;
+  node_id: NodeId;
+  degree: Degree;
+  degree_by_type?: DegreeByType;
   [k: string]: unknown;
+}
+export interface DegreeByType {
+  [k: string]: number;
 }

@@ -15,7 +15,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from schemas_check import diff_against_committed  # noqa: E402
 
-from schemas._phase0_placeholders import ALL_MODELS  # noqa: E402
+from schemas.generate_ts import ALL_MODELS  # noqa: E402
 
 
 def test_committed_generated_types_match_current_models() -> None:

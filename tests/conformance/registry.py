@@ -1,18 +1,23 @@
 """Adapter registry for the port conformance suites.
 
-Empty in Phase 0 — no adapter exists yet. Each port's `test_suite.py` is
-parametrised over its list here, so an empty list means zero cases collected
-(expected, not a failure). `test_guard.py` asserts the list is empty and that
-`test_suite.py` imports cleanly, so a broken suite module fails loudly instead
-of pytest silently reporting "no tests collected".
+Each port's `test_suite.py` is parametrised over its list here. `GraphPort`
+is real from Phase 1: `GRAPH_PORT_ADAPTERS` holds one `GraphAdapterFactory`
+per (adapter, dialect) pair the suite must prove — a live ArcadeDB
+connection can't sit in a module-level list the way an empty Phase 0 entry
+could, so each factory opens a fresh adapter instance per test rather than
+being the adapter itself.
 
-Phase 1 appends `adapters/graph_arcadedb` to `GRAPH_PORT_ADAPTERS` and the
-parametrised suite starts producing real cases with no change to this file's
-shape — only its contents.
+`AnalyticsPort`/`ComputePort`/`ModelPort` stay empty until Phases 2, 6 and 7
+register their own adapters — `test_guard.py` for each still asserts its
+list is empty, so a later phase populating one flips that guard red as the
+expected handover, same as `graph_port/test_guard.py` did this phase.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -21,7 +26,34 @@ if TYPE_CHECKING:
     from ports.graph import GraphPort
     from ports.model import ModelPort
 
-GRAPH_PORT_ADAPTERS: list[GraphPort] = []
+
+@dataclass(frozen=True)
+class GraphAdapterFactory:
+    """One conformance-testable (adapter, dialect) pair."""
+
+    label: str
+    dialect: str
+    context: Callable[[], AbstractAsyncContextManager[GraphPort]]
+
+    def __str__(self) -> str:  # pytest parametrize id
+        return f"{self.label}[{self.dialect}]"
+
+
+def _graph_arcadedb_factories() -> list[GraphAdapterFactory]:
+    from adapters.graph_arcadedb.testing import arcadedb_adapter
+    from ontology.handling import load_uk_le_scheme
+    from ontology.loader import load_default_ontology
+
+    ontology = load_default_ontology()
+    scheme = load_uk_le_scheme()
+
+    def _context() -> AbstractAsyncContextManager[GraphPort]:
+        return arcadedb_adapter(ontology, scheme)
+
+    return [GraphAdapterFactory(label="graph_arcadedb", dialect="gremlin", context=_context)]
+
+
+GRAPH_PORT_ADAPTERS: list[GraphAdapterFactory] = _graph_arcadedb_factories()
 ANALYTICS_PORT_ADAPTERS: list[AnalyticsPort] = []
 COMPUTE_PORT_ADAPTERS: list[ComputePort] = []
 MODEL_PORT_ADAPTERS: list[ModelPort] = []

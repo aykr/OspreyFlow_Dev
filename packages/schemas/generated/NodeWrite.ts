@@ -1,11 +1,78 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: packages/schemas/_phase0_placeholders.py via generate_ts.py
-/**
- * Marks this model as Phase 0 scaffolding, not domain content.
- */
-export type Phase0Note = string;
+// Source: packages/schemas/domain.py and _pending_port_placeholders.py, via generate_ts.py
+export type Type = string;
+export type ProvenanceState = "asserted" | "inferred" | "unresolved";
+export type DocumentId = string;
+export type Locator = string;
+export type ExcerptHash = string;
+export type Sources = SourceRef[];
+export type ExtractedBy = string | null;
+export type ExtractionConfidence = number | null;
+export type FirstSeen = string;
+export type LastConfirmed = string | null;
+export type PrincipalId = string;
+export type Classification = string;
+export type HandlingCode = string;
+export type ActionCode = string | null;
+export type SanitisationCode = string | null;
+export type OrgUnitId = string;
+export type ReviewDate = string | null;
+export type LegalBasis = string | null;
+export type ClusterId = string;
+export type ClusterScore = number | null;
+export type ResolutionRun = string | null;
+export type NodeId = string;
+export type ManuallyLinked = NodeId[];
+export type ManuallySplit = NodeId[];
 
+/**
+ * Pre-persistence `Node`: the adapter assigns `id` (a ULID) and the
+ * audit block's `created_at`/`revision` on write.
+ */
 export interface NodeWrite {
-  phase0_note?: Phase0Note;
+  type: Type;
+  properties?: Properties;
+  provenance: Provenance;
+  handling: Handling;
+  resolution?: ResolutionState;
+  created_by: PrincipalId;
+  [k: string]: unknown;
+}
+export interface Properties {
+  [k: string]: unknown;
+}
+export interface Provenance {
+  state: ProvenanceState;
+  sources: Sources;
+  extracted_by?: ExtractedBy;
+  extraction_confidence?: ExtractionConfidence;
+  first_seen: FirstSeen;
+  last_confirmed?: LastConfirmed;
+  confirmed_by?: PrincipalId | null;
+  [k: string]: unknown;
+}
+export interface SourceRef {
+  document_id: DocumentId;
+  locator: Locator;
+  excerpt_hash: ExcerptHash;
+  [k: string]: unknown;
+}
+export interface Handling {
+  classification: Classification;
+  handling_code: HandlingCode;
+  action_code?: ActionCode;
+  sanitisation_code?: SanitisationCode;
+  originator: OrgUnitId;
+  owning_unit: OrgUnitId;
+  review_date?: ReviewDate;
+  legal_basis?: LegalBasis;
+  [k: string]: unknown;
+}
+export interface ResolutionState {
+  cluster_id?: ClusterId | null;
+  cluster_score?: ClusterScore;
+  resolution_run?: ResolutionRun;
+  manually_linked?: ManuallyLinked;
+  manually_split?: ManuallySplit;
   [k: string]: unknown;
 }

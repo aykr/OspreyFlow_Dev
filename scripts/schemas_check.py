@@ -42,7 +42,7 @@ def diff_against_committed(models: Sequence[type[BaseModel]]) -> list[str]:
 
 
 def main() -> int:
-    from schemas._phase0_placeholders import ALL_MODELS
+    from schemas.generate_ts import ALL_MODELS
 
     differing = diff_against_committed(ALL_MODELS)
     if differing:

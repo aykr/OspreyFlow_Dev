@@ -1,4 +1,4 @@
-.PHONY: ci lint typecheck licence-check trivy schemas-check conformance-guard test
+.PHONY: ci lint typecheck licence-check trivy schemas-check conformance-guard conformance test
 
 PY := .venv/bin/python
 PYTEST := .venv/bin/pytest
@@ -33,5 +33,10 @@ schemas-check:
 conformance-guard:
 	$(PYTEST) tests/conformance -k test_guard
 
+# GraphPort's real conformance suite (Phase 1) — needs a live ArcadeDB.
+# `docker run --rm -p 2480:2480 -e JAVA_OPTS="-Darcadedb.server.rootPassword=playwithdata123" arcadedata/arcadedb:24.11.1`
+conformance:
+	$(PYTEST) tests/conformance/graph_port
+
 test:
-	$(PYTEST)
+	$(PYTEST) --ignore=tests/conformance/graph_port

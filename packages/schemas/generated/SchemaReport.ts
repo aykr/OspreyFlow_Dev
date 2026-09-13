@@ -1,11 +1,16 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: packages/schemas/_phase0_placeholders.py via generate_ts.py
-/**
- * Marks this model as Phase 0 scaffolding, not domain content.
- */
-export type Phase0Note = string;
+// Source: packages/schemas/domain.py and _pending_port_placeholders.py, via generate_ts.py
+export type MigrationId = string;
+export type AppliedEntityTypes = string[];
+export type AppliedEdgeTypes = string[];
+export type IndexesCreated = string[];
+export type Reversible = boolean;
 
 export interface SchemaReport {
-  phase0_note?: Phase0Note;
+  migration_id: MigrationId;
+  applied_entity_types: AppliedEntityTypes;
+  applied_edge_types: AppliedEdgeTypes;
+  indexes_created: IndexesCreated;
+  reversible?: Reversible;
   [k: string]: unknown;
 }

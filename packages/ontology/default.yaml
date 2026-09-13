@@ -1,0 +1,84 @@
+# The default ontology — docs/01_DOMAIN_MODEL.md §1.
+#
+# `SAME_AS` and `NOT_SAME_AS` are not listed here: the loader always injects
+# both as system edge types (ADR-006), regardless of what a deployment's
+# ontology says, so they are never hand-authored or removable.
+version: 3
+entity_types:
+  - name: Person
+    pole_class: person
+    channel: indigo
+    shape: circle
+    identifiers: [nino, pnc_id, prison_number, passport_number]
+    properties:
+      - {name: family_name, type: string, indexed: true, required: true}
+      - {name: given_names, type: string, indexed: true}
+      - {name: date_of_birth, type: date, indexed: true, sensitivity: high}
+      - {name: aliases, type: "string[]", indexed: true}
+    resolution:
+      blocking: [soundex(family_name), year(date_of_birth)]
+      comparisons: [jaro_winkler(family_name), levenshtein(given_names), exact(date_of_birth)]
+
+  - name: Endpoint
+    pole_class: object
+    channel: cyan
+    shape: hexagon
+    identifiers: [e164, handle, email]
+    properties:
+      - {name: value_raw, type: string}
+      - {name: value_normalised, type: string, indexed: true, required: true}
+      - {name: endpoint_kind, type: enum, values: [msisdn, imsi, imei, email, handle, iban, card]}
+
+  - name: Device
+    pole_class: object
+    channel: plum
+    shape: square
+    identifiers: [imei, imsi]
+
+  - name: Location
+    pole_class: location
+    channel: ochre
+    shape: pin
+    identifiers: [uprn, gnis_feature_id, tiger_geoid, osm_id]
+
+  - name: Organisation
+    pole_class: organisation
+    channel: azure
+    shape: square
+    identifiers: [companies_house_number, ein]
+
+  - name: Event
+    pole_class: event
+    channel: moss
+    shape: diamond
+
+  - name: Document
+    pole_class: object
+    channel: violet
+    shape: page
+
+  - name: Vehicle
+    pole_class: object
+    channel: jade
+    shape: triangle
+    identifiers: [vrm, vin]
+
+  - name: Asset
+    pole_class: object
+    channel: rose
+    shape: diamond
+
+edge_types:
+  - {name: COMMUNICATED_WITH, from: [Endpoint], to: [Endpoint], directed: true, temporal: true}
+  - {name: USES,              from: [Person], to: [Endpoint, Device], directed: true}
+  - {name: PRESENT_AT,        from: [Person, Device, Vehicle], to: [Location], directed: true, temporal: true}
+  - {name: MENTIONED_IN,      from: ["*"], to: [Document], directed: true}
+  - {name: ASSOCIATE_OF,      from: [Person], to: [Person], directed: false}
+  - name: FAMILY_OF
+    from: [Person]
+    to: [Person]
+    directed: false
+    properties:
+      - {name: relation, type: string}
+  - {name: MEMBER_OF,         from: [Person], to: [Organisation], directed: true}
+  - {name: TRANSACTED,        from: [Asset, Endpoint], to: [Asset, Endpoint], directed: true, temporal: true}

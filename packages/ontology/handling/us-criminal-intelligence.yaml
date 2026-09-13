@@ -1,0 +1,22 @@
+# US criminal-intelligence handling scheme — docs/01_DOMAIN_MODEL.md §2.2,
+# docs/06_DECISIONS.md ADR-017. Models the controls 28 CFR Part 23 imposes on
+# federally-funded criminal intelligence systems: an entry standard (recorded
+# in `Handling.legal_basis` at ingestion), a periodic review and purge cycle
+# (`Handling.review_date`), and dissemination recording (the audit stream,
+# `03_CONDUIT_MIDDLEWARE.md` §6). Confirm the specifics with the deploying
+# agency's own legal/compliance function before go-live — this file is a
+# starting point, not a legal opinion.
+classification: [UNCLASSIFIED, "LAW-ENFORCEMENT-SENSITIVE", RESTRICTED]
+
+handling_codes:
+  P: {label: "Dissemination permitted to a criminal justice agency with a right and need to know", dissemination: permitted}
+  C: {label: "Dissemination conditional on a documented right and need to know", dissemination: conditional}
+  R: {label: "Dissemination restricted to the originating agency", dissemination: restricted}
+
+action_codes:
+  A1: {label: "Reasonable suspicion only — no overt action without further corroboration", direct_action: false, originator_permission: true}
+  A2: {label: "Action permitted on the recorded predicate", direct_action: true}
+
+sanitisation_codes:
+  S1: {label: "May be sanitised for dissemination", consult_originator: false}
+  S2: {label: "Consult originator before dissemination or purge", consult_originator: true}

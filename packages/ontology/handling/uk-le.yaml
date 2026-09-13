@@ -1,0 +1,16 @@
+# UK law-enforcement handling scheme — docs/01_DOMAIN_MODEL.md §2.2.
+# The enforcement logic reads the booleans below, never the code letters.
+classification: [OFFICIAL, "OFFICIAL-SENSITIVE", SECRET]
+
+handling_codes:
+  P: {label: "Lawful sharing permitted", dissemination: permitted}
+  C: {label: "Conditions apply", dissemination: conditional}
+  R: {label: "Recipient restricted", dissemination: restricted}
+
+action_codes:
+  A1: {label: "Covert development", direct_action: false, originator_permission: true}
+  A2: {label: "Action permitted", direct_action: true}
+
+sanitisation_codes:
+  S1: {label: "May be sanitised", consult_originator: false}
+  S2: {label: "Consult originator", consult_originator: true}

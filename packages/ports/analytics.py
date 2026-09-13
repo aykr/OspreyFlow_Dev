@@ -12,7 +12,7 @@ from typing import Protocol
 
 import pyarrow
 
-from schemas._phase0_placeholders import (
+from schemas._pending_port_placeholders import (
     BaselineRequest,
     BaselineResult,
     CrossFilterRequest,
@@ -20,8 +20,8 @@ from schemas._phase0_placeholders import (
     GeoBinRequest,
     Histogram,
     HistogramRequest,
-    Principal,
 )
+from schemas.domain import Principal
 
 
 class AnalyticsPort(Protocol):

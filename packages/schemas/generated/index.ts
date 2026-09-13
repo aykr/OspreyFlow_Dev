@@ -1,18 +1,31 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: packages/schemas/_phase0_placeholders.py via generate_ts.py
+// Source: packages/schemas/domain.py and _pending_port_placeholders.py, via generate_ts.py
 
-export type { NodeWrite } from "./NodeWrite";
-export type { EdgeWrite } from "./EdgeWrite";
-export type { Node } from "./Node";
-export type { Principal } from "./Principal";
-export type { ExpandRequest } from "./ExpandRequest";
-export type { Subgraph } from "./Subgraph";
-export type { PathRequest } from "./PathRequest";
-export type { Path } from "./Path";
-export type { PatternQuery } from "./PatternQuery";
-export type { NeighbourhoodStats } from "./NeighbourhoodStats";
+export type { PropertyDef } from "./PropertyDef";
+export type { ResolutionConfig } from "./ResolutionConfig";
+export type { EntityTypeDef } from "./EntityTypeDef";
+export type { EdgeTypeDef } from "./EdgeTypeDef";
 export type { OntologySchema } from "./OntologySchema";
 export type { SchemaReport } from "./SchemaReport";
+export type { Handling } from "./Handling";
+export type { SourceRef } from "./SourceRef";
+export type { Provenance } from "./Provenance";
+export type { ResolutionState } from "./ResolutionState";
+export type { AuditStub } from "./AuditStub";
+export type { Node } from "./Node";
+export type { NodeWrite } from "./NodeWrite";
+export type { Interval } from "./Interval";
+export type { Edge } from "./Edge";
+export type { EdgeWrite } from "./EdgeWrite";
+export type { Principal } from "./Principal";
+export type { ExpandRequest } from "./ExpandRequest";
+export type { PathRequest } from "./PathRequest";
+export type { Path } from "./Path";
+export type { PatternNode } from "./PatternNode";
+export type { PatternEdge } from "./PatternEdge";
+export type { PatternQuery } from "./PatternQuery";
+export type { NeighbourhoodStats } from "./NeighbourhoodStats";
+export type { Subgraph } from "./Subgraph";
 export type { HistogramRequest } from "./HistogramRequest";
 export type { Histogram } from "./Histogram";
 export type { GeoBinRequest } from "./GeoBinRequest";

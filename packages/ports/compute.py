@@ -9,18 +9,14 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from schemas._phase0_placeholders import (
+from schemas._pending_port_placeholders import (
     CentralityRequest,
     CliqueMetricRequest,
-    CliqueScore,
-    CommunityId,
     CommunityRequest,
     MotifMatch,
     MotifRequest,
-    NodeId,
-    Path,
-    PathRequest,
 )
+from schemas.domain import CliqueScore, CommunityId, NodeId, Path, PathRequest
 
 
 class ComputePort(Protocol):

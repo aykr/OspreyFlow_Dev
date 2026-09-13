@@ -1,11 +1,11 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: packages/schemas/_phase0_placeholders.py via generate_ts.py
+// Source: packages/schemas/domain.py and _pending_port_placeholders.py, via generate_ts.py
 /**
- * Marks this model as Phase 0 scaffolding, not domain content.
+ * Marks this model as scaffolding, not domain content.
  */
-export type Phase0Note = string;
+export type PendingPortNote = string;
 
 export interface Transcript {
-  phase0_note?: Phase0Note;
+  pending_port_note?: PendingPortNote;
   [k: string]: unknown;
 }

@@ -1,4 +1,4 @@
-"""Generate TypeScript types from the Phase 0 placeholder Pydantic models.
+"""Generate TypeScript types from the shared Pydantic models.
 
 Pydantic is the source of truth (``docs/CLAUDE.md`` conventions). Each model's
 ``model_json_schema()`` output is piped through ``json-schema-to-typescript``
@@ -21,14 +21,20 @@ from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from schemas._phase0_placeholders import ALL_MODELS  # noqa: E402
+from schemas._pending_port_placeholders import ALL_MODELS as PENDING_MODELS  # noqa: E402
+from schemas.domain import ALL_MODELS as DOMAIN_MODELS  # noqa: E402
+
+#: Every Pydantic model in the repo the drift gate must cover: the real
+#: Phase 1 domain model plus the stand-ins for ports not yet built.
+ALL_MODELS: tuple[type[BaseModel], ...] = (*DOMAIN_MODELS, *PENDING_MODELS)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 JSON2TS = REPO_ROOT / "node_modules" / ".bin" / "json2ts"
 
 HEADER = (
     "// AUTO-GENERATED — do not edit by hand.\n"
-    "// Source: packages/schemas/_phase0_placeholders.py via generate_ts.py\n"
+    "// Source: packages/schemas/domain.py and _pending_port_placeholders.py, "
+    "via generate_ts.py\n"
 )
 
 

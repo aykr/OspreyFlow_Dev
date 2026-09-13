@@ -1,11 +1,15 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: packages/schemas/_phase0_placeholders.py via generate_ts.py
-/**
- * Marks this model as Phase 0 scaffolding, not domain content.
- */
-export type Phase0Note = string;
+// Source: packages/schemas/domain.py and _pending_port_placeholders.py, via generate_ts.py
+export type NodeId = string;
+export type MaxHops = number;
+export type K = number;
+export type EdgeTypes = string[] | null;
 
 export interface PathRequest {
-  phase0_note?: Phase0Note;
+  source: NodeId;
+  target: NodeId;
+  max_hops?: MaxHops;
+  k?: K;
+  edge_types?: EdgeTypes;
   [k: string]: unknown;
 }

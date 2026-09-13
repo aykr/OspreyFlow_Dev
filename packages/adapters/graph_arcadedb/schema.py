@@ -1,0 +1,137 @@
+"""Schema and migration runner — `docs/04_VAULT_BACKEND.md` §1.4.
+
+Every DDL statement is idempotent (`IF NOT EXISTS`), so applying the same
+ontology twice is a no-op rather than an error — the shape a migration
+runner needs for "up" to be safely re-run and to make "down" tractable.
+
+Indexes created, matching §1.4 exactly:
+- a unique index on `id` (every node/edge is looked up by its ULID);
+- a composite index on `(type, handling.classification)`, plus
+  `handling_code`, `owning_unit` and `originator` — the access filter's two
+  axes (`access_filter.py`) both run on every read;
+- one per ontology-declared `identifiers` field;
+- **one per `properties` entry the ontology marks `indexed: true`** — "the
+  flag is a schema instruction, not documentation" (§1.4);
+- a vertex-centric index on `(edge_type, interval.from)` for every temporal
+  edge type — realised as an indexed `valid_from` property on that edge
+  type, so a timeline-filtered expansion does not scan the whole adjacency
+  list.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+from schemas.domain import EdgeTypeDef, EntityTypeDef, OntologySchema, PropertyType, SchemaReport
+
+from .client import ArcadeDBClient
+from .gremlin_literals import groovy_identifier
+from .naming import physical_type_name
+
+_SQL_TYPE: dict[PropertyType, str] = {
+    PropertyType.STRING: "STRING",
+    PropertyType.STRING_LIST: "LIST",
+    PropertyType.DATE: "DATE",
+    PropertyType.DATETIME: "DATETIME",
+    PropertyType.INTEGER: "INTEGER",
+    PropertyType.FLOAT: "FLOAT",
+    PropertyType.BOOLEAN: "BOOLEAN",
+    PropertyType.ENUM: "STRING",
+}
+
+
+async def apply_schema(client: ArcadeDBClient, schema: OntologySchema) -> SchemaReport:
+    applied_entity_types: list[str] = []
+    applied_edge_types: list[str] = []
+    indexes_created: list[str] = []
+
+    for entity in schema.entity_types:
+        name = groovy_identifier(physical_type_name(entity.name))
+        await client.sql(f"CREATE VERTEX TYPE {name} IF NOT EXISTS")
+        indexes_created += await _apply_common_indexes(client, name)
+        for identifier in entity.identifiers:
+            indexes_created += await _apply_indexed_property(client, name, identifier, "STRING")
+        indexes_created += await _apply_indexed_declared_properties(client, name, entity)
+        applied_entity_types.append(entity.name)
+
+    for edge in schema.edge_types:
+        name = groovy_identifier(physical_type_name(edge.name))
+        await client.sql(f"CREATE EDGE TYPE {name} IF NOT EXISTS")
+        indexes_created += await _apply_common_indexes(client, name)
+        indexes_created += await _apply_indexed_declared_properties(client, name, edge)
+        if edge.temporal:
+            await _create_property(client, name, "valid_from", "DATETIME")
+            await _create_index(client, name, "valid_from", unique=False)
+            indexes_created.append(f"{name}.valid_from")
+        applied_edge_types.append(edge.name)
+
+    return SchemaReport(
+        migration_id=f"ontology-v{schema.version}-{datetime.now(UTC).isoformat()}",
+        applied_entity_types=applied_entity_types,
+        applied_edge_types=applied_edge_types,
+        indexes_created=indexes_created,
+        reversible=True,
+    )
+
+
+async def drop_schema(client: ArcadeDBClient, schema: OntologySchema) -> None:
+    """The migration runner's "down": drops every vertex/edge type the given
+    ontology declares. Called from `adapter.py`'s `revert_schema` — not part
+    of `GraphPort` itself, since schema migration is ops tooling, not a
+    per-analyst read."""
+    for edge in schema.edge_types:
+        await _drop_type_if_present(client, groovy_identifier(physical_type_name(edge.name)))
+    for entity in schema.entity_types:
+        await _drop_type_if_present(client, groovy_identifier(physical_type_name(entity.name)))
+
+
+async def _drop_type_if_present(client: ArcadeDBClient, type_name: str) -> None:
+    from .client import ArcadeDBError
+
+    try:
+        await client.sql(f"DROP TYPE {type_name} UNSAFE")
+    except ArcadeDBError as exc:
+        if "was not found" not in str(exc):
+            raise
+
+
+async def _apply_common_indexes(client: ArcadeDBClient, type_name: str) -> list[str]:
+    names = ["id", "handling_classification", "handling_code", "owning_unit", "originator"]
+    for name in names:
+        await _create_property(client, type_name, name, "STRING")
+        await _create_index(client, type_name, name, unique=(name == "id"))
+    return [f"{type_name}.{name}" for name in names]
+
+
+async def _apply_indexed_property(
+    client: ArcadeDBClient, type_name: str, prop_name: str, sql_type: str
+) -> list[str]:
+    prop = groovy_identifier(prop_name)
+    await _create_property(client, type_name, prop, sql_type)
+    await _create_index(client, type_name, prop, unique=False)
+    return [f"{type_name}.{prop}"]
+
+
+async def _apply_indexed_declared_properties(
+    client: ArcadeDBClient, type_name: str, type_def: EntityTypeDef | EdgeTypeDef
+) -> list[str]:
+    created: list[str] = []
+    for prop in type_def.properties:
+        if prop.indexed:
+            created += await _apply_indexed_property(
+                client, type_name, prop.name, _SQL_TYPE[prop.type]
+            )
+    return created
+
+
+async def _create_property(
+    client: ArcadeDBClient, type_name: str, prop_name: str, sql_type: str
+) -> None:
+    await client.sql(f"CREATE PROPERTY {type_name}.{prop_name} IF NOT EXISTS {sql_type}")
+
+
+async def _create_index(
+    client: ArcadeDBClient, type_name: str, prop_name: str, *, unique: bool
+) -> None:
+    kind = "UNIQUE" if unique else "NOTUNIQUE"
+    await client.sql(f"CREATE INDEX IF NOT EXISTS ON {type_name} ({prop_name}) {kind}")
