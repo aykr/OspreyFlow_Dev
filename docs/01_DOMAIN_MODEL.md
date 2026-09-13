@@ -204,6 +204,22 @@ class Handling(BaseModel):
     legal_basis: str | None          # the processing basis recorded at ingestion
 ```
 
+**Which of these fields filters a read, and which gates an export.** They are not the same set,
+and conflating them produces either a filter that leaks or an export gate that blocks everything.
+
+| Field | Read-time visibility | Export gate |
+| --- | --- | --- |
+| `classification` | Yes — the primary axis, ordered, dominance rule | Yes |
+| `handling_code` | Yes when `dissemination: restricted` — a recipient-restricted record is invisible outside its permitted set | Yes |
+| `owning_unit`, `originator` | Yes, but only as the scope for a restricted `handling_code` | Yes, for the originator reference |
+| `action_code` | **No.** It constrains what may be *done* with intelligence, not who may see it | No — it governs operational action |
+| `sanitisation_code` | **No.** It is a dissemination control and is the export gate's entire reason for existing | Yes |
+
+A `Principal` therefore carries the set of handling codes it may receive alongside its clearance
+and unit, and the filter evaluates both axes. Filtering on classification alone is a partial
+implementation: it will pass every existence-leak test written against classification and still
+disclose a recipient-restricted record to the wrong unit.
+
 The code *values* come from a scheme file, not from the codebase:
 
 ```yaml
@@ -221,8 +237,11 @@ sanitisation_codes:
   S2: {label: "Consult originator", consult_originator: true}
 ```
 
-Do not hardcode any national scheme. A source-evaluation scheme such as 5×5×5 is a second
-scheme file with the same shape; a deployment enables one or both. The enforcement logic reads
+Do not hardcode any national scheme. **Exactly one handling scheme is active at a time** — they
+define competing classification orderings and merging two produces a lattice nobody can reason
+about. What may be enabled alongside it is a *source-evaluation* scheme such as 5×5×5, which is a
+second file of the same shape describing a different axis: how reliable the source is, not who
+may see the record. One handling scheme, optionally one source-evaluation scheme. The enforcement logic reads
 the booleans (`dissemination`, `direct_action`, `consult_originator`), never the code letters.
 
 **Two schemes ship, for the two target jurisdictions.** `uk-le.yaml` as above. For the US,

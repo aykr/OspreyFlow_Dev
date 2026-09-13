@@ -488,10 +488,15 @@ class GraphPort(Protocol):
     async def match(self, pattern: PatternQuery, principal: Principal) -> Subgraph: ...
     async def neighbourhood_stats(self, node_id: NodeId, principal: Principal) -> NeighbourhoodStats: ...
     async def apply_schema(self, schema: OntologySchema) -> SchemaReport: ...
+    async def revert_schema(self, to_version: int) -> SchemaReport: ...
 ```
 
-Wire protocol is Apache TinkerPop / Gremlin over WebSocket with a binary serializer
-(GraphBinary; Gryo only if a backend lacks GraphBinary). TinkerPop 3.8 is the target.
+Gremlin is the query language; TinkerPop 3.8 is the target. **The transport is the adapter's
+business.** WebSocket with GraphBinary is the default where an engine runs a Gremlin Server
+listener, but some engines expose Gremlin over an HTTP command endpoint instead and run no
+separate listener. Either is conformant — what the port guarantees is the language and the fact
+that it never crosses into the Conduit's callers, not the socket underneath. An adapter records
+its transport in its README and proves itself the same way regardless: the conformance suite.
 
 **Gremlin never leaves the Vault.** The Conduit builds Gremlin; the Glass never sees it and
 never sends it. This is what makes a future move to SQL/PGQ or openCypher an adapter change
@@ -509,10 +514,17 @@ statistics, cross-filter counts. This is SQL, not traversal.
 class AnalyticsPort(Protocol):
     async def histogram(self, req: HistogramRequest, principal: Principal) -> Histogram: ...
     async def geo_bins(self, req: GeoBinRequest, principal: Principal) -> list[GeoBin]: ...
-    async def baseline(self, req: BaselineRequest) -> BaselineResult: ...
-    async def cross_filter(self, req: CrossFilterRequest) -> dict[str, Histogram]: ...
-    async def raw_sql(self, sql: str, params: Mapping) -> pyarrow.Table: ...
+    async def cross_filter(self, req: CrossFilterRequest, principal: Principal) -> dict[str, Histogram]: ...
+    async def baseline(self, req: BaselineRequest, principal: Principal) -> BaselineResult: ...
 ```
+
+**There is no `raw_sql` escape hatch, deliberately.** An arbitrary SQL string cannot be
+access-filtered — the same reason the Conduit never accepts free-form Gremlin (ADR-003). Every
+`AnalyticsPort` method takes a `Principal` and the adapter injects the filter into the `WHERE`
+clause before the query runs. A method that would let a caller write its own predicate over the
+event tables is a hole straight through the handling model, whatever the calling code intends.
+If an aggregate is needed that the port cannot express, add a typed method with a request object
+and a conformance case, not a passthrough.
 
 Results are Arrow tables end to end — Arrow IPC from Vault to Conduit, Arrow IPC over the wire
 to the Glass where the size warrants it. Do not round-trip histogram data through JSON.

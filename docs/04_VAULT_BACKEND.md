@@ -76,6 +76,9 @@ fixture graph. Adding a builder means adding a conformance case first.
 Both engines need explicit indexes; neither will be usable without them.
 
 - Composite index on every `identifiers` field declared in the ontology.
+- An index for every property the ontology marks `indexed: true`. The flag is a schema
+  instruction, not documentation — a loader that reads it and a migration runner that ignores it
+  leaves a field that looks indexed and scans.
 - Composite index on `(type, handling.classification)` — the access filter runs on every read
   and an unindexed filter there costs more than the query.
 - Mixed/full-text index on name-like properties, served by OpenSearch on the cluster profile.

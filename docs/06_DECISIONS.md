@@ -115,8 +115,10 @@ requirement emerges that cannot be expressed in a shader and cannot move to a DO
 
 **Status.** Accepted, 13 September 2026, with the GQL amendment below.
 
-**Decision.** TinkerPop 3.8 over WebSocket with GraphBinary. The Conduit composes traversals
-from a bounded set of builders; no free-form Gremlin from any caller.
+**Decision.** Gremlin as the query language, TinkerPop 3.8. The Conduit composes traversals from
+a bounded set of builders; no free-form Gremlin from any caller. Transport is adapter-specific —
+WebSocket with GraphBinary where an engine runs a Gremlin Server listener, an HTTP command
+endpoint where it does not. The guarantee is the language and the boundary, not the socket.
 
 **Why.** Gremlin gives the widest engine choice today. But the standards direction is SQL/PGQ
 (SQL:2023) and openCypher, and ArcadeDB and HugeGraph already speak both. Keeping Gremlin behind
