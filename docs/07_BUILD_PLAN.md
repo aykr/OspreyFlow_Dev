@@ -76,6 +76,9 @@ the guard turning red is recognised as the expected handover rather than a regre
 - Parquet staging in MinIO.
 - `adapters/analytics_duckdb` — full `AnalyticsPort`, and its conformance suite.
 - Load path writing both stores in one logical transaction per document.
+- Edge weight computed per `01_DOMAIN_MODEL.md` §6.1 at load time (`adapters/graph_arcadedb`
+  wrote a hardcoded `0.0` in Phase 1 — correct to defer, since the formula needs corpus-wide
+  mutual information that doesn't exist until a corpus does).
 
 **Exit.** Load the synthetic CDR fixture through a hand-written recipe. Every phone-number
 variant in the fixture resolves to one `Endpoint`. Duplicate rows collapse to one event with both
@@ -94,6 +97,10 @@ never coerced. `mantis ingest revert` supersedes a whole load and leaves the aud
 - WebSocket delta protocol including the reconnect-and-resnapshot path.
 - Expansion with cardinality preview and the expansion budget.
 - Audit stream to PostgreSQL, with write failure failing the request.
+- `NodeId`/`EdgeId` (ULID) and the audit stub's `created_at`/`revision` assigned here, by the
+  Conduit, per `01_DOMAIN_MODEL.md` §2 — `adapters/graph_arcadedb` assigns them in Phase 1
+  for lack of a Conduit yet to do it; move the assignment up when this phase lands, rather than
+  the adapter continuing to do a Conduit's job.
 
 **Exit.** A scripted client seeds a working set, expands three times, disconnects mid-stream,
 reconnects and arrives at a byte-identical set. Every action appears in the audit stream. An

@@ -220,6 +220,11 @@ and unit, and the filter evaluates both axes. Filtering on classification alone 
 implementation: it will pass every existence-leak test written against classification and still
 disclose a recipient-restricted record to the wrong unit.
 
+**A clearance value the active scheme does not recognise is the most restrictive principal
+possible: it sees nothing.** Default-deny, not default-allow — stated here rather than left as
+an implementation's judgement call, because the alternative (an unrecognised clearance defaulting
+to broad visibility) is exactly the kind of silent failure mode this section exists to close off.
+
 The code *values* come from a scheme file, not from the codebase:
 
 ```yaml
@@ -484,6 +489,18 @@ will destroy analyst trust the first time someone notices.
 | k-shortest paths | Pathfinder between two entities | Must respect the access filter; a path through a node the principal cannot see is not returned |
 | Temporal motifs | Convoy, relay, burst | See `02_GLASS_FRONTEND.md` §5 |
 
+**`GraphPort.paths` is not this table's k-shortest paths.** Two methods share a `PathRequest` and
+return a `list[Path]`, and they are not the same capability. `GraphPort.paths` is a bounded
+traversal-level existence check — is there a route within `max_hops`, access-filtered, and if so
+return up to `k` of whatever `simplePath` finds — suited to a single adapter answering "are these
+two entities connected at all" cheaply, on the graph store itself. `ComputePort.shortest_paths`
+(this table, Phase 7's Pathfinder) is the actual weighted, ranked k-shortest-paths algorithm,
+running on one of `ComputePort`'s three compute tiers over the working set. Do not implement
+`GraphPort.paths` as a shortest-path algorithm, and do not route the Pathfinder feature through
+`GraphPort` — the split exists so that a cheap connectivity check and an expensive ranked
+algorithm scale independently, the same reasoning as ADR-008's split between `AnalyticsPort` and
+`ComputePort`.
+
 ## 7. Identifier normalisation — the Knowledge Adapters
 
 The CoLP deck is specific about this and it is the least glamorous, highest-value part of the
@@ -515,3 +532,86 @@ Two rules that are not optional:
    file-level metadata. Hash `(a_party, b_party, start_ts_to_second, duration, direction)` and
    deduplicate on that, retaining every source row reference on the surviving event so the
    provenance chain stays complete.
+
+## 8. `GraphPort` request and response shapes
+
+`00_ARCHITECTURE.md` §2.1 gives `GraphPort`'s method signatures — `expand(req: ExpandRequest,
+principal) -> Subgraph`, and so on — but never defined the request/response types themselves.
+Phase 1 built them, without raising the gap first. Recorded here so the contract three more
+adapters must satisfy is not only the one written down in a single implementation.
+
+```python
+class ExpandRequest(BaseModel):
+    node_ids: list[NodeId]
+    depth: int                        # 1-4
+    edge_types: list[str] | None      # None: every edge type: an explicit ["*"]-style
+                                       # wildcard was not worth a second spelling of "no filter"
+    direction: Literal["out", "in", "both"]
+    temporal_window: Interval | None  # filters by the edge's own interval, not the node's
+
+class PathRequest(BaseModel):
+    source: NodeId
+    target: NodeId
+    max_hops: int
+    k: int                            # at most this many paths returned
+    edge_types: list[str] | None
+
+class Path(BaseModel):
+    nodes: list[NodeId]
+    edges: list[EdgeId]
+    length: int                       # hop count; len(edges)
+
+class NeighbourhoodStats(BaseModel):
+    node_id: NodeId
+    degree: int
+    degree_by_type: dict[str, int]    # keyed by edge type name
+
+class Subgraph(BaseModel):
+    nodes: list[Node]
+    edges: list[Edge]
+    filtered_count: int                # see the note below — reserved, not yet populated
+```
+
+**`GraphPort.paths` is a bounded connectivity check, not the k-shortest-paths algorithm** — see
+§6.3's note under the algorithm table for the split against `ComputePort.shortest_paths`.
+
+**`filtered_count` is reserved, and Phase 1's adapter leaves it at zero.** `00_ARCHITECTURE.md`
+§5 states the general principle — "the count is reported as filtered so the analyst knows the
+picture is incomplete" — but computing it correctly needs a full-vs-filtered comparison at a
+point that holds both results, which is the Working-Set Service in Phase 3
+(`03_CONDUIT_MIDDLEWARE.md`, the expansion budget/cardinality preview), not a second query
+inside `GraphPort.expand` itself. A second query invented per adapter to populate this field is
+exactly the kind of extra, less-audited channel the existence-leak requirement exists to rule
+out. Phase 3 populates it; until then it is a declared gap, not a silent one.
+
+### 8.1 Pattern matching
+
+```python
+class PatternNode(BaseModel):
+    var: str                          # a name local to this query, not a stored identifier
+    entity_type: str | None           # None: any entity type
+
+class PatternEdge(BaseModel):
+    edge_type: str
+    from_var: str
+    to_var: str
+
+class PatternQuery(BaseModel):
+    nodes: list[PatternNode]
+    edges: list[PatternEdge]
+    limit: int
+```
+
+The binding rule, stated explicitly because nothing else does: **`nodes[0]` is the query's
+anchor, and every edge in `edges` must name a `from_var` already bound by the anchor or an
+earlier edge in the list — never a `to_var` introduced later.** A pattern is built up the way a
+caller would compose it by hand, one hop at a time from a starting point, not declared as an
+unordered set of constraints to be solved. `MENTIONED_IN` from either of two unconnected node
+sets, or a pattern requiring a node reachable only via a *later* edge, cannot be expressed;
+splitting it into two `match` calls and joining the results in the Conduit is the workaround
+until a real pattern-solving `match` is worth building. A second `GraphPort` adapter proving this
+suite must honour the same ordering rule, not invent its own.
+
+Two nodes may share an `entity_type`, and an edge's endpoints are matched against whichever
+`PatternNode.entity_type` is declared for `to_var`, if any — an untyped node matches any entity
+type reached at that position.
