@@ -31,19 +31,19 @@ call rejects a naive (offset-less) value outright — exactly the case this
 profiler needs to see *and flag* (`AnomalyKind.UNDETERMINED_TIMEZONE`),
 not have hidden behind a low match rate with no explanation.
 
-**Shape-masking (`09_INGEST_STUDIO.md` §3).** `_shape_mask` reveals the
-first few alphanumeric characters of a value, wherever they fall, and
-replaces every alphanumeric character after that with `#`; separators
+**Shape-masking (`09_INGEST_STUDIO.md` §3).** `_shape_mask` is
+class-based: every alphanumeric character becomes `#`; separators
 (spaces, hyphens, the `+` in a phone number) are always shown literally,
-since they carry the shape, not the content. Deliberately independent of
-whether the value has any separators at all — a rule keyed on "the first
-group before a space" would leave an unseparated identifier like an
-MSISDN written with no spacing (`01621926368`) entirely unmasked, which
-is exactly the value most in need of masking. This is a concrete
-formalisation of the principle, not a byte-exact reproduction of every
-illustrative example in `09_INGEST_STUDIO.md` §3's prose — "enough to
-confirm a pattern match and spot a malformed column, disclosing nothing"
-is a qualitative bar this rule meets, not a literal algorithm spec.
+since they carry the shape, not the content. No prefix is revealed —
+`09_INGEST_STUDIO.md` §3 asks for "enough to confirm the profiler's
+pattern match and to spot a malformed column, disclosing nothing", and
+the pattern-match confirmation and malformed-column signal both come
+from the preserved *shape* (length, separator positions), not from any
+visible content. Deliberately independent of whether the value has any
+separators at all — a rule keyed on "the first group before a space"
+would leave an unseparated identifier like an MSISDN written with no
+spacing (`01621926368`) entirely unmasked, which is exactly the value
+most in need of masking.
 
 **`ENCODING_NOT_UTF8` is not detected here.** It needs the raw bytes a
 connector decoded, not the already-decoded string rows this function
@@ -157,33 +157,15 @@ def _iso_shape(value: str) -> str | None:
     return "naive"
 
 
-#: How many leading alphanumeric characters `_shape_mask` leaves visible —
-#: chosen to match an ISO year's length (`09_INGEST_STUDIO.md` §3's
-#: `2021-##-##` example); see the module docstring's "Shape-masking"
-#: section for why this is a formalisation, not a literal transcription
-#: of every illustrative example there.
-_SHAPE_MASK_VISIBLE_PREFIX = 4
-
-
 def _shape_mask(value: str) -> str:
-    """Reveals the first `_SHAPE_MASK_VISIBLE_PREFIX` alphanumeric
-    characters of `value`, wherever they fall, and masks every
-    alphanumeric character after that as `#`; separators (spaces,
-    hyphens, the `+` in a phone number) are always shown literally, since
-    they carry the shape, not the content. Deliberately independent of
-    whether `value` has any separators at all — a rule keyed on "the
-    first group" would leave an unseparated identifier like an MSISDN
-    written with no spacing (`01621926368`) entirely unmasked, which is
-    exactly the value most in need of masking."""
-    result: list[str] = []
-    alnum_seen = 0
-    for ch in value:
-        if not ch.isalnum():
-            result.append(ch)
-            continue
-        alnum_seen += 1
-        result.append(ch if alnum_seen <= _SHAPE_MASK_VISIBLE_PREFIX else "#")
-    return "".join(result)
+    """Masks every alphanumeric character of `value` as `#`; separators
+    (spaces, hyphens, the `+` in a phone number) are always shown
+    literally, since they carry the shape, not the content. Deliberately
+    independent of whether `value` has any separators at all — a rule
+    keyed on "the first group" would leave an unseparated identifier like
+    an MSISDN written with no spacing (`01621926368`) entirely unmasked,
+    which is exactly the value most in need of masking."""
+    return "".join("#" if ch.isalnum() else ch for ch in value)
 
 
 def _classify_value(value: str) -> InferredType:

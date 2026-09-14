@@ -76,11 +76,13 @@ reads a sample — 10,000 rows or the whole file, whichever is smaller — and r
 column-to-property mapping yet, so per-property sensitivity cannot apply — the only marking
 available is the one set on the source at Connect. The rule is therefore source-level: a
 principal cleared for the source's marking sees sample values in full; anyone else sees each
-value with its characters masked but its *structure* preserved — `+44 7### ######`,
-`A####AB`, `2021-##-##`. That is enough to confirm the profiler's pattern match and to spot a
-malformed column, and it discloses nothing. Values are never simply hidden, because a profiler
-that shows nothing cannot be checked, and an unchecked mapping is how a source silently
-fragments the graph.
+value with every alphanumeric character replaced by `#` and every separator (space, hyphen, the
+`+` in a phone number) shown literally, so its *structure* is preserved but no content is —
+`+44 7700 900461` becomes `+## #### ######`, `WILSON` becomes `######`, `A2435AB` becomes
+`#######`. That is enough to confirm the profiler's pattern match and to spot a malformed
+column, and it discloses nothing. Values are never simply hidden, because a profiler that shows
+nothing cannot be checked, and an unchecked mapping is how a source silently fragments the
+graph.
 
 Pattern recognition is what makes the mapping stage fast. A CDR from an unfamiliar carrier
 arrives and the profiler has already worked out that column 3 is an A-party MSISDN, column 7 is a
@@ -101,12 +103,12 @@ would "match" both); `coordinate_lon`/`coordinate_lat`/`geometry_ref` need a dec
 and a column *pair*, and `grid_ref`'s split form needs three columns, none of which a single
 column's values can supply, so cross-column pattern detection stays out of scope for this phase.
 `ENCODING_NOT_UTF8` is not detected — that needs the raw bytes a connector decoded, not the
-already-decoded rows this profiler receives. Shape-masking is `_shape_mask`: reveal the first four
-alphanumeric characters of a value wherever they fall, mask every alphanumeric character after
-that as `#`, keep every separator literal — deliberately independent of whether the value has any
-separators at all, since a rule keyed on "the first group before a space" would leave an
-unseparated identifier (an MSISDN with no spacing) entirely unmasked. A concrete formalisation of
-the principle above, not a byte-exact reproduction of `+44 7### ######`/`2021-##-##`.
+already-decoded rows this profiler receives. Shape-masking is `_shape_mask`: mask every
+alphanumeric character of a value as `#`, keep every separator literal — deliberately independent
+of whether the value has any separators at all, since a rule keyed on "the first group before a
+space" would leave an unseparated identifier (an MSISDN with no spacing) entirely unmasked. No
+prefix is revealed; the preserved length and separator positions are already enough to confirm a
+pattern match and spot a malformed column without disclosing content.
 
 ## 4. Stage 3 — Map
 

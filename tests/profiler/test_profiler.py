@@ -275,8 +275,28 @@ def test_shape_masking_also_applies_to_anomaly_samples() -> None:
     rows = _rows({"start_time": "2026-01-10 10:00:00"})
     profile = _profile(rows, principal=_UNCLEARED)
     anomaly = next(a for a in profile.anomalies if a.kind is AnomalyKind.UNDETERMINED_TIMEZONE)
-    assert anomaly.sample != "2026-01-10 10:00:00"
-    assert anomaly.sample.startswith("2026")
+    assert anomaly.sample == "####-##-## ##:##:##"
+
+
+def test_shape_masking_golden_cases() -> None:
+    """Exact golden values for `09_INGEST_STUDIO.md` §3's class-based
+    masking rule: every alphanumeric character becomes `#`, every
+    separator is shown literally, length is always preserved."""
+    cases = {
+        "+44 7700 900461": "+## #### ######",
+        # An unseparated MSISDN — the case the rule exists to catch: no
+        # space or hyphen to key a "first group" rule off of.
+        "07700900461": "###########",
+        # A person name: no digits, no separators, still fully masked.
+        "WILSON": "######",
+        # A vehicle registration: mixed letters and digits, no separators.
+        "A2435AB": "#######",
+    }
+    for value, expected in cases.items():
+        rows = _rows({"v": value})
+        profile = _profile(rows, principal=_UNCLEARED)
+        (col,) = profile.columns
+        assert col.sample_values[0] == expected, f"{value!r} -> {col.sample_values[0]!r}"
 
 
 def test_masking_is_one_decision_for_the_whole_source_not_per_column() -> None:
