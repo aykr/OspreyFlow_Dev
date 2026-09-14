@@ -75,14 +75,37 @@ reads a sample — 10,000 rows or the whole file, whichever is smaller — and r
 **What shape-masking means, since "redacted" was never defined.** At profiling time there is no
 column-to-property mapping yet, so per-property sensitivity cannot apply — the only marking
 available is the one set on the source at Connect. The rule is therefore source-level: a
-principal cleared for the source's marking sees sample values in full; anyone else sees each
-value with every alphanumeric character replaced by `#` and every separator (space, hyphen, the
-`+` in a phone number) shown literally, so its *structure* is preserved but no content is —
-`+44 7700 900461` becomes `+## #### ######`, `WILSON` becomes `######`, `A2435AB` becomes
-`#######`. That is enough to confirm the profiler's pattern match and to spot a malformed
-column, and it discloses nothing. Values are never simply hidden, because a profiler that shows
-nothing cannot be checked, and an unchecked mapping is how a source silently fragments the
-graph.
+principal cleared for the source's marking sees sample values in full; anyone else sees a mask.
+
+The mask preserves **character class and position, never content**:
+
+| Input character | Rendered as |
+| --- | --- |
+| Letter (Unicode-aware, not ASCII-only) | `A` |
+| Digit (Unicode-aware) | `#` |
+| Anything else | itself, literally |
+
+`+44 7700 900461` → `+## #### ######` · `WILSON` → `AAAAAA` · `A2435AB` → `A####AA` ·
+`2021-03-10` → `####-##-##`
+
+Class preservation is the part that does the work. Masking every alphanumeric to a single symbol
+renders `AB1234` and `123456` identically, which means the sample no longer shows a type
+mismatch and the "spot a malformed column" claim quietly transfers onto the separate
+`pattern_matches` field. Keeping letters and digits distinct puts that signal back in the sample
+itself, where an analyst scanning a column will actually see it, and discloses nothing: `A####AA`
+tells you the shape of a prison number without telling you whose.
+
+Two limits, because a positional mask over free text leaks more than it looks:
+
+- **Cap the mask at 32 characters** and append an ellipsis with the true length. A masked
+  paragraph otherwise discloses word lengths and every punctuation mark in order, which for a
+  short free-text field can be close to reading it.
+- **For a column the profiler classes as free text**, show a character-class summary and a
+  length distribution instead of a positional mask. Structure is the point of the mask, and free
+  text has none worth showing.
+
+Values are never simply hidden. A profiler that shows nothing cannot be checked, and an
+unchecked mapping is how a source silently fragments the graph.
 
 Pattern recognition is what makes the mapping stage fast. A CDR from an unfamiliar carrier
 arrives and the profiler has already worked out that column 3 is an A-party MSISDN, column 7 is a
@@ -93,22 +116,6 @@ The profile also flags what will hurt later: mixed timestamp formats in one colu
 that cannot be determined, an encoding that is not UTF-8, rows whose column count varies, and
 apparent duplicate records. Each is shown with a count and a sample, and each becomes a decision
 in the mapping stage rather than a silent default.
-
-**Implemented headless in Phase 2** (`services/ingest/profiler.py`, `schemas/profile.py`) — the
-studio (Phase 5a) is the display surface over `SourceProfile`, not a second implementation.
-Pattern recognition runs against `msisdn`/`imei`/`imsi`/`email`/`iban`/`card`/`postcode`/`grid_ref`
-and a bespoke ISO-datetime shape check — every adapter with a genuine reject condition.
-`person_name`/`address` are excluded (both reject only an empty string, so nearly any text column
-would "match" both); `coordinate_lon`/`coordinate_lat`/`geometry_ref` need a declared `source_crs`
-and a column *pair*, and `grid_ref`'s split form needs three columns, none of which a single
-column's values can supply, so cross-column pattern detection stays out of scope for this phase.
-`ENCODING_NOT_UTF8` is not detected — that needs the raw bytes a connector decoded, not the
-already-decoded rows this profiler receives. Shape-masking is `_shape_mask`: mask every
-alphanumeric character of a value as `#`, keep every separator literal — deliberately independent
-of whether the value has any separators at all, since a rule keyed on "the first group before a
-space" would leave an unseparated identifier (an MSISDN with no spacing) entirely unmasked. No
-prefix is revealed; the preserved length and separator positions are already enough to confirm a
-pattern match and spot a malformed column without disclosing content.
 
 ## 4. Stage 3 — Map
 

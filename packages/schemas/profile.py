@@ -8,12 +8,15 @@ what "redacted" means, now that it is a real, implemented decision rather
 than an undefined word: shape-masking, not hiding. Connect (stage 1) sets
 the source's handling marking before Profile (stage 2) ever runs, so the
 marking is available at profiling time — a principal cleared for it sees
-sample values in full; anyone else sees each value's structure
-(`+44 7### ######`, `2021-##-##`) with its content masked. Values are
-never simply hidden: a profiler that shows nothing cannot be checked, and
-an unchecked mapping is how a source silently fragments the graph. The
-studio (Phase 5a) is the display surface over this shape, not a second
-implementation of profiling or of the masking decision.
+sample values in full; anyone else sees each value's structure with its
+content masked by character class (a letter as `A`, a digit as `#`,
+`+44 7700 900461` as `+## #### ######`), capped in length, and replaced
+with a character-class-and-length summary instead for a free-text
+column. Values are never simply hidden: a profiler that shows nothing
+cannot be checked, and an unchecked mapping is how a source silently
+fragments the graph. The studio (Phase 5a) is the display surface over
+this shape, not a second implementation of profiling or of the masking
+decision.
 
 TypeScript types are generated from these (`generate_ts.py`); a drift
 between the two fails the build (`scripts/schemas_check.py`).

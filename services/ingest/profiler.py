@@ -32,18 +32,33 @@ profiler needs to see *and flag* (`AnomalyKind.UNDETERMINED_TIMEZONE`),
 not have hidden behind a low match rate with no explanation.
 
 **Shape-masking (`09_INGEST_STUDIO.md` §3).** `_shape_mask` is
-class-based: every alphanumeric character becomes `#`; separators
-(spaces, hyphens, the `+` in a phone number) are always shown literally,
-since they carry the shape, not the content. No prefix is revealed —
-`09_INGEST_STUDIO.md` §3 asks for "enough to confirm the profiler's
-pattern match and to spot a malformed column, disclosing nothing", and
-the pattern-match confirmation and malformed-column signal both come
-from the preserved *shape* (length, separator positions), not from any
-visible content. Deliberately independent of whether the value has any
-separators at all — a rule keyed on "the first group before a space"
-would leave an unseparated identifier like an MSISDN written with no
-spacing (`01621926368`) entirely unmasked, which is exactly the value
-most in need of masking.
+class-based, not uniform: a Unicode letter renders as `A`, a Unicode
+digit as `#`, and everything else — space, hyphen, `+`, `@`, `.`, any
+other punctuation — passes through literally, since it carries the
+shape, not the content. Every non-alphanumeric character is treated as
+a literal separator, not only the handful `09_INGEST_STUDIO.md` §3 uses
+as illustrations. Keeping letters and digits distinct, rather than
+collapsing both to one symbol, is what lets a masked sample still show
+a type mismatch by itself — `AB1234` and `123456` would otherwise
+render identically, pushing that signal onto the separate
+`pattern_matches` field instead. Deliberately independent of whether
+the value has any separators at all — a rule keyed on "the first group
+before a space" would leave an unseparated identifier like an MSISDN
+written with no spacing (`01621926368`) entirely unmasked, which is
+exactly the value most in need of masking.
+
+Two further limits, both because a positional mask over long or
+unstructured text discloses more than it looks. `_shape_mask` caps at
+`_MASK_CAP_LENGTH` characters and appends the true length, since an
+uncapped mask over a long value discloses its exact length. And
+`_is_free_text_column` (`STRING`-typed, no pattern match, at least one
+sample value over the cap) makes `_mask_profile` replace positional
+masking for that column altogether with `_free_text_summary`: a
+character-class count and a length distribution, never the values'
+shape. A masked paragraph would otherwise disclose word lengths and
+every punctuation mark in order, which for short free text is close to
+reading it — structure is the point of the mask, and free text has
+none worth showing.
 
 **`ENCODING_NOT_UTF8` is not detected here.** It needs the raw bytes a
 connector decoded, not the already-decoded string rows this function
@@ -157,15 +172,55 @@ def _iso_shape(value: str) -> str | None:
     return "naive"
 
 
+#: `_shape_mask` reveals nothing past this many characters — an
+#: uncapped positional mask over a long value discloses its exact
+#: length, which for a short free-text field is close to reading it.
+_MASK_CAP_LENGTH = 32
+
+
 def _shape_mask(value: str) -> str:
-    """Masks every alphanumeric character of `value` as `#`; separators
-    (spaces, hyphens, the `+` in a phone number) are always shown
-    literally, since they carry the shape, not the content. Deliberately
-    independent of whether `value` has any separators at all — a rule
-    keyed on "the first group" would leave an unseparated identifier like
-    an MSISDN written with no spacing (`01621926368`) entirely unmasked,
-    which is exactly the value most in need of masking."""
-    return "".join("#" if ch.isalnum() else ch for ch in value)
+    """Masks `value` by character class: a Unicode letter renders as
+    `A`, a Unicode digit as `#`; everything else (spaces, hyphens, the
+    `+` in a phone number, and any other punctuation) is shown literally,
+    since it carries the shape, not the content. Deliberately independent
+    of whether `value` has any separators at all — a rule keyed on "the
+    first group" would leave an unseparated identifier like an MSISDN
+    written with no spacing (`01621926368`) entirely unmasked, which is
+    exactly the value most in need of masking. Capped at
+    `_MASK_CAP_LENGTH` characters with the true length appended."""
+    masked = "".join("A" if ch.isalpha() else "#" if ch.isdigit() else ch for ch in value)
+    if len(value) <= _MASK_CAP_LENGTH:
+        return masked
+    return f"{masked[:_MASK_CAP_LENGTH]}…({len(value)})"
+
+
+def _is_free_text_column(column: ColumnProfile) -> bool:
+    """A column the profiler treats as free text rather than a
+    structured identifier: `STRING`-inferred, matching none of the
+    Knowledge Adapter patterns, and containing at least one sample value
+    longer than `_MASK_CAP_LENGTH` — the same length past which a
+    positional mask starts disclosing shape (word lengths, punctuation
+    in order) rather than concealing content."""
+    if column.inferred_type is not InferredType.STRING:
+        return False
+    if column.pattern_matches:
+        return False
+    return any(len(v) > _MASK_CAP_LENGTH for v in column.sample_values)
+
+
+def _free_text_summary(values: list[str]) -> str:
+    """Replaces positional masking for a free-text column: a
+    character-class count and a length distribution, never the values'
+    shape — structure is the point of the positional mask, and free
+    text has none worth showing."""
+    lengths = sorted(len(v) for v in values)
+    letters = sum(ch.isalpha() for v in values for ch in v)
+    digits = sum(ch.isdigit() for v in values for ch in v)
+    other = sum(len(v) for v in values) - letters - digits
+    return (
+        f"free text — {len(values)} sample value(s), length {lengths[0]}-{lengths[-1]}, "
+        f"{letters} letters / {digits} digits / {other} other characters"
+    )
 
 
 def _classify_value(value: str) -> InferredType:
@@ -317,7 +372,15 @@ _SENTINEL = object()
 
 def _mask_profile(profile: SourceProfile) -> SourceProfile:
     masked_columns = [
-        column.model_copy(update={"sample_values": [_shape_mask(v) for v in column.sample_values]})
+        column.model_copy(
+            update={
+                "sample_values": (
+                    [_free_text_summary(column.sample_values)]
+                    if _is_free_text_column(column)
+                    else [_shape_mask(v) for v in column.sample_values]
+                )
+            }
+        )
         for column in profile.columns
     ]
     masked_anomalies = [

@@ -26,6 +26,10 @@ it every session.
 All eighteen decision records in `docs/06_DECISIONS.md` are accepted. If you believe one is
 wrong, say so and stop — do not implement an alternative and explain afterwards.
 
+`docs/` is the source of truth for the specification. When a correction to a doc arrives as a
+whole replacement file, diff it against the working copy before applying it, and reject any hunk
+outside the stated scope of the change — a correction to one section must not revert another.
+
 ## Rules that hold in every session
 
 1. **Conformance suites are written before adapters.** The suite defines the contract.

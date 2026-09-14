@@ -280,23 +280,63 @@ def test_shape_masking_also_applies_to_anomaly_samples() -> None:
 
 def test_shape_masking_golden_cases() -> None:
     """Exact golden values for `09_INGEST_STUDIO.md` §3's class-based
-    masking rule: every alphanumeric character becomes `#`, every
-    separator is shown literally, length is always preserved."""
+    masking rule: a letter becomes `A`, a digit becomes `#`, everything
+    else is shown literally, length is always preserved (below the cap
+    — see `test_shape_masking_caps_long_values`)."""
     cases = {
         "+44 7700 900461": "+## #### ######",
         # An unseparated MSISDN — the case the rule exists to catch: no
         # space or hyphen to key a "first group" rule off of.
         "07700900461": "###########",
         # A person name: no digits, no separators, still fully masked.
-        "WILSON": "######",
-        # A vehicle registration: mixed letters and digits, no separators.
-        "A2435AB": "#######",
+        "WILSON": "AAAAAA",
+        # Non-ASCII letters must mask too — this is Unicode-aware, not
+        # ASCII-only (`09_INGEST_STUDIO.md` §3).
+        "أحمد": "AAAA",
+        # A mixed letter-digit reference: the whole point of class-based
+        # masking is that this does NOT collapse to a uniform symbol —
+        # the letter/digit pattern stays visible in the mask itself.
+        "A2435AB": "A####AA",
+        # An email address: `.` and `@` are separators, not content.
+        "john.smith@example.com": "AAAA.AAAAA@AAAAAAA.AAA",
     }
     for value, expected in cases.items():
         rows = _rows({"v": value})
         profile = _profile(rows, principal=_UNCLEARED)
         (col,) = profile.columns
         assert col.sample_values[0] == expected, f"{value!r} -> {col.sample_values[0]!r}"
+
+
+def test_shape_masking_caps_long_values_and_appends_the_true_length() -> None:
+    """`09_INGEST_STUDIO.md` §3: an uncapped positional mask over a long
+    value discloses its exact length almost as plainly as showing it.
+    Unit-level against `_shape_mask` directly — a `STRING` column with a
+    value this long and no pattern match is classified free text by
+    `profile_source` (see `test_free_text_column_gets_a_summary_not_a_positional_mask`),
+    so the capped-but-still-positional case is exercised here instead."""
+    from services.ingest.profiler import _shape_mask
+
+    value = "A" * 40
+    assert _shape_mask(value) == "A" * 32 + "…(40)"
+
+
+def test_free_text_column_gets_a_summary_not_a_positional_mask() -> None:
+    """A `STRING` column with no pattern match and a value over the cap
+    is free text — masking it positionally would disclose word lengths
+    and punctuation in order, which for short prose is close to reading
+    it, so it gets a character-class-and-length summary instead
+    (`09_INGEST_STUDIO.md` §3)."""
+    long_value = "Officer noted the vehicle left the scene heading north."
+    assert len(long_value) > 32
+    rows = _rows({"notes": long_value})
+    profile = _profile(rows, principal=_UNCLEARED)
+    (col,) = profile.columns
+    assert len(col.sample_values) == 1
+    summary = col.sample_values[0]
+    assert summary != long_value
+    assert "…" not in summary  # not a positional mask at all
+    assert "free text" in summary
+    assert str(len(long_value)) in summary
 
 
 def test_masking_is_one_decision_for_the_whole_source_not_per_column() -> None:
