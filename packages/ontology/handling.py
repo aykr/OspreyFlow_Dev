@@ -14,7 +14,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, ValidationError
 
-from schemas.domain import Handling
+from schemas.domain import Handling, Principal
 
 from .errors import HandlingSchemeError
 
@@ -45,6 +45,31 @@ class HandlingScheme(BaseModel):
     handling_codes: dict[str, HandlingCode]
     action_codes: dict[str, ActionCode]
     sanitisation_codes: dict[str, SanitisationCode]
+
+    def clears(self, principal_clearance: str, classification: str) -> bool:
+        """The classification dominance rule (`01_DOMAIN_MODEL.md` §2.2),
+        for a single check rather than `AccessFilter`'s per-query
+        `within(...)` list — the source profiler's shape-masking decision
+        (`09_INGEST_STUDIO.md` §3) is the caller, since it has no
+        traversal to inject a predicate into.
+
+        An unrecognised *principal* clearance clears nothing — the same
+        default-deny `AccessFilter.allowed_classifications` applies,
+        since a malformed or stale clearance is a security posture
+        question, not a configuration bug. An unrecognised
+        *classification* is different in kind: it means the marking being
+        checked is not in this scheme at all, the same scheme mismatch
+        `evaluate_handling` treats as a hard error rather than silently
+        denying or allowing."""
+        if classification not in self.classification:
+            raise HandlingSchemeError(
+                f"classification {classification!r} is not defined in scheme {self.name!r}"
+            )
+        try:
+            principal_rank = self.classification.index(principal_clearance)
+        except ValueError:
+            return False
+        return self.classification.index(classification) <= principal_rank
 
 
 class HandlingDecision(BaseModel):
@@ -114,4 +139,27 @@ def evaluate_handling(handling: Handling, scheme: HandlingScheme) -> HandlingDec
         direct_action_permitted=direct_action_permitted,
         originator_permission_required=originator_permission_required,
         consult_originator=consult_originator,
+    )
+
+
+def principal_may_view(handling: Handling, principal: Principal, scheme: HandlingScheme) -> bool:
+    """The same two axes `AccessFilter.gremlin_has_step` compiles into a
+    traversal predicate (`01_DOMAIN_MODEL.md` §2.2), evaluated directly
+    for one `Handling` block instead of injected into a query — for a
+    caller with no traversal to inject a predicate into, such as the
+    source profiler's shape-masking decision (`09_INGEST_STUDIO.md` §3).
+    `action_code`/`sanitisation_code` never gate a read, only classification
+    and a restricted `handling_code` do."""
+    if not scheme.clears(principal.clearance, handling.classification):
+        return False
+    code = scheme.handling_codes.get(handling.handling_code)
+    if code is None:
+        raise HandlingSchemeError(
+            f"handling code {handling.handling_code!r} is not defined in scheme {scheme.name!r}"
+        )
+    if code.dissemination != "restricted":
+        return True
+    return handling.handling_code in principal.receivable_handling_codes and principal.org_unit in (
+        handling.owning_unit,
+        handling.originator,
     )

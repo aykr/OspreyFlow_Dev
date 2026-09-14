@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from typing import Any
 
 from ulid import ULID
 
@@ -34,6 +35,8 @@ from schemas.domain import (
     EdgeId,
     EdgeWrite,
     ExpandRequest,
+    Handling,
+    Interval,
     NeighbourhoodStats,
     Node,
     NodeId,
@@ -43,21 +46,28 @@ from schemas.domain import (
     PathRequest,
     PatternQuery,
     Principal,
+    Provenance,
     SchemaReport,
     Subgraph,
     TxId,
+    WeightComponents,
 )
 
 from .access_filter import AccessFilter
 from .builders import (
     ExpandBuilder,
+    FindByIdentifierBuilder,
     GetNodeBuilder,
     MatchBuilder,
     NeighbourhoodStatsBuilder,
     PathBuilder,
 )
 from .client import ArcadeDBClient
-from .gremlin_literals import groovy_identifier, groovy_string_literal
+from .gremlin_literals import (
+    groovy_identifier,
+    groovy_string_list_literal,
+    groovy_string_literal,
+)
 from .naming import logical_type_name, physical_type_name
 from .schema import apply_schema as _apply_schema_ddl
 from .schema import drop_schema as _drop_schema_ddl
@@ -67,6 +77,7 @@ from .serialization import (
     node_from_element_map,
     node_write_to_properties,
 )
+from .weight import WeightConfig, compute_weight
 
 
 class GraphArcadeDBAdapter:
@@ -76,9 +87,16 @@ class GraphArcadeDBAdapter:
 
     dialects: frozenset[str] = frozenset({"gremlin"})
 
-    def __init__(self, client: ArcadeDBClient, handling_scheme: HandlingScheme) -> None:
+    def __init__(
+        self,
+        client: ArcadeDBClient,
+        handling_scheme: HandlingScheme,
+        *,
+        weight_config: WeightConfig = WeightConfig(),
+    ) -> None:
         self._client = client
         self._access = AccessFilter(handling_scheme)
+        self._weight_config = weight_config
         self._schema: OntologySchema | None = None
         # In-memory only: a real migration runner persists applied versions
         # to survive a restart. Reverting to a version never applied in
@@ -113,7 +131,13 @@ class GraphArcadeDBAdapter:
             validate_properties(entity_type, write.properties)
 
             node_id = str(ULID())
-            audit = AuditStub(created_at=datetime.now(UTC), created_by=write.created_by)
+            audit = AuditStub(
+                created_at=datetime.now(UTC),
+                created_by=write.created_by,
+                load_id=write.load_id,
+                recipe_id=write.recipe_id,
+                recipe_version=write.recipe_version,
+            )
             props = node_write_to_properties(
                 write, node_id=node_id, audit=audit, entity_type=entity_type
             )
@@ -134,9 +158,99 @@ class GraphArcadeDBAdapter:
             return None
         return logical_type_name(results[0]["result"])
 
+    async def _find_existing_edge(
+        self, type_name: str, source: NodeId, target: NodeId, *, directed: bool, session_id: TxId
+    ) -> dict[str, Any] | None:
+        """`01_DOMAIN_MODEL.md` §3: one summarised edge per pair per type.
+        A second `upsert_edges` call for the same (type, source, target) —
+        the same pair recurring in a later ingest load — must find and
+        merge into this edge, never add a second one. A *reverted* edge is
+        excluded: a later load touching the same pair starts a fresh edge
+        rather than silently resurrecting retracted data by piling more
+        occurrences onto it."""
+        src_lit = groovy_string_literal(source)
+        tgt_lit = groovy_string_literal(target)
+        label_lit = groovy_string_literal(type_name)
+        step = "outE" if directed else "bothE"
+        other = "inV" if directed else "otherV"
+        query = (
+            f'g.V().has("id",{src_lit}).{step}({label_lit}).has("reverted",false)'
+            f'.where({other}().has("id",{tgt_lit})).elementMap()'
+        )
+        results = await self._client.gremlin(query, session_id=session_id)
+        return results[0] if results else None
+
+    async def _sum_occurrences(self, query: str, session_id: TxId) -> int:
+        results = await self._client.gremlin(query, session_id=session_id)
+        if not results:
+            return 0
+        return int(results[0].get("result") or 0)
+
+    async def _corpus_edge_stats(
+        self, type_name: str, source: NodeId, target: NodeId, *, session_id: TxId
+    ) -> tuple[int, int, int]:
+        """Occurrences-weighted degree of `source` and `target` and the
+        corpus-wide total for this edge type, *before* this write's own
+        delta is added — `upsert_edges` adds that delta itself, since it is
+        the one write not yet reflected in the store at the moment this
+        query runs. Reverted edges are excluded throughout: retracted data
+        must not still weigh on the corpus statistics live edges are
+        scored against."""
+        label_lit = groovy_string_literal(type_name)
+        src_lit = groovy_string_literal(source)
+        tgt_lit = groovy_string_literal(target)
+        source_degree = await self._sum_occurrences(
+            f'g.V().has("id",{src_lit}).bothE({label_lit}).has("reverted",false)'
+            '.values("occurrences").sum()',
+            session_id,
+        )
+        target_degree = await self._sum_occurrences(
+            f'g.V().has("id",{tgt_lit}).bothE({label_lit}).has("reverted",false)'
+            '.values("occurrences").sum()',
+            session_id,
+        )
+        corpus_total = await self._sum_occurrences(
+            f'g.E().hasLabel({label_lit}).has("reverted",false).values("occurrences").sum()',
+            session_id,
+        )
+        return source_degree, target_degree, corpus_total
+
+    @staticmethod
+    def _merge_provenance(existing: object, incoming: Provenance) -> Provenance:
+        """`01_DOMAIN_MODEL.md` §7: every source row reference is retained
+        on the surviving edge — a second `upsert_edges` call for the same
+        pair adds its sources to the existing edge's, it does not replace
+        them. De-duplicated by `(document_id, locator)` so re-running the
+        same file against the same load is idempotent, not
+        source-list-growing."""
+        existing_provenance = Provenance.model_validate(existing) if existing else None
+        if existing_provenance is None:
+            return incoming
+        seen = {(s.document_id, s.locator) for s in existing_provenance.sources}
+        merged_sources = list(existing_provenance.sources)
+        for source in incoming.sources:
+            if (source.document_id, source.locator) not in seen:
+                merged_sources.append(source)
+                seen.add((source.document_id, source.locator))
+        return incoming.model_copy(update={"sources": merged_sources})
+
+    @staticmethod
+    def _merge_interval(existing: object, incoming: Interval | None) -> Interval | None:
+        existing_interval = Interval.model_validate(existing) if existing else None
+        if existing_interval is None:
+            return incoming
+        if incoming is None:
+            return existing_interval
+        valid_from = min(existing_interval.valid_from, incoming.valid_from)
+        existing_to = existing_interval.valid_to or existing_interval.valid_from
+        incoming_to = incoming.valid_to or incoming.valid_from
+        valid_to = max(existing_to, incoming_to)
+        return Interval(valid_from=valid_from, valid_to=valid_to)
+
     async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: TxId) -> list[EdgeId]:
         schema = self._require_schema()
         ids: list[EdgeId] = []
+        now = datetime.now(UTC)
         for write in edges:
             edge_type = schema.edge_type(write.type)
             if edge_type is None:
@@ -151,12 +265,63 @@ class GraphArcadeDBAdapter:
                 raise OntologyError(f"edge target {write.target!r} does not exist")
             validate_edge_endpoints(edge_type, source_type=source_type, target_type=target_type)
 
-            edge_id = str(ULID())
-            audit = AuditStub(created_at=datetime.now(UTC), created_by=write.created_by)
-            props = edge_write_to_properties(
-                write, edge_id=edge_id, audit=audit, edge_type=edge_type
-            )
             type_name = groovy_identifier(physical_type_name(write.type))
+            existing = await self._find_existing_edge(
+                type_name, write.source, write.target, directed=edge_type.directed, session_id=tx
+            )
+
+            if existing is not None:
+                edge_id = str(existing["id"])
+                merged_occurrences = int(existing.get("occurrences") or 1) + write.occurrences
+                merged_interval = self._merge_interval(existing.get("interval"), write.interval)
+                merged_provenance = self._merge_provenance(
+                    existing.get("provenance"), write.provenance
+                )
+                existing_audit = AuditStub.model_validate(existing["audit"])
+                audit = existing_audit.model_copy(
+                    update={
+                        "revision": existing_audit.revision + 1,
+                        "load_id": write.load_id,
+                        "recipe_id": write.recipe_id,
+                        "recipe_version": write.recipe_version,
+                    }
+                )
+            else:
+                edge_id = str(ULID())
+                merged_occurrences = write.occurrences
+                merged_interval = write.interval
+                merged_provenance = write.provenance
+                audit = AuditStub(
+                    created_at=now,
+                    created_by=write.created_by,
+                    load_id=write.load_id,
+                    recipe_id=write.recipe_id,
+                    recipe_version=write.recipe_version,
+                )
+
+            weight, components = await self._weigh_edge(
+                type_name,
+                write,
+                merged_occurrences=merged_occurrences,
+                merged_interval=merged_interval,
+                now=now,
+                session_id=tx,
+            )
+            merged_write = write.model_copy(
+                update={
+                    "occurrences": merged_occurrences,
+                    "interval": merged_interval,
+                    "provenance": merged_provenance,
+                }
+            )
+            props = edge_write_to_properties(
+                merged_write,
+                edge_id=edge_id,
+                audit=audit,
+                edge_type=edge_type,
+                weight=weight,
+                weight_components=components,
+            )
             # Bound Gremlin/Groovy variable names are prefixed: TinkerPop
             # statically imports `T.id`/`T.label` as bare `id`/`label` in
             # this scripting context, so a parameter literally named `id`
@@ -169,23 +334,77 @@ class GraphArcadeDBAdapter:
                 else f".property({key!r}, prop_{key})"
                 for key in props
             )
-            command = (
-                f'g.V().has("id", src).as("__src")'
-                f'.V().has("id", tgt)'
-                f'.addE("{type_name}").from("__src"){property_steps}'
-            )
-            await self._client.gremlin(
-                command,
-                params={"src": write.source, "tgt": write.target, **bound_params},
-                session_id=tx,
-            )
+            if existing is not None:
+                edge_lit = groovy_string_literal(edge_id)
+                command = f'g.E().has("id",{edge_lit}){property_steps}'
+                await self._client.gremlin(command, params=bound_params, session_id=tx)
+            else:
+                command = (
+                    f'g.V().has("id", src).as("__src")'
+                    f'.V().has("id", tgt)'
+                    f'.addE("{type_name}").from("__src"){property_steps}'
+                )
+                await self._client.gremlin(
+                    command,
+                    params={"src": write.source, "tgt": write.target, **bound_params},
+                    session_id=tx,
+                )
             ids.append(edge_id)
         return ids
 
+    async def _weigh_edge(
+        self,
+        type_name: str,
+        write: EdgeWrite,
+        *,
+        merged_occurrences: int,
+        merged_interval: Interval | None,
+        now: datetime,
+        session_id: TxId,
+    ) -> tuple[float, WeightComponents]:
+        """`01_DOMAIN_MODEL.md` §6.1. `merged_occurrences` already reflects
+        this write; the corpus-wide degree/total queries do not yet, since
+        the store has not been updated at the point they run — so this
+        write's own delta (`write.occurrences`) is added to each below."""
+        source_degree, target_degree, corpus_total = await self._corpus_edge_stats(
+            type_name, write.source, write.target, session_id=session_id
+        )
+        delta = write.occurrences
+        components = WeightComponents(
+            occurrences=merged_occurrences,
+            corpus_pair_count=merged_occurrences,
+            corpus_source_degree=source_degree + delta,
+            corpus_target_degree=target_degree + delta,
+            corpus_total_occurrences=corpus_total + delta,
+            computed_at=now,
+        )
+        weight = compute_weight(
+            components,
+            valid_to=merged_interval.valid_to if merged_interval else None,
+            now=now,
+            config=self._weight_config,
+        )
+        return weight, components
+
     # --- reads -----------------------------------------------------------
 
-    async def get_node(self, node_id: NodeId, principal: Principal) -> Node | None:
-        query = GetNodeBuilder(node_id).render_gremlin(self._access, principal)
+    async def get_node(
+        self, node_id: NodeId, principal: Principal, *, include_superseded: bool = False
+    ) -> Node | None:
+        query = GetNodeBuilder(node_id, include_superseded=include_superseded).render_gremlin(
+            self._access, principal
+        )
+        results = await self._client.gremlin(query)
+        if not results:
+            return None
+        return node_from_element_map(results[0])
+
+    async def find_node(
+        self, entity_type: str, identifier_field: str, value: str, principal: Principal
+    ) -> Node | None:
+        query = FindByIdentifierBuilder(entity_type, identifier_field, value).render_gremlin(
+            self._access, principal
+        )
         results = await self._client.gremlin(query)
         if not results:
             return None
@@ -275,3 +494,256 @@ class GraphArcadeDBAdapter:
         report = await _apply_schema_ddl(self._client, target)
         self._schema = target
         return report
+
+    # --- revert ------------------------------------------------------------
+
+    async def revert_elements(
+        self, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId], tx: TxId
+    ) -> None:
+        if node_ids:
+            ids_literal = groovy_string_list_literal(list(node_ids))
+            await self._client.gremlin(
+                f'g.V().has("id",within({ids_literal})).property("reverted", true)',
+                session_id=tx,
+            )
+        if edge_ids:
+            ids_literal = groovy_string_list_literal(list(edge_ids))
+            await self._client.gremlin(
+                f'g.E().has("id",within({ids_literal})).property("reverted", true)',
+                session_id=tx,
+            )
+
+    # --- supersession --------------------------------------------------------
+
+    async def supersede_node(self, node_id: NodeId, replacement: NodeWrite, tx: TxId) -> NodeId:
+        schema = self._require_schema()
+        entity_type = schema.entity_type(replacement.type)
+        if entity_type is None:
+            raise OntologyError(f"{replacement.type!r} is not a type in the active ontology")
+        validate_properties(entity_type, replacement.properties)
+
+        node_lit = groovy_string_literal(node_id)
+        # Unfiltered by design — an internal lookup during a trusted write,
+        # the same as `_node_type`'s, not a principal-scoped read. It must
+        # also find a node that is itself already superseded (the caller's
+        # business whether that is sensible), so it never applies the
+        # access filter's `hasNot("superseded_by")` step.
+        existing_results = await self._client.gremlin(
+            f'g.V().has("id",{node_lit}).elementMap()', session_id=tx
+        )
+        if not existing_results:
+            raise OntologyError(f"cannot supersede {node_id!r}: no such node")
+        existing_audit = AuditStub.model_validate(existing_results[0]["audit"])
+
+        new_node_id = str(ULID())
+        new_audit = AuditStub(
+            created_at=datetime.now(UTC),
+            created_by=replacement.created_by,
+            revision=existing_audit.revision + 1,
+            load_id=replacement.load_id,
+            recipe_id=replacement.recipe_id,
+            recipe_version=replacement.recipe_version,
+        )
+        props = node_write_to_properties(
+            replacement, node_id=new_node_id, audit=new_audit, entity_type=entity_type
+        )
+        type_name = groovy_identifier(physical_type_name(replacement.type))
+        set_clause = ", ".join(f"{key} = :{key}" for key in props)
+        await self._client.sql(
+            f"INSERT INTO {type_name} SET {set_clause}", params=props, session_id=tx
+        )
+
+        new_id_lit = groovy_string_literal(new_node_id)
+        await self._client.gremlin(
+            f'g.V().has("id",{node_lit}).property("superseded_by", {new_id_lit})',
+            session_id=tx,
+        )
+
+        await self._repoint_incident_edges(
+            node_id, new_node_id, created_by=replacement.created_by, tx=tx
+        )
+        return new_node_id
+
+    async def _repoint_incident_edges(
+        self, old_node_id: NodeId, new_node_id: NodeId, *, created_by: str, tx: TxId
+    ) -> None:
+        """`superseded_by` only marks the old node invisible by default —
+        it does nothing to the edges still recorded against it, and a
+        correction must not silently disconnect the corrected node from
+        its own network. An edge's endpoints are fixed at creation in
+        ArcadeDB (confirmed empirically: `UPDATE ... SET out = ...`
+        reports success but leaves `@out`/`@in` unchanged), so "re-point"
+        means clone each incident edge onto the new node, with the same
+        type, properties, occurrences, weight and provenance, and mark the
+        original reverted — the same flag `revert_elements` uses, for the
+        same reason: excluded from ordinary reads and from corpus-wide
+        weight statistics, never deleted."""
+        old_lit = groovy_string_literal(old_node_id)
+        now = datetime.now(UTC)
+
+        out_edges = await self._client.gremlin(
+            f'g.V().has("id",{old_lit}).outE().has("reverted",false).elementMap()',
+            session_id=tx,
+        )
+        for edge_record in out_edges:
+            await self._clone_edge_onto(
+                edge_record,
+                source=new_node_id,
+                target=edge_record["target"],
+                created_by=created_by,
+                now=now,
+                tx=tx,
+            )
+
+        in_edges = await self._client.gremlin(
+            f'g.V().has("id",{old_lit}).inE().has("reverted",false).elementMap()',
+            session_id=tx,
+        )
+        for edge_record in in_edges:
+            await self._clone_edge_onto(
+                edge_record,
+                source=edge_record["source"],
+                target=new_node_id,
+                created_by=created_by,
+                now=now,
+                tx=tx,
+            )
+
+        if out_edges or in_edges:
+            await self._client.gremlin(
+                f'g.V().has("id",{old_lit}).bothE().has("reverted",false)'
+                '.property("reverted", true)',
+                session_id=tx,
+            )
+
+    async def _clone_edge_onto(
+        self,
+        edge_record: dict[str, Any],
+        *,
+        source: NodeId,
+        target: NodeId,
+        created_by: str,
+        now: datetime,
+        tx: TxId,
+    ) -> EdgeId:
+        edge_type_name = logical_type_name(edge_record["label"])
+        edge_type = self._require_schema().edge_type(edge_type_name)
+        if edge_type is None:  # pragma: no cover — the old edge already proves this type is valid
+            raise OntologyError(f"{edge_type_name!r} is not a type in the active ontology")
+
+        interval = None
+        if edge_record.get("interval"):
+            interval = Interval.model_validate(edge_record["interval"])
+        write = EdgeWrite(
+            type=edge_type_name,
+            source=source,
+            target=target,
+            properties=edge_record.get("properties") or {},
+            interval=interval,
+            occurrences=edge_record.get("occurrences", 1),
+            provenance=Provenance.model_validate(edge_record["provenance"]),
+            handling=Handling.model_validate(edge_record["handling"]),
+            created_by=created_by,
+        )
+        new_edge_id = str(ULID())
+        audit = AuditStub(created_at=now, created_by=created_by, revision=1)
+        weight_components = WeightComponents.model_validate(edge_record["weight_components"])
+        props = edge_write_to_properties(
+            write,
+            edge_id=new_edge_id,
+            audit=audit,
+            edge_type=edge_type,
+            weight=edge_record.get("weight", 0.0),
+            weight_components=weight_components,
+        )
+        type_name = groovy_identifier(physical_type_name(edge_type_name))
+        bound_params = {f"prop_{key}": value for key, value in props.items()}
+        date_keys = {"valid_from", "valid_to"}
+        property_steps = "".join(
+            f".property({key!r}, new Date(prop_{key}))"
+            if key in date_keys
+            else f".property({key!r}, prop_{key})"
+            for key in props
+        )
+        command = (
+            f'g.V().has("id", src).as("__src")'
+            f'.V().has("id", tgt)'
+            f'.addE("{type_name}").from("__src"){property_steps}'
+        )
+        await self._client.gremlin(
+            command, params={"src": source, "tgt": target, **bound_params}, session_id=tx
+        )
+        return new_edge_id
+
+    async def supersede_edge(self, edge_id: EdgeId, replacement: EdgeWrite, tx: TxId) -> EdgeId:
+        """Unlike `supersede_node`, nothing needs repointing: nothing in
+        this domain model references an edge by id except an assessment's
+        evidence list (`01_DOMAIN_MODEL.md` §5), which is expected to
+        follow `superseded_by`, not be silently kept pointing at stale
+        content."""
+        schema = self._require_schema()
+        edge_type = schema.edge_type(replacement.type)
+        if edge_type is None:
+            raise OntologyError(f"{replacement.type!r} is not a type in the active ontology")
+        validate_properties(edge_type, replacement.properties)
+
+        edge_lit = groovy_string_literal(edge_id)
+        existing_results = await self._client.gremlin(
+            f'g.E().has("id",{edge_lit}).elementMap()', session_id=tx
+        )
+        if not existing_results:
+            raise OntologyError(f"cannot supersede {edge_id!r}: no such edge")
+        existing_audit = AuditStub.model_validate(existing_results[0]["audit"])
+
+        now = datetime.now(UTC)
+        new_edge_id = str(ULID())
+        new_audit = AuditStub(
+            created_at=now,
+            created_by=replacement.created_by,
+            revision=existing_audit.revision + 1,
+            load_id=replacement.load_id,
+            recipe_id=replacement.recipe_id,
+            recipe_version=replacement.recipe_version,
+        )
+        type_name = groovy_identifier(physical_type_name(replacement.type))
+        weight, components = await self._weigh_edge(
+            type_name,
+            replacement,
+            merged_occurrences=replacement.occurrences,
+            merged_interval=replacement.interval,
+            now=now,
+            session_id=tx,
+        )
+        props = edge_write_to_properties(
+            replacement,
+            edge_id=new_edge_id,
+            audit=new_audit,
+            edge_type=edge_type,
+            weight=weight,
+            weight_components=components,
+        )
+        bound_params = {f"prop_{key}": value for key, value in props.items()}
+        date_keys = {"valid_from", "valid_to"}
+        property_steps = "".join(
+            f".property({key!r}, new Date(prop_{key}))"
+            if key in date_keys
+            else f".property({key!r}, prop_{key})"
+            for key in props
+        )
+        command = (
+            f'g.V().has("id", src).as("__src")'
+            f'.V().has("id", tgt)'
+            f'.addE("{type_name}").from("__src"){property_steps}'
+        )
+        await self._client.gremlin(
+            command,
+            params={"src": replacement.source, "tgt": replacement.target, **bound_params},
+            session_id=tx,
+        )
+
+        new_id_lit = groovy_string_literal(new_edge_id)
+        await self._client.gremlin(
+            f'g.E().has("id",{edge_lit}).property("superseded_by", {new_id_lit})',
+            session_id=tx,
+        )
+        return new_edge_id

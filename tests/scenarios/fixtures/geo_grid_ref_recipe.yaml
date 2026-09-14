@@ -1,0 +1,33 @@
+# Hand-written recipe for the synthetic Location fixture quoted as bare
+# British National Grid references — 01_DOMAIN_MODEL.md §7: UK source
+# documents quote grid references directly, not an easting/northing pair,
+# so this is a separate real path, not a restatement of geo_bng_recipe.yaml.
+#
+# grid_ref needs no declared source_crs — a BNG reference is EPSG:27700 by
+# construction — and Location still carries geometry_ref only.
+id: geo-locations-grid-ref
+version: 1
+label: "Fixture — synthetic Location import (bare British National Grid references)"
+connector:
+  profile: geo-generic-csv
+  delimiter: ","
+  encoding: utf-8
+  header_rows: 1
+ontology_version: 6
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-1, owning_unit: unit-1}
+
+row_template:
+  entities:
+    - ref: loc
+      pole_class: location
+      type: Location
+      match_on: uprn
+      on_match: reference
+      properties:
+        uprn: {field: place_id}
+        geometry_ref: {field: grid_ref, transform: grid_ref}
+
+unmapped_fields: []

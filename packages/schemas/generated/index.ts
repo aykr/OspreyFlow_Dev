@@ -1,5 +1,5 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: packages/schemas/domain.py and _pending_port_placeholders.py, via generate_ts.py
+// Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py and _pending_port_placeholders.py, via generate_ts.py
 
 export type { PropertyDef } from "./PropertyDef";
 export type { ResolutionConfig } from "./ResolutionConfig";
@@ -15,6 +15,7 @@ export type { AuditStub } from "./AuditStub";
 export type { Node } from "./Node";
 export type { NodeWrite } from "./NodeWrite";
 export type { Interval } from "./Interval";
+export type { WeightComponents } from "./WeightComponents";
 export type { Edge } from "./Edge";
 export type { EdgeWrite } from "./EdgeWrite";
 export type { Principal } from "./Principal";
@@ -26,13 +27,37 @@ export type { PatternEdge } from "./PatternEdge";
 export type { PatternQuery } from "./PatternQuery";
 export type { NeighbourhoodStats } from "./NeighbourhoodStats";
 export type { Subgraph } from "./Subgraph";
+export type { EventRecord } from "./EventRecord";
+export type { GeometryRecord } from "./GeometryRecord";
+export type { EventFilter } from "./EventFilter";
 export type { HistogramRequest } from "./HistogramRequest";
+export type { HistogramBucket } from "./HistogramBucket";
 export type { Histogram } from "./Histogram";
 export type { GeoBinRequest } from "./GeoBinRequest";
 export type { GeoBin } from "./GeoBin";
 export type { BaselineRequest } from "./BaselineRequest";
 export type { BaselineResult } from "./BaselineResult";
+export type { CrossFilterDimension } from "./CrossFilterDimension";
 export type { CrossFilterRequest } from "./CrossFilterRequest";
+export type { RecipeConnector } from "./RecipeConnector";
+export type { RecipeDefaults } from "./RecipeDefaults";
+export type { DeduplicateConfig } from "./DeduplicateConfig";
+export type { FieldBinding } from "./FieldBinding";
+export type { RecipeCondition } from "./RecipeCondition";
+export type { RecipeEntity } from "./RecipeEntity";
+export type { TemporalBinding } from "./TemporalBinding";
+export type { RecipeEdge } from "./RecipeEdge";
+export type { UnmappedField } from "./UnmappedField";
+export type { RowTemplate } from "./RowTemplate";
+export type { ScheduleConfig } from "./ScheduleConfig";
+export type { Recipe } from "./Recipe";
+export type { RejectionRecord } from "./RejectionRecord";
+export type { LoadReport } from "./LoadReport";
+export type { LoadRecord } from "./LoadRecord";
+export type { PatternMatch } from "./PatternMatch";
+export type { ColumnProfile } from "./ColumnProfile";
+export type { ProfileAnomaly } from "./ProfileAnomaly";
+export type { SourceProfile } from "./SourceProfile";
 export type { CentralityRequest } from "./CentralityRequest";
 export type { CommunityRequest } from "./CommunityRequest";
 export type { CliqueMetricRequest } from "./CliqueMetricRequest";

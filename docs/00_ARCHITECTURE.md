@@ -377,6 +377,19 @@ Use `pyproj` server-side and `proj4js` in the browser for the few display-time c
 it — chiefly showing a British National Grid reference in the inspector alongside the lat/long,
 because UK source documents quote grid references and an analyst needs to match them by eye.
 
+**Implemented in Phase 2** as Knowledge Adapters — `coordinate_lon`/`coordinate_lat` for a bare
+coordinate, `geometry_ref` (the same reprojection, returning a deterministic reference instead)
+and `grid_ref` (parsing a British National Grid reference first) for a `Location` — dispatched by
+the same recipe-engine `transform:` mechanism every other normaliser uses
+(`01_DOMAIN_MODEL.md` §7.1). `source_crs` is declared once per connector, the same way
+`date_order` is (not needed for `grid_ref` — a grid reference is EPSG:27700 by construction); an
+undeclared, unrecognised, or out-of-bounds-after-reprojection CRS is rejected, named and counted.
+A `Location` node holds `geometry_ref` only, never coordinates directly — see
+`03_CONDUIT_MIDDLEWARE.md` §5.1, which this build got wrong once and corrected rather than
+patched. Tested against EPSG:27700 and two different NAD83 State Plane zones (Texas Central and
+California Zone III), each with real place coordinates, so the two US zones are proven distinct
+rather than merely "NAD83, handled somehow".
+
 #### Gazetteers swap in parallel
 
 A basemap is a picture; the geocoder needs data, and it follows the same tiers.
@@ -502,6 +515,23 @@ its transport in its README and proves itself the same way regardless: the confo
 never sends it. This is what makes a future move to SQL/PGQ or openCypher an adapter change
 rather than a frontend rewrite. It is also the security boundary: an analyst cannot author a
 traversal that bypasses the access filter (§5).
+
+**`GraphPort` grew beyond this illustrative snippet from Phase 1 on** — transactions and schema
+management first, then `find_node` and `revert_elements` in Phase 2, without re-litigating the
+snippet each time (`01_DOMAIN_MODEL.md` §8 records why: the doc never specified the request/
+response shapes either, and a real adapter has to). Phase 2 also added
+`get_node(..., include_superseded: bool = False)` and `supersede_node(node_id, replacement, tx)
+-> NodeId`, closing a gap the schema already implied: `01_DOMAIN_MODEL.md` §2.4 requires a
+correction to write a new revision and point the old one forward, and nothing before Phase 2
+actually enforced that a superseded node stops appearing in ordinary reads. The workflows that
+call it — Phase 6's retraction, Phase 8's judgement-review loop — land later; the capability
+belongs on the port now, against the one adapter that exists, the same reasoning as `find_node`.
+`supersede_node` also repoints every edge incident to the old node onto the new one (cloned, not
+moved — confirmed empirically that ArcadeDB does not support relinking an edge's endpoints after
+creation), so a correction cannot silently disconnect a node from its own network. `supersede_edge`
+is the same operation for an edge: `01_DOMAIN_MODEL.md` §5's `Judgement.supporting`/`contradicting`
+can cite an `EdgeId` directly, so an edge needs the same "corrected, not vanished" guarantee — it
+has nothing to repoint, since nothing else in the domain model references an edge by id.
 
 Supported adapters: `arcadedb`, `janusgraph`. Candidate: `hugegraph`.
 

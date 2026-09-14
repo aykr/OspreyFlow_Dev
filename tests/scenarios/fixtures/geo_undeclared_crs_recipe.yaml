@@ -1,0 +1,30 @@
+# Same shape as geo_bng_recipe.yaml but with no `source_crs` declared —
+# 00_ARCHITECTURE.md §1.2.2: "a file whose CRS cannot be determined is
+# rejected with a named error", not guessed. Every row must be rejected
+# and counted, never coerced.
+id: geo-locations-undeclared-crs
+version: 2
+label: "Fixture — Location import with no determinable CRS"
+connector:
+  profile: geo-generic-csv
+  delimiter: ","
+  encoding: utf-8
+  header_rows: 1
+ontology_version: 6
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-1, owning_unit: unit-1}
+
+row_template:
+  entities:
+    - ref: loc
+      pole_class: location
+      type: Location
+      match_on: uprn
+      on_match: reference
+      properties:
+        uprn: {field: place_id}
+        geometry_ref: {fields: [easting, northing], transform: geometry_ref}
+
+unmapped_fields: []

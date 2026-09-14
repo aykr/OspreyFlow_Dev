@@ -1,0 +1,33 @@
+# Hand-written recipe for the synthetic Location fixture in British
+# National Grid (EPSG:27700) — 00_ARCHITECTURE.md §1.2.2, ADR-017.
+#
+# Location carries geometry_ref only, never lon/lat/source_x/source_y —
+# 03_CONDUIT_MIDDLEWARE.md §5.1: geometry lives in the analytics store's
+# reference partition, the graph node holds a reference to it.
+id: geo-locations-bng
+version: 2
+label: "Fixture — synthetic Location import (British National Grid)"
+connector:
+  profile: geo-generic-csv
+  delimiter: ","
+  encoding: utf-8
+  header_rows: 1
+  source_crs: "EPSG:27700"
+ontology_version: 6
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-1, owning_unit: unit-1}
+
+row_template:
+  entities:
+    - ref: loc
+      pole_class: location
+      type: Location
+      match_on: uprn
+      on_match: reference
+      properties:
+        uprn: {field: place_id}
+        geometry_ref: {fields: [easting, northing], transform: geometry_ref}
+
+unmapped_fields: []

@@ -1,0 +1,31 @@
+# Hand-written recipe for the synthetic Location fixture in NAD83 Texas
+# Central State Plane (EPSG:32139) — 00_ARCHITECTURE.md §1.2.2, ADR-017.
+#
+# Location carries geometry_ref only — see geo_bng_recipe.yaml's comment.
+id: geo-locations-texas-central
+version: 2
+label: "Fixture — synthetic Location import (NAD83 Texas Central State Plane)"
+connector:
+  profile: geo-generic-csv
+  delimiter: ","
+  encoding: utf-8
+  header_rows: 1
+  source_crs: "EPSG:32139"
+ontology_version: 6
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-1, owning_unit: unit-1}
+
+row_template:
+  entities:
+    - ref: loc
+      pole_class: location
+      type: Location
+      match_on: gnis_feature_id
+      on_match: reference
+      properties:
+        gnis_feature_id: {field: place_id}
+        geometry_ref: {fields: [easting, northing], transform: geometry_ref}
+
+unmapped_fields: []

@@ -3,7 +3,26 @@
 # `SAME_AS` and `NOT_SAME_AS` are not listed here: the loader always injects
 # both as system edge types (ADR-006), regardless of what a deployment's
 # ontology says, so they are never hand-authored or removable.
-version: 3
+#
+# v4 (Phase 2): COMMUNICATED_WITH gained `duration_s`/`direction` — a
+# content change, not a fixture fix, so it bumps the version like any other
+# ontology change would. A recipe still declaring `ontology_version: 3` is
+# blocked by `services/ingest/engine.py`'s `run_recipe` until it is opened
+# and re-published against v4 (`09_INGEST_STUDIO.md`).
+#
+# v5 (Phase 2, corrected in v6): Location briefly gained `lon`/`lat`/
+# `source_crs`/`source_x`/`source_y` directly — a real defect, since
+# 03_CONDUIT_MIDDLEWARE.md §5.1 states geometry lives in the analytics
+# store with the graph node holding only a reference. v6 replaces all
+# five with a single optional `geometry_ref`.
+#
+# v6 (Phase 2): Location gained `geometry_ref` (optional — a jurisdiction
+# or an administrative boundary has no single point and must be able to
+# carry none at all) pointing at a row in the analytics store's geometry
+# reference partition (`01_DOMAIN_MODEL.md` §7.1, `schemas/analytics.py`'s
+# `GeometryRecord`). Never `lon`/`lat`/`source_x`/`source_y` on the node
+# itself — see the v5 note above for why that was wrong.
+version: 6
 entity_types:
   - name: Person
     pole_class: person
@@ -40,6 +59,12 @@ entity_types:
     channel: ochre
     shape: pin
     identifiers: [uprn, gnis_feature_id, tiger_geoid, osm_id]
+    properties:
+      # 03_CONDUIT_MIDDLEWARE.md §5.1: geometry lives in the analytics
+      # store, never on the graph node — this is a reference, not a
+      # coordinate. Not required: a jurisdiction or an administrative
+      # boundary has no single point and must be able to carry none.
+      - {name: geometry_ref, type: string}
 
   - name: Organisation
     pole_class: organisation
@@ -69,7 +94,14 @@ entity_types:
     shape: diamond
 
 edge_types:
-  - {name: COMMUNICATED_WITH, from: [Endpoint], to: [Endpoint], directed: true, temporal: true}
+  - name: COMMUNICATED_WITH
+    from: [Endpoint]
+    to: [Endpoint]
+    directed: true
+    temporal: true
+    properties:
+      - {name: duration_s, type: float}
+      - {name: direction, type: enum, values: [inbound, outbound]}
   - {name: USES,              from: [Person], to: [Endpoint, Device], directed: true}
   - {name: PRESENT_AT,        from: [Person, Device, Vehicle], to: [Location], directed: true, temporal: true}
   - {name: MENTIONED_IN,      from: ["*"], to: [Document], directed: true}

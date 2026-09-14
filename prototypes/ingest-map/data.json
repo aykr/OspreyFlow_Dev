@@ -1,0 +1,423 @@
+{
+  "recipe": {
+    "id": "cdr-fixture",
+    "version": 1,
+    "label": "Fixture \u2014 synthetic CDR",
+    "ontology_version": 6,
+    "connector": {
+      "profile": "cdr-generic-csv",
+      "delimiter": ",",
+      "encoding": "utf-8",
+      "header_rows": 1,
+      "date_order": "dmy",
+      "source_crs": null
+    },
+    "entities": [
+      {
+        "ref": "a",
+        "pole_class": "object",
+        "type": "Endpoint",
+        "match_on": "value_normalised",
+        "on_match": "reference",
+        "when": null,
+        "properties": {
+          "value_raw": {
+            "field": "a_party",
+            "fields": null,
+            "literal": null,
+            "transform": null,
+            "map": null
+          },
+          "value_normalised": {
+            "field": "a_party",
+            "fields": null,
+            "literal": null,
+            "transform": "msisdn",
+            "map": null
+          },
+          "endpoint_kind": {
+            "field": null,
+            "fields": null,
+            "literal": "msisdn",
+            "transform": null,
+            "map": null
+          }
+        }
+      },
+      {
+        "ref": "b",
+        "pole_class": "object",
+        "type": "Endpoint",
+        "match_on": "value_normalised",
+        "on_match": "reference",
+        "when": null,
+        "properties": {
+          "value_raw": {
+            "field": "b_party",
+            "fields": null,
+            "literal": null,
+            "transform": null,
+            "map": null
+          },
+          "value_normalised": {
+            "field": "b_party",
+            "fields": null,
+            "literal": null,
+            "transform": "msisdn",
+            "map": null
+          },
+          "endpoint_kind": {
+            "field": null,
+            "fields": null,
+            "literal": "msisdn",
+            "transform": null,
+            "map": null
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "type": "COMMUNICATED_WITH",
+        "from": "a",
+        "to": "b",
+        "when": null,
+        "temporal": {
+          "at": {
+            "field": "start_time",
+            "fields": null,
+            "literal": null,
+            "transform": "datetime(tz=Europe/London)",
+            "map": null
+          }
+        },
+        "properties": {
+          "duration_s": {
+            "field": "duration",
+            "fields": null,
+            "literal": null,
+            "transform": null,
+            "map": null
+          },
+          "direction": {
+            "field": "direction",
+            "fields": null,
+            "literal": null,
+            "transform": null,
+            "map": {
+              "I": "inbound",
+              "O": "outbound"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "unmapped_fields": [
+    {
+      "field": "seq",
+      "action": "ignore",
+      "note": "Sequence number; not loaded"
+    }
+  ],
+  "source_columns": [
+    "seq",
+    "start_time",
+    "a_party",
+    "b_party",
+    "duration",
+    "direction"
+  ],
+  "summary": {
+    "rows_read": 10,
+    "rows_deduplicated": 4,
+    "rejections": 1
+  },
+  "rows": [
+    {
+      "row_index": 0,
+      "status": "loaded",
+      "entities": [
+        {
+          "ref": "a",
+          "type": "Endpoint",
+          "properties": {
+            "value_raw": "01621926368",
+            "value_normalised": "+441621926368",
+            "endpoint_kind": "msisdn"
+          }
+        },
+        {
+          "ref": "b",
+          "type": "Endpoint",
+          "properties": {
+            "value_raw": "07911123456",
+            "value_normalised": "+447911123456",
+            "endpoint_kind": "msisdn"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "type": "COMMUNICATED_WITH",
+          "from": "a",
+          "to": "b",
+          "properties": {
+            "duration_s": "67",
+            "direction": "outbound"
+          },
+          "instant": "2026-01-10T10:00:00+00:00"
+        }
+      ],
+      "raw": {
+        "seq": "1",
+        "start_time": "2026-01-10T10:00:00Z",
+        "a_party": "01621926368",
+        "b_party": "07911123456",
+        "duration": "67",
+        "direction": "O"
+      }
+    },
+    {
+      "row_index": 1,
+      "status": "duplicate",
+      "duplicate_of": 0,
+      "raw": {
+        "seq": "2",
+        "start_time": "2026-01-10 10:00:00+00:00",
+        "a_party": "01621926368",
+        "b_party": "07911123456",
+        "duration": "67",
+        "direction": "O"
+      }
+    },
+    {
+      "row_index": 2,
+      "status": "loaded",
+      "entities": [
+        {
+          "ref": "a",
+          "type": "Endpoint",
+          "properties": {
+            "value_raw": "+44(0)1621926368",
+            "value_normalised": "+441621926368",
+            "endpoint_kind": "msisdn"
+          }
+        },
+        {
+          "ref": "b",
+          "type": "Endpoint",
+          "properties": {
+            "value_raw": "07911123456",
+            "value_normalised": "+447911123456",
+            "endpoint_kind": "msisdn"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "type": "COMMUNICATED_WITH",
+          "from": "a",
+          "to": "b",
+          "properties": {
+            "duration_s": "22",
+            "direction": "outbound"
+          },
+          "instant": "2026-01-11T10:00:00+00:00"
+        }
+      ],
+      "raw": {
+        "seq": "3",
+        "start_time": "2026-01-11T10:00:00Z",
+        "a_party": "+44(0)1621926368",
+        "b_party": "07911123456",
+        "duration": "22",
+        "direction": "O"
+      }
+    },
+    {
+      "row_index": 3,
+      "status": "duplicate",
+      "duplicate_of": 2,
+      "raw": {
+        "seq": "4",
+        "start_time": "2026-01-11 10:00:00",
+        "a_party": "+44(0)1621926368",
+        "b_party": "07911123456",
+        "duration": "22",
+        "direction": "O"
+      }
+    },
+    {
+      "row_index": 4,
+      "status": "loaded",
+      "entities": [
+        {
+          "ref": "a",
+          "type": "Endpoint",
+          "properties": {
+            "value_raw": "441621926368",
+            "value_normalised": "+441621926368",
+            "endpoint_kind": "msisdn"
+          }
+        },
+        {
+          "ref": "b",
+          "type": "Endpoint",
+          "properties": {
+            "value_raw": "07911123456",
+            "value_normalised": "+447911123456",
+            "endpoint_kind": "msisdn"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "type": "COMMUNICATED_WITH",
+          "from": "a",
+          "to": "b",
+          "properties": {
+            "duration_s": "150",
+            "direction": "outbound"
+          },
+          "instant": "2026-01-12T10:00:00+00:00"
+        }
+      ],
+      "raw": {
+        "seq": "5",
+        "start_time": "2026-01-12T10:00:00Z",
+        "a_party": "441621926368",
+        "b_party": "07911123456",
+        "duration": "150",
+        "direction": "O"
+      }
+    },
+    {
+      "row_index": 5,
+      "status": "duplicate",
+      "duplicate_of": 4,
+      "raw": {
+        "seq": "6",
+        "start_time": "12/01/2026 10:00:00",
+        "a_party": "441621926368",
+        "b_party": "07911123456",
+        "duration": "150",
+        "direction": "O"
+      }
+    },
+    {
+      "row_index": 6,
+      "status": "loaded",
+      "entities": [
+        {
+          "ref": "a",
+          "type": "Endpoint",
+          "properties": {
+            "value_raw": "#31#01621926368",
+            "value_normalised": "+441621926368",
+            "endpoint_kind": "msisdn"
+          }
+        },
+        {
+          "ref": "b",
+          "type": "Endpoint",
+          "properties": {
+            "value_raw": "07911123456",
+            "value_normalised": "+447911123456",
+            "endpoint_kind": "msisdn"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "type": "COMMUNICATED_WITH",
+          "from": "a",
+          "to": "b",
+          "properties": {
+            "duration_s": "135",
+            "direction": "outbound"
+          },
+          "instant": "2026-01-13T10:00:00+00:00"
+        }
+      ],
+      "raw": {
+        "seq": "7",
+        "start_time": "2026-01-13T10:00:00Z",
+        "a_party": "#31#01621926368",
+        "b_party": "07911123456",
+        "duration": "135",
+        "direction": "O"
+      }
+    },
+    {
+      "row_index": 7,
+      "status": "duplicate",
+      "duplicate_of": 6,
+      "raw": {
+        "seq": "8",
+        "start_time": "2026-01-13 10:00:00+00:00",
+        "a_party": "#31#01621926368",
+        "b_party": "07911123456",
+        "duration": "135",
+        "direction": "O"
+      }
+    },
+    {
+      "row_index": 8,
+      "status": "loaded",
+      "entities": [
+        {
+          "ref": "a",
+          "type": "Endpoint",
+          "properties": {
+            "value_raw": "01621926368",
+            "value_normalised": "+441621926368",
+            "endpoint_kind": "msisdn"
+          }
+        },
+        {
+          "ref": "b",
+          "type": "Endpoint",
+          "properties": {
+            "value_raw": "07911123456",
+            "value_normalised": "+447911123456",
+            "endpoint_kind": "msisdn"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "type": "COMMUNICATED_WITH",
+          "from": "a",
+          "to": "b",
+          "properties": {
+            "duration_s": "124",
+            "direction": "inbound"
+          },
+          "instant": "2026-03-30T10:00:00+00:00"
+        }
+      ],
+      "raw": {
+        "seq": "9",
+        "a_party": "01621926368",
+        "b_party": "07911123456",
+        "start_time": "2026-03-30 11:00:00",
+        "duration": "124",
+        "direction": "I"
+      }
+    },
+    {
+      "row_index": 9,
+      "status": "rejected",
+      "reason": "datetime: cannot normalise 'not-a-real-timestamp' \u2014 unrecognised datetime format",
+      "raw": {
+        "seq": "10",
+        "a_party": "01621926368",
+        "b_party": "07911123456",
+        "start_time": "not-a-real-timestamp",
+        "duration": "81",
+        "direction": "O"
+      }
+    }
+  ]
+}

@@ -225,7 +225,29 @@ class AuditStub(BaseModel):
     created_at: datetime
     created_by: PrincipalId
     revision: int = 1
-    superseded_by: NodeId | None = None
+    #: A `NodeId` on a `Node`'s audit, an `EdgeId` on an `Edge`'s — this
+    #: block is shared by both (§3: "structurally identical, plus...").
+    #: `GraphPort.supersede_node`/`supersede_edge` are the only writers.
+    superseded_by: str | None = None
+    #: The load that produced this element, and the recipe behind that
+    #: load (ADR-018: "every loaded element is stamped with the recipe
+    #: version that produced it"). `None` for elements written outside a
+    #: recipe load — a conformance-suite fixture, a manual `SAME_AS`, a
+    #: Splink write. `load_id` is the join key into the load ledger
+    #: (`services/ingest`'s `LoadRecord`) for the full source/recipe
+    #: detail; `recipe_id`/`recipe_version` are denormalised onto every
+    #: element too, so "everything `cdr-carrier-a` version 4 produced" is
+    #: a property filter on the graph itself, not a join through the
+    #: ledger — the "query rather than an excavation" ADR-018 asks for.
+    load_id: str | None = None
+    recipe_id: str | None = None
+    recipe_version: int | None = None
+    #: A universal axis, not principal-dependent: a reverted element is
+    #: invisible to every read, any clearance, the same way a `SECRET`
+    #: record is invisible to an unauthorised one — `services/ingest`'s
+    #: `revert_load` is the only writer, via `GraphPort.revert_elements`
+    #: (Phase 2; `01_DOMAIN_MODEL.md` §2.4).
+    reverted: bool = False
 
 
 # --- The node and edge records (01_DOMAIN_MODEL.md §2-3) ----------------
@@ -251,11 +273,30 @@ class NodeWrite(BaseModel):
     handling: Handling
     resolution: ResolutionState = Field(default_factory=ResolutionState)
     created_by: PrincipalId
+    load_id: str | None = None
+    recipe_id: str | None = None
+    recipe_version: int | None = None
 
 
 class Interval(BaseModel):
     valid_from: datetime
     valid_to: datetime | None = None
+
+
+class WeightComponents(BaseModel):
+    """Inputs to `01_DOMAIN_MODEL.md` §6.1's weight formula, captured at
+    load time. `weight` on `Edge` is a load-time snapshot, using the
+    corpus as it stood then — never treat it as frozen ground truth. These
+    counts are what make an honest recompute (the working set; a corpus
+    that has since grown) arithmetic over stored numbers rather than a
+    full corpus rescan."""
+
+    occurrences: int = Field(ge=0)
+    corpus_pair_count: int = Field(ge=0)  # this pair's occurrences, corpus-wide, this edge type
+    corpus_source_degree: int = Field(ge=0)  # source's occurrences of this edge type, corpus-wide
+    corpus_target_degree: int = Field(ge=0)
+    corpus_total_occurrences: int = Field(ge=0)  # every edge of this type, corpus-wide
+    computed_at: datetime  # when the corpus-wide counts above were taken
 
 
 class Edge(BaseModel):
@@ -267,6 +308,7 @@ class Edge(BaseModel):
     interval: Interval | None = None
     occurrences: int = 1
     weight: float = 0.0
+    weight_components: WeightComponents | None = None
     provenance: Provenance
     handling: Handling
     audit: AuditStub
@@ -282,6 +324,9 @@ class EdgeWrite(BaseModel):
     provenance: Provenance
     handling: Handling
     created_by: PrincipalId
+    load_id: str | None = None
+    recipe_id: str | None = None
+    recipe_version: int | None = None
 
 
 # --- Principal (00_ARCHITECTURE.md §5) ----------------------------------
@@ -379,6 +424,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     Node,
     NodeWrite,
     Interval,
+    WeightComponents,
     Edge,
     EdgeWrite,
     Principal,

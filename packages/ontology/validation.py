@@ -70,9 +70,13 @@ def _matches_type(prop: PropertyDef, value: Any) -> bool:
         case PropertyType.DATETIME:
             return isinstance(value, datetime) or _parses_as(datetime.fromisoformat, value)
         case PropertyType.INTEGER:
-            return isinstance(value, int) and not isinstance(value, bool)
+            if isinstance(value, bool):
+                return False
+            return isinstance(value, int) or _parses_as(int, value)
         case PropertyType.FLOAT:
-            return isinstance(value, int | float) and not isinstance(value, bool)
+            if isinstance(value, bool):
+                return False
+            return isinstance(value, int | float) or _parses_as(float, value)
         case PropertyType.BOOLEAN:
             return isinstance(value, bool)
         case PropertyType.ENUM:

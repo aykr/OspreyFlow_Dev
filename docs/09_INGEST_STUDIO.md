@@ -67,10 +67,20 @@ reads a sample — 10,000 rows or the whole file, whichever is smaller — and r
 
 - Inferred type, and the confidence in that inference
 - Null rate and distinct count
-- Five sample values, redacted if the handling marking requires it
+- Five sample values, **shape-masked** when the source's handling marking requires it
 - **Pattern recognition against the Knowledge Adapters**: a column that looks like E.164 or a UK
   national number, an IMEI passing its check digit, an IBAN, a timestamp and its apparent
   timezone, a postcode, a British National Grid reference, an easting/northing pair
+
+**What shape-masking means, since "redacted" was never defined.** At profiling time there is no
+column-to-property mapping yet, so per-property sensitivity cannot apply — the only marking
+available is the one set on the source at Connect. The rule is therefore source-level: a
+principal cleared for the source's marking sees sample values in full; anyone else sees each
+value with its characters masked but its *structure* preserved — `+44 7### ######`,
+`A####AB`, `2021-##-##`. That is enough to confirm the profiler's pattern match and to spot a
+malformed column, and it discloses nothing. Values are never simply hidden, because a profiler
+that shows nothing cannot be checked, and an unchecked mapping is how a source silently
+fragments the graph.
 
 Pattern recognition is what makes the mapping stage fast. A CDR from an unfamiliar carrier
 arrives and the profiler has already worked out that column 3 is an A-party MSISDN, column 7 is a
@@ -81,6 +91,22 @@ The profile also flags what will hurt later: mixed timestamp formats in one colu
 that cannot be determined, an encoding that is not UTF-8, rows whose column count varies, and
 apparent duplicate records. Each is shown with a count and a sample, and each becomes a decision
 in the mapping stage rather than a silent default.
+
+**Implemented headless in Phase 2** (`services/ingest/profiler.py`, `schemas/profile.py`) — the
+studio (Phase 5a) is the display surface over `SourceProfile`, not a second implementation.
+Pattern recognition runs against `msisdn`/`imei`/`imsi`/`email`/`iban`/`card`/`postcode`/`grid_ref`
+and a bespoke ISO-datetime shape check — every adapter with a genuine reject condition.
+`person_name`/`address` are excluded (both reject only an empty string, so nearly any text column
+would "match" both); `coordinate_lon`/`coordinate_lat`/`geometry_ref` need a declared `source_crs`
+and a column *pair*, and `grid_ref`'s split form needs three columns, none of which a single
+column's values can supply, so cross-column pattern detection stays out of scope for this phase.
+`ENCODING_NOT_UTF8` is not detected — that needs the raw bytes a connector decoded, not the
+already-decoded rows this profiler receives. Shape-masking is `_shape_mask`: reveal the first four
+alphanumeric characters of a value wherever they fall, mask every alphanumeric character after
+that as `#`, keep every separator literal — deliberately independent of whether the value has any
+separators at all, since a rule keyed on "the first group before a space" would leave an
+unseparated identifier (an MSISDN with no spacing) entirely unmasked. A concrete formalisation of
+the principle above, not a byte-exact reproduction of `+44 7### ######`/`2021-##-##`.
 
 ## 4. Stage 3 — Map
 
@@ -141,6 +167,13 @@ to do when it matches: `reference` an existing node or `create` a new one. This 
 most consequential setting in the studio and it is why entity resolution behaves. An `Endpoint`
 matches on `value_normalised` and references; a `Person` from a witness statement matches on
 nothing deterministic and creates, leaving Splink to link it later (`01_DOMAIN_MODEL.md` §4).
+
+**A binding may take more than one column.** Some transforms are inherently multi-column — a
+coordinate pair, an easting and northing, a separated date and time, a given name and family name
+in two fields. A `FieldBinding` therefore accepts a list of source fields, and each adapter
+declares the arity it expects; the studio offers only the columns that arity needs. Do not cap
+the list at two: a British National Grid reference split across a letter pair and two numeric
+columns is three, and the next format will be four.
 
 **Transforms are Knowledge Adapters, not free expressions.** A field binding may pass through
 `msisdn()`, `imei()`, `datetime(tz=...)`, `person_name()`, `address()`, `iban()` and the rest.
@@ -270,15 +303,24 @@ editor; the repository is the record.
 
 ### After publish
 
+- **Staged before it is graph.** Every resolved row is written to Parquet in object storage and
+  read back before a single node or edge is written (`03_CONDUIT_MIDDLEWARE.md` §5.1). This is
+  what makes a failed graph write retryable with no data loss, and what makes re-resolution
+  possible without re-uploading the source file.
 - **Re-runnable.** The same recipe against a new file, or the same file again — the deduplication
   key makes a re-run idempotent.
 - **Versioned, with loads attributed.** Every loaded element records which recipe version
-  produced it. When a mapping error is found in month six, the affected elements are
-  identifiable by query rather than by guesswork.
+  produced it (`load_id`/`recipe_id`/`recipe_version` on its audit stub — `01_DOMAIN_MODEL.md`
+  §2.4). When a mapping error is found in month six, the affected elements are identifiable by
+  query rather than by guesswork.
 - **Ontology-aware.** An ontology change that invalidates a recipe flags it and blocks scheduled
   runs until someone opens it. Recipes never silently adapt.
-- **Revertible.** A load is a unit. `mantis ingest revert <load_id>` supersedes everything the
-  load created, leaving the audit trail intact.
+- **Revertible.** A load is a unit. Revert is a function in `services/ingest` (`revert_load`),
+  tested directly against a live `GraphPort`, not a CLI command — this build has no `mantis`
+  unified CLI (`07_BUILD_PLAN.md`'s Phase 2 amendment). It supersedes everything the load
+  created, leaving the audit trail intact. The phrasing this section originally used
+  (`mantis ingest revert <load_id>`) predates the harness becoming browser-based; reverting a
+  load gets its own admin console screen in Phase 8, not a terminal command.
 
 ## 7. The review queue — where unstructured material actually lands
 

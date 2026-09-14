@@ -37,6 +37,7 @@ from schemas.domain import (
     NodeWrite,
     Provenance,
     ResolutionState,
+    WeightComponents,
 )
 
 from .naming import logical_type_name
@@ -56,12 +57,13 @@ def node_write_to_properties(
         for name in _indexed_property_names(entity_type)
         if name in write.properties
     }
-    return {
+    props: dict[str, Any] = {
         "id": node_id,
         "handling_classification": write.handling.classification,
         "handling_code": write.handling.handling_code,
         "owning_unit": write.handling.owning_unit,
         "originator": write.handling.originator,
+        "reverted": audit.reverted,
         **flattened,
         "properties": write.properties,
         "provenance": write.provenance.model_dump(mode="json"),
@@ -69,10 +71,23 @@ def node_write_to_properties(
         "resolution": write.resolution.model_dump(mode="json"),
         "audit": audit.model_dump(mode="json"),
     }
+    # Sparse, unlike `reverted`: most nodes are never superseded, so the
+    # property is only present at all once `supersede_node` sets it on an
+    # outgoing revision — `hasNot("superseded_by")` is what the access
+    # filter checks for "this is the current revision" (`access_filter.py`).
+    if audit.superseded_by is not None:
+        props["superseded_by"] = audit.superseded_by
+    return props
 
 
 def edge_write_to_properties(
-    write: EdgeWrite, *, edge_id: str, audit: AuditStub, edge_type: EdgeTypeDef
+    write: EdgeWrite,
+    *,
+    edge_id: str,
+    audit: AuditStub,
+    edge_type: EdgeTypeDef,
+    weight: float,
+    weight_components: WeightComponents,
 ) -> dict[str, Any]:
     flattened: dict[str, Any] = {
         name: write.properties[name]
@@ -87,10 +102,12 @@ def edge_write_to_properties(
         "handling_code": write.handling.handling_code,
         "owning_unit": write.handling.owning_unit,
         "originator": write.handling.originator,
+        "reverted": audit.reverted,
         **flattened,
         "properties": write.properties,
         "occurrences": write.occurrences,
-        "weight": 0.0,
+        "weight": weight,
+        "weight_components": weight_components.model_dump(mode="json"),
         "provenance": write.provenance.model_dump(mode="json"),
         "handling": write.handling.model_dump(mode="json"),
         "audit": audit.model_dump(mode="json"),
@@ -110,6 +127,13 @@ def edge_write_to_properties(
 
 
 def node_from_element_map(record: Mapping[str, Any]) -> Node:
+    # `supersede_node` updates the top-level flattened `superseded_by`
+    # directly, on the *old* revision, without rewriting its nested
+    # `audit` blob — so the flattened field, when present, is the
+    # authoritative value, not whatever the nested blob still says.
+    audit_data: dict[str, Any] = dict(record["audit"])
+    if "superseded_by" in record:
+        audit_data["superseded_by"] = record["superseded_by"]
     return Node(
         id=record["id"],
         type=logical_type_name(record["label"]),
@@ -117,7 +141,7 @@ def node_from_element_map(record: Mapping[str, Any]) -> Node:
         provenance=Provenance.model_validate(record["provenance"]),
         handling=Handling.model_validate(record["handling"]),
         resolution=ResolutionState.model_validate(record.get("resolution") or {}),
-        audit=AuditStub.model_validate(record["audit"]),
+        audit=AuditStub.model_validate(audit_data),
     )
 
 
@@ -125,6 +149,9 @@ def edge_from_element_map(record: Mapping[str, Any]) -> Edge:
     interval = None
     if record.get("interval"):
         interval = Interval.model_validate(record["interval"])
+    weight_components = None
+    if record.get("weight_components"):
+        weight_components = WeightComponents.model_validate(record["weight_components"])
     return Edge(
         id=record["id"],
         type=logical_type_name(record["label"]),
@@ -134,6 +161,7 @@ def edge_from_element_map(record: Mapping[str, Any]) -> Edge:
         interval=interval,
         occurrences=record.get("occurrences", 1),
         weight=record.get("weight", 0.0),
+        weight_components=weight_components,
         provenance=Provenance.model_validate(record["provenance"]),
         handling=Handling.model_validate(record["handling"]),
         audit=AuditStub.model_validate(record["audit"]),

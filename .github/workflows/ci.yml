@@ -61,6 +61,26 @@ jobs:
           exit-code: "1"
           skip-dirs: node_modules,.venv
 
+  # Standing rule (docs/07_BUILD_PLAN.md): each service's Dockerfile and its
+  # `trivy image` scan land in the phase that creates the service, not
+  # batched into Phase 8. `services/ingest` is Phase 2's.
+  # `ignore-unfixed`: unlike the fs scan above, an image scan turns up
+  # base-OS packages this service never touches with no upstream fix yet —
+  # failing forever on those is noise, not a gate.
+  trivy-image-ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f services/ingest/Dockerfile -t mantisnexus/ingest:ci .
+      - uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: mantisnexus/ingest:ci
+          scan-type: image
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
   schemas-check:
     runs-on: ubuntu-latest
     steps:
@@ -84,6 +104,9 @@ jobs:
   # GraphPort's conformance suite (Phase 1, docs/07_BUILD_PLAN.md) runs
   # against a live ArcadeDB — the graph store local-lite actually ships —
   # not a fake. One container, matching local-lite's own shape.
+  # tests/ingest's recipe-engine end-to-end test needs the same live
+  # ArcadeDB (Phase 2), so it runs here too rather than spinning up a
+  # second instance.
   conformance:
     runs-on: ubuntu-latest
     services:
@@ -106,7 +129,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
-      - run: uv run pytest tests/conformance/graph_port
+      - run: uv run pytest tests/conformance/graph_port tests/ingest
 
   test:
     runs-on: ubuntu-latest
@@ -117,6 +140,7 @@ jobs:
         with: { node-version: "22" }
       - run: uv sync
       - run: npm ci
-      # tests/conformance/graph_port needs the live ArcadeDB in the
-      # `conformance` job above; every other test runs here.
-      - run: uv run pytest --ignore=tests/conformance/graph_port
+      # tests/conformance/graph_port and tests/ingest need the live
+      # ArcadeDB in the `conformance` job above; every other test runs
+      # here.
+      - run: uv run pytest --ignore=tests/conformance/graph_port --ignore=tests/ingest

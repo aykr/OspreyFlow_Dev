@@ -100,7 +100,23 @@ async def _apply_common_indexes(client: ArcadeDBClient, type_name: str) -> list[
     for name in names:
         await _create_property(client, type_name, name, "STRING")
         await _create_index(client, type_name, name, unique=(name == "id"))
-    return [f"{type_name}.{name}" for name in names]
+    # `reverted` — checked on every read alongside the access filter
+    # (`access_filter.py`), so it needs the same treatment, not just a
+    # schemaless property. Not unique: every non-reverted element shares
+    # the value `false`.
+    await _create_property(client, type_name, "reverted", "BOOLEAN")
+    await _create_index(client, type_name, "reverted", unique=False)
+    # `superseded_by` — sparse (`01_DOMAIN_MODEL.md` §2.4): present only on
+    # a node `supersede_node` has replaced. Declared here so `hasNot(...)`
+    # and a direct lookup both have a real, indexed property to run
+    # against rather than one that only ever appears schemaless.
+    await _create_property(client, type_name, "superseded_by", "STRING")
+    await _create_index(client, type_name, "superseded_by", unique=False)
+    return [
+        *(f"{type_name}.{name}" for name in names),
+        f"{type_name}.reverted",
+        f"{type_name}.superseded_by",
+    ]
 
 
 async def _apply_indexed_property(

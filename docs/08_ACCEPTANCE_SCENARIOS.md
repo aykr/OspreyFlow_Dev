@@ -55,6 +55,16 @@ within the same session, and the export produced in A15 is marked as resting on 
 evidence. This closed loop is what makes the assessment objects worth storing rather than
 writing in a word processor.
 
+### The fixture's statistical shape is built and proved in Phase 2
+
+The A1/A2 site-grid mechanism (upload an image, place control points, draw a 10×10 grid) is
+Phase 5's — it needs the Glass's map screen. But the *finding itself* — four yards at ~52% of
+incidents, two intra-day peaks, Saturday and Sunday at ~34% — is a property of the event data,
+not of the grid UI, and `07_BUILD_PLAN.md` Phase 2 builds and proves it early
+(`tests/scenarios/fixtures/hmp.py`, `tests/scenarios/test_hmp_fixture_shape.py`) against a real
+`AnalyticsPort` adapter. Otherwise Scenario A would only discover in Phase 5, discovered by eye
+in a UI, whether the fixture ever actually carried the finding it is supposed to demonstrate.
+
 ---
 
 ## Scenario B — Communications, identity pivot and cross-case alerting

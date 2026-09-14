@@ -265,6 +265,13 @@ carries `consult_originator: true`, the export is blocked with the specific item
 proceeds only with a recorded justification and an originator reference. This is the single
 control that the HMP report's `S2` marking exists to impose.
 
+**An unrecognised clearance is default-deny, not default-allow.** A `Principal.clearance` value
+the active handling scheme does not know — a typo, a scheme mismatch after a deployment swaps
+schemes, a principal resolved against the wrong scheme entirely — is treated as the most
+restrictive possible principal: it matches no classification, not every classification. The
+alternative (fail open) would make a configuration error into a silent over-disclosure, which is
+the one failure mode this platform cannot recover from after the fact.
+
 ### 2.3 Resolution state
 
 ```python
@@ -284,13 +291,35 @@ See §4 — nodes are never destructively merged.
 class AuditStub(BaseModel):
     created_at: datetime
     created_by: PrincipalId          # a person, a connector, or an extraction worker
-    revision: int
-    superseded_by: NodeId | None
+    revision: int = 1
+    superseded_by: str | None = None  # a NodeId on a Node's audit, an EdgeId on an Edge's — §3
+    load_id: str | None = None
+    recipe_id: str | None = None
+    recipe_version: int | None = None
+    reverted: bool = False
 ```
 
 Nodes are versioned, not overwritten. A correction writes a new revision and points the old one
 forward. An intelligence assessment written last month must still be reconstructible against the
 picture as it stood at the time.
+
+**`load_id`/`recipe_id`/`recipe_version`** are what makes ADR-018's "every loaded element is
+stamped with the recipe version that produced it" true at the element level, not only in a
+side-table: `load_id` is the join key into the load ledger (`services/ingest`'s `LoadRecord`) for
+full source/recipe detail, and `recipe_id`/`recipe_version` are denormalised onto every element
+too, so "everything `cdr-carrier-a` version 4 produced" is a property filter on the graph itself
+rather than a join through the ledger. `None` for anything written outside a recipe load — a
+conformance fixture, a manual `SAME_AS`, a Splink write.
+
+**`reverted`** is a universal axis, not principal-dependent: a reverted element is invisible to
+every read, any clearance, the same way a classification a principal cannot see is invisible to
+them — `services/ingest`'s `revert_load` is the only writer, via `GraphPort.revert_elements`. It
+is never deleted, only flagged, so the audit trail stays intact and the same element ID can be
+cited in an audit query after the fact.
+
+**`superseded_by`** is written only by `GraphPort.supersede_node`/`supersede_edge` (§8.2). A
+superseded element is excluded from ordinary reads by default, the same as a reverted one, and
+retrievable only via `get_node(..., include_superseded=True)`.
 
 ## 3. The edge record
 
@@ -306,9 +335,18 @@ class Edge(BaseModel):
     interval: Interval | None        # valid_from / valid_to, for temporal edges
     occurrences: int                 # how many source events this edge summarises
     weight: float                    # derived; see §6
+    weight_components: WeightComponents | None  # §6.1 — the raw counts behind `weight`
     provenance: Provenance
     handling: Handling
+    audit: AuditStub                 # §2.4 — an edge is versioned the same way a node is
 ```
+
+**An edge carries `AuditStub` too, including `superseded_by`.** Correcting an edge (a wrong
+`duration_s`, a mistakenly-typed edge, evidence found to be unreliable) uses
+`GraphPort.supersede_edge` (§8.2), not a mutation in place, for the same reason a `Person` is
+never overwritten: `01_DOMAIN_MODEL.md` §5's `Judgement.supporting`/`contradicting` can cite an
+`EdgeId` directly, and a correction must leave that citation resolvable to something rather than
+silently rewriting what it pointed at.
 
 ### Temporal edges and the event table
 
@@ -454,6 +492,16 @@ the parameter set alongside any stored weight components — a weight computed u
 calibration is not comparable with one computed under another, and a silent recalibration would
 reorder every edge-strength filter in every saved investigation. The Glass exposes the normalised result as the edge-strength filter slider.
 
+**`WeightComponents` stores the raw counts, not just the derived float.** `mutual_information` is
+corpus-wide — it depends on how the *whole* corpus looks, which changes as more data loads and
+again when a caller scopes the formula to a working set rather than the full corpus. `weight` on
+`Edge` is a load-time snapshot using the corpus as it stood then, never frozen ground truth:
+freezing a single number and calling it the weight would silently go stale as the corpus grows.
+`WeightComponents` (`occurrences`, `corpus_pair_count`, `corpus_source_degree`,
+`corpus_target_degree`, `corpus_total_occurrences`, `computed_at`) persists exactly what the
+formula needs, so a later, more scoped recompute — Phase 3's working-set service — is arithmetic
+over stored numbers, never a full corpus rescan.
+
 ### 6.2 Clique Metric
 
 Both the v2 spec and the Gemini spec require a "Clique Metric" and neither defines it. Here is
@@ -496,6 +544,13 @@ will destroy analyst trust the first time someone notices.
 | k-shortest paths | Pathfinder between two entities | Must respect the access filter; a path through a node the principal cannot see is not returned |
 | Temporal motifs | Convoy, relay, burst | See `02_GLASS_FRONTEND.md` §5 |
 
+**`GraphPort.paths` implementation note.** The access predicate is compiled once per call and
+applied at *every* step of the traversal — the source vertex, each candidate edge, and each
+intermediate vertex (`otherV()`) before it is allowed onto the path — not only checked against
+the two endpoints. A path that would have to pass through a node the principal cannot see is
+never found at all, rather than found and then filtered, which is what "respect the access
+filter" means concretely for a multi-hop traversal.
+
 ## 7. Identifier normalisation — the Knowledge Adapters
 
 The CoLP deck is specific about this and it is the least glamorous, highest-value part of the
@@ -513,6 +568,10 @@ Normalisers required at ingest, each a pure function with a golden test file:
 | `email` | case, plus-addressing, unicode domains | lowercase local, punycode domain |
 | `datetime` | mixed formats, local times, missing zones | UTC with recorded original offset. A missing offset is an error, not a guess — and so is an **ambiguous date order**: `03/04/2026` is April in the UK and March in the US, and with both in scope (ADR-017) there is no safe default. The connector profile declares `date_order: dmy` or `mdy`; a file with ambiguous dates and no declaration is rejected, named and counted, exactly like a missing offset |
 | `person_name` | ordering, diacritics, honorifics, ALL-CAPS surnames | structured given/family, originals retained |
+| `postcode` | UK postcode, spacing and case variance | normalised outward and inward code |
+| `grid_ref` | British National Grid reference, letter pair plus digits, or a bare easting/northing pair | EPSG:27700 easting and northing, then reprojected to WGS84 like any other coordinate |
+| `coordinate_lon` / `coordinate_lat` | a declared-CRS easting/northing pair | WGS84 longitude/latitude, for an `EventRecord` or similar — never a `Location` node property (§7.1) |
+| `geometry_ref` | the same pair, reprojected the same way | a deterministic reference into the analytics store's geometry partition — what a `Location` node actually binds (§7.1) |
 | `address` | free text | structured, with a gazetteer identifier attached where one is configured — UPRN in the UK, a GNIS feature id, TIGER GEOID or county parcel id in the US. The identifier is an alias, never the key |
 | `iban` / `card` | spacing, masking | normalised; card stored as last-four plus a hash, never in full |
 
@@ -533,3 +592,295 @@ Three rules that are not optional:
    file-level metadata. Hash `(a_party, b_party, start_ts_to_second, duration, direction)` and
    deduplicate on that, retaining every source row reference on the surviving event so the
    provenance chain stays complete.
+
+### 7.1 Coordinate reprojection
+
+`00_ARCHITECTURE.md` §1.2.2 and ADR-017 require reprojection at ingest, never at query time, and
+require the source CRS to be declared rather than guessed. `03_CONDUIT_MIDDLEWARE.md` §5.1
+requires geometry to live in the analytics store, never on the graph node — a `Location` carries
+`geometry_ref` (a plain string, optional), never `lon`/`lat`/`source_x`/`source_y` directly. An
+earlier version of this section, and of `default.yaml`, put the coordinates on the node itself;
+that was a real defect (geometry in the graph store makes spatial filtering a traversal, the
+wrong shape of query), corrected in ontology v6, not patched in place — the CRS reprojection
+fixtures were rebuilt against the corrected shape rather than adjusted.
+
+Three Knowledge Adapters produce a `geometry_ref`:
+
+- **`coordinate_lon`/`coordinate_lat`** reproject a source easting/northing pair to WGS84 via
+  `pyproj.Transformer` and return a bare coordinate — for an `EventRecord.lat`/`lon` or any other
+  property that genuinely wants one, not for a `Location` node.
+- **`geometry_ref`** reprojects the same pair and returns a deterministic reference string — a
+  hash of `(source_crs, x, y)`, so the same source coordinate always yields the same ref and a
+  recipe re-run never mints a second geometry record for one point. This is what a `Location`
+  binds.
+- **`grid_ref`** parses a British National Grid reference — a single bare string
+  (`"TQ 32106 81020"`), or the letter pair and the two numeric offsets already split across three
+  columns — into the same kind of `geometry_ref`. No `source_crs` to declare: a grid reference is
+  EPSG:27700 by construction, never ambiguous. UK source documents quote grid references directly
+  (the HMP analysis is itself a grid), so this is not optional for the target geography.
+
+**A coordinate pair is the first case in this build needing more than one source column for one
+transform**, so `FieldBinding` gained `fields: list[str]`, an explicit named list of source
+columns, alongside the existing single `field` — still not an expression
+(`09_INGEST_STUDIO.md` §4), since nothing computes which columns to combine; the recipe states
+them outright. How many columns a transform takes is that adapter's own declared arity
+(`knowledge_adapters.ARITY`), not a fixed count: `coordinate_lon`/`coordinate_lat`/`geometry_ref`
+take two, `grid_ref`'s split form takes three — a British National Grid reference split across a
+letter pair and two numeric columns needs one more field than a plain easting/northing pair, and
+nothing about `fields` assumes every multi-column transform needs the same count.
+
+**The matching `GeometryRecord`** (`schemas/analytics.py`) — the reprojected WGS84 point plus the
+retained original `source_crs`/`source_x`/`source_y`, the same `value_raw` discipline every other
+Knowledge Adapter follows — is what a caller writes into the analytics store's geometry reference
+partition under that ref. No Knowledge Adapter writes anywhere itself, and the recipe engine does
+not yet write `GeometryRecord`s any more than it writes `EventRecord`s to the analytics store's
+served dataset (`services/ingest/__main__.py`'s stated gap) — Phase 2 establishes the correct
+storage tier and shape; the reference partition's own versioning and access-controlled read path
+is Phase 5 scope, the same phase that builds the geospatial connectors and the site grid this
+table also serves.
+
+Tested against three real projections with real place coordinates, not arbitrary numbers, so a
+wrong zone or a transposed axis shows up as a wrong place rather than a plausible wrong number:
+EPSG:27700 (OSGB36 British National Grid, both as an easting/northing pair and as bare grid
+references), and two NAD83 State Plane zones from different states — EPSG:32139 (Texas Central)
+and EPSG:2227 (California Zone III) — proving the two US zones are not interchangeable
+(`tests/knowledge_adapters/test_coordinates.py`, `test_grid_ref.py`,
+`tests/ingest/test_crs_reprojection.py`).
+
+## 8. `GraphPort` request and response shapes
+
+`packages/ports/graph.py` is the source of truth; this section documents the request/response
+shapes it builds on, the same way §9 documents `AnalyticsPort`'s. Port request and response
+shapes belong in the domain model, not only in docstrings.
+
+```python
+class ExpandRequest(BaseModel):
+    node_ids: list[NodeId]
+    depth: int = 1                       # 1..4
+    edge_types: list[str] | None = None
+    direction: Literal["out", "in", "both"] = "both"
+    temporal_window: Interval | None = None
+
+class PathRequest(BaseModel):
+    source: NodeId
+    target: NodeId
+    max_hops: int = 6
+    k: int = 1                           # k-shortest paths
+    edge_types: list[str] | None = None
+
+class Path(BaseModel):
+    nodes: list[NodeId]
+    edges: list[EdgeId]
+    length: int
+
+class NeighbourhoodStats(BaseModel):
+    node_id: NodeId
+    degree: int
+    degree_by_type: dict[str, int]
+
+class Subgraph(BaseModel):
+    nodes: list[Node]
+    edges: list[Edge]
+    filtered_count: int = 0              # §8.2 — placeholder until Phase 3
+```
+
+### 8.1 Pattern matching
+
+`match()` takes a bounded `PatternQuery`, never free-form Gremlin (ADR-003):
+
+```python
+class PatternNode(BaseModel):
+    var: str
+    entity_type: str | None = None
+
+class PatternEdge(BaseModel):
+    edge_type: str
+    from_var: str
+    to_var: str
+
+class PatternQuery(BaseModel):
+    nodes: list[PatternNode]
+    edges: list[PatternEdge]
+    limit: int = 1000
+```
+
+A fixed set of Conduit-side builders compiles a `PatternQuery` into Gremlin; the shape itself
+cannot express an arbitrary traversal, which is what makes it safe to accept from above the Vault
+boundary.
+
+### 8.2 Additions since Phase 1
+
+Phase 1 shipped `upsert_nodes`/`upsert_edges`/`get_node`/`expand`/`paths`/`match`/
+`neighbourhood_stats`/`apply_schema`/`revert_schema` against `00_ARCHITECTURE.md` §2.1's
+illustrative sketch. Phase 2 added five more, without re-litigating the sketch first, the same
+way Phase 1 itself went beyond it for transaction management and schema application:
+
+- **`find_node(entity_type, identifier_field, value, principal)`.** The recipe engine's
+  `on_match: reference` (§7) needs to look an entity up by its declared identifier before
+  deciding whether to create a new node, and `match()`'s `PatternQuery` has no property-value
+  predicate — only an entity type.
+- **`get_node(..., include_superseded=False)`.** The one way to retrieve a node
+  `supersede_node` has replaced; otherwise excluded from every read by default. Lifts only the
+  supersession exclusion — classification and `handling_code` still apply underneath.
+- **`supersede_node(node_id, replacement, tx) -> NodeId`.** Writes `replacement` as a new node
+  at `revision = node_id`'s current revision + 1, sets `node_id`'s own `AuditStub.superseded_by`
+  to the new id, and returns it. The old node is never deleted; every prior revision and the full
+  `superseded_by` chain stays individually retrievable. **Confirmed empirically that ArcadeDB (like
+  TinkerPop generally) cannot relink an existing edge's endpoints** — `UPDATE E1 SET out = #rid`
+  reports success but leaves `@out`/`@in` unchanged — so every edge incident to `node_id` is
+  cloned onto the replacement (provenance, handling, interval and occurrences preserved exactly)
+  and the originals are marked `reverted`, rather than repointed in place. The clone-and-revert is
+  wrapped in the same transaction as the rest of the operation: a failure partway rolls back to
+  zero trace of the partial write, proven by a conformance case that injects a failure after N
+  clones and asserts the pre-operation graph is exactly restored. **Measured, not estimated:**
+  superseding a node of degree 5,000 took 41 seconds against a single ArcadeDB instance — a real
+  ceiling, not a projected one. Above some threshold below that, synchronous supersession inside
+  one request is the wrong shape; Phase 3's scope (`07_BUILD_PLAN.md`) records making it a
+  background job past a configured degree rather than discovering the timeout in production.
+- **`supersede_edge(edge_id, replacement, tx) -> EdgeId`.** The same operation for an edge —
+  simpler, since nothing references an edge by id except an assessment's evidence list (§5), which
+  is expected to follow `superseded_by`, not be silently rewritten, so there is nothing to
+  repoint.
+- **`revert_elements(node_ids, edge_ids, tx) -> None`.** Sets `AuditStub.reverted` on existing
+  elements; `services/ingest`'s `revert_load` is the only caller. No `principal` argument, unlike
+  every read method — this is a backend write attributed by the caller's own audit trail (the
+  load ledger), not a principal-scoped read. A reverted element is invisible to every read
+  afterwards, any clearance, and is never actually deleted.
+
+**`Subgraph.filtered_count`** stays the Phase 1 placeholder `0` through Phase 2. It stands in for
+a specific, not-yet-answerable question: of the nodes an `expand` call excluded, how many were
+excluded because of the *access filter* specifically, as opposed to depth, edge-type or temporal
+scoping simply not reaching them? Answering that needs both the filtered and unfiltered node sets
+compared under one authority, and `GraphPort` alone cannot do that comparison without opening a
+second, less-audited query channel — it is a single-adapter read path, not a place two competing
+views of the same expansion can be reconciled. Phase 3's Working-Set Service is the first place
+that holds both views under its own authority, which is why closing this gap is scoped there
+(`07_BUILD_PLAN.md`) rather than attempted here with a workaround.
+
+## 9. `AnalyticsPort` request and response shapes
+
+`packages/schemas/analytics.py` is the source of truth. Columnar aggregation over the event table
+§3 describes. Every read method takes an `EventFilter` the adapter injects into its own `WHERE`
+clause before aggregating — there is no `raw_sql` escape hatch, deliberately
+(`00_ARCHITECTURE.md` §2.2): an arbitrary SQL string cannot be access-filtered, the same reason
+`GraphPort` never accepts free-form Gremlin.
+
+```python
+class EventRecord(BaseModel):
+    event_id: str
+    edge_id: EdgeId                  # the graph edge this row is one occurrence of
+    edge_type: str
+    source_id: NodeId
+    target_id: NodeId
+    occurred_at: datetime
+    duration_s: float | None = None
+    cell_site: str | None = None
+    lat: float | None = None         # -90..90
+    lon: float | None = None         # -180..180, travels with lat or not at all
+    direction: str | None = None
+    properties: dict[str, Any] = {}
+    investigation_scope: str
+    handling: Handling               # carried per row, so a filtered query never joins back
+                                      # to the graph store to know what it may not show
+
+class EventFilter(BaseModel):
+    investigation_scope: str         # required — the event tables partition on it
+    window: Interval | None = None
+    node_ids: list[NodeId] = []
+    edge_types: list[str] = []
+```
+
+**`GeometryRecord`** — the analytics store's geometry reference partition, §7.1's
+`geometry_ref`/`grid_ref` Knowledge Adapters produce the reference a `Location` node points at:
+
+```python
+class GeometryRecord(BaseModel):
+    geometry_ref: str
+    lon: float                       # -180..180, WGS84
+    lat: float                       # -90..90, WGS84
+    source_crs: str
+    source_x: float | None = None    # retained original, never discarded
+    source_y: float | None = None
+```
+
+No `investigation_scope`/`handling` here, unlike `EventRecord` — reference data is versioned as a
+whole rather than scoped per investigation, and the full versioning/access-control story for this
+partition is Phase 5 scope, the same phase that builds the geospatial connectors and the site
+grid it also serves.
+
+```python
+class HistogramBucketing(StrEnum):
+    FIXED_INTERVAL = "fixed_interval"
+    WEEKDAY_HOUR = "weekday_hour"
+    CATEGORICAL = "categorical"       # buckets by an EventRecord/properties field
+
+class HistogramRequest(BaseModel):
+    filter: EventFilter
+    bucketing: HistogramBucketing = HistogramBucketing.FIXED_INTERVAL
+    interval_seconds: int | None = None   # required for FIXED_INTERVAL
+    field: str | None = None              # required for CATEGORICAL
+
+class HistogramBucket(BaseModel):
+    start: datetime | None = None     # fixed_interval
+    end: datetime | None = None       # fixed_interval
+    weekday: int | None = None        # weekday_hour — 0 = Monday
+    hour: int | None = None           # weekday_hour
+    label: str | None = None          # categorical
+    count: int
+
+class Histogram(BaseModel):
+    bucketing: HistogramBucketing
+    buckets: list[HistogramBucket]
+    total: int
+```
+
+```python
+class GeoBinRequest(BaseModel):
+    filter: EventFilter
+    precision: int                    # 1..12 — higher is finer
+
+class GeoBin(BaseModel):
+    cell_id: str
+    centroid_lon: float
+    centroid_lat: float
+    count: int
+```
+
+**`geo_bins` is not a geohash.** No base-32 cell-id encoding, and bins are equal-*area* via a
+sinusoidal projection (`x = lon / cos(lat)`, gridded uniformly), not equal-*degree* — a degree of
+longitude at 55°N is about 57% the width, on the ground, of one at the equator, so an
+equal-degree grid gives the UK materially narrower bins than the US at the same precision and a
+cross-region density comparison reads wrong. Each row's own latitude sets its longitude bin
+width; there is no single global one.
+
+```python
+class BaselineRequest(BaseModel):
+    filter: EventFilter
+    baseline_window: Interval
+    comparison_window: Interval
+    bucketing: HistogramBucketing = HistogramBucketing.FIXED_INTERVAL
+    interval_seconds: int | None = None
+    field: str | None = None
+
+class BaselineResult(BaseModel):
+    baseline_count: int
+    comparison_count: int
+    baseline_rate_per_bucket: float
+    comparison_rate_per_bucket: float
+    ratio: float | None               # null when baseline_count is 0 — never divide to guess
+
+class CrossFilterDimension(BaseModel):
+    name: str
+    bucketing: HistogramBucketing
+    interval_seconds: int | None = None
+    field: str | None = None
+
+class CrossFilterRequest(BaseModel):
+    filter: EventFilter
+    dimensions: list[CrossFilterDimension]   # at least one
+```
+
+`cross_filter` runs every dimension against the same `EventFilter`, so the timeline, the map and
+the histogram panel restrict in lockstep (`08_ACCEPTANCE_SCENARIOS.md` A3) — one request, one
+compiled access predicate, rather than one call per panel that could disagree with itself under
+concurrent writes.

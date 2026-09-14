@@ -27,11 +27,31 @@ _OTHER_VERTEX_STEP = {"out": "inV", "in": "outV", "both": "otherV"}
 @dataclass(frozen=True)
 class GetNodeBuilder:
     node_id: str
+    include_superseded: bool = False
+
+    def render_gremlin(self, access: AccessFilter, principal: Principal) -> str:
+        has_access = access.gremlin_has_step(
+            principal, include_superseded=self.include_superseded
+        )
+        node_lit = groovy_string_literal(self.node_id)
+        return f'g.V().has("id",{node_lit}).{has_access}.elementMap()'
+
+
+@dataclass(frozen=True)
+class FindByIdentifierBuilder:
+    entity_type: str
+    identifier_field: str
+    value: str
 
     def render_gremlin(self, access: AccessFilter, principal: Principal) -> str:
         has_access = access.gremlin_has_step(principal)
-        node_lit = groovy_string_literal(self.node_id)
-        return f'g.V().has("id",{node_lit}).{has_access}.elementMap()'
+        type_lit = groovy_string_literal(physical_type_name(self.entity_type))
+        field_lit = groovy_string_literal(self.identifier_field)
+        value_lit = groovy_string_literal(self.value)
+        return (
+            f"g.V().hasLabel({type_lit}).has({field_lit},{value_lit})"
+            f".{has_access}.limit(1).elementMap()"
+        )
 
 
 @dataclass(frozen=True)

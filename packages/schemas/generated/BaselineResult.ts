@@ -1,11 +1,16 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: packages/schemas/domain.py and _pending_port_placeholders.py, via generate_ts.py
-/**
- * Marks this model as scaffolding, not domain content.
- */
-export type PendingPortNote = string;
+// Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py and _pending_port_placeholders.py, via generate_ts.py
+export type BaselineCount = number;
+export type ComparisonCount = number;
+export type BaselineRatePerBucket = number;
+export type ComparisonRatePerBucket = number;
+export type Ratio = number | null;
 
 export interface BaselineResult {
-  pending_port_note?: PendingPortNote;
+  baseline_count: BaselineCount;
+  comparison_count: ComparisonCount;
+  baseline_rate_per_bucket: BaselineRatePerBucket;
+  comparison_rate_per_bucket: ComparisonRatePerBucket;
+  ratio?: Ratio;
   [k: string]: unknown;
 }

@@ -62,12 +62,16 @@ def _handling(
     handling_code: str = "P",
     owning_unit: str = "unit-1",
     originator: str = "unit-1",
-) -> dict[str, str]:
+    action_code: str | None = None,
+    sanitisation_code: str | None = None,
+) -> dict[str, str | None]:
     return {
         "classification": classification,
         "handling_code": handling_code,
         "originator": originator,
         "owning_unit": owning_unit,
+        "action_code": action_code,
+        "sanitisation_code": sanitisation_code,
     }
 
 
@@ -77,6 +81,9 @@ def _handling(
 _DEFAULT_PROPERTIES: dict[str, dict[str, object]] = {
     "Person": {"family_name": "Test"},
     "Endpoint": {"value_normalised": "+441234567890"},
+    # Location has no required properties — geometry_ref is optional
+    # (03_CONDUIT_MIDDLEWARE.md §5.1: a jurisdiction or an administrative
+    # boundary has no single point and must be able to carry none).
 }
 
 
@@ -87,6 +94,11 @@ def _node(
     handling_code: str = "P",
     owning_unit: str = "unit-1",
     originator: str = "unit-1",
+    action_code: str | None = None,
+    sanitisation_code: str | None = None,
+    load_id: str | None = None,
+    recipe_id: str | None = None,
+    recipe_version: int | None = None,
     **properties: object,
 ) -> NodeWrite:
     merged_properties = {**_DEFAULT_PROPERTIES.get(node_type, {}), **properties}
@@ -96,9 +108,12 @@ def _node(
         provenance=_provenance(),
         handling=_handling(  # type: ignore[arg-type]
             classification, handling_code=handling_code, owning_unit=owning_unit,
-            originator=originator,
+            originator=originator, action_code=action_code, sanitisation_code=sanitisation_code,
         ),
         created_by="loader-1",
+        load_id=load_id,
+        recipe_id=recipe_id,
+        recipe_version=recipe_version,
     )
 
 
@@ -112,6 +127,10 @@ def _edge(
     owning_unit: str = "unit-1",
     originator: str = "unit-1",
     interval: Interval | None = None,
+    occurrences: int = 1,
+    load_id: str | None = None,
+    recipe_id: str | None = None,
+    recipe_version: int | None = None,
 ) -> EdgeWrite:
     return EdgeWrite(
         type=edge_type,
@@ -124,6 +143,10 @@ def _edge(
         ),
         created_by="loader-1",
         interval=interval,
+        occurrences=occurrences,
+        load_id=load_id,
+        recipe_id=recipe_id,
+        recipe_version=recipe_version,
     )
 
 
@@ -154,6 +177,142 @@ async def test_write_and_read_back_every_default_ontology_entity_type(
             node = await adapter.get_node(node_id, CLEARED)
             assert node is not None
             assert node.type == entity.name
+
+
+async def test_node_property_values_round_trip_exactly(factory: GraphAdapterFactory) -> None:
+    """Not just "the write succeeds and the type is right"
+    (`test_write_and_read_back_every_default_ontology_entity_type`, above)
+    — every property *value*, across the ontology's declared types
+    (`string`, `string[]`, `date`), must survive the round trip unchanged.
+    This is the shape of test the `upsert_edges` merge defect slipped
+    past: a property asserted at write time but never compared against
+    what a read actually returns."""
+    async with factory.context() as adapter:
+        (node_id,), _ = await _write(
+            adapter,
+            [
+                _node(
+                    "Person",
+                    classification="OFFICIAL",
+                    family_name="O'Brien-Smith",
+                    given_names="Mary Jane",
+                    date_of_birth="1990-05-17",
+                    aliases=["MJ", "Marie"],
+                )
+            ],
+            [],
+        )
+        node = await adapter.get_node(node_id, CLEARED)
+        assert node is not None
+        assert node.properties["family_name"] == "O'Brien-Smith"
+        assert node.properties["given_names"] == "Mary Jane"
+        assert node.properties["date_of_birth"] == "1990-05-17"
+        assert node.properties["aliases"] == ["MJ", "Marie"]
+
+
+async def test_node_resolution_state_round_trips_exactly(factory: GraphAdapterFactory) -> None:
+    from schemas.domain import ResolutionState
+
+    async with factory.context() as adapter:
+        write = _node("Person", classification="OFFICIAL")
+        write = write.model_copy(
+            update={
+                "resolution": ResolutionState(
+                    cluster_id="cluster-42",
+                    cluster_score=0.87,
+                    resolution_run="run-2026-01",
+                    manually_linked=["node-a", "node-b"],
+                    manually_split=["node-c"],
+                )
+            }
+        )
+        (node_id,), _ = await _write(adapter, [write], [])
+        node = await adapter.get_node(node_id, CLEARED)
+        assert node is not None
+        assert node.resolution.cluster_id == "cluster-42"
+        assert node.resolution.cluster_score == 0.87
+        assert node.resolution.resolution_run == "run-2026-01"
+        assert node.resolution.manually_linked == ["node-a", "node-b"]
+        assert node.resolution.manually_split == ["node-c"]
+
+
+async def test_edge_properties_and_distinct_interval_round_trip_exactly(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter,
+            [
+                _node("Endpoint", classification="OFFICIAL", value_normalised="+441111111111"),
+                _node("Endpoint", classification="OFFICIAL", value_normalised="+442222222222"),
+            ],
+            [],
+        )
+        start = datetime(2026, 1, 1, 9, 0, tzinfo=UTC)
+        end = datetime(2026, 1, 1, 9, 5, tzinfo=UTC)
+        _, (edge_id,) = await _write(
+            adapter,
+            [],
+            [
+                EdgeWrite(
+                    type="COMMUNICATED_WITH",
+                    source=a,
+                    target=b,
+                    properties={"duration_s": 42.5, "direction": "inbound"},
+                    interval=Interval(valid_from=start, valid_to=end),
+                    provenance=_provenance(),
+                    handling=_handling("OFFICIAL"),  # type: ignore[arg-type]
+                    created_by="loader-1",
+                )
+            ],
+        )
+        subgraph = await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)
+        (edge,) = subgraph.edges
+        assert edge.id == edge_id
+        assert edge.properties["duration_s"] == 42.5
+        assert edge.properties["direction"] == "inbound"
+        assert edge.interval == Interval(valid_from=start, valid_to=end)
+
+
+async def test_action_code_and_sanitisation_code_never_gate_a_read(
+    factory: GraphAdapterFactory,
+) -> None:
+    """`01_DOMAIN_MODEL.md` §2.2's field-by-field table: `action_code`
+    constrains what may be *done*, `sanitisation_code` is the export
+    gate's reason for existing — neither gates a *read*. Stated in prose;
+    nothing previously exercised it, since every other test in this suite
+    leaves both fields `None`."""
+    async with factory.context() as adapter:
+        (node_id,), _ = await _write(
+            adapter,
+            [
+                _node(
+                    "Person",
+                    classification="OFFICIAL",
+                    action_code="A1",  # covert development — the most access-restrictive-sounding
+                    sanitisation_code="S2",  # consult originator
+                )
+            ],
+            [],
+        )
+        # An OFFICIAL-cleared principal with no special permission at all
+        # still sees the record — these fields are read-inert.
+        assert await adapter.get_node(node_id, OFFICIAL) is not None
+
+
+async def test_subgraph_filtered_count_is_the_declared_placeholder_zero(
+    factory: GraphAdapterFactory,
+) -> None:
+    """`01_DOMAIN_MODEL.md` §8: `filtered_count` is reserved and left at
+    `0` until Phase 3's Working-Set Service computes it — a declared gap,
+    not a silent one. Pinned here so a future change either keeps the
+    declaration honest or updates it deliberately, rather than drifting
+    unnoticed."""
+    async with factory.context() as adapter:
+        (hub,), _ = await _write(adapter, [_node("Person", classification="OFFICIAL")], [])
+        await _write(adapter, [_node("Person", classification="SECRET")], [])
+        subgraph = await adapter.expand(ExpandRequest(node_ids=[hub], depth=1), OFFICIAL)
+        assert subgraph.filtered_count == 0
 
 
 async def test_write_and_read_back_an_edge(factory: GraphAdapterFactory) -> None:
@@ -352,6 +511,566 @@ async def test_schema_migration_is_idempotent_and_reversible(
 
         (node_id,), _ = await _write(adapter, [_node("Person", classification="OFFICIAL")], [])
         assert await adapter.get_node(node_id, CLEARED) is not None
+
+
+# --- find by identifier (the recipe engine's match_on/on_match) -------------
+
+
+async def test_find_node_locates_an_existing_node_by_its_identifier_field(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (node_id,), _ = await _write(
+            adapter,
+            [_node("Endpoint", classification="OFFICIAL", value_normalised="+441621926368")],
+            [],
+        )
+        found = await adapter.find_node("Endpoint", "value_normalised", "+441621926368", CLEARED)
+        assert found is not None
+        assert found.id == node_id
+
+        no_match = await adapter.find_node(
+            "Endpoint", "value_normalised", "+440000000000", CLEARED
+        )
+        assert no_match is None
+
+
+async def test_unauthorised_find_node_matches_a_graph_where_the_node_never_existed(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        await _write(
+            adapter,
+            [_node("Endpoint", classification="SECRET", value_normalised="+441621926368")],
+            [],
+        )
+        assert (
+            await adapter.find_node("Endpoint", "value_normalised", "+441621926368", OFFICIAL)
+            is None
+        )
+
+
+# --- edge summarisation, weight, and the load-ledger stamp ------------------
+
+
+async def test_upserting_the_same_pair_twice_merges_into_one_edge(
+    factory: GraphAdapterFactory,
+) -> None:
+    """`01_DOMAIN_MODEL.md` §3: one summarised edge per pair per type. A
+    second load touching the same pair extends the existing edge's
+    `occurrences` and `interval` — it must never add a second edge."""
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter,
+            [
+                _node("Endpoint", classification="OFFICIAL", value_normalised="+441111111111"),
+                _node("Endpoint", classification="OFFICIAL", value_normalised="+442222222222"),
+            ],
+            [],
+        )
+        day1 = datetime(2026, 1, 1, tzinfo=UTC)
+        day2 = datetime(2026, 1, 5, tzinfo=UTC)
+        _, (first_edge_id,) = await _write(
+            adapter,
+            [],
+            [
+                _edge(
+                    "COMMUNICATED_WITH",
+                    a,
+                    b,
+                    classification="OFFICIAL",
+                    occurrences=3,
+                    interval=Interval(valid_from=day1, valid_to=day1),
+                )
+            ],
+        )
+        _, (second_edge_id,) = await _write(
+            adapter,
+            [],
+            [
+                _edge(
+                    "COMMUNICATED_WITH",
+                    a,
+                    b,
+                    classification="OFFICIAL",
+                    occurrences=2,
+                    interval=Interval(valid_from=day2, valid_to=day2),
+                )
+            ],
+        )
+
+        assert first_edge_id == second_edge_id
+        assert (await adapter.neighbourhood_stats(a, CLEARED)).degree == 1
+
+        subgraph = await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)
+        (edge,) = subgraph.edges
+        assert edge.occurrences == 5
+        assert edge.interval == Interval(valid_from=day1, valid_to=day2)
+
+
+async def test_upserting_the_same_pair_twice_retains_both_source_references(
+    factory: GraphAdapterFactory,
+) -> None:
+    """`01_DOMAIN_MODEL.md` §7: "retaining every source row reference on
+    the surviving event" — the same requirement applies to the summarised
+    edge two separate loads both touch."""
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter,
+            [
+                _node("Endpoint", classification="OFFICIAL", value_normalised="+441111111111"),
+                _node("Endpoint", classification="OFFICIAL", value_normalised="+442222222222"),
+            ],
+            [],
+        )
+        first_write = _edge("COMMUNICATED_WITH", a, b, classification="OFFICIAL", occurrences=1)
+        await _write(adapter, [], [first_write])
+        second_write = _edge("COMMUNICATED_WITH", a, b, classification="OFFICIAL", occurrences=1)
+        second_write.provenance.sources[0].locator = "row 2"
+        await _write(adapter, [], [second_write])
+
+        subgraph = await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)
+        (edge,) = subgraph.edges
+        assert {s.locator for s in edge.provenance.sources} == {"p.1", "row 2"}
+
+
+async def test_edge_weight_is_derived_not_hardcoded_and_persists_its_components(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Phase 1 wrote a hardcoded `0.0` (`docs/07_BUILD_PLAN.md` Phase 2) —
+    `weight` must now be a real, positive value, and `weight_components`
+    must persist the counts behind it so a later recompute is arithmetic
+    over stored numbers, not a corpus rescan (`01_DOMAIN_MODEL.md` §6.1)."""
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter,
+            [
+                _node("Endpoint", classification="OFFICIAL", value_normalised="+441111111111"),
+                _node("Endpoint", classification="OFFICIAL", value_normalised="+442222222222"),
+            ],
+            [],
+        )
+        _, (edge_id,) = await _write(
+            adapter,
+            [],
+            [_edge("COMMUNICATED_WITH", a, b, classification="OFFICIAL", occurrences=10)],
+        )
+        subgraph = await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)
+        (edge,) = subgraph.edges
+        assert edge.id == edge_id
+        assert edge.weight > 0.0
+        assert edge.weight_components is not None
+        assert edge.weight_components.occurrences == 10
+        assert edge.weight_components.corpus_pair_count == 10
+        assert edge.weight_components.corpus_total_occurrences >= 10
+
+
+async def test_load_ledger_stamp_is_recorded_on_every_written_element(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-018: "every loaded element is stamped with the recipe version
+    that produced it" — the point being that a month-six mapping error is a
+    query against the graph itself, not an excavation through a ledger."""
+    async with factory.context() as adapter:
+        (node_id,), _ = await _write(
+            adapter,
+            [
+                _node(
+                    "Person",
+                    classification="OFFICIAL",
+                    load_id="load-abc",
+                    recipe_id="cdr-carrier-a",
+                    recipe_version=4,
+                )
+            ],
+            [],
+        )
+        node = await adapter.get_node(node_id, CLEARED)
+        assert node is not None
+        assert node.audit.load_id == "load-abc"
+        assert node.audit.recipe_id == "cdr-carrier-a"
+        assert node.audit.recipe_version == 4
+
+
+# --- revert ------------------------------------------------------------------
+
+
+async def test_reverted_node_is_invisible_to_every_read_any_clearance(
+    factory: GraphAdapterFactory,
+) -> None:
+    """A reverted element is a third, non-principal-dependent axis
+    (`01_DOMAIN_MODEL.md` §2.4) — unlike a hidden `SECRET` record, even the
+    most highly cleared principal must not see it, because it was
+    retracted, not merely restricted."""
+    async with factory.context() as adapter:
+        (node_id,), _ = await _write(adapter, [_node("Person", classification="OFFICIAL")], [])
+        assert await adapter.get_node(node_id, CLEARED) is not None
+
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([node_id], [], tx)
+        await adapter.commit_transaction(tx)
+
+        assert await adapter.get_node(node_id, CLEARED) is None
+
+
+async def test_reverted_edge_is_invisible_and_excluded_from_corpus_statistics(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter,
+            [
+                _node("Endpoint", classification="OFFICIAL", value_normalised="+441111111111"),
+                _node("Endpoint", classification="OFFICIAL", value_normalised="+442222222222"),
+            ],
+            [],
+        )
+        _, (edge_id,) = await _write(
+            adapter,
+            [],
+            [_edge("COMMUNICATED_WITH", a, b, classification="OFFICIAL", occurrences=5)],
+        )
+        assert (await adapter.neighbourhood_stats(a, CLEARED)).degree == 1
+
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([], [edge_id], tx)
+        await adapter.commit_transaction(tx)
+
+        assert (await adapter.neighbourhood_stats(a, CLEARED)).degree == 0
+        subgraph = await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)
+        assert subgraph.edges == []
+
+        # A later load touching the same pair starts a fresh edge rather
+        # than resurrecting the retracted one.
+        _, (new_edge_id,) = await _write(
+            adapter,
+            [],
+            [_edge("COMMUNICATED_WITH", a, b, classification="OFFICIAL", occurrences=1)],
+        )
+        assert new_edge_id != edge_id
+        subgraph_after = await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)
+        (live_edge,) = subgraph_after.edges
+        # 1, not 6 — the reverted edge's occurrences do not carry over.
+        assert live_edge.occurrences == 1
+
+
+async def test_revert_elements_on_an_empty_or_unknown_id_is_a_safe_no_op(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([], [], tx)
+        await adapter.revert_elements(["not-a-real-id"], ["not-a-real-id-either"], tx)
+        await adapter.commit_transaction(tx)
+
+
+# --- supersession (corrections) ------------------------------------------------
+
+
+async def test_superseded_node_is_excluded_from_default_reads(
+    factory: GraphAdapterFactory,
+) -> None:
+    """`01_DOMAIN_MODEL.md` §2.4: "Nodes are versioned, not overwritten. A
+    correction writes a new revision and points the old one forward." The
+    old revision must not appear in an ordinary read once superseded, any
+    more than a reverted element does."""
+    async with factory.context() as adapter:
+        (old_id,), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", family_name="Original")], []
+        )
+        tx = await adapter.begin_transaction()
+        new_id = await adapter.supersede_node(
+            old_id,
+            _node("Person", classification="OFFICIAL", family_name="Corrected"),
+            tx,
+        )
+        await adapter.commit_transaction(tx)
+
+        assert new_id != old_id
+        assert await adapter.get_node(old_id, CLEARED) is None
+        new_node = await adapter.get_node(new_id, CLEARED)
+        assert new_node is not None
+        assert new_node.properties["family_name"] == "Corrected"
+
+
+async def test_superseded_node_is_retrievable_by_explicit_revision(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (old_id,), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", family_name="Original")], []
+        )
+        tx = await adapter.begin_transaction()
+        new_id = await adapter.supersede_node(
+            old_id,
+            _node("Person", classification="OFFICIAL", family_name="Corrected"),
+            tx,
+        )
+        await adapter.commit_transaction(tx)
+
+        old_revision = await adapter.get_node(old_id, CLEARED, include_superseded=True)
+        assert old_revision is not None
+        assert old_revision.properties["family_name"] == "Original"
+        assert old_revision.audit.superseded_by == new_id
+        assert old_revision.audit.revision == 1
+
+        new_revision = await adapter.get_node(new_id, CLEARED, include_superseded=True)
+        assert new_revision is not None
+        assert new_revision.audit.revision == 2
+        assert new_revision.audit.superseded_by is None
+
+
+async def test_superseded_by_chain_is_traversable_across_two_corrections(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (id_a,), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", family_name="A")], []
+        )
+        tx1 = await adapter.begin_transaction()
+        id_b = await adapter.supersede_node(
+            id_a, _node("Person", classification="OFFICIAL", family_name="B"), tx1
+        )
+        await adapter.commit_transaction(tx1)
+
+        tx2 = await adapter.begin_transaction()
+        id_c = await adapter.supersede_node(
+            id_b, _node("Person", classification="OFFICIAL", family_name="C"), tx2
+        )
+        await adapter.commit_transaction(tx2)
+
+        # Walk the chain forward from the oldest revision.
+        node_a = await adapter.get_node(id_a, CLEARED, include_superseded=True)
+        node_b = await adapter.get_node(id_b, CLEARED, include_superseded=True)
+        node_c = await adapter.get_node(id_c, CLEARED, include_superseded=True)
+        assert node_a is not None and node_a.audit.superseded_by == id_b
+        assert node_b is not None and node_b.audit.superseded_by == id_c
+        assert node_c is not None and node_c.audit.superseded_by is None
+
+        # Only the tip is visible by default.
+        assert await adapter.get_node(id_a, CLEARED) is None
+        assert await adapter.get_node(id_b, CLEARED) is None
+        live = await adapter.get_node(id_c, CLEARED)
+        assert live is not None
+        assert live.properties["family_name"] == "C"
+
+
+async def test_include_superseded_does_not_bypass_classification(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The escape hatch is for history, not for clearance. An
+    OFFICIAL-cleared principal asking for a superseded revision must not
+    see one that was — and remains — SECRET."""
+    async with factory.context() as adapter:
+        (old_id,), _ = await _write(
+            adapter, [_node("Person", classification="SECRET", family_name="Hidden")], []
+        )
+        tx = await adapter.begin_transaction()
+        await adapter.supersede_node(
+            old_id, _node("Person", classification="SECRET", family_name="Still hidden"), tx
+        )
+        await adapter.commit_transaction(tx)
+
+        assert await adapter.get_node(old_id, OFFICIAL, include_superseded=True) is None
+        assert await adapter.get_node(old_id, CLEARED, include_superseded=True) is not None
+
+
+async def test_supersede_node_carries_its_whole_network_to_the_replacement(
+    factory: GraphAdapterFactory,
+) -> None:
+    """A correction must not silently disconnect the corrected node from
+    its own network — `superseded_by` alone does nothing to the edges
+    still recorded against the old id (see `_repoint_incident_edges`).
+    Degree 3 on the old node (two outgoing, one incoming, so both
+    directions are covered) must read as degree 3 on the replacement, and
+    zero — not an error, not a partial count — on the now-hidden original."""
+    async with factory.context() as adapter:
+        (person, contact_a, contact_b, contact_c), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL", family_name="Original"),
+                _node("Person", classification="OFFICIAL", family_name="Contact A"),
+                _node("Person", classification="OFFICIAL", family_name="Contact B"),
+                _node("Person", classification="OFFICIAL", family_name="Contact C"),
+            ],
+            [],
+        )
+        await _write(
+            adapter,
+            [],
+            [
+                _edge("ASSOCIATE_OF", person, contact_a, classification="OFFICIAL"),
+                _edge("ASSOCIATE_OF", person, contact_b, classification="OFFICIAL"),
+                _edge("ASSOCIATE_OF", contact_c, person, classification="OFFICIAL"),
+            ],
+        )
+        assert (await adapter.neighbourhood_stats(person, CLEARED)).degree == 3
+
+        tx = await adapter.begin_transaction()
+        new_id = await adapter.supersede_node(
+            person, _node("Person", classification="OFFICIAL", family_name="Corrected"), tx
+        )
+        await adapter.commit_transaction(tx)
+
+        assert (await adapter.neighbourhood_stats(new_id, CLEARED)).degree == 3
+        subgraph = await adapter.expand(ExpandRequest(node_ids=[new_id], depth=1), CLEARED)
+        new_neighbours = {n.id for n in subgraph.nodes} - {new_id}
+        assert new_neighbours == {contact_a, contact_b, contact_c}
+
+        # The old node is unreachable by default — not merely hidden itself,
+        # its former edges do not leave a trace either.
+        assert await adapter.get_node(person, CLEARED) is None
+        assert (await adapter.neighbourhood_stats(person, CLEARED)).degree == 0
+
+
+async def test_supersede_node_retains_each_cloned_edges_original_provenance(
+    factory: GraphAdapterFactory,
+) -> None:
+    """A cloned edge's evidence did not change because the node it points
+    at was corrected — `_clone_edge_onto` must carry the exact original
+    `Provenance` (state, every `SourceRef`, `extracted_by`,
+    `extraction_confidence`) onto the new edge, not a fresh one. Losing it
+    would break §5's judgement-review loop for any judgement citing that
+    edge: the citation would still resolve, but to evidence that no
+    longer says where it came from."""
+    async with factory.context() as adapter:
+        (person, contact), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL", family_name="Original"),
+                _node("Person", classification="OFFICIAL", family_name="Contact"),
+            ],
+            [],
+        )
+        multi_source_edge = EdgeWrite(
+            type="ASSOCIATE_OF",
+            source=person,
+            target=contact,
+            provenance=Provenance(
+                state=ProvenanceState.INFERRED,
+                sources=[
+                    SourceRef(document_id="doc-1", locator="p.1", excerpt_hash="a" * 64),
+                    SourceRef(document_id="doc-2", locator="p.7", excerpt_hash="b" * 64),
+                ],
+                extracted_by="model:qwen2-vl:7b@2026-05-02",
+                extraction_confidence=0.82,
+                first_seen=datetime(2026, 1, 1, tzinfo=UTC),
+            ),
+            handling=_handling("OFFICIAL"),  # type: ignore[arg-type]
+            created_by="loader-1",
+        )
+        _, (original_edge_id,) = await _write(adapter, [], [multi_source_edge])
+
+        tx = await adapter.begin_transaction()
+        new_id = await adapter.supersede_node(
+            person, _node("Person", classification="OFFICIAL", family_name="Corrected"), tx
+        )
+        await adapter.commit_transaction(tx)
+
+        subgraph = await adapter.expand(ExpandRequest(node_ids=[new_id], depth=1), CLEARED)
+        (cloned_edge,) = subgraph.edges
+        assert cloned_edge.id != original_edge_id
+        assert cloned_edge.provenance.state == ProvenanceState.INFERRED
+        assert cloned_edge.provenance.extracted_by == "model:qwen2-vl:7b@2026-05-02"
+        assert cloned_edge.provenance.extraction_confidence == 0.82
+        source_tuples = {
+            (s.document_id, s.locator, s.excerpt_hash) for s in cloned_edge.provenance.sources
+        }
+        assert source_tuples == {
+            ("doc-1", "p.1", "a" * 64),
+            ("doc-2", "p.7", "b" * 64),
+        }
+
+
+async def test_supersede_node_rollback_leaves_zero_trace_of_the_partial_operation(
+    factory: GraphAdapterFactory,
+) -> None:
+    """`supersede_node` is several separate writes under one transaction —
+    the new node, the old node's `superseded_by`, a clone per incident
+    edge, and marking the originals reverted. The recovery path for a
+    failure partway through is the same as for any other write: the
+    caller rolls back rather than commits, and everything done under that
+    transaction is discarded, not left half-migrated. Proven here against
+    the public API (rollback after a real, successful-but-uncommitted
+    `supersede_node`), not by faking an internal failure an adapter's own
+    implementation detail — a second `GraphPort` adapter must hold the
+    same guarantee without sharing that detail."""
+    async with factory.context() as adapter:
+        (person, contact_a, contact_b), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL", family_name="Original"),
+                _node("Person", classification="OFFICIAL", family_name="Contact A"),
+                _node("Person", classification="OFFICIAL", family_name="Contact B"),
+            ],
+            [],
+        )
+        await _write(
+            adapter,
+            [],
+            [
+                _edge("ASSOCIATE_OF", person, contact_a, classification="OFFICIAL"),
+                _edge("ASSOCIATE_OF", person, contact_b, classification="OFFICIAL"),
+            ],
+        )
+
+        tx = await adapter.begin_transaction()
+        new_id = await adapter.supersede_node(
+            person, _node("Person", classification="OFFICIAL", family_name="Corrected"), tx
+        )
+        await adapter.rollback_transaction(tx)
+
+        # The entire operation is undone: the original node, at its
+        # original degree, with no trace of the replacement.
+        original = await adapter.get_node(person, CLEARED)
+        assert original is not None
+        assert original.audit.superseded_by is None
+        assert (await adapter.neighbourhood_stats(person, CLEARED)).degree == 2
+        assert await adapter.get_node(new_id, CLEARED) is None
+
+
+async def test_supersede_edge_replaces_it_in_default_reads(
+    factory: GraphAdapterFactory,
+) -> None:
+    """`01_DOMAIN_MODEL.md` §3/§5: an edge carries `AuditStub` too, and a
+    `Judgement` can cite one directly as evidence — a corrected edge must
+    leave that citation resolvable to a `superseded_by` pointer, not just
+    disappear. Exercises the same exclusion mechanism as node supersession,
+    with no repointing needed (nothing else references an edge by id)."""
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL", family_name="A"),
+                _node("Person", classification="OFFICIAL", family_name="B"),
+            ],
+            [],
+        )
+        _, (old_edge_id,) = await _write(
+            adapter, [], [_edge("ASSOCIATE_OF", a, b, classification="OFFICIAL")]
+        )
+
+        tx = await adapter.begin_transaction()
+        new_edge_id = await adapter.supersede_edge(
+            old_edge_id,
+            EdgeWrite(
+                type="ASSOCIATE_OF",
+                source=a,
+                target=b,
+                provenance=_provenance(),
+                handling=_handling("OFFICIAL"),  # type: ignore[arg-type]
+                created_by="reviewer-1",
+            ),
+            tx,
+        )
+        await adapter.commit_transaction(tx)
+
+        assert new_edge_id != old_edge_id
+        subgraph = await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)
+        (edge,) = subgraph.edges
+        assert edge.id == new_edge_id
+        assert edge.audit.revision == 2
+        assert edge.audit.superseded_by is None
 
 
 # --- existence-leak assertions ------------------------------------------------

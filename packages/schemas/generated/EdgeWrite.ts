@@ -1,5 +1,5 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: packages/schemas/domain.py and _pending_port_placeholders.py, via generate_ts.py
+// Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py and _pending_port_placeholders.py, via generate_ts.py
 export type Type = string;
 export type NodeId = string;
 export type ValidFrom = string;
@@ -22,6 +22,9 @@ export type SanitisationCode = string | null;
 export type OrgUnitId = string;
 export type ReviewDate = string | null;
 export type LegalBasis = string | null;
+export type LoadId = string | null;
+export type RecipeId = string | null;
+export type RecipeVersion = number | null;
 
 export interface EdgeWrite {
   type: Type;
@@ -33,6 +36,9 @@ export interface EdgeWrite {
   provenance: Provenance;
   handling: Handling;
   created_by: PrincipalId;
+  load_id?: LoadId;
+  recipe_id?: RecipeId;
+  recipe_version?: RecipeVersion;
   [k: string]: unknown;
 }
 export interface Properties {

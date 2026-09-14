@@ -1,5 +1,5 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: packages/schemas/domain.py and _pending_port_placeholders.py, via generate_ts.py
+// Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py and _pending_port_placeholders.py, via generate_ts.py
 export type Classification = string;
 export type HandlingCode = string;
 export type ActionCode = string | null;

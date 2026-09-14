@@ -1,0 +1,60 @@
+# Hand-written recipe for the synthetic CDR fixture — 07_BUILD_PLAN.md
+# Phase 2 exit criterion, following the shape in 09_INGEST_STUDIO.md §6.
+id: cdr-fixture
+version: 1
+label: "Fixture — synthetic CDR"
+connector:
+  profile: cdr-generic-csv
+  delimiter: ","
+  encoding: utf-8
+  header_rows: 1
+  date_order: dmy
+ontology_version: 6
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-1, owning_unit: unit-1}
+
+# 01_DOMAIN_MODEL.md §7 rule 2: every key field is canonicalised through
+# its own Knowledge Adapter before hashing, not the raw source string —
+# a_party/b_party through msisdn, start_time through datetime (truncated
+# to the second by the engine before hashing).
+deduplicate:
+  key:
+    - {field: a_party, transform: msisdn}
+    - {field: b_party, transform: msisdn}
+    - {field: start_time, transform: "datetime(tz=Europe/London)"}
+    - {field: duration}
+    - {field: direction}
+
+row_template:
+  entities:
+    - ref: a
+      pole_class: object
+      type: Endpoint
+      match_on: value_normalised
+      on_match: reference
+      properties:
+        value_raw: {field: a_party}
+        value_normalised: {field: a_party, transform: msisdn}
+        endpoint_kind: {literal: msisdn}
+    - ref: b
+      pole_class: object
+      type: Endpoint
+      match_on: value_normalised
+      on_match: reference
+      properties:
+        value_raw: {field: b_party}
+        value_normalised: {field: b_party, transform: msisdn}
+        endpoint_kind: {literal: msisdn}
+  edges:
+    - type: COMMUNICATED_WITH
+      from: a
+      to: b
+      temporal: {at: {field: start_time, transform: "datetime(tz=Europe/London)"}}
+      properties:
+        duration_s: {field: duration}
+        direction: {field: direction, map: {I: inbound, O: outbound}}
+
+unmapped_fields:
+  - {field: seq, action: ignore, note: "Sequence number; not loaded"}

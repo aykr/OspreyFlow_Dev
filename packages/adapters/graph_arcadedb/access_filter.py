@@ -54,12 +54,27 @@ class AccessFilter:
     def _receivable_restricted_codes(self, principal: Principal) -> list[str]:
         return [c for c in principal.receivable_handling_codes if c in self._restricted_codes]
 
-    def gremlin_has_step(self, principal: Principal) -> str:
-        """Both axes, compiled into one fragment to chain directly onto
-        whatever vertex/edge step it follows. A record's `handling_code` is
+    def gremlin_has_step(
+        self, principal: Principal, *, include_superseded: bool = False
+    ) -> str:
+        """Both handling axes, plus two more that are not
+        principal-dependent at all: a reverted element (`services/ingest`'s
+        `revert_load`, `01_DOMAIN_MODEL.md` §2.4) is invisible to every
+        read regardless of clearance, and a superseded node — the old
+        revision a correction has replaced (`supersede_node`, same §2.4) —
+        is invisible by default too, since "excluded from reads by
+        default" only means something if ordinary reads actually exclude
+        it. Riding in the same fragment is what makes every existing call
+        site enforce both for free, with no change to `builders.py`.
+        `include_superseded` is the one caller-controlled exception —
+        `get_node`'s explicit-revision lookup — and it *only* lifts the
+        supersession check: classification and `handling_code` still apply
+        underneath it, so asking for history never surfaces a record the
+        caller could not otherwise see. A record's `handling_code` is
         visible either because it isn't a restricted code at all, or
         because this principal both may receive that specific restricted
         code and belongs to the record's owning or originating unit."""
+        not_reverted_step = 'has("reverted",false)'
         classification_step = (
             f'has("handling_classification",'
             f"within({groovy_string_list_literal(self.allowed_classifications(principal))}))"
@@ -79,4 +94,9 @@ class AccessFilter:
             ")"
             "))"
         )
-        return f"{classification_step}.{handling_code_step}"
+        steps = [not_reverted_step]
+        if not include_superseded:
+            steps.append('hasNot("superseded_by")')
+        steps.append(classification_step)
+        steps.append(handling_code_step)
+        return ".".join(steps)

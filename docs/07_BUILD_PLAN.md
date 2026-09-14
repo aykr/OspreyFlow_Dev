@@ -73,8 +73,14 @@ the guard turning red is recognised as the expected handover rather than a regre
   of an analyst for review (ADR-018). Cheap here, expensive in Phase 5a.
 - All Knowledge Adapters from `01_DOMAIN_MODEL.md` §7, each with a golden test file.
 - CDR content-hash deduplication.
+- CRS reprojection at ingest (`01_DOMAIN_MODEL.md` §7.1, ADR-017): `coordinate_lon`/
+  `coordinate_lat` Knowledge Adapters, declared `source_crs` per connector, fixtures in
+  EPSG:27700 and two NAD83 State Plane zones.
 - Parquet staging in MinIO.
 - `adapters/analytics_duckdb` — full `AnalyticsPort`, and its conformance suite.
+- The HMP fixture (`08_ACCEPTANCE_SCENARIOS.md` Scenario A's statistical shape, not its site-grid
+  UI mechanism): four yards at ~52% of incidents, two intra-day peaks, weekend at ~34%, proved
+  against a real `AnalyticsPort` adapter now so Phase 5 inherits a fixture already known correct.
 - Load path writing both stores in one logical transaction per document.
 - Edge weight computed per `01_DOMAIN_MODEL.md` §6.1 at load time (`adapters/graph_arcadedb`
   wrote a hardcoded `0.0` in Phase 1 — correct to defer, since the formula needs corpus-wide
@@ -104,11 +110,32 @@ supersedes a whole load and leaves the audit trail intact.
   Conduit, per `01_DOMAIN_MODEL.md` §2 — `adapters/graph_arcadedb` assigns them in Phase 1
   for lack of a Conduit yet to do it; move the assignment up when this phase lands, rather than
   the adapter continuing to do a Conduit's job.
+- `Subgraph.filtered_count`, populated for real. `01_DOMAIN_MODEL.md` §8: left at `0` since
+  Phase 1 — a declared gap, not a silent one — because computing it correctly needs a
+  full-vs-filtered comparison at a point that holds both results, and no such point exists before
+  this service does. `GraphPort.expand` itself cannot: its access predicate is compiled into the
+  traversal from the start (never filter after retrieval), so it only ever sees the
+  already-filtered result, and a second, broader query just to count what got excluded is exactly
+  the kind of extra, less-audited channel the existence-leak requirement rules out. The
+  Working-Set Service can, safely, because it already holds the full source-fidelity set
+  server-side and applies the handling filter as a projection on read — the comparison is a size
+  difference over data already fetched under its own authority, not a new query. Populate it as
+  part of the expansion budget/cardinality preview work above, not as an afterthought:
+  `02_GLASS_FRONTEND.md`'s status bar ("`6 hidden by handling`") reports this count directly, and
+  an always-zero value reaching that screen would tell an analyst nothing was hidden in a system
+  where things routinely are.
+- A job-based path for `GraphPort.supersede_node` above a degree threshold, rather than always a
+  synchronous Conduit call. `01_DOMAIN_MODEL.md` §8.2: measured (not assumed) at ~41 seconds for a
+  5,000-degree node against a local ArcadeDB instance — it held, correctly, but a request that
+  takes 41 seconds is not a reasonable synchronous operation, and a high-degree node (§6.1's
+  "service number that everyone calls") is exactly the shape most likely to need correcting.
+  Same job/status-id shape as `PatternQuery`'s "large results return a job id"
+  (`03_CONDUIT_MIDDLEWARE.md` §3.3).
 
 **Exit.** A scripted client seeds a working set, expands three times, disconnects mid-stream,
 reconnects and arrives at a byte-identical set. Every action appears in the audit stream. An
 expansion that would breach the cap returns the typed `limit_exceeded` error with its three
-options.
+options. An expansion that excludes a handling-filtered node reports a non-zero `filtered_count`.
 
 ---
 
@@ -156,11 +183,17 @@ pass automated contrast checks.
   registration and projection handling beyond Web Mercator.
 - Provider profile schema and validator; the shipped `providers/` set for the UK and the US, each
   with a verify fixture.
-- Coordinate reference system handling: transform to WGS84 at ingest, source CRS recorded beside
-  the original coordinates, undeclared CRS rejected by name. Fixtures in EPSG:27700 (British
-  National Grid) and at least two NAD83 State Plane zones.
 - UK and US gazetteer connectors: OS Open Names / Open UPRN / Code-Point Open / Boundary-Line,
-  and USGS GNIS / Census TIGER/Line / National Address Database.
+  and USGS GNIS / Census TIGER/Line / National Address Database. Coordinate reprojection itself
+  (`coordinate_lon`/`coordinate_lat`/`geometry_ref`/`grid_ref`, `01_DOMAIN_MODEL.md` §7.1) was
+  brought forward to Phase 2 — these connectors consume it, they do not rebuild it.
+- The geometry reference partition's own versioning and access-controlled read path
+  (`schemas/analytics.py`'s `GeometryRecord`, Phase 2's stated gap) — Phase 2 established the
+  correct storage tier and shape only.
+- Give the HMP fixture (`tests/scenarios/fixtures/hmp.py`) a graph side: real `Location`/`Person`
+  nodes and `PRESENT_AT` edges behind its `EventRecord`s, not the synthetic, unconnected
+  `edge_id`/`source_id`/`target_id` strings Phase 2 scoped it down to. Needed once the site grid
+  below actually resolves an incident to a `Location` entity.
 - Licence enforcement: `redistributable` and `client_scope` on every provider; `mantis bundle`
   refuses non-redistributable data by name; CI rejects any non-`open` provider in the demo
   configuration.

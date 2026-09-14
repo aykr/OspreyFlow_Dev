@@ -148,15 +148,27 @@ threshold must re-project against the full source-fidelity set, which the browse
 ### 5.1 Ingest
 
 ```
-upload/connector → identify → normalise → deduplicate → stage → extract? → resolve → load → index
+upload/connector → identify → stage(raw) → normalise → deduplicate → stage(normalised)
+                                                     → extract? → resolve → load → index
 ```
 
 - **identify** — MIME sniffing, not extension trust. Container formats unpacked one level.
 - **normalise** — the Knowledge Adapters from `01_DOMAIN_MODEL.md` §7. Originals retained.
 - **deduplicate** — content hash per record type; the CDR rule is specified in the domain model.
-- **stage** — everything lands in Parquet in object storage before it touches the graph. This is
-  what makes re-extraction, re-resolution and schema migration possible without re-uploading.
-  Skipping the staging layer is the most expensive shortcut available in this design.
+- **stage(raw)** — the source rows land in Parquet *before* any transform touches them, every
+  field as it appeared, typed as text. Immutable, never rewritten.
+- **stage(normalised)** — the post-transform rows land in a second Parquet dataset, partitioned
+  the same way and carrying the raw row's identifier.
+
+**Two staging datasets, not one, and the order matters.** Staging exists so that re-extraction,
+re-resolution and schema migration are possible without re-uploading — and only the raw dataset
+delivers that. If normalisation runs before the only stage step, a normaliser bug found in month
+six is correctable only for fields the recipe happened to bind twice, and an ontology version
+that wants a property the original recipe never captured has nowhere to read it from. Both cases
+end in a re-upload, which is the outcome staging is meant to prevent.
+
+Raw staging is cheap — text columns, compressed — and it is the layer that makes every other
+recovery path work. Skipping it is the most expensive shortcut available in this design.
 - **extract** — only for unstructured material; see §5.2.
 - **resolve** — Splink, writing `SAME_AS` edges; see §5.3.
 - **load** — batched writes through `GraphPort` and `AnalyticsPort` in one logical transaction
@@ -171,7 +183,10 @@ rather than per-document — a gazetteer refresh replaces a version, it does not
 previous one, and investigations record which gazetteer version was in force.
 
 Geometry is stored once, not twice: the geometry column lives in the analytics store where
-spatial predicates are cheap, and the graph holds the `Location` node with a reference to it.
+spatial predicates are cheap, and the graph holds the `Location` node with a `geometry_ref`
+pointing at that row — never `lon`, `lat` or a source easting and northing as node properties.
+A `Location` with no single point, such as a jurisdiction or an administrative boundary, carries
+no `geometry_ref` at all, so coordinates can never be a required property on the type.
 Putting geometry in the graph store would make spatial filtering a traversal, which is the wrong
 shape of query and constrains engine choice for no gain.
 
