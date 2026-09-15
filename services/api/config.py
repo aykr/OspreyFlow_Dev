@@ -51,7 +51,11 @@ class PostgresConfig:
     def from_env(cls) -> PostgresConfig:
         return cls(
             host=os.environ.get("POSTGRES_HOST", "localhost"),
-            port=int(os.environ.get("POSTGRES_PORT", "5432")),
+            # 5433, not Postgres's usual 5432: deploy/compose/dev.yaml publishes
+            # on 5433 to avoid colliding with a native Postgres already bound to
+            # 127.0.0.1:5432 on some dev machines. CI's own Postgres service
+            # still uses 5432 and sets POSTGRES_PORT explicitly to override this.
+            port=int(os.environ.get("POSTGRES_PORT", "5433")),
             user=os.environ.get("POSTGRES_USER", "osprey"),
             password=os.environ.get("POSTGRES_PASSWORD", "playwithdata123"),
             database=os.environ.get("POSTGRES_DB", "ospreyflow"),

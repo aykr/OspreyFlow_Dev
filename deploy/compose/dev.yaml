@@ -12,7 +12,11 @@
 # to this phase, on the same ports and credentials every client already
 # defaults to (`packages/adapters/graph_arcadedb/client.py`,
 # `services/ingest/staging.py`, `services/api/config.py`), so `make
-# dev-up && make test-all` needs no env configuration.
+# dev-up && make test-all` needs no env configuration. Postgres is the one
+# exception: it publishes on 5433, not its usual 5432, because a native
+# Postgres already bound to 127.0.0.1:5432 on some dev machines silently
+# intercepts connections meant for this container — `services/api/config.py`
+# defaults to 5433 to match, so no env configuration is still needed.
 services:
   arcadedb:
     image: arcadedata/arcadedb:24.11.1
@@ -74,7 +78,9 @@ services:
   postgres:
     image: postgres:16
     ports:
-      - "5432:5432"
+      # Host side is 5433, not Postgres's usual 5432 — see this file's
+      # header comment. Container-internal port is unchanged.
+      - "5433:5432"
     environment:
       POSTGRES_USER: osprey
       POSTGRES_PASSWORD: playwithdata123

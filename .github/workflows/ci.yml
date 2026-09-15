@@ -178,6 +178,11 @@ jobs:
       MINIO_ENDPOINT: "localhost:9000"
       VALKEY_HOST: localhost
       POSTGRES_HOST: localhost
+      # This job's own postgres service (below) still publishes on 5432 —
+      # only deploy/compose/dev.yaml's local-dev stack uses 5433. Explicit
+      # here rather than relying on services/api/config.py's default, which
+      # now points at 5433 to match that local-dev remap.
+      POSTGRES_PORT: "5432"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
