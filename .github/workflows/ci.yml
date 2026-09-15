@@ -53,7 +53,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "22" }
       - run: npm ci
-      - uses: aquasecurity/trivy-action@0.24.0
+      - uses: aquasecurity/trivy-action@v0.24.0
         with:
           scan-type: fs
           scanners: vuln,secret
@@ -72,7 +72,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build -f services/ingest/Dockerfile -t ospreyflow/ingest:ci .
-      - uses: aquasecurity/trivy-action@0.24.0
+      - uses: aquasecurity/trivy-action@v0.24.0
         with:
           image-ref: ospreyflow/ingest:ci
           scan-type: image
@@ -88,7 +88,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build -f services/api/Dockerfile -t ospreyflow/api:ci .
-      - uses: aquasecurity/trivy-action@0.24.0
+      - uses: aquasecurity/trivy-action@v0.24.0
         with:
           image-ref: ospreyflow/api:ci
           scan-type: image
