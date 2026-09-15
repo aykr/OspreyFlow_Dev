@@ -1,10 +1,10 @@
-# MantisNexus — System Specification Pack
+# OspreyFlow — System Specification Pack
 
 Version 1.1 · Architecture baseline for implementation by Claude Code.
-Supersedes v1.0 (`../mantisnexus-spec/`), which predates the Gemini architecture
+Supersedes v1.0 (`../ospreyflow-spec/`), which predates the Gemini architecture
 specification. v1.0 is retained for reference; where the two differ, this pack is current.
 
-MantisNexus is an open-source intelligence analysis and network discovery platform. It ingests
+OspreyFlow is an open-source intelligence analysis and network discovery platform. It ingests
 structured records and unstructured material (text, audio, imagery), resolves entities across
 sources, persists them in a property graph, and gives analysts a single workspace in which
 network, social-network, pattern, temporal and geospatial analysis are five views of one working
@@ -33,7 +33,7 @@ two years later need JanusGraph on a Scylla cluster.
 
 - The Conduit never calls ArcadeDB. It calls `GraphPort.expand(request, principal)`.
 - Switching engines means writing `adapters/graph_janusgraph`, a class implementing those same
-  method signatures, and changing one line in `mantis.yaml`.
+  method signatures, and changing one line in `osprey.yaml`.
 - Nothing in the Conduit changes. Nothing in the Glass changes. The API contracts, the working
   set, the access filter, the UI — all untouched, because none of them ever knew which engine
   was behind the port.
@@ -87,7 +87,7 @@ silently.
 3. **advanced_crime_analytics_ai_spec_v2.docx.** A prior feature specification. Its
    capabilities are adopted and restated as requirements. Its grounding — vendor demo videos
    and the named individuals in them — is dropped. Its node colour scheme is overruled by the
-   MantisNexus design system (ADR-009).
+   OspreyFlow design system (ADR-009).
 4. **CoLP_Demo_Presentation_V017.pptx.** The mobile-device and CDR analytical journey. Source
    of acceptance scenario B, and of the hotlist alerting, identifier standardisation and
    duplicate-CDR requirements.

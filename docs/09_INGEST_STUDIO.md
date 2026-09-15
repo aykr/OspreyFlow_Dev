@@ -325,10 +325,10 @@ editor; the repository is the record.
 - **Ontology-aware.** An ontology change that invalidates a recipe flags it and blocks scheduled
   runs until someone opens it. Recipes never silently adapt.
 - **Revertible.** A load is a unit. Revert is a function in `services/ingest` (`revert_load`),
-  tested directly against a live `GraphPort`, not a CLI command — this build has no `mantis`
+  tested directly against a live `GraphPort`, not a CLI command — this build has no `osprey`
   unified CLI (`07_BUILD_PLAN.md`'s Phase 2 amendment). It supersedes everything the load
   created, leaving the audit trail intact. The phrasing this section originally used
-  (`mantis ingest revert <load_id>`) predates the harness becoming browser-based; reverting a
+  (`osprey ingest revert <load_id>`) predates the harness becoming browser-based; reverting a
   load gets its own admin console screen in Phase 8, not a terminal command.
 
 ## 7. The review queue — where unstructured material actually lands

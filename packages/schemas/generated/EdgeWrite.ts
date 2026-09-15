@@ -1,5 +1,6 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py and _pending_port_placeholders.py, via generate_ts.py
+export type EdgeId = string;
 export type Type = string;
 export type NodeId = string;
 export type ValidFrom = string;
@@ -22,11 +23,17 @@ export type SanitisationCode = string | null;
 export type OrgUnitId = string;
 export type ReviewDate = string | null;
 export type LegalBasis = string | null;
+export type CreatedAt = string;
 export type LoadId = string | null;
 export type RecipeId = string | null;
 export type RecipeVersion = number | null;
 
+/**
+ * Pre-persistence `Edge`: `id` and `created_at` are Conduit-assigned,
+ * the same as `NodeWrite` — see its docstring.
+ */
 export interface EdgeWrite {
+  id: EdgeId;
   type: Type;
   source: NodeId;
   target: NodeId;
@@ -36,6 +43,7 @@ export interface EdgeWrite {
   provenance: Provenance;
   handling: Handling;
   created_by: PrincipalId;
+  created_at: CreatedAt;
   load_id?: LoadId;
   recipe_id?: RecipeId;
   recipe_version?: RecipeVersion;

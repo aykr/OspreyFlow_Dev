@@ -1,5 +1,6 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py and _pending_port_placeholders.py, via generate_ts.py
+export type NodeId = string;
 export type Type = string;
 export type ProvenanceState = "asserted" | "inferred" | "unresolved";
 export type DocumentId = string;
@@ -21,24 +22,29 @@ export type LegalBasis = string | null;
 export type ClusterId = string;
 export type ClusterScore = number | null;
 export type ResolutionRun = string | null;
-export type NodeId = string;
 export type ManuallyLinked = NodeId[];
 export type ManuallySplit = NodeId[];
+export type CreatedAt = string;
 export type LoadId = string | null;
 export type RecipeId = string | null;
 export type RecipeVersion = number | null;
 
 /**
- * Pre-persistence `Node`: the adapter assigns `id` (a ULID) and the
- * audit block's `created_at`/`revision` on write.
+ * Pre-persistence `Node`: `id` (a ULID) and `created_at` are assigned by
+ * the Conduit — `packages/conduit_common/identity.py` — never by an
+ * adapter (`01_DOMAIN_MODEL.md` §2: "assigned by the Conduit, never by a
+ * source system"). The adapter's own `AuditStub` still owns `revision`,
+ * since only it knows a node's current revision at write time.
  */
 export interface NodeWrite {
+  id: NodeId;
   type: Type;
   properties?: Properties;
   provenance: Provenance;
   handling: Handling;
   resolution?: ResolutionState;
   created_by: PrincipalId;
+  created_at: CreatedAt;
   load_id?: LoadId;
   recipe_id?: RecipeId;
   recipe_version?: RecipeVersion;

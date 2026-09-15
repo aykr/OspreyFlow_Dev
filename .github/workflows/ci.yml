@@ -27,7 +27,7 @@ jobs:
         with: { node-version: "22" }
       - run: uv sync
       - run: npm ci
-      - run: uv run mypy packages
+      - run: uv run mypy packages services
       - run: npm run typecheck
 
   licence-check:
@@ -71,10 +71,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -f services/ingest/Dockerfile -t mantisnexus/ingest:ci .
+      - run: docker build -f services/ingest/Dockerfile -t ospreyflow/ingest:ci .
       - uses: aquasecurity/trivy-action@0.24.0
         with:
-          image-ref: mantisnexus/ingest:ci
+          image-ref: ospreyflow/ingest:ci
+          scan-type: image
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  # services/api's Dockerfile, Phase 3's own — same reasoning as
+  # trivy-image-ingest above.
+  trivy-image-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f services/api/Dockerfile -t ospreyflow/api:ci .
+      - uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ospreyflow/api:ci
           scan-type: image
           scanners: vuln
           severity: HIGH,CRITICAL
@@ -105,8 +121,12 @@ jobs:
   # against a live ArcadeDB — the graph store local-lite actually ships —
   # not a fake. One container, matching local-lite's own shape.
   # tests/ingest's recipe-engine end-to-end test needs the same live
-  # ArcadeDB (Phase 2), so it runs here too rather than spinning up a
-  # second instance.
+  # ArcadeDB (Phase 2); test_staging.py in the same directory needs MinIO
+  # too. Phase 3 adds Valkey and Postgres for the Working-Set Service, the
+  # statelessness proof and the exit-criterion scenario test — the same
+  # four stores `deploy/compose/dev.yaml` (`make dev-up`) brings up
+  # locally, so this job and a developer's laptop run the identical test
+  # set against the identical stack.
   conformance:
     runs-on: ubuntu-latest
     services:
@@ -121,15 +141,66 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
+      valkey:
+        image: valkey/valkey:8.0
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      postgres:
+        image: postgres:16
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: osprey
+          POSTGRES_PASSWORD: playwithdata123
+          POSTGRES_DB: ospreyflow
+        options: >-
+          --health-cmd "pg_isready -U osprey -d ospreyflow"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
       ARCADEDB_HOST: localhost
       ARCADEDB_HTTP_PORT: "2480"
       ARCADEDB_ROOT_PASSWORD: playwithdata123
+      MINIO_ENDPOINT: "localhost:9000"
+      VALKEY_HOST: localhost
+      POSTGRES_HOST: localhost
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      # MinIO's image needs `server /data --console-address :9001` as its
+      # command, which GitHub Actions' `services:` block cannot override
+      # (no `command:` key) — run it directly instead.
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 -p 9001:9001 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            quay.io/minio/minio:RELEASE.2024-11-07T00-52-20Z \
+            server /data --console-address :9001
+          for _ in $(seq 1 20); do
+            curl -sf http://localhost:9000/minio/health/live && break
+            sleep 3
+          done
       - run: uv sync
-      - run: uv run pytest tests/conformance/graph_port tests/ingest
+      - run: >-
+          uv run pytest tests/conformance/graph_port tests/ingest
+          tests/services/api/test_valkey_store.py
+          tests/services/api/test_statelessness.py
+          tests/scenarios/test_phase3_working_set.py
+      - run: npm ci
+      # `deltaClient.integration.test.ts` (Phase 4) spawns the real
+      # `services.api.app` (`apps/workspace/test/glass_test_server.py`)
+      # against this same ArcadeDB/Valkey/Postgres — the one live-infra
+      # dependency the Glass's own test suite has, so it runs in this job
+      # rather than the plain `test` job below.
+      - run: npm run test:integration --workspace apps/workspace
 
   test:
     runs-on: ubuntu-latest
@@ -140,7 +211,37 @@ jobs:
         with: { node-version: "22" }
       - run: uv sync
       - run: npm ci
-      # tests/conformance/graph_port and tests/ingest need the live
-      # ArcadeDB in the `conformance` job above; every other test runs
-      # here.
-      - run: uv run pytest --ignore=tests/conformance/graph_port --ignore=tests/ingest
+      # Everything the `conformance` job above already covers against a
+      # live store runs here instead against nothing — every other test
+      # runs here.
+      - run: >-
+          uv run pytest --ignore=tests/conformance/graph_port --ignore=tests/ingest
+          --ignore=tests/services/api/test_valkey_store.py
+          --ignore=tests/services/api/test_statelessness.py
+          --ignore=tests/scenarios/test_phase3_working_set.py
+      # The Glass's fast, no-live-infra unit tests (`store.test.ts`,
+      # `zoomBands.test.ts`) — `*.integration.test.ts` is excluded by
+      # `vitest.config.ts` and runs in the `conformance` job instead.
+      - run: npm test --workspace apps/workspace
+
+  # `docs/07_BUILD_PLAN.md` Phase 4's exit criterion, the parts "not
+  # asserted in prose": the §5 performance budget, the §6 contrast floor,
+  # and "keyboard navigation reaches every canvas action" — all three as
+  # CI gates. Needs a real (if software-rendered — no GPU on a hosted
+  # runner) browser, so this is Playwright, not vitest; see `perf/
+  # perf.spec.ts`'s module docstring for the two-tier performance
+  # measurement decision (a CI regression proxy here, the literal §5
+  # numbers verified once against real hardware as this phase's own exit
+  # evidence).
+  glass-perf-a11y-keyboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/workspace
+      - run: npm run test:perf --workspace apps/workspace
+      - run: npm run test:a11y --workspace apps/workspace
+      - run: npm run test:keyboard --workspace apps/workspace

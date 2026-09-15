@@ -1,0 +1,95 @@
+// a11y contrast showcase — `docs/02_GLASS_FRONTEND.md` §6: "Contrast floor
+// met in both themes; verify with automated checks in CI, not by eye."
+// Renders a representative sample of the twenty primitives (`docs/
+// 02_GLASS_FRONTEND.md` §8) with real text content, so `a11y.spec.ts` has
+// something meaningful for axe-core's colour-contrast rule to scan — not
+// the full app (which needs a live investigation) or every primitive
+// (Popover/ContextMenu/RadialMenu/Drawer are transient overlays with
+// nothing to statically show; their surfaces reuse the same panel/overlay
+// tokens Panel/Toast already exercise here).
+import { createRoot } from "react-dom/client";
+
+import "../../../docs/design/tokens.css";
+import "../src/design/primitives.css";
+import { Button } from "../src/design/primitives/Button";
+import { Checkbox } from "../src/design/primitives/Checkbox";
+import { Histogram } from "../src/design/primitives/Histogram";
+import { IconButton } from "../src/design/primitives/IconButton";
+import { Input } from "../src/design/primitives/Input";
+import { Panel } from "../src/design/primitives/Panel";
+import { RadioGroup } from "../src/design/primitives/RadioGroup";
+import { Select } from "../src/design/primitives/Select";
+import { Slider } from "../src/design/primitives/Slider";
+import { Table } from "../src/design/primitives/Table";
+import { Tabs } from "../src/design/primitives/Tabs";
+import { Toast } from "../src/design/primitives/Toast";
+import { Toggle } from "../src/design/primitives/Toggle";
+import { Tooltip } from "../src/design/primitives/Tooltip";
+
+function Showcase() {
+  return (
+    <div style={{ padding: "var(--sp-24)", display: "flex", flexDirection: "column", gap: "var(--sp-16)" }}>
+      <Tabs
+        tabs={[
+          { id: "graph", label: "Graph" },
+          { id: "map", label: "Map" },
+        ]}
+        activeId="graph"
+        onChange={() => {}}
+      />
+      <Panel title="Inspector">
+        <p>Endpoint +441621926368, first seen 2026-01-01.</p>
+        <div style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
+          <Button variant="primary">Confirm</Button>
+          <Button>Split</Button>
+          <IconButton label="Close">×</IconButton>
+        </div>
+        <Input placeholder="Search entities, identifiers, documents" />
+        <Select defaultValue="official">
+          <option value="official">OFFICIAL</option>
+          <option value="secret">SECRET</option>
+        </Select>
+        <label style={{ display: "flex", gap: "var(--sp-6)", alignItems: "center" }}>
+          <Checkbox /> Include superseded
+        </label>
+        <RadioGroup
+          name="resolution"
+          options={[
+            { value: "strict", label: "Strict" },
+            { value: "balanced", label: "Balanced" },
+          ]}
+          value="balanced"
+          onChange={() => {}}
+          aria-label="Resolution threshold"
+        />
+        <Slider value={5} min={0} max={10} onChange={() => {}} aria-label="Degree filter" />
+        <Toggle checked label="Show labels" onChange={() => {}} />
+        <Tooltip text="Occurrence count over the brush window">
+          <span className="value">42</span>
+        </Tooltip>
+      </Panel>
+      <Table
+        columns={[
+          { key: "type", header: "Type", render: (r: { type: string }) => r.type },
+          { key: "id", header: "ID", render: (r: { id: string }) => r.id, numeric: true },
+        ]}
+        rows={[{ type: "Person", id: "n1" }]}
+        getRowId={(r) => r.id}
+      />
+      <Histogram
+        buckets={[
+          { key: "mon", count: 4, label: "Monday" },
+          { key: "tue", count: 9, label: "Tuesday" },
+        ]}
+        selectedKey={null}
+        onSelect={() => {}}
+      />
+      <Toast message="Query timed out at 30s. Narrow the date range." kind="error" />
+      <Toast message="6 item(s) withheld by handling policy" kind="warning" />
+    </div>
+  );
+}
+
+const container = document.getElementById("root");
+if (!container) throw new Error("#root not found");
+createRoot(container).render(<Showcase />);

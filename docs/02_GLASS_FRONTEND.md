@@ -237,14 +237,14 @@ projection and a node with coordinates sits where it belongs.
 | Convoy analysis | Two or more entities co-located within a distance and time tolerance; tolerances are user-set and shown |
 | Incident comparison | Two or more geo-temporal windows side by side, sharing a colour ramp |
 | Site geospatial | A georeferenced floor plan or aerial image as a raster layer with a drawn grid, for fixed-site analysis |
-| Basemap switching | Layer control listing every provider declared in `mantis.yaml`; attribution and any licence note render with the map and on every export |
+| Basemap switching | Layer control listing every provider declared in `osprey.yaml`; attribution and any licence note render with the map and on every export |
 | Gazetteer search | Place and address lookup against the locally ingested gazetteer; no hosted geocoder is ever called |
 | Boundary layers | Administrative, postcode and jurisdiction geometry as toggleable overlays; a drawn or selected boundary is a spatial filter like any other |
 | Offline tiles | PMTiles from a local file or a local tile server; no network call in an air-gapped deployment |
 
 Provider configuration is in `00_ARCHITECTURE.md` §1.2. The map component reads the registry and
 renders whatever kinds are declared — `vector`, `raster`, `image`, `dem` — with no per-provider
-code. Adding a force's corporate WMTS service is a `mantis.yaml` entry.
+code. Adding a force's corporate WMTS service is a `osprey.yaml` entry.
 
 **Site geospatial is not an afterthought.** The HMP analysis is an aerial photograph of a single
 site with a superimposed grid, and half the finding is "these four yards, adjacent to this

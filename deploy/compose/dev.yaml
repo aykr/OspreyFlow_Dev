@@ -1,0 +1,69 @@
+# `make dev-up` — docs/07_BUILD_PLAN.md Phase 3: "Add make dev-up bringing
+# up ArcadeDB, MinIO, Valkey and Postgres so the full suite runs locally.
+# The 49 [and now more] currently-skipped tests should be runnable on
+# demand, not only in CI."
+#
+# This is a dev convenience, not the harness (docs/05_DEPLOYMENT.md §2):
+# the harness is a browser application that generates a deployment's real
+# compose file from `osprey.yaml` and stands up the full local-lite stack
+# (twelve containers, including Keycloak, OpenSearch, Ollama...) — it does
+# not exist until Phase 8. This file exists only to run the test suite
+# locally, and stands up exactly the four stores the code already talks
+# to this phase, on the same ports and credentials every client already
+# defaults to (`packages/adapters/graph_arcadedb/client.py`,
+# `services/ingest/staging.py`, `services/api/config.py`), so `make
+# dev-up && make test-all` needs no env configuration.
+services:
+  arcadedb:
+    image: arcadedata/arcadedb:24.11.1
+    ports:
+      - "2480:2480"
+    environment:
+      JAVA_OPTS: "-Darcadedb.server.rootPassword=playwithdata123"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-u", "root:playwithdata123", "http://localhost:2480/api/v1/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  minio:
+    # MinIO's `minio/minio` Docker Hub image is no longer publicly
+    # pullable (denied without login as of 2024's distribution change);
+    # `quay.io/minio/minio` is the maintained public mirror.
+    image: quay.io/minio/minio:RELEASE.2024-11-07T00-52-20Z
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  valkey:
+    image: valkey/valkey:8.0
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  postgres:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: osprey
+      POSTGRES_PASSWORD: playwithdata123
+      POSTGRES_DB: ospreyflow
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U osprey -d ospreyflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 20

@@ -1,4 +1,4 @@
-# MantisNexus
+# OspreyFlow
 
 Open-source intelligence analysis and network discovery platform. Three tiers — the Glass
 (React workspace), the Conduit (FastAPI orchestration), the Vault (graph store, analytics,

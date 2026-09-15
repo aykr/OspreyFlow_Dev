@@ -1,5 +1,5 @@
 [project]
-name = "mantisnexus"
+name = "ospreyflow"
 version = "0.0.0"
 requires-python = ">=3.12"
 dependencies = [
@@ -13,6 +13,14 @@ dependencies = [
     "phonenumbers>=8.13",
     "pyproj>=3.6",
     "python-dateutil>=2.9",
+    "valkey>=6.1.1",
+    "msgpack>=1.2.2",
+    "fastapi>=0.141.1",
+    "uvicorn[standard]>=0.53.0",
+    "pyjwt>=2.14.0",
+    "cryptography>=50.0.1",
+    "asyncpg>=0.31.0",
+    "websockets>=17.1",
 ]
 
 [dependency-groups]
@@ -41,6 +49,14 @@ explicit_package_bases = true
 
 [[tool.mypy.overrides]]
 module = "pyarrow.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "asyncpg.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "msgpack.*"
 ignore_missing_imports = true
 
 [tool.ruff]

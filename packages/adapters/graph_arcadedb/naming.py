@@ -21,5 +21,5 @@ def physical_type_name(logical_name: str) -> str:
 
 def logical_type_name(physical_name: str) -> str:
     if not physical_name.startswith(_PREFIX):
-        raise ValueError(f"not a MantisNexus-namespaced ArcadeDB type: {physical_name!r}")
+        raise ValueError(f"not an OspreyFlow-namespaced ArcadeDB type: {physical_name!r}")
     return physical_name[len(_PREFIX) :]

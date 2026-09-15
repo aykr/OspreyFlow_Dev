@@ -31,7 +31,7 @@ it; everything after that happens on screen.
 docker run --rm -p 7000:7000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$PWD:/workspace" \
-  ghcr.io/mantisnexus/harness:latest
+  ghcr.io/ospreyflow/harness:latest
 # → Setup harness ready at http://localhost:7000
 ```
 
@@ -42,7 +42,7 @@ except start the harness.
 After launch the harness does not go away. It becomes the deployment's **admin console** at
 `/admin`, which is where provider registration, gazetteer loading, upgrades and verification live
 for the life of the system. Per the brand foundations, the console carries the Nexus mark and the
-analyst workspace carries Mantis; from inside the workspace the data layer is plumbing, not a
+analyst workspace carries Osprey; from inside the workspace the data layer is plumbing, not a
 brand.
 
 ### 2.1 What the harness does
@@ -73,13 +73,13 @@ failure explains what is wrong and what to do about it, with a **Re-check** butt
 loop of edit-and-rerun. Preflight must pass before Launch is enabled.
 
 **The generated artefacts are shown before anything runs.** The final screen is a diff, not a
-progress bar: `mantis.yaml` on the left, and the files that will be written on the right —
+progress bar: `osprey.yaml` on the left, and the files that will be written on the right —
 compose or Kubernetes manifests, environment files, `versions.lock` with every image digest
 pinned, and `RUNBOOK.md` written for *this* deployment with the real hostnames, ports and paths
 filled in. All of it is readable, all of it is downloadable, and Launch is the last click rather
 than the first.
 
-`mantis.yaml` is the deployment. Version it, review it in a pull request, and never hand-edit a
+`osprey.yaml` is the deployment. Version it, review it in a pull request, and never hand-edit a
 generated artefact — regenerate instead.
 
 ### 2.2 The geospatial screen
@@ -123,12 +123,12 @@ transfer and scripted rebuilds all need automation, so every screen maps to a su
 same behaviour and the same validation:
 
 ```bash
-mantis apply mantis.yaml          # generate and launch, non-interactive
-mantis preflight                  # the Preflight checks, exit code 0 or 1
-mantis geo build --osm great-britain
-mantis map add --profile os-zoomstack --file /data/tiles/os-open-zoomstack.pmtiles
-mantis verify map
-mantis bundle --images            # signed tarball for air-gapped transfer
+osprey apply osprey.yaml          # generate and launch, non-interactive
+osprey preflight                  # the Preflight checks, exit code 0 or 1
+osprey geo build --osm great-britain
+osprey map add --profile os-zoomstack --file /data/tiles/os-open-zoomstack.pmtiles
+osprey verify map
+osprey bundle --images            # signed tarball for air-gapped transfer
 ```
 
 The rule is that the UI never has a capability the headless path lacks. A deployment that was
@@ -147,7 +147,7 @@ Five guards, each closing a specific mistake:
 | Guard | The mistake it prevents |
 | --- | --- |
 | **Target confirmation** | The harness shows the resolved target before every action — the Docker context, or the Kubernetes cluster, context and namespace — and requires it to be confirmed when it differs from the last action. Applying to the wrong cluster is the classic incident, and it is almost always a stale `kubectl` context nobody looked at |
-| **Drift detection** | On open, the harness compares the running deployment against `mantis.yaml` and shows any divergence. Hand-edited manifests and out-of-band `kubectl edit` are the second commonest cause of an unreproducible environment |
+| **Drift detection** | On open, the harness compares the running deployment against `osprey.yaml` and shows any divergence. Hand-edited manifests and out-of-band `kubectl edit` are the second commonest cause of an unreproducible environment |
 | **Change preview** | Every switch shows what will be created, changed and destroyed before it runs, as a diff against the current state, not only at first generate |
 | **Ordering enforcement** | A profile switch with live data cannot skip backup and restore. The harness greys out Launch until a current backup exists, and states why |
 | **Capacity check** | A downgrade — cluster to small, small to laptop — runs preflight against the *existing data volume*, not the empty case, and refuses if it will not fit. Moving down is legitimate; discovering halfway through the restore that it cannot fit is not |
@@ -178,7 +178,7 @@ button.
 docker run --rm -p 7000:7000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$PWD:/workspace" \
-  ghcr.io/mantisnexus/harness:latest
+  ghcr.io/ospreyflow/harness:latest
 ```
 
 Then open `http://localhost:7000` and work through the six screens. For a laptop: choose
@@ -207,9 +207,9 @@ rather than assumed.
 
 **Laptop to small, or small to cluster:**
 
-1. **Back up** from the admin console, or `mantis backup`. Writes a portable bundle: staged
-   Parquet, object store contents, Postgres dump, ontology, handling scheme, and `mantis.yaml`.
-2. **Change profile** in the harness. It loads the existing `mantis.yaml` and re-opens only the
+1. **Back up** from the admin console, or `osprey backup`. Writes a portable bundle: staged
+   Parquet, object store contents, Postgres dump, ontology, handling scheme, and `osprey.yaml`.
+2. **Change profile** in the harness. It loads the existing `osprey.yaml` and re-opens only the
    screens whose answers are invalid at the new profile, marking the rest as carried forward.
 3. Review the regenerated artefacts and launch the new environment empty.
 4. **Restore** the bundle. This replays staged Parquet through load and index rather than copying
@@ -238,11 +238,11 @@ The maintainability requirement, made concrete.
   target version, and the console runs preflight, rolls the container or the Kubernetes
   deployment, then runs **verify** — the port conformance suite against the *running* deployment
   rather than a test fixture. Under two minutes, and it is what makes the upgrade safe rather
-  than hopeful. The headless equivalent is `mantis upgrade opensearch --to 3.2.1 && mantis verify
+  than hopeful. The headless equivalent is `osprey upgrade opensearch --to 3.2.1 && osprey verify
   opensearch`.
 - **Rollback** is one click to a previous digest, then verify again. `deploy/versions.lock`
   records every digest that has been live, so there is always a known-good target.
-- **Airgapped upgrades** — `mantis bundle --images` produces a signed tarball of every image and
+- **Airgapped upgrades** — `osprey bundle --images` produces a signed tarball of every image and
   weight file for transfer to a disconnected environment, where the harness runs from the bundle
   rather than from a registry. This path must be tested each release, because it is the path that
   will be needed under time pressure.
@@ -271,7 +271,7 @@ separately, with its own retention policy set by the deployment's legal basis.
   reverse proxy terminating TLS.
 - Default-deny egress. The model gateway is the only component with a documented exception, and
   the exception is off by default (`04_VAULT_BACKEND.md` §4).
-- Secrets from the environment or a secret manager, never in `mantis.yaml`, never in an image.
+- Secrets from the environment or a secret manager, never in `osprey.yaml`, never in an image.
 - Containers run as non-root, read-only root filesystem, no capabilities beyond the defaults.
 - Images signed and verified at pull; digests pinned in `deploy/versions.lock`.
 - Audit written to a separate volume with a separate retention policy and separate access.

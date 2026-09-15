@@ -2,7 +2,7 @@
 description: Start a build phase from the specification
 ---
 
-Start Phase $ARGUMENTS of the MantisNexus build.
+Start Phase $ARGUMENTS of the OspreyFlow build.
 
 1. Read the Phase $ARGUMENTS section of `docs/07_BUILD_PLAN.md`, and every spec document it
    references. Read `docs/06_DECISIONS.md` for any ADR that governs this phase.

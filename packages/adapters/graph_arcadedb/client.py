@@ -29,7 +29,7 @@ class ArcadeDBConfig:
     http_port: int = 2480
     username: str = "root"
     password: str = "playwithdata123"
-    database: str = "mantisnexus"
+    database: str = "ospreyflow"
 
     @property
     def base_url(self) -> str:

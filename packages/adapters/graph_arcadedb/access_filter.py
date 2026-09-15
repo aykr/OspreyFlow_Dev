@@ -54,6 +54,20 @@ class AccessFilter:
     def _receivable_restricted_codes(self, principal: Principal) -> list[str]:
         return [c for c in principal.receivable_handling_codes if c in self._restricted_codes]
 
+    def gremlin_structural_step(self, *, include_superseded: bool = False) -> str:
+        """The two exclusions `gremlin_has_step` bundles in that are not
+        principal-dependent at all — reverted and (unless lifted)
+        superseded (`01_DOMAIN_MODEL.md` §2.4) — factored out so a caller
+        that must *not* also compile the two access axes
+        (`ExpandBuilder.render_candidate_count_gremlin`, the unfiltered
+        half of `Subgraph.filtered_count`'s comparison, §8.2) can still
+        exclude the same not-really-there-any-more elements without
+        reproducing the clearance/handling-code compilation below."""
+        steps = ['has("reverted",false)']
+        if not include_superseded:
+            steps.append('hasNot("superseded_by")')
+        return ".".join(steps)
+
     def gremlin_has_step(
         self, principal: Principal, *, include_superseded: bool = False
     ) -> str:
@@ -74,7 +88,7 @@ class AccessFilter:
         visible either because it isn't a restricted code at all, or
         because this principal both may receive that specific restricted
         code and belongs to the record's owning or originating unit."""
-        not_reverted_step = 'has("reverted",false)'
+        structural_step = self.gremlin_structural_step(include_superseded=include_superseded)
         classification_step = (
             f'has("handling_classification",'
             f"within({groovy_string_list_literal(self.allowed_classifications(principal))}))"
@@ -94,9 +108,6 @@ class AccessFilter:
             ")"
             "))"
         )
-        steps = [not_reverted_step]
-        if not include_superseded:
-            steps.append('hasNot("superseded_by")')
-        steps.append(classification_step)
+        steps = [structural_step, classification_step]
         steps.append(handling_code_step)
         return ".".join(steps)

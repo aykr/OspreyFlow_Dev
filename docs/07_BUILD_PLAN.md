@@ -92,7 +92,7 @@ variant in the fixture resolves to one `Endpoint`. Duplicate rows collapse to on
 source references retained. A timeline histogram over the loaded events returns correct counts,
 including across a DST boundary. Rows with an undeterminable timezone are rejected and counted,
 never coerced. Reverting a load (`services/ingest`'s `revert_load` function — there is no
-`mantis` CLI; this build does not have one, a correction to this phrasing's original assumption)
+`osprey` CLI; this build does not have one, a correction to this phrasing's original assumption)
 supersedes a whole load and leaves the audit trail intact.
 
 ---
@@ -163,6 +163,18 @@ link detail. Zoom never changes the working set: node and edge counts in the sta
 identical at every band. Keyboard navigation reaches every canvas action. Both themes
 pass automated contrast checks.
 
+**Pre-deployment hardening item, carried forward rather than silently accepted.** The delta
+stream's WebSocket route accepts a `?token=` query-parameter fallback
+(`services/api/app.py`'s `_authenticate_websocket`) alongside the `Authorization` header, because
+a browser's native `WebSocket` cannot set that header at all — discovered live, when the Glass's
+canvas first tried to open this connection from an actual browser. The fallback carries the same
+long-lived JWT a browser client already holds, which is adequate to demonstrate this phase but not
+to deploy: a real deployment should replace it with a short-lived, single-use ticket (minted by an
+authenticated HTTP call, exchanged here instead of the JWT itself) before going live, closing the
+"token visible in a server access/proxy log" exposure the query-parameter form has. Not scheduled
+into a numbered phase above; tracked here so it has a home before Phase 5 rather than only a code
+docstring.
+
 ---
 
 ## Phase 5 — Temporal and geospatial
@@ -171,7 +183,7 @@ pass automated contrast checks.
 
 - Timeline: density strip, brush, playback, cyclical weekday × hour view, multi-track.
 - MapLibre integration with `@sigma/layer-maplibre`.
-- Basemap provider registry from `mantis.yaml`; layer control; attribution and licence notes
+- Basemap provider registry from `osprey.yaml`; layer control; attribution and licence notes
   rendered with the map and carried onto exports.
 - Tier 1 shipped default: one-button local basemap build (extract download, planetiler, gazetteer
   load), with bundled dark and light MapLibre styles built against `design/tokens.css`.
@@ -194,10 +206,10 @@ pass automated contrast checks.
   nodes and `PRESENT_AT` edges behind its `EventRecord`s, not the synthetic, unconnected
   `edge_id`/`source_id`/`target_id` strings Phase 2 scoped it down to. Needed once the site grid
   below actually resolves an incident to a `Location` entity.
-- Licence enforcement: `redistributable` and `client_scope` on every provider; `mantis bundle`
+- Licence enforcement: `redistributable` and `client_scope` on every provider; `osprey bundle`
   refuses non-redistributable data by name; CI rejects any non-`open` provider in the demo
   configuration.
-- Geospatial reference-data connectors and the reference partition; `mantis seed --geo`.
+- Geospatial reference-data connectors and the reference partition; `osprey seed --geo`.
 - In-deployment geocoder resolving extracted place names against the gazetteer, written as
   `inferred` with a match score.
 - Boundary overlays, and a drawn or selected boundary as a spatial filter.
@@ -210,7 +222,7 @@ pass automated contrast checks.
 **Exit.** Acceptance scenario A (`08_ACCEPTANCE_SCENARIOS.md`) passes end to end on the tier 1
 default provider with no network access, including the weekend and time-of-day findings and the
 site-grid hotspot, without a code change specific to the scenario. Swapping the default provider
-to tier 2 and re-running the scenario changes nothing analytically and `mantis verify map`
+to tier 2 and re-running the scenario changes nothing analytically and `osprey verify map`
 passes.
 
 ---

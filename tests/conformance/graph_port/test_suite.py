@@ -22,6 +22,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from conduit_common.identity import new_edge_id, new_node_id, now_utc
 from ontology.errors import OntologyError
 from ports.graph import GraphPort
 from schemas.domain import (
@@ -103,6 +104,7 @@ def _node(
 ) -> NodeWrite:
     merged_properties = {**_DEFAULT_PROPERTIES.get(node_type, {}), **properties}
     return NodeWrite(
+        id=new_node_id(),
         type=node_type,
         properties=merged_properties,
         provenance=_provenance(),
@@ -111,6 +113,7 @@ def _node(
             originator=originator, action_code=action_code, sanitisation_code=sanitisation_code,
         ),
         created_by="loader-1",
+        created_at=now_utc(),
         load_id=load_id,
         recipe_id=recipe_id,
         recipe_version=recipe_version,
@@ -133,6 +136,7 @@ def _edge(
     recipe_version: int | None = None,
 ) -> EdgeWrite:
     return EdgeWrite(
+        id=new_edge_id(),
         type=edge_type,
         source=source,
         target=target,
@@ -142,6 +146,7 @@ def _edge(
             originator=originator,
         ),
         created_by="loader-1",
+        created_at=now_utc(),
         interval=interval,
         occurrences=occurrences,
         load_id=load_id,
@@ -255,6 +260,7 @@ async def test_edge_properties_and_distinct_interval_round_trip_exactly(
             [],
             [
                 EdgeWrite(
+                    id=new_edge_id(),
                     type="COMMUNICATED_WITH",
                     source=a,
                     target=b,
@@ -263,6 +269,7 @@ async def test_edge_properties_and_distinct_interval_round_trip_exactly(
                     provenance=_provenance(),
                     handling=_handling("OFFICIAL"),  # type: ignore[arg-type]
                     created_by="loader-1",
+                    created_at=now_utc(),
                 )
             ],
         )
@@ -356,6 +363,90 @@ async def test_expand_reaches_further_nodes_as_depth_increases(
             )
             reached = {n.id for n in subgraph.nodes}
             assert reached == set(node_ids[: depth + 1])
+
+
+# --- expand_candidate_count (01_DOMAIN_MODEL.md §8.2 / filtered_count) ------
+
+
+async def test_expand_candidate_count_matches_expand_when_nothing_is_hidden(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (hub, visible), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL"),
+                _node("Endpoint", classification="OFFICIAL"),
+            ],
+            [],
+        )
+        await _write(adapter, [], [_edge("USES", hub, visible, classification="OFFICIAL")])
+
+        req = ExpandRequest(node_ids=[hub], depth=1)
+        subgraph = await adapter.expand(req, CLEARED)
+        candidate_count = await adapter.expand_candidate_count(req)
+
+        assert candidate_count == len(subgraph.nodes) == 2
+
+
+async def test_expand_candidate_count_includes_nodes_an_unauthorised_expand_excludes(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The unfiltered half of `filtered_count`'s comparison
+    (`01_DOMAIN_MODEL.md` §8.2): a SECRET neighbour an OFFICIAL principal's
+    `expand()` cannot see must still be in `expand_candidate_count`'s
+    reckoning, since that reckoning carries no principal at all — proving
+    it is genuinely unfiltered, not a second filtered call in disguise."""
+    async with factory.context() as adapter:
+        (hub,), _ = await _write(adapter, [_node("Person", classification="OFFICIAL")], [])
+        (visible,), _ = await _write(adapter, [_node("Endpoint", classification="OFFICIAL")], [])
+        (secret_neighbour,), _ = await _write(
+            adapter, [_node("Endpoint", classification="SECRET")], []
+        )
+        await _write(
+            adapter,
+            [],
+            [
+                _edge("USES", hub, visible, classification="OFFICIAL"),
+                _edge("USES", hub, secret_neighbour, classification="SECRET"),
+            ],
+        )
+
+        req = ExpandRequest(node_ids=[hub], depth=1)
+        unauthorised = await adapter.expand(req, OFFICIAL)
+        authorised = await adapter.expand(req, CLEARED)
+        candidate_count = await adapter.expand_candidate_count(req)
+
+        assert len(unauthorised.nodes) == 2  # hub + visible only
+        assert len(authorised.nodes) == 3  # hub + visible + secret_neighbour
+        assert candidate_count == 3
+        assert candidate_count - len(unauthorised.nodes) == 1  # what filtered_count must report
+
+
+async def test_expand_candidate_count_excludes_reverted_and_superseded_nodes(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Structural exclusion (reverted, superseded) is not what
+    `filtered_count` means — those elements were never real data to begin
+    with, the same as for every other read — so `expand_candidate_count`
+    must drop them exactly as `expand()` does, even though it applies
+    neither access axis."""
+    async with factory.context() as adapter:
+        (hub,), _ = await _write(adapter, [_node("Person", classification="OFFICIAL")], [])
+        (reverted_neighbour,), _ = await _write(
+            adapter, [_node("Endpoint", classification="OFFICIAL")], []
+        )
+        _, (touched_edge_id,) = await _write(
+            adapter, [], [_edge("USES", hub, reverted_neighbour, classification="OFFICIAL")]
+        )
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([reverted_neighbour], [touched_edge_id], tx)
+        await adapter.commit_transaction(tx)
+
+        req = ExpandRequest(node_ids=[hub], depth=1)
+        candidate_count = await adapter.expand_candidate_count(req)
+
+        assert candidate_count == 1  # hub only — the reverted neighbour never counts
 
 
 # --- k-shortest paths --------------------------------------------------------
@@ -548,6 +639,45 @@ async def test_unauthorised_find_node_matches_a_graph_where_the_node_never_exist
             await adapter.find_node("Endpoint", "value_normalised", "+441621926368", OFFICIAL)
             is None
         )
+
+
+async def test_search_nodes_matches_an_identifier_declared_on_any_entity_type(
+    factory: GraphAdapterFactory,
+) -> None:
+    """`search_nodes` is `find_node` generalised across every entity type's
+    declared `identifiers` — the caller does not name a type or field, the
+    way `find_node`'s caller must."""
+    async with factory.context() as adapter:
+        (person_id,), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", nino="AB123456C")], []
+        )
+        (endpoint_id,), _ = await _write(
+            adapter,
+            [_node("Endpoint", classification="OFFICIAL", e164="+441621926368")],
+            [],
+        )
+
+        person_hits = await adapter.search_nodes("AB123456C", CLEARED)
+        assert [n.id for n in person_hits] == [person_id]
+
+        endpoint_hits = await adapter.search_nodes("+441621926368", CLEARED)
+        assert [n.id for n in endpoint_hits] == [endpoint_id]
+
+        assert await adapter.search_nodes("no-such-value", CLEARED) == []
+
+
+async def test_unauthorised_search_matches_a_graph_where_the_node_never_existed(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The existence-leak discipline `test_unauthorised_find_node_*` proves
+    for one named field/type must hold for `search_nodes` too: a SECRET
+    node whose identifier exactly matches the query is invisible to an
+    OFFICIAL principal, not merely redacted."""
+    async with factory.context() as adapter:
+        await _write(
+            adapter, [_node("Person", classification="SECRET", nino="AB123456C")], []
+        )
+        assert await adapter.search_nodes("AB123456C", OFFICIAL) == []
 
 
 # --- edge summarisation, weight, and the load-ledger stamp ------------------
@@ -943,6 +1073,7 @@ async def test_supersede_node_retains_each_cloned_edges_original_provenance(
             [],
         )
         multi_source_edge = EdgeWrite(
+            id=new_edge_id(),
             type="ASSOCIATE_OF",
             source=person,
             target=contact,
@@ -958,6 +1089,7 @@ async def test_supersede_node_retains_each_cloned_edges_original_provenance(
             ),
             handling=_handling("OFFICIAL"),  # type: ignore[arg-type]
             created_by="loader-1",
+            created_at=now_utc(),
         )
         _, (original_edge_id,) = await _write(adapter, [], [multi_source_edge])
 
@@ -1051,24 +1183,26 @@ async def test_supersede_edge_replaces_it_in_default_reads(
         )
 
         tx = await adapter.begin_transaction()
-        new_edge_id = await adapter.supersede_edge(
+        replacement_edge_id = await adapter.supersede_edge(
             old_edge_id,
             EdgeWrite(
+                id=new_edge_id(),
                 type="ASSOCIATE_OF",
                 source=a,
                 target=b,
                 provenance=_provenance(),
                 handling=_handling("OFFICIAL"),  # type: ignore[arg-type]
                 created_by="reviewer-1",
+                created_at=now_utc(),
             ),
             tx,
         )
         await adapter.commit_transaction(tx)
 
-        assert new_edge_id != old_edge_id
+        assert replacement_edge_id != old_edge_id
         subgraph = await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)
         (edge,) = subgraph.edges
-        assert edge.id == new_edge_id
+        assert edge.id == replacement_edge_id
         assert edge.audit.revision == 2
         assert edge.audit.superseded_by is None
 

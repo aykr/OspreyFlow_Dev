@@ -25,7 +25,7 @@ FROM python:3.12-slim
 # on packages this service does not touch.
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
-RUN useradd --create-home --uid 10001 mantis
+RUN useradd --create-home --uid 10001 osprey
 WORKDIR /app
 COPY --from=builder /app/.venv ./.venv
 COPY --from=builder /app/packages ./packages
@@ -35,5 +35,5 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONPATH="/app:/app/packages" \
     PYTHONUNBUFFERED=1
 
-USER mantis
+USER osprey
 ENTRYPOINT ["python", "-m", "services.ingest"]

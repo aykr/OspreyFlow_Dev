@@ -95,7 +95,7 @@ different jobs:
 
 A terminology note, since it matters for anything client-facing: POLE is **Person, Object,
 Location, Event**. Organisation is not the O — it is usually folded into Object or carried as a
-sixth class in the POLE+ variants some forces use. MantisNexus takes the second route and gives
+sixth class in the POLE+ variants some forces use. OspreyFlow takes the second route and gives
 `organisation` its own `pole_class`, because an organisation behaves like a party in this domain
 rather than like a thing, and collapsing it into Object makes network analysis over corporate
 structures awkward. Flag the divergence in any client conversation rather than letting it be
@@ -747,15 +747,32 @@ way Phase 1 itself went beyond it for transaction management and schema applicat
   load ledger), not a principal-scoped read. A reverted element is invisible to every read
   afterwards, any clearance, and is never actually deleted.
 
-**`Subgraph.filtered_count`** stays the Phase 1 placeholder `0` through Phase 2. It stands in for
-a specific, not-yet-answerable question: of the nodes an `expand` call excluded, how many were
-excluded because of the *access filter* specifically, as opposed to depth, edge-type or temporal
-scoping simply not reaching them? Answering that needs both the filtered and unfiltered node sets
-compared under one authority, and `GraphPort` alone cannot do that comparison without opening a
-second, less-audited query channel — it is a single-adapter read path, not a place two competing
-views of the same expansion can be reconciled. Phase 3's Working-Set Service is the first place
-that holds both views under its own authority, which is why closing this gap is scoped there
-(`07_BUILD_PLAN.md`) rather than attempted here with a workaround.
+Phase 3 added one more, closing the `filtered_count` gap this section used to describe as
+outstanding (below):
+
+- **`expand_candidate_count(req) -> int`.** The unfiltered half of `Subgraph.filtered_count`'s
+  comparison. Same seed set, depth, edge-type and temporal scope as `expand(req, principal)`, but
+  with neither access axis applied — only structural exclusion (reverted, superseded) carries
+  over, since those aren't principal-dependent. No `principal` argument, matching
+  `revert_elements`: not a principal-scoped read, and it returns only a bare count, never a node,
+  an id or a property, so it cannot itself disclose which nodes are hidden or why.
+  `services/api`'s Working-Set Service is the only sanctioned caller — see below.
+
+**`Subgraph.filtered_count`** stayed the Phase 1 placeholder `0` through Phase 2. It stood in for
+a specific question `GraphPort` alone could not answer: of the nodes an `expand` call excluded,
+how many were excluded because of the *access filter* specifically, as opposed to depth, edge-type
+or temporal scoping simply not reaching them? Answering that needs both the filtered and
+unfiltered node sets compared under one authority, and a single `expand()` call only ever sees the
+already-filtered result — computing the unfiltered side *inside* the adapter would mean a second,
+less-audited query channel with no caller to hold both results and reconcile them.
+
+Phase 3 closes the gap with `expand_candidate_count` above, called by the Working-Set Service
+alongside the ordinary filtered `expand()`: `expand_candidate_count(req) - len(filtered.nodes)` is
+`filtered_count`. This is the one place the comparison can be made safely — the Working-Set
+Service already holds the filtered result under its own authority, and the unfiltered count adds
+no channel beyond a bare integer that cannot itself leak which nodes are hidden. See
+`03_CONDUIT_MIDDLEWARE.md` §4 for the read-time projection this feeds into, and §3.2 for
+`filtered_count`'s place in the delta protocol.
 
 ## 9. `AnalyticsPort` request and response shapes
 

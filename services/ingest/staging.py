@@ -48,7 +48,7 @@ class ObjectStorageConfig:
     endpoint: str = "localhost:9000"
     access_key: str = "minioadmin"
     secret_key: str = "minioadmin"
-    bucket: str = "mantisnexus-staging"
+    bucket: str = "ospreyflow-staging"
     use_ssl: bool = False
 
     @classmethod
@@ -59,7 +59,7 @@ class ObjectStorageConfig:
             endpoint=os.environ.get("MINIO_ENDPOINT", "localhost:9000"),
             access_key=os.environ.get("MINIO_ACCESS_KEY", "minioadmin"),
             secret_key=os.environ.get("MINIO_SECRET_KEY", "minioadmin"),
-            bucket=os.environ.get("MINIO_BUCKET", "mantisnexus-staging"),
+            bucket=os.environ.get("MINIO_BUCKET", "ospreyflow-staging"),
             use_ssl=os.environ.get("MINIO_USE_SSL", "false").lower() == "true",
         )
 

@@ -300,7 +300,7 @@ comes closest and would be one component behind two ports — which the port des
 for structured or confirmed-threat entities, and purple for peripheral or unconfirmed profiles.
 The Gemini specification carries that scheme forward.
 
-**Decision.** The MantisNexus design system governs. Hue encodes entity type across nine
+**Decision.** The OspreyFlow design system governs. Hue encodes entity type across nine
 channels, each paired with a shape. Stroke encodes provenance: solid asserted, dashed inferred,
 dotted unresolved. State is an oklab mix toward the panel surface: 32% dimmed, 12% filtered out.
 
@@ -364,7 +364,7 @@ you outgrow the harness you keep the manifests and maintain them directly, losin
 **The switch is harness-controlled.** The profile choice determines the orchestrator and the
 harness invokes it; nobody types `docker compose up` or `kubectl apply`. Five guards close the
 specific mistakes — target confirmation showing the resolved Docker context or Kubernetes
-cluster, context and namespace; drift detection against `mantis.yaml` on open; a
+cluster, context and namespace; drift detection against `osprey.yaml` on open; a
 create/change/destroy preview before every switch; enforced backup-before-switch ordering; and a
 capacity check that runs a downgrade's preflight against the existing data volume rather than the
 empty case. Specified in `05_DEPLOYMENT.md` §2.4.
@@ -378,7 +378,7 @@ offering it as a single button would misrepresent an hours-to-days operation as 
 usual way a deployment becomes unreproducible.
 
 **Revisit if.** The organisation already standardises on Helm or Kustomise. Then emit that
-format from the same `mantis.yaml`; the harness is a generator either way.
+format from the same `osprey.yaml`; the harness is a generator either way.
 
 ---
 
@@ -459,7 +459,7 @@ acceptance scenarios, and shipping raw points to the client is what the binning 
 
 **Status.** Accepted, 13 September 2026.
 
-**Decision.** Provider tiers, all driven from one registry in `mantis.yaml`. Tier 1 is
+**Decision.** Provider tiers, all driven from one registry in `osprey.yaml`. Tier 1 is
 OpenStreetMap built to local PMTiles and is the shipped default. Tier 2 is OS OpenData under the
 Open Government Licence. Tier 3 is OS Data Hub premium under PSGA or a commercial licence,
 reached through a credentialed proxy in the Conduit. ADR-016 adds tier 4 for generic OGC
@@ -476,7 +476,7 @@ sector bodies under PSGA, so a deployment that starts on OSM will frequently wan
 once the entitlement is confirmed — often after the platform is already in use. That has to be a
 config change and a restart, not a migration.
 
-**What makes the swap safe.** Four invariants, checked by `mantis verify map`: a `Location` is
+**What makes the swap safe.** Four invariants, checked by `osprey verify map`: a `Location` is
 keyed on a ULID with UPRN, TOID and OSM id held as identifiers rather than as the key;
 coordinates stored in WGS84 and projected only for display; attribution and licence travelling
 with the layer onto exports; styles referencing design tokens rather than literal colours.
@@ -491,7 +491,7 @@ which is precisely why tier 2 exists and why the harness makes moving up a singl
 one secure site, from an identifiable network, are an intelligence leak in themselves —
 independent of the tiles' content and of any handling marking, because the leak is the request
 rather than the payload. Mitigations: prefer a local provider for sensitive areas of interest,
-or `mantis map prefetch` the area of operations so live requests reveal nothing. The map shows a
+or `osprey map prefetch` the area of operations so live requests reveal nothing. The map shows a
 hosted-provider indicator whenever a tier 3 layer is live.
 
 **Revisit if.** An organisation standardises on a provider not in the registry. That is a new
@@ -519,7 +519,7 @@ cheaper thing to build.
 **Why profiles rather than shipped providers.** Every provider carried as code is permanent: a
 style maintained against the design tokens, a CI parity test, a licence review, and a support
 call whenever the vendor moves an endpoint. A profile is one validated file, authorable by a
-client's own GIS team, verifiable by `mantis verify map`, and able to be wrong without affecting
+client's own GIS team, verifiable by `osprey verify map`, and able to be wrong without affecting
 anyone else. The registry already renders anything matching the source kinds, so the long tail
 never needed code.
 
@@ -527,7 +527,7 @@ never needed code.
 licensing is a procurement matter. Across a client base it becomes a product constraint, and the
 failure mode is easy to walk into — building a demo on OS tiles under a PSGA entitlement and
 showing it to a commercial client is a breach, because PSGA covers the licensed body and not
-your product. So `mantis bundle` refuses to package anything marked `redistributable: false`,
+your product. So `osprey bundle` refuses to package anything marked `redistributable: false`,
 the export gate carries the licence note, and CI rejects any non-`open` provider in the demo
 configuration. That last rule is the commercial reason for the tier 1 default: there is always a
 version of the product that can be shown to anyone.

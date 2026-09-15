@@ -1,19 +1,25 @@
 {
-  "name": "mantisnexus",
+  "name": "ospreyflow",
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "workspaces": [
+    "apps/workspace"
+  ],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "test": "npm run test --workspace apps/workspace",
     "schemas:generate": "python3 packages/schemas/generate_ts.py",
     "licence-check": "node scripts/licence_check.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",
     "eslint": "^9.15.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
     "json-schema-to-typescript": "^15.0.3",
     "license-checker": "^25.0.1",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0"
   }
 }

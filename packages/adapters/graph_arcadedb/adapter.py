@@ -22,11 +22,10 @@ adapter exists to prevent. Flagged rather than guessed at.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
-from ulid import ULID
-
+from conduit_common.identity import new_edge_id, now_utc
 from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme
 from ontology.validation import validate_edge_endpoints, validate_properties
@@ -61,6 +60,7 @@ from .builders import (
     MatchBuilder,
     NeighbourhoodStatsBuilder,
     PathBuilder,
+    SearchNodesBuilder,
 )
 from .client import ArcadeDBClient
 from .gremlin_literals import (
@@ -130,9 +130,9 @@ class GraphArcadeDBAdapter:
                 raise OntologyError(f"{write.type!r} is not a type in the active ontology")
             validate_properties(entity_type, write.properties)
 
-            node_id = str(ULID())
+            node_id = write.id
             audit = AuditStub(
-                created_at=datetime.now(UTC),
+                created_at=write.created_at,
                 created_by=write.created_by,
                 load_id=write.load_id,
                 recipe_id=write.recipe_id,
@@ -250,7 +250,7 @@ class GraphArcadeDBAdapter:
     async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: TxId) -> list[EdgeId]:
         schema = self._require_schema()
         ids: list[EdgeId] = []
-        now = datetime.now(UTC)
+        now = now_utc()
         for write in edges:
             edge_type = schema.edge_type(write.type)
             if edge_type is None:
@@ -287,12 +287,12 @@ class GraphArcadeDBAdapter:
                     }
                 )
             else:
-                edge_id = str(ULID())
+                edge_id = write.id
                 merged_occurrences = write.occurrences
                 merged_interval = write.interval
                 merged_provenance = write.provenance
                 audit = AuditStub(
-                    created_at=now,
+                    created_at=write.created_at,
                     created_by=write.created_by,
                     load_id=write.load_id,
                     recipe_id=write.recipe_id,
@@ -410,6 +410,19 @@ class GraphArcadeDBAdapter:
             return None
         return node_from_element_map(results[0])
 
+    async def search_nodes(
+        self, query: str, principal: Principal, *, limit: int = 20
+    ) -> list[Node]:
+        schema = self._require_schema()
+        identifier_fields = tuple(
+            sorted({field for entity in schema.entity_types for field in entity.identifiers})
+        )
+        if not identifier_fields:
+            return []
+        builder = SearchNodesBuilder(identifier_fields, query, limit=limit)
+        results = await self._client.gremlin(builder.render_gremlin(self._access, principal))
+        return [node_from_element_map(r) for r in results]
+
     async def expand(self, req: ExpandRequest, principal: Principal) -> Subgraph:
         builder = ExpandBuilder(req)
         seed_records = await self._client.gremlin(
@@ -426,6 +439,14 @@ class GraphArcadeDBAdapter:
             nodes=list(nodes_by_id.values()),
             edges=[edge_from_element_map(r) for r in edge_records],
         )
+
+    async def expand_candidate_count(self, req: ExpandRequest) -> int:
+        structural_step = self._access.gremlin_structural_step()
+        query = ExpandBuilder(req).render_candidate_count_gremlin(structural_step)
+        results = await self._client.gremlin(query)
+        if not results:
+            return 0
+        return int(results[0].get("result") or 0)
 
     async def paths(self, req: PathRequest, principal: Principal) -> list[Path]:
         query = PathBuilder(req).render_gremlin(self._access, principal)
@@ -535,9 +556,9 @@ class GraphArcadeDBAdapter:
             raise OntologyError(f"cannot supersede {node_id!r}: no such node")
         existing_audit = AuditStub.model_validate(existing_results[0]["audit"])
 
-        new_node_id = str(ULID())
+        new_node_id = replacement.id
         new_audit = AuditStub(
-            created_at=datetime.now(UTC),
+            created_at=replacement.created_at,
             created_by=replacement.created_by,
             revision=existing_audit.revision + 1,
             load_id=replacement.load_id,
@@ -579,7 +600,7 @@ class GraphArcadeDBAdapter:
         same reason: excluded from ordinary reads and from corpus-wide
         weight statistics, never deleted."""
         old_lit = groovy_string_literal(old_node_id)
-        now = datetime.now(UTC)
+        now = now_utc()
 
         out_edges = await self._client.gremlin(
             f'g.V().has("id",{old_lit}).outE().has("reverted",false).elementMap()',
@@ -634,7 +655,17 @@ class GraphArcadeDBAdapter:
         interval = None
         if edge_record.get("interval"):
             interval = Interval.model_validate(edge_record["interval"])
+        # Cloned-edge ids are minted here, not supplied by `supersede_node`'s
+        # caller: the Conduit provides one `replacement` for the node being
+        # corrected, but has no way to know in advance how many edges are
+        # incident to it or what their new ids should be — that set is
+        # discovered only once this adapter reads the node's current
+        # neighbourhood, mid-transaction. Still routed through the shared
+        # generator (`conduit_common.identity`) rather than a bare `ULID()`
+        # call, so there is exactly one place that mints identifiers.
+        cloned_edge_id = new_edge_id()
         write = EdgeWrite(
+            id=cloned_edge_id,
             type=edge_type_name,
             source=source,
             target=target,
@@ -644,13 +675,13 @@ class GraphArcadeDBAdapter:
             provenance=Provenance.model_validate(edge_record["provenance"]),
             handling=Handling.model_validate(edge_record["handling"]),
             created_by=created_by,
+            created_at=now,
         )
-        new_edge_id = str(ULID())
         audit = AuditStub(created_at=now, created_by=created_by, revision=1)
         weight_components = WeightComponents.model_validate(edge_record["weight_components"])
         props = edge_write_to_properties(
             write,
-            edge_id=new_edge_id,
+            edge_id=cloned_edge_id,
             audit=audit,
             edge_type=edge_type,
             weight=edge_record.get("weight", 0.0),
@@ -673,7 +704,7 @@ class GraphArcadeDBAdapter:
         await self._client.gremlin(
             command, params={"src": source, "tgt": target, **bound_params}, session_id=tx
         )
-        return new_edge_id
+        return cloned_edge_id
 
     async def supersede_edge(self, edge_id: EdgeId, replacement: EdgeWrite, tx: TxId) -> EdgeId:
         """Unlike `supersede_node`, nothing needs repointing: nothing in
@@ -695,10 +726,10 @@ class GraphArcadeDBAdapter:
             raise OntologyError(f"cannot supersede {edge_id!r}: no such edge")
         existing_audit = AuditStub.model_validate(existing_results[0]["audit"])
 
-        now = datetime.now(UTC)
-        new_edge_id = str(ULID())
+        now = now_utc()
+        replacement_edge_id = replacement.id
         new_audit = AuditStub(
-            created_at=now,
+            created_at=replacement.created_at,
             created_by=replacement.created_by,
             revision=existing_audit.revision + 1,
             load_id=replacement.load_id,
@@ -716,7 +747,7 @@ class GraphArcadeDBAdapter:
         )
         props = edge_write_to_properties(
             replacement,
-            edge_id=new_edge_id,
+            edge_id=replacement_edge_id,
             audit=new_audit,
             edge_type=edge_type,
             weight=weight,
@@ -741,9 +772,9 @@ class GraphArcadeDBAdapter:
             session_id=tx,
         )
 
-        new_id_lit = groovy_string_literal(new_edge_id)
+        new_id_lit = groovy_string_literal(replacement_edge_id)
         await self._client.gremlin(
             f'g.E().has("id",{edge_lit}).property("superseded_by", {new_id_lit})',
             session_id=tx,
         )
-        return new_edge_id
+        return replacement_edge_id

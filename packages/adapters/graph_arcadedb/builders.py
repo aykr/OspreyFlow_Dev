@@ -55,6 +55,33 @@ class FindByIdentifierBuilder:
 
 
 @dataclass(frozen=True)
+class SearchNodesBuilder:
+    """`GraphPort.search_nodes` — exact match against `identifier_fields`
+    (every distinct property name any entity type in the applied ontology
+    declares as an `identifiers` entry), regardless of which type actually
+    carries it: `has(field,value)` alone, with no `hasLabel` restriction,
+    matches any vertex carrying that property — the same reasoning
+    `FindByIdentifierBuilder` uses for one named field, generalised across
+    the whole declared set with `or()` rather than one query per field."""
+
+    identifier_fields: tuple[str, ...]
+    query: str
+    limit: int = 20
+
+    def render_gremlin(self, access: AccessFilter, principal: Principal) -> str:
+        has_access = access.gremlin_has_step(principal)
+        value_lit = groovy_string_literal(self.query)
+        clauses = ",".join(
+            f'__.has({groovy_string_literal(field)},{value_lit})'
+            for field in self.identifier_fields
+        )
+        return (
+            f"g.V().or({clauses}).{has_access}"
+            f".dedup().limit({self.limit}).elementMap()"
+        )
+
+
+@dataclass(frozen=True)
 class ExpandBuilder:
     request: ExpandRequest
 
@@ -117,6 +144,34 @@ class ExpandBuilder:
         return (
             f'g.V().has("id",within({seeds})).{has_access}'
             f".{self._repeat_clause(access, principal)}.select('e').dedup().elementMap()"
+        )
+
+    def render_candidate_count_gremlin(self, structural_step: str) -> str:
+        """The unfiltered half of `Subgraph.filtered_count`'s comparison
+        (`01_DOMAIN_MODEL.md` §8.2): the same seed set, depth, edge-type
+        and temporal scope as `render_nodes_gremlin`, but with neither
+        access axis applied — only `structural_step`
+        (`AccessFilter.gremlin_structural_step`) carries over, since
+        reverted/superseded exclusion isn't principal-dependent and a
+        reverted or superseded element was never real data to begin with,
+        not a handling-filtered one. `union(identity(), repeat(...))`
+        mirrors `expand`'s own seeds-plus-reached union (`adapter.py`
+        currently does that union in Python across two separate queries)
+        in one traversal, since this method returns a bare count, not
+        elements to union in the caller."""
+        seeds = groovy_string_list_literal(self.request.node_ids)
+        edge_step = _EDGE_STEP[self.request.direction]
+        other_step = _OTHER_VERTEX_STEP[self.request.direction]
+        edge_filter = self._edge_label_filter()
+        temporal_filter = self._temporal_filter()
+        repeat = (
+            f"repeat({edge_step}(){edge_filter}.{structural_step}{temporal_filter}.as('e')"
+            f".{other_step}().{structural_step}.simplePath())"
+            f".times({self.request.depth}).emit()"
+        )
+        return (
+            f'g.V().has("id",within({seeds})).{structural_step}'
+            f".union(identity(),{repeat}).dedup().count()"
         )
 
 

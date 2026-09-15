@@ -123,7 +123,7 @@ async def test_cdr_fixture_loads_through_a_hand_written_recipe(tmp_path: Path) -
             assert dst_bucket.count == 1
 
         # Reverting the load — 09_INGEST_STUDIO.md §6: "A load is a unit."
-        # No mantis CLI; a plain function, tested directly.
+        # No osprey CLI; a plain function, tested directly.
         started_at = datetime.now(UTC)
         record = load_record_from_report(
             report,

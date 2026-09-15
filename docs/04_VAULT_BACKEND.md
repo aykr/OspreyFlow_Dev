@@ -197,7 +197,7 @@ material must not be able to reach a hosted endpoint by a routing accident.
 
 MinIO's AGPL requires a decision to be made deliberately rather than by default: running it
 unmodified as a separate containerised service does not impose source obligations on
-MantisNexus, but modifying it would. If that is judged too close to the line for the deployment,
+OspreyFlow, but modifying it would. If that is judged too close to the line for the deployment,
 SeaweedFS (Apache-2.0) is the substitute and the adapter surface is small — everything goes
 through an S3-compatible client either way.
 

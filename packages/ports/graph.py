@@ -107,7 +107,59 @@ class GraphPort(Protocol):
         Phase 1 added transactions and schema management beyond
         `00_ARCHITECTURE.md` §2.1's illustrative snippet."""
         ...
+    async def search_nodes(
+        self, query: str, principal: Principal, *, limit: int = 20
+    ) -> list[Node]:
+        """The Glass's global search box (`02_GLASS_FRONTEND.md`'s workspace
+        layout, `07_BUILD_PLAN.md` Phase 4) — `find_node` generalised across
+        every entity type's declared `identifiers`
+        (`schemas.domain.EntityTypeDef.identifiers`) instead of one
+        caller-named `(entity_type, identifier_field)` pair, since the
+        analyst does not know which type or field their query matches
+        before searching.
+
+        **Exact match, not full text.** `query` must equal a declared
+        identifier value for a hit — no substring, prefix or fuzzy
+        matching. `03_CONDUIT_MIDDLEWARE.md` §3.3 reserves "full text and
+        embeddings" for OpenSearch, not wired into any deployment profile
+        yet (Phase 6+/8); building fuzzy matching directly into this
+        adapter's Gremlin would duplicate that future component and fight
+        the boundary the docs already draw, for a capability (`TextP`-style
+        predicates) this adapter has never needed and is not proven to
+        support. This method is the v1 scope: it is a genuine capability
+        gap `find_node` alone could not close (one caller-named field is not
+        a search box), added the same way `find_node` and
+        `expand_candidate_count` themselves grew `GraphPort` past its own
+        illustrative sketch (`00_ARCHITECTURE.md` §2.1) — not a reason to
+        also reach for fuzzy matching in the same change.
+
+        Access-filtered exactly like every other read: a node whose
+        identifier matches but whose handling excludes `principal` must not
+        appear, count toward `limit`, or otherwise be detectable — the same
+        existence-leak discipline `find_node` itself already proves."""
+        ...
+
     async def expand(self, req: ExpandRequest, principal: Principal) -> Subgraph: ...
+
+    async def expand_candidate_count(self, req: ExpandRequest) -> int:
+        """The unfiltered half of `Subgraph.filtered_count`'s comparison
+        (`01_DOMAIN_MODEL.md` §8.2, Phase 3 — `07_BUILD_PLAN.md`): how many
+        nodes the *same* seed set, depth, edge-type and temporal scope as
+        `expand(req, principal)` would reach with neither access axis
+        applied. No `Principal` argument, matching `revert_elements` — not
+        a principal-scoped read, and it returns only a bare count, never a
+        node, an id or a property, so it cannot itself disclose which
+        nodes are hidden or why. `services/api`'s Working-Set Service is
+        the only sanctioned caller: it already holds the properly-filtered
+        result of the matching `expand()` call under its own authority,
+        and `expand_candidate_count(req) - len(filtered.nodes)` is
+        `filtered_count` — the comparison `GraphPort` alone cannot make
+        from inside one filtered call, since a single `expand()` only ever
+        sees the already-filtered result (`01_DOMAIN_MODEL.md` §8.2's own
+        reasoning for why this couldn't be computed before this port grew
+        this method)."""
+        ...
+
     async def paths(self, req: PathRequest, principal: Principal) -> list[Path]: ...
     async def match(self, pattern: PatternQuery, principal: Principal) -> Subgraph: ...
 

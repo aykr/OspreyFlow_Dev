@@ -50,6 +50,16 @@ GET    /v1/investigations/{id}/history         addressable step history
 POST   /v1/investigations/{id}/history/{step}  restore to a step
 ```
 
+**Authorization, added in Phase 3.** Every route above an investigation id checks the calling
+`Principal.org_unit` against that investigation's own `owning_unit` — set once at creation (or
+branch) from the acting principal's own unit, the same shape as `Handling.owning_unit`
+(`01_DOMAIN_MODEL.md` §2.2), not a new concept. This is deliberately *not* `clearance`-gated: a
+shared, unit-wide investigation with analysts at different clearances is the ordinary case, not
+an edge case, and clearance still gates individual node/edge visibility separately (§4's read-time
+handling filter). A principal in the wrong unit gets the same 404 an unknown investigation id
+would — never a 403 — extending the existence-leak discipline `00_ARCHITECTURE.md` §5 already
+requires at node/edge level up to the investigation id itself.
+
 ### 3.2 Working set
 
 ```
@@ -70,11 +80,17 @@ The delta protocol, client-bound:
  "merged": 3, "split": 1, "affected": 47}
 {"seq": 416, "op": "notice",  "level": "warning",
  "message": "6 nodes withheld by handling policy", "count": 6}
+{"seq": 417, "op": "snapshot", "nodes": [...], "edges": [...], "filtered_count": 6}
 ```
 
 Sequence numbers are monotonic per investigation. A client that misses a sequence reconnects and
 requests a full snapshot rather than attempting to patch — silent divergence between the
-server's picture and the analyst's is the failure this protocol exists to prevent.
+server's picture and the analyst's is the failure this protocol exists to prevent. `snapshot` is
+that full-state response, added in Phase 3: the five ops above are this section's own
+illustrative set, and a full-snapshot reconnect path is required without a shape given for it
+before Phase 3 filled it in — the same way `GraphPort` grew past its own illustrative sketch
+(`00_ARCHITECTURE.md` §2.1). Its `filtered_count` is the same figure `expand`'s response and the
+status bar both carry, computed fresh for whichever principal is reconnecting (§4).
 
 The `notice` operation is how withheld items reach the status bar. It carries a count and never
 carries the withheld content, not even its identifiers.
@@ -136,7 +152,23 @@ right dialogue.
 
 **Projection.** The stored set is source-fidelity. The projection applied on read is: resolution
 collapse at the session's τ, handling filter for the principal, then delta computation against
-what the client last acknowledged. Projection is pure and cheap; it runs per request.
+what the client last acknowledged. Projection is pure and cheap; it runs per request. Resolution
+collapse lands in Phase 6 with Splink; the handling filter and delta computation are real from
+Phase 3.
+
+**Why the stored set can hold more than one principal's own view, and why the filter must
+therefore run on every read, not once at write time.** An investigation is not single-principal
+for its whole life — §3.1's `owning_unit` authorization is unit-wide, not creator-only, so a
+shared team investigation, or one principal's branch of another's, means a later reader's own
+`Principal` may be different, and less privileged, than whoever's `expand`/`seed` call originally
+populated a given node. `GraphPort`'s own access filtering at the point of fetch is still the only
+thing that ever decides what gets *written* to the store — nothing re-derives or second-guesses
+that. What the handling filter re-applies on every read (`ontology.handling.principal_may_view`,
+the same predicate the adapter's compiled Gremlin is built from) is a *second*, independent check
+for whoever is *reading* the store back: a node one principal was entitled to fetch is not
+disclosed to a different principal who is not. This applies uniformly to the reconnect snapshot,
+replayed missed deltas, a live WebSocket push, and a `branch` copy — you cannot fork what you
+cannot see, either.
 
 **Why server-side rather than browser-only.** Three reasons that each independently decide it.
 An investigation must survive a tab crash. A branch operation must be atomic. And the resolution
@@ -266,7 +298,7 @@ worse than a refused one.
 **Export gate.** `POST /export` evaluates every node and edge in the selection against the
 handling scheme. A `consult_originator` item blocks the export and is named specifically.
 Override requires a justification and an originator reference, both recorded. Exports carry the
-Mantis mark, the investigation reference, the export timestamp, the resolution threshold in
+Osprey mark, the investigation reference, the export timestamp, the resolution threshold in
 force, and a manifest of withheld items by count.
 
 ## 7. Caching

@@ -264,15 +264,20 @@ class Node(BaseModel):
 
 
 class NodeWrite(BaseModel):
-    """Pre-persistence `Node`: the adapter assigns `id` (a ULID) and the
-    audit block's `created_at`/`revision` on write."""
+    """Pre-persistence `Node`: `id` (a ULID) and `created_at` are assigned by
+    the Conduit — `packages/conduit_common/identity.py` — never by an
+    adapter (`01_DOMAIN_MODEL.md` §2: "assigned by the Conduit, never by a
+    source system"). The adapter's own `AuditStub` still owns `revision`,
+    since only it knows a node's current revision at write time."""
 
+    id: NodeId
     type: str
     properties: dict[str, Any] = Field(default_factory=dict)
     provenance: Provenance
     handling: Handling
     resolution: ResolutionState = Field(default_factory=ResolutionState)
     created_by: PrincipalId
+    created_at: datetime
     load_id: str | None = None
     recipe_id: str | None = None
     recipe_version: int | None = None
@@ -315,6 +320,10 @@ class Edge(BaseModel):
 
 
 class EdgeWrite(BaseModel):
+    """Pre-persistence `Edge`: `id` and `created_at` are Conduit-assigned,
+    the same as `NodeWrite` — see its docstring."""
+
+    id: EdgeId
     type: str
     source: NodeId
     target: NodeId
@@ -324,6 +333,7 @@ class EdgeWrite(BaseModel):
     provenance: Provenance
     handling: Handling
     created_by: PrincipalId
+    created_at: datetime
     load_id: str | None = None
     recipe_id: str | None = None
     recipe_version: int | None = None

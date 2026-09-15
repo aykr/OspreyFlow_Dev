@@ -1,0 +1,41 @@
+{
+  "name": "@ospreyflow/workspace",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:perf": "playwright test --config perf/playwright.config.ts",
+    "test:a11y": "playwright test --config a11y/playwright.config.ts",
+    "test:keyboard": "playwright test --config keyboard/playwright.config.ts"
+  },
+  "dependencies": {
+    "@sigma/edge-curve": "^3.1.0",
+    "@sigma/export-image": "^3.0.0",
+    "@sigma/node-border": "^3.0.0",
+    "@sigma/node-image": "^3.0.0",
+    "graphology": "^0.26.0",
+    "graphology-types": "^0.24.8",
+    "immer": "^10.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "sigma": "^3.0.0",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/ws": "^8.5.13",
+    "@vitejs/plugin-react": "^4.3.4",
+    "ioredis": "^5.4.1",
+    "vite": "^6.4.0",
+    "vitest": "^5.0.0",
+    "ws": "^8.18.0"
+  }
+}

@@ -7,12 +7,14 @@
  * same reasoning as the Python-side script): linkage mode for LGPL-3.0 is not
  * checked.
  *
- * Also allows CC0-1.0, CC-BY-3.0/4.0 and Python-2.0 (PSF), none of which are
- * itemised in `00_ARCHITECTURE.md` §7 but are all permissive/OSI-style and
- * are unavoidable transitive licences in the npm ecosystem (data/font
- * packages such as caniuse-lite). Noted rather than silently absorbed: flag
- * to the spec owner as missing allowlist entries, same as the PSF-2.0 case
- * on the Python side.
+ * Also allows CC0-1.0, CC-BY-3.0/4.0, Python-2.0 (PSF) and BlueOak-1.0.0,
+ * none of which are itemised in `00_ARCHITECTURE.md` §7 but are all
+ * permissive/OSI-approved and are unavoidable transitive licences in the
+ * npm ecosystem (data/font packages such as caniuse-lite; BlueOak-1.0.0
+ * arrived via `minimatch`@10+ and its own transitive dependents once Phase
+ * 4 added Vite/Vitest/typescript-eslint). Noted rather than silently
+ * absorbed: flag to the spec owner as missing allowlist entries, same as
+ * the PSF-2.0 case on the Python side.
  */
 
 import { execFileSync } from "node:child_process";
@@ -31,6 +33,7 @@ const ALLOWED_MARKERS = [
   "python software foundation",
   "cc0",
   "cc-by",
+  "blueoak",
 ];
 
 function isAllowed(licenseText) {

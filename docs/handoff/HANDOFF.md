@@ -27,12 +27,12 @@ at this project, or otherwise — skip the `mkdir` and `git init` and see Step 2
 to do about anything already there.
 
 ```bash
-mkdir mantisnexus && cd mantisnexus
+mkdir ospreyflow && cd ospreyflow
 git init
 mkdir -p docs
 # copy the spec pack — all 12 files, keeping the design/ subfolder
-cp -r /path/to/mantisnexus-spec-v1.1/* docs/
-git add -A && git commit -m "docs: MantisNexus specification pack v1.1"
+cp -r /path/to/ospreyflow-spec-v1.1/* docs/
+git add -A && git commit -m "docs: OspreyFlow specification pack v1.1"
 ```
 
 Commit the pack before writing any code. Every later commit is then diffable against a fixed
@@ -52,7 +52,7 @@ Find out which one it is first. Claude Code reads several memory files and conca
 | File | Scope | What to do |
 | --- | --- | --- |
 | `~/.claude/CLAUDE.md` | **Your** preferences, every project on the machine | Leave it completely alone. This is not the project file and the one in `handoff/` does not belong here |
-| `./CLAUDE.md` in the MantisNexus repo | Project memory, shared via git | Merge — see below |
+| `./CLAUDE.md` in the OspreyFlow repo | Project memory, shared via git | Merge — see below |
 | `./CLAUDE.md` in some other repo | A different project | You are in the wrong directory |
 | `./CLAUDE.local.md` | Your machine-specific project notes | Leave alone; it is gitignored and personal |
 
@@ -110,7 +110,7 @@ cat > .claude/commands/phase.md <<'EOF'
 description: Start a build phase from the specification
 ---
 
-Start Phase $ARGUMENTS of the MantisNexus build.
+Start Phase $ARGUMENTS of the OspreyFlow build.
 
 1. Read the Phase $ARGUMENTS section of `docs/07_BUILD_PLAN.md`, and every spec document it
    references. Read `docs/06_DECISIONS.md` for any ADR that governs this phase.
@@ -181,7 +181,7 @@ No terminal needed. Open Claude Code in the repository and ask:
 Run `graphify --help` first — flags belong to the tool, not to this document.
 
 ```bash
-cd mantisnexus
+cd ospreyflow
 graphify install                      # registers it with Claude Code
 
 cat > .graphifyignore <<'EOF'

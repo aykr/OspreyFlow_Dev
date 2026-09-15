@@ -81,7 +81,7 @@ A fair catch: v1.1 covered basemap *rendering* and said almost nothing about geo
 | Concern | Fixed or configurable | Ships as | Where it lives |
 | --- | --- | --- | --- |
 | Map renderer | **Fixed** — MapLibre GL JS | — | `apps/workspace/src/map/` |
-| Basemap provider | **Configurable, swappable at any time** | OpenStreetMap, local tiles | `mantis.yaml` → provider registry |
+| Basemap provider | **Configurable, swappable at any time** | OpenStreetMap, local tiles | `osprey.yaml` → provider registry |
 | Gazetteer and reference data | **Configurable connectors** | OSM-derived gazetteer | `services/ingest/connectors/geo/` |
 | Hosted provider credentials | **Optional, off by default** | — | Conduit tile proxy |
 
@@ -140,7 +140,7 @@ asking someone to type them.
 MapLibre consumes any style plus vector or raster sources, so a provider is data, not code.
 
 ```yaml
-# mantis.yaml
+# osprey.yaml
 map:
   default: osm-local
   providers:
@@ -150,7 +150,7 @@ map:
       label: "OpenStreetMap"
       kind: vector
       source: file:///data/tiles/gb-osm.pmtiles
-      style: bundled:mantis-dark            # and bundled:mantis-light
+      style: bundled:osprey-dark            # and bundled:osprey-light
       attribution: "© OpenStreetMap contributors"
       licence: ODbL
 
@@ -159,7 +159,7 @@ map:
       label: "OS Open Zoomstack"
       kind: vector
       source: file:///data/tiles/os-open-zoomstack.pmtiles
-      style: bundled:mantis-dark
+      style: bundled:osprey-dark
       attribution: "Contains OS data © Crown copyright and database right 2026"
       licence: OGL-UK-3.0
 
@@ -254,7 +254,7 @@ auth:
   type: none                    # none | api_key_query | api_key_header | bearer | basic | oauth2
 projection: EPSG:3857
 zoom: {min: 0, max: 19}
-style: bundled:mantis-raster-overlay
+style: bundled:osprey-raster-overlay
 attribution: "Esri, Maxar, Earthstar Geographics"
 licence:
   id: "esri-terms"
@@ -369,7 +369,7 @@ Three consequences for implementation:
   Plane zone silently places points hundreds of miles from where they belong, and the failure
   looks like ordinary data rather than an error.
 - **Tier 4 services must be asked in a CRS the platform supports.** WMS and WFS advertise their
-  available CRS in their capabilities document; `mantis map add` reads it and refuses a service
+  available CRS in their capabilities document; `osprey map add` reads it and refuses a service
   that offers neither WGS84 nor Web Mercator rather than registering something that will
   misplace data later.
 
@@ -622,7 +622,7 @@ it.
 
 This is the single most consequential design decision in the platform, and the one the input
 documents leave vague. "Load data into the memory cache for analysis" can mean three different
-things; MantisNexus does all three, at different scales.
+things; OspreyFlow does all three, at different scales.
 
 **The persistent graph** lives in the Vault. It may be arbitrarily large. Nobody queries it
 interactively.
@@ -669,7 +669,7 @@ to be on every node and edge from the first write.
 ## 6. Repository layout
 
 ```
-mantisnexus/
+ospreyflow/
 ├── apps/
 │   └── workspace/              # The Glass. React + TS + Vite
 │       ├── src/canvas/         # Sigma renderer, programs, interaction

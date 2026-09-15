@@ -2,7 +2,7 @@
 recipe against one source file, per ADR-013 (batch and micro-batch only, no
 streaming lane). This is the container's own process entrypoint, invoked
 directly by whatever schedules the batch (a Kubernetes Job, `docker run`,
-cron) — not a `mantis` unified CLI, which this build deliberately does not
+cron) — not an `osprey` unified CLI, which this build deliberately does not
 have (`docs/07_BUILD_PLAN.md`'s Phase 2 amendment).
 
 Connection details come from the environment, the same variables
@@ -50,10 +50,10 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--investigation-scope", required=True)
     parser.add_argument("--load-id", required=True)
     parser.add_argument(
-        "--principal-id", default=os.environ.get("MANTIS_PRINCIPAL_ID", "ingest-worker")
+        "--principal-id", default=os.environ.get("OSPREY_PRINCIPAL_ID", "ingest-worker")
     )
-    parser.add_argument("--clearance", default=os.environ.get("MANTIS_CLEARANCE", "OFFICIAL"))
-    parser.add_argument("--org-unit", default=os.environ.get("MANTIS_ORG_UNIT", "unit-1"))
+    parser.add_argument("--clearance", default=os.environ.get("OSPREY_CLEARANCE", "OFFICIAL"))
+    parser.add_argument("--org-unit", default=os.environ.get("OSPREY_ORG_UNIT", "unit-1"))
     return parser.parse_args(argv)
 
 
@@ -62,7 +62,7 @@ async def _run(args: argparse.Namespace) -> int:
     ontology = load_default_ontology()
     scheme = load_uk_le_scheme()
 
-    database = os.environ.get("ARCADEDB_DATABASE", "mantisnexus")
+    database = os.environ.get("ARCADEDB_DATABASE", "ospreyflow")
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database))
     await client.create_database_if_absent()
     graph = GraphArcadeDBAdapter(client, scheme)

@@ -38,6 +38,7 @@ from typing import Any
 
 from ulid import ULID
 
+from conduit_common.identity import new_edge_id, new_node_id
 from knowledge_adapters import ARITY
 from knowledge_adapters.datetime_adapter import DatetimeResult
 from knowledge_adapters.errors import NormalisationError
@@ -500,11 +501,13 @@ async def _write_entity(
             return existing.id
 
     write = NodeWrite(
+        id=new_node_id(),
         type=entity.type,
         properties=properties,
         provenance=provenance,
         handling=handling,
         created_by=state.principal.id,
+        created_at=now,
         load_id=state.load_id,
         recipe_id=state.recipe.id,
         recipe_version=state.recipe.version,
@@ -557,6 +560,7 @@ async def _write_edge(
     )
 
     write = EdgeWrite(
+        id=new_edge_id(),
         type=edge.type,
         source=source_id,
         target=target_id,
@@ -566,6 +570,7 @@ async def _write_edge(
         provenance=provenance,
         handling=handling,
         created_by=state.principal.id,
+        created_at=now,
         load_id=state.load_id,
         recipe_id=state.recipe.id,
         recipe_version=state.recipe.version,

@@ -1,4 +1,4 @@
-# MantisNexus — session handover
+# OspreyFlow — session handover
 
 Written 14 September 2026, at the start of Phase 3. Everything durable about the *system* is in
 `docs/` in the repository. This file covers what `docs/` does not: how the review has been run,
@@ -8,7 +8,7 @@ what keeps going wrong, and what is open right now.
 
 ## First: the repository is the source of truth
 
-`docs/` in the MantisNexus repository is authoritative for the specification. Do not keep a
+`docs/` in the OspreyFlow repository is authoritative for the specification. Do not keep a
 separate working copy and do not apply whole-file replacements to it.
 
 This caused two regressions in the previous session. Claude Code corrects `docs/` as it builds —
