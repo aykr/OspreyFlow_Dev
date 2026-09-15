@@ -24,10 +24,11 @@ and new text, never a replacement file.**
 | Phase | State |
 | --- | --- |
 | 0 — Skeleton and guard rails | Complete |
-| 1 — Domain model and graph adapter | Complete |
-| 2 — Ingest, normalisation, staging | Complete, including a follow-up masking fix |
-| **3 — Conduit and the working set** | **Starting. Two decisions taken, no code written.** |
-| 4 onward | Not started |
+| 1 — Domain model and graph adapter | Complete, but with an open defect: the `GraphPort` conformance suite is intermittently flaky against a live ArcadeDB container (index-creation/read-lock errors under sustained sequential load) — not reliably green as the exit criterion requires. Needs investigation before this phase is closed out for real. |
+| 2 — Ingest, normalisation, staging | Complete, including a follow-up masking fix — with two known gaps against the build-plan bullets: only the CSV connector is implemented (JSON and generic-delimited are stubbed, not built); the ingest load path does not yet write the analytics store transactionally alongside the graph store (analytics store is populated only via test-harness wiring, per the ingest entrypoint's own docstring). |
+| **3 — Conduit and the working set** | **Built and committed** (`5e0a70f`, 15 September 2026) — this table was not updated when that landed. Every build-plan bullet and exit-criterion clause is present and unit/component-tested against live ArcadeDB and Valkey: FastAPI app, JWKS-with-TTL auth, Valkey working-set store, WebSocket delta/reconnect protocol, fail-closed Postgres audit, ULID/`AuditStub` minting moved to the Conduit, real `filtered_count`, job-routed `supersede_node`. Not yet confirmed: a full live run of the end-to-end scripted-client scenario test — blocked in the last review session by a local Postgres container in a broken credential state, an environment issue rather than a code defect. Re-run with a clean Postgres volume before treating the exit criterion as fully proven. |
+| 4 — The Glass, first light | **Complete and verified** (this table was not updated when it landed either). All twenty primitives, the full node-state vocabulary, semantic zoom, canvas interaction, inspector, history, and the perf/a11y/keyboard CI gates ran green live in review. |
+| 5 onward | Not started |
 
 ### Phase 3 decisions already taken
 
