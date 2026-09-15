@@ -7,10 +7,22 @@ transport `local-lite`'s single ArcadeDB container offers. The Gremlin
 *content* still never leaves the Vault: the Conduit only ever calls typed
 `GraphPort` methods, and the traversal strings are built and sent
 server-side, by this adapter, from the bounded builders in `builders.py`.
+
+A transaction commit that fails with a transient server-side error (see
+`_NON_RETRYABLE_COMMIT_EXCEPTIONS` below) is retried by redoing the whole
+transaction, not by re-sending the failed commit: ArcadeDB's commit is
+all-or-nothing, so a failed commit means nothing from that transaction
+was applied, and every command already went through this client with its
+values already substituted (the builders never re-roll a random id at
+execution time), so replaying the exact same recorded commands in a fresh
+transaction reproduces the identical write. This client keeps that replay
+log; callers never see it — `commit_transaction` either succeeds or
+raises, same as before.
 """
 
 from __future__ import annotations
 
+import asyncio
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -35,6 +47,30 @@ class ArcadeDBError(Exception):
         super().__init__(message)
         self.status_code = status_code
         self.exception_class = exception_class
+
+
+_COMMIT_MAX_ATTEMPTS = 3
+_COMMIT_BACKOFF_BASE_SECONDS = 0.2
+
+# Retry policy for a failed COMMIT — deliberately not the same denylist
+# `schema.py` uses for DDL. There, `ConcurrentModificationException` on a
+# schema statement is a real conflict that should fail fast. Here it is
+# the opposite: it is ArcadeDB's optimistic-concurrency check catching two
+# transactions that touched overlapping data, and the whole point of this
+# retry is to redo the transaction after the other one has released its
+# lock. So it is retryable for a commit even though it is not for DDL.
+# What stays non-retryable is a failure a replay would reproduce forever:
+# a malformed command (a real bug in the generated Gremlin/SQL, per
+# `builders.py`) or a genuine unique-constraint violation on caller data
+# (the write really does collide with something already committed, not
+# with an in-flight sibling transaction).
+_NON_RETRYABLE_COMMIT_EXCEPTIONS = frozenset(
+    {
+        "com.arcadedb.exception.SchemaException",
+        "com.arcadedb.query.sql.parser.ParseException",
+        "com.arcadedb.exception.DuplicatedKeyException",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +106,13 @@ class ArcadeDBClient:
             auth=(config.username, config.password),
             timeout=30.0,
         )
+        # Every command issued against an open transaction, in order, so a
+        # failed commit can be retried by replaying them into a fresh
+        # transaction rather than re-sending the dead commit. Keyed by
+        # session id; entries are dropped on commit (success or final
+        # failure) and on rollback so this never grows across a session's
+        # lifetime.
+        self._tx_log: dict[str, list[tuple[str, str, dict[str, Any] | None]]] = {}
 
     @property
     def database(self) -> str:
@@ -103,16 +146,61 @@ class ArcadeDBClient:
         session_id = resp.headers.get("arcadedb-session-id")
         if not session_id:
             raise ArcadeDBError("ArcadeDB did not return a session id for the new transaction")
+        self._tx_log[str(session_id)] = []
         return str(session_id)
 
-    async def commit_transaction(self, session_id: str) -> None:
+    async def _commit_once(self, session_id: str) -> None:
         resp = await self._http.post(
             f"/api/v1/commit/{self._config.database}",
             headers={"arcadedb-session-id": session_id},
         )
         self._raise_for_error(resp)
 
+    async def commit_transaction(self, session_id: str) -> None:
+        """A commit is all-or-nothing on ArcadeDB's side: if this fails,
+        nothing from `session_id`'s transaction was applied. On a failure
+        classified as transient (see `_NON_RETRYABLE_COMMIT_EXCEPTIONS`),
+        this redoes the whole transaction — begins a fresh session, resends
+        every command this client sent under the failed one, in the same
+        order, then commits that — rather than retrying the dead commit
+        call itself, which would just fail the same way again. A
+        non-retryable failure, or the last attempt, is raised as-is."""
+        current = session_id
+        pending_replay: list[tuple[str, str, dict[str, Any] | None]] | None = None
+        for attempt in range(1, _COMMIT_MAX_ATTEMPTS + 1):
+            try:
+                if pending_replay is not None:
+                    # Begins its own log entry for `current`; a failure
+                    # here or in the replay below is classified and
+                    # retried exactly like a failed commit itself — a
+                    # replayed command failing is no less a sign of a
+                    # transient conflict than the commit that triggered it.
+                    current = await self.begin_transaction()
+                    for language, command, params in pending_replay:
+                        await self.command(language, command, params=params, session_id=current)
+                    pending_replay = None
+                await self._commit_once(current)
+                self._tx_log.pop(current, None)
+                return
+            except ArcadeDBError as exc:
+                non_retryable = (
+                    exc.status_code is None
+                    or exc.status_code < 500
+                    or exc.exception_class in _NON_RETRYABLE_COMMIT_EXCEPTIONS
+                )
+                if non_retryable or attempt == _COMMIT_MAX_ATTEMPTS:
+                    self._tx_log.pop(current, None)
+                    raise
+            except httpx.TransportError:
+                if attempt == _COMMIT_MAX_ATTEMPTS:
+                    self._tx_log.pop(current, None)
+                    raise
+
+            await asyncio.sleep(_COMMIT_BACKOFF_BASE_SECONDS * (2 ** (attempt - 1)))
+            pending_replay = self._tx_log.pop(current, [])
+
     async def rollback_transaction(self, session_id: str) -> None:
+        self._tx_log.pop(session_id, None)
         resp = await self._http.post(
             f"/api/v1/rollback/{self._config.database}",
             headers={"arcadedb-session-id": session_id},
@@ -158,6 +246,13 @@ class ArcadeDBClient:
         result = resp.json().get("result", [])
         if not isinstance(result, list):
             raise ArcadeDBError(f"unexpected ArcadeDB response shape: {result!r}")
+        # Recorded only once the command has actually succeeded, and only
+        # for a session this client itself opened (`begin_transaction`
+        # seeds the log entry) — an unrecognised session_id is silently
+        # not logged rather than growing an entry commit_transaction will
+        # never clean up.
+        if session_id is not None and session_id in self._tx_log:
+            self._tx_log[session_id].append((language, command, dict(params) if params else None))
         return result
 
     @staticmethod
