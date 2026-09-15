@@ -125,10 +125,12 @@ These have come up repeatedly and the answers have held.
 
 ## Open items not yet closed
 
-- **The Ingest Studio prototype has not been reviewed by an analyst.** ADR-018 put it in Phase 2
-  precisely so this could happen early — finding out then that the row template should not be a
-  canvas costs a week, in Phase 5a it costs the phase. It renders correctly under Playwright,
-  which is not the test. **This is the highest-value outstanding action and it is a human one.**
+- **The Ingest Studio prototype has had its first analyst review (15 September 2026) and passed
+  — no changes requested against the synthetic fixture it currently runs on.** ADR-018 put this in
+  Phase 2 precisely so it could happen early, and it has. A second review is still required once
+  real data can be loaded through it, so the analyst can verify the row template and mapping
+  screen against an actual live scenario rather than the synthetic fixture — do not treat this
+  item as fully closed until that second pass happens.
 - **`§8.1` pattern-matching binding rule is more restrictive than Phase 7 will want.** No pattern
   where a node is reachable only via a later edge. Honestly documented, fine for now, will not
   survive an analyst drawing an arbitrary pattern on a canvas. Revisit at Phase 7.
