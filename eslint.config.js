@@ -11,6 +11,7 @@ export default [
       "packages/schemas/generated/**",
       ".venv/**",
       "apps/workspace/dist/**",
+      "prototypes/**",
     ],
   },
   {
