@@ -20,6 +20,23 @@ services:
       - "2480:2480"
     environment:
       JAVA_OPTS: "-Darcadedb.server.rootPassword=playwithdata123"
+      # Unset, the image's own default heap is ~25% of the memory Docker
+      # exposes to the container (JVM ergonomics, not a value this image
+      # hardcodes) — around 2GB on this machine's ~7.6GB Docker VM, which
+      # is what OOM'd under two concurrent full conformance-suite runs.
+      # 4GB is an explicit, reproducible floor well above the ~2GB a
+      # single sequential run needs (measured: 44/44 pass repeatedly at
+      # the unset default), giving real headroom for lighter concurrent
+      # load during local development. It does NOT fully eliminate OOM
+      # under two full 44-test suites run at the same time on this
+      # machine — that was re-tested up to -Xmx7G (near this Docker
+      # Desktop VM's entire 7.6GB budget) and still failed, just less
+      # often; the residual cause is the VM's own memory ceiling, not
+      # this value. Running two full suites concurrently reliably needs
+      # Docker Desktop's VM memory allocation raised (Settings →
+      # Resources → Memory, a host setting, not this file) beyond this
+      # host's current ~7.6GB.
+      ARCADEDB_OPTS_MEMORY: "-Xms1G -Xmx4G"
     healthcheck:
       test: ["CMD", "curl", "-sf", "-u", "root:playwithdata123", "http://localhost:2480/api/v1/ready"]
       interval: 5s

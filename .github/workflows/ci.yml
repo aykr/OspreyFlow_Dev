@@ -136,6 +136,14 @@ jobs:
           - 2480:2480
         env:
           JAVA_OPTS: "-Darcadedb.server.rootPassword=playwithdata123"
+          # Same heap override as deploy/compose/dev.yaml, for stack parity
+          # (see that file's comment for the full reasoning, including why
+          # this value doesn't try to cover two full concurrent suite runs).
+          # This job only ever runs one sequential pytest invocation against
+          # this container, which a single-run measurement shows needs far
+          # less than 4GB, so this is comfortable headroom, not a tight fit,
+          # on a hosted runner's RAM.
+          ARCADEDB_OPTS_MEMORY: "-Xms1G -Xmx4G"
         options: >-
           --health-cmd "curl -sf -u root:playwithdata123 http://localhost:2480/api/v1/ready"
           --health-interval 5s

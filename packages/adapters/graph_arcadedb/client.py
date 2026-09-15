@@ -20,7 +20,21 @@ import httpx
 
 
 class ArcadeDBError(Exception):
-    """An ArcadeDB command failed — surfaced with the server's own message."""
+    """An ArcadeDB command failed — surfaced with the server's own message.
+
+    `exception_class` is the server's own `exception` field (e.g.
+    `com.arcadedb.exception.SchemaException`) when the body is JSON shaped
+    that way — ArcadeDB returns the same HTTP status (usually 500, sometimes
+    503) for both a permanent command error and a transient server-side
+    failure, so callers that need to tell those apart (see `schema.py`'s
+    DDL retry) key off this instead of `status_code`."""
+
+    def __init__(
+        self, message: str, *, status_code: int | None = None, exception_class: str | None = None
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.exception_class = exception_class
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,4 +163,13 @@ class ArcadeDBClient:
     @staticmethod
     def _raise_for_error(resp: httpx.Response) -> None:
         if resp.status_code >= 400:
-            raise ArcadeDBError(f"ArcadeDB error {resp.status_code}: {resp.text}")
+            exception_class: str | None = None
+            try:
+                exception_class = resp.json().get("exception")
+            except ValueError:
+                pass
+            raise ArcadeDBError(
+                f"ArcadeDB error {resp.status_code}: {resp.text}",
+                status_code=resp.status_code,
+                exception_class=exception_class,
+            )
