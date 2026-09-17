@@ -10,7 +10,9 @@ fetches broadly and filters after (`00_ARCHITECTURE.md` §2.2). There is no
 
 from __future__ import annotations
 
+import json
 import math
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 import duckdb
@@ -21,14 +23,17 @@ from schemas.analytics import (
     BaselineResult,
     CrossFilterRequest,
     EventFilter,
+    EventRecord,
     GeoBin,
     GeoBinRequest,
+    GeometryKind,
+    GeometryRecord,
     Histogram,
     HistogramBucket,
     HistogramBucketing,
     HistogramRequest,
 )
-from schemas.domain import Interval, Principal
+from schemas.domain import Handling, Interval, Principal
 
 from .access_filter import AccessFilter, SqlPredicate
 
@@ -264,3 +269,121 @@ class AnalyticsDuckDBAdapter:
                 assert dimension.field is not None
                 result[dimension.name] = self._categorical_histogram(predicate, dimension.field)
         return result
+
+    # --- writes (07_BUILD_PLAN.md Phase 5 Checkpoint 2) ---------------------
+
+    async def load_events(self, records: Sequence[EventRecord]) -> None:
+        if not records:
+            return
+        self._con.executemany(
+            "INSERT INTO events (event_id, edge_id, edge_type, source_id, target_id, "
+            "occurred_at, duration_s, cell_site, lat, lon, direction, properties, "
+            "investigation_scope, handling_classification, handling_code, owning_unit, "
+            "originator) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                [
+                    r.event_id, r.edge_id, r.edge_type, r.source_id, r.target_id, r.occurred_at,
+                    r.duration_s, r.cell_site, r.lat, r.lon, r.direction, json.dumps(r.properties),
+                    r.investigation_scope, r.handling.classification, r.handling.handling_code,
+                    r.handling.owning_unit, r.handling.originator,
+                ]
+                for r in records
+            ],
+        )
+
+    # --- the geometry reference partition (07_BUILD_PLAN.md Phase 5) -------
+
+    async def load_geometries(self, records: Sequence[GeometryRecord]) -> None:
+        if not records:
+            return
+        self._con.executemany(
+            "INSERT INTO geometries (geometry_ref, version, kind, lon, lat, source_crs, "
+            "source_x, source_y, geometry, handling_classification, handling_code, "
+            "owning_unit, originator) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ST_GeomFromWKB(?), ?, ?, ?, ?)",
+            [
+                [
+                    r.geometry_ref, r.version, r.kind.value, r.lon, r.lat, r.source_crs,
+                    r.source_x, r.source_y, r.geometry_wkb,
+                    r.handling.classification, r.handling.handling_code, r.handling.owning_unit,
+                    r.handling.originator,
+                ]
+                for r in records
+            ],
+        )
+
+    def _current_partition_version(self) -> int | None:
+        row = self._con.execute("SELECT MAX(version) FROM geometries").fetchone()
+        return None if row is None or row[0] is None else int(row[0])
+
+    #: Shared by every geometry read below — `ST_AsWKB(geometry)` is `NULL`
+    #: for a point row (whose `geometry` column is itself `NULL`), so
+    #: `_row_to_geometry` below never has to branch on `kind` to know
+    #: whether to read it.
+    _GEOMETRY_SELECT_COLUMNS = (
+        "geometry_ref, version, kind, lon, lat, source_crs, source_x, source_y, "
+        "ST_AsWKB(geometry), handling_classification, handling_code, owning_unit, originator"
+    )
+
+    @staticmethod
+    def _row_to_geometry(row: tuple[object, ...]) -> GeometryRecord:
+        return GeometryRecord(
+            geometry_ref=row[0],
+            version=row[1],
+            kind=GeometryKind(row[2]),
+            lon=row[3],
+            lat=row[4],
+            source_crs=row[5],
+            source_x=row[6],
+            source_y=row[7],
+            geometry_wkb=bytes(row[8]) if row[8] is not None else None,
+            handling=Handling(
+                classification=row[9], handling_code=row[10], owning_unit=row[11],
+                originator=row[12],
+            ),
+        )
+
+    def _geometry_rows(
+        self, geometry_refs: Sequence[str], principal: Principal, version: int | None
+    ) -> list[GeometryRecord]:
+        resolved_version = version if version is not None else self._current_partition_version()
+        if resolved_version is None or not geometry_refs:
+            return []
+        placeholders = ",".join("?" for _ in geometry_refs)
+        access_pred = self._access.predicate(principal)
+        rows = self._con.execute(
+            f"SELECT {self._GEOMETRY_SELECT_COLUMNS} FROM geometries "
+            f"WHERE geometry_ref IN ({placeholders}) AND version = ? AND ({access_pred.where})",
+            [*geometry_refs, resolved_version, *access_pred.params],
+        ).fetchall()
+        return [self._row_to_geometry(row) for row in rows]
+
+    async def get_geometry(
+        self, geometry_ref: str, principal: Principal, *, version: int | None = None
+    ) -> GeometryRecord | None:
+        rows = self._geometry_rows([geometry_ref], principal, version)
+        return rows[0] if rows else None
+
+    async def get_geometries(
+        self, geometry_refs: Sequence[str], principal: Principal, *, version: int | None = None
+    ) -> list[GeometryRecord]:
+        return self._geometry_rows(list(geometry_refs), principal, version)
+
+    async def list_boundaries(
+        self, principal: Principal, *, version: int | None = None
+    ) -> list[GeometryRecord]:
+        """The "select an existing boundary" read path (Phase 5's known-gaps closure) — every
+        `kind = polygon` row at the resolved partition version, access-
+        filtered exactly like every other geometry read. `geometry_ref` is
+        not known in advance the way `get_geometry`'s caller already has
+        one, so this cannot reuse `_geometry_rows`'s `IN (...)` shape."""
+        resolved_version = version if version is not None else self._current_partition_version()
+        if resolved_version is None:
+            return []
+        access_pred = self._access.predicate(principal)
+        rows = self._con.execute(
+            f"SELECT {self._GEOMETRY_SELECT_COLUMNS} FROM geometries "
+            f"WHERE kind = ? AND version = ? AND ({access_pred.where})",
+            [GeometryKind.POLYGON.value, resolved_version, *access_pred.params],
+        ).fetchall()
+        return [self._row_to_geometry(row) for row in rows]

@@ -13,7 +13,7 @@ connector:
   encoding: utf-8
   header_rows: 1
   source_crs: "EPSG:27700"
-ontology_version: 6
+ontology_version: 9
 
 defaults:
   provenance: {state: asserted}

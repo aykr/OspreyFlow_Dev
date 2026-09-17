@@ -1,0 +1,42 @@
+# ASSOCIATE_OF edges among the HMP population — the relay group's own
+# near-complete internal subgraph plus one sparse external bridge each
+# (`hmp_population.py`'s `generate_associate_rows`), the topology
+# `08_ACCEPTANCE_SCENARIOS.md` A12's Clique Metric needs to find something
+# in, once Phase 7 builds `ComputePort` — not verified here.
+id: hmp-associates
+version: 1
+label: "HMP fixture — associate relationships"
+connector:
+  profile: hmp-fixture-generic
+ontology_version: 9
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: hmp-hollywood, owning_unit: hmp-hollywood}
+
+row_template:
+  entities:
+    - ref: person_a
+      pole_class: person
+      type: Person
+      match_on: prison_number
+      on_match: reference
+      properties:
+        prison_number: {field: person_a_prison_number}
+        family_name: {field: person_a_family_name}
+        given_names: {field: person_a_given_names}
+    - ref: person_b
+      pole_class: person
+      type: Person
+      match_on: prison_number
+      on_match: reference
+      properties:
+        prison_number: {field: person_b_prison_number}
+        family_name: {field: person_b_family_name}
+        given_names: {field: person_b_given_names}
+  edges:
+    - type: ASSOCIATE_OF
+      from: person_a
+      to: person_b
+
+unmapped_fields: []

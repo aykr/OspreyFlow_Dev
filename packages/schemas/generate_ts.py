@@ -25,17 +25,21 @@ from schemas._pending_port_placeholders import ALL_MODELS as PENDING_MODELS  # n
 from schemas.analytics import ALL_MODELS as ANALYTICS_MODELS  # noqa: E402
 from schemas.domain import ALL_MODELS as DOMAIN_MODELS  # noqa: E402
 from schemas.ingest import ALL_MODELS as INGEST_MODELS  # noqa: E402
+from schemas.mapconfig import ALL_MODELS as MAPCONFIG_MODELS  # noqa: E402
 from schemas.profile import ALL_MODELS as PROFILE_MODELS  # noqa: E402
+from schemas.provider_profile import ALL_MODELS as PROVIDER_PROFILE_MODELS  # noqa: E402
 
 #: Every Pydantic model in the repo the drift gate must cover: the real
 #: domain model, `AnalyticsPort`'s real shapes, the ingest recipe and load
-#: ledger, the source profiler's shapes, plus the stand-ins for ports not
-#: yet built.
+#: ledger, the source profiler's shapes, the basemap provider registry,
+#: plus the stand-ins for ports not yet built.
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     *DOMAIN_MODELS,
     *ANALYTICS_MODELS,
     *INGEST_MODELS,
     *PROFILE_MODELS,
+    *MAPCONFIG_MODELS,
+    *PROVIDER_PROFILE_MODELS,
     *PENDING_MODELS,
 )
 

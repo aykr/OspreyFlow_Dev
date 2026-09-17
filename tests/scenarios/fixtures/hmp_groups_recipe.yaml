@@ -1,0 +1,41 @@
+# Group affiliations — 08_ACCEPTANCE_SCENARIOS.md Scenario A / A8's "the
+# affiliated subset is identifiable by an Organisation edge." The person
+# already exists (hmp_persons_recipe.yaml); the Organisation is
+# deduplicated by `org_ref` so every relay-group row referencing the same
+# group resolves to one node, not eight.
+id: hmp-groups
+version: 1
+label: "HMP fixture — group affiliations"
+connector:
+  profile: hmp-fixture-generic
+ontology_version: 9
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: hmp-hollywood, owning_unit: hmp-hollywood}
+
+row_template:
+  entities:
+    - ref: person
+      pole_class: person
+      type: Person
+      match_on: prison_number
+      on_match: reference
+      properties:
+        prison_number: {field: prison_number}
+        family_name: {field: family_name}
+        given_names: {field: given_names}
+    - ref: org
+      pole_class: organisation
+      type: Organisation
+      match_on: org_ref
+      on_match: reference
+      properties:
+        org_ref: {field: org_ref}
+        name: {field: org_name}
+  edges:
+    - type: MEMBER_OF
+      from: person
+      to: org
+
+unmapped_fields: []

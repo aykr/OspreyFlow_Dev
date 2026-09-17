@@ -21,6 +21,8 @@ from datetime import UTC, datetime
 import pytest
 from ulid import ULID
 
+import duckdb
+
 from schemas.analytics import (
     BaselineRequest,
     CrossFilterDimension,
@@ -28,6 +30,8 @@ from schemas.analytics import (
     EventFilter,
     EventRecord,
     GeoBinRequest,
+    GeometryKind,
+    GeometryRecord,
     HistogramBucketing,
     HistogramRequest,
 )
@@ -98,6 +102,77 @@ def _event(
 
 def _filter(**kwargs: object) -> EventFilter:
     return EventFilter(investigation_scope=INVESTIGATION, **kwargs)  # type: ignore[arg-type]
+
+
+def _geometry(
+    *,
+    geometry_ref: str = "geo-1",
+    version: int = 1,
+    lon: float = -0.1276,
+    lat: float = 51.5072,
+    source_crs: str = "EPSG:4326",
+    source_x: float | None = None,
+    source_y: float | None = None,
+    classification: str = "OFFICIAL",
+    handling_code: str = "P",
+    owning_unit: str = "unit-1",
+    originator: str = "unit-1",
+) -> GeometryRecord:
+    return GeometryRecord(
+        geometry_ref=geometry_ref,
+        version=version,
+        lon=lon,
+        lat=lat,
+        source_crs=source_crs,
+        source_x=source_x,
+        source_y=source_y,
+        handling=_handling(
+            classification,
+            handling_code=handling_code,
+            owning_unit=owning_unit,
+            originator=originator,
+        ),
+    )
+
+
+def _polygon_wkb(wkt: str) -> bytes:
+    """Builds real WKB the same way the DuckDB adapter itself would —
+    through the `spatial` extension's own `ST_GeomFromText`/`ST_AsWKB` —
+    rather than adding a shapely dependency just for test fixtures."""
+    con = duckdb.connect(":memory:")
+    try:
+        con.install_extension("spatial")
+        con.load_extension("spatial")
+        return con.execute("SELECT ST_AsWKB(ST_GeomFromText(?))", [wkt]).fetchone()[0]
+    finally:
+        con.close()
+
+
+_SQUARE_WKT = "POLYGON((-0.2 51.4, -0.2 51.6, 0.0 51.6, 0.0 51.4, -0.2 51.4))"
+
+
+def _boundary(
+    *,
+    geometry_ref: str = "boundary-1",
+    version: int = 1,
+    wkt: str = _SQUARE_WKT,
+    classification: str = "OFFICIAL",
+    handling_code: str = "P",
+    owning_unit: str = "unit-1",
+    originator: str = "unit-1",
+) -> GeometryRecord:
+    return GeometryRecord(
+        geometry_ref=geometry_ref,
+        version=version,
+        kind=GeometryKind.POLYGON,
+        geometry_wkb=_polygon_wkb(wkt),
+        handling=_handling(
+            classification,
+            handling_code=handling_code,
+            owning_unit=owning_unit,
+            originator=originator,
+        ),
+    )
 
 
 # --- EventFilter's own dimensions --------------------------------------------
@@ -590,3 +665,238 @@ async def test_an_unrecognised_clearance_sees_nothing_rather_than_everything(
             filter=_filter(), bucketing=HistogramBucketing.FIXED_INTERVAL, interval_seconds=3600
         )
         assert (await adapter.histogram(req, unknown)).total == 0
+
+
+# --- the geometry reference partition (07_BUILD_PLAN.md Phase 5) ------------
+#
+# `load_geometries`/`get_geometry`/`get_geometries` are exercised directly —
+# there is no shared "context seeds this" fixture the way `EventRecord`s are
+# seeded through `factory.context(events)`, since geometry writes are a
+# separate, non-principal-scoped operation on the same adapter instance
+# (see the port's own docstring).
+
+
+async def test_load_geometries_and_get_geometry_round_trips_the_reprojected_point(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    record = _geometry(geometry_ref="geo-trafalgar", source_crs="EPSG:27700", source_x=532106.0,
+                        source_y=181020.0)
+    async with factory.context([]) as adapter:
+        await adapter.load_geometries([record])
+        stored = await adapter.get_geometry("geo-trafalgar", CLEARED)
+        assert stored == record
+
+
+async def test_get_geometry_defaults_to_the_latest_partition_version(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """A gazetteer refresh loads a new version of the whole partition
+    rather than merging into the previous one (`00_ARCHITECTURE.md` §1.2) —
+    every prior version's rows are retained, and an unpinned read resolves
+    to the current (highest) version."""
+    v1 = _geometry(geometry_ref="geo-1", version=1, lon=-0.1, lat=51.5)
+    v2 = _geometry(geometry_ref="geo-1", version=2, lon=-0.2, lat=51.6)
+    async with factory.context([]) as adapter:
+        await adapter.load_geometries([v1, v2])
+        assert (await adapter.get_geometry("geo-1", CLEARED)) == v2
+
+
+async def test_get_geometry_can_pin_an_explicit_historical_version(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """An investigation records which gazetteer version was in force when
+    a place name resolved (`00_ARCHITECTURE.md` §1.2) — that must remain
+    resolvable after a later refresh, not silently move underneath it."""
+    v1 = _geometry(geometry_ref="geo-1", version=1, lon=-0.1, lat=51.5)
+    v2 = _geometry(geometry_ref="geo-1", version=2, lon=-0.2, lat=51.6)
+    async with factory.context([]) as adapter:
+        await adapter.load_geometries([v1, v2])
+        assert (await adapter.get_geometry("geo-1", CLEARED, version=1)) == v1
+        assert (await adapter.get_geometry("geo-1", CLEARED, version=2)) == v2
+
+
+async def test_get_geometry_for_an_unknown_ref_returns_none_not_an_error(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    async with factory.context([]) as adapter:
+        assert (await adapter.get_geometry("does-not-exist", CLEARED)) is None
+
+
+async def test_get_geometries_batch_returns_only_the_matching_refs(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    geo_a = _geometry(geometry_ref="geo-a")
+    geo_b = _geometry(geometry_ref="geo-b")
+    async with factory.context([]) as adapter:
+        await adapter.load_geometries([geo_a, geo_b])
+        result = await adapter.get_geometries(["geo-a", "geo-b", "geo-missing"], CLEARED)
+        assert {r.geometry_ref for r in result} == {"geo-a", "geo-b"}
+
+
+async def test_unauthorised_get_geometry_cannot_distinguish_a_filtered_ref_from_a_missing_one(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """The existence-leak discipline (`00_ARCHITECTURE.md` §5) applies to
+    the geometry partition exactly as it does to a graph node: a site's own
+    control-point/grid geometry is not uniformly public reference data, and
+    an unauthorised principal must get the same `None` for a `geometry_ref`
+    that exists-but-is-hidden as for one that never existed at all."""
+    hidden = _geometry(geometry_ref="geo-secret", classification="SECRET")
+    async with factory.context([]) as adapter:
+        await adapter.load_geometries([hidden])
+        assert (await adapter.get_geometry("geo-secret", OFFICIAL)) is None
+        assert (await adapter.get_geometry("geo-nonexistent", OFFICIAL)) is None
+        # Proves the filter is real, not a no-op that would hide everything.
+        assert (await adapter.get_geometry("geo-secret", CLEARED)) == hidden
+
+
+async def test_unauthorised_get_geometries_batch_silently_omits_hidden_refs(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    visible = _geometry(geometry_ref="geo-open", classification="OFFICIAL")
+    hidden = _geometry(geometry_ref="geo-secret", classification="SECRET")
+    async with factory.context([]) as adapter:
+        await adapter.load_geometries([visible, hidden])
+        result = await adapter.get_geometries(["geo-open", "geo-secret"], OFFICIAL)
+        assert {r.geometry_ref for r in result} == {"geo-open"}
+
+
+# --- polygon geometry storage (07_BUILD_PLAN.md Phase 5 known-gaps closure) -
+
+
+async def test_load_geometries_and_get_geometry_round_trips_a_polygon(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    boundary = _boundary(geometry_ref="boundary-trafalgar")
+    async with factory.context([]) as adapter:
+        await adapter.load_geometries([boundary])
+        stored = await adapter.get_geometry("boundary-trafalgar", CLEARED)
+        assert stored == boundary
+        assert stored.kind is GeometryKind.POLYGON
+        assert stored.lon is None
+        assert stored.lat is None
+
+
+async def test_get_geometries_batch_returns_points_and_polygons_together(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    point = _geometry(geometry_ref="geo-point")
+    boundary = _boundary(geometry_ref="boundary-1")
+    async with factory.context([]) as adapter:
+        await adapter.load_geometries([point, boundary])
+        result = await adapter.get_geometries(["geo-point", "boundary-1"], CLEARED)
+        assert {r.geometry_ref: r.kind for r in result} == {
+            "geo-point": GeometryKind.POINT,
+            "boundary-1": GeometryKind.POLYGON,
+        }
+
+
+async def test_list_boundaries_returns_only_polygon_rows(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    point = _geometry(geometry_ref="geo-point")
+    boundary_a = _boundary(geometry_ref="boundary-a")
+    boundary_b = _boundary(geometry_ref="boundary-b")
+    async with factory.context([]) as adapter:
+        await adapter.load_geometries([point, boundary_a, boundary_b])
+        result = await adapter.list_boundaries(CLEARED)
+        assert {r.geometry_ref for r in result} == {"boundary-a", "boundary-b"}
+        assert all(r.kind is GeometryKind.POLYGON for r in result)
+
+
+async def test_list_boundaries_defaults_to_the_latest_partition_version(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    v1 = _boundary(geometry_ref="boundary-1", version=1)
+    v2 = _boundary(geometry_ref="boundary-1", version=2, wkt=_SQUARE_WKT)
+    async with factory.context([]) as adapter:
+        await adapter.load_geometries([v1, v2])
+        result = await adapter.list_boundaries(CLEARED)
+        assert [r.version for r in result] == [2]
+
+
+async def test_unauthorised_list_boundaries_omits_a_hidden_boundary(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """The existence-leak discipline applies to `list_boundaries` exactly
+    as it does to `get_geometries`: a hidden boundary must not appear, and
+    must not be distinguishable from one that was never loaded at all
+    (CLAUDE.md rule 3/4)."""
+    visible = _boundary(geometry_ref="boundary-open", classification="OFFICIAL")
+    hidden = _boundary(geometry_ref="boundary-secret", classification="SECRET")
+    async with factory.context([]) as adapter:
+        await adapter.load_geometries([visible, hidden])
+        result = await adapter.list_boundaries(OFFICIAL)
+        assert {r.geometry_ref for r in result} == {"boundary-open"}
+        # Proves the filter is real, not a no-op that would hide everything.
+        cleared_result = await adapter.list_boundaries(CLEARED)
+        assert {r.geometry_ref for r in cleared_result} == {"boundary-open", "boundary-secret"}
+
+
+# --- load_events (07_BUILD_PLAN.md Phase 5 Checkpoint 2) --------------------
+#
+# Every existing test above seeds events through `factory.context(events)`,
+# which itself calls `load_events` internally (`analytics_duckdb/testing.py`)
+# — so `load_events` is already exercised indirectly by this whole file. The
+# tests below exercise it directly and explicitly, the same way
+# `load_geometries` gets its own direct tests above rather than relying only
+# on incidental coverage, since this is the method's first real conformance
+# proof and the one place a future adapter's own `load_events` gets checked
+# against the same contract.
+
+
+async def test_load_events_and_histogram_round_trips_the_count(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    events = [_event(occurred_at=now), _event(occurred_at=now)]
+    async with factory.context([]) as adapter:
+        await adapter.load_events(events)
+        result = await adapter.histogram(
+            HistogramRequest(
+                filter=_filter(), bucketing=HistogramBucketing.FIXED_INTERVAL, interval_seconds=3600
+            ),
+            OFFICIAL,
+        )
+        assert result.total == 2
+
+
+async def test_load_events_is_a_safe_no_op_on_an_empty_sequence(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    async with factory.context([]) as adapter:
+        await adapter.load_events([])
+        result = await adapter.histogram(
+            HistogramRequest(
+                filter=_filter(), bucketing=HistogramBucketing.FIXED_INTERVAL, interval_seconds=3600
+            ),
+            OFFICIAL,
+        )
+        assert result.total == 0
+
+
+async def test_unauthorised_histogram_after_load_events_matches_a_corpus_without_the_hidden_event(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """The existence-leak discipline applies to `load_events` itself, not
+    only to a corpus a test fixture happened to seed some other way: an
+    OFFICIAL-cleared principal's `histogram` total must be identical
+    whether or not a SECRET-classified event was ever loaded."""
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    visible = _event(occurred_at=now, classification="OFFICIAL")
+    hidden = _event(occurred_at=now, classification="SECRET")
+    req = HistogramRequest(
+        filter=_filter(), bucketing=HistogramBucketing.FIXED_INTERVAL, interval_seconds=3600
+    )
+
+    async with factory.context([]) as adapter:
+        await adapter.load_events([visible])
+        before = await adapter.histogram(req, OFFICIAL)
+
+    async with factory.context([]) as adapter:
+        await adapter.load_events([visible, hidden])
+        after = await adapter.histogram(req, OFFICIAL)
+        after_cleared = await adapter.histogram(req, CLEARED)
+
+    assert before == after
+    assert after_cleared.total == 2  # proves the filter is real, not a no-op

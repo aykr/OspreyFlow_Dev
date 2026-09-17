@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Capabilities xmlns="http://www.opengis.net/wmts/1.0"
+              xmlns:ows="http://www.opengis.net/ows/1.1"
+              version="1.0.0">
+  <Contents>
+    <Layer>
+      <ows:Identifier>USGSTopo</ows:Identifier>
+      <Style isDefault="true"><ows:Identifier>default</ows:Identifier></Style>
+      <Format>image/png</Format>
+      <TileMatrixSetLink>
+        <TileMatrixSet>GoogleMapsCompatible</TileMatrixSet>
+      </TileMatrixSetLink>
+    </Layer>
+    <Layer>
+      <ows:Identifier>USGSImageryOnly</ows:Identifier>
+      <Style isDefault="true"><ows:Identifier>default</ows:Identifier></Style>
+      <Format>image/jpeg</Format>
+      <TileMatrixSetLink>
+        <TileMatrixSet>GoogleMapsCompatible</TileMatrixSet>
+      </TileMatrixSetLink>
+    </Layer>
+    <Layer>
+      <ows:Identifier>USGSShadedReliefOnly</ows:Identifier>
+      <Style isDefault="true"><ows:Identifier>default</ows:Identifier></Style>
+      <Format>image/png</Format>
+      <TileMatrixSetLink>
+        <TileMatrixSet>GoogleMapsCompatible</TileMatrixSet>
+      </TileMatrixSetLink>
+    </Layer>
+    <Layer>
+      <ows:Identifier>USGSHydroCached</ows:Identifier>
+      <Style isDefault="true"><ows:Identifier>default</ows:Identifier></Style>
+      <Format>image/png</Format>
+      <TileMatrixSetLink>
+        <TileMatrixSet>GoogleMapsCompatible</TileMatrixSet>
+      </TileMatrixSetLink>
+    </Layer>
+    <TileMatrixSet>
+      <ows:Identifier>GoogleMapsCompatible</ows:Identifier>
+      <ows:SupportedCRS>urn:ogc:def:crs:EPSG::3857</ows:SupportedCRS>
+      <TileMatrix><ows:Identifier>0</ows:Identifier></TileMatrix>
+      <TileMatrix><ows:Identifier>1</ows:Identifier></TileMatrix>
+      <TileMatrix><ows:Identifier>2</ows:Identifier></TileMatrix>
+      <TileMatrix><ows:Identifier>3</ows:Identifier></TileMatrix>
+      <TileMatrix><ows:Identifier>4</ows:Identifier></TileMatrix>
+      <TileMatrix><ows:Identifier>5</ows:Identifier></TileMatrix>
+      <TileMatrix><ows:Identifier>6</ows:Identifier></TileMatrix>
+      <TileMatrix><ows:Identifier>7</ows:Identifier></TileMatrix>
+      <TileMatrix><ows:Identifier>8</ows:Identifier></TileMatrix>
+      <TileMatrix><ows:Identifier>9</ows:Identifier></TileMatrix>
+      <TileMatrix><ows:Identifier>10</ows:Identifier></TileMatrix>
+      <TileMatrix><ows:Identifier>11</ows:Identifier></TileMatrix>
+      <TileMatrix><ows:Identifier>12</ows:Identifier></TileMatrix>
+      <TileMatrix><ows:Identifier>13</ows:Identifier></TileMatrix>
+      <TileMatrix><ows:Identifier>14</ows:Identifier></TileMatrix>
+      <TileMatrix><ows:Identifier>15</ows:Identifier></TileMatrix>
+      <TileMatrix><ows:Identifier>16</ows:Identifier></TileMatrix>
+    </TileMatrixSet>
+  </Contents>
+</Capabilities>

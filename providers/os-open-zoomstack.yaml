@@ -1,0 +1,41 @@
+# Provider profile — `docs/00_ARCHITECTURE.md` §1.2's "Provider profiles"
+# subsection, `docs/07_BUILD_PLAN.md` Phase 5 Checkpoint 3a.
+#
+# OS Open Zoomstack served live from OS Data Hub's own vector tile API —
+# distinct from a tier-2 `osprey.yaml` entry that downloads the same open
+# dataset once and serves it from a local PMTiles file with no credential
+# at all. OS Data Hub still requires a free, non-commercial API key for
+# rate-limiting even on its fully open products, which is exactly the case
+# a *profile* (as opposed to a bare tier-2 registry entry) exists for: this
+# is "beyond the four tiers" only in the sense of needing an endpoint/auth
+# pattern to declare, not in its licence terms — OGL permits redistribution
+# the same as tier 1/2.
+#
+# Verified against `tests/fixtures/provider_profiles/
+# os_open_zoomstack_capabilities.json` — a canned TileJSON-shaped response,
+# not a live network call (`tests/test_shipped_provider_profiles.py`).
+id: os-open-zoomstack
+label: "OS Open Zoomstack"
+vendor: "Ordnance Survey"
+kind: vector
+service: mvt
+# `{api_key}` is filled in from whichever `MapProvider.credential`
+# references this profile (`env:VAR`, resolved server-side by the tile
+# proxy, Checkpoint 3b) — not a `variables` entry, since a credential is
+# never a user-facing template choice the way `variables` is (contrast
+# `usgs-national-map.yaml`'s `variables.layer`).
+endpoint: "https://api.os.uk/maps/vector/v1/vts/tile/{z}/{y}/{x}.pbf?key={api_key}"
+auth:
+  type: api_key_query
+projection: "EPSG:3857"
+zoom:
+  min: 0
+  max: 20
+style: bundled:osprey-dark
+attribution: "Contains OS data © Crown copyright and database right"
+licence:
+  id: OGL-UK-3.0
+  redistributable: true
+  client_scope: open
+  note: "Open Government Licence v3.0 — attribution required, redistribution permitted."
+proxy: recommended

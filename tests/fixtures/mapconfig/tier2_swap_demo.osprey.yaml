@@ -1,0 +1,31 @@
+# Tier-1 -> tier-2 swap demonstration fixture — `docs/07_BUILD_PLAN.md`
+# Phase 5 Checkpoint 3a's exit demonstration ("swap the default provider to
+# tier 2... confirm nothing analytically changes"). Deliberately NOT the
+# committed root `osprey.yaml`: standing rule 9 pins the demo/CI config to
+# tier 1 only, and `tests/test_demo_osprey_config_is_tier_1_only.py` guards
+# that file specifically. This fixture is a second, tier-2-default config
+# used only for the live swap review point (`OSPREY_CONFIG_PATH` pointed at
+# this file) and its own proving test
+# (`tests/test_tier2_swap_demo_config.py`) — both providers stay open and
+# redistributable, so `osprey_bundle` accepts this config too.
+map:
+  default: os-open-zoomstack-local
+  providers:
+    - id: osm-local
+      label: "OpenStreetMap"
+      kind: vector
+      source: file:///data/tiles/osm-local.pmtiles
+      style: bundled:osprey-dark
+      attribution: "© OpenStreetMap contributors"
+      licence: {id: ODbL, redistributable: true, client_scope: open}
+    - id: os-open-zoomstack-local
+      label: "OS Open Zoomstack"
+      kind: vector
+      source: file:///data/tiles/os-open-zoomstack.pmtiles
+      style: bundled:osprey-dark
+      attribution: "Contains OS data © Crown copyright and database right"
+      licence:
+        id: OGL-UK-3.0
+        redistributable: true
+        client_scope: open
+        note: "Open Government Licence v3.0"

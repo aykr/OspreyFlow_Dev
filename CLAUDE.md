@@ -23,8 +23,8 @@ it every session.
 | `docs/09_INGEST_STUDIO.md` | Ingest, connectors, mapping, review queue |
 | `docs/design/tokens.css` | Any styling. Authoritative — no colour outside these tokens |
 
-All eighteen decision records in `docs/06_DECISIONS.md` are accepted. If you believe one is
-wrong, say so and stop — do not implement an alternative and explain afterwards.
+All decision records in `docs/06_DECISIONS.md` are accepted. If you believe one is wrong, say so
+and stop — do not implement an alternative and explain afterwards.
 
 `docs/` is the source of truth for the specification. When a correction to a doc arrives as a
 whole replacement file, diff it against the working copy before applying it, and reject any hunk

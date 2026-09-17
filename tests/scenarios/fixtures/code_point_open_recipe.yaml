@@ -1,0 +1,33 @@
+# Recipe for Code-Point Open — `docs/07_BUILD_PLAN.md` Phase 5
+# Checkpoint 3c. A postcode-centroid gazetteer, British National Grid
+# (EPSG:27700) like `geo_bng_recipe.yaml`. `postcode` here is the new
+# *gazetteer* identifier (Checkpoint 3c's own ontology bump, v9) —
+# distinct from `packages/knowledge_adapters/postcode.py`'s own
+# normalised-string output used on other entity types' free-text fields.
+id: code-point-open-gazetteer
+version: 1
+label: "Code-Point Open (UK postcode-centroid gazetteer)"
+connector:
+  profile: geo-generic-csv
+  delimiter: ","
+  encoding: utf-8
+  header_rows: 1
+  source_crs: "EPSG:27700"
+ontology_version: 9
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-1, owning_unit: unit-1}
+
+row_template:
+  entities:
+    - ref: postcode
+      pole_class: location
+      type: Location
+      match_on: postcode
+      on_match: reference
+      properties:
+        postcode: {field: Postcode}
+        geometry_ref: {fields: [Eastings, Northings], transform: geometry_ref}
+
+unmapped_fields: []

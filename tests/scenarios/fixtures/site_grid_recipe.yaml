@@ -1,0 +1,41 @@
+# Recipe for the site-grid connector — 00_ARCHITECTURE.md §1.2's
+# "Geospatial reference data as entities" table (site plans row),
+# 08_ACCEPTANCE_SCENARIOS.md A1.
+#
+# One recipe serves every calibrated site — a grid cell row's shape
+# (site_ref/name/lon/lat) doesn't vary per site, only its values do, so
+# there is nothing to template. `services/ingest/connectors/geo/site_grid.py`
+# produces the rows; this recipe is the same generic mapping
+# `osm_gazetteer_recipe.yaml` uses, with `match_on: site_ref` instead of
+# `osm_id`.
+#
+# Loaded from this fixtures path even by the live Conduit route
+# (services/api/app.py), mirroring scripts/build_local_basemap.py's own
+# precedent of reading osm_gazetteer_recipe.yaml from here — where a
+# shipped, non-test copy of either recipe should live is still an open
+# item, recorded once already in osm_gazetteer_recipe.yaml.
+id: site-grid
+version: 1
+label: "Site grid cells"
+connector:
+  profile: geo-site-grid
+  source_crs: "EPSG:4326"
+ontology_version: 9
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-1, owning_unit: unit-1}
+
+row_template:
+  entities:
+    - ref: cell
+      pole_class: location
+      type: Location
+      match_on: site_ref
+      on_match: reference
+      properties:
+        site_ref: {field: site_ref}
+        name: {field: name}
+        geometry_ref: {fields: [lon, lat], transform: geometry_ref}
+
+unmapped_fields: []

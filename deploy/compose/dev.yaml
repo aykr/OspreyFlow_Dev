@@ -40,7 +40,18 @@ services:
       # Docker Desktop's VM memory allocation raised (Settings →
       # Resources → Memory, a host setting, not this file) beyond this
       # host's current ~7.6GB.
-      ARCADEDB_OPTS_MEMORY: "-Xms1G -Xmx4G"
+      #
+      # Raised to 6G in Phase 5 (07_BUILD_PLAN.md): a single sequential
+      # run of the HMP fixture's graph side (tests/scenarios/
+      # fixtures/hmp_graph.py — ~400 Person nodes, their cells, and ~1,700
+      # edges) OOM'd at 4G on this host on every attempt, including at
+      # container startup before any client request — a different case
+      # from the two-concurrent-suites stress test above (one sequential
+      # run, not two concurrent ones), so the note above's "still failed
+      # at 7G" does not apply here. The other three dev containers
+      # combined use under 1GB, so 6G leaves real headroom in the
+      # existing ~7.6GB budget without needing that budget raised.
+      ARCADEDB_OPTS_MEMORY: "-Xms1G -Xmx6G"
     healthcheck:
       test: ["CMD", "curl", "-sf", "-u", "root:playwithdata123", "http://localhost:2480/api/v1/ready"]
       interval: 5s

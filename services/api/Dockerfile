@@ -35,7 +35,18 @@ COPY --from=builder /app/services ./services
 
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONPATH="/app:/app/packages" \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    HOME="/app"
+
+# `analytics_duckdb/schema.py`'s `load_extension("spatial")` (Phase 5a,
+# polygon geometry storage) must never touch the network at runtime — this
+# platform's tier 1 default and CI both assume no network access once a
+# deployment is up (`00_ARCHITECTURE.md` §1.2, `07_BUILD_PLAN.md` standing
+# rule 3). Installing it here, at build time, populates DuckDB's own
+# extension cache under `$HOME/.duckdb` so the runtime `load_extension`
+# call only ever reads a local file — it never re-installs.
+RUN /app/.venv/bin/python -c "import duckdb; duckdb.connect().install_extension('spatial')" \
+    && chown -R osprey:osprey /app
 
 USER osprey
 EXPOSE 8000

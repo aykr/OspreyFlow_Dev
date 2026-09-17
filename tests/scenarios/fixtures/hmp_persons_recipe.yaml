@@ -1,0 +1,40 @@
+# The ~400-person population, each with their own cell Location and a
+# PRESENT_AT edge to it — 08_ACCEPTANCE_SCENARIOS.md Scenario A's "wing
+# and cell locations." One row per person, exactly the CDR recipe's own
+# shape (one row -> two entities + an edge), not two recipes.
+id: hmp-persons
+version: 1
+label: "HMP fixture — persons and their cells"
+connector:
+  profile: hmp-fixture-generic
+ontology_version: 9
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: hmp-hollywood, owning_unit: hmp-hollywood}
+
+row_template:
+  entities:
+    - ref: person
+      pole_class: person
+      type: Person
+      match_on: prison_number
+      on_match: reference
+      properties:
+        prison_number: {field: prison_number}
+        family_name: {field: family_name}
+        given_names: {field: given_names}
+        date_of_birth: {field: date_of_birth}
+    - ref: cell
+      pole_class: location
+      type: Location
+      on_match: create
+      properties:
+        site_ref: {field: cell_site_ref}
+        name: {field: cell_name}
+  edges:
+    - type: PRESENT_AT
+      from: person
+      to: cell
+
+unmapped_fields: []

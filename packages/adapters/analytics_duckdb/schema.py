@@ -6,14 +6,37 @@ filter runs against; and `geometries`, the reference partition
 `03_CONDUIT_MIDDLEWARE.md` §5.1 and `schemas/analytics.py`'s
 `GeometryRecord` describe — a `Location` node's `geometry_ref` points at
 a row here, never carries the coordinates itself.
-"""
+
+Both `IF NOT EXISTS` — a conformance test's `:memory:` connection never has
+either table already, but the Conduit's own persistent DuckDB file
+(`services/api/app.py`'s lifespan, Phase 5 Checkpoint 2) does from its
+second startup onward, and re-running this DDL against it must be a
+no-op, not an error.
+
+**`geometries.geometry` (Phase 5's known-gaps closure) is a real DuckDB `GEOMETRY` column, via
+the `spatial` extension.** `load_extension` fetches the extension binary
+over the network on first install unless it is already vendored/cached —
+in tension with this platform's air-gapped posture — so a deployment
+image must pre-install it at build time (`services/api/Dockerfile`) rather
+than relying on `INSTALL` succeeding at runtime with no network reachable.
+`load_extension` here is idempotent and side-effect-free once installed;
+it is not itself what triggers a network fetch."""
 
 from __future__ import annotations
 
 import duckdb
 
+
+def load_spatial_extension(con: duckdb.DuckDBPyConnection) -> None:
+    """Shared with `services/api/prefetch.py`, which needs the same
+    `ST_*` functions over a `GeometryRecord.geometry_wkb` it already
+    fetched through `AnalyticsPort`, not a second table of its own."""
+    con.install_extension("spatial")
+    con.load_extension("spatial")
+
+
 CREATE_EVENTS_TABLE = """
-CREATE TABLE events (
+CREATE TABLE IF NOT EXISTS events (
     event_id VARCHAR,
     edge_id VARCHAR,
     edge_type VARCHAR,
@@ -34,17 +57,35 @@ CREATE TABLE events (
 )
 """
 
-#: No `investigation_scope`/handling columns — `GeometryRecord`'s own
-#: docstring records why: reference data is versioned as a whole, and the
-#: full access-control story for this partition is Phase 5 scope.
+#: No `investigation_scope` column — `GeometryRecord`'s own docstring
+#: records why: reference data is versioned as a whole rather than scoped
+#: per investigation. `handling_*` mirrors `events`' flattening exactly, so
+#: `access_filter.py`'s predicate runs unchanged against either table. The
+#: primary key is `(geometry_ref, version)`, not `geometry_ref` alone — a
+#: gazetteer refresh loads a new version without deleting the old one, so
+#: the same ref legitimately has one row per version it has ever appeared
+#: in (Phase 5, `07_BUILD_PLAN.md`).
+#: `kind`/`geometry` added in Phase 5's known-gaps closure: `kind` discriminates `point`/`polygon`
+#: (`schemas.analytics.GeometryKind`); `geometry` is `NULL` for a point row
+#: (which keeps carrying `lon`/`lat` as before) and a real `GEOMETRY` value
+#: — written via `ST_GeomFromWKB`, read back via `ST_AsWKB` — for a polygon
+#: row, which carries no `lon`/`lat`.
 CREATE_GEOMETRIES_TABLE = """
-CREATE TABLE geometries (
-    geometry_ref VARCHAR PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS geometries (
+    geometry_ref VARCHAR,
+    version INTEGER,
+    kind VARCHAR,
     lon DOUBLE,
     lat DOUBLE,
     source_crs VARCHAR,
     source_x DOUBLE,
-    source_y DOUBLE
+    source_y DOUBLE,
+    geometry GEOMETRY,
+    handling_classification VARCHAR,
+    handling_code VARCHAR,
+    owning_unit VARCHAR,
+    originator VARCHAR,
+    PRIMARY KEY (geometry_ref, version)
 )
 """
 
@@ -54,4 +95,5 @@ def create_events_table(con: duckdb.DuckDBPyConnection) -> None:
 
 
 def create_geometries_table(con: duckdb.DuckDBPyConnection) -> None:
+    load_spatial_extension(con)
     con.execute(CREATE_GEOMETRIES_TABLE)

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Capabilities xmlns="http://www.opengis.net/wmts/1.0"
+              xmlns:ows="http://www.opengis.net/ows/1.1"
+              version="1.0.0">
+  <Contents>
+    <Layer>
+      <ows:Identifier>OSGB36Layer</ows:Identifier>
+      <TileMatrixSetLink>
+        <TileMatrixSet>BritishNationalGrid</TileMatrixSet>
+      </TileMatrixSetLink>
+    </Layer>
+    <TileMatrixSet>
+      <ows:Identifier>BritishNationalGrid</ows:Identifier>
+      <ows:SupportedCRS>urn:ogc:def:crs:EPSG::27700</ows:SupportedCRS>
+      <TileMatrix><ows:Identifier>0</ows:Identifier></TileMatrix>
+      <TileMatrix><ows:Identifier>1</ows:Identifier></TileMatrix>
+    </TileMatrixSet>
+  </Contents>
+</Capabilities>

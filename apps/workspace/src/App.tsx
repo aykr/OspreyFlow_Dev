@@ -1,14 +1,37 @@
+import type { Map as MapLibreMap } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 
-import type { EdgeTypeDef, Node } from "../../../packages/schemas/generated";
+import type {
+  EdgeTypeDef,
+  GeoBin,
+  Node,
+  PublicMapConfig,
+} from "../../../packages/schemas/generated";
+import { fetchGeoBins } from "./analytics/api";
 import { GlassCanvas } from "./canvas/GlassCanvas";
+import {
+  buildEventFilter,
+  createCrossFilterStore,
+  type CrossFilterStore,
+  type CrossFilterStoreState,
+} from "./crossfilter/store";
 import { Button } from "./design/primitives/Button";
 import { Toast } from "./design/primitives/Toast";
 import { HistoryPanel } from "./history/HistoryPanel";
 import { Inspector } from "./inspector/Inspector";
-import { fetchOntologyRegistry, type OntologyRegistry } from "./ontology/schema";
+import { resolveNodeCoordinates } from "./map/geometries";
+import { HotspotHistogram } from "./map/HotspotHistogram";
+import { MapView } from "./map/MapView";
+import { defaultProvider, fetchMapConfig } from "./map/providers";
+import {
+  fetchOntologyRegistry,
+  type OntologyRegistry,
+} from "./ontology/schema";
 import { GlobalSearch } from "./search/GlobalSearch";
+import { BoundaryFilterTool } from "./map/BoundaryFilterTool";
+import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
 import { StatusBar } from "./statusbar/StatusBar";
+import { Timeline } from "./timeline/Timeline";
 import { connectDeltaClient, type SocketLike } from "./workingset/deltaClient";
 import { createWorkingSet } from "./workingset/store";
 
@@ -16,8 +39,35 @@ import { createWorkingSet } from "./workingset/store";
 // own UI is server-side, Phase 3's territory) — a bearer token supplied
 // this way is a stand-in until a real sign-in screen exists, not a
 // production auth path.
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 const DEV_BEARER_TOKEN = import.meta.env.VITE_DEV_BEARER_TOKEN ?? "";
+
+// A stable reference, not `new Map()` inline in JSX — used only as
+// `nodeCoordinates` state's initial value below (never recreated on every
+// render): an unstable reference here would force `MapView` to tear down
+// and rebuild its whole MapLibre/Sigma instance on every single render of
+// `App` — harmless in isolation, but a real infinite loop once anything
+// downstream (`onMapReady`) feeds a fresh map instance back into this
+// component's own state on every rebuild. Found via manual verification of
+// the site geospatial wizard, not by inspection — recorded here rather
+// than worked around in `MapView`. Real coordinates now come from
+// `resolveNodeCoordinates` (`map/geometries.ts`), Checkpoint 2's
+// `AnalyticsPort.get_geometries` HTTP wiring.
+const EMPTY_NODE_COORDINATES = new Map<string, { lat: number; lng: number }>();
+
+// Same stable-reference reasoning as `EMPTY_NODE_COORDINATES` above — this
+// feeds `GlassCanvas`'s `dimmedNodeIds` prop, which its own effect keys a
+// `useEffect` dependency array off (`canvas/GlassCanvas.tsx`).
+const EMPTY_DIMMED_NODE_IDS: ReadonlySet<string> = new Set();
+
+const EMPTY_GEO_BINS: readonly GeoBin[] = [];
+
+// `GeoBinRequest.precision`'s own doc comment: "higher is finer, each step
+// halving the latitude span a bin covers." 8 is this checkpoint's fixed
+// starting point — a zoom-linked precision is a real refinement, not
+// needed for A1/A2's fixed-site scale.
+const GEO_BIN_PRECISION = 8;
 
 function investigationIdFromSession(): string | null {
   return sessionStorage.getItem("ospreyflow.investigationId");
@@ -25,23 +75,56 @@ function investigationIdFromSession(): string | null {
 
 export function App() {
   const workingSetRef = useRef(createWorkingSet());
-  const [investigationId, setInvestigationId] = useState<string | null>(investigationIdFromSession());
+  const [investigationId, setInvestigationId] = useState<string | null>(
+    investigationIdFromSession(),
+  );
   const [ontology, setOntology] = useState<OntologyRegistry | null>(null);
   const [edgeTypes, setEdgeTypes] = useState<EdgeTypeDef[]>([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [counts, setCounts] = useState({ nodes: 0, edges: 0, filteredCount: 0 });
+  const [counts, setCounts] = useState({
+    nodes: 0,
+    edges: 0,
+    filteredCount: 0,
+  });
+  const [view, setView] = useState<"graph" | "map">("graph");
+  const [mapConfig, setMapConfig] = useState<PublicMapConfig | null>(null);
+  const [siteWizardOpen, setSiteWizardOpen] = useState(false);
+  const [boundaryToolOpen, setBoundaryToolOpen] = useState(false);
+  const [liveMap, setLiveMap] = useState<MapLibreMap | null>(null);
+  // Constructed once `investigationId` is known — `investigationScope` is
+  // frozen into the store at creation (`crossfilter/store.ts`), and
+  // `investigationId` only ever moves from `null` to a real id once per
+  // session, never changes again, so a lazy ref assignment during render
+  // (rather than an effect) is safe here.
+  const crossFilterRef = useRef<CrossFilterStore | null>(null);
+  if (investigationId && !crossFilterRef.current) {
+    crossFilterRef.current = createCrossFilterStore(
+      API_BASE_URL,
+      DEV_BEARER_TOKEN,
+      investigationId,
+    );
+  }
+  const [dimming, setDimming] = useState({
+    dimmedNodeIds: EMPTY_DIMMED_NODE_IDS,
+    dimmedCount: 0,
+  });
+  const [nodeCoordinates, setNodeCoordinates] = useState(EMPTY_NODE_COORDINATES);
+  const [geoBins, setGeoBins] = useState<readonly GeoBin[]>(EMPTY_GEO_BINS);
 
   useEffect(() => {
-    void fetchOntologyRegistry(API_BASE_URL, DEV_BEARER_TOKEN).then((registry) => {
-      setOntology(registry);
-    });
+    void fetchOntologyRegistry(API_BASE_URL, DEV_BEARER_TOKEN).then(
+      (registry) => {
+        setOntology(registry);
+      },
+    );
     void fetch(`${API_BASE_URL}/v1/ontology`, {
       headers: { Authorization: `Bearer ${DEV_BEARER_TOKEN}` },
     })
       .then((r) => r.json())
       .then((schema) => setEdgeTypes(schema.edge_types));
+    void fetchMapConfig(API_BASE_URL, DEV_BEARER_TOKEN).then(setMapConfig);
   }, []);
 
   useEffect(() => {
@@ -69,6 +152,20 @@ export function App() {
       for (const notice of state.notices) {
         setToast(notice.message);
       }
+      // A delta can add/remove working-set nodes the cross-filter has never
+      // seen — re-derive dimming against the current membership so a newly
+      // streamed-in node gets its correct dimmed state right away, per
+      // `crossfilter/store.ts`'s own `refresh` doc comment. A no-op fast
+      // path when no filter is active (`refresh`'s own early return).
+      void crossFilterRef.current?.refresh(workingSet.graph.nodes());
+      // Likewise, a delta can add a `Location` node the map has never
+      // plotted — re-resolve every working-set `Location`'s geometry_ref
+      // whenever membership changes. A no-op fast path when the working
+      // set has no `Location` nodes yet (`resolveNodeCoordinates`'s own
+      // early return).
+      void resolveNodeCoordinates(API_BASE_URL, DEV_BEARER_TOKEN, workingSet.graph).then(
+        setNodeCoordinates,
+      );
     });
 
     const wsUrl = API_BASE_URL.replace(/^http/, "ws");
@@ -88,9 +185,55 @@ export function App() {
     };
   }, [investigationId]);
 
-  if (!investigationId || !ontology) {
-    return <div style={{ padding: "var(--sp-24)", color: "var(--text-secondary)" }}>Loading…</div>;
+  useEffect(() => {
+    const crossFilter = crossFilterRef.current;
+    if (!crossFilter) return;
+    const unsubscribe = crossFilter.store.subscribe((state) => {
+      setDimming({
+        dimmedNodeIds: state.dimmedNodeIds,
+        dimmedCount: state.dimmedCount,
+      });
+    });
+    return () => unsubscribe();
+  }, [investigationId]);
+
+  useEffect(() => {
+    const crossFilter = crossFilterRef.current;
+    if (!crossFilter || !investigationId) return;
+    const scope = investigationId;
+    // Unlike the timeline's own density strip (`timeline/Timeline.tsx`'s
+    // own comment on why it always shows the full range), the map's heat
+    // layer *does* restrict to the active brush window — `02_GLASS_
+    // FRONTEND.md` §3.4's "the map restricts to it" is this bullet, named
+    // literally.
+    async function refresh(state: CrossFilterStoreState) {
+      const filter = buildEventFilter(scope, state.window, state.selectedNodeIds);
+      const bins = await fetchGeoBins(API_BASE_URL, DEV_BEARER_TOKEN, {
+        filter,
+        precision: GEO_BIN_PRECISION,
+      });
+      setGeoBins(bins);
+    }
+    let lastWindow = crossFilter.store.getState().window;
+    let lastSelected = crossFilter.store.getState().selectedNodeIds;
+    void refresh(crossFilter.store.getState());
+    const unsubscribe = crossFilter.store.subscribe((state) => {
+      if (state.window === lastWindow && state.selectedNodeIds === lastSelected) return;
+      lastWindow = state.window;
+      lastSelected = state.selectedNodeIds;
+      void refresh(state);
+    });
+    return () => unsubscribe();
+  }, [investigationId]);
+
+  if (!investigationId || !ontology || !crossFilterRef.current) {
+    return (
+      <div style={{ padding: "var(--sp-24)", color: "var(--text-secondary)" }}>
+        Loading…
+      </div>
+    );
   }
+  const crossFilterStore = crossFilterRef.current;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
@@ -119,33 +262,159 @@ export function App() {
             }}
           />
         </div>
+        <Button
+          aria-pressed={view === "graph"}
+          onClick={() => setView("graph")}
+        >
+          Graph
+        </Button>
+        <Button aria-pressed={view === "map"} onClick={() => setView("map")}>
+          Map
+        </Button>
+        {view === "map" && (
+          <Button
+            aria-pressed={siteWizardOpen}
+            onClick={() => setSiteWizardOpen((open) => !open)}
+          >
+            Add site
+          </Button>
+        )}
+        {view === "map" && (
+          <Button
+            aria-pressed={boundaryToolOpen}
+            onClick={() => setBoundaryToolOpen((open) => !open)}
+          >
+            Draw boundary
+          </Button>
+        )}
         <Button onClick={() => setHistoryOpen(true)}>History</Button>
       </header>
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         <div style={{ flex: 1, position: "relative" }}>
-          <GlassCanvas
-            graph={workingSetRef.current.graph}
-            store={workingSetRef.current.store}
-            ontology={ontology}
-            edgeTypes={edgeTypes}
-            investigationId={investigationId}
-            apiBaseUrl={API_BASE_URL}
-            bearerToken={DEV_BEARER_TOKEN}
-            onSelectionChange={(nodeIds) => {
-              const first = nodeIds[0];
-              const graph = workingSetRef.current.graph;
-              setSelectedNode(first && graph.hasNode(first) ? graph.getNodeAttribute(first, "data") : null);
-            }}
-          />
+          {view === "graph" && (
+            <GlassCanvas
+              graph={workingSetRef.current.graph}
+              store={workingSetRef.current.store}
+              ontology={ontology}
+              edgeTypes={edgeTypes}
+              investigationId={investigationId}
+              apiBaseUrl={API_BASE_URL}
+              bearerToken={DEV_BEARER_TOKEN}
+              dimmedNodeIds={dimming.dimmedNodeIds}
+              onSelectionChange={(nodeIds) => {
+                const first = nodeIds[0];
+                const graph = workingSetRef.current.graph;
+                setSelectedNode(
+                  first && graph.hasNode(first)
+                    ? graph.getNodeAttribute(first, "data")
+                    : null,
+                );
+              }}
+            />
+          )}
+          {view === "map" &&
+            mapConfig &&
+            (() => {
+              const provider = defaultProvider(mapConfig);
+              if (!provider) {
+                return (
+                  <div
+                    style={{
+                      padding: "var(--sp-24)",
+                      color: "var(--text-secondary)",
+                    }}
+                  >
+                    No default basemap provider is configured.
+                  </div>
+                );
+              }
+              return (
+                <>
+                  <MapView
+                    graph={workingSetRef.current.graph}
+                    provider={provider}
+                    nodeCoordinates={nodeCoordinates}
+                    geoBins={geoBins}
+                    apiBaseUrl={API_BASE_URL}
+                    bearerToken={DEV_BEARER_TOKEN}
+                    onMapReady={setLiveMap}
+                    onNodeClick={(nodeId) => {
+                      // A3's "select the hotspot cells" — clicking a
+                      // grid-cell Location toggles it in/out of the
+                      // cross-filter's node selection (multi-select, since
+                      // A3 selects several cells at once).
+                      const current = crossFilterStore.store.getState().selectedNodeIds ?? [];
+                      const next = current.includes(nodeId)
+                        ? current.filter((id) => id !== nodeId)
+                        : [...current, nodeId];
+                      crossFilterStore.store
+                        .getState()
+                        .setSelectedNodeIds(next.length > 0 ? next : null);
+                      void crossFilterStore.refresh(workingSetRef.current.graph.nodes());
+                    }}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "var(--sp-8)",
+                      left: "var(--sp-8)",
+                      width: 240,
+                      height: 220,
+                      background: "var(--surface-panel)",
+                      border: "1px solid var(--border-subtle)",
+                      borderRadius: "var(--r-panel)",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <HotspotHistogram
+                      apiBaseUrl={API_BASE_URL}
+                      bearerToken={DEV_BEARER_TOKEN}
+                      investigationScope={investigationId}
+                      crossFilterStore={crossFilterStore}
+                      getNodeIds={() => workingSetRef.current.graph.nodes()}
+                    />
+                  </div>
+                  {siteWizardOpen && (
+                    <SiteCalibrationWizard
+                      apiBaseUrl={API_BASE_URL}
+                      bearerToken={DEV_BEARER_TOKEN}
+                      investigationId={investigationId}
+                      map={liveMap}
+                      onClose={() => setSiteWizardOpen(false)}
+                    />
+                  )}
+                  {boundaryToolOpen && (
+                    <BoundaryFilterTool
+                      map={liveMap}
+                      crossFilterStore={crossFilterStore}
+                      nodeCoordinates={nodeCoordinates}
+                      getNodeIds={() => workingSetRef.current.graph.nodes()}
+                      onClose={() => setBoundaryToolOpen(false)}
+                    />
+                  )}
+                </>
+              );
+            })()}
         </div>
-        <div style={{ width: 320, borderLeft: "1px solid var(--border-subtle)" }}>
+        <div
+          style={{ width: 320, borderLeft: "1px solid var(--border-subtle)" }}
+        >
           <Inspector node={selectedNode} />
         </div>
+      </div>
+      <div style={{ height: 220, borderTop: "1px solid var(--border-subtle)" }}>
+        <Timeline
+          apiBaseUrl={API_BASE_URL}
+          bearerToken={DEV_BEARER_TOKEN}
+          investigationScope={investigationId}
+          crossFilterStore={crossFilterStore}
+          getNodeIds={() => workingSetRef.current.graph.nodes()}
+        />
       </div>
       <StatusBar
         nodeCount={counts.nodes}
         edgeCount={counts.edges}
-        dimmedCount={0}
+        dimmedCount={dimming.dimmedCount}
         filteredCount={counts.filteredCount}
       />
       <HistoryPanel
@@ -154,7 +423,9 @@ export function App() {
         investigationId={investigationId}
         apiBaseUrl={API_BASE_URL}
         bearerToken={DEV_BEARER_TOKEN}
-        onRestored={(snapshot) => workingSetRef.current.store.getState().applyDelta(snapshot)}
+        onRestored={(snapshot) =>
+          workingSetRef.current.store.getState().applyDelta(snapshot)
+        }
       />
       {toast && (
         <div style={{ position: "fixed", bottom: 16, right: 16 }}>

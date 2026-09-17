@@ -4,10 +4,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   BORDER_STRONG_DARK_HEX,
+  BORDER_SUBTLE_DARK_HEX,
   BRASS_HEX,
   CHANNEL_HEX,
+  SEQ_HEX,
+  SURFACE_APP_DARK_HEX,
   SURFACE_PANEL_DARK_HEX,
+  SURFACE_RAISED_DARK_HEX,
+  SURFACE_SUNKEN_DARK_HEX,
   TEXT_PRIMARY_DARK_HEX,
+  TEXT_SECONDARY_DARK_HEX,
 } from "./tokens";
 
 // Parses `docs/design/tokens.css` directly — this is the enforcement half
@@ -52,5 +58,29 @@ describe("CHANNEL_HEX matches docs/design/tokens.css (dark theme)", () => {
 
   it("surface-panel (n2, dark) matches", () => {
     expect(SURFACE_PANEL_DARK_HEX.toLowerCase()).toBe(cssVar(css, "n2"));
+  });
+
+  it("surface-sunken (n0, dark) matches", () => {
+    expect(SURFACE_SUNKEN_DARK_HEX.toLowerCase()).toBe(cssVar(css, "n0"));
+  });
+
+  it("surface-app (n1, dark) matches", () => {
+    expect(SURFACE_APP_DARK_HEX.toLowerCase()).toBe(cssVar(css, "n1"));
+  });
+
+  it("surface-raised (n3, dark) matches", () => {
+    expect(SURFACE_RAISED_DARK_HEX.toLowerCase()).toBe(cssVar(css, "n3"));
+  });
+
+  it("text-secondary (n10, dark) matches", () => {
+    expect(TEXT_SECONDARY_DARK_HEX.toLowerCase()).toBe(cssVar(css, "n10"));
+  });
+
+  it("border-subtle (n5, dark) matches", () => {
+    expect(BORDER_SUBTLE_DARK_HEX.toLowerCase()).toBe(cssVar(css, "n5"));
+  });
+
+  it.each(SEQ_HEX.map((hex, i) => [i + 1, hex]))("seq-%s matches", (n, hex) => {
+    expect((hex as string).toLowerCase()).toBe(cssVar(css, `seq-${n}`));
   });
 });

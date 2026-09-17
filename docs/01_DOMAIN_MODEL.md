@@ -365,6 +365,13 @@ and visibility from the result. This is the mechanism behind the temporal slider
 the graph, and it is why `AnalyticsPort` exists as a separate port rather than being folded into
 `GraphPort`.
 
+**`PRESENT_AT` carries two distinct meanings under one edge type**: a person's (or device's or
+vehicle's) residency at a `Location` (e.g. a person's assigned cell), and their point-in-time
+presence at a `Location` at a specific timestamp (e.g. an incident sighting in a yard). Both use
+the same `PRESENT_AT` edge/event shape rather than a second edge type, so a caller must not assume
+a given `Person` has exactly one `PRESENT_AT` edge — a subject under investigation may carry a
+residency edge plus one or more incident-presence edges to other locations.
+
 ## 4. Entity resolution is a view, not a merge
 
 **This overrides the Gemini specification, which states that records are "probabilistically
@@ -635,9 +642,9 @@ Knowledge Adapter follows — is what a caller writes into the analytics store's
 partition under that ref. No Knowledge Adapter writes anywhere itself, and the recipe engine does
 not yet write `GeometryRecord`s any more than it writes `EventRecord`s to the analytics store's
 served dataset (`services/ingest/__main__.py`'s stated gap) — Phase 2 establishes the correct
-storage tier and shape; the reference partition's own versioning and access-controlled read path
-is Phase 5 scope, the same phase that builds the geospatial connectors and the site grid this
-table also serves.
+storage tier and shape; the reference partition's own versioning and access-controlled read path,
+plus polygon storage for a boundary with no single point, ship in Phase 5/5a, the same phases that
+build the geospatial connectors and the site grid this table also serves.
 
 Tested against three real projections with real place coordinates, not arbitrary numbers, so a
 wrong zone or a transposed axis shows up as a wrong place rather than a plausible wrong number:
@@ -811,19 +818,30 @@ class EventFilter(BaseModel):
 `geometry_ref`/`grid_ref` Knowledge Adapters produce the reference a `Location` node points at:
 
 ```python
+class GeometryKind(StrEnum):
+    POINT = "point"
+    POLYGON = "polygon"              # a jurisdiction/boundary with no single point (Phase 5)
+
 class GeometryRecord(BaseModel):
     geometry_ref: str
-    lon: float                       # -180..180, WGS84
-    lat: float                       # -90..90, WGS84
-    source_crs: str
-    source_x: float | None = None    # retained original, never discarded
+    version: int                     # the reference partition's own version, not per-investigation
+    kind: GeometryKind = GeometryKind.POINT
+    lon: float | None = None         # -180..180, WGS84 — POINT only
+    lat: float | None = None         # -90..90, WGS84 — POINT only
+    source_crs: str | None = None
+    source_x: float | None = None    # retained original, never discarded — POINT only
     source_y: float | None = None
+    geometry_wkb: bytes | None = None  # POLYGON only
+    handling: Handling
 ```
 
-No `investigation_scope`/`handling` here, unlike `EventRecord` — reference data is versioned as a
-whole rather than scoped per investigation, and the full versioning/access-control story for this
-partition is Phase 5 scope, the same phase that builds the geospatial connectors and the site
-grid it also serves.
+No `investigation_scope` here, unlike `EventRecord` — reference data is versioned as a whole
+rather than scoped per investigation (`version` above), not per document. `handling` **is** carried
+per row: a site's own control-point/grid geometry is exactly as sensitive as the `Location`
+entities it backs, so it gets the same per-row access-control discipline `EventRecord` already has,
+via the same `AccessFilter`. This partition's versioning/access-controlled read path
+(`AnalyticsPort.get_geometry`/`get_geometries`/`list_boundaries`) and polygon storage (`kind`/
+`geometry_wkb`) both shipped in Phase 5's known-gaps closure.
 
 ```python
 class HistogramBucketing(StrEnum):

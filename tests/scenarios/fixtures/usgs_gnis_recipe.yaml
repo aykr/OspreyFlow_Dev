@@ -1,0 +1,40 @@
+# Recipe for USGS GNIS — `docs/07_BUILD_PLAN.md` Phase 5 Checkpoint 3c.
+# `gnis_feature_id` is already a Location identifier (used by
+# `tests/scenarios/fixtures/geo_texas_central_recipe.yaml`/
+# `geo_california_iii_recipe.yaml` as a plausible id value, never actually
+# produced by a GNIS-shaped connector until now). Real GNIS distribution
+# (the National File) is pipe-delimited, not comma-delimited — reuses the
+# generic CSV connector's own configurable `delimiter`
+# (`services/ingest/connectors/csv_connector.py`'s `read_csv(..., delimiter="|")`).
+# Coordinates are already WGS84.
+id: usgs-gnis-gazetteer
+version: 1
+label: "USGS GNIS (US named-feature gazetteer)"
+connector:
+  profile: geo-generic-csv
+  delimiter: "|"
+  encoding: utf-8
+  header_rows: 1
+  source_crs: "EPSG:4326"
+ontology_version: 9
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-1, owning_unit: unit-1}
+
+row_template:
+  entities:
+    - ref: feature
+      pole_class: location
+      type: Location
+      match_on: gnis_feature_id
+      on_match: reference
+      properties:
+        gnis_feature_id: {field: FEATURE_ID}
+        name: {field: FEATURE_NAME}
+        geometry_ref: {fields: [PRIM_LONG_DEC, PRIM_LAT_DEC], transform: geometry_ref}
+
+unmapped_fields:
+  - {field: FEATURE_CLASS, action: ignore}
+  - {field: STATE_ALPHA, action: ignore}
+  - {field: COUNTY_NAME, action: ignore}

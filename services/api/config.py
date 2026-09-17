@@ -86,6 +86,20 @@ class ApiConfig:
     oidc_algorithms: tuple[str, ...]
     oidc_jwks_ttl_seconds: float
     supersede_job_degree_threshold: int
+    #: `osprey.yaml` itself is never a secret (`05_DEPLOYMENT.md` §7) — only
+    #: its *path* is environment configuration, the same way a connector's
+    #: recipe path is. Relative to the process's working directory, which
+    #: `deploy/compose/dev.yaml` and CI both run from the repo root.
+    osprey_config_path: str
+    #: A persistent (not `:memory:`) DuckDB file — `07_BUILD_PLAN.md` Phase 5
+    #: Checkpoint 2. `analytics_duckdb/testing.py`'s own docstring records
+    #: the longer-term intent (Parquet in object storage); this is the
+    #: deliberately narrower, already-conformance-tested native-table store
+    #: standing in for it, a stated and recorded deferral (this phase's plan
+    #: and end-of-checkpoint audit), not silently dropped. The parent
+    #: directory is created if it doesn't exist — `deploy/compose/dev.yaml`
+    #: bind-mounts nothing for this, since DuckDB is embedded, not a service.
+    analytics_db_path: str
 
     @classmethod
     def from_env(cls) -> ApiConfig:
@@ -112,4 +126,6 @@ class ApiConfig:
                     "SUPERSEDE_JOB_DEGREE_THRESHOLD", str(DEFAULT_SUPERSEDE_JOB_DEGREE_THRESHOLD)
                 )
             ),
+            osprey_config_path=os.environ.get("OSPREY_CONFIG_PATH", "osprey.yaml"),
+            analytics_db_path=os.environ.get("ANALYTICS_DB_PATH", "data/analytics.duckdb"),
         )

@@ -13,6 +13,18 @@ graceful shutdown — an actual "the instance is gone", not a clean exit
 this test could accidentally rely on); the second, with no memory of the
 first beyond what the shared stores hold, is sent the rest of the same
 scripted session and must continue it seamlessly.
+
+**Each instance gets its own scratch analytics DuckDB path, deliberately
+not a shared one.** Confirmed empirically (Phase 5 Checkpoint 2): DuckDB
+takes an exclusive file lock, and a second process opening the same file
+— even read-only — while the first still holds it fails outright, not
+gracefully. That is a real, narrower-than-the-rest-of-the-store limitation
+of the native single-file store this checkpoint deliberately chose over
+the Parquet-in-object-storage design (`analytics_duckdb/testing.py`'s own
+docstring, this phase's plan), not something this test is asserting
+around — this test's own scope, per its docstring above, is investigation
+continuity through ArcadeDB/Valkey/Postgres, and neither request this
+script sends touches an `/v1/analytics/*` route at all.
 """
 
 from __future__ import annotations
@@ -21,6 +33,7 @@ import os
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -65,12 +78,18 @@ class _ConduitInstance:
         # `uvicorn` here needs the same `packages` root on `PYTHONPATH`
         # explicitly, the same way `services/api/Dockerfile` sets it.
         packages_root = repo_root / "packages"
+        # Its own scratch analytics path, not the shared default — see this
+        # module's own docstring for why two instances cannot share one.
+        analytics_db_path = (
+            Path(tempfile.mkdtemp(prefix="ospreyflow-analytics-")) / "analytics.duckdb"
+        )
         env = {
             **os.environ,
             "OIDC_JWKS_URL": jwks_url,
             "OIDC_ALGORITHMS": "RS256",
             "ARCADEDB_DATABASE": "ospreyflow",
             "PYTHONPATH": f"{repo_root}:{packages_root}:{os.environ.get('PYTHONPATH', '')}",
+            "ANALYTICS_DB_PATH": str(analytics_db_path),
         }
         self._process = subprocess.Popen(
             [

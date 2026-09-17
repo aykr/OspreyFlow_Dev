@@ -29,7 +29,18 @@ export function Combobox({ options, value, onChange, onQueryChange, placeholder,
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const listboxId = useId();
-  const filtered = query
+  // A caller that passes `onQueryChange` is driving `options` itself (a
+  // remote search, `search/GlobalSearch.tsx`'s own case) — `options`
+  // already *is* the filtered set for the current query, generally
+  // against fields (identifiers, ids) the visible `label` never contains
+  // (an entity's opaque node id, not its search query). Re-filtering by
+  // whether `label` contains the typed text on top of that would silently
+  // discard every real match whose label happens not to contain what was
+  // typed — found live: `GlobalSearch`'s "EntityType: <ulid>" labels never
+  // contain the query text, so every server search rendered zero results.
+  // Only a caller with no `onQueryChange` (a local, already-fully-loaded
+  // option list) wants this component's own substring filtering.
+  const filtered = !onQueryChange && query
     ? options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()))
     : options;
 

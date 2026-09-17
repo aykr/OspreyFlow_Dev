@@ -1,0 +1,33 @@
+# Recipe for Open UPRN — `docs/07_BUILD_PLAN.md` Phase 5 Checkpoint 3c.
+# `uprn` is already a Location identifier (Phase 5's own HMP/site-grid
+# work never needed it directly, but it was reserved from the start).
+# Open UPRN's real distribution ships both BNG and WGS84 columns; this
+# recipe uses the WGS84 ones, so `source_crs` is EPSG:4326 (declared, not
+# treated as a no-op special case — `01_DOMAIN_MODEL.md` §7.1).
+id: open-uprn-gazetteer
+version: 1
+label: "Open UPRN (UK address-point gazetteer)"
+connector:
+  profile: geo-generic-csv
+  delimiter: ","
+  encoding: utf-8
+  header_rows: 1
+  source_crs: "EPSG:4326"
+ontology_version: 9
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-1, owning_unit: unit-1}
+
+row_template:
+  entities:
+    - ref: address
+      pole_class: location
+      type: Location
+      match_on: uprn
+      on_match: reference
+      properties:
+        uprn: {field: UPRN}
+        geometry_ref: {fields: [LONGITUDE, LATITUDE], transform: geometry_ref}
+
+unmapped_fields: []

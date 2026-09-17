@@ -22,7 +22,47 @@
 # reference partition (`01_DOMAIN_MODEL.md` §7.1, `schemas/analytics.py`'s
 # `GeometryRecord`). Never `lon`/`lat`/`source_x`/`source_y` on the node
 # itself — see the v5 note above for why that was wrong.
-version: 6
+#
+# v7 (Phase 5): Location gained `name` (optional — a bare grid cell has
+# none). A gazetteer connector (`services/ingest/connectors/geo/`)
+# produces named places — "Cranford", a city, a POI — and
+# `02_GLASS_FRONTEND.md` §3.5's gazetteer search resolves free-text place
+# mentions against exactly this property. `place_kind` (an OSM `place=*`/
+# POI-tag value) is deliberately not a property here: the recipe engine's
+# `_resolve_binding` treats an empty bound field as a rejected row, not an
+# omitted property (`services/ingest/engine.py`), so a genuinely optional
+# per-node classification has no way to bind cleanly yet — recorded as an
+# open item rather than worked around with a fabricated default value.
+# Every recipe fixture pinned to `ontology_version: 6` is bumped to 7
+# alongside this change — none of them bind `name`, so nothing about their
+# own behaviour changes; they are just re-published against the current
+# ontology, the same re-publish `09_INGEST_STUDIO.md` describes for any
+# ontology edit.
+#
+# v8 (Phase 5, the HMP fixture's graph side): three additions, none of
+# them external-gazetteer identifiers, because none of this is external
+# data. `Location` gained `site_ref` — a deployment-internal reference
+# (a yard, a wing, a cell, eventually a site-grid cell) distinct from
+# `uprn`/`osm_id`/etc., which all name a place in an *external* gazetteer.
+# `Organisation` gained `org_ref` (the same idea, for an internal group
+# with no Companies House number or EIN) and `name` (it had no display
+# property at all until now — the same gap `name` closed for `Location`
+# in v7). `Document` gained `title`, for the same reason. Every recipe
+# fixture pinned to `ontology_version: 7` is bumped to 8 alongside this.
+#
+# v9 (Phase 5 Checkpoint 3c): four new *external*-gazetteer identifiers on
+# `Location` — the same category `uprn`/`gnis_feature_id`/`tiger_geoid`/
+# `osm_id` already are, not the internal `*_ref` category v8 added.
+# `os_place_id` (OS Open Names), `postcode` (Code-Point Open — a
+# postcode-centroid gazetteer entry, distinct from the `postcode` Knowledge
+# Adapter's own normalised-string output on other entity types),
+# `gss_code` (Boundary-Line's ONS administrative-area code — this is the
+# one identifier here whose `Location` typically has no `geometry_ref` at
+# all, per that property's own existing "a jurisdiction... must be able to
+# carry none" allowance), and `nad_address_id` (US National Address
+# Database). Every recipe fixture pinned to `ontology_version: 8` is
+# bumped to 9 alongside this.
+version: 9
 entity_types:
   - name: Person
     pole_class: person
@@ -58,19 +98,26 @@ entity_types:
     pole_class: location
     channel: ochre
     shape: pin
-    identifiers: [uprn, gnis_feature_id, tiger_geoid, osm_id]
+    identifiers: [uprn, gnis_feature_id, tiger_geoid, osm_id, site_ref, os_place_id, postcode, gss_code, nad_address_id]
     properties:
       # 03_CONDUIT_MIDDLEWARE.md §5.1: geometry lives in the analytics
       # store, never on the graph node — this is a reference, not a
       # coordinate. Not required: a jurisdiction or an administrative
       # boundary has no single point and must be able to carry none.
       - {name: geometry_ref, type: string}
+      # v7: a gazetteer place name — optional, since a site-grid cell or
+      # an administrative boundary has none.
+      - {name: name, type: string, indexed: true}
 
   - name: Organisation
     pole_class: organisation
     channel: azure
     shape: square
-    identifiers: [companies_house_number, ein]
+    identifiers: [companies_house_number, ein, org_ref]
+    properties:
+      # v8: no display property existed at all before this — the same
+      # gap `name` closed for `Location` in v7.
+      - {name: name, type: string, indexed: true}
 
   - name: Event
     pole_class: event
@@ -81,6 +128,8 @@ entity_types:
     pole_class: object
     channel: violet
     shape: page
+    properties:
+      - {name: title, type: string, indexed: true}
 
   - name: Vehicle
     pole_class: object

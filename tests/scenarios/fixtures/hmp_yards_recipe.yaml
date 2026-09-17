@@ -1,0 +1,27 @@
+# The ten HMP yards as real Location entities — 08_ACCEPTANCE_SCENARIOS.md
+# Scenario A, 07_BUILD_PLAN.md Phase 5's "give the HMP fixture a graph
+# side." Run first, before hmp_persons_recipe.yaml/hmp_incidents (the
+# latter is not a recipe — see hmp_graph.py) reference these by site_ref.
+id: hmp-yards
+version: 1
+label: "HMP fixture — yard Locations"
+connector:
+  profile: hmp-fixture-generic
+ontology_version: 9
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: hmp-hollywood, owning_unit: hmp-hollywood}
+
+row_template:
+  entities:
+    - ref: yard
+      pole_class: location
+      type: Location
+      match_on: site_ref
+      on_match: reference
+      properties:
+        site_ref: {field: site_ref}
+        name: {field: name}
+
+unmapped_fields: []

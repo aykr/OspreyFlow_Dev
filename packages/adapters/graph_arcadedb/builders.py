@@ -82,6 +82,33 @@ class SearchNodesBuilder:
 
 
 @dataclass(frozen=True)
+class SuggestLocationsBuilder:
+    """`GraphPort.suggest_locations` — the geocoder's own candidate
+    retrieval (`07_BUILD_PLAN.md`'s Phase 5 known-gaps list), scoped to `Location.name`
+    only. Uses TinkerPop's `TextP.containing` predicate — confirmed
+    live against a real ArcadeDB instance to work over its Gremlin command
+    endpoint (`SearchNodesBuilder`'s own docstring had flagged this as
+    unproven; it is not, for this predicate) — a coarse substring scan,
+    not a Lucene/full-text index: no relevance scoring, no tokenisation,
+    bounded by `limit` exactly like `SearchNodesBuilder`. Deliberately not
+    folded into `SearchNodesBuilder` itself, which stays exact-match-only
+    by its own documented contract."""
+
+    name: str
+    limit: int = 20
+
+    def render_gremlin(self, access: AccessFilter, principal: Principal) -> str:
+        has_access = access.gremlin_has_step(principal)
+        name_lit = groovy_string_literal(self.name)
+        location_type_lit = groovy_string_literal(physical_type_name("Location"))
+        return (
+            f"g.V().hasLabel({location_type_lit})"
+            f".has('name',TextP.containing({name_lit})).{has_access}"
+            f".dedup().limit({self.limit}).elementMap()"
+        )
+
+
+@dataclass(frozen=True)
 class ExpandBuilder:
     request: ExpandRequest
 
@@ -89,7 +116,18 @@ class ExpandBuilder:
         if not self.request.edge_types:
             return ""
         physical = [physical_type_name(t) for t in self.request.edge_types]
-        return f".hasLabel({groovy_string_list_literal(physical)})"
+        # `hasLabel(...)` is a varargs step (`hasLabel('a','b')`), not a
+        # list-argument one — `.hasLabel(['a'])` (a single Groovy List)
+        # fails against ArcadeDB's Gremlin engine with a bare
+        # `CommandExecutionException` and no further detail (confirmed
+        # empirically: `tests/conformance/graph_port/test_suite.py`'s
+        # `test_expand_edge_types_filters_to_the_declared_type`, added
+        # once this was found — no existing test had ever exercised
+        # `edge_types` filtering on `expand`/`paths` before Phase 5's HMP
+        # fixture work tripped over it). `groovy_args_literal` renders the
+        # comma-separated varargs form already used correctly elsewhere in
+        # this module (`select(...)`, below).
+        return f".hasLabel({groovy_args_literal(physical)})"
 
     def _temporal_filter(self) -> str:
         """Exercises the vertex-centric `(edge_type, interval.from)` index
@@ -186,7 +224,9 @@ class PathBuilder:
         edge_filter = ""
         if self.request.edge_types:
             physical = [physical_type_name(t) for t in self.request.edge_types]
-            edge_filter = f".hasLabel({groovy_string_list_literal(physical)})"
+            # See `ExpandBuilder._edge_label_filter`'s comment — the same
+            # varargs-not-list bug, same fix.
+            edge_filter = f".hasLabel({groovy_args_literal(physical)})"
         return (
             f'g.V().has("id",{source_lit}).{has_access}'
             f".repeat(bothE(){edge_filter}.{has_access}.as('e').otherV().{has_access}.simplePath())"

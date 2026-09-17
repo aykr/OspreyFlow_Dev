@@ -1,0 +1,44 @@
+# Family relationships among the HMP population —
+# 08_ACCEPTANCE_SCENARIOS.md Scenario A / A10. Both persons already exist
+# (hmp_persons_recipe.yaml ran first) — `on_match: reference` finds them
+# by prison_number; the redundant name/dob-less properties below are the
+# fallback path if a reference ever missed, never the expected path.
+id: hmp-families
+version: 1
+label: "HMP fixture — family relationships"
+connector:
+  profile: hmp-fixture-generic
+ontology_version: 9
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: hmp-hollywood, owning_unit: hmp-hollywood}
+
+row_template:
+  entities:
+    - ref: person_a
+      pole_class: person
+      type: Person
+      match_on: prison_number
+      on_match: reference
+      properties:
+        prison_number: {field: person_a_prison_number}
+        family_name: {field: person_a_family_name}
+        given_names: {field: person_a_given_names}
+    - ref: person_b
+      pole_class: person
+      type: Person
+      match_on: prison_number
+      on_match: reference
+      properties:
+        prison_number: {field: person_b_prison_number}
+        family_name: {field: person_b_family_name}
+        given_names: {field: person_b_given_names}
+  edges:
+    - type: FAMILY_OF
+      from: person_a
+      to: person_b
+      properties:
+        relation: {field: relation}
+
+unmapped_fields: []

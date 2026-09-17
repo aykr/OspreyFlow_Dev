@@ -30,10 +30,10 @@ confirmed.
 | 016 | Standards and profiles, not vendor integrations | | **Accepted** — 13 Sep 2026 |
 | 017 | Target the UK and the US; reprojection becomes mandatory | | **Accepted** — 13 Sep 2026 |
 | 018 | The Ingest Studio edits a declarative recipe, maps POLE-first | | **Accepted** — 13 Sep 2026, interface review pending |
+| 019 | Scenario A's exit criterion is split across three phases | | **Accepted** — 16 Sep 2026 |
 
-All eighteen records are accepted as of 13 September 2026, including all seven overrides of the
-input documents. `07_BUILD_PLAN.md` is unblocked end to end; nothing in the plan now waits on an
-open decision.
+All nineteen records are accepted, including all seven overrides of the input documents.
+`07_BUILD_PLAN.md` is unblocked end to end; nothing in the plan now waits on an open decision.
 
 One record carries a stated review point. ADR-018 is accepted on the understanding that the
 Ingest Studio's interface will be reviewed once it renders, and that the review may change it —
@@ -453,6 +453,35 @@ For point layers beyond roughly 500k features, deck.gl (MIT) composes with MapLi
 additional overlay. Not in v1 — server-side binning through `AnalyticsPort.geo_bins` covers the
 acceptance scenarios, and shipping raw points to the client is what the binning prevents.
 
+### Amendment — accepted risk: CVE-2026-85061 in the pinned `maplibre-gl` version
+
+**Status.** Accepted, 16 September 2026, Phase 5 Checkpoint 1, with a stated revisit trigger.
+
+`@sigma/layer-maplibre` (the binding this ADR requires for camera sync with Sigma v3) pins its
+peer dependency to `maplibre-gl: ^4.5.0`; no release of that binding supports a `5.x`/`6.x`
+`maplibre-gl`, and its own `4.0.0-alpha` line requires Sigma v4-alpha, which this build does not
+run. `maplibre-gl@4.7.1` — the newest release satisfying both constraints — carries
+CVE-2026-85061, a critical XSS sanitizer bypass in `DOM.sanitize()`, fixed upstream only in
+`6.4.1`. That fix is therefore not adoptable without dropping this ADR's mechanism entirely.
+
+**Threat model, stated precisely.** Exploiting this needs a compromised or malicious
+`osprey.yaml`/provider profile reaching MapLibre's `AttributionControl` through its
+HTML-sanitizing code path — not analyst input, not document content, and not anything this
+platform's handling model treats as untrusted at the point it reaches the browser.
+
+**Mitigation.** `apps/workspace/src/map/MapView.tsx` disables MapLibre's built-in
+`AttributionControl` entirely and renders a provider's attribution itself as a plain, escaped
+text node. The broken sanitizer is never in the code path for that string at all — "sanitize the
+input first" is not the claim here, since the sanitizer itself is what is broken.
+
+**Recorded in `.trivyignore`** (repo root) with the same reasoning, so `make trivy` passes with
+the risk named rather than silently suppressed.
+
+**Revisit if.** Either holds: `@sigma/layer-maplibre` ships a release compatible with
+`maplibre-gl >=6.4.1`, or a `maplibre-gl` `4.x` patch release backports the fix. Check both at
+the start of any later phase touching `apps/workspace`'s map dependencies, not only when
+`.trivyignore` is next edited by hand.
+
 ---
 
 ## ADR-015 — Map providers ship as tiers, with OpenStreetMap as the shipped default
@@ -691,3 +720,47 @@ is present.
 **Revisit if.** A client's source is genuinely unmappable within the template model. Investigate
 before conceding — in most cases the answer is a conditional element or a new adapter, and
 conceding an expression language once concedes it permanently.
+
+---
+
+## ADR-019 — Scenario A's exit criterion is split across three phases, not satisfied by one
+
+**Status.** Accepted, 16 September 2026.
+
+**The contradiction.** `07_BUILD_PLAN.md` Phase 5's exit criterion, as originally written, read
+"Acceptance scenario A (`08_ACCEPTANCE_SCENARIOS.md`) passes end to end" — but Scenario A's own
+steps are not all buildable by the end of Phase 5. A12 needs the Clique Metric, which needs
+`ComputePort`, which is Phase 7's own outcome. A13–A15 need Assessment objects, export and the
+handling gate, all Phase 8 outcomes. Phase 5 builds neither. The exit criterion, taken literally,
+asked this phase to demonstrate capabilities two and three phases away from existing — not a
+difficult target, an impossible one, found while planning Phase 5 rather than discovered as a
+surprise at the phase's own review point.
+
+**Decision.** Phase 5's exit criterion is corrected to name what it can actually demonstrate:
+Scenario A, scoped to A1–A11, plus the exit text's own already-named specifics (the weekend and
+time-of-day findings, the site-grid hotspot) and the tier-1-to-tier-2 provider swap. A12 is
+re-proven against the same HMP fixture when Phase 7 lands, as part of its own exit criterion.
+A13–A15, the full scenario end-to-end, and the retraction-propagates assertion after A15 are
+exactly what Phase 8's existing exit criterion ("both acceptance scenarios pass unchanged")
+already requires — nothing new is added there, the dependency was simply never spelled out.
+`08_ACCEPTANCE_SCENARIOS.md` itself is unchanged: it is still the full definition of done for
+Scenario A, in one place, regardless of which phase proves which step.
+
+**Why a doc correction rather than a silent partial build.** The alternative to naming this
+explicitly was building Phase 5 against the literal exit text, quietly stopping short of it, and
+letting whoever reads the build plan next assume A12–A15 either don't matter or were somehow
+proven anyway. `SESSION_HANDOVER.md`'s standing instruction is that a genuine spec gap gets fixed
+in the spec, not answered once in conversation and left for the next session to rediscover — this
+is that fix. It was also considered and rejected to reorder phases so `ComputePort`/Assessment
+land before Phase 5 purely to satisfy this one criterion; that would solve a documentation problem
+by restructuring real engineering sequencing around it, the wrong direction for the fix to come
+from.
+
+**Cost.** None to the platform's eventual scope — every step of Scenario A is still proven,
+by the phase that actually builds what that step needs. The cost is entirely to this document:
+Phase 5, Phase 7 and Phase 8's exit criteria each now carry a cross-reference to the others where
+before Phase 5 carried a promise it could not keep alone.
+
+**Revisit if.** A future reordering moves `ComputePort` or Assessment/export earlier than currently
+planned — update the phase each deferred assertion is attributed to, not this ADR's reasoning,
+which stays correct regardless of which phase number ends up doing the re-proving.

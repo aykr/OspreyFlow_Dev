@@ -48,6 +48,29 @@ the product cannot be exported without the handling policy being applied to ever
 If a later change makes A15 pass without evaluating handling on each element, the platform has
 regressed in the way that matters most.
 
+### Implementation note — A2's mechanism (found during Phase 5 Checkpoint 2's live verification)
+
+`AnalyticsPort.geo_bins`'s precision ceiling (12, enforced by `GeoBinRequest`'s own validator)
+cannot resolve individual grid cells at this fixture's scale: ten yards a few dozen metres apart
+on one fixed site collapsed into two bins even at maximum precision — nowhere near "four hotspot
+cells". A2's literal figure is instead produced by a *categorical* `cross_filter` dimension on
+`target_id` (the yard `Location` each incident is `PRESENT_AT`), which resolves per-cell exactly
+and reproduced the figure against live seeded data (51.1% measured vs. ~52% here). The Glass's
+Map view ships both: the `geo_bins` heat layer (`02_GLASS_FRONTEND.md` §3.5 names it directly,
+and it stays correct at a coarser scale this fixture doesn't exercise) and a ranked "hotspot
+cells" panel on `target_id` as the mechanism A2/A3 actually rely on at this fixture's scale.
+
+### Known gap — A7's "item category" filter
+
+A7 asks to filter reports "to one residential sub-unit and one item category". The sub-unit half
+is a `node_ids` restriction (already supported — a sub-unit is a `Location`). The item-category
+half is not: `EventFilter` (`packages/schemas/analytics.py`) carries `investigation_scope`,
+`window`, `node_ids` and `edge_types` only — no generic field/value predicate an event property
+such as `item_type` could be filtered on. `cross_filter`'s categorical dimensions *aggregate and
+display* a field's distinct values; they do not let a caller *restrict by* one. Building that
+(a `value_filters` field on `EventFilter`, or an equivalent) is real, unscoped work, not something
+Checkpoint 2 quietly worked around.
+
 ### Additional assertion — retraction propagates
 
 After A15, retract one node that supports a judgement. The judgement is flagged for review

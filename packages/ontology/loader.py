@@ -19,6 +19,8 @@ import yaml
 
 from schemas.domain import (
     DATA_CHANNELS,
+    NOT_SAME_AS,
+    SAME_AS,
     SYSTEM_EDGE_TYPES,
     EdgeTypeDef,
     EntityTypeDef,
@@ -30,9 +32,35 @@ from .errors import OntologyError
 _SCHEMA_PATH = Path(__file__).resolve().parent / "schema" / "ontology.schema.json"
 _DEFAULT_PATH = Path(__file__).resolve().parent / "default.yaml"
 
+#: `SAME_AS` alone gets a declared `score` property — `01_DOMAIN_MODEL.md`
+#: §4: "Splink runs over the source-fidelity nodes and writes `SAME_AS`
+#: edges carrying the Fellegi-Sunter match probability... A manual link is
+#: a `SAME_AS` with score 1.0." A real, previously-undiscovered gap found
+#: while building the geocoder (`services/geocoder/match.py`, Phase 5
+#: Checkpoint 3c): the ontology's schema-validation layer
+#: (`packages/ontology/validation.py`) rejects any edge property not
+#: declared here, and this system edge type declared none at all — so no
+#: `SAME_AS` writer, including Splink's own eventual one, could ever have
+#: written the score the domain model's own prose requires. `NOT_SAME_AS`
+#: needs no score — a manual split is a boolean assertion, never scored.
+#: `resolution_run`/the comparison vector §4 also mentions are Splink's
+#: own eventual, richer property set (Phase 6) — not added speculatively
+#: here ahead of that real implementation.
+_SYSTEM_EDGE_PROPERTIES: dict[str, list[dict[str, object]]] = {
+    SAME_AS: [{"name": "score", "type": "float"}],
+    NOT_SAME_AS: [],
+}
+
 _SYSTEM_EDGE_DEFS: dict[str, EdgeTypeDef] = {
     name: EdgeTypeDef.model_validate(
-        {"name": name, "from": ["*"], "to": ["*"], "directed": False, "system": True}
+        {
+            "name": name,
+            "from": ["*"],
+            "to": ["*"],
+            "directed": False,
+            "system": True,
+            "properties": _SYSTEM_EDGE_PROPERTIES[name],
+        }
     )
     for name in SYSTEM_EDGE_TYPES
 }

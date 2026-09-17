@@ -1,0 +1,44 @@
+# Reports as Document entities — 08_ACCEPTANCE_SCENARIOS.md Scenario A /
+# A6: "229 associated reports of which 68 carry structured detail." Every
+# row creates a Document; the `mentioner` Person ref and the MENTIONED_IN
+# edge are both gated on `mentioned_prison_number` being non-empty
+# (`when: not_null`) — the 161 unstructured reports have no mentioned
+# person at all, and an empty bound field is otherwise a rejected row
+# (`services/ingest/engine.py`'s `_resolve_binding`), not an omitted one.
+id: hmp-reports
+version: 1
+label: "HMP fixture — reports"
+connector:
+  profile: hmp-fixture-generic
+ontology_version: 9
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: hmp-hollywood, owning_unit: hmp-hollywood}
+
+row_template:
+  entities:
+    - ref: report
+      pole_class: object
+      type: Document
+      on_match: create
+      properties:
+        title: {field: title}
+    - ref: mentioner
+      pole_class: person
+      type: Person
+      match_on: prison_number
+      on_match: reference
+      when: {field: mentioned_prison_number, is: not_null}
+      properties:
+        prison_number: {field: mentioned_prison_number}
+        family_name: {field: mentioned_family_name}
+        given_names: {field: mentioned_given_names}
+  edges:
+    - type: MENTIONED_IN
+      from: mentioner
+      to: report
+      when: {field: mentioned_prison_number, is: not_null}
+
+unmapped_fields:
+  - {field: report_ref, action: ignore, note: "A fixture-local row id; not loaded as a property"}

@@ -9,6 +9,11 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
+# Conduit's local persistent analytics store (services/api/config.py's
+# ANALYTICS_DB_PATH default, Phase 5 Checkpoint 2) — dev-machine data, not
+# something to commit.
+/data/
+
 # Node
 node_modules/
 apps/workspace/dist/

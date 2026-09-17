@@ -6,10 +6,11 @@ ingest path: connector → recipe engine → Parquet staging → `GraphPort`.
 `geometry_ref` against what `geometry_reference()` independently computes
 for the same source coordinate, and separately prove the matching
 `GeometryRecord` round-trips through the analytics store's reference
-partition. The recipe engine does not write that record itself yet (the
-same stated gap as `EventRecord` — see `services/ingest/__main__.py`), so
-each test constructs and seeds it directly, the way a later write path
-will.
+partition via `AnalyticsPort.load_geometries`/`get_geometry` (Phase 5). The
+recipe engine does not call that write path itself yet (the same stated
+gap as `EventRecord` — see `services/ingest/__main__.py`), so each test
+constructs and loads the record directly, the way a gazetteer connector's
+write path will.
 """
 
 from __future__ import annotations
@@ -22,13 +23,13 @@ from services.ingest.connectors.csv_connector import read_csv
 from services.ingest.engine import run_recipe
 from services.ingest.recipe_loader import load_recipe
 
-from adapters.analytics_duckdb.testing import duckdb_adapter, read_geometry
+from adapters.analytics_duckdb.testing import duckdb_adapter
 from adapters.graph_arcadedb.testing import arcadedb_adapter
 from knowledge_adapters.coordinates import geometry_reference, reproject_point
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from schemas.analytics import GeometryRecord
-from schemas.domain import Principal
+from schemas.domain import Handling, Principal
 
 FIXTURES = Path(__file__).resolve().parents[1] / "scenarios" / "fixtures"
 
@@ -83,14 +84,20 @@ async def test_british_national_grid_locations_carry_a_geometry_ref_not_coordina
         lon, lat = reproject_point(532106.0, 181020.0, source_crs="EPSG:27700")
         record = GeometryRecord(
             geometry_ref=expected_ref,
+            version=1,
             lon=lon,
             lat=lat,
             source_crs="EPSG:27700",
             source_x=532106.0,
             source_y=181020.0,
+            handling=Handling(
+                classification="OFFICIAL", handling_code="P", owning_unit="unit-1",
+                originator="unit-1",
+            ),
         )
-        async with duckdb_adapter([], scheme, geometries=[record]) as analytics:
-            stored = read_geometry(analytics, expected_ref)
+        async with duckdb_adapter([], scheme) as analytics:
+            await analytics.load_geometries([record])
+            stored = await analytics.get_geometry(expected_ref, CLEARED)
             assert stored is not None
             # Trafalgar Square, London — not merely "some longitude and latitude".
             assert stored.lon == pytest.approx(-0.0976, abs=1e-3)

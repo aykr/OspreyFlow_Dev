@@ -1,0 +1,8 @@
+{
+  "tilejson": "3.0.0",
+  "name": "OS Open Zoomstack",
+  "attribution": "Contains OS data © Crown copyright and database right",
+  "scheme": "xyz",
+  "minzoom": 0,
+  "maxzoom": 20
+}

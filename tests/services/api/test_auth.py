@@ -41,6 +41,8 @@ def _config(jwks_url: str, **overrides: object) -> ApiConfig:
         oidc_algorithms=("RS256",),
         oidc_jwks_ttl_seconds=300.0,
         supersede_job_degree_threshold=500,
+        osprey_config_path="osprey.yaml",
+        analytics_db_path=":memory:",
     )
     defaults.update(overrides)
     return ApiConfig(**defaults)  # type: ignore[arg-type]

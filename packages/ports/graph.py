@@ -105,7 +105,17 @@ class GraphPort(Protocol):
         `PatternQuery` has no property-value predicate, only an entity
         type. Added in Phase 2, without raising the gap first, the same way
         Phase 1 added transactions and schema management beyond
-        `00_ARCHITECTURE.md` §2.1's illustrative snippet."""
+        `00_ARCHITECTURE.md` §2.1's illustrative snippet.
+
+        Takes no `tx`: it always reads committed state. A node written via
+        `upsert_nodes(..., tx)` under a still-open transaction is **not**
+        guaranteed visible to `find_node` until that transaction commits —
+        confirmed empirically against the ArcadeDB adapter (Phase 5's HMP
+        fixture work, `tests/scenarios/fixtures/hmp_graph.py`), which does
+        not offer read-your-writes within one open transaction. A caller
+        that needs an `on_match: reference` lookup to see an earlier write
+        in the same batch must commit between the write and the lookup, not
+        assume `find_node` sees into an open transaction."""
         ...
     async def search_nodes(
         self, query: str, principal: Principal, *, limit: int = 20
@@ -137,6 +147,34 @@ class GraphPort(Protocol):
         identifier matches but whose handling excludes `principal` must not
         appear, count toward `limit`, or otherwise be detectable — the same
         existence-leak discipline `find_node` itself already proves."""
+        ...
+
+    async def suggest_locations(
+        self, name: str, principal: Principal, *, limit: int = 20
+    ) -> list[Node]:
+        """The geocoder's own candidate retrieval (`07_BUILD_PLAN.md`'s
+        Phase 5 known-gaps list) — `services/geocoder/
+        match.py`'s `match_place_mention` scores caller-supplied
+        candidates but has never had a way to find its own; this closes
+        that gap for `Location.name` specifically.
+
+        **Deliberately not `search_nodes`, and not full text.**
+        `search_nodes` (above) is exact-identifier match, generalised
+        across every entity type's `identifiers` — extending it to fuzzy/
+        prefix matching would break its own documented contract and, per
+        its docstring, "fight the boundary" `03_CONDUIT_MIDDLEWARE.md`
+        §3.3 and `04_VAULT_BACKEND.md` draw around full text and
+        embeddings living in OpenSearch (Phase 6+/8, not wired into any
+        deployment profile yet). This method does not build that
+        capability either: it is a coarse, bounded, graph-native prefix/
+        substring scan over `Location.name` only — not a Lucene/full-text
+        index, no relevance scoring, no tokenisation pipeline — proportionate
+        to the geocoder's own "not Splink-grade" scope (`services/geocoder/
+        match.py`), which re-scores whatever this returns with `difflib`.
+
+        Access-filtered exactly like every other read: a `Location` whose
+        `handling` excludes `principal` must not appear, count toward
+        `limit`, or otherwise be detectable."""
         ...
 
     async def expand(self, req: ExpandRequest, principal: Principal) -> Subgraph: ...

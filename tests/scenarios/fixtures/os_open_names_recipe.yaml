@@ -1,0 +1,34 @@
+# Recipe for OS Open Names — `docs/07_BUILD_PLAN.md` Phase 5 Checkpoint 3c.
+# Reuses the generic CSV connector (`services/ingest/connectors/
+# csv_connector.py`) directly — no bespoke connector module, since OS Open
+# Names' real distribution format is plain CSV. Coordinates are British
+# National Grid (EPSG:27700), the same reprojection path
+# `geo_bng_recipe.yaml` already proves.
+id: os-open-names-gazetteer
+version: 1
+label: "OS Open Names (UK place-name gazetteer)"
+connector:
+  profile: geo-generic-csv
+  delimiter: ","
+  encoding: utf-8
+  header_rows: 1
+  source_crs: "EPSG:27700"
+ontology_version: 9
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-1, owning_unit: unit-1}
+
+row_template:
+  entities:
+    - ref: place
+      pole_class: location
+      type: Location
+      match_on: os_place_id
+      on_match: reference
+      properties:
+        os_place_id: {field: ID}
+        name: {field: NAME1}
+        geometry_ref: {fields: [GEOMETRY_X, GEOMETRY_Y], transform: geometry_ref}
+
+unmapped_fields: []

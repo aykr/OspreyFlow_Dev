@@ -64,6 +64,8 @@ def _resolver(jwks_url: str) -> PrincipalResolver:
             oidc_algorithms=("RS256",),
             oidc_jwks_ttl_seconds=300.0,
             supersede_job_degree_threshold=500,
+            osprey_config_path="osprey.yaml",
+            analytics_db_path=":memory:",
         )
     )
 
@@ -113,6 +115,8 @@ async def test_the_header_wins_when_both_are_present() -> None:
                 oidc_algorithms=("RS256",),
                 oidc_jwks_ttl_seconds=300.0,
                 supersede_job_degree_threshold=500,
+                osprey_config_path="osprey.yaml",
+                analytics_db_path=":memory:",
             )
         ),
         headers={"authorization": "Bearer not-a-real-token"},

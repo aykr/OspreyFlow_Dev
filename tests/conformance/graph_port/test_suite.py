@@ -365,6 +365,44 @@ async def test_expand_reaches_further_nodes_as_depth_increases(
             assert reached == set(node_ids[: depth + 1])
 
 
+async def test_expand_edge_types_filters_to_the_declared_type(
+    factory: GraphAdapterFactory,
+) -> None:
+    """`ExpandRequest.edge_types` had no conformance test at all before
+    this — a real gap, not a hypothetical one: the ArcadeDB adapter's own
+    query builder rendered `.hasLabel(['a'])` (a single Groovy *list*
+    argument), which `hasLabel` — a varargs step, `hasLabel('a','b')` — 500s
+    on, with no clearer error than `CommandExecutionException`. Found by
+    Phase 5's HMP fixture work asking `expand` to filter to `PRESENT_AT`
+    specifically, not by this suite. Two edge types from the hub, filtered
+    to one, proves both that the filter is real and that it is not merely
+    "no filter, everything passes"."""
+    async with factory.context() as adapter:
+        (hub, via_present_at, via_uses), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL"),
+                _node("Location", classification="OFFICIAL"),
+                _node("Endpoint", classification="OFFICIAL"),
+            ],
+            [],
+        )
+        await _write(
+            adapter,
+            [],
+            [
+                _edge("PRESENT_AT", hub, via_present_at, classification="OFFICIAL"),
+                _edge("USES", hub, via_uses, classification="OFFICIAL"),
+            ],
+        )
+
+        subgraph = await adapter.expand(
+            ExpandRequest(node_ids=[hub], depth=1, edge_types=["PRESENT_AT"]), CLEARED,
+        )
+        reached = {n.id for n in subgraph.nodes}
+        assert reached == {hub, via_present_at}
+
+
 # --- expand_candidate_count (01_DOMAIN_MODEL.md §8.2 / filtered_count) ------
 
 
@@ -475,6 +513,36 @@ async def test_paths_finds_the_chain_and_respects_max_hops(
             PathRequest(source=node_ids[0], target=node_ids[3], max_hops=2, k=1), CLEARED
         )
         assert too_short == []
+
+
+async def test_paths_edge_types_filters_to_the_declared_type(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The same `hasLabel` varargs-not-list bug
+    `test_expand_edge_types_filters_to_the_declared_type` documents,
+    `PathBuilder` had its own copy of. A path only exists through the
+    `ASSOCIATE_OF` edge; filtering to `USES` must find nothing, not error
+    and not silently ignore the filter."""
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL"),
+                _node("Person", classification="OFFICIAL"),
+            ],
+            [],
+        )
+        await _write(adapter, [], [_edge("ASSOCIATE_OF", a, b, classification="OFFICIAL")])
+
+        via_correct_type = await adapter.paths(
+            PathRequest(source=a, target=b, max_hops=3, k=1, edge_types=["ASSOCIATE_OF"]), CLEARED,
+        )
+        assert len(via_correct_type) == 1
+
+        via_wrong_type = await adapter.paths(
+            PathRequest(source=a, target=b, max_hops=3, k=1, edge_types=["USES"]), CLEARED,
+        )
+        assert via_wrong_type == []
 
 
 # --- pattern match ------------------------------------------------------------
@@ -678,6 +746,67 @@ async def test_unauthorised_search_matches_a_graph_where_the_node_never_existed(
             adapter, [_node("Person", classification="SECRET", nino="AB123456C")], []
         )
         assert await adapter.search_nodes("AB123456C", OFFICIAL) == []
+
+
+# --- suggest_locations (07_BUILD_PLAN.md Phase 5 known-gaps closure) --------
+#
+# The geocoder's own candidate retrieval — a coarse, bounded substring scan
+# over Location.name, deliberately separate from search_nodes's exact-match
+# contract above (see GraphPort.suggest_locations's own docstring).
+
+
+async def test_suggest_locations_matches_a_substring_of_the_name(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (cranford_id,), _ = await _write(
+            adapter, [_node("Location", classification="OFFICIAL", name="Cranford")], []
+        )
+        (cranbrook_id,), _ = await _write(
+            adapter, [_node("Location", classification="OFFICIAL", name="Cranbrook")], []
+        )
+        await _write(
+            adapter, [_node("Location", classification="OFFICIAL", name="Oxford")], []
+        )
+
+        hits = await adapter.suggest_locations("Cran", CLEARED)
+
+        assert {n.id for n in hits} == {cranford_id, cranbrook_id}
+
+
+async def test_suggest_locations_respects_the_limit(factory: GraphAdapterFactory) -> None:
+    async with factory.context() as adapter:
+        for name in ("Cranford", "Cranbrook", "Cranleigh"):
+            await _write(
+                adapter, [_node("Location", classification="OFFICIAL", name=name)], []
+            )
+
+        hits = await adapter.suggest_locations("Cran", CLEARED, limit=2)
+
+        assert len(hits) == 2
+
+
+async def test_suggest_locations_with_no_match_returns_empty(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        await _write(
+            adapter, [_node("Location", classification="OFFICIAL", name="Oxford")], []
+        )
+        assert await adapter.suggest_locations("Cran", CLEARED) == []
+
+
+async def test_unauthorised_suggest_locations_matches_a_graph_where_the_node_never_existed(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Existence-leak discipline, same as `search_nodes`'s own: a SECRET
+    Location whose name matches is invisible to an OFFICIAL principal, and
+    does not shrink `limit`'s effective headroom for visible results."""
+    async with factory.context() as adapter:
+        await _write(
+            adapter, [_node("Location", classification="SECRET", name="Cranford")], []
+        )
+        assert await adapter.suggest_locations("Cran", OFFICIAL) == []
 
 
 # --- edge summarisation, weight, and the load-ledger stamp ------------------

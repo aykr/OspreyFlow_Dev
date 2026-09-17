@@ -1,0 +1,38 @@
+# Recipe for the OSM-derived gazetteer connector — 00_ARCHITECTURE.md
+# §1.2's tier-1 gazetteer row, 07_BUILD_PLAN.md Phase 5.
+#
+# OSM coordinates are already WGS84 (EPSG:4326) — source_crs is still
+# declared, same as any other connector, rather than treated as a special
+# case with no CRS at all (01_DOMAIN_MODEL.md §7.1: "these connectors
+# consume [reprojection], they do not rebuild it").
+#
+# Where a shipped, production copy of this recipe should live (as opposed
+# to this fixture copy, used by the connector's own end-to-end test) is
+# not yet decided — the local-basemap build script/`osprey geo build`
+# equivalent that would run it in a real deployment is still an open item
+# in this same checkpoint. Recorded here rather than assumed.
+id: osm-gazetteer
+version: 1
+label: "OSM-derived gazetteer (tier 1)"
+connector:
+  profile: geo-osm-pbf
+  source_crs: "EPSG:4326"
+ontology_version: 9
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-1, owning_unit: unit-1}
+
+row_template:
+  entities:
+    - ref: place
+      pole_class: location
+      type: Location
+      match_on: osm_id
+      on_match: reference
+      properties:
+        osm_id: {field: osm_id}
+        name: {field: name}
+        geometry_ref: {fields: [lon, lat], transform: geometry_ref}
+
+unmapped_fields: []

@@ -219,11 +219,88 @@ docstring.
 - Cross-filter wiring: timeline ↔ canvas ↔ map ↔ histograms, all directions.
 - Filter panel with the histogram cross-filter pattern.
 
-**Exit.** Acceptance scenario A (`08_ACCEPTANCE_SCENARIOS.md`) passes end to end on the tier 1
-default provider with no network access, including the weekend and time-of-day findings and the
-site-grid hotspot, without a code change specific to the scenario. Swapping the default provider
-to tier 2 and re-running the scenario changes nothing analytically and `osprey verify map`
-passes.
+**Phase 5 known gaps (consolidated from Checkpoints 3a–3c's own implementation notes into one
+list, so the next phase's scoping reads this instead of reconstructing it from three
+checkpoints' worth of scattered notes).** Ordered roughly by how much unbuilt work each implies:
+
+- **`MapProvider.endpoint` is asked to be two incompatible URL shapes at once, for a real RESTful
+  WMTS service — found live by running `verify_map`, not assumed.** `services/api/tile_proxy.py`'s
+  `build_upstream_url` needs it as a `{z}`/`{x}`/`{y}`-templated tile URL; `services/api/
+  tier4_registration.py`'s `register_tier4_provider` (and `verify_map`'s own CRS check) needs it as
+  a bare WMTS base URL it appends `?SERVICE=WMTS&REQUEST=GetCapabilities` to. Checkpoint 3b's and
+  3c's own tests each passed in isolation because each used a differently-shaped `endpoint`
+  fixture — the conflict only surfaced once both were run against the same live provider. **Not
+  fixed.** A real WMTS KVP-encoding path (query parameters instead of path placeholders) would let
+  both share one bare base URL; flagged in both modules' own docstrings.
+- **There is no polygon-geometry storage anywhere** (`AnalyticsPort`/`GeometryRecord` is point-only).
+  Two consequences, both unbuilt: rendering a real Boundary-Line-derived polygon as a map overlay,
+  and filtering by *selecting* an existing jurisdiction boundary. Only the *drawn*, transient,
+  browser-only boundary filter is built (`apps/workspace/src/map/BoundaryFilterTool.tsx`), since it
+  needs no polygon storage. That drawn filter is itself scoped to the current working set (≤50k
+  nodes, the same scope `MapView`'s own coordinate resolution already has), not every `Location` in
+  the investigation — a server-side spatial predicate would be the scalable design for a very large
+  investigation's `Location` population.
+- **Tile prefetch is read-through-cache only.** `services/api/tile_cache.py` caches a tile the
+  first time it's requested; `PrefetchCache.prefetch_areas` (warming a named area of operations
+  ahead of time, a distinct feature from caching on read) is not built.
+- **The in-deployment geocoder (`services/geocoder/match.py`) is not Splink-grade and cannot find
+  its own candidates.** stdlib `difflib.SequenceMatcher.ratio()` on `Location.name` stands in for
+  Fellegi-Sunter matching — proportionate to demonstrating the match-and-link mechanism, not a
+  claim to be the real Splink integration (`services/resolve/`, still Phase 6). Candidate
+  retrieval is explicitly the caller's job: `GraphPort.search_nodes` has no fuzzy name search, so
+  there is no honest way for this module to supply its own candidates yet — Phase 6's extraction
+  pipeline is the eventual real caller, and whatever search mechanism it builds is what closes
+  this gap.
+- **Tier-4 capabilities parsing covers WMTS only, not WMS/WFS/OGC API – Features** — a direct
+  narrowing of the build-plan bullet's literal wording (line 194 above). Both shipped Checkpoint
+  3a profiles (`providers/os-open-zoomstack.yaml`, `providers/usgs-national-map.yaml`) use
+  `mvt`/`wmts`; WFS/OGC-Features capabilities describe feature types for entity creation (a
+  gazetteer-connector-shaped job, not this phase's tile/zoom concern) and WMS's capabilities XML is
+  a different shape needing its own parser. The same mechanism
+  (`services/api/tier4_registration.py`) would extend to those formats later.
+- **`kind: image`/`kind: dem` at the provider-registry level are not built.** Neither this
+  bullet list nor `00_ARCHITECTURE.md` §1.2 names a schema field for an `image` provider's corner
+  coordinates, and MapLibre's native `image` source needs them explicitly — it cannot read a
+  GeoTIFF's own embedded georeferencing, and there is no GeoTIFF-parsing code anywhere in the repo.
+  This is a different, unsolved input shape from the already-built Checkpoint 1 site-geospatial
+  wizard (`site/siteLayer.ts`), which takes an analyst-uploaded plain image plus manually-placed
+  control points. `kind: dem` has zero worked example anywhere in the docs. Both need a schema
+  addition plus real image-processing work; no checkpoint in this phase owns that.
+- **Smaller, lower-priority items:**
+  - The tile-proxy endpoint template's credential placeholder is named `{credential}` —
+    `services/api/tile_proxy.py`'s own naming choice; neither `MapProvider`'s schema nor this doc
+    states how a tier-4 endpoint template should name its credential slot.
+  - WMTS zoom range is read off a `TileMatrix`'s `Identifier` values directly — correct for the
+    common `GoogleMapsCompatible` tile matrix set both shipped profiles use, not a general
+    scale-denominator mapping for an arbitrary tile matrix set.
+  - The map contrast-floor Verify check (`apps/workspace/map-verify/`) covers dark theme only —
+    the light MapLibre style is a separate, already-named, not-yet-built follow-up. Its Playwright
+    baseline screenshot (the first pixel-comparison test in the repo) was generated on macOS; a CI
+    runner on a different OS needs its own baseline regenerated there once.
+
+One item surfaced this phase was a genuine defect, not a gap, and **was fixed rather than
+deferred**: the system-injected `SAME_AS` edge type declared no `properties` at all, so no
+`SAME_AS` writer — including Splink's own eventual one — could ever have written the match score
+`01_DOMAIN_MODEL.md` §4 itself requires. Found live while first verifying the geocoder against a
+real ArcadeDB (a fake `GraphPort` unit test could not have caught it); fixed in
+`packages/ontology/loader.py` (`_SYSTEM_EDGE_PROPERTIES`). Recorded here only so a future reader
+doesn't mistake it for still-open.
+
+**Exit.** Acceptance scenario A (`08_ACCEPTANCE_SCENARIOS.md`), **scoped to A1–A11**, passes end to
+end on the tier 1 default provider with no network access, including the weekend and time-of-day
+findings and the site-grid hotspot, without a code change specific to the scenario. Swapping the
+default provider to tier 2 and re-running the scenario changes nothing analytically and `osprey
+verify map` passes.
+
+The full scenario, as originally written, is not satisfiable in phase order: A12 needs the Clique
+Metric (`ComputePort`, Phase 7), and A13–A15 need Assessment objects, export and the handling gate
+(Phase 8) — none of which exist yet when this phase lands. This is a correction to the scenario's
+phase attribution, not a narrowing of what the platform must eventually do: A12 is re-proven
+against this same HMP fixture when Phase 7 lands (its own exit criterion, below, says so), and
+A13–A15 plus the full scenario end-to-end (including the retraction-propagates assertion after
+A15) are exactly what Phase 8's "both acceptance scenarios pass unchanged" already implies. See
+ADR-019 (`06_DECISIONS.md`) for why this was originally written as if Phase 5 alone completed the
+scenario, and why splitting it across three phases is the correct fix rather than a workaround.
 
 ---
 
@@ -284,7 +361,9 @@ conflict is recorded for review.
 
 **Exit.** Acceptance scenario B passes end to end. The Clique Metric ranks the insular-cluster
 fixture node above the broad-hub fixture node, and all three compute tiers return identical
-values within tolerance.
+values within tolerance. A12 (Phase 5's exit criterion, scoped to A1–A11, deferred this one
+step here per ADR-019) is re-proven against the same HMP fixture: the Clique Metric identifies
+the same insular subgroup Phase 5 already surfaced by other means.
 
 ---
 

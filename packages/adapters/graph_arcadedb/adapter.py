@@ -61,6 +61,7 @@ from .builders import (
     NeighbourhoodStatsBuilder,
     PathBuilder,
     SearchNodesBuilder,
+    SuggestLocationsBuilder,
 )
 from .client import ArcadeDBClient
 from .gremlin_literals import (
@@ -420,6 +421,13 @@ class GraphArcadeDBAdapter:
         if not identifier_fields:
             return []
         builder = SearchNodesBuilder(identifier_fields, query, limit=limit)
+        results = await self._client.gremlin(builder.render_gremlin(self._access, principal))
+        return [node_from_element_map(r) for r in results]
+
+    async def suggest_locations(
+        self, name: str, principal: Principal, *, limit: int = 20
+    ) -> list[Node]:
+        builder = SuggestLocationsBuilder(name, limit=limit)
         results = await self._client.gremlin(builder.render_gremlin(self._access, principal))
         return [node_from_element_map(r) for r in results]
 

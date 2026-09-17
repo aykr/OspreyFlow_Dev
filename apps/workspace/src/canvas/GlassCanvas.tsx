@@ -29,6 +29,7 @@ import Sigma from "sigma";
 import { useEffect, useRef, useState } from "react";
 
 import type { EdgeTypeDef } from "../../../../packages/schemas/generated";
+import { pointInPolygon } from "../map/geometry";
 import type { OntologyRegistry } from "../ontology/schema";
 import type {
   WorkingSetEdgeAttributes,
@@ -78,6 +79,11 @@ export interface GlassCanvasProps {
   investigationId: string;
   apiBaseUrl: string;
   bearerToken: string;
+  /** Node ids the active cross-filter excludes (`crossfilter/store.ts`) —
+   * dimmed, never removed, per `docs/02_GLASS_FRONTEND.md` §2 rule 2.
+   * Defaults to an empty set so this prop stays optional for any caller
+   * that hasn't wired cross-filtering (e.g. an existing test harness). */
+  dimmedNodeIds?: ReadonlySet<string>;
   onSelectionChange?: (nodeIds: string[]) => void;
   /** The keyboard-focused node id (`docs/02_GLASS_FRONTEND.md` §6: "Tab
    * moves between nodes... arrow keys walk edges"), or `null` when
@@ -96,6 +102,14 @@ interface PendingRadialMenu {
   layout: "radial" | "list";
 }
 
+// A stable reference, not `new Set()` inline in a default parameter — the
+// same reason `App.tsx`'s `EMPTY_NODE_COORDINATES` exists: a fresh Set on
+// every render would change `dimmedNodeIds`' identity every time, and it
+// feeds a `useEffect` dependency array below (found and fixed once this
+// phase as a real infinite-render bug in `MapView`'s own `nodeCoordinates`
+// prop, not a hypothetical this time either).
+const EMPTY_DIMMED_SET: ReadonlySet<string> = new Set();
+
 export function GlassCanvas({
   graph,
   store,
@@ -104,6 +118,7 @@ export function GlassCanvas({
   investigationId,
   apiBaseUrl,
   bearerToken,
+  dimmedNodeIds = EMPTY_DIMMED_SET,
   onSelectionChange,
   onFocusChange,
 }: GlassCanvasProps) {
@@ -129,7 +144,7 @@ export function GlassCanvas({
     const visual = ontology.visualFor(node.type);
     if (!visual) return;
     const attrs = computeNodeGraphAttributes(node, visual, {
-      dimmed: false,
+      dimmed: dimmedNodeIds.has(nodeId),
       filteredOut: false,
       hovered: hovered === nodeId,
       selected: selected.has(nodeId),
@@ -172,6 +187,15 @@ export function GlassCanvas({
     sigmaRef.current?.scheduleRefresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, hovered]);
+
+  // A cross-filter update can dim or un-dim *any* node in the working set,
+  // not just ones already selected/hovered/bordered — unlike the effect
+  // above, this one has to sweep every node rather than skip most of them.
+  useEffect(() => {
+    graph.forEachNode((key) => refreshNodeVisualState(key));
+    sigmaRef.current?.scheduleRefresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dimmedNodeIds]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -416,15 +440,3 @@ export function GlassCanvas({
   );
 }
 
-function pointInPolygon(point: { x: number; y: number }, polygon: { x: number; y: number }[]): boolean {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const pi = polygon[i]!;
-    const pj = polygon[j]!;
-    const intersects =
-      pi.y > point.y !== pj.y > point.y &&
-      point.x < ((pj.x - pi.x) * (point.y - pi.y)) / (pj.y - pi.y) + pi.x;
-    if (intersects) inside = !inside;
-  }
-  return inside;
-}

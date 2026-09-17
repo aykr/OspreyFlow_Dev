@@ -1,4 +1,4 @@
-.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check conformance-guard conformance test dev-up dev-down test-all glass-perf glass-a11y glass-keyboard
+.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check conformance-guard conformance test dev-up dev-down test-all glass-perf glass-a11y glass-keyboard glass-map-verify
 
 PY := .venv/bin/python
 PYTEST := .venv/bin/pytest
@@ -57,7 +57,7 @@ conformance:
 	$(PYTEST) tests/conformance/graph_port tests/ingest
 
 test:
-	$(PYTEST) --ignore=tests/conformance/graph_port --ignore=tests/ingest
+	$(PYTEST) --ignore=tests/conformance/graph_port --ignore=tests/ingest --ignore=tests/scenarios/test_hmp_graph.py --ignore=tests/services/api/test_sites_store.py --ignore=tests/services/api/test_tile_cache.py --ignore=tests/services/api/test_prefetch.py --ignore=tests/geocoder/test_match_live.py
 	npm test --workspace apps/workspace
 
 # Phase 3 (docs/07_BUILD_PLAN.md): "Add make dev-up bringing up ArcadeDB,
@@ -78,7 +78,7 @@ dev-down:
 # test:integration` (apps/workspace) is here too, not in `make test` — its
 # `deltaClient.integration.test.ts` needs the same dev-up stack.
 test-all:
-	$(PYTEST) tests/conformance/graph_port tests/ingest tests/scenarios/test_phase3_working_set.py tests/services/api/test_valkey_store.py tests/services/api/test_statelessness.py
+	$(PYTEST) tests/conformance/graph_port tests/ingest tests/scenarios/test_phase3_working_set.py tests/scenarios/test_hmp_graph.py tests/services/api/test_valkey_store.py tests/services/api/test_statelessness.py tests/services/api/test_sites_store.py tests/services/api/test_tile_cache.py tests/services/api/test_prefetch.py tests/geocoder/test_match_live.py
 	npm run test:integration --workspace apps/workspace
 
 # `docs/02_GLASS_FRONTEND.md` §5's performance budget, as a CI gate
@@ -99,3 +99,11 @@ glass-a11y:
 # that never calls `page.mouse`/`.click()`.
 glass-keyboard:
 	npm run test:keyboard --workspace apps/workspace
+
+# `docs/00_ARCHITECTURE.md` §1.2.1's Verify contrast-floor check — a
+# rendered-pixel/reference-image comparison of a fixture graph over the
+# basemap's own chrome colours (`apps/workspace/map-verify/contrast.spec.ts`),
+# genuinely different from `glass-a11y`'s axe-core DOM-rule check. Dark
+# theme only for now — see `map-verify/showcase.tsx`'s own docstring.
+glass-map-verify:
+	npm run test:map-verify --workspace apps/workspace

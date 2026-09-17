@@ -201,6 +201,19 @@ Four source kinds cover the field: `vector` (PMTiles or MVT), `raster` (XYZ, WMT
 Every provider the registry lists appears in the map's layer control; the analyst switches
 freely, and attribution and any licence note follow the layer onto every export.
 
+**`kind: image` here is a different mechanism from a site plan as reference geodata** (the
+"Geospatial reference data as entities" table below, "Site plans" row). This entry is
+ops-provisioned, deployment-wide config: an already-georeferenced raster (a GeoTIFF with its own
+embedded control points, or otherwise pre-registered) that a deployment drops into `osprey.yaml`
+ahead of time, the same way any other provider is. It is not how an analyst's own uploaded site
+photo becomes calibrated or becomes `Location` entities — that is a per-investigation capability
+built on the connector framework (`services/api/sites.py`, `services/ingest/connectors/geo/
+site_grid.py`), producing its own georeferencing live from control points the analyst places, and
+it does not touch this registry at all. The two can describe the same physical site without
+being the same object: a site an analyst has calibrated once could, later, be promoted to a
+`kind: image` entry for other investigations to reuse as a basemap layer — but that promotion
+step does not exist yet, and nothing does it silently.
+
 Swapping the default at implementation time is three actions on the admin console's Geospatial
 screen — add the provider, make it the default, run **Verify** — or the same three headlessly
 (`05_DEPLOYMENT.md` §2.3). No rebuild, no code change, no migration. Existing investigations keep working because nothing
@@ -277,6 +290,17 @@ one, which is the point of the format.
 | Commercial | ESRI ArcGIS Online, Mapbox, MapTiler |
 | Open hosted | OpenFreeMap, Protomaps |
 | Self-hosted | GeoServer, QGIS Server, TileServer GL, Martin, pg_tileserv |
+
+**Implementation note (Phase 5 Checkpoint 3a) — OS Open Zoomstack appears twice, deliberately,
+not by inconsistency.** The tier-2 table above lists it as a local drop-in ("nothing needed",
+air-gapped); the UK profile group here lists it again. These are two different consumption paths
+for the same open dataset, not a duplicate entry to reconcile: a deployment that downloads
+Zoomstack once and serves it from a local PMTiles file uses the tier-2 path (`osprey.yaml`'s own
+`kind: vector` / `source: file://...` entry, no credential); a deployment that fetches it live
+from OS Data Hub's own vector tile API instead uses the profile path
+(`providers/os-open-zoomstack.yaml`), since OS Data Hub still requires a free API key for
+rate-limiting even on fully open products — an `auth`/`endpoint` shape only a profile declares.
+Both stay `redistributable: true` / `client_scope: open` under OGL either way.
 
 ESRI stays in a narrowed list because a large share of US state and local agencies are already
 ESRI shops with an existing enterprise licence, which usually makes tier 4 against their own
@@ -450,6 +474,11 @@ is a configuration change.
 This is the part that was missing. Basemaps are pictures; a gazetteer is data, and the platform
 needs both. Reference geodata is ingested through the ordinary connector framework and becomes
 `Location` entities and lookup tables, so it participates in search, resolution and traversal.
+
+**"Site plans" here (the row below) is a distinct mechanism from `kind: image` above** — the
+provider registry is a picture, this table is data, and a site plan is deliberately both at
+once but through two separate paths: see the callout under "Four source kinds cover the field"
+above for what stays separate and why.
 
 | Source | Format | What it becomes | Note |
 | --- | --- | --- | --- |

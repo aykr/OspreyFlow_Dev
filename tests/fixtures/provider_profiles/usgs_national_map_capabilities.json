@@ -1,0 +1,10 @@
+{
+  "service": "WMTS",
+  "layers": ["USGSTopo", "USGSImageryOnly", "USGSShadedReliefOnly", "USGSHydroCached"],
+  "tile_matrix_set": {
+    "projection": "EPSG:3857",
+    "min_zoom": 0,
+    "max_zoom": 16
+  },
+  "attribution": "USGS The National Map"
+}

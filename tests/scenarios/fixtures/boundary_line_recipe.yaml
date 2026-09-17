@@ -1,0 +1,44 @@
+# Recipe for Boundary-Line — `docs/07_BUILD_PLAN.md` Phase 5
+# Checkpoint 3c. Administrative areas have no single point
+# (`packages/ontology/default.yaml`'s own "a jurisdiction... must be able
+# to carry none at all" allowance) — this recipe deliberately has no
+# `geometry_ref` property mapping, unlike every other gazetteer recipe.
+#
+# `AnalyticsPort`/`GeometryRecord` gained real polygon storage in Phase 5's known-gaps closure
+# (`kind: polygon`, `geometry_wkb`, `AnalyticsPort.list_boundaries`) — but
+# binding a polygon *through this recipe* still needs a Knowledge Adapter
+# that can parse a boundary geometry (WKT/GeoJSON/a Shapefile's own ring
+# data) out of a source row and write it as `geometry_wkb`; no such adapter
+# exists yet (`geometry_ref`/`grid_ref` only handle a point's
+# reprojection). That is real, separate connector-layer work, not done
+# here — this recipe still only registers the area as a named,
+# identifiable `Location`, which is what the connector layer can honestly
+# do today.
+id: boundary-line-gazetteer
+version: 1
+label: "Boundary-Line (UK administrative-area gazetteer)"
+connector:
+  profile: geo-generic-csv
+  delimiter: ","
+  encoding: utf-8
+  header_rows: 1
+ontology_version: 9
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-1, owning_unit: unit-1}
+
+row_template:
+  entities:
+    - ref: area
+      pole_class: location
+      type: Location
+      match_on: gss_code
+      on_match: reference
+      properties:
+        gss_code: {field: GSS_CODE}
+        name: {field: NAME}
+
+unmapped_fields:
+  - {field: AREA_TYPE, action: ignore, note: "Real Boundary-Line ships a boundary-type code here; not modelled yet."}
+

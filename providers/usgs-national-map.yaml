@@ -1,0 +1,37 @@
+# Provider profile — `docs/00_ARCHITECTURE.md` §1.2's "Provider profiles"
+# subsection, `docs/07_BUILD_PLAN.md` Phase 5 Checkpoint 3a.
+#
+# USGS The National Map ships four sub-products (topo, imagery, shaded
+# relief, hydro) as one WMTS service with a `variables.layer` choice
+# between them — the same "one profile, several layer choices" shape the
+# architecture doc's own ESRI worked example uses for `variables.service`,
+# rather than four near-identical profile files.
+#
+# US federal public-domain data: no redistribution restriction, no
+# credential. Verified against
+# `tests/fixtures/provider_profiles/usgs_national_map_capabilities.json`
+# (`tests/test_shipped_provider_profiles.py`).
+id: usgs-national-map
+label: "USGS The National Map"
+vendor: "US Geological Survey"
+kind: raster
+service: wmts
+endpoint: "https://basemap.nationalmap.gov/arcgis/rest/services/{layer}/MapServer/WMTS/tile/1.0.0/{layer}/default/GoogleMapsCompatible/{z}/{y}/{x}"
+variables:
+  layer:
+    default: USGSTopo
+    options: [USGSTopo, USGSImageryOnly, USGSShadedReliefOnly, USGSHydroCached]
+auth:
+  type: none
+projection: "EPSG:3857"
+zoom:
+  min: 0
+  max: 16
+style: bundled:osprey-raster-overlay
+attribution: "USGS The National Map"
+licence:
+  id: usgs-public-domain
+  redistributable: true
+  client_scope: open
+  note: "US federal government work — public domain, no usage restriction."
+proxy: recommended

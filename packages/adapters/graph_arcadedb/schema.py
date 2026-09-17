@@ -31,8 +31,21 @@ from .client import ArcadeDBClient, ArcadeDBError
 from .gremlin_literals import groovy_identifier
 from .naming import physical_type_name
 
-_DDL_MAX_ATTEMPTS = 3
-_DDL_BACKOFF_BASE_SECONDS = 0.2
+_DDL_MAX_ATTEMPTS = 6
+_DDL_BACKOFF_BASE_SECONDS = 0.5
+# Raised from 3/0.2s in Phase 5. Investigated a wave of `IndexException` on
+# `CREATE INDEX` across the full suite; the actual root cause turned out to
+# be the *host's* Docker Desktop VM disk filling up (unrelated stopped
+# containers/volumes from other work on the machine, not this repo) —
+# ArcadeDB was hitting `IOException: No space left on device` and every
+# retry attempt failed identically because the condition wasn't transient.
+# Freeing disk space (`docker image/builder prune`) resolved the vast
+# majority of failures outright; no code change was actually the fix for
+# that incident. This widened retry is kept anyway as a reasonable general
+# hardening against genuine transient load (e.g. real heap pressure during
+# concurrent schema DDL, per the class-level docstring above) — 6 attempts
+# at 0.5s base (0.5+1+2+4+8=15.5s worst case, paid only when the server is
+# first attempt still succeeds and costs nothing extra.
 
 # ArcadeDB returns the same HTTP status (usually 500, occasionally 503) for
 # both a permanent command error and a transient server-side failure, so

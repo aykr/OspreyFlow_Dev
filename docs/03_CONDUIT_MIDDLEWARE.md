@@ -217,8 +217,10 @@ previous one, and investigations record which gazetteer version was in force.
 Geometry is stored once, not twice: the geometry column lives in the analytics store where
 spatial predicates are cheap, and the graph holds the `Location` node with a `geometry_ref`
 pointing at that row — never `lon`, `lat` or a source easting and northing as node properties.
-A `Location` with no single point, such as a jurisdiction or an administrative boundary, carries
-no `geometry_ref` at all, so coordinates can never be a required property on the type.
+A `Location` with no single point, such as a jurisdiction or an administrative boundary, can carry
+a polygon-shaped `geometry_ref` instead of a point one (`schemas/analytics.py`'s `GeometryRecord.
+kind`, Phase 5's known-gaps closure) — or none at all, so coordinates can never be a required
+property on the type.
 Putting geometry in the graph store would make spatial filtering a traversal, which is the wrong
 shape of query and constrains engine choice for no gain.
 
