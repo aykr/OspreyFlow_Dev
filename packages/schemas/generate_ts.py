@@ -26,13 +26,15 @@ from schemas.analytics import ALL_MODELS as ANALYTICS_MODELS  # noqa: E402
 from schemas.domain import ALL_MODELS as DOMAIN_MODELS  # noqa: E402
 from schemas.ingest import ALL_MODELS as INGEST_MODELS  # noqa: E402
 from schemas.mapconfig import ALL_MODELS as MAPCONFIG_MODELS  # noqa: E402
+from schemas.model import ALL_MODELS as MODEL_PORT_MODELS  # noqa: E402
 from schemas.profile import ALL_MODELS as PROFILE_MODELS  # noqa: E402
 from schemas.provider_profile import ALL_MODELS as PROVIDER_PROFILE_MODELS  # noqa: E402
 
 #: Every Pydantic model in the repo the drift gate must cover: the real
 #: domain model, `AnalyticsPort`'s real shapes, the ingest recipe and load
 #: ledger, the source profiler's shapes, the basemap provider registry,
-#: plus the stand-ins for ports not yet built.
+#: `ModelPort.extract()`'s real shapes, plus the stand-ins for ports not yet
+#: fully built.
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     *DOMAIN_MODELS,
     *ANALYTICS_MODELS,
@@ -40,6 +42,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     *PROFILE_MODELS,
     *MAPCONFIG_MODELS,
     *PROVIDER_PROFILE_MODELS,
+    *MODEL_PORT_MODELS,
     *PENDING_MODELS,
 )
 
@@ -48,7 +51,7 @@ JSON2TS = REPO_ROOT / "node_modules" / ".bin" / "json2ts"
 
 HEADER = (
     "// AUTO-GENERATED — do not edit by hand.\n"
-    "// Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py and "
+    "// Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and "
     "_pending_port_placeholders.py, via generate_ts.py\n"
 )
 

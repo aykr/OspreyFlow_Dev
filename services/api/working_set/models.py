@@ -18,7 +18,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter
 
-from schemas.domain import Edge, EdgeId, Node, NodeId
+from schemas.domain import ClusterId, Edge, EdgeId, Node, NodeId
 
 #: `00_ARCHITECTURE.md` §4 / `03_CONDUIT_MIDDLEWARE.md` §4 — "50,000 nodes
 #: and 250,000 edges" by policy (ADR-007). Not a config value: raising the
@@ -152,6 +152,54 @@ class ExpansionOutcome(BaseModel):
     filtered_count: int
 
 
+class NodeNotInWorkingSetError(Exception):
+    """Raised by `manual_link`/`manual_split` when either node id is not currently part of this
+    investigation's working set. An analyst can only assert a resolution relationship between
+    nodes they can already see in their own session — the same boundary `03_CONDUIT_MIDDLEWARE.md`
+    §6 draws for every other read/write here, applied to a pair of ids instead of one."""
+
+
+class SameNodeAssertionError(Exception):
+    """Raised by `manual_link`/`manual_split` when `node_a == node_b` — asserting a node is (or
+    is not) the same as itself is meaningless and would otherwise silently no-op through
+    `compute_clusters`' own union-find rather than surfacing as the caller mistake it is."""
+
+
+class ClusterNotFoundError(Exception):
+    """Raised by `explain` when no node in the working set currently carries the requested
+    `cluster_id` — most often a stale id from before the working set's last reproject."""
+
+
+class PairwiseExplanation(BaseModel):
+    """One direct `SAME_AS`/`NOT_SAME_AS` edge between two current members of an explained
+    cluster — `03_CONDUIT_MIDDLEWARE.md` §3.5: "Return the per-comparison match weights, not just
+    the total." `score`/`model_version`/`comparison_vector` are `None` for a manually-asserted
+    edge (`manually_asserted=True`) — a human decision, not a model score, has none of those to
+    report. `meets_threshold` is evaluated against the session's *current* τ, not baked in at
+    write time, since the same edge can cross a threshold that later moves without the edge
+    itself changing."""
+
+    node_a: NodeId
+    node_b: NodeId
+    edge_type: Literal["SAME_AS", "NOT_SAME_AS"]
+    score: float | None
+    model_version: str | None
+    comparison_vector: dict[str, Any] | None
+    manually_asserted: bool
+    meets_threshold: bool
+
+
+class ClusterExplanation(BaseModel):
+    """`GET /resolution/explain/{cluster}`'s response — every direct resolution edge between two
+    of the cluster's current members, so an analyst can see *why* a transitively-clustered pair
+    that does not look alike ended up together (through a third node), not only the pairs that
+    individually cleared τ."""
+
+    cluster_id: ClusterId
+    member_node_ids: list[NodeId]
+    pairs: list[PairwiseExplanation]
+
+
 class CardinalityPreview(BaseModel):
     """`POST /expand/preview` (`03_CONDUIT_MIDDLEWARE.md` §3.2): cardinality
     only, no mutation. `would_breach` names which cap, if any, an actual
@@ -168,6 +216,8 @@ __all__ = [
     "MAX_EDGES",
     "MAX_NODES",
     "CardinalityPreview",
+    "ClusterExplanation",
+    "ClusterNotFoundError",
     "DeltaAdd",
     "DeltaNotice",
     "DeltaRemove",
@@ -181,6 +231,9 @@ __all__ = [
     "LimitExceededError",
     "LimitOption",
     "NodeId",
+    "NodeNotInWorkingSetError",
     "NodePropertyUpdate",
+    "PairwiseExplanation",
+    "SameNodeAssertionError",
     "WorkingSetDelta",
 ]

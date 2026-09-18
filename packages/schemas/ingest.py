@@ -13,11 +13,265 @@ without re-deriving what belongs to it.
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
-from schemas.domain import EdgeId, NodeId, PrincipalId
+from schemas.domain import Edge, EdgeId, Handling, Node, NodeId, PrincipalId, Provenance
+
+# --- Studio roles (09_INGEST_STUDIO.md §8) -------------------------------
+
+
+class StudioRole(StrEnum):
+    """Action authorisation for the Ingest Studio, a different axis from
+    `Principal.clearance`/`receivable_handling_codes` (`AccessFilter`,
+    `01_DOMAIN_MODEL.md` §2.2): holding a role permits an *action*
+    (publish, schedule, approve), never grants visibility into any
+    material. Arrives the same way the clearance axes already do — a
+    claim (`services/api/auth.py`'s `CLAIM_ROLES`) an IdP maps onto
+    `Principal.roles`, a plain list, so a principal may hold more than
+    one of these; nothing implies exclusivity."""
+
+    SOURCE_AUTHOR = "source_author"
+    SOURCE_APPROVER = "source_approver"
+    LOADER = "loader"
+
+
+# --- Connect (09_INGEST_STUDIO.md §2) -------------------------------------
+
+
+class ConnectorCatalogueEntry(BaseModel):
+    """One row of §2's structured/unstructured connector tables, reproduced
+    verbatim rather than derived, so the Connect screen's catalogue always
+    matches the doc exactly. `id` is a `RecipeConnector.profile` value once
+    a recipe is drafted against this entry. `available` is `False` for
+    every row that has no backing reader yet — only `generic-csv` does
+    today (`services/ingest/connectors/csv_connector.py`); the entry still
+    appears; the catalogue is never trimmed down to only what works, since
+    the whole point of showing it is that the gap is visible, not hidden."""
+
+    id: str
+    label: str
+    group: str
+    structured: bool
+    available: bool = False
+
+
+#: §2's "Structured connector catalogue" table, group by group.
+_STRUCTURED_CATALOGUE: tuple[ConnectorCatalogueEntry, ...] = (
+    ConnectorCatalogueEntry(
+        id="comms-cdr-ipdr", label="CDR and IPDR from carriers", group="Communications", structured=True
+    ),
+    ConnectorCatalogueEntry(
+        id="comms-subscriber-toll",
+        label="Subscriber and toll reports",
+        group="Communications",
+        structured=True,
+    ),
+    ConnectorCatalogueEntry(
+        id="mobile-cellebrite-ufdr", label="Cellebrite UFDR", group="Mobile device", structured=True
+    ),
+    ConnectorCatalogueEntry(id="mobile-xry", label="XRY", group="Mobile device", structured=True),
+    ConnectorCatalogueEntry(
+        id="mobile-generic-forensic",
+        label="Generic forensic report export",
+        group="Mobile device",
+        structured=True,
+    ),
+    ConnectorCatalogueEntry(
+        id="mobile-case-uco", label="CASE/UCO interchange", group="Mobile device", structured=True
+    ),
+    ConnectorCatalogueEntry(
+        id="financial-card-transactions", label="Card transactions", group="Financial", structured=True
+    ),
+    ConnectorCatalogueEntry(
+        id="financial-bank-statements", label="Bank statements", group="Financial", structured=True
+    ),
+    ConnectorCatalogueEntry(
+        id="financial-iso20022", label="ISO 20022 (camt, pain)", group="Financial", structured=True
+    ),
+    ConnectorCatalogueEntry(id="financial-swift-mt", label="SWIFT MT", group="Financial", structured=True),
+    ConnectorCatalogueEntry(
+        id="financial-crypto-exchange",
+        label="Crypto exchange export",
+        group="Financial",
+        structured=True,
+    ),
+    ConnectorCatalogueEntry(id="vehicle-anpr", label="ANPR", group="Vehicle and movement", structured=True),
+    ConnectorCatalogueEntry(
+        id="vehicle-telematics", label="Telematics", group="Vehicle and movement", structured=True
+    ),
+    ConnectorCatalogueEntry(
+        id="vehicle-travel-border",
+        label="Travel and border records",
+        group="Vehicle and movement",
+        structured=True,
+    ),
+    ConnectorCatalogueEntry(
+        id="records-custody-incident",
+        label="Custody, incident and intelligence exports",
+        group="Records",
+        structured=True,
+    ),
+    ConnectorCatalogueEntry(
+        id="records-case-management", label="Case management exports", group="Records", structured=True
+    ),
+    ConnectorCatalogueEntry(
+        id="generic-csv",
+        label="CSV",
+        group="Generic",
+        structured=True,
+        available=True,
+    ),
+    ConnectorCatalogueEntry(id="generic-tsv", label="TSV", group="Generic", structured=True),
+    ConnectorCatalogueEntry(id="generic-json", label="JSON", group="Generic", structured=True),
+    ConnectorCatalogueEntry(id="generic-jsonl", label="JSONL", group="Generic", structured=True),
+    ConnectorCatalogueEntry(id="generic-xml", label="XML", group="Generic", structured=True),
+    ConnectorCatalogueEntry(id="generic-parquet", label="Parquet", group="Generic", structured=True),
+    ConnectorCatalogueEntry(id="generic-excel", label="Excel", group="Generic", structured=True),
+    ConnectorCatalogueEntry(
+        id="generic-sql", label="SQL table or view", group="Generic", structured=True
+    ),
+)
+
+#: §2's "Unstructured sources" table.
+_UNSTRUCTURED_CATALOGUE: tuple[ConnectorCatalogueEntry, ...] = (
+    ConnectorCatalogueEntry(
+        id="doc-pdf-docx-rtf", label="PDF, DOCX, RTF, TXT, EML/MSG, HTML", group="Documents", structured=False
+    ),
+    ConnectorCatalogueEntry(
+        id="image-jpeg-png-tiff-heic",
+        label="JPEG, PNG, TIFF, HEIC, scanned images",
+        group="Images",
+        structured=False,
+    ),
+    ConnectorCatalogueEntry(
+        id="av-wav-mp3-m4a-mp4",
+        label="WAV, MP3, M4A, MP4, interview recordings",
+        group="Audio and video",
+        structured=False,
+    ),
+    ConnectorCatalogueEntry(
+        id="archive-zip-tar", label="ZIP and tarballs", group="Archives", structured=False
+    ),
+)
+
+CONNECTOR_CATALOGUE: tuple[ConnectorCatalogueEntry, ...] = (
+    _STRUCTURED_CATALOGUE + _UNSTRUCTURED_CATALOGUE
+)
+
+
+class StudioRecipeStatus(StrEnum):
+    """`09_INGEST_STUDIO.md` §6's `studio_recipes.status` values."""
+
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    FLAGGED = "flagged"
+    SUPERSEDED = "superseded"
+
+
+class ConnectDraftInput(BaseModel):
+    """What Connect (§2) actually collects: a connector choice and the
+    three mandatory gate answers. Nothing here is optional except
+    `legal_basis`'s presence at draft-creation time — a draft may be saved
+    mid-entry, but `StudioRecipeDraft.ready_for_profile` stays `False`
+    until all three are set, and §2 is explicit that Profile itself is
+    unreachable until they are."""
+
+    label: str
+    connector_profile: str
+    #: §2: "where the data is" — a path or URI (`RecipeConnector` carries no
+    #: location field yet; wiring an actual upload is Profile-stage scope,
+    #: not Connect's, since Profile is what first needs to read bytes).
+    source_location: str | None = None
+    #: §2: "what the handling marking on it is" — merged into
+    #: `RecipeDefaults.handling` once Map exists to act on it.
+    handling: dict[str, Any] = Field(default_factory=dict)
+    #: §2: "what the legal basis for processing it is".
+    legal_basis: str | None = None
+
+
+class StudioRecipeDraft(BaseModel):
+    """The Connect-stage view of one `studio_recipes` row (§6) — not the
+    full `Recipe`, which does not exist until Map supplies a
+    `row_template` and Publish supplies a `git_path`."""
+
+    recipe_id: str
+    version: int
+    status: StudioRecipeStatus
+    label: str
+    connector_profile: str | None = None
+    source_location: str | None = None
+    handling: dict[str, Any] = Field(default_factory=dict)
+    legal_basis: str | None = None
+    owning_unit: str
+    created_by: PrincipalId
+    created_at: datetime
+    #: §2: Connect cannot proceed to Profile without all three gate answers.
+    #: Profile enforces this server-side too (`services/api/studio_profile.
+    #: py`'s `RecipeNotReadyForProfileError`/`SourceHandlingIncompleteError`)
+    #: — this field is what the Connect screen gates its own "Continue"
+    #: action on, and the two checks are meant to agree: a draft this field
+    #: calls ready should never then fail Profile's own handling check.
+    #: Always overwritten by `_compute_ready_for_profile` below regardless
+    #: of what a caller passes — never something a caller can set
+    #: independently of the fields it actually reflects. (A
+    #: `@computed_field` property would have been the more obvious choice,
+    #: but `generate_ts.py`'s `model_json_schema()` call uses the default
+    #: "validation" mode, which omits computed fields entirely — this way
+    #: the field, and the gate it reports, actually reach the generated TS
+    #: type and the Connect screen.)
+    ready_for_profile: bool
+    #: Map's (§4) own state on the draft — `None`/`[]` until Map has ever
+    #: saved (`PUT /v1/ingest/recipes/{id}/row-template`). A draft is a row,
+    #: not client state (§6), and Map's draft spans sessions the same way
+    #: Connect's does, so the row template lives here rather than only in
+    #: the Glass's own component state.
+    row_template: RowTemplate | None = None
+    unmapped_fields: list[UnmappedField] = Field(default_factory=list)
+    #: Publish's own state (§6) — every field below is `None` while
+    #: `status='draft'`. `verified_at` is set by a *successful* run of
+    #: `POST .../verify` (`services/api/studio_verify.py`'s `run_verify`
+    #: completing without raising) and cleared by any subsequent edit
+    #: (`update_draft`/`update_row_template`) — "Verify must pass before
+    #: publish" (§5) is enforced against this flag, not re-derived from a
+    #: fresh dry run at publish time. The rest are set once, by `publish`,
+    #: and never revisited except `schedule_cron`/`schedule_watch`, which a
+    #: later `PATCH .../schedule` may change without touching anything else.
+    verified_at: datetime | None = None
+    ontology_version: int | None = None
+    git_path: str | None = None
+    published_by: PrincipalId | None = None
+    published_at: datetime | None = None
+    schedule_cron: str | None = None
+    schedule_watch: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _compute_ready_for_profile(cls, data: object) -> object:
+        if isinstance(data, dict):
+            data = dict(data)
+            handling = data.get("handling")
+            # A non-empty `handling` dict used to be enough — but "OFFICIAL"
+            # alone (classification with no handling_code/originator/
+            # owning_unit) is truthy and still leaves Profile unable to
+            # build a `Handling` to mask against. Requiring it to actually
+            # construct one is what makes `ready_for_profile=True` a real
+            # promise rather than an empty-dict check.
+            handling_complete = False
+            if isinstance(handling, dict):
+                try:
+                    Handling(**handling)
+                except ValidationError:
+                    handling_complete = False
+                else:
+                    handling_complete = True
+            data["ready_for_profile"] = bool(
+                data.get("source_location") and handling_complete and data.get("legal_basis")
+            )
+        return data
+
 
 # --- The recipe (09_INGEST_STUDIO.md §6) ---------------------------------
 
@@ -94,6 +348,16 @@ class RecipeEntity(BaseModel):
     on_match: Literal["reference", "create"] = "create"
     when: RecipeCondition | None = None
     properties: dict[str, FieldBinding] = Field(default_factory=dict)
+    #: `09_INGEST_STUDIO.md` §4: "Provenance and handling... overridable per
+    #: element." Merged over `recipe.defaults.handling`/`.provenance` by the
+    #: write path and by `preview_handling_and_provenance()`
+    #: (`services/ingest/engine.py`) — never used unconditionally on its
+    #: own. Map (§3's independent-minimums rule) only ever lets this
+    #: tighten, never loosen, the source-level marking set at Connect —
+    #: enforced at save time (`services/api/studio_map.py`'s
+    #: `validate_handling_tightens`), not re-checked per row at run time.
+    handling: dict[str, Any] | None = None
+    provenance: dict[str, Any] | None = None
 
 
 class TemporalBinding(BaseModel):
@@ -107,6 +371,9 @@ class RecipeEdge(BaseModel):
     when: RecipeCondition | None = None
     temporal: TemporalBinding | None = None
     properties: dict[str, FieldBinding] = Field(default_factory=dict)
+    #: Same per-element override as `RecipeEntity.handling`/`.provenance` above.
+    handling: dict[str, Any] | None = None
+    provenance: dict[str, Any] | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -122,9 +389,98 @@ class RowTemplate(BaseModel):
     edges: list[RecipeEdge] = Field(default_factory=list)
 
 
+# --- Map (09_INGEST_STUDIO.md §4) -----------------------------------------
+
+
+class TransformDescriptor(BaseModel):
+    """One entry of the Knowledge Adapter catalogue Map's transform picker
+    reads from — `packages/knowledge_adapters.REGISTRY`/`ARITY`, never
+    hand-duplicated here. `arity` is `1` for every adapter absent from
+    `ARITY` (that module's own docstring: such an adapter "does not support
+    `fields` at all"), so the studio only ever offers a `fields` picker
+    with more than one slot for a transform that actually declared one."""
+
+    name: str
+    arity: int = Field(ge=1)
+
+
+class RowTemplateUpdateInput(BaseModel):
+    """Body of `PUT /v1/ingest/recipes/{id}/row-template` — Map's save,
+    the same "a draft is a row, not client state" discipline Connect's own
+    `ConnectDraftInput` already follows (§6)."""
+
+    row_template: RowTemplate
+    unmapped_fields: list[UnmappedField] = Field(default_factory=list)
+
+
+class MapSampleRow(BaseModel):
+    """One raw row from the same bounded sample Profile reads — §4's "the
+    template is always shown bound to a real row, and the analyst can page
+    through." Shape-masked exactly like `ColumnProfile.sample_values`
+    (`09_INGEST_STUDIO.md` §3's independent-minimums rule) when the
+    principal isn't cleared for the source's own handling marking."""
+
+    row_index: int = Field(ge=0)
+    values: dict[str, str]
+    values_masked: bool
+    #: `True` once `row_index` is the last row in the bounded sample —
+    #: what the scrubber's "▸" disables against, never a silent clamp.
+    is_last_row: bool
+
+
+class MapHandlingPreviewRequest(BaseModel):
+    """Body of `POST /v1/ingest/recipes/{id}/map/handling-preview` — what
+    `preview_handling_and_provenance()` (`services/ingest/engine.py`) would
+    compute for one in-progress element, before it is saved onto the
+    template at all."""
+
+    row_index: int = Field(ge=0)
+    handling_override: dict[str, Any] | None = None
+    provenance_override: dict[str, Any] | None = None
+
+
+class MapHandlingPreviewResult(BaseModel):
+    handling: Handling
+    provenance: Provenance
+
+
 class ScheduleConfig(BaseModel):
     cron: str | None = None
     watch: str | None = None
+
+
+# --- Publish (09_INGEST_STUDIO.md §6) -------------------------------------
+
+
+class PublishRecipeInput(BaseModel):
+    """Body of `POST /v1/ingest/recipes/{id}/publish` — schedule is
+    optional at publish time (a recipe may be published unscheduled, run
+    only on demand) and settable/changeable later via `ScheduleUpdateInput`
+    without republishing the mapping itself."""
+
+    schedule_cron: str | None = None
+    schedule_watch: str | None = None
+
+
+class ScheduleUpdateInput(BaseModel):
+    """Body of `PATCH /v1/ingest/recipes/{id}/schedule` — §8's "schedule
+    it", kept separate from `publish` so changing when a recipe runs never
+    requires bumping its version or re-verifying a mapping that hasn't
+    changed."""
+
+    schedule_cron: str | None = None
+    schedule_watch: str | None = None
+
+
+class RunRecipeInput(BaseModel):
+    """Body of `POST /v1/investigations/{id}/ingest/recipes/{id}/run` —
+    §8: "Loader: run a published recipe against a file", not necessarily
+    the one Connect recorded. `source_location` is optional: omitted, the
+    run repeats against the recipe's own recorded location (a plain
+    re-run); given, it overrides just this run, the ordinary shape of a
+    Loader's day — a fresh day's export through an already-mapped recipe."""
+
+    source_location: str | None = None
 
 
 class Recipe(BaseModel):
@@ -170,6 +526,67 @@ class LoadReport(BaseModel):
     touched_edge_ids: list[EdgeId] = Field(default_factory=list)
 
 
+# --- Verify (09_INGEST_STUDIO.md §5) --------------------------------------
+
+
+class VerifyEntityCount(BaseModel):
+    """Per entity-type counts for one dry run — §5: "Counts. Nodes and
+    edges by type, how many referenced an existing node and how many
+    created one." """
+
+    created: int = 0
+    referenced: int = 0
+
+
+class VerifyEdgeCount(BaseModel):
+    """An edge has no `match_on`/`on_match` of its own (`RecipeEdge` never
+    declares one) — every edge the dry run resolves is "created" in the
+    sense of "this recipe would write it"; same-pair edges within the
+    sample still merge into one, occurrence-counted, the way a real load's
+    `GraphArcadeDBAdapter.upsert_edges` merges them."""
+
+    created: int = 0
+
+
+class RejectionGroup(BaseModel):
+    """§5: "The rejection report, grouped by cause with samples." `count`
+    is always the true total for this reason — `samples` is capped
+    (studio_verify.py), but the count itself never is, so a reason with
+    400 rejections still reads as 400, not silently as however many
+    samples happened to ride along."""
+
+    reason: str
+    count: int
+    samples: list[RejectionRecord]
+
+
+class VerifyReport(BaseModel):
+    """The dry run's three outputs (§5) in one response: counts,
+    `rejections`, and the graph it would make (`nodes`/`edges`) — the same
+    `schemas.domain.Node`/`Edge` shapes `GlassCanvas` already renders, not
+    a second preview-only shape invented for this screen."""
+
+    rows_read: int
+    rows_deduplicated: int
+    #: §3's own sample-size rule ("10,000 rows or the whole file, whichever
+    #: is smaller"), restated here the same way `SourceProfile` states it —
+    #: `False` means the source has more rows than this dry run covered.
+    sample_is_whole_source: bool
+    #: §3's independent-minimums rule, extended to Verify: `True` when the
+    #: requesting principal cannot clear the *source's own* classification,
+    #: in which case every would-create node/edge's property values below
+    #: are shape-masked — the same rule that already stops Profile's and
+    #: Map's sample views from being read in full by a principal who
+    #: couldn't clear the source, applied here so Verify isn't a way around
+    #: it.
+    values_masked: bool
+    entities_by_type: dict[str, VerifyEntityCount] = Field(default_factory=dict)
+    edges_by_type: dict[str, VerifyEdgeCount] = Field(default_factory=dict)
+    rejections: list[RejectionGroup] = Field(default_factory=list)
+    nodes: list[Node] = Field(default_factory=list)
+    edges: list[Edge] = Field(default_factory=list)
+
+
 # --- The load ledger (01_DOMAIN_MODEL.md §2.4, ADR-018) -------------------
 
 
@@ -203,6 +620,9 @@ class LoadRecord(BaseModel):
 
 
 ALL_MODELS: tuple[type[BaseModel], ...] = (
+    ConnectorCatalogueEntry,
+    ConnectDraftInput,
+    StudioRecipeDraft,
     RecipeConnector,
     RecipeDefaults,
     DeduplicateConfig,
@@ -213,9 +633,21 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     RecipeEdge,
     UnmappedField,
     RowTemplate,
+    TransformDescriptor,
+    RowTemplateUpdateInput,
+    MapSampleRow,
+    MapHandlingPreviewRequest,
+    MapHandlingPreviewResult,
     ScheduleConfig,
+    PublishRecipeInput,
+    ScheduleUpdateInput,
+    RunRecipeInput,
     Recipe,
     RejectionRecord,
     LoadReport,
+    VerifyEntityCount,
+    VerifyEdgeCount,
+    RejectionGroup,
+    VerifyReport,
     LoadRecord,
 )

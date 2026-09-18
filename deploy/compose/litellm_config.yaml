@@ -1,0 +1,44 @@
+# LiteLLM proxy config for `make dev-up`'s `litellm` service — routes the
+# logical model names `adapters.model_litellm.CONFORMANCE_MODEL`/
+# `CONFORMANCE_EMBED_MODEL` call to the Ollama backend this same compose
+# file brings up. `docs/06_DECISIONS.md` ADR-020 is what pins the actual
+# model weights (by digest, verified at the `ollama` service's own
+# startup); this file only wires names to a backend, so the pin lives in
+# exactly one place rather than being duplicated here.
+model_list:
+  - model_name: qwen2.5:0.5b-instruct
+    litellm_params:
+      model: ollama_chat/qwen2.5:0.5b-instruct
+      api_base: http://ollama:11434
+  # `embed()`'s own model — `ollama/`, not `ollama_chat/`: an embeddings
+  # call is not a chat completion, and LiteLLM routes the two prefixes to
+  # different Ollama endpoints (`/api/embed` vs `/api/chat`) accordingly.
+  - model_name: all-minilm:22m-l6-v2-fp16
+    litellm_params:
+      model: ollama/all-minilm:22m-l6-v2-fp16
+      api_base: http://ollama:11434
+  # `describe_image()`'s own model (Stage 2) — still `ollama_chat/`: a vision request is a chat
+  # completion with an image attached to the message, confirmed directly to translate correctly
+  # to Ollama's own `images` field.
+  - model_name: moondream:1.8b-v2-q4_K_M
+    litellm_params:
+      model: ollama_chat/moondream:1.8b-v2-q4_K_M
+      api_base: http://ollama:11434
+  # `transcribe()`'s own model (Stage 2) — routed to `speaches`, not Ollama: `openai/`, since
+  # `speaches` is itself already an OpenAI-Whisper-API-compatible server LiteLLM talks to as a
+  # generic OpenAI-shaped backend, the same way it would talk to the real OpenAI API with a
+  # different `api_base`/`api_key`.
+  - model_name: Systran/faster-whisper-tiny.en
+    litellm_params:
+      model: openai/Systran/faster-whisper-tiny.en
+      api_base: http://speaches:8000/v1
+      api_key: "not-needed"
+
+general_settings:
+  # Dev-only fixed key, matching every other dev-compose credential
+  # (`arcadedb`'s `playwithdata123`, `postgres`'s `osprey`/`playwithdata123`)
+  # — `packages/adapters/model_litellm/client.py`'s `LiteLLMConfig` default
+  # matches this so `make dev-up` needs no env configuration, the same
+  # "zero configuration" property this file's header comment describes for
+  # the other four services.
+  master_key: sk-ospreyflow-dev

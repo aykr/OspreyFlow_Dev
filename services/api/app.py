@@ -27,6 +27,7 @@ import json
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -48,6 +49,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
+from services.extract.writer import (
+    NodeNotFoundError,
+    ProvenanceTransitionError,
+    confirm_node,
+    retract_node,
+)
 from services.ingest.connectors.geo.site_grid import site_grid_rows
 from services.ingest.engine import run_recipe
 from services.ingest.recipe_loader import load_recipe
@@ -58,6 +65,9 @@ from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
+from adapters.model_litellm import CONFORMANCE_EMBED_MODEL
+from adapters.model_litellm.adapter import ModelLiteLLMAdapter
+from adapters.model_litellm.client import LiteLLMClient, LiteLLMConfig
 from conduit_common.identity import new_id
 from geo.bilinear import ControlPoint
 from geo.image_dimensions import (
@@ -65,10 +75,13 @@ from geo.image_dimensions import (
     image_content_type,
     image_dimensions,
 )
-from ontology.handling import load_uk_le_scheme
+from knowledge_adapters import ARITY, REGISTRY
+from ontology.errors import OntologyError
+from ontology.handling import HandlingScheme, load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
+from ports.model import ModelPort
 from schemas.analytics import (
     CrossFilterRequest,
     GeoBin,
@@ -78,8 +91,28 @@ from schemas.analytics import (
     HistogramRequest,
 )
 from schemas.domain import Edge, ExpandRequest, Node, NodeId, OntologySchema, Principal
+from schemas.ingest import (
+    CONNECTOR_CATALOGUE,
+    ConnectDraftInput,
+    ConnectorCatalogueEntry,
+    LoadReport,
+    MapHandlingPreviewRequest,
+    MapHandlingPreviewResult,
+    MapSampleRow,
+    PublishRecipeInput,
+    RowTemplateUpdateInput,
+    RunRecipeInput,
+    ScheduleUpdateInput,
+    StudioRecipeDraft,
+    StudioRole,
+    TransformDescriptor,
+    VerifyReport,
+)
 from schemas.mapconfig import MapConfig, PublicMapConfig
+from schemas.profile import SourceProfile
 
+from . import resolution as resolution_module
+from . import review as review_module
 from . import search as search_module
 from .audit import AuditWriteError, AuditWriter
 from .auth import PrincipalResolutionError, PrincipalResolver, bearer_scheme
@@ -94,6 +127,17 @@ from .investigations import Investigation, InvestigationNotFoundError, Investiga
 from .jobs import JobQueue
 from .mapconfig_loader import load_map_config, public_view
 from .notify import notify_channel, publish_delta
+from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
+from .review import (
+    AcceptCandidateRequest,
+    CandidateNotPendingError,
+    ExtractionCandidateNotFoundError,
+    ExtractionCandidateRecord,
+    ExtractionCandidateStore,
+    NodeIdResponse,
+    RejectedResponse,
+    RunExtractionRequest,
+)
 from .search import SearchRequest, SearchResponse
 from .site_images import (
     object_key_for,
@@ -102,6 +146,36 @@ from .site_images import (
     write_site_image,
 )
 from .sites import ControlPointQuad, Site, SiteNotFoundError, SiteStore
+from .studio_map import (
+    HandlingLoosenedError,
+    RowIndexOutOfRangeError,
+    get_sample_row,
+    preview_element_handling,
+    resolve_source_handling,
+    validate_handling_tightens,
+)
+from .studio_profile import (
+    ConnectorNotAvailableError,
+    RecipeNotReadyForProfileError,
+    SourceHandlingIncompleteError,
+    SourceUnreadableError,
+    profile_recipe_source,
+)
+from .studio_publish import (
+    GitCommitError,
+    RecipeNotRunnableError,
+    build_recipe,
+    run_published_recipe,
+    write_and_commit_recipe,
+)
+from .studio_recipes import (
+    StudioRecipeCannotVersionError,
+    StudioRecipeNotADraftError,
+    StudioRecipeNotFoundError,
+    StudioRecipeNotVerifiedError,
+    StudioRecipeStore,
+)
+from .studio_verify import RowTemplateMissingError, run_verify
 from .tile_cache import (
     cache_key_for,
     read_cached_tile,
@@ -111,11 +185,16 @@ from .tile_cache import (
 from .tile_proxy import build_upstream_url, fetch_tile
 from .working_set.models import (
     CardinalityPreview,
+    ClusterExplanation,
+    ClusterNotFoundError,
     DeltaNotice,
     DeltaRemove,
+    DeltaReproject,
     DeltaSnapshot,
     ExpansionOutcome,
     LimitExceededError,
+    NodeNotInWorkingSetError,
+    SameNodeAssertionError,
     WorkingSetDelta,
     decode_delta,
 )
@@ -139,6 +218,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     investigations = await InvestigationStore.connect(config.postgres.dsn)
     history = await InvestigationHistoryStore.connect(config.postgres.dsn)
     sites = await SiteStore.connect(config.postgres.dsn)
+    studio_recipes = await StudioRecipeStore.connect(config.postgres.dsn)
+    extraction_candidates = await ExtractionCandidateStore.connect(config.postgres.dsn)
+    litellm_client = LiteLLMClient(LiteLLMConfig.from_env())
+    # `embed_model` is the only model this adapter needs fixed at construction — `extract()`'s own
+    # model is caller-supplied per call (`ExtractionRequest.model`, ADR-005), never this adapter's
+    # own opinion (`services/api/review.py`'s own docstring on `RunExtractionRequest.model`).
+    model: ModelPort = ModelLiteLLMAdapter(litellm_client, embed_model=CONFORMANCE_EMBED_MODEL)
+    # `docs/09_INGEST_STUDIO.md` §6's reverse index: "an ontology edit flags
+    # every recipe that depends on the changed version". This deployment's
+    # only "ontology reload" trigger today is a process restart after a new
+    # `packages/ontology/default.yaml` ships — there is no live-reload admin
+    # action yet (Phase 8's own territory) — so this is that routine, run
+    # once, right after the ontology this process will serve is known.
+    await studio_recipes.flag_stale(ontology.version)
 
     # A persistent (not `:memory:`) DuckDB file — first production wiring of
     # `AnalyticsPort` anywhere in the Conduit (`07_BUILD_PLAN.md` Phase 5
@@ -162,6 +255,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.investigations = investigations
     app.state.history = history
     app.state.sites = sites
+    app.state.studio_recipes = studio_recipes
+    app.state.extraction_candidates = extraction_candidates
+    app.state.model = model
+    app.state.recipes_repo_root = _RECIPES_REPO_ROOT
+    app.state.handling_scheme = handling_scheme
     app.state.site_image_storage = site_image_storage_config()
     app.state.tile_cache_storage = tile_cache_storage_config()
     app.state.analytics = analytics
@@ -178,6 +276,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await investigations.close()
         await history.close()
         await sites.close()
+        await studio_recipes.close()
+        await extraction_candidates.close()
+        await litellm_client.aclose()
         analytics_con.close()
 
 
@@ -245,6 +346,26 @@ def get_sites(request: Request) -> SiteStore:
     return request.app.state.sites  # type: ignore[no-any-return]
 
 
+def get_studio_recipes(request: Request) -> StudioRecipeStore:
+    return request.app.state.studio_recipes  # type: ignore[no-any-return]
+
+
+def get_extraction_candidates(request: Request) -> ExtractionCandidateStore:
+    return request.app.state.extraction_candidates  # type: ignore[no-any-return]
+
+
+def get_model(request: Request) -> ModelPort:
+    return request.app.state.model  # type: ignore[no-any-return]
+
+
+def get_recipes_repo_root(request: Request) -> Path:
+    return request.app.state.recipes_repo_root  # type: ignore[no-any-return]
+
+
+def get_handling_scheme(request: Request) -> HandlingScheme:
+    return request.app.state.handling_scheme  # type: ignore[no-any-return]
+
+
 def get_site_image_storage(request: Request) -> ObjectStorageConfig:
     return request.app.state.site_image_storage  # type: ignore[no-any-return]
 
@@ -277,9 +398,37 @@ OntologyDep = Annotated[OntologySchema, Depends(get_ontology)]
 MapConfigDep = Annotated[MapConfig, Depends(get_map_config)]
 PrincipalDep = Annotated[Principal, Depends(get_principal)]
 SitesDep = Annotated[SiteStore, Depends(get_sites)]
+StudioRecipesDep = Annotated[StudioRecipeStore, Depends(get_studio_recipes)]
+ExtractionCandidatesDep = Annotated[ExtractionCandidateStore, Depends(get_extraction_candidates)]
+ModelDep = Annotated[ModelPort, Depends(get_model)]
+RecipesRepoRootDep = Annotated[Path, Depends(get_recipes_repo_root)]
+HandlingSchemeDep = Annotated[HandlingScheme, Depends(get_handling_scheme)]
 SiteImageStorageDep = Annotated[ObjectStorageConfig, Depends(get_site_image_storage)]
 TileCacheStorageDep = Annotated[ObjectStorageConfig, Depends(get_tile_cache_storage)]
 AnalyticsDep = Annotated[AnalyticsPort, Depends(get_analytics)]
+
+
+def require_studio_role(role: StudioRole) -> Any:
+    """Ingest Studio action authorisation (`09_INGEST_STUDIO.md` §8) — a
+    dependency factory rather than a bare dependency, since which role a
+    route needs varies per route (publish/schedule need `SOURCE_APPROVER`,
+    a load needs `LOADER`). Shaped like `get_authorized_investigation`
+    below: takes the resolved `Principal`, denies with an `HTTPException`
+    rather than filtering silently, and is meant to be wrapped the same
+    way (`Depends(require_studio_role(StudioRole.SOURCE_APPROVER))`) once
+    a studio route exists to attach it to. A different axis entirely from
+    `AccessFilter`'s per-record clearance/handling gate — holding a role
+    permits an action, never grants visibility into material."""
+
+    async def _dependency(principal: PrincipalDep) -> Principal:
+        if role.value not in principal.roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"principal lacks required studio role: {role.value}",
+            )
+        return principal
+
+    return _dependency
 
 
 async def get_authorized_investigation(
@@ -344,6 +493,33 @@ async def get_authorized_site(
 AuthorizedSiteDep = Annotated[Site, Depends(get_authorized_site)]
 
 
+async def get_authorized_studio_recipe(
+    recipe_id: str,
+    principal: PrincipalDep,
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
+) -> StudioRecipeDraft:
+    """Mirrors `get_authorized_site`. `StudioRecipeStore.get_authorized`
+    already collapses "no such recipe" and "wrong owning_unit" into the
+    same `StudioRecipeNotFoundError`; this wrapper adds the audit record on
+    denial. Org-unit scoping, not a `StudioRole` check — §8 does not name a
+    role gate for reading your own unit's draft, only for the actions
+    (create/edit/publish/schedule) the routes below gate separately."""
+    try:
+        return await studio_recipes.get_authorized(recipe_id, principal)
+    except StudioRecipeNotFoundError:
+        await audit.record(
+            principal=principal,
+            action="access_denied",
+            resolved_query={"recipe_id": recipe_id},
+            result_cardinality=0,
+        )
+        raise
+
+
+AuthorizedStudioRecipeDep = Annotated[StudioRecipeDraft, Depends(get_authorized_studio_recipe)]
+
+
 # --- exception handling ----------------------------------------------------
 
 
@@ -385,6 +561,198 @@ async def _history_step_not_found_handler(
 @app.exception_handler(SiteNotFoundError)
 async def _site_not_found_handler(request: Request, exc: SiteNotFoundError) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "site_not_found"})
+
+
+@app.exception_handler(NodeNotInWorkingSetError)
+async def _node_not_in_working_set_handler(
+    request: Request, exc: NodeNotInWorkingSetError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND, content={"error": "node_not_in_working_set"}
+    )
+
+
+@app.exception_handler(SameNodeAssertionError)
+async def _same_node_assertion_handler(
+    request: Request, exc: SameNodeAssertionError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": "same_node_assertion"},
+    )
+
+
+@app.exception_handler(ClusterNotFoundError)
+async def _cluster_not_found_handler(request: Request, exc: ClusterNotFoundError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND, content={"error": "cluster_not_found"}
+    )
+
+
+@app.exception_handler(ExtractionCandidateNotFoundError)
+async def _extraction_candidate_not_found_handler(
+    request: Request, exc: ExtractionCandidateNotFoundError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND, content={"error": "extraction_candidate_not_found"}
+    )
+
+
+@app.exception_handler(CandidateNotPendingError)
+async def _candidate_not_pending_handler(
+    request: Request, exc: CandidateNotPendingError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT, content={"error": "candidate_not_pending"}
+    )
+
+
+@app.exception_handler(NodeNotFoundError)
+async def _node_not_found_handler(request: Request, exc: NodeNotFoundError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "node_not_found"})
+
+
+@app.exception_handler(ProvenanceTransitionError)
+async def _provenance_transition_handler(
+    request: Request, exc: ProvenanceTransitionError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT, content={"error": "provenance_transition_invalid"}
+    )
+
+
+@app.exception_handler(StudioRecipeNotFoundError)
+async def _studio_recipe_not_found_handler(
+    request: Request, exc: StudioRecipeNotFoundError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND, content={"error": "studio_recipe_not_found"}
+    )
+
+
+@app.exception_handler(StudioRecipeNotADraftError)
+async def _studio_recipe_not_a_draft_handler(
+    request: Request, exc: StudioRecipeNotADraftError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT, content={"error": "studio_recipe_not_a_draft"}
+    )
+
+
+@app.exception_handler(RecipeNotReadyForProfileError)
+async def _recipe_not_ready_for_profile_handler(
+    request: Request, exc: RecipeNotReadyForProfileError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT, content={"error": "recipe_not_ready_for_profile"}
+    )
+
+
+@app.exception_handler(RowTemplateMissingError)
+async def _row_template_missing_handler(
+    request: Request, exc: RowTemplateMissingError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT, content={"error": "row_template_missing"}
+    )
+
+
+@app.exception_handler(StudioRecipeNotVerifiedError)
+async def _studio_recipe_not_verified_handler(
+    request: Request, exc: StudioRecipeNotVerifiedError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT, content={"error": "studio_recipe_not_verified"}
+    )
+
+
+@app.exception_handler(StudioRecipeCannotVersionError)
+async def _studio_recipe_cannot_version_handler(
+    request: Request, exc: StudioRecipeCannotVersionError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT, content={"error": "studio_recipe_cannot_version"}
+    )
+
+
+@app.exception_handler(RecipeNotRunnableError)
+async def _recipe_not_runnable_handler(
+    request: Request, exc: RecipeNotRunnableError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"error": "recipe_not_runnable", "detail": str(exc)},
+    )
+
+
+@app.exception_handler(GitCommitError)
+async def _git_commit_error_handler(request: Request, exc: GitCommitError) -> JSONResponse:
+    # A real infrastructure failure, not a client input problem — §6's
+    # "the repository is the record" only holds if a failed commit never
+    # gets a `published` row alongside it, so this is a 500, not a 409.
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"error": "git_commit_failed", "detail": str(exc)},
+    )
+
+
+@app.exception_handler(OntologyError)
+async def _ontology_error_handler(request: Request, exc: OntologyError) -> JSONResponse:
+    """Verify's own recipe-vs-ontology check (`services/ingest/engine.py`'s
+    `_dry_run_entity`/`_dry_run_edge`) — a structurally invalid recipe
+    (an undeclared type, a missing required property, an illegal edge
+    endpoint) fails here the same way it would, uncaught, at real load
+    time; never a bare 500, matching every other studio error."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": "ontology_violation", "detail": str(exc)},
+    )
+
+
+@app.exception_handler(ConnectorNotAvailableError)
+async def _connector_not_available_handler(
+    request: Request, exc: ConnectorNotAvailableError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": "connector_not_available", "detail": str(exc)},
+    )
+
+
+@app.exception_handler(SourceUnreadableError)
+async def _source_unreadable_handler(request: Request, exc: SourceUnreadableError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": "source_unreadable", "detail": str(exc)},
+    )
+
+
+@app.exception_handler(SourceHandlingIncompleteError)
+async def _source_handling_incomplete_handler(
+    request: Request, exc: SourceHandlingIncompleteError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"error": "source_handling_incomplete", "detail": str(exc)},
+    )
+
+
+@app.exception_handler(RowIndexOutOfRangeError)
+async def _row_index_out_of_range_handler(
+    request: Request, exc: RowIndexOutOfRangeError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={"error": "row_index_out_of_range", "detail": str(exc)},
+    )
+
+
+@app.exception_handler(HandlingLoosenedError)
+async def _handling_loosened_handler(request: Request, exc: HandlingLoosenedError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": "handling_loosened", "detail": str(exc)},
+    )
 
 
 @app.exception_handler(UnsupportedImageFormatError)
@@ -616,6 +984,269 @@ async def remove_nodes(
         result_cardinality=len(body.node_ids),
     )
     return {"seq": seq}
+
+
+# --- resolution ---------------------------------------------------------------
+
+
+@app.get("/v1/investigations/{investigation_id}/resolution/threshold")
+async def get_resolution_threshold_route(
+    investigation: AuthorizedInvestigationDep,
+    principal: PrincipalDep,
+    working_set: WorkingSetDep,
+    audit: AuditDep,
+) -> ThresholdResponse:
+    result = await resolution_module.get_threshold(working_set, investigation.id)
+    await audit.record(
+        principal=principal,
+        action="get_resolution_threshold",
+        investigation_id=investigation.id,
+        resolved_query={},
+        result_cardinality=1,
+    )
+    return result
+
+
+@app.put("/v1/investigations/{investigation_id}/resolution/threshold")
+async def set_resolution_threshold_route(
+    investigation: AuthorizedInvestigationDep,
+    body: SetThresholdRequest,
+    principal: PrincipalDep,
+    working_set: WorkingSetDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+) -> DeltaReproject:
+    delta = await resolution_module.set_threshold(working_set, investigation.id, body, principal)
+    await publish_delta(valkey, investigation.id, delta)
+    await audit.record(
+        principal=principal,
+        action="set_resolution_threshold",
+        investigation_id=investigation.id,
+        resolved_query={"threshold": body.threshold},
+        result_cardinality=delta.affected,
+    )
+    return delta
+
+
+@app.post("/v1/investigations/{investigation_id}/resolution/link")
+async def link_resolution_route(
+    investigation: AuthorizedInvestigationDep,
+    body: ManualAssertionRequest,
+    principal: PrincipalDep,
+    working_set: WorkingSetDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+) -> DeltaReproject:
+    delta = await resolution_module.link(working_set, investigation.id, body, principal)
+    await publish_delta(valkey, investigation.id, delta)
+    await audit.record(
+        principal=principal,
+        action="manual_link",
+        investigation_id=investigation.id,
+        resolved_query={"node_a": body.node_a, "node_b": body.node_b},
+        result_cardinality=delta.affected,
+    )
+    return delta
+
+
+@app.post("/v1/investigations/{investigation_id}/resolution/split")
+async def split_resolution_route(
+    investigation: AuthorizedInvestigationDep,
+    body: ManualAssertionRequest,
+    principal: PrincipalDep,
+    working_set: WorkingSetDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+) -> DeltaReproject:
+    delta = await resolution_module.split(working_set, investigation.id, body, principal)
+    await publish_delta(valkey, investigation.id, delta)
+    await audit.record(
+        principal=principal,
+        action="manual_split",
+        investigation_id=investigation.id,
+        resolved_query={"node_a": body.node_a, "node_b": body.node_b},
+        result_cardinality=delta.affected,
+    )
+    return delta
+
+
+@app.get("/v1/investigations/{investigation_id}/resolution/explain/{cluster_id}")
+async def explain_resolution_route(
+    investigation: AuthorizedInvestigationDep,
+    cluster_id: str,
+    principal: PrincipalDep,
+    working_set: WorkingSetDep,
+    audit: AuditDep,
+) -> ClusterExplanation:
+    result = await resolution_module.explain(working_set, investigation.id, cluster_id, principal)
+    await audit.record(
+        principal=principal,
+        action="explain_resolution_cluster",
+        investigation_id=investigation.id,
+        resolved_query={"cluster_id": cluster_id},
+        result_cardinality=len(result.pairs),
+    )
+    return result
+
+
+# --- extraction and the review queue -----------------------------------------
+#
+# Nested under investigations for audit-context consistency with
+# `run_studio_recipe` (`09_INGEST_STUDIO.md` §6's own precedent: `investigation_id` is not an
+# access-control scope for the produced elements, which join the shared graph/Postgres registry
+# like any other write — it is only what the audit row is attributed against). `09_INGEST_STUDIO.md`
+# §8's role table has no role for reviewing unstructured extraction candidates at all — it is
+# entirely about the structured Connect/Map/Publish/Load workflow — so these routes are gated by
+# `AuthorizedInvestigationDep` alone, the same boundary `/seed`/`/expand` already use, not a
+# `require_studio_role` this table never names for this path.
+
+
+@app.post("/v1/investigations/{investigation_id}/ingest/extract")
+async def run_extraction_route(
+    investigation: AuthorizedInvestigationDep,
+    body: RunExtractionRequest,
+    principal: PrincipalDep,
+    model: ModelDep,
+    ontology: OntologyDep,
+    extraction_candidates: ExtractionCandidatesDep,
+    audit: AuditDep,
+) -> list[ExtractionCandidateRecord]:
+    records = await review_module.run_extraction(
+        model,
+        ontology,
+        extraction_candidates,
+        document_id=body.document_id,
+        text=body.text,
+        profile=body.profile.to_profile(),
+        handling=body.handling,
+        principal=principal,
+        extraction_model=body.model,
+    )
+    await audit.record(
+        principal=principal,
+        action="run_extraction",
+        investigation_id=investigation.id,
+        resolved_query={"document_id": body.document_id, "entity_types": body.profile.entity_types},
+        result_cardinality=len(records),
+    )
+    return records
+
+
+@app.get("/v1/investigations/{investigation_id}/ingest/candidates")
+async def list_extraction_candidates_route(
+    investigation: AuthorizedInvestigationDep,
+    document_id: str,
+    principal: PrincipalDep,
+    extraction_candidates: ExtractionCandidatesDep,
+    audit: AuditDep,
+) -> list[ExtractionCandidateRecord]:
+    records = await extraction_candidates.list_for_document(document_id, principal)
+    await audit.record(
+        principal=principal,
+        action="list_extraction_candidates",
+        investigation_id=investigation.id,
+        resolved_query={"document_id": document_id},
+        result_cardinality=len(records),
+    )
+    return records
+
+
+@app.post("/v1/investigations/{investigation_id}/ingest/candidates/{candidate_id}/accept")
+async def accept_extraction_candidate_route(
+    investigation: AuthorizedInvestigationDep,
+    candidate_id: str,
+    body: AcceptCandidateRequest,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    extraction_candidates: ExtractionCandidatesDep,
+    audit: AuditDep,
+) -> NodeIdResponse:
+    """`09_INGEST_STUDIO.md` §7: exactly one `candidate_id` per call, no list, no filter, no
+    threshold — "no bulk accept" (`services/api/review.py`'s own module docstring) is structural
+    here, not a checked rule."""
+    node_id = await review_module.accept_candidate(
+        extraction_candidates,
+        graph,
+        candidate_id,
+        principal,
+        properties_override=body.properties_override,
+    )
+    await audit.record(
+        principal=principal,
+        action="accept_extraction_candidate",
+        investigation_id=investigation.id,
+        resolved_query={"candidate_id": candidate_id},
+        result_cardinality=1,
+    )
+    return NodeIdResponse(node_id=node_id)
+
+
+@app.post("/v1/investigations/{investigation_id}/ingest/candidates/{candidate_id}/reject")
+async def reject_extraction_candidate_route(
+    investigation: AuthorizedInvestigationDep,
+    candidate_id: str,
+    principal: PrincipalDep,
+    extraction_candidates: ExtractionCandidatesDep,
+    audit: AuditDep,
+) -> RejectedResponse:
+    await review_module.reject_candidate(extraction_candidates, candidate_id, principal)
+    await audit.record(
+        principal=principal,
+        action="reject_extraction_candidate",
+        investigation_id=investigation.id,
+        resolved_query={"candidate_id": candidate_id},
+        result_cardinality=1,
+    )
+    return RejectedResponse()
+
+
+# --- confirm/retract ----------------------------------------------------------
+#
+# Bare, not nested under an investigation: `provenance.state` is a fact about the node/edge
+# itself in the shared Vault, not a per-investigation-session concept the way τ or the working set
+# are (`services/extract/writer.py`'s own module docstring). Access control is `GraphPort.get_node`
+# alone, exactly the same principal-scoped read every other node lookup in this app already uses
+# — there is no second, investigation-shaped gate to add.
+
+
+@app.post("/v1/nodes/{node_id}/confirm")
+async def confirm_node_route(
+    node_id: str, principal: PrincipalDep, graph: GraphDep, audit: AuditDep
+) -> NodeIdResponse:
+    tx = await graph.begin_transaction()
+    try:
+        new_node_id = await confirm_node(graph, node_id, principal, tx=tx)
+    except Exception:
+        await graph.rollback_transaction(tx)
+        raise
+    await graph.commit_transaction(tx)
+    await audit.record(
+        principal=principal,
+        action="confirm_node",
+        resolved_query={"node_id": node_id},
+        result_cardinality=1,
+    )
+    return NodeIdResponse(node_id=new_node_id)
+
+
+@app.post("/v1/nodes/{node_id}/retract")
+async def retract_node_route(
+    node_id: str, principal: PrincipalDep, graph: GraphDep, audit: AuditDep
+) -> NodeIdResponse:
+    tx = await graph.begin_transaction()
+    try:
+        new_node_id = await retract_node(graph, node_id, principal, tx=tx)
+    except Exception:
+        await graph.rollback_transaction(tx)
+        raise
+    await graph.commit_transaction(tx)
+    await audit.record(
+        principal=principal,
+        action="retract_node",
+        resolved_query={"node_id": node_id},
+        result_cardinality=1,
+    )
+    return NodeIdResponse(node_id=new_node_id)
 
 
 # --- named-step history -----------------------------------------------------
@@ -875,6 +1506,14 @@ _SITE_GRID_RECIPE_PATH = (
     / "site_grid_recipe.yaml"
 )
 
+#: Publish's own git-repository root (§6: recipes commit to `recipes/<id>.
+#: yaml` at the repository root) — the same `.parents[2]` computation as
+#: `_SITE_GRID_RECIPE_PATH` above. An `app.state` value, not a bare module
+#: constant `studio_publish.py` reaches for on its own, so a route test can
+#: point it at a throwaway git repo (`app.dependency_overrides
+#: [get_recipes_repo_root]`) instead of committing into this checkout.
+_RECIPES_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 class ControlPointsRequest(BaseModel):
     #: Exactly 4, TL/TR/BR/BL winding order — `packages/geo/bilinear.py`.
@@ -1047,6 +1686,449 @@ async def set_site_grid(
         result_cardinality=report.nodes_created,
     )
     return updated
+
+
+# --- ingest studio: connect (09_INGEST_STUDIO.md §2) -------------------------
+
+
+@app.get("/v1/ingest/connectors")
+async def list_connectors(principal: PrincipalDep) -> list[ConnectorCatalogueEntry]:
+    """§2's structured/unstructured connector catalogue. Deployment
+    metadata, not material — same justification `get_ontology_route` gives
+    itself: authenticated so the route isn't open to the world, but not
+    investigation-scoped and not audited, since nothing here is a node, a
+    property value or a count."""
+    return list(CONNECTOR_CATALOGUE)
+
+
+@app.get("/v1/handling-scheme")
+async def get_handling_scheme_route(
+    principal: PrincipalDep, scheme: HandlingSchemeDep
+) -> HandlingScheme:
+    """The active deployment's classification/handling-code vocabulary —
+    what Connect's handling-marking gate question offers as choices. Same
+    treatment as `GET /v1/ontology`: schema metadata, not a disclosure of
+    any record's own handling."""
+    return scheme
+
+
+@app.post("/v1/ingest/recipes", status_code=status.HTTP_201_CREATED)
+async def create_studio_recipe_draft(
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))],
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
+    body: ConnectDraftInput,
+) -> StudioRecipeDraft:
+    """§8: "Source author: create and edit draft recipes." A fresh draft —
+    Connect's "pick a connector, point at the data" plus the three
+    mandatory gate answers, which may still be incomplete
+    (`StudioRecipeDraft.ready_for_profile` reports that, §2)."""
+    draft = await studio_recipes.create_draft(
+        principal,
+        label=body.label,
+        connector_profile=body.connector_profile,
+        source_location=body.source_location,
+        handling=body.handling,
+        legal_basis=body.legal_basis,
+    )
+    await audit.record(
+        principal=principal,
+        action="create_studio_recipe_draft",
+        resolved_query={"recipe_id": draft.recipe_id},
+        result_cardinality=1,
+    )
+    return draft
+
+
+@app.patch("/v1/ingest/recipes/{recipe_id}")
+async def update_studio_recipe_draft(
+    recipe: AuthorizedStudioRecipeDep,
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))],
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
+    body: ConnectDraftInput,
+) -> StudioRecipeDraft:
+    """Edits Connect's own fields on a draft still in progress — changing
+    connector, source location, handling marking or legal basis before
+    moving on. Rejects (409, via `StudioRecipeNotADraftError`) once the
+    recipe has left `draft` status."""
+    updated = await studio_recipes.update_draft(
+        recipe.recipe_id,
+        principal,
+        label=body.label,
+        connector_profile=body.connector_profile,
+        source_location=body.source_location,
+        handling=body.handling,
+        legal_basis=body.legal_basis,
+    )
+    await audit.record(
+        principal=principal,
+        action="update_studio_recipe_draft",
+        resolved_query={"recipe_id": recipe.recipe_id},
+        result_cardinality=1,
+    )
+    return updated
+
+
+@app.get("/v1/ingest/recipes/{recipe_id}")
+async def get_studio_recipe_draft(
+    recipe: AuthorizedStudioRecipeDep, principal: PrincipalDep, audit: AuditDep
+) -> StudioRecipeDraft:
+    await audit.record(
+        principal=principal,
+        action="get_studio_recipe_draft",
+        resolved_query={"recipe_id": recipe.recipe_id},
+        result_cardinality=1,
+    )
+    return recipe
+
+
+@app.get("/v1/ingest/recipes")
+async def list_studio_recipe_drafts(
+    principal: PrincipalDep, studio_recipes: StudioRecipesDep, audit: AuditDep
+) -> list[StudioRecipeDraft]:
+    """Connect's "resume a draft" list — the author's own unit's drafts
+    only (`StudioRecipeStore.list_drafts`' own `owning_unit` scoping)."""
+    drafts = await studio_recipes.list_drafts(principal)
+    await audit.record(
+        principal=principal,
+        action="list_studio_recipe_drafts",
+        resolved_query={},
+        result_cardinality=len(drafts),
+    )
+    return drafts
+
+
+# --- ingest studio: profile (09_INGEST_STUDIO.md §3) -------------------------
+
+
+@app.get("/v1/ingest/recipes/{recipe_id}/profile")
+async def get_studio_recipe_profile(
+    recipe: AuthorizedStudioRecipeDep,
+    principal: PrincipalDep,
+    scheme: HandlingSchemeDep,
+    audit: AuditDep,
+) -> SourceProfile:
+    """§3: automatic, and the studio does not let you map until it has run.
+    Reads the sample itself (`services/api/studio_profile.py` dispatches to
+    the one available connector) and calls the Phase 2 profiler
+    (`services/ingest/profiler.profile_source`) under this principal's own
+    clearance, so shape-masking (§3's independent-minimums rule) is exactly
+    as strict here as it is for any other read of this source."""
+    profile = await profile_recipe_source(recipe, principal, scheme)
+    await audit.record(
+        principal=principal,
+        action="get_studio_recipe_profile",
+        resolved_query={"recipe_id": recipe.recipe_id},
+        result_cardinality=len(profile.columns),
+    )
+    return profile
+
+
+# --- ingest studio: map (09_INGEST_STUDIO.md §4) ------------------------------
+
+
+@app.get("/v1/ingest/transforms")
+async def list_transforms(principal: PrincipalDep) -> list[TransformDescriptor]:
+    """The Knowledge Adapter catalogue Map's transform picker and arity
+    check read from — `knowledge_adapters.REGISTRY`/`ARITY`, never
+    hand-duplicated in the Glass. Deployment metadata, same treatment as
+    `list_connectors`. An adapter absent from `ARITY` takes a single
+    `field`, never a `fields` list (that module's own docstring)."""
+    return [TransformDescriptor(name=name, arity=ARITY.get(name, 1)) for name in REGISTRY]
+
+
+@app.put("/v1/ingest/recipes/{recipe_id}/row-template")
+async def update_studio_recipe_row_template(
+    recipe: AuthorizedStudioRecipeDep,
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))],
+    studio_recipes: StudioRecipesDep,
+    scheme: HandlingSchemeDep,
+    audit: AuditDep,
+    body: RowTemplateUpdateInput,
+) -> StudioRecipeDraft:
+    """Map's save (§4). Every element's own `handling` override is checked
+    against the draft's source-level marking before anything is written —
+    §3's independent-minimums rule: an override may tighten, never loosen,
+    what Connect already set (`validate_handling_tightens`,
+    `services/api/studio_map.py`). Gated on `ready_for_profile` the same
+    way Profile is (§3: "the studio does not let you map until it has
+    run") — `resolve_source_handling` is Profile's own defense-in-depth
+    check reused, not a second implementation of it."""
+    if not recipe.ready_for_profile:
+        raise RecipeNotReadyForProfileError(recipe.recipe_id)
+    baseline = resolve_source_handling(recipe)
+    for entity in body.row_template.entities:
+        validate_handling_tightens(baseline, entity.handling, scheme)
+    for edge in body.row_template.edges:
+        validate_handling_tightens(baseline, edge.handling, scheme)
+    updated = await studio_recipes.update_row_template(
+        recipe.recipe_id,
+        principal,
+        row_template=body.row_template,
+        unmapped_fields=body.unmapped_fields,
+    )
+    await audit.record(
+        principal=principal,
+        action="update_studio_recipe_row_template",
+        resolved_query={"recipe_id": recipe.recipe_id},
+        result_cardinality=1,
+    )
+    return updated
+
+
+@app.get("/v1/ingest/recipes/{recipe_id}/map/sample-rows/{row_index}")
+async def get_studio_recipe_sample_row(
+    recipe: AuthorizedStudioRecipeDep,
+    row_index: int,
+    principal: PrincipalDep,
+    scheme: HandlingSchemeDep,
+    audit: AuditDep,
+) -> MapSampleRow:
+    """§4: "the template is always shown bound to a real row, and the
+    analyst can page through." Reads the same bounded sample Profile does,
+    masked exactly like `GET .../profile` when the principal isn't cleared
+    for the source's own marking."""
+    row = await get_sample_row(recipe, principal, scheme, row_index)
+    await audit.record(
+        principal=principal,
+        action="get_studio_recipe_sample_row",
+        resolved_query={"recipe_id": recipe.recipe_id, "row_index": row_index},
+        result_cardinality=1,
+    )
+    return row
+
+
+@app.post("/v1/ingest/recipes/{recipe_id}/map/handling-preview")
+async def preview_studio_recipe_element_handling(
+    recipe: AuthorizedStudioRecipeDep,
+    principal: PrincipalDep,
+    audit: AuditDep,
+    body: MapHandlingPreviewRequest,
+) -> MapHandlingPreviewResult:
+    """§4: what an in-progress element's handling/provenance override would
+    resolve to, via `preview_handling_and_provenance()`
+    (`services/ingest/engine.py`) — the same function Verify's dry run
+    calls, so Map and Verify never disagree about this. Gated on
+    `ready_for_profile`, same reason as the row-template save above: an
+    incomplete `handling` has no baseline to preview an override against."""
+    if not recipe.ready_for_profile:
+        raise RecipeNotReadyForProfileError(recipe.recipe_id)
+    handling, provenance = await preview_element_handling(recipe, body)
+    await audit.record(
+        principal=principal,
+        action="preview_studio_recipe_element_handling",
+        resolved_query={"recipe_id": recipe.recipe_id},
+        result_cardinality=1,
+    )
+    return MapHandlingPreviewResult(handling=handling, provenance=provenance)
+
+
+# --- ingest studio: verify (09_INGEST_STUDIO.md §5) ---------------------------
+
+
+@app.post("/v1/ingest/recipes/{recipe_id}/verify")
+async def verify_studio_recipe(
+    recipe: AuthorizedStudioRecipeDep,
+    principal: PrincipalDep,
+    scheme: HandlingSchemeDep,
+    graph: GraphDep,
+    ontology: OntologyDep,
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
+) -> VerifyReport:
+    """§5: the dry run. No persistent write of any kind happens here — no
+    Parquet staging, no `GraphPort` write, no transaction — but an
+    `on_match: reference` element's lookup against the *existing* graph
+    goes through the ordinary `GraphPort.find_node` under this principal's
+    own clearance (`services/ingest/engine.py`'s `dry_run_recipe`), which is
+    the actual mechanism behind §5's "an author cannot use a dry run to see
+    material they could not otherwise see": an access-filtered miss reads
+    as `None`, exactly like any other read, so it shows as "would create"
+    rather than leaking that a higher-classification match exists."""
+    report = await run_verify(recipe, principal, scheme, graph, ontology)
+    # §5: "Verify must pass before publish" — recorded here, against a
+    # *completed* run (rejections included, per §5's own "a run with
+    # rejections can be published"), so `publish` below can gate on this
+    # flag alone rather than re-running the dry run itself.
+    await studio_recipes.mark_verified(recipe.recipe_id, recipe.version, now=datetime.now(UTC))
+    await audit.record(
+        principal=principal,
+        action="verify_studio_recipe",
+        resolved_query={"recipe_id": recipe.recipe_id},
+        result_cardinality=len(report.nodes) + len(report.edges),
+    )
+    return report
+
+
+# --- ingest studio: publish (09_INGEST_STUDIO.md §6) --------------------------
+
+
+@app.get("/v1/ingest/recipe-registry")
+async def list_studio_recipe_registry(
+    principal: PrincipalDep, studio_recipes: StudioRecipesDep, audit: AuditDep
+) -> list[StudioRecipeDraft]:
+    """Publish's own listing — every recipe the principal's own unit owns
+    at whatever status (draft/published/flagged/superseded), not only
+    drafts (`GET /v1/ingest/recipes`, Connect's narrower "resume a draft"
+    list). A distinct path rather than a query parameter on the existing
+    route, since `GET /v1/ingest/recipes/{recipe_id}` is already registered
+    and a literal suffix here would collide with that path parameter."""
+    recipes = await studio_recipes.list_all(principal)
+    await audit.record(
+        principal=principal,
+        action="list_studio_recipe_registry",
+        resolved_query={},
+        result_cardinality=len(recipes),
+    )
+    return recipes
+
+
+@app.post("/v1/ingest/recipes/{recipe_id}/publish")
+async def publish_studio_recipe(
+    recipe: AuthorizedStudioRecipeDep,
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_APPROVER))],
+    studio_recipes: StudioRecipesDep,
+    ontology: OntologyDep,
+    repo_root: RecipesRepoRootDep,
+    audit: AuditDep,
+    body: PublishRecipeInput,
+) -> StudioRecipeDraft:
+    """§6/§8: draft → published, source-approver only — this same gate is
+    what §8's "approve a mapping that changes an existing recipe's
+    semantics" means for a recipe reopened by `POST .../versions` below:
+    there is no separate "approve" action, publishing the new version *is*
+    the sign-off. Writes the YAML and commits it before flipping the
+    registry row (`StudioRecipeStore.publish` itself enforces "Verify must
+    pass" via `verified_at`), so a `published` row never exists without a
+    matching commit — the reverse of that (a commit with no `published`
+    row, if the registry write somehow failed) is the safer order given
+    §6's own "the repository is the record"."""
+    built = build_recipe(
+        recipe,
+        ontology_version=ontology.version,
+        schedule_cron=body.schedule_cron,
+        schedule_watch=body.schedule_watch,
+    )
+    git_path = await write_and_commit_recipe(built, repo_root=repo_root)
+    updated = await studio_recipes.publish(
+        recipe.recipe_id,
+        principal,
+        ontology_version=ontology.version,
+        git_path=git_path,
+        schedule_cron=body.schedule_cron,
+        schedule_watch=body.schedule_watch,
+        now=datetime.now(UTC),
+    )
+    await audit.record(
+        principal=principal,
+        action="publish_studio_recipe",
+        resolved_query={"recipe_id": recipe.recipe_id, "git_path": git_path},
+        result_cardinality=1,
+    )
+    return updated
+
+
+@app.patch("/v1/ingest/recipes/{recipe_id}/schedule")
+async def update_studio_recipe_schedule(
+    recipe: AuthorizedStudioRecipeDep,
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_APPROVER))],
+    studio_recipes: StudioRecipesDep,
+    ontology: OntologyDep,
+    repo_root: RecipesRepoRootDep,
+    audit: AuditDep,
+    body: ScheduleUpdateInput,
+) -> StudioRecipeDraft:
+    """§8: "schedule it" — a source-approver action distinct from
+    `publish`. Re-commits the recipe YAML with the new schedule (the
+    repository stays the record for the schedule too, not only the
+    mapping) at the same `git_path`, without bumping `version` — the
+    mapping itself is unchanged."""
+    updated = await studio_recipes.update_schedule(
+        recipe.recipe_id,
+        principal,
+        schedule_cron=body.schedule_cron,
+        schedule_watch=body.schedule_watch,
+    )
+    assert updated.row_template is not None and updated.ontology_version is not None
+    built = build_recipe(
+        updated,
+        ontology_version=updated.ontology_version,
+        schedule_cron=body.schedule_cron,
+        schedule_watch=body.schedule_watch,
+    )
+    await write_and_commit_recipe(built, repo_root=repo_root)
+    await audit.record(
+        principal=principal,
+        action="update_studio_recipe_schedule",
+        resolved_query={"recipe_id": recipe.recipe_id},
+        result_cardinality=1,
+    )
+    return updated
+
+
+@app.post("/v1/ingest/recipes/{recipe_id}/versions", status_code=status.HTTP_201_CREATED)
+async def create_studio_recipe_version(
+    recipe: AuthorizedStudioRecipeDep,
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))],
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
+) -> StudioRecipeDraft:
+    """Reopens a published/flagged recipe for further editing — a fresh
+    `status='draft'` row one version ahead, so Map's existing row-template
+    routes (draft-only) work on it unchanged. Author-gated: opening a
+    mapping for edit is authoring; publishing the result is what needs
+    approval (the `publish` route above)."""
+    updated = await studio_recipes.create_new_version(
+        recipe.recipe_id, principal, now=datetime.now(UTC)
+    )
+    await audit.record(
+        principal=principal,
+        action="create_studio_recipe_version",
+        resolved_query={"recipe_id": recipe.recipe_id, "version": updated.version},
+        result_cardinality=1,
+    )
+    return updated
+
+
+@app.post("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/run")
+async def run_studio_recipe(
+    investigation: AuthorizedInvestigationDep,
+    recipe: AuthorizedStudioRecipeDep,
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.LOADER))],
+    graph: GraphDep,
+    ontology: OntologyDep,
+    repo_root: RecipesRepoRootDep,
+    audit: AuditDep,
+    body: RunRecipeInput,
+) -> LoadReport:
+    """§8: "Loader: run a published recipe against a file at or below
+    their own clearance" — `body.source_location`, when given, is that
+    file; omitted, this repeats against the recipe's own recorded location
+    (§6: "re-runnable... the deduplication key makes a re-run idempotent").
+    `investigation_id` is carried onto the produced `EventRecord`s'
+    `investigation_scope` for analytics filtering (`schemas.analytics.
+    EventRecord`) — it is not an access-control scope for the loaded
+    elements themselves, which join the shared graph like any other load."""
+    load_id = new_id()
+    report = await run_published_recipe(
+        recipe,
+        principal,
+        graph=graph,
+        ontology=ontology,
+        load_id=load_id,
+        investigation_scope=investigation.id,
+        source_location=body.source_location,
+        repo_root=repo_root,
+    )
+    await audit.record(
+        principal=principal,
+        action="run_studio_recipe",
+        investigation_id=investigation.id,
+        resolved_query={"recipe_id": recipe.recipe_id, "load_id": load_id},
+        result_cardinality=report.nodes_created + report.edges_created,
+    )
+    return report
 
 
 # --- the delta stream --------------------------------------------------------

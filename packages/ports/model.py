@@ -9,7 +9,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Protocol
 
-from schemas._pending_port_placeholders import (
+from schemas.domain import Vector
+from schemas.model import (
     ExtractionRequest,
     ExtractionResult,
     ImageAnalysis,
@@ -17,7 +18,6 @@ from schemas._pending_port_placeholders import (
     Transcript,
     VisionRequest,
 )
-from schemas.domain import Vector
 
 
 class ModelPort(Protocol):

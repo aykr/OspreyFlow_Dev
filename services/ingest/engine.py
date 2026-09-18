@@ -42,15 +42,20 @@ from conduit_common.identity import new_edge_id, new_node_id
 from knowledge_adapters import ARITY
 from knowledge_adapters.datetime_adapter import DatetimeResult
 from knowledge_adapters.errors import NormalisationError
+from ontology.errors import OntologyError
+from ontology.validation import validate_edge_endpoints, validate_properties
 from ports.graph import GraphPort
 from schemas.analytics import EventRecord
 from schemas.domain import (
+    AuditStub,
+    Edge,
     EdgeId,
     EdgeTypeDef,
     EdgeWrite,
     EntityTypeDef,
     Handling,
     Interval,
+    Node,
     NodeId,
     NodeWrite,
     OntologySchema,
@@ -58,6 +63,7 @@ from schemas.domain import (
     PropertyType,
     Provenance,
     ProvenanceState,
+    ResolutionState,
     SourceRef,
     TxId,
 )
@@ -259,6 +265,21 @@ def _resolve_temporal_instant(
     raise RowRejected(f"temporal binding did not resolve to a datetime: {value!r}")
 
 
+def _merge_override(
+    defaults: Mapping[str, Any], override: Mapping[str, Any] | None
+) -> dict[str, Any]:
+    """A per-element `handling`/`provenance` override (`RecipeEntity.handling`/
+    `.provenance`, `RecipeEdge.handling`/`.provenance` —
+    `09_INGEST_STUDIO.md` §4) merged over the recipe's own defaults, override
+    winning per-key. Shallow: a `Handling`/`Provenance` field is a scalar or
+    a list assigned wholesale (e.g. `provenance.sources`), never a nested
+    dict itself, so a key-level merge is the whole merge."""
+    merged = dict(defaults)
+    if override:
+        merged.update(override)
+    return merged
+
+
 def _handling(defaults: Mapping[str, Any]) -> Handling:
     raw = dict(defaults)
     originator = raw.get("originator")
@@ -277,6 +298,37 @@ def _provenance(
         state=ProvenanceState(state),
         sources=[SourceRef(document_id=source, locator=f"row {row_index}", excerpt_hash="")],
         first_seen=now,
+    )
+
+
+def preview_handling_and_provenance(
+    recipe: Recipe,
+    *,
+    source: str,
+    row_index: int,
+    now: datetime,
+    handling_override: Mapping[str, Any] | None = None,
+    provenance_override: Mapping[str, Any] | None = None,
+) -> tuple[Handling, Provenance]:
+    """What `_write_entity`/`_write_edge` would attach to a written element,
+    computed the same way they do (`_handling`/`_provenance` above) but
+    callable with no open transaction, no `GraphPort`, and no `_RunState` —
+    `09_INGEST_STUDIO.md` §4/§5: the Map and Verify stages' shared preview
+    path, so a dry run's rendered graph and a real load agree on what an
+    element's handling and provenance would be, computed by one shared
+    function rather than reimplemented per caller. `handling_override`/
+    `provenance_override` are an element's own `RecipeEntity`/`RecipeEdge`
+    `handling`/`provenance` — merged over `recipe.defaults` via
+    `_merge_override` before validating, the same merge `_write_entity`/
+    `_write_edge` apply for a real write."""
+    return (
+        _handling(_merge_override(recipe.defaults.handling, handling_override)),
+        _provenance(
+            _merge_override(recipe.defaults.provenance, provenance_override),
+            source=source,
+            row_index=row_index,
+            now=now,
+        ),
     )
 
 
@@ -480,9 +532,12 @@ async def _write_entity(
     properties = _coerce_declared_numeric_types(
         resolved.properties, state.ontology.entity_type(entity.type)
     )
-    handling = _handling(state.recipe.defaults.handling)
+    handling = _handling(_merge_override(state.recipe.defaults.handling, entity.handling))
     provenance = _provenance(
-        state.recipe.defaults.provenance, source=state.source, row_index=row_index, now=now
+        _merge_override(state.recipe.defaults.provenance, entity.provenance),
+        source=state.source,
+        row_index=row_index,
+        now=now,
     )
 
     if entity.on_match == "reference" and entity.match_on:
@@ -542,9 +597,12 @@ async def _write_edge(
     properties = _coerce_declared_numeric_types(
         resolved.properties, state.ontology.edge_type(edge.type)
     )
-    handling = _handling(state.recipe.defaults.handling)
+    handling = _handling(_merge_override(state.recipe.defaults.handling, edge.handling))
     provenance = _provenance(
-        state.recipe.defaults.provenance, source=state.source, row_index=row_index, now=now
+        _merge_override(state.recipe.defaults.provenance, edge.provenance),
+        source=state.source,
+        row_index=row_index,
+        now=now,
     )
     # `01_DOMAIN_MODEL.md` §7: duplicate rows collapse to one event, but
     # every source row reference is retained on the survivor — every
@@ -613,6 +671,265 @@ def _as_float(value: object) -> float | None:
 
 def _as_str(value: object) -> str | None:
     return str(value) if value is not None else None
+
+
+# --- Dry run (Verify — 09_INGEST_STUDIO.md §5) ----------------------------
+#
+# No `GraphPort` write, ever — the property that makes this a dry run rather
+# than a load. No Parquet staging either: `_stage_raw_rows`/`_stage_rows` are
+# themselves persistent writes (to object storage), and §5 says "producing
+# no persistent writes" without carving out an exception for the staging
+# tier, so this goes straight from `resolve_rows()`'s in-memory `StagedRow`s
+# into simulation. `on_match: reference` is the one place this must still
+# touch the real graph: it calls the same `GraphPort.find_node` under the
+# same `Principal` `_write_entity` calls for a real load — an access-filtered
+# miss returns `None` exactly like any other read, so a principal who cannot
+# see a matching node sees this entity as "would create," never as evidence
+# that a higher-classification match exists. That guarantee falls out of
+# reusing the one lookup path everything else already goes through; nothing
+# below re-derives or loosens it.
+
+
+@dataclass
+class DryRunEntityCount:
+    created: int = 0
+    referenced: int = 0
+
+
+@dataclass
+class DryRunEdgeCount:
+    created: int = 0
+
+
+@dataclass
+class DryRunResult:
+    rows_read: int
+    rows_deduplicated: int
+    entities_by_type: dict[str, DryRunEntityCount]
+    edges_by_type: dict[str, DryRunEdgeCount]
+    rejections: list[RejectionRecord]
+    nodes: list[Node]
+    edges: list[Edge]
+    #: The subset of `nodes` this dry run would create — never one it
+    #: merely referenced (the same asymmetry `LoadReport.created_node_ids`
+    #: already draws). `services/api/studio_verify.py` uses exactly this
+    #: set to decide which node's properties to shape-mask when the
+    #: requesting principal cannot clear the source's own classification —
+    #: a referenced node's values are never masked here, since `find_node`'s
+    #: own access filter (not this set) is what already decided this
+    #: principal may see that particular node at all.
+    created_node_ids: frozenset[NodeId]
+
+
+@dataclass
+class _DryRunState:
+    graph: GraphPort
+    principal: Principal
+    recipe: Recipe
+    ontology: OntologySchema
+    source: str
+    now: datetime
+    nodes: dict[NodeId, Node] = field(default_factory=dict)
+    #: Keyed by (edge type, source id, target id) — same-pair edges merge
+    #: within the sample, mirroring `GraphArcadeDBAdapter.upsert_edges`'s
+    #: real merge-by-endpoint behaviour, so "how many distinct pairs" reads
+    #: the same way here as it would after a real load.
+    edges: dict[tuple[str, NodeId, NodeId], Edge] = field(default_factory=dict)
+    entities_by_type: dict[str, DryRunEntityCount] = field(default_factory=dict)
+    edges_by_type: dict[str, DryRunEdgeCount] = field(default_factory=dict)
+    local_index: dict[tuple[str, str], NodeId] = field(default_factory=dict)
+    created_node_ids: set[NodeId] = field(default_factory=set)
+
+
+async def _dry_run_entity(
+    resolved: _ResolvedEntity, *, row_index: int, state: _DryRunState
+) -> NodeId | None:
+    if resolved.properties is None:
+        return None
+    entity = resolved.entity
+    entity_type_def = state.ontology.entity_type(entity.type)
+    properties = _coerce_declared_numeric_types(resolved.properties, entity_type_def)
+    counts = state.entities_by_type.setdefault(entity.type, DryRunEntityCount())
+
+    if entity.on_match == "reference" and entity.match_on:
+        match_value = str(properties.get(entity.match_on))
+        cache_key = (entity.type, match_value)
+        cached = state.local_index.get(cache_key)
+        if cached is not None:
+            counts.referenced += 1
+            return cached
+        existing = await state.graph.find_node(
+            entity.type, entity.match_on, match_value, state.principal
+        )
+        if existing is not None:
+            # The real node, as-is — its own stored handling/provenance/id,
+            # never re-derived. `find_node`'s own access filter is what
+            # decided this principal may see it at all.
+            state.local_index[cache_key] = existing.id
+            state.nodes[existing.id] = existing
+            counts.referenced += 1
+            return existing.id
+
+    # Only the "would create" path is checked against the ontology — the
+    # same asymmetry `GraphArcadeDBAdapter.upsert_nodes` already has for a
+    # real load: `validate_properties` only ever runs for a `NodeWrite`,
+    # never for a referenced hit's already-stored properties. A recipe that
+    # would fail here would fail identically, uncaught, at real load time —
+    # §5's "Verify must pass before Publish" is a hollow promise if this
+    # class of failure only ever surfaces after Publish.
+    if entity_type_def is None:
+        raise OntologyError(f"{entity.type!r} is not a type in the active ontology")
+    validate_properties(entity_type_def, properties)
+
+    handling = _handling(_merge_override(state.recipe.defaults.handling, entity.handling))
+    provenance = _provenance(
+        _merge_override(state.recipe.defaults.provenance, entity.provenance),
+        source=state.source,
+        row_index=row_index,
+        now=state.now,
+    )
+    node_id = new_node_id()
+    node = Node(
+        id=node_id,
+        type=entity.type,
+        properties=properties,
+        provenance=provenance,
+        handling=handling,
+        resolution=ResolutionState(),
+        audit=AuditStub(created_at=state.now, created_by=state.principal.id, revision=1),
+    )
+    state.nodes[node_id] = node
+    state.created_node_ids.add(node_id)
+    counts.created += 1
+    if entity.on_match == "reference" and entity.match_on:
+        match_value = str(properties.get(entity.match_on))
+        state.local_index[(entity.type, match_value)] = node_id
+    return node_id
+
+
+def _dry_run_edge(
+    resolved: _ResolvedEdge,
+    refs: Mapping[str, NodeId],
+    *,
+    row_index: int,
+    state: _DryRunState,
+) -> None:
+    if resolved.properties is None:
+        return
+    edge = resolved.edge
+    source_id = refs.get(edge.from_ref)
+    target_id = refs.get(edge.to_ref)
+    if source_id is None or target_id is None:
+        return  # an endpoint entity was conditionally absent this row
+
+    edge_type_def = state.ontology.edge_type(edge.type)
+    properties = _coerce_declared_numeric_types(resolved.properties, edge_type_def)
+    key = (edge.type, source_id, target_id)
+    existing = state.edges.get(key)
+    if existing is not None:
+        existing.occurrences = (existing.occurrences or 1) + 1
+        return
+
+    # Same real-load parity as `_dry_run_entity`'s own check —
+    # `GraphArcadeDBAdapter.upsert_edges` validates type, properties and
+    # endpoint compatibility before ever writing; a merge into an existing
+    # preview edge (above) skips this precisely because a real merge write
+    # skips re-validating an edge that already exists too.
+    if edge_type_def is None:
+        raise OntologyError(f"{edge.type!r} is not a type in the active ontology")
+    validate_properties(edge_type_def, properties)
+    validate_edge_endpoints(
+        edge_type_def,
+        source_type=state.nodes[source_id].type,
+        target_type=state.nodes[target_id].type,
+    )
+
+    handling = _handling(_merge_override(state.recipe.defaults.handling, edge.handling))
+    provenance = _provenance(
+        _merge_override(state.recipe.defaults.provenance, edge.provenance),
+        source=state.source,
+        row_index=row_index,
+        now=state.now,
+    )
+    interval = (
+        Interval(valid_from=resolved.instant, valid_to=resolved.instant)
+        if resolved.instant
+        else None
+    )
+    state.edges[key] = Edge(
+        id=new_edge_id(),
+        type=edge.type,
+        source=source_id,
+        target=target_id,
+        properties=properties,
+        interval=interval,
+        occurrences=1,
+        provenance=provenance,
+        handling=handling,
+        audit=AuditStub(created_at=state.now, created_by=state.principal.id, revision=1),
+    )
+    state.edges_by_type.setdefault(edge.type, DryRunEdgeCount()).created += 1
+
+
+async def dry_run_recipe(
+    recipe: Recipe,
+    rows: Iterable[Mapping[str, str]],
+    *,
+    graph: GraphPort,
+    ontology: OntologySchema,
+    principal: Principal,
+    source: str,
+) -> DryRunResult:
+    """Verify (`09_INGEST_STUDIO.md` §5): the same `resolve_rows()` output
+    Map's own preview machinery is built on, simulated instead of loaded.
+    `load_id="dry-run"` is never persisted anywhere — `resolve_rows` only
+    threads it onto `StagedRow`s that this function itself consumes and
+    discards."""
+    staged_rows, rejections, rows_read, rows_deduplicated = resolve_rows(
+        recipe, rows, load_id="dry-run", source=source
+    )
+    state = _DryRunState(
+        graph=graph,
+        principal=principal,
+        recipe=recipe,
+        ontology=ontology,
+        source=source,
+        now=datetime.now(UTC),
+    )
+    for staged_row in staged_rows:
+        refs: dict[str, NodeId] = {}
+        for staged_entity in staged_row.entities:
+            resolved_entity = _staged_entity_to_resolved(staged_entity, recipe)
+            node_id = await _dry_run_entity(
+                resolved_entity, row_index=staged_row.row_index, state=state
+            )
+            if node_id is not None:
+                refs[staged_entity.ref] = node_id
+        for staged_edge in staged_row.edges:
+            resolved_edge = _staged_edge_to_resolved(staged_edge)
+            _dry_run_edge(resolved_edge, refs, row_index=staged_row.row_index, state=state)
+
+    # `weight` here is a local, within-sample density signal — `min(1.0,
+    # occurrences / 5)` — not `GraphArcadeDBAdapter._weigh_edge`'s real
+    # corpus-wide formula. That formula lives past `GraphPort`'s own
+    # interface (adapter-internal Gremlin over corpus-wide degree stats);
+    # reaching for it here would mean a new port method this stage doesn't
+    # need, or duplicating adapter internals engine.py has never depended
+    # on. Still enough to make a dense pair visually heavier than a sparse
+    # one — the actual diagnostic §5 asks Verify's canvas for.
+    for edge in state.edges.values():
+        edge.weight = min(1.0, (edge.occurrences or 1) / 5)
+
+    return DryRunResult(
+        rows_read=rows_read,
+        rows_deduplicated=rows_deduplicated,
+        entities_by_type=state.entities_by_type,
+        edges_by_type=state.edges_by_type,
+        rejections=rejections,
+        nodes=list(state.nodes.values()),
+        edges=list(state.edges.values()),
+        created_node_ids=frozenset(state.created_node_ids),
+    )
 
 
 def _staged_entity_to_resolved(staged: StagedEntity, recipe: Recipe) -> _ResolvedEntity:

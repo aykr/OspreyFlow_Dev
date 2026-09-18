@@ -11,10 +11,15 @@ its `context()` additionally takes the test's own `EventRecord` fixtures,
 since (unlike the graph store) each test seeds its own event population
 rather than sharing one ontology-applied schema.
 
-`ComputePort`/`ModelPort` stay empty until Phases 6 and 7 register their own
-adapters — `test_guard.py` for each still asserts its list is empty, so a
-later phase populating one flips that guard red as the expected handover,
-same as `graph_port/test_guard.py` and `analytics_port/test_guard.py` did.
+`ComputePort` stays empty until Phase 7 registers its own adapter —
+`test_guard.py` still asserts its list is empty, so Phase 7 populating it
+flips that guard red as the expected handover, same as `graph_port/
+test_guard.py` and `analytics_port/test_guard.py` did. `ModelPort` is real
+from Phase 6 Stage 1: `MODEL_PORT_ADAPTERS` holds one `ModelAdapterFactory`
+for `adapters/model_litellm`, calling the pinned conformance model
+(`adapters.model_litellm.CONFORMANCE_MODEL`, `06_DECISIONS.md` ADR-020)
+over a live LiteLLM proxy — the same "prove it against the real backend"
+discipline `GraphPort`/`AnalyticsPort` already established, not a fake.
 """
 
 from __future__ import annotations
@@ -86,7 +91,27 @@ def _analytics_duckdb_factories() -> list[AnalyticsAdapterFactory]:
     return [AnalyticsAdapterFactory(label="analytics_duckdb", context=_context)]
 
 
+@dataclass(frozen=True)
+class ModelAdapterFactory:
+    """One conformance-testable `ModelPort` adapter. Unlike `GraphAdapterFactory`/
+    `AnalyticsAdapterFactory`, `context()` takes no fixtures — there is no schema or event
+    population to apply first; a LiteLLM proxy is called directly, stateless from the adapter's
+    own point of view."""
+
+    label: str
+    context: Callable[[], AbstractAsyncContextManager[ModelPort]]
+
+    def __str__(self) -> str:  # pytest parametrize id
+        return self.label
+
+
+def _model_litellm_factories() -> list[ModelAdapterFactory]:
+    from adapters.model_litellm.testing import model_litellm_adapter
+
+    return [ModelAdapterFactory(label="model_litellm", context=model_litellm_adapter)]
+
+
 GRAPH_PORT_ADAPTERS: list[GraphAdapterFactory] = _graph_arcadedb_factories()
 ANALYTICS_PORT_ADAPTERS: list[AnalyticsAdapterFactory] = _analytics_duckdb_factories()
 COMPUTE_PORT_ADAPTERS: list[ComputePort] = []
-MODEL_PORT_ADAPTERS: list[ModelPort] = []
+MODEL_PORT_ADAPTERS: list[ModelAdapterFactory] = _model_litellm_factories()

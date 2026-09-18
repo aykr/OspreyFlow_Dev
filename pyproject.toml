@@ -30,6 +30,12 @@ dependencies = [
     # `xml.etree.ElementTree` is vulnerable to XXE/billion-laughs against
     # exactly that kind of input; `defusedxml` is the safe drop-in.
     "defusedxml>=0.7.1",
+    # Pinned exactly, not >=: 4.x/5.x add a hard, non-optional dependency on
+    # `igraph`, which is GPL-licensed and fails `make licence-check` —
+    # `docs/06_DECISIONS.md` ADR-021 has the full finding. 3.9.9 depends on
+    # `phonetics` (MIT) instead. Re-check `igraph` is still absent from
+    # `requires_dist` on PyPI before ever bumping this pin.
+    "splink==3.9.9",
 ]
 
 [dependency-groups]
@@ -67,6 +73,20 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "msgpack.*"
+ignore_missing_imports = true
+
+# `splink==3.9.9` (docs/06_DECISIONS.md ADR-021) and its own transitive `phonetics`/`pandas`
+# dependencies ship no type stubs or py.typed marker.
+[[tool.mypy.overrides]]
+module = "splink.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "phonetics.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "pandas.*"
 ignore_missing_imports = true
 
 [tool.ruff]

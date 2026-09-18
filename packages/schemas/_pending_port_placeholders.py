@@ -6,7 +6,12 @@ before those ports' own domain content exists. Nothing here is domain
 content. `GraphPort`'s request/response types moved to `schemas/domain.py`
 in Phase 1, and `AnalyticsPort`'s moved to `schemas/analytics.py` in Phase 2
 once `analytics_duckdb` was registered — see
-`tests/schemas/test_placeholder_lifecycle.py`.
+`tests/schemas/test_placeholder_lifecycle.py`. `ModelPort`'s four names
+(`ExtractionRequest`/`ExtractionResult`, `TranscribeRequest`/`Transcript`,
+`VisionRequest`/`ImageAnalysis`) moved to `schemas/model.py` across Phase 6
+Stages 1 and 2 as `adapters/model_litellm` implemented each pair for real.
+Only `ComputePort`'s five names remain here now, until Phase 7 registers
+`adapters/compute_rustworkx`.
 
 Guarded by ``tests/schemas/test_placeholder_lifecycle.py``: this module must
 no longer exist once *all three* of `ANALYTICS_PORT_ADAPTERS`,
@@ -52,43 +57,10 @@ class MotifMatch(_Placeholder):
     pass
 
 
-# --- ModelPort ---------------------------------------------------------------
-
-
-class ExtractionRequest(_Placeholder):
-    pass
-
-
-class ExtractionResult(_Placeholder):
-    pass
-
-
-class TranscribeRequest(_Placeholder):
-    pass
-
-
-class Transcript(_Placeholder):
-    pass
-
-
-class VisionRequest(_Placeholder):
-    pass
-
-
-class ImageAnalysis(_Placeholder):
-    pass
-
-
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     CentralityRequest,
     CommunityRequest,
     CliqueMetricRequest,
     MotifRequest,
     MotifMatch,
-    ExtractionRequest,
-    ExtractionResult,
-    TranscribeRequest,
-    Transcript,
-    VisionRequest,
-    ImageAnalysis,
 )

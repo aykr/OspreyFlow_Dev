@@ -31,8 +31,10 @@ confirmed.
 | 017 | Target the UK and the US; reprojection becomes mandatory | | **Accepted** — 13 Sep 2026 |
 | 018 | The Ingest Studio edits a declarative recipe, maps POLE-first | | **Accepted** — 13 Sep 2026, interface review pending |
 | 019 | Scenario A's exit criterion is split across three phases | | **Accepted** — 16 Sep 2026 |
+| 020 | `ModelPort` conformance is pinned to a small, digest-verified local model | | **Accepted** — 17 Sep 2026 |
+| 021 | Splink is pinned to 3.9.9, not the 4.x/5.x line, over a transitive GPL dependency | | **Accepted** — 18 Sep 2026 |
 
-All nineteen records are accepted, including all seven overrides of the input documents.
+All twenty-one records are accepted, including all seven overrides of the input documents.
 `07_BUILD_PLAN.md` is unblocked end to end; nothing in the plan now waits on an open decision.
 
 One record carries a stated review point. ADR-018 is accepted on the understanding that the
@@ -764,3 +766,349 @@ before Phase 5 carried a promise it could not keep alone.
 **Revisit if.** A future reordering moves `ComputePort` or Assessment/export earlier than currently
 planned — update the phase each deferred assertion is attributed to, not this ADR's reasoning,
 which stays correct regardless of which phase number ends up doing the re-proving.
+
+---
+
+## ADR-020 — `ModelPort` conformance is pinned to a small, digest-verified local model
+
+**Status.** Accepted, 17 September 2026.
+
+**Decision.** The `ModelPort` conformance suite (`tests/conformance/model_port/test_suite.py`,
+`docs/07_BUILD_PLAN.md` Phase 6 Stage 1) runs against Ollama's `qwen2.5:0.5b-instruct`
+(manifest digest `sha256:a8b0c51577010a279d933d14c2a8ab4b268079d44c5c8830c0a93900f1827c67`), served
+from the `ollama/ollama:0.18.2` container image, itself pinned by digest
+(`sha256:5a5d014aa774f78ebe1340c0d4afc2e35afc12a2c3b34c84e71f78ea20af4ba3` — an ordinary image pin,
+since Ollama's own digest-pull limitation below is specific to *model* references, not the engine
+image), proxied through the LiteLLM service `deploy/compose/dev.yaml` and the `conformance-model`
+CI job both bring up. The suite asserts the *contract* — a schema-conforming response comes back for
+a valid JSON Schema, and a malformed schema is rejected before any model call
+(`InvalidExtractionSchemaError`) — never exact generated text.
+
+**Why a real model, not a fake, and why this specific one.** `GraphPort`/`AnalyticsPort`'s own
+conformance suites already establish the precedent this build holds to: prove the port against the
+real backing engine `local-lite` actually ships, not a mock that could drift from what the adapter
+really does. A full extraction-grade model (7–14B, `03_CONDUIT_MIDDLEWARE.md` §5.2's own default)
+is too slow and too large to pull on every PR, and its sampling behaviour is not deterministic
+enough to gate a build on regardless of size. A small, pinned instruction-tuned model is the
+smallest thing that can still genuinely exercise constrained decoding end to end — request a
+document and a schema, get conforming JSON back — which is exactly the boundary ADR-005 draws
+around what `ModelPort` promises. Extraction *quality* against real language is a different
+question with a different, slower gate: the golden set (Stage 3), run less frequently, is what
+that's for.
+
+**The digest pin, and why it isn't literally a digest pull.** An Ollama tag can move upstream —
+the publisher re-tags `0.5b-instruct` against different weights, and every subsequent `ollama pull`
+silently starts running a different model, which is exactly the nondeterminism this ADR exists to
+rule out. The natural fix — pull by content digest, the way an OCI image reference can — does not
+work here: tested directly against Ollama 0.18.2, `ollama pull qwen2.5:0.5b-instruct@sha256:<digest>`
+and `ollama pull qwen2.5@sha256:<digest>` both return `Error: 400 Bad Request: invalid model name`.
+The pin is enforced the other way round instead: pull the tag, then check the resulting local
+manifest's digest (Ollama's own `ollama list` "ID" column, which is exactly this digest's first 12
+hex characters — confirmed directly, not assumed) against the digest recorded here, and fail loudly
+on a mismatch rather than silently proceeding with whatever the tag now resolves to. Both
+`deploy/compose/dev.yaml`'s `ollama` service entrypoint and the CI job that mirrors it run this
+check before the container/job is allowed to report healthy.
+
+**Cost.** A 397MB image layer and sub-second CPU inference for a schema this small — cheaper than
+any of the four stores the existing conformance jobs already stand up. The only real cost is a
+model this small being a poor extractor in absolute terms, which does not matter here: nothing in
+this suite grades what it extracts, only that the shape it returns is honest.
+
+### Addendum — `embed()` folded into Stage 1, pinned the same way
+
+**Status.** Accepted, 18 September 2026.
+
+**Decision.** `ModelPort.embed()` is real from Stage 1 too, not deferred or left unowned.
+`ModelLiteLLMAdapter.embed()` calls `all-minilm:22m-l6-v2-fp16` (manifest digest
+`sha256:1b226e2802dbb772b5fc32a58f103ca1804ef7501331012de126ab22f67475ef`) through the same
+LiteLLM proxy, pinned and verified by the same pull-then-verify mechanism as the extraction model
+above, in the same `ollama` service.
+
+**Why this, and why not Stage 4.** `embed()` was originally recorded as owned by no stage —
+found while scoping Stage 1's own close, not assumed either way beforehand. The candidate owner
+was Stage 4 (`services/resolve`, Splink), on the theory that embedding-based comparisons might be
+what Splink needs it for. Checked directly rather than assumed: Splink's comparison library does
+support a cosine-similarity comparison level over pre-computed embedding vectors, but Splink does
+not compute those vectors itself — a caller would have to supply them — and the ontology's own
+shipped `resolution` block (`packages/ontology/default.yaml`, `Person`) declares only classical
+comparisons (`soundex`, `jaro_winkler`, `levenshtein`, `exact`), none of which need a vector at
+all. Stage 4's own closed function-registry (this document's Stage 4 scoping) was agreed against
+exactly that classical set — extending it to an embedding-based comparison was never requested and
+is not implied by anything currently in `01_DOMAIN_MODEL.md` §4. Stage 4 is therefore not a real
+consumer today; assigning `embed()` to it would have been picking a home for appearance's sake,
+not because Stage 4's own work needs it.
+
+`embed()` is architecturally identical to `extract()` — a single text-in call through the same
+proxy, no orchestration, the adapter and conformance-suite plumbing already exist — so implementing
+it now, as Stage 1 infrastructure available to whichever future phase actually wants it (a Stage 4
+comparison type if the closed registry is ever extended to one, or a future phase that wires
+`03_CONDUIT_MIDDLEWARE.md` §5.1's still-unowned OpenSearch indexing step), is cheaper and more
+honest than deferring a two-line method a second time.
+
+**Why a different, smaller model from extraction.** Embedding and extraction are different tasks
+regardless of both happening to run on Ollama locally — an embedding model has no chat template
+and nothing to constrain-decode. `all-minilm` is smaller still than the extraction pin (45MB
+against 397MB) since the conformance suite only proves "one vector per input, correct and
+consistent dimensionality", never embedding quality.
+
+**Conformance scope, same discipline as `extract()`.** `tests/conformance/model_port/test_suite.py`
+asserts vector count, uniform non-zero dimensionality and float type — never exact vector values,
+for the same reason `extract()`'s own tests never assert exact text: hardware-dependent float
+drift is possible even on a pinned, digest-locked small model.
+
+**Revisit if.** Ollama ships genuine digest-pull support for a library-namespaced model — replace
+the pull-then-verify script with a direct digest pull, same digest, no behaviour change. Revisit
+the model choice itself only if the golden set's own tooling (Stage 3) needs a materially different
+small model as its own CI baseline — that is a separate question from what this ADR pins, and
+should not silently piggyback on this one changing.
+
+### Addendum — Stage 2: `transcribe()`/`describe_image()` pins, and the vision CI-cadence split
+
+**Status.** Accepted, 18 September 2026.
+
+**Decision.** Two more pinned, digest/commit-verified models, one new serving stack:
+
+- `transcribe()` calls `Systran/faster-whisper-tiny.en` (Hugging Face commit sha
+  `0d3d19a32d3338f10357c0889762bd8d64bbdeba`), served by `speaches`
+  (`ghcr.io/speaches-ai/speaches@sha256:21e3df06d842fb7802ab470dd77c25f0e8c0d22950e8d8c6ae886e851af53ef8`,
+  MIT) — an OpenAI-Whisper-API-compatible wrapper around faster-whisper itself, confirmed directly
+  to be what `03_CONDUIT_MIDDLEWARE.md` §5.2's "Default local: faster-whisper" resolves to, since
+  faster-whisper is a Python library, not a server. LiteLLM proxies the multipart
+  `/audio/transcriptions` upload to it as a generic `openai/`-shaped backend, the same "one
+  OpenAI-compatible base URL" invariant `extract()`/`embed()`/`describe_image()` already hold to —
+  confirmed by running the actual upload through the proxy, not assumed from either project's docs.
+- `describe_image()` calls `moondream:1.8b-v2-q4_K_M` (manifest digest
+  `sha256:c865c80afc38a27c2b0eaea3f77e00c0b5a631e3d3e46070927c0063d8a1853b`) — Ollama-served, pinned
+  and pull-then-verified the same way `extract()`'s and `embed()`'s models are. Confirmed directly
+  that this model accepts the same OpenAI vision content-part shape
+  (`{"type": "image_url", "image_url": {"url": "data:...;base64,..."}}`) and the same JSON-Schema
+  `response_format` as the text model, so `describe_image()` reuses `extract()`'s exact
+  schema-constrained-decoding code path in `client.py` rather than a second implementation.
+
+**The Whisper pin isn't a digest either, for a different reason than the Ollama case above.**
+`speaches`'s own model-download endpoint takes a bare Hugging Face repo id and no revision
+parameter — checked directly against its OpenAPI schema, not assumed. The pin is instead the
+model's Hugging Face commit sha: a downloaded snapshot lands in the server's Hugging Face cache at
+a directory named exactly for that commit (confirmed by inspecting the container's own cache
+layout after a real download), so verifying the expected directory exists is the equivalent check,
+against a different cache convention from Ollama's manifest digest.
+
+**Why `moondream` and not a larger vision model.** The same reasoning as the text/embedding pins:
+this suite proves the contract (schema in, schema-conforming JSON out), never description or OCR
+*quality*, so the smallest model that can genuinely exercise vision-language constrained decoding
+is the right one. It is materially larger than the other three pins regardless (1.8GB against
+45MB–397MB) — there is no smaller-still tier for a vision-language model the way `all-minilm` is
+for text embeddings — which is exactly why its own CI job runs on a different cadence, below.
+
+**The CI-cadence split.** `describe_image()`'s conformance case
+(`tests/conformance/model_port/test_suite_vision.py`) runs in its own CI job
+(`conformance-model-vision`), gated to `push` (merge to `main`) rather than every pull request —
+the same `02_GLASS_FRONTEND.md` §5 precedent that keeps a full performance-budget run off every
+commit rather than gating a fast PR loop on the heaviest possible check. `extract()`/`embed()`/
+`transcribe()` stay on every PR (`conformance-model`), since none of their pins carries this
+model's weight. The split is at the *test file* level, not only a CI job's `--ignore` flag, so a
+contributor reading `test_suite.py` alone sees exactly what runs on every PR without
+cross-referencing a workflow YAML.
+
+**Diarisation is not implemented this stage.** `TranscribeRequest.diarize=True` raises
+`NotImplementedError` (`ModelLiteLLMAdapter.transcribe`) rather than silently returning every
+segment's `speaker` as `None` as if diarisation had run and found nothing. Neither faster-whisper
+nor `speaches` do diarisation natively — checked directly against `speaches`'s own README, which
+names no such feature — and a real diarisation pipeline (e.g. `pyannote.audio`) is enough
+additional weight and dependency surface to be its own scoping decision, not a Stage 2 default.
+Disclosed in `07_BUILD_PLAN.md`'s Phase 6 known-gaps list, not only in this adapter's docstring.
+
+**Revisit if.** The same triggers as the addendum above, applied per model: Ollama digest-pull
+support would let `moondream`'s pin drop the pull-then-verify script; a `speaches` revision
+parameter would do the same for the Whisper pin. Revisit the vision CI cadence if a smaller
+genuinely-capable vision-language model appears, at which point running it on every PR may cost
+little more than the text model does today.
+
+### Addendum — Stage 3: the golden set measures this pin's regressions, not deployment quality
+
+**Status.** Accepted, 18 September 2026.
+
+**What the golden set's numbers are, restated here because it is easy to misread them later.**
+`tests/golden/baseline.json` (currently ~0.75 recall, ~0.53 precision for its one case) is a
+**CI regression detector for the exact model this ADR pins** — `qwen2.5:0.5b-instruct` — not a
+measurement of OspreyFlow's real extraction quality. `03_CONDUIT_MIDDLEWARE.md` §5.2 names the
+production default as a 7–14B model, fourteen to twenty-eight times larger than the CI pin, whose
+own precision/recall this harness has never measured and has no basis to estimate. The full
+statement of this lives in `tests/golden/harness.py`'s own docstring, which a reader touching the
+golden set will see directly; it is recorded here too because a baseline number travels — it can
+get quoted in a PR description or a status update — and whoever reads it there may never open
+`harness.py` at all.
+
+**A matcher bug, found by checking a suspicious result rather than trusting it.** Building Stage
+3's own regression tolerance meant measuring real run-to-run variance, and an initial pass
+recorded batch means as low as 0.53 with individual runs hitting `recall=0.0`. Checked directly,
+per the same discipline Stage 1's witness-statement flakiness and Stage 2's repeated-run checks
+already established, rather than accepted as "small models are noisy": two of the zero/low-recall
+runs turned out to be the harness's own matcher failing to recognise a correctly-identified entity
+— `dana_mercer` (identifier-style formatting) and `MERCER Dana` (word order) both failed exact
+match against `Dana MERCER` under the original `.strip().casefold()` comparison, despite the model
+having found the right person both times. Fixed in `tests/golden/harness.py`'s `_normalise()`:
+separator characters (`_`, `-`) collapse to spaces and tokens are sorted before comparison — still
+exact-after-normalisation, not fuzzy, since it can only ever match two already-identical multisets
+of words, never two different people. After the fix, a 20-run manual trial's per-run recall never
+went below 0.67, materially tighter than the pre-fix measurement, and the committed baseline
+reflects the fixed matcher, not the buggy one.
+
+**What was deliberately not fixed.** A handful of the original low-recall runs extract a bare
+surname with no forename (e.g. `'MERCER'` alone) — a genuine partial-extraction miss, not a
+formatting variant of a correct answer. Matching that against `'Dana MERCER'` would mean
+substring/partial matching, which is fuzzy in exactly the sense ADR-020's own "deliberately not
+fuzzy" design choice rules out for this harness (that comparison is Stage 4's Splink job, at query
+time, over resolved entities — not a golden-set string match over raw extraction). Left as a real,
+recorded miss.
+
+**Revisit if.** A second golden case is added whose category names collide in some way that makes
+"array-valued schema field" no longer an unambiguous stand-in for "entity type" (see
+`tests/golden/harness.py`'s own scoping note on this). Re-measure the tolerance if `N_RUNS` or the
+pinned model changes — the 0.15 figure is tied to this specific model's specific noise profile,
+not a universal constant.
+
+---
+
+## ADR-021 — Splink is pinned to 3.9.9, not the 4.x/5.x line, over a transitive GPL dependency
+
+**Status.** Accepted, 18 September 2026.
+
+**Decision.** `services/resolve` (Phase 6 Stage 4) depends on `splink==3.9.9`, not the current
+4.x stable line or the 5.x pre-release line, and this is a deliberate, revisit-worthy pin, not
+"whatever `uv add splink` resolved to".
+
+**Why, found live rather than assumed.** `01_DOMAIN_MODEL.md` §4 names Splink as "the right choice
+over Dedupe or Zingg here" on transportability grounds (DuckDB locally, Spark on the cluster
+profile) and cites its MIT licence. That is true of Splink itself, but `uv add splink` (which
+resolves to the current stable release, 4.0.17) pulls in `igraph>=0.11.2` as a hard, non-optional
+runtime dependency — checked directly against the installed package's own metadata, not assumed
+from a changelog. `python-igraph`'s own declared licence is GPL, which fails
+`scripts/licence_check.py` immediately: `licence-check: igraph 1.0.0 — 'GNU General Public
+License (GPL)' is not on the docs/00_ARCHITECTURE.md §7 allowlist`. `00_ARCHITECTURE.md` §7
+already rejects Neo4j Community for exactly this class of reason ("GPL reciprocity on a platform
+intended for wide distribution") — the same reasoning applies here regardless of how the GPL
+package arrived, as a direct dependency or a transitive one four layers into `splink`'s own
+install.
+
+**Why 3.9.9 specifically, not a different exclusion.** Checked directly, not assumed: PyPI's own
+per-release metadata shows `igraph` was added to Splink's dependency list at some point in the 4.x
+line and is still present in the newest 5.0.0 pre-release (`5.0.0.dev4`) — this is not a
+transient regression a patch release will lift. The last release before it, `splink==3.9.9`,
+depends on `phonetics` (MIT) instead and has no `igraph` dependency at all — confirmed both by
+reading its PyPI `requires_dist` and by actually installing it (`uv add "splink==3.9.9"`) and
+re-running `scripts/licence_check.py` clean: 68 packages, all allowed. 3.9.9's own API (the
+`splink.duckdb.linker.DuckDBLinker` class, raw settings-dict comparisons and blocking rules,
+`predict()`, `cluster_pairwise_predictions_at_threshold()`) was exercised directly against a
+synthetic five-row DuckDB dataset before this ADR was written, not assumed to work from
+documentation — blocking, scoring and threshold-clustering all behaved as `01_DOMAIN_MODEL.md`
+§4 describes.
+
+**Cost.** `services/resolve` is written against Splink 3.x's API shape (`splink.duckdb.linker`,
+dict-based settings), which differs from 4.x's (`splink.Linker` plus a separate `DuckDBAPI`
+backend object). A future upgrade to a 4.x/5.x release that drops the `igraph` dependency — or
+one where `igraph`'s own licence changes, or a deployment accepts a recorded GPL exception the way
+LGPL-3.0 already has a path for (`00_ARCHITECTURE.md` §7) — is real, non-trivial rework, not a
+version-number bump. Accepted because the alternative (shipping a GPL-licensed transitive
+dependency in a platform explicitly built for wide redistribution) is not a trade this project
+makes anywhere else in the stack, and 3.9.9 is not a dead end: it is a real, MIT-clean, previously
+stable release of the exact library the domain model names, not a fork or an unrelated substitute.
+
+**Revisit if.** A `splink` release drops the `igraph` dependency (check `requires_dist` on PyPI
+before upgrading, the same way this ADR did, not just the changelog's feature list), or `igraph`
+itself relicenses, or the project's own licence register grows a reviewed-exception path for GPL
+the way it already has one for LGPL-3.0's dynamic-linking case.
+
+**Addendum, 18 September 2026 — no m/u training (expectation-maximisation).** `services/resolve`
+calls `linker.predict()` directly against `comparison_library` defaults
+(`jaro_winkler_at_thresholds`, `exact_match`) and never calls Splink's
+`estimate_u_using_random_sampling` or `estimate_parameters_using_expectation_maximisation`. This
+is a real match-quality trade-off across the whole resolution system — the same category of call
+as ADR-006's query-time-projection decision — not an implementation detail, so it is recorded
+here rather than only in `services/resolve/splink_config.py`'s docstring.
+
+**Why.** Splink's own documentation is explicit that EM training needs "a few hundred, preferably
+thousand" labelled or blocked comparison pairs to produce statistically meaningful m/u
+probabilities. A typical investigation's `Person` population in this build is nowhere near that
+size, and training per-investigation on a handful of nodes would not converge on a real signal —
+it would fit noise and then present that noise as a calibrated probability, which is worse than
+an honestly-uncalibrated default because it looks trustworthy. Untrained `comparison_library`
+defaults make no such claim; they encode a fixed, published prior about how much a given
+similarity level should count as match evidence, transportable and honestly implementation
+constants, not a certificate of trained precision for this task or this investigation.
+
+**Evidence.** Correctness was not assumed from the design argument above; it was checked directly.
+`tests/resolve/test_resolution_accuracy.py` runs six hand-labelled pairs against the real
+`Person.resolution` ontology config and the untrained defaults — the same "deliberate
+alias-variation pattern" fixture discipline `tests/scenarios/fixtures/cdr.py` established for
+phone-number renderings, applied here to names (identical rendering, case-varied plus abbreviated
+given name, misspelled surname via soundex block, given-name typo, and two negative controls with
+no shared identity). Building this check found two real defects in `services/resolve/resolver.py`,
+both since fixed, not merely asserted around:
+
+- DuckDB's `jaro_winkler_similarity` is case-sensitive —
+  `jaro_winkler_similarity('MERCER', 'Mercer')` returns `0.44`, not `1.0` — which silently scored
+  a same-person, different-case pair as a near-certain non-match (`0.0001`). Fixed by casefolding
+  `PropertyType.STRING` values before they reach Splink.
+- The DataFrame builder passed to `DuckDBLinker` only included `comparison_columns()`, not the
+  union with `blocking_columns()` — harmless only because `Person`'s own config happens to compare
+  every column it blocks on; a hypothetical entity type blocking on a column it never compares
+  would have raised a DuckDB "column does not exist" error. Fixed by unioning both column sets.
+
+With both fixes applied, all six hand-labelled pairs land on the correct side of a permissive
+0.5 decision threshold, including the case-plus-abbreviation pair (`0.766`). This is evidence that
+the untrained defaults discriminate correctly on the comparisons this ontology actually configures
+— it is not evidence that the resulting probabilities are well-calibrated, which is exactly the
+thing EM training would buy and this decision forgoes.
+
+**Cost.** Match probabilities from untrained defaults are directional, not calibrated: a score of
+`0.77` means "closer to a match than not" under fixed, published priors, not "77% of pairs this
+similar are true matches in this deployment's actual population." `services/resolve/projection.py`
+already threshold-gates final decisions at `DEFAULT_THRESHOLD = 0.95` rather than the permissive
+`0.5` this accuracy check uses, which absorbs some of that lack of calibration, but it does not
+eliminate it — an investigation with unusual name-collision statistics (e.g. a population sharing
+one extended family's surname) gets the same fixed priors as one without, and a case Splink itself
+would need real EM training to resolve correctly (e.g. the "D" vs "Dana" abbreviation, which only
+just clears the 0.5 line here because `date_of_birth` carries most of the match weight) remains a
+genuine, disclosed limitation rather than a solved one.
+
+**Revisit if.** A deployment's investigation populations grow large enough — Splink's own guidance
+puts the floor at a few hundred, preferably thousand, comparison pairs per entity type — that
+per-investigation (or per-deployment, pooled across investigations under the same access
+boundary) EM training would produce statistically meaningful weights rather than fitting noise. At
+that point, `linker.estimate_u_using_random_sampling()` plus a labelled or blocked EM pass becomes
+a real option and this addendum should be superseded, not merely footnoted.
+
+**Addendum, 18 September 2026 — the resolution-conflict detection threshold (Phase 6 Stage 5).**
+`services/resolve/conflicts.py`'s `detect_conflicts` decides whether a fresh candidate "would have
+merged" a manually-split pair (`03_CONDUIT_MIDDLEWARE.md` §5.3's "a later run that would have
+merged the pair records the conflict for review"). This runs corpus-wide, outside any one
+investigation's session, so there is no session-specific τ to test against — the spec names the
+*behaviour* here, not which threshold decides it, and the value below is this build's own choice,
+not spec text.
+
+**Decision.** The bar is `services/resolve/projection.THRESHOLD_BROAD` (0.80) — the lowest of the
+three officially offered detents (Strict 0.99, Balanced 0.95, Broad 0.80) — not `DEFAULT_THRESHOLD`
+(Balanced, 0.95), which an earlier draft of this stage used.
+
+**Why.** Merging is monotonic in score: a candidate that clears Strict or Balanced also clears
+Broad. Broad is therefore the one single value that catches every candidate that could merge
+under *any* of the three supported settings — a candidate that does not even clear Broad could
+not merge under any officially offered τ, so it genuinely is not a conflict. Checking against
+Balanced instead (this stage's first draft) had a real, silent gap: a candidate scoring, say,
+0.85 clears Broad but not Balanced, so an investigation actually running at Broad would have
+genuinely merged that pair while the conflict check stayed silent about it. This was not decided
+unilaterally — flagged to the user as an arbitrary-vs-principled call in the same category as
+ADR-020's model pin, and Broad was confirmed as the right choice before landing.
+
+**Cost.** Broad is the most permissive of the three detents, so this is the most sensitive choice
+available: it will flag more candidates as conflicts than Balanced or Strict would, including some
+that would never actually merge for an investigation running Strict or Balanced. That is an
+intentional trade — a false-positive conflict costs an analyst one cheap `explain` look; a missed
+one costs a silent bad merge going unreviewed, which `03_CONDUIT_MIDDLEWARE.md` §5.3's whole
+"record the conflict for review" design exists to prevent.
+
+**Revisit if.** The three-detent scheme itself changes (a new detent, different values), or a
+future stage gives conflict detection a genuine per-investigation τ to check against instead of a
+single corpus-wide bar — at which point this should check the investigation's own running
+threshold directly rather than the most permissive of three fixed constants.

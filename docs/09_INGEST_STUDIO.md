@@ -107,6 +107,15 @@ Two limits, because a positional mask over free text leaks more than it looks:
 Values are never simply hidden. A profiler that shows nothing cannot be checked, and an
 unchecked mapping is how a source silently fragments the graph.
 
+**Source-level masking and per-node access control are independent minimums.** This masking is
+computed once, at profiling time, against the source's own handling marking set at Connect — it
+is not the same check as the `AccessFilter` gate applied to a written node's own
+`handling_classification`/`handling_code` once elements exist (§8, `01_DOMAIN_MODEL.md` §2.2). A
+looser per-element `handling` override set later in Map never loosens what Profile already masked
+here for a principal who could not clear the source: the sample was computed once, against the
+source-level marking, and is not retroactively recomputed because one element ends up less
+restrictive than the source default.
+
 Pattern recognition is what makes the mapping stage fast. A CDR from an unfamiliar carrier
 arrives and the profiler has already worked out that column 3 is an A-party MSISDN, column 7 is a
 duration in seconds, and column 11 is a cell identifier. The analyst confirms rather than
@@ -196,6 +205,17 @@ once and available to everyone.
 carry either — a records-management export often has its own classification column. Everything
 loaded structurally is `asserted`; everything derived by a model is `inferred`.
 
+The engine's `_handling()`/`_provenance()` (`services/ingest/engine.py`) are pure — recipe
+defaults and a row index in, a `Handling`/`Provenance` out, no open transaction required — which
+is exactly what lets Map (and Verify, §5) show what an element's handling and provenance *would*
+be before any write happens: `services/ingest/engine.preview_handling_and_provenance()` wraps
+them for this purpose and is the one path both this stage's live preview and Verify's dry run
+call, rather than each re-deriving it. The per-element override this paragraph promises is not
+yet a field on `RecipeEntity`/`RecipeEdge` — building it is this stage's own scope: add
+`handling`/`provenance` override fields to both, and have the write path (and the preview call
+above) merge an element's override over `recipe.defaults` before validating, rather than using
+the recipe-level default unconditionally as it does today.
+
 **Conditional elements.** An element can be conditional on a field value, which is how one
 recipe handles a file whose rows are not homogeneous — a device extraction where a row is a call,
 a message or a contact depending on a type column.
@@ -223,6 +243,17 @@ own authorisation, not a checkbox in an extraction profile.
 ## 5. Stage 4 — Verify
 
 A dry run over the sample that produces no persistent writes and three outputs.
+
+**How the clearance scoping in §8 is actually enforced.** An `on_match: reference` lookup during
+the dry run goes through the same `GraphPort.find_node` call the real write path uses
+(`services/ingest/engine.py`'s `_write_entity`), passing the author's own `Principal` — never a
+privileged or bypassing lookup. `GraphPort` is where `AccessFilter` is injected (`CLAUDE.md` rule
+3), so this is what makes "an author cannot use a dry run to see material they could not
+otherwise see" (§8) mechanically true rather than a convention someone could get wrong: the
+author sees exactly what `AccessFilter` would return them on any other read, existence-leak
+protections included. An element the recipe would `create` never touches `AccessFilter` at all —
+it doesn't exist yet — and its previewed handling/provenance come from
+`preview_handling_and_provenance()` (§4), not from a graph read.
 
 **The graph it would make**, rendered in the ordinary canvas. This is the highest-value screen in
 the studio: a wrong mapping is usually obvious at a glance and almost never obvious in a table.
@@ -331,6 +362,30 @@ editor; the repository is the record.
   (`osprey ingest revert <load_id>`) predates the harness becoming browser-based; reverting a
   load gets its own admin console screen in Phase 8, not a terminal command.
 
+### The recipe registry, and how "flags the affected recipes" (above) actually happens
+
+"Publishing writes the recipe to version control, not only to the database" already implies a
+database record; this section gives it a shape. A Postgres-backed `studio_recipes` table (the
+same Postgres instance the Conduit's audit stream already uses) tracks one row per recipe
+version: `recipe_id`, `version`, `ontology_version`, `label`, `status`
+(`draft`/`published`/`flagged`/`superseded`), `content` (the in-progress recipe as JSON, populated
+while `draft`), `git_path` (set once published), `owning_unit`, `created_by`, `published_by`,
+`schedule_cron`/`schedule_watch`, `created_at`/`published_at`.
+
+- **A draft is a row, not client state.** Stage 3's "create and edit draft recipes" (§8) spans
+  sessions and sometimes people — an author drafts, an approver publishes later — so a draft
+  lives in `content` on a `status='draft'` row with no `git_path`, not only in the Glass's own
+  working state. Publish serialises `content` to YAML, commits it to `recipes/<id>.yaml`, and
+  flips the row to `status='published'`.
+- **The reverse index this section's opening paragraph promises** — an ontology edit "flags the
+  affected recipes and blocks their scheduled runs" — is a routine that runs whenever the ontology
+  is reloaded: `UPDATE studio_recipes SET status='flagged' WHERE status='published' AND
+  ontology_version != :current`. This is what makes the flagging proactive (at the moment the
+  ontology changes) rather than scanning every recipe file in the repository on every reload.
+- **`StaleRecipeError`** (`services/ingest/engine.py`) is the separate, reactive last-line guard
+  at actual run time and is unchanged by this — the registry is what surfaces the problem before
+  someone tries to run a flagged recipe, not a replacement for the run-time check.
+
 ## 7. The review queue — where unstructured material actually lands
 
 Extraction produces candidates, not graph. The review queue is where a human turns one into the
@@ -382,8 +437,23 @@ able to load material at any classification.
 | Loader | Run a published recipe against a file at or below their own clearance |
 
 Verify runs against the sample under the author's own clearance, so an author cannot use a dry
-run to see material they could not otherwise see. Every recipe publish, edit and load is audited
-like any other action.
+run to see material they could not otherwise see (mechanism: §5). Every recipe publish, edit and
+load is audited like any other action.
+
+**Role vocabulary and enforcement.** The three roles are `StudioRole` values
+(`packages/schemas/ingest.py`): `source_author`, `source_approver`, `loader`. They arrive the same
+way `clearance`/`org_unit`/`receivable_handling_codes` already do — as a claim
+(`services/api/auth.py`'s `CLAIM_ROLES = "roles"`) a deployment's IdP maps onto `Principal.roles`,
+a plain list, so a principal may hold more than one role; nothing here implies exclusivity. Publish,
+schedule and semantics-changing-edit routes are gated by a `require_studio_role(role)` FastAPI
+dependency (`services/api/app.py`), following the same shape as the existing
+`get_authorized_investigation`/`AuthorizedInvestigationDep` pair: it takes the resolved
+`Principal`, raises `403` if the required role isn't in `principal.roles`, and is attached
+per-route, e.g. `Depends(require_studio_role(StudioRole.SOURCE_APPROVER))` on publish. This is
+role-based *action* authorisation, a different axis from `AccessFilter`'s per-record
+clearance/handling gate (§5, `CLAUDE.md` rule 3) — a source approver role does not itself grant
+visibility into any material; it only permits the publish/schedule/approve action once the
+recipe's own dry run has already passed under the author's clearance.
 
 ## 9. What the studio deliberately does not do
 

@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 from services.ingest.connectors.csv_connector import read_csv
-from services.ingest.engine import StaleRecipeError, run_recipe
+from services.ingest.engine import StaleRecipeError, preview_handling_and_provenance, run_recipe
 from services.ingest.load_ledger import load_record_from_report
 from services.ingest.recipe_loader import load_recipe
 from services.ingest.revert import LoadAlreadyRevertedError, revert_load
@@ -185,3 +185,24 @@ async def test_a_stale_recipe_is_blocked_not_silently_run(tmp_path: Path) -> Non
                 source=str(csv_path),
             )
         await graph.rollback_transaction(tx)
+
+
+def test_preview_handling_and_provenance_needs_no_transaction() -> None:
+    """`09_INGEST_STUDIO.md` §4/§5: Map's live preview and Verify's dry run
+    call this to show what an element's handling/provenance would be
+    before any write — it must work with nothing but the recipe itself,
+    no `GraphPort`, no `_RunState`."""
+    recipe = load_recipe(FIXTURES / "cdr_recipe.yaml")
+    now = datetime(2026, 3, 11, 19, 42, 1, tzinfo=UTC)
+
+    handling, provenance = preview_handling_and_provenance(
+        recipe, source="cdr.csv", row_index=0, now=now
+    )
+
+    assert handling.classification == "OFFICIAL"
+    assert handling.handling_code == "P"
+    assert handling.owning_unit == "unit-1"
+    assert provenance.state.value == "asserted"
+    assert provenance.sources[0].document_id == "cdr.csv"
+    assert provenance.sources[0].locator == "row 0"
+    assert provenance.first_seen == now

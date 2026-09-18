@@ -1,0 +1,179 @@
+// One property's `FieldBinding` — `docs/09_INGEST_STUDIO.md` §4: field vs.
+// `fields` (multi-column, arity from the transform catalogue) vs. `literal`
+// vs. `map`, never a free expression.
+import type { DragEvent } from "react";
+
+import type { FieldBinding, TransformDescriptor } from "../../../../../packages/schemas/generated";
+import { Button } from "../../design/primitives/Button";
+import { Input } from "../../design/primitives/Input";
+import { Select } from "../../design/primitives/Select";
+import { arityForTransform } from "./rowTemplate";
+
+export interface FieldBindingEditorProps {
+  binding: FieldBinding;
+  sourceFieldNames: string[];
+  transforms: TransformDescriptor[];
+  onChange: (binding: FieldBinding) => void;
+  onRemove?: () => void;
+}
+
+type Kind = "field" | "literal" | "map";
+
+function kindOf(binding: FieldBinding): Kind {
+  if (binding.literal !== undefined && binding.literal !== null) return "literal";
+  if (binding.map) return "map";
+  return "field";
+}
+
+export function FieldBindingEditor({
+  binding,
+  sourceFieldNames,
+  transforms,
+  onChange,
+  onRemove,
+}: FieldBindingEditorProps) {
+  const kind = kindOf(binding);
+  const arity = arityForTransform(transforms, binding.transform);
+  const fields = binding.fields ?? (binding.field ? [binding.field] : []);
+
+  function setKind(next: Kind) {
+    if (next === "literal") onChange({ literal: "" });
+    else if (next === "map") onChange({ field: binding.field ?? sourceFieldNames[0], map: {} });
+    else onChange({ field: sourceFieldNames[0] });
+  }
+
+  function setTransform(name: string) {
+    const nextArity = arityForTransform(transforms, name || null);
+    if (nextArity > 1) {
+      const nextFields = Array.from({ length: nextArity }, (_, i) => fields[i] ?? sourceFieldNames[0] ?? "");
+      onChange({ fields: nextFields, transform: name || undefined });
+    } else {
+      onChange({ field: fields[0] ?? sourceFieldNames[0] ?? "", transform: name || undefined });
+    }
+  }
+
+  function setFieldAt(index: number, value: string) {
+    if (arity > 1) {
+      const nextFields = [...fields];
+      nextFields[index] = value;
+      onChange({ ...binding, field: undefined, fields: nextFields });
+    } else {
+      onChange({ ...binding, field: value, fields: undefined });
+    }
+  }
+
+  function handleDrop(e: DragEvent) {
+    const dropped = e.dataTransfer.getData("text/x-osprey-field");
+    if (!dropped || !sourceFieldNames.includes(dropped)) return;
+    e.preventDefault();
+    setFieldAt(0, dropped);
+  }
+
+  return (
+    <div
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={handleDrop}
+      style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4, 4px)" }}
+    >
+      <div style={{ display: "flex", gap: "var(--sp-4, 4px)", alignItems: "center" }}>
+        <Select value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
+          <option value="field">Field</option>
+          <option value="literal">Literal</option>
+          <option value="map">Value map</option>
+        </Select>
+        {onRemove && (
+          <Button onClick={onRemove} aria-label="Remove property">
+            ✕
+          </Button>
+        )}
+      </div>
+
+      {kind === "literal" && (
+        <Input
+          value={typeof binding.literal === "string" ? binding.literal : String(binding.literal ?? "")}
+          onChange={(e) => onChange({ literal: e.target.value })}
+          placeholder="Literal value"
+        />
+      )}
+
+      {(kind === "field" || kind === "map") && (
+        <>
+          <div style={{ display: "flex", gap: "var(--sp-4, 4px)", flexWrap: "wrap" }}>
+            {Array.from({ length: Math.max(arity, 1) }, (_, i) => (
+              <Select key={i} value={fields[i] ?? ""} onChange={(e) => setFieldAt(i, e.target.value)}>
+                <option value="" disabled>
+                  {arity > 1 ? `column ${i + 1} of ${arity}` : "choose a field"}
+                </option>
+                {sourceFieldNames.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </Select>
+            ))}
+          </div>
+          <Select value={binding.transform ?? ""} onChange={(e) => setTransform(e.target.value)}>
+            <option value="">No transform</option>
+            {transforms.map((t) => (
+              <option key={t.name} value={t.name}>
+                {t.name}
+                {t.arity > 1 ? ` (${t.arity} columns)` : ""}
+              </option>
+            ))}
+          </Select>
+        </>
+      )}
+
+      {kind === "map" && (
+        <ValueMapEditor
+          map={binding.map ?? {}}
+          onChange={(map) => onChange({ ...binding, map })}
+        />
+      )}
+    </div>
+  );
+}
+
+function ValueMapEditor({
+  map,
+  onChange,
+}: {
+  map: Record<string, string>;
+  onChange: (map: Record<string, string>) => void;
+}) {
+  const entries = Object.entries(map);
+
+  function setEntry(index: number, key: string, value: string) {
+    const next = [...entries];
+    next[index] = [key, value];
+    onChange(Object.fromEntries(next));
+  }
+
+  function removeEntry(index: number) {
+    onChange(Object.fromEntries(entries.filter((_, i) => i !== index)));
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4, 4px)" }}>
+      {entries.map(([key, value], i) => (
+        <div key={i} style={{ display: "flex", gap: "var(--sp-4, 4px)" }}>
+          <Input
+            value={key}
+            placeholder="source value"
+            onChange={(e) => setEntry(i, e.target.value, value)}
+          />
+          <span>→</span>
+          <Input
+            value={value}
+            placeholder="mapped value"
+            onChange={(e) => setEntry(i, key, e.target.value)}
+          />
+          <Button onClick={() => removeEntry(i)} aria-label="Remove mapping">
+            ✕
+          </Button>
+        </div>
+      ))}
+      <Button onClick={() => onChange({ ...map, "": "" })}>+ mapping</Button>
+    </div>
+  );
+}

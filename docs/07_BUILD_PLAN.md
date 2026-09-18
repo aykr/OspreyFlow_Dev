@@ -322,6 +322,56 @@ financial fixture from scratch, using the studio only, and both verify clean. Ed
 ontology flags the affected recipes and blocks their scheduled runs. Every element loaded carries
 the recipe version that produced it.
 
+**Phase 5a known gaps (consolidated as each stage lands, the same discipline Phase 5's own list
+above follows — so Publish's own scoping reads this instead of reconstructing it):**
+
+- **Map's row template canvas binds by drag-and-drop only.** This bullet list's own line above
+  promises "drag and keyboard binding"; the keyboard path (§4: "select both, press Enter") is not
+  wired end to end — every other control on the screen (adding an element, changing a type,
+  editing a binding, saving) is a plain focusable control reachable by Tab, so nothing is
+  keyboard-*inaccessible*, only this one specific shortcut path is deferred. Disclosed in
+  `apps/workspace/src/ingest/map/MapScreen.tsx`'s own module docstring at the point it was found,
+  the same way `GlassCanvas.tsx` discloses its own curved-edge gap rather than shipping a silent
+  partial version of the spec.
+- **Map never proposes a starting template.** This bullet list's own line above promises
+  "profiler-proposed mappings shown as proposals until confirmed" (§4: "For a recognised source
+  shape it proposes the whole thing; for an unfamiliar one it proposes the bindings it is
+  confident about"). What Map actually built is the *manual* half only — POLE-first element
+  creation, per-element match-on/on-match, the transform picker, unmapped-field tracking — every
+  binding is added and set by hand, with no auto-proposal step at all, confirmed or otherwise.
+  Found auditing Publish's own closing pass (Publish's scope never touched Map), not disclosed
+  when Map itself landed — recorded here now rather than left silent.
+- **No synthetic financial fixture, and no second tester review.** The exit criterion above
+  promises both a CDR *and* a financial fixture mapped from scratch by someone who hasn't seen
+  the ontology, plus (§6, ADR-018) a second studio review once real data can be loaded through
+  it. Only the CDR fixture (`tests/scenarios/fixtures/cdr.py`) exists; no financial fixture, and
+  no second review, have happened. The first review (`docs/SESSION_HANDOVER.md`, 15 September
+  2026) covered the prototype against the CDR fixture only, before Verify or Publish existed.
+- **Publish commits from the running Conduit process's own local checkout, not a shared
+  remote.** `write_and_commit_recipe` (`services/api/studio_publish.py`) runs `git add`/`git
+  commit` against `app.state.recipes_repo_root` — the checkout the process happens to be running
+  from. That is the correct, and only sensible, behaviour for the single-instance dev deployment
+  this phase targets; it is not yet correct for a horizontally-scaled deployment (`app.py`'s own
+  statelessness proof) where two Conduit instances would each hold their own independent
+  checkout, so a commit made against one is invisible to a Loader hitting the other. Making
+  "the repository is the record" (§6) hold under that topology needs a push to a shared remote
+  (or a single writable git-backed service Publish routes through) — real, undesigned work, not
+  a stated deferral this phase already made a call about.
+- **The ontology → dependent-recipe reverse index re-flags only on process restart.** §6's
+  routine ("run whenever the ontology is reloaded") is real (`StudioRecipeStore.flag_stale`,
+  called from `services/api/app.py`'s `lifespan`) and proven to actually block a flagged
+  recipe's run (`tests/ingest/test_studio_publish_pipeline.py`), but this deployment has no
+  live-reload admin action — "reload" only ever happens via a full process restart after a new
+  `packages/ontology/default.yaml` ships. Fine for now (matches "the harness's admin console is
+  Phase 8" already established for `revert_load`); a live "reload the ontology" trigger, if one
+  is ever wanted without a restart, is unbuilt.
+- **§8's "approve a mapping that changes an existing recipe's semantics" has no dedicated
+  endpoint.** `POST .../versions` (source-author-gated) reopens a published/flagged recipe as a
+  new draft version; publishing that version goes through the same `POST .../publish`
+  (source-approver-gated) every other publish does. Reusing the one gate is a deliberate reading
+  of §8's table, not an oversight — recorded here so a future reader doesn't go looking for a
+  second "approve" route that was never meant to exist.
+
 ---
 
 ## Phase 6 — Extraction and resolution
@@ -344,6 +394,246 @@ the recipe version that produced it.
 source spans. Moving τ from Strict to Broad merges the expected clusters and reports the delta.
 A manual split survives a subsequent resolution run that would have merged the pair, and the
 conflict is recorded for review.
+
+**Six stages, closed one at a time, the same discipline Phase 5a's own five stages followed:**
+(1) `adapters/model_litellm` and schema-constrained text extraction, plus the LiteLLM/Ollama
+dev-compose service; (2) audio (faster-whisper) and image (vision model) extraction; (3) the
+golden set and the precision/recall CI gate; (4) `services/resolve` with Splink on DuckDB,
+`SAME_AS` writing and the τ threshold projection — including the Working-Set Service wiring, the
+`/v1/resolution/threshold` endpoint and delta computation, not deferred to a later stage, since the
+exit criterion tests the wired behaviour rather than the projection function in isolation;
+(5) manual link/split and the `explain` endpoint; (6) extraction profiles, the review queue, and
+the confirm/retract flow promoting `inferred` to `asserted` — the studio-facing half of the phase,
+and the one piece of the outcome list Stages 1–5 did not exercise: Stages 1–3 proved extraction
+produces correctly-spanned `inferred` output at the `ExtractionResult` layer, but nothing wrote it
+to the graph or gave a human a way to promote it.
+
+**Phase 6 known gaps (consolidated as each stage lands, the same discipline Phase 5's and Phase
+5a's own lists above follow):**
+
+- **Stage 2 lands `transcribe()`/`describe_image()` for real** — `Systran/faster-whisper-tiny.en`
+  behind `speaches` (audio) and `moondream:1.8b-v2-q4_K_M` behind Ollama (image), both pinned and
+  conformance-tested the same way `extract()`/`embed()` are (`06_DECISIONS.md` ADR-020's Stage 2
+  addendum has the full pin/mechanism detail). All four `ModelPort` methods are real as of this
+  stage.
+- **Diarisation is not implemented.** `TranscribeRequest.diarize=True` raises `NotImplementedError`
+  rather than silently returning every segment's `speaker` as `None` as if diarisation had run and
+  found nothing (`06_DECISIONS.md` ADR-020's Stage 2 addendum). Neither faster-whisper nor
+  `speaches` do this natively; a real pipeline (e.g. `pyannote.audio`) is its own scoping decision,
+  not assumed into Stage 2's default.
+- **`describe_image()`'s own conformance case runs on a different CI cadence** than the other
+  three `ModelPort` methods — merge-to-main only (`conformance-model-vision`), not every PR, since
+  a vision-language model is materially heavier (1.8GB) than any of the other three pins. Split at
+  the test-file level (`tests/conformance/model_port/test_suite_vision.py`), not only a CI job
+  filter, so a contributor reading the suite sees exactly what runs on every PR without
+  cross-referencing the workflow YAML. Full reasoning in `06_DECISIONS.md` ADR-020's Stage 2
+  addendum.
+- **`ModelPort.embed()` was found unowned by any stage, then resolved rather than left open**
+  (`06_DECISIONS.md` ADR-020's addendum has the full reasoning). Checked directly before deciding:
+  Stage 4's Splink resolution does not need it — the ontology's shipped `resolution` block
+  declares only classical comparisons (`soundex`, `jaro_winkler`, `levenshtein`, `exact`), and
+  Splink's own optional embedding-based comparison level expects a caller to supply vectors it
+  does not compute itself, which nothing in the current ontology or Stage 4's scoping asks for.
+  `embed()` is real from Stage 1 instead — `ModelLiteLLMAdapter.embed()` calls a second, much
+  smaller pinned model (`all-minilm:22m-l6-v2-fp16`) through the same proxy, conformance-tested
+  the same way `extract()` is. `03_CONDUIT_MIDDLEWARE.md` §5.1's "index — full text and embeddings
+  into OpenSearch" step remains genuinely unowned by any phase — that gap is about the *consumer*
+  (no OpenSearch adapter exists anywhere in this plan), not the `ModelPort` method. Recorded in
+  full under "Gaps with no owning phase" below, not only here, precisely so it is findable by a
+  reader auditing gaps rather than only one reading Phase 6 top to bottom — the same failure mode
+  that let the witness-statement fixture drift unbuilt after being named in this same phase's own
+  scoping.
+- **The `ModelPort` conformance suite's own CI job (`conformance-model`) pulls a ~1–4GB Ollama
+  base image on every run**, unlike the four stores `conformance`'s job already brings up. Accepted
+  for Stage 1's text-only, small-model case; the heavier vision-model case landed in Stage 2 as
+  planned here — its own slower CI cadence is the bullet above, not deferred further.
+- **Stage 3 lands the golden set** (`tests/golden/`) — one hand-labelled case so far
+  (`witness-statement-1`, folded in from Stage 1's own smoke-test fixture rather than a second
+  document), gating on recall regression per `03_CONDUIT_MIDDLEWARE.md` §5.2/standing rule 5.
+  **"Per entity type" is narrowed to "per schema-array-field"** — `tests/golden/harness.py`'s own
+  docstring states this precisely: the spec's literal wording presumes Stage 6's ontology-driven,
+  POLE-typed schema generation, which does not exist yet, so a "category" is whatever array-valued
+  property a case's own caller-supplied `json_schema` declares (`persons_mentioned`, for the one
+  case that exists), the same schema-agnostic shape Stage 1 already committed to. Revisit this
+  narrowing once Stage 6 lands real per-type schemas.
+- **Each golden case runs twelve times, not once, before its mean is trusted** — measured
+  directly, not assumed: a single run's recall for the witness-statement case ranged from 0.0 to
+  1.0, and even a five-run mean still varied batch-to-batch by roughly ±0.17. The CI gate's own
+  regression tolerance (0.15, `tests/golden/test_golden_set.py`) is set from this same measurement,
+  above the observed noise floor rather than at it.
+- **The golden set measures the CI-pinned model's own regressions, not real extraction quality.**
+  Stated explicitly in `tests/golden/harness.py`'s own docstring and `06_DECISIONS.md` ADR-020's
+  Stage 3 addendum, not left implicit: the ~0.75 baseline recall is `qwen2.5:0.5b-instruct`'s own
+  number, a model fourteen to twenty-eight times smaller than `03_CONDUIT_MIDDLEWARE.md` §5.2's
+  named production default — reading it as "how well OspreyFlow extracts" would be a category
+  error the doc now heads off directly.
+- **A harness matcher bug, found while sanity-checking a suspicious result, not assumed to be
+  model noise.** Two of the original zero/low-recall measurements were the golden-set's own exact
+  matcher failing to recognise a correctly-identified entity (`dana_mercer`, `MERCER Dana`) — fixed
+  by normalising separator characters and word order before comparing, still exact-after-
+  normalisation rather than fuzzy. Full before/after in `06_DECISIONS.md` ADR-020's Stage 3
+  addendum. A genuine partial-extraction miss (a bare surname with no forename) was left
+  unnormalised deliberately — fixing that would mean substring matching, which is Stage 4's
+  Splink job at query time, not this harness's.
+- **Stage 4 lands `services/resolve`, real from the ontology to a wired τ endpoint** — a genuine
+  licence conflict was found and resolved before any of it could be built: `splink`'s current
+  stable/pre-release lines (4.x/5.x) pull in `igraph`, which is GPL, failing `make licence-check`
+  outright. Pinned to `splink==3.9.9` instead (`06_DECISIONS.md` ADR-021 has the full finding and
+  the cost of that pin — a different, older API surface). The ontology's `resolution: {blocking,
+  comparisons}` closed function registry (`packages/ontology/resolution_functions.py`) is
+  validated at ontology-load time, not Splink-setup time, per this phase's own original scoping.
+  `SAME_AS`'s ontology-declared properties grew from `score` alone to also carry `model_version`/
+  `comparison_vector` (`packages/ontology/loader.py`), closing the rest of the gap
+  `01_DOMAIN_MODEL.md` §4 always asked for. The τ projection (`services/resolve/projection.py`)
+  is pure and unit-tested standalone; `WorkingSetService.set_resolution_threshold` is the wired
+  caller, exactly as this phase's own scoping insisted on rather than deferring the wiring to
+  Stage 5.
+- **No m/u training**, given its own ADR treatment (`06_DECISIONS.md` ADR-021's 18 September 2026
+  addendum) rather than left only in a code docstring, since it is a real match-quality trade-off
+  across the whole resolution system, the same category of call as ADR-006's query-time-projection
+  decision. Splink's `comparison_library` defaults produce sensible `match_probability` values
+  with no `estimate_u_using_random_sampling`/EM step at all; per-investigation EM training would
+  need "a few hundred, preferably thousand" comparisons Splink's own guidance asks for — far more
+  than a typical investigation's own Person population has. This was not accepted on the design
+  argument alone: `tests/resolve/test_resolution_accuracy.py` checks six hand-labelled pairs
+  (identical, case-varied plus abbreviated given name, misspelled-surname soundex block,
+  given-name typo, two negative controls) against the real ontology config and the untrained
+  defaults, the same fixture discipline `tests/scenarios/fixtures/cdr.py` established. Building
+  that check found and fixed two real defects in `services/resolve/resolver.py` — DuckDB's
+  `jaro_winkler_similarity` is case-sensitive (`'MERCER'` vs `'Mercer'` scored `0.44`, not `1.0`,
+  silently near-certain-non-matching a same-person pair differing only in case) and the DataFrame
+  builder omitted blocking-only columns — both now fixed and covered. All six pairs now land
+  correctly; the ADR addendum records the honest cost this doesn't buy (uncalibrated, only
+  directional, probabilities) and a "revisit if" clause tied to population size. Deployment-wide
+  model training against a real historical corpus, with its own persistence and retraining story,
+  is real, undesigned work — not assumed into this stage.
+- **Stage 5 lands manual link/split, `explain`, and resolution-conflict recording.**
+  `WorkingSetService.manual_link`/`manual_split` write a real `SAME_AS` (score 1.0)/`NOT_SAME_AS`
+  edge through `GraphPort` in a transaction (`01_DOMAIN_MODEL.md` §4's own wording for both),
+  then reproject the working set at the session's current τ and return the same `DeltaReproject`
+  shape `set_resolution_threshold` already established. `explain_cluster`
+  (`GET .../resolution/explain/{cluster_id}`) returns every direct `SAME_AS`/`NOT_SAME_AS` edge
+  between a cluster's current members — including sub-threshold ones that only matter because a
+  transitive chain pulled the pair together — with score, model version, comparison vector and a
+  `manually_asserted` flag, satisfying `03_CONDUIT_MIDDLEWARE.md` §3.5's "return the per-comparison
+  match weights, not just the total."
+  `services/resolve/conflicts.py`'s `detect_conflicts`/`same_as_writer.record_conflicts`
+  supersede the existing `NOT_SAME_AS` edge with `conflict_pending`/`conflict_score`/
+  `conflict_model_version`/`conflict_comparison_vector` properties when a fresh candidate would
+  have merged a manually split pair, closing the second half of
+  `03_CONDUIT_MIDDLEWARE.md` §5.3's "a later run... records the conflict for review" (Stage 4
+  only closed the first half: refusing to act on it).
+  **Two things here are this build's own design, not spec text, flagged rather than presented as
+  spec-mandated:** the `ResolutionConflict` record's shape (§5.3 names the behaviour, never the
+  fields a recorded conflict must carry — see `conflicts.py`'s own docstring), and the "would have
+  merged" bar being `THRESHOLD_BROAD` (0.80), the lowest of the three official detents, rather
+  than a session-specific τ, since conflict detection runs corpus-wide, outside any one
+  investigation's session. Both were checked, not assumed: this bar started as `DEFAULT_THRESHOLD`
+  (Balanced, 0.95) in an earlier draft of this stage, which had a real, silent gap — a candidate
+  scoring between Broad and Balanced could merge for an investigation actually running at Broad
+  without ever being flagged. Broad is the correct single value instead: merging is monotonic in
+  score, so Broad is the one bar that catches every candidate that could merge under *any* of the
+  three supported settings. Flagged to the user as an arbitrary-vs-principled call in the same
+  category as ADR-020's model pin, and corrected before landing — `06_DECISIONS.md` ADR-021's
+  second Stage 5 addendum has the full decision record.
+- **No proactive conflict-discovery surface.** Nothing lists "all pending conflicts" for an
+  investigation or the corpus. An analyst who already suspects a pair needs review can query
+  `explain`/the graph directly for `conflict_pending = true` on a `NOT_SAME_AS` edge; nothing
+  surfaces that to them unprompted. A review-queue-style endpoint over pending conflicts is real,
+  undesigned work, deliberately not built this stage.
+- **No corpus-wide resolution job trigger exists yet — a gap that has been true since Stage 4,
+  only now made explicit.** `resolve_entity_type`/`write_same_as_edges`/`detect_conflicts`/
+  `record_conflicts` are real, tested, callable functions, but nothing in this build schedules or
+  triggers a run of them against the live corpus — no ingest hook, no cron, no manual "resolve
+  now" endpoint. Every test of this pipeline (`tests/resolve/*`) calls it directly. Building that
+  trigger is real, separate work (what runs it, how often, against what population) that neither
+  Stage 4 nor Stage 5 was scoped to include.
+- **`ResolutionState.manually_linked`/`manually_split` (`packages/schemas/domain.py`) remain
+  unpopulated.** These per-node convenience fields predate this phase; populating them correctly
+  would mean writing them onto the permanent Vault node via `GraphPort.supersede_node` (a heavier,
+  edge-repointing write), whereas the actual permanent record of a manual decision is the
+  `SAME_AS`/`NOT_SAME_AS` edge itself, which `manual_link`/`manual_split` already write. Left
+  unpopulated deliberately rather than half-populated only in the ephemeral working-set copy,
+  which would silently vanish on the next fresh `expand()`/`seed()` and misrepresent permanence
+  the field's name implies.
+- **Stage 6 lands `services/extract` (profile → schema generation, candidate extraction/span
+  location, the graph writer, confirm/retract) and `services/api/review.py` (the Postgres-backed
+  review queue, mirroring `studio_recipes`'s own registry pattern).** `09_INGEST_STUDIO.md` §7's
+  "extraction produces candidates, not graph" is literal here: `run_extraction` never touches
+  `GraphPort`; only `accept_candidate` does, writing `provenance.state = inferred`, never
+  `asserted` — accept and confirm are different actions (`services/extract/writer.py`'s own module
+  docstring), the only reading consistent with `CLAUDE.md` rule 5's "no automatic promotion" and
+  with this phase's own exit criterion naming `inferred` as what extraction produces. Confirm/
+  retract go through `GraphPort.supersede_node` — not invented for this stage: that method's own
+  docstring already named "Phase 6's retraction" as one of its two intended callers, written back
+  when the port itself was built. An explicit test
+  (`tests/services/api/test_review_routes.py::test_confirming_a_node_does_not_touch_an_unrelated_conflict_flagged_edge`)
+  proves confirming a clustered entity cannot reach a `NOT_SAME_AS` edge's `conflict_pending`
+  property — confirm/retract only ever call `get_node`/`supersede_node` against the target node id.
+- **Edge/relationship candidates are not built — and this is a match against the phase's own
+  literal exit criterion, not a convenient narrowing that happens to line up with it.** This
+  phase's `**Exit.**` paragraph reads in full: "Ingest a witness statement. Extracted entities
+  appear as `inferred` with correct source spans. Moving τ from Strict to Broad merges the
+  expected clusters and reports the delta. A manual split survives a subsequent resolution run
+  that would have merged the pair, and the conflict is recorded for review." It names *entities*
+  exactly once and never names an edge or a relationship anywhere in that text — the checkable
+  acceptance bar Stage 6 had to clear was always entity-only. The broader outcome bullet
+  ("Unstructured material becomes graph") and `09_INGEST_STUDIO.md` §7's own mockup (which shows
+  "Proposed links", e.g. an `ALLEGED_THREAT` edge between two extracted people, alongside entity
+  candidates) are more expansive than the exit criterion actually tests, and edge candidates
+  remain real, undesigned future work against that broader ambition — but Stage 6 is not falling
+  short of what it was graded against. Separately, and not as the primary reason: building edge
+  candidates now would also need a `GraphPort.get_edge` method that does not exist — adding one is
+  a real port change needing its own conformance-suite coverage (`CLAUDE.md` rule 1) — but that
+  constraint is incidental to the scoping decision, not the justification for it.
+- **No persisted, versioned extraction-profile registry.** Unlike `studio_recipes` (§6), a profile
+  is inline, caller-supplied configuration on each extraction run, not a database row with its own
+  draft/publish lifecycle — nothing in the Phase 6 outcome bullet asks for that, only the
+  schema-generation capability itself (`services/extract/profile.py`'s own module docstring).
+- **The review queue has no new studio-specific role layered on top of ordinary access control —
+  it is not ungated.** To be precise about which of two different claims this is: `run_extraction`/
+  `accept_candidate`/`reject_candidate` are real, tested access-control boundaries — every route
+  carries `AuthorizedInvestigationDep` (403/404s a principal outside the investigation's own
+  `owning_unit`, `tests/services/api/test_review_routes.py`'s own denial tests), and
+  `ExtractionCandidateStore.get_authorized` independently re-checks the *candidate*'s own
+  `owning_unit` against the caller a second time. What is genuinely absent is a *third*,
+  finer-grained layer: `09_INGEST_STUDIO.md` §8's role table (`source_author`/`source_approver`/
+  `loader`) is entirely about the structured Connect/Map/Publish/Load workflow and names nothing
+  for reviewing unstructured extraction candidates, so any principal already authorized on the
+  investigation can run extraction and accept/reject — there is no `require_studio_role`-style
+  restriction narrowing that further, the way publishing a recipe is restricted to
+  `source_approver`. This is a disclosed reading of a silent table, standing rule 4's own
+  access-control test discipline fully applied to the boundary that does exist, not a gap in it.
+- **Extraction confidence is the model's own self-report, uncalibrated with the CI-pinned tiny
+  model** — the same disclosed-limitation class as ADR-021's no-EM-training addendum, and worse
+  than merely uncalibrated: checked live against the real model, not assumed, `qwen2.5:0.5b-
+  instruct` reports confidence on an unpredictable mix of 0..1, 0..10 and 0..100 scales from one
+  call to the next for extractions of comparable actual quality (`1`, `0.8`, `8`, `14`, `92`,
+  `150` observed directly across ten runs of the same document). Two real defects were found and
+  fixed because of this, not merely disclosed around: `profile.py`'s schema first constrained
+  `confidence` to `{"minimum": 0.0, "maximum": 1.0}`, which made constrained decoding *retry and
+  fail the entire extraction* (`ExtractionFailedError`) whenever the model reported a value outside
+  that range, rather than merely miscalibrating — the bound was dropped from the schema entirely.
+  `candidates.py` now normalises defensively (treats `>1.0` as a percentage, then clamps to
+  `[0.0, 1.0]`), which recovers the common 0–100 case but not the 0–10 one — a genuine, disclosed
+  residual gap, not silently papered over. Nothing in `services/extract` further corrects or
+  calibrates the underlying self-report; the per-type confidence floor filters against whatever
+  survives normalisation, honestly, not against a verified figure.
+- **No Glass/frontend screens** for the extraction-profile checklist or the review-queue UI —
+  backend/API only, consistent with every other Phase 6 stage.
+- **`ollama` (Stage 1+) shares this host's Docker VM memory budget tightly enough with ArcadeDB to
+  OOM-kill it (exit 137), reproduced repeatedly running Stage 6's own live tests.**
+  `deploy/compose/dev.yaml`'s `arcadedb` service already carries two dated notes on this exact
+  failure mode from earlier phases (two concurrent conformance suites; one heavy sequential HMP
+  build); this is a third, environment-level cause (cross-container contention with `ollama`'s own
+  resting footprint, introduced by Phase 6 itself) recorded there rather than only here, so it
+  does not have to be rediscovered from scratch.
+
+**Phase 6 exit criterion, verified end to end after Stage 6 closed it.** All three clauses
+together, against the live stack (real LiteLLM/Ollama, real Postgres, real ArcadeDB, real
+DuckDB/Splink) rather than trusting each stage's own tests to add up correctly — the same closing
+pass Phase 5a's own Publish stage did for its acceptance scenario. See `tests/scenarios/
+test_phase6_extraction_and_resolution.py`.
 
 ---
 
@@ -389,6 +679,35 @@ the same insular subgroup Phase 5 already surfaced by other means.
 `backup` → `restore` cycle across profiles reproduces the graph from staged Parquet. An export
 containing an `S2`-marked item is blocked, names the item, and proceeds only with a recorded
 justification.
+
+---
+
+## Gaps with no owning phase
+
+Unlike the known-gaps lists inside Phase 5, Phase 5a and Phase 6 above — each a thing that stage's
+or phase's own work found and deferred — an entry here is something no phase's bullet list claims
+at all. A phase about to close checks this list the same way Phase 6's own stages checked the
+previous phase's known gaps before scoping their work, so an orphaned intention doesn't sit
+findable only from whichever phase happened to notice it.
+
+- **The ingest pipeline's OpenSearch full-text-and-embeddings index has no owning phase.**
+  `03_CONDUIT_MIDDLEWARE.md` §5.1 names it as the ingest pipeline's own `index` step ("full text
+  and embeddings into OpenSearch"), `03_CONDUIT_MIDDLEWARE.md` §3.3 specifies `POST /v1/search` as
+  "federated search across graph, documents, index", and `02_GLASS_FRONTEND.md` §2's workspace
+  mockup already shows the search box as "Search entities, identifiers, documents" — three
+  separate points in the spec assume this exists, and no phase's own bullet list above builds it.
+  `services/api/search.py`'s own docstring already discloses half of this live in the code
+  (`SearchRequest`/`search()`): "the index leg is OpenSearch, which is not wired into any
+  deployment profile until later... document content itself does not exist as a searchable thing
+  until extraction, Phase 6" — Phase 6 is what makes document content extractable, not a commitment
+  to build the OpenSearch adapter itself, and no phase after it picks that commitment up either.
+  **Not the same gap as Phase 8's own OpenSearch use** — `04_VAULT_BACKEND.md` §1.4 ties OpenSearch
+  to `adapters/graph_janusgraph` (Phase 8) as JanusGraph's own cluster-profile mixed index for
+  graph-property search, a different consumer of the same underlying store. Phase 8 closing does
+  not close this gap. Needs a scoping decision — its own phase, or folded into an existing one
+  (Phase 2's ingest pipeline is the natural producer of the index writes; Phase 4's Glass search
+  box is the natural consumer of reading it) — before a future phase assumes `/v1/search`'s
+  document/index legs already work because the graph leg does.
 
 ---
 

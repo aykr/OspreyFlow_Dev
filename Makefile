@@ -56,8 +56,31 @@ conformance-guard:
 conformance:
 	$(PYTEST) tests/conformance/graph_port tests/ingest
 
+# ModelPort's real conformance suite (Phase 6 Stage 1) — needs a live LiteLLM
+# proxy in front of Ollama, both brought up by `make dev-up` (`deploy/compose/
+# dev.yaml`'s `ollama`/`litellm` services, pinned per docs/06_DECISIONS.md
+# ADR-020). Excludes `test_suite_vision.py` deliberately — see
+# `conformance-model-vision` below.
+conformance-model:
+	$(PYTEST) tests/conformance/model_port --ignore=tests/conformance/model_port/test_suite_vision.py tests/scenarios/test_witness_statement_extraction.py
+
+# `describe_image()`'s own conformance case, run separately from the target
+# above on a slower cadence (nightly / merge-to-main, not every PR) —
+# `docs/06_DECISIONS.md` ADR-020's Stage 2 addendum: a vision-language model
+# is materially heavier (1.8GB) than any of the other three pinned models.
+conformance-model-vision:
+	$(PYTEST) tests/conformance/model_port/test_suite_vision.py
+
+# The golden set's precision/recall CI gate (Phase 6 Stage 3,
+# docs/03_CONDUIT_MIDDLEWARE.md §5.2, standing rule 5) — needs the same live
+# LiteLLM/Ollama as `conformance-model`. Twelve runs per case
+# (`tests/golden/harness.py`'s own docstring has the measured reasoning), so
+# this is slower per-case than the conformance suite's own single-shot checks.
+golden-set:
+	$(PYTEST) tests/golden
+
 test:
-	$(PYTEST) --ignore=tests/conformance/graph_port --ignore=tests/ingest --ignore=tests/scenarios/test_hmp_graph.py --ignore=tests/services/api/test_sites_store.py --ignore=tests/services/api/test_tile_cache.py --ignore=tests/services/api/test_prefetch.py --ignore=tests/geocoder/test_match_live.py
+	$(PYTEST) --ignore=tests/conformance/graph_port --ignore=tests/conformance/model_port --ignore=tests/golden --ignore=tests/ingest --ignore=tests/scenarios/test_hmp_graph.py --ignore=tests/scenarios/test_witness_statement_extraction.py --ignore=tests/services/api/test_sites_store.py --ignore=tests/services/api/test_tile_cache.py --ignore=tests/services/api/test_prefetch.py --ignore=tests/geocoder/test_match_live.py
 	npm test --workspace apps/workspace
 
 # Phase 3 (docs/07_BUILD_PLAN.md): "Add make dev-up bringing up ArcadeDB,
@@ -78,7 +101,7 @@ dev-down:
 # test:integration` (apps/workspace) is here too, not in `make test` — its
 # `deltaClient.integration.test.ts` needs the same dev-up stack.
 test-all:
-	$(PYTEST) tests/conformance/graph_port tests/ingest tests/scenarios/test_phase3_working_set.py tests/scenarios/test_hmp_graph.py tests/services/api/test_valkey_store.py tests/services/api/test_statelessness.py tests/services/api/test_sites_store.py tests/services/api/test_tile_cache.py tests/services/api/test_prefetch.py tests/geocoder/test_match_live.py
+	$(PYTEST) tests/conformance/graph_port tests/conformance/model_port tests/golden tests/scenarios/test_witness_statement_extraction.py tests/ingest tests/scenarios/test_phase3_working_set.py tests/scenarios/test_hmp_graph.py tests/services/api/test_valkey_store.py tests/services/api/test_statelessness.py tests/services/api/test_sites_store.py tests/services/api/test_tile_cache.py tests/services/api/test_prefetch.py tests/geocoder/test_match_live.py
 	npm run test:integration --workspace apps/workspace
 
 # `docs/02_GLASS_FRONTEND.md` §5's performance budget, as a CI gate

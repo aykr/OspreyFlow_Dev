@@ -51,6 +51,24 @@ services:
       # at 7G" does not apply here. The other three dev containers
       # combined use under 1GB, so 6G leaves real headroom in the
       # existing ~7.6GB budget without needing that budget raised.
+      #
+      # Phase 6 (07_BUILD_PLAN.md) added a fourth, heavier neighbour this budget did not
+      # previously have to share with: `ollama`, which idles around 3.5GB with a model loaded
+      # (`docker stats`, this host). Reproduced directly, not assumed: with `ollama` up (its
+      # ordinary Stage 1+ resting state, not under load), this container OOM-killed (exit 137)
+      # repeatedly under Stage 6's live end-to-end scenario test and the full live conformance
+      # suite — sometimes within seconds of its own startup/recovery, before any client request —
+      # on this same ~7.6GB Docker Desktop VM the two notes above already describe as tight. This
+      # is a fourth distinct stress case from the two already on file (two concurrent
+      # ArcadeDB-only suites; one heavy sequential ArcadeDB-only HMP build): cross-container
+      # contention with `ollama`'s own resting footprint, not ArcadeDB's own workload size. Same
+      # underlying cause as both prior notes — this host's total VM budget, not this container's
+      # own `-Xmx` value — so raising `-Xmx` further is not expected to help on its own; running
+      # the live Phase 6 scenario/conformance tests reliably on this host needs either Docker
+      # Desktop's VM memory allocation raised beyond ~7.6GB (Settings → Resources → Memory) or
+      # `ollama` stopped first. Restarting this container (`docker start arcadedb` /
+      # `compose-arcadedb-1`) after a kill recovers cleanly; no data loss was observed across
+      # several repeated kills during Stage 6 development.
       ARCADEDB_OPTS_MEMORY: "-Xms1G -Xmx6G"
     healthcheck:
       test: ["CMD", "curl", "-sf", "-u", "root:playwithdata123", "http://localhost:2480/api/v1/ready"]
@@ -101,3 +119,139 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+
+  # ModelPort's backend (docs/07_BUILD_PLAN.md Phase 6 Stage 1) — the model
+  # itself is pinned by digest, not by tag (docs/06_DECISIONS.md ADR-020):
+  # an Ollama tag can move upstream and silently reintroduce the
+  # nondeterminism the pin exists to rule out. The base image is pinned by
+  # digest directly, the same way `litellm` below is; the model weights
+  # cannot be, since Ollama's own CLI (tested against 0.18.2) rejects
+  # `ollama pull <name>@sha256:...` for a library model with a
+  # "400 Bad Request: invalid model name" — ADR-020 records this in full.
+  # The pin is enforced here the other way round: pull the tag, then check
+  # the resulting local manifest's digest (`ollama list`'s own "ID" column
+  # — confirmed to be exactly this digest's first 12 hex characters) against
+  # the one recorded here, refusing to serve on a mismatch rather than
+  # silently running whatever the tag now resolves to.
+  ollama:
+    image: ollama/ollama@sha256:5a5d014aa774f78ebe1340c0d4afc2e35afc12a2c3b34c84e71f78ea20af4ba3
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    entrypoint: ["/bin/sh", "-c"]
+    # Three models, all pinned and verified the same way: `qwen2.5:0.5b-instruct` for `extract()`,
+    # `all-minilm:22m-l6-v2-fp16` for `embed()` — a separate, much smaller model, since embedding
+    # and extraction are different tasks even where both happen to run on Ollama locally
+    # (`06_DECISIONS.md` ADR-020's embed() addendum: Splink's own comparisons, per the ontology's
+    # shipped `resolution` block, need no embeddings, so this is not for Stage 4 — `embed()` simply
+    # belongs with `extract()` as Stage 1 infrastructure, available to whichever future phase
+    # wants it) — and `moondream:1.8b-v2-q4_K_M` for `describe_image()` (Stage 2), materially
+    # larger than the other two, which is exactly why its own conformance CI job runs on a slower
+    # cadence (ADR-020's Stage 2 addendum) rather than every PR.
+    command:
+      - |
+        set -e
+        ollama serve &
+        until ollama list >/dev/null 2>&1; do sleep 1; done
+        pull_and_verify() {
+          model="$$1"; expected="$$2"
+          ollama pull "$$model"
+          actual="$$(ollama list | awk -v m="$$model" '$$1 == m {print $$2}')"
+          if [ "$$actual" != "$$expected" ]; then
+            echo "FATAL: $$model resolved to manifest $$actual, expected $$expected (docs/06_DECISIONS.md ADR-020) — the tag moved upstream; update the ADR deliberately, do not proceed silently." >&2
+            exit 1
+          fi
+        }
+        pull_and_verify qwen2.5:0.5b-instruct a8b0c5157701
+        pull_and_verify all-minilm:22m-l6-v2-fp16 1b226e2802db
+        pull_and_verify moondream:1.8b-v2-q4_K_M c865c80afc38
+        wait
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "ollama list | grep -q qwen2.5:0.5b-instruct && ollama list | grep -q all-minilm:22m-l6-v2-fp16 && ollama list | grep -q moondream:1.8b-v2-q4_K_M",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 90  # the 397MB + 45MB + 1.8GB pull, on a cold volume, is the slow part
+
+  # LiteLLM proxy in front of `ollama` above — `docs/00_ARCHITECTURE.md`
+  # §2.4: the Conduit (and `adapters/model_litellm`'s conformance suite)
+  # talk to this one OpenAI-compatible base URL, never to Ollama directly,
+  # so swapping the backend model/engine is a config change to
+  # `litellm_config.yaml`, not a code change.
+  litellm:
+    image: ghcr.io/berriai/litellm@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm_config.yaml:/app/config.yaml:ro
+    environment:
+      LITELLM_MASTER_KEY: sk-ospreyflow-dev
+    depends_on:
+      ollama:
+        condition: service_healthy
+      speaches:
+        condition: service_healthy
+    healthcheck:
+      # Not `curl` — found live, not assumed: `ghcr.io/berriai/litellm`'s image has no `curl`
+      # (or `wget`) on `PATH` at all, only the Python venv it ships its own server with, so every
+      # other healthcheck in this file's `CMD`-array style fails here with "executable file not
+      # found" regardless of whether the server itself is healthy.
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness')",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # `transcribe()`'s backend (Phase 6 Stage 2) — faster-whisper itself is a Python library, not a
+  # server; `speaches` (https://github.com/speaches-ai/speaches, MIT) is the OpenAI-Whisper-API-
+  # compatible server that wraps it, matching `ports/model.py`'s own "one OpenAI-compatible base
+  # URL... behind a LiteLLM proxy" invariant — confirmed directly, not assumed, that LiteLLM
+  # correctly proxies a multipart `/audio/transcriptions` upload to this server the same way it
+  # proxies chat/embeddings JSON to Ollama.
+  #
+  # Pinned differently from the Ollama-backed models above: this server downloads models from
+  # Hugging Face by repo id, not by Ollama manifest, and its own download endpoint takes no
+  # revision/commit parameter to pin against (checked directly against its OpenAPI schema). The
+  # pin is instead the model's Hugging Face commit sha, verified the same pull-then-verify way —
+  # a downloaded snapshot lands at a directory named exactly for its commit sha (confirmed by
+  # inspecting the container's own Hugging Face cache layout), so a tag moving upstream is
+  # detected the same way an Ollama manifest digest mismatch is, just against a different cache
+  # convention.
+  speaches:
+    image: ghcr.io/speaches-ai/speaches@sha256:21e3df06d842fb7802ab470dd77c25f0e8c0d22950e8d8c6ae886e851af53ef8
+    ports:
+      - "8001:8000"
+    volumes:
+      - speaches-models:/home/ubuntu/.cache/huggingface/hub
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        uvicorn --factory speaches.main:create_app &
+        until curl -sf http://localhost:8000/health >/dev/null 2>&1; do sleep 1; done
+        curl -sf -X POST "http://localhost:8000/v1/models/Systran/faster-whisper-tiny.en" >/dev/null
+        expected="0d3d19a32d3338f10357c0889762bd8d64bbdeba"
+        if [ ! -d "/home/ubuntu/.cache/huggingface/hub/models--Systran--faster-whisper-tiny.en/snapshots/$$expected" ]; then
+          echo "FATAL: Systran/faster-whisper-tiny.en did not resolve to commit $$expected (docs/06_DECISIONS.md ADR-020) — the model moved upstream; update the ADR deliberately, do not proceed silently." >&2
+          exit 1
+        fi
+        wait
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/v1/models | grep -q faster-whisper-tiny"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+volumes:
+  ollama-models:
+  speaches-models:

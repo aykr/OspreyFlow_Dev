@@ -1,0 +1,404 @@
+// The per-element settings panel — `docs/09_INGEST_STUDIO.md` §4: POLE-first
+// type narrowing, match/on-match, per-property bindings, conditions, and a
+// per-element handling/provenance override with a live preview.
+import { useState } from "react";
+
+import type {
+  FieldBinding,
+  MapHandlingPreviewResult,
+  OntologySchema,
+  RecipeCondition,
+  RecipeEdge,
+  RecipeEntity,
+  TransformDescriptor,
+} from "../../../../../packages/schemas/generated";
+import { Button } from "../../design/primitives/Button";
+import { Checkbox } from "../../design/primitives/Checkbox";
+import { Input } from "../../design/primitives/Input";
+import { Panel } from "../../design/primitives/Panel";
+import { RadioGroup } from "../../design/primitives/RadioGroup";
+import { Select } from "../../design/primitives/Select";
+import { FieldBindingEditor } from "./FieldBindingEditor";
+import { classificationWouldLoosen, entityTypesForPole, edgeTypesForEndpoints } from "./rowTemplate";
+
+const POLE_CLASSES = ["person", "object", "location", "event", "organisation"] as const;
+
+export type ElementSelection =
+  | { kind: "entity"; entity: RecipeEntity }
+  | { kind: "edge"; edge: RecipeEdge; fromType: string; toType: string };
+
+export interface ElementInspectorProps {
+  selection: ElementSelection;
+  ontology: OntologySchema;
+  transforms: TransformDescriptor[];
+  sourceFieldNames: string[];
+  baselineClassification: string;
+  classificationOrder: string[];
+  onChangeEntity: (next: RecipeEntity) => void;
+  onChangeEdge: (next: RecipeEdge) => void;
+  onDelete: () => void;
+  onPreviewHandling: (
+    handlingOverride: Record<string, unknown> | null,
+    provenanceOverride: Record<string, unknown> | null,
+  ) => Promise<MapHandlingPreviewResult>;
+}
+
+function ConditionEditor({
+  condition,
+  sourceFieldNames,
+  onChange,
+}: {
+  condition: RecipeCondition | null;
+  sourceFieldNames: string[];
+  onChange: (next: RecipeCondition | null) => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4, 4px)" }}>
+      <label style={{ display: "flex", alignItems: "center", gap: "var(--sp-4, 4px)" }}>
+        <Checkbox
+          checked={condition !== null}
+          onChange={(e) =>
+            onChange(e.target.checked ? { field: sourceFieldNames[0] ?? "", is: "not_null" } : null)
+          }
+        />
+        Conditional element
+      </label>
+      {condition && (
+        <div style={{ display: "flex", gap: "var(--sp-4, 4px)", alignItems: "center" }}>
+          <Select
+            value={condition.field}
+            onChange={(e) => onChange({ ...condition, field: e.target.value })}
+          >
+            {sourceFieldNames.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </Select>
+          <Select
+            value={condition.equals !== undefined && condition.equals !== null ? "equals" : (condition.is ?? "not_null")}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "equals") onChange({ field: condition.field, equals: "" });
+              else onChange({ field: condition.field, is: v as "not_null" | "null" });
+            }}
+          >
+            <option value="not_null">is not null</option>
+            <option value="null">is null</option>
+            <option value="equals">equals</option>
+          </Select>
+          {condition.equals !== undefined && condition.equals !== null && (
+            <Input
+              value={String(condition.equals)}
+              onChange={(e) => onChange({ field: condition.field, equals: e.target.value })}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HandlingOverrideEditor({
+  override,
+  baselineClassification,
+  classificationOrder,
+  onChange,
+  onPreviewHandling,
+}: {
+  override: Record<string, unknown> | null;
+  baselineClassification: string;
+  classificationOrder: string[];
+  onChange: (next: Record<string, unknown> | null) => void;
+  onPreviewHandling: (
+    handlingOverride: Record<string, unknown> | null,
+  ) => Promise<MapHandlingPreviewResult>;
+}) {
+  const [preview, setPreview] = useState<MapHandlingPreviewResult | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const classification = (override?.classification as string | undefined) ?? "";
+  const wouldLoosen = classificationWouldLoosen(classificationOrder, baselineClassification, classification || null);
+
+  async function runPreview() {
+    setPreviewError(null);
+    try {
+      setPreview(await onPreviewHandling(override));
+    } catch (err) {
+      setPreview(null);
+      setPreviewError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4, 4px)" }}>
+      <label style={{ display: "flex", alignItems: "center", gap: "var(--sp-4, 4px)" }}>
+        <Checkbox
+          checked={override !== null}
+          onChange={(e) => onChange(e.target.checked ? {} : null)}
+        />
+        Override handling for this element
+      </label>
+      {override !== null && (
+        <>
+          <Select
+            value={classification}
+            onChange={(e) => onChange({ ...override, classification: e.target.value || undefined })}
+          >
+            <option value="">(use source default: {baselineClassification})</option>
+            {classificationOrder.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </Select>
+          {wouldLoosen && (
+            <div role="alert" style={{ color: "var(--warning, #b04a2f)" }}>
+              This loosens the source's own {baselineClassification} marking — an override may
+              only tighten it. Saving will be rejected.
+            </div>
+          )}
+          <Button onClick={runPreview}>Preview handling</Button>
+          {previewError && <div role="alert">{previewError}</div>}
+          {preview && (
+            <div style={{ fontFamily: "var(--mono)", fontSize: "0.85em" }}>
+              classification: {preview.handling.classification} · handling_code:{" "}
+              {preview.handling.handling_code} · provenance: {preview.provenance.state}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+export function ElementInspector({
+  selection,
+  ontology,
+  transforms,
+  sourceFieldNames,
+  baselineClassification,
+  classificationOrder,
+  onChangeEntity,
+  onChangeEdge,
+  onDelete,
+  onPreviewHandling,
+}: ElementInspectorProps) {
+  if (selection.kind === "entity") {
+    const { entity } = selection;
+    const concreteTypes = entityTypesForPole(ontology, entity.pole_class);
+    const properties = entity.properties ?? {};
+
+    function setProperty(name: string, binding: FieldBinding | null) {
+      const next = { ...properties };
+      if (binding === null) delete next[name];
+      else next[name] = binding;
+      onChangeEntity({ ...entity, properties: next });
+    }
+
+    const typeDef = ontology.entity_types.find((t) => t.name === entity.type);
+    const availablePropertyNames = (typeDef?.properties ?? []).map((p) => p.name);
+
+    return (
+      <Panel title={`${entity.ref} · ${entity.type}`}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-16, 16px)" }}>
+          <div>
+            <label>Ref</label>
+            <Input
+              value={entity.ref}
+              onChange={(e) => onChangeEntity({ ...entity, ref: e.target.value })}
+            />
+          </div>
+
+          <div>
+            <label>POLE class</label>
+            <Select
+              value={entity.pole_class}
+              onChange={(e) => {
+                const pole = e.target.value;
+                const firstType = entityTypesForPole(ontology, pole)[0]?.name ?? "";
+                onChangeEntity({ ...entity, pole_class: pole, type: firstType, match_on: null });
+              }}
+            >
+              {POLE_CLASSES.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          <div>
+            <label>Type</label>
+            <Select value={entity.type} onChange={(e) => onChangeEntity({ ...entity, type: e.target.value })}>
+              {concreteTypes.map((t) => (
+                <option key={t.name} value={t.name}>
+                  {t.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          <div>
+            <label>Match on</label>
+            <Input
+              value={entity.match_on ?? ""}
+              placeholder="e.g. value_normalised"
+              onChange={(e) => onChangeEntity({ ...entity, match_on: e.target.value || null })}
+            />
+            <RadioGroup
+              name={`on-match-${entity.ref}`}
+              aria-label="On match"
+              value={entity.on_match ?? "create"}
+              onChange={(v) => onChangeEntity({ ...entity, on_match: v as "reference" | "create" })}
+              options={[
+                { value: "reference", label: "reference existing" },
+                { value: "create", label: "create new" },
+              ]}
+            />
+          </div>
+
+          <Panel title="Properties">
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-8, 8px)" }}>
+              {Object.entries(properties).map(([name, binding]) => (
+                <div key={name} style={{ borderBottom: "1px solid var(--border-subtle)", paddingBottom: "var(--sp-8)" }}>
+                  <strong>{name}</strong>
+                  <FieldBindingEditor
+                    binding={binding}
+                    sourceFieldNames={sourceFieldNames}
+                    transforms={transforms}
+                    onChange={(next) => setProperty(name, next)}
+                    onRemove={() => setProperty(name, null)}
+                  />
+                </div>
+              ))}
+              <Select
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) setProperty(e.target.value, { field: sourceFieldNames[0] });
+                }}
+              >
+                <option value="">+ property</option>
+                {availablePropertyNames
+                  .filter((n) => !(n in properties))
+                  .map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+              </Select>
+            </div>
+          </Panel>
+
+          <ConditionEditor
+            condition={entity.when ?? null}
+            sourceFieldNames={sourceFieldNames}
+            onChange={(when) => onChangeEntity({ ...entity, when })}
+          />
+
+          <HandlingOverrideEditor
+            override={entity.handling ?? null}
+            baselineClassification={baselineClassification}
+            classificationOrder={classificationOrder}
+            onChange={(handling) => onChangeEntity({ ...entity, handling })}
+            onPreviewHandling={(handlingOverride) =>
+              onPreviewHandling(handlingOverride, entity.provenance ?? null)
+            }
+          />
+
+          <Button onClick={onDelete}>Delete element</Button>
+        </div>
+      </Panel>
+    );
+  }
+
+  const { edge, fromType, toType } = selection;
+  const validTypes = edgeTypesForEndpoints(ontology, fromType, toType);
+  const properties = edge.properties ?? {};
+
+  function setEdgeProperty(name: string, binding: FieldBinding | null) {
+    const next = { ...properties };
+    if (binding === null) delete next[name];
+    else next[name] = binding;
+    onChangeEdge({ ...edge, properties: next });
+  }
+
+  const edgeTypeDef = ontology.edge_types.find((t) => t.name === edge.type);
+  const availableEdgePropertyNames = (edgeTypeDef?.properties ?? []).map((p) => p.name);
+
+  return (
+    <Panel title={`${edge.from} → ${edge.to} · ${edge.type}`}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-16, 16px)" }}>
+        <div>
+          <label>Type</label>
+          <Select value={edge.type} onChange={(e) => onChangeEdge({ ...edge, type: e.target.value })}>
+            {validTypes.map((t) => (
+              <option key={t.name} value={t.name}>
+                {t.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        {edgeTypeDef?.temporal && (
+          <div>
+            <label>Temporal (when it occurred)</label>
+            <FieldBindingEditor
+              binding={edge.temporal?.at ?? { field: sourceFieldNames[0] }}
+              sourceFieldNames={sourceFieldNames}
+              transforms={transforms}
+              onChange={(at) => onChangeEdge({ ...edge, temporal: { at } })}
+            />
+          </div>
+        )}
+
+        <Panel title="Properties">
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-8, 8px)" }}>
+            {Object.entries(properties).map(([name, binding]) => (
+              <div key={name} style={{ borderBottom: "1px solid var(--border-subtle)", paddingBottom: "var(--sp-8)" }}>
+                <strong>{name}</strong>
+                <FieldBindingEditor
+                  binding={binding}
+                  sourceFieldNames={sourceFieldNames}
+                  transforms={transforms}
+                  onChange={(next) => setEdgeProperty(name, next)}
+                  onRemove={() => setEdgeProperty(name, null)}
+                />
+              </div>
+            ))}
+            <Select
+              value=""
+              onChange={(e) => {
+                if (e.target.value) setEdgeProperty(e.target.value, { field: sourceFieldNames[0] });
+              }}
+            >
+              <option value="">+ property</option>
+              {availableEdgePropertyNames
+                .filter((n) => !(n in properties))
+                .map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+            </Select>
+          </div>
+        </Panel>
+
+        <ConditionEditor
+          condition={edge.when ?? null}
+          sourceFieldNames={sourceFieldNames}
+          onChange={(when) => onChangeEdge({ ...edge, when })}
+        />
+
+        <HandlingOverrideEditor
+          override={edge.handling ?? null}
+          baselineClassification={baselineClassification}
+          classificationOrder={classificationOrder}
+          onChange={(handling) => onChangeEdge({ ...edge, handling })}
+          onPreviewHandling={(handlingOverride) => onPreviewHandling(handlingOverride, edge.provenance ?? null)}
+        />
+
+        <Button onClick={onDelete}>Delete element</Button>
+      </div>
+    </Panel>
+  );
+}

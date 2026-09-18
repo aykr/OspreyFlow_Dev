@@ -29,6 +29,7 @@ import {
 } from "./ontology/schema";
 import { GlobalSearch } from "./search/GlobalSearch";
 import { BoundaryFilterTool } from "./map/BoundaryFilterTool";
+import { IngestStudio } from "./ingest/IngestStudio";
 import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
 import { StatusBar } from "./statusbar/StatusBar";
 import { Timeline } from "./timeline/Timeline";
@@ -88,7 +89,7 @@ export function App() {
     edges: 0,
     filteredCount: 0,
   });
-  const [view, setView] = useState<"graph" | "map">("graph");
+  const [view, setView] = useState<"graph" | "map" | "ingest">("graph");
   const [mapConfig, setMapConfig] = useState<PublicMapConfig | null>(null);
   const [siteWizardOpen, setSiteWizardOpen] = useState(false);
   const [boundaryToolOpen, setBoundaryToolOpen] = useState(false);
@@ -271,6 +272,9 @@ export function App() {
         <Button aria-pressed={view === "map"} onClick={() => setView("map")}>
           Map
         </Button>
+        <Button aria-pressed={view === "ingest"} onClick={() => setView("ingest")}>
+          Ingest
+        </Button>
         {view === "map" && (
           <Button
             aria-pressed={siteWizardOpen}
@@ -290,6 +294,14 @@ export function App() {
         <Button onClick={() => setHistoryOpen(true)}>History</Button>
       </header>
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+        {view === "ingest" && (
+          <IngestStudio
+            apiBaseUrl={API_BASE_URL}
+            bearerToken={DEV_BEARER_TOKEN}
+            investigationId={investigationId}
+          />
+        )}
+        {view !== "ingest" && (
         <div style={{ flex: 1, position: "relative" }}>
           {view === "graph" && (
             <GlassCanvas
@@ -396,12 +408,16 @@ export function App() {
               );
             })()}
         </div>
+        )}
+        {view !== "ingest" && (
         <div
           style={{ width: 320, borderLeft: "1px solid var(--border-subtle)" }}
         >
           <Inspector node={selectedNode} />
         </div>
+        )}
       </div>
+      {view !== "ingest" && (
       <div style={{ height: 220, borderTop: "1px solid var(--border-subtle)" }}>
         <Timeline
           apiBaseUrl={API_BASE_URL}
@@ -411,12 +427,15 @@ export function App() {
           getNodeIds={() => workingSetRef.current.graph.nodes()}
         />
       </div>
+      )}
+      {view !== "ingest" && (
       <StatusBar
         nodeCount={counts.nodes}
         edgeCount={counts.edges}
         dimmedCount={dimming.dimmedCount}
         filteredCount={counts.filteredCount}
       />
+      )}
       <HistoryPanel
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}

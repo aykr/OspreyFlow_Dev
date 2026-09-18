@@ -28,27 +28,48 @@ from schemas.domain import (
 )
 
 from .errors import OntologyError
+from .resolution_functions import validate_resolution_config
 
 _SCHEMA_PATH = Path(__file__).resolve().parent / "schema" / "ontology.schema.json"
 _DEFAULT_PATH = Path(__file__).resolve().parent / "default.yaml"
 
-#: `SAME_AS` alone gets a declared `score` property — `01_DOMAIN_MODEL.md`
-#: §4: "Splink runs over the source-fidelity nodes and writes `SAME_AS`
-#: edges carrying the Fellegi-Sunter match probability... A manual link is
-#: a `SAME_AS` with score 1.0." A real, previously-undiscovered gap found
-#: while building the geocoder (`services/geocoder/match.py`, Phase 5
-#: Checkpoint 3c): the ontology's schema-validation layer
-#: (`packages/ontology/validation.py`) rejects any edge property not
-#: declared here, and this system edge type declared none at all — so no
-#: `SAME_AS` writer, including Splink's own eventual one, could ever have
-#: written the score the domain model's own prose requires. `NOT_SAME_AS`
-#: needs no score — a manual split is a boolean assertion, never scored.
-#: `resolution_run`/the comparison vector §4 also mentions are Splink's
-#: own eventual, richer property set (Phase 6) — not added speculatively
-#: here ahead of that real implementation.
+#: `SAME_AS`'s full property set — `01_DOMAIN_MODEL.md` §4: "Splink runs over the source-fidelity
+#: nodes and writes `SAME_AS` edges carrying the Fellegi-Sunter match probability, the model
+#: version, and the comparison vector that produced the score." `score` alone was a real,
+#: previously-undiscovered gap found while building the geocoder (`services/geocoder/match.py`,
+#: Phase 5 Checkpoint 3c) — the ontology's schema-validation layer
+#: (`packages/ontology/validation.py`) rejects any edge property not declared here, and this
+#: system edge type declared none at all, so no `SAME_AS` writer could ever have written a score.
+#: `model_version`/`comparison_vector` are Phase 6 Stage 4's own addition, now that
+#: `services/resolve` is the real writer the domain model's prose describes: `comparison_vector`
+#: is `STRING` (JSON-encoded), not a richer structured type, since `PropertyType` has no generic
+#: object/JSON type and adding one for this single field would be a broader schema change than
+#: this stage's own scope — `services/resolve/same_as_writer.py` is the only writer and the only
+#: reader that needs to parse it.
+#:
+#: `NOT_SAME_AS`'s `conflict_*` properties are Phase 6 Stage 5's own addition, and — unlike the
+#: `SAME_AS` grant above — **not** spec-derived: `01_DOMAIN_MODEL.md` §4 and
+#: `03_CONDUIT_MIDDLEWARE.md` §5.3 only say a later run that would have merged a split pair
+#: "records the conflict for review", never specifying the record's shape. This is this build's
+#: own reasonable design for that phrase, flagged as such rather than presented as spec text
+#: (`services/resolve/conflicts.py` has the full reasoning). It also revises this module's own
+#: earlier Stage 4 comment that "`NOT_SAME_AS` needs none of these — a manual split is a boolean
+#: assertion, never scored": that was true until a conflicting resolution run needed somewhere to
+#: record the score it was overridden by. `conflict_detected_at` is deliberately not one of these
+#: fields — the replacement edge `supersede_edge` writes already carries its own `audit.created_at`
+#: for that, so a duplicate timestamp property would just be two sources of truth for one fact.
 _SYSTEM_EDGE_PROPERTIES: dict[str, list[dict[str, object]]] = {
-    SAME_AS: [{"name": "score", "type": "float"}],
-    NOT_SAME_AS: [],
+    SAME_AS: [
+        {"name": "score", "type": "float"},
+        {"name": "model_version", "type": "string"},
+        {"name": "comparison_vector", "type": "string"},
+    ],
+    NOT_SAME_AS: [
+        {"name": "conflict_pending", "type": "boolean"},
+        {"name": "conflict_score", "type": "float"},
+        {"name": "conflict_model_version", "type": "string"},
+        {"name": "conflict_comparison_vector", "type": "string"},
+    ],
 }
 
 _SYSTEM_EDGE_DEFS: dict[str, EdgeTypeDef] = {
@@ -87,6 +108,7 @@ def load_ontology(path: str | Path) -> OntologySchema:
     edge_types = [EdgeTypeDef.model_validate(e) for e in raw.get("edge_types", [])]
 
     _check_entity_types(entity_types)
+    _check_resolution_configs(entity_types)
     edge_types = _inject_system_edge_types(edge_types)
     _check_edge_endpoints(entity_types, edge_types)
 
@@ -124,6 +146,21 @@ def _check_entity_types(entity_types: list[EntityTypeDef]) -> None:
             "channel and shape combination(s) assigned to more than one entity type "
             f"(sharing a channel is fine; sharing channel and shape is not): {rendered}"
         )
+
+
+def _check_resolution_configs(entity_types: list[EntityTypeDef]) -> None:
+    """Every `resolution.blocking`/`resolution.comparisons` entry must parse as a registered
+    function call — `resolution_functions.validate_resolution_config` (`06_DECISIONS.md`
+    ADR-021's closed-registry design). Checked at load time, the same as every other ontology
+    business rule in this module, so a malformed entry is a load-time `OntologyError`, not a
+    surprise the first time `services/resolve` touches this entity type."""
+    for entity_type in entity_types:
+        if entity_type.resolution is not None:
+            validate_resolution_config(
+                entity_type.name,
+                entity_type.resolution.blocking,
+                entity_type.resolution.comparisons,
+            )
 
 
 def _inject_system_edge_types(edge_types: list[EdgeTypeDef]) -> list[EdgeTypeDef]:

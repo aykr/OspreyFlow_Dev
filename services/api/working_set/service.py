@@ -34,26 +34,58 @@ compute the boundary of.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
+from typing import Any
 
+from services.resolve.projection import DEFAULT_THRESHOLD, compute_clusters, diff_clusters
+
+from conduit_common.identity import new_edge_id, now_utc
 from ontology.handling import HandlingScheme, principal_may_view
 from ports.graph import GraphPort
-from schemas.domain import Edge, ExpandRequest, Node, NodeId, Principal
+from schemas.domain import (
+    NOT_SAME_AS,
+    SAME_AS,
+    AuditStub,
+    ClusterId,
+    Edge,
+    EdgeWrite,
+    ExpandRequest,
+    Node,
+    NodeId,
+    Principal,
+    Provenance,
+    ProvenanceState,
+    SourceRef,
+)
 
 from .models import (
     MAX_EDGES,
     MAX_NODES,
     CardinalityPreview,
+    ClusterExplanation,
+    ClusterNotFoundError,
     DeltaAdd,
     DeltaNotice,
     DeltaRemove,
+    DeltaReproject,
     DeltaSnapshot,
     ExpansionOutcome,
     LimitExceeded,
     LimitExceededError,
+    NodeNotInWorkingSetError,
+    PairwiseExplanation,
+    SameNodeAssertionError,
     WorkingSetDelta,
 )
 from .store import WorkingSetStorage
+
+
+def _decode_comparison_vector(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, str):
+        return None
+    result: dict[str, Any] = json.loads(raw)
+    return result
 
 
 def _filtered_count(candidate_count: int, delivered_count: int) -> int:
@@ -121,6 +153,267 @@ class WorkingSetService:
                 hidden,
             )
         return delta, 0
+
+    async def get_resolution_threshold(self, investigation_id: str) -> float:
+        """`GET /v1/resolution/threshold` (`03_CONDUIT_MIDDLEWARE.md` §3.5). `None` in the store
+        means no `PUT` has ever run for this investigation — `DEFAULT_THRESHOLD` (Balanced, 0.95,
+        `01_DOMAIN_MODEL.md` §4's three detents) is the session's starting point, not a stored
+        value that happens to equal it."""
+        stored = await self._store.get_threshold(investigation_id)
+        return stored if stored is not None else DEFAULT_THRESHOLD
+
+    async def set_resolution_threshold(
+        self, investigation_id: str, tau: float, principal: Principal
+    ) -> DeltaReproject:
+        """`PUT /v1/resolution/threshold` (`03_CONDUIT_MIDDLEWARE.md` §3.5, §4): "resolution
+        collapse at the session's τ" re-projected against the *full* source-fidelity node set —
+        not merely the nodes a single prior `expand()` happened to include — since a threshold
+        change can affect any two nodes currently in the working set, not only ones a specific
+        delta touched.
+
+        Resolution edges are fetched via the same `GraphPort.expand()` every other read uses,
+        scoped to `SAME_AS`/`NOT_SAME_AS` via `ExpandRequest.edge_types` — no new `GraphPort`
+        method needed, and the same access filter every other read already goes through
+        (`03_CONDUIT_MIDDLEWARE.md` §6: "Filtering in the Conduit after retrieval is forbidden").
+
+        The delta this returns/records carries only the three summary counts
+        `01_DOMAIN_MODEL.md` §4's own example gives ("3 entities merged, 1 split, 47 nodes
+        affected") — never a per-node breakdown (`DeltaReproject`'s own shape, stubbed in Phase 3
+        for exactly this). A client that wants to see *which* nodes moved re-fetches via `sync`/
+        `current_membership`, which already reflect the newly-annotated `resolution.cluster_id`
+        this method persists before returning."""
+        old_tau = await self.get_resolution_threshold(investigation_id)
+        nodes_by_id = await self._store.source_fidelity_nodes(investigation_id)
+        node_ids = list(nodes_by_id.keys())
+
+        resolution_edges: list[Edge] = []
+        if node_ids:
+            subgraph = await self._graph.expand(
+                ExpandRequest(node_ids=node_ids, depth=1, edge_types=[SAME_AS, NOT_SAME_AS]),
+                principal,
+            )
+            resolution_edges = subgraph.edges
+        same_as_edges = [e for e in resolution_edges if e.type == SAME_AS]
+        not_same_as_edges = [e for e in resolution_edges if e.type == NOT_SAME_AS]
+
+        before = compute_clusters(node_ids, same_as_edges, not_same_as_edges, old_tau)
+        after = compute_clusters(node_ids, same_as_edges, not_same_as_edges, tau)
+        delta_counts = diff_clusters(before, after)
+
+        updated_nodes = [
+            node.model_copy(
+                update={
+                    "resolution": node.resolution.model_copy(update={"cluster_id": after[node_id]})
+                }
+            )
+            for node_id, node in nodes_by_id.items()
+        ]
+        if updated_nodes:
+            await self._store.add_nodes(investigation_id, updated_nodes)
+        await self._store.set_threshold(investigation_id, tau)
+
+        seq = await self._store.next_seq(investigation_id)
+        delta = DeltaReproject(
+            seq=seq,
+            reason=f"resolution threshold changed from {old_tau} to {tau}",
+            merged=delta_counts.merged,
+            split=delta_counts.split,
+            affected=delta_counts.nodes_affected,
+        )
+        await self._store.append_delta(investigation_id, delta)
+        return delta
+
+    async def manual_link(
+        self, investigation_id: str, node_a: NodeId, node_b: NodeId, principal: Principal
+    ) -> DeltaReproject:
+        """`POST /v1/resolution/link` (`03_CONDUIT_MIDDLEWARE.md` §3.5): "analyst-asserted
+        `SAME_AS`" — `01_DOMAIN_MODEL.md` §4: "a manual link is a `SAME_AS` with score 1.0 and
+        `provenance.state = asserted`." Only `score` is set on the new edge: `model_version`/
+        `comparison_vector` are Splink's own output fields (`01_DOMAIN_MODEL.md` §4), and a manual
+        decision was not produced by any model run — leaving them unset rather than inventing a
+        placeholder value keeps `explain`'s `manually_asserted` flag the one honest signal for
+        "why is this pair linked", not a fabricated model tag."""
+        return await self._manual_assertion(
+            investigation_id,
+            node_a,
+            node_b,
+            principal,
+            edge_type=SAME_AS,
+            properties={"score": 1.0},
+            reason="link",
+        )
+
+    async def manual_split(
+        self, investigation_id: str, node_a: NodeId, node_b: NodeId, principal: Principal
+    ) -> DeltaReproject:
+        """`POST /v1/resolution/split` (`03_CONDUIT_MIDDLEWARE.md` §3.5): "analyst-asserted
+        `NOT_SAME_AS`" — `01_DOMAIN_MODEL.md` §4: "a manual split is a `NOT_SAME_AS` edge that the
+        projection always honours and no future resolution run may override." `compute_clusters`
+        already enforces the "always honours" half (`projection.py`'s own docstring;
+        `test_a_manual_split_survives_even_at_a_broad_threshold` is the proof); the "no future run
+        may override" half is `services/resolve/conflicts.py`'s job, once a corpus-wide resolution
+        run actually happens — recording, not silently re-merging, is that module's whole point."""
+        return await self._manual_assertion(
+            investigation_id,
+            node_a,
+            node_b,
+            principal,
+            edge_type=NOT_SAME_AS,
+            properties={},
+            reason="split",
+        )
+
+    async def _manual_assertion(
+        self,
+        investigation_id: str,
+        node_a: NodeId,
+        node_b: NodeId,
+        principal: Principal,
+        *,
+        edge_type: str,
+        properties: dict[str, Any],
+        reason: str,
+    ) -> DeltaReproject:
+        if node_a == node_b:
+            raise SameNodeAssertionError(node_a)
+
+        nodes_by_id = await self._store.source_fidelity_nodes(investigation_id)
+        if node_a not in nodes_by_id or node_b not in nodes_by_id:
+            raise NodeNotInWorkingSetError(f"{node_a}, {node_b}")
+
+        node_ids = list(nodes_by_id.keys())
+        tau = await self.get_resolution_threshold(investigation_id)
+
+        resolution_edges: list[Edge] = []
+        if node_ids:
+            subgraph = await self._graph.expand(
+                ExpandRequest(node_ids=node_ids, depth=1, edge_types=[SAME_AS, NOT_SAME_AS]),
+                principal,
+            )
+            resolution_edges = subgraph.edges
+        same_as_edges = [e for e in resolution_edges if e.type == SAME_AS]
+        not_same_as_edges = [e for e in resolution_edges if e.type == NOT_SAME_AS]
+        before = compute_clusters(node_ids, same_as_edges, not_same_as_edges, tau)
+
+        now = now_utc()
+        new_edge = Edge(
+            id=new_edge_id(),
+            type=edge_type,
+            source=node_a,
+            target=node_b,
+            properties=properties,
+            provenance=Provenance(
+                state=ProvenanceState.ASSERTED,
+                sources=[
+                    SourceRef(
+                        document_id=f"manual:{node_a}:{node_b}",
+                        locator=principal.id,
+                        excerpt_hash="",
+                    )
+                ],
+                first_seen=now,
+            ),
+            handling=nodes_by_id[node_a].handling,
+            audit=AuditStub(created_at=now, created_by=principal.id),
+        )
+        edge_write = EdgeWrite(
+            id=new_edge.id,
+            type=edge_type,
+            source=node_a,
+            target=node_b,
+            properties=properties,
+            provenance=new_edge.provenance,
+            handling=new_edge.handling,
+            created_by=principal.id,
+            created_at=now,
+        )
+
+        tx = await self._graph.begin_transaction()
+        try:
+            await self._graph.upsert_edges([edge_write], tx)
+        except Exception:
+            await self._graph.rollback_transaction(tx)
+            raise
+        await self._graph.commit_transaction(tx)
+
+        if edge_type == SAME_AS:
+            same_as_edges = [*same_as_edges, new_edge]
+        else:
+            not_same_as_edges = [*not_same_as_edges, new_edge]
+        after = compute_clusters(node_ids, same_as_edges, not_same_as_edges, tau)
+        delta_counts = diff_clusters(before, after)
+
+        updated_nodes = [
+            node.model_copy(
+                update={
+                    "resolution": node.resolution.model_copy(update={"cluster_id": after[node_id]})
+                }
+            )
+            for node_id, node in nodes_by_id.items()
+        ]
+        if updated_nodes:
+            await self._store.add_nodes(investigation_id, updated_nodes)
+
+        seq = await self._store.next_seq(investigation_id)
+        delta = DeltaReproject(
+            seq=seq,
+            reason=f"manual {reason} between {node_a} and {node_b}",
+            merged=delta_counts.merged,
+            split=delta_counts.split,
+            affected=delta_counts.nodes_affected,
+        )
+        await self._store.append_delta(investigation_id, delta)
+        return delta
+
+    async def explain_cluster(
+        self, investigation_id: str, cluster_id: ClusterId, principal: Principal
+    ) -> ClusterExplanation:
+        """`GET /v1/resolution/explain/{cluster}` (`03_CONDUIT_MIDDLEWARE.md` §3.5): "the
+        comparison vector and score that produced a cluster... Return the per-comparison match
+        weights, not just the total." Reads the working set's *last-computed*
+        `resolution.cluster_id` annotation — `set_resolution_threshold`/`manual_link`/
+        `manual_split` are the only writers of it — rather than recomputing clusters fresh, so
+        what an analyst sees explained is exactly the clustering their session is currently
+        showing, not whatever a threshold that happens to be current right now would produce."""
+        nodes_by_id = await self._store.source_fidelity_nodes(investigation_id)
+        member_ids = {
+            node_id
+            for node_id, node in nodes_by_id.items()
+            if node.resolution.cluster_id == cluster_id
+        }
+        if not member_ids:
+            raise ClusterNotFoundError(cluster_id)
+
+        tau = await self.get_resolution_threshold(investigation_id)
+        resolution_edges: list[Edge] = []
+        if member_ids:
+            subgraph = await self._graph.expand(
+                ExpandRequest(
+                    node_ids=list(member_ids), depth=1, edge_types=[SAME_AS, NOT_SAME_AS]
+                ),
+                principal,
+            )
+            resolution_edges = subgraph.edges
+
+        pairs = [
+            PairwiseExplanation(
+                node_a=edge.source,
+                node_b=edge.target,
+                edge_type=edge.type,  # type: ignore[arg-type]
+                score=edge.properties.get("score"),
+                model_version=edge.properties.get("model_version"),
+                comparison_vector=_decode_comparison_vector(
+                    edge.properties.get("comparison_vector")
+                ),
+                manually_asserted=edge.provenance.state == ProvenanceState.ASSERTED,
+                meets_threshold=(edge.properties.get("score") or 0.0) >= tau,
+            )
+            for edge in resolution_edges
+            if edge.source in member_ids and edge.target in member_ids
+        ]
+        return ClusterExplanation(
+            cluster_id=cluster_id, member_node_ids=sorted(member_ids), pairs=pairs
+        )
 
     async def seed(
         self,

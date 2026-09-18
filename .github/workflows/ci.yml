@@ -215,6 +215,133 @@ jobs:
       # rather than the plain `test` job below.
       - run: npm run test:integration --workspace apps/workspace
 
+  # `ModelPort`'s conformance suite (Phase 6 Stage 1) — needs a live LiteLLM
+  # proxy in front of Ollama, pinned per docs/06_DECISIONS.md ADR-020. A
+  # separate job from `conformance` above: that job's four stores are
+  # already the ones `deploy/compose/dev.yaml` brings up together, but
+  # Ollama/LiteLLM need a model pull and a mounted config file neither of
+  # which GitHub Actions' `services:` block supports (no `command:` override,
+  # no volume mounts) — the same limitation the `conformance` job's own
+  # MinIO step already works around, here for two containers instead of one.
+  conformance-model:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - name: Start Ollama and pull the ADR-020-pinned models
+        run: |
+          docker network create model-port-ci
+          docker run -d --name ollama --network model-port-ci -p 11434:11434 \
+            ollama/ollama@sha256:5a5d014aa774f78ebe1340c0d4afc2e35afc12a2c3b34c84e71f78ea20af4ba3
+          for _ in $(seq 1 30); do
+            docker exec ollama ollama list >/dev/null 2>&1 && break
+            sleep 2
+          done
+          # ADR-020: Ollama has no working digest-pull for a library model
+          # (tested directly against 0.18.2 — `ollama pull <name>@sha256:...`
+          # returns "400 Bad Request: invalid model name") — the pin is
+          # enforced by checking each pulled tag's own resulting manifest
+          # digest instead, failing the job if a tag has moved upstream
+          # rather than silently running a different model. Two models:
+          # `qwen2.5:0.5b-instruct` for extract(), `all-minilm:22m-l6-v2-fp16`
+          # for embed() — the same pair `deploy/compose/dev.yaml` pulls. The
+          # vision model (`moondream`) is deliberately not pulled here — see
+          # `conformance-model-vision` below.
+          pull_and_verify() {
+            model="$1"; expected="$2"
+            docker exec ollama ollama pull "$model"
+            actual="$(docker exec ollama ollama list | awk -v m="$model" '$1 == m {print $2}')"
+            if [ "$actual" != "$expected" ]; then
+              echo "$model resolved to manifest $actual, expected $expected" >&2
+              echo "(docs/06_DECISIONS.md ADR-020) — the tag moved upstream; do not proceed silently." >&2
+              exit 1
+            fi
+          }
+          pull_and_verify qwen2.5:0.5b-instruct a8b0c5157701
+          pull_and_verify all-minilm:22m-l6-v2-fp16 1b226e2802db
+      - name: Start speaches and pull the ADR-020-pinned Whisper model
+        run: |
+          docker run -d --name speaches --network model-port-ci -p 8001:8000 \
+            ghcr.io/speaches-ai/speaches@sha256:21e3df06d842fb7802ab470dd77c25f0e8c0d22950e8d8c6ae886e851af53ef8
+          for _ in $(seq 1 30); do
+            curl -sf http://localhost:8001/health >/dev/null 2>&1 && break
+            sleep 2
+          done
+          curl -sf -X POST "http://localhost:8001/v1/models/Systran/faster-whisper-tiny.en" >/dev/null
+          # Same reasoning as the Ollama models above, different mechanism: this server has no
+          # revision-pinning parameter on its own download endpoint (checked directly against its
+          # OpenAPI schema), so the pin is a Hugging Face commit sha, verified against the
+          # downloaded snapshot's own cache directory name.
+          expected="0d3d19a32d3338f10357c0889762bd8d64bbdeba"
+          if ! docker exec speaches test -d "/home/ubuntu/.cache/huggingface/hub/models--Systran--faster-whisper-tiny.en/snapshots/$expected"; then
+            echo "Systran/faster-whisper-tiny.en did not resolve to commit $expected" >&2
+            echo "(docs/06_DECISIONS.md ADR-020) — the model moved upstream; do not proceed silently." >&2
+            exit 1
+          fi
+      - name: Start LiteLLM
+        run: |
+          docker run -d --name litellm --network model-port-ci -p 4000:4000 \
+            -v "${{ github.workspace }}/deploy/compose/litellm_config.yaml:/app/config.yaml:ro" \
+            -e LITELLM_MASTER_KEY=sk-ospreyflow-dev \
+            ghcr.io/berriai/litellm@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b \
+            --config /app/config.yaml --port 4000
+          for _ in $(seq 1 30); do
+            curl -sf http://localhost:4000/health/liveliness && break
+            sleep 2
+          done
+      # `moondream` (describe_image()'s model) is not pulled in this job, so LiteLLM logs a
+      # warning for that one unreachable model entry — harmless; test_suite_vision.py is excluded
+      # below and no other test in this job calls it.
+      - run: >-
+          uv run pytest tests/conformance/model_port
+          --ignore=tests/conformance/model_port/test_suite_vision.py
+          tests/scenarios/test_witness_statement_extraction.py
+          tests/golden
+
+  # `describe_image()`'s own conformance case (`docs/06_DECISIONS.md` ADR-020's Stage 2 addendum)
+  # — merge-to-main only, not every PR: a vision-language model is materially heavier (1.8GB) than
+  # any of the three models `conformance-model` above pulls, the same `02_GLASS_FRONTEND.md` §5
+  # precedent that keeps the full performance-budget run off every commit. Otherwise an exact
+  # mirror of `conformance-model`'s own Ollama/LiteLLM setup, with `moondream` pulled instead of
+  # skipped and only the vision test file run.
+  conformance-model-vision:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - name: Start Ollama and pull the ADR-020-pinned vision model
+        run: |
+          docker network create model-port-ci
+          docker run -d --name ollama --network model-port-ci -p 11434:11434 \
+            ollama/ollama@sha256:5a5d014aa774f78ebe1340c0d4afc2e35afc12a2c3b34c84e71f78ea20af4ba3
+          for _ in $(seq 1 30); do
+            docker exec ollama ollama list >/dev/null 2>&1 && break
+            sleep 2
+          done
+          docker exec ollama ollama pull moondream:1.8b-v2-q4_K_M
+          actual="$(docker exec ollama ollama list | awk '$1 == "moondream:1.8b-v2-q4_K_M" {print $2}')"
+          expected="c865c80afc38"
+          if [ "$actual" != "$expected" ]; then
+            echo "moondream:1.8b-v2-q4_K_M resolved to manifest $actual, expected $expected" >&2
+            echo "(docs/06_DECISIONS.md ADR-020) — the tag moved upstream; do not proceed silently." >&2
+            exit 1
+          fi
+      - name: Start LiteLLM
+        run: |
+          docker run -d --name litellm --network model-port-ci -p 4000:4000 \
+            -v "${{ github.workspace }}/deploy/compose/litellm_config.yaml:/app/config.yaml:ro" \
+            -e LITELLM_MASTER_KEY=sk-ospreyflow-dev \
+            ghcr.io/berriai/litellm@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b \
+            --config /app/config.yaml --port 4000
+          for _ in $(seq 1 30); do
+            curl -sf http://localhost:4000/health/liveliness && break
+            sleep 2
+          done
+      - run: uv run pytest tests/conformance/model_port/test_suite_vision.py
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -224,14 +351,16 @@ jobs:
         with: { node-version: "22" }
       - run: uv sync
       - run: npm ci
-      # Everything the `conformance` job above already covers against a
-      # live store runs here instead against nothing — every other test
-      # runs here.
+      # Everything the `conformance`/`conformance-model` jobs above already
+      # cover against a live store or a live model runs here instead against
+      # nothing — every other test runs here.
       - run: >-
-          uv run pytest --ignore=tests/conformance/graph_port --ignore=tests/ingest
+          uv run pytest --ignore=tests/conformance/graph_port
+          --ignore=tests/conformance/model_port --ignore=tests/golden --ignore=tests/ingest
           --ignore=tests/services/api/test_valkey_store.py
           --ignore=tests/services/api/test_statelessness.py
           --ignore=tests/scenarios/test_phase3_working_set.py
+          --ignore=tests/scenarios/test_witness_statement_extraction.py
       # The Glass's fast, no-live-infra unit tests (`store.test.ts`,
       # `zoomBands.test.ts`) — `*.integration.test.ts` is excluded by
       # `vitest.config.ts` and runs in the `conformance` job instead.

@@ -1,5 +1,5 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py and _pending_port_placeholders.py, via generate_ts.py
+// Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and _pending_port_placeholders.py, via generate_ts.py
 export type Ref = string;
 export type PoleClass = string;
 export type Type = string;
@@ -13,6 +13,12 @@ export type Transform = string | null;
 export type Map = {
   [k: string]: string;
 } | null;
+export type Handling = {
+  [k: string]: unknown;
+} | null;
+export type Provenance = {
+  [k: string]: unknown;
+} | null;
 
 export interface RecipeEntity {
   ref: Ref;
@@ -22,6 +28,8 @@ export interface RecipeEntity {
   on_match?: OnMatch;
   when?: RecipeCondition | null;
   properties?: Properties;
+  handling?: Handling;
+  provenance?: Provenance;
   [k: string]: unknown;
 }
 /**

@@ -113,6 +113,7 @@ GET    /v1/jobs/{id}/events             SSE progress stream
 ```
 POST   /v1/ingest/upload                multipart; returns a document id and a job id
 POST   /v1/ingest/connector/{name}/run  trigger a configured connector
+GET    /v1/handling-scheme              the active deployment's classification/handling-code vocabulary
 GET    /v1/documents/{id}               metadata, provenance, extraction results
 GET    /v1/documents/{id}/content       original bytes, access-checked, audited
 POST   /v1/documents/{id}/reextract     re-run with a different model version

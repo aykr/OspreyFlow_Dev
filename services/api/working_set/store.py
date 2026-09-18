@@ -86,6 +86,14 @@ class WorkingSetStorage(Protocol):
         Never called from the ordinary read/expand path."""
         ...
 
+    async def get_threshold(self, investigation_id: str) -> float | None:
+        """`None` means no `PUT /v1/resolution/threshold` has ever run for this investigation —
+        the caller's signal to use `services/resolve/projection.py`'s `DEFAULT_THRESHOLD`
+        (Balanced, 0.95) rather than a stored value (`01_DOMAIN_MODEL.md` §4's three detents)."""
+        ...
+
+    async def set_threshold(self, investigation_id: str, tau: float) -> None: ...
+
 
 def _node_key(investigation_id: str) -> str:
     return f"ws:{investigation_id}:nodes"
@@ -101,6 +109,10 @@ def _seq_key(investigation_id: str) -> str:
 
 def _deltas_key(investigation_id: str) -> str:
     return f"ws:{investigation_id}:deltas"
+
+
+def _threshold_key(investigation_id: str) -> str:
+    return f"ws:{investigation_id}:threshold"
 
 
 class ValkeyWorkingSetStore:
@@ -127,6 +139,7 @@ class ValkeyWorkingSetStore:
             _edge_key(investigation_id),
             _seq_key(investigation_id),
             _deltas_key(investigation_id),
+            _threshold_key(investigation_id),
         ):
             pipe.expire(key, IDLE_TTL_SECONDS)
         await _reply(pipe.execute())
@@ -240,5 +253,14 @@ class ValkeyWorkingSetStore:
                 _edge_key(investigation_id),
                 _seq_key(investigation_id),
                 _deltas_key(investigation_id),
+                _threshold_key(investigation_id),
             )
         )
+
+    async def get_threshold(self, investigation_id: str) -> float | None:
+        value = await _reply(self._client.get(_threshold_key(investigation_id)))
+        return float(value) if value is not None else None
+
+    async def set_threshold(self, investigation_id: str, tau: float) -> None:
+        await _reply(self._client.set(_threshold_key(investigation_id), str(tau)))
+        await self._touch_ttl(investigation_id)
