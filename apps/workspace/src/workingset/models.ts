@@ -86,3 +86,24 @@ export interface HistoryStepSummary {
   node_count: number;
   edge_count: number;
 }
+
+// `services/api/working_set/models.py`'s `PairwiseExplanation`/`ClusterExplanation` — the
+// `GET .../resolution/explain/{cluster_id}` response, Phase 6a Stage 3 (B10). `score`/
+// `model_version`/`comparison_vector` are `null` together for a manually-asserted edge — the
+// Python side's own docstring: "a human decision, not a model score, has none of those to report."
+export interface PairwiseExplanation {
+  node_a: string;
+  node_b: string;
+  edge_type: "SAME_AS" | "NOT_SAME_AS";
+  score: number | null;
+  model_version: string | null;
+  comparison_vector: Record<string, unknown> | null;
+  manually_asserted: boolean;
+  meets_threshold: boolean;
+}
+
+export interface ClusterExplanation {
+  cluster_id: string;
+  member_node_ids: string[];
+  pairs: PairwiseExplanation[];
+}

@@ -16,6 +16,8 @@ import { Checkbox } from "../src/design/primitives/Checkbox";
 import { Histogram } from "../src/design/primitives/Histogram";
 import { IconButton } from "../src/design/primitives/IconButton";
 import { Input } from "../src/design/primitives/Input";
+import { explanationBasis } from "../src/resolution/explainView";
+import type { PairwiseExplanation } from "../src/workingset/models";
 import { Panel } from "../src/design/primitives/Panel";
 import { RadioGroup } from "../src/design/primitives/RadioGroup";
 import { Select } from "../src/design/primitives/Select";
@@ -75,6 +77,41 @@ function Showcase() {
         ]}
         rows={[{ type: "Person", id: "n1" }]}
         getRowId={(r) => r.id}
+      />
+      <Table
+        columns={[
+          { key: "node_a", header: "Node A", render: (p: PairwiseExplanation) => p.node_a },
+          { key: "node_b", header: "Node B", render: (p: PairwiseExplanation) => p.node_b },
+          { key: "basis", header: "Basis", render: explanationBasis },
+          {
+            key: "meets_threshold",
+            header: "Meets τ",
+            render: (p: PairwiseExplanation) => (p.meets_threshold ? "Yes" : "No"),
+          },
+        ]}
+        rows={[
+          {
+            node_a: "n1",
+            node_b: "n2",
+            edge_type: "SAME_AS",
+            score: 0.97,
+            model_version: "splink-3.9.9-config-1",
+            comparison_vector: { given_name: 0.88, family_name: 0.95 },
+            manually_asserted: false,
+            meets_threshold: true,
+          },
+          {
+            node_a: "n2",
+            node_b: "n3",
+            edge_type: "SAME_AS",
+            score: null,
+            model_version: null,
+            comparison_vector: null,
+            manually_asserted: true,
+            meets_threshold: true,
+          },
+        ]}
+        getRowId={(p: PairwiseExplanation) => `${p.node_a}-${p.node_b}`}
       />
       <Histogram
         buckets={[

@@ -151,3 +151,71 @@ test("Space, then the radial list, reaches manual link — a real POST, not a st
   expect(linkRequestBody).toMatchObject({ node_a: "n1", node_b: "n0" });
   await expect(menu).toBeHidden(); // RadialMenu closes on select, same as a mouse click
 });
+
+test("the radial list reaches Explain cluster, and the explanation actually renders — CLAUDE.md rule 13", async ({
+  page,
+}) => {
+  // `07_BUILD_PLAN.md` Phase 6a Stage 3 (B10): the same bar the two tests above already set for
+  // a canvas action — reachable *and* activatable, not merely present in the DOM. `n2`/`n3` are
+  // the harness's own cluster pair (`harness.tsx`'s own `resolution.cluster_id` fixture data);
+  // this is a single-node trigger, unlike B11's pair requirement above, since `explain` takes one
+  // `cluster_id`, not two node ids.
+  await page.goto("/keyboard/harness.html");
+
+  let explainRequestUrl: string | null = null;
+  await page.route("**/*/resolution/explain/*", async (route) => {
+    explainRequestUrl = route.request().url();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        cluster_id: "n2",
+        member_node_ids: ["n2", "n3"],
+        pairs: [
+          {
+            node_a: "n2",
+            node_b: "n3",
+            edge_type: "SAME_AS",
+            score: 0.95,
+            model_version: "splink-3.9.9-config-1",
+            comparison_vector: null,
+            manually_asserted: false,
+            meets_threshold: true,
+          },
+        ],
+      }),
+    });
+  });
+
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  await page.keyboard.press("Tab"); // focus n0
+  await page.keyboard.press("ArrowRight"); // focus n1
+  await page.keyboard.press("ArrowLeft"); // focus n2 — n1's *last* neighbour
+  // (`onKeyDown`'s `ArrowLeft`/`ArrowUp` branch picks `neighbours[neighbours.length - 1]`; n1's
+  // own neighbour order is `[n0, n2]`, edge-insertion order, so `ArrowRight`'s `neighbours[0]`
+  // would walk back to n0 instead).
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.focused))
+    .toBe("n2");
+
+  await page.keyboard.press("\\"); // opens the list menu on n2, the focused node
+  const menu = page.locator(".radial-menu__list[role='menu']");
+  await expect(menu).toBeVisible();
+
+  // Item order: the one declared edge type first (`radialMenuItems`' own edge-type items come
+  // before the cluster item), then "Explain cluster" — one native Tab past the auto-focused first
+  // item reaches it, the same navigation shape the manual-link test above already proves.
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("menuitem", { name: "Explain cluster" })).toBeFocused();
+  await page.keyboard.press("Enter");
+
+  await expect.poll(() => explainRequestUrl !== null).toBe(true);
+  expect(explainRequestUrl).toContain("/resolution/explain/n2");
+  await expect(menu).toBeHidden(); // RadialMenu closes on select, same as a mouse click
+
+  // Reached the network call; now prove it actually rendered, not just fired — the same bar
+  // `explainView.test.ts` sets for the leak-defense filter this overlay's own `Table` is built on.
+  await expect(page.getByText("Cluster explanation")).toBeVisible();
+  await expect(page.getByRole("cell", { name: "n3" })).toBeVisible();
+});

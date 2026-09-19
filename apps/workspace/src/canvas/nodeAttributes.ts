@@ -56,7 +56,10 @@ const BAND_SIZE: Record<ZoomBand, number> = {
   "link-detail": 8,
 };
 
-function nodeLabel(node: Node): string {
+/** Exported for reuse outside the per-frame reducer — `ClusterExplainOverlay` (Phase 6a Stage 3)
+ * needs the same human-readable label for a `PairwiseExplanation`'s `node_a`/`node_b`, and
+ * duplicating this lookup rather than sharing it would be a second place to keep in sync. */
+export function nodeLabel(node: Node): string {
   const name = node.properties?.["family_name"] ?? node.properties?.["value_normalised"];
   return typeof name === "string" ? name : node.id;
 }

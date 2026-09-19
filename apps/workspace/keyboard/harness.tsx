@@ -30,7 +30,7 @@ const SCHEMA: OntologySchema = {
   edge_types: [{ name: "ASSOCIATE_OF", from: ["Person"], to: ["Person"], directed: false }],
 };
 
-function node(id: string): Node {
+function node(id: string, overrides: Partial<Node> = {}): Node {
   return {
     id,
     type: "Person",
@@ -47,6 +47,7 @@ function node(id: string): Node {
       owning_unit: "unit-1",
     },
     audit: { created_at: "2026-01-01T00:00:00Z", created_by: "fixture" },
+    ...overrides,
   };
 }
 
@@ -79,7 +80,18 @@ const ontology = new OntologyRegistry(SCHEMA);
 // A chain n0—n1—n2—n3: `graph.nodes()[0]` (Tab's keyboard entry point) is
 // deterministically "n0", and it has exactly one neighbour ("n1"), so the
 // arrow-walk assertion has one unambiguous correct answer.
-const nodes = ["n0", "n1", "n2", "n3"].map(node);
+//
+// `n2`/`n3` additionally share a `resolution.cluster_id` (Phase 6a Stage 3) — the only fixture
+// data needed for the radial menu's "Explain cluster" item to appear at all; it does not depend
+// on a `SAME_AS`/`NOT_SAME_AS` edge existing, since `keyboard.spec.ts` mocks the `explain` network
+// call rather than exercising a real backend, the same way the existing Enter/Space tests mock
+// `expand`/`resolution/link`.
+const nodes = [
+  node("n0"),
+  node("n1"),
+  node("n2", { resolution: { cluster_id: "n2" } }),
+  node("n3", { resolution: { cluster_id: "n2" } }),
+];
 const edges = [edge("e0", "n0", "n1"), edge("e1", "n1", "n2"), edge("e2", "n2", "n3")];
 workingSet.store.getState().applyDelta({ seq: 1, op: "snapshot", nodes, edges, filtered_count: 0 });
 

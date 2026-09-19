@@ -96,6 +96,33 @@ into a meta-node, or expanding it back, happens in graphology and produces a rea
 working set with an entry in the step history. It behaves identically whichever renderer draws
 it, so it was never part of this decision.
 
+**Resolution clustering is a separate, unrelated sense of "cluster," and neither this document nor
+the Inspector's own tab list (§2) named a rendering convention for it before Phase 6a — recorded
+here, retroactively for Stage 2 and directly for Stage 3, rather than left implicit in
+`07_BUILD_PLAN.md`'s own narrative.** A community (above) is a Leiden/analytics grouping, rendered
+as a translucent hull. A resolution cluster (`Node.resolution.cluster_id`, `01_DOMAIN_MODEL.md`
+§4) is the query-time collapse of `SAME_AS` edges scoring above the session's τ — a different axis
+entirely, and the two must never share a visual channel or an analyst could not tell which kind of
+grouping they were looking at.
+
+*Collapse (Stage 2, B9).* Every node sharing a `cluster_id` with at least one other co-locates at
+the cluster's own anchor position and gains a second, independent `@sigma/node-border` ring (never
+the same attribute the interaction-state ring — on-path/selected/hover — already owns, so both can
+show on one node at once). A node whose cluster splits back apart returns to its own deterministic
+scatter position rather than staying wherever a previous merge left it. This is the picture the
+threshold control's own change-summary counts (`merged`/`split`/`affected`) must agree with.
+
+*Explanation (Stage 3, B10).* `GET .../resolution/explain/{cluster_id}` — the per-comparison match
+weights behind a cluster — renders in a transient `Popover` overlay anchored to the triggering
+canvas position, the same shape edge inspection (above) already uses, opened from a cluster-aware
+item in the existing radial menu. Not an Inspector tab (none is named "Resolution," and inventing
+one pre-empts the Dossier, B6/Stage 4's own, larger, permanent surface for exactly this class of
+content) and not a modal. A row is omitted, never shown redacted, if the render cannot independently
+confirm both endpoints of a pairwise comparison from the response's own `member_node_ids` and this
+session's already-access-controlled local graph — belt and braces against a node id the API
+technically cleared but this client has not yet synced, or against a future regression, not a
+claim that the API itself is untrusted.
+
 ## 2. Workspace layout
 
 ```

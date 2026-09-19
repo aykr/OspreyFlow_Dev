@@ -143,8 +143,9 @@ async def _run_structural_recipes(
     **Why chunked within the two largest recipes.** Measured, not assumed:
     a single ~400-row (persons) or ~229-row (reports) transaction reliably
     triggered `"Error in execution in lock"` on ArcadeDB commit on this
-    host (`docs/SESSION_HANDOVER.md`'s documented heap-pressure territory,
-    reached here by data volume rather than concurrent DDL). Batches of
+    host (`deploy/compose/dev.yaml`'s own dated ArcadeDB memory notes have
+    the documented heap-pressure territory this falls in, reached here by
+    data volume rather than concurrent DDL). Batches of
     `_CHUNK_SIZE` rows keep every single transaction's write volume in the
     range every other fixture in this build already runs at without
     incident."""

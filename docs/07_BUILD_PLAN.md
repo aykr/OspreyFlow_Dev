@@ -727,9 +727,30 @@ than a new surface).
    harness's own `seedOneNode` cannot seed a real `GraphPort` node (see the `Gaps with no owning
    phase` entry above), so this is proved at the Python service layer against the real adapter
    instead. Demonstrated against the `SAME_AS` Stage 1 created.
-3. **`explain` rendering (B10).** Per-*cluster*, not per-node — triggered from a clustered
-   selection, rendered as a `Table` (already built) of per-comparison match weights. Demonstrated
-   against the same seed as Stage 2.
+3. **`explain` rendering (B10). Built: a cluster-aware "Explain cluster" radial-menu item
+   (single-node trigger — `explain` takes one `cluster_id`, not a pair) opening
+   `ClusterExplainOverlay`, a transient `Popover` (modelled on the existing edge-inspection
+   overlay) containing the `Table` primitive.** Scoping this stage surfaced a rendering-layer
+   question the Stage 2 API fix doesn't answer by itself: what the *table* does with a node id,
+   independent of whether the API was correct. Answer, built and tested: `visiblePairs`
+   (`apps/workspace/src/resolution/explainView.ts`) requires a pair's both endpoints to be *both*
+   in the response's own `member_node_ids` *and* already present in this session's local graph
+   before rendering it at all — belt and braces against a legitimately-visible member not yet
+   synced to this client, or a future regression, dropping the row entirely rather than showing it
+   redacted (`explainView.test.ts`, plus a keyboard-level render assertion, not just a network-call
+   one). A manually-asserted pair's "Basis" column branches on `manually_asserted` before ever
+   reading `score`/`model_version`, so it reads "Asserted by analyst" by construction, never as
+   blank data (`explanationBasis`). Rule 13: `keyboard.spec.ts` gained a case proving the new
+   action reachable and activatable, and the harness fixture gained the `resolution.cluster_id`
+   data needed to exercise it — it had none before. `make glass-a11y` re-run after adding a
+   representative sample of the new "Basis"/"meets τ" cell patterns to `a11y/showcase.tsx` (the
+   only way its fixed-page scan reaches new content); both themes pass. Standing rule 2: the
+   access-control test for this read path is `test_explain_cluster_access_control.py`, written in
+   Stage 2 when this method's own node-disclosure bug was found and fixed — cited here rather than
+   duplicated, since the Stage 2 threshold test does not cover it and the new frontend test above
+   is a different concern (the render boundary) from the API's own access control. Rendering
+   convention recorded in `02_GLASS_FRONTEND.md` (added alongside Stage 2's own, likewise
+   never written into that document before now). Demonstrated against the same seed as Stage 2.
 4. **B6 — the Dossier.** Largest and last: a wholly new Glass surface (`apps/workspace/src/
    dossier/` is empty; `00_ARCHITECTURE.md` names the Dossier as its own component alongside
    Canvas/Timeline/Map/Query, not an Inspector tab) — the same shape of work Phase 5a's own Map

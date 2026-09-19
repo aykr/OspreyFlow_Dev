@@ -46,6 +46,8 @@ import {
 } from "./nodeAttributes";
 import { RadialMenu, type RadialMenuItem } from "../design/primitives/RadialMenu";
 import { EdgeInspectionOverlay } from "./EdgeInspectionOverlay";
+import { ClusterExplainOverlay } from "./ClusterExplainOverlay";
+import type { ClusterExplanation } from "../workingset/models";
 
 const NODE_PROGRAM = createNodeCompoundProgram<WorkingSetNodeAttributes, WorkingSetEdgeAttributes>([
   createNodeImageProgram<WorkingSetNodeAttributes, WorkingSetEdgeAttributes>({
@@ -144,6 +146,9 @@ export function GlassCanvas({
   const [inspectedEdge, setInspectedEdge] = useState<{ edgeId: string; x: number; y: number } | null>(
     null,
   );
+  const [clusterExplain, setClusterExplain] = useState<
+    { x: number; y: number; explanation: ClusterExplanation } | null
+  >(null);
   const [lassoActive, setLassoActive] = useState(false);
   const [lassoPoints, setLassoPoints] = useState<{ x: number; y: number }[]>([]);
   const lastReproject = useStore(store, (s) => s.lastReproject);
@@ -452,6 +457,20 @@ export function GlassCanvas({
     store.getState().applyDelta(delta);
   }
 
+  // `08_ACCEPTANCE_SCENARIOS.md` B10 / `07_BUILD_PLAN.md` Phase 6a Stage 3: "per-comparison match
+  // weights, not just the total." A `GET`, unlike `expandNode`/`manualAssertion` — `explain_cluster`
+  // is a pure read of the working set's own last-computed clustering, nothing to attribute to this
+  // principal beyond the bearer token every other read here already sends.
+  async function explainCluster(clusterId: string, x: number, y: number): Promise<void> {
+    const response = await fetch(
+      `${apiBaseUrl}/v1/investigations/${investigationId}/resolution/explain/${clusterId}`,
+      { headers: { Authorization: `Bearer ${bearerToken}` } },
+    );
+    if (!response.ok) return; // a stale cluster id 404s (`ClusterNotFoundError`) — nothing to show
+    const explanation: ClusterExplanation = await response.json();
+    setClusterExplain({ x, y, explanation });
+  }
+
   function radialMenuItems(nodeId: string): RadialMenuItem[] {
     if (!graph.hasNode(nodeId)) return [];
     const node = graph.getNodeAttribute(nodeId, "data");
@@ -485,6 +504,29 @@ export function GlassCanvas({
             onSelect: () => void manualAssertion(nodeId, other, "split"),
           },
         );
+      }
+    }
+
+    // B10: single-node trigger, unlike B11's pair requirement — `explain` takes one `cluster_id`,
+    // not two node ids. Only offered when the cluster actually has more than one current member
+    // (the same `resolution.cluster_id` accessor `refreshClusterVisualState` already uses) —
+    // a singleton's own "cluster" is itself, nothing to explain about how it got there.
+    const clusterId = node.resolution?.cluster_id;
+    if (clusterId) {
+      let clusterSize = 0;
+      graph.forEachNode((otherId, attrs) => {
+        if ((attrs.data.resolution?.cluster_id ?? otherId) === clusterId) clusterSize += 1;
+      });
+      if (clusterSize > 1) {
+        items.push({
+          id: "explain-cluster",
+          label: "Explain cluster",
+          count: 0,
+          onSelect: () => {
+            const anchor = radialMenu ?? { x: 0, y: 0 };
+            void explainCluster(clusterId, anchor.x, anchor.y);
+          },
+        });
       }
     }
 
@@ -562,6 +604,15 @@ export function GlassCanvas({
           y={inspectedEdge.y}
           edge={graph.getEdgeAttribute(inspectedEdge.edgeId, "data")}
           onClose={() => setInspectedEdge(null)}
+        />
+      )}
+      {clusterExplain && (
+        <ClusterExplainOverlay
+          x={clusterExplain.x}
+          y={clusterExplain.y}
+          explanation={clusterExplain.explanation}
+          graph={graph}
+          onClose={() => setClusterExplain(null)}
         />
       )}
     </div>
