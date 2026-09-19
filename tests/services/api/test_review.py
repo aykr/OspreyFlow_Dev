@@ -100,6 +100,37 @@ async def test_run_extraction_persists_pending_candidates(store: ExtractionCandi
     assert len(listed) == 1
 
 
+async def test_run_extraction_persists_the_document_text_the_dossier_later_renders(
+    store: ExtractionCandidateStore,
+) -> None:
+    """Phase 6a Stage 4 (B6): `run_extraction`'s own module docstring says `text` is "also
+    persisted" — checked here against the real store `run_extraction` actually writes through
+    (this file's own fake is `ModelPort`/`GraphPort` only), since no other test in this session
+    called `run_extraction` itself and asserted the persisted text back out; every other new test
+    exercises `store_document_text` directly rather than through the pipeline that is supposed to
+    call it. Without this test, deleting `run_extraction`'s own `store_document_text` call left
+    every existing test green — confirmed by reverting it and re-running this file."""
+    document_id = new_id()
+    model = _FakeModelPort(
+        {"Person": [{"family_name": "MERCER", "given_names": "Dana", "confidence": 0.9}]}
+    )
+    profile = ExtractionProfile(["Person"])
+
+    await run_extraction(
+        model,
+        ONTOLOGY,
+        store,
+        document_id=document_id,
+        text=SOURCE_TEXT,
+        profile=profile,
+        handling=_handling(),
+        principal=ANALYST,
+        extraction_model="qwen2.5:0.5b-instruct",
+    )
+
+    assert await store.get_document_text(document_id, ANALYST) == SOURCE_TEXT
+
+
 async def test_accept_candidate_writes_an_inferred_node_and_marks_accepted(
     store: ExtractionCandidateStore,
 ) -> None:
