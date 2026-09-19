@@ -1217,6 +1217,72 @@ things the ontology already declares (`packages/ontology/default.yaml`'s `Endpoi
 and `Device.identifiers` both claiming `imei`), not an unclaimed intention — standing rule 7 makes
 that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than left open here.
 
+- **The `graphify` `PreToolUse` hook had a zero compliance rate across the whole of Phase 6a,
+  undetected for six days, and it took a direct question to surface it — not a test, not a review,
+  not the hook itself.** `.claude/settings.json` (in place since 13 September) runs `graphify
+  hook-guard read`/`search` before every `Read`/`Glob`/`Bash`/`Grep` call, printing a `MANDATORY`
+  instruction to consult `graphify query`/`path`/`explain` first. Checked directly, not assumed:
+  `graphify hook-guard read` and `graphify hook-guard search` both exit `0` unconditionally — the
+  hook is advisory, not blocking, by construction of the installed tool itself, not a
+  configuration choice this repository made. Across the whole of Phase 6a's Dossier work, `graphify
+  query`/`path`/`explain` were called zero times; every lookup went through `Read`/`grep` instead,
+  the `MANDATORY` reminder printed and not acted on, repeatedly, without anyone — human or model —
+  noticing until asked directly whether the tool had been used at all. This is `CLAUDE.md` rule
+  13's own admission ("depends on being remembered, which is the exact failure mode it exists to
+  close") made concrete: not a suspicion this time, a measured zero.
+
+  **A live test of the instruction's own accuracy, run in response to being asked, found a second,
+  compounding problem: the instruction is also wrong often enough to teach ignoring it.**
+  `graphify query "how does the radial menu handle Escape and keyboard dismissal in GlassCanvas"`
+  — a real, focused question about the exact bug this phase's own closing pass fixed — returned a
+  197-node BFS neighbourhood including files with no relationship to the question
+  (`ConnectScreen.tsx`, `ingest/api.ts`), truncated at a 1200-token budget with the actually-useful
+  answer plausibly among the 164 cut nodes. A direct `Read` of `GlassCanvas.tsx` and `Popover.tsx`
+  found the real defect (a focus-loss bug, not anything a keyword-shaped BFS query was suited to
+  surface) faster and more precisely. `CLAUDE.md`'s own instruction as written does not distinguish
+  this case — a targeted read of a file already identified by reasoning — from the case the tool
+  is actually built for: a broad "how does X connect to Y" question with no starting file in mind.
+  An instruction that is wrong in the common case trains ignoring it in the case it would actually
+  help, which is a real cost to every other "MUST"/"MANDATORY" instruction in `CLAUDE.md` by
+  association, not only this one.
+
+  **Decision: narrow the instruction, then enforce the narrower one — not one without the other.**
+  Leaving it advisory, now that the compliance rate is measured at zero, changes nothing about why
+  it was zero. Making the existing, over-broad instruction blocking (a `PreToolUse` hook can deny a
+  call outright; `graphify hook-guard` itself cannot today, so this would need a new,
+  locally-written hook script, not a settings change) would guarantee compliance and also guarantee
+  the over-broad cases the live test above just found — forcing a worse answer on exactly the kind
+  of question that surfaced this finding. Narrowing first closes the reason compliance was zero
+  (an instruction wrong often enough to be worth ignoring); enforcing after narrowing closes the
+  fact that "worth following" and "actually followed" are not the same thing once a control has an
+  active mechanism and nobody is checking it. Narrowing alone, left advisory, repeats this same
+  finding under a better-worded rule. **Narrowed** (`CLAUDE.md`'s own graphify section, this
+  change): a scoped subgraph query is for a broad "how does X relate to Y" question or unfamiliar-
+  codebase orientation with no file already identified; a targeted read of a file already named by
+  reasoning, a prior message, or this document's own file-path references is a direct `Read`, not a
+  query first. **Not yet enforced**: making the narrowed rule blocking needs a hook script this
+  repository would own and maintain (deciding, per call, which case a `Read`/`Grep` falls into),
+  real scoped work of its own, not a one-line `settings.json` change — named here as the next step,
+  not built as part of recording this finding.
+
+- **`graphify export wiki` had never been run on this repository; `graphify-out/wiki/index.md` did
+  not exist, and `CLAUDE.md`'s own instruction to use it for broad navigation pointed at nothing.**
+  Found and run in the same pass as the finding above (`graphify export wiki` — 334 articles,
+  no LLM call, generated purely from the already-computed graph and labels). A rule pointing at a
+  file that has never existed is a smaller instance of the same class of problem: an instruction
+  nobody checks the truth of degrades the same way a nobody-enforces-it hook does.
+- **The 130 communities `graphify update` renamed after Stage 4's own file changes are a labeling
+  staleness, not a retrieval-precision one — checked against the installed tool's own source, not
+  assumed.** `graphify/serve.py`'s `_query_graph_text` (the engine behind `query`/`path`/`explain`)
+  reads `community`/`community_name` only to print a `community=<name>` annotation on each result
+  line; neither field feeds seed-matching, BFS ordering, or the token-budget truncation that
+  decides which nodes actually appear in an answer. The 130 renames themselves are the tool's own
+  deterministic "named after its hub" fallback for a community whose *membership* changed enough
+  that its old LLM-generated name no longer matched — membership is therefore already current;
+  only the human-readable name for those 130 groups is a placeholder until `graphify label` is run
+  to re-generate descriptive ones. A stale name could mislead a reader following it to a specific
+  named group; it cannot cause `query`/`path`/`explain` to return the wrong nodes.
+
 ---
 
 ## Standing rules for the whole build

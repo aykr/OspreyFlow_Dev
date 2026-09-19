@@ -90,8 +90,25 @@ assumptions are where this build will go wrong.
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
 
+**Narrowed 19 September 2026** (`07_BUILD_PLAN.md`'s "Gaps with no owning phase" has the full
+finding): the version of this section below that said "first run `graphify query` for codebase
+questions" had a measured zero compliance rate across the whole of Phase 6a, and a live test of
+that wording — run in response to being asked, not before — found it was also wrong often enough
+to explain why: a targeted question about a file already identified returned a 197-node BFS
+neighbourhood full of unrelated files, where a direct `Read` found the real answer faster. The
+rule below is the corrected scope, not the original one.
+
 Rules:
-- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- **Reach for `graphify query "<question>"` / `graphify path "<A>" "<B>"` / `graphify explain
+  "<concept>"` for a broad "how does X relate to Y" question, or orientation in an area of the
+  codebase you have not yet read anything in.** These return a scoped subgraph, usually much
+  smaller than `GRAPH_REPORT.md` or raw grep output, specifically because they are built for
+  "where do I even start" — not for "what does this function I already found do."
+  - **Do not reach for a query when you already know which file to look at** — a path named in
+    this conversation, a prior message, another file's import, or one of `docs/*.md`'s own file
+    references. A direct `Read` of that file is faster and more precise than a BFS neighbourhood
+    around it; this is the case the live test above actually measured.
+- `graphify-out/wiki/index.md` exists — use it for broad navigation instead of raw source browsing.
+- Read `graphify-out/GRAPH_REPORT.md` only for broad architecture review or when query/path/explain
+  do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
