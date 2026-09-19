@@ -9,6 +9,7 @@ from services.resolve.conflicts import ResolutionConflict
 from services.resolve.resolver import MODEL_VERSION, SameAsCandidate
 from services.resolve.same_as_writer import record_conflicts, write_same_as_edges
 
+from ontology.handling import load_uk_le_scheme
 from schemas.domain import (
     AuditStub,
     Edge,
@@ -19,6 +20,8 @@ from schemas.domain import (
     ProvenanceState,
     SourceRef,
 )
+
+_SCHEME = load_uk_le_scheme()
 
 
 class _FakeGraphPort:
@@ -63,7 +66,7 @@ async def test_writes_one_edge_per_candidate_with_score_and_model_version() -> N
     )
 
     edge_ids = await write_same_as_edges(
-        graph, [candidate], nodes_by_id, created_by="resolve-service", tx="tx-1"
+        graph, [candidate], nodes_by_id, created_by="resolve-service", tx="tx-1", scheme=_SCHEME
     )
 
     assert len(edge_ids) == 1
@@ -78,24 +81,51 @@ async def test_writes_one_edge_per_candidate_with_score_and_model_version() -> N
     assert written.provenance.extraction_confidence == 0.93
 
 
-async def test_edge_inherits_node_as_own_handling() -> None:
+async def test_edge_inherits_the_more_restrictive_endpoints_handling() -> None:
+    """`06_DECISIONS.md` ADR-025: "a derived edge should never be more visible than either fact
+    it connects" — checked in *both* arrangements, not just the one where `node_a` already
+    happens to be the more restrictive endpoint. The `node_a="OFFICIAL"`/`node_b="SECRET"`
+    arrangement is the one that actually distinguishes this invariant from "always inherit
+    `node_a`'s handling" — the defect this test replaces (`_handling_for` returned `node_a`'s
+    handling unconditionally; a fixture that never put the more restrictive endpoint second could
+    never have failed against that bug)."""
     graph = _FakeGraphPort()
-    nodes_by_id = {
+    candidate = SameAsCandidate(node_a="n1", node_b="n2", score=0.9, comparison_vector={})
+
+    node_a_more_restrictive = {
         "n1": _person("n1", classification="SECRET"),
         "n2": _person("n2", classification="OFFICIAL"),
     }
-    candidate = SameAsCandidate(node_a="n1", node_b="n2", score=0.9, comparison_vector={})
-
     await write_same_as_edges(
-        graph, [candidate], nodes_by_id, created_by="resolve-service", tx="tx-1"
+        graph,
+        [candidate],
+        node_a_more_restrictive,
+        created_by="resolve-service",
+        tx="tx-1",
+        scheme=_SCHEME,
     )
+    assert graph.writes[-1].handling.classification == "SECRET"
 
-    assert graph.writes[0].handling.classification == "SECRET"
+    node_b_more_restrictive = {
+        "n1": _person("n1", classification="OFFICIAL"),
+        "n2": _person("n2", classification="SECRET"),
+    }
+    await write_same_as_edges(
+        graph,
+        [candidate],
+        node_b_more_restrictive,
+        created_by="resolve-service",
+        tx="tx-1",
+        scheme=_SCHEME,
+    )
+    assert graph.writes[-1].handling.classification == "SECRET"
 
 
 async def test_no_candidates_writes_nothing() -> None:
     graph = _FakeGraphPort()
-    edge_ids = await write_same_as_edges(graph, [], {}, created_by="resolve-service", tx="tx-1")
+    edge_ids = await write_same_as_edges(
+        graph, [], {}, created_by="resolve-service", tx="tx-1", scheme=_SCHEME
+    )
     assert edge_ids == []
     assert graph.writes == []
 

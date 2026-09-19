@@ -419,6 +419,24 @@ class Subgraph(BaseModel):
     filtered_count: int = 0
 
 
+class ListNodesPage(BaseModel):
+    """`GraphPort.list_nodes`'s response — `06_DECISIONS.md` ADR-025,
+    `01_DOMAIN_MODEL.md` §8.2. Not `limit_exceeded`'s contract (that error
+    is analyst-facing, offering three interactive choices; `list_nodes` has
+    no analyst in the loop, only a service-principal caller that pages).
+    `next_cursor is None` is the *only* correct signal that a type's
+    population is exhausted — an empty `nodes` list on its own is not: a
+    page can legitimately contain zero *visible* nodes while more exist
+    further on, if every node in this page's key range happens to be
+    hidden from `principal`. A caller that stops on an empty page rather
+    than checking `next_cursor` recreates, one layer up, exactly the
+    silent truncation `CLAUDE.md` rule 2 forbids `GraphPort` itself from
+    producing."""
+
+    nodes: list[Node]
+    next_cursor: NodeId | None = None
+
+
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     PropertyDef,
     ResolutionConfig,
@@ -446,4 +464,5 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     PatternQuery,
     NeighbourhoodStats,
     Subgraph,
+    ListNodesPage,
 )

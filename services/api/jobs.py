@@ -66,6 +66,13 @@ class JobQueue:
     def __init__(self, client: Valkey) -> None:
         self._client = client
 
+    def stream_key(self, job_type: str) -> str:
+        """The Valkey Stream key a `job_type`'s entries live on — exposed so
+        `services/api/worker.py`'s consumer-group loop reads from exactly
+        the key `submit` writes to, without duplicating the naming
+        convention in a second module."""
+        return _queue_key(job_type)
+
     async def submit(self, job_type: str, payload: dict[str, Any]) -> str:
         job_id = new_id()
         record = JobRecord(

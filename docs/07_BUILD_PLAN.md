@@ -980,6 +980,39 @@ test harness, until ADR-025's own design is actually built. See ADR-025 for the 
 design (event, population, principal, overlap, recovery) and ADR-024 for the msisdn↔imsi
 mechanism and its own owning phase.
 
+**Phase 7 known gaps (created here, during Stage 1's own closing pass, the same discipline Phase
+5's, Phase 5a's and Phase 6's own lists were each created by the stage that first needed to
+disclose something — this list did not exist before Stage 1 found it needed one):**
+
+- **The status-bar conflict-count notice (this phase's own Stage 1 bullet,
+  `06_DECISIONS.md` ADR-025) is not built.** ADR-025 proposes surfacing pending conflicts "the same
+  way the status bar already surfaces 'N hidden by handling'" — but that existing notice
+  (`apps/workspace/src/statusbar/StatusBar.tsx`) rides the per-*investigation* WebSocket delta
+  stream (`DeltaNotice`, `03_CONDUIT_MIDDLEWARE.md` §3.2), and a corpus-wide resolution run is not
+  scoped to any one investigation's session. ADR-025 never settled how a signal with no
+  investigation to attach to reaches an open investigation's own delta stream — broadcasting to
+  every open session, polling a corpus-wide count on some other request, or another shape entirely
+  are each a real design choice with its own cost, not an implementation detail to fill in while
+  wiring the rest of Stage 1. Left disclosed rather than built on an invented, un-reviewed
+  broadcast mechanism.
+- **`services/resolve/trigger.py`'s `LOCK_TTL_SECONDS` (two hours) guards a correctness property
+  with an unmeasured, conservatively-guessed value.** `06_DECISIONS.md` ADR-025's addendum has the
+  full reasoning: the overlap guard is a real, held-for-duration Valkey lock, not merely a
+  pre-submission check, but a run that genuinely outlives the TTL still lets a second run start
+  while the first is writing, reopening the conflict-recording race the lock otherwise closes. No
+  measurement of `resolve_entity_type`'s own running time at corpus scale exists anywhere in this
+  repository — `tests/resolve/test_projection_perf.py`'s 50,000-node/0.056-second figure measures a
+  different operation (`compute_clusters`' τ-threshold reprojection, bounded by the working set's
+  50k cap), not this one. **What would retire the guess:** a real timing of `resolve_entity_type`
+  against a `Person` population at the largest scale a deployment expects to run it, the same
+  "measured, not assumed" discipline `01_DOMAIN_MODEL.md` §8.2 already applied to
+  `supersede_node`'s own ~41-second figure.
+- **`GraphPort.get_edge` remains unbuilt, now for a second, independent reason.** Phase 6's own
+  gaps list declined to add it for edge-candidate extraction. Stage 1 hit the identical absence
+  from a different direction — a cheap revision-check inside `record_conflicts` would have closed
+  the overlap gap above directly — and made the same call not to add it for this reason either.
+  Recorded here so a third caller finding the same gap reads this instead of re-deriving it.
+
 ---
 
 ## Phase 8 — Assessment, export, and the second profile

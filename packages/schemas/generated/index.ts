@@ -27,6 +27,7 @@ export type { PatternEdge } from "./PatternEdge";
 export type { PatternQuery } from "./PatternQuery";
 export type { NeighbourhoodStats } from "./NeighbourhoodStats";
 export type { Subgraph } from "./Subgraph";
+export type { ListNodesPage } from "./ListNodesPage";
 export type { EventRecord } from "./EventRecord";
 export type { GeometryRecord } from "./GeometryRecord";
 export type { EventFilter } from "./EventFilter";

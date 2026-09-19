@@ -289,6 +289,27 @@ restrictive possible principal: it matches no classification, not every classifi
 alternative (fail open) would make a configuration error into a silent over-disclosure, which is
 the one failure mode this platform cannot recover from after the fact.
 
+**A non-human `Principal` follows the same two axes as any other — a decision, not an implied
+exemption.** `06_DECISIONS.md` ADR-025's corpus-wide resolution trigger is the first caller in this
+build that acts under a deployment-level service identity rather than an analyst's own — a real
+question, since nothing above states what such an identity may see. Settled here: the service
+principal carries the active scheme's *highest* classification but an **empty**
+`receivable_handling_codes`. The reason is structural, not a cautious default chosen for its own
+sake — `receivable_handling_codes` only ever matters for a `handling_code` whose scheme entry is
+`dissemination: restricted`, and clearing one also requires `org_unit` to match the record's
+`owning_unit` or `originator` (the table above). A single fixed `org_unit` cannot belong to every
+unit a corpus spans, so a service principal with a *non-empty* `receivable_handling_codes` would
+still fail the unit check for some records — an inconsistent, partially-working bypass rather than
+a clean one. An empty list instead makes the outcome uniform and honest: the trigger resolves
+every non-restricted record and **never** a restricted-`handling_code` record, corpus-wide, by
+construction — the same `AccessFilter.gremlin_has_step` predicate every other principal is
+compiled against, not a second, privileged path around it (`CLAUDE.md` rule 3). A future
+deployment that needs restricted records resolved too needs per-unit service identities, a real,
+separate design question this default does not answer.
+`tests/resolve/test_trigger.py::test_service_principal_cannot_see_a_restricted_handling_code_record`
+proves it against the real adapter: a `handling_code: R` `Person` is invisible to the service
+principal and visible to an ordinarily-cleared-and-entitled one, in the same test.
+
 ### 2.3 Resolution state
 
 ```python
@@ -781,6 +802,27 @@ outstanding (below):
   `revert_elements`: not a principal-scoped read, and it returns only a bare count, never a node,
   an id or a property, so it cannot itself disclose which nodes are hidden or why.
   `services/api`'s Working-Set Service is the only sanctioned caller — see below.
+
+Phase 7 Stage 1 added the first bulk read this port has ever had (`06_DECISIONS.md` ADR-025):
+
+- **`list_nodes(entity_type, principal, cursor=None, limit=500) -> ListNodesPage`.** "Every
+  `Person` node" — the corpus-wide resolution trigger's own population fetch — has no other route
+  to it: `find_node`/`search_nodes` need an exact identifier value, `expand`/`paths` need a known
+  seed, `match` needs a bounded pattern. Paginated, access-controlled exactly like every other
+  read. `ListNodesPage = {nodes: list[Node], next_cursor: NodeId | None}`; `next_cursor is None` is
+  the *only* correct exhaustion signal — a short page is not one, since a page can legitimately
+  return zero visible nodes while more exist further on if that page's key range happens to be
+  entirely hidden from `principal`. **Not `limit_exceeded`'s contract**: that typed error is
+  analyst-facing (three interactive options a person chooses between); this method's only caller
+  is a service principal that pages, with no one to offer a choice to. **Cursor: keyset on `id`
+  (a ULID, lexicographically sortable and fixed at creation), not an offset** — a page selects
+  `id > cursor`, ordered by `id`, so a node written after a scan starts is picked up by a later
+  page in the ordinary case rather than skipped or duplicated. Not snapshot isolation: a node
+  whose id happens to sort behind the current cursor at the moment it's written (only possible
+  under ULID clock skew across writers) could be missed by that pass — acceptable given ADR-025's
+  own "re-run whole, never resume from a checkpoint" recovery model, which corrects a missed node
+  on the next triggered run rather than this method guaranteeing a perfect snapshot it cannot
+  cheaply give. `services/resolve/trigger.py` is the only caller today.
 
 **`Subgraph.filtered_count`** stayed the Phase 1 placeholder `0` through Phase 2. It stood in for
 a specific question `GraphPort` alone could not answer: of the nodes an `expand` call excluded,

@@ -16,6 +16,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from conduit_common.identity import new_edge_id, now_utc
+from ontology.handling import HandlingScheme
 from ports.graph import GraphPort
 from schemas.domain import (
     Edge,
@@ -40,12 +41,17 @@ async def write_same_as_edges(
     *,
     created_by: str,
     tx: TxId,
+    scheme: HandlingScheme,
 ) -> list[EdgeId]:
-    """`nodes_by_id` supplies each candidate pair's `Handling` — the edge inherits `node_a`'s,
-    the same "one endpoint's own handling" choice `services/geocoder/match.py` already made for
-    an inferred `SAME_AS` edge with no handling of its own to carry. Deterministic identifiers
-    never reach this function at all (`01_DOMAIN_MODEL.md` §4: "Only run Splink on types where
-    identity is genuinely uncertain") — it only ever receives what `resolver.py` already scored."""
+    """`nodes_by_id` supplies each candidate pair's `Handling` — the edge inherits whichever
+    endpoint's classification ranks more restrictive under `scheme` (`06_DECISIONS.md` ADR-025: "a
+    derived edge should never be more visible than either fact it connects"), taken wholesale
+    rather than merged field by field, the same "one endpoint's own handling" shape
+    `services/geocoder/match.py` already established for an inferred `SAME_AS` edge with no
+    handling of its own to carry — just the more restrictive endpoint, not always `node_a`'s.
+    Deterministic identifiers never reach this function at all (`01_DOMAIN_MODEL.md` §4: "Only run
+    Splink on types where identity is genuinely uncertain") — it only ever receives what
+    `resolver.py` already scored."""
     now = now_utc()
     writes = [
         EdgeWrite(
@@ -70,7 +76,7 @@ async def write_same_as_edges(
                 first_seen=now,
                 extraction_confidence=candidate.score,
             ),
-            handling=_handling_for(candidate, nodes_by_id),
+            handling=_handling_for(candidate, nodes_by_id, scheme),
             created_by=created_by,
             created_at=now,
         )
@@ -81,8 +87,15 @@ async def write_same_as_edges(
     return await graph.upsert_edges(writes, tx)
 
 
-def _handling_for(candidate: SameAsCandidate, nodes_by_id: dict[str, Node]) -> Handling:
-    return nodes_by_id[candidate.node_a].handling
+def _handling_for(
+    candidate: SameAsCandidate, nodes_by_id: dict[str, Node], scheme: HandlingScheme
+) -> Handling:
+    node_a = nodes_by_id[candidate.node_a]
+    node_b = nodes_by_id[candidate.node_b]
+    rank = {classification: i for i, classification in enumerate(scheme.classification)}
+    if rank[node_b.handling.classification] > rank[node_a.handling.classification]:
+        return node_b.handling
+    return node_a.handling
 
 
 async def record_conflicts(

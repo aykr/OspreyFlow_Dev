@@ -82,6 +82,32 @@ class SearchNodesBuilder:
 
 
 @dataclass(frozen=True)
+class ListNodesBuilder:
+    """`GraphPort.list_nodes` — `06_DECISIONS.md` ADR-025. Keyset pagination
+    on `id` (a ULID, lexicographically sortable and fixed at creation): a
+    page is `id > cursor` (or unfiltered on the first page), ordered by
+    `id`, so a page boundary is stable regardless of what else is written
+    concurrently — see the port method's own docstring for the full
+    consistency argument this relies on."""
+
+    entity_type: str
+    cursor: str | None
+    limit: int
+
+    def render_gremlin(self, access: AccessFilter, principal: Principal) -> str:
+        has_access = access.gremlin_has_step(principal)
+        type_lit = groovy_string_literal(physical_type_name(self.entity_type))
+        cursor_step = ""
+        if self.cursor is not None:
+            cursor_lit = groovy_string_literal(self.cursor)
+            cursor_step = f'.has("id",gt({cursor_lit}))'
+        return (
+            f"g.V().hasLabel({type_lit}){cursor_step}.{has_access}"
+            f'.order().by("id").limit({self.limit}).elementMap()'
+        )
+
+
+@dataclass(frozen=True)
 class SuggestLocationsBuilder:
     """`GraphPort.suggest_locations` — the geocoder's own candidate
     retrieval (`07_BUILD_PLAN.md`'s Phase 5 known-gaps list), scoped to `Location.name`

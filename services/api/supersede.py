@@ -78,14 +78,17 @@ async def submit_supersede_node(
 
 async def run_supersede_node_job(
     payload: dict[str, object], *, graph: GraphPort, tx: TxId
-) -> NodeId:
-    """The background half a worker process calls once one exists —
-    separated from `submit_supersede_node` so that worker, when it is
-    written against a real caller, tests against this function rather
-    than reconstructing the payload shape by hand."""
+) -> dict[str, object]:
+    """The background half a worker process calls — `services/api/worker.py`'s `JobWorker`, now
+    that one exists (`06_DECISIONS.md` ADR-025). Separated from `submit_supersede_node` so that
+    worker tests against this function rather than reconstructing the payload shape by hand.
+    Returns a `dict`, not a bare `NodeId`, to match `JobWorker`'s one fixed handler shape
+    (`JobRecord.result: dict[str, Any] | None`) — the same contract `run_resolve_entity_type_job`
+    presents alongside it."""
     node_id = str(payload["node_id"])
     replacement = NodeWrite.model_validate(payload["replacement"])
-    return await graph.supersede_node(node_id, replacement, tx)
+    new_id = await graph.supersede_node(node_id, replacement, tx)
+    return {"result_node_id": new_id}
 
 
 __all__ = [

@@ -947,6 +947,131 @@ async def test_unauthorised_suggest_locations_matches_a_graph_where_the_node_nev
         assert await adapter.suggest_locations("Cran", OFFICIAL) == []
 
 
+# --- list_nodes (06_DECISIONS.md ADR-025's corpus-wide population read) ----
+
+
+async def test_list_nodes_returns_every_node_of_a_type_paginated(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Write more than one page's worth of `Person` nodes, plus a decoy
+    `Endpoint`, and page through with a small `limit` until `next_cursor`
+    is `None` — the union must be exactly the `Person` population, no
+    more, no fewer, no duplicates, regardless of how many pages it took."""
+    async with factory.context() as adapter:
+        person_ids: list[str] = []
+        for i in range(5):
+            (node_id,), _ = await _write(
+                adapter, [_node("Person", classification="OFFICIAL", family_name=f"P{i}")], []
+            )
+            person_ids.append(node_id)
+        await _write(
+            adapter, [_node("Endpoint", classification="OFFICIAL", value_normalised="+440")], []
+        )
+
+        seen: list[str] = []
+        cursor: str | None = None
+        pages = 0
+        while True:
+            page = await adapter.list_nodes("Person", CLEARED, cursor=cursor, limit=2)
+            seen.extend(n.id for n in page.nodes)
+            pages += 1
+            if page.next_cursor is None:
+                break
+            cursor = page.next_cursor
+            assert pages <= 10, "list_nodes did not converge — cursor is not advancing"
+
+        assert sorted(seen) == sorted(person_ids)
+        assert len(seen) == len(set(seen))
+        assert pages >= 3  # 5 Person nodes at limit=2 must take at least 3 pages
+
+
+async def test_list_nodes_single_page_exhausts_immediately(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (node_id,), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", family_name="Solo")], []
+        )
+        page = await adapter.list_nodes("Person", CLEARED, limit=500)
+        assert [n.id for n in page.nodes] == [node_id]
+        assert page.next_cursor is None
+
+
+async def test_list_nodes_a_full_page_that_exactly_exhausts_the_type_still_needs_a_final_call(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The caller must check `next_cursor`, never infer exhaustion from a
+    page coming back shorter than `limit` (`ListNodesPage`'s own docstring):
+    when the population is an exact multiple of `limit`, a full page still
+    carries a non-`None` `next_cursor`, and only the following, empty call
+    reports `next_cursor is None`. A caller that stops as soon as a page
+    looks "full enough" rather than checking the field itself would silently
+    drop this exact-boundary case."""
+    async with factory.context() as adapter:
+        ids: list[str] = []
+        for i in range(2):
+            (node_id,), _ = await _write(
+                adapter, [_node("Person", classification="OFFICIAL", family_name=f"B{i}")], []
+            )
+            ids.append(node_id)
+
+        first = await adapter.list_nodes("Person", CLEARED, limit=2)
+        assert sorted(n.id for n in first.nodes) == sorted(ids)
+        assert first.next_cursor is not None
+
+        second = await adapter.list_nodes("Person", CLEARED, cursor=first.next_cursor, limit=2)
+        assert second.nodes == []
+        assert second.next_cursor is None
+
+
+async def test_unauthorised_list_nodes_matches_a_graph_where_the_node_never_existed(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Existence-leak discipline, extended to a paginated result: an
+    OFFICIAL principal paging over a type that also has a SECRET member
+    must see exactly the OFFICIAL ones, with the same page shape (count,
+    final `next_cursor`) a graph with no SECRET member at all would give."""
+    async with factory.context() as adapter:
+        (visible_id,), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", family_name="Visible")], []
+        )
+        await _write(
+            adapter, [_node("Person", classification="SECRET", family_name="Hidden")], []
+        )
+
+        page = await adapter.list_nodes("Person", OFFICIAL, limit=500)
+        assert [n.id for n in page.nodes] == [visible_id]
+        assert page.next_cursor is None
+
+        control = await adapter.list_nodes("Person", OFFICIAL, limit=500, cursor=None)
+        assert len(control.nodes) == 1
+        assert control.next_cursor is None
+
+
+async def test_list_nodes_cursor_excludes_already_returned_nodes(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (first_id,), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", family_name="First")], []
+        )
+        (second_id,), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", family_name="Second")], []
+        )
+
+        first_page = await adapter.list_nodes("Person", CLEARED, limit=1)
+        assert len(first_page.nodes) == 1
+        assert first_page.next_cursor is not None
+
+        second_page = await adapter.list_nodes(
+            "Person", CLEARED, cursor=first_page.next_cursor, limit=10
+        )
+        assert [n.id for n in second_page.nodes] == [
+            i for i in (first_id, second_id) if i != first_page.nodes[0].id
+        ]
+        assert second_page.next_cursor is None
+
+
 # --- edge summarisation, weight, and the load-ledger stamp ------------------
 
 

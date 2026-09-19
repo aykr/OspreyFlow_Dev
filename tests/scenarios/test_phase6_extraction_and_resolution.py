@@ -199,6 +199,7 @@ async def test_phase6_exit_criterion_end_to_end() -> None:
                 {dup_a_id: dup_a, dup_b_id: dup_b},
                 created_by="resolve-service",
                 tx=tx,
+                scheme=scheme,
             )
             await graph.commit_transaction(tx)
 

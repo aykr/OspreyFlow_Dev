@@ -1554,14 +1554,24 @@ defensible, honestly-priced first cut is "refetch the whole entity type," which 
 past a small corpus and is disclosed as such, the same way `ArcadeDBAdapter`'s own contention
 notes disclose a real, known limit rather than hiding it.
 
-**Principal and access control.** Proposed, since `docs/` is silent on this specific question: the
-job runs under a deployment-level service principal, not the ingesting analyst's own — resolution
-is corpus-wide and cross-investigation, and the analyst who happened to trigger a load has no
-special claim over every resulting `SAME_AS` edge. A written `SAME_AS`'s own `handling` inherits
-the *more restrictive* of its two endpoint nodes' classifications, proposed on the general
-principle that a derived edge should never be more visible than either fact it connects. Every
-write still goes through the same `GraphPort` access-control path standing rule 2 already
-requires everywhere else; the service principal is a caller identity, not a bypass.
+**Principal and access control.** The job runs under a deployment-level service principal, not the
+ingesting analyst's own — resolution is corpus-wide and cross-investigation, and the analyst who
+happened to trigger a load has no special claim over every resulting `SAME_AS` edge. **Decided
+during Phase 7 Stage 1, not left as this ADR's own open proposal:** `01_DOMAIN_MODEL.md` §2.2 now
+settles exactly what that identity may see — the scheme's highest classification, an empty
+`receivable_handling_codes`, and the structural reason a non-empty one cannot work for a single
+fixed `org_unit` — proven against the real adapter by
+`tests/resolve/test_trigger.py::test_service_principal_cannot_see_a_restricted_handling_code_record`.
+This ADR only restates the pointer rather than duplicating that text, per this project's own
+"settle it where an access-control audit would look" discipline. A written `SAME_AS`'s own
+`handling` inherits the *more restrictive* of its two endpoint nodes' classifications, proposed on
+the general principle that a derived edge should never be more visible than either fact it
+connects — implemented in `services/resolve/same_as_writer.py::_handling_for`, ranking via the
+active `HandlingScheme`'s own dominance order rather than a hardcoded one, and proven discriminating
+(not merely non-contradicted) by `tests/resolve/test_same_as_writer.py::
+test_edge_inherits_the_more_restrictive_endpoints_handling`. Every write still goes through the
+same `GraphPort` access-control path standing rule 2 already requires everywhere else; the service
+principal is a caller identity, not a bypass.
 
 **Overlap and partial-run recovery.** Checked, not assumed: `write_same_as_edges`/
 `record_conflicts` are already upsert/supersede-based (`record_conflicts` supersedes the existing
@@ -1616,6 +1626,65 @@ says plainly for B12–B14/B19–B20.
 **Revisit if.** The blocking-key-scoped incremental fetch turns out to be needed sooner than "the
 corpus is still small" holds — at which point the population-selection proposal above, not this
 ADR's other decisions, is what changes.
+
+**Addendum, 19 September 2026 — §5's own overlap fix as proposed was not built; found, checked and
+replaced during Phase 7 Stage 1, and recorded here rather than left standing only in
+`services/resolve/trigger.py`'s own module docstring.**
+
+**What §5 assumed.** The paragraph above treats `write_same_as_edges`/`record_conflicts` as
+uniformly safe under overlap because both are "already upsert/supersede-based," and proposes the
+Valkey guard purely as a performance throttle ("checked before submitting, skipping a redundant
+submission") on top of that assumed safety.
+
+**Checked, not assumed, while building Stage 1 — and only half of it holds.** The `SAME_AS`-write
+half is genuinely safe: `GraphArcadeDBAdapter.upsert_edges` already finds-and-merges an existing
+edge by `(type, source, target)` via `_find_existing_edge`, using `bothE`/`otherV` for an
+undirected type, and `SAME_AS` is declared `directed: false` (`packages/ontology/loader.py`'s
+`_SYSTEM_EDGE_DEFS`) — two overlapping runs writing the same pair correctly collapse into one edge
+regardless of which run names which endpoint `source`/`target`. The conflict-recording half does
+not: `GraphArcadeDBAdapter.supersede_edge` fetches the target edge by raw id with no check that it
+hasn't already been superseded, and blindly writes a new replacement. Two overlapping runs that
+both detect the same conflict against the same `NOT_SAME_AS` edge id — plausible, since each run
+does its own fresh Splink pass and its own fresh read of existing edges at its own start time — can
+both call `record_conflicts` against that id; the second call does not fail or no-op, it produces a
+second, independent replacement, forking `superseded_by` rather than leaving one clean conflict
+record. This is a correctness problem the guard alone was never going to prevent, not merely
+wasted work.
+
+**Why the obvious fix — a revision-check inside `record_conflicts` before superseding — was not
+built.** Closing it cheaply needs a way to re-fetch an edge's current state immediately before the
+write. `GraphPort` has no `get_edge` method. Adding one now, solely for this internal safety net,
+would repeat exactly the reasoning `07_BUILD_PLAN.md`'s Phase 6 gaps list already used to decline
+one for a related but different reason (edge candidates needing their own conformance-suite
+coverage, standing rule 1) — real, additional port surface, not a small addition to this stage.
+
+**What replaced it.** `resolve:running:{entity_type}` (§5's own name) is a real Valkey lock
+(`valkey.asyncio.lock.Lock`), acquired atomically and **held for the run's own duration, released
+on completion** — not merely checked once before submitting, as §5's own wording has it. This
+closes the common case without a new port method: as long as a run finishes inside
+`LOCK_TTL_SECONDS`, no second run for the same entity type can execute concurrently at all, so the
+conflict-recording race above cannot occur in practice.
+
+**The residual gap, stated at the strength it actually has.** If a run genuinely outlives
+`LOCK_TTL_SECONDS`, a second run can acquire the (now-expired) lock while the first is still
+writing, and the conflict-recording race is not closed for that window — the mutex is
+best-effort against a real duration, not a guarantee independent of how that duration is set.
+
+**The measurement this residual gap actually turns on, checked rather than assumed, because it is
+exactly the kind of substitution a future reader would otherwise make silently.**
+`tests/resolve/test_projection_perf.py`'s 50,000-node, 0.056-second result is real, but it measures
+`compute_clusters`/`diff_clusters` — the τ-threshold reprojection path called from the interactive
+`set_resolution_threshold` endpoint, bounded by the working set's own 50,000-node cap. It says
+nothing about how long this trigger's own expensive step — `resolve_entity_type`'s Splink
+`linker.predict()` over "every `Person` node," per this ADR's own "refetch the whole entity type,"
+explicitly **not** bounded by the 50k working-set cap — actually takes at corpus scale. No
+measurement of that step exists anywhere in this repository. `LOCK_TTL_SECONDS` (set to two hours)
+is therefore a conservative, disclosed guess, not a number derived from either figure — sizing it
+off the 50k/0.056s result would be sizing a guard against the wrong operation. **What would retire
+the guess:** a real timing of `resolve_entity_type` against a `Person` population at the largest
+scale a deployment expects to run it, the same "measured, not assumed" discipline `01_DOMAIN_MODEL.md`
+§8.2 already applied to `supersede_node`'s own ~41-second figure. Recorded in `07_BUILD_PLAN.md`'s
+new Phase 7 known-gaps list alongside the status-bar notice, not only here.
 
 ---
 

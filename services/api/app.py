@@ -23,6 +23,7 @@ audit failure.
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import os
 from collections.abc import AsyncIterator
@@ -59,6 +60,7 @@ from services.ingest.connectors.geo.site_grid import site_grid_rows
 from services.ingest.engine import run_recipe
 from services.ingest.recipe_loader import load_recipe
 from services.ingest.staging import ObjectStorageConfig
+from services.resolve.trigger import JOB_TYPE_RESOLVE_ENTITY_TYPE, run_resolve_entity_type_job
 from valkey.asyncio import Valkey
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
@@ -113,6 +115,7 @@ from schemas.profile import SourceProfile
 
 from . import dossier as dossier_module
 from . import resolution as resolution_module
+from . import resolution_trigger as resolution_trigger_module
 from . import review as review_module
 from . import search as search_module
 from .audit import AuditWriteError, AuditWriter
@@ -130,6 +133,7 @@ from .jobs import JobQueue
 from .mapconfig_loader import load_map_config, public_view
 from .notify import notify_channel, publish_delta
 from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
+from .resolution_trigger import ResolveNowAccepted
 from .review import (
     AcceptCandidateRequest,
     CandidateNotPendingError,
@@ -179,6 +183,7 @@ from .studio_recipes import (
     StudioRecipeStore,
 )
 from .studio_verify import RowTemplateMissingError, run_verify
+from .supersede import JOB_TYPE_SUPERSEDE_NODE, run_supersede_node_job
 from .tile_cache import (
     cache_key_for,
     read_cached_tile,
@@ -186,6 +191,7 @@ from .tile_cache import (
     write_cached_tile,
 )
 from .tile_proxy import build_upstream_url, fetch_tile
+from .worker import JobWorker
 from .working_set.models import (
     CardinalityPreview,
     ClusterExplanation,
@@ -266,7 +272,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.site_image_storage = site_image_storage_config()
     app.state.tile_cache_storage = tile_cache_storage_config()
     app.state.analytics = analytics
-    app.state.jobs = JobQueue(valkey)
+    jobs = JobQueue(valkey)
+    app.state.jobs = jobs
+    # `06_DECISIONS.md` ADR-025: this system's first job-queue worker,
+    # generalised by `job_type` rather than resolution-specific — closes
+    # `services/api/supersede.py`'s own long-disclosed "no worker attached
+    # yet" gap in the same stroke. Constructed and its handlers registered
+    # here so a standalone worker process (`services/api/run_worker.py`)
+    # has something real to import and drive in a loop; this app process
+    # itself does not spin up that loop — running the worker is deployment
+    # wiring (its own process/container), not additional Conduit logic.
+    job_worker = JobWorker(valkey, jobs, graph)
+    job_worker.register(JOB_TYPE_SUPERSEDE_NODE, run_supersede_node_job)
+    job_worker.register(
+        JOB_TYPE_RESOLVE_ENTITY_TYPE,
+        functools.partial(
+            run_resolve_entity_type_job, ontology=ontology, scheme=handling_scheme, valkey=valkey
+        ),
+    )
+    app.state.job_worker = job_worker
     app.state.principal_resolver = PrincipalResolver(config)
     app.state.map_config = load_map_config(config.osprey_config_path)
 
@@ -345,6 +369,10 @@ def get_valkey(request: Request) -> Valkey:
     return request.app.state.valkey  # type: ignore[no-any-return]
 
 
+def get_jobs(request: Request) -> JobQueue:
+    return request.app.state.jobs  # type: ignore[no-any-return]
+
+
 def get_sites(request: Request) -> SiteStore:
     return request.app.state.sites  # type: ignore[no-any-return]
 
@@ -406,6 +434,7 @@ ExtractionCandidatesDep = Annotated[ExtractionCandidateStore, Depends(get_extrac
 ModelDep = Annotated[ModelPort, Depends(get_model)]
 RecipesRepoRootDep = Annotated[Path, Depends(get_recipes_repo_root)]
 HandlingSchemeDep = Annotated[HandlingScheme, Depends(get_handling_scheme)]
+JobsDep = Annotated[JobQueue, Depends(get_jobs)]
 SiteImageStorageDep = Annotated[ObjectStorageConfig, Depends(get_site_image_storage)]
 TileCacheStorageDep = Annotated[ObjectStorageConfig, Depends(get_tile_cache_storage)]
 AnalyticsDep = Annotated[AnalyticsPort, Depends(get_analytics)]
@@ -1355,6 +1384,31 @@ async def search_route(
     return result
 
 
+# --- the corpus-wide resolution trigger (06_DECISIONS.md ADR-025) -------------
+
+
+@app.post("/v1/resolution/{entity_type}/run")
+async def resolve_now_route(
+    entity_type: str,
+    principal: PrincipalDep,
+    ontology: OntologyDep,
+    jobs: JobsDep,
+    audit: AuditDep,
+) -> ResolveNowAccepted:
+    """Not investigation-scoped — `resolution_trigger.py`'s own docstring has the full reasoning,
+    the same one `/v1/search` already gives for its own lack of an `owning_unit` check."""
+    accepted = await resolution_trigger_module.resolve_now(
+        entity_type, ontology=ontology, jobs=jobs
+    )
+    await audit.record(
+        principal=principal,
+        action="resolve_now",
+        resolved_query={"entity_type": entity_type},
+        result_cardinality=1,
+    )
+    return accepted
+
+
 # --- ontology -----------------------------------------------------------------
 
 
@@ -2139,6 +2193,7 @@ async def run_studio_recipe(
     ontology: OntologyDep,
     repo_root: RecipesRepoRootDep,
     audit: AuditDep,
+    jobs: JobsDep,
     body: RunRecipeInput,
 ) -> LoadReport:
     """§8: "Loader: run a published recipe against a file at or below
@@ -2148,7 +2203,15 @@ async def run_studio_recipe(
     `investigation_id` is carried onto the produced `EventRecord`s'
     `investigation_scope` for analytics filtering (`schemas.analytics.
     EventRecord`) — it is not an access-control scope for the loaded
-    elements themselves, which join the shared graph like any other load."""
+    elements themselves, which join the shared graph like any other load.
+
+    Also the post-ingest half of `06_DECISIONS.md` ADR-025's corpus-wide
+    resolution trigger: a load that actually creates something submits a
+    resolution job per resolvable entity type the recipe declares
+    (`resolution_trigger.submit_post_ingest_resolution_jobs`) — this is the
+    only route through which an ingest can ever raise a hotlist/
+    saved-pattern alert against a live deployment, not fixture data
+    assembled by a test harness."""
     load_id = new_id()
     report = await run_published_recipe(
         recipe,
@@ -2159,6 +2222,9 @@ async def run_studio_recipe(
         investigation_scope=investigation.id,
         source_location=body.source_location,
         repo_root=repo_root,
+    )
+    await resolution_trigger_module.submit_post_ingest_resolution_jobs(
+        report, recipe.row_template, ontology=ontology, jobs=jobs
     )
     await audit.record(
         principal=principal,

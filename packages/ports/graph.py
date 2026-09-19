@@ -16,6 +16,7 @@ from schemas.domain import (
     EdgeId,
     EdgeWrite,
     ExpandRequest,
+    ListNodesPage,
     NeighbourhoodStats,
     Node,
     NodeId,
@@ -207,6 +208,58 @@ class GraphPort(Protocol):
 
     async def apply_schema(self, schema: OntologySchema) -> SchemaReport: ...
     async def revert_schema(self, to_version: int) -> SchemaReport: ...
+
+    async def list_nodes(
+        self,
+        entity_type: str,
+        principal: Principal,
+        *,
+        cursor: NodeId | None = None,
+        limit: int = 500,
+    ) -> ListNodesPage:
+        """The first bulk read this port has ever had — `06_DECISIONS.md`
+        ADR-025: the corpus-wide resolution trigger needs "every `Person`
+        node," and nothing before this could produce it (`find_node`/
+        `search_nodes` need an exact identifier value, `expand`/`paths`
+        need a known seed, `match` needs a bounded pattern). Paginated,
+        access-controlled exactly like every other read.
+
+        **Cursor: keyset on `id`, not an offset.** `NodeId`s are ULIDs —
+        lexicographically sortable and fixed at creation
+        (`01_DOMAIN_MODEL.md` §2) — so `cursor` is the last id already
+        returned and a page selects `id > cursor`, ordered by `id`. This is
+        not snapshot isolation: a node written *after* a scan starts is
+        picked up by a later page in the ordinary case (its id sorts after
+        the current cursor), never duplicated, and a node that already
+        existed is visited exactly once regardless of what else is written
+        concurrently while the scan runs. `06_DECISIONS.md` ADR-025's own
+        "re-run whole, never resume from a checkpoint" recovery model is
+        what makes this an acceptable trade rather than a defect: a node
+        missed by one pass (only possible under ULID clock skew across
+        writers) is corrected by the next triggered run, not by this
+        method trying to guarantee a perfect snapshot it cannot cheaply
+        give.
+
+        **Not `limit_exceeded`'s contract.** That typed error is
+        analyst-facing — three interactive options a person chooses
+        between (`03_CONDUIT_MIDDLEWARE.md` §4). This method's only caller
+        is a service principal that pages; there is no one to offer a
+        choice to. `ListNodesPage.next_cursor is None` is the sole signal
+        of exhaustion, never an empty `nodes` list on its own — a page can
+        legitimately return zero *visible* nodes while more exist further
+        on, if this page's key range happens to be entirely hidden from
+        `principal`. A caller that pages once and treats it as the whole
+        population recreates, one layer up, exactly the silent truncation
+        rule 2 forbids this port from producing itself.
+
+        Access-filtered exactly like every other read: a node hidden from
+        `principal` must not appear, must not count toward `limit`, and
+        the pagination shape itself (page count, last page size, whether a
+        final page carries a `next_cursor`) must be identical to a graph
+        where that hidden node never existed — the same existence-leak
+        discipline `find_node`/`search_nodes` already prove, extended to a
+        paginated result."""
+        ...
 
     async def revert_elements(
         self, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId], tx: TxId

@@ -36,6 +36,7 @@ from schemas.domain import (
     ExpandRequest,
     Handling,
     Interval,
+    ListNodesPage,
     NeighbourhoodStats,
     Node,
     NodeId,
@@ -57,6 +58,7 @@ from .builders import (
     ExpandBuilder,
     FindByIdentifierBuilder,
     GetNodeBuilder,
+    ListNodesBuilder,
     MatchBuilder,
     NeighbourhoodStatsBuilder,
     PathBuilder,
@@ -430,6 +432,27 @@ class GraphArcadeDBAdapter:
         builder = SuggestLocationsBuilder(name, limit=limit)
         results = await self._client.gremlin(builder.render_gremlin(self._access, principal))
         return [node_from_element_map(r) for r in results]
+
+    async def list_nodes(
+        self,
+        entity_type: str,
+        principal: Principal,
+        *,
+        cursor: NodeId | None = None,
+        limit: int = 500,
+    ) -> ListNodesPage:
+        builder = ListNodesBuilder(entity_type, cursor, limit)
+        results = await self._client.gremlin(builder.render_gremlin(self._access, principal))
+        nodes = [node_from_element_map(r) for r in results]
+        # A short page is not itself proof of exhaustion (the port's own
+        # docstring): only ask for one more than requested to know whether
+        # a further page exists would need a second query, so instead the
+        # correct signal is "this page came back full" — a page shorter
+        # than `limit` cannot be followed by more of *this* entity type
+        # under keyset-on-id ordering, since every remaining node's id is
+        # necessarily greater than every id already returned.
+        next_cursor = nodes[-1].id if len(nodes) == limit else None
+        return ListNodesPage(nodes=nodes, next_cursor=next_cursor)
 
     async def expand(self, req: ExpandRequest, principal: Principal) -> Subgraph:
         builder = ExpandBuilder(req)
