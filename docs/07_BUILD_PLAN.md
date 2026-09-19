@@ -367,8 +367,9 @@ above follows — so Publish's own scoping reads this instead of reconstructing 
   promises both a CDR *and* a financial fixture mapped from scratch by someone who hasn't seen
   the ontology, plus (§6, ADR-018) a second studio review once real data can be loaded through
   it. Only the CDR fixture (`tests/scenarios/fixtures/cdr.py`) exists; no financial fixture, and
-  no second review, have happened. The first review (`docs/SESSION_HANDOVER.md`, 15 September
-  2026) covered the prototype against the CDR fixture only, before Verify or Publish existed.
+  no second review, have happened. The first review (`docs/archive/SESSION_HANDOVER.md`, 15
+  September 2026) covered the prototype against the CDR fixture only, before Verify or Publish
+  existed.
 - **Publish commits from the running Conduit process's own local checkout, not a shared
   remote.** `write_and_commit_recipe` (`services/api/studio_publish.py`) runs `git add`/`git
   commit` against `app.state.recipes_repo_root` — the checkout the process happens to be running

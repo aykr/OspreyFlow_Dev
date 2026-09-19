@@ -3,7 +3,7 @@ concrete mechanism that makes `08_ACCEPTANCE_SCENARIOS.md` Scenario A
 (A3–A11) demonstrable against a live Glass, not only against automated
 tests (`07_BUILD_PLAN.md` Phase 5 Checkpoint 2).
 
-**No `osprey` CLI** (`docs/SESSION_HANDOVER.md`'s standing note, reconfirmed
+**No `osprey` CLI** (`CLAUDE.md`'s own Conventions, reconfirmed
 this phase) — a plain, directly-runnable script now, the same correction
 already made for `revert_load` (Phase 2) and the local-basemap build
 (Checkpoint 1). `python -m scripts.seed_hmp_fixture` is what an eventual

@@ -5,7 +5,7 @@ to produce PMTiles, and loads the OSM-derived gazetteer") and
 `docs/05_DEPLOYMENT.md` §2.2 ("Build local basemap").
 
 **No harness exists yet** (`harness/` is Phase 8 scope, `docs/07_BUILD_PLAN.md`)
-and there is no `osprey` CLI (`docs/SESSION_HANDOVER.md`'s standing note,
+and there is no `osprey` CLI (`CLAUDE.md`'s own Conventions,
 reconfirmed for Phase 5). This module is the real functionality the
 eventual `osprey geo build`/harness button wraps — a plain, importable,
 directly-runnable script now, the same correction already made for
@@ -278,7 +278,7 @@ async def build_local_basemap(
 # --- CLI entrypoint, mirroring services/ingest/__main__.py's shape -----------
 #
 # Not an `osprey geo build` command — there is no unified `osprey` CLI
-# (`docs/SESSION_HANDOVER.md`), and this module's own docstring records
+# (`CLAUDE.md`'s own Conventions), and this module's own docstring records
 # that as deliberate for now. `python -m scripts.build_local_basemap` is
 # what that eventual command wraps.
 

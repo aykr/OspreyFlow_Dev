@@ -6,7 +6,7 @@ compliance, and confirms attribution is present", `docs/07_BUILD_PLAN.md`
 Phase 5's own "Verify parity check... CRS, zoom range, contrast floor over
 a fixture graph, attribution presence" bullet.
 
-No `osprey` CLI yet (`docs/SESSION_HANDOVER.md`'s standing note) — a plain,
+No `osprey` CLI yet (`CLAUDE.md`'s own Conventions) — a plain,
 directly-runnable script now, mirroring `scripts/build_local_basemap.py`'s
 exact shape: named stage functions, an injectable `Callable` for the one
 network-dependent stage, a frozen result dataclass, a

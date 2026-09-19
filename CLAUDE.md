@@ -49,6 +49,16 @@ outside the stated scope of the change — a correction to one section must not 
 9. **Fixtures are synthetic and in-repo.** No real intelligence data anywhere, ever. Map data in
    the demo and CI is tier 1 only.
 10. **The performance budget in `docs/02_GLASS_FRONTEND.md` §5 is a CI gate**, not a target.
+11. **A genuine spec gap gets fixed in the spec, not answered in chat.** An answer given only in
+    conversation is lost by the next session — if `docs/` is ambiguous or silent on something
+    needed, the fix is an edit to `docs/` (an ADR, if it is a real decision), not a reply.
+12. **When a spec sentence states an invariant, ask which test would fail if it were violated.**
+    `upsert_edges` never merged same-pair edges for a whole phase while the conformance suite
+    passed, because no case wrote the same pair twice — the invariant was stated in prose and
+    exercised by nothing. The same failure has recurred since: a keyboard-navigation CI gate that
+    proves a menu opens but not that an item in it activates; a fake test double that proves a
+    pure function's logic but not the access control its real caller depends on. Naming the test
+    is part of stating the invariant, not a follow-up.
 
 ## Conventions
 
@@ -58,6 +68,10 @@ outside the stated scope of the change — a correction to one section must not 
 - Ports are `Protocol` classes in `packages/ports`. Adapters live in `packages/adapters/<name>`.
 - British English in code comments, documentation and all user-facing copy.
 - Conventional Commits.
+- No `osprey` CLI yet. Operational work (seeding a fixture, minting a dev token, reverting a
+  load, building the local basemap) is a plain, directly-runnable module under `scripts/`, run as
+  `python -m scripts.<name>` — the shape an eventual CLI subcommand would wrap, not a shortcut
+  around one.
 
 ## Before you write code
 

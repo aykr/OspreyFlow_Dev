@@ -5,7 +5,7 @@
 // only, which is domain data, not the Conduit's own control-plane envelope
 // shapes. Keeping this file in sync with the Python source is manual; a
 // change to either side without the other is a real, if modest, drift risk
-// worth naming rather than leaving implicit (`docs/SESSION_HANDOVER.md`'s
+// worth naming rather than leaving implicit (`CLAUDE.md` rule 12's
 // "invariants stated in prose that no test exercises" failure mode,
 // applied to a cross-language contract instead of a domain invariant).
 // `deltaClient.test.ts` exercises this file against the *real* Python

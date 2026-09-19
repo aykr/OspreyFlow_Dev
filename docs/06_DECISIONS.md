@@ -751,7 +751,7 @@ Scenario A, in one place, regardless of which phase proves which step.
 **Why a doc correction rather than a silent partial build.** The alternative to naming this
 explicitly was building Phase 5 against the literal exit text, quietly stopping short of it, and
 letting whoever reads the build plan next assume A12–A15 either don't matter or were somehow
-proven anyway. `SESSION_HANDOVER.md`'s standing instruction is that a genuine spec gap gets fixed
+proven anyway. `CLAUDE.md`'s own standing rule is that a genuine spec gap gets fixed
 in the spec, not answered once in conversation and left for the next session to rediscover — this
 is that fix. It was also considered and rejected to reorder phases so `ComputePort`/Assessment
 land before Phase 5 purely to satisfy this one criterion; that would solve a documentation problem

@@ -1,4 +1,4 @@
-# MantisNexus — design provenance
+# OspreyFlow — design provenance
 
 How the architecture in `docs/` was arrived at: what was proposed, what was challenged, what
 changed, and why. The specification states the decisions; this records the reasoning behind them
@@ -124,7 +124,7 @@ Four capabilities were added during the review that were not in any input docume
 
 ## 4. What the build found
 
-Three phases in, the pattern has been consistent: the end-of-phase audit finds a real defect every
+Six phases in, the pattern has been consistent: the end-of-phase audit finds a real defect every
 time, and roughly half are specification defects rather than implementation ones.
 
 | Found in | Defect | Whose |
@@ -140,12 +140,23 @@ time, and roughly half are specification defects rather than implementation ones
 | Phase 2 audit | Geometry stored on the `Location` node rather than the analytics store | Implementation |
 | Phase 2 audit | Staging ran *after* normalisation, defeating its own stated purpose | Specification |
 | Masking fix | A justification sentence survived a change to the mechanism it justified | Specification |
+| Phase 5 plan | Phase 5's exit criterion ("Scenario A passes end to end") asked for A12–A15 capabilities two and three phases from existing (ADR-019) | Specification |
+| Phase 6 build | `splink`'s current stable/pre-release lines pull in `igraph`, GPL, failing the licence gate (ADR-021) | Specification |
+| Phase 6 build | DuckDB's `jaro_winkler_similarity` is case-sensitive — `'MERCER'`/`'Mercer'` scored 0.44, silently near-certain non-matching a same-person pair | Implementation |
+| Phase 6 build | Extraction confidence self-report arrives on an unpredictable mix of 0..1/0..10/0..100 scales | Specification gap |
+| Phase 7 plan | Phase 7's exit criterion ("Scenario B passes end to end") named six steps its own bullet list never claimed — B6, B9–B11, B16, B18 (ADR-022) | Specification |
+| Phase 7 plan | `Endpoint.endpoint_kind` and `Device.identifiers` both declared `imei`, letting one handset exist as two nodes (ADR-023) | Specification |
+| Phase 7 plan | `FakeGraphPort.expand` ignores `principal`; every clustering test built on it proved `compute_clusters`' own logic, never the access control it depends on | Implementation, test coverage |
 
-Two of these deserve note. The **staging order** defect would have surfaced in Phase 6, when
+Three of these deserve note. The **staging order** defect would have surfaced in Phase 6, when
 someone tried to re-extract and found only normalised values staged — by which point months of
 data would have been staged the wrong way. The **`upsert_edges`** defect is the clearest argument
 for the audit habit: a green conformance suite proved nothing because no test wrote the same pair
-twice, and the prose invariant was never exercised.
+twice, and the prose invariant was never exercised. The **`FakeGraphPort`** defect is the same
+shape one phase pair later: a fake test double proved a pure function correct against input it
+assumed was already safe, and nothing checked the assumption until a session went looking for it
+specifically — `CLAUDE.md` rule 12 now names asking that question directly, rather than leaving it
+to be rediscovered a third time.
 
 ---
 
@@ -170,11 +181,17 @@ does. Worth checking explicitly whenever a mechanism changes.
 
 ## 6. What has not been tested
 
-Recorded so it is not mistaken for settled.
+Recorded so it is not mistaken for settled. Brought current to the close of Phase 6 (19
+September) — the claim below about the Ingest Studio review was wrong by that point and is
+corrected here rather than left to be found by a later audit.
 
-- **No analyst has used any of it.** The Ingest Studio prototype was built in Phase 2 precisely so
-  an analyst could react to it early, and that review has not happened. Everything about the
-  interface remains a well-reasoned guess.
+- **The Ingest Studio review happened; a second one has not.** The first review (15 September,
+  `docs/archive/SESSION_HANDOVER.md`, commit `87dbb7b`) covered the prototype against the CDR
+  fixture, before Verify or Publish existed — real feedback, not a well-reasoned guess, but
+  against an earlier, narrower build than what Phase 5a eventually shipped. Phase 5a's own
+  known-gaps list (`07_BUILD_PLAN.md`) already discloses what remains open: no financial fixture
+  has been mapped from scratch, and no second review has happened against the completed studio
+  (Verify and Publish included).
 - **No real data has passed through.** All fixtures are synthetic and seeded, by design, but the
   normalisers in particular will meet cases the golden files do not anticipate.
 - **The swap boundary has one adapter per port.** "Swappable" is proved by conformance suites that

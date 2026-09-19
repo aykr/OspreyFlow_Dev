@@ -2,7 +2,7 @@
 multiple clients": "the bundle step refuses to package tiles or
 gazetteers whose profile says `redistributable: false`, and names them."
 
-No `osprey` CLI yet (`docs/SESSION_HANDOVER.md`'s standing note, reconfirmed
+No `osprey` CLI yet (`CLAUDE.md`'s own Conventions, reconfirmed
 for Phase 5) — a plain, directly-runnable script now, the same pattern as
 `scripts/build_local_basemap.py`/`scripts/seed_hmp_fixture.py`. The real
 `osprey bundle` command wraps `bundle_map_providers` below in Phase 8.

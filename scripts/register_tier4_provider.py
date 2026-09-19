@@ -1,6 +1,6 @@
 """`osprey map add` for a tier-4 WMTS endpoint — `docs/00_ARCHITECTURE.md`
 §1.2 ("Capabilities documents are parsed at registration"). No `osprey`
-CLI yet (`docs/SESSION_HANDOVER.md`'s standing note) — a plain,
+CLI yet (`CLAUDE.md`'s own Conventions) — a plain,
 directly-runnable script now, the same pattern as `scripts/
 build_local_basemap.py`/`scripts/osprey_bundle.py`. Fetches a WMTS
 service's own `GetCapabilities` document, parses it, and prints the

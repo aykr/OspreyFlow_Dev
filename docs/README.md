@@ -1,8 +1,8 @@
 # OspreyFlow — System Specification Pack
 
-Version 1.1 · Architecture baseline for implementation by Claude Code.
-Supersedes v1.0 (`../ospreyflow-spec/`), which predates the Gemini architecture
-specification. v1.0 is retained for reference; where the two differ, this pack is current.
+Version 1.1 · Architecture baseline for implementation by Claude Code. Supersedes the v1.0 draft,
+which predated the Gemini architecture specification and was folded into this folder at the start
+of the project. This pack is the only copy; there is no separate v1.0 to consult.
 
 OspreyFlow is an open-source intelligence analysis and network discovery platform. It ingests
 structured records and unstructured material (text, audio, imagery), resolves entities across
@@ -66,9 +66,11 @@ and each is expected to be replaced at some point without that being a re-archit
 | `08_ACCEPTANCE_SCENARIOS.md` | Two end-to-end analyst journeys used as the functional test |
 | `09_INGEST_STUDIO.md` | The visual POLE mapping harness, connector catalogue, review queue |
 | `design/tokens.css` | Design tokens extracted verbatim from the brand foundations |
-| `handoff/HANDOFF.md` | How to hand this pack to Claude Code, step by step |
-| `handoff/CLAUDE.md` | Repository-root memory file for Claude Code |
-| `handoff/PROMPTS.md` | Kickoff prompt, the `/phase` command, and prompts for when a build drifts |
+| `DEMO_GUIDE.md` | Bringing up a demo environment, the analyst walkthrough, and what is not yet demonstrable |
+| `NEXT_STEPS_PHASE7.md` | Sequencing and session prompts for the work after Phase 6 |
+| `SESSION_HANDOVER.md` | The current handover (Phase 6 → Phase 7). The 14 September original is `archive/SESSION_HANDOVER.md` |
+| `DESIGN_PROVENANCE.md` | How the decisions in this pack were arrived at, and what remains untested |
+| `archive/` | Superseded documents, retained for reference only. See `archive/README.md` |
 
 ## Source documents reconciled by this pack
 
