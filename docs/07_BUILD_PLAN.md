@@ -950,12 +950,15 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
 6. **Hotlists, saved-pattern monitors, alert inbox** — genuinely demonstrable only once Stage 1
    exists.
 
-**Exit.** Acceptance scenario B, scoped to B1–B5, B7, B12–B14, B15, B19 and B20 (ADR-022), passes
-end to end. The Clique Metric ranks the insular-cluster fixture node above the broad-hub fixture
-node, and all three compute tiers return identical values within tolerance. A12 (Phase 5's exit
-criterion, scoped to A1–A11, deferred this one step here per ADR-019) is re-proven against the
-same HMP fixture: the Clique Metric identifies the same insular subgroup Phase 5 already surfaced
-by other means. B15 (a SIM `Endpoint` reaching its `Device` in one traversal) is re-verified here
+**Exit.** Acceptance scenario B, scoped to B1 (its two-CDR-files half only; the device-extraction
+half stays unowned, ADR-027), B2–B5, B7, B12, B13 (via a CDR-carried hotlisted identifier, not the
+literal seizure-record fixture, ADR-027), B14, B15 (its `imsi→Device` leg only, ADR-022's
+addendum), B19 and B20, passes end to end. The Clique Metric ranks the insular-cluster fixture node
+above the broad-hub fixture node, and all three compute tiers return identical values within
+tolerance. A12 (Phase 5's exit criterion, scoped to A1–A11, deferred this one step here per
+ADR-019) is re-proven against the same HMP fixture: the Clique Metric identifies the same insular
+subgroup Phase 5 already surfaced by other means. B15 (a SIM `Endpoint` reaching its `Device` in
+one traversal) is re-verified here
 specifically because this phase's own pathfinder and visual query builder compute over that same
 traversal shape — see ADR-023, which must land before this phase's Session 5 (schemas and the
 `ComputePort` conformance suite) so neither is built against a graph topology about to change.
@@ -1065,7 +1068,10 @@ findable only from whichever phase happened to notice it.
   MSISDN↔IMSI `SAME_AS` write it proposes needs a structured record that reports both values
   together, which only a device-extraction (or equivalent) connector would ever produce. Needs a
   scoping decision — its own stage inside whichever phase eventually builds it, per ADR-024 — not
-  an assumption that Phase 2 closing or Phase 6a's Glass work already covers it.
+  an assumption that Phase 2 closing or Phase 6a's Glass work already covers it. **Phase 7's own
+  exit criterion (ADR-027) confirms this gap is not closed by that phase either** — B1 and B13 are
+  both scoped around it, not through it: B1 to its two-CDR-files half only, B13 to a CDR-carried
+  hotlisted identifier rather than the literal seizure-record fixture.
 
 - **Fake-based tests in this repository do not exercise security-relevant paths, and that is now
   a pattern across four independent findings, not a property of any one fake.** Each instance was

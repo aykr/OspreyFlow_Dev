@@ -1692,3 +1692,73 @@ Confirming a permissive licence alone does not reopen this ADR; the shaped fixtu
 chosen because the licence was assumed restrictive.
 
 ---
+
+## ADR-027 — B1 and B13's device-extraction legs stay unowned; Phase 7 proves the underlying mechanism through what already exists
+
+**Status.** Accepted, 19 September 2026.
+
+**The contradiction.** ADR-022 asserted, without checking it against the working tree, that
+Scenario B's B1–B5 and B7 were "already proven by Phases 2–4." Opening Phase 7 and re-walking
+B1–B5, B7, B12–B14, B15, B19 and B20 against the repository at `5c8c72c` finds that claim false
+for B1, and finds the identical gap reaching B13: `tests/scenarios/fixtures/cdr.py` is one
+carrier's file (four renderings of one number, one recipe) — there is no second CDR file in a
+different carrier format, and no device-extraction fixture, connector or recipe exists anywhere.
+`services/ingest/connectors/` holds only `csv_connector.py`. `tests/scenarios/fixtures/
+seizure_record.py`'s own docstring already discloses this for B13's fixture directly: "no
+seizure-record connector or recipe exists yet to do it end to end." This is the same defect
+ADR-022 was written to correct, found again, one phase later, inside the very exit criterion
+ADR-022 itself wrote — the recurrence standing rule 9 exists to make visible rather than silent.
+
+Checked and found **not** to need reattribution, contrary to a first reading of the same gaps
+list: B4 ("seed a working set from the first cohort") is `GraphPort.search_nodes`, which matches
+only a type's *declared* `identifiers` — `Person.identifiers = [nino, pnc_id, prison_number,
+passport_number]`, not `family_name` — so seeding by a declared identifier is pure graph-leg
+search, real since Phase 3/4, and the OpenSearch document/index gap (`Gaps with no owning phase`)
+does not reach it. B15 is scoped by ADR-022's own addendum to the already-real `imsi→Device`
+(`PAIRED_WITH`) leg only; the `msisdn` leg was already, correctly, left fixture-only by ADR-024.
+Both are recorded here so a future reader does not have to redo either check.
+
+**Why not absorb device-extraction ingest into Phase 7 (rejected).** A real device-extraction
+connector (UFDR/XRY-shaped, per ADR-024) is Phase-2-shaped ingest/connector work, not analytics
+work — the same distinction ADR-022 already drew to keep B6/B9–B11 out of Phase 7 and into their
+own phase (6a) rather than bolting Glass work onto an analytics phase. Phase 7 already carries
+three `ComputePort` tiers, the metrics panel, the visual query builder, the pathfinder and
+ADR-025's own resolution/alerting trigger; adding connector-building work on top repeats the
+uncosted-growth pattern ADR-022's addendum found and corrected for Phase 8.
+
+**Why not a disclosed CSV substitution either (rejected).** `services/ingest/engine.py`'s
+row-template writer (`_write_entity`/`_write_edge`) is generic over entity and edge type, and
+`on_match: reference` already resolves against the live graph across loads via `GraphPort.
+find_node` — a recipe could plausibly write `PAIRED_WITH`/`SAME_AS` edges today with no new engine
+code. But representing a "device extraction" as CSV rows would satisfy B1's and B13's literal
+graph-state assertions without ever proving the platform can ingest a structurally different
+source format, which is the actual capability Phase 2's own known-gaps list and ADR-024 both name
+as missing. Narrowing what the exit criterion tests, honestly, is the correct fix; narrowing what
+a fixture proves while presenting it as the real thing is not — put to the user directly rather
+than decided silently, and this is the option rejected.
+
+**Decision.**
+1. B1 is scoped, for Phase 7's exit criterion only, to its two-CDR-files half: two CSV-shaped
+   files in different carrier column layouts, authored as a new recipe/fixture over the existing
+   CSV connector — no new connector code — proving identifier collapse across carrier formats and
+   `value_raw` retention. The "two device extractions" half of B1's fixture stays unbuilt and
+   unowned, exactly its status today, until a phase claims device-extraction ingest.
+2. B13 is scoped, for Phase 7's exit criterion only, to the post-ingest-hook → hotlist-match →
+   alert mechanism (ADR-025), demonstrated via an ordinary CDR row carrying a previously-hotlisted
+   MSISDN — not via the literal seizure-record/device-extraction fixture. The mechanism under test
+   is identical either way; only the source-format claim changes.
+3. B4 and B15 need no reattribution, per the checks above.
+4. `07_BUILD_PLAN.md`'s Phase 7 exit-criterion paragraph and its `Gaps with no owning phase`
+   device-extraction entry are both edited to record this.
+
+**Cost.** None to the platform's eventual scope. Two ordinary fixture/recipe-authoring tasks
+(a second-carrier CDR file, a hotlist-triggering CDR row) stand in for what would otherwise be
+connector-building work. The literal "two device extractions" and "ingest the seizure record"
+claims remain honestly unmet — the same status they hold today, now written down against Phase 7
+specifically rather than silently carried past it a second time the way B1 already was once.
+
+**Revisit if.** A future phase claims device-extraction ingest (ADR-024's own "whichever phase
+eventually builds" it) — at that point B1 and B13 should be re-proven against their literal
+fixtures, the same way A12 was re-proven once its own dependency landed.
+
+---
