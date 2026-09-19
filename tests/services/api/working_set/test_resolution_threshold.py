@@ -9,7 +9,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from services.api.working_set.service import WorkingSetService
-from services.resolve.projection import DEFAULT_THRESHOLD, THRESHOLD_BROAD, THRESHOLD_STRICT
+from services.resolve.projection import (
+    DEFAULT_THRESHOLD,
+    THRESHOLD_BALANCED,
+    THRESHOLD_BROAD,
+    THRESHOLD_STRICT,
+)
 
 from ontology.handling import load_uk_le_scheme
 from schemas.domain import (
@@ -77,6 +82,41 @@ def _not_same_as(node_a: str, node_b: str) -> Edge:
         type="NOT_SAME_AS",
         source=node_a,
         target=node_b,
+        properties={},
+        provenance=_provenance(),
+        handling=_handling(),
+        audit=_audit(),
+    )
+
+
+def _endpoint(node_id: str, endpoint_kind: str) -> Node:
+    return Node(
+        id=node_id,
+        type="Endpoint",
+        properties={"endpoint_kind": endpoint_kind},
+        provenance=_provenance(),
+        handling=_handling(),
+        audit=_audit(),
+    )
+
+
+def _device(node_id: str) -> Node:
+    return Node(
+        id=node_id,
+        type="Device",
+        properties={},
+        provenance=_provenance(),
+        handling=_handling(),
+        audit=_audit(),
+    )
+
+
+def _paired_with(sim_endpoint: str, device: str) -> Edge:
+    return Edge(
+        id=f"{sim_endpoint}-{device}",
+        type="PAIRED_WITH",
+        source=sim_endpoint,
+        target=device,
         properties={},
         provenance=_provenance(),
         handling=_handling(),
@@ -165,3 +205,42 @@ async def test_no_change_reports_a_zero_delta() -> None:
     assert delta.merged == 0
     assert delta.split == 0
     assert delta.affected == 0
+
+
+async def test_msisdn_and_imsi_endpoints_cluster_together_the_device_does_not() -> None:
+    """`08_ACCEPTANCE_SCENARIOS.md` B15 / `06_DECISIONS.md` ADR-023's own layering addendum:
+    `compute_clusters` "collapses, never merges" — this proves the *cluster assignment* a `SAME_AS`
+    between an `msisdn` `Endpoint` and its `imsi` `Endpoint` produces at the projection layer,
+    which is as far as this layer's own claim goes. It is not a claim about what the Glass renders
+    (`services/resolve/projection.py`'s own docstring: that's a rendering question for that tier,
+    still Phase 6a's unbuilt work) — only that the two `Endpoint`s land in one `ClusterId` and the
+    `Device` they're paired to, which carries no `SAME_AS` edge of its own, does not join it."""
+    store = FakeWorkingSetStore()
+    same_as = _same_as("sim-msisdn", "sim-imsi", 1.0)
+    paired_with = _paired_with("sim-imsi", "device-1")
+    graph = FakeGraphPort(
+        Subgraph(
+            nodes=[
+                _endpoint("sim-msisdn", "msisdn"),
+                _endpoint("sim-imsi", "imsi"),
+                _device("device-1"),
+            ],
+            edges=[same_as, paired_with],
+        ),
+        0,
+    )
+    service = WorkingSetService(graph, store, SCHEME)
+    await store.add_nodes(
+        INVESTIGATION,
+        [
+            _endpoint("sim-msisdn", "msisdn"),
+            _endpoint("sim-imsi", "imsi"),
+            _device("device-1"),
+        ],
+    )
+
+    await service.set_resolution_threshold(INVESTIGATION, THRESHOLD_BALANCED, PRINCIPAL)
+
+    nodes = await store.source_fidelity_nodes(INVESTIGATION)
+    assert nodes["sim-msisdn"].resolution.cluster_id == nodes["sim-imsi"].resolution.cluster_id
+    assert nodes["device-1"].resolution.cluster_id != nodes["sim-imsi"].resolution.cluster_id

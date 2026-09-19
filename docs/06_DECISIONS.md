@@ -1112,3 +1112,158 @@ one costs a silent bad merge going unreviewed, which `03_CONDUIT_MIDDLEWARE.md` 
 future stage gives conflict detection a genuine per-investigation τ to check against instead of a
 single corpus-wide bar — at which point this should check the investigation's own running
 threshold directly rather than the most permissive of three fixed constants.
+
+---
+
+## ADR-023 — `imei` belongs to `Device`, `imsi` stays on `Endpoint`, and a new edge gives a SIM swap one hop
+
+**Status.** Accepted, 18 September 2026.
+
+**The contradiction.** `01_DOMAIN_MODEL.md`'s own embedded ontology (§1) declares `Endpoint` with
+`endpoint_kind: enum [msisdn, imsi, imei, email, handle, iban, card]` and, four lines later, a
+separate `Device` entity type — with no identifiers of its own in the doc's own illustration, so
+the doc never actually says what identifies a `Device` node. The shipped ontology
+(`packages/ontology/default.yaml`) resolves that silence by giving `Device` `identifiers: [imei,
+imsi]` — which now claims both values `Endpoint.endpoint_kind` already claims. One physical
+handset can therefore exist as two nodes of two different types, in a platform whose own ADR-006
+position is that duplicate identity is never merged in storage but reconciled by a scored `SAME_AS`
+edge at query time; nothing here is scored, and nothing reconciles the two. The domain model's own
+"Why `Endpoint` rather than `Phone`" section is unambiguous about why this matters: "a mobile
+number, a WhatsApp handle, an IMEI and an IMSI are the same *kind* of thing analytically... The
+journey's pivot is a suspect swapping SIMs while keeping a handset... modelling them as one
+`Endpoint` type with an `endpoint_kind` makes it a single hop." Neither the doc's own embedded
+ontology nor the shipped one currently delivers that single hop: the only edge either declares
+between an `Endpoint` and a `Device` is `USES` (`Person → Endpoint, Device`), a two-hop path
+through a person, which is exactly the "special case" the cited rationale says this design exists
+to avoid. `08_ACCEPTANCE_SCENARIOS.md` B15 ("both SIMs link to one device; the SIM-swap pattern is
+one traversal, not a special case") is the literal test this gap fails.
+
+**Why none of the three options first considered is quite right as posed.** IMSI and IMEI are not
+interchangeable, and every option that moves them as a pair gets this wrong. An IMSI, like an
+MSISDN, identifies a subscriber — the SIM — which is squarely the "addressable point a person uses
+and that can be swapped" the `Endpoint` rationale describes. An IMEI identifies the handset itself,
+a physical object a SIM is inserted into, not an address a person is reached at. `Device`'s own
+shipped identifier list (`[imei, imsi]`) already conflates the two by putting a SIM identifier on
+the handset type — a second, sharper defect than the duplication itself, and one that survives
+untouched under a naive reading of any of the three options ("both stay", "`Device` owns both", or
+"`Endpoint` owns both") unless the split below is made explicit.
+
+**Migration cost, checked against the working tree rather than assumed.** No real ingested data
+uses either shape today. `Device` and an `Endpoint` of kind `imei`/`imsi` appear nowhere but
+ontology declarations, JSON Schema, and three test/fixture references — `tests/resolve/
+test_resolver.py:62` (a standalone `EntityTypeDef` in a unit test), `tests/ontology/
+test_validation.py:26` (a standalone `EdgeTypeDef` in a unit test), and `apps/workspace/perf/
+fixture.ts:10` (a synthetic performance-test entity list) — none of them real or persisted graph
+data. `packages/knowledge_adapters/imei.py`/`imsi.py` are pure format normalisers, indifferent to
+which entity type eventually consumes their output. This means every option below costs the same,
+close to nothing, in migration terms; the choice is about correctness and the design system's own
+constraints, not about disturbing anything already loaded.
+
+- **Option 1 (`Device` owns `imei` and `imsi`; both leave `Endpoint.endpoint_kind`).** Cheap, but
+  reproduces `default.yaml`'s own defect — an IMSI identifying a handset — just more explicitly.
+- **Option 2 (`Endpoint` owns both; `Device` is removed).** Matches the "Why `Endpoint` rather than
+  `Phone`" prose most directly, but costs more than it first appears: `01_DOMAIN_MODEL.md` §1.1
+  states "nine entity types, nine data channels... not a coincidence" as load-bearing for the
+  design system's channel/shape allocation. Removing `Device` drops the count to eight and
+  requires rewriting that passage too, and gives up the one type naturally suited to holding
+  seizure-time forensic properties (make, model, colour) that do not belong on an "addressable
+  point" record.
+- **Option 3 (both stay; a `SAME_AS`-style edge connects them).** `SAME_AS` (`system: true`) is
+  documented and property-shaped for *probabilistic* resolution — `score`, `model_version`,
+  `comparison_vector`, written by Splink under a τ. A SIM-in-handset pairing carries none of that
+  uncertainty; it is either asserted or it is not. Reusing `SAME_AS` for a deterministic fact would
+  overload a system edge type with a second, incompatible meaning rather than fix the model.
+
+**Decision.** `imei` moves to `Device` as its identifier; `imsi` stays on `Endpoint` alongside
+`msisdn`, since both identify a subscriber, not a handset. `Endpoint.endpoint_kind`'s enum drops
+`imei`. A new edge type, `PAIRED_WITH` (`Endpoint → Device`, `directed: true`, `temporal: true`),
+records that a given SIM `Endpoint` was installed in a given `Device` over a stated window —
+**only an `Endpoint` of kind `imsi` writes this edge.** `msisdn` never does: an MSISDN and the
+IMSI it is dialled through are the same SIM observed by two different technical channels (a CDR
+names the MSISDN; a device extraction or HLR record names the IMSI), which is a duplicate-identity
+question, not a pairing one — precisely the shape `SAME_AS` exists for and the same pattern
+Scenario B already uses elsewhere (B8's handle-to-endpoint resolution, B11's manual link).
+`WorkingSetService.manual_link` (`services/api/working_set/service.py`) already establishes the
+right property shape for a directly-known, non-Splink link — `{"score": 1.0}` only, leaving
+`model_version`/`comparison_vector` unset rather than inventing values a model never produced —
+and this reuses that shape rather than adding a fourth option nobody proposed. `USES`
+(`Person → Endpoint, Device`) and `PRESENT_AT` (`Person, Device, Vehicle → Location`) need no
+change — a person already correctly uses a device as well as a SIM, and a device already correctly
+has its own location history; both were right about `Device` all along, only the identifier
+overlap was wrong.
+
+**B15's own traversal is one hop for the SIM→Device leg specifically, not for the whole journey.**
+An `Endpoint` of kind `imsi` carries one `PAIRED_WITH` edge into the `Device` node, so two swapped
+SIMs both resolve to one handset in one traversal — the literal claim B15 makes, and all it makes.
+Getting there from B5/B7's own landing point (an `Endpoint` of kind `msisdn`) is a second, separate
+hop: `Endpoint(msisdn) --SAME_AS--> Endpoint(imsi) --PAIRED_WITH--> Device`, two graph edges,
+collapsing to one presented node at the resolution projection the same way every other `SAME_AS`
+in this scenario does — not a special case for this pairing, and not a claim that reaching the
+handset from the number is itself "one hop." Neither the ontology's `from: [Endpoint]` (entity
+type only) nor `validate_edge_endpoints` (`packages/ontology/validation.py`) can enforce the
+`imsi`-only convention at the `endpoint_kind` level — this is documented in `default.yaml`'s own
+comment and in `01_DOMAIN_MODEL.md`, not schema-checked, the same "disclose what the schema can't
+enforce" pattern already used elsewhere in this ontology. `Device` keeps its ninth channel and
+shape unchanged, so `01_DOMAIN_MODEL.md` §1.1's nine-and-nine claim stays true, and it gains a real
+purpose beyond a bare identifier bag: the anchor for a handset's own physical properties and its
+location history, addressed through whichever SIM was paired to it at the time.
+
+This is closest to the first option as posed, refined by the asymmetry above — not a selection
+among the three unmodified.
+
+**Addendum, 18 September 2026 — Question 2 shipped unresolved, then fixed before anything built
+on it.** This ADR's own "Why none of the three options... is quite right" section answered
+*whether IMEI and IMSI move together* but never settled a second, distinct question the approved
+implementation plan also asked: does an MSISDN `Endpoint` ever carry `PAIRED_WITH` directly, or
+only an IMSI `Endpoint`? The Decision paragraph above originally said "two `Endpoint` nodes of kind
+`msisdn`/`imsi`, each with its own `PAIRED_WITH` edge" — implying msisdn pairs directly — while
+`01_DOMAIN_MODEL.md`'s prose said only "each SIM `Endpoint`," and the ontology's own
+`from: [Endpoint]` permitted either reading. The one conformance test written against this ADR
+exercised only `imsi`-kind endpoints, so nothing would have failed had the ambiguity gone either
+way in a future writer. Found and corrected here, in the same migration, before any ingest or
+recipe code was written against either reading — the Decision paragraph above is the corrected
+text, not a later revision layered on top of it. `tests/conformance/graph_port/test_suite.py`
+now carries a second case proving the two-hop shape specifically: `expand` one hop from an MSISDN
+reaches its `imsi` `Endpoint` but not the `Device`; two hops reaches all three.
+
+**Cost.** One ontology edit (`packages/ontology/default.yaml`, mirrored in `01_DOMAIN_MODEL.md`
+§1's own embedded copy, per this project's own rule that a correction to the pack is a diffed edit
+against the working copy, never a silent divergence) and one new edge type. Three test/fixture
+references to `Device` update their own literal identifier lists; none touches persisted data,
+because none exists yet. `services/ingest/profiler.py`'s pattern-recognition list and both
+Knowledge Adapters are unaffected — they normalise a raw value, not the entity type it lands on.
+
+**Lands before Phase 7, not inside it.** `07_BUILD_PLAN.md` Phase 7 builds the pathfinder
+(access-filtered k-shortest paths) and the visual query builder, both computing directly over
+traversal shape; B20 lets an analyst save a pattern as a standing monitor. Shipping either against
+today's two-hop shape and correcting the ontology afterwards would silently change what an already
+saved pattern matches, and would mean re-baselining `ComputePort`'s "identical values within
+tolerance" conformance fixture against a topology that moved under it mid-phase. Since no real data
+exists yet to migrate, there is no cost to fixing this now and a real, avoidable one to fixing it
+later — this lands before Phase 7's own Session 5 (schemas and the `ComputePort` conformance
+suite), the same pre-phase slot `01_DOMAIN_MODEL.md` §8.1's pattern-binding question already
+occupies for the same phase.
+
+**Revisit if.** A deployment needs a `Device` that is not a comms handset at all (a laptop, a
+scanner, an IoT sensor with no IMEI) — nothing here prevents a `Device` node from carrying no
+identifier value yet, the same way a `Person` node carries none of its four candidate identifiers
+until one is confirmed, so this should not itself force a revisit; only a genuine second identifier
+scheme for non-phone devices would.
+
+**Addendum, 18 September 2026 — the two-hop claim was stated one layer higher than this ADR
+builds.** This ADR's own Decision paragraph says the msisdn→imsi→Device path "collaps[es] to one
+presented node at the resolution projection the same way every other `SAME_AS` in this scenario
+does." That is true of the *cluster assignment* `services/resolve/projection.py`'s `compute_clusters`
+produces — its own docstring is explicit that this is "collapse, not merge": `NodeId -> ClusterId`
+only, no `Node` object touched, and "whether/how the Glass renders same-cluster nodes as one
+visual entity is a rendering question for that tier." It is not true that anything in this build
+today renders that collapse to an analyst — that rendering is Phase 6a's own unbuilt Glass work
+(`07_BUILD_PLAN.md`), the same as the resolution-threshold slider and `explain` view it already
+owns. `08_ACCEPTANCE_SCENARIOS.md` B15's own wording ("the SIM-swap pattern is one traversal, not
+a special case") is a claim about the raw `GraphPort` shape, which `tests/conformance/graph_port/
+test_suite.py`'s two `PAIRED_WITH`/`SAME_AS` cases prove; a *second*, separate claim — that the
+two hops present as one node to an analyst — was never tested at the layer that would actually
+produce that, until `tests/services/api/working_set/test_resolution_threshold.py`'s
+`test_msisdn_and_imsi_endpoints_cluster_together_the_device_does_not` closed it at the one layer
+this build has today: cluster assignment. Recorded here rather than only in that test's own
+docstring, since this ADR is what a future reader will check the claim against.

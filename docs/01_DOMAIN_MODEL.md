@@ -34,16 +34,17 @@ entity_types:
     pole_class: object
     channel: cyan
     shape: hexagon
-    identifiers: [e164, handle, email]
+    identifiers: [e164, handle, email, imsi]
     properties:
       - {name: value_raw, type: string}
       - {name: value_normalised, type: string, indexed: true, required: true}
-      - {name: endpoint_kind, type: enum, values: [msisdn, imsi, imei, email, handle, iban, card]}
+      - {name: endpoint_kind, type: enum, values: [msisdn, imsi, email, handle, iban, card]}
 
-  - name: Device
+  - name: Device                  # a physical handset — identified by IMEI, not an Endpoint kind
     pole_class: object
     channel: plum
     shape: square
+    identifiers: [imei]
   - name: Location
     pole_class: location
     channel: ochre
@@ -78,6 +79,10 @@ edge_types:
   - {name: FAMILY_OF,         from: [Person], to: [Person], directed: false, properties: [relation]}
   - {name: MEMBER_OF,         from: [Person], to: [Organisation]}
   - {name: TRANSACTED,        from: [Asset, Endpoint], to: [Asset, Endpoint], temporal: true}
+  # By convention the source is an Endpoint of kind `imsi` only — see the
+  # prose below. Not schema-enforced: `from`/`to` check entity type, not
+  # `endpoint_kind`.
+  - {name: PAIRED_WITH,       from: [Endpoint], to: [Device], directed: true, temporal: true}
   - {name: SAME_AS,           from: ["*"], to: ["*"], directed: false, system: true}
 ```
 
@@ -134,11 +139,23 @@ The rule exists for the tenth.
 
 ### Why `Endpoint` rather than `Phone`
 
-The CoLP journey turns on the fact that a mobile number, a WhatsApp handle, an IMEI and an IMSI
-are the same *kind* of thing analytically: an addressable point that a person uses and that can
-be swapped. The journey's pivot is a suspect swapping SIMs while keeping a handset. Modelling
-phone numbers and handles as separate types makes that traversal a special case; modelling them
-as one `Endpoint` type with an `endpoint_kind` makes it a single hop. Take the generalisation.
+The CoLP journey turns on the fact that a mobile number, a WhatsApp handle and an IMSI are the
+same *kind* of thing analytically: an addressable point a person uses and that can be swapped.
+Modelling phone numbers and handles as separate types makes that traversal a special case;
+modelling them as one `Endpoint` type with an `endpoint_kind` makes it a single hop. Take the
+generalisation.
+
+An IMEI is not this — it identifies the handset itself, not an address a person is reached at, so
+it lives on `Device`, not as an `endpoint_kind`. The journey's pivot, a suspect swapping SIMs
+while keeping a handset, is one hop *for the SIM leg specifically*: an `Endpoint` of kind `imsi`
+carries one `PAIRED_WITH` edge to the `Device` it was inserted in, so two swapped SIMs both
+resolve to one handset node in one traversal rather than two. An `Endpoint` of kind `msisdn` never
+carries `PAIRED_WITH` directly — an MSISDN and the IMSI it is dialled through are the same SIM
+observed two ways, so they resolve like any other duplicate identity in this scenario, via a
+`SAME_AS` edge, not a second `PAIRED_WITH`. Reaching a `Device` from the number an analyst lands
+on (`08_ACCEPTANCE_SCENARIOS.md` B5/B7) is therefore `Endpoint(msisdn) --SAME_AS-->
+Endpoint(imsi) --PAIRED_WITH--> Device`: two graph hops, collapsing to one at the resolution
+projection the same way every other `SAME_AS` in this journey does (`06_DECISIONS.md` ADR-023).
 
 ## 2. The node record
 

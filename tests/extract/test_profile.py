@@ -65,7 +65,7 @@ def test_property_type_mapping_covers_every_kind_person_and_endpoint_use() -> No
     endpoint_props = schema["properties"]["Endpoint"]["items"]["properties"]
     assert endpoint_props["endpoint_kind"] == {
         "type": "string",
-        "enum": ["msisdn", "imsi", "imei", "email", "handle", "iban", "card"],
+        "enum": ["msisdn", "imsi", "email", "handle", "iban", "card"],
     }
 
 

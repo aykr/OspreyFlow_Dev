@@ -403,6 +403,144 @@ async def test_expand_edge_types_filters_to_the_declared_type(
         assert reached == {hub, via_present_at}
 
 
+async def test_both_sims_reach_their_device_in_one_expand(factory: GraphAdapterFactory) -> None:
+    """`08_ACCEPTANCE_SCENARIOS.md` B15 / `06_DECISIONS.md` ADR-023: a SIM
+    swap is one traversal, not a special case. Two distinct SIM `Endpoint`s
+    (different source nodes) each carry their own `PAIRED_WITH` edge into
+    the same `Device` — a single `expand` one hop out from the handset,
+    default `direction="both"` since `PAIRED_WITH` runs `Endpoint -> Device`
+    and the handset is the target, must return both, from one call. Also
+    guards against `_merge_interval` collapsing them: they are different
+    edges (different sources), unlike `test_upserting_the_same_pair_twice_
+    merges_into_one_edge`'s same-pair case above, so both intervals must
+    survive distinct and unmerged."""
+    async with factory.context() as adapter:
+        (handset, sim_a, sim_b), _ = await _write(
+            adapter,
+            [
+                _node("Device", classification="OFFICIAL", imei="49015420323751"),
+                _node(
+                    "Endpoint",
+                    classification="OFFICIAL",
+                    value_normalised="234150123456781",
+                    endpoint_kind="imsi",
+                    imsi="234150123456781",
+                ),
+                _node(
+                    "Endpoint",
+                    classification="OFFICIAL",
+                    value_normalised="234150123456782",
+                    endpoint_kind="imsi",
+                    imsi="234150123456782",
+                ),
+            ],
+            [],
+        )
+        before_swap = Interval(
+            valid_from=datetime(2026, 1, 1, tzinfo=UTC), valid_to=datetime(2026, 1, 20, tzinfo=UTC)
+        )
+        after_swap = Interval(valid_from=datetime(2026, 1, 21, tzinfo=UTC), valid_to=None)
+        await _write(
+            adapter,
+            [],
+            [
+                _edge(
+                    "PAIRED_WITH", sim_a, handset, classification="OFFICIAL", interval=before_swap
+                ),
+                _edge(
+                    "PAIRED_WITH", sim_b, handset, classification="OFFICIAL", interval=after_swap
+                ),
+            ],
+        )
+
+        subgraph = await adapter.expand(
+            ExpandRequest(node_ids=[handset], depth=1, edge_types=["PAIRED_WITH"]), CLEARED,
+        )
+        reached = {n.id for n in subgraph.nodes}
+        assert reached == {handset, sim_a, sim_b}
+
+        intervals = {e.source: e.interval for e in subgraph.edges}
+        assert intervals[sim_a] == before_swap
+        assert intervals[sim_b] == after_swap
+
+
+async def test_msisdn_reaches_its_device_in_two_hops_not_one(
+    factory: GraphAdapterFactory,
+) -> None:
+    """`06_DECISIONS.md` ADR-023's corrected answer to its own second
+    question: an `Endpoint` of kind `msisdn` never carries `PAIRED_WITH`
+    directly — only its `imsi` `Endpoint` does. Reaching the handset from
+    the number `08_ACCEPTANCE_SCENARIOS.md` B5/B7 land an analyst on is
+    `msisdn --SAME_AS--> imsi --PAIRED_WITH--> device`, exactly two graph
+    hops. This is the test that would fail if that shape were ever
+    collapsed — a future shortcut edge straight from an `msisdn` `Endpoint`
+    to a `Device` would make `depth=1` below reach three nodes instead of
+    two."""
+    async with factory.context() as adapter:
+        (handset, sim_imsi, sim_msisdn), _ = await _write(
+            adapter,
+            [
+                _node("Device", classification="OFFICIAL", imei="49015420323751"),
+                _node(
+                    "Endpoint",
+                    classification="OFFICIAL",
+                    value_normalised="234150123456782",
+                    endpoint_kind="imsi",
+                    imsi="234150123456782",
+                ),
+                _node(
+                    "Endpoint",
+                    classification="OFFICIAL",
+                    value_normalised="+447911123457",
+                    endpoint_kind="msisdn",
+                ),
+            ],
+            [],
+        )
+        # `{"score": 1.0}` only — the same shape `WorkingSetService.manual_link`
+        # writes for a directly-known, non-Splink link: `model_version`/
+        # `comparison_vector` are Splink's own output fields, left unset
+        # rather than invented (`_edge()` has no `properties` parameter,
+        # matching `test_edge_properties_and_distinct_interval_round_trip_
+        # exactly`'s own precedent for constructing `EdgeWrite` directly
+        # whenever a test needs edge properties `_edge()` doesn't expose).
+        same_as = EdgeWrite(
+            id=new_edge_id(),
+            type="SAME_AS",
+            source=sim_msisdn,
+            target=sim_imsi,
+            properties={"score": 1.0},
+            provenance=_provenance(),
+            handling=_handling("OFFICIAL"),  # type: ignore[arg-type]
+            created_by="loader-1",
+            created_at=now_utc(),
+        )
+        await _write(
+            adapter,
+            [],
+            [
+                same_as,
+                _edge("PAIRED_WITH", sim_imsi, handset, classification="OFFICIAL"),
+            ],
+        )
+
+        one_hop = await adapter.expand(
+            ExpandRequest(
+                node_ids=[sim_msisdn], depth=1, edge_types=["SAME_AS", "PAIRED_WITH"]
+            ),
+            CLEARED,
+        )
+        assert {n.id for n in one_hop.nodes} == {sim_msisdn, sim_imsi}
+
+        two_hops = await adapter.expand(
+            ExpandRequest(
+                node_ids=[sim_msisdn], depth=2, edge_types=["SAME_AS", "PAIRED_WITH"]
+            ),
+            CLEARED,
+        )
+        assert {n.id for n in two_hops.nodes} == {sim_msisdn, sim_imsi, handset}
+
+
 # --- expand_candidate_count (01_DOMAIN_MODEL.md §8.2 / filtered_count) ------
 
 

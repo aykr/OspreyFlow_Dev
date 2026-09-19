@@ -82,17 +82,17 @@ entity_types:
     pole_class: object
     channel: cyan
     shape: hexagon
-    identifiers: [e164, handle, email]
+    identifiers: [e164, handle, email, imsi]
     properties:
       - {name: value_raw, type: string}
       - {name: value_normalised, type: string, indexed: true, required: true}
-      - {name: endpoint_kind, type: enum, values: [msisdn, imsi, imei, email, handle, iban, card]}
+      - {name: endpoint_kind, type: enum, values: [msisdn, imsi, email, handle, iban, card]}
 
   - name: Device
     pole_class: object
     channel: plum
     shape: square
-    identifiers: [imei, imsi]
+    identifiers: [imei]
 
   - name: Location
     pole_class: location
@@ -163,3 +163,8 @@ edge_types:
       - {name: relation, type: string}
   - {name: MEMBER_OF,         from: [Person], to: [Organisation], directed: true}
   - {name: TRANSACTED,        from: [Asset, Endpoint], to: [Asset, Endpoint], directed: true, temporal: true}
+  # By convention the source is an Endpoint of kind `imsi` only — an MSISDN
+  # reaches the same Device via SAME_AS to its IMSI Endpoint first, never
+  # directly (06_DECISIONS.md ADR-023). `from`/`to` check entity type, not
+  # `endpoint_kind`, so this is not schema-enforced.
+  - {name: PAIRED_WITH,       from: [Endpoint], to: [Device], directed: true, temporal: true}
