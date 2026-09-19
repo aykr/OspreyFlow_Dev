@@ -38,6 +38,7 @@ import json
 from collections.abc import Sequence
 from typing import Any
 
+from services.api.access import narrow_to_visible
 from services.resolve.projection import DEFAULT_THRESHOLD, compute_clusters, diff_clusters
 
 from conduit_common.identity import new_edge_id, now_utc
@@ -200,23 +201,20 @@ class WorkingSetService:
         edges at all, so intersecting the requested `node_ids` with `subgraph.nodes`'
         own ids is sufficient — no separate `get_node` round trip per node is needed the way
         `_manual_assertion` needs one per *named* node, because here the full candidate set is
-        already the thing being visibility-checked in bulk."""
+        already the thing being visibility-checked in bulk. Narrowing itself is
+        `services/api/access.py`'s `narrow_to_visible` — shared with `explain_cluster` below and,
+        since Phase 6a Stage 4, the Dossier's own assembly, rather than a third independent copy
+        of this exact pattern."""
         old_tau = await self.get_resolution_threshold(investigation_id)
         nodes_by_id = await self._store.source_fidelity_nodes(investigation_id)
         node_ids = list(nodes_by_id.keys())
 
-        resolution_edges: list[Edge] = []
-        visible_ids: list[NodeId] = []
-        if node_ids:
-            subgraph = await self._graph.expand(
-                ExpandRequest(node_ids=node_ids, depth=1, edge_types=[SAME_AS, NOT_SAME_AS]),
-                principal,
-            )
-            resolution_edges = subgraph.edges
-            visible = {n.id for n in subgraph.nodes}
-            visible_ids = [node_id for node_id in node_ids if node_id in visible]
-        same_as_edges = [e for e in resolution_edges if e.type == SAME_AS]
-        not_same_as_edges = [e for e in resolution_edges if e.type == NOT_SAME_AS]
+        result = await narrow_to_visible(
+            self._graph, node_ids, principal, edge_types=[SAME_AS, NOT_SAME_AS]
+        )
+        visible_ids = list(result.nodes.keys())
+        same_as_edges = [e for e in result.edges if e.type == SAME_AS]
+        not_same_as_edges = [e for e in result.edges if e.type == NOT_SAME_AS]
 
         before = compute_clusters(visible_ids, same_as_edges, not_same_as_edges, old_tau)
         after = compute_clusters(visible_ids, same_as_edges, not_same_as_edges, tau)
@@ -448,13 +446,11 @@ class WorkingSetService:
             raise ClusterNotFoundError(cluster_id)
 
         tau = await self.get_resolution_threshold(investigation_id)
-        subgraph = await self._graph.expand(
-            ExpandRequest(node_ids=list(candidate_ids), depth=1, edge_types=[SAME_AS, NOT_SAME_AS]),
-            principal,
+        result = await narrow_to_visible(
+            self._graph, list(candidate_ids), principal, edge_types=[SAME_AS, NOT_SAME_AS]
         )
-        resolution_edges = subgraph.edges
-        visible = {n.id for n in subgraph.nodes}
-        member_ids = candidate_ids & visible
+        resolution_edges = result.edges
+        member_ids = set(result.nodes.keys())
         if not member_ids:
             raise ClusterNotFoundError(cluster_id)
 

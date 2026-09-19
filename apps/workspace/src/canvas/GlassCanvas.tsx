@@ -104,6 +104,11 @@ export interface GlassCanvasProps {
    * walkthrough actually moves focus, rather than asserting on internal
    * component state it has no other way to reach. */
   onFocusChange?: (nodeId: string | null) => void;
+  /** B6 / Phase 6a Stage 4: the "View messages" radial-menu item (`Endpoint`-type nodes only,
+   * `08_ACCEPTANCE_SCENARIOS.md` B6's own wording — "the shared endpoint's messages") calls this
+   * with the node's own id rather than owning any Dossier state itself; `App.tsx` owns `view`,
+   * the same separation `onSelectionChange` already establishes. */
+  onViewMessages?: (nodeId: string) => void;
 }
 
 interface PendingRadialMenu {
@@ -132,6 +137,7 @@ export function GlassCanvas({
   dimmedNodeIds = EMPTY_DIMMED_SET,
   onSelectionChange,
   onFocusChange,
+  onViewMessages,
 }: GlassCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sigmaRef = useRef<Sigma<WorkingSetNodeAttributes, WorkingSetEdgeAttributes> | null>(null);
@@ -528,6 +534,19 @@ export function GlassCanvas({
           },
         });
       }
+    }
+
+    // B6: single-node trigger, `Endpoint`-type only — `08_ACCEPTANCE_SCENARIOS.md`'s own wording
+    // ("the shared endpoint's messages") is specific about the node type, not generalised to every
+    // node here. Owns no Dossier state itself; `App.tsx` does, the same split `onSelectionChange`
+    // already establishes.
+    if (node.type === "Endpoint" && onViewMessages) {
+      items.push({
+        id: "view-messages",
+        label: "View messages",
+        count: 0,
+        onSelect: () => void onViewMessages(nodeId),
+      });
     }
 
     return items;

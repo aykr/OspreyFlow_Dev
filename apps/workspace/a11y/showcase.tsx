@@ -18,6 +18,9 @@ import { IconButton } from "../src/design/primitives/IconButton";
 import { Input } from "../src/design/primitives/Input";
 import { explanationBasis } from "../src/resolution/explainView";
 import type { PairwiseExplanation } from "../src/workingset/models";
+import { HighlightedMessage } from "../src/dossier/HighlightedMessage";
+import type { DocumentView } from "../src/dossier/models";
+import { OntologyRegistry } from "../src/ontology/schema";
 import { Panel } from "../src/design/primitives/Panel";
 import { RadioGroup } from "../src/design/primitives/RadioGroup";
 import { Select } from "../src/design/primitives/Select";
@@ -27,6 +30,27 @@ import { Tabs } from "../src/design/primitives/Tabs";
 import { Toast } from "../src/design/primitives/Toast";
 import { Toggle } from "../src/design/primitives/Toggle";
 import { Tooltip } from "../src/design/primitives/Tooltip";
+
+// Phase 6a Stage 4 (B6): one `asserted` span (solid underline) and one `inferred` span (dashed
+// underline) in the same message — the two visual states `HighlightedMessage`'s own
+// `highlightStyle` distinguishes, both densely close together, the shape most likely to fail the
+// contrast floor per this stage's own plan.
+const DOSSIER_ONTOLOGY = new OntologyRegistry({
+  version: 1,
+  entity_types: [
+    { name: "Person", pole_class: "person", channel: "indigo", shape: "circle", identifiers: [] },
+    { name: "Endpoint", pole_class: "object", channel: "cyan", shape: "hexagon", identifiers: [] },
+  ],
+  edge_types: [],
+});
+const DOSSIER_DOCUMENT: DocumentView = {
+  document_id: "showcase-doc",
+  text: "Dana called +441621926368 about the shipment on Tuesday.",
+  spans: [
+    { start: 0, end: 4, node_id: "n1", entity_type: "Person", provenance_state: "asserted" },
+    { start: 12, end: 26, node_id: "n2", entity_type: "Endpoint", provenance_state: "inferred" },
+  ],
+};
 
 function Showcase() {
   return (
@@ -123,6 +147,9 @@ function Showcase() {
       />
       <Toast message="Query timed out at 30s. Narrow the date range." kind="error" />
       <Toast message="6 item(s) withheld by handling policy" kind="warning" />
+      <Panel title="Messages">
+        <HighlightedMessage document={DOSSIER_DOCUMENT} ontology={DOSSIER_ONTOLOGY} />
+      </Panel>
     </div>
   );
 }

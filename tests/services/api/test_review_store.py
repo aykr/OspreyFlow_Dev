@@ -10,6 +10,7 @@ import pytest
 from services.api.config import PostgresConfig
 from services.api.review import (
     CandidateStatus,
+    DocumentNotFoundError,
     ExtractionCandidateNotFoundError,
     ExtractionCandidateStore,
 )
@@ -112,3 +113,43 @@ async def test_mark_reviewed_persists_status_and_node_id(store: ExtractionCandid
 
 async def test_storing_no_candidates_is_a_no_op(store: ExtractionCandidateStore) -> None:
     assert await store.store([], ANALYST) == []
+
+
+# --- document text (Phase 6a Stage 4, B6 — the Dossier) -----------------------------------------
+
+
+async def test_document_text_round_trips(store: ExtractionCandidateStore) -> None:
+    document_id = new_id()
+    await store.store_document_text(document_id, "Dana called at noon.", ANALYST)
+
+    assert await store.get_document_text(document_id, ANALYST) == "Dana called at noon."
+
+
+async def test_storing_document_text_twice_upserts_rather_than_conflicts(
+    store: ExtractionCandidateStore,
+) -> None:
+    """A re-run of extraction against the same `document_id` (a different profile, a second
+    model) must not fail on a primary-key conflict a caller has no reason to expect from what
+    looks like an idempotent action."""
+    document_id = new_id()
+    await store.store_document_text(document_id, "first version", ANALYST)
+
+    await store.store_document_text(document_id, "second version", ANALYST)
+
+    assert await store.get_document_text(document_id, ANALYST) == "second version"
+
+
+async def test_get_document_text_denies_a_principal_in_a_different_org_unit(
+    store: ExtractionCandidateStore,
+) -> None:
+    """`CLAUDE.md` rule 4: every read path gets its own access-control test."""
+    document_id = new_id()
+    await store.store_document_text(document_id, "Dana called at noon.", ANALYST)
+
+    with pytest.raises(DocumentNotFoundError):
+        await store.get_document_text(document_id, OTHER_UNIT_ANALYST)
+
+
+async def test_get_document_text_raises_for_an_unknown_id(store: ExtractionCandidateStore) -> None:
+    with pytest.raises(DocumentNotFoundError):
+        await store.get_document_text("no-such-document", ANALYST)

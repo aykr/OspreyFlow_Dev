@@ -17,6 +17,7 @@ import {
 } from "./crossfilter/store";
 import { Button } from "./design/primitives/Button";
 import { Toast } from "./design/primitives/Toast";
+import { Dossier } from "./dossier/Dossier";
 import { HistoryPanel } from "./history/HistoryPanel";
 import { Inspector } from "./inspector/Inspector";
 import { ResolutionThresholdControl } from "./resolution/ThresholdControl";
@@ -90,7 +91,8 @@ export function App() {
     edges: 0,
     filteredCount: 0,
   });
-  const [view, setView] = useState<"graph" | "map" | "ingest">("graph");
+  const [view, setView] = useState<"graph" | "map" | "ingest" | "dossier">("graph");
+  const [dossierNodeId, setDossierNodeId] = useState<string | null>(null);
   const [mapConfig, setMapConfig] = useState<PublicMapConfig | null>(null);
   const [siteWizardOpen, setSiteWizardOpen] = useState(false);
   const [boundaryToolOpen, setBoundaryToolOpen] = useState(false);
@@ -276,6 +278,11 @@ export function App() {
         <Button aria-pressed={view === "ingest"} onClick={() => setView("ingest")}>
           Ingest
         </Button>
+        {dossierNodeId && (
+          <Button aria-pressed={view === "dossier"} onClick={() => setView("dossier")}>
+            Messages
+          </Button>
+        )}
         {view === "graph" && (
           <ResolutionThresholdControl
             apiBaseUrl={API_BASE_URL}
@@ -311,7 +318,22 @@ export function App() {
             investigationId={investigationId}
           />
         )}
-        {view !== "ingest" && (
+        {view === "dossier" && dossierNodeId && (
+          <Dossier
+            graph={workingSetRef.current.graph}
+            ontology={ontology}
+            nodeId={dossierNodeId}
+            investigationId={investigationId}
+            apiBaseUrl={API_BASE_URL}
+            bearerToken={DEV_BEARER_TOKEN}
+            onSelectNode={(nodeId) => {
+              const graph = workingSetRef.current.graph;
+              setSelectedNode(graph.hasNode(nodeId) ? graph.getNodeAttribute(nodeId, "data") : null);
+              setView("graph");
+            }}
+          />
+        )}
+        {view !== "ingest" && view !== "dossier" && (
         <div style={{ flex: 1, position: "relative" }}>
           {view === "graph" && (
             <GlassCanvas
@@ -331,6 +353,10 @@ export function App() {
                     ? graph.getNodeAttribute(first, "data")
                     : null,
                 );
+              }}
+              onViewMessages={(nodeId) => {
+                setDossierNodeId(nodeId);
+                setView("dossier");
               }}
             />
           )}
@@ -419,7 +445,7 @@ export function App() {
             })()}
         </div>
         )}
-        {view !== "ingest" && (
+        {view !== "ingest" && view !== "dossier" && (
         <div
           style={{ width: 320, borderLeft: "1px solid var(--border-subtle)" }}
         >
@@ -427,7 +453,7 @@ export function App() {
         </div>
         )}
       </div>
-      {view !== "ingest" && (
+      {view !== "ingest" && view !== "dossier" && (
       <div style={{ height: 220, borderTop: "1px solid var(--border-subtle)" }}>
         <Timeline
           apiBaseUrl={API_BASE_URL}
@@ -438,7 +464,7 @@ export function App() {
         />
       </div>
       )}
-      {view !== "ingest" && (
+      {view !== "ingest" && view !== "dossier" && (
       <StatusBar
         nodeCount={counts.nodes}
         edgeCount={counts.edges}

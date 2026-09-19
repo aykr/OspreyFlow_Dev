@@ -25,6 +25,7 @@ from services.api.app import (
 from services.api.investigations import Investigation, InvestigationNotFoundError
 from services.api.review import (
     CandidateStatus,
+    DocumentNotFoundError,
     ExtractionCandidateNotFoundError,
     ExtractionCandidateRecord,
 )
@@ -105,6 +106,18 @@ class _FakeExtractionCandidates:
     def __init__(self) -> None:
         self.records: dict[str, ExtractionCandidateRecord] = {}
         self.list_calls: list[tuple[str, Principal]] = []
+        self.document_texts: dict[str, tuple[str, str]] = {}  # document_id -> (text, owning_unit)
+
+    async def store_document_text(
+        self, document_id: str, text: str, principal: Principal
+    ) -> None:
+        self.document_texts[document_id] = (text, principal.org_unit)
+
+    async def get_document_text(self, document_id: str, principal: Principal) -> str:
+        stored = self.document_texts.get(document_id)
+        if stored is None or stored[1] != principal.org_unit:
+            raise DocumentNotFoundError(document_id)
+        return stored[0]
 
     async def store(
         self, candidates: list, principal: Principal

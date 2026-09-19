@@ -111,12 +111,14 @@ from schemas.ingest import (
 from schemas.mapconfig import MapConfig, PublicMapConfig
 from schemas.profile import SourceProfile
 
+from . import dossier as dossier_module
 from . import resolution as resolution_module
 from . import review as review_module
 from . import search as search_module
 from .audit import AuditWriteError, AuditWriter
 from .auth import PrincipalResolutionError, PrincipalResolver, bearer_scheme
 from .config import ApiConfig
+from .dossier import DocumentView
 from .history import (
     HistoryStep,
     HistoryStepNotFoundError,
@@ -131,6 +133,7 @@ from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdRe
 from .review import (
     AcceptCandidateRequest,
     CandidateNotPendingError,
+    DocumentNotFoundError,
     ExtractionCandidateNotFoundError,
     ExtractionCandidateRecord,
     ExtractionCandidateStore,
@@ -595,6 +598,13 @@ async def _extraction_candidate_not_found_handler(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND, content={"error": "extraction_candidate_not_found"}
+    )
+
+
+@app.exception_handler(DocumentNotFoundError)
+async def _document_not_found_handler(request: Request, exc: DocumentNotFoundError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND, content={"error": "document_not_found"}
     )
 
 
@@ -1198,6 +1208,35 @@ async def reject_extraction_candidate_route(
         result_cardinality=1,
     )
     return RejectedResponse()
+
+
+# --- the Dossier (B6, Phase 6a Stage 4) ---------------------------------------
+#
+# Nested under investigations for the same audit-context reason the extraction/review routes
+# above are — `investigation_id` is not this route's own access-control scope (`owning_unit`,
+# via `principal`, already is), only what the audit row is attributed against.
+
+
+@app.get("/v1/investigations/{investigation_id}/dossier/documents/{document_id}")
+async def get_dossier_document_route(
+    investigation: AuthorizedInvestigationDep,
+    document_id: str,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    extraction_candidates: ExtractionCandidatesDep,
+    audit: AuditDep,
+) -> DocumentView:
+    view = await dossier_module.get_document_view(
+        extraction_candidates, graph, document_id, principal
+    )
+    await audit.record(
+        principal=principal,
+        action="get_dossier_document",
+        investigation_id=investigation.id,
+        resolved_query={"document_id": document_id},
+        result_cardinality=len(view.spans),
+    )
+    return view
 
 
 # --- confirm/retract ----------------------------------------------------------

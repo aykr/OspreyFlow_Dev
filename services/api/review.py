@@ -24,6 +24,12 @@ accept above a confidence threshold. Not as a default, not as a setting." `accep
 `reject_candidate` both take exactly one `candidate_id` — there is no code path here that accepts
 a list of ids, a filter, or a threshold, so this is structurally true rather than a rule a caller
 could accidentally satisfy by passing a filter that happens to match one row.
+
+**A document's own raw text, since Phase 6a Stage 4.** `run_extraction`'s `text` argument used to
+be discarded once candidates were built — nothing anywhere served a document's text back by id.
+`document_texts` (a sibling table to `extraction_candidates`, same pool, same `owning_unit`-scoped
+shape) exists for exactly one consumer: `services/api/dossier.py`'s own assembly of "message
+content renders with the entity spans... highlighted in place" (`08_ACCEPTANCE_SCENARIOS.md` B6).
 """
 
 from __future__ import annotations
@@ -65,6 +71,20 @@ CREATE TABLE IF NOT EXISTS extraction_candidates (
 );
 """
 
+# Phase 6a Stage 4 (B6, the Dossier): `run_extraction`'s own `text` argument was discarded once
+# candidates were built, and nothing anywhere served a document's raw text back by id — the
+# Dossier's own "message content renders... in place" (`08_ACCEPTANCE_SCENARIOS.md` B6) needs
+# exactly that. A sibling table, not a new store/dependency: same pool, same
+# `owning_unit`-scoped shape `extraction_candidates` already establishes.
+_DOCUMENT_TEXT_BOOTSTRAP_SQL = """
+CREATE TABLE IF NOT EXISTS document_texts (
+    document_id TEXT PRIMARY KEY,
+    text TEXT NOT NULL,
+    owning_unit TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL
+);
+"""
+
 
 class CandidateStatus(StrEnum):
     PENDING = "pending"
@@ -81,6 +101,12 @@ class ExtractionCandidateNotFoundError(Exception):
 class CandidateNotPendingError(Exception):
     """Raised by `accept_candidate`/`reject_candidate` against a candidate whose `status` has
     already moved past `pending` — a candidate is reviewed exactly once."""
+
+
+class DocumentNotFoundError(Exception):
+    """Also raised — deliberately, not a 403 — when the document's text exists but
+    `principal.org_unit` does not match its own `owning_unit`: the same existence-leak discipline
+    `ExtractionCandidateNotFoundError` already applies."""
 
 
 class ExtractionProfileInput(BaseModel):
@@ -171,6 +197,7 @@ class ExtractionCandidateStore:
         pool = await asyncpg.create_pool(dsn=dsn)
         async with pool.acquire() as conn:
             await conn.execute(_BOOTSTRAP_SQL)
+            await conn.execute(_DOCUMENT_TEXT_BOOTSTRAP_SQL)
         return cls(pool)
 
     async def close(self) -> None:
@@ -275,6 +302,37 @@ class ExtractionCandidateStore:
                 candidate_id,
             )
 
+    async def store_document_text(
+        self, document_id: str, text: str, principal: Principal
+    ) -> None:
+        """Upsert, not insert-only — `run_extraction` re-run against the same `document_id` (a
+        different profile, a second model) re-stores the same text rather than failing on a
+        primary-key conflict a caller has no reason to expect from an idempotent-looking action."""
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO document_texts (document_id, text, owning_unit, created_at) "
+                "VALUES ($1, $2, $3, $4) ON CONFLICT (document_id) DO UPDATE SET "
+                "text = EXCLUDED.text, owning_unit = EXCLUDED.owning_unit, "
+                "created_at = EXCLUDED.created_at",
+                document_id,
+                text,
+                principal.org_unit,
+                datetime.now(UTC),
+            )
+
+    async def get_document_text(self, document_id: str, principal: Principal) -> str:
+        """`WHERE owning_unit = $2` in the query itself, the same `get_authorized` shape —
+        existence and content refused by the same query, not a fetch followed by a check."""
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT text FROM document_texts WHERE document_id = $1 AND owning_unit = $2",
+                document_id,
+                principal.org_unit,
+            )
+        if row is None:
+            raise DocumentNotFoundError(document_id)
+        return row["text"]
+
 
 async def run_extraction(
     model: ModelPort,
@@ -290,7 +348,11 @@ async def run_extraction(
 ) -> list[ExtractionCandidateRecord]:
     """`09_INGEST_STUDIO.md` §4 end to end: builds the schema from the profile, calls
     `ModelPort.extract()`, turns the result into candidates, and persists them `pending` — no
-    graph write anywhere in this function (`module docstring`)."""
+    graph write anywhere in this function (`module docstring`).
+
+    Also persists `text` itself (`store_document_text`, Phase 6a Stage 4) — previously discarded
+    the moment candidates were built, leaving nothing for the Dossier's own "message content
+    renders... in place" to render against."""
     schema = build_schema(profile, ontology)
     result = await model.extract(
         ExtractionRequest(
@@ -298,6 +360,7 @@ async def run_extraction(
         )
     )
     candidates = extract_candidates(result, profile, ontology, text, handling)
+    await store.store_document_text(document_id, text, principal)
     return await store.store(candidates, principal)
 
 
@@ -360,6 +423,7 @@ __all__ = [
     "AcceptCandidateRequest",
     "CandidateNotPendingError",
     "CandidateStatus",
+    "DocumentNotFoundError",
     "ExtractionCandidateNotFoundError",
     "ExtractionCandidateRecord",
     "ExtractionCandidateStore",
