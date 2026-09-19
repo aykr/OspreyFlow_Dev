@@ -84,7 +84,7 @@ def _same_as(node_a: str, node_b: str, score: float) -> Edge:
 
 async def test_manual_link_merges_two_nodes_and_writes_the_edge() -> None:
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(Subgraph(nodes=[], edges=[]), 0)
+    graph = FakeGraphPort(Subgraph(nodes=[_person("n1"), _person("n2")], edges=[]), 0)
     service = WorkingSetService(graph, store, SCHEME)
     await store.add_nodes(INVESTIGATION, [_person("n1"), _person("n2")])
 
@@ -106,7 +106,7 @@ async def test_manual_link_merges_two_nodes_and_writes_the_edge() -> None:
 async def test_manual_split_separates_two_nodes_even_at_a_broad_threshold() -> None:
     store = FakeWorkingSetStore()
     same_as = _same_as("n1", "n2", 0.999)
-    graph = FakeGraphPort(Subgraph(nodes=[], edges=[same_as]), 0)
+    graph = FakeGraphPort(Subgraph(nodes=[_person("n1"), _person("n2")], edges=[same_as]), 0)
     service = WorkingSetService(graph, store, SCHEME)
     await store.add_nodes(INVESTIGATION, [_person("n1"), _person("n2")])
     await store.set_threshold(INVESTIGATION, THRESHOLD_STRICT)
@@ -149,7 +149,13 @@ async def test_manual_split_rejects_asserting_a_node_against_itself() -> None:
 async def test_explain_cluster_returns_the_direct_edges_between_current_members() -> None:
     store = FakeWorkingSetStore()
     same_as = _same_as("n1", "n2", 0.97)
-    graph = FakeGraphPort(Subgraph(nodes=[], edges=[same_as]), 0)
+    graph = FakeGraphPort(
+        Subgraph(
+            nodes=[_person("n1"), _person("n2"), _person("n3")],
+            edges=[same_as],
+        ),
+        0,
+    )
     service = WorkingSetService(graph, store, SCHEME)
     await store.add_nodes(INVESTIGATION, [_person("n1"), _person("n2"), _person("n3")])
     await service.set_resolution_threshold(INVESTIGATION, THRESHOLD_BALANCED, PRINCIPAL)
@@ -170,7 +176,7 @@ async def test_explain_cluster_returns_the_direct_edges_between_current_members(
 
 async def test_explain_cluster_flags_a_manually_linked_pair() -> None:
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(Subgraph(nodes=[], edges=[]), 0)
+    graph = FakeGraphPort(Subgraph(nodes=[_person("n1"), _person("n2")], edges=[]), 0)
     service = WorkingSetService(graph, store, SCHEME)
     await store.add_nodes(INVESTIGATION, [_person("n1"), _person("n2")])
     await service.manual_link(INVESTIGATION, "n1", "n2", PRINCIPAL)
@@ -191,7 +197,7 @@ async def test_explain_cluster_flags_a_manually_linked_pair() -> None:
         handling=written.handling,
         audit=_audit(),
     )
-    graph.expand_result = Subgraph(nodes=[], edges=[manual_edge])
+    graph.expand_result = Subgraph(nodes=[_person("n1"), _person("n2")], edges=[manual_edge])
 
     explanation = await service.explain_cluster(INVESTIGATION, cluster_id, PRINCIPAL)
 

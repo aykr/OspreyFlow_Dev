@@ -10,19 +10,40 @@ real thing, once `make dev-up` exists to provide one.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
 from services.api.working_set.models import WorkingSetDelta
 
 from schemas.domain import (
+    AuditStub,
     Edge,
     EdgeId,
     EdgeWrite,
     ExpandRequest,
+    Handling,
     Node,
     NodeId,
     Principal,
+    Provenance,
+    ProvenanceState,
+    SourceRef,
     Subgraph,
     TxId,
+)
+
+#: `FakeGraphPort.get_node`'s own default "visible" response — its content is never asserted on
+#: by any test; only whether `get_node` was called and whether it returned `None` is.
+_FAKE_VISIBLE_NODE = Node(
+    id="fake-visible-node",
+    type="Person",
+    properties={},
+    provenance=Provenance(
+        state=ProvenanceState.ASSERTED,
+        sources=[SourceRef(document_id="d", locator="l", excerpt_hash="")],
+        first_seen=datetime(2026, 1, 1, tzinfo=UTC),
+    ),
+    handling=Handling(classification="OFFICIAL", handling_code="P", originator="u", owning_unit="u"),
+    audit=AuditStub(created_at=datetime(2026, 1, 1, tzinfo=UTC), created_by="fixture"),
 )
 
 
@@ -132,14 +153,35 @@ class FakeGraphPort:
     `commit_transaction`, never after a `rollback_transaction`), so a test can assert on the write
     without needing a real transactional store."""
 
-    def __init__(self, expand_result: Subgraph, candidate_count: int) -> None:
+    def __init__(
+        self,
+        expand_result: Subgraph,
+        candidate_count: int,
+        *,
+        hidden_node_ids: frozenset[NodeId] = frozenset(),
+    ) -> None:
         self.expand_result = expand_result
         self.candidate_count = candidate_count
         self.expand_requests: list[ExpandRequest] = []
         self.candidate_count_requests: list[ExpandRequest] = []
+        self.get_node_requests: list[tuple[NodeId, Principal]] = []
         self.committed_edges: list[EdgeWrite] = []
         self._pending_edges: dict[TxId, list[EdgeWrite]] = {}
         self._next_tx = 0
+        #: Every node is visible to every principal by default — this fake is not a stand-in for
+        #: real classification-based filtering (`tests/resolve/test_projection_access_control.py`
+        #: proves that against the real adapter). Configuring `hidden_node_ids` lets a test that
+        #: only cares about `_manual_assertion`'s own *call shape* (does it call `get_node` and
+        #: honour a `None` result) do so without needing a live ArcadeDB.
+        self._hidden_node_ids = hidden_node_ids
+
+    async def get_node(
+        self, node_id: NodeId, principal: Principal, *, include_superseded: bool = False
+    ) -> Node | None:
+        self.get_node_requests.append((node_id, principal))
+        if node_id in self._hidden_node_ids:
+            return None
+        return _FAKE_VISIBLE_NODE
 
     async def expand(self, req: ExpandRequest, principal: Principal) -> Subgraph:
         self.expand_requests.append(req)

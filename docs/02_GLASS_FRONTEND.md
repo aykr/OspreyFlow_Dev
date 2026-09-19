@@ -319,7 +319,10 @@ not wait for the whole payload.
 Not negotiable and cheaper to build in than to retrofit.
 
 - Every canvas action reachable by keyboard. Tab moves between nodes in the current selection
-  ring, arrow keys walk edges, `Enter` expands, `\` opens the radial menu as a list.
+  ring, arrow keys walk edges, `Enter` expands, `\` opens the radial menu as a list, `Space`
+  toggles the focused node's own membership in the selection ring (`07_BUILD_PLAN.md` Phase 6a
+  Stage 1: added for manual link/split, the first action needing a keyboard-built multi-node
+  selection at all — walking with arrow keys moves focus only, never the ring itself).
 - The canvas exposes an accessible alternative view — the Matrix view is not a novelty, it is
   the screen-reader-navigable rendering of the same data.
 - Focus is a 2px brass outline at 2px offset, everywhere, never suppressed.

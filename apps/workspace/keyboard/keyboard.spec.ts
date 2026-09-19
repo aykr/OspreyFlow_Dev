@@ -98,3 +98,56 @@ test("Enter expands the focused node — a real network call, not a stub", async
     request: { node_ids: ["n1"], depth: 1 },
   });
 });
+
+test("Space, then the radial list, reaches manual link — a real POST, not a stub", async ({
+  page,
+}) => {
+  // `07_BUILD_PLAN.md` Phase 6a Stage 1 (B11): the same bar the "Enter
+  // expands" test above already sets — the backslash test alone only
+  // proves the menu opens as a keyboard-navigable list, never that an item
+  // in it is reachable and activatable. This is the first test in this
+  // file to select a *second* node by keyboard at all: `Space` is this
+  // build's own proposed resolution of `02_GLASS_FRONTEND.md` §6's silence
+  // on building a multi-node ring without a mouse (see `GlassCanvas.tsx`'s
+  // own `onKeyDown` comment).
+  await page.goto("/keyboard/harness.html");
+
+  let linkRequestBody: unknown = null;
+  await page.route("**/*/resolution/link", async (route) => {
+    linkRequestBody = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ seq: 2, op: "reproject", merged: 1, split: 0, affected: 2 }),
+    });
+  });
+
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  await page.keyboard.press("Tab"); // focus n0 — Tab's own entry point already puts it in the
+  // ring (`onKeyDown`'s "Tab && selected.size === 0" branch), so no Space needed for it here.
+  await page.keyboard.press("ArrowRight"); // focus n1 (n0's only neighbour) — walking does not
+  // itself change the ring, only `focused`, which is exactly why Space is needed at all.
+  await page.keyboard.press("Space"); // add n1 — ring: {n0, n1}
+
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selection.sort()))
+    .toEqual(["n0", "n1"]);
+
+  await page.keyboard.press("\\"); // opens the list menu on n1, the focused node
+  const menu = page.locator(".radial-menu__list[role='menu']");
+  await expect(menu).toBeVisible();
+
+  // Item order: the one declared edge type first, then "Link to n0" —
+  // `GlassCanvas.tsx`'s own `radialMenuItems` appends the manual-link/split
+  // items after the edge-type ones. One native Tab reaches it; `RadialMenu`
+  // itself focuses the first item on open, and nothing here calls
+  // `preventDefault` on Tab while a menu is open (`onKeyDown`'s own guard).
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("menuitem", { name: /Link to n0/ })).toBeFocused();
+  await page.keyboard.press("Enter");
+
+  await expect.poll(() => linkRequestBody !== null).toBe(true);
+  expect(linkRequestBody).toMatchObject({ node_a: "n1", node_b: "n0" });
+  await expect(menu).toBeHidden(); // RadialMenu closes on select, same as a mouse click
+});

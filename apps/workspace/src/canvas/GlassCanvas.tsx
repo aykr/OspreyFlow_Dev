@@ -289,6 +289,17 @@ export function GlassCanvas({
   // Keyboard: accessibility floor (`docs/02_GLASS_FRONTEND.md` §6) — every
   // canvas action reachable without a mouse.
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // `RadialMenu` is rendered as this container's own child, so a keydown on
+    // one of its `<button role="menuitem">` items bubbles up to this same
+    // handler (React's synthetic events follow real DOM bubbling). Found
+    // while wiring B11's own keyboard test: without this guard, Tab inside
+    // an open menu was *also* being caught by the ring-cycling branch below,
+    // which calls `preventDefault()` and fights the browser's native
+    // button-to-button focus movement the menu's own real `<button>`
+    // elements otherwise get for free. `Escape` still closes the menu
+    // regardless — that is `RadialMenu`'s own `document`-level listener, not
+    // this handler, so it needs no exemption here.
+    if (radialMenu) return;
     if (e.key === "Tab" && selected.size === 0) {
       // The keyboard-only entry point: §6 says "Tab moves between nodes
       // in the current selection ring", which presumes a ring already
@@ -318,6 +329,22 @@ export function GlassCanvas({
     } else if ((e.key === "ArrowLeft" || e.key === "ArrowUp") && focused) {
       const neighbours = graph.neighbors(focused);
       if (neighbours.length > 0) setFocused(neighbours[neighbours.length - 1] ?? null);
+    } else if (e.key === " " && focused) {
+      // `02_GLASS_FRONTEND.md` §6 names Tab/Arrow/Enter/`\` and is silent on
+      // building a multi-node selection by keyboard at all — Space toggling
+      // the focused node's own ring membership is this build's own
+      // resolution of that silence (proposed, not spec-mandated), mirroring
+      // `clickNode`'s own ctrl/cmd-click toggle below exactly. B11 (manual
+      // link/split) is the first feature that needs a keyboard-built
+      // two-node selection; nothing before it did.
+      e.preventDefault();
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(focused)) next.delete(focused);
+        else next.add(focused);
+        onSelectionChange?.(Array.from(next));
+        return next;
+      });
     } else if (e.key === "Enter" && focused) {
       void expandNode(focused, null);
     } else if (e.key === "\\" && focused) {
@@ -349,18 +376,66 @@ export function GlassCanvas({
     store.getState().applyDelta(outcome.delta);
   }
 
+  // `08_ACCEPTANCE_SCENARIOS.md` B11 / `07_BUILD_PLAN.md` Phase 6a Stage 1: "a SAME_AS with
+  // score 1.0, provenance asserted, attributed to the analyst" — attribution needs no plumbing
+  // here beyond the same `bearerToken` `expandNode` already sends, since `link_resolution_route`/
+  // `split_resolution_route` (`services/api/app.py`) resolve the writing principal from that same
+  // bearer token's own `PrincipalDep`, never a service identity. Both routes return the same
+  // `DeltaReproject` shape `set_resolution_threshold` already does, so `applyDelta` needs no new
+  // handling for it. `node_a`/`node_b` are sent flat, not wrapped in `{request: ...}` the way
+  // `/expand`'s own `ExpandBody` is — `ManualAssertionRequest` (`services/api/resolution.py`) is
+  // the whole body, checked directly rather than assumed from `expandNode`'s own different shape.
+  async function manualAssertion(nodeA: string, nodeB: string, kind: "link" | "split"): Promise<void> {
+    const response = await fetch(
+      `${apiBaseUrl}/v1/investigations/${investigationId}/resolution/${kind}`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ node_a: nodeA, node_b: nodeB }),
+      },
+    );
+    if (!response.ok) return; // surfaces via a Toast at the App layer, not here — same as expandNode
+    const delta = await response.json();
+    store.getState().applyDelta(delta);
+  }
+
   function radialMenuItems(nodeId: string): RadialMenuItem[] {
     if (!graph.hasNode(nodeId)) return [];
     const node = graph.getNodeAttribute(nodeId, "data");
     const valid = edgeTypes.filter(
       (et) => et.from.includes(node.type) || et.to.includes(node.type),
     );
-    return valid.map((et) => ({
+    const items = valid.map((et) => ({
       id: et.name,
       label: et.name,
       count: 0, // populated by expand/preview in a follow-up pass, not blocking the action itself
       onSelect: () => void expandNode(nodeId, et.name),
     }));
+
+    // B11: only offered on a *pair* — `selected` (the ring, closed over from this component's own
+    // state) is what tells the menu a second node exists, since the menu is always opened on one
+    // `nodeId` (a right-click or `\`), never on a pair directly.
+    if (selected.size === 2 && selected.has(nodeId)) {
+      const other = Array.from(selected).find((id) => id !== nodeId);
+      if (other) {
+        items.push(
+          {
+            id: "manual-link",
+            label: `Link to ${other}`,
+            count: 0,
+            onSelect: () => void manualAssertion(nodeId, other, "link"),
+          },
+          {
+            id: "manual-split",
+            label: `Split from ${other}`,
+            count: 0,
+            onSelect: () => void manualAssertion(nodeId, other, "split"),
+          },
+        );
+      }
+    }
+
+    return items;
   }
 
   return (
