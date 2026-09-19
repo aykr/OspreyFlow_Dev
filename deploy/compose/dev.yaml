@@ -67,8 +67,32 @@ services:
       # the live Phase 6 scenario/conformance tests reliably on this host needs either Docker
       # Desktop's VM memory allocation raised beyond ~7.6GB (Settings → Resources → Memory) or
       # `ollama` stopped first. Restarting this container (`docker start arcadedb` /
-      # `compose-arcadedb-1`) after a kill recovers cleanly; no data loss was observed across
-      # several repeated kills during Stage 6 development.
+      # `compose-arcadedb-1`) after a kill recovers cleanly in the memory-pressure case above; no
+      # data loss was observed across several repeated kills during Stage 6 development. It does
+      # NOT recover from the disk-exhaustion case the next note describes — that needs the stale
+      # databases actually removed first.
+      #
+      # A fourth, distinct failure mode, found during the ADR-023 migration (18 September 2026):
+      # `testing.py`'s (`packages/adapters/graph_arcadedb/testing.py`) per-test database teardown
+      # runs in a `finally` block, which cannot fire across a hard kill of the test process or
+      # this container. Three `conformance_*` databases orphaned by an earlier interrupted run
+      # (~3.5GB) had accumulated here undetected, and this container's own disk (Docker Desktop's
+      # VM disk, not host disk — checked directly, the host had hundreds of GB free) filled
+      # ("No space left on device" from `LocalSchema.close`), then a plain restart made it worse:
+      # ArcadeDB tried to reload every accumulated database at startup and OOM'd before serving a
+      # single request. Recovery needed the orphaned `conformance_*` directories deleted from the
+      # server's own `databases` volume directly, not a container restart — real data (the
+      # `ospreyflow` database) was identified and left untouched by name, not by guessing. This is
+      # now self-healing going forward: `packages/adapters/graph_arcadedb/testing.py`'s
+      # `sweep_stale_conformance_databases`, run once per session from `tests/conformance/
+      # graph_port/conftest.py`, drops any `conformance_*` orphan before the suite starts — it
+      # does not prevent a hard kill from orphaning one, only stops orphans from compounding
+      # silently across sessions. The sweep's own first cut dropped every `conformance_*`
+      # database unconditionally, which is unsafe under the artificial two-concurrent-process
+      # stress case Phase 1's own known-gap already names above (session B's sweep would drop
+      # session A's still-running database mid-test) — fixed by encoding a creation timestamp
+      # into the database name and only sweeping past a staleness window; `testing.py`'s own
+      # docstring has the full reasoning and the measurements the window is set from.
       ARCADEDB_OPTS_MEMORY: "-Xms1G -Xmx6G"
     healthcheck:
       test: ["CMD", "curl", "-sf", "-u", "root:playwithdata123", "http://localhost:2480/api/v1/ready"]

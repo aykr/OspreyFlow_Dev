@@ -129,9 +129,18 @@ class ArcadeDBClient:
             await self._server_command(f"create database {self._config.database}")
 
     async def drop_database(self) -> None:
+        await self.drop_database_named(self._config.database)
+
+    async def list_databases(self) -> list[str]:
+        """Server-level, independent of `self._config.database` — used by
+        `testing.py`'s stale-database sweep, which operates on the whole
+        server, not one test's own database."""
+        return await self._server_command("list databases")
+
+    async def drop_database_named(self, name: str) -> None:
         databases = await self._server_command("list databases")
-        if self._config.database in databases:
-            await self._server_command(f"drop database {self._config.database}")
+        if name in databases:
+            await self._server_command(f"drop database {name}")
 
     async def _server_command(self, command: str) -> Any:
         resp = await self._http.post("/api/v1/server", json={"command": command})
