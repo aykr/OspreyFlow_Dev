@@ -41,7 +41,7 @@ export function ClusterExplainOverlay({ x, y, explanation, graph, onClose }: Clu
   ];
 
   return (
-    <Popover x={x} y={y}>
+    <Popover x={x} y={y} onClose={onClose}>
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-6)", minWidth: 360 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <strong className="value">Cluster explanation</strong>

@@ -15,7 +15,7 @@ export interface EdgeInspectionOverlayProps {
  * HTML than in the WebGL layer (ADR-002's own "one honest caveat"). */
 export function EdgeInspectionOverlay({ x, y, edge, onClose }: EdgeInspectionOverlayProps) {
   return (
-    <Popover x={x} y={y}>
+    <Popover x={x} y={y} onClose={onClose}>
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-6)", minWidth: 220 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <strong className="value">{edge.type}</strong>

@@ -363,7 +363,18 @@ export function GlassCanvas({
     // elements otherwise get for free. `Escape` still closes the menu
     // regardless — that is `RadialMenu`'s own `document`-level listener, not
     // this handler, so it needs no exemption here.
+    //
+    // Phase 6a Stage 4: `inspectedEdge`/`clusterExplain` get the same exemption, found the same
+    // way — without it, this container's own Tab/arrow branches below fight a keyboard-only
+    // analyst trying to reach either overlay's own close button, the identical bug class
+    // `radialMenu` was already exempted from. `Escape` needs no branch here: `Popover` (the base
+    // both overlays render through) now closes itself on Escape via its own `document`-level
+    // listener, the same self-contained shape `RadialMenu` already had — found necessary, not
+    // just tidier, because this container's own handler only runs while the container itself has
+    // focus, and both overlays are opened from a radial-menu item whose own unmount drops focus to
+    // `<body>`, past this div entirely.
     if (radialMenu) return;
+    if (inspectedEdge || clusterExplain) return;
     if (e.key === "Tab" && selected.size === 0) {
       // The keyboard-only entry point: §6 says "Tab moves between nodes
       // in the current selection ring", which presumes a ring already

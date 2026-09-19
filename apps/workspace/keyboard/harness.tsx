@@ -18,7 +18,11 @@ import type { OntologySchema, Node, Edge } from "../../../packages/schemas/gener
 
 declare global {
   interface Window {
-    __KEYBOARD__?: { focused: string | null; selection: string[] };
+    __KEYBOARD__?: {
+      focused: string | null;
+      selection: string[];
+      viewMessagesNodeId: string | null;
+    };
   }
 }
 
@@ -26,8 +30,14 @@ const SCHEMA: OntologySchema = {
   version: 1,
   entity_types: [
     { name: "Person", pole_class: "person", channel: "indigo", shape: "circle", identifiers: [] },
+    // Phase 6a Stage 4 (B6): the only fixture data the "View messages" radial-menu item needs —
+    // it is offered on `Endpoint`-type nodes specifically (`GlassCanvas.tsx`'s own condition).
+    { name: "Endpoint", pole_class: "object", channel: "cyan", shape: "hexagon", identifiers: [] },
   ],
-  edge_types: [{ name: "ASSOCIATE_OF", from: ["Person"], to: ["Person"], directed: false }],
+  edge_types: [
+    { name: "ASSOCIATE_OF", from: ["Person"], to: ["Person"], directed: false },
+    { name: "USES", from: ["Person"], to: ["Endpoint"], directed: true },
+  ],
 };
 
 function node(id: string, overrides: Partial<Node> = {}): Node {
@@ -51,10 +61,10 @@ function node(id: string, overrides: Partial<Node> = {}): Node {
   };
 }
 
-function edge(id: string, source: string, target: string): Edge {
+function edge(id: string, source: string, target: string, type = "ASSOCIATE_OF"): Edge {
   return {
     id,
-    type: "ASSOCIATE_OF",
+    type,
     source,
     target,
     provenance: {
@@ -72,7 +82,7 @@ function edge(id: string, source: string, target: string): Edge {
   };
 }
 
-window.__KEYBOARD__ = { focused: null, selection: [] };
+window.__KEYBOARD__ = { focused: null, selection: [], viewMessagesNodeId: null };
 
 const workingSet = createWorkingSet();
 const ontology = new OntologyRegistry(SCHEMA);
@@ -86,13 +96,21 @@ const ontology = new OntologyRegistry(SCHEMA);
 // on a `SAME_AS`/`NOT_SAME_AS` edge existing, since `keyboard.spec.ts` mocks the `explain` network
 // call rather than exercising a real backend, the same way the existing Enter/Space tests mock
 // `expand`/`resolution/link`.
+// `n4` is an `Endpoint`, reachable by walking one hop past `n3` (`USES`) — the only fixture data
+// the "View messages" item needs to actually be reachable by keyboard, not merely present.
 const nodes = [
   node("n0"),
   node("n1"),
   node("n2", { resolution: { cluster_id: "n2" } }),
   node("n3", { resolution: { cluster_id: "n2" } }),
+  node("n4", { type: "Endpoint", properties: { value_normalised: "n4" } }),
 ];
-const edges = [edge("e0", "n0", "n1"), edge("e1", "n1", "n2"), edge("e2", "n2", "n3")];
+const edges = [
+  edge("e0", "n0", "n1"),
+  edge("e1", "n1", "n2"),
+  edge("e2", "n2", "n3"),
+  edge("e3", "n3", "n4", "USES"),
+];
 workingSet.store.getState().applyDelta({ seq: 1, op: "snapshot", nodes, edges, filtered_count: 0 });
 
 const container = document.getElementById("root");
@@ -112,6 +130,9 @@ createRoot(container).render(
     }}
     onSelectionChange={(ids) => {
       window.__KEYBOARD__!.selection = ids;
+    }}
+    onViewMessages={(nodeId) => {
+      window.__KEYBOARD__!.viewMessagesNodeId = nodeId;
     }}
   />,
 );
