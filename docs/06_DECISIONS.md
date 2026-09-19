@@ -1115,6 +1115,154 @@ threshold directly rather than the most permissive of three fixed constants.
 
 ---
 
+## ADR-022 — Scenario B's exit criterion is split across Phases 6 through 8, not satisfied by Phase 7 alone
+
+**Status.** Accepted, 18 September 2026.
+
+**The contradiction.** `07_BUILD_PLAN.md` Phase 7's exit criterion reads "Acceptance scenario B
+passes end to end" — but a step-by-step re-check of `08_ACCEPTANCE_SCENARIOS.md` Scenario B (B1
+through B20) against the working tree and every phase's own bullet list finds six of its twenty
+steps have no Glass screen and no phase committed to building one. B6's document view (the
+Dossier, `00_ARCHITECTURE.md`'s own named Glass component) is `apps/workspace/src/dossier/`, an
+empty directory. B9's resolution-threshold slider, B10's `explain` rendering and B11's manual-link
+control were shipped by Phase 6 as API endpoints only (`services/api/resolution.py`), disclosed as
+such in Phase 6's own gaps list — "no Glass/frontend screens ... backend/API only, consistent with
+every other Phase 6 stage" — but the disclosure named the extraction review queue, not resolution
+by name, and nothing after Phase 6 picked either half up; the Glass's own delta client
+(`apps/workspace/src/workingset/store.ts`) still receives the `reproject` delta Phase 6's
+threshold endpoint sends and explicitly does not act on it. B16's cross-case timeline overlay and
+B18's playback-driven snail trail are named in `02_GLASS_FRONTEND.md` §3.4/§3.5 and appear in
+Phase 5's own outcome bullet ("playback", "multi-track") — but `apps/workspace/src/timeline/
+Timeline.tsx`'s own header comment records that Checkpoint 2 deferred `playback`, `multi-track`
+and `cross-case overlay` past Phase 5, a deferral never carried into this document's Phase 5
+known-gaps list, so the bullet's own wording still reads as delivered. Phase 7's bullet list —
+compute adapters, the metrics panel, the visual query builder, hotlists/monitors/alert inbox, the
+pathfinder — names none of these six.
+
+Two further steps have a working mechanism with no way to trigger it inside a running deployment,
+which is a different kind of gap from the six above and not fixed by moving a Glass screen between
+phases. B8's resolution and B13/B20's alerting all need a corpus-wide job; Phase 6's own gaps list
+already discloses that `resolve_entity_type`/`write_same_as_edges`/`detect_conflicts`/
+`record_conflicts` are real and tested but nothing schedules or triggers a run against the live
+corpus, and no phase since has claimed the trigger. B15 needs a single traversal from a SIM
+`Endpoint` to a `Device`; the shipped ontology (`packages/ontology/default.yaml`) declares `imei`/
+`imsi` as identifiers on both an `Endpoint` (`endpoint_kind`) and a separate `Device` type, with no
+edge connecting them directly — only `USES` (`Person → Endpoint`/`Device`), a two-hop path through
+a person, which is exactly the "special case" `01_DOMAIN_MODEL.md`'s own rationale for `Endpoint`
+over `Phone` says this design is meant to avoid.
+
+One step the same re-check flagged as suspect turned out to be already correctly claimed: B14
+("open the alert into a pre-populated investigation ... a link to the originating investigation")
+reads as unclaimed from Phase 7's bullet text alone, but `02_GLASS_FRONTEND.md`'s own "Hotlists and
+watchlists" paragraph — the section Phase 7's "Hotlists" bullet is shorthand for — names "a
+one-click jump into a pre-populated investigation" as intrinsic to that capability, not a separate
+one. B14 needs no reattribution.
+
+**Decision.** Phase 7's exit criterion is corrected to name what it actually proves: Scenario B,
+scoped to B1–B5 and B7 (already proven by Phases 2–4), plus B12–B14, B19 and B20 (this phase's own
+hotlist, alert-inbox, visual-query-builder and saved-pattern-monitor work), plus the Clique
+Metric/A12 re-proof already in the text. B6, B9–B11, B16 and B18 — the six Glass screens no phase
+has claimed — move to Phase 8, alongside its existing browser-harness/admin-console work.
+`08_ACCEPTANCE_SCENARIOS.md` itself is unchanged: it remains the full definition of done for
+Scenario B in one place, regardless of which phase proves which step.
+
+B8, B13, B15 and B20's remaining blockers — the corpus-wide resolution/alerting trigger, and the
+`Endpoint`-to-`Device` traversal — are not settled by this reattribution and are recorded
+separately under `Gaps with no owning phase`, because moving a Glass screen to the phase that will
+build it is a documentation fix, and building an ingest-triggered resolution job or correcting an
+ontology's edge types is not.
+
+**Why grow Phase 8 rather than Phase 7's bullet list.** Phase 7's outcome is "the remaining two
+analytical capabilities" — pattern analysis and hotlist alerting — a scope that is already
+backend- and metrics-heavy on its own: three `ComputePort` tiers, a visual query builder compiling
+to Gremlin, an alert inbox. Adding a document viewer, three resolution controls, a cross-case
+timeline mode and playback animation would roughly double the phase's Glass surface with work that
+has nothing to do with graph analytics, for no better reason than that two earlier phases used UI
+words in their own outcome bullets without building the UI. Phase 8 already runs a comprehensive
+closing pass — "both acceptance scenarios pass unchanged" is its existing exit criterion, and it
+already carries the browser harness, the admin console and the last two adapters. Adding the
+remaining Scenario B screens to that pass is the same shape of fix ADR-019 already made for
+Scenario A's A13–A15, not a new pattern being introduced for Scenario B alone.
+
+**Why a doc correction rather than a silent partial build.** The alternative was letting Phase 7
+close against the literal old exit text, quietly stopping six steps short of it, and leaving
+whoever reads the build plan next to assume B6/B9–B11/B16/B18 either don't matter or were somehow
+proven anyway — the exact failure mode ADR-019 already named for Scenario A, and the one this
+document's own Phase 5 and Phase 6 known-gaps lists were supposed to prevent by disclosing a gap
+where it was found. Two of the six gaps here were disclosed once, in a source comment or a
+loosely-worded outcome bullet, and never carried into this document where the next phase's own
+scoping would actually see them; that is the specific mistake this ADR is closing, not merely the
+gap itself.
+
+**Cost.** None to the platform's eventual scope — every step of Scenario B is still proven, by the
+phase that actually builds what it needs. The cost is entirely to schedule and to this document:
+Phase 7 closes without Scenario B passing end to end, which was already true before this ADR and is
+now written down rather than discovered at the phase's own review point; six Glass screens move one
+phase later than a literal reading of the old exit text implied; Phase 7's own B12–B14/B19–B20 work
+still cannot be demonstrated against a live deployment (as opposed to fixture data assembled by a
+test harness) until the corpus-wide trigger gap is separately closed.
+
+**Revisit if.** A future reordering moves the Dossier or the resolution Glass controls earlier —
+update the phase each deferred step is attributed to, not this ADR's reasoning, which stays correct
+regardless of which phase number ends up building each screen. Also revisit if the corpus-wide
+resolution/alerting trigger turns out to need Glass surface of its own (a review queue for pending
+matches, say) rather than a pure backend job — in which case it stops being a `Gaps with no owning
+phase` entry and becomes a seventh step in this same reattribution.
+
+**Addendum, 18 September 2026 — Phase 6a replaces half of the Phase 8 assignment, and B15 leaves
+this ADR for its own.** Two things above turned out to be wrong on the same day this ADR was
+accepted, both found by re-reading the decision against the rest of the plan rather than against
+Scenario B alone.
+
+*B15 does not belong in "recorded under `Gaps with no owning phase`."* That section's own
+preamble defines an entry there as something no phase's bullet list claims at all — an unowned
+intention. B15 is a different kind of problem: `packages/ontology/default.yaml` already declares
+`imei` on both `Endpoint.endpoint_kind` and `Device.identifiers`, a live contradiction between two
+things that both exist, not an absent one. Standing rule 7 (a disagreement between the pack and
+what was built is an ADR, not a gaps entry) applies directly. B15 is withdrawn from this ADR's
+"Decision" and "Cost" paragraphs and given its own record, ADR-023, which also finds that Phase 7's
+pathfinder and visual query builder compute over the exact traversal shape B15 questions — so
+unlike the other five steps this ADR reattributes, B15 is resolved *before* Phase 7 begins, not
+deferred past it. Phase 7's exit criterion (`07_BUILD_PLAN.md`) now scopes B15 in alongside A12 as
+a step re-verified there rather than newly built there.
+
+*Growing Phase 8 by six screens was accepted without pricing what Phase 8 already carries.* Phase
+8 is the largest phase in the plan and the one whose exit criterion cannot slip: assessment
+objects, the yardstick loader, export and the handling gate, two conformance-green adapters, the
+entire browser harness and admin console, a headless CLI mirroring every screen, generated
+Kubernetes manifests and runbooks, against an exit criterion of both acceptance scenarios passing
+unchanged on both profiles. Adding six more screens to that load without comment understated the
+decision's own cost.
+
+The repository already has a precedent for exactly this shape of problem: Phase 5a exists because
+the Ingest Studio — a wholly new analyst-facing surface over Phase 2's headless recipe engine —
+was a coherent unit worth its own phase rather than a bullet added to Phase 3 or folded into
+Phase 8 (ADR-018). B6 and B9–B11 are the same shape: a wholly new Glass surface over Phase 6's
+extraction and resolution API, which shipped zero screens by its own gaps list's own words. B16
+and B18 are not that shape — they are two small, incremental features (a second track on an
+existing Timeline, a snail-trail mode on the existing Map) added to components Phase 5 already
+built and Scenario A already exercises daily, not a new surface built from nothing.
+
+**Revised decision.** B6, B9, B10 and B11 move to a new **Phase 6a — The analyst-facing surface
+over extraction and resolution** (`07_BUILD_PLAN.md`), sequenced immediately after Phase 6 and
+before Phase 7, mirroring where Phase 5a sits between Phase 5 and Phase 6. It calls Phase 6's
+existing endpoints exclusively; no new backend route. B16 and B18 remain Phase 8's addition, now
+priced correctly as two incremental features rather than folded in among four screens that needed
+a phase of their own. This does not reopen the core finding above — Phase 7's own bullet list
+still does not, and should not, grow to cover any of the six.
+
+There is a second reason to prefer a named phase over folding this into Phase 8's queue, beyond
+cost. `DESIGN_PROVENANCE.md` §6 still records that the Ingest Studio's own analyst review — the
+one ADR-018 built the prototype-before-Phase-5a specifically to make cheap — "has not happened,"
+a claim `NEXT_STEPS_PHASE7.md` §5 already flags as stale against the 15 September handover and
+commit `87dbb7b`, itself unresolved because no single phase owned closing the loop on it. A named
+Phase 6a, with its own exit criterion, is a place an analyst review of the Dossier and the
+resolution controls is a checkable exit item rather than an assumed side-effect of "Phase 8 also
+did some Glass work" — the same discipline ADR-018 established once, now applied to the surface
+Phase 6 left unbuilt.
+
+---
+
 ## ADR-023 — `imei` belongs to `Device`, `imsi` stays on `Endpoint`, and a new edge gives a SIM swap one hop
 
 **Status.** Accepted, 18 September 2026.
@@ -1267,3 +1415,280 @@ produce that, until `tests/services/api/working_set/test_resolution_threshold.py
 `test_msisdn_and_imsi_endpoints_cluster_together_the_device_does_not` closed it at the one layer
 this build has today: cluster assignment. Recorded here rather than only in that test's own
 docstring, since this ADR is what a future reader will check the claim against.
+
+---
+
+## ADR-024 — the MSISDN↔IMSI link is a deterministic write from the ingest path, not a resolution problem
+
+**Status.** Accepted, 18 September 2026.
+
+**The contradiction.** ADR-023's own corrected answer to its second question routes B15's
+msisdn leg through `SAME_AS`: `Endpoint(msisdn) --SAME_AS--> Endpoint(imsi) --PAIRED_WITH-->
+Device`. But nothing in this build can produce that `SAME_AS` edge. `Person` is the only entity
+type with a `resolution:` block anywhere in `packages/ontology/default.yaml` (line 77), and
+`tests/resolve/test_resolver.py`'s own `test_no_resolution_config_returns_no_candidates` asserts
+the direct consequence: `resolve_entity_type` returns `[]` for any type with no resolution
+config, `Endpoint` included. `tests/scenarios/fixtures/seizure_record.py` writes the msisdn↔imsi
+`SAME_AS` by hand, in the fixture, because nothing else in this build ever would. In a real
+deployment, an analyst reaches the handset from the number only if someone has already run
+`manual_link` for that specific pair — for every SIM, every time, with no route that ever
+surfaces the need to do so.
+
+**Why Splink resolution (Option a) is the wrong tool, not merely a hard configuration.** Checked
+against `packages/ontology/resolution_functions.py`'s closed comparison/blocking registry, not
+assumed: every comparison function there (`jaro_winkler`, `levenshtein`, `soundex`, `exact`)
+scores *similarity between values of the same kind* — the mechanism that makes a misspelled
+`family_name` resolvable. An MSISDN (`+447911123457`) and the IMSI of the SIM it is dialled
+through (`234150123456782`) are not one value seen twice with noise; they are two different
+identifier systems (E.164 numbering; 3GPP subscriber identity) that name the same SIM by a
+carrier/HLR record's own say-so, with no lexical resemblance a comparison function could ever
+detect. Blocking fails the same way: a blocking key needs a cheap, shared derived value to bucket
+candidates before the expensive pairwise comparison (`soundex(family_name)` for `Person`), and
+nothing derivable from an MSISDN's own digits and an IMSI's own digits would ever land them in
+the same bucket. Giving `Endpoint` a `resolution:` block for this pair means either comparing
+every MSISDN against every IMSI in the corpus with no blocking at all — exactly what blocking
+exists to prevent — or inventing a blocking key that corresponds to nothing the values actually
+share, which is building a fake signal to make Splink do a job it was never suited for.
+
+**Why "disclose as unbuilt, no owning phase" (Option c) is also rejected, and for a different
+reason than Option a.** The gap is real, but leaving it merely disclosed while a conformance suite
+already exists that only passes because a fixture hand-writes the edge the resolver would need to
+produce is the same defect this whole ADR-023 exercise was built to close: an invariant tested at
+a layer that doesn't actually produce it. Recording where the mechanism lives, even before it is
+built, is the fix; recording that it doesn't exist and stopping there is not.
+
+**Decision.** The link is a direct, asserted write, not a probabilistic match. A device
+extraction (or a carrier/HLR record) that reports an IMSI and an MSISDN together on one
+structured record is not proposing a match under uncertainty — it is stating a fact the tool
+already confirmed, the same category as a CDR row's own `value_raw`/`value_normalised`
+(`ASSERTED`, never `inferred`). The property shape reuses `WorkingSetService.manual_link`'s own
+precedent for a directly-known, non-Splink link exactly: `{"score": 1.0}`, `model_version`/
+`comparison_vector` left unset. The natural home is the ingest recipe engine's own row-template
+mechanism (`services/ingest/engine.py`) — the same mechanism that already turns one CDR row into
+two `Endpoint`s, an `Event` and a `COMMUNICATED_WITH` edge
+(`tests/scenarios/fixtures/cdr_recipe.yaml`) — extended so a row template can declare "these two
+fields on this row name the same SIM" and have the engine write the `SAME_AS` deterministically,
+using `on_match: reference` to find each `Endpoint` by its own declared identifier, the same
+mechanism ADR-023 already established for `PAIRED_WITH`.
+
+**Cost and owning phase — this depends on a connector this build has never had, and that gap has
+never been written down before now.** `services/ingest/connectors/` holds only `csv_connector.py`.
+Phase 2's own outcome bullet (`07_BUILD_PLAN.md`) promised "CSV, JSON and generic delimited"; only
+CSV shipped, and Phase 2 — unlike Phase 5/5a/6 — has never carried a known-gaps list recording the
+shortfall. Device-extraction formats (Cellebrite UFDR, XRY) are catalogue labels only
+(`packages/schemas/ingest.py`), never claimed as a connector or a recipe capability by any phase's
+bullet list at all. Both halves are fixed in `07_BUILD_PLAN.md` as part of this decision: a new
+Phase 2 known-gaps list records the JSON/generic-delimited shortfall as Phase 2's own disclosed
+gap, and a new `Gaps with no owning phase` entry records that no phase has ever claimed a
+device-extraction connector or format. The row-template `SAME_AS` mechanism itself is small and
+independent of the connector — it lands as a stage inside whichever phase eventually builds
+device-extraction ingest, not as a phase of its own, and B15's msisdn leg stays honestly
+fixture-only until that lands, unlike the imsi→Device leg, which is real today.
+
+**Revisit if.** A future entity type's identifiers genuinely are similar-by-construction (unlike
+MSISDN/IMSI) — Splink resolution remains the right tool for that case, and this ADR's rejection
+of Option (a) is specific to MSISDN↔IMSI's own value spaces, not a general claim that `Endpoint`
+can never have a `resolution:` block.
+
+---
+
+## ADR-025 — the corpus-wide resolution and alerting trigger: design, not yet built
+
+**Status.** Accepted, 18 September 2026. Undesigned work per `CLAUDE.md`'s "before you write
+code" rule — every inference below is a proposal, flagged as such, not a claim that `docs/`
+already settles it. Where `docs/` does constrain the answer, it is cited directly.
+
+**The gap, as `07_BUILD_PLAN.md`'s Phase 6 known-gaps list already states it.**
+`resolve_entity_type`, `write_same_as_edges`, `detect_conflicts` and `record_conflicts`
+(`services/resolve/`) are real and tested; nothing schedules or runs them against a live corpus.
+Every test in `tests/resolve/` calls them directly, and so does Phase 6's own end-to-end scenario
+test (`tests/scenarios/test_phase6_extraction_and_resolution.py`). Three things depend on this
+closing: B8/B9 (`08_ACCEPTANCE_SCENARIOS.md`) presume resolution has already run before an analyst
+moves τ; B13/B20 need a post-ingest hook — ingesting a seizure record must raise a hotlist alert,
+and subsequent matching ingest must raise a saved-pattern alert of the same shape; and Phase 6a's
+screens (`07_BUILD_PLAN.md`) have nothing to show unless a `SAME_AS` edge exists by some path other
+than a test calling the resolver directly.
+
+**The blocking discovery, found while designing this rather than assumed away: `GraphPort` cannot
+fetch "all nodes of a type."** `resolve_entity_type(nodes, entity_type)` is a pure function over a
+caller-supplied `Sequence[Node]` (`services/resolve/resolver.py`) — it does no fetching itself.
+Checked against every method `packages/ports/graph.py` declares: `find_node`/`search_nodes` need
+an exact identifier value, `expand`/`paths` need a known seed node, `match` needs a bounded
+pattern (itself still constrained by `01_DOMAIN_MODEL.md` §8.1's own unresolved binding-rule
+question). Nothing lists a type's population. **Proposed:** a new `GraphPort` method — paginated,
+access-controlled the same as every other read (`GraphPort.list_nodes(entity_type, cursor, limit,
+principal)` or equivalent) — written conformance-suite-first per standing rule 1. ArcadeDB's own
+per-type indexes (`packages/adapters/graph_arcadedb/schema.py`'s `_apply_indexed_declared_
+properties`) already make this cheap to serve; only the abstract port surface has never needed to
+expose it. Recorded as its own `Gaps with no owning phase` entry in `07_BUILD_PLAN.md` — a
+structural port gap, not an orchestration one, and the actual reason "wire up a scheduler" is not
+enough on its own to close this.
+
+**No worker process exists anywhere in this codebase yet.** `services/api/supersede.py`'s own
+docstring already discloses this for `GraphPort.supersede_node`'s job path: the job is submitted
+(`services/api/jobs.py`'s `JobQueue`, real, Valkey-Streams-backed), but "a worker process that
+drains `jobs:supersede_node`... is not written here... the consumer is written against a real
+caller, not a placeholder one." **Proposed:** this trigger is that real caller, and the worker it
+needs should be one generic loop dispatching by `job_type` to a registered handler, not a
+resolution-specific one — it closes `supersede_node`'s own long-open gap for free rather than
+leaving two near-identical workers unbuilt side by side. Flagged as a scope decision: building the
+first worker process this system has ever had is a materially bigger unit of work than "wire up
+resolution," and can be its own stage rather than bundled silently into this one.
+
+**On what event — two triggers, because they unblock different things.**
+1. *Post-ingest hook.* `run_recipe` (`services/ingest/engine.py`) returns a `LoadReport` carrying
+   `created_node_ids`; the natural integration point is the API route that calls it (`app.py`'s
+   `POST .../ingest/recipes/{recipe_id}/run`), submitting a job scoped to the entity types that
+   load actually touched, once the `list_nodes` gap above is closed. Nothing else can raise a
+   post-ingest alert — this is what B13/B20 need.
+2. *Manual "resolve now."* A small, analyst-facing route mirroring `submit_supersede_node`'s own
+   sync-vs-job split (below).
+
+**Against which population — proposed narrow, not corpus-wide, on the first pass.** Restrict to
+entity types that actually declare a `resolution:` block (today, only `Person`), scoped to nodes
+the triggering load touched. A full unrestricted corpus scan on every ingest is exactly the kind
+of premature generality this build has avoided elsewhere (`01_DOMAIN_MODEL.md` §8's own
+`filtered_count` reasoning: no second, less-audited query beyond what is actually needed). A
+precise blocking-key-scoped incremental fetch is real design work of its own, not assumed here; a
+defensible, honestly-priced first cut is "refetch the whole entity type," which does not scale
+past a small corpus and is disclosed as such, the same way `ArcadeDBAdapter`'s own contention
+notes disclose a real, known limit rather than hiding it.
+
+**Principal and access control.** Proposed, since `docs/` is silent on this specific question: the
+job runs under a deployment-level service principal, not the ingesting analyst's own — resolution
+is corpus-wide and cross-investigation, and the analyst who happened to trigger a load has no
+special claim over every resulting `SAME_AS` edge. A written `SAME_AS`'s own `handling` inherits
+the *more restrictive* of its two endpoint nodes' classifications, proposed on the general
+principle that a derived edge should never be more visible than either fact it connects. Every
+write still goes through the same `GraphPort` access-control path standing rule 2 already
+requires everywhere else; the service principal is a caller identity, not a bypass.
+
+**Overlap and partial-run recovery.** Checked, not assumed: `write_same_as_edges`/
+`record_conflicts` are already upsert/supersede-based (`record_conflicts` supersedes the existing
+`NOT_SAME_AS` edge rather than appending), so re-running a resolution pass from scratch is safe
+and idempotent. **Proposed recovery: re-run whole, never resume from a checkpoint** — checkpointing
+a Splink batch is real added complexity this doesn't need if redoing the whole pass is already
+cheap and correct at the scoped population size above. Overlap (two runs for the same entity type
+at once) is then wasted work, not a correctness risk; **proposed guard:** a short-TTL Valkey key
+per entity type (`resolve:running:{type}`), checked before submitting, skipping a redundant
+submission rather than queuing or erroring it. `JobQueue`'s existing `pending`/`running`/`done`/
+`failed` states and 24-hour TTL already cover "a job that never finished shows as `running` until
+TTL expires" — no new mechanism needed there.
+
+**Scoping question 1 — does Phase 6a need the full trigger?** No, and a manual "resolve now"
+route is a real first stage, not a thing that needs undoing. Phase 6a's screens call Phase 6's
+*existing* endpoints; they need `SAME_AS` edges to already exist to have something to show, not a
+live corpus-scale automatic trigger. `submit_supersede_node`'s own sync-vs-job split is the same
+shape a manual route would use — building the sync half first is the same mechanism the full
+trigger later reuses for its job half, not a different design. It unblocks Phase 6a and B8/B9
+(both presume resolution has *already run* by the time an analyst looks, which a manual button
+satisfies). It does **not** unblock B13/B20 — an alert firing from ingest with nobody in the loop
+needs the real post-ingest hook; nothing about a manual route substitutes for that.
+
+**Scoping question 2 — does a scheduled run change the "no proactive conflict-discovery surface"
+calculus?** Yes, and this ADR proposes a minimal fix, not reopening the full decision. Phase 6's
+own gaps list accepted no review queue when conflicts could only arise from an analyst's *own*
+manual actions later contradicted by another manual one — low-volume and self-inflicted, findable
+by whoever would know to look. An automatic corpus-wide run generates conflicts as a side effect
+of ingest nobody asked to see, which is the same class of risk the cross-cutting assertion "the
+status bar count of dimmed and withheld items is correct at every step" already exists to prevent
+— an investigation resting on a `conflict_pending` edge with nothing in the Glass saying so is an
+analyst mistaking a partial picture for a complete one. **Proposed:** surface a *count* of pending
+conflicts the same way the status bar already surfaces "N hidden by handling" — a `DeltaNotice`-
+shaped signal (`03_CONDUIT_MIDDLEWARE.md`'s own "a count... never the withheld content"
+precedent), not a browsable list. A full conflict review queue remains a separate, larger,
+explicitly out-of-scope decision.
+
+**Where this lands.** Not a new phase. Phase 7's own outcome already names "Hotlists,
+saved-pattern monitors, alert inbox" — this trigger is the backend engine that makes that bullet
+real against a live deployment rather than fixture data. `07_BUILD_PLAN.md`'s Phase 7 outcome list
+gets explicit new bullets (the `list_nodes` method, the worker, the post-ingest hook, the manual
+route, the conflict-count notice), and its `Gaps with no owning phase` trigger entry from the
+previous session is updated to point here instead of standing alone.
+
+**Cost.** A materially larger unit of work than "wire up resolution" reads as on its own: a new
+port method with its own conformance suite, this system's first worker process, a service-principal
+identity that doesn't exist yet, and a Valkey-based overlap guard. None of it is required to exist
+before Phase 7 starts — it is required before B8/B9/B13/B20/Phase 6a can be demonstrated against a
+live deployment rather than fixture data, which `07_BUILD_PLAN.md`'s Phase 7 exit criterion already
+says plainly for B12–B14/B19–B20.
+
+**Revisit if.** The blocking-key-scoped incremental fetch turns out to be needed sooner than "the
+corpus is still small" holds — at which point the population-selection proposal above, not this
+ADR's other decisions, is what changes.
+
+---
+
+## ADR-026 — The VAST Challenge datasets are admitted shaped, not verbatim; standing rule 3 is not amended
+
+**Status.** Accepted, 19 September 2026.
+
+**The question, as `docs/DEMO_GUIDE.md` §7 has posed it since it was written, unresolved until
+now.** The VAST Challenge datasets are fabricated scenarios with no real people, clearing the bar
+the real Enron corpus fails (`CLAUDE.md` rule 9; standing rule 3's own naming of the demo). VAST
+2014 MC2 in particular — GPS tracks, credit-card transactions and employee records for a fictional
+company — maps closely onto this platform's POLE model and would exercise cross-filtering harder
+than any fixture currently in the repository. Three things need settling, the same three this
+project already settled for map providers: licence and redistribution, in-repo versus fetched at
+run time, and whether standing rule 3 itself admits a fixture that is synthetic but neither
+in-repo nor generator-produced.
+
+**Licence, checked against the actual source rather than assumed, and found genuinely
+unresolved.** VAST 2014 MC2 circulates from at least two places. `data.pnnl.gov`'s DataHub states
+its *platform default* licence is CC0 Public Domain Dedication, redistributable, unless a specific
+dataset overrides it — but the dataset's own listing there (`data.pnnl.gov/group/nodes/dataset/
+13213`) does not display an explicit CC0 confirmation or an override in what a fetch of that page
+returns. The original distribution channel, `vacommunity.org`, has historically gated VAST
+Challenge data behind a click-through research-use agreement, and this session could not verify
+whether that still applies or in what form. This is recorded as an open fact, not a guess in
+either direction — asserting a licence position in an architecture document on an incomplete web
+fetch would be exactly the kind of unverified claim this project's own discipline already refuses
+to make silently elsewhere (ADR-021's own live-checked licence finding for `splink`/`igraph` is
+the precedent for checking rather than assuming).
+
+**The decision does not require that question to be resolved, which is the reason it is the right
+one.** `tests/scenarios/fixtures/cdr.py` and the still-unbuilt Fixture Corp (`docs/DEMO_GUIDE.md`
+§6) already establish this project's own answer to "a real, well-known case study would be a
+better demo than anything synthesised from nothing": not the real corpus, but a same-shaped
+synthetic one — structural statistics modelled on the published case, zero real identifiers,
+built by a seeded generator, labelled shaped-not-real rather than blurring the distinction.
+VAST 2014 MC2's value to this platform is exactly that kind of structural property — the shape of
+its GPS tracks, its transaction patterns, its employee hierarchy against POLE — which is a
+property of the *published academic description* of the challenge (its own problem statement, and
+the papers analysing submissions against it), not of the specific files IEEE VAST or PNNL
+distributes. **Decision: build a VAST-2014-MC2-*shaped* fixture via a seeded generator, the same
+discipline `cdr.py` and Fixture Corp both already follow, and never admit the published dataset's
+own files into the repository.** This is a decision, not a same-session build commitment — the
+fixture itself is future work, exactly as Fixture Corp is named in `DEMO_GUIDE.md` §6 but not yet
+built.
+
+**Why this answers the other two questions without needing to argue them separately.**
+- *In-repo or fetched at run time* — moot under this decision. ADR-015 refused fetching a map
+  tile at run time in terms that apply unchanged here: "a platform whose map is blank until
+  someone obtains an entitlement is a platform that cannot be demonstrated, evaluated or tested."
+  A generated fixture is checked in like every other one, with no third-party availability
+  dependency at all — satisfied more completely by generation than redistribution ever could
+  achieve, regardless of how the licence question above eventually resolves.
+- *Standing rule 3* — **not amended.** The rule already requires synthetic, in-repo, and
+  seeded-generator-produced, together. A shaped fixture clears all three exactly as written. Only
+  admitting VAST's own published files verbatim would need the amendment `DEMO_GUIDE.md` §7
+  already flagged as a real ADR question rather than a judgement call — and weakening a
+  load-bearing standing rule when a working reference implementation of the alternative (Fixture
+  Corp's own design, `cdr.py`'s own precedent) already exists in this same document is the more
+  expensive choice, not the cheaper one, especially resting on a licence fact this session could
+  not confirm either way.
+
+**Cost.** A VAST-shaped fixture is real, unscoped work — structural statistics need extracting
+from the challenge's own published problem statement and the papers analysing it, the same
+research effort Fixture Corp's own Enron-shaped design already required. Nothing about this
+decision reduces that cost; it only settles which fixture gets built rather than whether the real
+files could be used instead.
+
+**Revisit if.** Both of two things become true together: a human confirms the actual attached
+licence terms (not the platform default) permit redistribution, *and* a later reader concludes the
+real files would demonstrate something a shaped fixture cannot — at which point verbatim admission
+becomes a live alternative to evaluate on its own merits, not a reason this decision was wrong.
+Confirming a permissive licence alone does not reopen this ADR; the shaped fixture was never
+chosen because the licence was assumed restrictive.
+
+---

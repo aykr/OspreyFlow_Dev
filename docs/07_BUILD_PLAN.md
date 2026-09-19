@@ -95,6 +95,18 @@ never coerced. Reverting a load (`services/ingest`'s `revert_load` function — 
 `osprey` CLI; this build does not have one, a correction to this phrasing's original assumption)
 supersedes a whole load and leaves the audit trail intact.
 
+**Phase 2 known gaps (recorded 18 September 2026, during ADR-024's own work — not disclosed at
+the time this phase closed, unlike Phase 5/5a/6's own gaps lists below, which is itself the
+finding worth fixing here rather than only in a chat transcript):**
+
+- **Only the CSV connector was built.** This phase's own outcome bullet promises "CSV, JSON and
+  generic delimited"; `services/ingest/connectors/` holds `csv_connector.py` and a `geo/`
+  directory (gazetteer/OSM connectors, a different concern) and nothing else. JSON and generic
+  delimited never landed. `06_DECISIONS.md` ADR-024 depends on this: the ingest recipe engine's
+  own row-template mechanism is the proposed home for a deterministic MSISDN↔IMSI `SAME_AS`
+  write, and a device-extraction source is structurally exactly the kind of non-CSV format this
+  bullet already promised and never delivered.
+
 ---
 
 ## Phase 3 — Conduit and the working set
@@ -266,6 +278,16 @@ checkpoints' worth of scattered notes).** Ordered roughly by how much unbuilt wo
   wizard (`site/siteLayer.ts`), which takes an analyst-uploaded plain image plus manually-placed
   control points. `kind: dem` has zero worked example anywhere in the docs. Both need a schema
   addition plus real image-processing work; no checkpoint in this phase owns that.
+- **Three of this phase's own timeline bullets were deferred past it, and the deferral was
+  disclosed only in `apps/workspace/src/timeline/Timeline.tsx`'s header comment, not here.** The
+  bullet list above promises "Timeline: density strip, brush, playback, cyclical weekday × hour
+  view, multi-track". Checkpoint 2 built the density strip, the brush and the cyclical view, and
+  deferred `playback`, `multi-track` and the cross-case overlay (`02_GLASS_FRONTEND.md` §3.4) on
+  the correct grounds that no A1–A11 step exercises them — but carried that into a component
+  header rather than into this list, where it sat unread for four phases until Phase 7's own
+  Scenario B audit found it. B16 and B18 each depend on two of the three, and are attributed to
+  Phase 8 by ADR-022. Recorded here because this list exists precisely so the next phase's scoping
+  reads it instead of reconstructing the position from three checkpoints' notes.
 - **Smaller, lower-priority items:**
   - The tile-proxy endpoint template's credential placeholder is named `{credential}` —
     `services/api/tile_proxy.py`'s own naming choice; neither `MapProvider`'s schema nor this doc
@@ -602,7 +624,7 @@ to the graph or gave a human a way to promote it.
   for reviewing unstructured extraction candidates, so any principal already authorized on the
   investigation can run extraction and accept/reject — there is no `require_studio_role`-style
   restriction narrowing that further, the way publishing a recipe is restricted to
-  `source_approver`. This is a disclosed reading of a silent table, standing rule 4's own
+  `source_approver`. This is a disclosed reading of a silent table, standing rule 2's own
   access-control test discipline fully applied to the boundary that does exist, not a gap in it.
 - **Extraction confidence is the model's own self-report, uncalibrated with the CI-pinned tiny
   model** — the same disclosed-limitation class as ADR-021's no-EM-training addendum, and worse
@@ -637,6 +659,72 @@ test_phase6_extraction_and_resolution.py`.
 
 ---
 
+## Phase 6a — The analyst-facing surface over extraction and resolution
+
+**Outcome.** Everything Phase 6 shipped as an API only becomes something an analyst can use,
+the same relationship Phase 5a had to Phase 2's headless recipe engine (ADR-018).
+
+**Read first:** `02_GLASS_FRONTEND.md` §2 (workspace layout — the Inspector's own spec'd tabs are
+"Properties, Provenance, Relationships, Judgements, Source document"; nothing named "Resolution,"
+so B9/B10/B11's controls need a real placement decision, not an assumed tab), §1.1/§4 (node-state
+vocabulary — nine channels, three provenance strokes, six interaction states, and a *separate*,
+already-built sense of "cluster": §1.1's zoom-dependent *community* clustering is a data
+operation, not this phase's concern, and must not be confused with resolution's own `ClusterId`,
+which has no rendering convention at all yet — deciding one is this phase's own work), and §5
+(performance budget — a CI gate, not a target; "node hover to inspector populated < 100ms" is the
+one figure these four screens could threaten if any attaches to the existing Inspector rather
+than a new surface).
+
+**Two dependencies, answered here rather than discovered mid-stage.**
+- **Does this phase depend on ADR-025's corpus-wide trigger landing first? No.** Stage 1 below
+  (manual link/split) needs no pre-existing `SAME_AS` edge — it creates one from any two
+  analyst-selected nodes directly. Its own output is the seed data Stages 2 and 3 need. Phase 6a
+  is fully self-sufficient; it does not wait on Phase 7's own, much larger, trigger
+  infrastructure (ADR-025), and no analyst review needs to either.
+- **What would a reviewer actually see, given ADR-024's device-extraction mechanism is unbuilt?**
+  The manual-link-seeded flow below demonstrates the *generic* resolution UI — threshold,
+  `explain`, manual link — working correctly against any `SAME_AS` edge, regardless of how it was
+  written. It does **not** demonstrate ADR-024's own specific claim (a device extraction reporting
+  an MSISDN and an IMSI together writes the link automatically) — that connector does not exist
+  (this document's Phase 2 known-gaps list and its `Gaps with no owning phase` entry both record
+  it). B15's *imsi→Device* leg is demonstrable end to end (`PAIRED_WITH`, already
+  conformance-tested); its *msisdn→imsi* leg is demonstrable only by manual assertion in this
+  phase's own review, not by the automatic mechanism ADR-024 describes, until that connector
+  lands. A reviewer is told this directly, not left to infer it.
+
+**Stages, closed one at a time, the same discipline Phase 6/5a followed:**
+
+1. **B11 — manual link/split.** Smallest, most contained: a canvas/context-menu action
+   (`RadialMenu`, already built) on two selected nodes, calling the existing
+   `POST .../resolution/link`/`split`. No new design-system primitive needed. Closes first
+   because its own output seeds Stages 2 and 3.
+2. **B9 — resolution threshold control.** A global, session-level control, not per-node — reuses
+   the existing `Slider`/`RangeSlider` primitive; the change summary is a `Toast` or small panel
+   surfacing `DeltaReproject`'s merged/split/affected counts. Demonstrated against the `SAME_AS`
+   Stage 1 created.
+3. **`explain` rendering (B10).** Per-*cluster*, not per-node — triggered from a clustered
+   selection, rendered as a `Table` (already built) of per-comparison match weights. Demonstrated
+   against the same seed as Stage 2.
+4. **B6 — the Dossier.** Largest and last: a wholly new Glass surface (`apps/workspace/src/
+   dossier/` is empty; `00_ARCHITECTURE.md` names the Dossier as its own component alongside
+   Canvas/Timeline/Map/Query, not an Inspector tab) — the same shape of work Phase 5a's own Map
+   screen was over Phase 2.
+
+**Exit.** Acceptance scenario B's B6, B9, B10 and B11 (ADR-022) pass end to end against Phase 6's
+existing API. Moving the threshold control from Strict to Broad in the Glass produces the same
+merge and change summary `WorkingSetService.set_resolution_threshold`'s own test already proves at
+the service layer. A manual link made from the interface is indistinguishable, once written, from
+one made through the API directly. **If the analyst review (ADR-018's own precedent: put the
+screens in front of someone who hasn't built them) has not taken place by the time the automated
+criterion above is met, that is recorded in this phase's own known-gaps list and does not block
+Phase 7** — the same disclosure Phase 5a's own unmet second review already carries
+(`07_BUILD_PLAN.md` Phase 5a known gaps, "no synthetic financial fixture, and no second tester
+review"), not a new pattern. Naming a review does not make it happen; what this phase commits to
+is that the review's status — done, or disclosed as outstanding — is true and checkable at close,
+not that its completion gates anything downstream.
+
+---
+
 ## Phase 7 — Analytics, patterns, alerting
 
 **Outcome.** The remaining two analytical capabilities.
@@ -648,12 +736,68 @@ test_phase6_extraction_and_resolution.py`.
 - Visual query builder compiling to Gremlin builders, with result estimation.
 - Hotlists, saved-pattern monitors, alert inbox with rule and evidence display.
 - Pathfinder with access-filtered k-shortest paths.
+- The corpus-wide resolution and alerting trigger (ADR-025, `06_DECISIONS.md`): a new
+  `GraphPort` method to list a type's population (conformance-suite-first, standing rule 1);
+  this system's first job-queue worker, generalised rather than resolution-specific so it also
+  closes `services/api/supersede.py`'s own long-disclosed "no worker attached yet" gap; the
+  post-ingest hook `run_recipe` needs to submit a scoped resolution job; a manual "resolve now"
+  route mirroring `submit_supersede_node`'s sync-vs-job split; and a status-bar conflict-count
+  notice, since an automatic run generates `conflict_pending` edges nobody asked to see.
 
-**Exit.** Acceptance scenario B passes end to end. The Clique Metric ranks the insular-cluster
-fixture node above the broad-hub fixture node, and all three compute tiers return identical
-values within tolerance. A12 (Phase 5's exit criterion, scoped to A1–A11, deferred this one
-step here per ADR-019) is re-proven against the same HMP fixture: the Clique Metric identifies
-the same insular subgroup Phase 5 already surfaced by other means.
+**Priced, not just added — the assessment ADR-022's own precedent calls for.** Before the trigger
+bullet above, this phase already carried three `ComputePort` tiers with two of its own unresolved
+environment questions (`NEXT_STEPS_PHASE7.md`: how a Python-`pytest` conformance suite exercises
+a browser Web Worker for Tier 1; whether Tier 3's Spark/HugeGraph is even feasible on this host's
+already-tight Docker VM budget), the metrics panel, the visual query builder, the pathfinder, and
+Scenario B's own analytic half. The trigger adds a new `GraphPort` method with its own
+conformance suite, this system's first job-queue worker, and a service-principal identity that
+doesn't exist yet — real infrastructure, not one more bullet's worth of work. Unlike Phase 6a
+(carved out because Glass work over a backend-only phase is a different *kind* of work), the
+trigger and the compute/analytics work here are both backend/Conduit work of the *same* kind, so
+this does not split into a new phase — but it does mean Phase 7 needs the stage breakdown it has
+lacked until now, with the trigger sequenced first because it shares no implementation surface
+with compute/analytics and two of this phase's own bullets (hotlists, alert inbox) depend on it:
+
+1. **The trigger** (ADR-025's own pieces) — independent of every other stage below; closes
+   `supersede_node`'s long-open worker gap in the same stroke; unblocks B8/B9/B13/B20's live
+   demonstration soonest.
+2. **`ComputePort` schemas and its conformance suite** — `NEXT_STEPS_PHASE7.md`'s own Tier-1/
+   Tier-3 questions answered here, before any adapter, per standing rule 1; independent of Stage 1
+   and may run in parallel with it.
+3. **`adapters/compute_rustworkx` and the metrics panel.**
+4. **The visual query builder** — `01_DOMAIN_MODEL.md` §8.1's own pattern-binding-rule question
+   (flagged since Phase 3, still unresolved) settled here, before an analyst is put in front of a
+   canvas drawing arbitrary patterns.
+5. **The pathfinder.**
+6. **Hotlists, saved-pattern monitors, alert inbox** — genuinely demonstrable only once Stage 1
+   exists.
+
+**Exit.** Acceptance scenario B, scoped to B1–B5, B7, B12–B14, B15, B19 and B20 (ADR-022), passes
+end to end. The Clique Metric ranks the insular-cluster fixture node above the broad-hub fixture
+node, and all three compute tiers return identical values within tolerance. A12 (Phase 5's exit
+criterion, scoped to A1–A11, deferred this one step here per ADR-019) is re-proven against the
+same HMP fixture: the Clique Metric identifies the same insular subgroup Phase 5 already surfaced
+by other means. B15 (a SIM `Endpoint` reaching its `Device` in one traversal) is re-verified here
+specifically because this phase's own pathfinder and visual query builder compute over that same
+traversal shape — see ADR-023, which must land before this phase's Session 5 (schemas and the
+`ComputePort` conformance suite) so neither is built against a graph topology about to change.
+
+The full scenario, as originally written, is not satisfiable by this phase alone. B6 and B9–B11
+need the Glass surface Phase 6a builds over Phase 6's existing API. B16 and B18 need a cross-case
+timeline overlay and a playback-driven snail trail; Phase 5's own Checkpoint 2 deferred
+`playback`, `multi-track` and `cross-case overlay` past that phase without carrying the deferral
+into this document. None of these four steps is built by any phase's bullet list above them. This
+is a correction to the scenario's phase attribution, not a narrowing of what the platform must
+eventually do: B6/B9–B11 are Phase 6a's own exit criterion, B16/B18 are Phase 8's own outcome
+(below). See ADR-022 (`06_DECISIONS.md`) for the full reasoning and its 18 September addendum for
+the Phase 6a/Phase 8 split.
+
+B8, B13 and B20's own dependence on a corpus-wide trigger — and B15's own msisdn leg, which stays
+fixture-only until a device-extraction connector exists (ADR-024) — mean this phase's own bullets
+above cannot be demonstrated against a live deployment, rather than fixture data assembled by a
+test harness, until ADR-025's own design is actually built. See ADR-025 for the full trigger
+design (event, population, principal, overlap, recovery) and ADR-024 for the msisdn↔imsi
+mechanism and its own owning phase.
 
 ---
 
@@ -674,6 +818,9 @@ the same insular subgroup Phase 5 already surfaced by other means.
 - The headless CLI equivalent for every screen, so a deployment built by clicking is reproducible
   by a script.
 - Generated Kubernetes manifests and the per-deployment runbook.
+- The two Scenario B Glass features no earlier phase built (ADR-022): cross-case timeline overlay
+  and playback-driven snail trail (B16, B18) — small, incremental additions to Timeline and Map,
+  the components Phase 5 already shipped, not a new surface the way Phase 6a is over Phase 6.
 
 **Exit.** Both acceptance scenarios pass unchanged on `local-lite` and on `cluster`. A
 `backup` → `restore` cycle across profiles reproduces the graph from staged Parquet. An export
@@ -709,6 +856,87 @@ findable only from whichever phase happened to notice it.
   box is the natural consumer of reading it) — before a future phase assumes `/v1/search`'s
   document/index legs already work because the graph leg does.
 
+- **Nothing triggers resolution or alerting against a live corpus.** `services/resolve`'s
+  `resolve_entity_type`/`write_same_as_edges`/`detect_conflicts`/`record_conflicts` are real and
+  tested — Phase 6's own gaps list already discloses "no ingest hook, no cron, no manual endpoint
+  ... every test calls them directly" — and no hotlist/alert code exists anywhere in `services/`
+  or `packages/` to consume a match once one is found. `08_ACCEPTANCE_SCENARIOS.md` Scenario B's
+  B8 (a scored `SAME_AS` edge exists to examine) and B13/B20 (ingest raises an alert) all presume
+  this trigger runs; Phase 7's hotlist/saved-pattern-monitor bullet builds the alert's display, not
+  the corpus-wide job that would ever fire one outside a test calling the functions directly.
+  **No longer just a scoping question** — see `06_DECISIONS.md` ADR-025 for the full design (what
+  runs it, on what event, against which population, under what principal, what happens when a run
+  overlaps the previous one, how a partial run is recovered) and the Phase 7 outcome bullets above
+  for where it lands.
+
+- **`GraphPort` has no method to list a type's population.** Found while designing ADR-025's own
+  trigger, not by inspection alone: `resolve_entity_type` is a pure function over a
+  caller-supplied node list, and nothing in `packages/ports/graph.py` can produce "every `Person`
+  node" or "every node of type X touched since Y" — `find_node`/`search_nodes` need an exact
+  identifier value, `expand`/`paths` need a known seed, `match` needs a bounded pattern. A
+  structural port gap, not an orchestration one: `06_DECISIONS.md` ADR-025 proposes a new,
+  paginated, access-controlled `GraphPort` method, conformance-suite-first per standing rule 1 —
+  needed before any corpus-wide resolution job can run against more than a caller-already-knows
+  population.
+
+- **No device-extraction connector or format exists, and no phase has ever claimed one.** Phase
+  2's own outcome bullet promised "CSV, JSON and generic delimited" (its own known-gaps list above
+  now records that only CSV shipped) — but device-extraction formats (Cellebrite UFDR, XRY) were
+  never promised by that bullet or any other; `packages/schemas/ingest.py`'s connector catalogue
+  carries them as labels only. `06_DECISIONS.md` ADR-024 depends on this: the deterministic
+  MSISDN↔IMSI `SAME_AS` write it proposes needs a structured record that reports both values
+  together, which only a device-extraction (or equivalent) connector would ever produce. Needs a
+  scoping decision — its own stage inside whichever phase eventually builds it, per ADR-024 — not
+  an assumption that Phase 2 closing or Phase 6a's Glass work already covers it.
+
+- **`FakeGraphPort` (`tests/services/api/working_set/fakes.py`) ignores `principal` on `expand`,
+  and this is a fact about every test built on it, not about the one file that first found it.**
+  Checked precisely, correcting an initial "eleven files" estimate that turned out to be a
+  substring match: `grep -rl FakeGraphPort tests/` also matches seven independently-defined,
+  unrelated `_FakeGraphPort` classes (`tests/extract/test_writer.py`, `tests/resolve/
+  test_conflict_pipeline.py` and `test_same_as_writer.py`, `tests/services/api/test_review_routes.py`,
+  `test_review.py`, `test_studio_verify_routes.py`) that implement `get_node`/`upsert_edges`/etc.
+  for entirely different code paths, several of which *do* simulate their own principal check
+  correctly (e.g. `test_review_routes.py`'s own `_FakeGraphPort.get_node` checks `owning_unit`).
+  The actual shared, public `FakeGraphPort` — the one whose `expand(req, principal)` records the
+  request and returns a fixed `Subgraph` regardless of who asks — has exactly three real
+  consumers: `test_manual_resolution.py`, `test_resolution_threshold.py` and `test_service.py`,
+  all in `tests/services/api/working_set/`. Every test built on it that exercises resolution
+  clustering is therefore only ever proving `compute_clusters`' own logic against input the fake
+  declares safe by construction, never proving the filtering that safety actually depends on —
+  `tests/resolve/test_projection_access_control.py` (added to close exactly this for the
+  clustering path specifically) is the pattern any future `FakeGraphPort`-based test of a
+  filtered read needs to follow: compose the real adapter's own access control with the pure
+  logic under test, rather than trust the fake's silence about `principal` to mean it's handled.
+  Recorded here, spanning phases, rather than in Phase 3 (which built `FakeGraphPort`) or Phase 6a
+  (which will write more tests against it) alone — precisely so an audit of either phase finds it
+  without having to rediscover it, the same failure mode Phase 5's own `playback`/`multi-track`
+  deferral sat unread in a component header for four phases before this document named it.
+
+**On Phase 6's own citation of `test_review_routes.py`'s denial tests as evidence access control
+is real (above): checked against this finding, and it survives unnarrowed, because it was never a
+claim about `GraphPort`.** `run_extraction`/`accept_candidate`/`reject_candidate`'s access control
+is `AuthorizedInvestigationDep` (real dependency-injection code, backed by a faked `Investigations`
+store) and `ExtractionCandidateStore.get_authorized` (a Postgres-backed store in production, faked
+here) — both Conduit-internal, neither one of the four ports `ADR-001` names, so `CLAUDE.md` rule
+3's "access control lives in the adapter, injected into the traversal or the `WHERE` clause" does
+not reach either: that rule is scoped to `GraphPort`/`AnalyticsPort`/`ComputePort`/`ModelPort`
+specifically, not every store the Conduit happens to hold. The confirm/retract routes in the same
+file *do* go through `GraphPort.get_node`, via that same file's `_FakeGraphPort` — a different,
+unrelated fake from the one above, correctly simulating an `owning_unit` check — and that
+composition is sound for a different, checked reason: `tests/conformance/graph_port/test_suite.py`'s
+`test_unauthorised_get_node_matches_a_graph_where_the_node_never_existed` proves the real adapter
+enforces the same thing the fake assumes. So both halves of Phase 6's own citation hold, for two
+different reasons that happen to look similar: one because the rule they'd be checked against
+doesn't apply to that store, the other because the real-adapter proof exists elsewhere and was
+simply not the thing this particular bullet was citing.
+
+**Not listed here: the `Endpoint`/`Device` traversal B15 needs.** It was found during the same
+Scenario B re-check that surfaced the entries above, but it is a live contradiction between two
+things the ontology already declares (`packages/ontology/default.yaml`'s `Endpoint.endpoint_kind`
+and `Device.identifiers` both claiming `imei`), not an unclaimed intention — standing rule 7 makes
+that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than left open here.
+
 ---
 
 ## Standing rules for the whole build
@@ -737,3 +965,16 @@ findable only from whichever phase happened to notice it.
    pair. An image scan turns up base-OS packages the service never touches with no upstream fix
    yet — `--ignore-unfixed` is the standard way to keep that from being permanent, unrelated
    noise on the gate, unlike the dependency-focused `trivy fs` scan, which does not use it.
+9. **A phase closes when its exit criterion passes, not when its outcome bullet list is fully
+   delivered.** An outcome bullet the exit criterion never exercised is real, promised work, not
+   satisfied work — record it in the phase's own known-gaps list, or reattribute it to whichever
+   later phase's bullet list actually claims it, as soon as it is found to be short. A bullet may
+   legitimately go unbuilt at close; it may never go unrecorded. Practice already followed this
+   three times (Phase 5's A1–A11 scoping, Phase 6's entities-only exit, Phase 6a's own disclosed
+   review) before it was ever written down here — and once failed it silently: Phase 5's own
+   closing commit (`dcd985c`) never carried `playback`/`multi-track`/`cross-case overlay` into its
+   known-gaps list, and they sat claimed-but-undelivered in the outcome bullet for four phases
+   until an unrelated audit found the deferral in `Timeline.tsx`'s own source comment. This rule
+   does not mechanically prevent that recurring — closing against the exit criterion rather than
+   the bullet list was already the practice when it happened — it only makes silence itself the
+   one thing a future audit can call a rule violation rather than a judgement call.
