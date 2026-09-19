@@ -908,8 +908,11 @@ test_phase6a_glass_surfaces.py`.
 **Outcome.** The remaining two analytical capabilities.
 
 - `adapters/compute_rustworkx` and the browser worker tier.
-- Degree, betweenness, eigenvector, clustering coefficient, Leiden, Clique Metric.
-- `ComputePort` conformance across all three tiers on the 5,000-node fixture.
+- Degree, betweenness, eigenvector, clustering coefficient, Louvain (Leiden is unavailable on
+  either compute tier — `06_DECISIONS.md` ADR-029), Clique Metric.
+- `ComputePort` conformance across two tiers (Tier 1 graphology, Tier 2 `rustworkx`) on the
+  5,000-node fixture — Tier 3 registers in Phase 8's `cluster` profile instead (`06_DECISIONS.md`
+  ADR-028).
 - Metrics panel with two-metric comparison; size encoding; community hull overlay.
 - Visual query builder compiling to Gremlin builders, with result estimation.
 - Hotlists, saved-pattern monitors, alert inbox with rule and evidence display.
@@ -961,14 +964,15 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
 half stays unowned, ADR-027), B2–B5, B7, B12, B13 (via a CDR-carried hotlisted identifier, not the
 literal seizure-record fixture, ADR-027), B14, B15 (its `imsi→Device` leg only, ADR-022's
 addendum), B19 and B20, passes end to end. The Clique Metric ranks the insular-cluster fixture node
-above the broad-hub fixture node, and all three compute tiers return identical values within
-tolerance. A12 (Phase 5's exit criterion, scoped to A1–A11, deferred this one step here per
-ADR-019) is re-proven against the same HMP fixture: the Clique Metric identifies the same insular
-subgroup Phase 5 already surfaced by other means. B15 (a SIM `Endpoint` reaching its `Device` in
-one traversal) is re-verified here
-specifically because this phase's own pathfinder and visual query builder compute over that same
-traversal shape — see ADR-023, which must land before this phase's Session 5 (schemas and the
-`ComputePort` conformance suite) so neither is built against a graph topology about to change.
+above the broad-hub fixture node, and its two registered compute tiers (Tier 1 graphology, Tier 2
+`rustworkx` — Tier 3 deferred to Phase 8's `cluster` profile, `06_DECISIONS.md` ADR-028) return
+identical values within tolerance. A12 (Phase 5's exit criterion, scoped to A1–A11, deferred this
+one step here per ADR-019) is re-proven against the same HMP fixture: the Clique Metric identifies
+the same insular subgroup Phase 5 already surfaced by other means. B15 (a SIM `Endpoint` reaching
+its `Device` in one traversal) is re-verified here specifically because this phase's own pathfinder
+and visual query builder compute over that same traversal shape — see ADR-023, which must land
+before this phase's Session 5 (schemas and the `ComputePort` conformance suite) so neither is built
+against a graph topology about to change.
 
 The full scenario, as originally written, is not satisfiable by this phase alone. B6 and B9–B11
 need the Glass surface Phase 6a builds over Phase 6's existing API. B16 and B18 need a cross-case
@@ -1023,7 +1027,7 @@ disclose something — this list did not exist before Stage 1 found it needed on
   Stage 2 gave `MotifRequest`/`MotifMatch` real schemas — `_pending_port_placeholders.py`'s
   retirement needed every one of `ComputePort`'s five names replaced, not only the ones this
   phase's own outcome bullet names — but that bullet lists only "Degree, betweenness, eigenvector,
-  clustering coefficient, Leiden, Clique Metric." The type is real
+  clustering coefficient, Louvain, Clique Metric." The type is real
   (`01_DOMAIN_MODEL.md` §10); the algorithm itself has no owning phase, the same "gaps with no
   owning phase" shape the OpenSearch index and the corpus-wide trigger both had before something
   claimed them.

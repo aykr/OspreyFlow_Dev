@@ -1853,9 +1853,12 @@ Browser-Worker message-passing is real, but it is a *frontend integration* conce
 `apps/workspace`'s own Playwright suite already has an established pattern for (`glass-perf`/
 `glass-keyboard`/`glass-map-verify`, `Makefile`'s `npm run test:X --workspace apps/workspace`), not
 this port's conformance suite — which has never tested transport or threading for any other
-adapter either (it proves Gremlin's answers, never ArcadeDB's own WebSocket framing). `graphology`/
-`graphology-metrics` are already `apps/workspace/package.json` dependencies; `node`/`npm` are
-already present on this host and every CI runner that builds the frontend. **Decision:** a
+adapter either (it proves Gremlin's answers, never ArcadeDB's own WebSocket framing). `graphology`
+is already an `apps/workspace/package.json` dependency; `graphology-metrics` (the package that
+actually implements degree/betweenness/eigenvector/pagerank/clustering-coefficient) is **not** —
+checked directly against `package.json`, not assumed from `graphology` being present, and corrected
+here rather than left standing (see this ADR's own addendum). `node`/`npm` are already present on
+this host and every CI runner that builds the frontend. **Decision:** a
 `ComputeAdapterFactory` entry (`tests/conformance/registry.py`, mirroring `AnalyticsAdapterFactory`'s
 own shape) whose `context()` shells out to a small Node script reading a JSON-serialised `Subgraph`
 and request on stdin and writing a JSON result on stdout — headless, no browser, no `Worker`. A
@@ -1901,5 +1904,150 @@ proves two tiers agree on this host and defers the third rather than three.
 (a host setting, `deploy/compose/dev.yaml`'s own notes already name this lever), *or* the actual
 deployment target is the `cluster` profile regardless, at which point Tier 3 registers there
 directly rather than being retested on this host first.
+
+**Addendum, 20 September 2026 — the tolerance number, measured rather than assumed, opening Phase
+7 Stage 3; and a dependency correction found while measuring it.**
+
+**Correction first.** This ADR's own Tier 1 section said `graphology-metrics` was already an
+`apps/workspace/package.json` dependency alongside `graphology`. Checked directly rather than
+re-asserted: it is not. Only `graphology`/`graphology-types` are listed;
+`graphology-metrics` — the package that actually implements degree, betweenness, eigenvector,
+PageRank and clustering coefficient — is a real, undisclosed addition whichever stage builds the
+Tier 1 Node harness must make. Small (MIT-licensed, same author/ecosystem as `graphology` itself,
+no transitive licence conflict found), but a real line item, not zero-cost as this ADR originally
+implied.
+
+**The tolerance, measured, not chosen because it looked reasonable.** `rustworkx` (Rust core) and
+`graphology-metrics` (pure JavaScript) were run against the identical seeded 5,000-node/14,991-edge
+fixture (Barabási–Albert-shaped, seed 42) with the same explicit convergence settings
+(`tol=1e-10`, `max_iter=1000`) on both sides — a real cross-implementation run, not a projection.
+Two materially different regimes, not one number:
+
+- **Exact, closed-form metrics** (degree, weighted degree, clustering coefficient, betweenness,
+  the Clique Metric — none involve iterative approximation, only summation order): measured max
+  relative divergence `1.17 × 10⁻¹⁴` (betweenness), consistent with plain IEEE 754 double-precision
+  summation-order noise. **`rel=1e-9` is generously safe** — five orders of magnitude of headroom,
+  the same "tight enough that a real regression would trip it, loose enough ordinary variance
+  never does" philosophy `test_projection_perf.py`'s own `_CEILING_SECONDS` already uses.
+- **Iterative metrics** (eigenvector, PageRank — convergence-tolerance-dependent, and the two
+  implementations' own iteration/convergence paths differ): measured max relative divergence
+  `2.59 × 10⁻⁶`. **`rel=1e-4` is safe with real margin** (~40×), but only if both adapters *pin* an
+  explicit convergence tolerance and iteration cap rather than trusting each library's own
+  default — an unpinned default is a silent, version-dependent moving target this measurement does
+  not cover and a future dependency bump could quietly widen.
+
+**Communities (Leiden) are not a numeric-tolerance question at all, found while designing the
+cross-tier case rather than assumed to fit the same pattern.** Leiden is a stochastic, heuristic
+optimisation: cluster *labels* are arbitrary and interchangeable between two runs, and two correct
+implementations are not guaranteed to converge on the *same partition*, only on partitions of
+comparable quality — "identical values within tolerance" has no meaning for a
+`dict[NodeId, CommunityId]` the way it does for a `dict[NodeId, float]`. **Proposed, for whichever
+stage builds the cross-tier `communities` case:** compare partitions by modularity score (a single
+float per partition, the same exact-metric tolerance class as the Clique Metric) rather than
+per-node cluster-id equality — this is a real, undesigned test-shape decision for that stage, not
+answered by this ADR's own tolerance figures, which is why it is named here rather than left to be
+discovered when that specific case is written.
+
+**Cost.** One dependency addition (`graphology-metrics`) not previously disclosed; two tolerance
+constants to carry in the eventual cross-tier test (`rel=1e-9` exact, `rel=1e-4` iterative), pinned
+against a real measurement rather than each reader's own guess; the `communities` comparison shape
+is real, separate design work for whichever stage writes that specific case.
+
+**Revisit if.** Either library's own default algorithm changes in a way that moves the measured
+figures — re-run this comparison rather than assume the old numbers still hold, the same discipline
+this addendum was written to establish in the first place.
+
+---
+
+## ADR-029 — Neither compute tier can run Leiden; both run Louvain with a connected-components fix
+
+**Status.** Accepted, 20 September 2026.
+
+**The premise, checked precisely rather than assumed either way.** `01_DOMAIN_MODEL.md` §6.3 says
+"Prefer Leiden; Louvain can produce disconnected communities," and `packages/schemas/compute.py`'s
+own `CommunityRequest` (Phase 7 Stage 2) already committed to "Leiden only... no algorithm choice
+is exposed." Opening Stage 3, neither compute tier actually has one. `rustworkx` has no
+community-detection function at all — checked directly against its own module contents, not
+assumed absent. `leidenalg` (the standard Python route) pulls in `python-igraph`, confirmed GPL
+via `importlib.metadata` — the same package `06_DECISIONS.md` ADR-021 already rejected for Splink.
+But that is not the only Python Leiden, checked rather than stopped at the first result:
+`graspologic.partition.leiden`, backed by `graspologic-native` (a Rust core), is genuinely MIT —
+confirmed via the same metadata check on both packages, not assumed from the parent package's own
+licence. It comes at real transitive cost: installing it pulled 39 packages (`matplotlib`, `scipy`,
+`scikit-learn`, `numba`, `gensim`, `umap-learn`, among others) to reach one function. Three
+JavaScript Leiden packages exist on npm — `@aflsolutions/graphology-communities-leiden`,
+`leiden-ts`, `ngraph.leiden` — but none is graphology's own official ecosystem package the way
+`graphology-communities-louvain` is: a single-maintainer extraction, a `v0.1.0` package with no
+version history, and a different graph library entirely, respectively.
+
+**The architectural reason, which forces the answer independently of any licence question, and is
+therefore the reason this ADR leads with it rather than with ADR-021's own GPL line.** Tier 1 is
+`graphology` in a browser Web Worker. There is no mature, trusted Leiden implementation in that
+ecosystem — checked above, not assumed. Phase 7's own exit criterion requires every registered
+tier to agree, and Leiden versus Louvain is not a numerical-tolerance question the way PageRank's
+own convergence path is (this ADR's own addendum above) — it is a genuinely different partition of
+the same graph. A licence-clean Leiden on Tier 2 alone (`graspologic`) would not help this
+particular problem: it would make the two tiers agree with each other *less*, not more, and would
+add a 39-package dependency tree to buy that. ADR-021's GPL finding is the second, independent
+reason the common route is closed regardless — cited alongside the architectural one, not in place
+of it, so a future reader does not conclude that vendoring a licence-clean Leiden on Tier 2 in
+isolation would fix anything it doesn't.
+
+**Decision.** Both tiers run Louvain. Tier 2 uses NetworkX's native
+`networkx.algorithms.community.louvain_communities` — BSD-3, confirmed against the installed
+package's own `LICENSE.txt`, not assumed from the project's general reputation — rather than a
+separate `python-louvain` package: the bare install has **zero** required dependencies (confirmed
+via `Requires-Dist`; numpy/scipy/matplotlib are opt-in `extras` this build does not need), and
+`04_VAULT_BACKEND.md` already names NetworkX as "a reference implementation for the conformance
+fixtures" — this reuses a dependency the spec already anticipated rather than introducing a new
+one. Tier 1 uses `graphology-communities-louvain` (MIT, the actual official graphology-ecosystem
+package, not one of the three Leiden extractions checked above).
+
+**Mitigating the specific, named hazard, rather than only disclosing it.** §6.3's own objection to
+Louvain is precise, not vague: it can merge two components sharing no edge into one labelled
+community, because merging two already-disconnected pieces is never worse, and can tie, under
+modularity optimisation — the exact failure Traag, Waltman & van Eck (2019) built Leiden to close.
+**Fix: a connected-components split pass over Louvain's own output, run identically — the same
+O(n+m) algorithm, written natively in each tier's own language, not shared code — on both tiers.**
+For each community label Louvain returns, find the connected components of its own induced
+subgraph and give each one its own label. **Stated at the strength this actually buys, not
+further:** the specific disconnection hazard is closed — every returned community is now
+guaranteed internally connected, the one property Leiden guaranteed and Louvain alone does not. It
+does **not** restore Leiden's own partition quality (Leiden's refinement step improves modularity
+beyond plain Louvain in ways this split pass does not attempt), and the resulting partition is a
+Louvain partition, not a Leiden one — a real, disclosed trade, not a free fix dressed up as one.
+
+**The test this needs, per standing rule 12 — proving the fix directly, not hoping a fixture
+happens to reproduce Louvain's own nondeterministic tie-breaking.** Louvain's disconnection
+failure mode is real — the literature that motivated Leiden establishes it — but is not reliably
+reproducible on demand from an arbitrary constructed graph, since it depends on the specific
+implementation's own tie-breaking under an exact modularity tie. The rigorous test is therefore of
+the *mitigation function itself*, not of Louvain:
+`test_split_disconnected_communities_separates_unconnected_members` — hand-construct a partition
+that is deliberately wrong (two disjoint edges, `A–B` and `C–D`, sharing no path between them, both
+labelled as one community — bypassing Louvain's own output entirely for this specific proof) and
+assert the post-processed result gives `{A, B}` and `{C, D}` two different labels. Written and run
+in both languages against the identical adversarial input, since the fix itself is duplicated, not
+shared.
+
+**Every site naming Leiden is corrected in the same change as this ADR, not left to drift — the
+exact failure this build has already named more than once (`playback`/`multi-track`, the
+keyboard-registry gap, the graphify-hook instruction) when a correction lived in only one place:**
+`01_DOMAIN_MODEL.md` §6.3's own table row and §10's `CommunityRequest` sketch comment;
+`07_BUILD_PLAN.md`'s Phase 7 outcome bullet and the Stage-2 `temporal_motifs` gaps entry that
+quotes it verbatim; `02_GLASS_FRONTEND.md` §2's "a Leiden/analytics grouping" and §3.2's "Community
+assignment (Leiden)"; `04_VAULT_BACKEND.md`'s own conformance-suite description; and
+`packages/schemas/compute.py`'s `CommunityRequest` docstring, with its generated TypeScript
+regenerated in the same change.
+
+**Cost.** Two new dependencies (`networkx`, bare install, zero transitive weight;
+`graphology-communities-louvain`, MIT, four dependencies of its own), one small mitigation function
+duplicated in two languages with its own adversarial test in each, eight documentation sites
+corrected in one change.
+
+**Revisit if.** A Leiden implementation ships in the graphology ecosystem with the maturity/trust
+profile this build already requires of its other dependencies — an official package, a real
+version history, real adoption — at which point Tier 1 could adopt it and the cross-tier
+agreement question reopens on its own terms, not before.
 
 ---

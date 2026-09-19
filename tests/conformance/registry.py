@@ -11,10 +11,13 @@ its `context()` additionally takes the test's own `EventRecord` fixtures,
 since (unlike the graph store) each test seeds its own event population
 rather than sharing one ontology-applied schema.
 
-`ComputePort` stays empty until Phase 7 registers its own adapter —
-`test_guard.py` still asserts its list is empty, so Phase 7 populating it
-flips that guard red as the expected handover, same as `graph_port/
-test_guard.py` and `analytics_port/test_guard.py` did. `ModelPort` is real
+`ComputePort` is real from Phase 7 Stage 3: `COMPUTE_PORT_ADAPTERS` holds one
+`ComputeAdapterFactory` for `adapters/compute_rustworkx` (Tier 2) — Tier 1
+(`graphology`, a Node harness per `06_DECISIONS.md` ADR-028) and Tier 3
+(deferred to Phase 8's `cluster` profile, ADR-028) are not registered here
+yet, so the cross-tier agreement case in `compute_port/test_suite.py`
+(needing at least two) still collects zero until Tier 1 joins. `ModelPort`
+is real
 from Phase 6 Stage 1: `MODEL_PORT_ADAPTERS` holds one `ModelAdapterFactory`
 for `adapters/model_litellm`, calling the pinned conformance model
 (`adapters.model_litellm.CONFORMANCE_MODEL`, `06_DECISIONS.md` ADR-020)
@@ -111,7 +114,26 @@ def _model_litellm_factories() -> list[ModelAdapterFactory]:
     return [ModelAdapterFactory(label="model_litellm", context=model_litellm_adapter)]
 
 
+@dataclass(frozen=True)
+class ComputeAdapterFactory:
+    """One conformance-testable `ComputePort` adapter. `context()` takes no fixtures, the same
+    shape as `ModelAdapterFactory` — every method's own input is the request's `Subgraph`
+    (`01_DOMAIN_MODEL.md` §10), so there is no schema or store connection to establish first."""
+
+    label: str
+    context: Callable[[], AbstractAsyncContextManager[ComputePort]]
+
+    def __str__(self) -> str:  # pytest parametrize id
+        return self.label
+
+
+def _compute_rustworkx_factories() -> list[ComputeAdapterFactory]:
+    from adapters.compute_rustworkx.testing import compute_rustworkx_adapter
+
+    return [ComputeAdapterFactory(label="compute_rustworkx", context=compute_rustworkx_adapter)]
+
+
 GRAPH_PORT_ADAPTERS: list[GraphAdapterFactory] = _graph_arcadedb_factories()
 ANALYTICS_PORT_ADAPTERS: list[AnalyticsAdapterFactory] = _analytics_duckdb_factories()
-COMPUTE_PORT_ADAPTERS: list[ComputePort] = []
+COMPUTE_PORT_ADAPTERS: list[ComputeAdapterFactory] = _compute_rustworkx_factories()
 MODEL_PORT_ADAPTERS: list[ModelAdapterFactory] = _model_litellm_factories()

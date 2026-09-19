@@ -133,9 +133,11 @@ NetworkX remains useful as a reference implementation for the conformance fixtur
 as node properties with a computation timestamp and the algorithm version.
 
 All three must agree. The conformance suite runs a fixture graph of about 5,000 nodes through
-every tier and asserts identical output for degree, betweenness, clustering coefficient, Leiden
-communities and the Clique Metric, within a stated numerical tolerance for the iterative
-algorithms. A metric that changes value when the working set crosses a size boundary destroys
+every tier and asserts identical output for degree, betweenness, clustering coefficient, Louvain
+communities (Leiden is unavailable on either compute tier — `06_DECISIONS.md` ADR-029) and the
+Clique Metric, within a stated numerical tolerance for the iterative algorithms — measured, not
+assumed: `rel=1e-9` for the exact metrics, `rel=1e-4` for the iterative ones (ADR-028's own
+addendum). A metric that changes value when the working set crosses a size boundary destroys
 analyst trust the first time someone notices, and they will notice.
 
 ## 4. Model serving

@@ -583,7 +583,7 @@ will destroy analyst trust the first time someone notices.
 
 | Algorithm | Use | Note |
 | --- | --- | --- |
-| Louvain / Leiden | Community detection | Prefer Leiden; Louvain can produce disconnected communities |
+| Louvain | Community detection | Leiden is unavailable on either compute tier (no browser-ecosystem implementation, and the standard Python route is GPL); both tiers run Louvain with a connected-components split pass closing the one hazard Leiden would have avoided — `06_DECISIONS.md` ADR-029 |
 | Betweenness centrality | Brokers and cut-outs | Approximate (Brandes with sampling) above 100k nodes |
 | Eigenvector / PageRank | Influence | Report alongside clique score, never instead of it |
 | k-shortest paths | Pathfinder between two entities | Must respect the access filter; a path through a node the principal cannot see is not returned |
@@ -995,8 +995,8 @@ class CentralityRequest(BaseModel):
     metric: CentralityMetric
 
 class CommunityRequest(BaseModel):
-    subgraph: Subgraph                # Leiden only — §6.3: "Louvain can produce disconnected
-                                       # communities"; no algorithm choice is exposed
+    subgraph: Subgraph                # Louvain, connected-components split — ADR-029:
+                                       # Leiden is unavailable on either compute tier
 
 class CliqueMetricRequest(BaseModel):
     subgraph: Subgraph
@@ -1045,5 +1045,5 @@ it is not assumed to happen automatically once the route is built.
 exist because `_pending_port_placeholders.py`'s retirement needed real content for every one of
 `ComputePort`'s five names, not because any phase's own bullet list has claimed the convoy/relay/
 burst algorithms themselves — `07_BUILD_PLAN.md`'s Phase 7 outcome bullet names only "Degree,
-betweenness, eigenvector, clustering coefficient, Leiden, Clique Metric." Recorded in Phase 7's own
+betweenness, eigenvector, clustering coefficient, Louvain, Clique Metric." Recorded in Phase 7's own
 known-gaps list, not discovered only at the exit gate.

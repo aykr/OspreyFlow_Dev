@@ -45,8 +45,13 @@ class CentralityRequest(BaseModel):
 
 
 class CommunityRequest(BaseModel):
-    """Leiden only — `01_DOMAIN_MODEL.md` §6.3: "Prefer Leiden; Louvain can produce disconnected
-    communities." No algorithm choice is exposed; only one is sanctioned."""
+    """Louvain, with a connected-components split pass — `06_DECISIONS.md` ADR-029: Leiden
+    (`01_DOMAIN_MODEL.md` §6.3's own original preference) is unavailable on either compute tier —
+    no browser-ecosystem implementation with the maturity this build requires, and the standard
+    Python route (`leidenalg`) is GPL, the same dependency ADR-021 already rejected for Splink.
+    The split pass closes §6.3's own specific objection to Louvain (it can merge two disconnected
+    components into one labelled community) without restoring Leiden's own partition quality — a
+    disclosed trade, not a free fix. No algorithm choice is exposed; only one is sanctioned."""
 
     subgraph: Subgraph
 

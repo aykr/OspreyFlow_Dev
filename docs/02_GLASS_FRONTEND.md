@@ -99,8 +99,9 @@ it, so it was never part of this decision.
 **Resolution clustering is a separate, unrelated sense of "cluster," and neither this document nor
 the Inspector's own tab list (§2) named a rendering convention for it before Phase 6a — recorded
 here, retroactively for Stage 2 and directly for Stage 3, rather than left implicit in
-`07_BUILD_PLAN.md`'s own narrative.** A community (above) is a Leiden/analytics grouping, rendered
-as a translucent hull. A resolution cluster (`Node.resolution.cluster_id`, `01_DOMAIN_MODEL.md`
+`07_BUILD_PLAN.md`'s own narrative.** A community (above) is a Louvain/analytics grouping
+(`06_DECISIONS.md` ADR-029 — Leiden is unavailable on either compute tier), rendered as a
+translucent hull. A resolution cluster (`Node.resolution.cluster_id`, `01_DOMAIN_MODEL.md`
 §4) is the query-time collapse of `SAME_AS` edges scoring above the session's τ — a different axis
 entirely, and the two must never share a visual channel or an analyst could not tell which kind of
 grouping they were looking at.
@@ -206,7 +207,7 @@ Metrics panel, computed on the working set in a Web Worker, recomputed on filter
 - Eigenvector / PageRank
 - Local clustering coefficient
 - **Clique Metric** (defined in `01_DOMAIN_MODEL.md` §6.2)
-- Community assignment (Leiden)
+- Community assignment (Louvain, connected-components split — `06_DECISIONS.md` ADR-029)
 
 Each metric is applied to the canvas as **size**, never as colour — colour is reserved for
 entity type. The sequential ramp from the design system is available for a heatmap overlay when
