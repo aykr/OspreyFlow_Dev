@@ -1831,3 +1831,75 @@ eventually builds" it) — at that point B1 and B13 should be re-proven against 
 fixtures, the same way A12 was re-proven once its own dependency landed.
 
 ---
+
+## ADR-028 — `ComputePort`'s three tiers: Tier 1 runs as a plain Node script, not a browser; Tier 3 is deferred to Phase 8's `cluster` profile
+
+**Status.** Accepted, 19 September 2026.
+
+**The question, named by `NEXT_STEPS_PHASE7.md`'s own Session 5 prompt before Phase 7's compute
+work began, and settled here rather than re-deferred a second time.** Phase 7's exit criterion
+requires "all three compute tiers return identical values within tolerance on the 5,000-node
+fixture." `00_ARCHITECTURE.md` §2.3 names the three: graphology in a browser Web Worker (≤20k
+nodes), `rustworkx` in a Conduit worker process (≤2M nodes), and GraphFrames on Spark or HugeGraph
+Vermeer (>2M nodes, Vault, batch). Every conformance suite in this repository is a Python `pytest`
+parametrisation over an adapter registry — there was no precedent for exercising a TypeScript
+browser Worker, and no assessment on file of whether the third tier is feasible on the dev host at
+all.
+
+**Tier 1 — the suite exercises it as a plain Node script, never a browser or a `Worker`.** The
+correctness claim `tests/conformance/compute_port/test_suite.py` exists to prove is algorithmic —
+graphology's numbers agree with `rustworkx`'s on the same input — not a threading claim.
+Browser-Worker message-passing is real, but it is a *frontend integration* concern
+`apps/workspace`'s own Playwright suite already has an established pattern for (`glass-perf`/
+`glass-keyboard`/`glass-map-verify`, `Makefile`'s `npm run test:X --workspace apps/workspace`), not
+this port's conformance suite — which has never tested transport or threading for any other
+adapter either (it proves Gremlin's answers, never ArcadeDB's own WebSocket framing). `graphology`/
+`graphology-metrics` are already `apps/workspace/package.json` dependencies; `node`/`npm` are
+already present on this host and every CI runner that builds the frontend. **Decision:** a
+`ComputeAdapterFactory` entry (`tests/conformance/registry.py`, mirroring `AnalyticsAdapterFactory`'s
+own shape) whose `context()` shells out to a small Node script reading a JSON-serialised `Subgraph`
+and request on stdin and writing a JSON result on stdout — headless, no browser, no `Worker`. A
+later, separate Playwright case (frontend-owned) is what would prove the Worker actually returns to
+the main thread without blocking it; that is not this suite's claim and this ADR does not schedule
+it. **Not built in Phase 7 Stage 2** — schemas and the suite only, standing rule 1 — named here so
+whichever stage registers Tier 1 is not blocked re-deriving the mechanism.
+
+**Tier 3 — not feasible on this development host; deferred to Phase 8's `cluster` profile, not
+tested and found wanting.** `docker info` on this host reports a fixed 8,214,585,344-byte
+(~7.65GiB) Docker Desktop VM. `deploy/compose/dev.yaml`'s own `arcadedb` service already carries
+four dated incident notes on exactly this budget: two concurrent conformance suites OOM'd at the
+JVM's default heap; a single heavy sequential HMP graph build OOM'd at 4G; `ollama`'s own resting
+~3.5GB footprint OOM-killed ArcadeDB repeatedly during Phase 6 Stage 6; orphaned `conformance_*`
+databases from a hard-killed test run filled the VM's own disk. Phase 7 Stage 1 added a fifth,
+different-in-kind incident this same session: two live Conduit instances together exhausted
+Postgres's connection limit. A local Spark session's own driver and executor JVMs typically need
+several gigabytes of their own headroom on top of whatever else is running — asking that to coexist
+with ArcadeDB (already tuned to 6G), Ollama, Postgres, MinIO, Valkey and LiteLLM on a budget that
+has already produced five distinct incidents from lighter combinations is answered by the evidence
+already on file, not a proposal worth spending a sixth incident to confirm.
+
+**Decision: Tier 3 registers in Phase 8's `cluster` profile, not in Phase 7, and not on this host.**
+Phase 8 already owns exactly this class of work — `adapters/graph_janusgraph`,
+`adapters/analytics_clickhouse`, "runs on more than a laptop" (`07_BUILD_PLAN.md`) — so this is not
+inventing a new home for orphaned scope, the same shape ADR-022 already used once for Scenario B's
+own six Glass screens. `tests/conformance/compute_port/test_suite.py`'s cross-tier agreement case
+(`test_all_registered_tiers_agree_within_tolerance`) already collects zero cases with fewer than two
+tiers registered and needs no change when Tier 3 eventually joins — the suite this ADR is attached
+to was written to accommodate exactly this deferral without a rewrite.
+
+**What this means for Phase 7's own exit criterion, stated plainly.** "All three compute tiers
+return identical values within tolerance" cannot be demonstrated inside Phase 7 on this host.
+Recorded in Phase 7's own known-gaps list (`07_BUILD_PLAN.md`), not silently narrowed — the third
+tier's own conformance case joins the suite the moment its adapter registers, on whichever host
+actually runs it.
+
+**Cost.** None to the platform's eventual scope — every tier is still built, by the profile that
+can actually host it. The cost is to Phase 7's own literal exit-criterion demonstration, which
+proves two tiers agree on this host and defers the third rather than three.
+
+**Revisit if.** The dev host's Docker Desktop VM memory allocation is raised well beyond ~7.6GB
+(a host setting, `deploy/compose/dev.yaml`'s own notes already name this lever), *or* the actual
+deployment target is the `cluster` profile regardless, at which point Tier 3 registers there
+directly rather than being retested on this host first.
+
+---

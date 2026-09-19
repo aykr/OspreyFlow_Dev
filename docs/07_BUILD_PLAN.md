@@ -940,8 +940,15 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
    `supersede_node`'s long-open worker gap in the same stroke; unblocks B8/B9/B13/B20's live
    demonstration soonest.
 2. **`ComputePort` schemas and its conformance suite** — `NEXT_STEPS_PHASE7.md`'s own Tier-1/
-   Tier-3 questions answered here, before any adapter, per standing rule 1; independent of Stage 1
-   and may run in parallel with it.
+   Tier-3 questions answered here, before any adapter, per standing rule 1 (`06_DECISIONS.md`
+   ADR-028: Tier 1 runs as a plain Node script, Tier 3 defers to Phase 8's `cluster` profile);
+   independent of Stage 1 and may run in parallel with it. **Stage 3's own obligation, named here
+   rather than left to be assumed automatic:** `ComputePort` takes no `Principal`
+   (`01_DOMAIN_MODEL.md` §10) — the structural containment test this stage writes proves an
+   adapter cannot leak a node it was never given, but the composed claim (a real caller always
+   assembles its `Subgraph` through an access-filtered `GraphPort.expand`/`match` first) is
+   `test_projection_access_control.py`'s own shape of test, owed by Stage 3 the moment the metrics
+   panel exists as a real caller.
 3. **`adapters/compute_rustworkx` and the metrics panel.**
 4. **The visual query builder** — `01_DOMAIN_MODEL.md` §8.1's own pattern-binding-rule question
    (flagged since Phase 3, still unresolved) settled here, before an analyst is put in front of a
@@ -1012,6 +1019,21 @@ disclose something — this list did not exist before Stage 1 found it needed on
   from a different direction — a cheap revision-check inside `record_conflicts` would have closed
   the overlap gap above directly — and made the same call not to add it for this reason either.
   Recorded here so a third caller finding the same gap reads this instead of re-deriving it.
+- **`ComputePort.temporal_motifs`'s own algorithm (convoy/relay/burst detection) is unclaimed.**
+  Stage 2 gave `MotifRequest`/`MotifMatch` real schemas — `_pending_port_placeholders.py`'s
+  retirement needed every one of `ComputePort`'s five names replaced, not only the ones this
+  phase's own outcome bullet names — but that bullet lists only "Degree, betweenness, eigenvector,
+  clustering coefficient, Leiden, Clique Metric." The type is real
+  (`01_DOMAIN_MODEL.md` §10); the algorithm itself has no owning phase, the same "gaps with no
+  owning phase" shape the OpenSearch index and the corpus-wide trigger both had before something
+  claimed them.
+- **Tier 3 (`GraphFrames`/HugeGraph Vermeer, >2M nodes) does not register in Phase 7, on this
+  host.** `06_DECISIONS.md` ADR-028 has the full reasoning and its own "revisit if": this
+  development host's ~7.65GB Docker VM has produced five distinct memory/resource incidents across
+  this build, and a local Spark session's own JVM overhead is not a proposal worth a sixth. Tier 3
+  registers in Phase 8's `cluster` profile instead — Phase 7's own exit criterion's "all three
+  compute tiers return identical values within tolerance" is therefore demonstrated for two tiers
+  inside this phase, not three, disclosed here rather than silently narrowed.
 
 ---
 

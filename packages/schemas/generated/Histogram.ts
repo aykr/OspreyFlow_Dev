@@ -1,5 +1,5 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and _pending_port_placeholders.py, via generate_ts.py
+// Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 /**
  * `02_GLASS_FRONTEND.md` §3.4: the timeline's two temporal modes.
  * `CATEGORICAL` is what lets `cross_filter` bucket a dimension that

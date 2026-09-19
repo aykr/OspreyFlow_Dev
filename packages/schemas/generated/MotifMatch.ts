@@ -1,11 +1,19 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and _pending_port_placeholders.py, via generate_ts.py
-/**
- * Marks this model as scaffolding, not domain content.
- */
-export type PendingPortNote = string;
+// Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
+export type MotifType = "convoy" | "relay" | "burst";
+export type NodeId = string;
+export type NodeIds = NodeId[];
+export type ValidFrom = string;
+export type ValidTo = string | null;
 
 export interface MotifMatch {
-  pending_port_note?: PendingPortNote;
+  motif_type: MotifType;
+  node_ids: NodeIds;
+  interval?: Interval | null;
+  [k: string]: unknown;
+}
+export interface Interval {
+  valid_from: ValidFrom;
+  valid_to?: ValidTo;
   [k: string]: unknown;
 }

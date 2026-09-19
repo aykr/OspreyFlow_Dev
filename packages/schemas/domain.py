@@ -6,8 +6,9 @@ writes and reads. TypeScript types are generated from these
 (`scripts/schemas_check.py`).
 
 Supersedes `packages/schemas/_phase0_placeholders.py` for everything
-`GraphPort` references — see `tests/schemas/test_placeholder_lifecycle.py`
-for what still lives in `_pending_port_placeholders.py` and why.
+`GraphPort` references. `_pending_port_placeholders.py` (the same idea for
+`ComputePort`/`ModelPort`, ahead of their own real schemas) is gone for
+good as of Phase 7 Stage 2 — see `tests/schemas/test_placeholder_lifecycle.py`.
 """
 
 from __future__ import annotations

@@ -978,3 +978,72 @@ class CrossFilterRequest(BaseModel):
 the histogram panel restrict in lockstep (`08_ACCEPTANCE_SCENARIOS.md` A3) — one request, one
 compiled access predicate, rather than one call per panel that could disagree with itself under
 concurrent writes.
+
+## 10. `ComputePort` request and response shapes
+
+`packages/schemas/compute.py` is the source of truth — Phase 7 Stage 2, ahead of any adapter
+(standing rule 1). Graph algorithms: centrality, community detection, the Clique Metric, temporal
+motifs (`00_ARCHITECTURE.md` §2.3).
+
+```python
+CentralityMetric = Literal[
+    "degree", "weighted_degree", "betweenness", "eigenvector", "pagerank", "clustering_coefficient",
+]
+
+class CentralityRequest(BaseModel):
+    subgraph: Subgraph
+    metric: CentralityMetric
+
+class CommunityRequest(BaseModel):
+    subgraph: Subgraph                # Leiden only — §6.3: "Louvain can produce disconnected
+                                       # communities"; no algorithm choice is exposed
+
+class CliqueMetricRequest(BaseModel):
+    subgraph: Subgraph
+    k_min: int = 4                    # §6.2's own defaults, deployment-overridable like the
+    k_max: int = 30                   # edge-weight formula's α/β/γ, never hardcoded
+
+MotifType = Literal["convoy", "relay", "burst"]
+
+class MotifRequest(BaseModel):
+    subgraph: Subgraph
+    motif_type: MotifType
+    distance_tolerance: float | None = None       # named from 02_GLASS_FRONTEND.md's own
+    time_tolerance_seconds: float | None = None   # Convoy analysis line
+
+class MotifMatch(BaseModel):
+    motif_type: MotifType
+    node_ids: list[NodeId]
+    interval: Interval | None = None
+```
+
+**No `Principal` on any `ComputePort` method, deliberately — unlike `GraphPort`/`AnalyticsPort`,
+which carry one everywhere.** Every population-carrying request above embeds `Subgraph` — the same
+type `GraphPort.expand`/`match` already return, already access-filtered — rather than an implicit
+"compute over the whole graph." This is not an oversight in `00_ARCHITECTURE.md` §2.3's own
+illustrative sketch (which never had one either); it is the same shape `services/resolve/
+projection.py`'s `compute_clusters` already uses successfully: a pure function over whatever
+population it is handed, correct because its caller fetches through an access-filtered path first,
+never because the function checks anything itself. The alternative — threading a `Principal`
+through every tier — would need a browser Web Worker with no server-side session, an in-process
+`rustworkx` call with no store handle, and a Spark/Vault batch job to each independently compile an
+access predicate, which only `GraphPort` adapters do today and which Tier 1/2 cannot do at all:
+they never hold a store connection, so a `Subgraph` is structurally the only population they can
+ever reach.
+
+**What this makes true by construction, and what it does not.** A `ComputePort` adapter cannot leak
+a node it was never given — `tests/conformance/compute_port/test_suite.py`'s
+`test_centrality_never_returns_a_node_outside_the_requested_subgraph` proves this structurally,
+for every registered tier. It does **not** prove that a real caller always assembles that
+`Subgraph` through an access-filtered fetch first — the same residual `compute_clusters` has, which
+`tests/resolve/test_projection_access_control.py` closes for it directly (real `GraphPort` adapter,
+two principals, one hidden node, fed into the pure function). `ComputePort`'s own first real caller
+(the metrics panel, Phase 7 Stage 3) owes the equivalent test the moment it exists — named here so
+it is not assumed to happen automatically once the route is built.
+
+**`temporal_motifs` is real as a type, not as a claimed capability.** `MotifRequest`/`MotifMatch`
+exist because `_pending_port_placeholders.py`'s retirement needed real content for every one of
+`ComputePort`'s five names, not because any phase's own bullet list has claimed the convoy/relay/
+burst algorithms themselves — `07_BUILD_PLAN.md`'s Phase 7 outcome bullet names only "Degree,
+betweenness, eigenvector, clustering coefficient, Leiden, Clique Metric." Recorded in Phase 7's own
+known-gaps list, not discovered only at the exit gate.

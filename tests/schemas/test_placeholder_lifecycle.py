@@ -4,47 +4,42 @@
 (`schemas/domain.py`) in Phase 1 once `graph_arcadedb` was registered —
 `_phase0_placeholders.py` is gone (`docs/07_BUILD_PLAN.md` Phase 1 exit
 criterion). `AnalyticsPort`'s moved to `schemas/analytics.py` in Phase 2 once
-`analytics_duckdb` was registered. `ComputePort`/`ModelPort` have no adapter
-yet, so their stand-ins live on in `_pending_port_placeholders.py` until
-Phases 6 and 7 replace them, one port at a time — the module itself is only
-deleted once none are left.
+`analytics_duckdb` was registered. `ModelPort`'s moved to `schemas/model.py`
+across Phase 6 Stages 1 and 2 as `adapters/model_litellm` implemented each
+pair for real.
 
-Note on this test's history: through Phase 1, all three of
-`ANALYTICS_PORT_ADAPTERS`/`COMPUTE_PORT_ADAPTERS`/`MODEL_PORT_ADAPTERS` were
-simultaneously empty, so "the module exists iff all three registries are
-empty" and "the module exists iff not all three are populated" agreed and
-the difference was invisible. Phase 2 is the first point they diverge —
-`ANALYTICS_PORT_ADAPTERS` populates while the other two stay empty — and the
-first assertion, as originally written, demanded the module vanish
-immediately, which would have deleted `ComputePort`/`ModelPort`'s still-live
-placeholders. Corrected to the second condition, which is what the module's
-own docstring always described.
+Note on this test's history: through Phase 6, a port's placeholder types and
+its adapter registration always landed in the same phase/stage, so gating
+the module's deletion on "are all three of `ANALYTICS_PORT_ADAPTERS`/
+`COMPUTE_PORT_ADAPTERS`/`MODEL_PORT_ADAPTERS` populated" was a correct proxy
+for "does any placeholder content remain" — the two conditions never
+diverged. Phase 7 Stage 2 is the first point they do: standing rule 1
+(conformance suites, and the schemas they need, before any adapter) moves
+`ComputePort`'s real schemas (`schemas/compute.py`) ahead of
+`adapters/compute_rustworkx`'s own registration by a full stage.
+Checked directly, not assumed, before writing the module off: keying
+deletion to registry population would have kept `_pending_port_placeholders.py`
+around empty of all content, `COMPUTE_PORT_ADAPTERS` being the only registry
+still unpopulated — which is exactly the "an instruction whose condition no
+longer matches what it was protecting" shape this project's own graphify-hook
+finding already named once. Corrected here to what the module's own
+docstring always actually described: it exists while any port's placeholder
+content remains, checked by import, not by a proxy that stopped tracking it.
 """
 
 from __future__ import annotations
 
 import importlib.util
 
-from tests.conformance.registry import (
-    ANALYTICS_PORT_ADAPTERS,
-    COMPUTE_PORT_ADAPTERS,
-    MODEL_PORT_ADAPTERS,
-)
 
-
-def test_pending_placeholders_exist_until_every_port_has_an_adapter() -> None:
-    all_three_registries_populated = all(
-        (ANALYTICS_PORT_ADAPTERS, COMPUTE_PORT_ADAPTERS, MODEL_PORT_ADAPTERS)
-    )
-    placeholders_module_exists = (
-        importlib.util.find_spec("schemas._pending_port_placeholders") is not None
-    )
-    assert placeholders_module_exists != all_three_registries_populated, (
-        "packages/schemas/_pending_port_placeholders.py must exist until "
-        "ANALYTICS_PORT_ADAPTERS, COMPUTE_PORT_ADAPTERS and MODEL_PORT_ADAPTERS "
-        "(tests/conformance/registry.py) are ALL non-empty — it is deleted only "
-        "once every port has a real adapter."
-    )
+def test_pending_port_placeholders_module_is_gone() -> None:
+    """`ComputePort` was the last port carrying placeholder content
+    (`schemas/compute.py` replaced it in Phase 7 Stage 2, ahead of
+    `adapters/compute_rustworkx`'s own registration — standing rule 1).
+    Every port now has real domain content; this module must never come
+    back, the same permanent regression `test_phase0_placeholders_module_
+    is_gone` already proves for its own Phase 0 predecessor."""
+    assert importlib.util.find_spec("schemas._pending_port_placeholders") is None
 
 
 def test_phase0_placeholders_module_is_gone() -> None:
