@@ -650,7 +650,22 @@ to the graph or gave a human a way to promote it.
   failure mode from earlier phases (two concurrent conformance suites; one heavy sequential HMP
   build); this is a third, environment-level cause (cross-container contention with `ollama`'s own
   resting footprint, introduced by Phase 6 itself) recorded there rather than only here, so it
-  does not have to be rediscovered from scratch.
+  does not have to be rediscovered from scratch. **A fourth occurrence, recorded here rather than
+  rediscovered again:** the container was OOM-killed a second time while writing Phase 6a's own
+  closing-pass scenario test (running it alongside `test_phase3_working_set.py`'s and this file's
+  own `test_phase6_exit_criterion_end_to_end` in the same session) — same exit 137, same cause.
+  After restart, `test_phase6_exit_criterion_end_to_end` specifically (its own `arcadedb_adapter`
+  fixture, which provisions a fresh `conformance_*` database per run) failed intermittently on a
+  different randomly-affected type each retry (`Error on creating index on type 'mx_Vehicle'`,
+  then `'mx_Organisation'`, then `'mx_Event'` — three different types across three consecutive
+  attempts, including after a full `docker restart`), suggesting the OOM-kill leaves the server
+  in a degraded state schema/index creation is sensitive to, beyond the immediate crash itself —
+  not something a restart alone reliably clears. Not investigated further here, since it is this
+  host's own resource budget rather than anything Phase 6a's own scenario touches: the new
+  closing-pass test (`tests/scenarios/test_phase6a_glass_surfaces.py`, below) does not use
+  `arcadedb_adapter` at all — it reads/writes the long-lived `ospreyflow` database directly, the
+  same database the Conduit itself runs against — and passed consistently across every one of
+  these events.
 
 **Phase 6 exit criterion, verified end to end after Stage 6 closed it.** All three clauses
 together, against the live stack (real LiteLLM/Ollama, real Postgres, real ArcadeDB, real
@@ -751,10 +766,61 @@ than a new surface).
    is a different concern (the render boundary) from the API's own access control. Rendering
    convention recorded in `02_GLASS_FRONTEND.md` (added alongside Stage 2's own, likewise
    never written into that document before now). Demonstrated against the same seed as Stage 2.
-4. **B6 — the Dossier.** Largest and last: a wholly new Glass surface (`apps/workspace/src/
-   dossier/` is empty; `00_ARCHITECTURE.md` names the Dossier as its own component alongside
-   Canvas/Timeline/Map/Query, not an Inspector tab) — the same shape of work Phase 5a's own Map
-   screen was over Phase 2.
+4. **B6 — the Dossier. Built: a wholly new Glass surface** (`apps/workspace/src/dossier/`;
+   `00_ARCHITECTURE.md` names the Dossier as its own component alongside Canvas/Timeline/Map/
+   Query, not an Inspector tab) — the same shape of work Phase 5a's own Map screen was over Phase
+   2. The backend data this needed did not fully exist before this stage: `run_extraction`'s own
+   `text` argument was discarded after building candidates, so `services/api/review.py` gained a
+   small `owning_unit`-scoped document-text store (`store_document_text`/`get_document_text`,
+   the same query-level `WHERE owning_unit = $2` shape `get_authorized` already uses, so an
+   unauthorised principal 404s identically whether a document never existed or simply isn't
+   theirs). **A second gap, standing rule 12's own kind, found while writing this stage's tests
+   rather than left for a later one:** every test written so far called `store_document_text`
+   directly; none called it through `run_extraction`, the only real caller — deleting
+   `run_extraction`'s own call to it left every existing test green. Closed with
+   `test_run_extraction_persists_the_document_text_the_dossier_later_renders`
+   (`tests/services/api/test_review.py`, against the real store that file already uses),
+   reverted and confirmed failing before the fix, per standing rule 2. `services/api/dossier.py`
+   assembles a document's text with the subset of its
+   **accepted** extraction candidates the requesting principal can currently see — pending/
+   rejected candidates stay the still-separate, still-unbuilt review-queue screen's own concern
+   (`09_INGEST_STUDIO.md` §7), not this stage's. **A third independent copy of the "narrow node
+   ids to what a principal can see" pattern, closed rather than added:** `set_resolution_
+   threshold` and `explain_cluster` (instances three and four, `Gaps with no owning phase` above)
+   each still inlined that logic independently; the Dossier's own assembly would have been a
+   fourth. Extracted instead into `services/api/access.py`'s `narrow_to_visible`, and both
+   existing call sites retrofitted to it — verified unchanged by the existing threshold/explain
+   test suites, which still pass. A span naming a node the principal cannot see is omitted from
+   the response entirely, never rendered redacted — the same rule Stage 3's `visiblePairs`
+   established one surface over (`tests/services/api/test_dossier_access_control.py`, reverted
+   and confirmed failing before the fix, per this build's own standing discipline). Frontend:
+   `HighlightedMessage.tsx` renders each span as a native, focusable `<button>` — colour and
+   rendering convention recorded in `02_GLASS_FRONTEND.md` §1.1, alongside Stage 2/3's own,
+   likewise never written into that document before now; `Dossier.tsx` reads the selected node's
+   own already-synced `provenance.sources` rather than a new backend call to discover which
+   documents mention it. Trigger: a new "View messages" radial-menu item, `Endpoint`-type nodes
+   only (B6's own wording).
+
+   **The keyboard-action-registry decision (`Gaps with no owning phase` above) is decided here:
+   built, not deferred.** `apps/workspace/keyboard/actionRegistry.ts` — a plain list of
+   `GlassCanvas`'s own action ids, `registerCovered(id)` called at the point each `keyboard.
+   spec.ts` case actually proves one, and a final test asserting every registered id was covered.
+   Rule 13 alone had already let four actions go untested entirely on its own before this stage
+   added anything, checked directly rather than assumed: ring-cycling (a second `Tab`), the
+   `"manual-split"` item, the per-edge-type item exercised through the menu itself rather than
+   only `Enter`'s own shortcut, and dismissing either transient overlay at all. All four retrofitted
+   here, alongside the new Dossier case, rather than left red against a newly-built gate (standing
+   rule 9). **A real bug, found while retrofitting the fourth case, fixed as part of it — not left
+   disclosed-only:** confirmed against a running browser, not assumed from reading the container's
+   own `onKeyDown`, that `Escape` never reached `EdgeInspectionOverlay`/`ClusterExplainOverlay`'s
+   own close button at all — opening either from a radial-menu item leaves focus nowhere (the
+   menu's own `<button>` unmounts on select, dropping focus to `<body>`, past the container
+   entirely), so a handler that only fires while the container itself has focus never ran. Fixed
+   in `Popover` (the shared base both overlays render through, so this is fixed once rather than
+   per overlay): the same self-contained mount-focus-and-`document`-level-`Escape`-listener shape
+   `RadialMenu` already had. `make glass-keyboard` (twelve cases, all newly passing) and
+   `make glass-a11y` (both themes, after adding a representative highlighted-message sample to
+   `a11y/showcase.tsx`) both re-run clean.
 
 **Exit.** Acceptance scenario B's B6, B9, B10 and B11 (ADR-022) pass end to end against Phase 6's
 existing API. Moving the threshold control from Strict to Broad in the Glass produces the same
@@ -768,6 +834,72 @@ Phase 7** — the same disclosure Phase 5a's own unmet second review already car
 review"), not a new pattern. Naming a review does not make it happen; what this phase commits to
 is that the review's status — done, or disclosed as outstanding — is true and checkable at close,
 not that its completion gates anything downstream.
+
+**Phase 6a known gaps (this list did not exist before this phase's own closing pass — it is
+created here, not merely populated, the same way Phase 5's and Phase 5a's own lists above were
+each created once by the stage that first needed to disclose something):**
+
+- **The analyst review named in the Exit paragraph above has not happened.** The demo was
+  deliberately deferred until after the build — the Exit paragraph's own clause explicitly permits
+  this, provided the status is disclosed honestly rather than left unrecorded, which is what this
+  bullet is. The four screens are built, and automatically verified at three separate levels:
+  each stage's own unit/keyboard/a11y tests, and now `tests/scenarios/
+  test_phase6a_glass_surfaces.py`'s closing pass proving B6/B9/B10/B11 compose correctly in one
+  session against the live stack. No analyst who did not build them has used them. **What this
+  proves, stated at the strength it actually supports and no further: the screens work — the API
+  they call is correct, access-controlled, and composes end to end. It does not prove the screens
+  are usable** — that a real analyst's workflow fits what got built, that the four-screen split
+  (Inspector vs. a new Dossier surface vs. transient overlays) reads as intended, that "View
+  messages" is where someone would actually look for it. Automated correctness and human usability
+  are different claims; this phase can honestly make only the first until the review happens. Same
+  disclosure shape Phase 5a's own unmet second review already carries — not a new pattern, a
+  repeated one, which is itself worth noticing rather than treating each occurrence as a one-off.
+- **No literal browser-driven test exists for any of B6/B9/B10/B11 — the closing pass proves the
+  API surface, not a rendered Glass.** Checked directly before writing the closing pass, not
+  assumed: every existing Playwright suite in this repository (`keyboard/`, `a11y/`, `perf/`,
+  `map-verify/`) boots an isolated Vite harness with `page.route` intercepting every network call —
+  none of them drive a live Conduit. Building that combination (a live auth-token flow reaching the
+  browser, a live Conduit alongside Playwright's own `webServer`, CORS) is real, unscoped test
+  infrastructure work with no existing pattern to extend, not a natural next step from
+  `keyboard.spec.ts`. This is a narrower, more specific version of the analyst-review gap above:
+  even a scripted, non-human agent has never operated these four screens through a browser against
+  real data — only against the API directly, or against a mocked network.
+- **The Dossier's own existence-leak answer is confirmed identical to Stage 3's `explain` answer,
+  not different — checked directly, not assumed.** `services/api/dossier.py` omits a span naming a
+  node the requesting principal cannot see, exactly the same "omit, never redact" rule
+  `explainView.ts`'s `visiblePairs` already established for a pairwise comparison row
+  (`02_GLASS_FRONTEND.md` §1.1's own "Highlighting" paragraph states this plainly, and
+  `tests/services/api/test_dossier_access_control.py` proves it against the real adapter,
+  reverted-and-confirmed-failing per standing rule 2). Recorded here explicitly, as a settled
+  question rather than an open one, so a future reader doesn't have to re-derive whether the
+  Dossier's own answer might diverge from the surface Stage 3 already closed.
+- **The keyboard-registry retrofit found exactly one real defect, not four.** Of the four
+  previously-uncovered `GlassCanvas` actions the registry surfaced (ring-cycling, the
+  `"manual-split"` item, the per-edge-type item via the menu, dismissing a transient overlay),
+  three were simply untested and already correct once a case was written for them. Only the
+  fourth — `Escape` never reaching `EdgeInspectionOverlay`/`ClusterExplainOverlay`'s own close
+  button, because opening either from a radial-menu item drops focus to `<body>` past the
+  container entirely — was a genuine, user-facing defect, fixed in `Popover` (this phase's own
+  "Built" bullet above has the full account). Stated precisely rather than left to imply the
+  registry's yield was larger than it was.
+- **`resolution/threshold`'s own "move the threshold and see the merge" clause is demonstrated by
+  this phase's closing pass in a narrower, honestly-stated form.** `tests/scenarios/
+  test_phase6a_glass_surfaces.py`'s own module docstring has the full mechanical account: a
+  manual link's `score=1.0` exceeds every valid τ, so its merge and change summary appear in B11's
+  own response, not in the subsequent `PUT .../resolution/threshold` call — which, correctly,
+  reports zero further change. A fresh Strict-to-Broad transition on a genuinely
+  intermediate-scoring, Splink-produced pair is `test_phase6_exit_criterion_end_to_end`'s own
+  clause 2, already proven separately; this phase's own closing pass does not repeat it, and a
+  reader should not assume B9's presence in the B11→B9→B10→B6 chain demonstrates a threshold-driven
+  transition specifically — it demonstrates the mechanism running for real against a state B11
+  already produced, and that state surviving the move unchanged.
+
+**Phase 6a exit criterion, verified end to end after Stage 4 closed it.** B11, B9, B10 and B6
+together, in that order, in one investigation, as one principal, against the live stack (real
+ArcadeDB, real Postgres) — the same closing-pass discipline Phase 6's own Stage 6 and Phase 5a's
+own Publish stage each followed for their acceptance scenarios, rather than trusting four stages'
+worth of individually-passing tests to compose correctly. See `tests/scenarios/
+test_phase6a_glass_surfaces.py`.
 
 ---
 
@@ -1036,25 +1168,30 @@ findable only from whichever phase happened to notice it.
   `DeltaReproject.affected_cluster_ids` addition is otherwise unverified against the real wire
   format beyond type-checking.
 
-- **`keyboard.spec.ts`'s walkthrough has no auto-discovery of new canvas actions, and `CLAUDE.md`
-  rule 13's standing rule is a stopgap for that, not a fix.** Confirmed directly while closing
-  Phase 6a Stage 1's own keyboard gap: the spec is a hardcoded sequence of steps, so a new action
-  with no step added is invisible to it — Phase 4's own exit criterion ("keyboard navigation
-  reaches every canvas action") is enforced by a test structurally unable to detect its own
-  violation. Rule 13 makes adding that step the new action's own author's responsibility, in the
-  same change, rather than a follow-up — cheap, and adopted for Stage 2 onward, but it depends on
-  being remembered, which is the exact failure mode it exists to close.
+- **`keyboard.spec.ts`'s walkthrough had no auto-discovery of new canvas actions, and `CLAUDE.md`
+  rule 13's standing rule was a stopgap for that, not a fix — closed by Phase 6a Stage 4, not left
+  open.** Confirmed directly while closing Phase 6a Stage 1's own keyboard gap: the spec was a
+  hardcoded sequence of steps, so a new action with no step added was invisible to it — Phase 4's
+  own exit criterion ("keyboard navigation reaches every canvas action") was enforced by a test
+  structurally unable to detect its own violation. Rule 13 made adding that step the new action's
+  own author's responsibility, in the same change, rather than a follow-up — cheap, and adopted
+  for Stage 2 onward, but it depended on being remembered, which was the exact failure mode it
+  existed to close, and it had already let four actions go untested on its own by the time Stage 4
+  checked, before that stage added anything.
 
-  **The stronger fix, named here rather than built:** an explicit, machine-checked inventory —
-  `GlassCanvas` (and whatever surface Stage 4's Dossier or Phase 7's metrics panel, visual query
-  builder and pathfinder add) exports a registry of its own canvas actions, and a test asserts one
-  `keyboard.spec.ts` case exists per registered action, so a new action with no step fails the
-  build rather than passing it silently. This is real, unscoped engineering — what counts as "an
-  action," how a metrics-panel or query-builder action registers itself the same way a canvas node
-  action does — not a one-line change, which is why it is recorded here rather than folded into
-  rule 13 itself. Whichever phase first adds a second keyboard-driven surface (Stage 4, on current
-  sequencing) is the natural owner, and should either build the inventory then or say explicitly
-  why the rule alone still suffices.
+  **The stronger fix, built in Stage 4 rather than left named:** `apps/workspace/keyboard/
+  actionRegistry.ts` — `GlassCanvas` exports a plain list of its own action ids
+  (`CANVAS_ACTIONS`); each `keyboard.spec.ts` case calls `registerCovered(id)` at the point it
+  actually proves that action; a final test asserts every registered id was covered, failing with
+  the exact missing ids rather than passing silently. The four pre-existing gaps (ring-cycling, the
+  `"manual-split"` item, the per-edge-type item through the menu itself, dismissing a transient
+  overlay) were retrofitted in the same change rather than left red against a newly-built gate.
+  Whichever surface Phase 7's metrics panel, visual query builder or pathfinder add next is a new,
+  separate keyboard-driven surface in this same sense — each should get its own action list and
+  spec-level registry the way `GlassCanvas`'s did, not a shared one; this entry's own "how a
+  non-canvas action registers itself" question was answered narrowly, for the canvas, and is worth
+  re-checking rather than assumed solved generally the first time a genuinely different surface
+  (not a further canvas radial-menu item) needs it.
 
 **On Phase 6's own citation of `test_review_routes.py`'s denial tests as evidence access control
 is real (above): checked against this finding, and it survives unnarrowed, because it was never a

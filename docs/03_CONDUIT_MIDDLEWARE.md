@@ -138,6 +138,40 @@ GET    /v1/resolution/explain/{cluster}  the comparison vector and score that pr
 one person will either trust the merge blindly or distrust the whole system. Return the
 per-comparison match weights, not just the total.
 
+### 3.6 Dossier
+
+```
+GET    /v1/investigations/{id}/dossier/documents/{document_id}   a message, with its entity spans
+```
+
+Phase 6a Stage 4 (B6): the Dossier's own read, backing `apps/workspace/src/dossier/` — "the
+shared endpoint's messages... rendered with the entity spans highlighted in place." A document's
+raw text (persisted once, at extraction time, keyed by `document_id` and scoped to the extracting
+principal's own `owning_unit` — the same `WHERE owning_unit = $2` shape `get_authorized` already
+uses for a candidate, so an unauthorised principal gets the same 404 whether the document never
+existed or simply isn't theirs) plus the subset of its **accepted** extraction candidates whose
+minted node the requesting principal can currently see:
+
+```json
+{
+  "document_id": "doc-412",
+  "text": "Dana called +441621926368 about the shipment.",
+  "spans": [
+    {"start": 0, "end": 4, "node_id": "n1", "entity_type": "Person", "provenance_state": "asserted"}
+  ]
+}
+```
+
+A span naming a node the principal cannot see is **omitted from the array entirely, never
+returned redacted** — the same rule §3.5's `explain` response already follows for a pairwise
+comparison naming an invisible node (`visiblePairs`). A redacted span would still assert "an
+entity was extracted here," which is exactly the existence signal access control exists to deny;
+omission is the only response shape that doesn't. A **pending** (not yet accepted) or **rejected**
+candidate never produces a span at all — that is the still-separate, still-unbuilt review-queue
+screen's own concern (`09_INGEST_STUDIO.md` §7), not post-hoc inspection of an already-resolved
+message, and a pending candidate has no minted node and no `Handling` to check visibility against
+in the first place.
+
 ## 4. The Working-Set Service
 
 The most important component in the Conduit.

@@ -123,6 +123,23 @@ session's already-access-controlled local graph — belt and braces against a no
 technically cleared but this client has not yet synced, or against a future regression, not a
 claim that the API itself is untrusted.
 
+*Highlighting (Stage 4, B6).* This document had no rendering convention for message-span
+highlighting before Stage 4 — recorded here directly, not left implicit. A highlighted span never
+gets a solid channel fill behind its text: that is exactly what would risk the contrast floor over
+dense prose, so instead it reuses the same "8% channel opacity" convention already specified for
+the community-hull overlay above (§3.2), composed via CSS `color-mix()` against the entity's own
+channel token rather than a solid background — theme-aware for free, since it mixes against the
+already theme-aware surface a span sits on rather than computing a fixed colour once. Text colour
+is never touched, so a highlighted run introduces no new foreground/background pairing for
+axe-core's contrast check to evaluate at all; the only new visual element is the run's own
+underline, reusing the canvas's existing solid/dashed `provenanceStroke` distinction (asserted/
+inferred) rather than a second visual language for the same fact. As with the explain-cluster row
+above, a span naming a node the requesting principal cannot see is never returned by the Conduit
+in the first place (`03_CONDUIT_MIDDLEWARE.md` §3.6) — omitted, not rendered redacted — so the
+Dossier itself needs no separate leak-defense filter the way `visiblePairs` gives the explain
+overlay one; there is nothing to filter client-side because the array it receives is already
+narrowed.
+
 ## 2. Workspace layout
 
 ```
