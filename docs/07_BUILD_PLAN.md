@@ -699,10 +699,34 @@ than a new surface).
    (`RadialMenu`, already built) on two selected nodes, calling the existing
    `POST .../resolution/link`/`split`. No new design-system primitive needed. Closes first
    because its own output seeds Stages 2 and 3.
-2. **B9 — resolution threshold control.** A global, session-level control, not per-node — reuses
-   the existing `Slider`/`RangeSlider` primitive; the change summary is a `Toast` or small panel
-   surfacing `DeltaReproject`'s merged/split/affected counts. Demonstrated against the `SAME_AS`
-   Stage 1 created.
+2. **B9 — resolution threshold control. Built: three fixed detents (`ResolutionThresholdControl`,
+   `apps/workspace/src/resolution/ThresholdControl.tsx`), reusing `Slider` with a new, disclosed
+   `onCommit` prop (commits on release, not on drag — `PUT .../resolution/threshold` re-projects
+   the whole working set) and an App-level `Toast` summary.** Scoping this stage surfaced two
+   access-control gaps neither `_manual_assertion`'s own Stage 1 fix nor `explain_cluster` had
+   closed — both fixed here, not deferred, and both folded into the `FakeGraphPort` gaps entry as
+   instances three and four of one pattern (`Gaps with no owning phase`, above): `set_resolution_
+   threshold`/`_manual_assertion` clustered the investigation-*shared*, unfiltered node population
+   rather than the principal-visible subset (a write-path bug — a principal blind to a node could
+   silently reset its persisted `cluster_id` — proved against the real adapter in `tests/services/
+   api/working_set/test_resolution_threshold_access_control.py`), and `explain_cluster` returned a
+   hidden node's own id verbatim in `member_node_ids` (`tests/services/api/working_set/
+   test_explain_cluster_access_control.py`). `DeltaReproject`/`ClusterDelta` grew
+   `affected_cluster_ids` (bounded by `affected`) so the Glass applies cluster moves in place
+   (`workingset/store.ts`'s `applyReproject`) instead of re-syncing the whole working set.
+   Rendering, proposed since `02_GLASS_FRONTEND.md` has no existing convention for resolution
+   collapse: same-cluster nodes co-locate at the cluster's own anchor and get a second, independent
+   `@sigma/node-border` ring (`canvas/nodeAttributes.ts`'s `computeClusterGraphAttributes`) —
+   distinct from the interaction-state ring, so both can show at once. Measured, not assumed:
+   `compute_clusters`+`diff_clusters` over the full 50,000-node cap, worst case (every node
+   collapsing into one cluster in a single call), took 0.056s (`tests/resolve/
+   test_projection_perf.py`) — this path is not where a reprojection's cost lives; `GraphPort.
+   expand`'s own network/traversal cost at that scale is unmeasured here and remains the open
+   question if a real demo shows the control feeling slow. **Not built:** a WebSocket-level
+   integration test proving `affected_cluster_ids` round-trips through the real Conduit — the
+   harness's own `seedOneNode` cannot seed a real `GraphPort` node (see the `Gaps with no owning
+   phase` entry above), so this is proved at the Python service layer against the real adapter
+   instead. Demonstrated against the `SAME_AS` Stage 1 created.
 3. **`explain` rendering (B10).** Per-*cluster*, not per-node — triggered from a clustered
    selection, rendered as a `Table` (already built) of per-comparison match weights. Demonstrated
    against the same seed as Stage 2.
@@ -890,10 +914,15 @@ findable only from whichever phase happened to notice it.
   scoping decision — its own stage inside whichever phase eventually builds it, per ADR-024 — not
   an assumption that Phase 2 closing or Phase 6a's Glass work already covers it.
 
-- **`FakeGraphPort` (`tests/services/api/working_set/fakes.py`) ignores `principal` on `expand`,
-  and this is a fact about every test built on it, not about the one file that first found it.**
-  Checked precisely, correcting an initial "eleven files" estimate that turned out to be a
-  substring match: `grep -rl FakeGraphPort tests/` also matches seven independently-defined,
+- **Fake-based tests in this repository do not exercise security-relevant paths, and that is now
+  a pattern across four independent findings, not a property of any one fake.** Each instance was
+  found by someone deliberately going looking for coverage that turned out not to exist; none was
+  found by a test failing. That is itself the property worth recording: it means the next instance
+  is currently caught only by an audit, not by the suite.
+
+  **Instance one — `FakeGraphPort` (`tests/services/api/working_set/fakes.py`) ignores `principal`
+  on `expand`.** Checked precisely, correcting an initial "eleven files" estimate that turned out
+  to be a substring match: `grep -rl FakeGraphPort tests/` also matches seven independently-defined,
   unrelated `_FakeGraphPort` classes (`tests/extract/test_writer.py`, `tests/resolve/
   test_conflict_pipeline.py` and `test_same_as_writer.py`, `tests/services/api/test_review_routes.py`,
   `test_review.py`, `test_studio_verify_routes.py`) that implement `get_node`/`upsert_edges`/etc.
@@ -903,16 +932,108 @@ findable only from whichever phase happened to notice it.
   request and returns a fixed `Subgraph` regardless of who asks — has exactly three real
   consumers: `test_manual_resolution.py`, `test_resolution_threshold.py` and `test_service.py`,
   all in `tests/services/api/working_set/`. Every test built on it that exercises resolution
-  clustering is therefore only ever proving `compute_clusters`' own logic against input the fake
-  declares safe by construction, never proving the filtering that safety actually depends on —
-  `tests/resolve/test_projection_access_control.py` (added to close exactly this for the
-  clustering path specifically) is the pattern any future `FakeGraphPort`-based test of a
-  filtered read needs to follow: compose the real adapter's own access control with the pure
-  logic under test, rather than trust the fake's silence about `principal` to mean it's handled.
-  Recorded here, spanning phases, rather than in Phase 3 (which built `FakeGraphPort`) or Phase 6a
-  (which will write more tests against it) alone — precisely so an audit of either phase finds it
-  without having to rediscover it, the same failure mode Phase 5's own `playback`/`multi-track`
-  deferral sat unread in a component header for four phases before this document named it.
+  clustering was therefore only ever proving `compute_clusters`' own logic against input the fake
+  declares safe by construction, never proving the filtering that safety actually depends on.
+
+  **Instance two — the twenty-two `review.py` tests that passed identically either side of the
+  real `AND owning_unit = $2` fix.** Found during Phase 6's own access-control pass: a fake-backed
+  suite is not evidence a query is scoped correctly if the fake never runs the query at all. The
+  fake returning a plausible-looking result regardless of the fix being present or absent is
+  indistinguishable, from inside the suite, from the fix working.
+
+  **Instance three — `set_resolution_threshold`'s (and `_manual_assertion`'s) own unfiltered
+  `node_ids`, found this session while scoping Phase 6a Stage 2, and checked precisely enough to
+  correct the first theory of the bug.** `node_ids = list(nodes_by_id.keys())` came from
+  `source_fidelity_nodes` — the investigation-*shared*, unfiltered node set — and both
+  `compute_clusters` calls (`before`/`after`) ran over that unfiltered list in *both* methods
+  (Stage 1's own fix to `_manual_assertion` only added the two-named-node existence check; it did
+  not narrow this population). The first hypothesis was an aggregate-count leak through
+  `merged`/`split`/`affected` — checked directly and it does **not** hold: `GraphPort.expand`
+  already excludes any edge with either endpoint hidden from `principal`
+  (`test_projection_access_control.py`), so a node the caller cannot see always arrives with no
+  edges and sits in `compute_clusters`' union-find as an untouched singleton at every τ, never
+  registering as affected. The **real** defect is a write, not a read: `compute_clusters` returns
+  a mapping over whatever ids it is given, and persisting that mapping unfiltered let a principal
+  blind to a node silently reset that node's own stored `resolution.cluster_id` — collapsing
+  state a better-cleared principal had legitimately established, purely by calling their own
+  threshold or manual-link endpoint. `tests/services/api/working_set/
+  test_resolution_threshold_access_control.py` proves this against the real adapter, and proves it
+  the way this document requires: reverting the narrowing reintroduces the exact failure.
+
+  **Instance four — `explain_cluster` (`GET .../resolution/explain/{cluster_id}`), found in the
+  same pass, and worse in kind.** This route resolves a `cluster_id` to its member node ids from
+  the same unfiltered `source_fidelity_nodes` population, with nothing checking that every member
+  is visible to the calling principal before returning `member_node_ids` directly — a live route,
+  not a latent one, that handed back a hidden node's own id verbatim rather than merely an
+  aggregate count. Fixed the same way: candidate membership narrowed to `expand`'s own
+  principal-filtered result, an empty result after narrowing raising `ClusterNotFoundError`
+  (indistinguishable from the cluster never existing, standing rule 3).
+
+  No version of `FakeGraphPort` could have caught instance three or four, because none of its variants
+  simulate classification-based filtering at all — a fake that returns everything to everyone
+  cannot fail a test that checks whether everything was returned to everyone.
+
+  **The implication, stated at the strength these four instances actually support, not stronger.**
+  Not "fakes are categorically unable to prove access control" — a fake that itself implements a
+  correct, principal-aware check (as `test_review_routes.py`'s own `_FakeGraphPort.get_node` does)
+  is fine to build on. The implication is narrower and, checked against all four instances, holds
+  exactly: **a fake earns the right to stand in for an access-control claim only when something
+  separately proves the fake's own simulated behaviour matches the real adapter's — and nothing in
+  this repository currently does that for any fake.** Until something does, the practical rule is
+  the same either way: an access-control claim needs a real adapter behind its test, the pattern
+  `tests/resolve/test_projection_access_control.py` and `test_manual_resolution_access_control.py`
+  already establish — compose the real adapter's own filtering with the pure logic under test,
+  rather than trust a fake's silence about `principal` to mean it's handled. Instance three is a
+  second, independent lesson on top of that one: even a *correct* read-time filter (the `expand`
+  call both methods already made) does not automatically make a *write* derived from a broader,
+  unfiltered population safe — the two have to be checked separately, and were not.
+
+  Recorded here, spanning phases, rather than in Phase 3 (which built `FakeGraphPort`), Phase 6
+  (which found instance two) or Phase 6a (which found instance three) alone — precisely so an
+  audit of any of them finds the pattern without having to rediscover it, the same failure mode
+  Phase 5's own `playback`/`multi-track` deferral sat unread in a component header for four phases
+  before this document named it.
+
+- **`deltaClient.integration.test.ts`'s own harness (`apps/workspace/test/glass_test_server.py`,
+  its `seedOneNode` helper) cannot exercise any resolution endpoint that checks real node
+  existence — `manual_link`/`manual_split`/`set_resolution_threshold` all now do, correctly, via
+  `GraphPort`.** Found while trying to add a real WebSocket-level proof that `DeltaReproject.
+  affected_cluster_ids` (Phase 6a Stage 2) round-trips end to end: `POST .../seed` only writes into
+  the *working-set store* (`WorkingSetService.seed`'s own docstring: the caller-supplied objects
+  are never handed to `GraphPort`), never into the real ArcadeDB adapter this harness's app
+  actually runs against. A node seeded this way passes every working-set-store check but fails
+  `GraphPort.get_node`/`expand`'s own seed-node query — a real `404 node_not_in_working_set` from
+  the live server, not a fixture artefact — so `resolution/link`, `resolution/split` and `PUT
+  resolution/threshold` are all, today, untestable through this particular harness. The existing
+  three WebSocket-level tests never needed a real graph node (`add`/live-push/resync all work over
+  the working-set store alone), so this went unnoticed until Stage 2 needed one. **Not fixed
+  here** — closing it means giving the harness (or a small, explicit test-only route) a way to
+  write a real node into `GraphPort` before seeding the working set, which is its own scoped piece
+  of infrastructure work, not a Stage 2 line item. The Python-level proof
+  (`tests/services/api/working_set/test_resolution_threshold_access_control.py`, against the real
+  adapter directly) stands in for the WebSocket-level one in the meantime; `models.ts`'s own
+  `DeltaReproject.affected_cluster_ids` addition is otherwise unverified against the real wire
+  format beyond type-checking.
+
+- **`keyboard.spec.ts`'s walkthrough has no auto-discovery of new canvas actions, and `CLAUDE.md`
+  rule 13's standing rule is a stopgap for that, not a fix.** Confirmed directly while closing
+  Phase 6a Stage 1's own keyboard gap: the spec is a hardcoded sequence of steps, so a new action
+  with no step added is invisible to it — Phase 4's own exit criterion ("keyboard navigation
+  reaches every canvas action") is enforced by a test structurally unable to detect its own
+  violation. Rule 13 makes adding that step the new action's own author's responsibility, in the
+  same change, rather than a follow-up — cheap, and adopted for Stage 2 onward, but it depends on
+  being remembered, which is the exact failure mode it exists to close.
+
+  **The stronger fix, named here rather than built:** an explicit, machine-checked inventory —
+  `GlassCanvas` (and whatever surface Stage 4's Dossier or Phase 7's metrics panel, visual query
+  builder and pathfinder add) exports a registry of its own canvas actions, and a test asserts one
+  `keyboard.spec.ts` case exists per registered action, so a new action with no step fails the
+  build rather than passing it silently. This is real, unscoped engineering — what counts as "an
+  action," how a metrics-panel or query-builder action registers itself the same way a canvas node
+  action does — not a one-line change, which is why it is recorded here rather than folded into
+  rule 13 itself. Whichever phase first adds a second keyboard-driven surface (Stage 4, on current
+  sequencing) is the natural owner, and should either build the inventory then or say explicitly
+  why the rule alone still suffices.
 
 **On Phase 6's own citation of `test_review_routes.py`'s denial tests as evidence access control
 is real (above): checked against this finding, and it survives unnarrowed, because it was never a

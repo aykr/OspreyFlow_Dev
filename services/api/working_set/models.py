@@ -89,7 +89,16 @@ class DeltaReproject(BaseModel):
     """A resolution-threshold change (`PUT /v1/resolution/threshold`,
     `03_CONDUIT_MIDDLEWARE.md` §3.5) re-collapses the working set at the
     new τ; this is how the client learns what moved without re-fetching
-    the whole set."""
+    the whole set.
+
+    `affected_cluster_ids` (Phase 6a Stage 2) is `ClusterDelta.affected_cluster_ids`
+    (`services/resolve/projection.py`) carried through unchanged — every node whose cluster
+    membership moved, mapped to its new cluster id, bounded by `affected` and therefore never a
+    full-working-set payload. It is what lets the Glass update cluster rendering in place instead
+    of re-syncing up to the 50k cap to learn a handful of new `cluster_id` values, and it is
+    already principal-safe by construction: it is derived from the same node population
+    `set_resolution_threshold` filters to the calling principal before clustering, not from the
+    investigation-shared set."""
 
     seq: int
     op: Literal["reproject"] = "reproject"
@@ -97,6 +106,7 @@ class DeltaReproject(BaseModel):
     merged: int = 0
     split: int = 0
     affected: int = 0
+    affected_cluster_ids: dict[NodeId, ClusterId] = Field(default_factory=dict)
 
 
 class DeltaNotice(BaseModel):

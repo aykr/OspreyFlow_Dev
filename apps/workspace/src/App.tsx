@@ -19,6 +19,7 @@ import { Button } from "./design/primitives/Button";
 import { Toast } from "./design/primitives/Toast";
 import { HistoryPanel } from "./history/HistoryPanel";
 import { Inspector } from "./inspector/Inspector";
+import { ResolutionThresholdControl } from "./resolution/ThresholdControl";
 import { resolveNodeCoordinates } from "./map/geometries";
 import { HotspotHistogram } from "./map/HotspotHistogram";
 import { MapView } from "./map/MapView";
@@ -275,6 +276,15 @@ export function App() {
         <Button aria-pressed={view === "ingest"} onClick={() => setView("ingest")}>
           Ingest
         </Button>
+        {view === "graph" && (
+          <ResolutionThresholdControl
+            apiBaseUrl={API_BASE_URL}
+            bearerToken={DEV_BEARER_TOKEN}
+            investigationId={investigationId}
+            store={workingSetRef.current.store}
+            onChangeSummary={setToast}
+          />
+        )}
         {view === "map" && (
           <Button
             aria-pressed={siteWizardOpen}

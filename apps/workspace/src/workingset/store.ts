@@ -22,6 +22,7 @@ import type {
   DeltaAdd,
   DeltaNotice,
   DeltaRemove,
+  DeltaReproject,
   DeltaSnapshot,
   DeltaUpdate,
   WorkingSetDelta,
@@ -44,6 +45,12 @@ export type WorkingSetNodeAttributes = {
   color?: string;
   borderColor?: string;
   borderSize?: number;
+  /** A second, independent `@sigma/node-border` ring (Phase 6a Stage 2) — never the same channel
+   * as `borderColor`/`borderSize`'s own interaction-state ring, so a resolution-cluster indicator
+   * and a hover/selection/on-path ring can both show at once rather than one silently overriding
+   * the other. */
+  clusterBorderColor?: string;
+  clusterBorderSize?: number;
 };
 export type WorkingSetEdgeAttributes = { data: Edge; color?: string; size?: number; label?: string };
 export type WorkingSetGraph = Graph<WorkingSetNodeAttributes, WorkingSetEdgeAttributes>;
@@ -52,6 +59,12 @@ export interface WorkingSetStoreState {
   seq: number;
   filteredCount: number;
   notices: DeltaNotice[];
+  /** The most recent `reproject` delta, `null` until the first one arrives — a narrower signal
+   * than `seq` itself (which changes on every delta) for a consumer that only cares about
+   * resolution-cluster changes: `GlassCanvas`'s own cluster-collapse rendering sweep keys off this
+   * changing rather than re-scanning the whole working set on every unrelated `add`/`update`, and
+   * the change-summary Toast (`App.tsx`) reads its `merged`/`split`/`affected` counts directly. */
+  lastReproject: DeltaReproject | null;
   applyDelta: (delta: WorkingSetDelta) => void;
 }
 
@@ -98,6 +111,23 @@ function applyRemove(graph: WorkingSetGraph, delta: DeltaRemove): void {
   }
 }
 
+function applyReproject(graph: WorkingSetGraph, delta: DeltaReproject): void {
+  // `affected_cluster_ids` (Phase 6a Stage 2) is already bounded to the nodes whose membership
+  // actually moved — every node currently in the graph gets its `data.resolution.cluster_id`
+  // updated in place, the same "nodes merging is a visual event" contract `02_GLASS_FRONTEND.md`'s
+  // resolution-cluster rendering reads off this field. A node named here that isn't (yet) in this
+  // client's own graph — reached via a different principal's broader view, or a race with a
+  // pending `add` — is silently skipped: nothing to annotate until it arrives.
+  for (const [nodeId, clusterId] of Object.entries(delta.affected_cluster_ids)) {
+    if (!graph.hasNode(nodeId)) continue;
+    const current = graph.getNodeAttribute(nodeId, "data");
+    graph.setNodeAttribute(nodeId, "data", {
+      ...current,
+      resolution: { ...current.resolution, cluster_id: clusterId },
+    });
+  }
+}
+
 function applySnapshot(graph: WorkingSetGraph, delta: DeltaSnapshot): void {
   graph.clear();
   for (const node of delta.nodes) {
@@ -123,12 +153,13 @@ function applyDeltaToGraph(graph: WorkingSetGraph, delta: WorkingSetDelta): void
       applySnapshot(graph, delta);
       return;
     case "reproject":
+      // Phase 6a Stage 2: `reproject` never touches working-set *membership* (no node is added
+      // or removed), only which cluster each affected node currently belongs to.
+      applyReproject(graph, delta);
+      return;
     case "notice":
-      // Neither touches working-set membership. `reproject` is Phase 6's
-      // resolution-threshold recollapse — out of scope until `services/
-      // resolve` exists, tolerated here without acting on it. `notice`
-      // never carries content to apply at all (`models.py`'s own
-      // docstring: "a count... never the withheld content").
+      // Never carries content to apply at all (`models.py`'s own docstring: "a count... never
+      // the withheld content").
       return;
   }
 }
@@ -146,18 +177,37 @@ function applyDeltaToGraph(graph: WorkingSetGraph, delta: WorkingSetDelta): void
 function nextStoreState(
   state: WorkingSetStoreState,
   delta: WorkingSetDelta,
-): Pick<WorkingSetStoreState, "seq" | "filteredCount" | "notices"> {
+): Pick<WorkingSetStoreState, "seq" | "filteredCount" | "notices" | "lastReproject"> {
   if (delta.op === "snapshot") {
-    return { seq: delta.seq, filteredCount: delta.filtered_count, notices: [] };
+    return {
+      seq: delta.seq,
+      filteredCount: delta.filtered_count,
+      notices: [],
+      lastReproject: state.lastReproject,
+    };
   }
   if (delta.op === "notice") {
     return {
       seq: delta.seq,
       filteredCount: state.filteredCount + delta.count,
       notices: [...state.notices, delta],
+      lastReproject: state.lastReproject,
     };
   }
-  return { seq: delta.seq, filteredCount: state.filteredCount, notices: state.notices };
+  if (delta.op === "reproject") {
+    return {
+      seq: delta.seq,
+      filteredCount: state.filteredCount,
+      notices: state.notices,
+      lastReproject: delta,
+    };
+  }
+  return {
+    seq: delta.seq,
+    filteredCount: state.filteredCount,
+    notices: state.notices,
+    lastReproject: state.lastReproject,
+  };
 }
 
 export function createWorkingSet(): WorkingSet {
@@ -167,6 +217,7 @@ export function createWorkingSet(): WorkingSet {
     seq: 0,
     filteredCount: 0,
     notices: [],
+    lastReproject: null,
     applyDelta: (delta: WorkingSetDelta) => {
       applyDeltaToGraph(graph, delta);
       set((state) => nextStoreState(state, delta));

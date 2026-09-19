@@ -101,7 +101,32 @@ describe("createWorkingSet", () => {
     expect(graph.order).toBe(1); // notice never touches membership
   });
 
-  it("reproject bumps seq without touching membership (tolerated, not yet acted on)", () => {
+  it("reproject bumps seq and annotates every affected node's cluster id, without touching membership", () => {
+    const { graph, store } = createWorkingSet();
+    store.getState().applyDelta({
+      seq: 1,
+      op: "add",
+      nodes: [makeNode("n1"), makeNode("n2")],
+      edges: [],
+    });
+
+    store.getState().applyDelta({
+      seq: 2,
+      op: "reproject",
+      reason: "resolution_threshold",
+      merged: 1,
+      split: 0,
+      affected: 2,
+      affected_cluster_ids: { n1: "n1", n2: "n1" },
+    });
+
+    expect(graph.order).toBe(2);
+    expect(store.getState().seq).toBe(2);
+    expect(graph.getNodeAttribute("n1", "data").resolution?.cluster_id).toBe("n1");
+    expect(graph.getNodeAttribute("n2", "data").resolution?.cluster_id).toBe("n1");
+  });
+
+  it("reproject silently skips an affected node not (yet) in this client's own graph", () => {
     const { graph, store } = createWorkingSet();
     store.getState().applyDelta({ seq: 1, op: "add", nodes: [makeNode("n1")], edges: [] });
 
@@ -112,9 +137,11 @@ describe("createWorkingSet", () => {
       merged: 1,
       split: 0,
       affected: 2,
+      affected_cluster_ids: { n1: "n1", "not-in-graph": "n1" },
     });
 
     expect(graph.order).toBe(1);
-    expect(store.getState().seq).toBe(2);
+    expect(graph.hasNode("not-in-graph")).toBe(false);
+    expect(graph.getNodeAttribute("n1", "data").resolution?.cluster_id).toBe("n1");
   });
 });

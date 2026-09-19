@@ -37,12 +37,19 @@ DEFAULT_THRESHOLD = THRESHOLD_BALANCED
 @dataclass(frozen=True)
 class ClusterDelta:
     """`01_DOMAIN_MODEL.md` §4's own example text: "3 entities merged, 1 split, 47 nodes
-    affected." — the exact three numbers `DeltaReproject` (`services/api/working_set/models.py`,
-    stubbed in Phase 3 for this) carries."""
+    affected." — `merged`/`split`/`nodes_affected` are the exact three numbers `DeltaReproject`
+    (`services/api/working_set/models.py`) carries as its own summary counts.
+
+    `affected_cluster_ids` is the same `affected` node set's own *new* cluster assignment
+    (Phase 6a Stage 2) — bounded by `nodes_affected` and therefore the same order of magnitude a
+    full snapshot already allows for, not a new unbounded case. It exists so a client holding the
+    working set already can update just the nodes that moved rather than re-sync the whole set (up
+    to the 50k cap) to learn a handful of new `cluster_id` values."""
 
     merged: int
     split: int
     nodes_affected: int
+    affected_cluster_ids: dict[NodeId, ClusterId]
 
 
 def compute_clusters(
@@ -126,4 +133,9 @@ def diff_clusters(before: dict[NodeId, ClusterId], after: dict[NodeId, ClusterId
         if len({after[m] for m in members}) > 1
     )
 
-    return ClusterDelta(merged=merged, split=split, nodes_affected=len(affected))
+    return ClusterDelta(
+        merged=merged,
+        split=split,
+        nodes_affected=len(affected),
+        affected_cluster_ids={node_id: after[node_id] for node_id in affected},
+    )

@@ -49,6 +49,10 @@ export interface DeltaReproject {
   merged: number;
   split: number;
   affected: number;
+  /** Phase 6a Stage 2 — every node whose cluster membership moved, mapped to its new cluster
+   * id, mirroring `services/api/working_set/models.py`'s own field. Bounded by `affected`, never
+   * the full working set. */
+  affected_cluster_ids: Record<string, string>;
 }
 
 export interface DeltaNotice {

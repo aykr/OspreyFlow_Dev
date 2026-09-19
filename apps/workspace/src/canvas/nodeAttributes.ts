@@ -29,6 +29,7 @@ import { cachedNodeSvgDataUri, type StrokeStyle } from "../color/nodeVisual";
 import { mixOklab } from "../color/oklab";
 import {
   BORDER_STRONG_DARK_HEX,
+  BORDER_SUBTLE_DARK_HEX,
   BRASS_HEX,
   resolveChannelHex,
   SURFACE_PANEL_DARK_HEX,
@@ -130,6 +131,25 @@ export function computeNodeGraphAttributes(
         : { borderColor: "transparent", borderSize: 0 };
 
   return { image, color: fillHex, borderColor, borderSize };
+}
+
+export interface ClusterGraphAttributes {
+  clusterBorderColor: string;
+  clusterBorderSize: number;
+}
+
+/**
+ * Phase 6a Stage 2 (B9): "the number and the picture have to agree" — a node currently
+ * collapsed with at least one other under the session's resolution threshold gets a quiet,
+ * always-on second ring (`--border-subtle`, never `--brass`/on-path white: those are interaction
+ * state, this is a standing fact about the node's own resolution status). A singleton cluster
+ * (the ordinary case — no `SAME_AS` above τ) gets no ring at all. Proposed rendering, not spec:
+ * `02_GLASS_FRONTEND.md` has no existing convention for resolution-cluster collapse (its own
+ * hull overlay is for community detection, a different, unrelated grouping).
+ */
+export function computeClusterGraphAttributes(clusterMemberCount: number): ClusterGraphAttributes {
+  if (clusterMemberCount <= 1) return { clusterBorderColor: "transparent", clusterBorderSize: 0 };
+  return { clusterBorderColor: BORDER_SUBTLE_DARK_HEX, clusterBorderSize: 1 };
 }
 
 export interface EdgeRenderContext {

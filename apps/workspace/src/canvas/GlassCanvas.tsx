@@ -24,6 +24,7 @@
 import { createNodeBorderProgram } from "@sigma/node-border";
 import { createNodeImageProgram } from "@sigma/node-image";
 import type { StoreApi } from "zustand/vanilla";
+import { useStore } from "zustand/react";
 import { EdgeLineProgram, createNodeCompoundProgram } from "sigma/rendering";
 import Sigma from "sigma";
 import { useEffect, useRef, useState } from "react";
@@ -38,6 +39,7 @@ import type {
   WorkingSetStoreState,
 } from "../workingset/store";
 import {
+  computeClusterGraphAttributes,
   computeEdgeAttributes,
   computeNodeFrameAttributes,
   computeNodeGraphAttributes,
@@ -53,6 +55,13 @@ const NODE_PROGRAM = createNodeCompoundProgram<WorkingSetNodeAttributes, Working
   }),
   createNodeBorderProgram<WorkingSetNodeAttributes, WorkingSetEdgeAttributes>({
     borders: [
+      // Resolution-cluster ring (Phase 6a Stage 2) drawn first/innermost, so the interaction-state
+      // ring below it — on-path/selected/hover, which changes far more often — stays the outer,
+      // more prominent one. Independent attribute channel: a clustered node can be selected too.
+      {
+        color: { attribute: "clusterBorderColor" },
+        size: { attribute: "clusterBorderSize", defaultValue: 0, mode: "pixels" },
+      },
       {
         color: { attribute: "borderColor" },
         size: { attribute: "borderSize", defaultValue: 0, mode: "pixels" },
@@ -137,6 +146,7 @@ export function GlassCanvas({
   );
   const [lassoActive, setLassoActive] = useState(false);
   const [lassoPoints, setLassoPoints] = useState<{ x: number; y: number }[]>([]);
+  const lastReproject = useStore(store, (s) => s.lastReproject);
 
   const refreshNodeVisualState = (nodeId: string) => {
     if (!graph.hasNode(nodeId)) return;
@@ -151,6 +161,38 @@ export function GlassCanvas({
       onPath: false,
     });
     graph.mergeNodeAttributes(nodeId, attrs);
+  };
+
+  // Phase 6a Stage 2 (B9): "the number and the picture have to agree" — every node sharing a
+  // `resolution.cluster_id` with at least one other is co-located at the cluster's own anchor
+  // (`compute_clusters`' union-find convention: the cluster id *is* one of its own member ids, the
+  // numerically-smallest one) and gets the second, dedicated cluster-ring attributes. A node no
+  // longer (or never) merged gets its own deterministic `seededScatter` home position back —
+  // recomputed on demand rather than stored, so an un-merge (raising τ back up) has a real
+  // position to return to instead of staying wherever a previous merge last placed it.
+  const refreshClusterVisualState = () => {
+    const membersByCluster = new Map<string, string[]>();
+    graph.forEachNode((nodeId, attrs) => {
+      const clusterId = attrs.data.resolution?.cluster_id ?? nodeId;
+      const members = membersByCluster.get(clusterId);
+      if (members) members.push(nodeId);
+      else membersByCluster.set(clusterId, [nodeId]);
+    });
+    for (const [clusterId, members] of membersByCluster) {
+      const clusterAttrs = computeClusterGraphAttributes(members.length);
+      for (const nodeId of members) {
+        graph.mergeNodeAttributes(nodeId, clusterAttrs);
+        if (nodeId === clusterId) continue;
+        const anchorX = members.length > 1 ? graph.getNodeAttribute(clusterId, "x") : undefined;
+        const anchorY = members.length > 1 ? graph.getNodeAttribute(clusterId, "y") : undefined;
+        if (anchorX !== undefined && anchorY !== undefined) {
+          graph.mergeNodeAttributes(nodeId, { x: anchorX, y: anchorY });
+        } else {
+          const home = seededScatter(nodeId);
+          graph.mergeNodeAttributes(nodeId, { x: home.x, y: home.y });
+        }
+      }
+    }
   };
 
   // Assign an initial position and the graph-level (rarely-changing)
@@ -173,6 +215,17 @@ export function GlassCanvas({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph]);
+
+  // Cluster-collapse rendering: runs once every node has its initial `seededScatter` position
+  // (this effect is declared, and therefore runs, after the one above), and again only when a
+  // `reproject` delta actually lands — `lastReproject` is `WorkingSetStoreState`'s own narrower
+  // signal for exactly that, so an unrelated `add`/`update` delta doesn't trigger a working-set-wide
+  // sweep for nothing.
+  useEffect(() => {
+    refreshClusterVisualState();
+    sigmaRef.current?.scheduleRefresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph, lastReproject]);
 
   // Re-derive graph-level visual attributes only for the node(s) whose
   // hover/selection actually changed — not the whole working set.

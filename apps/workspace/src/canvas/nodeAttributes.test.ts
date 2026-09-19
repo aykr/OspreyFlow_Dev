@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { makeEdge, makeNode } from "../testing/fixtures";
 import {
+  computeClusterGraphAttributes,
   computeEdgeAttributes,
   computeNodeFrameAttributes,
   computeNodeGraphAttributes,
@@ -160,5 +161,21 @@ describe("computeEdgeAttributes", () => {
     expect(
       computeEdgeAttributes(edge, { cameraRatio: 0.05, strengthFilterFloor: 0 }).label,
     ).not.toBe("");
+  });
+});
+
+describe("computeClusterGraphAttributes", () => {
+  it("a singleton cluster gets no ring at all", () => {
+    expect(computeClusterGraphAttributes(1)).toEqual({
+      clusterBorderColor: "transparent",
+      clusterBorderSize: 0,
+    });
+  });
+
+  it("a cluster of more than one member gets a quiet, non-interaction ring", () => {
+    const attrs = computeClusterGraphAttributes(3);
+    expect(attrs.clusterBorderSize).toBeGreaterThan(0);
+    expect(attrs.clusterBorderColor).not.toBe("transparent");
+    expect(attrs.clusterBorderColor.toLowerCase()).not.toBe("#c08a34"); // never the selection brass
   });
 });

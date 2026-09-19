@@ -59,6 +59,13 @@ outside the stated scope of the change — a correction to one section must not 
     proves a menu opens but not that an item in it activates; a fake test double that proves a
     pure function's logic but not the access control its real caller depends on. Naming the test
     is part of stating the invariant, not a follow-up.
+13. **A canvas or workspace action is not reachable-by-keyboard until `keyboard.spec.ts` (or its
+    equivalent for a new surface) has a case proving it end to end.** Confirmed directly: that
+    walkthrough is hardcoded, with no auto-discovery of new actions, so Phase 4's own exit
+    criterion ("keyboard navigation reaches every canvas action") is enforced by a test that
+    cannot detect its own violation. A new action's own author owns adding its own step in the
+    same change, the same way rule 4 already makes an access-control test the author's
+    responsibility rather than a follow-up.
 
 ## Conventions
 
