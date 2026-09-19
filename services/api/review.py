@@ -237,16 +237,24 @@ class ExtractionCandidateStore:
     async def get_authorized(
         self, candidate_id: str, principal: Principal
     ) -> ExtractionCandidateRecord:
+        """`owning_unit` is filtered in the query itself, not after fetch — the same
+        `list_for_document`'s own shape, and `CLAUDE.md` rule 3's reasoning even though this store
+        is Conduit-internal Postgres, not one of the four ports: a bare `SELECT *` pulls every
+        column of a candidate derived from an intelligence document into process memory for a
+        principal who is not cleared for it, before anything checks, from where it can reach a log
+        line, an exception trace or a debugger. `WHERE owning_unit = $2` means that row is never
+        fetched at all for a principal outside it — existence and content are refused by the same
+        query, not a query followed by a Python-side check that already holds what it's about to
+        reject."""
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT * FROM extraction_candidates WHERE id = $1", candidate_id
+                "SELECT * FROM extraction_candidates WHERE id = $1 AND owning_unit = $2",
+                candidate_id,
+                principal.org_unit,
             )
         if row is None:
             raise ExtractionCandidateNotFoundError(candidate_id)
-        record = _row_to_record(row)
-        if record.owning_unit != principal.org_unit:
-            raise ExtractionCandidateNotFoundError(candidate_id)
-        return record
+        return _row_to_record(row)
 
     async def mark_reviewed(
         self,
