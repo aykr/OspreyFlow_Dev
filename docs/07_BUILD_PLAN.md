@@ -1258,6 +1258,20 @@ findable only from whichever phase happened to notice it.
   re-checking rather than assumed solved generally the first time a genuinely different surface
   (not a further canvas radial-menu item) needs it.
 
+- **Betweenness has no size-triggered Brandes-sampling fallback, though `02_GLASS_FRONTEND.md`
+  line 206 already documents one should exist ("Betweenness (exact to 20k nodes, Brandes-sampled
+  above)").** Found while building `services/api/compute_routes.py` (Phase 7 Stage 3): the same
+  20,000-node figure is this route's own sync/job boundary, but neither `CentralityRequest`
+  (Stage 2) nor `adapters/compute_rustworkx`'s own `centrality` method carries a sampling
+  parameter or branch — the job-mode path runs the identical exact `rustworkx.
+  betweenness_centrality` call regardless of population size, so a working set at or beyond the
+  sync boundary gets an exact (slower, but not incorrect) result rather than the approximation
+  the spec's own performance table assumes. Not fixed here — real algorithmic work (a sampled
+  Brandes estimator, on both tiers, with its own accuracy/tolerance question for the cross-tier
+  agreement case) that this route's own scope did not extend to invent unprompted, the same
+  "disclose, don't silently fill" instruction the `Endpoint`-to-`Device` gap above and B15's own
+  scoping already follow.
+
 **On Phase 6's own citation of `test_review_routes.py`'s denial tests as evidence access control
 is real (above): checked against this finding, and it survives unnarrowed, because it was never a
 claim about `GraphPort`.** `run_extraction`/`accept_candidate`/`reject_candidate`'s access control

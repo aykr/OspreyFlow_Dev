@@ -65,6 +65,7 @@ from valkey.asyncio import Valkey
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
+from adapters.compute_rustworkx.adapter import ComputeRustworkxAdapter
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from adapters.model_litellm import CONFORMANCE_EMBED_MODEL
@@ -82,6 +83,7 @@ from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme, load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from ports.analytics import AnalyticsPort
+from ports.compute import ComputePort
 from ports.graph import GraphPort
 from ports.model import ModelPort
 from schemas.analytics import (
@@ -113,6 +115,7 @@ from schemas.ingest import (
 from schemas.mapconfig import MapConfig, PublicMapConfig
 from schemas.profile import SourceProfile
 
+from . import compute_routes as compute_routes_module
 from . import dossier as dossier_module
 from . import resolution as resolution_module
 from . import resolution_trigger as resolution_trigger_module
@@ -120,6 +123,13 @@ from . import review as review_module
 from . import search as search_module
 from .audit import AuditWriteError, AuditWriter
 from .auth import PrincipalResolutionError, PrincipalResolver, bearer_scheme
+from .compute_routes import (
+    JOB_TYPE_COMPUTE_METRIC,
+    ComputeMetricAccepted,
+    ComputeMetricName,
+    ComputeMetricRequest,
+    run_compute_metric_job,
+)
 from .config import ApiConfig
 from .dossier import DocumentView
 from .history import (
@@ -272,6 +282,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.site_image_storage = site_image_storage_config()
     app.state.tile_cache_storage = tile_cache_storage_config()
     app.state.analytics = analytics
+    # `06_DECISIONS.md` ADR-029/Phase 7 Stage 3: Tier 2 only, registered here — Tier 1
+    # (`graphology`, a Node harness) and Tier 3 (Phase 8's `cluster` profile, ADR-028) have no
+    # Conduit-side adapter to construct yet. Stateless, same shape as `ComputeRustworkxAdapter`'s
+    # own `tests/conformance/registry.py` factory — no client, no lifecycle to close.
+    compute: ComputePort = ComputeRustworkxAdapter()
+    app.state.compute = compute
     jobs = JobQueue(valkey)
     app.state.jobs = jobs
     # `06_DECISIONS.md` ADR-025: this system's first job-queue worker,
@@ -289,6 +305,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         functools.partial(
             run_resolve_entity_type_job, ontology=ontology, scheme=handling_scheme, valkey=valkey
         ),
+    )
+    job_worker.register(
+        JOB_TYPE_COMPUTE_METRIC, functools.partial(run_compute_metric_job, compute=compute)
     )
     app.state.job_worker = job_worker
     app.state.principal_resolver = PrincipalResolver(config)
@@ -409,6 +428,10 @@ def get_analytics(request: Request) -> AnalyticsPort:
     return request.app.state.analytics  # type: ignore[no-any-return]
 
 
+def get_compute(request: Request) -> ComputePort:
+    return request.app.state.compute  # type: ignore[no-any-return]
+
+
 async def get_principal(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
@@ -432,6 +455,7 @@ SitesDep = Annotated[SiteStore, Depends(get_sites)]
 StudioRecipesDep = Annotated[StudioRecipeStore, Depends(get_studio_recipes)]
 ExtractionCandidatesDep = Annotated[ExtractionCandidateStore, Depends(get_extraction_candidates)]
 ModelDep = Annotated[ModelPort, Depends(get_model)]
+ComputeDep = Annotated[ComputePort, Depends(get_compute)]
 RecipesRepoRootDep = Annotated[Path, Depends(get_recipes_repo_root)]
 HandlingSchemeDep = Annotated[HandlingScheme, Depends(get_handling_scheme)]
 JobsDep = Annotated[JobQueue, Depends(get_jobs)]
@@ -1126,6 +1150,41 @@ async def explain_resolution_route(
         result_cardinality=len(result.pairs),
     )
     return result
+
+
+# --- ComputePort: the metrics panel (Phase 7 Stage 3, 06_DECISIONS.md ADR-029) ----------------
+
+
+@app.post("/v1/investigations/{investigation_id}/compute/{metric}")
+async def compute_metric_route(
+    investigation: AuthorizedInvestigationDep,
+    metric: ComputeMetricName,
+    body: ComputeMetricRequest,
+    principal: PrincipalDep,
+    working_set: WorkingSetDep,
+    graph: GraphDep,
+    compute: ComputeDep,
+    jobs: JobsDep,
+    audit: AuditDep,
+) -> ComputeMetricAccepted:
+    accepted = await compute_routes_module.submit_compute_metric(
+        metric,
+        investigation.id,
+        body,
+        working_set=working_set,
+        graph=graph,
+        principal=principal,
+        compute=compute,
+        jobs=jobs,
+    )
+    await audit.record(
+        principal=principal,
+        action=f"compute_{metric}",
+        investigation_id=investigation.id,
+        resolved_query={"metric": metric, "mode": accepted.mode},
+        result_cardinality=len(accepted.values or accepted.communities or {}),
+    )
+    return accepted
 
 
 # --- extraction and the review queue -----------------------------------------

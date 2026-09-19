@@ -28,7 +28,9 @@ class VisibilityResult:
     #: Only the ids from the caller's own `node_ids` that came back visible — never a neighbour
     #: `expand` reached one hop out that was not itself a requested id.
     nodes: dict[NodeId, Node] = field(default_factory=dict)
-    #: The same `expand` call's own edges, filtered by `edge_types` if given — callers who need no
+    #: The same `expand` call's own edges, filtered by `edge_types` if given and narrowed to those
+    #: whose source and target are both in `nodes` above — never an edge naming a neighbour this
+    #: result's own `nodes` excluded (`tests/services/api/test_access.py`). Callers who need no
     #: edges (a plain visibility check) pass none and pay no extra traversal cost for them.
     edges: list[Edge] = field(default_factory=list)
 
@@ -51,4 +53,12 @@ async def narrow_to_visible(
     )
     requested = set(node_ids)
     nodes = {n.id: n for n in subgraph.nodes if n.id in requested}
-    return VisibilityResult(nodes=nodes, edges=subgraph.edges)
+    # `expand(depth=1)` returns edges reaching one hop past `requested` — an edge whose other
+    # endpoint is a *visible* neighbour, not itself a requested id, can survive the node filter
+    # above while referencing a node this result never includes (no classification is involved: a
+    # hidden neighbour is already excluded by `expand` itself, before this line ever runs — checked
+    # directly, `tests/services/api/test_access.py`'s own docstring has the full distinction). A
+    # caller that feeds these edges onward (e.g. ComputePort, Phase 7 Stage 3) must never be handed
+    # an edge naming a node it wasn't also given.
+    edges = [e for e in subgraph.edges if e.source in nodes and e.target in nodes]
+    return VisibilityResult(nodes=nodes, edges=edges)
