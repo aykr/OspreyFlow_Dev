@@ -11,13 +11,14 @@ its `context()` additionally takes the test's own `EventRecord` fixtures,
 since (unlike the graph store) each test seeds its own event population
 rather than sharing one ontology-applied schema.
 
-`ComputePort` is real from Phase 7 Stage 3: `COMPUTE_PORT_ADAPTERS` holds one
-`ComputeAdapterFactory` for `adapters/compute_rustworkx` (Tier 2) — Tier 1
-(`graphology`, a Node harness per `06_DECISIONS.md` ADR-028) and Tier 3
-(deferred to Phase 8's `cluster` profile, ADR-028) are not registered here
-yet, so the cross-tier agreement case in `compute_port/test_suite.py`
-(needing at least two) still collects zero until Tier 1 joins. `ModelPort`
-is real
+`ComputePort` is real from Phase 7 Stage 3: `COMPUTE_PORT_ADAPTERS` holds a
+`ComputeAdapterFactory` for `adapters/compute_rustworkx` (Tier 2) and one for
+`adapters/compute_graphology_tier1` (Tier 1, a subprocess-driven `node` script
+per `06_DECISIONS.md` ADR-028 — no browser or `Worker` involved, since the
+claim this suite owes is algorithmic agreement, not a threading one) — the
+cross-tier agreement case in `compute_port/test_suite.py` now actually runs
+against both. Tier 3 (deferred to Phase 8's `cluster` profile, ADR-028) is
+still not registered here. `ModelPort` is real
 from Phase 6 Stage 1: `MODEL_PORT_ADAPTERS` holds one `ModelAdapterFactory`
 for `adapters/model_litellm`, calling the pinned conformance model
 (`adapters.model_litellm.CONFORMANCE_MODEL`, `06_DECISIONS.md` ADR-020)
@@ -133,7 +134,20 @@ def _compute_rustworkx_factories() -> list[ComputeAdapterFactory]:
     return [ComputeAdapterFactory(label="compute_rustworkx", context=compute_rustworkx_adapter)]
 
 
+def _compute_graphology_tier1_factories() -> list[ComputeAdapterFactory]:
+    from adapters.compute_graphology_tier1.testing import compute_graphology_tier1_adapter
+
+    return [
+        ComputeAdapterFactory(
+            label="compute_graphology_tier1", context=compute_graphology_tier1_adapter
+        )
+    ]
+
+
 GRAPH_PORT_ADAPTERS: list[GraphAdapterFactory] = _graph_arcadedb_factories()
 ANALYTICS_PORT_ADAPTERS: list[AnalyticsAdapterFactory] = _analytics_duckdb_factories()
-COMPUTE_PORT_ADAPTERS: list[ComputeAdapterFactory] = _compute_rustworkx_factories()
+COMPUTE_PORT_ADAPTERS: list[ComputeAdapterFactory] = [
+    *_compute_rustworkx_factories(),
+    *_compute_graphology_tier1_factories(),
+]
 MODEL_PORT_ADAPTERS: list[ModelAdapterFactory] = _model_litellm_factories()
