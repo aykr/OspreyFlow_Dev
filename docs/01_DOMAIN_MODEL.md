@@ -709,13 +709,14 @@ class ExpandRequest(BaseModel):
 class PathRequest(BaseModel):
     source: NodeId
     target: NodeId
-    max_hops: int = 6
-    k: int = 1                           # k-shortest paths
+    max_hops: int = 6                    # 1..8 — Phase 7 Stage 5, ADR-033: a disclosed,
+                                          # reasoned-but-unmeasured ceiling, not a multiplier
+    k: int = 1                           # k-shortest paths, 1..10
     edge_types: list[str] | None = None
 
 class Path(BaseModel):
-    nodes: list[NodeId]
-    edges: list[EdgeId]
+    nodes: list[Node]                    # hydrated — Phase 7 Stage 5, `06_DECISIONS.md` ADR-033
+    edges: list[Edge]                    # (was list[NodeId]/list[EdgeId] through Phase 6a)
     length: int
 
 class NeighbourhoodStats(BaseModel):

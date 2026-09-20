@@ -975,6 +975,21 @@ and visual query builder compute over that same traversal shape — see ADR-023,
 before this phase's Session 5 (schemas and the `ComputePort` conformance suite) so neither is built
 against a graph topology about to change.
 
+**Read precisely, not assumed from the sentence above: this does not make B15 exit-criterion
+coverage for the pathfinder itself.** B15's own "Platform capability" column
+(`08_ACCEPTANCE_SCENARIOS.md`) names "Endpoint model," not "Pathfinder" — the traversal it
+re-verifies is a direct `GraphPort.expand`-shaped one over the corrected ontology, not a `POST
+/v1/paths` call. The sentence above names the pathfinder only as *why the phase orders ADR-023
+before Session 5* (both consumers would need rework if the topology moved under them after being
+built), not as a claim the pathfinder is itself exercised by any acceptance scenario. Checked
+directly against every B-step's own row rather than inferred from this ordering note: none of
+B1–B20 names "Pathfinder" in its own mechanism column, and Phase 7's own exit criterion (above)
+does not list it. Standing rule 9 makes this permitted — a phase closes against its exit criterion,
+and the pathfinder (Phase 7 Stage 5, `06_DECISIONS.md` ADR-033) is bullet-list work with no
+acceptance-scenario obligation, the same shape hotlists/saved-pattern monitors have until Stage 6
+gives B20 something to run against — recorded here, before the gate, rather than left for a future
+phase's scoping to rediscover from this same ambiguous-looking sentence.
+
 The full scenario, as originally written, is not satisfiable by this phase alone. B6 and B9–B11
 need the Glass surface Phase 6a builds over Phase 6's existing API. B16 and B18 need a cross-case
 timeline overlay and a playback-driven snail trail; Phase 5's own Checkpoint 2 deferred

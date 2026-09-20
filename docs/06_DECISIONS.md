@@ -2457,3 +2457,65 @@ alongside it — not before, and not on a general "canvases are nicer" preferenc
 trigger.
 
 ---
+
+## ADR-033 — `Path.nodes`/`Path.edges` carry hydrated `Node`/`Edge` objects, not bare ids; `PathBuilder`'s own `elementMap()`-inside-`path()` limitation on this adapter
+
+**Status.** Accepted, 20 September 2026.
+
+**The gap, found while tracing how a found path would actually reach the canvas.** `Path.nodes:
+list[NodeId]` and `Path.edges: list[EdgeId]` (`packages/schemas/domain.py`) have carried bare ids
+since Phase 1 — `PathBuilder.render_gremlin`'s own compiled query ended `.path().by("id").by
+("id")`, and `GraphArcadeDBAdapter.paths()` parsed the interleaved result straight into bare-id
+`Path` objects. This was never exercised against a real caller before Phase 7 Stage 5, because
+nothing before the pathfinder read a `Path`'s own `.nodes`/`.edges` for anything beyond a
+conformance assertion on `.length`. A bare id cannot be rendered: `canvas/nodeAttributes.ts`'s own
+`computeNodeGraphAttributes` needs a node's `type` (via `OntologyRegistry.visualFor`) to choose a
+channel/shape at all, and a node not already in the analyst's working set has no other source for
+its own properties. `02_GLASS_FRONTEND.md` §3.1's own "paths render with the on-path node state"
+is not satisfiable from an id alone.
+
+**The fix.** `Path.nodes: list[Node]`, `Path.edges: list[Edge]` — the same hydrated shape
+`Subgraph` already carries. Checked against every existing caller before widening: nothing outside
+`tests/conformance/graph_port/test_suite.py` touches `Path.nodes`/`.edges` today, and every
+existing assertion there reads `.length`, never `.nodes`/`.edges` — this widens cleanly, the same
+"checked, not assumed, that nothing breaks" discipline every other widening in this record follows.
+
+**The real mechanism, checked against a live ArcadeDB instance rather than assumed from the
+compiled-string change alone — the second time this build has found an ArcadeDB-specific Gremlin
+limitation this way, after ADR-030's own `match()` finding.** The natural first attempt —
+`.path().by(elementMap()).by(elementMap())`, hydrating in place of the two `.by("id")` calls —
+fails on this adapter: ArcadeDB's own Gremlin engine raises a server-side `ClassCastException`
+("`T$2` cannot be cast to `java.lang.String`") the moment an `elementMap()` modulator is cycled
+through `path()`'s own interleaved vertex/edge/vertex/... steps, confirmed directly by running the
+query against a live instance, not inferred from the TinkerPop specification. `render_gremlin`
+itself is therefore unchanged — still `.by("id").by("id")`, still exactly the query
+`test_unauthorised_path_length_matches_a_graph_without_the_hidden_hop` already proves is
+access-filtered at every step. Hydration happens in two new, separate follow-up queries
+(`PathBuilder.render_hydrate_nodes_gremlin`/`render_hydrate_edges_gremlin`), anchored at `g.V()`
+with the path's own (already access-proven) ids passed via `within()` — the same "separate query
+per element type" shape `ExpandBuilder.render_nodes_gremlin`/`render_edges_gremlin` already use,
+not a new pattern invented for this. `has_access` is re-applied on both follow-up queries as
+defence in depth, not because it is load-bearing: every id being hydrated already passed the
+original path traversal's own filter before this stage ever sees it.
+
+**Does this weaken the access-control guarantee SECOND (Phase 7 Stage 5's own session) names?**
+No, and for the same reason ADR-030 gives for its own widening: what changed is what is
+*materialised* per step, never which step is allowed onto the path in the first place. The
+`has_access` injection points inside `render_gremlin` are untouched; the two hydration queries
+only ever run against ids the filtered traversal already produced.
+
+**Cost.** One widened schema (`Path`), a compiled-string no-op (`render_gremlin` itself
+unchanged), two new builder methods, and two extra round trips per `paths()` call — bounded by the
+number of distinct nodes/edges across every found path (at most `k × max_hops`, tens of elements,
+not hundreds). `tests/conformance/graph_port/test_suite.py` gains
+`test_paths_returns_hydrated_nodes_and_edges_not_bare_ids`; `01_DOMAIN_MODEL.md` §8's own `Path`
+code block is updated to match, the same synchronisation this record's own precedents (ADR-030 for
+`PatternNode`) already established.
+
+**Revisit if.** A future ArcadeDB release fixes `elementMap()`'s own behaviour inside `path()`
+(worth re-testing before assuming it still fails, the same "revisit sooner" discipline ADR-030's
+own `match()` finding already states) — at which point the two-query hydration could collapse back
+into the single traversal, a performance refinement, not a correctness one; nothing about the
+`Path` schema itself would need to change again.
+
+---
