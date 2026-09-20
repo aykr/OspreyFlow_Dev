@@ -2353,3 +2353,107 @@ delay the move a further, explicitly-named increment rather than force it agains
 moving, the same reasoning that sets this timing in the first place.
 
 ---
+
+## ADR-032 — The visual query builder is a keyboard-native list/palette editor, not a second drawing canvas; `02_GLASS_FRONTEND.md` §3.3 is corrected to match
+
+**Status.** Accepted, 20 September 2026.
+
+**The premise.** `02_GLASS_FRONTEND.md` §3.3 specifies the visual query builder as "a
+node-and-edge pattern the analyst draws" — language that reads, and was built against elsewhere in
+this document, as a second Sigma/graphology drawing surface beside `GlassCanvas`. Phase 7 Stage 4
+built something else: `apps/workspace/src/patterns/QueryBuilderPanel.tsx`, a `Panel` of native
+controls — an entity-type palette that places a pattern node, `GlobalSearch` reused to pin one, a
+list of the pattern's own nodes and edges, and Preview/Run. This was disclosed as a scope choice in
+the implementation session's own summary rather than recorded in `docs/`, which this repository's
+own standing discipline (ADR-019, 022, 023, 027, 028, 029, 030 each correcting spec text the moment
+implementation diverged from it) does not permit a session summary to substitute for. This record
+is that correction, made after the fact rather than before — the deviation is real and already
+built, and what follows is the case for keeping it, not a proposal.
+
+**Why a second canvas was the default assumption, and why it does not survive contact with what
+this repository already knows about `GlassCanvas`.** A drawing surface is the obvious reading of
+"draws," and `02_GLASS_FRONTEND.md` §1 already chose Sigma for exactly this kind of interactive,
+WebGL-rendered graph structure. But a second canvas is not a second instance of a solved problem —
+it is a second instance of every interaction problem the first one has, including ones this build
+has already had to find and fix once. `06_DECISIONS.md`'s own Phase 7 Stage 4 write-up and
+`07_BUILD_PLAN.md`'s "Gaps with no owning phase" both record the Tab-trap: `GlassCanvas.tsx`'s own
+`onKeyDown` intercepted every Tab keydown once its container held focus, discovered only when
+`metrics-panel.spec.ts` needed a keyboard user to leave the canvas and reach a sibling panel, and
+fixed by moving ring-establishment to `onFocus` and ring-cycling off Tab entirely. A second,
+independently-built canvas inherits the same design questions from scratch — what does Tab do
+inside it, what does arrow-key focus mean over a pattern instead of a working set, how does a
+screen-reader user perceive a node with no accessible-tree equivalent — and each is a place the
+same class of defect can recur, proven by the fact that it already has once. `02_GLASS_FRONTEND.md`
+§6's own accessible-alternative-view requirement (Matrix, standing beside the graph canvas) is the
+existing acknowledgement that a canvas is not, by itself, a fully accessible surface — it is made
+one by a second, non-canvas rendering next to it. A list/palette editor does not need that second
+rendering built afterward, because it never leaves the accessible-by-default DOM in the first
+place: every pattern node is a real `<div role="group" tabIndex={0}>` inside ordinary tab order,
+every action is a native `<button>`/`<select>`, and `Combobox`'s own keyboard-selection gap
+(surfaced by this same stage — see the "Gaps with no owning phase" entry) shows that even a
+*non-canvas* control's keyboard path needs checking, not assuming; a canvas starts from further
+back on exactly that axis.
+
+**What a canvas would have bought, named honestly rather than assumed away.** A node-link diagram
+is a genuinely better tool than a list for reasoning about topology once a shape has more than a
+handful of elements — an analyst can see a diamond converge at a glance in a drawing, where a list
+of `PatternEdge` rows requires reading and mentally reconstructing the same shape. This is a real
+cost, not a hypothetical one. It is bounded, though, by what `06_DECISIONS.md` ADR-030 already
+narrowed `MatchBuilder` to compile: one primary chain plus pinned secondary roots converging on a
+variable the primary chain reaches — not an open, arbitrary graph. Every pattern this compiler can
+actually run is, by construction, small and shallow enough that a list renders it in a handful of
+rows (`nodes`, then `edges`, each one line) — B19's own shape is two pinned roots and one discovered
+node, three list rows and two edge rows, legible without a diagram. The list editor's real weakness
+— scaling to a shape with many convergence points or long chains — is a cost this build is not
+currently paying, because ADR-030's own compiler cannot express that shape either. **This is a
+coupled trade, not an independent one:** if ADR-030's own "revisit if" is ever exercised (a second
+graph engine, or an ArcadeDB release that supports a genuine multi-root `match()` join), the
+pattern space this builder needs to represent grows past what a list renders well, and this ADR's
+own conclusion should be re-examined at the same time, not treated as settled independently of it.
+
+**Was "draws" load-bearing in the source journey, or incidental phrasing?** Checked against
+`08_ACCEPTANCE_SCENARIOS.md` directly rather than assumed either way. B19 ("expand to common
+contacts across the two principal endpoints") is Scenario B's own pattern-query step, "derived from
+the City of London Police demonstration journey" per that document's own header — but B19's
+assertion is "the intersection set is returned, with the estimated count shown before running," an
+assertion entirely about *output*, with no reference to drawing, a canvas, or any other input
+mechanism. B20 ("save the pattern as a monitor") is the one CoLP-derived step that names an
+interaction verb at all, and it is "save," not "draw." Nothing in Scenario B's own eighteen-row
+journey, nor in `01_DOMAIN_MODEL.md`'s or `02_GLASS_FRONTEND.md`'s own CoLP citations (both about
+hotlist/watchlist alerting, the *second* of §3.3's three pattern-analysis mechanisms, not the
+visual query builder), needs the query to be *drawn* rather than *composed*. "Draws" reads as the
+same kind of inherited, not-yet-checked-against-this-build's-own-constraints phrasing
+`02_GLASS_FRONTEND.md` §1 already found and overrode once before, for the same reason: that
+section's own opening paragraph records that "both the research brief and the Gemini specification
+nominate Cytoscape.js," a recommendation this document itself rejected once it was checked against
+the platform's actual scale requirement. "Draws" was never checked against this build's own
+compiler narrowing (ADR-030 postdates it) the way the renderer choice was checked against the scale
+requirement — this ADR is that check, arriving after the implementation rather than before it.
+
+**The correction.** `02_GLASS_FRONTEND.md` §3.3's "Visual query builder" bullet is amended in the
+same change that adds this record: "draws" becomes "composes," describing the palette/pin/connect
+list editor `QueryBuilderPanel.tsx` actually is, not the canvas the original phrasing implied.
+
+**On "saveable, shareable and versioned," the same bullet's own third promise.** Checked separately
+and found not built at all, in any of the three: `PatternQuery` has no persistence path, no owner
+or share target, and no version history — Stage 4 built the compose/preview/run loop only. B19's
+own assertion does not need any of the three (it is a one-shot expand-and-return), but B20's does
+("save the pattern as a monitor"), and B20 is named in Phase 7's own exit criterion alongside B19.
+Saving-as-a-monitor (B20, Stage 6's own hotlist/saved-pattern-monitor bullet) and saving a pattern
+as a reusable, shareable, versioned object in its own right (this bullet's own promise) are related
+but not the same capability — a monitor is one specific consumer of a saved pattern, not a
+demonstration that generic save/share/version exists. Recording this in `07_BUILD_PLAN.md`'s own
+Phase 7 known-gaps list rather than treating Stage 6 as an automatic answer to it.
+
+**Cost.** One corrected word in `02_GLASS_FRONTEND.md` §3.3, this record, and a new Phase 7
+known-gaps entry for the still-unbuilt save/share/version promise. No code changes — the
+implementation this ADR describes already exists and is already tested; nothing here proposes
+redoing it.
+
+**Revisit if.** ADR-030's own pinned-root mechanism is superseded by a general multi-root join
+(that ADR's own "revisit if"), at which point the pattern shapes this builder must represent grow
+past what a list renders legibly and this ADR's own list-editor conclusion needs re-examining
+alongside it — not before, and not on a general "canvases are nicer" preference absent that
+trigger.
+
+---

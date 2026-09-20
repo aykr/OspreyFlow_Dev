@@ -1039,6 +1039,17 @@ disclose something — this list did not exist before Stage 1 found it needed on
   registers in Phase 8a's `cluster` profile instead — Phase 7's own exit criterion's "all three
   compute tiers return identical values within tolerance" is therefore demonstrated for two tiers
   inside this phase, not three, disclosed here rather than silently narrowed.
+- **`02_GLASS_FRONTEND.md` §3.3's "Patterns are saveable, shareable and versioned" is not built, in
+  any of the three.** Stage 4 (the visual query builder, `06_DECISIONS.md` ADR-032) built compose,
+  preview and run; `PatternQuery` has no persistence path, no owner or share target, and no version
+  history. Not covered by Stage 6 either, though it looks adjacent: B20 ("save the pattern as a
+  monitor," this phase's own exit criterion alongside B19) needs Stage 6's own hotlist/saved
+  -pattern-monitor mechanism specifically — a monitor is one consumer of a saved pattern, not a
+  demonstration that generic save/share/version exists for a pattern an analyst simply wants to
+  keep or hand to a colleague without scheduling it. Needs its own scoping decision (a stage inside
+  Phase 7, or carried into whichever later phase gets a general saved-object/sharing mechanism, if
+  one is ever generalised past this one bullet) rather than being assumed closed once Stage 6 ships
+  B20.
 
 ---
 
@@ -1313,8 +1324,11 @@ findable only from whichever phase happened to notice it.
   canvas to reach a sibling panel's own controls while the canvas held it: confirmed directly,
   not assumed, while writing `keyboard/metrics-panel.spec.ts` — a walkthrough starting focus on
   the canvas never reached the metrics panel's row buttons at all, in up to 20 Tab presses. Stage
-  4's own query-builder canvas made this the stage's own primary interaction (a second drawing
-  surface beside its own controls, not a cosmetic gap), so it was fixed there: Tab/Shift+Tab are
+  4 fixed it rather than carrying it forward disclosed — **not because its own query-builder
+  surface turned out to be a second canvas needing the same fix** (`06_DECISIONS.md` ADR-032: it
+  is a list/palette editor, never a `GlassCanvas` instance, so it never inherited this defect in
+  the first place), but because a defect already found and left open is Stage 4's own closing
+  pass's business regardless of what its own new surface turned out to need. Tab/Shift+Tab are
   no longer intercepted at all — establishing a ring moved to the container's own `onFocus`
   (reaching it by any means, not a keypress after arriving), and ring-cycling (needed for a
   lasso-selected set of non-adjacent nodes arrow-walk cannot reach) moved to
@@ -1323,6 +1337,45 @@ findable only from whichever phase happened to notice it.
   walkthrough from the panel's first control, not the canvas) is removed in the same change — the
   test now starts from the canvas and reaches the panel's row buttons in the real Tab order, the
   concrete proof the fix works rather than merely disclosing that it should.
+
+- **A third instance of "an automated gate proves only the specific failure it was built to
+  detect, not the class of defect its name suggests" — `Combobox.tsx`'s option selection was
+  `onMouseDown`-only, on a control shipped since Phase 4 (`GlobalSearch`), and both `make
+  glass-a11y` and every keyboard walkthrough written before Stage 4 passed it regardless.** The
+  same shape as the other two instances already recorded in this list — the Fake-based-tests entry
+  above ("each instance was found by someone deliberately going looking for coverage that turned
+  out not to exist; none was found by a test failing") and `keyboard.spec.ts`'s own
+  no-auto-discovery entry above it — but the detecting mechanism this time is neither a fake nor a
+  hand-written walkthrough: it is `axe-core` itself, `glass-a11y`'s own gate
+  (`02_GLASS_FRONTEND.md` §6). `axe-core` checks DOM structure and ARIA semantics — a `role`, a
+  label, a contrast ratio — and a listbox option wired to `onMouseDown` instead of a real activation
+  path is invisible to every one of those checks: the markup an assistive-technology user's own
+  tooling reads (`role="option"`, `aria-selected`) was already correct, and a screen reader would
+  have announced the option correctly. What was missing had no DOM signature at all — a plain
+  JavaScript event-handler choice, checkable only by actually trying to select an option with a
+  keyboard and observing that nothing happens. Found while wiring Stage 4's own `pin-node-from
+  -search` keyboard action (`keyboard/query-builder.spec.ts`): the first walkthrough in this
+  repository's history to attempt a keyboard-driven *selection* out of a `Combobox`, because
+  `GlobalSearch`'s own prior callers (`App.tsx`'s global search box) had never been given a
+  keyboard-only proving test naming a specific selected result. Fixed in the same change
+  (`ArrowDown`/`ArrowUp`/`Enter`, `aria-activedescendant`) rather than worked around per-caller,
+  the same "fix the shared primitive once" instinct `actionRegistry.ts`'s own namespacing fix
+  followed alongside it.
+
+  **The implication, at the strength this instance actually supports.** Not "axe-core is a weak
+  tool" — it correctly proves what it is built to prove, the DOM/ARIA half of the accessibility
+  floor, and continues to be the right gate for that half. The implication is narrower: **a gate's
+  name (`glass-a11y`, "the keyboard suite") is not evidence of what it checks — only reading what it
+  actually inspects is.** `axe-core` inspects structure; it cannot and does not execute an
+  interaction and observe whether anything happened, which is exactly the class of defect a
+  mouse-only handler is. For any gate this build adds next — `check-registry-coverage`-style static
+  checks included — the question to ask before trusting a green result is not "does a gate with the
+  relevant name exist and pass," but "what specific mechanism does this gate exercise, and what
+  adjacent failure, however plausible-sounding under the same gate's name, would still pass it
+  unnoticed." `apps/workspace/keyboard/registryCoverage.test.ts` (Phase 7 Stage 4, alongside this
+  finding) is itself an instance of asking that question proactively: it is a static text scan, not
+  an executed proof, and says so in its own header, rather than letting "the keyboard suite is
+  green" imply more than a static scan can support.
 
 - **Betweenness has no size-triggered Brandes-sampling fallback, though `02_GLASS_FRONTEND.md`
   line 206 already documents one should exist ("Betweenness (exact to 20k nodes, Brandes-sampled

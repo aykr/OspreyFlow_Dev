@@ -228,9 +228,18 @@ the design system will not bend.
 
 Three mechanisms, in increasing order of power:
 
-**Visual query builder.** A node-and-edge pattern the analyst draws, with per-element
-constraints, compiled to Gremlin in the Conduit. Never expose the Gremlin; do show the estimated
-result count before running. Patterns are saveable, shareable and versioned.
+**Visual query builder.** A node-and-edge pattern the analyst composes — an entity-type palette
+places a node, search pins one to an already-known entity, a connect control joins two with an
+edge — with per-element constraints, compiled to Gremlin in the Conduit. **Not a second drawing
+canvas** (`06_DECISIONS.md` ADR-032, Phase 7 Stage 4, correcting this bullet's own earlier
+"draws"): a list/palette editor built from the same native controls as every other panel, chosen
+because the pattern shapes ADR-030's own compiler can express are small enough to read as a list,
+and because a canvas inherits every accessibility problem `GlassCanvas` has already needed fixing
+once (that ADR's own reasoning). Never expose the Gremlin; do show the estimated result count
+before running, principal-filtered exactly like the result itself will be, never a raw or
+unfiltered figure (`CLAUDE.md` rules 3 and 7). **Patterns are saveable, shareable and versioned**
+is this bullet's own unbuilt promise — Stage 4 built compose/preview/run only; see
+`07_BUILD_PLAN.md`'s Phase 7 known-gaps list.
 
 **Hotlists and watchlists.** A list of identifiers with an owner and a review date. Any ingest
 that touches a listed identifier raises an alert. The CoLP journey turns on exactly this — a SIM
