@@ -2050,4 +2050,40 @@ profile this build already requires of its other dependencies — an official pa
 version history, real adoption — at which point Tier 1 could adopt it and the cross-tier
 agreement question reopens on its own terms, not before.
 
+**A second, independent route back to Leiden, recorded now because it is the realistic one and
+costs more to re-derive later than to write down here — not a scope change, nothing below is
+built by this ADR.** Leiden never joins the browser tier at all. Instead, "recompute communities
+with Leiden" becomes an explicit, analyst-initiated action that always runs server-side, at any
+working-set size, while Louvain stays the default computed under the ordinary tier rules
+(browser-first, falling back per `00_ARCHITECTURE.md` §2.3's own boundaries). This beats a
+size-based split on two separate grounds, not one: the browser tier exists to buy interactivity, not
+because computation is otherwise impossible — a small working set can afford a server round-trip
+for an algorithm the browser cannot run at all, the same way `submit_supersede_node`'s own sync/job
+split already treats "runs client-side" as an optimisation, not an entitlement. And an analyst who
+explicitly asks for Leiden is asking for a different answer, not the same one delivered faster — a
+silent reshuffle of community membership the moment a working set crosses the 20,000-node
+sync/job boundary would be the wrong failure mode entirely, mistaking a deliberate choice for
+tier-selection noise.
+
+Three things this design would need, none built here:
+
+1. **A permissively-licensed server-side Leiden — still unverified, not merely unbuilt.** This
+   ADR's own premise check found exactly one MIT candidate, `graspologic.partition.leiden`, at a
+   real cost (39 transitive packages for one function) that was disqualifying for the *default*,
+   always-on path this ADR actually decided. Whether that same cost is acceptable for an
+   *explicit, occasional, analyst-initiated* action is a real question this ADR has not answered
+   either way — the check so far only established that no *free* option exists, not that
+   `graspologic` is the one to take.
+2. **The algorithm recorded alongside each community, the same way a `SAME_AS` edge carries its
+   own `model_version`.** Without it, two analysts working the same investigation could see
+   different community groupings with no way to tell whether that is a Louvain/Leiden split or a
+   real change in the underlying data — exactly the kind of silent inconsistency `provenance`
+   already exists to foreclose everywhere else in this domain model.
+3. **An amendment to `01_DOMAIN_MODEL.md` §10's `CommunityRequest` sketch ("no algorithm choice is
+   exposed").** That constraint was written to prevent *accidental* inconsistency between tiers —
+   two tiers silently disagreeing because a caller picked differently on each. A deliberate,
+   labelled analyst choice, recorded per-community the way item 2 above requires, is a different
+   thing entirely and is not what that sentence was written to forbid; the sentence itself would
+   need to say so, not merely be read around.
+
 ---
