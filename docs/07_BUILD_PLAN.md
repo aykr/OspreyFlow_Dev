@@ -1074,6 +1074,16 @@ needs real multi-node infrastructure this phase's own bullet list does not, so e
 criterion is now a test it can actually run on the infrastructure it has, not a criterion split
 across two without saying so.
 
+**This phase's own close is also when `06_DECISIONS.md` ADR-031 schedules the repository split —
+`docs/` into `spec/` and `process/`, `README.md`/`DEMO_GUIDE.md` to the repository root — not
+before, regardless of whether Phase 8a has closed by then.** Not built as part of this phase's own
+outcome bullets above; recorded here as the trigger point per that ADR's own reasoning (the
+specification needs to have stopped moving shape first, and the move must not wait on Phase 8a's
+own infrastructure uncertainty). The move ships with `scripts/doc_citations_check.py`, a new
+CI-gating check (joining `Makefile`'s `ci` target alongside `schemas-check`/`licence-check`) run
+once before the move as a baseline and again after as the permanent gate — see ADR-031 for why
+both runs matter.
+
 ---
 
 ## Phase 8a — The cluster profile

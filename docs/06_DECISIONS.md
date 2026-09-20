@@ -42,8 +42,9 @@ confirmed.
 | 028 | `ComputePort`'s three tiers: Tier 1 a plain Node script, Tier 3 deferred to Phase 8a | | **Accepted** — 19 Sep 2026, addendum |
 | 029 | Neither compute tier can run Leiden; both run Louvain with a connected-components fix | | **Accepted** — 20 Sep 2026 |
 | 030 | `PatternQuery` widened for a pinned second root; `match()` does not work on ArcadeDB | | **Accepted** — 20 Sep 2026 |
+| 031 | The repository splits into `spec/` and `process/`; `docs/` is dissolved at Phase 8's close | | **Accepted, scheduled** — 20 Sep 2026 |
 
-All thirty records are accepted, including all seven overrides of the input documents.
+All thirty-one records are accepted, including all seven overrides of the input documents.
 `07_BUILD_PLAN.md` is unblocked end to end; nothing in the plan now waits on an open decision.
 This table lagged the actual record count for a stretch of Phase 7 (ADR-022 through ADR-029 were
 written but never added here) — caught and closed in the same change that added ADR-030, not
@@ -2239,5 +2240,116 @@ complete — at which point the general join becomes available and the pinned-ro
 stay as a cheaper special case rather than the only path. Revisit sooner if a real pattern needing
 a true open (unpinned) multi-root join is named by name against an acceptance scenario, the same
 way B19 forced this one.
+
+---
+
+## ADR-031 — The repository splits into `spec/` and `process/`; `docs/` is dissolved; the move waits for Phase 8's close
+
+**Status.** Accepted, 20 September 2026. Scheduled for the end of Phase 8 — not built by this
+record, which documents and schedules the move rather than performing it.
+
+**The problem.** `docs/` today mixes three kinds of thing with no marker distinguishing them: the
+binding specification (`00_ARCHITECTURE.md` through `09_INGEST_STUDIO.md`, `06_DECISIONS.md`,
+`design/tokens.css`), the process record (`SESSION_HANDOVER.md`, `NEXT_STEPS_PHASE7.md`,
+`DESIGN_PROVENANCE.md`, `archive/`), and operator-facing product documentation (`README.md`,
+`DEMO_GUIDE.md`). A maintainer who inherits this repository after the build has no way to tell
+which is which without reading each file — the process record in particular is noise to anyone
+who was not part of the build, and actively misleading if mistaken for a live commitment (a
+handover note describing what a session *intended* to do next reads, to an outsider, exactly like
+a spec).
+
+**The target layout.**
+
+- **`spec/`** — the binding pack: `00_ARCHITECTURE.md` through `09_INGEST_STUDIO.md`, `design/`
+  (`tokens.css`, brand foundations), and `06_DECISIONS.md`. `06_DECISIONS.md` reads like a process
+  record — a log of decisions made over time — but is not one: `CLAUDE.md` makes every accepted
+  ADR binding on the same footing as the numbered spec files, so it belongs in `spec/`, not
+  `process/`, despite its own narrative shape. Filenames are unchanged, including their numeric
+  prefixes — only the leading path segment changes (`docs/01_DOMAIN_MODEL.md` →
+  `spec/01_DOMAIN_MODEL.md`), which is what makes the citation-rewrite below a mechanical prefix
+  swap for the numbered files rather than a rename.
+- **`process/`** — the record: `SESSION_HANDOVER.md`, `NEXT_STEPS_PHASE7.md`,
+  `DESIGN_PROVENANCE.md`, `archive/` (unchanged internally).
+- **Root-level product documentation, not a third top-level directory.** `README.md` and
+  `DEMO_GUIDE.md` are neither binding spec nor process record — they document the finished
+  product for an operator or a visitor, the same class of thing a `CONTRIBUTING.md` or a
+  `CHANGELOG.md` would be. This repository currently has no root-level `README.md` at all (`docs/
+  README.md` is the closest thing, an internal docs-index page) — a real gap for a repository
+  anyone opens on GitHub, where a root `README.md` renders automatically and is the conventional
+  landing page. Both move to the repository root, `README.md` rewritten to serve as that landing
+  page (pointing into `spec/` for the specification, `process/` for the history) rather than
+  staying an internal docs index. This is the smallest structure that actually separates the three
+  kinds of thing named above — inventing a fourth top-level directory for two files would not
+  clarify anything a root-level file doesn't already.
+- `docs/` no longer exists once the move completes; `spec/` and `process/` are its two
+  replacements, not new siblings kept alongside an empty shell.
+
+**One repository with two top-level directories, not two sibling repositories — considered and
+rejected on evidence, not on convention.** `392` source files carry `1,150` citations of the
+specification by filename, in docstrings and comments shaped like `` `01_DOMAIN_MODEL.md` §8.1:
+`match()` takes a bounded `PatternQuery`` ``. Those citations are not decoration: they are how
+this build has actually found some of its own real defects — ADR-023's `Endpoint`/`Device`
+identifier contradiction and Stage 1's `_handling_for` bug were both caught by following a
+docstring's own citation back to the spec and finding the two disagreed. A citation only does
+that job when the cited file is a `git checkout` away, not a submodule pin or a separate clone
+that can silently drift to a different commit. Splitting into two repositories would also end
+spec-and-code co-versioning — code at one commit, spec at another, with nothing to detect the
+drift — in a build whose own central discipline, stated throughout `CLAUDE.md`, is that the
+repository itself is the source of truth. Two top-level directories inside one repository keep
+every one of those 1,150 citations exactly as load-bearing as it is today, at the cost of nothing
+this ADR can find.
+
+**Why the move waits for the end of Phase 8, not Phase 8a, and why that distinction matters.**
+The specification is still genuinely moving — five ADRs accepted in the week this record was
+written alone. Restructuring a moving target multiplies merge conflicts between in-flight spec
+edits and the move itself for no offsetting benefit; better to move a specification that has
+stopped changing shape. Phase 8a, by its own ADR-022 addendum, is *specifically* the part of this
+build that needs real multi-node infrastructure that may not be available on any given host —
+tying a clean-handover step to a phase defined by that uncertainty risks the handover step never
+happening at all. The restructure has no actual dependency on cluster work: nothing about `spec/`
+versus `process/` versus root-level product docs is affected by whether Tier 3 or the two cluster
+adapters are done. Phase 8a's own later spec edits, whenever they land, simply land inside the
+new structure rather than the old one — the ordering (Phase 8 closes, then the move, independent
+of whether Phase 8a has also closed by then) is the one point this record fixes now rather than
+leaving to be re-argued at the time.
+
+**The engineering the move actually requires — an invariant with a test, not a bullet point.**
+1,150 citation rewrites cannot be verified by eye; a single missed or mistyped path is a silent
+dangling reference this build has a standing rule about (rule 12: name the test that would fail).
+The move's own Phase 8 bullet must ship with a checker, running in CI, that confirms every
+spec/process/product path cited anywhere in the repository resolves to a file that actually
+exists — not a one-time manual grep, a permanent gate the same way `scripts/schemas_check.py`
+gates generated-type drift and `scripts/licence_check.py` gates dependency licences.
+
+**A new script, not an extension of either precedent.** `schemas_check.py` (Pydantic-to-TypeScript
+parity) and `licence_check.py` (dependency licence scanning) share this checker's *shape* — a
+small, standalone, `make`-invoked gate — but neither shares its *logic*: there is nothing in
+either script's own domain (type generation, licence text matching) that a citation-path
+existence check would extend rather than bolt on. A new script,
+`scripts/doc_citations_check.py` in the same family, wired into `Makefile`'s own `ci` target
+(`ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check
+conformance-guard`) alongside its two precedents, is the consistent choice — matching the
+established pattern exactly rather than forcing a fit.
+
+**Run before the move, as a baseline, not only after.** The checker's first real run must happen
+*before* any file moves, against the current `docs/`-rooted citations, for the reason named
+directly: a citation that is already dangling today — a stale filename, a typo, a reference to
+something already renamed — would otherwise be indistinguishable from one this move itself broke,
+and the move would take the blame for a pre-existing defect. The sequence: run the checker against
+the pre-move tree and fix whatever it finds first, so the baseline is clean; move the files; run
+the mechanical prefix rewrite across all 1,150 citations; run the checker again as the real
+post-move gate; wire it into `ci` permanently from that point on, not only for this one move.
+
+**Cost.** One new script and its own test fixture (a small tree of files with a deliberately
+dangling citation, proving the checker actually fails on one — the same "prove it can fail"
+discipline this repository already applies to every other invariant). A large, mechanical
+citation-rewrite pass across 392 files, verified by the checker rather than by review. Every
+existing citation of `docs/06_DECISIONS.md`'s own ADR numbers, `01_DOMAIN_MODEL.md`'s section
+numbers, and so on stays correct without further edits, since only the leading path segment
+changes for the numbered files.
+
+**Revisit if.** The specification is still changing shape materially at Phase 8's own close —
+delay the move a further, explicitly-named increment rather than force it against a target still
+moving, the same reasoning that sets this timing in the first place.
 
 ---
