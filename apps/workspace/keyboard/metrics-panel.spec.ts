@@ -67,9 +67,9 @@ test("a keyboard-activated ranked row centres the canvas on the right node", asy
   await expect
     .poll(() => page.evaluate(() => window.__METRICS_PANEL__?.focusedNodeId))
     .toBe("n1");
-  registerCovered("row-select-and-centre");
+  registerCovered("METRICS_PANEL_ACTIONS", "row-select-and-centre");
 });
 
 test("every registered metrics-panel action has its own proving test case above", () => {
-  assertAllCovered(METRICS_PANEL_ACTIONS);
+  assertAllCovered("METRICS_PANEL_ACTIONS", METRICS_PANEL_ACTIONS);
 });

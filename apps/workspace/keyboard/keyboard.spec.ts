@@ -55,7 +55,7 @@ test("focusing the canvas establishes a starting node when nothing is selected y
     .toBe("n0");
   const selection = await page.evaluate(() => window.__KEYBOARD__?.selection);
   expect(selection).toEqual(["n0"]);
-  registerCovered("focus-establishes-ring");
+  registerCovered("CANVAS_ACTIONS", "focus-establishes-ring");
 });
 
 test("Tab leaves the canvas and reaches the next real focusable element on the page", async ({
@@ -80,7 +80,7 @@ test("Tab leaves the canvas and reaches the next real focusable element on the p
   await page.keyboard.press("Tab");
 
   await expect(page.locator("#after-canvas")).toBeFocused();
-  registerCovered("tab-leaves-the-canvas");
+  registerCovered("CANVAS_ACTIONS", "tab-leaves-the-canvas");
 });
 
 test("arrow keys walk from the focused node to a real neighbour", async ({ page }) => {
@@ -96,7 +96,7 @@ test("arrow keys walk from the focused node to a real neighbour", async ({ page 
   await expect
     .poll(() => page.evaluate(() => window.__KEYBOARD__?.focused))
     .toBe("n1");
-  registerCovered("arrow-walk-forward");
+  registerCovered("CANVAS_ACTIONS", "arrow-walk-forward");
 });
 
 test("backslash opens the radial menu as a keyboard-navigable list", async ({ page }) => {
@@ -112,7 +112,7 @@ test("backslash opens the radial menu as a keyboard-navigable list", async ({ pa
 
   await page.keyboard.press("Escape");
   await expect(menu).toBeHidden();
-  registerCovered("backslash-open-menu");
+  registerCovered("CANVAS_ACTIONS", "backslash-open-menu");
 });
 
 test("Enter expands the focused node — a real network call, not a stub", async ({ page }) => {
@@ -141,7 +141,7 @@ test("Enter expands the focused node — a real network call, not a stub", async
   expect(expandRequestBody).toMatchObject({
     request: { node_ids: ["n1"], depth: 1 },
   });
-  registerCovered("enter-expand");
+  registerCovered("CANVAS_ACTIONS", "enter-expand");
 });
 
 test("Ctrl+ArrowRight cycles the focused node forward through an existing ring", async ({
@@ -162,7 +162,7 @@ test("Ctrl+ArrowRight cycles the focused node forward through an existing ring",
   await expect
     .poll(() => page.evaluate(() => window.__KEYBOARD__?.focused))
     .toBe("n0");
-  registerCovered("ctrl-arrow-cycles-ring");
+  registerCovered("CANVAS_ACTIONS", "ctrl-arrow-cycles-ring");
 });
 
 test("Space, then the radial list, reaches manual link — a real POST, not a stub", async ({
@@ -193,7 +193,7 @@ test("Space, then the radial list, reaches manual link — a real POST, not a st
   await page.keyboard.press("ArrowRight"); // focus n1 (n0's only neighbour) — walking does not
   // itself change the ring, only `focused`, which is exactly why Space is needed at all.
   await page.keyboard.press("Space"); // add n1 — ring: {n0, n1}
-  registerCovered("space-toggle-ring-membership");
+  registerCovered("CANVAS_ACTIONS", "space-toggle-ring-membership");
 
   await expect
     .poll(() => page.evaluate(() => window.__KEYBOARD__?.selection.sort()))
@@ -217,7 +217,7 @@ test("Space, then the radial list, reaches manual link — a real POST, not a st
   await expect.poll(() => linkRequestBody !== null).toBe(true);
   expect(linkRequestBody).toMatchObject({ node_a: "n1", node_b: "n0" });
   await expect(menu).toBeHidden(); // RadialMenu closes on select, same as a mouse click
-  registerCovered("menu-item-manual-link");
+  registerCovered("CANVAS_ACTIONS", "menu-item-manual-link");
 });
 
 test("the radial list also reaches Split, not only Link", async ({ page }) => {
@@ -256,7 +256,7 @@ test("the radial list also reaches Split, not only Link", async ({ page }) => {
   await expect.poll(() => splitRequestBody !== null).toBe(true);
   expect(splitRequestBody).toMatchObject({ node_a: "n1", node_b: "n0" });
   await expect(menu).toBeHidden();
-  registerCovered("menu-item-manual-split");
+  registerCovered("CANVAS_ACTIONS", "menu-item-manual-split");
 });
 
 test("the radial list's own auto-focused first item is itself reachable and activatable", async ({
@@ -292,7 +292,7 @@ test("the radial list's own auto-focused first item is itself reachable and acti
   await expect.poll(() => expandRequestBody !== null).toBe(true);
   expect(expandRequestBody).toMatchObject({ request: { node_ids: ["n0"], depth: 1 } });
   await expect(menu).toBeHidden();
-  registerCovered("menu-item-expand-by-edge-type");
+  registerCovered("CANVAS_ACTIONS", "menu-item-expand-by-edge-type");
 });
 
 test("the radial list reaches Explain cluster, and the explanation actually renders — CLAUDE.md rule 13", async ({
@@ -340,7 +340,7 @@ test("the radial list reaches Explain cluster, and the explanation actually rend
   await expect
     .poll(() => page.evaluate(() => window.__KEYBOARD__?.focused))
     .toBe("n2");
-  registerCovered("arrow-walk-backward"); // the `ArrowLeft`/`ArrowUp` branch itself, distinct from
+  registerCovered("CANVAS_ACTIONS", "arrow-walk-backward"); // the `ArrowLeft`/`ArrowUp` branch itself, distinct from
   // `arrow-walk-forward`'s own `ArrowRight`/`ArrowDown` branch above
 
   await page.keyboard.press("\\"); // opens the list menu on n2, the focused node
@@ -359,7 +359,7 @@ test("the radial list reaches Explain cluster, and the explanation actually rend
   await expect.poll(() => explainRequestUrl !== null).toBe(true);
   expect(explainRequestUrl).toContain("/resolution/explain/n2");
   await expect(menu).toBeHidden(); // RadialMenu closes on select, same as a mouse click
-  registerCovered("menu-item-explain-cluster");
+  registerCovered("CANVAS_ACTIONS", "menu-item-explain-cluster");
 
   // Reached the network call; now prove it actually rendered, not just fired — the same bar
   // `explainView.test.ts` sets for the leak-defense filter this overlay's own `Table` is built on.
@@ -398,7 +398,7 @@ test("Escape dismisses the cluster-explanation overlay, reachable by keyboard al
   await page.keyboard.press("Escape");
 
   await expect(page.getByText("Cluster explanation")).toBeHidden();
-  registerCovered("overlay-dismiss-cluster-explain");
+  registerCovered("CANVAS_ACTIONS", "overlay-dismiss-cluster-explain");
 });
 
 test("the radial list reaches View messages on an Endpoint node", async ({ page }) => {
@@ -435,9 +435,9 @@ test("the radial list reaches View messages on an Endpoint node", async ({ page 
   await expect
     .poll(() => page.evaluate(() => window.__KEYBOARD__?.viewMessagesNodeId))
     .toBe("n4");
-  registerCovered("menu-item-view-messages");
+  registerCovered("CANVAS_ACTIONS", "menu-item-view-messages");
 });
 
 test("every registered keyboard action has its own proving test case above", () => {
-  assertAllCovered(CANVAS_ACTIONS);
+  assertAllCovered("CANVAS_ACTIONS", CANVAS_ACTIONS);
 });

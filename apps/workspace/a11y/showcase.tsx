@@ -197,6 +197,32 @@ function Showcase() {
           <span>Community hull (cluster 3)</span>
         </div>
       </Panel>
+      {/* Phase 7 Stage 4: the visual query builder's own representative sample — one pinned node,
+          one node in the "needs pinning" state (a dashed `--warning` border plus an inline
+          `role="status"` cue, the newest, least-proven-by-eye state this stage introduces and
+          therefore the one most worth checking here), and the preview/run controls. Static
+          markup with the same primitives `patterns/QueryBuilderPanel.tsx` uses, not the live
+          component itself — this file's own convention throughout, see the Metrics panel above. */}
+      <Panel title="Query builder">
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-8)" }}>
+          <div style={{ border: "1px solid var(--border)", borderRadius: 4, padding: "var(--sp-4)" }}>
+            <strong>a</strong>: Person · n1
+          </div>
+          <div style={{ border: "2px dashed var(--warning)", borderRadius: 4, padding: "var(--sp-4)" }}>
+            <strong>b</strong>: Person
+            <span role="status" style={{ display: "block" }}>
+              Second root — pin to a known node or connect it to the pattern
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: "var(--sp-8)" }}>
+            <Button type="button">Preview</Button>
+            <Button type="button" variant="primary">
+              Run
+            </Button>
+          </div>
+          <p>~12 matches</p>
+        </div>
+      </Panel>
     </div>
   );
 }

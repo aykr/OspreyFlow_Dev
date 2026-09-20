@@ -5,6 +5,7 @@ import type {
   EdgeTypeDef,
   GeoBin,
   Node,
+  OntologySchema,
   PublicMapConfig,
 } from "../../../packages/schemas/generated";
 import { fetchGeoBins } from "./analytics/api";
@@ -22,6 +23,7 @@ import { HistoryPanel } from "./history/HistoryPanel";
 import { Inspector } from "./inspector/Inspector";
 import { computeCommunityHulls } from "./metrics/hulls";
 import { MetricsPanel } from "./metrics/MetricsPanel";
+import { QueryBuilderPanel } from "./patterns/QueryBuilderPanel";
 import { ResolutionThresholdControl } from "./resolution/ThresholdControl";
 import { resolveNodeCoordinates } from "./map/geometries";
 import { HotspotHistogram } from "./map/HotspotHistogram";
@@ -91,6 +93,11 @@ export function App() {
   const [communities, setCommunities] = useState<Record<string, string> | null>(null);
   const [ontology, setOntology] = useState<OntologyRegistry | null>(null);
   const [edgeTypes, setEdgeTypes] = useState<EdgeTypeDef[]>([]);
+  // The full schema, not only `OntologyRegistry`'s own channel/shape lookup — Phase 7 Stage 4's
+  // `QueryBuilderPanel` needs the entity/edge type *names* to populate its own palette and connect
+  // controls, which `OntologyRegistry` was never built to expose. Captured from the same `/v1
+  // /ontology` fetch `edgeTypes` already comes from, not a third redundant request.
+  const [ontologySchema, setOntologySchema] = useState<OntologySchema | null>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -135,7 +142,10 @@ export function App() {
       headers: { Authorization: `Bearer ${DEV_BEARER_TOKEN}` },
     })
       .then((r) => r.json())
-      .then((schema) => setEdgeTypes(schema.edge_types));
+      .then((schema: OntologySchema) => {
+        setEdgeTypes(schema.edge_types);
+        setOntologySchema(schema);
+      });
     void fetchMapConfig(API_BASE_URL, DEV_BEARER_TOKEN).then(setMapConfig);
   }, []);
 
@@ -489,6 +499,13 @@ export function App() {
               graph={workingSetRef.current.graph}
               onFocusNode={(nodeId) => glassCanvasRef.current?.focusOnNode(nodeId)}
               onCommunitiesChange={setCommunities}
+            />
+          )}
+          {view === "graph" && ontologySchema && (
+            <QueryBuilderPanel
+              apiBaseUrl={API_BASE_URL}
+              bearerToken={DEV_BEARER_TOKEN}
+              schema={ontologySchema}
             />
           )}
         </div>

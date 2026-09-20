@@ -6,31 +6,66 @@
  * no longer defensible (`GlassCanvas.tsx` already had four actions no existing test covered,
  * checked directly, before this stage added anything).
  *
- * Each keyboard-driven surface exports a plain list of its own action ids; a `test()` that
- * actually proves one calls `registerCovered(id)` at the point it does so — call-site
- * registration, not title-regex matching against test names, which is brittle to a rename. A
- * final assertion checks every registered id was covered, failing with the exact missing ids
- * rather than passing silently.
+ * Each keyboard-driven surface exports a plain list of its own action ids, declared via
+ * `defineActionRegistry` below; a `test()` that actually proves one calls `registerCovered(name,
+ * id)` at the point it does so — call-site registration, not title-regex matching against test
+ * names, which is brittle to a rename. A final assertion in that surface's own spec file checks
+ * every registered id was covered, failing with the exact missing ids rather than passing
+ * silently.
  *
- * Module state, not a class instance, deliberately: `keyboard.spec.ts` runs its tests
- * sequentially in one worker (this project's own `keyboard/playwright.config.ts`), so this
- * module's state is shared across every test in the file — a `registerCovered` call in an
- * earlier test is visible to the final assertion in the last one. A parallel-worker config would
- * break this; if `playwright.config.ts` ever gains one, this file's own single-module assumption
- * needs revisiting first.
+ * **Namespaced per registry, not one flat `Set<string>` — Phase 7 Stage 4's own fix.** A third
+ * registry (`QUERY_BUILDER_ACTIONS`) exposed a gap the first two (`CANVAS_ACTIONS`,
+ * `METRICS_PANEL_ACTIONS`) never had to answer: nothing stopped a `registerCovered` call in one
+ * surface's spec file from satisfying a *different* surface's `assertAllCovered`, if their id
+ * strings ever collided — the two existing files avoided it only because `CANVAS_ACTIONS` and
+ * `METRICS_PANEL_ACTIONS` happen not to share a string, not because anything enforced it. Keying
+ * `covered` by registry name closes that by construction: a call for the wrong registry can never
+ * satisfy this one's assertion, regardless of what `playwright.config.ts` does with workers.
+ *
+ * **`defineActionRegistry` self-registers into `ALL_REGISTRIES`** so `check-registry-coverage.mjs`
+ * (a plain Node script, not a Playwright test — see its own header) can enumerate every declared
+ * registry by statically importing this module, and fail the build when one has no
+ * `assertAllCovered` call reaching it anywhere under `apps/workspace/keyboard/*.spec.ts` — the gap
+ * a purely runtime check cannot close, since nothing forces a *test* asserting a registry's own
+ * coverage to exist merely because the registry itself does.
  */
 
-const covered = new Set<string>();
-
-export function registerCovered(id: string): void {
-  covered.add(id);
+export interface ActionRegistry {
+  readonly name: string;
+  readonly actions: readonly string[];
 }
 
-export function assertAllCovered(actions: readonly string[]): void {
-  const missing = actions.filter((id) => !covered.has(id));
+export const ALL_REGISTRIES: ActionRegistry[] = [];
+
+export function defineActionRegistry<const T extends readonly string[]>(
+  name: string,
+  actions: T,
+): T {
+  ALL_REGISTRIES.push({ name, actions });
+  return actions;
+}
+
+const covered = new Map<string, Set<string>>();
+
+function coveredSetFor(registryName: string): Set<string> {
+  let set = covered.get(registryName);
+  if (!set) {
+    set = new Set<string>();
+    covered.set(registryName, set);
+  }
+  return set;
+}
+
+export function registerCovered(registryName: string, id: string): void {
+  coveredSetFor(registryName).add(id);
+}
+
+export function assertAllCovered(registryName: string, actions: readonly string[]): void {
+  const seen = coveredSetFor(registryName);
+  const missing = actions.filter((id) => !seen.has(id));
   if (missing.length > 0) {
     throw new Error(
-      `Keyboard action(s) registered with no proving test case: ${missing.join(", ")}`,
+      `${registryName}: keyboard action(s) registered with no proving test case: ${missing.join(", ")}`,
     );
   }
 }
@@ -47,7 +82,7 @@ export function assertAllCovered(actions: readonly string[]): void {
  * mouse-then-keyboard session isn't stuck, but this file cannot honestly claim to test entering
  * that state, so it does not claim to test leaving it either.
  */
-export const CANVAS_ACTIONS = [
+export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   "focus-establishes-ring",
   "tab-leaves-the-canvas",
   "ctrl-arrow-cycles-ring",
@@ -62,7 +97,7 @@ export const CANVAS_ACTIONS = [
   "menu-item-explain-cluster",
   "menu-item-view-messages",
   "overlay-dismiss-cluster-explain",
-] as const;
+] as const);
 
 /**
  * `metrics/MetricsPanel.tsx`'s own keyboard-reachable actions — Phase 7 Stage 3, a second and
@@ -75,4 +110,30 @@ export const CANVAS_ACTIONS = [
  * type="range">` — only "select a row" is real, canvas-touching application logic (a camera pan
  * via `GlassCanvasHandle.focusOnNode`), which is why it alone is listed here.
  */
-export const METRICS_PANEL_ACTIONS = ["row-select-and-centre"] as const;
+export const METRICS_PANEL_ACTIONS = defineActionRegistry("METRICS_PANEL_ACTIONS", [
+  "row-select-and-centre",
+] as const);
+
+/**
+ * The visual query builder's own keyboard-reachable actions — Phase 7 Stage 4, the third
+ * keyboard-driven surface (`01_DOMAIN_MODEL.md` §8.1 / `06_DECISIONS.md` ADR-030's own analyst
+ * -facing surface). `pin-node-from-search` and `second-root-needs-pinning-announced` are the two
+ * actions proving ADR-030's own "explained at the point of drawing" standard end to end by
+ * keyboard: pinning a second root is reachable without a mouse, and the live "needs pinning" cue
+ * is announced to a screen reader the moment it appears, not only rendered visually. Canvas
+ * pan/zoom/drag-to-place has no keyboard equivalent for the same disclosed reason `CANVAS_ACTIONS`
+ * already gives its own pan/zoom/lasso — placing a node by keyboard goes through the ontology
+ * palette's own list, not a drag gesture. Reaching the entity-type `Select`/search `Combobox` by
+ * Tab is not itself listed — a native form control's own Tab-reachability is the browser's
+ * guarantee, not this codebase's, the same exemption `MetricsPanel`'s own selects already
+ * established; only what happens *after* a control is reached (a real state mutation, a real
+ * network call) needs a case here.
+ */
+export const QUERY_BUILDER_ACTIONS = defineActionRegistry("QUERY_BUILDER_ACTIONS", [
+  "palette-add-variable-node",
+  "pin-node-from-search",
+  "second-root-needs-pinning-announced",
+  "delete-focused-pattern-element",
+  "run-preview",
+  "submit-run",
+] as const);

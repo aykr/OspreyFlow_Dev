@@ -1,0 +1,149 @@
+// A scripted, keyboard-only walkthrough of the visual query builder — Phase 7 Stage 4, `CLAUDE.md`
+// rule 13 applied to the third keyboard-driven surface (`keyboard/query-builder-harness.tsx`'s own
+// docstring has the reasoning for a separate harness/spec pair rather than folding into either
+// existing one). Like the other two, this file never calls `page.mouse`/`.click()`.
+//
+// **What each case proves, precisely — real application logic, not a browser default.** Every
+// action below mutates `patterns/store.ts`'s own pattern state or crosses a real network call; the
+// panel's native `<select>`/`<button>` controls that carry no logic of their own (choosing an
+// entity type, the Connect selects) get no case here, the same "a native control needs no proving
+// test case" exemption `MetricsPanel`'s own selects already established. `/v1/search`,
+// `/v1/patterns/preview` and `/v1/patterns/run` are intercepted so every result is deterministic —
+// the same "real network call, mocked at the transport" shape `metrics-panel.spec.ts` uses for
+// `/compute/degree`.
+import { expect, test, type Page } from "@playwright/test";
+
+import { assertAllCovered, QUERY_BUILDER_ACTIONS, registerCovered } from "./actionRegistry";
+
+const SEARCH_NODE = {
+  id: "n42",
+  type: "Person",
+  properties: { family_name: "Searched" },
+  provenance: {
+    state: "asserted",
+    sources: [{ document_id: "fixture-doc", locator: "p.1", excerpt_hash: "a".repeat(64) }],
+    first_seen: "2026-01-01T00:00:00Z",
+  },
+  handling: { classification: "OFFICIAL", handling_code: "P", originator: "unit-1", owning_unit: "unit-1" },
+  audit: { created_at: "2026-01-01T00:00:00Z", created_by: "fixture" },
+};
+
+async function tabUntil(page: Page, matches: () => Promise<boolean>, maxTabs = 20): Promise<void> {
+  for (let i = 0; i < maxTabs; i++) {
+    if (await matches()) return;
+    await page.keyboard.press("Tab");
+  }
+  if (!(await matches())) throw new Error(`Tab never reached the expected element within ${maxTabs} presses`);
+}
+
+async function tabToButtonNamed(page: Page, name: string, maxTabs = 20): Promise<void> {
+  await tabUntil(
+    page,
+    async () => {
+      const active = await page.evaluate(() => ({
+        tag: document.activeElement?.tagName,
+        text: document.activeElement?.textContent ?? "",
+      }));
+      return active.tag === "BUTTON" && active.text.includes(name);
+    },
+    maxTabs,
+  );
+}
+
+test("Add variable places a new, unpinned pattern node", async ({ page }) => {
+  await page.goto("/keyboard/query-builder-harness.html");
+  await tabToButtonNamed(page, "Add variable");
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByRole("group", { name: /Pattern node a: Person/ })).toBeVisible();
+  registerCovered("QUERY_BUILDER_ACTIONS", "palette-add-variable-node");
+});
+
+test("selecting a search result via the keyboard pins it as a new pattern node", async ({ page }) => {
+  await page.route("**/*/v1/search", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ nodes: [SEARCH_NODE] }),
+    });
+  });
+
+  await page.goto("/keyboard/query-builder-harness.html");
+  const search = page.getByRole("combobox", { name: "Search entities, identifiers, documents" });
+  await search.focus();
+  await search.fill("search");
+  await page.getByRole("option", { name: /Person: n42/ }).waitFor();
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByRole("group", { name: /Pattern node a: Person · n42/ })).toBeVisible();
+  registerCovered("QUERY_BUILDER_ACTIONS", "pin-node-from-search");
+});
+
+test("a second, unpinned root is announced live, not only disclosed at Run", async ({ page }) => {
+  await page.goto("/keyboard/query-builder-harness.html");
+  await tabToButtonNamed(page, "Add variable");
+  await page.keyboard.press("Enter"); // var a — the primary root
+  await tabToButtonNamed(page, "Add variable");
+  await page.keyboard.press("Enter"); // var b — a second, disconnected, unpinned root
+
+  await expect(page.getByRole("status")).toHaveText(
+    "Second root — pin to a known node or connect it to the pattern",
+  );
+  registerCovered("QUERY_BUILDER_ACTIONS", "second-root-needs-pinning-announced");
+});
+
+test("Delete on a focused pattern node removes it", async ({ page }) => {
+  await page.goto("/keyboard/query-builder-harness.html");
+  await tabToButtonNamed(page, "Add variable");
+  await page.keyboard.press("Enter");
+
+  const node = page.getByRole("group", { name: /Pattern node a: Person/ });
+  await expect(node).toBeVisible();
+  await node.focus();
+  await page.keyboard.press("Delete");
+
+  await expect(node).toHaveCount(0);
+  registerCovered("QUERY_BUILDER_ACTIONS", "delete-focused-pattern-element");
+});
+
+test("Preview reports the principal-filtered estimate before Run is ever pressed", async ({ page }) => {
+  await page.route("**/*/v1/patterns/preview", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ estimated_count: 12, is_floor: false }),
+    });
+  });
+
+  await page.goto("/keyboard/query-builder-harness.html");
+  await tabToButtonNamed(page, "Add variable");
+  await page.keyboard.press("Enter");
+  await tabToButtonNamed(page, "Preview");
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByText("~12 matches")).toBeVisible();
+  registerCovered("QUERY_BUILDER_ACTIONS", "run-preview");
+});
+
+test("Run executes the pattern and reports the matched count", async ({ page }) => {
+  await page.route("**/*/v1/patterns/run", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ mode: "sync", subgraph: { nodes: [], edges: [] }, matched_count: 12 }),
+    });
+  });
+
+  await page.goto("/keyboard/query-builder-harness.html");
+  await tabToButtonNamed(page, "Add variable");
+  await page.keyboard.press("Enter");
+  await tabToButtonNamed(page, "Run");
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByText("12 node(s) matched.")).toBeVisible();
+  registerCovered("QUERY_BUILDER_ACTIONS", "submit-run");
+});
+
+test("every registered query-builder action has its own proving test case above", () => {
+  assertAllCovered("QUERY_BUILDER_ACTIONS", QUERY_BUILDER_ACTIONS);
+});
