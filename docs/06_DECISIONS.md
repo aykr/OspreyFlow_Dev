@@ -1261,6 +1261,47 @@ resolution controls is a checkable exit item rather than an assumed side-effect 
 did some Glass work" — the same discipline ADR-018 established once, now applied to the surface
 Phase 6 left unbuilt.
 
+**Addendum, 20 September 2026 — Phase 8 has grown twice more since the addendum above, and this
+time the growth is not the same shape.** This ADR's own first addendum weighed B16/B18 against
+Phase 5a's precedent and correctly found them absorbable: two small, incremental features added to
+components Phase 5 already built, not a new surface needing its own phase. Since then, Phase 8 has
+absorbed two more additions, and a third finding, none processed against that same question until
+now:
+
+- **ComputePort Tier 3** (`06_DECISIONS.md` ADR-028): GraphFrames on Spark or HugeGraph Vermeer,
+  registering in Phase 8's `cluster` profile because the dev host cannot host it at all.
+- **The Postgres connection-pool exhaustion finding** (Phase 7 Stage 1): two live Conduit
+  instances together exhausted `max_connections` — a hardening requirement that lands on the
+  cluster profile by definition (concurrent instances are what a cluster profile is), and one no
+  bullet in Phase 8's own list currently names.
+- B16/B18 (above) remain correctly absorbed and are not reopened by this addendum.
+
+**The finding, and why it is not the same question the addendum above already answered.** That
+addendum's own test was cost — bullet count, added surface, whether Phase 8's existing closing
+pass could absorb the work without comment. Tier 3 and the pool-hardening finding fail a
+different, sharper test: verification profile, not size. Judgements/assumptions, export, the
+yardstick loader, the browser harness/admin console, the headless CLI and the two existing
+adapters (`graph_janusgraph`, `analytics_clickhouse`) are all provable on `local-lite`, or on a
+docker-compose cluster-profile stand-in for one. Tier 3 cannot be — ADR-028's own finding was that
+a local Spark/HugeGraph Vermeer session cannot coexist with this host's other services at all, not
+merely that it is slow or awkward there. The pool-hardening finding is the same shape: it only
+exists because concurrent instances are the cluster profile's own defining property, so it cannot
+be demonstrated anywhere else either. Phase 8's own exit criterion — both acceptance scenarios
+pass unchanged on `local-lite` and on `cluster` — now depends on two items that share a distinct,
+harder verification story from everything else the exit criterion already covers, and nothing in
+Phase 8's own bullet list names the pool-hardening item at all.
+
+**Proposed, not decided — pending Ayan's own call, the same standing this ADR gives every option
+it weighs rather than settles unilaterally.** If split, the shape follows this ADR's own
+established precedent (Phase 5a for the Ingest Studio, Phase 6a for B6/B9–B11) rather than
+inventing a new pattern: a **Phase 8a**, taking `adapters/graph_janusgraph`,
+`adapters/analytics_clickhouse`, ComputePort Tier 3, the connection-pool hardening, and the
+`cluster` half of the exit criterion; **Phase 8** keeping judgements/assumptions, the yardstick
+loader, export/the handling gate, the browser harness/admin console, the headless CLI, generated
+Kubernetes manifests, B16/B18, and the `local-lite` half of the exit criterion. This addendum
+records the finding and the shape a split would take; it does not enact either — no phase is
+renumbered, no bullet moved, until that call is made.
+
 ---
 
 ## ADR-023 — `imei` belongs to `Device`, `imsi` stays on `Endpoint`, and a new edge gives a SIM swap one hop

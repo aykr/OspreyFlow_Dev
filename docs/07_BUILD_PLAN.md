@@ -1067,6 +1067,14 @@ disclose something — this list did not exist before Stage 1 found it needed on
 containing an `S2`-marked item is blocked, names the item, and proceeds only with a recorded
 justification.
 
+**Before scoping this phase, read `06_DECISIONS.md` ADR-022's own second addendum (20 September
+2026).** ComputePort Tier 3 (ADR-028) and the Postgres connection-pool hardening finding (Phase 7
+Stage 1) have both landed here since the bullet list above was last priced, and both need real
+multi-node infrastructure to verify at all — a distinct, harder verification profile than
+everything else this phase already carries, which is provable on `local-lite`. The addendum
+proposes a **Phase 8a** split (the two adapters, Tier 3, the pool hardening, and the `cluster`
+half of the exit criterion) but does not enact it — pending a decision, not assumed either way.
+
 ---
 
 ## Gaps with no owning phase
