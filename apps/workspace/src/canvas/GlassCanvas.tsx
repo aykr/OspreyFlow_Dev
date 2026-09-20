@@ -29,7 +29,7 @@ import { EdgeLineProgram, createNodeCompoundProgram } from "sigma/rendering";
 import Sigma from "sigma";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 
-import type { EdgeTypeDef } from "../../../../packages/schemas/generated";
+import type { Edge, EdgeTypeDef, Node, Path as GraphPath } from "../../../../packages/schemas/generated";
 import { pointInPolygon } from "../map/geometry";
 import type { OntologyRegistry } from "../ontology/schema";
 import type {
@@ -48,6 +48,7 @@ import { RadialMenu, type RadialMenuItem } from "../design/primitives/RadialMenu
 import { EdgeInspectionOverlay } from "./EdgeInspectionOverlay";
 import { ClusterExplainOverlay } from "./ClusterExplainOverlay";
 import { CommunityHullOverlay } from "./CommunityHullOverlay";
+import { PathfinderOverlay } from "./PathfinderOverlay";
 import type { ClusterExplanation } from "../workingset/models";
 
 const NODE_PROGRAM = createNodeCompoundProgram<WorkingSetNodeAttributes, WorkingSetEdgeAttributes>([
@@ -176,6 +177,18 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
   const [clusterExplain, setClusterExplain] = useState<
     { x: number; y: number; explanation: ClusterExplanation } | null
   >(null);
+  // Phase 7 Stage 5 (the pathfinder) — `x`/`y` anchor the overlay to the radial menu's own
+  // position, the same shape `clusterExplain` above already uses. `activeIndex` is which of the
+  // (up to `k`) found paths is currently drawn on-path; cycling it never re-fetches.
+  const [pathResult, setPathResult] = useState<
+    { x: number; y: number; paths: GraphPath[]; activeIndex: number } | null
+  >(null);
+  // Read by `refreshNodeVisualState` (called from many unrelated call sites — hover, selection,
+  // dimming) without threading a new parameter through every one of them; written only by the
+  // effect below, keyed on `pathResult` itself. A ref, not state, because nothing here needs a
+  // re-render when it changes on its own — the effect that writes it already re-renders via
+  // `pathResult`.
+  const pathNodeIdsRef = useRef<Set<string>>(new Set());
   const [lassoActive, setLassoActive] = useState(false);
   const [lassoPoints, setLassoPoints] = useState<{ x: number; y: number }[]>([]);
   const lastReproject = useStore(store, (s) => s.lastReproject);
@@ -185,15 +198,35 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
     const node = graph.getNodeAttribute(nodeId, "data");
     const visual = ontology.visualFor(node.type);
     if (!visual) return;
+    const onPath = pathNodeIdsRef.current.has(nodeId);
+    // `02_GLASS_FRONTEND.md` §3.1: "everything else dims to 32%" — a found path in effect adds a
+    // second, independent reason a node can be dimmed, ORed with the existing cross-filter
+    // dimming rather than replacing it.
+    const pathActive = pathNodeIdsRef.current.size > 0;
     const attrs = computeNodeGraphAttributes(node, visual, {
-      dimmed: dimmedNodeIds.has(nodeId),
+      dimmed: dimmedNodeIds.has(nodeId) || (pathActive && !onPath),
       filteredOut: false,
       hovered: hovered === nodeId,
       selected: selected.has(nodeId),
-      onPath: false,
+      onPath,
     });
     graph.mergeNodeAttributes(nodeId, attrs);
   };
+
+  // Re-derives which nodes/edges are "on path" whenever the found path or the analyst's choice of
+  // which of the `k` results to look at changes, and refreshes every node/edge's own visual state
+  // accordingly — dimming is a whole-graph property of "a path is active," not a per-node toggle,
+  // so this sweeps the graph the same way `refreshClusterVisualState` does for its own trigger.
+  useEffect(() => {
+    const activePath = pathResult ? pathResult.paths[pathResult.activeIndex] : undefined;
+    pathNodeIdsRef.current = new Set(activePath?.nodes.map((n) => n.id) ?? []);
+    const pathEdgeIds = new Set(activePath?.edges.map((e) => e.id) ?? []);
+    graph.forEachNode((nodeId) => refreshNodeVisualState(nodeId));
+    graph.forEachEdge((edgeId) => {
+      graph.mergeEdgeAttributes(edgeId, { onPath: pathEdgeIds.has(edgeId) });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathResult, graph]);
 
   // Phase 6a Stage 2 (B9): "the number and the picture have to agree" — every node sharing a
   // `resolution.cluster_id` with at least one other is co-located at the cluster's own anchor
@@ -320,7 +353,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
       },
       edgeReducer: (_edgeId, data) => {
         const ratio = currentSigma?.getCamera().ratio ?? 1;
-        const attrs = computeEdgeAttributes(data.data, { cameraRatio: ratio, strengthFilterFloor: 0 });
+        const attrs = computeEdgeAttributes(data.data, {
+          cameraRatio: ratio,
+          strengthFilterFloor: 0,
+          onPath: data.onPath ?? false,
+        });
         return { ...data, ...attrs, type: "glass-edge" };
       },
       hideEdgesOnMove: true, // §1.1: "buys the frame budget at 250,000 edges"
@@ -417,7 +454,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
     // focus, and both overlays are opened from a radial-menu item whose own unmount drops focus to
     // `<body>`, past this div entirely.
     if (radialMenu) return;
-    if (inspectedEdge || clusterExplain) return;
+    // `pathResult` (Phase 7 Stage 5) gets the identical exemption `inspectedEdge`/`clusterExplain`
+    // already have, for the identical reason — `PathfinderOverlay` renders through the same
+    // `Popover`, opened from the same radial-menu-item shape.
+    if (inspectedEdge || clusterExplain || pathResult) return;
     // Tab/Shift+Tab are deliberately never intercepted here — `02_GLASS_FRONTEND.md` §6's own
     // Tab-cycling wording was corrected in Phase 7 Stage 4 (found while wiring a second
     // keyboard-driven surface beside this canvas, `07_BUILD_PLAN.md`'s own gaps entry has the
@@ -526,6 +566,61 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
     setClusterExplain({ x, y, explanation });
   }
 
+  // Phase 7 Stage 5 (the pathfinder) — `06_DECISIONS.md` ADR-033. `POST /v1/paths` is a bare,
+  // non-investigation-scoped query (the same reasoning `/v1/search` already has: it searches the
+  // whole access-filtered corpus, not this investigation's own working set), so the result must be
+  // seeded into this working set before it can be drawn on-path at all — reusing the existing
+  // `/seed` endpoint exactly, not a new working-set-service method. Only nodes/edges not already
+  // present are sent; `/seed` itself is idempotent-by-id on the store side regardless.
+  async function findPaths(nodeA: string, nodeB: string, x: number, y: number): Promise<void> {
+    const response = await fetch(`${apiBaseUrl}/v1/paths`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ source: nodeA, target: nodeB, max_hops: 6, k: 5 }),
+    });
+    if (!response.ok) return;
+    const found: GraphPath[] = await response.json();
+
+    if (found.length > 0) {
+      const nodesById = new Map<string, Node>();
+      const edgesById = new Map<string, Edge>();
+      for (const path of found) {
+        for (const n of path.nodes) nodesById.set(n.id, n);
+        for (const e of path.edges) edgesById.set(e.id, e);
+      }
+      const newNodes = [...nodesById.values()].filter((n) => !graph.hasNode(n.id));
+      const newEdges = [...edgesById.values()].filter((e) => !graph.hasEdge(e.id));
+      if (newNodes.length > 0 || newEdges.length > 0) {
+        const seedResponse = await fetch(
+          `${apiBaseUrl}/v1/investigations/${investigationId}/seed`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ nodes: newNodes, edges: newEdges }),
+          },
+        );
+        if (seedResponse.ok) {
+          const outcome = await seedResponse.json();
+          store.getState().applyDelta(outcome.delta);
+        }
+      }
+    }
+
+    setPathResult({ x, y, paths: found, activeIndex: 0 });
+  }
+
+  function cyclePathfinderResult(direction: 1 | -1): void {
+    setPathResult((prev) => {
+      if (!prev || prev.paths.length <= 1) return prev;
+      const nextIndex = (prev.activeIndex + direction + prev.paths.length) % prev.paths.length;
+      return { ...prev, activeIndex: nextIndex };
+    });
+  }
+
+  function dismissPathfinderResult(): void {
+    setPathResult(null);
+  }
+
   function radialMenuItems(nodeId: string): RadialMenuItem[] {
     if (!graph.hasNode(nodeId)) return [];
     const node = graph.getNodeAttribute(nodeId, "data");
@@ -557,6 +652,17 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
             label: `Split from ${other}`,
             count: 0,
             onSelect: () => void manualAssertion(nodeId, other, "split"),
+          },
+          {
+            // Phase 7 Stage 5 — the same pair-selection shape B11 above already established,
+            // reused rather than a new selection mechanism invented for it.
+            id: "find-paths",
+            label: `Find paths to ${other}`,
+            count: 0,
+            onSelect: () => {
+              const anchor = radialMenu ?? { x: 0, y: 0 };
+              void findPaths(nodeId, other, anchor.x, anchor.y);
+            },
           },
         );
       }
@@ -701,6 +807,16 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
       )}
       {communityHulls && communityHulls.size > 0 && (
         <CommunityHullOverlay sigmaRef={sigmaRef} hulls={communityHulls} />
+      )}
+      {pathResult && (
+        <PathfinderOverlay
+          x={pathResult.x}
+          y={pathResult.y}
+          paths={pathResult.paths}
+          activeIndex={pathResult.activeIndex}
+          onCycle={cyclePathfinderResult}
+          onClose={dismissPathfinderResult}
+        />
       )}
     </div>
   );

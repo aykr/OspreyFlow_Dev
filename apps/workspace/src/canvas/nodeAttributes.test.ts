@@ -148,19 +148,41 @@ describe("computeNodeFrameAttributes", () => {
 describe("computeEdgeAttributes", () => {
   it("hides only edges below the strength filter, only at the overview band", () => {
     const weak = makeEdge("e1", "a", "b", { weight: 0.1 });
-    const overview = computeEdgeAttributes(weak, { cameraRatio: 5, strengthFilterFloor: 0.5 });
+    const overview = computeEdgeAttributes(weak, {
+      cameraRatio: 5,
+      strengthFilterFloor: 0.5,
+      onPath: false,
+    });
     expect(overview.hidden).toBe(true);
 
-    const structure = computeEdgeAttributes(weak, { cameraRatio: 1, strengthFilterFloor: 0.5 });
+    const structure = computeEdgeAttributes(weak, {
+      cameraRatio: 1,
+      strengthFilterFloor: 0.5,
+      onPath: false,
+    });
     expect(structure.hidden).toBe(false); // "All edges, width by weight" at Structure
   });
 
   it("edge labels are only eligible at link-detail", () => {
     const edge = makeEdge("e1", "a", "b");
-    expect(computeEdgeAttributes(edge, { cameraRatio: 1, strengthFilterFloor: 0 }).label).toBe("");
     expect(
-      computeEdgeAttributes(edge, { cameraRatio: 0.05, strengthFilterFloor: 0 }).label,
+      computeEdgeAttributes(edge, { cameraRatio: 1, strengthFilterFloor: 0, onPath: false }).label,
+    ).toBe("");
+    expect(
+      computeEdgeAttributes(edge, { cameraRatio: 0.05, strengthFilterFloor: 0, onPath: false })
+        .label,
     ).not.toBe("");
+  });
+
+  it("on-path overrides the strength filter — a found path is never hidden by an unrelated filter", () => {
+    const weak = makeEdge("e1", "a", "b", { weight: 0.01 });
+    const onPath = computeEdgeAttributes(weak, {
+      cameraRatio: 5,
+      strengthFilterFloor: 0.5,
+      onPath: true,
+    });
+    expect(onPath.hidden).toBe(false);
+    expect(onPath.size).toBeGreaterThan(4); // thickened past the ordinary weight-based ceiling
   });
 });
 

@@ -158,6 +158,15 @@ export function computeClusterGraphAttributes(clusterMemberCount: number): Clust
 export interface EdgeRenderContext {
   cameraRatio: number;
   strengthFilterFloor: number;
+  /** Phase 7 Stage 5 (the pathfinder) — `02_GLASS_FRONTEND.md` §3.1: "paths render with the
+   * on-path node state... edges thickened". Node dimming (32% channel mix, already implemented
+   * in `computeNodeGraphAttributes`) is the dominant "everything else" cue for a found path —
+   * edges here get only the thickened treatment, not a parallel dimming concept of their own:
+   * `ResolvedEdgeAttributes.color` is already a single fixed `--border-strong` hex regardless of
+   * any other state, so there is no existing per-edge colour-mix mechanism to extend, and a thin
+   * line's own colour barely registers next to a dimmed node's fill in any case. Disclosed
+   * simplification, not an oversight. */
+  onPath: boolean;
 }
 
 export interface ResolvedEdgeAttributes {
@@ -167,6 +176,12 @@ export interface ResolvedEdgeAttributes {
   hidden: boolean;
 }
 
+//: Fixed, not weight-derived — an on-path edge must read as thickened regardless of how thin its
+//: own weight would otherwise draw it; the ordinary weight-based size tops out at 4
+//: (`Math.min(4, weight * 2)` below), so 5 is a real, visible step up rather than an
+//: overlap-prone one.
+const ON_PATH_EDGE_SIZE = 5;
+
 export function computeEdgeAttributes(
   edge: Edge,
   context: EdgeRenderContext,
@@ -174,6 +189,18 @@ export function computeEdgeAttributes(
   const band = zoomBandForRatio(context.cameraRatio);
   const weight = edge.weight ?? 1;
   const belowStrengthFilter = weight < context.strengthFilterFloor;
+
+  // On-path takes priority over the strength filter and the overview band's own size clamp — the
+  // same "path highlighting takes priority" ordering `computeNodeGraphAttributes` already
+  // documents for its own border priority (on-path, then selected, then hover).
+  if (context.onPath) {
+    return {
+      size: ON_PATH_EDGE_SIZE,
+      color: TEXT_PRIMARY_DARK_HEX,
+      label: band === "link-detail" ? `${edge.type} (${edge.occurrences ?? 1})` : "",
+      hidden: false,
+    };
+  }
 
   if (band === "overview") {
     return { size: 1, color: BORDER_STRONG_DARK_HEX, label: "", hidden: belowStrengthFilter };

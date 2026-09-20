@@ -438,6 +438,159 @@ test("the radial list reaches View messages on an Endpoint node", async ({ page 
   registerCovered("CANVAS_ACTIONS", "menu-item-view-messages");
 });
 
+// Phase 7 Stage 5 (the pathfinder) — `06_DECISIONS.md` ADR-033. `POST /v1/paths` is intercepted,
+// the same "real network call, mocked at the transport" shape every test above already uses; the
+// mocked `Path[]` bodies reference only ids already in this file's own fixture (`n0`..`n3`,
+// `e0`..`e2`) so `GlassCanvas`'s own seed-if-new step never fires a second network call these
+// tests would also need to intercept.
+function pathNode(id: string): unknown {
+  return {
+    id,
+    type: "Person",
+    properties: { family_name: id },
+    provenance: {
+      state: "asserted",
+      sources: [{ document_id: "fixture-doc", locator: "p.1", excerpt_hash: "a".repeat(64) }],
+      first_seen: "2026-01-01T00:00:00Z",
+    },
+    handling: { classification: "OFFICIAL", handling_code: "P", originator: "unit-1", owning_unit: "unit-1" },
+    audit: { created_at: "2026-01-01T00:00:00Z", created_by: "fixture" },
+  };
+}
+
+function pathEdge(id: string, source: string, target: string): unknown {
+  return {
+    id,
+    type: "ASSOCIATE_OF",
+    source,
+    target,
+    provenance: {
+      state: "asserted",
+      sources: [{ document_id: "fixture-doc", locator: "p.1", excerpt_hash: "a".repeat(64) }],
+      first_seen: "2026-01-01T00:00:00Z",
+    },
+    handling: { classification: "OFFICIAL", handling_code: "P", originator: "unit-1", owning_unit: "unit-1" },
+    audit: { created_at: "2026-01-01T00:00:00Z", created_by: "fixture" },
+  };
+}
+
+// Shared by all three pathfinder tests below: builds the ring `{n0, n3}` (three hops apart in
+// this file's own `n0`—`n1`—`n2`—`n3` chain) and opens the radial menu on `n3`, the focused node.
+async function selectN0AndN3ThenOpenMenu(page: import("@playwright/test").Page): Promise<void> {
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus(); // ring: {n0}
+  await page.keyboard.press("ArrowRight"); // focus n1
+  await page.keyboard.press("ArrowLeft"); // focus n2 (see the View-messages test above)
+  await page.keyboard.press("ArrowLeft"); // focus n3
+  await page.keyboard.press("Space"); // ring: {n0, n3}
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selection.sort()))
+    .toEqual(["n0", "n3"]);
+
+  await page.keyboard.press("\\");
+  await expect(page.locator(".radial-menu__list[role='menu']")).toBeVisible();
+  // Item order on `n3` (a `Person`): `ASSOCIATE_OF`, `USES` (both qualify, same reasoning the
+  // manual-link test above already gives), "Link to n0", "Split from n0", "Find paths to n0" —
+  // `radialMenuItems`' own push order. Auto-focused first item; four Tabs reach the last one.
+  for (let i = 0; i < 4; i++) await page.keyboard.press("Tab");
+  await expect(page.getByRole("menuitem", { name: /Find paths to n0/ })).toBeFocused();
+}
+
+test("the radial list reaches Find paths, and a real found path renders in its own overlay", async ({
+  page,
+}) => {
+  await page.goto("/keyboard/harness.html");
+
+  let pathsRequestBody: unknown = null;
+  await page.route("**/*/v1/paths", async (route) => {
+    pathsRequestBody = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        {
+          nodes: [pathNode("n3"), pathNode("n2"), pathNode("n1"), pathNode("n0")],
+          edges: [pathEdge("e2", "n2", "n3"), pathEdge("e1", "n1", "n2"), pathEdge("e0", "n0", "n1")],
+          length: 3,
+        },
+      ]),
+    });
+  });
+
+  await selectN0AndN3ThenOpenMenu(page);
+  await page.keyboard.press("Enter");
+
+  await expect.poll(() => pathsRequestBody !== null).toBe(true);
+  expect(pathsRequestBody).toMatchObject({ source: "n3", target: "n0" });
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByText("Path 1 of 1 (3 hops)")).toBeVisible();
+  registerCovered("CANVAS_ACTIONS", "menu-item-find-paths");
+});
+
+test("the pathfinder result's own selector cycles which of several found paths is on-path", async ({
+  page,
+}) => {
+  await page.goto("/keyboard/harness.html");
+
+  await page.route("**/*/v1/paths", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        {
+          nodes: [pathNode("n3"), pathNode("n2"), pathNode("n1"), pathNode("n0")],
+          edges: [pathEdge("e2", "n2", "n3"), pathEdge("e1", "n1", "n2"), pathEdge("e0", "n0", "n1")],
+          length: 3,
+        },
+        { nodes: [pathNode("n1"), pathNode("n0")], edges: [pathEdge("e0", "n0", "n1")], length: 1 },
+      ]),
+    });
+  });
+
+  await selectN0AndN3ThenOpenMenu(page);
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Path 1 of 2 (3 hops)")).toBeVisible();
+
+  // `Popover` auto-focuses its own first focusable element (the close button) on open — two Tabs
+  // reach "Next path", past "Previous path".
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Next path" })).toBeFocused();
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByText("Path 2 of 2 (1 hop)")).toBeVisible();
+  registerCovered("CANVAS_ACTIONS", "path-selector-cycles-highlighted-path");
+});
+
+test("Escape dismisses the pathfinder result overlay, reachable by keyboard alone", async ({
+  page,
+}) => {
+  await page.goto("/keyboard/harness.html");
+
+  await page.route("**/*/v1/paths", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        {
+          nodes: [pathNode("n3"), pathNode("n2"), pathNode("n1"), pathNode("n0")],
+          edges: [pathEdge("e2", "n2", "n3"), pathEdge("e1", "n1", "n2"), pathEdge("e0", "n0", "n1")],
+          length: 3,
+        },
+      ]),
+    });
+  });
+
+  await selectN0AndN3ThenOpenMenu(page);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog")).toBeVisible();
+
+  await page.keyboard.press("Escape");
+
+  await expect(page.getByRole("dialog")).toBeHidden();
+  registerCovered("CANVAS_ACTIONS", "overlay-dismiss-pathfinder-result");
+});
+
 test("every registered keyboard action has its own proving test case above", () => {
   assertAllCovered("CANVAS_ACTIONS", CANVAS_ACTIONS);
 });

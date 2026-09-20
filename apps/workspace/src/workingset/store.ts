@@ -52,7 +52,18 @@ export type WorkingSetNodeAttributes = {
   clusterBorderColor?: string;
   clusterBorderSize?: number;
 };
-export type WorkingSetEdgeAttributes = { data: Edge; color?: string; size?: number; label?: string };
+export type WorkingSetEdgeAttributes = {
+  data: Edge;
+  color?: string;
+  size?: number;
+  label?: string;
+  /** Phase 7 Stage 5 (the pathfinder) — merged imperatively by `GlassCanvas`'s own
+   * `refreshPathfinderVisualState` whenever the active found path changes, the same
+   * merge-onto-stored-attributes shape `WorkingSetNodeAttributes`'s own interaction-state fields
+   * already use, so `computeEdgeAttributes` can read it back rather than needing it threaded
+   * through the per-frame reducer's own closure. */
+  onPath?: boolean;
+};
 export type WorkingSetGraph = Graph<WorkingSetNodeAttributes, WorkingSetEdgeAttributes>;
 
 export interface WorkingSetStoreState {

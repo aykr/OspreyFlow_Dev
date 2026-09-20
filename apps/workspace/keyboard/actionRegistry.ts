@@ -97,6 +97,12 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   "menu-item-explain-cluster",
   "menu-item-view-messages",
   "overlay-dismiss-cluster-explain",
+  // Phase 7 Stage 5 (the pathfinder) — `07_BUILD_PLAN.md`'s own keyboard-walkthrough entry drew
+  // the line this follows: a further canvas radial-menu item extends this registry rather than
+  // getting its own, the same shape `menu-item-manual-link`/`explain-cluster` already are.
+  "menu-item-find-paths",
+  "path-selector-cycles-highlighted-path",
+  "overlay-dismiss-pathfinder-result",
 ] as const);
 
 /**
