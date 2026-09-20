@@ -1288,6 +1288,20 @@ findable only from whichever phase happened to notice it.
   "disclose, don't silently fill" instruction the `Endpoint`-to-`Device` gap above and B15's own
   scoping already follow.
 
+- **Phase 7's own metrics-panel bullet names three things — "two-metric comparison; size
+  encoding; community hull overlay" — and Stage 3 built two of the three.** The ranked list, the
+  second-metric comparison column and the community hull overlay (`metrics/MetricsPanel.tsx`,
+  `metrics/hulls.ts`, `canvas/CommunityHullOverlay.tsx`) are real and tested; **node size scaled
+  by the active metric's own value is not built.** `07_BUILD_PLAN.md`'s own Stage 3 plan priced
+  size encoding's *performance* cost ("an `O(1)` reducer touch per node, not a new bottleneck")
+  but that was a feasibility measurement, not the feature itself — actually threading a fetched
+  metric value through to `canvas/nodeAttributes.ts`'s own per-frame `computeNodeFrameAttributes`
+  (which currently sizes a node from its zoom band alone, `BAND_SIZE[band]`, nothing else) needs a
+  real design pass of its own: how a value is normalised to a size range, how that interacts with
+  the existing zoom-band scaling, and its own perf proof against `perf/perf.spec.ts`'s fixture —
+  not assumed free just because the *per-node* cost was shown to be cheap. Disclosed rather than
+  silently dropped from the bullet; not fixed here.
+
 **On Phase 6's own citation of `test_review_routes.py`'s denial tests as evidence access control
 is real (above): checked against this finding, and it survives unnarrowed, because it was never a
 claim about `GraphPort`.** `run_extraction`/`accept_candidate`/`reject_candidate`'s access control
