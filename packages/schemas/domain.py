@@ -391,6 +391,14 @@ class Path(BaseModel):
 class PatternNode(BaseModel):
     var: str
     entity_type: str | None = None
+    #: Pins this variable to one already-known node — `01_DOMAIN_MODEL.md` §8.1's own widening
+    #: (Phase 7 Stage 4, `06_DECISIONS.md`): a pattern with more than one root is only compiled
+    #: when every root beyond the first is pinned this way (B19's own shape — "the two principal
+    #: endpoints" are nodes the analyst already selected, not an open type). An unpinned second
+    #: root remains unsupported — confirmed empirically that ArcadeDB's own Gremlin `match()` step
+    #: cannot introduce a genuinely independent second enumeration, so there is no general join to
+    #: fall back to.
+    node_id: str | None = None
 
 
 class PatternEdge(BaseModel):

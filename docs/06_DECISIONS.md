@@ -33,9 +33,21 @@ confirmed.
 | 019 | Scenario A's exit criterion is split across three phases | | **Accepted** — 16 Sep 2026 |
 | 020 | `ModelPort` conformance is pinned to a small, digest-verified local model | | **Accepted** — 17 Sep 2026 |
 | 021 | Splink is pinned to 3.9.9, not the 4.x/5.x line, over a transitive GPL dependency | | **Accepted** — 18 Sep 2026 |
+| 022 | Scenario B's exit criterion is split across Phases 6 through 8 | | **Accepted** — 18 Sep 2026, two addenda |
+| 023 | `imei` belongs to `Device`, `imsi` stays on `Endpoint`; a new edge gives a SIM swap one hop | | **Accepted** — 18 Sep 2026 |
+| 024 | The MSISDN↔IMSI link is a deterministic ingest-path write, not a resolution problem | | **Accepted** — 18 Sep 2026 |
+| 025 | The corpus-wide resolution and alerting trigger | | **Accepted** — 18 Sep 2026, addendum |
+| 026 | The VAST Challenge datasets are admitted shaped, not verbatim; rule 3 is not amended | | **Accepted** — 19 Sep 2026 |
+| 027 | B1 and B13's device-extraction legs stay unowned in Phase 7 | | **Accepted** — 19 Sep 2026 |
+| 028 | `ComputePort`'s three tiers: Tier 1 a plain Node script, Tier 3 deferred to Phase 8 | | **Accepted** — 19 Sep 2026, addendum |
+| 029 | Neither compute tier can run Leiden; both run Louvain with a connected-components fix | | **Accepted** — 20 Sep 2026 |
+| 030 | `PatternQuery` widened for a pinned second root; `match()` does not work on ArcadeDB | | **Accepted** — 20 Sep 2026 |
 
-All twenty-one records are accepted, including all seven overrides of the input documents.
+All thirty records are accepted, including all seven overrides of the input documents.
 `07_BUILD_PLAN.md` is unblocked end to end; nothing in the plan now waits on an open decision.
+This table lagged the actual record count for a stretch of Phase 7 (ADR-022 through ADR-029 were
+written but never added here) — caught and closed in the same change that added ADR-030, not
+worth its own record.
 
 One record carries a stated review point. ADR-018 is accepted on the understanding that the
 Ingest Studio's interface will be reviewed once it renders, and that the review may change it —
@@ -2126,5 +2138,99 @@ Three things this design would need, none built here:
    labelled analyst choice, recorded per-community the way item 2 above requires, is a different
    thing entirely and is not what that sentence was written to forbid; the sentence itself would
    need to say so, not merely be read around.
+
+---
+
+## ADR-030 — `PatternQuery` is widened for a pinned second root; Gremlin's `match()` step does not work on this adapter
+
+**Status.** Accepted, 20 September 2026.
+
+**The premise, flagged since before Phase 7 was scoped, settled here.** `01_DOMAIN_MODEL.md`
+§8.1's own `MatchBuilder` compiled a `PatternQuery` by walking `pattern.edges` in list order,
+starting from `pattern.nodes[0]`, requiring every edge's `from_var` to already be bound. This
+expresses exactly one shape: a single directed chain rooted at one node, walked forward via
+`.outE()` only. A phase-3-era handover already flagged this as "more restrictive than Phase 7
+will want," deferred to Phase 7 Stage 4 — the visual query builder — because that is where an
+analyst first draws an arbitrary pattern rather than a caller constructing one in code.
+
+**Not a hypothetical — `08_ACCEPTANCE_SCENARIOS.md` B19 is exactly the shape the old compiler
+rejected.** "Expand to common contacts across the two principal endpoints" is a diamond: two
+independent, already-known starting nodes converging on a shared third. The old compiler's second
+root is never bound by anything and raises. B19 is named in `07_BUILD_PLAN.md`'s own Phase 7 exit
+paragraph — restricting the builder and explaining the limitation at the point of drawing, the
+cheaper and safer of the two options originally weighed, cannot be the whole answer, because it
+cannot pass this phase's own exit criterion without a bespoke mechanism built outside
+`PatternQuery` entirely, which the acceptance table's own "Pattern query" mechanism column argues
+against.
+
+**The first design tried, and why it does not work on this adapter — checked directly against a
+live ArcadeDB instance, not assumed from the TinkerPop specification.** Gremlin's own `match()`
+step is the standard, general-purpose way to join independently-expressed traversal fragments on
+a shared variable — the textbook answer to a diamond pattern, and the one this ADR originally
+intended to ship. It does not work here: every attempt at a `match()` fragment introducing a
+genuinely independent second enumeration (a fragment starting its own fresh `V()`, needed for any
+second root that is not already reachable from the first) failed with a bare
+`CommandExecutionException`, including the simplest possible case with no filters, no access
+checks, and an empty database. `g.V().match(__.as('a').out().as('b'))` — the canonical single-root
+form, where `match()`'s own fragments only ever *extend* a binding the outer traversal already
+provides — works correctly. `g.inject(0).match(__.V().as('a'), ...)` and every variant seeding a
+fresh enumeration inside a fragment does not. ArcadeDB's own Gremlin engine, in short, supports
+`match()` only for elaborating a single existing binding, not for the general multi-root join
+TinkerPop's own documentation describes.
+
+**The mechanism actually shipped: a pinned-root reachability check, not a general join.** Every
+root beyond the primary one must carry a new `PatternNode.node_id` field pinning it to an
+already-known node — which is B19's own real shape (the analyst has already selected both
+"principal endpoints"; the query discovers their common contacts, not the endpoints themselves).
+The primary root's own chain compiles forward exactly as the original single-chain algorithm
+already does. Each pinned secondary root's own chain to the convergence point is reversed into a
+`.where()` step — walked backward with `.in(edge_type)` in reverse order, ending in
+`.has("id", <the known id>)` — proving "this known node also reaches the same convergence point,"
+without ever needing to enumerate or bind a second, independent root at all. Confirmed directly
+against a live ArcadeDB instance with real fixture data before being accepted as the design.
+
+**What this narrows, stated plainly rather than left to be discovered later.** An open (unpinned)
+second root — a genuinely general diamond, "any two Persons of this shape converging on a shared
+node," neither already known — remains unsupported. There is no general join to fall back to on
+this adapter; a pattern needing one is rejected by the builder with a specific error naming the
+unbound root, not silently mis-compiled or silently wrong. This is narrower than the `match()`-based
+design originally planned, and is disclosed as such rather than presented as the general fix a
+reader might assume "widened" means.
+
+**Does this weaken ADR-003's bounded-query guarantee? Answered directly.** The guarantee ADR-003
+actually names is that the compiler — not the caller — controls every traversal step, which is
+what makes access-filtering reliable; free-form Gremlin is the thing rejected, not any particular
+traversal shape. Under this design, every step in both the primary chain and every reversed
+secondary check is still built exclusively by `MatchBuilder`, one hop at a time, with the same
+`access.gremlin_has_step()` fragment injected at every `.outE()`/`.inV()`/`.in()` the single-chain
+compiler already used. Nothing about a reachability check changes who constructs a step. What it
+does change is what must be *proven*: a hidden common node must not change an intersection
+query's own result, count, or presence for a principal who cannot see it — a new conformance case
+(`test_match_intersection_never_leaks_a_hidden_common_endpoint`) proves exactly this against the
+real adapter, not a fake, the same standing discipline every access-control claim in this
+repository already follows.
+
+**A no-regression guarantee, proven as a compiled-string comparison, not only a behavioural one.**
+`test_match_single_chain_pattern_compiles_to_the_same_gremlin_as_before` asserts the exact Gremlin
+string an existing single-chain pattern compiles to is byte-identical to what it was before this
+widening — checked because "the query still returns the right nodes" could pass even if the
+compiler took a slower or differently-shaped path to the same answer, which would not itself be a
+regression but would be an undisclosed one.
+
+**Cost.** One new `PatternNode` field, regenerated TypeScript. `MatchBuilder` gains a second
+compilation path (`_render_matched`), used only when the pattern cannot be linearised from a
+single root — the existing path is untouched code, not merely untouched output. Three new
+conformance cases. The real, ongoing cost is scope: this ADR does not deliver a general
+multi-root query capability, only the specific pinned-root shape B19 needs; a future pattern
+requiring a true open diamond join is a new question, not something this ADR's own mechanism
+answers by extension.
+
+**Revisit if.** A future ArcadeDB release fixes `match()`'s own independent-enumeration case
+(worth re-testing before assuming it still fails, not re-asserting this ADR's own finding
+indefinitely), or the adapter layer gains a second graph engine whose `match()` support is more
+complete — at which point the general join becomes available and the pinned-root mechanism can
+stay as a cheaper special case rather than the only path. Revisit sooner if a real pattern needing
+a true open (unpinned) multi-root join is named by name against an acceptance scenario, the same
+way B19 forced this one.
 
 ---

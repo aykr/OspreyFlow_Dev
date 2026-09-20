@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from schemas.domain import ExpandRequest, PathRequest, PatternQuery, Principal
+from schemas.domain import ExpandRequest, PathRequest, PatternEdge, PatternQuery, Principal
 
 from .access_filter import AccessFilter
 from .gremlin_literals import (
@@ -277,16 +277,48 @@ class NeighbourhoodStatsBuilder:
 
 @dataclass(frozen=True)
 class MatchBuilder:
-    """Compiles a bounded `PatternQuery` into a Gremlin traversal by chaining
-    `.as(var)`/`.select(var)` steps in the order the pattern's edges are
-    given — each edge's `from_var` must already be bound by an earlier node
-    or edge, exactly as a caller composing the pattern would build it up."""
+    """Compiles a bounded `PatternQuery` into Gremlin — `01_DOMAIN_MODEL.md` §8.1, widened in
+    Phase 7 Stage 4 (`06_DECISIONS.md`). A pattern that linearises into a single chain from one
+    root (every edge's `from_var` already bound when it's declared) compiles via
+    `_render_single_chain` — byte-identical to the pre-widening compiler
+    (`test_match_single_chain_pattern_compiles_to_the_same_gremlin_as_before`'s own no-regression
+    proof).
+
+    **A pattern needing more than one root — B19's own "two independent endpoints converging on
+    shared contacts" shape — falls back to `_render_matched`, which does *not* use Gremlin's
+    `match()` step.** That was the first design tried; confirmed empirically against a live
+    ArcadeDB instance, not assumed from the TinkerPop docs, that ArcadeDB's own `match()`
+    implementation cannot introduce a second, genuinely independent enumeration inside a fragment
+    (`__.V()...` as a *root* fragment) — every attempt failed with a bare
+    `CommandExecutionException`, including the simplest possible case with no filters at all.
+    `_render_matched` instead compiles
+    a *pinned-root reachability check*: every root beyond the primary one must carry `PatternNode.
+    node_id` (a concrete, already-known node — B19's own "two principal endpoints" are nodes the
+    analyst already selected, not an open type to search for), and the fragment reaching the
+    convergence point is walked forward once for the primary chain, then reversed and asserted as
+    a `.where()` reachability check from each secondary root's own known id. An open (unpinned)
+    second root remains unsupported — there is no general join to fall back to on this adapter.
+    Every step in both paths is still built exclusively by this compiler, one hop at a time, with
+    `has_access` injected at every `.outE()`/`.inV()`/`.in()` exactly as before — the
+    access-filtering guarantee is that the compiler owns every step, not that the overall shape
+    stays one chain, so widening changes what must be *proven*
+    (`test_match_intersection_never_leaks_a_hidden_common_endpoint`), not who constructs a step."""
 
     pattern: PatternQuery
 
     def render_gremlin(self, access: AccessFilter, principal: Principal) -> str:
         if not self.pattern.nodes:
             raise ValueError("PatternQuery must declare at least one node")
+        single_chain = self._render_single_chain(access, principal)
+        if single_chain is not None:
+            return single_chain
+        return self._render_matched(access, principal)
+
+    def _render_single_chain(self, access: AccessFilter, principal: Principal) -> str | None:
+        """The original compiler, unchanged in every step it emits — returns `None` (never
+        raises) the moment the pattern cannot be linearised from `nodes[0]` alone, so
+        `render_gremlin` can fall back to `_render_matched` rather than the caller having to
+        pre-classify the pattern's own shape first."""
         has_access = access.gremlin_has_step(principal)
         node_by_var = {n.var: n for n in self.pattern.nodes}
 
@@ -301,10 +333,7 @@ class MatchBuilder:
         bound = {first.var}
         for edge in self.pattern.edges:
             if edge.from_var not in bound:
-                raise ValueError(
-                    f"pattern edge {edge.edge_type!r} references {edge.from_var!r} before it "
-                    "is bound — list edges in traversal order from the first node"
-                )
+                return None
             to_node = node_by_var.get(edge.to_var)
             physical_edge_type = physical_type_name(edge.edge_type)
             steps.append(f".select({groovy_string_literal(edge.from_var)})")
@@ -318,7 +347,132 @@ class MatchBuilder:
             steps.append(f".as({groovy_string_literal(edge.to_var)})")
             bound.add(edge.to_var)
 
+        # Every declared node must actually be bound by the walk above — a pattern with more
+        # than one fully-disconnected root (no edge ever references the second one at all) would
+        # otherwise emit a `.select()` naming a step label nothing ever produced.
+        if bound != {n.var for n in self.pattern.nodes}:
+            return None
+
         select_args = groovy_args_literal(n.var for n in self.pattern.nodes)
+        steps.append(f".select({select_args})")
+        steps.append(".by(elementMap())")
+        steps.append(f".dedup().limit({self.pattern.limit})")
+        return "".join(steps)
+
+    def _render_matched(self, access: AccessFilter, principal: Principal) -> str:
+        """The pinned-root reachability compiler — see the class docstring for why this exists
+        instead of Gremlin's own `match()` step. One root drives the primary traversal exactly
+        like `_render_single_chain`; every other root must be pinned to a known `node_id` and
+        converge, via its own edge chain, on a variable the primary chain also reaches. Each such
+        chain is reversed into a `.where()` step, walked backward with `.in(edge_type)` in
+        reverse order, ending in a check against the pinned id — proving "this known node also
+        reaches the same convergence point," without ever needing to enumerate or bind a second,
+        independent root at all."""
+        has_access = access.gremlin_has_step(principal)
+        node_by_var = {n.var: n for n in self.pattern.nodes}
+        to_vars = {e.to_var for e in self.pattern.edges}
+        roots = [n for n in self.pattern.nodes if n.var not in to_vars]
+        if not roots:
+            raise ValueError(
+                "PatternQuery has no root — every node is only ever named as some edge's own "
+                "to_var, which cannot be bound by anything (a cycle with no entry point)"
+            )
+
+        primary = next((root for root in roots if root.node_id is None), roots[0])
+        secondary_roots = [root for root in roots if root.var != primary.var]
+        for root in secondary_roots:
+            if root.node_id is None:
+                raise ValueError(
+                    f"pattern root {root.var!r} is not reachable from another root and carries "
+                    "no node_id — an open second root has no general join on this adapter "
+                    "(ArcadeDB's own Gremlin match() step cannot introduce an independent second "
+                    "enumeration, confirmed empirically); pin it to a known node instead"
+                )
+
+        edges_by_from: dict[str, list[PatternEdge]] = {}
+        for edge in self.pattern.edges:
+            edges_by_from.setdefault(edge.from_var, []).append(edge)
+
+        def chain_from(root_var: str) -> list[PatternEdge]:
+            chain: list[PatternEdge] = []
+            visited = {root_var}
+            frontier = [root_var]
+            while frontier:
+                var = frontier.pop(0)
+                for edge in edges_by_from.get(var, []):
+                    if edge.to_var in visited:
+                        continue
+                    chain.append(edge)
+                    visited.add(edge.to_var)
+                    frontier.append(edge.to_var)
+            return chain
+
+        primary_chain = chain_from(primary.var)
+        primary_bound = {primary.var, *(edge.to_var for edge in primary_chain)}
+
+        steps = ["g.V()"]
+        if primary.entity_type:
+            steps.append(f".hasLabel({groovy_string_literal(physical_type_name(primary.entity_type))})")
+        if primary.node_id:
+            steps.append(f'.has("id",{groovy_string_literal(primary.node_id)})')
+        steps.append(f".{has_access}")
+        steps.append(f".as({groovy_string_literal(primary.var)})")
+        for edge in primary_chain:
+            to_node = node_by_var.get(edge.to_var)
+            physical_edge_type = physical_type_name(edge.edge_type)
+            steps.append(f".select({groovy_string_literal(edge.from_var)})")
+            steps.append(f".outE({groovy_string_literal(physical_edge_type)})")
+            steps.append(f".{has_access}")
+            steps.append(".inV()")
+            steps.append(f".{has_access}")
+            if to_node and to_node.entity_type:
+                steps.append(f".hasLabel({groovy_string_literal(physical_type_name(to_node.entity_type))})")
+            steps.append(f".as({groovy_string_literal(edge.to_var)})")
+
+        for root in secondary_roots:
+            secondary_chain = chain_from(root.var)
+            if not secondary_chain:
+                raise ValueError(
+                    f"pattern root {root.var!r} is pinned but has no edge connecting it to the "
+                    "rest of the pattern"
+                )
+            join_var = secondary_chain[-1].to_var
+            if join_var not in primary_bound:
+                raise ValueError(
+                    f"pattern root {root.var!r}'s own chain does not converge on a variable the "
+                    "primary chain also reaches — only a direct convergence (a diamond) is "
+                    "supported, not an arbitrary disjoint fragment"
+                )
+            assert root.node_id is not None  # guaranteed by the secondary_roots check above
+            reverse_steps = []
+            for edge in reversed(secondary_chain):
+                physical_edge_type = physical_type_name(edge.edge_type)
+                reverse_steps.append(f".in({groovy_string_literal(physical_edge_type)})")
+                reverse_steps.append(f".{has_access}")
+            reverse_steps.append(f'.has("id",{groovy_string_literal(root.node_id)})')
+            steps.append(f".select({groovy_string_literal(join_var)})")
+            steps.append(f".where(__{''.join(reverse_steps)})")
+
+        # Every declared node must be either bound (`.as()`-labelled in the outer traversal) or a
+        # pinned secondary root (already fully known to the caller — a real node id, not something
+        # this query discovers). A root that is neither is a genuine gap: nothing establishes it.
+        all_vars = {n.var for n in self.pattern.nodes}
+        pinned_vars = {root.var for root in secondary_roots}
+        if primary_bound | pinned_vars != all_vars:
+            missing = sorted(all_vars - primary_bound - pinned_vars)
+            raise ValueError(f"pattern variable(s) never bound by any root or edge: {missing}")
+
+        # A pinned *secondary* root's own identity is never returned — it is never itself
+        # `.as()`-labelled outside its own nested `.where()` check, so it could not be selected at
+        # all. The primary root stays in `select()` even when it is also pinned: Gremlin's own
+        # `select(x)` (one argument) returns the bound value directly rather than `{x: value}`, a
+        # different shape from `select(x, y, ...)` (confirmed empirically — dropping the primary
+        # here for a two-node pattern collapses to exactly that single-argument case and the
+        # adapter's own multi-key parsing broke against it). Keeping the primary avoids ever
+        # emitting a single-argument `select()` for the diamond path; a bare single-pinned-node
+        # pattern with no discovered variable at all is `_render_single_chain`'s own scope, not
+        # this one, and already shares whatever behaviour that path has for it.
+        select_args = groovy_args_literal(sorted(primary_bound))
         steps.append(f".select({select_args})")
         steps.append(".by(elementMap())")
         steps.append(f".dedup().limit({self.pattern.limit})")

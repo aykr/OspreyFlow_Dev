@@ -710,6 +710,160 @@ async def test_match_finds_the_declared_pattern(factory: GraphAdapterFactory) ->
         assert {a, b} <= found_ids
 
 
+def test_match_single_chain_pattern_compiles_to_the_same_gremlin_as_before(
+    factory: GraphAdapterFactory,
+) -> None:
+    """`06_DECISIONS.md` §8.1's widening (Phase 7 Stage 4) must not change one character of the
+    Gremlin an existing single-chain pattern already compiled to — this is the no-regression
+    proof, checked as a compiled-string comparison rather than only "the query still returns the
+    right nodes," since the latter could pass even if the compiler now takes a slower or
+    differently-shaped path to the same answer. This golden string was captured directly from the
+    unmodified `MatchBuilder` before Stage 4's own widening, per standing rule 1."""
+    from adapters.graph_arcadedb.access_filter import AccessFilter
+    from adapters.graph_arcadedb.builders import MatchBuilder
+    from ontology.handling import load_uk_le_scheme
+
+    access = AccessFilter(load_uk_le_scheme())
+    pattern = PatternQuery(
+        nodes=[
+            PatternNode(var="p", entity_type="Person"),
+            PatternNode(var="e", entity_type="Endpoint"),
+        ],
+        edges=[PatternEdge(edge_type="USES", from_var="p", to_var="e")],
+    )
+    rendered = MatchBuilder(pattern).render_gremlin(access, CLEARED)
+    assert rendered == (
+        "g.V().hasLabel('mx_Person').has(\"reverted\",false).hasNot(\"superseded_by\")"
+        ".has(\"handling_classification\",within(['OFFICIAL','OFFICIAL-SENSITIVE','SECRET']))"
+        '.filter(or(has("handling_code",within([\'P\',\'C\'])),and(has("handling_code",within([])),'
+        'or(has("owning_unit",\'unit-1\'),has("originator",\'unit-1\'))))).as(\'p\')'
+        ".select('p').outE('mx_USES')"
+        '.has("reverted",false).hasNot("superseded_by")'
+        '.has("handling_classification",within([\'OFFICIAL\',\'OFFICIAL-SENSITIVE\',\'SECRET\']))'
+        '.filter(or(has("handling_code",within([\'P\',\'C\'])),and(has("handling_code",within([])),'
+        "or(has(\"owning_unit\",'unit-1'),has(\"originator\",'unit-1')))))"
+        ".inV()"
+        '.has("reverted",false).hasNot("superseded_by")'
+        '.has("handling_classification",within([\'OFFICIAL\',\'OFFICIAL-SENSITIVE\',\'SECRET\']))'
+        '.filter(or(has("handling_code",within([\'P\',\'C\'])),and(has("handling_code",within([])),'
+        "or(has(\"owning_unit\",'unit-1'),has(\"originator\",'unit-1'))))).hasLabel('mx_Endpoint')"
+        ".as('e').select('p','e').by(elementMap()).dedup().limit(1000)"
+    )
+
+
+async def test_match_finds_the_intersection_across_two_independent_roots(
+    factory: GraphAdapterFactory,
+) -> None:
+    """B19 (`08_ACCEPTANCE_SCENARIOS.md`): "Expand to common contacts across the two principal
+    endpoints" — a diamond, not a chain: two independent starting nodes (`a`, `b`) converging on a
+    shared third (`e`), which the pre-Stage-4 single-chain-only compiler could not express at all
+    (`e`'s own second incoming edge referenced a `from_var` — `b` — the linear walk never bound).
+    `06_DECISIONS.md` §8.1's widening addresses exactly this pattern."""
+    async with factory.context() as adapter:
+        (a, b, e, other), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL"),
+                _node("Person", classification="OFFICIAL"),
+                _node("Endpoint", classification="OFFICIAL"),
+                # A second Endpoint only `a` uses — proves the match is the real intersection,
+                # not merely "everything either root can reach."
+                _node("Endpoint", classification="OFFICIAL"),
+            ],
+            [],
+        )
+        await _write(
+            adapter,
+            [],
+            [
+                _edge("USES", a, e, classification="OFFICIAL"),
+                _edge("USES", b, e, classification="OFFICIAL"),
+                _edge("USES", a, other, classification="OFFICIAL"),
+            ],
+        )
+
+        pattern = PatternQuery(
+            nodes=[
+                # Both principal endpoints pinned — B19's own real shape ("the two principal
+                # endpoints" are nodes the analyst already selected); only `e`, the common
+                # contact, is the variable this query actually discovers.
+                PatternNode(var="a", entity_type="Person", node_id=a),
+                PatternNode(var="b", entity_type="Person", node_id=b),
+                PatternNode(var="e", entity_type="Endpoint"),
+            ],
+            edges=[
+                PatternEdge(edge_type="USES", from_var="a", to_var="e"),
+                PatternEdge(edge_type="USES", from_var="b", to_var="e"),
+            ],
+        )
+        subgraph = await adapter.match(pattern, CLEARED)
+        found_ids = {n.id for n in subgraph.nodes}
+        # `e` (the actual discovered common contact) is always present. `b` — the *secondary*
+        # pinned root, listed second in `nodes` — is never returned: it is never `.as()`-labelled
+        # outside its own nested `.where()` check, so there is nothing to select in the first
+        # place. `a`, the primary root (`MatchBuilder`'s own internal choice, `nodes[0]` here), is
+        # returned even though it is also pinned — a real, disclosed asymmetry (see `builders.py`
+        # own comment): dropping it would force a single-argument `select()`, which Gremlin gives
+        # a different result shape than the multi-argument form the adapter's own parsing expects.
+        assert {a, e} <= found_ids
+        assert b not in found_ids
+        assert other not in found_ids
+
+
+async def test_match_intersection_never_leaks_a_hidden_common_endpoint(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Standing rule 3/4, applied to the new diamond-pattern join: a common endpoint neither root
+    principal can see must not appear in the result, count toward it, or otherwise be detectable —
+    the same existence-leak discipline this suite's own header names, now proven for a *join*
+    across two independently-filtered fragments rather than a single chain. An unauthorised
+    principal asking "what do these two people have in common" must get back nothing that reveals
+    a SECRET-only common endpoint exists at all, not even by a non-empty result of the wrong
+    shape."""
+    async with factory.context() as adapter:
+        (a, b, hidden), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL"),
+                _node("Person", classification="OFFICIAL"),
+                _node("Endpoint", classification="SECRET"),
+            ],
+            [],
+        )
+        await _write(
+            adapter,
+            [],
+            [
+                _edge("USES", a, hidden, classification="OFFICIAL"),
+                _edge("USES", b, hidden, classification="OFFICIAL"),
+            ],
+        )
+
+        pattern = PatternQuery(
+            nodes=[
+                # Both principal endpoints pinned — B19's own real shape, and the same fixture
+                # design `test_match_finds_the_intersection_across_two_independent_roots` uses.
+                PatternNode(var="a", entity_type="Person", node_id=a),
+                PatternNode(var="b", entity_type="Person", node_id=b),
+                PatternNode(var="e", entity_type="Endpoint"),
+            ],
+            edges=[
+                PatternEdge(edge_type="USES", from_var="a", to_var="e"),
+                PatternEdge(edge_type="USES", from_var="b", to_var="e"),
+            ],
+        )
+
+        official_result = await adapter.match(pattern, OFFICIAL)
+        assert official_result.nodes == []
+        assert hidden not in {n.id for n in official_result.nodes}
+
+        # The SECRET-cleared principal, by contrast, really does see the intersection — proving
+        # the empty result above is `OFFICIAL`'s own filtering, not a bug that would hide it from
+        # everyone.
+        cleared_result = await adapter.match(pattern, CLEARED)
+        assert hidden in {n.id for n in cleared_result.nodes}
+
+
 # --- temporal filtering on the vertex-centric index -------------------------
 
 

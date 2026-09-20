@@ -737,6 +737,8 @@ class Subgraph(BaseModel):
 class PatternNode(BaseModel):
     var: str
     entity_type: str | None = None
+    node_id: str | None = None   # pins this variable to one already-known node — §8.1's own
+                                  # widening, `06_DECISIONS.md` ADR-030
 
 class PatternEdge(BaseModel):
     edge_type: str
@@ -752,6 +754,40 @@ class PatternQuery(BaseModel):
 A fixed set of Conduit-side builders compiles a `PatternQuery` into Gremlin; the shape itself
 cannot express an arbitrary traversal, which is what makes it safe to accept from above the Vault
 boundary.
+
+**A pattern may have more than one root, within a real, checked limit — widened in Phase 7 Stage
+4 (`06_DECISIONS.md` ADR-030), replacing the single-chain-only restriction this section
+previously left undocumented.** Before this widening, `MatchBuilder`'s own compiler could only
+express a traversal linearised from one node (`nodes[0]`), walked forward via `.outE()` only — a
+node reachable exclusively through a second, independent starting point (a diamond: two roots
+converging on a shared node) could not be expressed at all. `08_ACCEPTANCE_SCENARIOS.md` B19
+("expand to common contacts across the two principal endpoints") is exactly this shape and is
+this build's own binding proof that the restriction had to be lifted, not merely documented.
+
+**The real mechanism, checked against a live ArcadeDB instance rather than assumed from the
+TinkerPop spec.** The natural general solution — Gremlin's own `match()` step, which finds every
+consistent variable binding across independently-expressed traversal fragments — does not work on
+this adapter: ArcadeDB's own Gremlin engine rejects a `match()` fragment that introduces a
+genuinely independent second enumeration (a fragment starting its own fresh `V()`), confirmed
+directly by testing the simplest possible case with no filters at all. The mechanism this build
+uses instead is narrower and does not need `match()`: **every root beyond the first must be
+pinned to an already-known `node_id`** — which is B19's own real shape (the analyst has already
+selected both "principal endpoints"; the query discovers their common contacts, not the endpoints
+themselves). The primary root's own chain is walked forward exactly as the single-chain compiler
+already does; each pinned secondary root's own chain to the convergence point is reversed into a
+`.where()` reachability check ending in `.has("id", <the known id>)` — proving "this known node
+also reaches the same point," without ever needing to enumerate or bind a second, independent
+root. **An open (unpinned) second root remains unsupported.** There is no general join to fall
+back to on this adapter; a pattern needing one is rejected by the builder with a specific error
+naming the unbound root, not silently mis-compiled.
+
+**What this changes for a caller.** `PatternNode.node_id` is the only new surface: set it to pin
+a variable to a specific, already-known node. A pattern where every node is either the first root
+or reachable by a forward chain from it compiles exactly as before (byte-identical Gremlin,
+proven by a dedicated no-regression test). A pattern with additional roots compiles only if every
+one of them is pinned and its own chain converges on a variable the primary chain also reaches;
+anything else — an unpinned second root, or a chain that never converges — is a compile-time
+error, not a silent wrong answer.
 
 ### 8.2 Additions since Phase 1
 
