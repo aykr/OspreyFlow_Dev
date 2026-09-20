@@ -62,3 +62,16 @@ export const CANVAS_ACTIONS = [
   "menu-item-view-messages",
   "overlay-dismiss-cluster-explain",
 ] as const;
+
+/**
+ * `metrics/MetricsPanel.tsx`'s own keyboard-reachable actions — Phase 7 Stage 3, a second and
+ * separate keyboard-driven surface from `GlassCanvas`'s own `CANVAS_ACTIONS`
+ * (`keyboard/metrics-panel-harness.tsx`'s own docstring has the full reasoning for why this is a
+ * new list rather than an addition to that one). The metric selector, compare toggle and hull
+ * toggle are deliberately absent: each is a plain `Select`/`Toggle` with no custom key handling of
+ * its own, the same "a native control needs no proving test case" exemption
+ * `resolution/ThresholdControl.tsx`'s own docstring already establishes for its `<input
+ * type="range">` — only "select a row" is real, canvas-touching application logic (a camera pan
+ * via `GlassCanvasHandle.focusOnNode`), which is why it alone is listed here.
+ */
+export const METRICS_PANEL_ACTIONS = ["row-select-and-centre"] as const;

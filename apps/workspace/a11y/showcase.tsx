@@ -11,6 +11,7 @@ import { createRoot } from "react-dom/client";
 
 import "../../../docs/design/tokens.css";
 import "../src/design/primitives.css";
+import { SEQ_HEX } from "../src/color/tokens";
 import { Button } from "../src/design/primitives/Button";
 import { Checkbox } from "../src/design/primitives/Checkbox";
 import { Histogram } from "../src/design/primitives/Histogram";
@@ -149,6 +150,52 @@ function Showcase() {
       <Toast message="6 item(s) withheld by handling policy" kind="warning" />
       <Panel title="Messages">
         <HighlightedMessage document={DOSSIER_DOCUMENT} ontology={DOSSIER_ONTOLOGY} />
+      </Panel>
+      {/* Phase 7 Stage 3: the metrics panel's own representative sample — a ranked list row, a
+          dense two-metric comparison (the shape most likely to fail the contrast floor, the same
+          reasoning `DOSSIER_DOCUMENT`'s own two-span choice above already follows), and a
+          community-hull legend entry. Static markup with the same primitives the real
+          `metrics/MetricsPanel.tsx` uses, not the live-fetching component itself — this file's own
+          convention throughout (the `Table` rows above are hand-written fixtures too), since a
+          real fetch here would prove nothing about contrast and would fail against no real API. */}
+      <Panel title="Metrics">
+        <Select aria-label="Primary metric" defaultValue="betweenness">
+          <option value="degree">Degree</option>
+          <option value="betweenness">Betweenness</option>
+        </Select>
+        <Toggle checked label="Compare a second metric" onChange={() => {}} />
+        <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          <li>
+            <button
+              type="button"
+              style={{ width: "100%", display: "flex", justifyContent: "space-between" }}
+            >
+              <span>Person · n1</span>
+              <span className="value">0.842 / 0.311</span>
+            </button>
+          </li>
+          <li>
+            <button
+              type="button"
+              style={{ width: "100%", display: "flex", justifyContent: "space-between" }}
+            >
+              <span>Endpoint · n2</span>
+              <span className="value">0.573 / 0.204</span>
+            </button>
+          </li>
+        </ul>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-6)" }}>
+          <span
+            style={{
+              width: 12,
+              height: 12,
+              background: SEQ_HEX[2],
+              display: "inline-block",
+              borderRadius: 2,
+            }}
+          />
+          <span>Community hull (cluster 3)</span>
+        </div>
       </Panel>
     </div>
   );

@@ -1258,6 +1258,22 @@ findable only from whichever phase happened to notice it.
   re-checking rather than assumed solved generally the first time a genuinely different surface
   (not a further canvas radial-menu item) needs it.
 
+  **That first genuinely different surface arrived in Phase 7 Stage 3 (the metrics panel), and the
+  re-check found a real gap, not a false alarm.** `GlassCanvas.tsx`'s own `onKeyDown` calls
+  `preventDefault()` on every `Tab` keydown once its container div holds focus (the "establish/
+  cycle the selection ring" branches) — correct for the canvas's own documented behaviour, but it
+  means native Tab-order focus can never leave the canvas to reach a sibling panel's own controls
+  while the canvas holds it: confirmed directly, not assumed, while writing `keyboard/
+  metrics-panel.spec.ts` — a walkthrough starting focus on the canvas (as `keyboard/harness.tsx`'s
+  own pattern does) never reached the metrics panel's row buttons at all, in up to 20 Tab presses.
+  **Not fixed here** — `metrics-panel.spec.ts` starts its own walkthrough from the panel's own
+  first control instead, which proves the panel's own row-activation action correctly but does not
+  exercise cross-surface Tab flow. A real accessibility gap for an analyst tabbing from the canvas
+  outward once two keyboard-driven surfaces are visible side by side, worth its own fix (most
+  plausibly: the canvas's own Tab branches should fall through to the browser default, i.e. let
+  focus leave, once no ring exists yet to establish or cycle) before Phase 7's visual query builder
+  or pathfinder add a third such surface and compound the same gap.
+
 - **Betweenness has no size-triggered Brandes-sampling fallback, though `02_GLASS_FRONTEND.md`
   line 206 already documents one should exist ("Betweenness (exact to 20k nodes, Brandes-sampled
   above)").** Found while building `services/api/compute_routes.py` (Phase 7 Stage 3): the same

@@ -1,5 +1,5 @@
 import type { Map as MapLibreMap } from "maplibre-gl";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   EdgeTypeDef,
@@ -8,7 +8,7 @@ import type {
   PublicMapConfig,
 } from "../../../packages/schemas/generated";
 import { fetchGeoBins } from "./analytics/api";
-import { GlassCanvas } from "./canvas/GlassCanvas";
+import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
 import {
   buildEventFilter,
   createCrossFilterStore,
@@ -20,6 +20,8 @@ import { Toast } from "./design/primitives/Toast";
 import { Dossier } from "./dossier/Dossier";
 import { HistoryPanel } from "./history/HistoryPanel";
 import { Inspector } from "./inspector/Inspector";
+import { computeCommunityHulls } from "./metrics/hulls";
+import { MetricsPanel } from "./metrics/MetricsPanel";
 import { ResolutionThresholdControl } from "./resolution/ThresholdControl";
 import { resolveNodeCoordinates } from "./map/geometries";
 import { HotspotHistogram } from "./map/HotspotHistogram";
@@ -78,9 +80,15 @@ function investigationIdFromSession(): string | null {
 
 export function App() {
   const workingSetRef = useRef(createWorkingSet());
+  const glassCanvasRef = useRef<GlassCanvasHandle>(null);
   const [investigationId, setInvestigationId] = useState<string | null>(
     investigationIdFromSession(),
   );
+  // Phase 7 Stage 3: the metrics panel's own "Show community hulls" toggle feeds this, `App.tsx`
+  // (not `MetricsPanel` itself) turns it into hull geometry — `MetricsPanel` has no dependency on
+  // Sigma/the canvas at all, the same separation `onSelectionChange`/`onViewMessages` already draw
+  // between "what happened" and "what the canvas does about it."
+  const [communities, setCommunities] = useState<Record<string, string> | null>(null);
   const [ontology, setOntology] = useState<OntologyRegistry | null>(null);
   const [edgeTypes, setEdgeTypes] = useState<EdgeTypeDef[]>([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
@@ -230,6 +238,21 @@ export function App() {
     return () => unsubscribe();
   }, [investigationId]);
 
+  // Recomputed only when the fetched `communities` result itself changes, not on every render —
+  // `metrics/hulls.ts`'s own benchmark (2.6ms at the 20k-node sync boundary) makes per-render
+  // recomputation affordable in principle, but `useMemo` avoids paying it for unrelated App-level
+  // re-renders (a Toast firing, the status bar ticking) that touch neither `communities` nor the
+  // graph. Known, disclosed staleness: a reproject that moves node positions without a fresh
+  // `communities` fetch does not itself refresh hull vertices until the next fetch — real, and
+  // left rather than adding a second recompute trigger this stage's own plan did not call for.
+  //
+  // Declared before the "not ready yet" early return below, per the rules of Hooks — every Hook
+  // in this component must run on every render, loading state included.
+  const communityHulls = useMemo(
+    () => (communities ? computeCommunityHulls(workingSetRef.current.graph, communities) : undefined),
+    [communities],
+  );
+
   if (!investigationId || !ontology || !crossFilterRef.current) {
     return (
       <div style={{ padding: "var(--sp-24)", color: "var(--text-secondary)" }}>
@@ -337,6 +360,7 @@ export function App() {
         <div style={{ flex: 1, position: "relative" }}>
           {view === "graph" && (
             <GlassCanvas
+              ref={glassCanvasRef}
               graph={workingSetRef.current.graph}
               store={workingSetRef.current.store}
               ontology={ontology}
@@ -345,6 +369,7 @@ export function App() {
               apiBaseUrl={API_BASE_URL}
               bearerToken={DEV_BEARER_TOKEN}
               dimmedNodeIds={dimming.dimmedNodeIds}
+              communityHulls={communityHulls}
               onSelectionChange={(nodeIds) => {
                 const first = nodeIds[0];
                 const graph = workingSetRef.current.graph;
@@ -447,9 +472,25 @@ export function App() {
         )}
         {view !== "ingest" && view !== "dossier" && (
         <div
-          style={{ width: 320, borderLeft: "1px solid var(--border-subtle)" }}
+          style={{
+            width: 320,
+            borderLeft: "1px solid var(--border-subtle)",
+            display: "flex",
+            flexDirection: "column",
+            overflowY: "auto",
+          }}
         >
           <Inspector node={selectedNode} />
+          {view === "graph" && (
+            <MetricsPanel
+              apiBaseUrl={API_BASE_URL}
+              bearerToken={DEV_BEARER_TOKEN}
+              investigationId={investigationId}
+              graph={workingSetRef.current.graph}
+              onFocusNode={(nodeId) => glassCanvasRef.current?.focusOnNode(nodeId)}
+              onCommunitiesChange={setCommunities}
+            />
+          )}
         </div>
         )}
       </div>

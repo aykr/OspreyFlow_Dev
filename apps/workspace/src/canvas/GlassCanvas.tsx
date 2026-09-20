@@ -27,7 +27,7 @@ import type { StoreApi } from "zustand/vanilla";
 import { useStore } from "zustand/react";
 import { EdgeLineProgram, createNodeCompoundProgram } from "sigma/rendering";
 import Sigma from "sigma";
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 import type { EdgeTypeDef } from "../../../../packages/schemas/generated";
 import { pointInPolygon } from "../map/geometry";
@@ -47,6 +47,7 @@ import {
 import { RadialMenu, type RadialMenuItem } from "../design/primitives/RadialMenu";
 import { EdgeInspectionOverlay } from "./EdgeInspectionOverlay";
 import { ClusterExplainOverlay } from "./ClusterExplainOverlay";
+import { CommunityHullOverlay } from "./CommunityHullOverlay";
 import type { ClusterExplanation } from "../workingset/models";
 
 const NODE_PROGRAM = createNodeCompoundProgram<WorkingSetNodeAttributes, WorkingSetEdgeAttributes>([
@@ -109,6 +110,22 @@ export interface GlassCanvasProps {
    * with the node's own id rather than owning any Dossier state itself; `App.tsx` owns `view`,
    * the same separation `onSelectionChange` already establishes. */
   onViewMessages?: (nodeId: string) => void;
+  /** Phase 7 Stage 3: the metrics panel's own community-detection result, already grouped into
+   * hull polygons by `metrics/hulls.ts`'s pure `computeCommunityHulls` — `GlassCanvas` only
+   * renders them (`CommunityHullOverlay`, camera-tracked the same way `EdgeInspectionOverlay`'s
+   * own DOM-overlay pattern is, ADR-002's "one honest caveat"), it does not compute them, so a
+   * caller that never fetches communities pays nothing beyond the `undefined` check below. */
+  communityHulls?: ReadonlyMap<string, readonly [number, number][]>;
+}
+
+/** Phase 7 Stage 3: what the metrics panel needs from outside the canvas's own event handlers —
+ * "row-select-and-centre" is real application logic (a camera pan, not merely a browser default),
+ * so it is proven end-to-end by `keyboard/metrics-panel.spec.ts`, per standing rule 13. */
+export interface GlassCanvasHandle {
+  /** Selects `nodeId` (firing `onSelectionChange`/`onFocusChange` exactly as a mouse click would)
+   * and pans the camera to centre it, without changing the current zoom ratio — a no-op if
+   * `nodeId` is not in `graph` (e.g. a stale metrics-panel row after a working-set change). */
+  focusOnNode: (nodeId: string) => void;
 }
 
 interface PendingRadialMenu {
@@ -126,19 +143,23 @@ interface PendingRadialMenu {
 // prop, not a hypothetical this time either).
 const EMPTY_DIMMED_SET: ReadonlySet<string> = new Set();
 
-export function GlassCanvas({
-  graph,
-  store,
-  ontology,
-  edgeTypes,
-  investigationId,
-  apiBaseUrl,
-  bearerToken,
-  dimmedNodeIds = EMPTY_DIMMED_SET,
-  onSelectionChange,
-  onFocusChange,
-  onViewMessages,
-}: GlassCanvasProps) {
+export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(function GlassCanvas(
+  {
+    graph,
+    store,
+    ontology,
+    edgeTypes,
+    investigationId,
+    apiBaseUrl,
+    bearerToken,
+    dimmedNodeIds = EMPTY_DIMMED_SET,
+    onSelectionChange,
+    onFocusChange,
+    onViewMessages,
+    communityHulls,
+  }: GlassCanvasProps,
+  ref,
+) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sigmaRef = useRef<Sigma<WorkingSetNodeAttributes, WorkingSetEdgeAttributes> | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -349,6 +370,28 @@ export function GlassCanvas({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      focusOnNode: (nodeId: string) => {
+        if (!graph.hasNode(nodeId)) return;
+        setSelected(new Set([nodeId]));
+        onSelectionChange?.([nodeId]);
+        setFocused(nodeId);
+        const sigma = sigmaRef.current;
+        if (!sigma) return;
+        const x = graph.getNodeAttribute(nodeId, "x") ?? 0;
+        const y = graph.getNodeAttribute(nodeId, "y") ?? 0;
+        // Pan only — the current zoom ratio is left untouched (`camera.animate` merges the given
+        // keys, per Sigma's own `CameraState` semantics), so "centre" means exactly that and
+        // nothing else, the simplest deterministic behaviour to both implement and assert against
+        // in `keyboard/metrics-panel.spec.ts`.
+        sigma.getCamera().animate({ x, y }, { duration: 200 });
+      },
+    }),
+    [graph, onSelectionChange],
+  );
 
   // Keyboard: accessibility floor (`docs/02_GLASS_FRONTEND.md` §6) — every
   // canvas action reachable without a mouse.
@@ -645,7 +688,10 @@ export function GlassCanvas({
           onClose={() => setClusterExplain(null)}
         />
       )}
+      {communityHulls && communityHulls.size > 0 && (
+        <CommunityHullOverlay sigmaRef={sigmaRef} hulls={communityHulls} />
+      )}
     </div>
   );
-}
+});
 
