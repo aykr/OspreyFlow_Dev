@@ -500,6 +500,15 @@ class GraphArcadeDBAdapter:
                 nodes[node.id] = node
         return Subgraph(nodes=list(nodes.values()), edges=[])
 
+    async def match_count(
+        self, pattern: PatternQuery, principal: Principal, *, ceiling: int
+    ) -> int:
+        query = MatchBuilder(pattern).render_count_gremlin(self._access, principal, ceiling=ceiling)
+        results = await self._client.gremlin(query)
+        if not results:
+            return 0
+        return int(results[0].get("result") or 0)
+
     async def neighbourhood_stats(
         self, node_id: NodeId, principal: Principal
     ) -> NeighbourhoodStats:

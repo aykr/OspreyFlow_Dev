@@ -202,6 +202,34 @@ class GraphPort(Protocol):
     async def paths(self, req: PathRequest, principal: Principal) -> list[Path]: ...
     async def match(self, pattern: PatternQuery, principal: Principal) -> Subgraph: ...
 
+    async def match_count(
+        self, pattern: PatternQuery, principal: Principal, *, ceiling: int
+    ) -> int:
+        """`docs/02_GLASS_FRONTEND.md` §3.3's "estimated result count" for the visual query
+        builder, and `08_ACCEPTANCE_SCENARIOS.md` B19's own "estimated count shown before
+        running". **Principal-filtered — deliberately not `expand_candidate_count`'s shape.**
+        That method exists to compute the *unfiltered* half of a comparison an authorised caller
+        (`WorkingSetService`) reconciles against its own already-filtered result; it is never
+        itself shown to an analyst. A pattern's estimate has no such reconciling caller and is
+        shown directly, so it must be filtered by this same call, the same way `match()` itself
+        is — an unfiltered count here is `CLAUDE.md` rule 7's "unfiltered count" the Glass must
+        never see, and rule 3's existence-leak-by-aggregate, not a shortcut.
+
+        Compiles the identical access-filtered traversal `match()` does (same `has_access`
+        injected at every step) up to a `.dedup().count()` tail in place of `match()`'s own
+        `.select(...).by(elementMap())` — cheaper (no property hydration) while guaranteeing the
+        count and the eventual result set can never disagree about *who* is let through, only
+        about how many are materialised.
+
+        `ceiling` bounds the traversal's own `.limit()` before `.count()` — a real, unavoidable
+        cost bound for a weakly-constrained pattern, not `pattern.limit` itself (a caller
+        deciding whether a match needs the job hand-off, `03_CONDUIT_MIDDLEWARE.md` §3.3, must
+        see past `pattern.limit` to know how far past it the true count goes). A returned count
+        equal to `ceiling` means "at least `ceiling`", never a claim that `ceiling` is the exact
+        total — the caller is the one that knows whether its own `ceiling` was exact or a floor,
+        since this method's own return type carries no such flag itself."""
+        ...
+
     async def neighbourhood_stats(
         self, node_id: NodeId, principal: Principal
     ) -> NeighbourhoodStats: ...

@@ -314,7 +314,37 @@ class MatchBuilder:
             return single_chain
         return self._render_matched(access, principal)
 
-    def _render_single_chain(self, access: AccessFilter, principal: Principal) -> str | None:
+    def render_count_gremlin(
+        self, access: AccessFilter, principal: Principal, *, ceiling: int
+    ) -> str:
+        """`GraphPort.match_count`'s compiler — `01_DOMAIN_MODEL.md` §8.1, Phase 7 Stage 4's
+        query-builder surface. Deliberately routed through `_render_single_chain`/
+        `_render_matched` with `count_only=True` rather than a separate step-building method:
+        the whole point (`CLAUDE.md` rule 3/7 — an estimate must be filtered exactly like the
+        real result) is that this can never drift from `render_gremlin`'s own access-filtered
+        steps, which duplicating the walk logic here would risk the moment one of the two copies
+        was edited and the other wasn't. Only the tail differs: `.dedup().limit(ceiling).count()`
+        in place of `.select(...).by(elementMap()).dedup().limit(pattern.limit)` — no property
+        hydration, and `ceiling` (not `pattern.limit`) bounds the cost, since a caller deciding
+        whether a match needs the job hand-off needs to see how far past `pattern.limit` the true
+        count goes, not the query's own display cap."""
+        if not self.pattern.nodes:
+            raise ValueError("PatternQuery must declare at least one node")
+        single_chain = self._render_single_chain(
+            access, principal, count_only=True, ceiling=ceiling
+        )
+        if single_chain is not None:
+            return single_chain
+        return self._render_matched(access, principal, count_only=True, ceiling=ceiling)
+
+    def _render_single_chain(
+        self,
+        access: AccessFilter,
+        principal: Principal,
+        *,
+        count_only: bool = False,
+        ceiling: int | None = None,
+    ) -> str | None:
         """The original compiler, unchanged in every step it emits — returns `None` (never
         raises) the moment the pattern cannot be linearised from `nodes[0]` alone, so
         `render_gremlin` can fall back to `_render_matched` rather than the caller having to
@@ -353,13 +383,45 @@ class MatchBuilder:
         if bound != {n.var for n in self.pattern.nodes}:
             return None
 
+        if count_only:
+            assert ceiling is not None  # always passed together — see `render_count_gremlin`
+            steps.append(self._count_tail(sorted(n.var for n in self.pattern.nodes), ceiling))
+            return "".join(steps)
+
         select_args = groovy_args_literal(n.var for n in self.pattern.nodes)
         steps.append(f".select({select_args})")
         steps.append(".by(elementMap())")
         steps.append(f".dedup().limit({self.pattern.limit})")
         return "".join(steps)
 
-    def _render_matched(self, access: AccessFilter, principal: Principal) -> str:
+    @staticmethod
+    def _count_tail(labelled_vars: list[str], ceiling: int) -> str:
+        """The count-only tail shared by both compilation paths — counts the distinct-by-id union
+        of every `.as()`-labelled variable a match binds, the same set `match()`'s own adapter
+        code builds in Python (`{node.id: node for record in results for value in
+        record.values()}`), so `match_count` and `len(match().nodes)` can never disagree about
+        *what* is being counted, only about whether `ceiling` cut it short. `union(select(v), ...)`
+        re-selects each already-bound label off the current traverser's own path history — the
+        same mid-chain re-`select()` the walk above already relies on — rather than
+        `select(v1,...).by(id())` plus a Python-side flatten, so the count stays one real
+        server-side aggregate with no extra network round trip for however many rows `ceiling`
+        might otherwise allow through. A single-variable pattern skips `union()` entirely: with
+        nothing to union, the current stream position already *is* that one variable's own
+        vertices, and `union()`'s own single-argument form is unnecessary indirection, not a
+        different result."""
+        if len(labelled_vars) > 1:
+            branches = ",".join(f"select({groovy_string_literal(v)})" for v in labelled_vars)
+            return f".union({branches}).dedup().limit({ceiling}).count()"
+        return f".dedup().limit({ceiling}).count()"
+
+    def _render_matched(
+        self,
+        access: AccessFilter,
+        principal: Principal,
+        *,
+        count_only: bool = False,
+        ceiling: int | None = None,
+    ) -> str:
         """The pinned-root reachability compiler — see the class docstring for why this exists
         instead of Gremlin's own `match()` step. One root drives the primary traversal exactly
         like `_render_single_chain`; every other root must be pinned to a known `node_id` and
@@ -472,6 +534,11 @@ class MatchBuilder:
         # emitting a single-argument `select()` for the diamond path; a bare single-pinned-node
         # pattern with no discovered variable at all is `_render_single_chain`'s own scope, not
         # this one, and already shares whatever behaviour that path has for it.
+        if count_only:
+            assert ceiling is not None  # always passed together — see `render_count_gremlin`
+            steps.append(self._count_tail(sorted(primary_bound), ceiling))
+            return "".join(steps)
+
         select_args = groovy_args_literal(sorted(primary_bound))
         steps.append(f".select({select_args})")
         steps.append(".by(elementMap())")

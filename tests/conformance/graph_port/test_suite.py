@@ -864,6 +864,85 @@ async def test_match_intersection_never_leaks_a_hidden_common_endpoint(
         assert hidden in {n.id for n in cleared_result.nodes}
 
 
+# --- pattern match: cardinality estimate ------------------------------------
+
+
+async def test_match_count_agrees_with_the_filtered_results_own_count(
+    factory: GraphAdapterFactory,
+) -> None:
+    """`GraphPort.match_count` is `match()`'s own cheaper cousin, not a second, independently
+    -filtered channel — `02_GLASS_FRONTEND.md` §3.3's estimate and the eventual run result must
+    never disagree when nothing was capped."""
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL"),
+                _node("Endpoint", classification="OFFICIAL"),
+            ],
+            [],
+        )
+        await _write(adapter, [], [_edge("USES", a, b, classification="OFFICIAL")])
+
+        pattern = PatternQuery(
+            nodes=[
+                PatternNode(var="p", entity_type="Person"),
+                PatternNode(var="e", entity_type="Endpoint"),
+            ],
+            edges=[PatternEdge(edge_type="USES", from_var="p", to_var="e")],
+        )
+        count = await adapter.match_count(pattern, CLEARED, ceiling=1_000)
+        subgraph = await adapter.match(pattern, CLEARED)
+        assert count == len(subgraph.nodes) == 2
+
+
+async def test_match_count_never_leaks_a_hidden_node(factory: GraphAdapterFactory) -> None:
+    """`CLAUDE.md` rule 7 (the Glass never sees an unfiltered count) and rule 3 (an unauthorised
+    principal must not detect a filtered node's existence via an aggregate) — applied to the
+    visual query builder's own estimate, which is shown to the analyst directly rather than
+    reconciled by an authorised caller the way `expand_candidate_count` is. A principal who
+    cannot see a matching node must get a *smaller* count, not the same one with the node itself
+    merely missing from a list."""
+    async with factory.context() as adapter:
+        (a, hidden), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL"),
+                _node("Endpoint", classification="SECRET"),
+            ],
+            [],
+        )
+        await _write(adapter, [], [_edge("USES", a, hidden, classification="OFFICIAL")])
+
+        pattern = PatternQuery(
+            nodes=[
+                PatternNode(var="p", entity_type="Person"),
+                PatternNode(var="e", entity_type="Endpoint"),
+            ],
+            edges=[PatternEdge(edge_type="USES", from_var="p", to_var="e")],
+        )
+        official_count = await adapter.match_count(pattern, OFFICIAL, ceiling=1_000)
+        cleared_count = await adapter.match_count(pattern, CLEARED, ceiling=1_000)
+        assert official_count < cleared_count
+        assert official_count == len((await adapter.match(pattern, OFFICIAL)).nodes)
+
+
+async def test_match_count_is_a_floor_at_the_ceiling(factory: GraphAdapterFactory) -> None:
+    """A count equal to `ceiling` is a floor ("at least"), never a claim that `ceiling` is the
+    exact total — proven by matching a population strictly larger than a deliberately small
+    ceiling and confirming the reported count is exactly the ceiling, not the true, larger
+    total."""
+    async with factory.context() as adapter:
+        people = [_node("Person", classification="OFFICIAL") for _ in range(5)]
+        (*person_ids,), _ = await _write(adapter, people, [])
+
+        pattern = PatternQuery(nodes=[PatternNode(var="p", entity_type="Person")], edges=[])
+        capped = await adapter.match_count(pattern, CLEARED, ceiling=3)
+        uncapped = await adapter.match_count(pattern, CLEARED, ceiling=1_000)
+        assert capped == 3
+        assert uncapped == len(person_ids) == 5
+
+
 # --- temporal filtering on the vertex-centric index -------------------------
 
 

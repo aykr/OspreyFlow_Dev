@@ -94,7 +94,15 @@ from schemas.analytics import (
     Histogram,
     HistogramRequest,
 )
-from schemas.domain import Edge, ExpandRequest, Node, NodeId, OntologySchema, Principal
+from schemas.domain import (
+    Edge,
+    ExpandRequest,
+    Node,
+    NodeId,
+    OntologySchema,
+    PatternQuery,
+    Principal,
+)
 from schemas.ingest import (
     CONNECTOR_CATALOGUE,
     ConnectDraftInput,
@@ -143,6 +151,14 @@ from .jobs import JobQueue
 from .mapconfig_loader import load_map_config, public_view
 from .notify import notify_channel, publish_delta
 from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
+from .patterns import (
+    JOB_TYPE_PATTERN_MATCH,
+    PatternPreview,
+    PatternRunAccepted,
+    preview_pattern,
+    run_pattern,
+    run_pattern_match_job,
+)
 from .resolution_trigger import ResolveNowAccepted
 from .review import (
     AcceptCandidateRequest,
@@ -310,6 +326,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     job_worker.register(
         JOB_TYPE_COMPUTE_METRIC, functools.partial(run_compute_metric_job, compute=compute)
     )
+    job_worker.register(JOB_TYPE_PATTERN_MATCH, run_pattern_match_job)
     app.state.job_worker = job_worker
     app.state.principal_resolver = PrincipalResolver(config)
     app.state.map_config = load_map_config(config.osprey_config_path)
@@ -1442,6 +1459,47 @@ async def search_route(
         result_cardinality=len(result.nodes),
     )
     return result
+
+
+# --- the visual query builder (Phase 7 Stage 4, 06_DECISIONS.md ADR-030) ------
+#
+# Not investigation-scoped — `patterns.py`'s own module docstring has the full reasoning, the
+# same one `/v1/search` above already gives for its own lack of an `owning_unit` check.
+
+
+@app.post("/v1/patterns/preview")
+async def patterns_preview_route(
+    pattern: PatternQuery,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    audit: AuditDep,
+) -> PatternPreview:
+    preview = await preview_pattern(pattern, graph=graph, principal=principal)
+    await audit.record(
+        principal=principal,
+        action="patterns_preview",
+        resolved_query=pattern.model_dump(mode="json"),
+        result_cardinality=preview.estimated_count,
+    )
+    return preview
+
+
+@app.post("/v1/patterns/run")
+async def patterns_run_route(
+    pattern: PatternQuery,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    jobs: JobsDep,
+    audit: AuditDep,
+) -> PatternRunAccepted:
+    accepted = await run_pattern(pattern, graph=graph, principal=principal, jobs=jobs)
+    await audit.record(
+        principal=principal,
+        action="patterns_run",
+        resolved_query=pattern.model_dump(mode="json"),
+        result_cardinality=accepted.matched_count or 0,
+    )
+    return accepted
 
 
 # --- the corpus-wide resolution trigger (06_DECISIONS.md ADR-025) -------------
