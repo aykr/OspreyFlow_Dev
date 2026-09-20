@@ -911,7 +911,7 @@ test_phase6a_glass_surfaces.py`.
 - Degree, betweenness, eigenvector, clustering coefficient, Louvain (Leiden is unavailable on
   either compute tier — `06_DECISIONS.md` ADR-029), Clique Metric.
 - `ComputePort` conformance across two tiers (Tier 1 graphology, Tier 2 `rustworkx`) on the
-  5,000-node fixture — Tier 3 registers in Phase 8's `cluster` profile instead (`06_DECISIONS.md`
+  5,000-node fixture — Tier 3 registers in Phase 8a's `cluster` profile instead (`06_DECISIONS.md`
   ADR-028).
 - Metrics panel with two-metric comparison; size encoding; community hull overlay.
 - Visual query builder compiling to Gremlin builders, with result estimation.
@@ -944,7 +944,7 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
    demonstration soonest.
 2. **`ComputePort` schemas and its conformance suite** — `NEXT_STEPS_PHASE7.md`'s own Tier-1/
    Tier-3 questions answered here, before any adapter, per standing rule 1 (`06_DECISIONS.md`
-   ADR-028: Tier 1 runs as a plain Node script, Tier 3 defers to Phase 8's `cluster` profile);
+   ADR-028: Tier 1 runs as a plain Node script, Tier 3 defers to Phase 8a's `cluster` profile);
    independent of Stage 1 and may run in parallel with it. **Stage 3's own obligation, named here
    rather than left to be assumed automatic:** `ComputePort` takes no `Principal`
    (`01_DOMAIN_MODEL.md` §10) — the structural containment test this stage writes proves an
@@ -962,10 +962,11 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
 
 **Exit.** Acceptance scenario B, scoped to B1 (its two-CDR-files half only; the device-extraction
 half stays unowned, ADR-027), B2–B5, B7, B12, B13 (via a CDR-carried hotlisted identifier, not the
-literal seizure-record fixture, ADR-027), B14, B15 (its `imsi→Device` leg only, ADR-022's
-addendum), B19 and B20, passes end to end. The Clique Metric ranks the insular-cluster fixture node
-above the broad-hub fixture node, and its two registered compute tiers (Tier 1 graphology, Tier 2
-`rustworkx` — Tier 3 deferred to Phase 8's `cluster` profile, `06_DECISIONS.md` ADR-028) return
+literal seizure-record fixture, ADR-027), B14, B15 (its `imsi→Device` leg only, ADR-022's own
+first addendum), B19 and B20, passes end to end. The Clique Metric ranks the insular-cluster
+fixture node above the broad-hub fixture node, and its two registered compute tiers (Tier 1
+graphology, Tier 2 `rustworkx` — Tier 3 deferred to Phase 8a's `cluster` profile, `06_DECISIONS.md`
+ADR-028) return
 identical values within tolerance. A12 (Phase 5's exit criterion, scoped to A1–A11, deferred this
 one step here per ADR-019) is re-proven against the same HMP fixture: the Clique Metric identifies
 the same insular subgroup Phase 5 already surfaced by other means. B15 (a SIM `Endpoint` reaching
@@ -1035,21 +1036,21 @@ disclose something — this list did not exist before Stage 1 found it needed on
   host.** `06_DECISIONS.md` ADR-028 has the full reasoning and its own "revisit if": this
   development host's ~7.65GB Docker VM has produced five distinct memory/resource incidents across
   this build, and a local Spark session's own JVM overhead is not a proposal worth a sixth. Tier 3
-  registers in Phase 8's `cluster` profile instead — Phase 7's own exit criterion's "all three
+  registers in Phase 8a's `cluster` profile instead — Phase 7's own exit criterion's "all three
   compute tiers return identical values within tolerance" is therefore demonstrated for two tiers
   inside this phase, not three, disclosed here rather than silently narrowed.
 
 ---
 
-## Phase 8 — Assessment, export, and the second profile
+## Phase 8 — Assessment, export, and the admin console
 
-**Outcome.** The platform produces an intelligence product, and runs on more than a laptop.
+**Outcome.** The platform produces an intelligence product, and a deployment is buildable and
+operable from the browser or a script — all of it provable on `local-lite`.
 
 - Judgements, gaps and assumptions with evidence linking and the review-flag loop.
 - The probability yardstick loader.
 - Export: chart, subgraph, report. The handling gate with named blockers and recorded
   justification. Withheld-item manifest on every export.
-- `adapters/graph_janusgraph` and `adapters/analytics_clickhouse`, both conformance-green.
 - The browser harness and the admin console it becomes: the six setup screens, live preflight,
   the generated-artefact diff, and the backup, restore, upgrade and verify screens.
 - Harness-driven orchestration (`05_DEPLOYMENT.md` §2.4): target confirmation, drift detection,
@@ -1062,18 +1063,46 @@ disclose something — this list did not exist before Stage 1 found it needed on
   and playback-driven snail trail (B16, B18) — small, incremental additions to Timeline and Map,
   the components Phase 5 already shipped, not a new surface the way Phase 6a is over Phase 6.
 
-**Exit.** Both acceptance scenarios pass unchanged on `local-lite` and on `cluster`. A
-`backup` → `restore` cycle across profiles reproduces the graph from staged Parquet. An export
-containing an `S2`-marked item is blocked, names the item, and proceeds only with a recorded
-justification.
+**Exit.** Both acceptance scenarios pass unchanged on `local-lite`. A `backup` → `restore` cycle
+reproduces the graph from staged Parquet. An export containing an `S2`-marked item is blocked,
+names the item, and proceeds only with a recorded justification.
 
-**Before scoping this phase, read `06_DECISIONS.md` ADR-022's own second addendum (20 September
-2026).** ComputePort Tier 3 (ADR-028) and the Postgres connection-pool hardening finding (Phase 7
-Stage 1) have both landed here since the bullet list above was last priced, and both need real
-multi-node infrastructure to verify at all — a distinct, harder verification profile than
-everything else this phase already carries, which is provable on `local-lite`. The addendum
-proposes a **Phase 8a** split (the two adapters, Tier 3, the pool hardening, and the `cluster`
-half of the exit criterion) but does not enact it — pending a decision, not assumed either way.
+`adapters/graph_janusgraph`, `adapters/analytics_clickhouse`, ComputePort Tier 3 and the
+`cluster` half of this phase's own former exit criterion move to Phase 8a
+(`06_DECISIONS.md` ADR-022's third addendum, 20 September 2026) — that phase's own verification
+needs real multi-node infrastructure this phase's own bullet list does not, so each phase's exit
+criterion is now a test it can actually run on the infrastructure it has, not a criterion split
+across two without saying so.
+
+---
+
+## Phase 8a — The cluster profile
+
+**Outcome.** The platform runs on more than a laptop, and both acceptance scenarios pass there
+too.
+
+- `adapters/graph_janusgraph` and `adapters/analytics_clickhouse`, both conformance-green against
+  the `cluster` profile.
+- ComputePort Tier 3 (GraphFrames on Spark, or HugeGraph Vermeer) — deferred here from Phase 7
+  (`06_DECISIONS.md` ADR-028) because the dev host cannot host it at all, not merely awkwardly;
+  its own conformance case joins `tests/conformance/compute_port` the moment it registers, with
+  no change owed to that suite (ADR-028's own design already accommodates a third tier).
+- The Postgres connection-pool hardening Phase 7 Stage 1 found (two live Conduit instances
+  together exhausted `max_connections`) — real here for the first time, since concurrent
+  instances are the `cluster` profile's own defining property and cannot be demonstrated on
+  `local-lite` at all.
+
+**Exit.** Both acceptance scenarios pass unchanged on the `cluster` profile. ComputePort's three
+registered tiers (Tier 1 `graphology`, Tier 2 `rustworkx`, Tier 3) return identical values within
+`06_DECISIONS.md` ADR-028's own measured tolerance on the 5,000-node fixture. A sustained run of
+two or more Conduit instances against the same Postgres does not exhaust its connection pool.
+
+**Why this phase exists, stated plainly rather than left to be inferred from a bullet list.**
+`06_DECISIONS.md` ADR-022's own second and third addenda have the full finding: Tier 3 and the
+pool-hardening item share a verification profile neither Phase 8 nor any earlier phase carries —
+provable only against real multi-node infrastructure, not a docker-compose stand-in for one. That
+is the reason for the split, not bullet count; B16/B18 landed on Phase 8 in the same period and
+correctly stayed there, being small additions reusing components Phase 5 already shipped.
 
 ---
 

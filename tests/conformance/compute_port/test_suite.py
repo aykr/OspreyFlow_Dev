@@ -1,11 +1,13 @@
 """`ComputePort` conformance suite (`docs/07_BUILD_PLAN.md` Phase 7, `00_ARCHITECTURE.md` §2.3,
 `01_DOMAIN_MODEL.md` §10).
 
-Parametrised over `COMPUTE_PORT_ADAPTERS` in `tests/conformance/registry.py` — real from Stage 3
-(`adapters/compute_rustworkx`, Tier 2). Tier 1 (`graphology`, a Node harness per `06_DECISIONS.md`
-ADR-028) and Tier 3 (deferred to Phase 8's `cluster` profile, same ADR) are not registered yet, so
-the cross-tier agreement case below still collects zero until a second tier joins — the same
-"structurally unable to pass vacuously" discipline Phase 0 established for every other port.
+Parametrised over `COMPUTE_PORT_ADAPTERS` in `tests/conformance/registry.py` — real from Stage 3:
+`adapters/compute_rustworkx` (Tier 2) and `adapters/compute_graphology_tier1` (Tier 1, a
+subprocess-driven Node script per `06_DECISIONS.md` ADR-028), so the cross-tier agreement case
+below actually runs rather than collecting zero. Tier 3 (deferred to Phase 8a's `cluster`
+profile, ADR-028 / ADR-022's third addendum) is still not registered — the same
+"structurally unable to pass vacuously" discipline Phase 0 established for every other port
+covered its own absence until Tier 1 joined.
 
 **What this suite does not, and cannot, prove — named rather than left to be assumed covered.**
 `ComputePort` takes no `Principal` (`01_DOMAIN_MODEL.md` §10): every request below carries an

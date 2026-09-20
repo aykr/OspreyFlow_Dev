@@ -33,13 +33,13 @@ confirmed.
 | 019 | Scenario A's exit criterion is split across three phases | | **Accepted** — 16 Sep 2026 |
 | 020 | `ModelPort` conformance is pinned to a small, digest-verified local model | | **Accepted** — 17 Sep 2026 |
 | 021 | Splink is pinned to 3.9.9, not the 4.x/5.x line, over a transitive GPL dependency | | **Accepted** — 18 Sep 2026 |
-| 022 | Scenario B's exit criterion is split across Phases 6 through 8 | | **Accepted** — 18 Sep 2026, two addenda |
+| 022 | Scenario B's exit criterion is split across Phases 6 through 8 | | **Accepted** — 18 Sep 2026, three addenda |
 | 023 | `imei` belongs to `Device`, `imsi` stays on `Endpoint`; a new edge gives a SIM swap one hop | | **Accepted** — 18 Sep 2026 |
 | 024 | The MSISDN↔IMSI link is a deterministic ingest-path write, not a resolution problem | | **Accepted** — 18 Sep 2026 |
 | 025 | The corpus-wide resolution and alerting trigger | | **Accepted** — 18 Sep 2026, addendum |
 | 026 | The VAST Challenge datasets are admitted shaped, not verbatim; rule 3 is not amended | | **Accepted** — 19 Sep 2026 |
 | 027 | B1 and B13's device-extraction legs stay unowned in Phase 7 | | **Accepted** — 19 Sep 2026 |
-| 028 | `ComputePort`'s three tiers: Tier 1 a plain Node script, Tier 3 deferred to Phase 8 | | **Accepted** — 19 Sep 2026, addendum |
+| 028 | `ComputePort`'s three tiers: Tier 1 a plain Node script, Tier 3 deferred to Phase 8a | | **Accepted** — 19 Sep 2026, addendum |
 | 029 | Neither compute tier can run Leiden; both run Louvain with a connected-components fix | | **Accepted** — 20 Sep 2026 |
 | 030 | `PatternQuery` widened for a pinned second root; `match()` does not work on ArcadeDB | | **Accepted** — 20 Sep 2026 |
 
@@ -1303,16 +1303,22 @@ pass unchanged on `local-lite` and on `cluster` — now depends on two items tha
 harder verification story from everything else the exit criterion already covers, and nothing in
 Phase 8's own bullet list names the pool-hardening item at all.
 
-**Proposed, not decided — pending Ayan's own call, the same standing this ADR gives every option
-it weighs rather than settles unilaterally.** If split, the shape follows this ADR's own
+**Revised decision, 20 September 2026 — accepted.** The split is made, following this ADR's own
 established precedent (Phase 5a for the Ingest Studio, Phase 6a for B6/B9–B11) rather than
-inventing a new pattern: a **Phase 8a**, taking `adapters/graph_janusgraph`,
-`adapters/analytics_clickhouse`, ComputePort Tier 3, the connection-pool hardening, and the
-`cluster` half of the exit criterion; **Phase 8** keeping judgements/assumptions, the yardstick
-loader, export/the handling gate, the browser harness/admin console, the headless CLI, generated
-Kubernetes manifests, B16/B18, and the `local-lite` half of the exit criterion. This addendum
-records the finding and the shape a split would take; it does not enact either — no phase is
-renumbered, no bullet moved, until that call is made.
+inventing a new pattern. A new **Phase 8a — The cluster profile** (`07_BUILD_PLAN.md`), sequenced
+after Phase 8, takes `adapters/graph_janusgraph`, `adapters/analytics_clickhouse`, ComputePort
+Tier 3, the Postgres connection-pool hardening (Phase 7 Stage 1's own finding), and the `cluster`
+half of the exit criterion. Phase 8 keeps judgements/assumptions, the yardstick loader,
+export/the handling gate, the browser harness/admin console, the headless CLI, generated
+Kubernetes manifests, B16/B18, and now reads its own exit criterion against `local-lite` alone —
+each phase's own criterion is a test it can actually run on the infrastructure it has, not a
+criterion split across two without saying so.
+
+**Every reference to "Phase 8's own cluster profile" is chased down, not assumed limited to the
+two named here.** ADR-028's own Tier 3 deferral and this document's Phase 7 known-gaps entry for
+the connection-pool finding both pointed at Phase 8's cluster profile by name and are corrected in
+the same change to point at Phase 8a instead; `07_BUILD_PLAN.md` itself is searched for every
+other citation of Phase 8's cluster work rather than trusting that these two were the only ones.
 
 ---
 
@@ -1885,7 +1891,7 @@ fixtures, the same way A12 was re-proven once its own dependency landed.
 
 ---
 
-## ADR-028 — `ComputePort`'s three tiers: Tier 1 runs as a plain Node script, not a browser; Tier 3 is deferred to Phase 8's `cluster` profile
+## ADR-028 — `ComputePort`'s three tiers: Tier 1 runs as a plain Node script, not a browser; Tier 3 is deferred to Phase 8a's `cluster` profile
 
 **Status.** Accepted, 19 September 2026.
 
@@ -1920,8 +1926,9 @@ the main thread without blocking it; that is not this suite's claim and this ADR
 it. **Not built in Phase 7 Stage 2** — schemas and the suite only, standing rule 1 — named here so
 whichever stage registers Tier 1 is not blocked re-deriving the mechanism.
 
-**Tier 3 — not feasible on this development host; deferred to Phase 8's `cluster` profile, not
-tested and found wanting.** `docker info` on this host reports a fixed 8,214,585,344-byte
+**Tier 3 — not feasible on this development host; deferred to Phase 8a's `cluster` profile (named
+Phase 8 at the time this ADR was first accepted; split out by ADR-022's third addendum, 20
+September 2026), not tested and found wanting.** `docker info` on this host reports a fixed 8,214,585,344-byte
 (~7.65GiB) Docker Desktop VM. `deploy/compose/dev.yaml`'s own `arcadedb` service already carries
 four dated incident notes on exactly this budget: two concurrent conformance suites OOM'd at the
 JVM's default heap; a single heavy sequential HMP graph build OOM'd at 4G; `ollama`'s own resting
@@ -1934,8 +1941,8 @@ with ArcadeDB (already tuned to 6G), Ollama, Postgres, MinIO, Valkey and LiteLLM
 has already produced five distinct incidents from lighter combinations is answered by the evidence
 already on file, not a proposal worth spending a sixth incident to confirm.
 
-**Decision: Tier 3 registers in Phase 8's `cluster` profile, not in Phase 7, and not on this host.**
-Phase 8 already owns exactly this class of work — `adapters/graph_janusgraph`,
+**Decision: Tier 3 registers in Phase 8a's `cluster` profile, not in Phase 7, and not on this
+host.** Phase 8a already owns exactly this class of work — `adapters/graph_janusgraph`,
 `adapters/analytics_clickhouse`, "runs on more than a laptop" (`07_BUILD_PLAN.md`) — so this is not
 inventing a new home for orphaned scope, the same shape ADR-022 already used once for Scenario B's
 own six Glass screens. `tests/conformance/compute_port/test_suite.py`'s cross-tier agreement case

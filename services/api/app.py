@@ -283,8 +283,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.tile_cache_storage = tile_cache_storage_config()
     app.state.analytics = analytics
     # `06_DECISIONS.md` ADR-029/Phase 7 Stage 3: Tier 2 only, registered here — Tier 1
-    # (`graphology`, a Node harness) and Tier 3 (Phase 8's `cluster` profile, ADR-028) have no
-    # Conduit-side adapter to construct yet. Stateless, same shape as `ComputeRustworkxAdapter`'s
+    # (`graphology`, a Node harness, conformance-only) and Tier 3 (Phase 8a's `cluster` profile,
+    # ADR-028/ADR-022's third addendum) have no Conduit-side adapter to construct yet. Stateless,
+    # same shape as `ComputeRustworkxAdapter`'s
     # own `tests/conformance/registry.py` factory — no client, no lifecycle to close.
     compute: ComputePort = ComputeRustworkxAdapter()
     app.state.compute = compute
