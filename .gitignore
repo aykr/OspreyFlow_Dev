@@ -22,10 +22,10 @@ apps/workspace/playwright-report/
 apps/workspace/.env.local
 .playwright-mcp/
 
-# macOS
+# macOS — no leading slash: matches at every directory level, not only the
+# repo root (`docs/.DS_Store` was tracked despite this rule because it
+# predates it; untracking it is a one-time `git rm --cached`, not a rule fix)
 .DS_Store
-.DS_Store
-graphify-out/
 
 # Claude Code / Cowork session artifacts
 Claude outputs/
