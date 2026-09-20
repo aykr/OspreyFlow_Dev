@@ -48,17 +48,14 @@ test("a keyboard-activated ranked row centres the canvas on the right node", asy
 
   await page.goto("/keyboard/metrics-panel-harness.html");
 
-  // Starting focus point is the panel's own metric selector, not the page's very first tabbable
-  // element (`GlassCanvas`'s own container). Found necessary, not assumed: that container has its
-  // own `onKeyDown` Tab handling (`GlassCanvas.tsx`'s "establish/cycle the selection ring"
-  // branches) which calls `preventDefault()` on every Tab keydown once it holds focus, the same
-  // way it is meant to while an analyst is actively using canvas keyboard navigation — it has no
-  // reason to know a sibling panel exists to hand focus onward to, a real, pre-existing property
-  // of that component this test works around rather than silently masks. This test's own scope is
-  // the metrics panel's row activation, not cross-component Tab flow between two independent
-  // keyboard-driven surfaces, which `actionRegistry.ts`'s own module docstring already treats as a
-  // question "worth re-checking rather than assumed solved generally" the first time it matters.
-  await page.getByRole("combobox", { name: "Primary metric" }).focus();
+  // Starting focus point is the canvas itself, not the panel's own first control — this is the
+  // concrete proof of Phase 7 Stage 4's own Tab-trap fix (`GlassCanvas.tsx`'s own `onKeyDown`
+  // comment has the full incident): before that fix, this container called `preventDefault()` on
+  // every Tab keydown once it held focus, so a keyboard user could never Tab onward from the
+  // canvas into a sibling panel at all — this exact test previously had to start from the panel's
+  // own first control to work around it. It no longer does.
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
 
   // The ranked list sorts descending by value — n1 (5) is the top row, not fixture order's n0.
   // Waited for explicitly: the intercepted fetch above resolves asynchronously, and starting the

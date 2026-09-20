@@ -418,26 +418,21 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
     // `<body>`, past this div entirely.
     if (radialMenu) return;
     if (inspectedEdge || clusterExplain) return;
-    if (e.key === "Tab" && selected.size === 0) {
-      // The keyboard-only entry point: §6 says "Tab moves between nodes
-      // in the current selection ring", which presumes a ring already
-      // exists. Without this branch a keyboard-only analyst who has never
-      // touched the mouse has no way to reach a first node at all — Tab
-      // here establishes a one-node ring (and fires `onSelectionChange`,
-      // the same event a mouse click would) so every subsequent
-      // documented behaviour (arrows, Enter, `\`) has something to act on.
-      e.preventDefault();
-      const first = graph.nodes()[0];
-      if (first) {
-        setSelected(new Set([first]));
-        setFocused(first);
-        onSelectionChange?.([first]);
-      }
-    } else if (e.key === "Tab" && selected.size > 0) {
+    // Tab/Shift+Tab are deliberately never intercepted here — `02_GLASS_FRONTEND.md` §6's own
+    // Tab-cycling wording was corrected in Phase 7 Stage 4 (found while wiring a second
+    // keyboard-driven surface beside this canvas, `07_BUILD_PLAN.md`'s own gaps entry has the
+    // full incident): a container that calls `preventDefault()` on every Tab keydown once it
+    // holds focus traps a keyboard user inside it for the container's own lifetime, with no way
+    // to reach a sibling panel at all. Tab now behaves exactly like every other control on the
+    // page — establishing the first ring happens on this container's own `onFocus` below, not on
+    // a keypress after arriving; cycling an already-built ring (needed for a lasso-selected set
+    // of non-adjacent nodes arrow-walk cannot reach) moves to `Ctrl`/`Cmd`+`ArrowRight`/`Left`,
+    // the key Tab's release frees up for it.
+    if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && (e.ctrlKey || e.metaKey) && selected.size > 0) {
       e.preventDefault();
       const ring = Array.from(selected);
       const currentIndex = focused ? ring.indexOf(focused) : -1;
-      const nextIndex = e.shiftKey
+      const nextIndex = e.key === "ArrowLeft"
         ? (currentIndex - 1 + ring.length) % ring.length
         : (currentIndex + 1) % ring.length;
       setFocused(ring[nextIndex] ?? null);
@@ -613,6 +608,22 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
       aria-label="Network canvas"
       tabIndex={0}
       onKeyDown={onKeyDown}
+      onFocus={(e) => {
+        // The keyboard-only entry point, moved off Tab's own keydown (see `onKeyDown`'s own
+        // comment on why) — reaching this container by any means (Tab, a click, `.focus()`)
+        // with no ring yet establishes a one-node ring immediately, so every subsequent
+        // documented behaviour (arrows, Enter, `\`) has something to act on without needing an
+        // extra keypress first. `e.target === e.currentTarget` matters: React's own `onFocus`
+        // bubbles (via `focusin`), so without this guard, focus landing on a *descendant* — the
+        // lasso toggle button, a radial-menu item — would also fire this and re-establish a ring
+        // an analyst may have deliberately built past a single node already.
+        if (e.target !== e.currentTarget || selected.size > 0) return;
+        const first = graph.nodes()[0];
+        if (!first) return;
+        setSelected(new Set([first]));
+        setFocused(first);
+        onSelectionChange?.([first]);
+      }}
       style={{ width: "100%", height: "100%", position: "relative", outline: "none" }}
       onPointerDown={(e) => {
         if (!lassoActive) return;

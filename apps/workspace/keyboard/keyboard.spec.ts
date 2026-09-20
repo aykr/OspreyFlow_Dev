@@ -2,20 +2,28 @@
 // accessibility floor and `docs/07_BUILD_PLAN.md` Phase 4's exit
 // criterion, "Keyboard navigation reaches every canvas action", taken
 // literally: this test never calls `page.mouse` or `.click()`. It proves
-// the four behaviours §6 actually specifies — "Tab moves between nodes in
-// the current selection ring, arrow keys walk edges, Enter expands, `\`
-// opens the radial menu as a list" — reach real effects (a focus change
-// observable through `GlassCanvas`'s own `onFocusChange`/
+// the behaviours §6 actually specifies — arrow keys walk edges, Enter
+// expands, `\` opens the radial menu as a list — reach real effects (a
+// focus change observable through `GlassCanvas`'s own `onFocusChange`/
 // `onSelectionChange` props, a real `expand` network call, a real menu in
 // the DOM), not just that the key handlers exist.
+//
+// **Tab's own role, corrected in Phase 7 Stage 4** (`06_DECISIONS.md`'s Stage 4 write-up has the
+// full incident): Tab/Shift+Tab are never intercepted by the canvas any more — they behave
+// exactly like every other control on the page, which is what lets a keyboard user reach a
+// sibling panel beside the canvas at all. Focusing the canvas (by Tab, by click, by
+// `.focus()`) establishes a one-node ring immediately, with no keypress needed after arriving.
+// Cycling an already-built ring (needed for a lasso-selected set of non-adjacent nodes arrow-walk
+// cannot reach) moved to `Ctrl`/`Cmd`+`ArrowRight`/`Left`, the key Tab's release freed up for it.
 //
 // Pan, zoom and lasso have no keyboard equivalent in §6's own text, and
 // none is asserted here — inventing one would be filling a gap the spec
 // left silent rather than reading what "every canvas action reachable by
-// keyboard" is later grounded to: these four behaviours, applied to
-// select/walk/expand/context-menu. "Select" is realised as focus (Tab to
-// an entry point, arrows to move it) — the same reasoning the GlassCanvas
-// implementation itself follows (`onFocusChange`'s own docstring).
+// keyboard" is later grounded to: these behaviours, applied to
+// select/walk/expand/context-menu. "Select" is realised as focus (focusing
+// the canvas establishes an entry point, arrows move it) — the same
+// reasoning the GlassCanvas implementation itself follows (`onFocusChange`'s
+// own docstring).
 //
 // Phase 6a Stage 4: every `test()` below that proves a `CANVAS_ACTIONS` entry calls
 // `registerCovered(id)` at the point it does so; the final test asserts none were missed —
@@ -34,26 +42,51 @@ declare global {
   }
 }
 
-test("Tab establishes a starting node when nothing is selected yet", async ({ page }) => {
+test("focusing the canvas establishes a starting node when nothing is selected yet", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });
-  await canvas.focus();
 
-  await page.keyboard.press("Tab");
+  await canvas.focus();
 
   await expect
     .poll(() => page.evaluate(() => window.__KEYBOARD__?.focused))
     .toBe("n0");
   const selection = await page.evaluate(() => window.__KEYBOARD__?.selection);
   expect(selection).toEqual(["n0"]);
-  registerCovered("tab-establish-ring");
+  registerCovered("focus-establishes-ring");
+});
+
+test("Tab leaves the canvas and reaches the next real focusable element on the page", async ({
+  page,
+}) => {
+  // The actual fix, proven end to end per rule 12 — the assertion that fails if the canvas's own
+  // `onKeyDown` ever goes back to calling `preventDefault()` on Tab. `#after-canvas`
+  // (`keyboard/harness.tsx`'s own sentinel) is the real next tab-stop on the page; a keyboard
+  // user must be able to reach it from the canvas without a mouse. Two Tabs, not one: the lasso
+  // toggle button (`GlassCanvas`'s own first child, always rendered) is itself a real, separate
+  // tab-stop inside the canvas region — checked directly, not assumed, when the first Tab landed
+  // there instead of on `#after-canvas`.
+  await page.goto("/keyboard/harness.html");
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.focused))
+    .toBe("n0"); // the canvas's own focus handler already ran — see the test above
+
+  await page.keyboard.press("Tab");
+  await expect(page.getByTitle("Lasso select")).toBeFocused();
+  await page.keyboard.press("Tab");
+
+  await expect(page.locator("#after-canvas")).toBeFocused();
+  registerCovered("tab-leaves-the-canvas");
 });
 
 test("arrow keys walk from the focused node to a real neighbour", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus();
-  await page.keyboard.press("Tab"); // focus n0
 
   await page.keyboard.press("ArrowRight");
 
@@ -69,8 +102,7 @@ test("arrow keys walk from the focused node to a real neighbour", async ({ page 
 test("backslash opens the radial menu as a keyboard-navigable list", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });
-  await canvas.focus();
-  await page.keyboard.press("Tab"); // focus n0
+  await canvas.focus(); // establishes n0 immediately — see the focus-establishes-ring test above
 
   await page.keyboard.press("\\");
 
@@ -100,8 +132,7 @@ test("Enter expands the focused node — a real network call, not a stub", async
   });
 
   const canvas = page.getByRole("application", { name: "Network canvas" });
-  await canvas.focus();
-  await page.keyboard.press("Tab"); // focus n0
+  await canvas.focus(); // establishes n0 immediately
   await page.keyboard.press("ArrowRight"); // focus n1 — see the arrow-walk test above
 
   await page.keyboard.press("Enter");
@@ -113,24 +144,25 @@ test("Enter expands the focused node — a real network call, not a stub", async
   registerCovered("enter-expand");
 });
 
-test("a second Tab cycles the focused node forward through an existing ring", async ({ page }) => {
-  // Untested before Phase 6a Stage 4, found while building the action registry: every existing
-  // test presses `Tab` at most once per ring. This is the ring-cycling branch itself
-  // (`onKeyDown`'s "Tab && selected.size > 0"), not the ring-establishing one above.
+test("Ctrl+ArrowRight cycles the focused node forward through an existing ring", async ({
+  page,
+}) => {
+  // This is the ring-cycling branch itself (`onKeyDown`'s "ctrlKey/metaKey + ArrowRight/Left &&
+  // selected.size > 0"), moved off Tab in Phase 7 Stage 4 once Tab itself was freed to leave the
+  // canvas natively (see this file's own header comment).
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });
-  await canvas.focus();
-  await page.keyboard.press("Tab"); // focus n0, ring: {n0}
+  await canvas.focus(); // establishes n0, ring: {n0}
   await page.keyboard.press("ArrowRight"); // focus n1 — walking does not touch the ring
   await page.keyboard.press("Space"); // add n1 — ring: {n0, n1}, focus still n1
 
-  await page.keyboard.press("Tab"); // cycle forward through the ring
+  await page.keyboard.press("Control+ArrowRight"); // cycle forward through the ring
 
   // The ring is a `Set`, insertion order {n0, n1} — cycling forward from n1 wraps to n0.
   await expect
     .poll(() => page.evaluate(() => window.__KEYBOARD__?.focused))
     .toBe("n0");
-  registerCovered("tab-cycle-ring");
+  registerCovered("ctrl-arrow-cycles-ring");
 });
 
 test("Space, then the radial list, reaches manual link — a real POST, not a stub", async ({
@@ -157,9 +189,7 @@ test("Space, then the radial list, reaches manual link — a real POST, not a st
   });
 
   const canvas = page.getByRole("application", { name: "Network canvas" });
-  await canvas.focus();
-  await page.keyboard.press("Tab"); // focus n0 — Tab's own entry point already puts it in the
-  // ring (`onKeyDown`'s "Tab && selected.size === 0" branch), so no Space needed for it here.
+  await canvas.focus(); // establishes n0 in the ring immediately, so no Space needed for it here.
   await page.keyboard.press("ArrowRight"); // focus n1 (n0's only neighbour) — walking does not
   // itself change the ring, only `focused`, which is exactly why Space is needed at all.
   await page.keyboard.press("Space"); // add n1 — ring: {n0, n1}
@@ -206,8 +236,7 @@ test("the radial list also reaches Split, not only Link", async ({ page }) => {
   });
 
   const canvas = page.getByRole("application", { name: "Network canvas" });
-  await canvas.focus();
-  await page.keyboard.press("Tab"); // focus n0, ring: {n0}
+  await canvas.focus(); // establishes n0, ring: {n0}
   await page.keyboard.press("ArrowRight"); // focus n1
   await page.keyboard.press("Space"); // add n1 — ring: {n0, n1}
 
@@ -250,8 +279,7 @@ test("the radial list's own auto-focused first item is itself reachable and acti
   });
 
   const canvas = page.getByRole("application", { name: "Network canvas" });
-  await canvas.focus();
-  await page.keyboard.press("Tab"); // focus n0, ring: {n0} — no second selected node, so no
+  await canvas.focus(); // establishes n0, ring: {n0} — no second selected node, so no
   // manual-link/split items compete for the auto-focused first slot.
 
   await page.keyboard.press("\\");
@@ -303,8 +331,7 @@ test("the radial list reaches Explain cluster, and the explanation actually rend
   });
 
   const canvas = page.getByRole("application", { name: "Network canvas" });
-  await canvas.focus();
-  await page.keyboard.press("Tab"); // focus n0
+  await canvas.focus(); // establishes n0
   await page.keyboard.press("ArrowRight"); // focus n1
   await page.keyboard.press("ArrowLeft"); // focus n2 — n1's *last* neighbour
   // (`onKeyDown`'s `ArrowLeft`/`ArrowUp` branch picks `neighbours[neighbours.length - 1]`; n1's
@@ -358,8 +385,7 @@ test("Escape dismisses the cluster-explanation overlay, reachable by keyboard al
   });
 
   const canvas = page.getByRole("application", { name: "Network canvas" });
-  await canvas.focus();
-  await page.keyboard.press("Tab");
+  await canvas.focus(); // establishes n0
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowLeft"); // focus n2 — see the Explain-cluster test above
   await page.keyboard.press("\\");
@@ -381,8 +407,7 @@ test("the radial list reaches View messages on an Endpoint node", async ({ page 
   await page.goto("/keyboard/harness.html");
 
   const canvas = page.getByRole("application", { name: "Network canvas" });
-  await canvas.focus();
-  await page.keyboard.press("Tab"); // focus n0
+  await canvas.focus(); // establishes n0
   await page.keyboard.press("ArrowRight"); // focus n1
   await page.keyboard.press("ArrowLeft"); // focus n2
   await page.keyboard.press("ArrowLeft"); // focus n3 — n2's own last neighbour

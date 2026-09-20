@@ -117,22 +117,28 @@ const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
 
 createRoot(container).render(
-  <GlassCanvas
-    graph={workingSet.graph}
-    store={workingSet.store}
-    ontology={ontology}
-    edgeTypes={SCHEMA.edge_types}
-    investigationId="keyboard-fixture"
-    apiBaseUrl="http://keyboard-test.invalid"
-    bearerToken="unused"
-    onFocusChange={(nodeId) => {
-      window.__KEYBOARD__!.focused = nodeId;
-    }}
-    onSelectionChange={(ids) => {
-      window.__KEYBOARD__!.selection = ids;
-    }}
-    onViewMessages={(nodeId) => {
-      window.__KEYBOARD__!.viewMessagesNodeId = nodeId;
-    }}
-  />,
+  <>
+    <GlassCanvas
+      graph={workingSet.graph}
+      store={workingSet.store}
+      ontology={ontology}
+      edgeTypes={SCHEMA.edge_types}
+      investigationId="keyboard-fixture"
+      apiBaseUrl="http://keyboard-test.invalid"
+      bearerToken="unused"
+      onFocusChange={(nodeId) => {
+        window.__KEYBOARD__!.focused = nodeId;
+      }}
+      onSelectionChange={(ids) => {
+        window.__KEYBOARD__!.selection = ids;
+      }}
+      onViewMessages={(nodeId) => {
+        window.__KEYBOARD__!.viewMessagesNodeId = nodeId;
+      }}
+    />
+    {/* The Tab-trap fix's own proof needs a real next tab-stop after the canvas — nothing here
+        before Phase 7 Stage 4, since the canvas's own onKeyDown used to intercept every Tab
+        press regardless. */}
+    <button id="after-canvas">After canvas</button>
+  </>,
 );

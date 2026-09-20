@@ -363,11 +363,18 @@ not wait for the whole payload.
 
 Not negotiable and cheaper to build in than to retrofit.
 
-- Every canvas action reachable by keyboard. Tab moves between nodes in the current selection
-  ring, arrow keys walk edges, `Enter` expands, `\` opens the radial menu as a list, `Space`
+- Every canvas action reachable by keyboard. Tab and Shift+Tab move focus in and out of the
+  canvas exactly like every other control on the page — corrected in Phase 7 Stage 4 (a
+  container that instead captures every Tab keydown once it holds focus traps a keyboard user
+  inside it for good, found once a second keyboard-driven surface sat beside the canvas). Reaching
+  the canvas by any means (Tab, a click, `.focus()`) with nothing selected establishes a one-node
+  ring immediately, with no keypress needed after arriving. `Ctrl`/`Cmd`+`ArrowRight`/`Left`
+  cycles the focused node through an already-built ring (needed for a lasso-selected set of
+  non-adjacent nodes plain arrow-walk cannot reach); plain arrow keys walk edges, moving focus
+  only, never the ring itself; `Enter` expands; `\` opens the radial menu as a list; `Space`
   toggles the focused node's own membership in the selection ring (`07_BUILD_PLAN.md` Phase 6a
   Stage 1: added for manual link/split, the first action needing a keyboard-built multi-node
-  selection at all — walking with arrow keys moves focus only, never the ring itself).
+  selection at all).
 - The canvas exposes an accessible alternative view — the Matrix view is not a novelty, it is
   the screen-reader-navigable rendering of the same data.
 - Focus is a 2px brass outline at 2px offset, everywhere, never suppressed.

@@ -48,8 +48,9 @@ export function assertAllCovered(actions: readonly string[]): void {
  * that state, so it does not claim to test leaving it either.
  */
 export const CANVAS_ACTIONS = [
-  "tab-establish-ring",
-  "tab-cycle-ring",
+  "focus-establishes-ring",
+  "tab-leaves-the-canvas",
+  "ctrl-arrow-cycles-ring",
   "arrow-walk-forward",
   "arrow-walk-backward",
   "space-toggle-ring-membership",
