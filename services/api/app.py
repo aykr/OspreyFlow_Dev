@@ -103,6 +103,10 @@ from schemas.domain import (
     PatternQuery,
     Principal,
 )
+# `Path` is already `pathlib.Path` in this module — `GraphPath` is the same alias
+# `adapters/compute_graphology_tier1/adapter.py` already uses for the identical collision.
+from schemas.domain import Path as GraphPath
+from schemas.domain import PathRequest
 from schemas.ingest import (
     CONNECTOR_CATALOGUE,
     ConnectDraftInput,
@@ -1500,6 +1504,38 @@ async def patterns_run_route(
         result_cardinality=accepted.matched_count or 0,
     )
     return accepted
+
+
+# --- the pathfinder (Phase 7 Stage 5) -----------------------------------------
+#
+# Not investigation-scoped — the same reasoning `/v1/search` and `/v1/patterns/*` already give:
+# a path search is a query over the whole, principal-filtered corpus, not a property of any one
+# working set (`01_DOMAIN_MODEL.md` §6.3, `06_DECISIONS.md` ADR-033's own "FIRST" reasoning — the
+# working set is what an analyst has already chosen to look at; the pathfinder exists to find a
+# route through nodes not yet on it, which scoping to the working set would defeat).
+#
+# No preview, no job hand-off, unlike `/v1/patterns/*`: `PathRequest.k` bounds the result size by
+# construction (`.limit(k)` in the compiled query, not a display cap racing a larger true
+# population), so there is no undisclosed larger number a preview would need to surface — ADR
+# -033's own "THIRD" reasoning has the full argument. `GraphPort.paths` is called directly, never
+# `ComputePort.shortest_paths` (unclaimed, `ports/compute.py`'s own disclosed stub).
+
+
+@app.post("/v1/paths")
+async def paths_route(
+    req: PathRequest,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    audit: AuditDep,
+) -> list[GraphPath]:
+    found = await graph.paths(req, principal)
+    await audit.record(
+        principal=principal,
+        action="paths",
+        resolved_query=req.model_dump(mode="json"),
+        result_cardinality=len(found),
+    )
+    return found
 
 
 # --- the corpus-wide resolution trigger (06_DECISIONS.md ADR-025) -------------

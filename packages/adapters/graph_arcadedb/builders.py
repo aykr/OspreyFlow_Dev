@@ -241,6 +241,25 @@ class ExpandBuilder:
 
 @dataclass(frozen=True)
 class PathBuilder:
+    """Compiles a `PathRequest` into a `has_access`-filtered `repeat()`/`until()` traversal —
+    `01_DOMAIN_MODEL.md` §6.3's own implementation note: the access predicate is injected at the
+    source vertex, every candidate edge, and every intermediate vertex, so a path that would have
+    to pass through a node the principal cannot see is never found at all, not found and then
+    discarded. `test_unauthorised_path_length_matches_a_graph_without_the_hidden_hop`
+    (`tests/conformance/graph_port/test_suite.py`) is the standing proof this must never regress.
+
+    **`render_gremlin` stays `.by("id").by("id")` — confirmed empirically, not assumed, that
+    `.by(elementMap())` inside a `path()` step fails on this adapter** (Phase 7 Stage 5,
+    `06_DECISIONS.md` ADR-033): ArcadeDB's own Gremlin engine raises a server-side
+    `ClassCastException` ("`T$2` cannot be cast to `String`") the moment an `elementMap()`
+    modulator is cycled through `path()`'s own interleaved steps — a live-instance finding, the
+    same "checked directly against ArcadeDB, not the TinkerPop spec" discipline ADR-030's own
+    `match()` finding already established for a different step. `render_hydrate_nodes_gremlin`/
+    `render_hydrate_edges_gremlin` below hydrate the resulting ids in two separate, already
+    -proven-safe follow-up queries instead — the same "separate query per element type" shape
+    `ExpandBuilder.render_nodes_gremlin`/`render_edges_gremlin` already use — rather than fighting
+    the broken combination."""
+
     request: PathRequest
 
     def render_gremlin(self, access: AccessFilter, principal: Principal) -> str:
@@ -259,6 +278,31 @@ class PathBuilder:
             f'.until(has("id",{target_lit}).or().loops().is(gte({self.request.max_hops})))'
             f'.has("id",{target_lit})'
             f'.limit({self.request.k}).path().by("id").by("id")'
+        )
+
+    @staticmethod
+    def render_hydrate_nodes_gremlin(
+        node_ids: list[str], access: AccessFilter, principal: Principal
+    ) -> str:
+        has_access = access.gremlin_has_step(principal)
+        ids_literal = groovy_string_list_literal(node_ids)
+        return f'g.V().has("id",within({ids_literal})).{has_access}.elementMap()'
+
+    @staticmethod
+    def render_hydrate_edges_gremlin(
+        node_ids: list[str], edge_ids: list[str], access: AccessFilter, principal: Principal
+    ) -> str:
+        """Anchored at the path's own (already access-proven) node ids, not `g.E()` — this
+        codebase has no existing, proven-safe edge-first traversal start to build on, and every
+        other builder here starts from `g.V()`; re-checking `has_access` on the edge step itself
+        is defence in depth, not a correctness requirement (these ids already passed the original
+        path traversal's own filter)."""
+        has_access = access.gremlin_has_step(principal)
+        node_ids_literal = groovy_string_list_literal(node_ids)
+        edge_ids_literal = groovy_string_list_literal(edge_ids)
+        return (
+            f'g.V().has("id",within({node_ids_literal})).{has_access}'
+            f'.bothE().has("id",within({edge_ids_literal})).{has_access}.dedup().elementMap()'
         )
 
 

@@ -683,6 +683,33 @@ async def test_paths_edge_types_filters_to_the_declared_type(
         assert via_wrong_type == []
 
 
+async def test_paths_returns_hydrated_nodes_and_edges_not_bare_ids(
+    factory: GraphAdapterFactory,
+) -> None:
+    """`06_DECISIONS.md` ADR-033: `Path.nodes`/`.edges` carry full `Node`/`Edge` objects — the one
+    real interactive caller (the pathfinder) needs a node's own `type` to render it at all, which
+    a bare id cannot supply."""
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL"),
+                _node("Endpoint", classification="OFFICIAL"),
+            ],
+            [],
+        )
+        _, (edge_id,) = await _write(
+            adapter, [], [_edge("USES", a, b, classification="OFFICIAL")]
+        )
+
+        [found] = await adapter.paths(PathRequest(source=a, target=b, max_hops=3, k=1), CLEARED)
+
+        assert [n.id for n in found.nodes] == [a, b]
+        assert [n.type for n in found.nodes] == ["Person", "Endpoint"]
+        assert [e.id for e in found.edges] == [edge_id]
+        assert found.edges[0].type == "USES"
+
+
 # --- pattern match ------------------------------------------------------------
 
 

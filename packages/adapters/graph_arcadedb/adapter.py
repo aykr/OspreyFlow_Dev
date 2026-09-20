@@ -31,6 +31,7 @@ from ontology.handling import HandlingScheme
 from ontology.validation import validate_edge_endpoints, validate_properties
 from schemas.domain import (
     AuditStub,
+    Edge,
     EdgeId,
     EdgeWrite,
     ExpandRequest,
@@ -482,12 +483,37 @@ class GraphArcadeDBAdapter:
     async def paths(self, req: PathRequest, principal: Principal) -> list[Path]:
         query = PathBuilder(req).render_gremlin(self._access, principal)
         results = await self._client.gremlin(query)
+        raw_paths: list[list[str]] = [record["result"] for record in results]
+        if not raw_paths:
+            return []
+
+        # `06_DECISIONS.md` ADR-033: hydrate every distinct id across every found path in two
+        # batch queries (nodes, edges), not per-path or per-step — bounded by k*max_hops, tiny
+        # against the working-set scale every other builder here is sized for.
+        all_node_ids = sorted({node_id for steps in raw_paths for node_id in steps[0::2]})
+        all_edge_ids = sorted({edge_id for steps in raw_paths for edge_id in steps[1::2]})
+        node_query = PathBuilder.render_hydrate_nodes_gremlin(all_node_ids, self._access, principal)
+        node_results = await self._client.gremlin(node_query)
+        nodes_by_id = {r["id"]: node_from_element_map(r) for r in node_results}
+        edges_by_id: dict[EdgeId, Edge] = {}
+        if all_edge_ids:
+            edge_query = PathBuilder.render_hydrate_edges_gremlin(
+                all_node_ids, all_edge_ids, self._access, principal
+            )
+            edge_results = await self._client.gremlin(edge_query)
+            edges_by_id = {r["id"]: edge_from_element_map(r) for r in edge_results}
+
         paths: list[Path] = []
-        for record in results:
-            steps: list[str] = record["result"]
+        for steps in raw_paths:
             node_ids = steps[0::2]
             edge_ids = steps[1::2]
-            paths.append(Path(nodes=node_ids, edges=edge_ids, length=len(edge_ids)))
+            paths.append(
+                Path(
+                    nodes=[nodes_by_id[i] for i in node_ids],
+                    edges=[edges_by_id[i] for i in edge_ids],
+                    length=len(edge_ids),
+                )
+            )
         return paths
 
     async def match(self, pattern: PatternQuery, principal: Principal) -> Subgraph:

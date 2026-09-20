@@ -377,14 +377,30 @@ class ExpandRequest(BaseModel):
 class PathRequest(BaseModel):
     source: NodeId
     target: NodeId
-    max_hops: int = Field(default=6, ge=1)
-    k: int = Field(default=1, ge=1)
+    #: `le=8` — a real, small margin over `01_DOMAIN_MODEL.md` §6.3's own domain-modelled default
+    #: of 6, not a multiplier: a `repeat().until()` traversal's cost scales with branching factor
+    #: raised to `max_hops`, not linearly, so this is a disclosed, reasoned-but-unmeasured ceiling
+    #: (Phase 7 Stage 5) in the same spirit as `01_DOMAIN_MODEL.md` §8.2's `supersede_node` figure
+    #: and ADR-025's `LOCK_TTL_SECONDS` — a real number retires the guess; none exists yet.
+    max_hops: int = Field(default=6, ge=1, le=8)
+    #: `le=10` — past which an analyst is not meaningfully paging through alternative routes.
+    #: Result size can never exceed `k` by construction (`.limit(k)` in the compiled query), so
+    #: this bounds request cost, not a hidden larger population (`06_DECISIONS.md` ADR-033's own
+    #: "THIRD" reasoning has the full argument for why paths need no `match_count`-style preview).
+    k: int = Field(default=1, ge=1, le=10)
     edge_types: list[str] | None = None
 
 
 class Path(BaseModel):
-    nodes: list[NodeId]
-    edges: list[EdgeId]
+    """`06_DECISIONS.md` ADR-033: hydrated, not bare ids — `nodes`/`edges` carry the same shape
+    `Subgraph` already does, because the one real interactive caller (the pathfinder,
+    `GlassCanvas.tsx`) needs a node's own `type` to render it at all, and a node not already in
+    the working set has no other source for its own properties. Widened, not redesigned: `length`
+    is unchanged, and every existing caller (only conformance tests before this stage) reads
+    `.length`, never `.nodes`/`.edges`, so this breaks nothing that exists."""
+
+    nodes: list[Node]
+    edges: list[Edge]
     length: int
 
 
