@@ -359,6 +359,24 @@ cited in an audit query after the fact.
 superseded element is excluded from ordinary reads by default, the same as a reverted one, and
 retrievable only via `get_node(..., include_superseded=True)`.
 
+**This absence of a hard-delete method is load-bearing for something outside `GraphPort` itself,
+not only a design choice contained here — read this before adding one.** `06_DECISIONS.md`
+ADR-037's own amendment (Phase 7 Stage 6, the corpus-wide change stream a saved-pattern monitor
+watches) proves the stream misses no possible match — including one created by removing
+something — on exactly two facts: this section's own "nodes are versioned, not overwritten"
+(supersession is a *write*, which the change stream already captures) and `PatternQuery`'s own
+absence of a negation/"must not exist" clause (`§8.1`, its own matching note). **If a real
+hard-delete is ever added to `GraphPort`, that half of the argument breaks even if `PatternQuery`
+still has no negation** — a hard-deleted element is not a write the change stream would see, so a
+monitor watching for a pattern whose completion depended on that element's absence (once
+`PatternQuery` can express that) would go silently incomplete: it would simply never fire, with
+nothing failing to say so. **The test that would need to exist at that point:**
+`test_change_stream_carries_an_entry_for_a_hard_delete`, asserting a consumer reading the stream
+after a hard-delete sees an entry for it, the same proof `06_DECISIONS.md` ADR-037's own accepted
+case already requires for resolution/manual-assertion writes. Until a hard-delete method exists,
+this is a documented dependency, not a gap — recorded here as well as in `06_DECISIONS.md`
+ADR-037 and `§8.1` below, so whoever adds one reads it at the point they'd otherwise miss it.
+
 ## 3. The edge record
 
 Structurally identical, plus:
@@ -789,6 +807,32 @@ proven by a dedicated no-regression test). A pattern with additional roots compi
 one of them is pinned and its own chain converges on a variable the primary chain also reaches;
 anything else — an unpinned second root, or a chain that never converges — is a compile-time
 error, not a silent wrong answer.
+
+**`PatternQuery`'s own absence of a negation/"must not exist" clause is load-bearing for
+something outside pattern matching itself, not only a scope limit contained here — read this
+before adding one.** `06_DECISIONS.md` ADR-037's own amendment (Phase 7 Stage 6, the corpus-wide
+change stream a saved-pattern monitor watches) proves the stream misses no possible match —
+including one created by removing something — on exactly two facts: `GraphPort`'s own absence of
+a hard-delete method (`§2.4`, above) and this schema's own absence of a negation clause, checked
+directly against `PatternNode`/`PatternEdge` above rather than assumed. A pattern language with no
+"must not exist" shape cannot have a match newly created by removing something, because removing
+an edge or node can only shrink a match set under this schema, never grow it. **If negation is
+ever added — an obvious future want, letting a pattern express "an `Endpoint` with no `SAME_AS`
+edge to a hotlisted identifier," say — this argument breaks even if `GraphPort` still has no
+hard-delete:** a superseded element is still a write the change stream captures, but the *effect*
+of that write can now be "a previously-blocking match now completes because the blocking element
+is gone" — a state change the corpus-wide change stream's own entry shape (source, node/edge ids
+*touched*) does not obviously encode, since the newly-completed match's own nodes/edges were not
+what was written. **The test that would need to exist at that point:**
+`test_monitor_fires_on_a_match_completed_by_a_negated_clause_no_longer_blocking`, proving whatever
+mechanism exists then (the change stream as built today, or a revised one) still lets a monitor
+watching a negated pattern fire correctly once the blocking element is superseded — the same
+proof `06_DECISIONS.md` ADR-037's own accepted case already requires for resolution/manual-
+assertion writes, for the shape negation adds rather than the shape it replaces. Until negation
+exists, this is a documented dependency, not a gap — recorded here as well as in `06_DECISIONS.md`
+ADR-037 and `§2.4` above, so whoever adds it reads this at the point they'd otherwise miss it, and
+`06_DECISIONS.md` ADR-030's own "revisit if" (a general multi-root join or negation added to the
+pattern language) is exactly the trigger for re-checking this argument, not a coincidence.
 
 ### 8.2 Additions since Phase 1
 

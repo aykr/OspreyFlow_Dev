@@ -977,7 +977,7 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
    pattern persistence — is also closed, same day (Stage 4's own Part 3 above):** ADR-036's own
    owning-principal reference now lives on `SavedPattern.owner_id`.
 
-   **Stage 6 splits into 6a (foundation), 6b and 6c — 6a built 21 September 2026, 6b/6c not
+   **Stage 6 splits into 6a (foundation), 6b and 6c — 6a and 6b built 21 September 2026, 6c not
    started.** Read this as the same "carve out a different kind of work" discipline Phase 6a
    (over Phase 6) already established, applied one level down: the alert model, the disclosure
    switch and the change stream are backend primitives every future producer shares; hotlist/
@@ -1047,6 +1047,91 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
    unexercised by any acceptance scenario until 6b/6c gives them a real hotlist/monitor to fire
    from — Stage 6a's own primitives are what B12/B13/B14/B20 will eventually run against, not
    something this stage itself claims to satisfy.
+
+   **6b — the evaluator and its bounds, built 21 September 2026. 6b, not 6c, is where the
+   evaluator lives:** ADR-037's own bounds (concurrency limit, per-evaluation cost cap, overrun
+   behaviour) exist to bound a scheduled/event-driven consumer of the change stream, and 6b is
+   the first stage that builds one — 6c's own remaining scope (below) is UI and the routes a real
+   analyst would use to create a hotlist or turn a pattern into a monitor, neither of which needs
+   or benefits from existing before the mechanism they will eventually call does. Building the
+   evaluator against 6c's own not-yet-written routes would have meant either a second, throwaway
+   test harness or blocking on 6c — reversed instead: the evaluator is proven directly, by tests
+   calling it with real Postgres/ArcadeDB/Valkey, exactly the way 6a's own primitives already were.
+
+   Two stores, both Postgres, both `owner_id`-filtered in the query itself from the start
+   (`scripts/authorized_query_check.py`, re-run after this stage: 41 files under `services/api`,
+   no offenders): `services/api/hotlists.py`'s `HotlistStore` (`02_GLASS_FRONTEND.md` §3.3 — an
+   `identifier`, an `owner_id`, a `review_date`; deliberately bare, since ADR-038's own "an analyst
+   can hotlist a bare phone number before it resolves to anything they can see" means a hotlist
+   entry is not a node reference) and `services/api/monitors.py`'s `MonitorStore` (a `pattern_id`
+   reference, never a copy of the pattern's own definition — re-read fresh from `PatternStore` on
+   every evaluation, the same "resolved fresh, never cached" discipline ADR-036 already requires of
+   a monitor's *access*, extended here to its own *query*). Both add a `list_all_active` method
+   that is deliberately **not** principal-scoped — the one unscoped read each store has, mirroring
+   `GraphPort.list_nodes`'s own ADR-025 precedent for "the trigger needs the whole population, not
+   a caller-scoped view of it" — and both are never called from any route, only from the evaluator
+   below.
+
+   The evaluator (`services/api/evaluation.py`) is two functions, not one, because a hotlist match
+   and a monitor match have genuinely different leak shapes (ADR-036/038 already say so):
+   `evaluate_hotlists_for_entry` needs a read unscoped to any one owner's access just to *find* a
+   match (`service_principal`, the same corpus-wide identity `services/resolve/trigger.py` already
+   uses for resolution), then a *separate* disclosure decision via `alerts.py`'s `record_match`
+   using the hotlist owner's own principal and ADR-038's `strict`/`notify` switch;
+   `evaluate_monitors_for_entry` re-runs the saved pattern through `GraphPort.match` as the owner's
+   own principal directly, so there is no out-of-access case for a monitor alert to ever suppress
+   or redact — `record_match`'s `strict`/`notify` branch is structurally unreachable for a monitor,
+   not merely defaulted to one side of it. Both are guarded per-hotlist/per-monitor by a Valkey
+   lock (ADR-025's own overlap-guard shape, reused rather than reinvented) that skips a concurrent
+   trigger rather than queuing it — ADR-037's overrun bound. The per-evaluation cost cap
+   (`MAX_TOUCHED_NODES_PER_EVALUATION = 200`) bounds how many of a single change-stream entry's own
+   touched node ids one hotlist evaluation will check, not the number of hotlists themselves.
+   Monitor dedup is disclosed as coarse, not assumed precise: `GraphPort.match` returns one
+   `Subgraph` per pattern, not discrete match instances, so "is this a new match" is answered at
+   the whole-subgraph level — a hash of the current match's sorted node/edge ids, compared against
+   the last hash this monitor alerted on. A growing, shrinking-but-nonempty, or differently-composed
+   match set all count as "new"; an unchanged one does not.
+
+   **The no-principal-directory gap, disclosed at the point it first bites, not worked around.**
+   No principal directory exists anywhere in this codebase — `Principal` is "resolved by the
+   Conduit from the session token" (`schemas.domain.Principal`'s own docstring) — and a scheduled
+   evaluator has no session token in flight to resolve one from. Both evaluator functions take a
+   caller-supplied `principal_for_owner: Callable[[str], Principal | None]` rather than resolving
+   one internally; returning `None` is the disclosed stand-in for ADR-036's own "the monitor
+   stops" when a fresh principal cannot be resolved, proven directly by
+   `test_a_hotlist_with_no_resolvable_owner_principal_is_skipped_not_run_as_a_stale_one`. **Owning
+   phase for the real resolution: 6c**, the same stage that first gives a hotlist/monitor a route
+   an actual analyst calls through — a scheduled worker process still has no session token even
+   once 6c exists, so 6c's own job is a principal-resolution strategy for a backgrounded caller
+   (a service-level re-resolution against a stored `owner_id`, most plausibly), not a full
+   principal directory; recorded here so it is not silently assumed solved by 6b's own test double.
+
+   Proven — the task's own named test and five more exercising what it implies:
+   `test_a_hotlist_match_outside_the_owners_access_produces_nothing_in_strict_and_notify` (a
+   hotlist match the evaluator's own unscoped read can see but the hotlist's owner cannot: nothing
+   under `strict`, a content-free alert under `notify` — `referent_node_ids == []` and neither the
+   node id nor the identifier appear anywhere in the serialised alert, checked against
+   `.model_dump(mode="json")` per ADR-038's own precedent, not an internal attribute);
+   `test_a_hotlist_match_visible_to_its_owner_writes_a_full_alert`;
+   `test_a_hotlist_evaluation_already_in_progress_is_skipped_not_queued` (the overlap guard,
+   proven by holding its own lock externally, not merely asserted);
+   `test_a_monitor_alert_is_always_visible_since_the_match_is_already_owner_filtered`;
+   `test_a_monitor_alerts_once_per_match_set_and_again_only_when_it_changes` (the coarse dedup,
+   proven against a match set that grows, not only one that stays the same); and
+   `test_a_monitor_whose_pattern_no_longer_exists_stops_rather_than_errors`.
+
+   **What 6b does not build:** no `app.py` routes for creating a hotlist or turning a pattern into
+   a monitor (nothing yet calls `HotlistStore.create`/`MonitorStore.create` except this stage's own
+   tests), no production wiring of the evaluator into an actual running scheduled or event-driven
+   process (the evaluator is a callable function, proven directly by tests against real
+   Postgres/ArcadeDB/Valkey — a real always-on consumer of `changes:corpus` is 6c's own job,
+   paired with the routes above, since a scheduler with nothing able to create a hotlist or
+   monitor yet would have nothing to evaluate in production), no hotlist/monitor/alert-inbox UI.
+   **B12/B13/B20 are therefore still not satisfied end-to-end** — `08_ACCEPTANCE_SCENARIOS.md`'s
+   own rows describe an analyst action ("Add the endpoint to a hotlist," "Save the pattern as a
+   monitor") that has no route to perform it through yet. What 6b changes is *where* the remaining
+   gap sits: narrowed from "no mechanism exists" to "the mechanism exists and is proven directly,
+   only the route and the UI in front of it are missing" — 6c's own scope, precisely.
 
 **Exit.** Acceptance scenario B, scoped to B1 (its two-CDR-files half only; the device-extraction
 half stays unowned, ADR-027), B2–B5, B7, B12, B13 (via a CDR-carried hotlisted identifier, not the
@@ -2109,20 +2194,39 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
   it should be fixed or split). Owning phase: **Phase 8** — same closing-pass home as the
   gate-hygiene entries above it.
 
-- **`services/resolve/duckdb_setup.py`'s `_soundex` UDF crashes on a hyphenated, digit-bearing
-  input rather than degrading — found incidentally writing Stage 6a's own change-stream test, not
-  investigated for its own sake.** `_soundex` guards only `if not value: return None` (empty/
-  falsy); a non-empty value containing a hyphen and digits (`"Resolveonlya1b2c3d4"`-shaped —
-  checked precisely: a purely alphabetic marker of the same length does not reproduce it) reaches
-  `phonetics.soundex()` and raises `IndexError: string index out of range` from inside that
-  library, surfacing as a `duckdb.duckdb.InvalidInputException` through Splink's own compiled SQL
-  — not a bare-string edge case DuckDB itself rejects, a defect in the third-party `phonetics`
-  package's own `soundex()` this UDF wrapper does not guard against. Every existing fixture in
-  `tests/resolve/` uses plain alphabetic family names (`"Mercer"`, `"Ahmed"`), so this has never
-  been hit before. Worked around in the new test (a purely alphabetic marker), not fixed at the
-  source. Owning phase: **Phase 8** — `_soundex` should guard against, or `resolve_entity_type`
-  should sanitise before, whatever character class `phonetics.soundex()` cannot handle, proven by
-  a case using exactly the failing shape found here rather than assumed fixed by inspection.
+- **RE-SCOPED, Stage 6b's own carry-over 2 from 6a: `_soundex` is not an incidental test-fixture
+  finding — it is a live defect in `Person` resolution, reachable by an entirely ordinary
+  hyphenated British surname, checked precisely rather than assumed from the original digit-
+  bearing marker.** `packages/ontology/default.yaml` declares exactly one `resolution:` block in
+  the whole ontology, on `Person`: `blocking: [soundex(family_name), year(date_of_birth)]` — the
+  only call site. Checked directly against `phonetics.soundex()` itself, isolating what actually
+  triggers it (the original finding's "hyphen and digits" framing was broader than the true
+  cause): **the hyphen alone is sufficient, no digit needed.** `soundex("smith-jones")`,
+  `soundex("o-brien")`, `soundex("d-artagnan")`, `soundex("jean-luc")` all raise the identical
+  `IndexError: string index out of range`; `soundex("obrien")`/`soundex("mercer")` (no hyphen) do
+  not. A double-barrelled surname (Smith-Jones, Taylor-Wood) is unremarkable in UK population
+  data specifically — the demographic this platform's own UK law-enforcement handling scheme
+  targets — not a synthetic edge case. `resolve_entity_type("Person", ...)` (`services/resolve/
+  resolver.py:60` calling `duckdb_setup.new_connection()`, which registers the UDF Splink's
+  compiled blocking SQL then calls once per row) fails for the **entire population being
+  resolved**, not merely the one affected row — Splink compiles blocking into one SQL statement
+  over the whole population, and DuckDB's own UDF exception aborts that statement outright. This
+  is called from both the manual "resolve now" route and the automatic post-ingest hook
+  (`06_DECISIONS.md` ADR-025, Phase 7 Stage 1, already live) — so a single hyphenated-surname
+  `Person` entering the corpus, from any ingest, fails corpus-wide `Person` resolution outright
+  from that point on (the job itself fails cleanly, per `worker.py`'s own exception handling —
+  not a crash of the worker process, but resolution for every `Person`, hyphenated-surname or
+  not, silently stops completing). Every existing fixture in `tests/resolve/` uses a plain
+  alphabetic family name (`"Mercer"`, `"Ahmed"`), which is why this was never hit before.
+  **Not fixed here** — resolver-internals work orthogonal to Stage 6b's own scope (alert
+  evaluation) and owed its own test-first treatment, not a one-line change bundled into an
+  unrelated stage. Owning phase: **Phase 8, raised in severity from the original "incidental"
+  framing** — this blocks a core, already-shipped feature (corpus-wide `Person` resolution)
+  against ordinary data, not a hardening nicety; a deployment ingesting real UK population data is
+  likely to hit it on the first hyphenated surname it processes. Fix shape unchanged: `_soundex`
+  should guard against, or `resolve_entity_type` should sanitise before, whatever character class
+  `phonetics.soundex()` cannot handle, proven by a case using exactly `"smith-jones"` (the real
+  failing shape, not a synthetic one) rather than assumed fixed by inspection.
 
 ---
 

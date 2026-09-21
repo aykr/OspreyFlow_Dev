@@ -27,6 +27,8 @@ export type { PatternEdge } from "./PatternEdge";
 export type { PatternQuery } from "./PatternQuery";
 export type { SavedPattern } from "./SavedPattern";
 export type { Alert } from "./Alert";
+export type { Hotlist } from "./Hotlist";
+export type { Monitor } from "./Monitor";
 export type { NeighbourhoodStats } from "./NeighbourhoodStats";
 export type { Subgraph } from "./Subgraph";
 export type { ListNodesPage } from "./ListNodesPage";

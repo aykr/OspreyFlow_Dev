@@ -240,6 +240,18 @@ jobs:
       # producer); `test_alerts.py` also needs the same access-control discipline the sites_store
       # entry above already argues for — a fake could not prove "evidence unreadable after a
       # handling change" at all.
+      # `test_pattern_store.py` was found here, not carried over from anywhere: it was already in
+      # the `test` job's own `--ignore` list (correctly — it needs live Postgres) but was never
+      # actually added to this job's run list when it was written, so it has never run in any CI
+      # job at all — the exact class of gap this job's own comment above already describes finding
+      # for `test_sites_store.py`/`test_hmp_graph.py`, recurring for one more file. Fixed here
+      # alongside the Stage 6b files below rather than filed separately, since `test_monitors.py`
+      # now depends on `PatternStore` and would otherwise be the second store leaning on an
+      # access-control proof that itself never runs.
+      # `test_hotlists.py`/`test_monitors.py`/`test_evaluation.py` (Phase 7 Stage 6b,
+      # `06_DECISIONS.md` ADR-036/037/038) — Postgres for the first two, plus ArcadeDB and Valkey
+      # for `test_evaluation.py` (the match itself, the overlap-guard lock, the monitor dedup
+      # signature).
       - run: >-
           uv run pytest tests/conformance/graph_port tests/ingest
           tests/services/api/test_valkey_store.py
@@ -249,6 +261,10 @@ jobs:
           tests/scenarios/test_hmp_graph.py
           tests/services/api/test_change_stream.py
           tests/services/api/test_alerts.py
+          tests/services/api/test_pattern_store.py
+          tests/services/api/test_hotlists.py
+          tests/services/api/test_monitors.py
+          tests/services/api/test_evaluation.py
       - run: npm ci
       # `deltaClient.integration.test.ts` (Phase 4) spawns the real
       # `services.api.app` (`apps/workspace/test/glass_test_server.py`)
@@ -410,6 +426,14 @@ jobs:
       # than done piecemeal in this comment. `test_tile_cache.py`/`test_prefetch.py`/
       # `test_match_live.py` were already known and deliberately left unactioned (narrower stakes,
       # per that same gaps entry); the other 14 are new findings from this pass.
+      # `test_change_stream.py`/`test_alerts.py` were the same defect recurring a third time
+      # (Phase 7 Stage 6b's own read-before-building pass found it): added to the `conformance`
+      # job's run list in Stage 6a, but never added here, so this job would have run them against
+      # nothing and failed — undetected until now because nothing since 6a had touched this file.
+      # `test_pattern_store.py` was already correctly excluded here but, per this job's own list
+      # above, had never actually been wired into `conformance` either — fixed there, not here.
+      # `test_hotlists.py`/`test_monitors.py`/`test_evaluation.py` (Stage 6b) are excluded from
+      # first principles, the same reasoning as every file above: real Postgres/ArcadeDB/Valkey.
       - run: >-
           uv run pytest --ignore=tests/conformance/graph_port
           --ignore=tests/conformance/model_port --ignore=tests/golden --ignore=tests/ingest
@@ -419,6 +443,11 @@ jobs:
           --ignore=tests/scenarios/test_witness_statement_extraction.py
           --ignore=tests/services/api/test_sites_store.py
           --ignore=tests/scenarios/test_hmp_graph.py
+          --ignore=tests/services/api/test_change_stream.py
+          --ignore=tests/services/api/test_alerts.py
+          --ignore=tests/services/api/test_hotlists.py
+          --ignore=tests/services/api/test_monitors.py
+          --ignore=tests/services/api/test_evaluation.py
           --ignore=tests/geocoder/test_match_live.py
           --ignore=tests/resolve/test_projection_access_control.py
           --ignore=tests/resolve/test_trigger.py

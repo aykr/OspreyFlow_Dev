@@ -3203,6 +3203,17 @@ could ever satisfy. **Revisit if** ADR-030's own "revisit if" is ever exercised 
 multi-root join, or negation added to the pattern language) — at that point this finding, not
 merely the trigger-model proposal above it, needs re-checking.
 
+**Recorded at both absences this argument depends on, not only here — Phase 7 Stage 6b's own
+carry-over from 6a.** `01_DOMAIN_MODEL.md` §2.4 (`GraphPort`'s own versioning/no-hard-delete
+statement) and §8.1 (`PatternQuery`'s own schema, where negation's absence is checked directly
+against `PatternNode`/`PatternEdge`) each now carry a pointer back to this paragraph, stating
+precisely what breaks if either absence is removed and naming the test that would need to exist
+at that point — `test_change_stream_carries_an_entry_for_a_hard_delete` and `test_monitor_fires_
+on_a_match_completed_by_a_negated_clause_no_longer_blocking` respectively. Read the two
+statements there before adding either capability; this paragraph's own "revisit if" is the same
+trigger, restated at the point a reader of the spec's own delete/pattern-matching sections would
+actually be standing when they make the change, not only at the point a reader of this ADR would.
+
 ---
 
 ## ADR-038 — Hotlist membership and existence: decided, a two-mode deployment policy

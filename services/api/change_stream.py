@@ -26,7 +26,12 @@ did this analysis and it is not repeated here, only pointed at**: a match create
 not exist as a possible gap in this system as built (no hard-delete on `GraphPort`, no negation in
 `PatternQuery`) — see ADR-037's own "What the change delta still misses" section for the full
 two-part argument (supersession is itself a write this stream already captures; a pattern language
-with no "must not exist" clause cannot have a match newly created by removal). The only thing this
+with no "must not exist" clause cannot have a match newly created by removal). **This dependency is
+recorded at its own two source locations, not only here** — `01_DOMAIN_MODEL.md` §2.4 (`GraphPort`'s
+own no-hard-delete statement) and §8.1 (`PatternQuery`'s own schema, where negation's absence is
+checked directly) each carry a pointer back to ADR-037 stating precisely what breaks, and naming
+the test that would need to exist, if either absence is ever removed — read there, not re-derived
+here, if you are the one adding a hard-delete method or a negation clause. The only thing this
 stream cannot yet prove it captures is a producer nobody has wired it to — currently exactly three,
 matching ADR-037's own accepted list, no more and no fewer.
 """

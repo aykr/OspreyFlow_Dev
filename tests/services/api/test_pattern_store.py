@@ -65,7 +65,9 @@ async def test_list_returns_the_latest_version_only_once_per_pattern(store: Patt
     # own discipline of scoping each assertion to the object it just created), so `list_authorized`
     # may legitimately also return patterns other tests in this session saved under `OWNER`.
     first = await store.save(OWNER, pattern_id=None, name="Common contacts", definition=_pattern())
-    await store.save(OWNER, pattern_id=first.pattern_id, name="Common contacts", definition=_pattern())
+    await store.save(
+        OWNER, pattern_id=first.pattern_id, name="Common contacts", definition=_pattern()
+    )
 
     listed = await store.list_authorized(OWNER)
     matching = [s for s in listed if s.pattern_id == first.pattern_id]
@@ -101,6 +103,12 @@ async def test_a_different_analyst_cannot_save_a_new_version_of_someone_elses_pa
 
 
 async def test_list_never_returns_another_analysts_pattern(store: PatternStore) -> None:
-    await store.save(OWNER, pattern_id=None, name="Common contacts", definition=_pattern())
+    """Scoped to the pattern this test itself creates, not asserted as total emptiness — Postgres
+    is shared across the whole run with no per-test reset (this file's own top comment), so a
+    stricter `listed == []` broke the first time another file (`test_monitors.py`, Stage 6b) also
+    saved a pattern under `OTHER_ANALYST` in the same database. `test_alerts.py`'s own
+    `test_list_never_returns_another_analysts_alert` already uses this shape for the identical
+    reason."""
+    saved = await store.save(OWNER, pattern_id=None, name="Common contacts", definition=_pattern())
     listed = await store.list_authorized(OTHER_ANALYST)
-    assert listed == []
+    assert all(s.pattern_id != saved.pattern_id for s in listed)

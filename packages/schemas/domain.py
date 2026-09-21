@@ -477,6 +477,40 @@ class Alert(BaseModel):
     created_at: datetime
 
 
+class Hotlist(BaseModel):
+    """A watched identifier — `02_GLASS_FRONTEND.md` §3.3: "A list of identifiers with an owner
+    and a review date." Phase 7 Stage 6b. Deliberately bare: an `identifier` is a normalised
+    value string (the same `value_normalised` shape `Endpoint`'s own identifiers already use, not
+    a node id — a hotlist entry can be created before anything resolves to a node at all, per
+    ADR-038's own "an analyst can hotlist a bare phone number read off a warrant before it
+    resolves to anything they can see"), an `owner_id`, and a `review_date` — no handling ceiling
+    (`06_DECISIONS.md` ADR-038's option (c), recorded there as not selected, not built here)."""
+
+    id: str
+    identifier: str
+    owner_id: str
+    review_date: date
+    created_at: datetime
+
+
+class Monitor(BaseModel):
+    """A saved pattern being watched — `02_GLASS_FRONTEND.md` §3.3: "A saved visual query run...
+    against new data." Phase 7 Stage 6b. References a `SavedPattern` by `pattern_id`, never
+    copies its own definition — `PatternStore.get_authorized` is the one place a monitor's own
+    query is ever read from, the same "resolved fresh, never cached" discipline `06_DECISIONS.md`
+    ADR-036 requires of a monitor's *access*, extended here to its own *definition* too, so an
+    edited-then-resaved pattern is evaluated as it now reads, not as it read when the monitor was
+    turned on. `owner_id` is redundant with `SavedPattern.owner_id` (a monitor cannot be turned on
+    for a pattern its own creator does not own — checked at creation, not re-derived from the
+    pattern on every read) but stored directly so a monitor row is self-describing without a join
+    for the common "list my own monitors" case."""
+
+    id: str
+    pattern_id: str
+    owner_id: str
+    created_at: datetime
+
+
 class NeighbourhoodStats(BaseModel):
     node_id: NodeId
     degree: int
@@ -534,6 +568,8 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     PatternQuery,
     SavedPattern,
     Alert,
+    Hotlist,
+    Monitor,
     NeighbourhoodStats,
     Subgraph,
     ListNodesPage,
