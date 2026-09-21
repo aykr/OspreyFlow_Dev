@@ -2718,3 +2718,230 @@ question, or B6's DCO-vs-CLA recommendation before Trigger B — each is written
 precisely so settling it is a small, targeted edit to this record rather than a new ADR.
 
 ---
+
+## ADR-035 — Demo distribution classes (`shipped`/`internal`), fail-closed and enforced at packaging time; Fixture Corp (R24) is the shippable demo; Enron and VAST stay internal, one of them narrower than requested
+
+**Status.** Accepted, 21 September 2026, with one item this record declines to accept as written
+(C3, below) rather than implement silently against a standing rule.
+
+**The problem.** Every demo case this build has named or built — Scenario A (HMP fixture, built),
+the Ingest Studio (CDR fixture, built), Scenario C / "Fixture Corp" (Enron-shaped, not built), a
+generic reference to "the Enron corpus," and the VAST Challenge datasets — has been tracked
+informally, in prose, in `DEMO_GUIDE.md`. Nothing today enforces, mechanically, which of these may
+leave this repository in a built artefact and which may not; `DEMO_GUIDE.md` §6 already relies on
+prose ("No real intelligence data anywhere, ever") to keep the real Enron corpus out, with nothing
+that would catch a packaging step that copied it in by accident.
+
+### C1 — Demo distribution classes
+
+Every demo carries a manifest declaring a `distribution` field: `shipped` (included in artefacts
+given to customers and testers) or `internal` (never included in any artefact leaving this
+project).
+
+**The registry fails closed.** A manifest with a missing, empty, misspelled or unrecognised
+`distribution` value is treated as `internal`. **The test that proves this:**
+`tests/demo_registry/test_fail_closed.py::test_a_manifest_with_no_distribution_field_is_excluded_
+from_a_shipped_build` — asserts, for a manifest literally lacking the field (not one explicitly set
+to `"internal"`), that the demo it describes does not appear in a shipped-build listing. A second
+case in the same file, `test_an_unrecognised_distribution_value_is_treated_as_internal`, covers the
+misspelled/unrecognised half separately, since "missing" and "wrong" are different code paths
+(a missing key vs. a value that fails an enum check) and each needs its own proof.
+
+**Exclusion happens at packaging time, by omitting the demo's files from the artefact — not a
+runtime flag.** A build that contains an internal demo's data and disables it with configuration
+has shipped that data; C2 below is the packaging-time gate this requires.
+
+**Datasets for internal demos are never committed.** They are provisioned to a gitignored directory
+located by environment variable (`OSPREYFLOW_INTERNAL_DEMO_DATA_DIR`, no default — absence is
+"nothing provisioned," never a fallback path that might silently point somewhere real), referenced
+by the manifest by filename rather than contained in it. **Gitignore entry added in this session:**
+
+```
+# Internal-only demo datasets (docs/06_DECISIONS.md ADR-035, C1) — never committed, provisioned to
+# OSPREYFLOW_INTERNAL_DEMO_DATA_DIR at runtime, referenced by filename from a demo's own manifest.
+/demo-data/
+```
+
+(`/demo-data/` is this session's own choice of the conventional default `OSPREYFLOW_INTERNAL_DEMO_
+DATA_DIR` points at when unset in local dev — anchored at the repository root, not matched at every
+directory level, since nothing about this data is a build artefact like `.DS_Store` that can appear
+anywhere.)
+
+**The Glass renders a demo whose dataset is not provisioned as unavailable, with a clear reason —
+never an error, never a leaked stack trace.** Design note, not built: the natural place is the same
+demo-selection surface `DEMO_GUIDE.md` §1's table already documents in prose; a demo whose manifest
+resolves to `internal` and whose `OSPREYFLOW_INTERNAL_DEMO_DATA_DIR` file is absent renders a
+disabled entry with the reason "dataset not provisioned," the same shape `services/api/config.py`'s
+own fail-fast-on-missing-`OIDC_JWKS_URL` already establishes for "tell the operator exactly what is
+missing," not a 500 from a route that assumed the file would be there.
+
+**`make demo-manifest` prints each demo and its distribution class** — this session's chosen name,
+matching the `make licence-check`/`make schemas-check` naming convention — so what will ship is
+inspectable before shipping rather than after.
+
+**Not built in this session — design only, per this ADR, owned by Phase 8.** No demo-manifest
+schema, registry, packaging hook or Glass unavailable-state component exists anywhere in this
+repository today (checked: `git grep -li "distribution.*class\|demo.*manifest"` over `packages/`,
+`services/`, `apps/` returns nothing), and Phase 8 is the first phase that builds any packaging
+pipeline at all (ADR-034's own B7 finding: "the browser harness and its packaging pipeline are
+Phase 8's own outcome, not built until then"). Building C1's registry ahead of Phase 8's own
+packaging work would have nothing to attach to. `07_BUILD_PLAN.md`'s Phase 8 outcome bullets are
+amended below to own this design.
+
+### C2 — Packaging gate
+
+An assertion on the packaging step, failing the build, that no internal demo's id, directory path
+or dataset filename appears anywhere in the built artefact — **including inside image layers**, not
+merely the running filesystem: if a packaging step copies the repository root, `/demo-data/`'s own
+gitignore exclusion is irrelevant to what a `docker build` context includes unless the `Dockerfile`
+also excludes it (`.dockerignore`), the same "check the build context, not just the running
+container" finding ADR-034's own B7 already makes for the private build tree.
+
+**The test, named prospectively (not built — no packaging step exists to test yet):**
+`tests/packaging/test_internal_demo_exclusion.py::test_reclassifying_an_internal_demo_to_shipped_
+without_removing_its_data_still_fails_the_gate` and a sibling,
+`test_removing_the_exclusion_step_itself_fails_the_gate` — both required, per this session's own
+"name the test that would fail" discipline (rule 12): a gate that only ever proves the *current*
+correct state passes is not proof it would catch either the reclassification mistake or its own
+removal.
+
+**Not completed in this session; recorded, per this item's own explicit instruction, as required
+work owned by Trigger A (Phase 8's close, per ADR-034 §B3), and no artefact may be given to any
+third party until it exists.**
+
+### C3 — The Enron email corpus, narrower than requested
+
+**Research and reasoning, recorded in full because it is useful regardless of the disposition
+below:**
+
+- No licence or terms are stated by the CMU maintainer — only an informal request to be sensitive
+  to the privacy of those involved. Absence of a stated restriction is not a grant of rights.
+- Documented redaction history: messages have been removed at the request of affected employees, so
+  the corpus is mutable, and a local copy may contain material since withdrawn elsewhere.
+- UK GDPR applies to processing regardless of repository visibility — repository privacy controls
+  who can *read* the repository; it is not a lawful basis and not a packaging control.
+- Size: ~1.7GB, above GitHub's per-file limits and unsuitable for git regardless of the above.
+
+**Where this record departs from what was asked, and why, rather than implementing it silently.**
+The request was: distribution class `internal`, permitting "local development, scale and realism
+testing, and demos run by the owner for the owner's own purposes." `CLAUDE.md`'s own rule 9 —
+binding on every session, not merely an accepted ADR — is unqualified: "No real intelligence data
+anywhere, ever." `07_BUILD_PLAN.md`'s own standing rule 3, which `DEMO_GUIDE.md` §6 already cites
+by name against using the real Enron corpus at all, is scoped precisely: "No real intelligence data
+in the repository, in CI, **or in a demo**." A demo "run by the owner for the owner's own purposes"
+is still, in the rule's own words, a demo. `CLAUDE.md` is explicit that an accepted decision record
+believed wrong gets said so and stopped on, not silently implemented around — the same discipline
+applies with more force to a standing rule than to an ADR. **This record does not amend standing
+rule 3 or `CLAUDE.md` rule 9, and does not grant the "demos run by the owner" permission as
+requested.**
+
+**What this record does accept, because it does not touch either rule's own explicit scope:**
+distribution class `internal`, permitted for **local development and scale/realism testing only** —
+neither the repository, CI, nor a demo of any kind, the three channels standing rule 3 actually
+names. The corpus may sit on the owner's own machine, outside `/demo-data/` and outside git
+entirely (it is 1.7GB and ungitignorable-by-size regardless), used to stress-test the platform at a
+scale Fixture Corp does not reach, and never rendered to any audience, the owner included, as a
+"demo."
+
+**Open item for the owner, not decided here:** whether standing rule 3 and `CLAUDE.md` rule 9 should
+be amended to carve out an "owner-only demo, never distributed" exception — the request as written
+needs exactly that amendment to be actionable, and this record surfaces the need rather than making
+the amendment itself. **Separately, and regardless of that amendment:** whether even
+development-only use requires a documented lawful basis and retention period under UK GDPR is
+recorded as requiring legal advice before alpha, per the original request.
+
+### C4 — VAST Challenge datasets, and the same conflict in miniature
+
+Distribution class `internal`, for the **generated, VAST-shaped fixture** `06_DECISIONS.md` ADR-026
+already designs — no licence or terms found on any host checked (the moved benchmark repository,
+the GitHub organisation, PNNL Datahub, OSTI, or the GitHub repositories; none carries a `LICENSE`
+file), and publication for challenge participation reads as a reasonable implied licence to
+participate, a thin one for redistribution. No personal data, so no GDPR question — a materially
+different risk profile from Enron.
+
+**One clarification, checked against ADR-026 rather than assumed:** ADR-026's own title states it
+plainly — "the VAST Challenge datasets are admitted shaped, not verbatim; standing rule 3 is not
+amended." If "distribution class `internal`" is read as license to keep the *actual published VAST
+files* on this project's own infrastructure for any purpose, that already conflicts with ADR-026's
+own express holding, the same shape as C3's conflict above, just already resolved rather than newly
+found. Read correctly, C4's `internal` class attaches to the *generated fixture's own build
+artefacts* (intermediate files a seeded generator might produce before the final fixture is
+committed as `shipped` test data) — not to a cached copy of VAST's own files, which ADR-026 already
+declines to admit into this project at all, in any distribution class.
+
+### C5 — Fixture Corp (R24) — distribution class `shipped`
+
+Synthetic and generated — Enron-*shaped*, not Enron-derived, per `DEMO_GUIDE.md` §6's own framing.
+Candidate generators, both Apache-2.0: AMLSim and gen-fraud-graph. Generated output is owned
+outright and carries no third-party licence — the one demo dataset this record can actually put in
+front of a customer.
+
+Fixture Corp is the demo shown to customers and the one an analyst review runs against, being the
+only one shippable and the only one whose content is arrangeable deterministically. It must
+exercise, at minimum:
+
+- entity resolution at τ 0.99, 0.95 and 0.80 producing visibly different projections;
+- community structure the selected algorithm (Louvain, per `06_DECISIONS.md` ADR-029) actually
+  finds;
+- path lengths across the pathfinder's own supported range (`max_hops<=8`, per this session's own
+  Part A);
+- an access-control boundary where a hidden hop lengthens the path rather than removing it — the
+  same property `test_unauthorised_path_length_matches_a_graph_without_the_hidden_hop`
+  (`tests/conformance/graph_port/test_suite.py`) already proves for the pathfinder generally, here
+  demonstrated against fixture data an analyst can actually see rendered.
+
+**R24 has been the only backlog item with no owning phase. Owning phase: Phase 8.** `07_BUILD_PLAN.
+md`'s Phase 8 outcome bullets are amended below to claim it, alongside C1's demo-manifest registry
+it is the first real `shipped`-class citizen of.
+
+### C6 — IBM AML-Data, conditional
+
+If ever used as data rather than AMLSim as a generator: CDLA-Sharing-1.0 carries a share-alike
+obligation on published modifications. It does not reach the code — a data licence, not a code one
+— but complicates the single-licence (Apache 2.0) story ADR-034 §B2 otherwise tells cleanly.
+Recorded as a constraint on a path not currently taken, not a decision to avoid it outright.
+
+### C7 — `make licence-check`'s actual coverage, verified rather than assumed
+
+**Checked directly, both halves.** `scripts/licence_check.py` (Python) runs `pip-licenses` against
+the active Python environment and checks each reported package licence string against an allowlist
+(`docs/00_ARCHITECTURE.md` §7). `scripts/licence_check.mjs` (Node, `package.json`'s own `licence-
+check` script) does the identical check via `license-checker` against `node_modules`. **Neither leg
+inspects a data file's own embedded or accompanying licence** — a fixture carrying its own data
+licence (C6's CDLA-Sharing-1.0 case, or any future dataset with terms of its own) passes both
+scripts unexamined, because neither script's own scope extends past installed-package metadata.
+
+**This is the fourth recorded instance of a gate verifying less than its name implies** — after
+`keyboard.spec.ts`'s own no-auto-discovery finding, the fake-backed access-control tests
+(`07_BUILD_PLAN.md`'s "Gaps with no owning phase," four instances), and the `axe-core`
+`onMouseDown`-only showcase finding (same list). The pattern each of those four entries already
+names — found by someone going looking, never by the gate itself failing — holds again here.
+
+**Extending `licence-check` to data files is real, additional work, not a quick fix to either
+existing script** (neither `pip-licenses` nor `license-checker` has any notion of a non-package data
+file at all — this would need its own small scanner, checking for a `LICENSE`/`NOTICE`/manifest-
+declared licence alongside any fixture directory). **Recorded as work with an owning phase: Phase
+8**, alongside C1's registry and C5's Fixture Corp, since a shipped fixture's own data licence is
+exactly the class of thing C1's `make demo-manifest` output should also be able to report.
+
+### C8 — `docs/DEMO_GUIDE.md`
+
+Amended in this session (see the file itself) with a new provisioning section describing how
+internal demo datasets are obtained and placed (`OSPREYFLOW_INTERNAL_DEMO_DATA_DIR`, by reference
+from a manifest, never committed) without containing or linking the datasets themselves — the guide
+stays in the Apache tree (ADR-034 §B2) and must describe the mechanism, not the content. The
+existing demo table is amended to state each entry's distribution class plainly.
+
+**Cost.** One gitignore entry (done). Two ADR sections (C3, C4) that decline part of what was asked
+rather than implement it against a standing rule, with the amendment they would need named as an
+open item for the owner. Everything else — the manifest schema, the registry, the packaging gate,
+the Glass unavailable-state rendering, `make demo-manifest`, the extended licence-check, and Fixture
+Corp itself — is design and ownership only in this session; `07_BUILD_PLAN.md`'s Phase 8 outcome
+bullets are amended to claim all of it, so none of it is a second orphaned backlog item the way R24
+already was once.
+
+**Revisit if.** The owner amends standing rule 3/`CLAUDE.md` rule 9 to add an owner-only-demo
+exception (C3's own open item) — at which point this record's own `internal` scope for Enron widens
+to match, by an edit to this record, not a new ADR.
+
+---

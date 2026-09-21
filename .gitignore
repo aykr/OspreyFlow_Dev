@@ -14,6 +14,10 @@ __pycache__/
 # something to commit.
 /data/
 
+# Internal-only demo datasets (docs/06_DECISIONS.md ADR-035, C1) — never committed, provisioned to
+# OSPREYFLOW_INTERNAL_DEMO_DATA_DIR at runtime, referenced by filename from a demo's own manifest.
+/demo-data/
+
 # Node
 node_modules/
 apps/workspace/dist/

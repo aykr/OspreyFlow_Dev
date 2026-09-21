@@ -1088,6 +1088,19 @@ operable from the browser or a script — all of it provable on `local-lite`.
 - The two Scenario B Glass features no earlier phase built (ADR-022): cross-case timeline overlay
   and playback-driven snail trail (B16, B18) — small, incremental additions to Timeline and Map,
   the components Phase 5 already shipped, not a new surface the way Phase 6a is over Phase 6.
+- **The demo distribution-class registry and Fixture Corp (R24) — `06_DECISIONS.md` ADR-035.** The
+  `shipped`/`internal` manifest schema, its fail-closed registry, the packaging-time exclusion gate
+  (both asserting no internal demo's id/path/dataset filename reaches a built artefact, including
+  inside image layers), the Glass's "dataset not provisioned" unavailable state, and `make
+  demo-manifest`. Fixture Corp itself (AMLSim- or gen-fraud-graph-generated, Enron-shaped, `shipped`)
+  is this registry's first real citizen and the only demo this phase's own packaging work can put in
+  front of a customer — entity resolution at τ 0.99/0.95/0.80, Louvain community structure, the
+  pathfinder's full `max_hops` range, and an access-control-lengthened-path case, per ADR-035 §C5.
+  `make licence-check`'s own scope (ADR-035 §C7: Python/npm package metadata only, never a data
+  file's own licence) is extended in the same pass, so a future fixture carrying its own data
+  licence (ADR-035 §C6's IBM AML-Data case) does not pass unexamined the way it does today.
+- **A pathfinder acceptance-scenario step (B21, or an ADR addendum accepting its absence) —
+  `07_BUILD_PLAN.md`'s own "Gaps with no owning phase" entry, this session's Part A.**
 
 **Exit.** Both acceptance scenarios pass unchanged on `local-lite`. A `backup` → `restore` cycle
 reproduces the graph from staged Parquet. An export containing an `S2`-marked item is blocked,

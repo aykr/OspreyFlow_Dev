@@ -15,19 +15,29 @@ instruction that will fail.
 
 ## 1. What you can demo today
 
-| Demo case | State | What it shows |
-| --- | --- | --- |
-| **Scenario A, steps A1–A11** (HMP fixture) | **Built and exit-verified** | Timeline, map, cross-filtering, boundary and site-grid filters, the weekend and time-of-day findings, the site hotspot |
-| **The Ingest Studio**, Connect → Publish (CDR fixture) | **Built and exit-verified** | Onboarding a new source without touching the ontology: profiling, row-template mapping, dry-run verify, publish with versioning |
-| Scenario A, A12 | Not built — needs Phase 7's Clique Metric | — |
-| Scenario A, A13–A15 | Not built — needs Phase 8's assessment and export | — |
-| Scenario B (comms and identity pivot) | Partly built; split across Phases 6a, 7 and 8 by ADR-022 | — |
-| **Extraction and entity resolution** | Built, **API only** | Demonstrable to engineers through the API; there are no screens until Phase 6a |
-| **Scenario C — "Fixture Corp"** (Enron-shaped) | **Script written, fixture never built** | See §6 |
-| **VAST Challenge dataset** | **Not decided** — needs an ADR first | See §7 |
+Every demo case below has a **distribution class** (`06_DECISIONS.md` ADR-035): `shipped` means it
+is allowed inside an artefact given to a customer or tester; `internal` means it must never leave
+this project, in any form, at packaging time — enforced by a fail-closed registry and a packaging
+gate ADR-035 designs and this phase (Phase 8) owns building. Until that registry exists, treat the
+column below as the same binding statement in prose that the registry will enforce mechanically.
+
+| Demo case | Distribution | State | What it shows |
+| --- | --- | --- | --- |
+| **Scenario A, steps A1–A11** (HMP fixture) | `shipped` | **Built and exit-verified** | Timeline, map, cross-filtering, boundary and site-grid filters, the weekend and time-of-day findings, the site hotspot |
+| **The Ingest Studio**, Connect → Publish (CDR fixture) | `shipped` | **Built and exit-verified** | Onboarding a new source without touching the ontology: profiling, row-template mapping, dry-run verify, publish with versioning |
+| Scenario A, A12 | `shipped` | Not built — needs Phase 7's Clique Metric | — |
+| Scenario A, A13–A15 | `shipped` | Not built — needs Phase 8's assessment and export | — |
+| Scenario B (comms and identity pivot) | `shipped` | Partly built; split across Phases 6a, 7 and 8 by ADR-022 | — |
+| **Extraction and entity resolution** | `shipped` | Built, **API only** | Demonstrable to engineers through the API; there are no screens until Phase 6a |
+| **Scenario C — "Fixture Corp"** (Enron-*shaped*, R24) | `shipped` | **Script written, fixture never built** — owning phase Phase 8 | See §6 |
+| **The real Enron email corpus** | `internal`, **narrower than the raw corpus itself suggests — see §6** | Never provisioned as a demo, for anyone | — |
+| **VAST Challenge dataset** (generated fixture) | `internal` | Decided (ADR-026); fixture not yet built | See §7 |
+| **VAST Challenge dataset** (the published files themselves) | Not admitted, any class | ADR-026: "standing rule 3 is not amended" — never used, shaped or verbatim | See §7 |
 
 The honest summary: **Scenario A on the HMP fixture is the demo that exists**, and it is a good
-one. It exercises three of the five analytical capabilities against a live stack.
+one. It exercises three of the five analytical capabilities against a live stack. It is also the
+only demo case that is both built and unambiguously `shipped` — Fixture Corp fills that second role
+once §6's fixture is built.
 
 ---
 
@@ -222,18 +232,26 @@ five minutes. See §2.
 
 ---
 
-## 6. Scenario C — the Enron-shaped demo (not yet built)
+## 6. Scenario C — the Enron-shaped demo (not yet built) — `shipped`, R24, owning phase Phase 8
 
 **The fixture does not exist.** The Scenario C script is a planning document; "Fixture Corp" — around
 150 fabricated employees, a five-level hierarchy, four departments, structural statistics modelled
-on published Enron corpus research — has never been built as a fixture.
+on published Enron corpus research — has never been built as a fixture. `06_DECISIONS.md` ADR-035
+gives it an owning phase (Phase 8) and its own distribution class (`shipped`) — it is the demo this
+platform can actually put in front of a customer, once built.
 
-**The real Enron corpus cannot be used, and does not need to be.** `CLAUDE.md` rule 9 is
-unqualified: "No real intelligence data anywhere, ever." Standing rule 3 names the demo explicitly:
-"No real intelligence data in the repository, in CI, or in a demo." The corpus is the private
+**The real Enron corpus is `internal`, and narrower than "usable for a demo."** `CLAUDE.md` rule 9
+is unqualified: "No real intelligence data anywhere, ever." Standing rule 3 names the demo
+explicitly: "No real intelligence data in the repository, in CI, **or in a demo**" — including one
+run by the owner, for the owner's own purposes; that phrase is still, in the rule's own words, a
+demo. ADR-035 §C3 records this precisely rather than working around it: the real corpus may be used
+for local development and scale/realism testing only, never committed, never in CI, and never
+rendered to any audience — the owner included — as a demo, unless and until the owner amends
+standing rule 3 and `CLAUDE.md` rule 9 to add that exception explicitly. It is the private
 correspondence of about 150 identifiable people, most never charged with anything, and loading it
-into an intelligence platform to demonstrate network analysis is precisely the thing that rule
-prevents — quite apart from being a data-protection problem in its own right.
+into an intelligence platform to demonstrate network analysis is precisely the thing the rule
+prevents — quite apart from being a data-protection problem in its own right (ADR-035 §C3 has the
+full GDPR/redaction/licence reasoning).
 
 Fixture Corp gets you what makes Enron the canonical social-network case study — the hierarchy, the
 community structure, the communication asymmetries that betray it — with none of that. That it is
@@ -242,11 +260,14 @@ Enron-*shaped* rather than Enron is a point to make in the demo, not a caveat to
 Building it depends on nothing in Phase 7, because fixtures are synthetic and in-repo by standing
 rule 3. It can start now, and if it does, Scenario C's analytics-dependent steps C9–C16 are runnable
 the day Phase 7 closes rather than starting then. Follow the discipline `tests/scenarios/fixtures/
-cdr.py` already sets: seeded, deterministic, in-repo, with its own shape-correctness test.
+cdr.py` already sets: seeded, deterministic, in-repo, with its own shape-correctness test. See
+`06_DECISIONS.md` ADR-035 §C5 for the minimum set of things the built fixture must exercise (τ
+0.99/0.95/0.80 resolution, Louvain community structure, the pathfinder's full hop range, and an
+access-control-lengthened-path case).
 
 ---
 
-## 7. The VAST Challenge datasets — decided
+## 7. The VAST Challenge datasets — decided, `internal`
 
 `06_DECISIONS.md` ADR-026 settles this: a VAST-2014-MC2-*shaped* fixture, built by a seeded
 generator the same way `tests/scenarios/fixtures/cdr.py` and Fixture Corp (§6) already are — never
@@ -258,11 +279,45 @@ synthetic-but-not-generated third category. See the ADR for the full reasoning a
 if" clause.
 
 The fixture itself is not yet built — this is a decision, not a delivered capability, the same
-status Fixture Corp (§6) has.
+status Fixture Corp (§6) has. `06_DECISIONS.md` ADR-035 §C4 gives the generated fixture's own build
+artefacts a distribution class (`internal`, same as Enron's development-only use) and reconfirms,
+against ADR-026's own text rather than assuming it still holds, that the published VAST files
+themselves are not admitted into this project in any distribution class — `internal` never means
+"the actual dataset, kept private"; it means the generated, VAST-*shaped* fixture's own
+intermediate build output.
 
 ---
 
-## 8. Related documents
+## 8. Provisioning internal demo datasets
+
+Applies to any demo whose distribution class (§1's table, `06_DECISIONS.md` ADR-035) is `internal`
+— today, real-corpus development/scale-testing data (§6) and any intermediate build output from the
+VAST-shaped generator (§7). **This section describes the mechanism only; it contains no dataset, no
+download link, and no identifying detail about what an internal dataset contains** — this guide is
+Apache-licensed product documentation (`06_DECISIONS.md` ADR-034 §B2) and stays that way regardless
+of what any one internal demo happens to be.
+
+**The mechanism.** Set `OSPREYFLOW_INTERNAL_DEMO_DATA_DIR` to a local directory holding whatever
+internal datasets you have separately obtained the rights to use, then place each dataset at the
+path its own demo's manifest names (once ADR-035's registry exists — until then, whatever path the
+demo's own README/module docstring names). This directory is never `/demo-data/` inside the
+repository by accident — `.gitignore` excludes exactly that path so a dataset placed there cannot be
+committed even by mistake, but the environment variable has no default, precisely so an unset
+variable means "nothing provisioned" rather than silently resolving to a path that might exist.
+
+**What happens if it is not set, or the file it names is absent.** The Glass renders that demo as
+unavailable, with the reason "dataset not provisioned" — never an error, never a stack trace naming
+a path that doesn't exist on the machine an analyst is looking at (design target; the rendering
+itself is Phase 8 build work, `06_DECISIONS.md` ADR-035 §C1).
+
+**Obtaining rights to an internal dataset is out of scope for this guide entirely.** Whether a given
+dataset may be used at all — under what licence, for what purpose, under what data-protection basis
+— is a decision recorded in `06_DECISIONS.md` (ADR-035 for the datasets named above), not something
+this operator-facing guide adjudicates or grants.
+
+---
+
+## 9. Related documents
 
 | Document | What it covers |
 | --- | --- |
@@ -270,6 +325,7 @@ status Fixture Corp (§6) has.
 | `05_DEPLOYMENT.md` | Deployment profiles, the harness, the operator runbook |
 | `09_INGEST_STUDIO.md` | The Ingest Studio's five stages, for demonstrating source onboarding |
 | `07_BUILD_PLAN.md` | What is built, what is not, and each phase's known gaps |
+| `06_DECISIONS.md` (ADR-035) | Demo distribution classes, the packaging gate, and each named demo's own disposition (§1, §6–8 here) |
 | Developer & Operator Guide | The engineering-facing companion to this document |
 
 > **A caveat on the Developer & Operator Guide.** It was written assuming full completion, and its
