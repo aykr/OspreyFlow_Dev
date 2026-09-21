@@ -1,4 +1,4 @@
-.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check conformance-guard conformance test dev-up dev-down test-all glass-perf glass-a11y glass-keyboard glass-map-verify
+.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check conformance-guard conformance test dev-up dev-down test-all glass-perf glass-a11y glass-keyboard glass-map-verify
 
 PY := .venv/bin/python
 PYTEST := .venv/bin/pytest
@@ -8,7 +8,7 @@ MYPY := .venv/bin/mypy
 # Phase 0 exit criterion (docs/07_BUILD_PLAN.md): CI green; a PR adding a GPL
 # dependency fails; a Pydantic model change not reflected in the generated
 # TypeScript fails the build. See the Phase 0 plan for what each target proves.
-ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check conformance-guard
+ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check conformance-guard
 
 lint:
 	$(RUFF) check .
@@ -22,6 +22,12 @@ licence-check:
 	$(PY) scripts/licence_check.py
 	npm run licence-check
 	@echo "licence-check: see tests/licence_check/test_gpl_rejection.py for the deterministic proof"
+
+# `06_DECISIONS.md` ADR-041 (accepted, option (b)): mechanical, not documentary, control for the
+# fetch-then-check authorization bug class. See scripts/authorized_query_check.py's own docstring.
+authorized-query-check:
+	$(PY) scripts/authorized_query_check.py
+	@echo "authorized-query-check: see tests/authorized_query_check/ for the deterministic proof"
 
 trivy:
 	trivy fs --exit-code 1 --severity HIGH,CRITICAL --include-dev-deps --skip-dirs node_modules,.venv .

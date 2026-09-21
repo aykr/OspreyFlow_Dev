@@ -50,6 +50,7 @@ import { ClusterExplainOverlay } from "./ClusterExplainOverlay";
 import { CommunityHullOverlay } from "./CommunityHullOverlay";
 import { PathfinderOverlay } from "./PathfinderOverlay";
 import { PathfinderErrorOverlay } from "./PathfinderErrorOverlay";
+import { ActionErrorOverlay } from "./ActionErrorOverlay";
 import type { ClusterExplanation } from "../workingset/models";
 
 const NODE_PROGRAM = createNodeCompoundProgram<WorkingSetNodeAttributes, WorkingSetEdgeAttributes>([
@@ -188,6 +189,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
   // completed search, zero results) rather than folded into it, since the two are different
   // findings for the analyst (`findPaths`'s own doc comment below has the full reasoning).
   const [pathError, setPathError] = useState<{ x: number; y: number; message: string } | null>(
+    null,
+  );
+  // A failed `expandNode`/`manualAssertion`/`explainCluster` call — `ActionErrorOverlay`'s own
+  // doc comment has the full reasoning for why these three share one generic overlay rather than
+  // `pathError`'s own distinct-outcomes shape.
+  const [actionError, setActionError] = useState<{ x: number; y: number; message: string } | null>(
     null,
   );
   // Read by `refreshNodeVisualState` (called from many unrelated call sites — hover, selection,
@@ -464,7 +471,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
     // `pathResult` (Phase 7 Stage 5) gets the identical exemption `inspectedEdge`/`clusterExplain`
     // already have, for the identical reason — `PathfinderOverlay` renders through the same
     // `Popover`, opened from the same radial-menu-item shape.
-    if (inspectedEdge || clusterExplain || pathResult || pathError) return;
+    if (inspectedEdge || clusterExplain || pathResult || pathError || actionError) return;
     // Tab/Shift+Tab are deliberately never intercepted here — `02_GLASS_FRONTEND.md` §6's own
     // Tab-cycling wording was corrected in Phase 7 Stage 4 (found while wiring a second
     // keyboard-driven surface beside this canvas, `07_BUILD_PLAN.md`'s own gaps entry has the
@@ -506,7 +513,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
         return next;
       });
     } else if (e.key === "Enter" && focused) {
-      void expandNode(focused, null);
+      // No menu is open here to anchor on — the same container-corner-plus-offset fallback the
+      // `\` handler below uses to open one, since a failed expand needs somewhere to render.
+      const rect = containerRef.current?.getBoundingClientRect();
+      void expandNode(focused, null, (rect?.left ?? 0) + 40, (rect?.top ?? 0) + 40);
     } else if (e.key === "\\" && focused) {
       e.preventDefault();
       const rect = containerRef.current?.getBoundingClientRect();
@@ -519,19 +529,35 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
     }
   };
 
-  async function expandNode(nodeId: string, edgeType: string | null): Promise<void> {
-    const response = await fetch(`${apiBaseUrl}/v1/investigations/${investigationId}/expand`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        request: {
-          node_ids: [nodeId],
-          depth: 1,
-          edge_types: edgeType ? [edgeType] : null,
-        },
-      }),
-    });
-    if (!response.ok) return; // limit_exceeded (409) surfaces via a Toast at the App layer, not here
+  async function expandNode(
+    nodeId: string,
+    edgeType: string | null,
+    x: number,
+    y: number,
+  ): Promise<void> {
+    let response: Response;
+    try {
+      response = await fetch(`${apiBaseUrl}/v1/investigations/${investigationId}/expand`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          request: {
+            node_ids: [nodeId],
+            depth: 1,
+            edge_types: edgeType ? [edgeType] : null,
+          },
+        }),
+      });
+      if (!response.ok) {
+        // `limit_exceeded` (409, the working-set cap) included — CLAUDE.md rule 2 requires the
+        // typed error surface itself, not a silent drop; the response body's own `options` (the
+        // three the cap offers) are not yet rendered here — flagged, not solved, by this fix.
+        throw new Error(`Expand failed (${response.status}). Try again.`);
+      }
+    } catch (err) {
+      setActionError({ x, y, message: err instanceof Error ? err.message : String(err) });
+      return;
+    }
     const outcome = await response.json();
     store.getState().applyDelta(outcome.delta);
   }
@@ -545,16 +571,35 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
   // handling for it. `node_a`/`node_b` are sent flat, not wrapped in `{request: ...}` the way
   // `/expand`'s own `ExpandBody` is — `ManualAssertionRequest` (`services/api/resolution.py`) is
   // the whole body, checked directly rather than assumed from `expandNode`'s own different shape.
-  async function manualAssertion(nodeA: string, nodeB: string, kind: "link" | "split"): Promise<void> {
-    const response = await fetch(
-      `${apiBaseUrl}/v1/investigations/${investigationId}/resolution/${kind}`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ node_a: nodeA, node_b: nodeB }),
-      },
-    );
-    if (!response.ok) return; // surfaces via a Toast at the App layer, not here — same as expandNode
+  async function manualAssertion(
+    nodeA: string,
+    nodeB: string,
+    kind: "link" | "split",
+    x: number,
+    y: number,
+  ): Promise<void> {
+    // Fixed first, ahead of expandNode/explainCluster below (CLAUDE.md's own session priority):
+    // this is a write, not a read. A silently-dropped expand/explain misleads an analyst about
+    // what the data shows; a silently-dropped manualAssertion leaves them believing a link (or
+    // split) is recorded in the case when it is not — the more dangerous silence of the three.
+    let response: Response;
+    try {
+      response = await fetch(
+        `${apiBaseUrl}/v1/investigations/${investigationId}/resolution/${kind}`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ node_a: nodeA, node_b: nodeB }),
+        },
+      );
+      if (!response.ok) {
+        const verb = kind === "link" ? "Link" : "Split";
+        throw new Error(`${verb} failed (${response.status}). Not recorded — try again.`);
+      }
+    } catch (err) {
+      setActionError({ x, y, message: err instanceof Error ? err.message : String(err) });
+      return;
+    }
     const delta = await response.json();
     store.getState().applyDelta(delta);
   }
@@ -564,11 +609,23 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
   // is a pure read of the working set's own last-computed clustering, nothing to attribute to this
   // principal beyond the bearer token every other read here already sends.
   async function explainCluster(clusterId: string, x: number, y: number): Promise<void> {
-    const response = await fetch(
-      `${apiBaseUrl}/v1/investigations/${investigationId}/resolution/explain/${clusterId}`,
-      { headers: { Authorization: `Bearer ${bearerToken}` } },
-    );
-    if (!response.ok) return; // a stale cluster id 404s (`ClusterNotFoundError`) — nothing to show
+    let response: Response;
+    try {
+      response = await fetch(
+        `${apiBaseUrl}/v1/investigations/${investigationId}/resolution/explain/${clusterId}`,
+        { headers: { Authorization: `Bearer ${bearerToken}` } },
+      );
+      if (!response.ok) {
+        // A stale cluster id 404s (`ClusterNotFoundError`, standing rule 3's own indistinguishable-
+        // from-never-existed shape) — worth saying plainly rather than leaving the analyst to
+        // wonder why nothing happened, the same reasoning `PathfinderOverlay`'s own "No path
+        // found" already gives for a different, but equally silent-by-default, empty outcome.
+        throw new Error(`Explain cluster failed (${response.status}). Try again.`);
+      }
+    } catch (err) {
+      setActionError({ x, y, message: err instanceof Error ? err.message : String(err) });
+      return;
+    }
     const explanation: ClusterExplanation = await response.json();
     setClusterExplain({ x, y, explanation });
   }
@@ -645,6 +702,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
     setPathError(null);
   }
 
+  function dismissActionError(): void {
+    setActionError(null);
+  }
+
   function radialMenuItems(nodeId: string): RadialMenuItem[] {
     if (!graph.hasNode(nodeId)) return [];
     const node = graph.getNodeAttribute(nodeId, "data");
@@ -655,7 +716,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
       id: et.name,
       label: et.name,
       count: 0, // populated by expand/preview in a follow-up pass, not blocking the action itself
-      onSelect: () => void expandNode(nodeId, et.name),
+      onSelect: () => {
+        const anchor = radialMenu ?? { x: 0, y: 0 };
+        void expandNode(nodeId, et.name, anchor.x, anchor.y);
+      },
     }));
 
     // B11: only offered on a *pair* — `selected` (the ring, closed over from this component's own
@@ -669,13 +733,19 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
             id: "manual-link",
             label: `Link to ${other}`,
             count: 0,
-            onSelect: () => void manualAssertion(nodeId, other, "link"),
+            onSelect: () => {
+              const anchor = radialMenu ?? { x: 0, y: 0 };
+              void manualAssertion(nodeId, other, "link", anchor.x, anchor.y);
+            },
           },
           {
             id: "manual-split",
             label: `Split from ${other}`,
             count: 0,
-            onSelect: () => void manualAssertion(nodeId, other, "split"),
+            onSelect: () => {
+              const anchor = radialMenu ?? { x: 0, y: 0 };
+              void manualAssertion(nodeId, other, "split", anchor.x, anchor.y);
+            },
           },
           {
             // Phase 7 Stage 5 — the same pair-selection shape B11 above already established,
@@ -848,6 +918,14 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
           y={pathError.y}
           message={pathError.message}
           onClose={dismissPathError}
+        />
+      )}
+      {actionError && (
+        <ActionErrorOverlay
+          x={actionError.x}
+          y={actionError.y}
+          message={actionError.message}
+          onClose={dismissActionError}
         />
       )}
     </div>

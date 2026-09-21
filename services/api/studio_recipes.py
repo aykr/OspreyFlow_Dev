@@ -197,10 +197,22 @@ class StudioRecipeStore:
         return _row_to_draft(row)
 
     async def get_authorized(self, recipe_id: str, principal: Principal) -> StudioRecipeDraft:
-        draft = await self.get(recipe_id)
-        if draft.owning_unit != principal.org_unit:
+        """`owning_unit` filtered in the query itself, not after fetch — `06_DECISIONS.md`
+        ADR-041's own fix, the same shape `review.py`'s `get_authorized`/`get_document_text` and
+        `pattern_store.py`'s `get_authorized` already use. A hazard, not a leak, before this fix:
+        the Python-side check below it replaced correctly rejected a mismatched principal
+        (checked directly — no caller of `get()` elsewhere bypasses it), it just pulled the full
+        row into process memory first."""
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT * FROM studio_recipes WHERE recipe_id = $1 AND owning_unit = $2 "
+                "ORDER BY version DESC LIMIT 1",
+                recipe_id,
+                principal.org_unit,
+            )
+        if row is None:
             raise StudioRecipeNotFoundError(recipe_id)
-        return draft
+        return _row_to_draft(row)
 
     async def update_draft(
         self,

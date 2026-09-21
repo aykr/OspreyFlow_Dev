@@ -1357,25 +1357,25 @@ findable only from whichever phase happened to notice it.
   Phase 5's own `playback`/`multi-track` deferral sat unread in a component header for four phases
   before this document named it.
 
-- **Three live, currently-unfixed instances of the fetch-then-check authorization bug class —
-  `06_DECISIONS.md` ADR-041 proposes the structural fix, this entry owns the interim state.**
-  `services/api/sites.py`'s `SiteStore.get_authorized`, `services/api/investigations.py`'s
-  `InvestigationStore.get_authorized` and `services/api/studio_recipes.py`'s
-  `StudioRecipeStore.get_authorized` all currently fetch a row unscoped (`get()`, `SELECT * ...
-  WHERE id = $1`) then compare `owning_unit` against `principal.org_unit` in Python, the identical
-  shape `services/api/review.py`'s `ExtractionCandidateStore.get_authorized` was fixed away from
-  (commit `6189461`, 19 September) and `services/api/pattern_store.py`'s `PatternStore.
-  get_authorized` was found and fixed away from this session — checked directly against every
-  `*_authorized` method in `services/api/`, not assumed. None of the three is a live vulnerability
-  today by itself (each still correctly refuses a mismatched principal, via the Python check,
-  before returning), but standing rule 3 and ADR-041's own history both name the same reason this
-  shape is worth closing regardless: the unscoped row is pulled fully into process memory before
-  anything rejects it, reachable by a log line, an exception trace or a debugger a query-scoped
-  fetch never exposes it to. Owning phase: **Phase 8**, the same as ADR-041's own resolution — once
-  ADR-041 is accepted, these three are exactly what option (a) or (b) there needs to close first
-  (option (b) fails its own CI check against all three the moment it lands; option (a) needs them
-  retrofitted onto its new composition point). Not fixed piecemeal ahead of that decision — doing
-  so by hand a fourth and fifth and sixth time is the exact pattern ADR-041 argues against.
+- **RESOLVED, same session it was found.** Three live instances of the fetch-then-check
+  authorization bug class — `services/api/sites.py`'s `SiteStore.get_authorized`,
+  `services/api/investigations.py`'s `InvestigationStore.get_authorized` and
+  `services/api/studio_recipes.py`'s `StudioRecipeStore.get_authorized` — were found while scoping
+  `06_DECISIONS.md` ADR-041, each fetching a row unscoped then comparing `owning_unit` against
+  `principal.org_unit` in Python. Checked individually before fixing, so the record distinguishes
+  a latent hazard from an actual leak (ADR-041's own account has the full check per store): **all
+  three were hazards, not leaks** — the Python-side comparison was correct in every case and no
+  other caller bypassed it, so no unauthorized data was ever actually returned; the defect was the
+  unscoped row reaching process memory before the (correct) rejection, not a wrong rejection.
+  ADR-041 was accepted (option (b), the mechanical `authorized-query-check` script) the same day
+  it was proposed, all three stores fixed to the query-scoped shape and reverified against live
+  Postgres, and the checker wired into `make ci`/`ci.yml`. **A residual, smaller gap found in the
+  same pass, not yet closed:** `InvestigationStore` has no direct-Postgres test file of its own
+  (`test_sites_store.py`/`test_studio_recipes_store.py` exist; nothing named
+  `test_investigations_store.py` does) — its access control is proven only indirectly, through
+  `app.py`'s own route-level fakes, the exact "fakes never exercise the real query" gap this same
+  section already warns about elsewhere. Owning phase: **Phase 8** — a direct-Postgres
+  `InvestigationStore` test file, mirroring `test_sites_store.py`'s own shape.
 
 - **The class the entry above is one instance of, stated at its own level rather than left implicit:
   a conformance suite in this repository binds every *registered* adapter to one shared contract; a
@@ -1911,6 +1911,86 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
   carve-out, the same reasoning `conformance-model-vision` already uses for its own heavier model)
   or record explicitly, next to wherever `make test`'s count is reported, which suites it excludes.
 
+- **The `test_sites_store.py`/`test_hmp_graph.py` fix above was checked against the wider claim it
+  sat inside — "the `test` job runs against nothing" — and the claim failed at a scale the first
+  fix did not disclose. Asked directly: was CI red and unread, or did these tests skip silently on
+  a failed connection and count as passes? Answered with evidence, not inferred.**
+
+  **No skip mechanism exists anywhere in this codebase.** `grep -rln "pytest.skip\|skipif\|pytest.
+  mark.skip" tests/ packages/ services/` returns nothing — zero matches, every test file, every
+  directory. `tests/conformance/graph_port/conftest.py`'s own `try`/`finally` (the sweep fixture)
+  and `tests/conftest.py`'s loopback JWKS server are the only `try` blocks near a fixture in the
+  whole suite, and neither swallows a connection failure into a pass. Checked directly against
+  `ci.yml` too: no `continue-on-error` anywhere. So the specific mechanism asked about — a test
+  quietly skipping when its service is absent, counted as green — **cannot happen in this
+  codebase, for any test, not only these two.** Confirmed live, twice: `test_sites_store.py`
+  against an unreachable Postgres and `test_hmp_graph.py` against an unreachable ArcadeDB each
+  raised their real connection exception (`ConnectionRefusedError`, `httpx.ConnectError`) and
+  `FAILED`/`ERROR`, not a skip.
+
+  **What could not be checked: the actual GitHub Actions run history.** `git ls-remote origin`
+  shows `origin/main` at `5c2b51a` (`docs: ADR-033`) — every commit from `49e7864` (ADR-034)
+  onward, including this whole session's own work, is local-only and has never been pushed.
+  `curl https://api.github.com/repos/ayankarsolirius/ospreyflow` returns `404` with no `gh` CLI or
+  token configured in this environment — consistent with a private repository this session cannot
+  authenticate against, not proof either way of what any past run showed. **No CI run log is
+  quoted here because none was reachable; the finding below rests on reproducing the job's own
+  command locally, not on run history.**
+
+  **The reproduction.** `test_sites_store.py`/`test_hmp_graph.py`'s own fix (`conformance` job
+  gains both, `test` job excludes both) was verified by literally re-running the `test` job's own
+  `pytest` invocation — every `--ignore` flag it had at the time, copied exactly — with
+  `ARCADEDB_HOST`, `POSTGRES_HOST`, `VALKEY_HOST` and `MINIO_ENDPOINT` all pointed at unreachable
+  addresses, the same "no live store" environment a bare `ubuntu-latest` runner with none of the
+  `conformance` job's `services:` actually has. Result: **19 failed, 41 errored — 60 test
+  functions across 17 files this job's own ignore list did not name**, none of them
+  `test_sites_store.py`/`test_hmp_graph.py` (those were already fixed by that point). Three were
+  already known and disclosed above (`test_tile_cache.py`, `test_prefetch.py`,
+  `test_match_live.py`, 7 of the 60). **Fourteen were not previously found:**
+  `tests/resolve/test_trigger.py`, `tests/resolve/test_projection_access_control.py`,
+  `tests/scenarios/test_phase6_extraction_and_resolution.py`,
+  `tests/scenarios/test_phase6a_glass_surfaces.py`, `tests/services/api/test_access.py`,
+  `tests/services/api/test_dossier_access_control.py`, `tests/services/api/test_pattern_store.py`
+  (this session's own new store — added without checking whether the `test` job could run it),
+  `tests/services/api/test_review.py`, `tests/services/api/test_review_store.py`,
+  `tests/services/api/test_studio_recipes_store.py`, and all three of
+  `tests/services/api/working_set/test_compute_access_control.py`/
+  `test_explain_cluster_access_control.py`/`test_manual_resolution_access_control.py`/
+  `test_resolution_threshold_access_control.py` (four, not three — checked the directory listing
+  directly rather than assumed). Every `graph_arcadedb[gremlin]`-parametrised access-control test
+  in the repository is in this list: `GRAPH_PORT_ADAPTERS` (`tests/conformance/registry.py`) has
+  exactly one entry, so there is no non-live-service variant for any of them to fall back to.
+
+  **The answer to the question actually asked.** Since no skip mechanism exists, "did these skip
+  silently and count as passes" is answered **no, categorically, for every test in this
+  codebase** — the mechanism itself does not exist to have happened. If any commit touching these
+  17 files was ever pushed to GitHub and `ci.yml`'s `test` job actually ran, the only outcome
+  consistent with the evidence above is that **the job was red, and that red was not acted on** —
+  not a false green. This session cannot confirm a run happened at all (see the access
+  limitation above); what it can and does confirm is that a run, had it happened against this
+  configuration, could not have been green.
+
+  **Fixed in this session, for the `test` job specifically:** all 17 files added to its `--ignore`
+  list (`ci.yml`'s own comment on the job now carries the full count and reasoning); the exact
+  updated command re-run against the same unreachable-service environment above now completes
+  **580 passed, 0 failed, 0 errored** — the "runs against nothing" claim is true of this job now,
+  checked, not merely restored to how it read before. **Not fixed, and not in scope for this
+  entry to fix:** giving the 14 newly-found files real CI coverage (a live ArcadeDB/Postgres job,
+  the same shape `test_sites_store.py`/`test_hmp_graph.py` just received) — genuine engineering
+  work, several of these needing careful placement (the `working_set` access-control four are
+  exactly the kind of proof `07_BUILD_PLAN.md`'s own "Fake-based tests" gaps entry above says this
+  repository cannot currently claim from a fake alone). Also not fixed: `Makefile`'s own `test`
+  target carries the identical undisclosed shape — it works locally only because a developer's own
+  `make dev-up` stack is usually already running when `make test` is invoked, a dependency the
+  target's own name and this document's own "headline test count" framing have never stated.
+  Owning phase for both: **Phase 8** — wire the 14 into `conformance` (or a further job, if the
+  combined runtime/memory budget argues for splitting it — `deploy/compose/dev.yaml`'s own
+  documented ArcadeDB/Ollama memory-contention incident, and this session's own live reproduction
+  of it during Part 0, are reasons to size that job deliberately rather than pile fourteen more
+  files onto one), and decide whether `make test` should either guarantee no live-service
+  dependency (matching its own name) or have that dependency stated plainly next to every place
+  its count is quoted.
+
 - **`make typecheck` was permanently red — 19 pre-existing `mypy` errors in five files, plus three
   more `tsc` errors this session found undisclosed alongside them. Fixed rather than split, same
   session.** A red gate that has been red long enough to be treated as background noise cannot
@@ -1928,6 +2008,37 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
   `ConnectScreen.test.ts`'s own fix is a non-null assertion on a locally-built fixture array, no
   behaviour change. None of the 22 were in a Part 3 file. `make typecheck` (`mypy packages
   services` and `npm run typecheck` both) exits 0 as of this entry — verified, not assumed.
+
+- **`GlassCanvas.tsx`'s three remaining silent-drop call sites — `expandNode`, `manualAssertion`,
+  `explainCluster` — closed, same session `findPaths` was, and for the same reason: raised once,
+  each still read `if (!response.ok) return;` behind a comment claiming "surfaces via a Toast at
+  the App layer," checked directly and found false (the App-layer Toast is driven only by
+  server-pushed `notice` deltas over the websocket, never by a client-side `fetch` failure).
+  `manualAssertion` was fixed and proven first, ahead of the other two: a failed *write* left the
+  analyst believing a link (or split) was recorded in the case when it was not, worse than a
+  failed *read* misleading them about what the data shows. All three now surface a shared
+  `ActionErrorOverlay` (`role="alert"`, Escape-dismissed via the same `Popover` every other canvas
+  overlay uses) rather than silence — one new keyboard action, `overlay-dismiss-action-error`,
+  proven via manual-link (the priority), expand and explain-cluster each, red then green.
+  **A residual, smaller gap found while fixing `expandNode`, not yet closed:** the typed
+  `limit_exceeded` (409) response Phase 3's own exit criterion requires (`"returns the typed
+  limit_exceeded error with its three options"`, above) is now surfaced as a generic error message
+  rather than the three options themselves — checked directly, no frontend code anywhere renders
+  them (`grep -rln "limit_exceeded" apps/workspace/src` matches only this fix's own comment).
+  Phase 3's exit criterion is about the *backend* returning the typed error, which it does; this
+  is a distinct, frontend-only gap Phase 3's own text does not cover. Owning phase: **Phase 8** —
+  render `limit_exceeded`'s three options in `ActionErrorOverlay` (or a dedicated variant) rather
+  than the generic message currently shown.
+
+- **`make lint`/`ruff check .` is also pre-existing-red, found incidentally this session while
+  verifying the fixes above, not investigated for its own sake.** 32 errors across 16 files, none
+  touched by this session's own work (`packages/schemas/ingest.py`, `scripts/mint_dev_token.py`,
+  `services/api/dossier.py`, `services/api/studio_profile.py`, and a further twelve test files —
+  mostly `I001` unsorted-import-block and `F401` unused-import, 18 of the 32 mechanically
+  `--fix`-able). Not fixed here — genuinely out of this session's scope, unlike `make typecheck`
+  (fixed earlier this session because a prior entry in this same document asked directly whether
+  it should be fixed or split). Owning phase: **Phase 8** — same closing-pass home as the
+  gate-hygiene entries above it.
 
 ---
 

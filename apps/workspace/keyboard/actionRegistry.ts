@@ -107,6 +107,13 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   // (`GlassCanvas.tsx`'s own `pathError`/`pathResult` split) — its own dismiss action, proven the
   // same way `overlay-dismiss-pathfinder-result` already is.
   "overlay-dismiss-pathfinder-error",
+  // `expandNode`/`manualAssertion`/`explainCluster` used to drop a failed call silently — fixed
+  // to a shared `ActionErrorOverlay`, one dismiss action for all three
+  // (`ActionErrorOverlay.tsx`'s own doc comment has the reasoning for why one overlay, not three).
+  // Proven via manual link/split, the priority fix (a failed write, not a failed read) — and via
+  // expand and explain-cluster too, since each reaches the same overlay through a different
+  // existing keyboard action.
+  "overlay-dismiss-action-error",
 ] as const);
 
 /**

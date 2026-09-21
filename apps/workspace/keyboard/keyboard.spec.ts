@@ -612,6 +612,83 @@ test("a failed path search announces an error, distinguishable from 'No path fou
   registerCovered("CANVAS_ACTIONS", "overlay-dismiss-pathfinder-error");
 });
 
+test("a failed manual link announces an error and does not silently leave the analyst believing it was recorded — the priority fix", async ({
+  page,
+}) => {
+  // manualAssertion is a failed *write*, not a failed *read* like expand/explain-cluster below —
+  // fixed first, and proven first here, for the same reason: a silently-dropped link leaves the
+  // analyst believing it is recorded in the case when it is not.
+  await page.goto("/keyboard/harness.html");
+
+  await page.route("**/*/resolution/link", async (route) => {
+    await route.fulfill({ status: 500, contentType: "text/plain", body: "internal error" });
+  });
+
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  await page.keyboard.press("ArrowRight"); // focus n1
+  await page.keyboard.press("Space"); // ring: {n0, n1}
+
+  await page.keyboard.press("\\");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("menuitem", { name: /Link to n0/ })).toBeFocused();
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByRole("alert")).toHaveText("Link failed (500). Not recorded — try again.");
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toBeHidden();
+  registerCovered("CANVAS_ACTIONS", "overlay-dismiss-action-error");
+});
+
+test("a failed expand announces an error instead of leaving the analyst to wonder why nothing happened", async ({
+  page,
+}) => {
+  await page.goto("/keyboard/harness.html");
+
+  await page.route("**/*/expand", async (route) => {
+    await route.fulfill({ status: 500, contentType: "text/plain", body: "internal error" });
+  });
+
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  await page.keyboard.press("Enter"); // direct Enter-expand, no menu open — the fallback anchor path
+
+  await expect(page.getByRole("alert")).toHaveText("Expand failed (500). Try again.");
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toBeHidden();
+  registerCovered("CANVAS_ACTIONS", "overlay-dismiss-action-error");
+});
+
+test("a failed explain-cluster announces an error rather than leaving the analyst to wonder why nothing happened", async ({
+  page,
+}) => {
+  await page.goto("/keyboard/harness.html");
+
+  await page.route("**/*/resolution/explain/*", async (route) => {
+    await route.fulfill({ status: 500, contentType: "text/plain", body: "internal error" });
+  });
+
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus(); // n0
+  await page.keyboard.press("ArrowRight"); // n1
+  await page.keyboard.press("ArrowLeft"); // n2 — the harness's own cluster pair with n3
+
+  await page.keyboard.press("\\");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("menuitem", { name: "Explain cluster" })).toBeFocused();
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByRole("alert")).toHaveText("Explain cluster failed (500). Try again.");
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toBeHidden();
+  registerCovered("CANVAS_ACTIONS", "overlay-dismiss-action-error");
+});
+
 test("every registered keyboard action has its own proving test case above", () => {
   assertAllCovered("CANVAS_ACTIONS", CANVAS_ACTIONS);
 });

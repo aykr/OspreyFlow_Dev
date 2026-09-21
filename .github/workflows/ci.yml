@@ -46,6 +46,23 @@ jobs:
       # tests/licence_check/test_gpl_rejection.py.
       - run: uv run pytest tests/licence_check
 
+  # `docs/06_DECISIONS.md` ADR-041 (accepted, option (b)): mechanical control for the
+  # fetch-then-check authorization bug class found three times over (review.py, the fakes that
+  # never exercised the query, pattern_store.py — and, checked directly while scoping the ADR,
+  # three more live instances: sites.py, investigations.py, studio_recipes.py, all fixed the same
+  # session this job was added). See scripts/authorized_query_check.py's own docstring for what it
+  # checks and its own disclosed limits.
+  authorized-query-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - run: uv run python scripts/authorized_query_check.py
+      # Deterministic proof it actually fails on the bug class it exists to catch — see
+      # tests/authorized_query_check/test_principal_predicate_required.py.
+      - run: uv run pytest tests/authorized_query_check
+
   trivy:
     runs-on: ubuntu-latest
     steps:
@@ -369,13 +386,21 @@ jobs:
       - run: npm ci
       # Everything the `conformance`/`conformance-model` jobs above already cover against a live
       # store or a live model runs here instead against nothing — every other test runs here.
-      # **Was not actually true** until `test_sites_store.py`/`test_hmp_graph.py` were added to
-      # `conformance` above and excluded here to match (`07_BUILD_PLAN.md`'s own gaps entry has
-      # the full incident): this job's own ignore list was a strict subset of `Makefile`'s `test`
-      # target's, so both ran here, against nothing, and would fail with a bare connection error
-      # rather than being skipped. `test_tile_cache.py`/`test_prefetch.py`/`test_match_live.py`
-      # are still in that same state, disclosed and deliberately not acted on here — narrower
-      # scope, no access-control or acceptance-scenario stakes, per the same gaps entry.
+      # **This claim was checked, not trusted, and found false at a scale well beyond the first
+      # fix** (`07_BUILD_PLAN.md`'s own gaps entry has the full incident and evidence): this job's
+      # own ignore list was a strict subset of the files that actually need a live service — first
+      # found for `test_sites_store.py`/`test_hmp_graph.py` (added to `conformance` above, excluded
+      # here to match), then, reproducing this job's exact command with every service host pointed
+      # at an unreachable address, found for 60 more test functions across 17 further files, none
+      # of which has ever run correctly in any CI job. No skip mechanism exists anywhere in this
+      # codebase (`git grep -rn 'pytest.skip\|skipif'` under `tests/`, `packages/`, `services/`
+      # returns nothing) — every one of the 60 fails or errors outright rather than passing
+      # silently, so "CI was green" for a commit including these, if it ever happened, was a red
+      # job unread, not a false pass. All 17 excluded below rather than left to fail; none is
+      # wired into a live-service job here — that is real work, owned in `07_BUILD_PLAN.md` rather
+      # than done piecemeal in this comment. `test_tile_cache.py`/`test_prefetch.py`/
+      # `test_match_live.py` were already known and deliberately left unactioned (narrower stakes,
+      # per that same gaps entry); the other 14 are new findings from this pass.
       - run: >-
           uv run pytest --ignore=tests/conformance/graph_port
           --ignore=tests/conformance/model_port --ignore=tests/golden --ignore=tests/ingest
@@ -385,6 +410,23 @@ jobs:
           --ignore=tests/scenarios/test_witness_statement_extraction.py
           --ignore=tests/services/api/test_sites_store.py
           --ignore=tests/scenarios/test_hmp_graph.py
+          --ignore=tests/geocoder/test_match_live.py
+          --ignore=tests/resolve/test_projection_access_control.py
+          --ignore=tests/resolve/test_trigger.py
+          --ignore=tests/scenarios/test_phase6_extraction_and_resolution.py
+          --ignore=tests/scenarios/test_phase6a_glass_surfaces.py
+          --ignore=tests/services/api/test_access.py
+          --ignore=tests/services/api/test_dossier_access_control.py
+          --ignore=tests/services/api/test_pattern_store.py
+          --ignore=tests/services/api/test_prefetch.py
+          --ignore=tests/services/api/test_review.py
+          --ignore=tests/services/api/test_review_store.py
+          --ignore=tests/services/api/test_studio_recipes_store.py
+          --ignore=tests/services/api/test_tile_cache.py
+          --ignore=tests/services/api/working_set/test_compute_access_control.py
+          --ignore=tests/services/api/working_set/test_explain_cluster_access_control.py
+          --ignore=tests/services/api/working_set/test_manual_resolution_access_control.py
+          --ignore=tests/services/api/working_set/test_resolution_threshold_access_control.py
       # The Glass's fast, no-live-infra unit tests (`store.test.ts`,
       # `zoomBands.test.ts`) — `*.integration.test.ts` is excluded by
       # `vitest.config.ts` and runs in the `conformance` job instead.
