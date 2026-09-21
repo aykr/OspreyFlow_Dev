@@ -29,6 +29,7 @@ original template-substitution behaviour unchanged.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from typing import cast
 from urllib.parse import quote
 
 import httpx
@@ -73,11 +74,14 @@ def _build_wmts_kvp_url(provider: MapProvider, z: int, x: int, y: int) -> str:
             "for it is defined yet — flagged, not guessed"
         )
     extra_params = "".join(f"&{quote(k)}={quote(v)}" for k, v in provider.variables.items())
+    # `missing` above already proves each of these four is not None for a `service: wmts`
+    # provider that reaches this point — the `cast`s tell mypy what the raise already enforces
+    # at runtime, without repeating it as a redundant assertion.
     return (
         f"{provider.endpoint}?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0"
-        f"&LAYER={quote(provider.layer)}&STYLE={quote(provider.wmts_style)}"
-        f"&TILEMATRIXSET={quote(provider.tile_matrix_set)}"
-        f"&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT={quote(provider.format)}"
+        f"&LAYER={quote(cast(str, provider.layer))}&STYLE={quote(cast(str, provider.wmts_style))}"
+        f"&TILEMATRIXSET={quote(cast(str, provider.tile_matrix_set))}"
+        f"&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT={quote(cast(str, provider.format))}"
         f"{extra_params}"
     )
 

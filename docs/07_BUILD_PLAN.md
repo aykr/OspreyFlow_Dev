@@ -1874,6 +1874,24 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
   its own heavier model), or record explicitly, next to wherever `make test`'s count is reported,
   which suites it excludes and which of those are and are not covered elsewhere.
 
+- **`make typecheck` was permanently red — 19 pre-existing `mypy` errors in five files, plus three
+  more `tsc` errors this session found undisclosed alongside them. Fixed rather than split, same
+  session.** A red gate that has been red long enough to be treated as background noise cannot
+  catch a real regression landing next to it, so once found this was closed outright rather than
+  carved out with an owning phase, unlike the two entries above: every one of the 22 was either a
+  `cast` narrowing what runtime code already guarantees (DuckDB's untyped row tuples in
+  `analytics_duckdb/adapter.py` and `prefetch.py`'s single-literal-row subquery, asyncpg's
+  `Record.__getitem__` in `review.py`, ArcadeDB's JSON-decoded `Any` in `graph_arcadedb/
+  client.py`, and `tile_proxy.py`'s already-`raise`d "missing" check) or a genuine, small logic
+  fix — `map/geometries.ts`'s `resolveNodeCoordinates` was written when `GeometryRecord` was
+  point-only and never updated for the `POLYGON` kind (Phase 5's known-gaps closure, above in this
+  same list) making `lat`/`lon` optional; a `POLYGON` record's node now correctly drops out of the
+  plottable-coordinates result (the function's own docstring already promised this: "only nodes
+  with a *resolvable* geometry_ref appear") rather than being a type error nobody had reconciled.
+  `ConnectScreen.test.ts`'s own fix is a non-null assertion on a locally-built fixture array, no
+  behaviour change. None of the 22 were in a Part 3 file. `make typecheck` (`mypy packages
+  services` and `npm run typecheck` both) exits 0 as of this entry — verified, not assumed.
+
 ---
 
 ## Standing rules for the whole build

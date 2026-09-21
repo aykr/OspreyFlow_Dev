@@ -37,7 +37,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 import asyncpg
 from pydantic import BaseModel, Field
@@ -331,7 +331,7 @@ class ExtractionCandidateStore:
             )
         if row is None:
             raise DocumentNotFoundError(document_id)
-        return row["text"]
+        return cast(str, row["text"])
 
 
 async def run_extraction(

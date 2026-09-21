@@ -26,7 +26,7 @@ import asyncio
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -135,7 +135,7 @@ class ArcadeDBClient:
         """Server-level, independent of `self._config.database` — used by
         `testing.py`'s stale-database sweep, which operates on the whole
         server, not one test's own database."""
-        return await self._server_command("list databases")
+        return cast("list[str]", await self._server_command("list databases"))
 
     async def drop_database_named(self, name: str) -> None:
         databases = await self._server_command("list databases")

@@ -52,7 +52,11 @@ export async function resolveNodeCoordinates(
   );
   for (const [nodeId, ref] of refsByNode) {
     const record = recordByRef.get(ref);
-    if (record) coordinates.set(nodeId, { lat: record.lat, lng: record.lon });
+    // A `POLYGON`-kind record carries no `lat`/`lon` (`GeometryRecord`'s own docstring) — not
+    // plottable as a point, so it is absent from the result, the same as an unresolved ref.
+    if (record && record.lat != null && record.lon != null) {
+      coordinates.set(nodeId, { lat: record.lat, lng: record.lon });
+    }
   }
   return coordinates;
 }

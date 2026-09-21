@@ -34,6 +34,7 @@ import sys
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import duckdb
 
@@ -70,11 +71,18 @@ def _bbox_from_wkb(geometry_wkb: bytes) -> tuple[float, float, float, float]:
     con = duckdb.connect(":memory:")
     try:
         load_spatial_extension(con)
-        row = con.execute(
-            "SELECT ST_XMin(g), ST_YMin(g), ST_XMax(g), ST_YMax(g) "
-            "FROM (SELECT ST_GeomFromWKB(?) AS g)",
-            [geometry_wkb],
-        ).fetchone()
+        # A one-row-literal subquery with no WHERE/JOIN to filter it out always produces exactly
+        # one row — `fetchone()`'s `| None` in DuckDB's own stub is for the general case, not
+        # this query; the `cast` says so rather than adding an `if row is None: raise` branch
+        # that can never run.
+        row = cast(
+            "tuple[float, float, float, float]",
+            con.execute(
+                "SELECT ST_XMin(g), ST_YMin(g), ST_XMax(g), ST_YMax(g) "
+                "FROM (SELECT ST_GeomFromWKB(?) AS g)",
+                [geometry_wkb],
+            ).fetchone(),
+        )
         return (row[0], row[1], row[2], row[3])
     finally:
         con.close()

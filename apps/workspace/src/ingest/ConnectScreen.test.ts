@@ -40,7 +40,8 @@ describe("groupCatalogue", () => {
     const grouped = groupCatalogue(entries);
 
     expect(grouped.map(([group]) => group)).toEqual(["Generic", "Financial"]);
-    expect(grouped[0][1].map((e) => e.id)).toEqual(["a", "c"]);
+    // `grouped[0]` is guaranteed by the assertion above: two groups came back, "Generic" first.
+    expect(grouped[0]![1].map((e) => e.id)).toEqual(["a", "c"]);
   });
 });
 

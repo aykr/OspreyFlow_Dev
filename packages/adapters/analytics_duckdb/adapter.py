@@ -14,6 +14,7 @@ import json
 import math
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from typing import cast
 
 import duckdb
 
@@ -327,19 +328,23 @@ class AnalyticsDuckDBAdapter:
 
     @staticmethod
     def _row_to_geometry(row: tuple[object, ...]) -> GeometryRecord:
+        # `row` is `tuple[object, ...]` because DuckDB's own driver returns an untyped tuple —
+        # these `cast`s assert what `_GEOMETRY_SELECT_COLUMNS`' own column order guarantees at
+        # runtime, matching each field's real DuckDB column type; they change no behaviour, only
+        # what mypy can see.
         return GeometryRecord(
-            geometry_ref=row[0],
-            version=row[1],
-            kind=GeometryKind(row[2]),
-            lon=row[3],
-            lat=row[4],
-            source_crs=row[5],
-            source_x=row[6],
-            source_y=row[7],
-            geometry_wkb=bytes(row[8]) if row[8] is not None else None,
+            geometry_ref=cast(str, row[0]),
+            version=cast(int, row[1]),
+            kind=GeometryKind(cast(str, row[2])),
+            lon=cast("float | None", row[3]),
+            lat=cast("float | None", row[4]),
+            source_crs=cast("str | None", row[5]),
+            source_x=cast("float | None", row[6]),
+            source_y=cast("float | None", row[7]),
+            geometry_wkb=cast(bytes, row[8]) if row[8] is not None else None,
             handling=Handling(
-                classification=row[9], handling_code=row[10], owning_unit=row[11],
-                originator=row[12],
+                classification=cast(str, row[9]), handling_code=cast(str, row[10]),
+                owning_unit=cast(str, row[11]), originator=cast(str, row[12]),
             ),
         )
 
