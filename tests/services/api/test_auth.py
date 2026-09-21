@@ -43,6 +43,7 @@ def _config(jwks_url: str, **overrides: object) -> ApiConfig:
         supersede_job_degree_threshold=500,
         osprey_config_path="osprey.yaml",
         analytics_db_path=":memory:",
+        hotlist_alert_policy="strict",
     )
     defaults.update(overrides)
     return ApiConfig(**defaults)  # type: ignore[arg-type]

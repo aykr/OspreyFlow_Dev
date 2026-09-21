@@ -975,9 +975,78 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
    deployment-level `strict`/`notify` policy switch), and alert inbox lifecycle (ADR-039, accepted
    with two additions) are no longer open decisions. **Stage 6's one remaining precondition —
    pattern persistence — is also closed, same day (Stage 4's own Part 3 above):** ADR-036's own
-   owning-principal reference now lives on `SavedPattern.owner_id`. Stage 6 itself — monitor
-   evaluation, hotlist alerting, the alert inbox — is not built; this entry records that its
-   design and structural preconditions are now clear, not that the stage is done.
+   owning-principal reference now lives on `SavedPattern.owner_id`.
+
+   **Stage 6 splits into 6a (foundation), 6b and 6c — 6a built 21 September 2026, 6b/6c not
+   started.** Read this as the same "carve out a different kind of work" discipline Phase 6a
+   (over Phase 6) already established, applied one level down: the alert model, the disclosure
+   switch and the change stream are backend primitives every future producer shares; hotlist/
+   monitor UI and the actual scheduled evaluation loop are each their own, later, unit of work
+   against those primitives, not bundled into discovering them.
+
+   **6a — foundation, built.** The change stream (`services/api/change_stream.py`, ADR-037's own
+   amendment): one Valkey Stream (`changes:corpus`), a thin publish/read mechanism with no
+   consumer-group/worker of its own — Stage 6b/6c's own future evaluator is the first real
+   consumer. Wired to all three accepted producers: ingest (`app.py`'s `run_studio_recipe`
+   route), the corpus-wide resolution trigger (`services/resolve/trigger.py::
+   run_resolution_for_entity_type`, optional `valkey` param so every existing direct caller keeps
+   working unchanged), and manual assertion (`WorkingSetService._manual_assertion`, optional
+   `valkey` constructor param, same shape). Proven with the case ADR-037's own amendment named
+   directly: `tests/services/api/test_change_stream.py::test_change_stream_carries_a_same_as_
+   edge_written_by_resolution_with_no_new_ingest` — two pre-existing nodes, no ingest call
+   anywhere in the test, the resolution trigger alone writes the `SAME_AS` edge and the stream
+   carries it.
+
+   The alert model (`services/api/alerts.py`, ADR-039): `Alert` stores references
+   (`referent_node_ids`), never copies; `AlertStore.get_authorized` filters `owner_id` in the
+   query itself from the start (ADR-041's own mechanical check, `scripts/
+   authorized_query_check.py`, passed clean on first write — 38 files, no offenders);
+   `evidence_available` re-checks every referent against `GraphPort.get_node` at read time,
+   independent of the ownership check. Proven: `test_alert_evidence_is_unreadable_after_
+   referent_access_is_revoked` (a `supersede_node` call with a replacement handling the owner
+   can no longer see — the only way a node's own handling changes in this system) and
+   `test_revoked_alert_remains_listed_as_unavailable_not_removed` (the row stays readable and
+   listed, marked unavailable, per ADR-039's own Addition 2).
+
+   The disclosure policy switch (`disclosure_policy_from_value`, ADR-038): a whitelist match to
+   exactly `"notify"`, defaulting to `"strict"` for everything else — fail-closed by
+   construction, not by a separate check, read once into `ApiConfig.hotlist_alert_policy`.
+   Proven: `test_hotlist_policy_defaults_to_strict_when_deployment_config_is_unset` (unset,
+   empty, unrecognised and wrong-case all resolve to `strict`) and `test_notify_mode_alert_
+   contains_no_referent_its_recipient_cannot_read` — written against `alert.model_dump(mode=
+   "json")`, the client-serialised shape, not the internal object, per the task's own
+   instruction, since a check against an attribute happening to be empty today would not catch a
+   future evidence panel reconstructing content a different way.
+
+   Audit (`record_match`, ADR-038): every suppressed (`strict`) and every notified (`notify`)
+   match writes an `audit_log` row via the existing `AuditWriter`, carrying the principal, the
+   matched identifier and the policy mode — both modes, not only `notify`. Proven:
+   `test_suppressed_and_notify_matches_both_write_an_audit_record_with_principal_and_mode`, run
+   under both configured modes in one test, asserting a distinct row for each.
+
+   **Bounds (ADR-037: concurrency limit, per-evaluation cost cap, overrun behaviour) — disclosed,
+   not implemented, and that is the deliberate choice, not an oversight.** All three exist to
+   bound a *scheduled evaluation loop* — the thing that would run a saved pattern or a hotlist
+   check repeatedly against the change stream. Stage 6a builds no such loop (6a's own scope is
+   the mechanism the loop will later call, not the loop); ADR-025's own overlap-guard shape
+   (`resolve:running:{entity_type}`, a held-for-duration Valkey lock) is the obvious pattern to
+   reuse once one exists, but writing that lock now, with nothing yet acquiring it on a repeating
+   schedule, would be bounding a mechanism that cannot yet run unbounded — speculative
+   infrastructure against a caller that doesn't exist, the same class of premature build this
+   document's own standing rules argue against elsewhere. **Owning phase/stage: 6b or 6c**,
+   whichever first builds a real scheduled/event-driven evaluator — the bound belongs in the
+   scheduler ADR-037 already says it must, at the point a scheduler is first written, not before.
+
+   **What 6a does not build, named precisely rather than left to be inferred from "foundation
+   only":** no `HotlistStore`/monitor-definition store (the disclosure mechanism `record_match`
+   takes an abstract "triggering node ids" and a caller-supplied identifier label — real, but
+   generic; nothing persists a hotlist entry or a monitor's own saved-pattern binding yet), no
+   scheduled or event-driven consumer of the change stream (the stream is proven readable, not
+   watched), no hotlist/monitor/alert-inbox UI, no `app.py` routes for any of the above (nothing
+   yet calls this code except a future 6b/6c and this stage's own tests). B12/B13/B14/B20 remain
+   unexercised by any acceptance scenario until 6b/6c gives them a real hotlist/monitor to fire
+   from — Stage 6a's own primitives are what B12/B13/B14/B20 will eventually run against, not
+   something this stage itself claims to satisfy.
 
 **Exit.** Acceptance scenario B, scoped to B1 (its two-CDR-files half only; the device-extraction
 half stays unowned, ADR-027), B2–B5, B7, B12, B13 (via a CDR-carried hotlisted identifier, not the
@@ -2039,6 +2108,21 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
   (fixed earlier this session because a prior entry in this same document asked directly whether
   it should be fixed or split). Owning phase: **Phase 8** — same closing-pass home as the
   gate-hygiene entries above it.
+
+- **`services/resolve/duckdb_setup.py`'s `_soundex` UDF crashes on a hyphenated, digit-bearing
+  input rather than degrading — found incidentally writing Stage 6a's own change-stream test, not
+  investigated for its own sake.** `_soundex` guards only `if not value: return None` (empty/
+  falsy); a non-empty value containing a hyphen and digits (`"Resolveonlya1b2c3d4"`-shaped —
+  checked precisely: a purely alphabetic marker of the same length does not reproduce it) reaches
+  `phonetics.soundex()` and raises `IndexError: string index out of range` from inside that
+  library, surfacing as a `duckdb.duckdb.InvalidInputException` through Splink's own compiled SQL
+  — not a bare-string edge case DuckDB itself rejects, a defect in the third-party `phonetics`
+  package's own `soundex()` this UDF wrapper does not guard against. Every existing fixture in
+  `tests/resolve/` uses plain alphabetic family names (`"Mercer"`, `"Ahmed"`), so this has never
+  been hit before. Worked around in the new test (a purely alphabetic marker), not fixed at the
+  source. Owning phase: **Phase 8** — `_soundex` should guard against, or `resolve_entity_type`
+  should sanitise before, whatever character class `phonetics.soundex()` cannot handle, proven by
+  a case using exactly the failing shape found here rather than assumed fixed by inspection.
 
 ---
 

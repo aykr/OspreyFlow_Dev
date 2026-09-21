@@ -14,6 +14,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+from .alerts import DisclosurePolicy, disclosure_policy_from_value
+
 
 def _env_float(name: str, default: float) -> float:
     value = os.environ.get(name)
@@ -100,6 +102,11 @@ class ApiConfig:
     #: directory is created if it doesn't exist — `deploy/compose/dev.yaml`
     #: bind-mounts nothing for this, since DuckDB is embedded, not a service.
     analytics_db_path: str
+    #: `06_DECISIONS.md` ADR-038 — deployment-level, read once at process start, never a per-
+    #: request or per-hotlist setting. `services/api/alerts.py::disclosure_policy_from_value`
+    #: is what actually enforces the fail-closed default; this field only carries whatever that
+    #: function resolved, once, here.
+    hotlist_alert_policy: DisclosurePolicy
 
     @classmethod
     def from_env(cls) -> ApiConfig:
@@ -128,4 +135,7 @@ class ApiConfig:
             ),
             osprey_config_path=os.environ.get("OSPREY_CONFIG_PATH", "osprey.yaml"),
             analytics_db_path=os.environ.get("ANALYTICS_DB_PATH", "data/analytics.duckdb"),
+            hotlist_alert_policy=disclosure_policy_from_value(
+                os.environ.get("HOTLIST_ALERT_POLICY")
+            ),
         )

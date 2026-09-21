@@ -233,6 +233,13 @@ jobs:
       # real query — the exact class `07_BUILD_PLAN.md`'s "Fake-based tests" gaps entry already
       # warns about). `test_hmp_graph.py` is `08_ACCEPTANCE_SCENARIOS.md` Scenario A's own graph
       # fixture.
+      # `test_change_stream.py`/`test_alerts.py` (Phase 7 Stage 6a, `06_DECISIONS.md` ADR-037/
+      # 038/039) land here too — the Gate this stage was built under: "new service-backed tests
+      # get wired into the live-service CI job, not added to an ignore list." Both need Postgres
+      # (the alert store, the audit log) and ArcadeDB (the referent recheck / the resolution
+      # producer); `test_alerts.py` also needs the same access-control discipline the sites_store
+      # entry above already argues for — a fake could not prove "evidence unreadable after a
+      # handling change" at all.
       - run: >-
           uv run pytest tests/conformance/graph_port tests/ingest
           tests/services/api/test_valkey_store.py
@@ -240,6 +247,8 @@ jobs:
           tests/scenarios/test_phase3_working_set.py
           tests/services/api/test_sites_store.py
           tests/scenarios/test_hmp_graph.py
+          tests/services/api/test_change_stream.py
+          tests/services/api/test_alerts.py
       - run: npm ci
       # `deltaClient.integration.test.ts` (Phase 4) spawns the real
       # `services.api.app` (`apps/workspace/test/glass_test_server.py`)

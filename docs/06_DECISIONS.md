@@ -2654,6 +2654,23 @@ item, owned by Trigger B:** whether that account converts to a GitHub organisati
 public push — GitHub's terms permit one free personal account per person, so this needs settling
 before the account becomes publicly active, not after.
 
+**Updated to record fact, not intent — checked directly, not assumed from the paragraph above.**
+This working repository's own `origin` remote now points at `github.com/ospreyflow/ospreyflow-dev`
+(`git remote -v`; the prior `origin`, `github.com/ayankarsolirius/ospreyflow.git`, survives only as
+a `backup` remote) — the `ospreyflow` account is already in active use for this private working
+tree, not merely reserved. **This is not Trigger B**: `ospreyflow-dev` is a second, still-private
+repository under that account, not the published artefact B4's own binding requires (a new
+repository seeded from the restructured subtree, at Trigger B, on explicit owner instruction) —
+recorded here because the destination account's own state changed, not because Trigger B fired.
+`github.com/ospreyflow/ospreyflow` (no `-dev` suffix) **remains unclaimed**, reverified the same
+way as the paragraph above's own claim, not re-asserted from it: `git ls-remote https://github.com/
+ospreyflow/ospreyflow.git` — using the identical credentials that resolve `ospreyflow-dev`
+successfully — returns `remote: Repository not found`, the strongest evidence available from
+inside this session that the name is genuinely unclaimed rather than merely private-and-
+inaccessible (an unauthenticated `curl` against the GitHub API cannot distinguish the two, checked
+directly: it returns `404` for both `ospreyflow/ospreyflow` and the known-to-exist
+`ospreyflow/ospreyflow-dev` alike).
+
 ### B5 — Authorship neutrality
 
 **The identifier set, established from the whole commit history, not `HEAD`:**
@@ -2669,7 +2686,10 @@ OspreyFlow|331628805+ospreyflow@users.noreply.github.com|OspreyFlow|331628805+os
 ```
 
 Search patterns taken from this: the personal name "Ayan Kar", the handle "ayankarsolirius" (also
-the current remote's own URL path segment, `github.com/ayankarsolirius/ospreyflow.git`), and the
+the URL path segment of what was `origin` when this record was written, `github.com/
+ayankarsolirius/ospreyflow.git` — now the `backup` remote; B4 above records `origin`'s own move to
+`github.com/ospreyflow/ospreyflow-dev`, which changes nothing here since the search pattern comes
+from the commit-author identity, not the remote URL, and that identity is unchanged), and the
 employer domain `solirius.com`. The third identity (`OspreyFlow` / the GitHub noreply address) is
 already neutral and is not a search pattern.
 

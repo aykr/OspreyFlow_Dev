@@ -66,6 +66,7 @@ def _resolver(jwks_url: str) -> PrincipalResolver:
             supersede_job_degree_threshold=500,
             osprey_config_path="osprey.yaml",
             analytics_db_path=":memory:",
+            hotlist_alert_policy="strict",
         )
     )
 
@@ -117,6 +118,7 @@ async def test_the_header_wins_when_both_are_present() -> None:
                 supersede_job_degree_threshold=500,
                 osprey_config_path="osprey.yaml",
                 analytics_db_path=":memory:",
+                hotlist_alert_policy="strict",
             )
         ),
         headers={"authorization": "Bearer not-a-real-token"},

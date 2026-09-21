@@ -156,6 +156,7 @@ from .jobs import JobQueue
 from .mapconfig_loader import load_map_config, public_view
 from .notify import notify_channel, publish_delta
 from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
+from .change_stream import ChangeStreamWriter
 from .pattern_store import PatternNotFoundError, PatternStore
 from .patterns import (
     JOB_TYPE_PATTERN_MATCH,
@@ -294,7 +295,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.graph = graph
     app.state.ontology = ontology
     app.state.valkey = valkey
-    app.state.working_set = WorkingSetService(graph, ValkeyWorkingSetStore(valkey), handling_scheme)
+    app.state.working_set = WorkingSetService(
+        graph, ValkeyWorkingSetStore(valkey), handling_scheme, valkey=valkey
+    )
     app.state.audit = audit
     app.state.investigations = investigations
     app.state.history = history
@@ -493,6 +496,7 @@ ComputeDep = Annotated[ComputePort, Depends(get_compute)]
 RecipesRepoRootDep = Annotated[Path, Depends(get_recipes_repo_root)]
 HandlingSchemeDep = Annotated[HandlingScheme, Depends(get_handling_scheme)]
 JobsDep = Annotated[JobQueue, Depends(get_jobs)]
+ValkeyDep = Annotated[Valkey, Depends(get_valkey)]
 SiteImageStorageDep = Annotated[ObjectStorageConfig, Depends(get_site_image_storage)]
 TileCacheStorageDep = Annotated[ObjectStorageConfig, Depends(get_tile_cache_storage)]
 AnalyticsDep = Annotated[AnalyticsPort, Depends(get_analytics)]
@@ -2422,6 +2426,7 @@ async def run_studio_recipe(
     repo_root: RecipesRepoRootDep,
     audit: AuditDep,
     jobs: JobsDep,
+    valkey: ValkeyDep,
     body: RunRecipeInput,
 ) -> LoadReport:
     """§8: "Loader: run a published recipe against a file at or below
@@ -2439,7 +2444,10 @@ async def run_studio_recipe(
     (`resolution_trigger.submit_post_ingest_resolution_jobs`) — this is the
     only route through which an ingest can ever raise a hotlist/
     saved-pattern alert against a live deployment, not fixture data
-    assembled by a test harness."""
+    assembled by a test harness.
+
+    Also ingest's own producer onto the corpus-wide change stream (`06_DECISIONS.md` ADR-037's
+    amendment, Phase 7 Stage 6a — `services/api/change_stream.py`'s own docstring)."""
     load_id = new_id()
     report = await run_published_recipe(
         recipe,
@@ -2453,6 +2461,9 @@ async def run_studio_recipe(
     )
     await resolution_trigger_module.submit_post_ingest_resolution_jobs(
         report, recipe.row_template, ontology=ontology, jobs=jobs
+    )
+    await ChangeStreamWriter(valkey).publish(
+        "ingest", node_ids=report.created_node_ids, edge_ids=report.touched_edge_ids
     )
     await audit.record(
         principal=principal,

@@ -450,6 +450,33 @@ class SavedPattern(BaseModel):
     definition: PatternQuery
 
 
+class AlertMode(StrEnum):
+    #: Full evidence — the referents named below are re-checked against the reading principal's
+    #: own access at read time (`06_DECISIONS.md` ADR-039), never trusted from write time.
+    FULL = "full"
+    #: `06_DECISIONS.md` ADR-038's `notify` policy stub — written when the triggering referent was
+    #: outside the recipient's access at write time. Carries no referent of any kind (not even the
+    #: identifier the analyst supplied) — `referent_node_ids` is always empty for this mode, by
+    #: construction, not merely by convention a caller must remember to honour.
+    NOTIFY_STUB = "notify_stub"
+
+
+class Alert(BaseModel):
+    """A persisted alert row — `06_DECISIONS.md` ADR-038/039, Phase 7 Stage 6a's own foundation.
+    Stores references to evidence, never copies (`rule_id` plus `referent_node_ids`) — access is
+    re-checked at read time against those referents, not trusted from whatever was true when this
+    row was written. `NOTIFY_STUB` rows never carry a referent at all, enforced by every producer
+    this stage builds (`services/api/alerts.py`'s own `record_match` is the one place a row is
+    constructed), not merely a convention this model documents without holding to."""
+
+    id: str
+    rule_id: str
+    owner_id: str
+    mode: AlertMode
+    referent_node_ids: list[NodeId] = Field(default_factory=list)
+    created_at: datetime
+
+
 class NeighbourhoodStats(BaseModel):
     node_id: NodeId
     degree: int
@@ -506,6 +533,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     PatternEdge,
     PatternQuery,
     SavedPattern,
+    Alert,
     NeighbourhoodStats,
     Subgraph,
     ListNodesPage,

@@ -49,6 +49,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from services.api.change_stream import ChangeStreamWriter
 from valkey.asyncio import Valkey
 from valkey.asyncio.lock import Lock
 from valkey.exceptions import LockError
@@ -153,12 +154,21 @@ async def run_resolution_for_entity_type(
     tx: TxId,
     ontology: OntologySchema,
     scheme: HandlingScheme,
+    valkey: Valkey | None = None,
 ) -> ResolutionRunResult:
     """The actual work, independent of the job-queue/worker plumbing —
     `run_resolve_entity_type_job` below is the thin adapter this presents
     to `JobWorker`'s fixed dispatch shape. Kept separate so a test (or the
     manual "resolve now" route, which has no job payload to unwrap) can
-    call this directly."""
+    call this directly.
+
+    `valkey` is optional (default `None`, no publish) so every existing direct caller — including
+    every test in this file predating Stage 6a — keeps working unchanged; `try_run_resolution_
+    with_overlap_guard` below, the real production path, always passes it. When given, a
+    `SAME_AS` write is published to the corpus-wide change stream (`06_DECISIONS.md` ADR-037's own
+    amendment — `services/api/change_stream.py`'s own docstring has the full reasoning) — this is
+    resolution's own producer, the one that makes "a match created by resolution alone, with no
+    new ingest" observable to a future monitor at all."""
     entity_type: EntityTypeDef | None = ontology.entity_type(entity_type_name)
     if entity_type is None or entity_type.resolution is None:
         raise ValueError(
@@ -195,6 +205,9 @@ async def run_resolution_for_entity_type(
         graph, conflicts, not_same_as_by_id, created_by=SERVICE_PRINCIPAL_ID, tx=tx
     )
 
+    if valkey is not None and same_as_ids:
+        await ChangeStreamWriter(valkey).publish("resolution", edge_ids=same_as_ids)
+
     return ResolutionRunResult(
         skipped=False,
         nodes_processed=len(nodes),
@@ -224,7 +237,7 @@ async def try_run_resolution_with_overlap_guard(
         return ResolutionRunResult(skipped=True, reason="a resolution run is already in progress")
     try:
         return await run_resolution_for_entity_type(
-            entity_type_name, graph=graph, tx=tx, ontology=ontology, scheme=scheme
+            entity_type_name, graph=graph, tx=tx, ontology=ontology, scheme=scheme, valkey=valkey
         )
     finally:
         try:

@@ -39,7 +39,9 @@ from collections.abc import Sequence
 from typing import Any
 
 from services.api.access import narrow_to_visible
+from services.api.change_stream import ChangeStreamWriter
 from services.resolve.projection import DEFAULT_THRESHOLD, compute_clusters, diff_clusters
+from valkey.asyncio import Valkey
 
 from conduit_common.identity import new_edge_id, now_utc
 from ontology.handling import HandlingScheme, principal_may_view
@@ -101,11 +103,22 @@ def _filtered_count(candidate_count: int, delivered_count: int) -> int:
 
 class WorkingSetService:
     def __init__(
-        self, graph: GraphPort, store: WorkingSetStorage, handling_scheme: HandlingScheme
+        self,
+        graph: GraphPort,
+        store: WorkingSetStorage,
+        handling_scheme: HandlingScheme,
+        *,
+        valkey: Valkey | None = None,
     ) -> None:
         self._graph = graph
         self._store = store
         self._scheme = handling_scheme
+        # Optional, default `None` — every existing test constructing this service directly keeps
+        # working unchanged; `app.py`'s own production wiring passes the real client. When given,
+        # a manual `SAME_AS`/`NOT_SAME_AS` write publishes to the corpus-wide change stream
+        # (`06_DECISIONS.md` ADR-037's own amendment names manual assertion, B11's mechanism, as
+        # one of its three accepted producers — `services/api/change_stream.py`'s own docstring).
+        self._valkey = valkey
 
     def _project(
         self, nodes: Sequence[Node], edges: Sequence[Edge], principal: Principal
@@ -383,6 +396,11 @@ class WorkingSetService:
             await self._graph.rollback_transaction(tx)
             raise
         await self._graph.commit_transaction(tx)
+
+        if self._valkey is not None:
+            await ChangeStreamWriter(self._valkey).publish(
+                "manual_assertion", edge_ids=[new_edge.id]
+            )
 
         if edge_type == SAME_AS:
             same_as_edges = [*same_as_edges, new_edge]
