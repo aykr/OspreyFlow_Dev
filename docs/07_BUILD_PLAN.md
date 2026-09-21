@@ -958,7 +958,14 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
    canvas drawing arbitrary patterns.
 5. **The pathfinder.**
 6. **Hotlists, saved-pattern monitors, alert inbox** — genuinely demonstrable only once Stage 1
-   exists.
+   exists. **Blocked on ADR-036 through ADR-039 (`06_DECISIONS.md`), all four Proposed, not
+   accepted, as of 21 September 2026.** Four design questions the acceptance-table assertions for
+   B12–B14/B20 do not themselves settle — monitor principal identity (ADR-036), monitor trigger
+   model and execution bounds (ADR-037), hotlist membership and existence (ADR-038, presented as a
+   contradiction between B13's own text and standing rule 3, not a gap), and alert inbox lifecycle
+   (ADR-039) — each drafted with its own proposed answer, the test that would retire it, and its
+   cost, per `CLAUDE.md` rule 12's own discipline. None decided; Stage 6 does not start until the
+   owner accepts, amends, or rejects each.
 
 **Exit.** Acceptance scenario B, scoped to B1 (its two-CDR-files half only; the device-extraction
 half stays unowned, ADR-027), B2–B5, B7, B12, B13 (via a CDR-carried hotlisted identifier, not the

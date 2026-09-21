@@ -43,12 +43,23 @@ confirmed.
 | 029 | Neither compute tier can run Leiden; both run Louvain with a connected-components fix | | **Accepted** — 20 Sep 2026 |
 | 030 | `PatternQuery` widened for a pinned second root; `match()` does not work on ArcadeDB | | **Accepted** — 20 Sep 2026 |
 | 031 | The repository splits into `spec/` and `process/`; `docs/` is dissolved at Phase 8's close | | **Accepted, scheduled** — 20 Sep 2026 |
+| 032 | The visual query builder is a list/palette editor, not a second drawing canvas | | **Accepted** — 20 Sep 2026 |
+| 033 | `Path.nodes`/`Path.edges` carry hydrated objects, not bare ids | | **Accepted** — 20 Sep 2026 |
+| 034 | Publication and licence boundary; supersedes ADR-031 | | **Accepted** — 21 Sep 2026 |
+| 035 | Demo distribution classes (`shipped`/`internal`); Fixture Corp is the shippable demo | | **Accepted** — 21 Sep 2026, one item declined as written |
+| 036 | Saved-pattern monitor principal identity | | **Proposed** — 21 Sep 2026 |
+| 037 | Monitor trigger model and execution bounds | | **Proposed** — 21 Sep 2026 |
+| 038 | Hotlist membership and existence | | **Proposed** — 21 Sep 2026 |
+| 039 | Alert inbox lifecycle | | **Proposed** — 21 Sep 2026 |
 
-All thirty-one records are accepted, including all seven overrides of the input documents.
-`07_BUILD_PLAN.md` is unblocked end to end; nothing in the plan now waits on an open decision.
-This table lagged the actual record count for a stretch of Phase 7 (ADR-022 through ADR-029 were
-written but never added here) — caught and closed in the same change that added ADR-030, not
-worth its own record.
+Thirty-five records (001–035) are accepted, including all seven overrides of the input documents.
+Four more (036–039) are **Proposed**, not accepted — drafted at the owner's request to settle four
+design questions Phase 7 Stage 6 (hotlists, saved-pattern monitors, alert inbox) needs answered
+before it is safe to build against, per each record's own reasoning, and none is decided here.
+`07_BUILD_PLAN.md`'s Phase 7 Stage 6 entry is cross-referenced to this block and states plainly
+that Stage 6 is blocked on the owner's acceptance of all four. This table lagged the actual record
+count for a stretch of Phase 7 (ADR-022 through ADR-029 were written but never added here) —
+caught and closed in the same change that added ADR-030, not worth its own record.
 
 One record carries a stated review point. ADR-018 is accepted on the understanding that the
 Ingest Studio's interface will be reviewed once it renders, and that the review may change it —
@@ -2943,5 +2954,266 @@ already was once.
 **Revisit if.** The owner amends standing rule 3/`CLAUDE.md` rule 9 to add an owner-only-demo
 exception (C3's own open item) — at which point this record's own `internal` scope for Enron widens
 to match, by an edit to this record, not a new ADR.
+
+---
+
+## ADR-036 — Saved-pattern monitor principal identity: proposed, not decided
+
+**Status.** Proposed, 21 September 2026. The owner decides. Drafted at the owner's request while
+scoping Phase 7 Stage 6; nothing below is built.
+
+**The gap, as the spec states it.** `02_GLASS_FRONTEND.md` §3.3: "Saved-pattern monitors. A saved
+visual query run on a schedule against new data. Matches raise alerts with the same shape as
+hotlist alerts." No principal is named. `07_BUILD_PLAN.md`'s Phase 7 outcome bullet ("Hotlists,
+saved-pattern monitors, alert inbox with rule and evidence display") names none either. The only
+principal-identity precedent anywhere in this codebase for scheduled, out-of-request evaluation is
+ADR-025's service principal for the corpus-wide resolution trigger.
+
+**Why ADR-025's own precedent does not transfer, quoted rather than assumed.** ADR-025: "The job
+runs under a deployment-level service principal, not the ingesting analyst's own — resolution is
+corpus-wide and cross-investigation, and the analyst who happened to trigger a load has no special
+claim over every resulting `SAME_AS` edge." That reasoning is specific to a job with no single
+owner: resolution runs against the whole corpus on every entity type that declares a
+`resolution:` block, on behalf of no one analyst in particular. A saved-pattern monitor is the
+opposite shape — one analyst's own saved query, evaluated on a schedule on their behalf, against
+data they asked to be told about. ADR-025's own justification argues against reusing its own
+pattern here: where resolution's premise is "no analyst has special claim," a monitor's premise is
+"this analyst, and only this analyst, has a claim." Evaluating a monitor as a broader service
+principal does not merely fail to fit that premise — it inverts it, and produces exactly the leak
+the task naming this gap described: the analyst learns of matches against data they cannot see
+themselves.
+
+**Proposed answer, first half.** A saved-pattern monitor evaluates as the saving analyst's own
+principal, never a service principal. Its query goes through `GraphPort`'s ordinary
+access-filtered path exactly as if the analyst issued it themselves at the moment of evaluation —
+no new privileged code path, no elevated identity, nothing standing rule 2/CLAUDE.md rule 3 does
+not already require of every other read.
+
+**Proposed answer, second half, equally binding.** Access is resolved fresh at each evaluation, not
+captured or cached at save time. A monitor that carries "access as it was when saved" is a durable
+grant outliving whatever permission produced it — the same shape of defect standing rule 3 exists
+to prevent generally, here specific to a stored, re-run query rather than a stored result. What
+happens when the saving principal is no longer valid at evaluation time (account disabled,
+credential revoked, an `org_unit`/handling reassignment that changes what the saved principal
+reference can resolve to)? **Proposed: the monitor stops.** It is not evaluated with degraded or
+fallback access, and it is not silently kept running against a stale snapshot of the access that
+existed when it was saved. A stopped monitor is surfaced as stopped somewhere the analyst or
+another owner can see it (the monitor list, or the alert inbox) rather than silently producing
+nothing forever with no visible state change.
+
+**The test that would retire this gap.**
+- `test_monitor_never_fires_on_a_match_the_saving_analyst_cannot_see` — save a pattern as
+  analyst A under a narrow handling scheme; create a node/edge that matches the pattern but is
+  visible only to a broader principal B; run the monitor's evaluation; assert no alert is
+  produced and no evidence of the match is observable to A.
+- `test_monitor_stops_evaluating_once_the_saving_principal_is_revoked` — save a pattern as
+  analyst A; revoke or invalidate A's principal; trigger an evaluation (including against data
+  that would otherwise match and that A could previously see); assert no alert fires and the
+  monitor's own state reflects "stopped," not silently active.
+
+**Cost.** Needs the saved-pattern persistence path — itself still an unbuilt gap, recorded in
+ADR-032's own known-gaps note ("Patterns are saveable, shareable and versioned" is unbuilt) — to
+carry an owning-principal reference, plus a principal-validity check at evaluation time. Real new
+surface; nothing already built decides either half of this for free.
+
+**Revisit if.** Monitors are ever generalised to be shared or team-owned rather than
+analyst-owned — the "shareable" third of ADR-032's own still-unbuilt promise — at which point this
+record's single-owner-principal model needs re-examining alongside whatever sharing model is
+chosen, not assumed to survive it unchanged.
+
+---
+
+## ADR-037 — Monitor trigger model and execution bounds: proposed, not decided
+
+**Status.** Proposed, 21 September 2026. The owner decides.
+
+**The finding, stated plainly rather than resolved.** `02_GLASS_FRONTEND.md` §3.3 describes a
+saved-pattern monitor as run "on a schedule" *and* "against new data" in the same sentence. These
+are two different mechanisms with cost profiles orders of magnitude apart: wall-clock scheduling
+re-evaluates a pattern against the full corpus on every tick regardless of whether anything
+changed; a delta/event trigger evaluates only against what changed since the last run. The spec
+names both without reconciling them, and nothing elsewhere in `docs/` picks one.
+
+**Proposed answer.** Ingest-triggered evaluation against the ingest delta, not wall-clock
+scheduling against the full corpus. This makes a monitor structurally identical to a hotlist —
+B13's own mechanism ("any ingest that touches a listed identifier raises an alert") is already
+delta/event-triggered — so one post-ingest evaluation pass can check both hotlist identifiers and
+saved-pattern deltas rather than building two separate mechanisms with two separate cost models.
+It bounds cost by ingest volume, which is what this system actually processes continuously,
+rather than by corpus size, which "on a schedule" read literally would force re-scanning
+regardless of whether any ingest happened at all.
+
+**The cost, stated honestly rather than assumed away.** Delta evaluation misses a match that
+becomes true without new ingested data touching it — an edge appearing between two already-
+existing nodes as a pure resolution by-product (a `SAME_AS` write with no new node), or a match
+created by a deletion (a previously-blocking fact removed makes an existing pattern newly match).
+**Whether any acceptance row depends on those cases, checked directly:** B20's own assertion is
+"Subsequent matching ingest raises an alert with the same shape as B13" — explicitly ingest-
+triggered. No row in Scenario B needs a monitor to catch a resolution-only or deletion-triggered
+match. This is a real capability gap against "on a schedule" read literally, disclosed as one, but
+it is not a gap Scenario B's own exit criterion exercises.
+
+**Bounds that remain necessary regardless of which trigger model is chosen.**
+- **Concurrency.** Whether two evaluations of the same monitor, or evaluations of different
+  monitors against an overlapping population, can run at once. Proposed: the same shape ADR-025
+  already uses for the resolution trigger — a short-TTL, held-for-duration lock per monitor id,
+  not merely a pre-submission check (ADR-025's own addendum on why a checked-once guard was not
+  enough for its own overlap case applies here too).
+- **Per-evaluation cost cap.** ADR-025's own A2 finding stands unchanged: ArcadeDB has no
+  server-side query budget, keeps working past the Conduit's 30-second client-side timeout, and
+  runs against a fixed 6GB heap with documented OOM history across this build. A monitor's own
+  pattern-match query must therefore be bounded by the scheduler or job layer that submits it, not
+  assumed safe because the client will eventually time out — the client timing out does not stop
+  the server-side work.
+- **Overrun behaviour.** What happens when an evaluation is still running when the next
+  ingest that would trigger it arrives. Proposed, mirroring ADR-025's own choice for the
+  resolution trigger: skip the redundant trigger rather than queue or error it, relying on the
+  concurrency lock above to make the skip safe.
+
+**The test that would retire this gap.**
+- `test_monitor_evaluation_is_scoped_to_the_ingest_delta_not_the_full_corpus` — ingest a batch
+  that does not touch a saved pattern's own entity types; assert the monitor's evaluation query
+  is never issued (or is issued against zero candidate nodes), not merely that no alert results.
+- `test_concurrent_monitor_evaluations_for_the_same_pattern_do_not_double_fire` — trigger two
+  overlapping ingests that both match the same saved pattern; assert exactly one alert, not two,
+  and that the second trigger's own submission was skipped, not queued behind the first.
+- A cost-cap test proving an evaluation that exceeds its bound is stopped and recorded as such,
+  rather than left to run unbounded against the server.
+
+**Cost.** The post-ingest hook infrastructure ADR-025/Stage 1 already built
+(`services/resolve/trigger.py`, the job queue, the worker loop) is the natural place to add a
+second job type rather than a second mechanism — real work, but not a second worker process.
+
+**Revisit if.** An acceptance scenario or product requirement ever needs a monitor to catch a
+resolution-only or deletion-triggered match — at which point this record's delta-only scope
+needs to widen, most likely via a periodic reconciliation pass layered on top of the ingest
+trigger, priced as its own addition rather than folded into this one silently.
+
+---
+
+## ADR-038 — Hotlist membership and existence: a contradiction, not a gap
+
+**Status.** Proposed, 21 September 2026. Three options are presented below; none is decided. The
+owner chooses.
+
+**Why this is a contradiction, not merely an unanswered question.** Hotlists hold identifiers, not
+entities — `02_GLASS_FRONTEND.md` §3.3: "A list of identifiers with an owner and a review date."
+Adding to a hotlist therefore needs no visibility of any graph node at all: an analyst can hotlist
+a bare phone number read off a warrant before it resolves to anything they can see. B13
+(`08_ACCEPTANCE_SCENARIOS.md`) promises "An alert fires naming the matched identifier, the
+triggering document and the rule" on *any* ingest that touches a listed identifier — with no
+qualification on whether the triggering document is visible to the hotlist's owner. The feature's
+entire purpose is therefore to report that something appeared in data the analyst who set the
+hotlist may not be able to see — which is precisely the existence leak CLAUDE.md's standing rule 3
+exists to prevent ("An unauthorised principal must not be able to detect a filtered node's
+existence via path length, degree count or histogram bucket"). A hotlist alert on a document its
+owner cannot open is that same leak, produced by B13's own text working exactly as specified, not
+a bug introduced by insufficient filtering. Building B13 literally and honouring rule 3 literally
+cannot both be true at once without choosing one of the three shapes below.
+
+**Option (a) — alerts fire only when the triggering document is within the owner's access; the
+hotlist silently misses the rest.**
+- *What the analyst observes.* Alerts only for matches they could already have found themselves
+  by other means; no indication that anything else matched.
+- *What leaks.* Nothing — this is the option that costs rule 3 nothing.
+- *What it costs to build.* The hotlist becomes materially weaker than B13's literal promise:
+  "any ingest" becomes "any ingest the hotlist owner could already see," which may defeat the
+  CoLP-derived use case this feature is modelled on — a warrant seizure logged by a unit other
+  than the one that set the original hotlist entry.
+- *The test that would prove it.* `test_hotlist_alert_suppressed_when_triggering_document_
+  outside_owner_access` — hotlist owned by analyst A; a matching document visible only to a
+  different principal; ingest runs; assert A receives no alert and no alert record referencing
+  that document is readable by A.
+
+**Option (b) — alerts fire with an "a match exists you cannot view" notice: a deliberate,
+auditable leak rather than an accidental one.**
+- *What the analyst observes.* An alert stub — the rule name, the identifier A already supplied
+  (not new information to A), and an explicit statement that access is insufficient to view the
+  match — with no document content, no entity detail, no field derived from the inaccessible
+  record.
+- *What leaks.* The existence of a matching document or event outside A's access, deliberately
+  and as an audited disclosure rather than an accidental one.
+- *What it costs to build.* A new, visually distinct alert-rendering state, and — the part that
+  most needs an owner's call rather than an implementer's — a policy decision that this specific,
+  bounded disclosure (existence only, never content) is an acceptable exception to rule 3 for
+  this feature, which nothing in `docs/` currently grants.
+- *The test that would prove it.* `test_hotlist_alert_shows_access_denied_notice_without_
+  disclosing_content` — assert the alert record exists and is readable by A, and assert none of
+  its fields beyond the identifier A already supplied are derived from the inaccessible document.
+
+**Option (c) — hotlists carry a handling level and match only within it.**
+- *What the analyst observes.* Alerts only for matches at or below the hotlist's own declared
+  handling ceiling — symmetrical with how every other read path in this system already enforces
+  handling in-query (rule 3).
+- *What leaks.* Nothing, and it is the most structurally consistent of the three with how the
+  rest of the platform works — but it changes what a hotlist can promise: an analyst who accepts
+  a low default handling ceiling on their hotlist (or sets one too narrowly) can miss a real match
+  even to a document they personally could see, if the hotlist's own ceiling is lower than their
+  own clearance.
+- *What it costs to build.* The most schema work of the three — hotlist entries need a new
+  handling field, a UI control to set it, and the match/alert path needs to check it — but it
+  reuses the existing `HandlingScheme` dominance-order machinery (the same mechanism ADR-025's own
+  `SAME_AS`-handling-inheritance already uses) rather than inventing a new concept.
+- *The test that would prove it.* `test_hotlist_match_suppressed_above_its_own_handling_ceiling`.
+
+**A second, separately stated question: what does an analyst who does not own a hotlist observe
+of it?** Not addressed anywhere in `docs/`. Count, ordering, and whether the list of entries
+itself is readable to a non-owner are all unstated. This is the same existence-leak shape as the
+alert question above, one level up: hotlist membership itself ("someone is watching this
+identifier") could be disclosive independently of whether any match has ever fired. Flagged here
+rather than answered, because it is very likely to resolve the same way the owner resolves (a),
+(b) or (c) above, not independently of it.
+
+**Cost.** None of the three options is built. This record is design and ownership only.
+
+**Revisit if.** Not applicable in the ADR-025 sense — this record decides nothing, so there is
+nothing yet to revisit. Whichever option the owner accepts should carry its own "revisit if" at
+that point.
+
+---
+
+## ADR-039 — Alert inbox lifecycle: proposed, not decided
+
+**Status.** Proposed, 21 September 2026. The owner decides.
+
+**The gap, as the spec states it.** `02_GLASS_FRONTEND.md` §3.3 states what an alert *contains* —
+"Every alert names the rule that fired and shows the evidence," and a hotlist alert specifically
+carries "the matched identifier, the triggering document, and a one-click jump into a
+pre-populated investigation." Nothing states who can *read* an alert, nor what happens to an
+already-written alert when the access that produced it is later revoked.
+
+**Proposed answer.** An alert stores references — node/edge/document ids, the rule id — not
+copies of evidence content, and access is re-checked at read time against those referents. This is
+the same "resolved fresh, not captured" principle ADR-036 proposes for monitor evaluation, applied
+to a stored record rather than a re-run query. Revoking access after the alert is written must
+make the alert (or at minimum its evidence) unreadable, not merely absent from some default
+listing — an alert that still renders full evidence to a principal who has since lost access to
+the underlying node is a durable grant outliving the permission that justified it, the exact
+failure shape this whole design question exists to prevent.
+
+**The residual question, stated rather than answered.** Once an alert's *contents* become
+unreadable under the proposal above, is the alert's own *existence* still disclosive — does a
+revoked-access alert disappear entirely from the inbox, or remain listed as "an alert you can no
+longer view"? This is the same shape as ADR-038's hotlist contradiction: a list entry can leak
+existence independently of its content, and resolving it one way for alerts and a different way
+for hotlists, with no stated reason for the difference, would itself be an unexplained
+inconsistency. **Proposed: this question is not answered independently here** — it should follow
+whichever of ADR-038's three options the owner accepts, applied to alerts by the same logic,
+rather than be decided a second, unrelated way in this record.
+
+**The test that would retire this gap.**
+`test_alert_unreadable_after_referent_access_is_revoked` — write an alert referencing a node
+visible to principal A; revoke A's access to that node (a handling change, an `org_unit`
+reassignment); read the alert by id as A; assert the evidence content the alert originally carried
+is no longer returned.
+
+**Cost.** Needs the alert store's own reference schema — not yet designed, and dependent on
+ADR-036/037's monitor design and on B13's hotlist-alert shape, so not something this record can
+price independently of those — plus a read-time access re-check hook on every alert read, which is
+real new surface, not an addition to an existing read path.
+
+**Revisit if.** The owner's decision on ADR-038 settles the list-existence-leak question in a way
+that gives this record's own residual question a direct answer — at which point this record is
+updated to state that answer plainly rather than continuing to defer to ADR-038.
 
 ---
