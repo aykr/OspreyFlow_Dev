@@ -3365,6 +3365,56 @@ than "pick one."
 at which point option (c)'s handling-ceiling mechanism is the natural next layer, not a
 replacement for the switch decided here.
 
+**Addendum, Phase 7 Stage 6b — the evaluator's own unscoped read, recorded here as an explicit,
+justified exemption rather than left for the next reader to stumble on unexplained.**
+`services/api/evaluation.py::evaluate_hotlists_for_entry` reads every touched node with
+`service_principal(scheme)` (`services/resolve/trigger.py`'s own corpus-wide identity, reused, not
+a second one invented) — a read scoped to nobody, not to the hotlist's owner.
+
+**Why it must be unscoped.** `notify` mode's entire content (`"a match exists you cannot view"`)
+is a report about a node the owner *cannot* see. A read already filtered to the owner's own access
+would never surface that node in the first place — `strict` and `notify` would become identical,
+both silently degrading to option (a)'s behaviour, because the evaluator would never *find* the
+out-of-access match `notify` exists to report. Scoping this read to the hotlist owner would not
+make the leak this ADR already accepts smaller; it would make `notify` mode a name for a feature
+that no longer does anything, unnoticed until an analyst asked why a match they later found by
+other means never generated a stub.
+
+**What the only barrier to disclosure is.** Finding the match and disclosing it are two separate
+steps, deliberately: `evaluate_hotlists_for_entry` finding a match with the unscoped read commits
+this codebase to nothing about what the owner is shown. `alerts.py::record_match`, called
+immediately after with the *owner's own* principal (never the unscoped one), is the one and only
+place that decision is made — its `strict`/`notify` policy branch is the entire barrier between
+"the evaluator saw something" and "the owner learns anything at all." No other check, filter or
+gate sits between the unscoped read and this barrier; if `record_match` were ever called with the
+unscoped principal instead of the owner's, or skipped, the leak this whole ADR exists to bound
+would reopen exactly the way B13's literal text originally implied it must (see this record's own
+opening argument).
+
+**`scripts/authorized_query_check.py` does not, and structurally cannot, cover this.** Confirmed
+against that script's own detection shape, not assumed: it flags a `self`-first store *method*
+whose name contains `"authorized"` and takes a `principal` parameter, when no SQL `SELECT` call in
+its own body binds a `principal.<attr>` argument. `evaluate_hotlists_for_entry` is a module-level
+function, not a store method; its name contains no `"authorized"`; and its read is not a case of
+"took a principal but forgot to scope the query with it" — the exact fetch-then-check shape ADR-041
+targets — it is a read built *not* to take the owner's principal at all, by design, for the reason
+above. A check built to catch a principal being ignored has nothing to say about a principal being
+deliberately absent from a different call three lines above a different one that isn't. The
+barrier this ADR relies on is `record_match`'s own policy branch, not anything
+`authorized-query-check` inspects, and no future addition to that script's heuristics will ever
+reach it without also becoming able to reason about which of two adjacent calls in the same
+function is the one that decides disclosure — out of scope for a purely syntactic, single-call
+check.
+
+**The test that pins the barrier.** `tests/services/api/test_evaluation.py::test_a_hotlist_match_
+outside_the_owners_access_leaks_nothing_in_strict_or_notify` — a node outside the hotlist owner's
+access, found only because the read is unscoped; asserts the barrier holds on both sides of it:
+nothing produced under `strict`, and a `notify`-mode alert whose serialised form
+(`.model_dump(mode="json")`) contains neither the node id nor the matched identifier. If
+`record_match` in `evaluate_hotlists_for_entry` were ever called with the unscoped matcher instead
+of the owner's own principal, this test would start asserting a full alert leaked instead — the
+regression this record depends on that test catching, not merely hopes it would.
+
 ---
 
 ## ADR-039 — Alert inbox lifecycle: accepted as proposed, with two additions

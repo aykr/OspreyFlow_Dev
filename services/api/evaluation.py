@@ -124,7 +124,13 @@ async def evaluate_hotlists_for_entry(
     "resolved by the Conduit from the session token", `schemas.domain.Principal`'s own docstring —
     and a scheduled evaluator has no session token in flight). Returning `None` from this callable
     is the disclosed stand-in for ADR-036's own "the monitor stops" when a principal cannot be
-    resolved: this evaluation is skipped for that owner, not run against a stale or invented one."""
+    resolved: this evaluation is skipped for that owner, not run against a stale or invented one.
+
+    `matcher` below is deliberately unscoped — `06_DECISIONS.md` ADR-038's own addendum records
+    why this is a justified exemption rather than an oversight `authorized-query-check` missed
+    (it cannot see this shape at all: a module function, not a `*_authorized` store method), what
+    the only barrier to disclosure is (`record_match`'s own `policy` branch, called below with
+    `recipient` — the owner's principal — never with `matcher`), and names the test that pins it."""
     if not entry.node_ids:
         return []
     touched = entry.node_ids[:MAX_TOUCHED_NODES_PER_EVALUATION]

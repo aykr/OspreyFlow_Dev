@@ -87,10 +87,22 @@ class _NullExtractionCandidateStore:
     `tests/services/api/test_review_store.py`/`test_review.py` — this closing pass only needs the
     candidates it returns, not a second live-Postgres round trip, so `store` just echoes them back
     with the shape `run_extraction`'s caller actually uses (`.properties`/`.confidence`/etc. via
-    the plain `ExtractionCandidate` already attached to each stored "record")."""
+    the plain `ExtractionCandidate` already attached to each stored "record").
+
+    `store_document_text` was added to `run_extraction`'s own call chain in Phase 6a Stage 4
+    (`services/api/review.py`'s own docstring: "previously discarded the moment candidates were
+    built, leaving nothing for the Dossier's own... to render against") — after this file's fake
+    was written, and never added here, so every run of this test raised `AttributeError` from
+    that point on. Found and fixed as part of Stage 6b's own test-count reconciliation, not
+    because Stage 6b touches extraction: `git log`/`git blame` on this file, not investigated
+    further here, has whichever change actually introduced the gap. A no-op for the same reason
+    `store` above is a bare echo, not a second live-Postgres round trip this test doesn't need."""
 
     async def store(self, candidates, principal):  # type: ignore[no-untyped-def]
         return candidates
+
+    async def store_document_text(self, document_id, text, principal):  # type: ignore[no-untyped-def]
+        pass
 
 
 async def test_phase6_exit_criterion_end_to_end() -> None:

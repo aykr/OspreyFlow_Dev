@@ -1107,10 +1107,13 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
    principal directory; recorded here so it is not silently assumed solved by 6b's own test double.
 
    Proven — the task's own named test and five more exercising what it implies:
-   `test_a_hotlist_match_outside_the_owners_access_produces_nothing_in_strict_and_notify` (a
-   hotlist match the evaluator's own unscoped read can see but the hotlist's owner cannot: nothing
-   under `strict`, a content-free alert under `notify` — `referent_node_ids == []` and neither the
-   node id nor the identifier appear anywhere in the serialised alert, checked against
+   `test_a_hotlist_match_outside_the_owners_access_leaks_nothing_in_strict_or_notify` (renamed
+   from `..._produces_nothing_in_strict_and_notify` — a later review caught that the original name
+   read as "nothing is produced in either mode," which is false: notify mode does produce an
+   alert, ADR-038's whole point of having two modes. What the test actually proves: a hotlist
+   match the evaluator's own unscoped read can see but the hotlist's owner cannot produces nothing
+   at all under `strict`, and a content-free alert under `notify` — `referent_node_ids == []` and
+   neither the node id nor the identifier appear anywhere in the serialised alert, checked against
    `.model_dump(mode="json")` per ADR-038's own precedent, not an internal attribute);
    `test_a_hotlist_match_visible_to_its_owner_writes_a_full_alert`;
    `test_a_hotlist_evaluation_already_in_progress_is_skipped_not_queued` (the overlap guard,
@@ -1119,6 +1122,20 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
    `test_a_monitor_alerts_once_per_match_set_and_again_only_when_it_changes` (the coarse dedup,
    proven against a match set that grows, not only one that stays the same); and
    `test_a_monitor_whose_pattern_no_longer_exists_stops_rather_than_errors`.
+
+   **`test_a_monitor_never_evaluates_with_a_principal_broader_than_its_owner`, added on later
+   review — pins an invariant the code already had but nothing proved.** The structural-
+   unreachability claim in `evaluate_monitors_for_entry`'s own docstring is a property of today's
+   code, not an enforced one: a future "efficiency" swapping in `service_principal` (the identity
+   `evaluate_hotlists_for_entry` deliberately does use) for a monitor's own match would silently
+   activate the out-of-access path this module claims does not exist. Checked directly while
+   writing this test, not assumed: an assertion on the *alert outcome* alone cannot catch that
+   regression — `alerts.py::record_match`'s own independent per-referent recheck
+   (`graph.get_node(node_id, recipient)`, always against the true owner) suppresses the leak at
+   the alert either way, so a leak-outcome-only test passes whether or not `graph.match` itself
+   was ever called with the wrong principal. The test instead wraps the real adapter
+   (`_PrincipalRecordingGraph`) to record the actual `principal` argument `graph.match` receives,
+   the only thing that pins the invariant the task named rather than a downstream proxy for it.
 
    **What 6b does not build:** no `app.py` routes for creating a hotlist or turning a pattern into
    a monitor (nothing yet calls `HotlistStore.create`/`MonitorStore.create` except this stage's own
@@ -2194,39 +2211,46 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
   it should be fixed or split). Owning phase: **Phase 8** — same closing-pass home as the
   gate-hygiene entries above it.
 
-- **RE-SCOPED, Stage 6b's own carry-over 2 from 6a: `_soundex` is not an incidental test-fixture
-  finding — it is a live defect in `Person` resolution, reachable by an entirely ordinary
-  hyphenated British surname, checked precisely rather than assumed from the original digit-
-  bearing marker.** `packages/ontology/default.yaml` declares exactly one `resolution:` block in
-  the whole ontology, on `Person`: `blocking: [soundex(family_name), year(date_of_birth)]` — the
-  only call site. Checked directly against `phonetics.soundex()` itself, isolating what actually
-  triggers it (the original finding's "hyphen and digits" framing was broader than the true
-  cause): **the hyphen alone is sufficient, no digit needed.** `soundex("smith-jones")`,
-  `soundex("o-brien")`, `soundex("d-artagnan")`, `soundex("jean-luc")` all raise the identical
-  `IndexError: string index out of range`; `soundex("obrien")`/`soundex("mercer")` (no hyphen) do
-  not. A double-barrelled surname (Smith-Jones, Taylor-Wood) is unremarkable in UK population
-  data specifically — the demographic this platform's own UK law-enforcement handling scheme
-  targets — not a synthetic edge case. `resolve_entity_type("Person", ...)` (`services/resolve/
-  resolver.py:60` calling `duckdb_setup.new_connection()`, which registers the UDF Splink's
-  compiled blocking SQL then calls once per row) fails for the **entire population being
-  resolved**, not merely the one affected row — Splink compiles blocking into one SQL statement
-  over the whole population, and DuckDB's own UDF exception aborts that statement outright. This
-  is called from both the manual "resolve now" route and the automatic post-ingest hook
-  (`06_DECISIONS.md` ADR-025, Phase 7 Stage 1, already live) — so a single hyphenated-surname
-  `Person` entering the corpus, from any ingest, fails corpus-wide `Person` resolution outright
-  from that point on (the job itself fails cleanly, per `worker.py`'s own exception handling —
-  not a crash of the worker process, but resolution for every `Person`, hyphenated-surname or
-  not, silently stops completing). Every existing fixture in `tests/resolve/` uses a plain
-  alphabetic family name (`"Mercer"`, `"Ahmed"`), which is why this was never hit before.
-  **Not fixed here** — resolver-internals work orthogonal to Stage 6b's own scope (alert
-  evaluation) and owed its own test-first treatment, not a one-line change bundled into an
-  unrelated stage. Owning phase: **Phase 8, raised in severity from the original "incidental"
-  framing** — this blocks a core, already-shipped feature (corpus-wide `Person` resolution)
-  against ordinary data, not a hardening nicety; a deployment ingesting real UK population data is
-  likely to hit it on the first hyphenated surname it processes. Fix shape unchanged: `_soundex`
-  should guard against, or `resolve_entity_type` should sanitise before, whatever character class
-  `phonetics.soundex()` cannot handle, proven by a case using exactly `"smith-jones"` (the real
-  failing shape, not a synthetic one) rather than assumed fixed by inspection.
+- **FIXED, Stage 6b's own carry-over 2 from 6a, closed rather than left re-scoped.** The finding
+  stood as written through this stage's first report — a live defect in `Person` resolution,
+  reachable by an entirely ordinary hyphenated British surname, not an incidental test-fixture
+  finding. `packages/ontology/default.yaml` declares exactly one `resolution:` block in the whole
+  ontology, on `Person`: `blocking: [soundex(family_name), year(date_of_birth)]` — the only call
+  site. `resolve_entity_type` (`services/resolve/resolver.py:60` calling `duckdb_setup.
+  new_connection()`, which registers the UDF Splink's compiled blocking SQL then calls once per
+  row) failed for the **entire population being resolved**, not merely the one affected row —
+  Splink compiles blocking into one SQL statement over the whole population, and DuckDB's own UDF
+  exception aborted that statement outright — called from both the manual "resolve now" route and
+  the automatic post-ingest hook (`06_DECISIONS.md` ADR-025, Phase 7 Stage 1, already live).
+
+  **Checked broader than a hyphen before fixing it, not fixed narrowly first and widened later:**
+  `phonetics.soundex()` indexes its digit table with `ord(c) - ord('a')` for every character after
+  the first, with no bounds check, so *any* character outside `a`-`z` raises the identical
+  `IndexError` — confirmed directly for an apostrophe (`o'brien`), an internal space
+  (`van der berg`), digits (`smith2`) and an accented letter (`müller`), not only a hyphen. A fix
+  scoped to hyphens alone would have left `O'Brien`/`O'Neill` — at least as ordinary a UK surname
+  shape — still crashing.
+
+  **Fix:** `services/resolve/duckdb_setup.py`'s `_soundex` now sanitises before calling
+  `phonetics.soundex` — Unicode-normalises and folds accents to their base letter (`müller` blocks
+  as `muller`, not as the accent-stripped `mller`), then strips anything still outside `a`-`z`, and
+  returns `None` (the same "no blocking key" result an empty/`None` input already produced) if
+  nothing letter-shaped survives, rather than a new failure mode. No other blocking or comparison
+  function in the registry (`packages/ontology/resolution_functions.py`'s `BLOCKING_FUNCTIONS`/
+  `COMPARISON_FUNCTIONS`) shares this fragility, checked directly rather than assumed: `exact` and
+  `year` compile to plain DuckDB SQL with no custom function at all, and `jaro_winkler`/
+  `levenshtein` resolve to Splink's own `comparison_library` constructors
+  (`services/resolve/splink_config.py`) — `soundex` was the only registered function backed by
+  bespoke Python indexing code.
+
+  Proven: `tests/resolve/test_duckdb_setup.py` (seven cases directly against `_soundex` — hyphen,
+  apostrophe, space, digits, accent-folding, punctuation-only input, and that a hyphenated and its
+  unhyphenated spelling still share a blocking key) and
+  `tests/resolve/test_resolver.py::test_a_hyphenated_family_name_does_not_crash_the_entire_
+  resolution_pass`, the reachable-path proof: confirmed to fail with the pre-fix code (a
+  `SplinkException` wrapping the same `IndexError`) and to pass with the fix, including a third,
+  unrelated `Person` in the same pass to prove the *population-wide* failure mode is gone, not only
+  the one hyphenated row.
 
 ---
 

@@ -26,12 +26,14 @@ from services.api.evaluation import (
 from services.api.hotlists import HotlistStore
 from services.api.monitors import MonitorStore
 from services.api.pattern_store import PatternStore
+from services.resolve.trigger import service_principal
 from valkey.asyncio import Valkey
 
 from adapters.graph_arcadedb.testing import arcadedb_adapter
 from conduit_common.identity import new_id
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
+from ports.graph import GraphPort
 from schemas.domain import (
     EdgeWrite,
     Handling,
@@ -43,6 +45,7 @@ from schemas.domain import (
     Provenance,
     ProvenanceState,
     SourceRef,
+    Subgraph,
 )
 
 OWNER = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
@@ -231,15 +234,22 @@ async def test_a_hotlist_match_visible_to_its_owner_writes_a_full_alert(
         assert matching[0].referent_node_ids == [node_id]
 
 
-async def test_a_hotlist_match_outside_the_owners_access_produces_nothing_in_strict_and_notify(
+async def test_a_hotlist_match_outside_the_owners_access_leaks_nothing_in_strict_or_notify(
     hotlist_store, alert_store, audit, valkey
 ) -> None:
-    """The named test the Stage 6b task itself calls for: a hotlist match the evaluator's own
-    unscoped `service_principal` read can see, but the hotlist's own owner cannot (a different
-    `owning_unit`, a `classification` above `OWNER`'s own clearance), must produce nothing under
-    `policy="strict"` and a content-free alert under `policy="notify"` — mirroring
-    `test_alerts.py`'s own `test_notify_mode_alert_contains_no_referent_its_recipient_cannot_read`,
-    but exercised through the evaluator's own hotlist-matching path, not `record_match` directly."""
+    """The named test the Stage 6b task itself calls for. **Renamed from the original
+    `..._produces_nothing_in_strict_and_notify`**: that name read as "nothing is produced in
+    either mode," which is false and would mislead a future reader into thinking notify mode
+    suppresses the alert row the same way strict does — it does not (ADR-038's own point of
+    having two modes at all). What this test actually asserts, checked line by line below: under
+    `policy="strict"` nothing is produced at all (no alert row, matching `test_alerts.py`'s own
+    `test_a_suppressed_strict_match_writes_no_alert_row`); under `policy="notify"` one alert *is*
+    produced, but it leaks nothing — `referent_node_ids == []` and neither the node id nor the
+    matched identifier appear anywhere in the serialised alert, mirroring `test_alerts.py`'s own
+    `test_notify_mode_alert_contains_no_referent_its_recipient_cannot_read`. A hotlist match the
+    evaluator's own unscoped `service_principal` read can see, but the hotlist's own owner cannot
+    (a different `owning_unit`, a `classification` above `OWNER`'s own clearance) — exercised
+    through the evaluator's own hotlist-matching path, not `record_match` directly."""
     ontology = load_default_ontology()
     scheme = load_uk_le_scheme()
     identifier = f"+44-hotlist-hidden-{uuid.uuid4().hex[:10]}"
@@ -421,6 +431,102 @@ async def test_a_monitor_alert_is_always_visible_since_the_match_is_already_owne
         assert len(matching) == 1
         assert matching[0].mode.value == "full"
         assert set(matching[0].referent_node_ids) >= {person_id, endpoint_id}
+
+
+class _PrincipalRecordingGraph:
+    """Wraps a real `GraphPort` adapter, delegating every call unchanged except `match`, whose
+    `principal` argument it records before delegating on. This is the only reliable way to pin
+    which principal `evaluate_monitors_for_entry` actually used: asserting on the *alert outcome*
+    alone cannot distinguish "never used a broader principal" from "used one, but `alerts.py`'s
+    own independent per-referent recheck in `record_match` (`graph.get_node(node_id, recipient)`,
+    always against the true recipient) suppressed the leak anyway" — checked directly while
+    designing this test, not assumed: substituting a broader principal into the `graph.match` call
+    still produced zero alerts, because that second, independent check catches it too. Real
+    defense in depth, but it means a leak-outcome-only test would pass unchanged even if this
+    function started matching under the wrong principal — silently exercising the "match found
+    under a broader principal, then suppressed" path this module's own docstring says does not
+    exist for a monitor at all, rather than the "no broader principal, nothing to suppress" path
+    it claims to be on. This wrapper observes the actual argument, not a downstream proxy for it."""
+
+    def __init__(self, real: GraphPort) -> None:
+        self._real = real
+        self.match_principals: list[Principal] = []
+
+    async def match(self, pattern: PatternQuery, principal: Principal) -> Subgraph:
+        self.match_principals.append(principal)
+        return await self._real.match(pattern, principal)
+
+    def __getattr__(self, name: str):  # noqa: ANN001, ANN204 - delegating proxy
+        return getattr(self._real, name)
+
+
+async def test_a_monitor_never_evaluates_with_a_principal_broader_than_its_owner(
+    monitor_store, pattern_store, alert_store, audit, valkey
+) -> None:
+    """Pins an invariant of today's code as a test, not left as a property that happens to hold:
+    `evaluate_monitors_for_entry`'s own docstring says a monitor alert is always visible because
+    `GraphPort.match` is always run as the owner's own principal — that is true only as long as
+    nothing inside this function ever substitutes a broader one in. `service_principal` (the same
+    corpus-wide, all-seeing identity `evaluate_hotlists_for_entry` deliberately *does* use,
+    `06_DECISIONS.md` ADR-038's own addendum) is exactly the "obvious future efficiency" a later
+    change might reach for — matching once against the broadest principal rather than once per
+    monitor owner. `_PrincipalRecordingGraph` above records exactly which principal reached
+    `graph.match`, so this test fails if that principal is ever anything but the monitor's own
+    saving analyst — not only if a leak happens to reach the alert, which `record_match`'s own
+    independent recheck can mask regardless of what `graph.match` was called with.
+
+    `principal_for_owner` here resolves only `OWNER` — Postgres is shared across the whole test
+    run with no per-test reset (`test_pattern_store.py`'s own established discipline), so
+    `monitor_store.list_all_active()` also returns every other test's own leftover monitors, some
+    owned by ids this function has no reason to recognise. Those are skipped via the already-proven
+    "unresolvable owner" behaviour (`test_a_hotlist_with_no_resolvable_owner_principal_is_skipped_
+    not_run_as_a_stale_one`), so `graph.match` is only ever reached for the monitor this test
+    itself created — not an assumption that the store happens to be empty."""
+    ontology = load_default_ontology()
+    scheme = load_uk_le_scheme()
+    saved = await pattern_store.save(
+        OWNER, pattern_id=None, name="Evaluator fixture principal pin", definition=_pattern()
+    )
+    monitor = await monitor_store.create(OWNER, pattern_id=saved.pattern_id)
+
+    async with arcadedb_adapter(ontology, scheme) as graph:
+        tx = await graph.begin_transaction()
+        (person_id, endpoint_id) = await graph.upsert_nodes(
+            [
+                _person_write("Principalpinfixture", owning_unit=OWNER.org_unit),
+                _endpoint_write(f"+44-{uuid.uuid4().hex[:8]}", owning_unit=OWNER.org_unit),
+            ],
+            tx,
+        )
+        await graph.commit_transaction(tx)
+        tx = await graph.begin_transaction()
+        await graph.upsert_edges(
+            [_uses_edge(person_id, endpoint_id, owning_unit=OWNER.org_unit)], tx
+        )
+        await graph.commit_transaction(tx)
+
+        recording_graph = _PrincipalRecordingGraph(graph)
+        await evaluate_monitors_for_entry(
+            _entry([]),
+            graph=recording_graph,
+            monitor_store=monitor_store,
+            pattern_store=pattern_store,
+            alert_store=alert_store,
+            audit=audit,
+            valkey=valkey,
+            principal_for_owner=lambda owner_id: OWNER if owner_id == OWNER.id else None,
+        )
+
+        assert recording_graph.match_principals, (
+            "graph.match was never called — the setup above is wrong, not the invariant"
+        )
+        broader = service_principal(scheme)
+        for used in recording_graph.match_principals:
+            assert used.id == OWNER.id, (
+                f"monitor {monitor.id} evaluated with principal {used.id!r}, not its own "
+                f"owner {OWNER.id!r}"
+            )
+            assert used.id != broader.id
 
 
 async def test_a_monitor_alerts_once_per_match_set_and_again_only_when_it_changes(

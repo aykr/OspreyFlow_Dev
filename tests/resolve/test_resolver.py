@@ -110,3 +110,21 @@ def test_a_soundex_variant_still_blocks_together(_run: int) -> None:
     candidates = resolve_entity_type(nodes, PERSON_TYPE)
     assert len(candidates) == 1  # soundex(Mercer) == soundex(Marcer): blocked together
     assert candidates[0].score > 0.0
+
+
+def test_a_hyphenated_family_name_does_not_crash_the_entire_resolution_pass() -> None:
+    """`07_BUILD_PLAN.md`'s own Stage 6b carry-over 2, proven through the real reachable path, not
+    only against `_soundex` in isolation: before the fix, `resolve_entity_type` raised `IndexError`
+    for the *entire population* the moment any one `Person` in it had a hyphenated family name —
+    `Smith-Jones` is ordinary UK data, not a constructed edge case. A third, unrelated node is
+    included so this also proves the crash's own blast radius: with the fix, an unrelated `Person`
+    resolves normally in the same pass as the hyphenated one, not merely alone."""
+    nodes = [
+        _person("n1", "Smith-Jones", "Dana", "1980-01-01"),
+        _person("n2", "Smith-Jones", "Dana", "1980-01-01"),
+        _person("n3", "Okafor", "Susan", "1975-03-03"),
+    ]
+    candidates = resolve_entity_type(nodes, PERSON_TYPE)  # must not raise
+    pairs = {frozenset((c.node_a, c.node_b)) for c in candidates}
+    assert frozenset({"n1", "n2"}) in pairs
+    assert not any({"n3"} <= pair for pair in pairs)

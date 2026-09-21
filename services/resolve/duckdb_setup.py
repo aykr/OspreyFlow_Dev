@@ -3,18 +3,50 @@ scalar UDF DuckDB itself lacks. Confirmed directly, not assumed: `SELECT soundex
 against a bare DuckDB connection raises `Catalog Error: Scalar Function with name soundex does not
 exist!`. `phonetics` (MIT) is already a transitive dependency of `splink==3.9.9` itself, so this
 adds no new dependency.
+
+**`_soundex` sanitises its input — fixed, not merely disclosed, `07_BUILD_PLAN.md`'s own
+Stage 6b carry-over 2.** `phonetics.soundex` indexes a 27-character digit table with
+`ord(c) - ord('a')` for every character after the first, with no bounds check: any character
+outside `a`-`z` — a hyphen, an apostrophe, a space, a digit, an accented letter — makes that
+either negative or too large and raises `IndexError: string index out of range`, not a graceful
+skip. `Person.family_name` is exactly where this was reachable (`packages/ontology/default.yaml`'s
+one `resolution:` block blocks on `soundex(family_name)`), and a hyphenated or apostrophised
+surname is ordinary UK data, not an edge case — confirmed directly: `smith-jones`, `o-brien`,
+`o'brien`, `van der berg` and `müller` all crashed the unmodified function, not only a hyphen.
 """
 
 from __future__ import annotations
 
+import re
+import unicodedata
+
 import duckdb
 import phonetics
 
+#: What survives sanitisation before `phonetics.soundex` ever sees it — everything else in the
+#: alphabet the digit table actually indexes.
+_NON_ALPHA = re.compile(r"[^a-z]")
+
 
 def _soundex(value: str | None) -> str | None:
+    """Accents are folded to their base letter (`unicodedata` NFKD decomposition, dropping the
+    combining marks), not merely discarded along with everything else — `müller` blocks as
+    `muller` would, not as `mller`, which a same-surname pair spelled with and without the umlaut
+    would otherwise fail to share. Anything left that still isn't `a`-`z` (a hyphen, an apostrophe,
+    a space, a digit) is stripped outright: `phonetics.soundex` has no notion of any of them, and
+    `docs/01_DOMAIN_MODEL.md` already treats `soundex(family_name)` as an approximate blocking key,
+    not an identity comparison — Splink's own comparison step, not this key, is what re-checks a
+    pair blocked together. `None` if nothing letter-shaped survives (an empty value, or one that
+    is entirely punctuation/digits) — the same "no blocking key" result `not value` already
+    returns for an empty/`None` input, not a new failure mode this fix introduces."""
     if not value:
         return None
-    return str(phonetics.soundex(value.lower()))
+    folded = unicodedata.normalize("NFKD", value.lower())
+    ascii_only = folded.encode("ascii", "ignore").decode("ascii")
+    letters = _NON_ALPHA.sub("", ascii_only)
+    if not letters:
+        return None
+    return str(phonetics.soundex(letters))
 
 
 def new_connection() -> duckdb.DuckDBPyConnection:
