@@ -1321,6 +1321,43 @@ findable only from whichever phase happened to notice it.
   Phase 5's own `playback`/`multi-track` deferral sat unread in a component header for four phases
   before this document named it.
 
+- **The class the entry above is one instance of, stated at its own level rather than left implicit:
+  a conformance suite in this repository binds every *registered* adapter to one shared contract; a
+  hand-written local test double, because it is never registered anywhere, bypasses that binding
+  entirely and answers to nothing but whatever the one test file that defines it happens to assert.**
+  Three concrete citations, not all the same kind of drift, which is the point — the class is
+  "un-bound double," not "access-control double" specifically:
+  - `_NullExtractionCandidateStore` (this session's own Part A, `test_phase6_exit_criterion_end_to_
+    end`) — **interface drift.** The real `ExtractionCandidateStore` contract gained
+    `store_document_text` in Phase 6a Stage 4; this local double, defined once inside
+    `tests/scenarios/test_phase6_extraction_and_resolution.py` and registered nowhere, was never told.
+  - `FakeGraphPort` (`tests/services/api/working_set/fakes.py`) — **behavioural drift**, the entry
+    above's own instance one: it ignores `principal` on `expand`, so every test built on it proves
+    `compute_clusters`' logic against input the fake declares safe by construction, never the
+    filtering that safety actually depends on.
+  - The `review.py`/`set_resolution_threshold`/`explain_cluster` fakes (instances two through four,
+    above) — **silent-pass drift**: each kept returning a plausible result on either side of a real
+    access-control fix, because the fake never ran the query the fix changed at all.
+  Every one of these is a different failure shape (a missing method, an ignored parameter, an
+  entirely bypassed query), which is exactly why "write more fakes carefully" does not close the
+  class — carefulness is a property of one double at the moment it is written, not of the class over
+  the life of the contract it stands in for.
+
+  **What would have to be true for a double to be *covered*, stated as a criterion rather than a
+  hope.** Either (a) the double is registered in the same adapter registry a conformance suite
+  already iterates (`tests/conformance/registry.py`'s own `GraphAdapterFactory`/
+  `AnalyticsAdapterFactory`/`ComputeAdapterFactory` shape — the same registration `06_DECISIONS.md`
+  ADR-028's own Tier 1 compute entry uses for a non-database adapter, so "double" and "conformance-
+  registered" are not mutually exclusive), and made to pass the same suite real adapters do for the
+  properties it is relied on to simulate; or (b) a standalone parity test asserts the double's own
+  behaviour matches a real adapter's for the *specific* property under test (the shape
+  `test_resolution_threshold_access_control.py` and `test_manual_resolution_access_control.py`
+  already use — composing the real adapter's own filtering with the pure logic under test, rather
+  than trusting the double). Neither exists today for any double named above; a double with neither
+  is unbound, and unbound is the actual defect, not any one double's own specific miss. **Not fixed
+  here — recorded as a class, owning phase Phase 8**, the same close-of-build hardening pass this
+  session's other disclosed gaps (A1, A2 above) already land in.
+
 - **`deltaClient.integration.test.ts`'s own harness (`apps/workspace/test/glass_test_server.py`,
   its `seedOneNode` helper) cannot exercise any resolution endpoint that checks real node
   existence — `manual_link`/`manual_split`/`set_resolution_threshold` all now do, correctly, via
@@ -1590,6 +1627,24 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
   assigned a concrete mechanism** — this entry exists so it is not silently discovered as a sixth
   OOM incident.
 
+  **Follow-up, checked rather than assumed: nothing retries a `paths()` call after the Conduit's
+  own 30s client-side timeout expires — not the Conduit, not the Glass, not a proxy (none exists;
+  `deploy/` has no reverse proxy or gateway in front of `services/api`).** `ArcadeDBClient.command()`
+  (`client.py:239-265`, which `gremlin()` calls and `paths()` calls that) is a single `await self.
+  _http.post(...)` with no `try`/`except` and no loop around it — contrast `commit_transaction`
+  (`client.py:168-209`) and `schema.py`'s DDL apply, both of which *do* retry on a classified-
+  transient failure with backoff; reads through `command()`/`gremlin()` have no equivalent. On the
+  Glass side, `GlassCanvas.tsx`'s `findPaths` (`GlassCanvas.tsx:575-581`) is a single bare `fetch()`
+  with no retry wrapper anywhere in `apps/workspace/src` (`grep -rn "retry" apps/workspace/src`
+  returns nothing outside this search itself). **So the specific compounding-load risk this
+  follow-up was checked for does not exist today** — a slow query is not currently multiplied by a
+  client retrying against a server still working through the first attempt. One adjacent, smaller
+  finding from the same read, noted rather than expanded into its own entry: `findPaths`'s own
+  `if (!response.ok) return;` means a timed-out/failed `paths()` call — including the bare `500`
+  A1 above already names — is dropped silently on the Glass side too, with no retry *and* no
+  analyst-visible error; the same disclosure A1 already gives the Conduit side applies here without
+  a separate entry.
+
 - **`Path.nodes`/`Path.edges`' on-path node styling is not colour-only, checked directly rather than
   assumed from the WCAG 1.4.1 concern that prompted the check.** `nodeAttributes.ts:128-134`:
   `state.onPath` sets `{ borderColor: TEXT_PRIMARY_DARK_HEX, borderSize: 2 }` where an unmarked node
@@ -1605,7 +1660,20 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
   selected is distinguished from a merely-selected one by colour alone. That is a real but narrow
   case (both states already reduce to "this node is currently notable" for an analyst), not the
   on-path/not-on-path distinction WCAG 1.4.1 is actually about, which the dimming and ring-presence
-  channels both already cover. No gap recorded; no code change made.
+  channels both already cover.
+
+  **Addendum: the on-path/selected pair on its own is still a colour-only distinction and is still
+  WCAG 1.4.1, even though it is narrow and low-severity.** `computeNodeGraphAttributes`
+  (`nodeAttributes.ts:105-137`) gives both states the identical `borderSize: 2` and differs only in
+  `borderColor` — for the one pair of states this applies to, colour is the sole visual means of
+  distinguishing them, which is exactly what 1.4.1 prohibits regardless of how many other states
+  are involved or how minor the practical consequence. **Disclosed gap, owning phase Phase 8.** Not
+  fixed here: `02_GLASS_FRONTEND.md` §1.1/§4 is the authoritative statement of this surface's own
+  interaction-state vocabulary (nine channels, three provenance strokes, six interaction states),
+  and a size/shape distinction added only for this one pairing is a change to that vocabulary, not
+  a local code tweak — a spec decision (which non-colour channel, and whether it belongs on the
+  on-path state, the selected state, or both) rather than something to pick unreviewed. Recording
+  it, not choosing for the spec's own owner.
 
 - **The `PathBuilder`'s own `elementMap()`-inside-`path()` ArcadeDB limitation is already recorded
   correctly, not only as a workaround-site comment.** ADR-033 (`06_DECISIONS.md`) is the primary
@@ -1632,11 +1700,13 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
   record that decision explicitly as an ADR addendum at that point. Recording the gap is not owning
   it; this entry gives it a phase.
 
-- **The two currently-failing tests this session found while re-establishing a clean baseline
-  (`docker compose down -v` then a single `make dev-up` then one full, uninterrupted `make test`
-  run — not layered on top of a prior run's leftover state, which produced a noisier, misleading
-  count on the first attempt) are named here for the first time; neither had an owning phase before
-  this entry.**
+- **Two items this session found while re-establishing a clean baseline** (`docker compose down -v`
+  then a single `make dev-up` then one full, uninterrupted `make test` run — not layered on top of a
+  prior run's leftover state, which produced a noisier, misleading count on the first attempt) **are
+  named here for the first time; neither had an owning phase before this entry. One is a genuine
+  test failure; the other, re-scoped below, is an unverified architectural claim rather than a
+  failing test — the two are different in kind and should not be counted together as "two failing
+  tests" past this point.**
   - `tests/scenarios/test_phase6_extraction_and_resolution.py::test_phase6_exit_criterion_end_to_end`
     — `AttributeError: '_NullExtractionCandidateStore' object has no attribute
     'store_document_text'` (`services/api/review.py:363`, inside `run_extraction`). This is
@@ -1650,14 +1720,27 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
     re-run the closing-pass suite to confirm the underlying OOM-sensitivity notes above are the only
     remaining known flakiness for this test.
   - `tests/services/api/test_statelessness.py::test_a_second_process_continues_an_investigation_the_
-    first_was_killed_mid` — `httpcore.ConnectError: [Errno 61] Connection refused`, raised from
-    `map_exceptions` during a real HTTP call this test makes to a second, separately-spawned
-    process. Not previously named anywhere in this document. Owning phase **Phase 8**: needs
-    someone to determine, with process-level tracing (not a re-run — the failure was consistent
-    across the clean baseline run this entry is built on, not intermittent within it), whether the
+    first_was_killed_mid` — re-scoped from "failing test" to what it actually is. This test exists
+    to prove a specific, named architectural claim — its own docstring cites it directly:
+    `03_CONDUIT_MIDDLEWARE.md` §1, "Any Conduit instance can serve any request for any session;
+    kill one mid-investigation and the analyst notices nothing." Two real `uvicorn` processes, the
+    first `Popen.kill()`-ed outright, the second sent the rest of the same scripted session and
+    required to continue it seamlessly — this is the *only* proof anywhere in the repository of
+    that sentence; nothing else exercises it. It currently cannot run in this environment
+    (`httpcore.ConnectError: [Errno 61] Connection refused`, raised from `map_exceptions` during
+    the real HTTP call this test makes to its own second, separately-spawned process) — and while
+    it cannot run, **statelessness is an asserted, unverified architectural claim, not a confirmed
+    property with one failing regression test against it.** Those are different findings with
+    different urgency: a failing test on a working property is a test-scaffolding problem; an
+    unrunnable proof of a load-bearing architectural sentence (the same sentence Phase 5a's own
+    Publish-route gap, §370-382 above, already leans on when it says horizontal scaling is "not yet
+    correct" for a different reason) is a verification gap in the claim itself. Owning phase
+    **Phase 8**: needs process-level tracing (not a re-run — the failure was consistent across the
+    clean baseline run this entry is built on, not intermittent within it) to determine whether the
     refused connection is this test's own process-spawn/port-binding mechanism failing under
-    whatever host or sandbox it is run in, or a real statelessness regression; recorded as failing
-    and unexplained rather than assumed to be either.
+    whatever host or sandbox it is run in, or a real statelessness regression — until that
+    determination is made, treat `03_CONDUIT_MIDDLEWARE.md` §1 as unverified in this environment,
+    not as verified-and-then-regressed.
 
 ---
 
