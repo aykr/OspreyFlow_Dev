@@ -43,7 +43,7 @@ confirmed.
 | 029 | Neither compute tier can run Leiden; both run Louvain with a connected-components fix | | **Accepted** — 20 Sep 2026 |
 | 030 | `PatternQuery` widened for a pinned second root; `match()` does not work on ArcadeDB | | **Accepted** — 20 Sep 2026 |
 | 031 | The repository splits into `spec/` and `process/`; `docs/` is dissolved at Phase 8's close | | **Accepted, scheduled** — 20 Sep 2026 |
-| 032 | The visual query builder is a list/palette editor, not a second drawing canvas | | **Accepted** — 20 Sep 2026 |
+| 032 | The visual query builder is a list/palette editor, not a second drawing canvas | | **Accepted, partially implemented** — 20 Sep 2026, save/version scoped to Stage 4, not yet built |
 | 033 | `Path.nodes`/`Path.edges` carry hydrated objects, not bare ids | | **Accepted** — 20 Sep 2026 |
 | 034 | Publication and licence boundary; supersedes ADR-031 | | **Accepted** — 21 Sep 2026 |
 | 035 | Demo distribution classes (`shipped`/`internal`); Fixture Corp is the shippable demo | | **Accepted** — 21 Sep 2026, one item declined as written |
@@ -51,15 +51,20 @@ confirmed.
 | 037 | Monitor trigger model and execution bounds | | **Accepted, amended** — 21 Sep 2026 |
 | 038 | Hotlist membership and existence | | **Accepted, two-mode deployment policy** — 21 Sep 2026 |
 | 039 | Alert inbox lifecycle | | **Accepted, two additions** — 21 Sep 2026 |
+| 040 | Pattern sharing and query-definition disclosure | | **Proposed** — 21 Sep 2026 |
 
 Thirty-nine records (001–039) are accepted, including all seven overrides of the input documents.
 ADR-036 through ADR-039 were drafted Proposed and accepted in the same session, two (037, 038)
 with changes from their own first draft recorded in place rather than rewritten silently — see
 each record's own amendment/decision section. ADR-036's acceptance is contingent on pattern
-persistence, built in the same session that accepted it. `07_BUILD_PLAN.md`'s Phase 7 Stage 6
-entry is cross-referenced to this block. This table lagged the actual record count for a stretch
-of Phase 7 (ADR-022 through ADR-029 were written but never added here) — caught and closed in the
-same change that added ADR-030, not worth its own record.
+persistence, scoped to Stage 4 and built later in the same session that accepted it (Part 3).
+ADR-040 is **Proposed**, not accepted —
+it presents three options for pattern sharing without deciding one, and pattern sharing is not
+built until it is accepted; a saved pattern is readable only by its own owner until then.
+`07_BUILD_PLAN.md`'s Phase 7 Stage 6 entry is cross-referenced to ADR-036–039, and its Phase 7
+Stage 4 known-gaps entry is cross-referenced to ADR-032 and ADR-040. This table lagged the actual
+record count for a stretch of Phase 7 (ADR-022 through ADR-029 were written but never added here)
+— caught and closed in the same change that added ADR-030, not worth its own record.
 
 One record carries a stated review point. ADR-018 is accepted on the understanding that the
 Ingest Studio's interface will be reviewed once it renders, and that the review may change it —
@@ -2372,7 +2377,13 @@ moving, the same reasoning that sets this timing in the first place.
 
 ## ADR-032 — The visual query builder is a keyboard-native list/palette editor, not a second drawing canvas; `02_GLASS_FRONTEND.md` §3.3 is corrected to match
 
-**Status.** Accepted, 20 September 2026.
+**Status.** Accepted, 20 September 2026. **Partially implemented — recorded explicitly here
+because this record had been reading as done.** Stage 4 (20 September 2026) built compose, preview
+and run only. Save and version are scoped to Stage 4's own unfinished business and are built
+**later in the same session** that accepts ADR-036–039 (Part 3, not yet landed as of this
+acceptance) — see the updated paragraph below and `07_BUILD_PLAN.md`'s Phase 7 Stage 4 known-gaps
+entry, both to be updated again once Part 3 closes. Sharing is deferred to ADR-040, Proposed, not
+accepted — a saved pattern remains readable only by its own owner until that record is decided.
 
 **The premise.** `02_GLASS_FRONTEND.md` §3.3 specifies the visual query builder as "a
 node-and-edge pattern the analyst draws" — language that reads, and was built against elsewhere in
@@ -2450,21 +2461,28 @@ requirement — this ADR is that check, arriving after the implementation rather
 same change that adds this record: "draws" becomes "composes," describing the palette/pin/connect
 list editor `QueryBuilderPanel.tsx` actually is, not the canvas the original phrasing implied.
 
-**On "saveable, shareable and versioned," the same bullet's own third promise.** Checked separately
-and found not built at all, in any of the three: `PatternQuery` has no persistence path, no owner
-or share target, and no version history — Stage 4 built the compose/preview/run loop only. B19's
-own assertion does not need any of the three (it is a one-shot expand-and-return), but B20's does
-("save the pattern as a monitor"), and B20 is named in Phase 7's own exit criterion alongside B19.
-Saving-as-a-monitor (B20, Stage 6's own hotlist/saved-pattern-monitor bullet) and saving a pattern
-as a reusable, shareable, versioned object in its own right (this bullet's own promise) are related
-but not the same capability — a monitor is one specific consumer of a saved pattern, not a
-demonstration that generic save/share/version exists. Recording this in `07_BUILD_PLAN.md`'s own
-Phase 7 known-gaps list rather than treating Stage 6 as an automatic answer to it.
+**On "saveable, shareable and versioned," the same bullet's own third promise — updated 21
+September 2026, not left as originally drafted.** At first checked and found not built at all, in
+any of the three: `PatternQuery` had no persistence path, no owner or share target, and no version
+history — Stage 4 built the compose/preview/run loop only. **Save and version are scoped to be
+built next, in Part 3 of this same session, not yet built as of this entry:** a `PatternQuery`
+will be saveable, loadable, listable and versionable, with an owner field satisfying ADR-036's own
+contingency, once that work lands. **Sharing is not built** — a saved pattern is readable only by
+its own owner — and stays that way until ADR-040 (pattern sharing and query-definition disclosure,
+Proposed) is accepted; ADR-040 records why sharing is a distinct leak from the result-time leaks
+ADR-038 already settled for hotlists. B19's
+own assertion does not need any of the three (it is a one-shot expand-and-return); B20's does
+("save the pattern as a monitor"), and save/version is what B20 actually needed — sharing was
+never B20's own requirement, only this bullet's separate, broader promise. **This gap now lives in
+`07_BUILD_PLAN.md`'s Phase 7 Stage 4 known-gaps entry, not Stage 6's** — a monitor is one specific
+consumer of a saved pattern (Stage 6's own concern), not the same thing as generic save/share/
+version existing (Stage 4's own unfinished bullet), and the two should not be scoped together a
+second time.
 
-**Cost.** One corrected word in `02_GLASS_FRONTEND.md` §3.3, this record, and a new Phase 7
-known-gaps entry for the still-unbuilt save/share/version promise. No code changes — the
-implementation this ADR describes already exists and is already tested; nothing here proposes
-redoing it.
+**Cost.** One corrected word in `02_GLASS_FRONTEND.md` §3.3 (20 September), this record, real
+implementation work for save/load/list/version still to come (Part 3 of this same session —
+`07_BUILD_PLAN.md`'s Stage 4 entry to be updated once it lands), and a residual, still-open gap for
+sharing, priced separately once ADR-040 is decided.
 
 **Revisit if.** ADR-030's own pinned-root mechanism is superseded by a general multi-root join
 (that ADR's own "revisit if"), at which point the pattern shapes this builder must represent grow
@@ -3382,5 +3400,89 @@ only a backend check.
 changes what "an alert exists at write time" means — at which point Addition 1's dependency on
 ADR-038 needs re-checking alongside it, the same coupling this record already declares rather than
 hides.
+
+---
+
+## ADR-040 — Pattern sharing and query-definition disclosure: proposed, decide nothing
+
+**Status.** Proposed, 21 September 2026. Three options are presented below, in the same shape
+ADR-038's own first draft used; none is decided. The owner chooses. **Pattern sharing is not
+built until this record is accepted** — Part 3 of this session builds save/load/list/version/owner
+only; a saved `PatternQuery` is readable exclusively by its own owner until this ADR settles how,
+or whether, that changes.
+
+**The leak, distinct from anything ADR-038 already settled.** ADR-038 governs a *result-time*
+leak: whether a match's existence is disclosive to a principal who cannot see the matched data. A
+saved pattern is a different object with a different leak surface. `02_GLASS_FRONTEND.md` §3.3's
+own compiled shape (ADR-030's `MatchBuilder`) means a saved `PatternQuery` *is* a literal
+specification — named entity types, named attribute values, the connecting edge types — the
+query's own text says things like "`Person` where `employer` = 'Acme Corp'" regardless of whether
+the query ever returns a single matching row. Sharing that object with a second principal
+discloses those literal values through the *query definition itself*, independent of whether the
+recipient could ever see a node the query matches, or whether it matches anything at all. This is
+not covered by any decision this session has already made: ADR-038's modes govern what a
+*recipient of a fired alert* observes about a *match*; nothing governs what a *recipient of a
+shared pattern* observes about the *pattern's own text*.
+
+**Option (a) — patterns are never shared as query definitions; a share is a saved *view* of a
+result (a count, or a redacted result set), never the underlying pattern.**
+- *What the recipient observes.* An outcome — "12 potential matches as of &lt;date&gt;" — with no
+  visibility into what entity types, attribute values or edge shapes produced it.
+- *What leaks.* Nothing about the query definition. The result-count itself can still be
+  disclosive in the way ADR-038 already treats existence/count leaks generally, but that is
+  ADR-038's own concern, not a new one this option introduces.
+- *What it costs to build.* A second object type (a shared *view*, distinct from the pattern
+  itself) with its own, narrower schema; the recipient can never refine or re-run the query
+  themselves, only re-request a fresh snapshot from the owner — a real capability loss against
+  "share a pattern" read literally.
+- *The test that would prove it.* `test_shared_pattern_view_never_exposes_underlying_attribute_
+  constraints` — share a view derived from a pattern naming a specific attribute value; assert no
+  field the recipient can read (list, detail, export) contains that value or any other literal
+  from the pattern's own definition.
+
+**Option (b) — the full pattern definition is shared, but only to a principal whose own access
+already covers every literal the pattern names.**
+- *What the recipient observes.* The full pattern, exactly as the owner built it, including every
+  entity type, attribute value and edge constraint — but only ever in a case where the recipient's
+  own clearance already entitles them to see equivalent information, so nothing is disclosed to
+  them that their own access did not already permit.
+- *What leaks.* Nothing new — the share adds convenience (a ready-made query) rather than
+  visibility, by construction.
+- *What it costs to build.* The most engineering work of the three: a clearance-comparison check
+  at share time, comparing the recipient principal's own access against every literal value and
+  entity type named in the pattern, using the existing `HandlingScheme` dominance-order machinery
+  (the same mechanism ADR-025's `SAME_AS`-handling-inheritance and ADR-038's declined option (c)
+  both already reuse) rather than inventing a second one. Needs a precise definition of "covers"
+  for an attribute *value* specifically, which the dominance order was designed for node/edge
+  *classification*, not literal predicate values — real, undesigned work, flagged as such rather
+  than assumed to fall out of the existing mechanism for free.
+- *The test that would prove it.* `test_pattern_share_rejected_when_recipient_access_does_not_
+  cover_a_named_value` — attempt to share a pattern naming a value outside the recipient's own
+  clearance; assert the share is refused, not silently narrowed.
+
+**Option (c) — the full pattern definition is shared unconditionally, to any principal the owner
+names, as a deliberate, audited act by the owner rather than a system-enforced gate.**
+- *What the recipient observes.* The full pattern, exactly as built, regardless of their own
+  clearance relative to its literals.
+- *What leaks.* Potentially everything in the pattern's own definition, to whoever the owner
+  chooses — deliberately, on the reasoning that the owner (a cleared analyst who already knows the
+  values in their own pattern) could disclose the same fact verbally or by any other channel this
+  system does not control, so gating the share itself adds friction without closing a leak that
+  exists outside the system regardless.
+- *What it costs to build.* The least gating logic of the three — no clearance comparison needed
+  — but it requires the same audit discipline ADR-038's `notify` mode already established: every
+  share recorded with owner, recipient and pattern id, so a security function can be shown what
+  was disclosed and by whom, the same "cannot demonstrate to a customer's security function what
+  the system did" concern ADR-038 already named.
+- *The test that would prove it.* `test_pattern_share_is_audited_with_owner_recipient_and_
+  pattern_id` — share a pattern; assert an audit record exists naming the owner, the recipient
+  and the pattern id, independent of whatever access either principal holds.
+
+**Cost.** None of the three is built. This record is design and ownership only, the same shape
+ADR-038's own first draft used before the owner decided between (a) and (b) there.
+
+**Revisit if.** Not applicable in the ADR-025 sense — this record decides nothing, so there is
+nothing yet to revisit. Whichever option the owner accepts should carry its own "revisit if" at
+that point, the same discipline ADR-038's own decision section applied.
 
 ---

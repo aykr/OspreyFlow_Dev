@@ -955,17 +955,24 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
 3. **`adapters/compute_rustworkx` and the metrics panel.**
 4. **The visual query builder** — `01_DOMAIN_MODEL.md` §8.1's own pattern-binding-rule question
    (flagged since Phase 3, still unresolved) settled here, before an analyst is put in front of a
-   canvas drawing arbitrary patterns.
+   canvas drawing arbitrary patterns. **Unfinished business, moved here from Stage 6's own scope
+   21 September 2026:** ADR-032's own "saveable, shareable and versioned" promise for
+   `PatternQuery` was left two-thirds unbuilt after this stage first shipped compose/preview/run —
+   save, load, list, version and owner are this stage's own gap, not a monitor feature, and belong
+   here rather than inside Stage 6 (see the known-gaps entry below and ADR-032's own updated
+   record). Sharing is out of scope pending ADR-040 (Proposed, not accepted).
 5. **The pathfinder.**
 6. **Hotlists, saved-pattern monitors, alert inbox** — genuinely demonstrable only once Stage 1
-   exists. **Blocked on ADR-036 through ADR-039 (`06_DECISIONS.md`), all four Proposed, not
-   accepted, as of 21 September 2026.** Four design questions the acceptance-table assertions for
-   B12–B14/B20 do not themselves settle — monitor principal identity (ADR-036), monitor trigger
-   model and execution bounds (ADR-037), hotlist membership and existence (ADR-038, presented as a
-   contradiction between B13's own text and standing rule 3, not a gap), and alert inbox lifecycle
-   (ADR-039) — each drafted with its own proposed answer, the test that would retire it, and its
-   cost, per `CLAUDE.md` rule 12's own discipline. None decided; Stage 6 does not start until the
-   owner accepts, amends, or rejects each.
+   exists. **ADR-036 through ADR-039 (`06_DECISIONS.md`) are Accepted, 21 September 2026** —
+   monitor principal identity (ADR-036), monitor trigger model and execution bounds (ADR-037,
+   amended to a unified change stream), hotlist membership and existence (ADR-038, decided as a
+   deployment-level `strict`/`notify` policy switch), and alert inbox lifecycle (ADR-039, accepted
+   with two additions) are no longer open decisions. **Stage 6 remains blocked on one thing:
+   pattern persistence**, moved to Stage 4's own known-gaps entry above rather than left inside
+   this bullet — ADR-036's own owning-principal reference has nowhere to live and a monitor has
+   nothing to save until Stage 4's save/load/list/version work lands. Stage 6 itself does not
+   start building monitor evaluation, hotlist alerting or the alert inbox until that dependency
+   closes.
 
 **Exit.** Acceptance scenario B, scoped to B1 (its two-CDR-files half only; the device-extraction
 half stays unowned, ADR-027), B2–B5, B7, B12, B13 (via a CDR-carried hotlisted identifier, not the
@@ -1061,17 +1068,23 @@ disclose something — this list did not exist before Stage 1 found it needed on
   registers in Phase 8a's `cluster` profile instead — Phase 7's own exit criterion's "all three
   compute tiers return identical values within tolerance" is therefore demonstrated for two tiers
   inside this phase, not three, disclosed here rather than silently narrowed.
-- **`02_GLASS_FRONTEND.md` §3.3's "Patterns are saveable, shareable and versioned" is not built, in
-  any of the three.** Stage 4 (the visual query builder, `06_DECISIONS.md` ADR-032) built compose,
-  preview and run; `PatternQuery` has no persistence path, no owner or share target, and no version
-  history. Not covered by Stage 6 either, though it looks adjacent: B20 ("save the pattern as a
-  monitor," this phase's own exit criterion alongside B19) needs Stage 6's own hotlist/saved
-  -pattern-monitor mechanism specifically — a monitor is one consumer of a saved pattern, not a
-  demonstration that generic save/share/version exists for a pattern an analyst simply wants to
-  keep or hand to a colleague without scheduling it. Needs its own scoping decision (a stage inside
-  Phase 7, or carried into whichever later phase gets a general saved-object/sharing mechanism, if
-  one is ever generalised past this one bullet) rather than being assumed closed once Stage 6 ships
-  B20.
+- **`02_GLASS_FRONTEND.md` §3.3's "Patterns are saveable, shareable and versioned" — scoped 21
+  September 2026, save/version queued for the same session's Part 3, recorded here rather than
+  left as the open question the paragraph below originally posed.** Stage 4 (the visual query
+  builder, `06_DECISIONS.md` ADR-032) built compose, preview and run only, on 20 September;
+  `PatternQuery` had no persistence path, no owner or share target, and no version history.
+  **The scoping decision:** this is Stage
+  4's own unfinished business, not Stage 6's — a monitor (Stage 6's own concern) is one consumer of
+  a saved pattern, not a demonstration that generic save/share/version exists, and B20 ("save the
+  pattern as a monitor") only ever needed save/version, never sharing. Moved to Stage 4's own
+  bullet above accordingly. **Save, load, list and version are scoped to be built next**, in Part
+  3 of the same session that accepted ADR-036–039 — not yet built as of this entry; an owner field
+  on every persisted pattern is what closes ADR-036's own contingency. This entry is updated again
+  once Part 3 lands. **Sharing is not built and stays out of scope pending ADR-040**
+  (`06_DECISIONS.md`, Proposed, not accepted) — a saved pattern will be readable only by its own
+  owner until that record is decided, because sharing a pattern's own query definition (named
+  entity types and literal attribute values) is a distinct leak from anything a fired match
+  already discloses, per ADR-040's own reasoning.
 
 ---
 
