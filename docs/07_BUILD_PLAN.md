@@ -1510,6 +1510,119 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
   to re-generate descriptive ones. A stale name could mislead a reader following it to a specific
   named group; it cannot cause `query`/`path`/`explain` to return the wrong nodes.
 
+- **`GraphArcadeDBAdapter.paths()`'s two-query hydration (ADR-033) has no defined behaviour if the
+  graph mutates between the traversal and the hydration queries, and nothing tests it.** Found
+  during Stage 5's own post-hoc verification. `adapter.py:506-517` builds each `Path` by indexing
+  straight into the `nodes_by_id`/`edges_by_id` dicts the hydration queries returned
+  (`nodes=[nodes_by_id[i] for i in node_ids]`) with no membership check first. If an element the
+  traversal already returned an id for is deleted, or a principal's access to it changes (a
+  handling reclassification, an `owning_unit` change), before the hydration query runs a few
+  milliseconds later, that id is simply absent from the hydration result and the dict lookup raises
+  a bare `KeyError` — **not** a silently short path (rule 2 would forbid that anyway) but also not a
+  typed, caller-meaningful error: `services/api/app.py`'s `paths_route` (§1524) has no
+  `except`/`exception_handler` for it, and neither does `app.py`'s own exception-handling block
+  (§600 onward, which has a named handler for every other domain error), so it falls through to
+  FastAPI's default handling — an undifferentiated `500`. No test exercises this: `tests/
+  conformance/graph_port/test_suite.py`'s own path tests (`test_paths_finds_the_chain_and_respects_
+  max_hops`, `test_paths_returns_hydrated_nodes_and_edges_not_bare_ids`,
+  `test_unauthorised_path_length_matches_a_graph_without_the_hidden_hop`) all traverse a static
+  graph; grepping the suite for "race"/"concurrent"/"mutat" returns nothing. **Owning phase: Phase
+  8.** The fix shape is a typed error (`PathStaleError` or similar, alongside the domain errors
+  `app.py` already names) raised when a hydration id goes missing, proven by a conformance case that
+  deletes (or reclassifies) a path element between the two queries and asserts the typed error, not
+  a `KeyError`/bare `500` — the same "name the test that would fail" discipline rule 12 asks for
+  every stated invariant.
+
+- **Nothing bounds the *work* a `paths()` traversal does — only its inputs (`max_hops<=8`, `k<=10`)
+  and its output (`.limit(k)`).** Checked directly: `PathBuilder.render_gremlin`
+  (`builders.py:265-281`) compiles a bare `repeat().until()` Gremlin traversal with no `timeLimit()`
+  or step-count modulator; `ArcadeDBClient`'s own `httpx.AsyncClient` (`client.py:104-108`) sets
+  `timeout=30.0`, which is a *client-side* socket/read timeout — abandoning the HTTP connection
+  after 30s, not a server-side query budget — so a runaway traversal keeps consuming ArcadeDB's own
+  heap after the Conduit gives up on it. The only actual ceiling is the container's fixed JVM heap
+  (`deploy/compose/dev.yaml`'s `arcadedb` service, `-Xmx6G`), and that ceiling is already documented
+  to fail under load: the same file's own comment records two concurrent conformance suites OOM'ing
+  at the unset ~2GB default, a single sequential HMP graph build OOM'ing at 4G, and `ollama`'s
+  resting footprint OOM-killing ArcadeDB repeatedly in Phase 6 Stage 6 — `07_BUILD_PLAN.md`'s own
+  Phase 6 known-gaps list (§647-668) and this document's "Gaps with no owning phase" entries record
+  a fourth and (with `test_statelessness`'s Postgres-exhaustion incident) fifth occurrence of the
+  same class. An 8-hop `repeat()`/`simplePath()` traversal over a dense neighbourhood — exactly the
+  shape a real corpus can produce and a fixture graph is unlikely to — is unbounded work with no
+  budget between the request boundary and the JVM's own OOM killer. Disclosed rather than fixed
+  here: no owning phase claims a server-side traversal budget (a Gremlin `timeLimit()` step, or an
+  ArcadeDB-level query-cost ceiling) today: **flagged for Phase 8's own hardening scope, not yet
+  assigned a concrete mechanism** — this entry exists so it is not silently discovered as a sixth
+  OOM incident.
+
+- **`Path.nodes`/`Path.edges`' on-path node styling is not colour-only, checked directly rather than
+  assumed from the WCAG 1.4.1 concern that prompted the check.** `nodeAttributes.ts:128-134`:
+  `state.onPath` sets `{ borderColor: TEXT_PRIMARY_DARK_HEX, borderSize: 2 }` where an unmarked node
+  gets `{ borderColor: "transparent", borderSize: 0 }` — a ring that is *absent* for an off-path
+  node and *present* at size 2 for an on-path one is a shape/size channel, not colour. It is also
+  not the dominant cue: `GlassCanvas.tsx:207`'s `dimmed: dimmedNodeIds.has(nodeId) || (pathActive &&
+  !onPath)` means every node not on the active path is dimmed to a 32% channel-colour mix
+  (`computeNodeGraphAttributes`'s own `mixOklab(channelHex, SURFACE_PANEL_DARK_HEX, 32)`), the same
+  lightness-contrast cue `nodeAttributes.ts:163-168`'s own comment names as "the dominant 'everything
+  else' cue for a found path," with edge thickening layered on top. One precise caveat, not a gap:
+  the on-path ring is visually identical in *size* (2px) to the `selected` ring — they differ only
+  by hue (`TEXT_PRIMARY_DARK_HEX` vs `BRASS_HEX`) — so a node that is simultaneously on-path and
+  selected is distinguished from a merely-selected one by colour alone. That is a real but narrow
+  case (both states already reduce to "this node is currently notable" for an analyst), not the
+  on-path/not-on-path distinction WCAG 1.4.1 is actually about, which the dimming and ring-presence
+  channels both already cover. No gap recorded; no code change made.
+
+- **The `PathBuilder`'s own `elementMap()`-inside-`path()` ArcadeDB limitation is already recorded
+  correctly, not only as a workaround-site comment.** ADR-033 (`06_DECISIONS.md`) is the primary
+  record — the same "checked against a live instance, not assumed from the TinkerPop spec"
+  discipline ADR-030's `match()` finding established first. `builders.py:251-261`'s own `PathBuilder`
+  docstring cites it by name (`` `06_DECISIONS.md` ADR-033 ``), so a reader who only ever opens the
+  adapter still finds the full record. No move needed; this entry exists only to confirm the check
+  was made rather than assumed, per this session's own A4.
+
+- **The pathfinder (`POST /v1/paths`, ADR-033) appears in no acceptance scenario, and that gap has
+  been disclosed (`07_BUILD_PLAN.md` §978-991, Phase 7's own exit-criterion note) but never
+  owned.** That note explains *why* Phase 7 can close without it (standing rule 9) and draws the
+  parallel to hotlists/saved-pattern monitors — but that parallel does not actually hold past
+  Phase 7's own close: hotlists/monitors get B20 to run against once Stage 6 lands, inside Phase 7
+  itself, while nothing anywhere commits the pathfinder to ever gaining a scenario step. Checked
+  directly, not assumed: unlike the pathfinder, both of the other two corpus-wide query surfaces the
+  Stage 5 code comment (`app.py:1509-1521`) compares itself to — `/v1/search` (B4, B5, B7) and
+  `/v1/patterns/*` (B19) — are themselves exercised by named acceptance-scenario steps, so
+  "permanently accepted, the same class as `/v1/search`" is not available as a disposition here; the
+  precedent it would lean on does not support it. **Owning phase: Phase 8.** Concretely: either add
+  a step to Scenario B (a B21, in the same "journey" table `08_ACCEPTANCE_SCENARIOS.md` §105
+  already uses) that exercises `POST /v1/paths` end to end through the Glass, or — if the owner
+  judges the pathfinder to be a general-purpose tool like search rather than a scenario-bound step —
+  record that decision explicitly as an ADR addendum at that point. Recording the gap is not owning
+  it; this entry gives it a phase.
+
+- **The two currently-failing tests this session found while re-establishing a clean baseline
+  (`docker compose down -v` then a single `make dev-up` then one full, uninterrupted `make test`
+  run — not layered on top of a prior run's leftover state, which produced a noisier, misleading
+  count on the first attempt) are named here for the first time; neither had an owning phase before
+  this entry.**
+  - `tests/scenarios/test_phase6_extraction_and_resolution.py::test_phase6_exit_criterion_end_to_end`
+    — `AttributeError: '_NullExtractionCandidateStore' object has no attribute
+    'store_document_text'` (`services/api/review.py:363`, inside `run_extraction`). This is
+    interface drift, not the OOM-driven flakiness this same test's name already carries three dated
+    incident notes for (§647-668 above): Phase 6a Stage 4 added `store_document_text` to the real
+    `ExtractionCandidateStore` contract (the Dossier's "message content renders... in place" work),
+    and this closing-pass scenario test's own local `_NullExtractionCandidateStore` fake was never
+    updated to implement it. A real, fixable bug in test scaffolding, not a product defect — not
+    fixed in this session (verification only), owning phase **Phase 8**, fix shape: add
+    `store_document_text` to the fake (a no-op is sufficient, matching what the name promises) and
+    re-run the closing-pass suite to confirm the underlying OOM-sensitivity notes above are the only
+    remaining known flakiness for this test.
+  - `tests/services/api/test_statelessness.py::test_a_second_process_continues_an_investigation_the_
+    first_was_killed_mid` — `httpcore.ConnectError: [Errno 61] Connection refused`, raised from
+    `map_exceptions` during a real HTTP call this test makes to a second, separately-spawned
+    process. Not previously named anywhere in this document. Owning phase **Phase 8**: needs
+    someone to determine, with process-level tracing (not a re-run — the failure was consistent
+    across the clean baseline run this entry is built on, not intermittent within it), whether the
+    refused connection is this test's own process-spawn/port-binding mechanism failing under
+    whatever host or sandbox it is run in, or a real statelessness regression; recorded as failing
+    and unexplained rather than assumed to be either.
+
 ---
 
 ## Standing rules for the whole build
