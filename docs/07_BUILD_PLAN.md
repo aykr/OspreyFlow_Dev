@@ -2252,6 +2252,19 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
   unrelated `Person` in the same pass to prove the *population-wide* failure mode is gone, not only
   the one hyphenated row.
 
+- **NEW, found while closing the entry above, not fixed by it: an entirely non-Latin-script family
+  name still crashes the whole `Person` resolution pass, same blast radius as the hyphen defect,
+  different mechanism.** Full reasoning and reproduction: `01_DOMAIN_MODEL.md` §4's own "Splink
+  configuration" section, in the note right after the accent-folding record. One line here: the fix
+  above sanitises down to `None` when nothing letter-shaped survives sanitisation (a fully Chinese,
+  Cyrillic, Arabic, etc. family name), and DuckDB's own UDF registration — `null_handling='DEFAULT'`
+  by construction, no argument overriding it — forbids a UDF from ever returning `NULL` for a
+  non-`NULL` input, so `resolve_entity_type` raises `SplinkException` the moment one such `Person`
+  exists anywhere in the population, not only "every non-Latin name silently blocks with every
+  other one" as first suspected. Owning phase: **Phase 8**, alongside the resolver-internals work
+  the fix above was already filed under. Named test, not written un-owned:
+  `test_a_non_latin_family_name_does_not_crash_the_entire_resolution_pass`.
+
 ---
 
 ## Standing rules for the whole build
