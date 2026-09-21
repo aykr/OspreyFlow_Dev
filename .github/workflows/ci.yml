@@ -252,6 +252,22 @@ jobs:
       # `06_DECISIONS.md` ADR-036/037/038) — Postgres for the first two, plus ArcadeDB and Valkey
       # for `test_evaluation.py` (the match itself, the overlap-guard lock, the monitor dedup
       # signature).
+      # Fifteen more, found and added the same session as the reconciliation above (Phase 7 Stage
+      # 6b's own read-before-building pass) — every one already runs against nothing but the four
+      # stores this job already stands up (ArcadeDB, Valkey, Postgres, MinIO), so joining this job
+      # cost no new service and no new job, only these lines. All 15 were run as a set for the
+      # first time as part of that check and all 15 passed — not assumed safe to add, confirmed.
+      # Seven prove an access-control invariant (`test_access.py`, `test_dossier_access_control.py`,
+      # `test_projection_access_control.py`, and the four `working_set/test_*_access_control.py`
+      # files) and had been unverified in any CI job until now — the highest-consequence entries in
+      # this list, per CLAUDE.md rule 4 ("every read path gets an access-control test. No
+      # exceptions"). `test_match_live.py` is `services/geocoder/match.py`'s own real-adapter proof
+      # (an ontology-validation gap a fake could not catch, `07_BUILD_PLAN.md`'s own precedent for
+      # why this class of file matters). `test_trigger.py` is the corpus-wide resolution trigger's
+      # own correctness (locking, `service_principal` scoping). `test_phase6a_glass_surfaces.py` is
+      # Phase 6a's own exit-criterion scenario (B6/B9/B10/B11) end to end. `test_review.py`/
+      # `test_review_store.py`/`test_studio_recipes_store.py` are Postgres-store/business-logic
+      # correctness; `test_prefetch.py`/`test_tile_cache.py` are MinIO round-trip correctness.
       - run: >-
           uv run pytest tests/conformance/graph_port tests/ingest
           tests/services/api/test_valkey_store.py
@@ -265,6 +281,21 @@ jobs:
           tests/services/api/test_hotlists.py
           tests/services/api/test_monitors.py
           tests/services/api/test_evaluation.py
+          tests/geocoder/test_match_live.py
+          tests/resolve/test_projection_access_control.py
+          tests/resolve/test_trigger.py
+          tests/scenarios/test_phase6a_glass_surfaces.py
+          tests/services/api/test_access.py
+          tests/services/api/test_dossier_access_control.py
+          tests/services/api/test_prefetch.py
+          tests/services/api/test_review.py
+          tests/services/api/test_review_store.py
+          tests/services/api/test_studio_recipes_store.py
+          tests/services/api/test_tile_cache.py
+          tests/services/api/working_set/test_compute_access_control.py
+          tests/services/api/working_set/test_explain_cluster_access_control.py
+          tests/services/api/working_set/test_manual_resolution_access_control.py
+          tests/services/api/working_set/test_resolution_threshold_access_control.py
       - run: npm ci
       # `deltaClient.integration.test.ts` (Phase 4) spawns the real
       # `services.api.app` (`apps/workspace/test/glass_test_server.py`)
@@ -283,6 +314,57 @@ jobs:
   # MinIO step already works around, here for two containers instead of one.
   conformance-model:
     runs-on: ubuntu-latest
+    # ArcadeDB + Valkey, added to unlock `test_phase6_extraction_and_resolution.py` — the one file
+    # needing ArcadeDB, Valkey and Ollama/LiteLLM together, a combination neither this job nor
+    # `conformance` individually provided (`07_BUILD_PLAN.md`'s own "Gaps with no owning phase"
+    # entry). Added here, not as a new job, so the addition is marginal against this job's own
+    # already-paid Ollama/LiteLLM setup cost rather than paying both setups from scratch. Deliberately
+    # *not* Postgres/MinIO: the target test needs neither (`_NullExtractionCandidateStore`, no real
+    # Postgres round trip). `-Xmx4G` matches `conformance`'s own ArcadeDB sizing exactly, not raised
+    # for this job specifically — `deploy/compose/dev.yaml`'s own documented ArcadeDB/Ollama
+    # memory-contention incident (six local OOM-kills across this build, per that file's own comment)
+    # is exactly the risk of running both together, so this starts at the already-proven-sufficient
+    # value rather than guessing a runner needs more.
+    #
+    # **Watched for contention before committing to this, not assumed safe — held.** Simulated
+    # locally on a machine with a comparable memory budget to a standard hosted runner (~7.6GB):
+    # a fresh ArcadeDB at this exact `-Xmx4G`, alongside the already-running Ollama/LiteLLM/speaches
+    # containers, ran the target test in isolation, then twice more back to back, then the full real
+    # command this job actually runs below (all 11 tests together) — four separate invocations, all
+    # passed, no `OOMKilled`, ArcadeDB settling around 4.0-4.2GB (near but not over its own ceiling)
+    # rather than growing unbounded, total footprint leaving real headroom under the budget. Kept on
+    # that evidence. If this destabilises on the actual runner despite the local read, revert this
+    # block and the run-list line below, restore `--ignore=tests/scenarios/test_phase6_extraction_
+    # and_resolution.py` to the `test` job, and record the failure mode in `07_BUILD_PLAN.md` rather
+    # than silently reverting — the next person to consider this extension should not repeat the
+    # simulation blind.
+    services:
+      arcadedb:
+        image: arcadedata/arcadedb:24.11.1
+        ports:
+          - 2480:2480
+        env:
+          JAVA_OPTS: "-Darcadedb.server.rootPassword=playwithdata123"
+          ARCADEDB_OPTS_MEMORY: "-Xms1G -Xmx4G"
+        options: >-
+          --health-cmd "curl -sf -u root:playwithdata123 http://localhost:2480/api/v1/ready"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      valkey:
+        image: valkey/valkey:8.0
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      ARCADEDB_HOST: localhost
+      ARCADEDB_HTTP_PORT: "2480"
+      ARCADEDB_ROOT_PASSWORD: playwithdata123
+      VALKEY_HOST: localhost
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
@@ -356,6 +438,7 @@ jobs:
           --ignore=tests/conformance/model_port/test_suite_vision.py
           tests/scenarios/test_witness_statement_extraction.py
           tests/golden
+          tests/scenarios/test_phase6_extraction_and_resolution.py
 
   # `describe_image()`'s own conformance case (`docs/06_DECISIONS.md` ADR-020's Stage 2 addendum)
   # — merge-to-main only, not every PR: a vision-language model is materially heavier (1.8GB) than
@@ -411,29 +494,22 @@ jobs:
       - run: npm ci
       # Everything the `conformance`/`conformance-model` jobs above already cover against a live
       # store or a live model runs here instead against nothing — every other test runs here.
-      # **This claim was checked, not trusted, and found false at a scale well beyond the first
-      # fix** (`07_BUILD_PLAN.md`'s own gaps entry has the full incident and evidence): this job's
-      # own ignore list was a strict subset of the files that actually need a live service — first
-      # found for `test_sites_store.py`/`test_hmp_graph.py` (added to `conformance` above, excluded
-      # here to match), then, reproducing this job's exact command with every service host pointed
-      # at an unreachable address, found for 60 more test functions across 17 further files, none
-      # of which has ever run correctly in any CI job. No skip mechanism exists anywhere in this
-      # codebase (`git grep -rn 'pytest.skip\|skipif'` under `tests/`, `packages/`, `services/`
-      # returns nothing) — every one of the 60 fails or errors outright rather than passing
-      # silently, so "CI was green" for a commit including these, if it ever happened, was a red
-      # job unread, not a false pass. All 17 excluded below rather than left to fail; none is
-      # wired into a live-service job here — that is real work, owned in `07_BUILD_PLAN.md` rather
-      # than done piecemeal in this comment. `test_tile_cache.py`/`test_prefetch.py`/
-      # `test_match_live.py` were already known and deliberately left unactioned (narrower stakes,
-      # per that same gaps entry); the other 14 are new findings from this pass.
-      # `test_change_stream.py`/`test_alerts.py` were the same defect recurring a third time
-      # (Phase 7 Stage 6b's own read-before-building pass found it): added to the `conformance`
-      # job's run list in Stage 6a, but never added here, so this job would have run them against
-      # nothing and failed — undetected until now because nothing since 6a had touched this file.
-      # `test_pattern_store.py` was already correctly excluded here but, per this job's own list
-      # above, had never actually been wired into `conformance` either — fixed there, not here.
-      # `test_hotlists.py`/`test_monitors.py`/`test_evaluation.py` (Stage 6b) are excluded from
-      # first principles, the same reasoning as every file above: real Postgres/ArcadeDB/Valkey.
+      # **What is actually still excluded, current as of the reconciliation below, not the
+      # original incident report (`07_BUILD_PLAN.md`'s own gaps entry has that history in full):**
+      # fifteen of the seventeen files that entry found were added to `conformance`'s own run list
+      # above the same session this comment was rewritten — every one needed only the four stores
+      # that job already stands up (ArcadeDB, Valkey, Postgres, MinIO), so "real work, owned in
+      # `07_BUILD_PLAN.md`" overstated the actual cost of fixing most of them; that framing is
+      # exactly what left this open as long as it did. `test_golden_set.py`/
+      # `test_witness_statement_extraction.py` were already correctly wired into
+      # `conformance-model` (Ollama/LiteLLM), not orphaned — an earlier pass mis-filed them as
+      # unwired without checking that job's own run list, corrected here.
+      #
+      # **What is genuinely still excluded, and why:** `test_phase6_extraction_and_resolution.py`
+      # alone — the one file needing ArcadeDB *and* Ollama/LiteLLM *and* Valkey together, a
+      # combination neither this job nor `conformance`/`conformance-model` individually provides.
+      # See `conformance-model`'s own comment above for the outcome of extending that job to cover
+      # it (attempted the same session).
       - run: >-
           uv run pytest --ignore=tests/conformance/graph_port
           --ignore=tests/conformance/model_port --ignore=tests/golden --ignore=tests/ingest
@@ -448,14 +524,14 @@ jobs:
           --ignore=tests/services/api/test_hotlists.py
           --ignore=tests/services/api/test_monitors.py
           --ignore=tests/services/api/test_evaluation.py
+          --ignore=tests/scenarios/test_phase6_extraction_and_resolution.py
+          --ignore=tests/services/api/test_pattern_store.py
           --ignore=tests/geocoder/test_match_live.py
           --ignore=tests/resolve/test_projection_access_control.py
           --ignore=tests/resolve/test_trigger.py
-          --ignore=tests/scenarios/test_phase6_extraction_and_resolution.py
           --ignore=tests/scenarios/test_phase6a_glass_surfaces.py
           --ignore=tests/services/api/test_access.py
           --ignore=tests/services/api/test_dossier_access_control.py
-          --ignore=tests/services/api/test_pattern_store.py
           --ignore=tests/services/api/test_prefetch.py
           --ignore=tests/services/api/test_review.py
           --ignore=tests/services/api/test_review_store.py

@@ -2182,22 +2182,55 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
   list (`ci.yml`'s own comment on the job now carries the full count and reasoning); the exact
   updated command re-run against the same unreachable-service environment above now completes
   **580 passed, 0 failed, 0 errored** — the "runs against nothing" claim is true of this job now,
-  checked, not merely restored to how it read before. **Not fixed, and not in scope for this
-  entry to fix:** giving the 14 newly-found files real CI coverage (a live ArcadeDB/Postgres job,
-  the same shape `test_sites_store.py`/`test_hmp_graph.py` just received) — genuine engineering
-  work, several of these needing careful placement (the `working_set` access-control four are
-  exactly the kind of proof `07_BUILD_PLAN.md`'s own "Fake-based tests" gaps entry above says this
-  repository cannot currently claim from a fake alone). Also not fixed: `Makefile`'s own `test`
-  target carries the identical undisclosed shape — it works locally only because a developer's own
-  `make dev-up` stack is usually already running when `make test` is invoked, a dependency the
-  target's own name and this document's own "headline test count" framing have never stated.
-  Owning phase for both: **Phase 8** — wire the 14 into `conformance` (or a further job, if the
-  combined runtime/memory budget argues for splitting it — `deploy/compose/dev.yaml`'s own
-  documented ArcadeDB/Ollama memory-contention incident, and this session's own live reproduction
-  of it during Part 0, are reasons to size that job deliberately rather than pile fourteen more
-  files onto one), and decide whether `make test` should either guarantee no live-service
-  dependency (matching its own name) or have that dependency stated plainly next to every place
-  its count is quoted.
+  checked, not merely restored to how it read before.
+
+  **CLOSED, a later session the same phase: 16 of the 17 wired into `conformance`, not deferred to
+  Phase 8 after all.** The "genuine engineering work" framing directly above overstated the cost —
+  checked, not assumed, before closing it: every one of the 17 needs only ArcadeDB, Valkey,
+  Postgres or MinIO, all four of which `conformance` already stands up, so wiring them in needed no
+  new job and no new service, only the run-list lines themselves. All 15 not already handled
+  elsewhere (`test_pattern_store.py` was closed separately, above) were run as a set for the first
+  time as part of this closure and all 15 passed — confirmed safe to add, not assumed. Seven of
+  them prove an access-control invariant and had been unverified in any CI job until now:
+  `test_access.py`, `test_dossier_access_control.py`, `test_projection_access_control.py`, and all
+  four `working_set/test_*_access_control.py` files — exactly the `working_set` access-control four
+  the paragraph above named as needing "careful placement," which turned out to mean fifteen lines
+  in an existing job's run list, not new infrastructure.
+
+  **`test_phase6_extraction_and_resolution.py` — CLOSED THE SAME SESSION, extending
+  `conformance-model` rather than a new job.** The one file needing ArcadeDB *and* Ollama/LiteLLM
+  *and* Valkey together, a combination neither `conformance` nor `conformance-model` individually
+  provided. `conformance-model` already pays the Ollama/LiteLLM/speaches setup cost every run, so
+  ArcadeDB (`-Xmx4G`, matching `conformance`'s own sizing exactly, not raised) and Valkey were added
+  to that job instead of standing up a third — a marginal addition, not two setups paid from
+  scratch. **Watched for the memory contention this combination is known to cause, not assumed
+  safe:** `deploy/compose/dev.yaml`'s own ArcadeDB/Ollama note already documents six local OOM-kills
+  from this exact pairing across this build. Simulated locally before committing to it — a fresh
+  ArcadeDB at the configured heap, alongside the already-running Ollama/LiteLLM/speaches
+  containers, run four separate times (the target test alone, twice more back to back, then the
+  full 11-test command the job actually runs) — all four passed, no `OOMKilled`, ArcadeDB settling
+  around 4.0-4.2GB rather than growing unbounded across repeats, comfortable headroom left under a
+  ~7.6GB budget comparable to a standard hosted runner. Held on that evidence rather than reverted.
+  `ci.yml`'s own comment on `conformance-model` carries the full simulation detail and the revert
+  instructions if the actual runner disagrees with the local read.
+
+  **Still not fixed, still Phase 8's own scope:** `Makefile`'s own `test`/`test-all` targets are now
+  further out of sync with `ci.yml` than when this entry was first written — `test-all` still lists
+  only the original ten files' worth of live-service coverage (`tests/conformance/graph_port`,
+  `tests/conformance/model_port`, `tests/golden`, `test_witness_statement_extraction.py`,
+  `tests/ingest`, `test_phase3_working_set.py`, `test_hmp_graph.py`, `test_valkey_store.py`,
+  `test_statelessness.py`, `test_sites_store.py`, `test_tile_cache.py`, `test_prefetch.py`,
+  `test_match_live.py`), never updated for `test_change_stream.py`/`test_alerts.py`/
+  `test_pattern_store.py`/`test_hotlists.py`/`test_monitors.py`/`test_evaluation.py` (Phase 7 Stage
+  6a/6b) or any of the 15 just wired into `ci.yml`'s own `conformance` job here — meaning `make
+  test` (no ignore for any of those) would today attempt roughly twenty files against no live
+  service and fail, and `make test-all` would not actually run several of them even against a real
+  `make dev-up` stack. Not touched in this pass — out of scope for a `ci.yml`-only wiring session,
+  and `make test`/`make test-all` are a local developer convenience, not what any CI job runs.
+  Owning phase: **Phase 8**, same as before — bring `Makefile`'s own two targets back in sync with
+  `ci.yml`'s current run/ignore lists in one pass, and decide whether `make test` should either
+  guarantee no live-service dependency (matching its own name) or have that dependency stated
+  plainly next to every place its count is quoted.
 
 - **`make typecheck` was permanently red — 19 pre-existing `mypy` errors in five files, plus three
   more `tsc` errors this session found undisclosed alongside them. Fixed rather than split, same
