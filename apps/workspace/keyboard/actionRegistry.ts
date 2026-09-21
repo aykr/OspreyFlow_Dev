@@ -103,6 +103,10 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   "menu-item-find-paths",
   "path-selector-cycles-highlighted-path",
   "overlay-dismiss-pathfinder-result",
+  // A failed `/v1/paths` call is a distinguishable state from a completed zero-result search
+  // (`GlassCanvas.tsx`'s own `pathError`/`pathResult` split) — its own dismiss action, proven the
+  // same way `overlay-dismiss-pathfinder-result` already is.
+  "overlay-dismiss-pathfinder-error",
 ] as const);
 
 /**

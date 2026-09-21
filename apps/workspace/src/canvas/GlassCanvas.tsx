@@ -49,6 +49,7 @@ import { EdgeInspectionOverlay } from "./EdgeInspectionOverlay";
 import { ClusterExplainOverlay } from "./ClusterExplainOverlay";
 import { CommunityHullOverlay } from "./CommunityHullOverlay";
 import { PathfinderOverlay } from "./PathfinderOverlay";
+import { PathfinderErrorOverlay } from "./PathfinderErrorOverlay";
 import type { ClusterExplanation } from "../workingset/models";
 
 const NODE_PROGRAM = createNodeCompoundProgram<WorkingSetNodeAttributes, WorkingSetEdgeAttributes>([
@@ -183,6 +184,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
   const [pathResult, setPathResult] = useState<
     { x: number; y: number; paths: GraphPath[]; activeIndex: number } | null
   >(null);
+  // A failed `/v1/paths` call — distinguishable from `pathResult`'s own "No path found" (a
+  // completed search, zero results) rather than folded into it, since the two are different
+  // findings for the analyst (`findPaths`'s own doc comment below has the full reasoning).
+  const [pathError, setPathError] = useState<{ x: number; y: number; message: string } | null>(
+    null,
+  );
   // Read by `refreshNodeVisualState` (called from many unrelated call sites — hover, selection,
   // dimming) without threading a new parameter through every one of them; written only by the
   // effect below, keyed on `pathResult` itself. A ref, not state, because nothing here needs a
@@ -457,7 +464,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
     // `pathResult` (Phase 7 Stage 5) gets the identical exemption `inspectedEdge`/`clusterExplain`
     // already have, for the identical reason — `PathfinderOverlay` renders through the same
     // `Popover`, opened from the same radial-menu-item shape.
-    if (inspectedEdge || clusterExplain || pathResult) return;
+    if (inspectedEdge || clusterExplain || pathResult || pathError) return;
     // Tab/Shift+Tab are deliberately never intercepted here — `02_GLASS_FRONTEND.md` §6's own
     // Tab-cycling wording was corrected in Phase 7 Stage 4 (found while wiring a second
     // keyboard-driven surface beside this canvas, `07_BUILD_PLAN.md`'s own gaps entry has the
@@ -573,12 +580,25 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
   // `/seed` endpoint exactly, not a new working-set-service method. Only nodes/edges not already
   // present are sent; `/seed` itself is idempotent-by-id on the store side regardless.
   async function findPaths(nodeA: string, nodeB: string, x: number, y: number): Promise<void> {
-    const response = await fetch(`${apiBaseUrl}/v1/paths`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ source: nodeA, target: nodeB, max_hops: 6, k: 5 }),
-    });
-    if (!response.ok) return;
+    let response: Response;
+    try {
+      response = await fetch(`${apiBaseUrl}/v1/paths`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ source: nodeA, target: nodeB, max_hops: 6, k: 5 }),
+      });
+      if (!response.ok) {
+        throw new Error(`Path search failed (${response.status}). Try again.`);
+      }
+    } catch (err) {
+      // Not "No path found" (`pathResult`'s own zero-length case, a completed search) — the
+      // search did not complete at all, and folding the two together would tell the analyst
+      // something the system does not actually know (`06_DECISIONS.md` ADR-033's own "FIRST"
+      // reasoning: this searches the whole access-filtered corpus, a real claim worth getting
+      // right). Matches `patterns/api.ts`'s own `throw` shape, not `if (!response.ok) return;`.
+      setPathError({ x, y, message: err instanceof Error ? err.message : String(err) });
+      return;
+    }
     const found: GraphPath[] = await response.json();
 
     if (found.length > 0) {
@@ -619,6 +639,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
 
   function dismissPathfinderResult(): void {
     setPathResult(null);
+  }
+
+  function dismissPathError(): void {
+    setPathError(null);
   }
 
   function radialMenuItems(nodeId: string): RadialMenuItem[] {
@@ -816,6 +840,14 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
           activeIndex={pathResult.activeIndex}
           onCycle={cyclePathfinderResult}
           onClose={dismissPathfinderResult}
+        />
+      )}
+      {pathError && (
+        <PathfinderErrorOverlay
+          x={pathError.x}
+          y={pathError.y}
+          message={pathError.message}
+          onClose={dismissPathError}
         />
       )}
     </div>

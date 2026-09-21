@@ -52,6 +52,7 @@ confirmed.
 | 038 | Hotlist membership and existence | | **Accepted, two-mode deployment policy** — 21 Sep 2026 |
 | 039 | Alert inbox lifecycle | | **Accepted, two additions** — 21 Sep 2026 |
 | 040 | Pattern sharing and query-definition disclosure | | **Proposed** — 21 Sep 2026 |
+| 041 | Structural control for the fetch-then-check authorization bug class | | **Proposed** — 21 Sep 2026 |
 
 Thirty-nine records (001–039) are accepted, including all seven overrides of the input documents.
 ADR-036 through ADR-039 were drafted Proposed and accepted in the same session, two (037, 038)
@@ -61,7 +62,10 @@ persistence existing; Part 3 of the same session built it (save/load/list/versio
 unfinished business), so the contingency is satisfied and the owning-principal reference ADR-036
 needs now lives on `SavedPattern.owner_id`. ADR-040 is **Proposed**, not accepted —
 it presents three options for pattern sharing without deciding one, and pattern sharing is not
-built until it is accepted; a saved pattern is readable only by its own owner until then.
+built until it is accepted; a saved pattern is readable only by its own owner until then. ADR-041
+is likewise **Proposed**, presenting two structural options for the fetch-then-check
+authorization bug class rather than deciding one — see the record itself for why documentation
+alone (this table's own entries recording the first two occurrences) did not prevent a third.
 `07_BUILD_PLAN.md`'s Phase 7 Stage 6 entry is cross-referenced to ADR-036–039, and its Phase 7
 Stage 4 known-gaps entry is cross-referenced to ADR-032 and ADR-040. This table lagged the actual
 record count for a stretch of Phase 7 (ADR-022 through ADR-029 were written but never added here)
@@ -3489,5 +3493,114 @@ ADR-038's own first draft used before the owner decided between (a) and (b) ther
 **Revisit if.** Not applicable in the ADR-025 sense — this record decides nothing, so there is
 nothing yet to revisit. Whichever option the owner accepts should carry its own "revisit if" at
 that point, the same discipline ADR-038's own decision section applied.
+
+---
+
+## ADR-041 — Structural control for the fetch-then-check authorization bug class: proposed, decide nothing
+
+**Status.** Proposed, 21 September 2026. Two options are presented below; none is decided. The
+owner chooses. Nothing here is built — the bug class this record addresses keeps being fixed
+store-by-store, on discovery, in the meantime.
+
+**The pattern, and why documentation was tried and has now failed as the control.** A
+`get_authorized`-shaped method exists to answer one question — "does this principal own/may this
+principal see this row?" — and three times now, independently, someone has written it as: fetch
+the row unscoped (`SELECT * FROM t WHERE id = $1`), pull it fully into process memory, then compare
+`row.owning_unit` (or `owner_id`) against `principal.org_unit`/`principal.id` in Python, raising
+`NotFoundError` on a mismatch. Standing rule 3 states the requirement directly ("Access control
+lives in the adapter, injected into the traversal or the `WHERE` clause — never applied in the
+Conduit after retrieval") and this table already carries the first fix as a named record's own
+history:
+
+1. **`services/api/review.py`'s `ExtractionCandidateStore.get_authorized`** (commit `6189461`,
+   19 September 2026) — `SELECT * FROM extraction_candidates WHERE id = $1`, `owning_unit`
+   compared after fetch. Fixed to `WHERE id = $1 AND owning_unit = $2`. The fix's own commit
+   message states the reasoning that this record now generalises: "the row for a candidate outside
+   the caller's unit was pulled into process memory, in full, before anything rejected it."
+2. **The fakes that never exercised the query at all** (`07_BUILD_PLAN.md`'s "Gaps with no owning
+   phase" — the four fake-double instances). Instance two there is this exact bug class from the
+   *test* side: "the twenty-two `review.py` tests that passed identically either side of the real
+   `AND owning_unit = $2` fix" — proof that a fake-backed suite cannot catch this class at all,
+   since the fake never runs a query for the fix to be present or absent in.
+3. **`services/api/pattern_store.py`'s `PatternStore.get_authorized`, this week** — `SELECT ...
+   FROM saved_patterns WHERE pattern_id = $1`, `owner_id` compared after fetch, in a save/load/
+   list/version store built and committed in the same session that already had instance 1's own
+   commit message and this exact document's own words describing the correct shape. Found and
+   fixed in a follow-up verification pass, not by the authoring session itself.
+
+**Documentation could not have been a stronger control than it already was — it named the bug,
+the fix, and the reasoning, in a record instance 3's own author had access to, and the bug still
+shipped.** That is the actual argument for a structural control rather than a fourth instance of
+"found it, fixed it, wrote it down again."
+
+**A fourth and fifth and sixth instance already exist, found while scoping this record — not
+hypothetical.** Checked directly against every `*_authorized` method in `services/api/`, not
+assumed from the three the user named: `services/api/sites.py`'s `SiteStore.get_authorized`,
+`services/api/investigations.py`'s `InvestigationStore.get_authorized`, and
+`services/api/studio_recipes.py`'s `StudioRecipeStore.get_authorized` all currently have the
+identical shape — `get()` unscoped, then an `if record.owning_unit != principal.org_unit: raise`
+in Python. `review.py`'s two methods and (as of this session's fix) `pattern_store.py`'s are the
+only currently-compliant ones. Six methods across five files have carried this exact bug at one
+time or another; three still do, today, un-owned by any phase or record until this one.
+
+**Option (a) — a composition point: an `*_authorized` method receives its principal predicate
+from a shared helper, not from hand-written SQL text.**
+- *What it catches.* A structural requirement, not a review discipline: an `AuthorizedQuery`
+  (or similarly-named) helper each store's `get_authorized`-shaped method must construct through,
+  taking the table, the id column/value, and the principal-scoping column/value as required
+  constructor arguments — the WHERE-clause fragment and its bound parameter are assembled once,
+  centrally, and a caller cannot get a `fetchrow`/`fetch` out of the helper without supplying the
+  principal side of the predicate, the same way a required (not optional) constructor argument
+  cannot be omitted at a type level.
+- *What it costs to build.* Real design work, not a small change: this codebase's Postgres control-
+  plane stores are all hand-written `asyncpg` SQL strings with no query-builder layer to hook
+  today (unlike `GraphPort`'s adapters, which already compose through `builders.py`) — this option
+  introduces that layer for the first time, for exactly this one shape of query. It also has to
+  answer composition questions instance 3 already shows are not free: `PatternStore.get_authorized`
+  filters on `pattern_id` *and* `owner_id` *and, optionally, version* in one query — the helper
+  needs to compose a principal predicate alongside caller-supplied predicates, not replace them.
+- *Which stores need changing.* All six methods across `sites.py`, `investigations.py`,
+  `studio_recipes.py` (the three still non-compliant), plus, to keep the codebase in one shape
+  rather than two, the three already-compliant ones (`review.py`'s two, `pattern_store.py`'s one)
+  retrofitted onto the same helper rather than left as hand-written examples of the pattern the
+  helper exists to stop hand-writing.
+- *The test that would prove it.* `test_authorized_query_cannot_be_constructed_without_a_principal_
+  predicate` — attempt to build the helper's query with the principal argument omitted; assert a
+  construction-time (not runtime-query) failure, so the gap this record closes is "the shape is
+  impossible to write wrong," not "the shape is checked after being written wrong."
+
+**Option (b) — a mechanical check: a static scan fails any `*_authorized` store method whose SQL
+omits the principal parameter.**
+- *What it catches.* The literal shape all three instances share: a method named `*_authorized`
+  (this codebase's own established naming convention, `git grep`-able today) whose SQL string(s)
+  do not reference the principal-scoping bound parameter it is given. A plain script in the shape
+  `scripts/schemas_check.py`/`scripts/licence_check.py` already are — an AST walk over
+  `services/api/*.py`, not a new runtime dependency — wired into `make ci` as its own target,
+  the same "a PR adding a GPL dependency fails the build" discipline Phase 0's own exit criterion
+  already established for a different class of thing.
+- *What it costs to build.* Small and immediate compared to (a): no change to how any store
+  executes a query, no new abstraction every store must adopt — a checker that reads source text
+  and fails the build, working against the codebase as it is today. Weaker as a guarantee: it is a
+  naming-convention-dependent heuristic (a method renamed off the `*_authorized` pattern is
+  invisible to it, the same class of gap `keyboard.spec.ts`'s own hardcoded-walkthrough history
+  already taught this codebase about un-discovered new instances) and a text/AST match that a
+  principal parameter appears in a query's bound-parameter list does not prove it appears in the
+  *right* place (a query could reference `principal.id` for an unrelated column and still pass).
+- *Which stores need changing.* None, to add the check — but the check fails immediately against
+  `sites.py`, `investigations.py` and `studio_recipes.py` the moment it lands, so adopting this
+  option is itself the forcing function that fixes those three, on the same footing instance 1's
+  fix already set, rather than fixing them first and adding the check after.
+- *The test that would prove it.* `test_checker_flags_an_authorized_method_with_no_principal_
+  parameter_in_its_sql` / `test_checker_passes_a_correctly_scoped_one` — the checker's own
+  conformance pair, run against a small fixture store class in each shape, the same self-test
+  discipline `test_gpl_rejection.py` already gives `licence_check.py`.
+
+**Cost.** Neither option is built. Three stores (`sites.py`, `investigations.py`,
+`studio_recipes.py`) carry the live bug today regardless of which option is chosen, and stay that
+way until this record is accepted and acted on.
+
+**Revisit if.** Not applicable — this record decides nothing yet. Whichever option the owner
+accepts should carry its own "revisit if," the same discipline ADR-040's own decision section will
+need too.
 
 ---

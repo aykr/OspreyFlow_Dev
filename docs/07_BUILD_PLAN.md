@@ -1357,6 +1357,26 @@ findable only from whichever phase happened to notice it.
   Phase 5's own `playback`/`multi-track` deferral sat unread in a component header for four phases
   before this document named it.
 
+- **Three live, currently-unfixed instances of the fetch-then-check authorization bug class —
+  `06_DECISIONS.md` ADR-041 proposes the structural fix, this entry owns the interim state.**
+  `services/api/sites.py`'s `SiteStore.get_authorized`, `services/api/investigations.py`'s
+  `InvestigationStore.get_authorized` and `services/api/studio_recipes.py`'s
+  `StudioRecipeStore.get_authorized` all currently fetch a row unscoped (`get()`, `SELECT * ...
+  WHERE id = $1`) then compare `owning_unit` against `principal.org_unit` in Python, the identical
+  shape `services/api/review.py`'s `ExtractionCandidateStore.get_authorized` was fixed away from
+  (commit `6189461`, 19 September) and `services/api/pattern_store.py`'s `PatternStore.
+  get_authorized` was found and fixed away from this session — checked directly against every
+  `*_authorized` method in `services/api/`, not assumed. None of the three is a live vulnerability
+  today by itself (each still correctly refuses a mismatched principal, via the Python check,
+  before returning), but standing rule 3 and ADR-041's own history both name the same reason this
+  shape is worth closing regardless: the unscoped row is pulled fully into process memory before
+  anything rejects it, reachable by a log line, an exception trace or a debugger a query-scoped
+  fetch never exposes it to. Owning phase: **Phase 8**, the same as ADR-041's own resolution — once
+  ADR-041 is accepted, these three are exactly what option (a) or (b) there needs to close first
+  (option (b) fails its own CI check against all three the moment it lands; option (a) needs them
+  retrofitted onto its new composition point). Not fixed piecemeal ahead of that decision — doing
+  so by hand a fourth and fifth and sixth time is the exact pattern ADR-041 argues against.
+
 - **The class the entry above is one instance of, stated at its own level rather than left implicit:
   a conformance suite in this repository binds every *registered* adapter to one shared contract; a
   hand-written local test double, because it is never registered anywhere, bypasses that binding
@@ -1851,28 +1871,45 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
   | `tests/golden` | needs the same live LiteLLM/Ollama | `make golden-set`, `make test-all` | Yes — folded into `conformance-model` job's own pytest invocation |
   | `tests/ingest` | needs live ArcadeDB (+ MinIO for `test_staging.py`) | `make conformance`, `make test-all` | Yes — `conformance` job |
   | `tests/scenarios/test_witness_statement_extraction.py` | needs live LiteLLM/Ollama | `make conformance-model`, `make test-all` | Yes — `conformance-model` job |
-  | `tests/scenarios/test_hmp_graph.py` | needs live ArcadeDB | `make test-all` only | **No** — not named anywhere in `ci.yml` |
-  | `tests/services/api/test_sites_store.py` | needs live MinIO | `make test-all` only | **No** |
-  | `tests/services/api/test_tile_cache.py` | needs live Valkey | `make test-all` only | **No** |
-  | `tests/services/api/test_prefetch.py` | needs live Valkey | `make test-all` only | **No** |
+  | `tests/scenarios/test_hmp_graph.py` | needs live ArcadeDB | `make test-all` | **Yes, added this session** — folded into `conformance` job's own pytest invocation |
+  | `tests/services/api/test_sites_store.py` | needs live Postgres (corrected here — recorded as MinIO when this table was first written, checked directly against the file's own `PostgresConfig.from_env()` fixture) | `make test-all` | **Yes, added this session** — folded into `conformance` job's own pytest invocation |
+  | `tests/services/api/test_tile_cache.py` | needs live MinIO | `make test-all` only | **No** |
+  | `tests/services/api/test_prefetch.py` | needs live MinIO | `make test-all` only | **No** |
   | `tests/geocoder/test_match_live.py` | hits a live external geocoder | `make test-all` only | **No** |
 
-  So the honest state is split, not uniform: five of the ten (`graph_port`, `model_port`, `golden`,
-  `ingest`, `test_witness_statement_extraction.py`) run on every PR and push, via CI's own direct
-  `pytest` invocations in dedicated jobs — not via `make conformance`/`make conformance-model`
+  So the honest state, as first written here, was worse than "five of the ten never run in CI" —
+  checked precisely while acting on this same entry: this job's own `--ignore` list on the `test`
+  job was a **strict subset** of `Makefile`'s `test` target's ten, meaning `test_sites_store.py`
+  and `test_hmp_graph.py` were not merely unrun, they were **attempted by the `test` job with no
+  live store to connect to**, reproduced locally against an unreachable Postgres
+  (`ConnectionRefusedError`, no `skip` mechanism in either file) — the `test` job's own comment
+  ("every other test runs here") was not true, not merely under-disclosed. Closed for these two
+  this session: both added to the `conformance` job's pytest invocation (it already has the one
+  live service each needs — Postgres for the former, ArcadeDB for the latter) and excluded from
+  the `test` job to match, so neither is attempted twice. `test_sites_store.py` mattered most of
+  the five to close: its own module docstring names it as the one direct-Postgres proof of
+  `SiteStore`'s access control, distinct from `test_sites_routes.py`'s own fake-backed route test
+  (checked directly: that fake's `owning_unit` check is hardcoded in the fake itself,
+  `_FakeSites.get_authorized`, so it proves the fake's own logic, never the real store's query —
+  the exact class `07_BUILD_PLAN.md`'s "Fake-based tests" gaps entry above already warns about),
+  and that proof ran nowhere routinely until now. `test_hmp_graph.py` is
+  `08_ACCEPTANCE_SCENARIOS.md` Scenario A's own graph fixture.
+
+  Six of the ten now run on every PR and push (`graph_port`, `model_port`, `golden`, `ingest`,
+  `test_witness_statement_extraction.py`, and as of this session `test_hmp_graph.py`/
+  `test_sites_store.py` count as one addition each but land in the same job) — via CI's own direct
+  `pytest` invocations in dedicated jobs, not via `make conformance`/`make conformance-model`
   themselves, which is why those CI job commands and the Makefile targets of the same apparent
   purpose have quietly drifted apart (CI's `conformance-model` job also runs `tests/golden` inline;
-  `make conformance-model` does not). The other five — `test_hmp_graph.py`, `test_sites_store.py`,
-  `test_tile_cache.py`, `test_prefetch.py`, `test_match_live.py` — are reachable only by a developer
-  running `make test-all` against a `make dev-up` stack by hand; nothing in `ci.yml` runs them, ever.
-  Rule 1's suites are not the gap here — they run on every PR. The gap is that `make test`'s own
-  passing count, quoted all week as "the suite is green," has never included any of the ten, and a
-  reader of that count has no way to know five of the ten are additionally uncovered by CI too
-  without reading this table. Owning phase: **Phase 8** — either wire the five CI-dark suites into a
-  CI job (`test_match_live.py` may need an explicit "hits a real external service, nightly only"
-  carve-out rather than every-PR, the same reasoning `conformance-model-vision` already uses for
-  its own heavier model), or record explicitly, next to wherever `make test`'s count is reported,
-  which suites it excludes and which of those are and are not covered elsewhere.
+  `make conformance-model` does not — a pre-existing drift, not touched this session). The
+  remaining three — `test_tile_cache.py`, `test_prefetch.py`, `test_match_live.py` — stay
+  deliberately unactioned here: narrower stakes than the two closed above (no access-control proof,
+  no acceptance-scenario fixture behind either), reachable only via `make test-all` against a `make
+  dev-up` stack by hand, and correctly excluded by the `test` job (`--ignore`s for both already
+  present). Owning phase for these three: **Phase 8** — either wire them into a CI job
+  (`test_match_live.py` may need an explicit "hits a real external service, nightly only"
+  carve-out, the same reasoning `conformance-model-vision` already uses for its own heavier model)
+  or record explicitly, next to wherever `make test`'s count is reported, which suites it excludes.
 
 - **`make typecheck` was permanently red — 19 pre-existing `mypy` errors in five files, plus three
   more `tsc` errors this session found undisclosed alongside them. Fixed rather than split, same

@@ -591,6 +591,27 @@ test("Escape dismisses the pathfinder result overlay, reachable by keyboard alon
   registerCovered("CANVAS_ACTIONS", "overlay-dismiss-pathfinder-result");
 });
 
+test("a failed path search announces an error, distinguishable from 'No path found', and Escape dismisses it by keyboard alone", async ({
+  page,
+}) => {
+  await page.goto("/keyboard/harness.html");
+
+  await page.route("**/*/v1/paths", async (route) => {
+    await route.fulfill({ status: 500, contentType: "text/plain", body: "internal error" });
+  });
+
+  await selectN0AndN3ThenOpenMenu(page);
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByRole("alert")).toHaveText("Path search failed (500). Try again.");
+  // Not `pathResult`'s own "No path found" — the search did not complete, a different finding.
+  await expect(page.getByText("No path found")).not.toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toBeHidden();
+  registerCovered("CANVAS_ACTIONS", "overlay-dismiss-pathfinder-error");
+});
+
 test("every registered keyboard action has its own proving test case above", () => {
   assertAllCovered("CANVAS_ACTIONS", CANVAS_ACTIONS);
 });
