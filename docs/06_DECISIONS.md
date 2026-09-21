@@ -47,19 +47,19 @@ confirmed.
 | 033 | `Path.nodes`/`Path.edges` carry hydrated objects, not bare ids | | **Accepted** — 20 Sep 2026 |
 | 034 | Publication and licence boundary; supersedes ADR-031 | | **Accepted** — 21 Sep 2026 |
 | 035 | Demo distribution classes (`shipped`/`internal`); Fixture Corp is the shippable demo | | **Accepted** — 21 Sep 2026, one item declined as written |
-| 036 | Saved-pattern monitor principal identity | | **Proposed** — 21 Sep 2026 |
-| 037 | Monitor trigger model and execution bounds | | **Proposed** — 21 Sep 2026 |
-| 038 | Hotlist membership and existence | | **Proposed** — 21 Sep 2026 |
-| 039 | Alert inbox lifecycle | | **Proposed** — 21 Sep 2026 |
+| 036 | Saved-pattern monitor principal identity | | **Accepted, contingent on pattern persistence** — 21 Sep 2026 |
+| 037 | Monitor trigger model and execution bounds | | **Accepted, amended** — 21 Sep 2026 |
+| 038 | Hotlist membership and existence | | **Accepted, two-mode deployment policy** — 21 Sep 2026 |
+| 039 | Alert inbox lifecycle | | **Accepted, two additions** — 21 Sep 2026 |
 
-Thirty-five records (001–035) are accepted, including all seven overrides of the input documents.
-Four more (036–039) are **Proposed**, not accepted — drafted at the owner's request to settle four
-design questions Phase 7 Stage 6 (hotlists, saved-pattern monitors, alert inbox) needs answered
-before it is safe to build against, per each record's own reasoning, and none is decided here.
-`07_BUILD_PLAN.md`'s Phase 7 Stage 6 entry is cross-referenced to this block and states plainly
-that Stage 6 is blocked on the owner's acceptance of all four. This table lagged the actual record
-count for a stretch of Phase 7 (ADR-022 through ADR-029 were written but never added here) —
-caught and closed in the same change that added ADR-030, not worth its own record.
+Thirty-nine records (001–039) are accepted, including all seven overrides of the input documents.
+ADR-036 through ADR-039 were drafted Proposed and accepted in the same session, two (037, 038)
+with changes from their own first draft recorded in place rather than rewritten silently — see
+each record's own amendment/decision section. ADR-036's acceptance is contingent on pattern
+persistence, built in the same session that accepted it. `07_BUILD_PLAN.md`'s Phase 7 Stage 6
+entry is cross-referenced to this block. This table lagged the actual record count for a stretch
+of Phase 7 (ADR-022 through ADR-029 were written but never added here) — caught and closed in the
+same change that added ADR-030, not worth its own record.
 
 One record carries a stated review point. ADR-018 is accepted on the understanding that the
 Ingest Studio's interface will be reviewed once it renders, and that the review may change it —
@@ -2957,10 +2957,16 @@ to match, by an edit to this record, not a new ADR.
 
 ---
 
-## ADR-036 — Saved-pattern monitor principal identity: proposed, not decided
+## ADR-036 — Saved-pattern monitor principal identity: accepted as proposed
 
-**Status.** Proposed, 21 September 2026. The owner decides. Drafted at the owner's request while
-scoping Phase 7 Stage 6; nothing below is built.
+**Status.** Accepted, 21 September 2026. Accepted exactly as proposed — the saving-analyst
+principal, resolved fresh at each evaluation, stop rather than degrade on revocation — with one
+condition attached at acceptance, not a change to the reasoning: this record is **contingent on
+pattern persistence existing**, since the owning-principal reference this ADR requires has nowhere
+to live until a saved pattern is itself a persisted object. Part 3 of the same session that
+accepted this record builds that persistence (save/load/list/version/owner, no sharing); the
+owning-principal reference lives on the persisted `PatternQuery` record's own `owner` field. Until
+Part 3 lands, this ADR is accepted in principle but not yet buildable end to end.
 
 **The gap, as the spec states it.** `02_GLASS_FRONTEND.md` §3.3: "Saved-pattern monitors. A saved
 visual query run on a schedule against new data. Matches raise alerts with the same shape as
@@ -3011,10 +3017,12 @@ nothing forever with no visible state change.
   that would otherwise match and that A could previously see); assert no alert fires and the
   monitor's own state reflects "stopped," not silently active.
 
-**Cost.** Needs the saved-pattern persistence path — itself still an unbuilt gap, recorded in
-ADR-032's own known-gaps note ("Patterns are saveable, shareable and versioned" is unbuilt) — to
-carry an owning-principal reference, plus a principal-validity check at evaluation time. Real new
-surface; nothing already built decides either half of this for free.
+**Cost.** Needs the saved-pattern persistence path — recorded as an unbuilt gap in ADR-032's own
+known-gaps note ("Patterns are saveable, shareable and versioned" is unbuilt) at the time this ADR
+was drafted, closed for the save/version/owner third by Part 3 of this same session — to carry an
+owning-principal reference, plus a principal-validity check at evaluation time. The persistence
+path is now real; the principal-validity check at evaluation time is not, since no monitor
+evaluator exists yet (ADR-037 is its own separate, still-unbuilt mechanism).
 
 **Revisit if.** Monitors are ever generalised to be shared or team-owned rather than
 analyst-owned — the "shareable" third of ADR-032's own still-unbuilt promise — at which point this
@@ -3023,9 +3031,12 @@ chosen, not assumed to survive it unchanged.
 
 ---
 
-## ADR-037 — Monitor trigger model and execution bounds: proposed, not decided
+## ADR-037 — Monitor trigger model and execution bounds: accepted, amended to a unified change stream
 
-**Status.** Proposed, 21 September 2026. The owner decides.
+**Status.** Accepted, 21 September 2026, amended. The ingest-delta proposal below is the record as
+originally drafted — kept in place rather than rewritten, per this document's own discipline of
+showing what changed and why — and is superseded by the amendment at the end of this record, which
+is what was actually accepted.
 
 **The finding, stated plainly rather than resolved.** `02_GLASS_FRONTEND.md` §3.3 describes a
 saved-pattern monitor as run "on a schedule" *and* "against new data" in the same sentence. These
@@ -3089,12 +3100,69 @@ resolution-only or deletion-triggered match — at which point this record's del
 needs to widen, most likely via a periodic reconciliation pass layered on top of the ingest
 trigger, priced as its own addition rather than folded into this one silently.
 
+**Amendment, 21 September 2026 — accepted with the trigger widened from the ingest delta to the
+change delta.**
+
+**What changed and why.** The proposal above ties a monitor's evaluation to ingest alone. Checked
+against ADR-025's own design rather than assumed compatible: ADR-025's resolution trigger writes
+`SAME_AS` edges between nodes that already existed before the triggering ingest — a pattern
+requiring exactly that edge becomes newly true with no new node or edge touched by ingest itself.
+This is not an edge case of resolution; it is resolution's normal output, on every run that finds
+a match. An ingest-only trigger would mean a monitor watching for a pattern that becomes true
+through resolution never fires — not occasionally, but routinely, by construction, on every run
+where the resolution trigger (ADR-025) is the mechanism that actually completes the pattern. B11's
+own manual-link mechanism (`services/api/resolution.py`'s manual assertion, attributed provenance
+`asserted`) has the identical property: an analyst's own manual `SAME_AS` write can complete a
+pattern with no ingest involved at all.
+
+**The accepted trigger.** Ingest, the corpus-wide resolution trigger (ADR-025), and manual
+assertion (B11's mechanism) all publish to one change stream; a monitor evaluates against that
+stream, not against ingest alone. The natural substrate is the same Valkey-Streams mechanism
+ADR-025's own job queue already uses (`services/api/jobs.py`) — a second stream, not a second
+piece of infrastructure, flagged as a proposal at the implementation-detail level since nothing in
+this repository has built a corpus-wide (as against per-investigation) event stream before; the
+existing `DeltaNotice` mechanism (`03_CONDUIT_MIDDLEWARE.md` §3.2) is per-investigation-scoped and
+was already found unable to serve a corpus-wide signal by the still-open status-bar
+conflict-count gap this phase's own known-gaps list records — the same limitation would apply here
+if reused as-is, which is why this is a second stream rather than a reuse of that one.
+
+**The test that would retire this gap.** `test_monitor_fires_on_a_match_created_by_resolution_
+with_no_new_ingest` — save a pattern requiring a `SAME_AS` edge between two pre-existing nodes; run
+the resolution trigger (not ingest) so it writes that edge; assert the monitor fires. A second,
+parallel case for manual assertion: `test_monitor_fires_on_a_match_created_by_manual_link_with_
+no_new_ingest`.
+
+**The bounds, unchanged.** Concurrency, the per-evaluation cost cap and overrun behaviour stand
+exactly as already stated above — none of the three is trigger-model-specific, and A2's own
+finding (ArcadeDB has no server-side query budget) still means the cap lives in the scheduler
+regardless of what publishes to the stream a monitor watches.
+
+**What the change delta still misses, checked rather than assumed.** The original proposal flagged
+"a match created by a deletion" as a residual gap. Checked directly against two facts already
+established elsewhere in this repository, rather than left open: first, `packages/ports/graph.py`
+has no hard-delete method on `GraphPort` — the only removal mechanism this system has is
+supersession (`supersede_node`/`supersede_edge`), and a superseded element is excluded from
+ordinary reads rather than erased; a supersede call is itself a write, and a write is exactly what
+the change stream above already captures. Second, ADR-030's own `PatternQuery` compiler expresses
+only positive, present-and-connected shapes — no negation or absence constraint appears anywhere
+in its own record or in `01_DOMAIN_MODEL.md` §8.1. A pattern language with no "must not exist"
+clause cannot have a match newly created by removing something; removing an edge can only shrink a
+pattern's match set, never grow it. Put together: the deletion case the original proposal worried
+about does not exist in this system as built, because this system's only removal mechanism is
+itself a write the change stream already covers, and its query language has no shape that removal
+could ever satisfy. **Revisit if** ADR-030's own "revisit if" is ever exercised (a general
+multi-root join, or negation added to the pattern language) — at that point this finding, not
+merely the trigger-model proposal above it, needs re-checking.
+
 ---
 
-## ADR-038 — Hotlist membership and existence: a contradiction, not a gap
+## ADR-038 — Hotlist membership and existence: decided, a two-mode deployment policy
 
-**Status.** Proposed, 21 September 2026. Three options are presented below; none is decided. The
-owner chooses.
+**Status.** Accepted, 21 September 2026. The three-option analysis below is the record as
+originally drafted — kept in place, not rewritten, per this document's own discipline of showing
+what changed and why. The owner's decision, superseding "none is decided" in that analysis, is at
+the end of this record: options (a) and (b) are both built, as a deployment-level policy switch,
+not a single architectural choice; option (c) is not selected.
 
 **Why this is a contradiction, not merely an unanswered question.** Hotlists hold identifiers, not
 entities — `02_GLASS_FRONTEND.md` §3.3: "A list of identifiers with an owner and a review date."
@@ -3164,17 +3232,87 @@ identifier") could be disclosive independently of whether any match has ever fir
 rather than answered, because it is very likely to resolve the same way the owner resolves (a),
 (b) or (c) above, not independently of it.
 
-**Cost.** None of the three options is built. This record is design and ownership only.
+**Decision, 21 September 2026 — a deployment-level policy switch between (a) and (b), named
+`strict` and `notify`. Option (c) is not selected.**
 
-**Revisit if.** Not applicable in the ADR-025 sense — this record decides nothing, so there is
-nothing yet to revisit. Whichever option the owner accepts should carry its own "revisit if" at
-that point.
+**Why a switch rather than a single choice.** Whether a suppressed match or a content-free
+existence notice is the right behaviour genuinely varies by the customer's own
+information-security regime, not by anything this codebase can determine — a police force running
+this platform across units with different clearances and a bank running it across compliance
+functions do not answer "should an analyst learn a match exists that they cannot view" the same
+way, and neither answer is wrong in the abstract. This is a deployment policy with a safe default,
+not an architectural property this system should hardcode one way.
+
+**`strict` (the default).** Option (a) as drafted above: alerts fire only when the triggering
+document is within the analyst's access; a match outside it is suppressed, with no observable
+trace in the analyst's own inbox.
+
+**`notify`.** Option (b) as drafted above, with its own boundary restated precisely: an alert is
+raised stating that a match exists which the analyst cannot view. It carries no identifier
+context, no document reference and no jump target — nothing beyond the bare fact that the rule
+fired and access was insufficient to show more. This is deliberately narrower than option (b)'s
+own first draft above, which allowed the identifier the analyst already supplied to appear on the
+stub; restricting `notify` further, to carry no referent of any kind, closes the risk named in
+option (b)'s own draft — that a permissive evidence panel could reconstruct the very content the
+mode exists to withhold — at the cost of a slightly less informative stub.
+
+**Binding requirements.**
+- **Deployment-level, not per-user, and not toggleable by an analyst at runtime.** The mode is
+  configuration read once at deployment/service start, the same class of setting the demo
+  provider allowlist (`06_DECISIONS.md` ADR-035's own fail-closed provider gate) already is — not
+  a per-request parameter, not a per-hotlist setting, not something an API call can change.
+- **Fails closed.** An unset, empty or unrecognised configuration value means `strict`. **The
+  test that would prove it:** `test_hotlist_policy_defaults_to_strict_when_deployment_config_is_
+  unset` — start the service with the policy variable absent, then again with an empty string,
+  then again with an unrecognised value; assert all three behave identically to an explicit
+  `strict` in every case: a match outside the owner's access produces no alert of any kind.
+- **Audited in both modes.** Every suppressed match (`strict`) and every content-free
+  notification (`notify`) writes an audit record carrying the principal, the matched identifier,
+  and the policy mode in force at the time — the record a customer's security function would need
+  to be shown what the system did on their behalf, in either mode, including the mode that
+  produces no visible alert at all. **The test:** `test_suppressed_match_and_notify_alert_both_
+  write_an_audit_record_with_principal_identifier_and_mode` — run the same out-of-access match
+  under both configured modes; assert an audit entry exists for each, differing only in `mode` and
+  in whether an alert row also exists.
+- **`notify` must not leak through a side channel.** **The test that would catch the leak
+  reappearing through the evidence panel:** `test_notify_mode_alert_contains_no_referent_its_
+  recipient_cannot_read` — raise a `notify`-mode alert, then attempt every read this system
+  exposes against it (the alert's own detail view, its evidence panel, a `GET` by id, an export) as
+  the recipient; assert none returns a document reference, entity id, or jump target for the
+  underlying match — only the rule name and the bare "match exists, access insufficient" fact.
+
+**Option (c), recorded as not selected rather than silently dropped.** A hotlist-level handling
+ceiling remains available as a future refinement layered under whichever mode is active — a
+hotlist could, in principle, additionally decline to alert above its own declared ceiling even in
+`notify` mode — but it is not required by this decision and is not built here.
+
+**What a second analyst observes of a hotlist they do not own — settled, not deferred.** A
+non-owning analyst observes nothing: no count, no ordering, no readable membership. A hotlist that
+is not theirs does not appear in their own hotlist listing at all — indistinguishable from it not
+existing, the same standing-rule-3 discipline this system already applies everywhere else, and the
+same shape ADR-040 (below) applies to a saved pattern nobody has shared with a given principal.
+Sharing a hotlist with a second principal is out of scope of this record. **The test:**
+`test_hotlist_not_visible_to_non_owning_principal` — create a hotlist as analyst A; list hotlists
+as analyst B; assert B's result contains neither the hotlist nor any count derived from it.
+
+**Cost.** Two configured behaviours instead of one, a deployment-level config surface, an audit
+write on every match evaluation regardless of which mode is active (not only on a fired alert),
+and the non-owner-visibility check on the hotlist list endpoint. Real work, priced here rather than
+assumed free because two of the three original options turned out to be "both, switched" rather
+than "pick one."
+
+**Revisit if.** A deployment needs per-hotlist granularity rather than one deployment-wide mode —
+at which point option (c)'s handling-ceiling mechanism is the natural next layer, not a
+replacement for the switch decided here.
 
 ---
 
-## ADR-039 — Alert inbox lifecycle: proposed, not decided
+## ADR-039 — Alert inbox lifecycle: accepted as proposed, with two additions
 
-**Status.** Proposed, 21 September 2026. The owner decides.
+**Status.** Accepted, 21 September 2026. Accepted exactly as proposed — references not copies,
+access re-checked at read time — with two additions decided at acceptance, recorded below rather
+than folded silently into the original text: what resolves the residual existence question left
+open in the original draft, and what happens to an alert's own row on revocation.
 
 **The gap, as the spec states it.** `02_GLASS_FRONTEND.md` §3.3 states what an alert *contains* —
 "Every alert names the rule that fired and shows the evidence," and a hotlist alert specifically
@@ -3201,19 +3339,48 @@ inconsistency. **Proposed: this question is not answered independently here** �
 whichever of ADR-038's three options the owner accepts, applied to alerts by the same logic,
 rather than be decided a second, unrelated way in this record.
 
+**Addition 1, 21 September 2026 — the residual question above is now answered, via ADR-038's
+decision rather than a separate one.** ADR-038 decided a deployment-level `strict`/`notify` switch
+governing whether an alert is created *at all* for a match outside the recipient's own access at
+write time. That is precisely this record's residual question, restated for hotlist alerts
+specifically: under `strict`, no alert row is ever written for an out-of-access match, so there is
+nothing for this record to hide — the question does not arise. Under `notify`, a content-free
+stub *is* written and is visible to its recipient by design — that stub's own existence is the
+disclosure the mode deliberately makes, not a leak beyond what ADR-038 already accounts for and
+audits. Both cases are governed by ADR-038's own mode, not by a second, alert-specific decision —
+confirming the original draft's own instinct that these should not resolve independently of each
+other.
+
 **The test that would retire this gap.**
 `test_alert_unreadable_after_referent_access_is_revoked` — write an alert referencing a node
 visible to principal A; revoke A's access to that node (a handling change, an `org_unit`
 reassignment); read the alert by id as A; assert the evidence content the alert originally carried
 is no longer returned.
 
+**Addition 2, 21 September 2026 — what happens to the alert's own row on revocation, decided
+rather than left to Addition 1's logic by default.** Content becomes unreadable per the proposal
+above, but the alert **remains visible in the inbox, marked unavailable, rather than vanishing.**
+This is deliberately not the same answer `strict` gives at write time: `strict` prevents an alert
+existing at all for a principal who never had access, whereas this is an alert the recipient
+already had access to and already may have seen — the analyst has already been told the fact the
+alert conveyed, so leaving the row in place discloses nothing new to them. A record that silently
+disappears from an audit-bearing inbox reads as a defect and undermines trust in the inbox as a
+complete record of what fired, which is a real cost of its own, distinct from the access-control
+question the rest of this ADR is about. **The test:**
+`test_revoked_alert_remains_listed_as_unavailable_not_removed` — write an alert readable by
+principal A; revoke A's access to its referent; list A's alert inbox; assert the alert's row is
+still present and marked unavailable, and a direct read of it by id returns no evidence content
+but does not 404.
+
 **Cost.** Needs the alert store's own reference schema — not yet designed, and dependent on
 ADR-036/037's monitor design and on B13's hotlist-alert shape, so not something this record can
-price independently of those — plus a read-time access re-check hook on every alert read, which is
-real new surface, not an addition to an existing read path.
+price independently of those — plus a read-time access re-check hook on every alert read, and an
+`unavailable` display state distinct from a normal alert row, which is real new UI surface, not
+only a backend check.
 
-**Revisit if.** The owner's decision on ADR-038 settles the list-existence-leak question in a way
-that gives this record's own residual question a direct answer — at which point this record is
-updated to state that answer plainly rather than continuing to defer to ADR-038.
+**Revisit if.** ADR-038's own `strict`/`notify` switch is ever replaced or extended in a way that
+changes what "an alert exists at write time" means — at which point Addition 1's dependency on
+ADR-038 needs re-checking alongside it, the same coupling this record already declares rather than
+hides.
 
 ---
