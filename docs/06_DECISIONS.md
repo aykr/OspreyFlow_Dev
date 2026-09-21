@@ -2245,8 +2245,13 @@ way B19 forced this one.
 
 ## ADR-031 — The repository splits into `spec/` and `process/`; `docs/` is dissolved; the move waits for Phase 8's close
 
-**Status.** Accepted, 20 September 2026. Scheduled for the end of Phase 8 — not built by this
-record, which documents and schedules the move rather than performing it.
+**Status.** Accepted, 20 September 2026. **Superseded by ADR-034** (21 September 2026), which
+carries this record's own `spec/`/`process/` split forward unchanged (see ADR-034's own B1) and
+adds the licence boundary, the restructure/publication trigger split, the new-repository
+publication mechanism, authorship neutrality and the copyright-holder decision that this record
+never addressed. Read this record for the physical-layout reasoning and ADR-034 for everything
+about what leaves the repository, when, and under what name. Scheduled for the end of Phase 8 —
+not built by this record, which documents and schedules the move rather than performing it.
 
 **The problem.** `docs/` today mixes three kinds of thing with no marker distinguishing them: the
 binding specification (`00_ARCHITECTURE.md` through `09_INGEST_STUDIO.md`, `06_DECISIONS.md`,
@@ -2517,5 +2522,199 @@ code block is updated to match, the same synchronisation this record's own prece
 own `match()` finding already states) — at which point the two-query hydration could collapse back
 into the single traversal, a performance refinement, not a correctness one; nothing about the
 `Path` schema itself would need to change again.
+
+---
+
+## ADR-034 — Publication and licence boundary: ADR-031's split carried forward, Apache 2.0 scoped to the product tree, two independent triggers, new-repository publication, authorship neutrality, and "The OspreyFlow Authors"
+
+**Status.** Accepted, 21 September 2026. Supersedes ADR-031 (`06_DECISIONS.md` above), whose own
+`spec/`/`process/` physical split this record carries forward unchanged rather than revisits.
+
+**Scope note.** This record is documentation only — no product code changes. `07_BUILD_PLAN.md`'s
+Phase 8 close step is amended to cite this ADR (alongside ADR-031, not in place of the physical-
+layout reasoning ADR-031 still owns).
+
+### B1 — Top-level segregation, unchanged from ADR-031
+
+ADR-031's `spec/`/`process/` split, and root-level product documentation (`README.md`,
+`DEMO_GUIDE.md`), is carried forward exactly as that record states it — `docs/` dissolves into
+`spec/` and `process/` at Trigger A (below), one repository with two top-level directories, not two
+repositories, for the citation-integrity reasons ADR-031 already gives in full. Nothing in this
+record revisits that reasoning or that layout.
+
+### B2 — Licence boundary
+
+**Apache 2.0** covers the core product code (`packages/`, `services/`, `apps/`, `scripts/`,
+`tests/`) and the installation, developer, architecture and user guides: `spec/00_ARCHITECTURE.md`
+through `spec/05_DEPLOYMENT.md`, `spec/08_ACCEPTANCE_SCENARIOS.md`, `spec/09_INGEST_STUDIO.md`,
+`spec/design/` (including `tokens.css`), and the root-level `README.md`/`DEMO_GUIDE.md` ADR-031
+already places outside `docs/`.
+
+**Excluded and private** — the build framework: the prompt register (`.claude/`, including
+`CLAUDE.md`), the phase plan (`07_BUILD_PLAN.md`), the decision log (`06_DECISIONS.md`), design
+provenance (`DESIGN_PROVENANCE.md`), the gap inventory (contained entirely within
+`07_BUILD_PLAN.md` — no separate file), and handover documents (`SESSION_HANDOVER.md`,
+`NEXT_STEPS_PHASE7.md`, `archive/`).
+
+**This is not the same axis as ADR-031's `spec/`/`process/` split, and the overlap needs stating
+precisely rather than left to be inferred.** ADR-031 places `06_DECISIONS.md` inside `spec/`
+because `CLAUDE.md` makes every accepted ADR binding on this build "on the same footing as the
+numbered spec files" — a statement about what is operationally authoritative *for continuing this
+build*, unrelated to who should be allowed to read it. `06_DECISIONS.md`'s own content is, in
+substance, exactly the process record ADR-031's own text says it "reads like" — a log of decisions,
+the mistakes found on the way to them, the internal deliberation behind each — which is precisely
+the class of thing B2's "excluded and private" list is drawn to keep out of a published artefact.
+The two records are not in tension: `06_DECISIONS.md` stays in `spec/` at Trigger A (ADR-031's own
+directory move, unchanged per B1) and is *also* excluded from what Trigger B ever publishes — a
+file's physical location in the private working tree and its licence/publication status are
+independent facts about it, and this is the one file in the tree where they visibly disagree.
+`07_BUILD_PLAN.md` has no such tension — ADR-031 already places it in `process/`.
+
+**A consequence, checked and recorded rather than left for whoever reaches Trigger B to discover.**
+`06_DECISIONS.md` carries the only copy of every ADR's own reasoning, and a large fraction of the
+1,150 citations ADR-031's own count established are citations *of* `06_DECISIONS.md` by ADR number,
+from docstrings scattered across the product code that does publish (this session alone added
+citations to ADR-033 from `builders.py` and `adapter.py`, both Apache-tree files). Once
+`06_DECISIONS.md` itself stays private, every one of those citations becomes, to a reader of the
+published repository, a reference to a document they cannot open. Not a defect in the citations
+themselves — they remain exactly as load-bearing as ADR-031 already established for this repository
+— but a real, foreseeable degradation of the published artefact's own self-explanatory-ness, not
+previously named anywhere. Recorded as **open item, owned by Trigger A**: `scripts/
+doc_citations_check.py` (ADR-031's own new checker, built at the same Phase 8 close this record's
+own restructure fires at) should be extended, or a sibling check added, to flag any ADR-number
+citation inside a file that itself lives in the Apache tree — not to remove the citations, which
+stay true and useful to this repository's own maintainers, but so the gap is measured rather than
+discovered by an external reader.
+
+### B3 — Two triggers
+
+- **Trigger A, restructure.** Fires at the close of Phase 8. Moves files per ADR-031/B1. The
+  repository stays private throughout.
+- **Trigger B, publication.** Fires only on explicit owner instruction, after all phases, stages,
+  and alpha and beta testing are complete.
+
+**Trigger A completing does not imply Trigger B, and nothing in `07_BUILD_PLAN.md` may treat it as
+implying it.** The Phase 8 close-step paragraph this ADR amends is written to name Trigger A only —
+publication is never described there as a consequence of Phase 8 closing.
+
+### B4 — Publication is a new repository, not this one made public
+
+Moving a file into the private `process/` tree at Trigger A does not remove its earlier versions
+from git history — every prior revision of the gap inventory, design provenance, handover documents
+and prompt register stays readable via `git log -p`, in this repository, forever. The segregation
+B1/B2 describe is effective for the working tree only.
+
+**Binding: the published artefact is a new repository**, seeded from the restructured product
+subtree, with a single initial commit and no inherited history. Rewriting this repository's own
+history is not a substitute unless the owner explicitly chooses it — every commit SHA cited across
+`docs/`/`spec/` and `process/` would be invalidated by a history rewrite, and nothing chooses that
+lightly.
+
+**Record: destination account `github.com/ospreyflow`, currently a personal account.** The name
+`github.com/ospreyflow/ospreyflow` is reserved and deliberately unclaimed until Trigger B. **Open
+item, owned by Trigger B:** whether that account converts to a GitHub organisation before the first
+public push — GitHub's terms permit one free personal account per person, so this needs settling
+before the account becomes publicly active, not after.
+
+### B5 — Authorship neutrality
+
+**The identifier set, established from the whole commit history, not `HEAD`:**
+
+```
+git log --format='%an|%ae|%cn|%ce' | sort -u
+```
+
+```
+Ayan Kar|ayan.kar@solirius.com|Ayan Kar|ayan.kar@solirius.com
+ayankarsolirius|ayan.kar@solirius.com|ayankarsolirius|ayan.kar@solirius.com
+OspreyFlow|331628805+ospreyflow@users.noreply.github.com|OspreyFlow|331628805+ospreyflow@users.noreply.github.com
+```
+
+Search patterns taken from this: the personal name "Ayan Kar", the handle "ayankarsolirius" (also
+the current remote's own URL path segment, `github.com/ayankarsolirius/ospreyflow.git`), and the
+employer domain `solirius.com`. The third identity (`OspreyFlow` / the GitHub noreply address) is
+already neutral and is not a search pattern.
+
+**Verified against every tracked file, not assumed from a prior count:**
+
+```
+git grep -liE "ayan\.?kar|ayankarsolirius|solirius" -- .
+```
+
+matches exactly one tracked file: `docs/SESSION_HANDOVER.md` (its own byline line, "2026-09-18 ·
+@Ayan", and two body references to "Ayan"/"Ayan's Mac"). No other tracked file in the repository —
+product code, `spec/`-bound docs, or any other `process/`-bound doc — carries a personal name,
+handle or employer domain. `docs/SESSION_HANDOVER.md` is explicitly out of scope for this session
+(its byline is handled at Trigger A) and is unchanged here.
+
+**Binding: the product tree, the published guides and the prompt register carry no personal name,
+employer name or employer email domain.** Where an owner decision needs attributing, the term is
+"the owner". `docs/SESSION_HANDOVER.md` is the one currently-tracked exception, already scoped to
+Trigger A rather than this session.
+
+**Open item, owned by Trigger B:** the initial commit of the published repository is authored under
+a neutral identity, set in git config before that commit is made — not the identities in the table
+above, none of which is anonymous enough to seed a repository whose whole point is to carry no
+personal identity.
+
+**Open question for the owner, not decided here:** published documents (the guides moving to the
+Apache tree, and — per B2's own new finding above — every product-code docstring citing an ADR by
+number) cite commit SHAs and ADR numbers from this private repository, neither of which resolves
+for a reader of the published artefact. Options are to strip SHA/ADR citations from published docs
+at Trigger B, or to accept that a published citation is sometimes a dead end and say so once,
+prominently, rather than fix every instance. The owner's call, not this record's.
+
+### B6 — Copyright holder: "The OspreyFlow Authors"
+
+Year set at Trigger B, being the year of first publication.
+
+**Three consequences, recorded rather than left implicit:**
+
+1. **The choice is reversible until the first external contribution, and effectively irreversible
+   after it.** Consolidating under a named entity after external contributions have landed requires
+   assignments from every contributor. The contributor agreement is therefore a blocking gate on
+   the first external pull request — a later, distinct moment from publication itself, and not to
+   be conflated with Trigger B.
+2. **Recommended, not decided: a DCO (a `Signed-off-by` line, no paperwork) over a CLA.** No
+   relicensing right is needed for a services-based commercial model, and a CLA suppresses casual
+   contribution a DCO does not. Recorded as the owner's own call to make, not made here.
+3. **The published artefact will contain no record of who the authors are** — B6's own notice
+   enumerates no names, and B4's single squashed initial commit under a neutral identity (B5) is
+   the only history it carries. Anonymisation removes the evidence of authorship along with the
+   name unless something else preserves it. **Trigger A deliverable, in the private build tree:** a
+   dated authorship record, created at the restructure rather than assumed to exist later.
+
+**Dated context, not a decision:** Companies House showed no registration for "OspreyFlow" or
+"Osprey Flow" as at 2026-09-20. Companies House availability is not trademark availability — the
+IPO register is a separate check, an owner action with months of lead time, not addressed here.
+
+### B7 — Tester-artefact gates
+
+Alpha and beta testers receive a built product and never repository access. Two assertions are
+required on the packaging step, both failing the build:
+
+1. **No file originating in the private build tree appears in the built artefact.** If a packaging
+   step copies the repository root, `docs/`/`spec/`/`process/` and `.claude/` ride along inside
+   image layers — invisible at runtime, fully recoverable from the tarball. The same containment
+   check already run for `scripts/mint_dev_token.py`; never run for `docs/`.
+2. **No identifier from B5's set appears in the built artefact**, including whatever the build
+   reads out of git for version metadata — a version string built from an author field would
+   reintroduce the name into the one thing a tester actually receives.
+
+**Not addable in this session** — no packaging/harness step exists yet to attach either assertion
+to (the browser harness and its packaging pipeline are Phase 8's own outcome, not built until then).
+**Recorded here as required work owned by Trigger A**, per this ADR's own §B3: the harness that
+Phase 8 builds must ship with both assertions from its first version, not add them later, and no
+artefact may be given to any third party — alpha or beta tester included — until they exist.
+
+**Cost.** Documentation only in this session: two ADR cross-references (this record, and ADR-031's
+own superseded pointer), one `07_BUILD_PLAN.md` amendment (below), and one open item added to
+`scripts/doc_citations_check.py`'s own eventual scope (owned by Trigger A, not built here). Trigger
+A itself carries real cost when it fires — the authorship record (B6), the tester-artefact gates
+(B7) — recorded as owed work, not discharged by this record.
+
+**Revisit if.** The owner settles any of B4's account-conversion question, B5's SHA/ADR-citation
+question, or B6's DCO-vs-CLA recommendation before Trigger B — each is written here as open
+precisely so settling it is a small, targeted edit to this record rather than a new ADR.
 
 ---

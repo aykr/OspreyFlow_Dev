@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/ayankar/miniconda3/bin/graphify hook-guard search"
+            "command": "$HOME/miniconda3/bin/graphify hook-guard search"
           }
         ]
       },
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/ayankar/miniconda3/bin/graphify hook-guard read"
+            "command": "$HOME/miniconda3/bin/graphify hook-guard read"
           }
         ]
       }

@@ -1110,6 +1110,29 @@ CI-gating check (joining `Makefile`'s `ci` target alongside `schemas-check`/`lic
 once before the move as a baseline and again after as the permanent gate — see ADR-031 for why
 both runs matter.
 
+**This same close step is Trigger A under `06_DECISIONS.md` ADR-034** (21 September 2026, supersedes
+ADR-031 — read ADR-031 for the physical `spec`/`process` layout, ADR-034 for the licence boundary,
+the publication trigger, and everything downstream of it). Trigger A fires here and moves files; it
+does **not** fire Trigger B (publication), which is owner-instructed only, after alpha and beta
+testing, and is a new seeded repository rather than this one made public. Four deliverables are owed
+at this close step, per ADR-034, beyond the restructure itself:
+
+- **B3/B4 — record, do not build:** the destination account (`github.com/ospreyflow`, a personal
+  account today) and the reserved-but-unclaimed `github.com/ospreyflow/ospreyflow` name stay exactly
+  as ADR-034 records them; whether the account converts to an organisation is Trigger B's own open
+  item, not this close step's.
+- **B5 — authorship record.** A dated authorship record, created in the private build tree at this
+  close step (ADR-034's own B6 deliverable, cross-referenced from B5) — without it, Trigger B's
+  neutral-identity squash later removes the evidence of who wrote the build along with the name.
+- **B7 — tester-artefact gates are a blocking prerequisite of Phase 8's own harness/packaging work,
+  not a follow-up to it.** The harness this phase's own outcome bullets already build must ship, from
+  its first version, with both ADR-034 assertions (no private-tree file in the artefact; no B5
+  identifier in the artefact, including in build-time version metadata) — no artefact reaches any
+  third party, alpha or beta tester included, until both exist.
+- **`scripts/doc_citations_check.py` gains the ADR-citation scope ADR-034's own B2 finding names** —
+  flagging any product-tree docstring's own `06_DECISIONS.md` ADR-number citation, since that file
+  stays private past publication even though it stays inside `spec/` at this close step.
+
 ---
 
 ## Phase 8a — The cluster profile
