@@ -1334,7 +1334,7 @@ both runs matter.
 ADR-031 — read ADR-031 for the physical `spec`/`process` layout, ADR-034 for the licence boundary,
 the publication trigger, and everything downstream of it). Trigger A fires here and moves files; it
 does **not** fire Trigger B (publication), which is owner-instructed only, after alpha and beta
-testing, and is a new seeded repository rather than this one made public. Four deliverables are owed
+testing, and is a new seeded repository rather than this one made public. Six deliverables are owed
 at this close step, per ADR-034, beyond the restructure itself:
 
 - **B3/B4 — record, do not build:** the destination account (`github.com/ospreyflow`, a personal
@@ -1352,6 +1352,43 @@ at this close step, per ADR-034, beyond the restructure itself:
 - **`scripts/doc_citations_check.py` gains the ADR-citation scope ADR-034's own B2 finding names** —
   flagging any product-tree docstring's own `06_DECISIONS.md` ADR-number citation, since that file
   stays private past publication even though it stays inside `spec/` at this close step.
+- **B2/B6 — `LICENSE` and `NOTICE`, present in the product subtree, new at this close step.**
+  ADR-034 §B2/§B6 decide *what* licence and *who* the holder is (Apache 2.0; "The OspreyFlow
+  Authors") but record no step that actually creates either file — checked directly: no `LICENSE`,
+  `LICENSE.txt`, `NOTICE` or equivalent exists anywhere in this repository today, and neither
+  `make licence-check` leg (`scripts/licence_check.py`'s own docstring, and ADR-034 §B2's own text)
+  checks for one; both validate third-party dependency licences only. A decision recorded in
+  `06_DECISIONS.md` is not the same thing as a build step that discharges it, and this gap is the
+  difference between the two. **Owned by Trigger A, not Trigger B**: the published artefact is
+  seeded from this subtree (ADR-034 §B4), so `LICENSE`/`NOTICE` must already be present and correct
+  in it before that seeding, not written for the first time at publication. Only the copyright
+  *year* is Trigger B's own (ADR-034 §B6: "Year set at Trigger B, being the year of first
+  publication") — the holder name, the licence text itself, and the files' own presence are not
+  year-dependent and are not deferred.
+- **A new `licence-check` gate, built at this close step: the project's own `LICENSE`/`NOTICE`,
+  not only its dependencies'.** `make licence-check` today runs two legs (`pip-licenses` against
+  Python, `license-checker` against `node_modules`), both scoped to third-party dependency licence
+  *metadata* — confirmed directly against `scripts/licence_check.py`'s own docstring and ADR-034
+  §B2's own "Neither leg... existing script" finding. Nothing anywhere checks that this project's
+  *own* `LICENSE` file exists, is the unmodified Apache 2.0 text (not silently edited or truncated),
+  and that `NOTICE` names the holder ADR-034 §B6 records ("The OspreyFlow Authors") — a gap in the
+  same class the Phase 0 allowlist gap this script's own docstring already discloses, just on a
+  different axis (own-project compliance, not dependency compliance). Add to this close step's own
+  scope, sibling to the two existing legs rather than folded into either: a third check (or a small
+  script `licence_check.py` gains a mode for) asserting `LICENSE` is present and byte-identical to
+  the canonical Apache 2.0 text, and `NOTICE` is present and contains the B6 holder string.
+
+**Recorded, not decided: per-file Apache 2.0 headers across the product tree — an open item for the
+owner, the same "not made here" treatment ADR-034 §B6 already gives DCO-vs-CLA.** Nothing in
+`06_DECISIONS.md` or this document commits to (or against) a header on every source file, only to
+the licence covering the tree as a whole (`LICENSE`/`NOTICE`, above). **Cost, if chosen:** roughly
+455 source files across the Apache-scoped tree today (321 Python files under `packages/`,
+`services/`, `scripts/`, `tests/`; 134 TypeScript/TSX/JS/MJS files under `apps/`) — a number that
+will have moved by the time this is decided, not a commitment to touch exactly that count.
+**No tooling in this repository applies headers today** — checked directly: no header-management
+tool (`licenseheaders`, `addlicense`, or similar) appears in `pyproject.toml`, `package.json`, or
+`Makefile`; introducing one, not adapting an existing one, would be the first step if the owner
+decides to build this.
 
 ---
 

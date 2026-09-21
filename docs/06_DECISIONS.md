@@ -2775,6 +2775,17 @@ A itself carries real cost when it fires — the authorship record (B6), the tes
 question, or B6's DCO-vs-CLA recommendation before Trigger B — each is written here as open
 precisely so settling it is a small, targeted edit to this record rather than a new ADR.
 
+**Addendum — §B2/§B6 decide the licence and the holder; they do not, on their own, create the
+files that carry either.** Checked directly, not assumed: no `LICENSE`/`NOTICE` file exists
+anywhere in this repository, and neither `make licence-check` leg checks for one, both being scoped
+to third-party dependency licences only. Filed as two new Trigger A deliverables in
+`07_BUILD_PLAN.md`'s own Phase 8 close step (LICENSE/NOTICE presence; a licence-check gate covering
+them), not decided or built here — a decision record and the build step that discharges it are not
+the same thing, and this is the one place in this ADR where that gap had gone unrecorded. Per-file
+Apache 2.0 headers are a distinct, still-open question for the owner, the same "not made here"
+treatment §B6 already gives DCO-vs-CLA — recorded in the same `07_BUILD_PLAN.md` entry, not answered
+by this addendum.
+
 ---
 
 ## ADR-035 — Demo distribution classes (`shipped`/`internal`), fail-closed and enforced at packaging time; Fixture Corp (R24) is the shippable demo; Enron and VAST stay internal, one of them narrower than requested
