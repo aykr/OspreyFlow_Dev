@@ -6,6 +6,7 @@ export type OwnerId = string;
 export type AlertMode = "full" | "notify_stub";
 export type NodeId = string;
 export type ReferentNodeIds = NodeId[];
+export type InvestigationId = string | null;
 export type CreatedAt = string;
 
 /**
@@ -15,6 +16,17 @@ export type CreatedAt = string;
  * row was written. `NOTIFY_STUB` rows never carry a referent at all, enforced by every producer
  * this stage builds (`services/api/alerts.py`'s own `record_match` is the one place a row is
  * constructed), not merely a convention this model documents without holding to.
+ *
+ * `investigation_id` (Stage 6c): a best-effort audit-shaped hint, not an access-control scope —
+ * the same distinction `run_studio_recipe`'s own docstring already draws for `EventRecord.
+ * investigation_scope`. Threaded from `ChangeStreamEntry.investigation_id`, itself threaded from
+ * whichever producer route was investigation-scoped at the point the triggering write happened
+ * (ingest); `None` for a producer that genuinely has no single investigation in scope (the
+ * corpus-wide resolution trigger). B14's "jump" branches a new investigation from this field via
+ * `InvestigationStore.create(principal, branched_from=...)` — the identical mechanism
+ * `branch_investigation` already uses, not new investigation-linking infrastructure. `None` here
+ * means the jump starts an unbranched investigation instead of one carrying that link, disclosed
+ * to the analyst rather than silently omitted.
  */
 export interface Alert {
   id: Id;
@@ -22,6 +34,7 @@ export interface Alert {
   owner_id: OwnerId;
   mode: AlertMode;
   referent_node_ids?: ReferentNodeIds;
+  investigation_id?: InvestigationId;
   created_at: CreatedAt;
   [k: string]: unknown;
 }

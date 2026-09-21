@@ -3089,6 +3089,63 @@ analyst-owned — the "shareable" third of ADR-032's own still-unbuilt promise �
 record's single-owner-principal model needs re-examining alongside whatever sharing model is
 chosen, not assumed to survive it unchanged.
 
+**Amendment, Phase 7 Stage 6c — this record's own "resolved fresh, not captured" text is narrower
+in the built system than as written, and that gap is amended here rather than left as a quietly
+unsatisfied ADR.** As accepted above: "Access is resolved fresh at each evaluation, not captured or
+cached at save time." Built: access is resolved fresh only when the saving analyst is the
+*requester whose own action triggered the evaluation* — a hotlist/monitor owned by anyone else is
+skipped for that trigger, not evaluated against stale or cached access, but also not evaluated at
+all. An accepted ADR the code does not satisfy is worse than a narrower honest one; this amendment
+states what is actually true rather than leaving the original text standing unqualified.
+
+**Why, quoted rather than asserted.** `services/api/auth.py`'s `PrincipalResolver.resolve()` is the
+one place a `Principal` is ever constructed in this codebase, and it builds every field —
+`clearance`, `org_unit`, `receivable_handling_codes` — from the bearer token's own JWT claims,
+verified against a JWKS URL:
+
+```python
+def resolve(self, token: str) -> Principal:
+    signing_key = self._jwk_client.get_signing_key_from_jwt(token)
+    claims = jwt.decode(token, signing_key.key, ...)
+    ...
+```
+
+There is no id-keyed lookup anywhere alongside it — no table, no directory, nothing that answers
+"what is analyst B's current `Principal`" given only `owner_id` and no live token from B. A
+scheduled or event-triggered evaluator acting on B's behalf, prompted by A's own action, has no
+such token in flight (6b's own finding, restated here because this amendment is the point at which
+it stops being a disclosed limitation of an unbuilt mechanism and starts being a disclosed
+limitation of a built one). `services/api/evaluation.py`'s `principal_for_owner: Callable[[str],
+Principal | None]` returning `None` is this amendment's own mechanism, not a new one: the same
+"the monitor stops" behaviour this ADR already specifies for a revoked principal, now also the
+behaviour for every owner who is not, in this moment, the one triggering the check.
+
+**What the unamended version would require.** A principal directory — some service or store,
+keyed by a stable analyst id, from which a current `Principal` (clearance, org_unit, handling
+codes) can be constructed without a live session token. Nothing in this codebase provides one, and
+none is planned before Phase 8's own harness work (the same phase already carrying the
+Keycloak/identity-provider wiring this system has deferred throughout). Building a synchronous
+approximation now (caching a principal from a prior request, say) would reintroduce exactly the
+"durable grant outliving whatever permission produced it" failure shape this ADR's own second half
+already rejects — narrower-but-honest was chosen over broader-but-wrong.
+
+**Consequence for Scenario B, stated here and at the exit criterion itself
+(`07_BUILD_PLAN.md`'s own Phase 7 outcome), not only in this record.** B12/B13/B14/B20 pass for the
+walkthrough as `08_ACCEPTANCE_SCENARIOS.md` narrates it — one analyst, start to finish — because
+that analyst is both the one who set the hotlist/monitor and the one whose later ingest triggers
+it, so `owner_id == requester` holds. A hotlist or monitor firing from a *different* analyst's
+later ingest — the operational case B13's own CoLP framing is modelled on ("a warrant seizure
+logged by a unit other than the one that set the original hotlist entry") — does not fire under
+this amendment, and does not silently fire wrong; it is skipped, observably (`Hotlist.status`/
+`Monitor.status`, Stage 6c). Owning phase for the general case: **Phase 8**, alongside the
+principal-directory dependency this amendment names.
+
+**Revisit this amendment if.** A principal directory (or equivalent — a service-account credential
+an evaluator can present on an owner's behalf, an identity-provider lookup endpoint) is built at
+Phase 8 or later — at which point `principal_for_owner` gains a real implementation and this
+amendment's own narrowing is lifted, restoring the original "resolved fresh at each evaluation" text
+as literally true rather than true-for-one-case.
+
 ---
 
 ## ADR-037 — Monitor trigger model and execution bounds: accepted, amended to a unified change stream

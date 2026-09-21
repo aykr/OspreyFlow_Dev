@@ -51,6 +51,13 @@ DisclosurePolicy = Literal["strict", "notify"]
 #: `"strict"` for everything else, is fail-closed by construction rather than by a separate check.
 _NOTIFY_VALUE = "notify"
 
+#: `ADD COLUMN IF NOT EXISTS` below, not only in the `CREATE TABLE` itself — this codebase has no
+#: migration tooling yet (`CLAUDE.md`: "No `osprey` CLI yet"), and `CREATE TABLE IF NOT EXISTS` is
+#: a no-op against a database an earlier stage's own bootstrap already ran on, the persistent
+#: `ospreyflow` database this whole build has shared across every session included. Without this,
+#: `investigation_id` (Stage 6c) would exist for a fresh database and silently not exist for this
+#: one, discovered only as a runtime `UndefinedColumnError` the first time a Stage 6c code path
+#: actually read it.
 _BOOTSTRAP_SQL = """
 CREATE TABLE IF NOT EXISTS alerts (
     id TEXT PRIMARY KEY,
@@ -58,8 +65,10 @@ CREATE TABLE IF NOT EXISTS alerts (
     owner_id TEXT NOT NULL,
     mode TEXT NOT NULL,
     referent_node_ids TEXT NOT NULL,
+    investigation_id TEXT,
     created_at TIMESTAMPTZ NOT NULL
 );
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS investigation_id TEXT;
 CREATE INDEX IF NOT EXISTS alerts_owner_id_idx ON alerts (owner_id);
 """
 
@@ -85,6 +94,7 @@ def _row_to_alert(row: asyncpg.Record) -> Alert:
         owner_id=row["owner_id"],
         mode=AlertMode(row["mode"]),
         referent_node_ids=json.loads(row["referent_node_ids"]),
+        investigation_id=row["investigation_id"],
         created_at=row["created_at"],
     )
 
@@ -95,7 +105,9 @@ class AlertStore:
 
     @classmethod
     async def connect(cls, dsn: str) -> AlertStore:
-        pool = await asyncpg.create_pool(dsn=dsn)
+        # `min_size`/`max_size` — `hotlists.py::HotlistStore.connect`'s own comment has the full
+        # reasoning (the Stage 6c connection-ceiling finding).
+        pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=4)
         async with pool.acquire() as conn:
             await conn.execute(_BOOTSTRAP_SQL)
         return cls(pool)
@@ -106,13 +118,15 @@ class AlertStore:
     async def save(self, alert: Alert) -> None:
         async with self._pool.acquire() as conn:
             await conn.execute(
-                "INSERT INTO alerts (id, rule_id, owner_id, mode, referent_node_ids, created_at) "
-                "VALUES ($1, $2, $3, $4, $5, $6)",
+                "INSERT INTO alerts "
+                "(id, rule_id, owner_id, mode, referent_node_ids, investigation_id, created_at) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7)",
                 alert.id,
                 alert.rule_id,
                 alert.owner_id,
                 alert.mode.value,
                 json.dumps(alert.referent_node_ids),
+                alert.investigation_id,
                 alert.created_at,
             )
 
@@ -123,8 +137,8 @@ class AlertStore:
         `evidence_available` below for the *referent* recheck ADR-039 separately requires."""
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT id, rule_id, owner_id, mode, referent_node_ids, created_at "
-                "FROM alerts WHERE id = $1 AND owner_id = $2",
+                "SELECT id, rule_id, owner_id, mode, referent_node_ids, investigation_id, "
+                "created_at FROM alerts WHERE id = $1 AND owner_id = $2",
                 alert_id,
                 principal.id,
             )
@@ -135,8 +149,8 @@ class AlertStore:
     async def list_authorized(self, principal: Principal) -> list[Alert]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, rule_id, owner_id, mode, referent_node_ids, created_at "
-                "FROM alerts WHERE owner_id = $1 ORDER BY created_at DESC",
+                "SELECT id, rule_id, owner_id, mode, referent_node_ids, investigation_id, "
+                "created_at FROM alerts WHERE owner_id = $1 ORDER BY created_at DESC",
                 principal.id,
             )
         return [_row_to_alert(row) for row in rows]
@@ -168,6 +182,7 @@ async def record_match(
     matched_identifier: str,
     triggering_node_ids: list[str],
     policy: DisclosurePolicy,
+    investigation_id: str | None = None,
 ) -> Alert | None:
     """The disclosure mechanism itself — `06_DECISIONS.md` ADR-038. `triggering_node_ids` is
     whatever node(s) the match is actually about (a hotlisted identifier's own node, a saved
@@ -175,6 +190,10 @@ async def record_match(
     audit trail below, never stored on the `Alert` row itself, not even for a `notify` stub —
     ADR-038's own decision text is explicit that `notify` "carries no referent of any kind",
     tighter than its own first draft, which would have allowed exactly this identifier through.
+    `investigation_id` (Stage 6c, `schemas.domain.Alert.investigation_id`'s own docstring) is
+    dropped for a `notify` stub for the identical reason `matched_identifier` already is — it is
+    information about the triggering event, from the *ingesting* analyst's own context, and ADR-038
+    draws no exception for it in "carries no referent of any kind" just because it isn't a node id.
 
     Returns the written `Alert` when one is written (always, under `full` visibility or `notify`),
     `None` under `strict` when the match is outside `recipient`'s own access — `strict`'s whole
@@ -193,6 +212,7 @@ async def record_match(
             owner_id=recipient.id,
             mode=AlertMode.FULL,
             referent_node_ids=triggering_node_ids,
+            investigation_id=investigation_id,
             created_at=datetime.now(UTC),
         )
         await alert_store.save(alert)

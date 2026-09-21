@@ -56,6 +56,10 @@ class ChangeStreamEntry(BaseModel):
     source: ChangeSource
     node_ids: list[str]
     edge_ids: list[str]
+    #: Phase 7 Stage 6c — a best-effort audit-shaped hint (`schemas.domain.Alert.investigation_id`'s
+    #: own docstring has the full reasoning), never an access-control scope. `None` for a producer
+    #: with no single investigation in scope (the resolution trigger).
+    investigation_id: str | None = None
     recorded_at: datetime
 
 
@@ -78,23 +82,37 @@ class ChangeStreamWriter:
         *,
         node_ids: list[str] | None = None,
         edge_ids: list[str] | None = None,
-    ) -> str | None:
+        investigation_id: str | None = None,
+    ) -> ChangeStreamEntry | None:
         """No-op (returns `None`) when a producer's own write touched nothing — an ingest run that
         created zero nodes, a resolution pass that wrote zero `SAME_AS` edges — the same "nothing
         happened, nothing to publish" discipline `submit_post_ingest_resolution_jobs` already
-        applies to its own `report.nodes_created == 0` check, not a special case invented here."""
+        applies to its own `report.nodes_created == 0` check, not a special case invented here.
+
+        Returns the entry actually written (Stage 6c: the caller needs it in hand to trigger
+        synchronous evaluation against exactly what was published, not a second `read_since` round
+        trip to reconstruct it) rather than only the bare entry id 6a returned."""
         node_ids = node_ids or []
         edge_ids = edge_ids or []
         if not node_ids and not edge_ids:
             return None
+        recorded_at = datetime.now(UTC)
         fields = {
             "source": source,
             "node_ids": ",".join(node_ids),
             "edge_ids": ",".join(edge_ids),
-            "recorded_at": datetime.now(UTC).isoformat(),
+            "investigation_id": investigation_id or "",
+            "recorded_at": recorded_at.isoformat(),
         }
-        entry_id = await reply(self._client.xadd(_STREAM_KEY, fields))
-        return _decode(entry_id)
+        entry_id = _decode(await reply(self._client.xadd(_STREAM_KEY, fields)))
+        return ChangeStreamEntry(
+            entry_id=entry_id,
+            source=source,
+            node_ids=node_ids,
+            edge_ids=edge_ids,
+            investigation_id=investigation_id,
+            recorded_at=recorded_at,
+        )
 
     async def read_since(
         self, *, after_id: str = "-", count: int = 1000
@@ -115,6 +133,7 @@ class ChangeStreamWriter:
                     source=decoded["source"],  # type: ignore[arg-type]
                     node_ids=[n for n in decoded["node_ids"].split(",") if n],
                     edge_ids=[e for e in decoded["edge_ids"].split(",") if e],
+                    investigation_id=decoded.get("investigation_id") or None,
                     recorded_at=decoded["recorded_at"],  # type: ignore[arg-type]
                 )
             )

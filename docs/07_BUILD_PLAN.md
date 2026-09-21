@@ -1150,6 +1150,92 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
    gap sits: narrowed from "no mechanism exists" to "the mechanism exists and is proven directly,
    only the route and the UI in front of it are missing" — 6c's own scope, precisely.
 
+   **6c — the backend half, built 21 September 2026; the Glass UI half not started, named
+   precisely rather than silently implied by "6c done."** Routes: `POST`/`GET /v1/hotlists`,
+   `POST`/`GET /v1/monitors` (owner-only, mirroring `/v1/patterns/*` exactly), `GET /v1/alerts`,
+   `GET /v1/alerts/{id}`, `POST /v1/alerts/{id}/jump` (`services/api/watch_routes.py` for the
+   request/response shapes, wired into `app.py`).
+
+   **The synchronous-evaluation decision (`06_DECISIONS.md` ADR-036's own new amendment has the
+   full reasoning) wired into exactly one producer: ingest.** `app.py`'s `run_studio_recipe`
+   calls `evaluate_hotlists_for_entry`/`evaluate_monitors_for_entry` synchronously, right after
+   publishing to the change stream, with `principal_for_owner` resolving only when `owner_id`
+   equals the requesting analyst's own id — B13/B20 are both specifically about ingest, so
+   manual-assertion and the resolution trigger are deliberately not wired this stage, a scope
+   narrowing stated here rather than left to be discovered by grepping for call sites. A failure in
+   this best-effort side evaluation is caught and audited (`action="watch_evaluation_failed"`),
+   never allowed to fail the ingest response the load itself already succeeded at.
+
+   **The ingest-path cost this adds, disclosed rather than silently absorbed into latency.** Each
+   hotlist/monitor evaluation is bounded (the overlap lock, `MAX_TOUCHED_NODES_PER_EVALUATION`,
+   both Stage 6b's own) — the *aggregate* is not: `run_studio_recipe` now blocks on evaluating
+   every hotlist and monitor this requesting principal owns, not a fixed number of them, unlike
+   `services/resolve/trigger.py`'s own precedent of one dispatched job regardless of population
+   size. Acceptable at the scale a single analyst's own watch list reaches today; not a bound that
+   holds at arbitrary scale, and not fixed here — a job-queue dispatch (`services/api/jobs.py`,
+   the same infrastructure `submit_supersede_node`/pattern-match already use) is the shape a fix
+   would take, owned by whichever phase first needs it.
+
+   **`Hotlist.status`/`Monitor.status`, `06_DECISIONS.md` ADR-036's own "surfaced as stopped"
+   requirement, closed.** Written by the evaluator on every reach (`"stopped"` when a principal
+   cannot be resolved or, for a monitor, its pattern no longer resolves; `"active"` on every
+   attempt that genuinely runs), not sticky — the next successful attempt clears it. Proven:
+   `test_a_skipped_hotlist_evaluation_is_observable_as_stopped_and_a_later_success_clears_it` and
+   its monitor twin (`tests/services/api/test_evaluation.py`) — the named tests the task itself
+   asked for, proving the skip is observable, not merely that it happens (already proven in 6b).
+
+   **`Alert.investigation_id`, threaded from the triggering event, not from the hotlist/monitor's
+   own creation context** — `schemas.domain.Alert`'s own docstring has the full reasoning for why
+   (ingest is investigation-scoped at the route level; a hotlist/monitor is not investigation-scoped
+   at all and outlives any one investigation it was set from). `ChangeStreamEntry` gained the same
+   field, threaded through `ChangeStreamWriter.publish`. `POST /v1/alerts/{id}/jump` branches a new
+   `Investigation` from it via `InvestigationStore.create(principal, branched_from=...)` — the
+   identical mechanism `branch_investigation` already uses — then seeds the branch's working set
+   with the alert's referents, re-fetched fresh as the *viewer's* own principal at jump time, never
+   trusted from whatever `evidence_available` found true when the alert was listed
+   (`fetch_jumpable_referents`, `watch_routes.py`). A referent unreadable by jump time is not
+   silently dropped: `AlertJumpResult.unreadable_count` reports it, alongside `seeded_count`, so a
+   caller can surface a partial-success notice rather than a call that looks fully successful when
+   it wasn't — the task's own question, answered in the response shape, not only in prose.
+   **Real foreign key, checked directly while writing this stage's own tests, not assumed:**
+   `investigations.branched_from` is a genuine `REFERENCES investigations(id)` constraint — a
+   synthetic or stale `investigation_id` is rejected at write time, not silently accepted.
+
+   **`AlertView` redacts server-side** (`watch_routes.py`) — the task's own instruction that
+   notify-mode's render-layer leak risk ("a component that helpfully falls back to an id") needs an
+   equivalent to the API-layer test that already exists. A `FULL` alert whose evidence has since
+   become unavailable (ADR-039's own revocation case) is never returned with its real
+   `referent_node_ids` intact alongside a separate flag a future renderer could ignore;
+   `referent_node_ids` in the wire response is authoritatively `[]` whenever `evidence_available`
+   is `False`, computed once, server-side, so a renderer has nothing left to get wrong. Proven:
+   `test_alert_list_redacts_a_full_alert_whose_evidence_has_since_become_unavailable`
+   (`tests/scenarios/test_phase7_stage6c_watch_routes.py`), against a real revocation
+   (`supersede_node`), at both `GET /v1/alerts` and `GET /v1/alerts/{id}`.
+
+   **A real connection-pool ceiling, found and fixed while writing this stage's own real-service
+   tests, not left for whoever next opens a `TestClient` against the real app to rediscover.**
+   `asyncpg.create_pool`'s own default (`min_size=10`) times the roughly ten Postgres-backed stores
+   `app.py`'s lifespan already opened was already within reach of Postgres's own
+   `max_connections=100` before this stage; adding `HotlistStore`/`MonitorStore`/`AlertStore` (three
+   more pools at the same default) pushed a real `TestClient(app)` lifespan over it, reproduced
+   directly as `asyncpg.exceptions.TooManyConnectionsError`, not merely suspected. Fixed for these
+   three (`min_size=1, max_size=4` each — a small, low-traffic control-plane store needs nowhere
+   near ten idle connections) rather than by raising Postgres's own ceiling, which would have
+   papered over the other seven stores' identical unbounded default rather than these three's own
+   actual load. **The other seven stores' own identical `min_size=10` default is untouched and
+   still a live risk** — not fixed here, since bounding pools this stage did not add is a separate,
+   broader change; owning phase: **Phase 8**, or whenever the next store addition tips the same
+   ceiling again.
+
+   **What 6c's backend half does not build, named precisely:** no Glass UI (no hotlist/monitor
+   creation panel, no alert inbox render, no jump affordance), no keyboard actions registered for
+   any of the above, no vitest/Playwright coverage for any of the above — the Gates this stage's
+   own task named (`authorized-query-check`; every new workspace action registered and covered, red
+   then green; frontend behaviour gets frontend tests) apply to that half and are unmet by design,
+   not overlooked, pending a decision on whether this session continues into it or a follow-up does.
+   `authorized-query-check` itself: run against this stage's own new stores, clean — 42 files under
+   `services/api`, no offenders.
+
 **Exit.** Acceptance scenario B, scoped to B1 (its two-CDR-files half only; the device-extraction
 half stays unowned, ADR-027), B2–B5, B7, B12, B13 (via a CDR-carried hotlisted identifier, not the
 literal seizure-record fixture, ADR-027), B14, B15 (its `imsi→Device` leg only, ADR-022's own
@@ -1165,8 +1251,22 @@ and visual query builder compute over that same traversal shape — see ADR-023,
 before this phase's Session 5 (schemas and the `ComputePort` conformance suite) so neither is built
 against a graph topology about to change.
 
-**Read precisely, not assumed from the sentence above: this does not make B15 exit-criterion
-coverage for the pathfinder itself.** B15's own "Platform capability" column
+**Read precisely, not assumed from the sentence above, a second time: "B12/B13/B14/B20 pass end to
+end" is not the same claim for every principal who could set a hotlist or a monitor.** The pattern
+this document's own standing rule 12 names — a gate proving less than its name implies — applies to
+this exit criterion itself, not only to a test file, and is recorded here rather than only in
+`06_DECISIONS.md` ADR-036's own amendment. What actually passes: the walkthrough
+`08_ACCEPTANCE_SCENARIOS.md` narrates, where the analyst who sets the hotlist/monitor in B12/B20 is
+the same analyst whose later action in B13/B20 triggers it — `owner_id == requester` holds by
+construction, because it is one continuous session. What does not pass, and is not exercised by
+this exit criterion at all: a hotlist or monitor firing from a *different* analyst's later ingest —
+the operational case B13's own CoLP framing is actually modelled on ("a warrant seizure logged by a
+unit other than the one that set the original hotlist entry"), which is precisely the case this
+document's own acceptance scenario does not test, because ADR-036's amendment (`06_DECISIONS.md`)
+means the built system does not yet handle it. "Scenario B passes end to end" is therefore true of
+the walkthrough as written and not a claim that hotlists/monitors work operationally across
+analysts — that remains Phase 8's own scope, alongside the principal-directory dependency the
+amendment names. B15's own "Platform capability" column
 (`08_ACCEPTANCE_SCENARIOS.md`) names "Endpoint model," not "Pathfinder" — the traversal it
 re-verifies is a direct `GraphPort.expand`-shaped one over the corrected ontology, not a `POST
 /v1/paths` call. The sentence above names the pathfinder only as *why the phase orders ADR-023

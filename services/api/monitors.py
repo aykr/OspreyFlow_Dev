@@ -13,16 +13,19 @@ from datetime import UTC, datetime
 import asyncpg
 
 from conduit_common.identity import new_id
-from schemas.domain import Monitor, Principal
+from schemas.domain import Monitor, Principal, WatchStatus
 
+#: `ADD COLUMN IF NOT EXISTS` — `alerts.py`'s own `_BOOTSTRAP_SQL` docstring has the full reasoning.
 _BOOTSTRAP_SQL = """
 CREATE TABLE IF NOT EXISTS monitors (
     id TEXT PRIMARY KEY,
     pattern_id TEXT NOT NULL,
     owner_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
     created_at TIMESTAMPTZ NOT NULL,
     UNIQUE (pattern_id, owner_id)
 );
+ALTER TABLE monitors ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
 CREATE INDEX IF NOT EXISTS monitors_owner_id_idx ON monitors (owner_id);
 """
 
@@ -37,6 +40,7 @@ def _row_to_monitor(row: asyncpg.Record) -> Monitor:
         id=row["id"],
         pattern_id=row["pattern_id"],
         owner_id=row["owner_id"],
+        status=row["status"],
         created_at=row["created_at"],
     )
 
@@ -47,7 +51,9 @@ class MonitorStore:
 
     @classmethod
     async def connect(cls, dsn: str) -> MonitorStore:
-        pool = await asyncpg.create_pool(dsn=dsn)
+        # `min_size`/`max_size` — `hotlists.py::HotlistStore.connect`'s own comment has the full
+        # reasoning (the Stage 6c connection-ceiling finding).
+        pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=4)
         async with pool.acquire() as conn:
             await conn.execute(_BOOTSTRAP_SQL)
         return cls(pool)
@@ -68,11 +74,12 @@ class MonitorStore:
         )
         async with self._pool.acquire() as conn:
             await conn.execute(
-                "INSERT INTO monitors (id, pattern_id, owner_id, created_at) "
-                "VALUES ($1, $2, $3, $4)",
+                "INSERT INTO monitors (id, pattern_id, owner_id, status, created_at) "
+                "VALUES ($1, $2, $3, $4, $5)",
                 monitor.id,
                 monitor.pattern_id,
                 monitor.owner_id,
+                monitor.status,
                 monitor.created_at,
             )
         return monitor
@@ -80,7 +87,7 @@ class MonitorStore:
     async def get_authorized(self, monitor_id: str, principal: Principal) -> Monitor:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT id, pattern_id, owner_id, created_at FROM monitors "
+                "SELECT id, pattern_id, owner_id, status, created_at FROM monitors "
                 "WHERE id = $1 AND owner_id = $2",
                 monitor_id,
                 principal.id,
@@ -92,7 +99,7 @@ class MonitorStore:
     async def list_authorized(self, principal: Principal) -> list[Monitor]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, pattern_id, owner_id, created_at FROM monitors "
+                "SELECT id, pattern_id, owner_id, status, created_at FROM monitors "
                 "WHERE owner_id = $1 ORDER BY created_at DESC",
                 principal.id,
             )
@@ -103,8 +110,18 @@ class MonitorStore:
         reasoning `HotlistStore.list_all_active`'s own docstring gives; never exposed through a
         route."""
         async with self._pool.acquire() as conn:
-            rows = await conn.fetch("SELECT id, pattern_id, owner_id, created_at FROM monitors")
+            rows = await conn.fetch(
+                "SELECT id, pattern_id, owner_id, status, created_at FROM monitors"
+            )
         return [_row_to_monitor(row) for row in rows]
+
+    async def set_status(self, monitor_id: str, status: WatchStatus) -> None:
+        """`HotlistStore.set_status`'s own twin, identical reasoning — called only by the
+        evaluator, written on every evaluation attempt so `status` reflects the most recent one."""
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE monitors SET status = $2 WHERE id = $1", monitor_id, status
+            )
 
 
 __all__ = ["MonitorNotFoundError", "MonitorStore"]

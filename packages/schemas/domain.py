@@ -467,35 +467,61 @@ class Alert(BaseModel):
     re-checked at read time against those referents, not trusted from whatever was true when this
     row was written. `NOTIFY_STUB` rows never carry a referent at all, enforced by every producer
     this stage builds (`services/api/alerts.py`'s own `record_match` is the one place a row is
-    constructed), not merely a convention this model documents without holding to."""
+    constructed), not merely a convention this model documents without holding to.
+
+    `investigation_id` (Stage 6c): a best-effort audit-shaped hint, not an access-control scope —
+    the same distinction `run_studio_recipe`'s own docstring already draws for `EventRecord.
+    investigation_scope`. Threaded from `ChangeStreamEntry.investigation_id`, itself threaded from
+    whichever producer route was investigation-scoped at the point the triggering write happened
+    (ingest); `None` for a producer that genuinely has no single investigation in scope (the
+    corpus-wide resolution trigger). B14's "jump" branches a new investigation from this field via
+    `InvestigationStore.create(principal, branched_from=...)` — the identical mechanism
+    `branch_investigation` already uses, not new investigation-linking infrastructure. `None` here
+    means the jump starts an unbranched investigation instead of one carrying that link, disclosed
+    to the analyst rather than silently omitted."""
 
     id: str
     rule_id: str
     owner_id: str
     mode: AlertMode
     referent_node_ids: list[NodeId] = Field(default_factory=list)
+    investigation_id: str | None = None
     created_at: datetime
+
+
+#: `Hotlist.status`/`Monitor.status` — ADR-036's own "the monitor stops" (extended in Stage 6b to
+#: a hotlist's identical owner-principal-unresolvable case) must be surfaced somewhere the analyst
+#: or another owner can see it, not left as a silent skip with no visible state change. Written by
+#: the evaluator (`services/api/evaluation.py`), read by the Stage 6c list panels.
+WatchStatus = Literal["active", "stopped"]
 
 
 class Hotlist(BaseModel):
     """A watched identifier — `02_GLASS_FRONTEND.md` §3.3: "A list of identifiers with an owner
-    and a review date." Phase 7 Stage 6b. Deliberately bare: an `identifier` is a normalised
+    and a review date." Phase 7 Stage 6b/6c. Deliberately bare: an `identifier` is a normalised
     value string (the same `value_normalised` shape `Endpoint`'s own identifiers already use, not
     a node id — a hotlist entry can be created before anything resolves to a node at all, per
     ADR-038's own "an analyst can hotlist a bare phone number read off a warrant before it
     resolves to anything they can see"), an `owner_id`, and a `review_date` — no handling ceiling
-    (`06_DECISIONS.md` ADR-038's option (c), recorded there as not selected, not built here)."""
+    (`06_DECISIONS.md` ADR-038's option (c), recorded there as not selected, not built here).
+
+    `status` (Stage 6c): `06_DECISIONS.md` ADR-036's own "the monitor stops" requirement, extended
+    here — see `WatchStatus`'s own docstring. The investigation a jumped-to alert branches into
+    comes from `Alert.investigation_id` (the *triggering* event's own investigation, threaded
+    through `ChangeStreamEntry`), not from this row — a hotlist is not investigation-scoped and
+    outlives any one investigation it happened to be set from."""
 
     id: str
     identifier: str
     owner_id: str
     review_date: date
+    status: WatchStatus = "active"
     created_at: datetime
 
 
 class Monitor(BaseModel):
     """A saved pattern being watched — `02_GLASS_FRONTEND.md` §3.3: "A saved visual query run...
-    against new data." Phase 7 Stage 6b. References a `SavedPattern` by `pattern_id`, never
+    against new data." Phase 7 Stage 6b/6c. References a `SavedPattern` by `pattern_id`, never
     copies its own definition — `PatternStore.get_authorized` is the one place a monitor's own
     query is ever read from, the same "resolved fresh, never cached" discipline `06_DECISIONS.md`
     ADR-036 requires of a monitor's *access*, extended here to its own *definition* too, so an
@@ -503,11 +529,19 @@ class Monitor(BaseModel):
     turned on. `owner_id` is redundant with `SavedPattern.owner_id` (a monitor cannot be turned on
     for a pattern its own creator does not own — checked at creation, not re-derived from the
     pattern on every read) but stored directly so a monitor row is self-describing without a join
-    for the common "list my own monitors" case."""
+    for the common "list my own monitors" case.
+
+    `status` (Stage 6c): ADR-036's own binding requirement, quoted directly: "A stopped monitor is
+    surfaced as stopped somewhere the analyst or another owner can see it (the monitor list, or the
+    alert inbox) rather than silently producing nothing forever with no visible state change."
+    Before Stage 6c this was true only of `evaluate_monitors_for_entry`'s own in-memory skip;
+    nothing persisted or rendered it — see `WatchStatus`'s own docstring, and `Hotlist`'s own note
+    on why the jump's investigation link lives on `Alert`, not here."""
 
     id: str
     pattern_id: str
     owner_id: str
+    status: WatchStatus = "active"
     created_at: datetime
 
 

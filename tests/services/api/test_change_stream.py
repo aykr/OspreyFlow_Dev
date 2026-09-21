@@ -38,11 +38,11 @@ async def test_publish_is_a_no_op_when_nothing_was_touched(valkey: Valkey) -> No
 async def test_a_consumer_reads_back_what_a_producer_published(valkey: Valkey) -> None:
     writer = ChangeStreamWriter(valkey)
     edge_id = new_id()
-    published_id = await writer.publish("manual_assertion", edge_ids=[edge_id])
-    assert published_id is not None
+    published = await writer.publish("manual_assertion", edge_ids=[edge_id])
+    assert published is not None
 
     entries = await writer.read_since()
-    matching = [e for e in entries if e.entry_id == published_id]
+    matching = [e for e in entries if e.entry_id == published.entry_id]
     assert len(matching) == 1
     assert matching[0].source == "manual_assertion"
     assert matching[0].edge_ids == [edge_id]

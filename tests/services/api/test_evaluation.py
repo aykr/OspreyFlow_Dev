@@ -331,6 +331,60 @@ async def test_a_hotlist_with_no_resolvable_owner_principal_is_skipped_not_run_a
         assert [a for a in alerts if a.rule_id == f"hotlist:{hotlist.id}"] == []
 
 
+async def test_a_skipped_hotlist_evaluation_is_observable_as_stopped_and_a_later_success_clears_it(
+    hotlist_store, alert_store, audit, valkey
+) -> None:
+    """Stage 6c's own addendum: the test above proves the skip *happens*; this one proves it is
+    not silent — `06_DECISIONS.md` ADR-036's own "the monitor stops" requirement, extended to
+    hotlists, means the owner (or another reader of the list) must be able to see it, not just
+    trust that no alert firing means everything is fine. Written to `hotlist.status`, checked by
+    re-reading the row through the store's own `get_authorized`, not inferred from the evaluator's
+    return value. The second half proves it is not a one-way trip: the next attempt that *does*
+    resolve a principal flips it back to `active`, matching this stage's own synchronous-evaluation
+    design, where most reaches for someone else's hotlist are ordinary, expected skips, not a
+    terminal failure state."""
+    ontology = load_default_ontology()
+    scheme = load_uk_le_scheme()
+    identifier = f"+44-hotlist-status-{uuid.uuid4().hex[:10]}"
+    hotlist = await hotlist_store.create(OWNER, identifier=identifier, review_date=date(2027, 1, 1))
+    assert hotlist.status == "active"
+
+    async with arcadedb_adapter(ontology, scheme) as graph:
+        tx = await graph.begin_transaction()
+        (node_id,) = await graph.upsert_nodes(
+            [_endpoint_write(identifier, owning_unit=OWNER.org_unit)], tx
+        )
+        await graph.commit_transaction(tx)
+
+        await evaluate_hotlists_for_entry(
+            _entry([node_id]),
+            graph=graph,
+            scheme=scheme,
+            hotlist_store=hotlist_store,
+            alert_store=alert_store,
+            audit=audit,
+            valkey=valkey,
+            principal_for_owner=lambda owner_id: None,  # every owner unresolvable, this one too
+            policy="strict",
+        )
+        stopped = await hotlist_store.get_authorized(hotlist.id, OWNER)
+        assert stopped.status == "stopped"
+
+        await evaluate_hotlists_for_entry(
+            _entry([node_id]),
+            graph=graph,
+            scheme=scheme,
+            hotlist_store=hotlist_store,
+            alert_store=alert_store,
+            audit=audit,
+            valkey=valkey,
+            principal_for_owner=_principal_for,  # resolves OWNER again
+            policy="strict",
+        )
+        active_again = await hotlist_store.get_authorized(hotlist.id, OWNER)
+        assert active_again.status == "active"
+
+
 async def test_a_hotlist_evaluation_already_in_progress_is_skipped_not_queued(
     hotlist_store, alert_store, audit, valkey
 ) -> None:
@@ -634,3 +688,47 @@ async def test_a_monitor_whose_pattern_no_longer_exists_stops_rather_than_errors
         # No exception raised (the whole call must not error), and the orphaned monitor produces
         # no alert. The well-formed monitor above is unaffected by its neighbour's failure.
         assert [a for a in alerts if a.rule_id == f"monitor:{orphan_monitor.id}"] == []
+
+
+async def test_a_skipped_monitor_evaluation_is_observable_as_stopped_and_a_later_success_clears_it(
+    monitor_store, pattern_store, alert_store, audit, valkey
+) -> None:
+    """`test_a_skipped_hotlist_evaluation_is_observable_as_stopped_and_a_later_success_clears_it`'s
+    own twin for monitors — same reasoning, same ADR-036 requirement, this time for the "principal
+    unresolvable" skip specifically (not the "pattern gone" skip the test above already covers,
+    which also sets `status="stopped"` but is not re-asserted here to keep this one scoped to a
+    single named case)."""
+    ontology = load_default_ontology()
+    scheme = load_uk_le_scheme()
+    saved = await pattern_store.save(
+        OWNER, pattern_id=None, name="Evaluator fixture status observability", definition=_pattern()
+    )
+    monitor = await monitor_store.create(OWNER, pattern_id=saved.pattern_id)
+    assert monitor.status == "active"
+
+    async with arcadedb_adapter(ontology, scheme) as graph:
+        await evaluate_monitors_for_entry(
+            _entry([]),
+            graph=graph,
+            monitor_store=monitor_store,
+            pattern_store=pattern_store,
+            alert_store=alert_store,
+            audit=audit,
+            valkey=valkey,
+            principal_for_owner=lambda owner_id: None,
+        )
+        stopped = await monitor_store.get_authorized(monitor.id, OWNER)
+        assert stopped.status == "stopped"
+
+        await evaluate_monitors_for_entry(
+            _entry([]),
+            graph=graph,
+            monitor_store=monitor_store,
+            pattern_store=pattern_store,
+            alert_store=alert_store,
+            audit=audit,
+            valkey=valkey,
+            principal_for_owner=lambda owner_id: OWNER if owner_id == OWNER.id else None,
+        )
+        active_again = await monitor_store.get_authorized(monitor.id, OWNER)
+        assert active_again.status == "active"

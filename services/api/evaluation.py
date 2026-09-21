@@ -33,7 +33,15 @@ match set growing, shrinking to a different-but-nonempty set, or changing compos
 "new" and re-alert; an unchanged match set does not. This is coarser than per-instance dedup and
 disclosed as such, not silently assumed to be the finer-grained thing a reader might expect from
 "a new match."
-"""
+
+**`status`, written on every evaluation attempt — Stage 6c, `06_DECISIONS.md` ADR-036's own
+amendment.** A skipped evaluation (`principal_for_owner` returns `None`, or — for a monitor — its
+own pattern no longer resolves) is not left as a silent in-memory `continue`: the hotlist/monitor
+row's own `status` is written `"stopped"` before skipping, `"active"` on every attempt that
+genuinely resolves a principal and runs, so the owner (or another reader of the list/inbox) can see
+it rather than believe a watch is live when 6c's own synchronous wiring (`app.py`'s
+`run_studio_recipe`) never had a principal to evaluate it as. Not sticky — the next successful
+attempt flips it back, so this reflects the most recent reach, not a one-way trip."""
 
 from __future__ import annotations
 
@@ -140,7 +148,9 @@ async def evaluate_hotlists_for_entry(
     for hotlist in await hotlist_store.list_all_active():
         recipient = principal_for_owner(hotlist.owner_id)
         if recipient is None:
+            await hotlist_store.set_status(hotlist.id, "stopped")
             continue
+        await hotlist_store.set_status(hotlist.id, "active")
 
         async def _run(hotlist: Hotlist = hotlist, recipient: Principal = recipient) -> list[Alert]:
             found: list[Alert] = []
@@ -160,6 +170,7 @@ async def evaluate_hotlists_for_entry(
                     matched_identifier=hotlist.identifier,
                     triggering_node_ids=[node_id],
                     policy=policy,
+                    investigation_id=entry.investigation_id,
                 )
                 if alert is not None:
                     found.append(alert)
@@ -187,16 +198,18 @@ async def evaluate_monitors_for_entry(
     has the full reasoning), so `record_match` always takes its "visible" branch and the
     `strict`/`notify` switch is never reached for a monitor alert, not merely defaulted to one
     side of it."""
-    del entry  # the change stream entry only gates *when* an evaluation runs, not what it checks —
-    # the pattern's own query is re-run in full against the owner's current access each time,
-    # the same "re-verify from the authoritative source" discipline `change_stream.py`'s own
-    # docstring already commits this codebase to, rather than trying to infer from touched ids
-    # alone whether a pattern with joins across them could newly match.
+    # The change stream entry gates *when* an evaluation runs and carries `investigation_id`
+    # through to a fired alert; it does not otherwise shape *what* is checked — the pattern's own
+    # query is re-run in full against the owner's current access each time, the same "re-verify
+    # from the authoritative source" discipline `change_stream.py`'s own docstring already commits
+    # this codebase to, rather than trying to infer from touched ids alone whether a pattern with
+    # joins across them could newly match.
     all_alerts: list[Alert] = []
 
     for monitor in await monitor_store.list_all_active():
         recipient = principal_for_owner(monitor.owner_id)
         if recipient is None:
+            await monitor_store.set_status(monitor.id, "stopped")
             continue
 
         async def _run(monitor: Monitor = monitor, recipient: Principal = recipient) -> list[Alert]:
@@ -207,7 +220,9 @@ async def evaluate_monitors_for_entry(
                 # today, so in practice this is "the owning principal this monitor's own row
                 # names no longer owns the pattern it was created against," ADR-036's own
                 # "the monitor stops" case, extended from principal validity to pattern validity.
+                await monitor_store.set_status(monitor.id, "stopped")
                 return []
+            await monitor_store.set_status(monitor.id, "active")
             subgraph = await graph.match(saved.definition, recipient)
             if not subgraph.nodes and not subgraph.edges:
                 return []
@@ -228,6 +243,7 @@ async def evaluate_monitors_for_entry(
                 matched_identifier=saved.name,
                 triggering_node_ids=triggering_ids,
                 policy="strict",  # irrelevant here — see this function's own docstring
+                investigation_id=entry.investigation_id,
             )
             return [alert] if alert is not None else []
 

@@ -16,16 +16,21 @@ from datetime import UTC, date, datetime
 import asyncpg
 
 from conduit_common.identity import new_id
-from schemas.domain import Hotlist, Principal
+from schemas.domain import Hotlist, Principal, WatchStatus
 
+#: `ADD COLUMN IF NOT EXISTS` — `alerts.py`'s own `_BOOTSTRAP_SQL` docstring has the full reasoning:
+#: this codebase has no migration tooling, and `CREATE TABLE IF NOT EXISTS` alone is a no-op
+#: against the persistent database Stage 6b's own bootstrap already ran on.
 _BOOTSTRAP_SQL = """
 CREATE TABLE IF NOT EXISTS hotlists (
     id TEXT PRIMARY KEY,
     identifier TEXT NOT NULL,
     owner_id TEXT NOT NULL,
     review_date DATE NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
     created_at TIMESTAMPTZ NOT NULL
 );
+ALTER TABLE hotlists ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
 CREATE INDEX IF NOT EXISTS hotlists_owner_id_idx ON hotlists (owner_id);
 CREATE INDEX IF NOT EXISTS hotlists_identifier_idx ON hotlists (identifier);
 """
@@ -42,6 +47,7 @@ def _row_to_hotlist(row: asyncpg.Record) -> Hotlist:
         identifier=row["identifier"],
         owner_id=row["owner_id"],
         review_date=row["review_date"],
+        status=row["status"],
         created_at=row["created_at"],
     )
 
@@ -52,7 +58,17 @@ class HotlistStore:
 
     @classmethod
     async def connect(cls, dsn: str) -> HotlistStore:
-        pool = await asyncpg.create_pool(dsn=dsn)
+        # `min_size`/`max_size`, not `asyncpg.create_pool`'s own `min_size=10` default — Stage 6c
+        # found the real cost of ten-plus stores in this file each defaulting to a ten-connection
+        # floor: `app.py`'s own lifespan alone was already requesting ~100 connections against
+        # Postgres's own `max_connections=100`, and adding this store (plus `monitors.py`/
+        # `alerts.py`, this stage's other two) pushed a real `TestClient` lifespan over the ceiling,
+        # reproduced directly as `asyncpg.exceptions.TooManyConnectionsError`. A small, low-traffic
+        # control-plane store (a handful of hotlists per analyst) needs nowhere near ten idle
+        # connections; bounded here rather than fixed by raising Postgres's own ceiling, which
+        # would paper over every other store's identical unbounded default rather than this one's
+        # own actual load.
+        pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=4)
         async with pool.acquire() as conn:
             await conn.execute(_BOOTSTRAP_SQL)
         return cls(pool)
@@ -72,12 +88,13 @@ class HotlistStore:
         )
         async with self._pool.acquire() as conn:
             await conn.execute(
-                "INSERT INTO hotlists (id, identifier, owner_id, review_date, created_at) "
-                "VALUES ($1, $2, $3, $4, $5)",
+                "INSERT INTO hotlists (id, identifier, owner_id, review_date, status, created_at) "
+                "VALUES ($1, $2, $3, $4, $5, $6)",
                 hotlist.id,
                 hotlist.identifier,
                 hotlist.owner_id,
                 hotlist.review_date,
+                hotlist.status,
                 hotlist.created_at,
             )
         return hotlist
@@ -85,7 +102,7 @@ class HotlistStore:
     async def get_authorized(self, hotlist_id: str, principal: Principal) -> Hotlist:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT id, identifier, owner_id, review_date, created_at "
+                "SELECT id, identifier, owner_id, review_date, status, created_at "
                 "FROM hotlists WHERE id = $1 AND owner_id = $2",
                 hotlist_id,
                 principal.id,
@@ -99,11 +116,26 @@ class HotlistStore:
         "what does a second analyst observe of a hotlist they do not own": nothing."""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, identifier, owner_id, review_date, created_at "
+                "SELECT id, identifier, owner_id, review_date, status, created_at "
                 "FROM hotlists WHERE owner_id = $1 ORDER BY created_at DESC",
                 principal.id,
             )
         return [_row_to_hotlist(row) for row in rows]
+
+    async def set_status(self, hotlist_id: str, status: WatchStatus) -> None:
+        """Called only by the evaluator (`services/api/evaluation.py`), never a route — Stage 6c's
+        own answer to ADR-036's "surfaced as stopped somewhere the analyst... can see it": written
+        on every evaluation attempt that reaches this hotlist, not only on the first skip, so
+        `status` reflects the *most recent* attempt (`active` again the next time a principal is
+        resolved), not a one-way, permanently-tripped flag. No principal parameter and no
+        `WHERE owner_id = ...` — the evaluator has no principal to filter by at this call site by
+        construction (this is precisely the caller resolving one *failed*), and the row's own id is
+        already the only thing identifying it; nothing here is a read a principal could leak
+        through."""
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE hotlists SET status = $2 WHERE id = $1", hotlist_id, status
+            )
 
     async def list_all_active(self) -> list[Hotlist]:
         """**Not principal-scoped — deliberately, and the one method on this store that isn't.**
@@ -117,7 +149,7 @@ class HotlistStore:
         established needs an unscoped population."""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, identifier, owner_id, review_date, created_at FROM hotlists"
+                "SELECT id, identifier, owner_id, review_date, status, created_at FROM hotlists"
             )
         return [_row_to_hotlist(row) for row in rows]
 

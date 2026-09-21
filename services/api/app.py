@@ -97,17 +97,20 @@ from schemas.analytics import (
 from schemas.domain import (
     Edge,
     ExpandRequest,
+    Hotlist,
+    Monitor,
     Node,
     NodeId,
     OntologySchema,
+    PathRequest,
     PatternQuery,
     Principal,
     SavedPattern,
 )
+
 # `Path` is already `pathlib.Path` in this module — `GraphPath` is the same alias
 # `adapters/compute_graphology_tier1/adapter.py` already uses for the identical collision.
 from schemas.domain import Path as GraphPath
-from schemas.domain import PathRequest
 from schemas.ingest import (
     CONNECTOR_CATALOGUE,
     ConnectDraftInput,
@@ -134,8 +137,10 @@ from . import resolution as resolution_module
 from . import resolution_trigger as resolution_trigger_module
 from . import review as review_module
 from . import search as search_module
+from .alerts import AlertNotFoundError, AlertStore
 from .audit import AuditWriteError, AuditWriter
 from .auth import PrincipalResolutionError, PrincipalResolver, bearer_scheme
+from .change_stream import ChangeStreamWriter
 from .compute_routes import (
     JOB_TYPE_COMPUTE_METRIC,
     ComputeMetricAccepted,
@@ -145,29 +150,31 @@ from .compute_routes import (
 )
 from .config import ApiConfig
 from .dossier import DocumentView
+from .evaluation import evaluate_hotlists_for_entry, evaluate_monitors_for_entry
 from .history import (
     HistoryStep,
     HistoryStepNotFoundError,
     HistoryStepSummary,
     InvestigationHistoryStore,
 )
+from .hotlists import HotlistNotFoundError, HotlistStore
 from .investigations import Investigation, InvestigationNotFoundError, InvestigationStore
 from .jobs import JobQueue
 from .mapconfig_loader import load_map_config, public_view
+from .monitors import MonitorNotFoundError, MonitorStore
 from .notify import notify_channel, publish_delta
-from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
-from .change_stream import ChangeStreamWriter
 from .pattern_store import PatternNotFoundError, PatternStore
 from .patterns import (
     JOB_TYPE_PATTERN_MATCH,
     PatternPreview,
     PatternRunAccepted,
-    SavePatternRequest,
     SavedPatternList,
+    SavePatternRequest,
     preview_pattern,
     run_pattern,
     run_pattern_match_job,
 )
+from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
 from .resolution_trigger import ResolveNowAccepted
 from .review import (
     AcceptCandidateRequest,
@@ -226,6 +233,17 @@ from .tile_cache import (
     write_cached_tile,
 )
 from .tile_proxy import build_upstream_url, fetch_tile
+from .watch_routes import (
+    AlertJumpResult,
+    AlertList,
+    AlertView,
+    CreateHotlistRequest,
+    CreateMonitorRequest,
+    HotlistList,
+    MonitorList,
+    alert_to_view,
+    fetch_jumpable_referents,
+)
 from .worker import JobWorker
 from .working_set.models import (
     CardinalityPreview,
@@ -263,6 +281,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     history = await InvestigationHistoryStore.connect(config.postgres.dsn)
     sites = await SiteStore.connect(config.postgres.dsn)
     patterns_store = await PatternStore.connect(config.postgres.dsn)
+    hotlists_store = await HotlistStore.connect(config.postgres.dsn)
+    monitors_store = await MonitorStore.connect(config.postgres.dsn)
+    alerts_store = await AlertStore.connect(config.postgres.dsn)
     studio_recipes = await StudioRecipeStore.connect(config.postgres.dsn)
     extraction_candidates = await ExtractionCandidateStore.connect(config.postgres.dsn)
     litellm_client = LiteLLMClient(LiteLLMConfig.from_env())
@@ -303,6 +324,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.history = history
     app.state.sites = sites
     app.state.patterns_store = patterns_store
+    app.state.hotlists_store = hotlists_store
+    app.state.monitors_store = monitors_store
+    app.state.alerts_store = alerts_store
     app.state.studio_recipes = studio_recipes
     app.state.extraction_candidates = extraction_candidates
     app.state.model = model
@@ -354,6 +378,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await history.close()
         await sites.close()
         await patterns_store.close()
+        await hotlists_store.close()
+        await monitors_store.close()
+        await alerts_store.close()
         await studio_recipes.close()
         await extraction_candidates.close()
         await litellm_client.aclose()
@@ -432,6 +459,22 @@ def get_patterns_store(request: Request) -> PatternStore:
     return request.app.state.patterns_store  # type: ignore[no-any-return]
 
 
+def get_config(request: Request) -> ApiConfig:
+    return request.app.state.config  # type: ignore[no-any-return]
+
+
+def get_hotlists_store(request: Request) -> HotlistStore:
+    return request.app.state.hotlists_store  # type: ignore[no-any-return]
+
+
+def get_monitors_store(request: Request) -> MonitorStore:
+    return request.app.state.monitors_store  # type: ignore[no-any-return]
+
+
+def get_alerts_store(request: Request) -> AlertStore:
+    return request.app.state.alerts_store  # type: ignore[no-any-return]
+
+
 def get_studio_recipes(request: Request) -> StudioRecipeStore:
     return request.app.state.studio_recipes  # type: ignore[no-any-return]
 
@@ -489,6 +532,10 @@ MapConfigDep = Annotated[MapConfig, Depends(get_map_config)]
 PrincipalDep = Annotated[Principal, Depends(get_principal)]
 SitesDep = Annotated[SiteStore, Depends(get_sites)]
 PatternsStoreDep = Annotated[PatternStore, Depends(get_patterns_store)]
+ConfigDep = Annotated[ApiConfig, Depends(get_config)]
+HotlistsStoreDep = Annotated[HotlistStore, Depends(get_hotlists_store)]
+MonitorsStoreDep = Annotated[MonitorStore, Depends(get_monitors_store)]
+AlertsStoreDep = Annotated[AlertStore, Depends(get_alerts_store)]
 StudioRecipesDep = Annotated[StudioRecipeStore, Depends(get_studio_recipes)]
 ExtractionCandidatesDep = Annotated[ExtractionCandidateStore, Depends(get_extraction_candidates)]
 ModelDep = Annotated[ModelPort, Depends(get_model)]
@@ -663,6 +710,31 @@ async def _pattern_not_found_handler(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND, content={"error": "pattern_not_found"}
+    )
+
+
+@app.exception_handler(HotlistNotFoundError)
+async def _hotlist_not_found_handler(
+    request: Request, exc: HotlistNotFoundError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND, content={"error": "hotlist_not_found"}
+    )
+
+
+@app.exception_handler(MonitorNotFoundError)
+async def _monitor_not_found_handler(
+    request: Request, exc: MonitorNotFoundError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND, content={"error": "monitor_not_found"}
+    )
+
+
+@app.exception_handler(AlertNotFoundError)
+async def _alert_not_found_handler(request: Request, exc: AlertNotFoundError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND, content={"error": "alert_not_found"}
     )
 
 
@@ -1584,6 +1656,130 @@ async def patterns_load_route(
     return await patterns_store.get_authorized(pattern_id, principal, version=version)
 
 
+# --- hotlists, monitors, the alert inbox (Phase 7 Stage 6c) -------------------
+#
+# Owner-only, not investigation-scoped — the same reasoning `/v1/patterns/*` already gives.
+# `Alert.investigation_id` (the triggering event's own investigation, not the hotlist/monitor's
+# own creation context — `schemas.domain.Alert`'s own docstring has the full reasoning) is what
+# `POST /v1/alerts/{alert_id}/jump` branches a new investigation from.
+
+
+@app.post("/v1/hotlists", status_code=status.HTTP_201_CREATED)
+async def create_hotlist_route(
+    body: CreateHotlistRequest,
+    principal: PrincipalDep,
+    hotlists_store: HotlistsStoreDep,
+    audit: AuditDep,
+) -> Hotlist:
+    hotlist = await hotlists_store.create(
+        principal, identifier=body.identifier, review_date=body.review_date
+    )
+    await audit.record(
+        principal=principal,
+        action="hotlists_create",
+        resolved_query={"hotlist_id": hotlist.id},
+        result_cardinality=1,
+    )
+    return hotlist
+
+
+@app.get("/v1/hotlists")
+async def list_hotlists_route(
+    principal: PrincipalDep, hotlists_store: HotlistsStoreDep
+) -> HotlistList:
+    return HotlistList(hotlists=await hotlists_store.list_authorized(principal))
+
+
+@app.post("/v1/monitors", status_code=status.HTTP_201_CREATED)
+async def create_monitor_route(
+    body: CreateMonitorRequest,
+    principal: PrincipalDep,
+    monitors_store: MonitorsStoreDep,
+    patterns_store: PatternsStoreDep,
+    audit: AuditDep,
+) -> Monitor:
+    """`pattern_id` ownership proven via `PatternStore.get_authorized` first, the same
+    `PatternNotFoundError`-collapse existence-leak discipline every other route in this file
+    already uses — `MonitorStore.create`'s own docstring is explicit this is the caller's job, not
+    re-derived inside the store from a second, independent ownership check."""
+    await patterns_store.get_authorized(body.pattern_id, principal)
+    monitor = await monitors_store.create(principal, pattern_id=body.pattern_id)
+    await audit.record(
+        principal=principal,
+        action="monitors_create",
+        resolved_query={"monitor_id": monitor.id},
+        result_cardinality=1,
+    )
+    return monitor
+
+
+@app.get("/v1/monitors")
+async def list_monitors_route(
+    principal: PrincipalDep, monitors_store: MonitorsStoreDep
+) -> MonitorList:
+    return MonitorList(monitors=await monitors_store.list_authorized(principal))
+
+
+@app.get("/v1/alerts")
+async def list_alerts_route(
+    principal: PrincipalDep, alerts_store: AlertsStoreDep, graph: GraphDep
+) -> AlertList:
+    rows = await alerts_store.list_authorized(principal)
+    return AlertList(alerts=[await alert_to_view(a, principal, graph) for a in rows])
+
+
+@app.get("/v1/alerts/{alert_id}")
+async def get_alert_route(
+    alert_id: str, principal: PrincipalDep, alerts_store: AlertsStoreDep, graph: GraphDep
+) -> AlertView:
+    alert = await alerts_store.get_authorized(alert_id, principal)
+    return await alert_to_view(alert, principal, graph)
+
+
+@app.post("/v1/alerts/{alert_id}/jump", status_code=status.HTTP_201_CREATED)
+async def jump_alert_route(
+    alert_id: str,
+    principal: PrincipalDep,
+    alerts_store: AlertsStoreDep,
+    graph: GraphDep,
+    investigations: InvestigationsDep,
+    working_set: WorkingSetDep,
+    history: HistoryDep,
+    audit: AuditDep,
+    valkey: ValkeyDep,
+) -> AlertJumpResult:
+    """`08_ACCEPTANCE_SCENARIOS.md` B14: "The new working set contains the alert's entities and a
+    link to the originating investigation." The link is `branch.branched_from` — the identical
+    mechanism `branch_investigation` already uses (`investigations.create(principal,
+    branched_from=...)`), not new investigation-linking infrastructure. `alert.investigation_id`
+    may be `None` (the resolution trigger's own producer carries no single investigation) — the
+    branch still succeeds, simply unlinked, disclosed via `Investigation.branched_from` being
+    `None` rather than silently pointed at a wrong investigation."""
+    alert = await alerts_store.get_authorized(alert_id, principal)
+    branch = await investigations.create(principal, branched_from=alert.investigation_id)
+    nodes, unreadable = await fetch_jumpable_referents(alert, principal=principal, graph=graph)
+    outcome = await working_set.seed(branch.id, nodes, [], principal)
+    await publish_delta(valkey, branch.id, outcome.delta)
+    await _record_history_step(
+        working_set,
+        history,
+        branch.id,
+        seq=outcome.delta.seq,
+        label=f"Opened from alert {alert.id}",
+        principal=principal,
+    )
+    await audit.record(
+        principal=principal,
+        action="alerts_jump",
+        investigation_id=branch.id,
+        resolved_query={"alert_id": alert.id, "from_investigation_id": alert.investigation_id},
+        result_cardinality=len(nodes),
+    )
+    return AlertJumpResult(
+        investigation=branch, seeded_count=len(nodes), unreadable_count=unreadable
+    )
+
+
 # --- the pathfinder (Phase 7 Stage 5) -----------------------------------------
 #
 # Not investigation-scoped — the same reasoning `/v1/search` and `/v1/patterns/*` already give:
@@ -2428,6 +2624,12 @@ async def run_studio_recipe(
     jobs: JobsDep,
     valkey: ValkeyDep,
     body: RunRecipeInput,
+    handling_scheme: HandlingSchemeDep,
+    config: ConfigDep,
+    hotlists_store: HotlistsStoreDep,
+    monitors_store: MonitorsStoreDep,
+    patterns_store: PatternsStoreDep,
+    alerts_store: AlertsStoreDep,
 ) -> LoadReport:
     """§8: "Loader: run a published recipe against a file at or below
     their own clearance" — `body.source_location`, when given, is that
@@ -2447,7 +2649,22 @@ async def run_studio_recipe(
     assembled by a test harness.
 
     Also ingest's own producer onto the corpus-wide change stream (`06_DECISIONS.md` ADR-037's
-    amendment, Phase 7 Stage 6a — `services/api/change_stream.py`'s own docstring)."""
+    amendment, Phase 7 Stage 6a — `services/api/change_stream.py`'s own docstring).
+
+    **Phase 7 Stage 6c: the change-stream entry, once published, is also evaluated synchronously,
+    in this same request — `06_DECISIONS.md` ADR-036's own amendment has the full reasoning for why
+    (no principal directory exists to resolve any other owner's principal from), what this
+    narrows (only a hotlist/monitor this *same* principal owns can fire from this ingest — the
+    cross-analyst case is disclosed, not silently narrowed), and why only ingest is wired here
+    (manual-assertion and resolution are not — B13/B20, the rows this exists for, are both about
+    ingest specifically). Bounded per-hotlist/monitor by `evaluation.py`'s own overlap lock and
+    `MAX_TOUCHED_NODES_PER_EVALUATION`; **not** bounded in aggregate — this request now blocks on
+    evaluating every active hotlist and monitor this principal owns, not a fixed number of them,
+    the cost disclosed in `07_BUILD_PLAN.md` rather than silently absorbed into ingest latency. A
+    failure in this best-effort side evaluation is caught and audited, never allowed to fail the
+    ingest response itself — the load already happened; a failure to also check watches against it
+    is a narrower, disclosed problem, not a reason to tell the caller their load failed when it
+    didn't."""
     load_id = new_id()
     report = await run_published_recipe(
         recipe,
@@ -2462,9 +2679,49 @@ async def run_studio_recipe(
     await resolution_trigger_module.submit_post_ingest_resolution_jobs(
         report, recipe.row_template, ontology=ontology, jobs=jobs
     )
-    await ChangeStreamWriter(valkey).publish(
-        "ingest", node_ids=report.created_node_ids, edge_ids=report.touched_edge_ids
+    entry = await ChangeStreamWriter(valkey).publish(
+        "ingest",
+        node_ids=report.created_node_ids,
+        edge_ids=report.touched_edge_ids,
+        investigation_id=investigation.id,
     )
+    if entry is not None:
+
+        def _principal_for_owner(owner_id: str) -> Principal | None:
+            return principal if owner_id == principal.id else None
+
+        try:
+            await evaluate_hotlists_for_entry(
+                entry,
+                graph=graph,
+                scheme=handling_scheme,
+                hotlist_store=hotlists_store,
+                alert_store=alerts_store,
+                audit=audit,
+                valkey=valkey,
+                principal_for_owner=_principal_for_owner,
+                policy=config.hotlist_alert_policy,
+            )
+            await evaluate_monitors_for_entry(
+                entry,
+                graph=graph,
+                monitor_store=monitors_store,
+                pattern_store=patterns_store,
+                alert_store=alerts_store,
+                audit=audit,
+                valkey=valkey,
+                principal_for_owner=_principal_for_owner,
+            )
+        except Exception as exc:  # noqa: BLE001 - a best-effort side channel, see this route's
+            # own docstring: must never fail the ingest response the load itself already succeeded
+            # at. Audited, not silently swallowed.
+            await audit.record(
+                principal=principal,
+                action="watch_evaluation_failed",
+                investigation_id=investigation.id,
+                resolved_query={"load_id": load_id, "error": str(exc)},
+                result_cardinality=0,
+            )
     await audit.record(
         principal=principal,
         action="run_studio_recipe",

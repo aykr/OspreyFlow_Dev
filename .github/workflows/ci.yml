@@ -296,6 +296,7 @@ jobs:
           tests/services/api/working_set/test_explain_cluster_access_control.py
           tests/services/api/working_set/test_manual_resolution_access_control.py
           tests/services/api/working_set/test_resolution_threshold_access_control.py
+          tests/scenarios/test_phase7_stage6c_watch_routes.py
       - run: npm ci
       # `deltaClient.integration.test.ts` (Phase 4) spawns the real
       # `services.api.app` (`apps/workspace/test/glass_test_server.py`)
@@ -541,6 +542,7 @@ jobs:
           --ignore=tests/services/api/working_set/test_explain_cluster_access_control.py
           --ignore=tests/services/api/working_set/test_manual_resolution_access_control.py
           --ignore=tests/services/api/working_set/test_resolution_threshold_access_control.py
+          --ignore=tests/scenarios/test_phase7_stage6c_watch_routes.py
       # The Glass's fast, no-live-infra unit tests (`store.test.ts`,
       # `zoomBands.test.ts`) — `*.integration.test.ts` is excluded by
       # `vitest.config.ts` and runs in the `conformance` job instead.
