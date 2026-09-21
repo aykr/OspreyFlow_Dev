@@ -144,6 +144,95 @@ test("Run executes the pattern and reports the matched count", async ({ page }) 
   registerCovered("QUERY_BUILDER_ACTIONS", "submit-run");
 });
 
+test("Save writes the pattern and reports its new version, reachable by keyboard alone", async ({
+  page,
+}) => {
+  await page.route("**/*/v1/patterns", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ patterns: [] }) });
+  });
+  await page.route("**/*/v1/patterns/save", async (route) => {
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({
+        id: "row-1",
+        pattern_id: "pattern-1",
+        version: 1,
+        name: "Common contacts",
+        owner_id: "analyst-1",
+        created_at: "2026-01-01T00:00:00Z",
+        definition: { nodes: [], edges: [], limit: 1000 },
+      }),
+    });
+  });
+
+  await page.goto("/keyboard/query-builder-harness.html");
+  await tabToButtonNamed(page, "Add variable");
+  await page.keyboard.press("Enter");
+
+  const nameField = page.getByRole("textbox", { name: "Pattern name" });
+  await nameField.focus();
+  await page.keyboard.type("Common contacts");
+  await tabToButtonNamed(page, "Save");
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByText("Saved as version 1.")).toBeVisible();
+  registerCovered("QUERY_BUILDER_ACTIONS", "save-pattern");
+});
+
+test("Load replaces the builder's own pattern with a previously saved one, reachable by keyboard alone", async ({
+  page,
+}) => {
+  await page.route("**/*/v1/patterns", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        patterns: [
+          {
+            id: "row-1",
+            pattern_id: "pattern-1",
+            version: 2,
+            name: "Common contacts",
+            owner_id: "analyst-1",
+            created_at: "2026-01-01T00:00:00Z",
+            definition: { nodes: [], edges: [], limit: 1000 },
+          },
+        ],
+      }),
+    });
+  });
+  await page.route("**/*/v1/patterns/pattern-1*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        id: "row-1",
+        pattern_id: "pattern-1",
+        version: 2,
+        name: "Common contacts",
+        owner_id: "analyst-1",
+        created_at: "2026-01-01T00:00:00Z",
+        definition: {
+          nodes: [{ var: "a", entity_type: "Person", node_id: "n42" }],
+          edges: [],
+          limit: 1000,
+        },
+      }),
+    });
+  });
+
+  await page.goto("/keyboard/query-builder-harness.html");
+  const savedSelect = page.getByRole("combobox", { name: "Saved patterns" });
+  await savedSelect.focus();
+  await savedSelect.selectOption("pattern-1");
+  await tabToButtonNamed(page, "Load");
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByRole("group", { name: /Pattern node a: Person · n42/ })).toBeVisible();
+  registerCovered("QUERY_BUILDER_ACTIONS", "load-saved-pattern");
+});
+
 test("every registered query-builder action has its own proving test case above", () => {
   assertAllCovered("QUERY_BUILDER_ACTIONS", QUERY_BUILDER_ACTIONS);
 });

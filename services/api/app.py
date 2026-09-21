@@ -102,6 +102,7 @@ from schemas.domain import (
     OntologySchema,
     PatternQuery,
     Principal,
+    SavedPattern,
 )
 # `Path` is already `pathlib.Path` in this module — `GraphPath` is the same alias
 # `adapters/compute_graphology_tier1/adapter.py` already uses for the identical collision.
@@ -155,10 +156,13 @@ from .jobs import JobQueue
 from .mapconfig_loader import load_map_config, public_view
 from .notify import notify_channel, publish_delta
 from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
+from .pattern_store import PatternNotFoundError, PatternStore
 from .patterns import (
     JOB_TYPE_PATTERN_MATCH,
     PatternPreview,
     PatternRunAccepted,
+    SavePatternRequest,
+    SavedPatternList,
     preview_pattern,
     run_pattern,
     run_pattern_match_job,
@@ -257,6 +261,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     investigations = await InvestigationStore.connect(config.postgres.dsn)
     history = await InvestigationHistoryStore.connect(config.postgres.dsn)
     sites = await SiteStore.connect(config.postgres.dsn)
+    patterns_store = await PatternStore.connect(config.postgres.dsn)
     studio_recipes = await StudioRecipeStore.connect(config.postgres.dsn)
     extraction_candidates = await ExtractionCandidateStore.connect(config.postgres.dsn)
     litellm_client = LiteLLMClient(LiteLLMConfig.from_env())
@@ -294,6 +299,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.investigations = investigations
     app.state.history = history
     app.state.sites = sites
+    app.state.patterns_store = patterns_store
     app.state.studio_recipes = studio_recipes
     app.state.extraction_candidates = extraction_candidates
     app.state.model = model
@@ -344,6 +350,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await investigations.close()
         await history.close()
         await sites.close()
+        await patterns_store.close()
         await studio_recipes.close()
         await extraction_candidates.close()
         await litellm_client.aclose()
@@ -418,6 +425,10 @@ def get_sites(request: Request) -> SiteStore:
     return request.app.state.sites  # type: ignore[no-any-return]
 
 
+def get_patterns_store(request: Request) -> PatternStore:
+    return request.app.state.patterns_store  # type: ignore[no-any-return]
+
+
 def get_studio_recipes(request: Request) -> StudioRecipeStore:
     return request.app.state.studio_recipes  # type: ignore[no-any-return]
 
@@ -474,6 +485,7 @@ OntologyDep = Annotated[OntologySchema, Depends(get_ontology)]
 MapConfigDep = Annotated[MapConfig, Depends(get_map_config)]
 PrincipalDep = Annotated[Principal, Depends(get_principal)]
 SitesDep = Annotated[SiteStore, Depends(get_sites)]
+PatternsStoreDep = Annotated[PatternStore, Depends(get_patterns_store)]
 StudioRecipesDep = Annotated[StudioRecipeStore, Depends(get_studio_recipes)]
 ExtractionCandidatesDep = Annotated[ExtractionCandidateStore, Depends(get_extraction_candidates)]
 ModelDep = Annotated[ModelPort, Depends(get_model)]
@@ -639,6 +651,15 @@ async def _history_step_not_found_handler(
 @app.exception_handler(SiteNotFoundError)
 async def _site_not_found_handler(request: Request, exc: SiteNotFoundError) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "site_not_found"})
+
+
+@app.exception_handler(PatternNotFoundError)
+async def _pattern_not_found_handler(
+    request: Request, exc: PatternNotFoundError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND, content={"error": "pattern_not_found"}
+    )
 
 
 @app.exception_handler(NodeNotInWorkingSetError)
@@ -1504,6 +1525,59 @@ async def patterns_run_route(
         result_cardinality=accepted.matched_count or 0,
     )
     return accepted
+
+
+# --- saved patterns (Phase 7 Stage 4, 06_DECISIONS.md ADR-032/036/040) --------
+#
+# Owner-only, not investigation-scoped — `pattern_store.py`'s own module docstring has the full
+# reasoning. No share route exists: ADR-040 (pattern sharing) is Proposed, not accepted, so there
+# is nothing here for a share endpoint to do yet.
+
+
+@app.post("/v1/patterns/save", status_code=status.HTTP_201_CREATED)
+async def patterns_save_route(
+    body: SavePatternRequest,
+    principal: PrincipalDep,
+    patterns_store: PatternsStoreDep,
+    audit: AuditDep,
+) -> SavedPattern:
+    """A `pattern_id` the caller does not own raises `PatternStore`'s own `PatternNotFoundError`
+    (mapped to 404 by `_pattern_not_found_handler`) — the same existence-leak collapse
+    `get_authorized_investigation` already uses, here inside `PatternStore.save` itself rather
+    than a separate route-level gate, since save and the ownership check are one operation."""
+    saved = await patterns_store.save(
+        principal,
+        pattern_id=body.pattern_id,
+        name=body.name,
+        definition=body.definition,
+    )
+    await audit.record(
+        principal=principal,
+        action="patterns_save",
+        resolved_query={"pattern_id": saved.pattern_id, "version": saved.version},
+        result_cardinality=1,
+    )
+    return saved
+
+
+@app.get("/v1/patterns")
+async def patterns_list_route(
+    principal: PrincipalDep,
+    patterns_store: PatternsStoreDep,
+) -> SavedPatternList:
+    """Never another principal's patterns — `PatternStore.list_authorized` filters by owner in
+    the query itself (`CLAUDE.md` rule 3), not after fetching everything."""
+    return SavedPatternList(patterns=await patterns_store.list_authorized(principal))
+
+
+@app.get("/v1/patterns/{pattern_id}")
+async def patterns_load_route(
+    pattern_id: str,
+    principal: PrincipalDep,
+    patterns_store: PatternsStoreDep,
+    version: int | None = None,
+) -> SavedPattern:
+    return await patterns_store.get_authorized(pattern_id, principal, version=version)
 
 
 # --- the pathfinder (Phase 7 Stage 5) -----------------------------------------

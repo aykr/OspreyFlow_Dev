@@ -1,7 +1,9 @@
-// Fetch wrappers for `POST /v1/patterns/preview` and `POST /v1/patterns/run`
-// (`services/api/patterns.py`) — mirrors `metrics/api.ts`'s own conventions. Not investigation
-// -scoped, the same reasoning `search.py`/`GlobalSearch.tsx` already give for `POST /v1/search`.
-import type { PatternQuery, Subgraph } from "../../../../packages/schemas/generated";
+// Fetch wrappers for `POST /v1/patterns/preview`, `POST /v1/patterns/run` and the saved-pattern
+// routes (`services/api/patterns.py`, `services/api/pattern_store.py`) — mirrors `metrics/api.ts`'s
+// own conventions. Not investigation-scoped, the same reasoning `search.py`/`GlobalSearch.tsx`
+// already give for `POST /v1/search`. `06_DECISIONS.md` ADR-032/036/040: save/load/list only —
+// no share endpoint exists, since ADR-040 (pattern sharing) is Proposed, not accepted.
+import type { PatternQuery, SavedPattern, Subgraph } from "../../../../packages/schemas/generated";
 
 export interface PatternPreview {
   estimated_count: number;
@@ -45,4 +47,48 @@ export async function runPattern(
     throw new Error(`POST /v1/patterns/run failed: ${response.status}`);
   }
   return (await response.json()) as PatternRunAccepted;
+}
+
+export async function savePattern(
+  apiBaseUrl: string,
+  bearerToken: string,
+  request: { pattern_id: string | null; name: string; definition: PatternQuery },
+): Promise<SavedPattern> {
+  const response = await fetch(`${apiBaseUrl}/v1/patterns/save`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(`POST /v1/patterns/save failed: ${response.status}`);
+  }
+  return (await response.json()) as SavedPattern;
+}
+
+export async function listPatterns(
+  apiBaseUrl: string,
+  bearerToken: string,
+): Promise<SavedPattern[]> {
+  const response = await fetch(`${apiBaseUrl}/v1/patterns`, {
+    headers: { Authorization: `Bearer ${bearerToken}` },
+  });
+  if (!response.ok) {
+    throw new Error(`GET /v1/patterns failed: ${response.status}`);
+  }
+  const body = (await response.json()) as { patterns: SavedPattern[] };
+  return body.patterns;
+}
+
+export async function loadPattern(
+  apiBaseUrl: string,
+  bearerToken: string,
+  patternId: string,
+): Promise<SavedPattern> {
+  const response = await fetch(`${apiBaseUrl}/v1/patterns/${patternId}`, {
+    headers: { Authorization: `Bearer ${bearerToken}` },
+  });
+  if (!response.ok) {
+    throw new Error(`GET /v1/patterns/${patternId} failed: ${response.status}`);
+  }
+  return (await response.json()) as SavedPattern;
 }

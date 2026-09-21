@@ -432,6 +432,24 @@ class PatternQuery(BaseModel):
     limit: int = Field(default=1000, ge=1)
 
 
+class SavedPattern(BaseModel):
+    """A persisted `PatternQuery` — Phase 7 Stage 4's own "saveable ... and versioned" promise
+    (`02_GLASS_FRONTEND.md` §3.3), closed for save/load/list/version by `06_DECISIONS.md` ADR-032/
+    036/040. `pattern_id` is stable across saves; `id` and `version` identify one specific save.
+    Deliberately carries `owner_id` and nothing shaped like `Handling.owning_unit` or a share
+    target — ADR-036 and ADR-040 both require a saved pattern readable only by its own owner until
+    ADR-040 (pattern sharing) is accepted; there is no broader-audience field to widen by mistake
+    because none exists yet."""
+
+    id: str
+    pattern_id: str
+    version: int = Field(ge=1)
+    name: str
+    owner_id: str
+    created_at: datetime
+    definition: PatternQuery
+
+
 class NeighbourhoodStats(BaseModel):
     node_id: NodeId
     degree: int
@@ -487,6 +505,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     PatternNode,
     PatternEdge,
     PatternQuery,
+    SavedPattern,
     NeighbourhoodStats,
     Subgraph,
     ListNodesPage,

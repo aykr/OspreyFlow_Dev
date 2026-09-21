@@ -4,6 +4,7 @@ import {
   addEdge,
   addVariableNode,
   createEmptyPattern,
+  fromPatternQuery,
   pinNode,
   removeElement,
   toPatternQuery,
@@ -61,5 +62,46 @@ describe("toPatternQuery", () => {
     state = addVariableNode(state, "Person");
     const query = toPatternQuery(state);
     expect(query.nodes[0]?.node_id).toBeNull();
+  });
+});
+
+describe("fromPatternQuery", () => {
+  it("round-trips a saved pattern's nodes and edges back into builder state", () => {
+    let state = createEmptyPattern();
+    state = addVariableNode(state, "Person"); // a
+    state = addVariableNode(state, "Endpoint"); // b
+    state = addEdge(state, "USES", "a", "b");
+    const query = toPatternQuery(state);
+
+    expect(fromPatternQuery(query)).toEqual(state);
+  });
+
+  it("regenerates a pinned node's display label from entity_type and node_id, matching pinNode's own shape", () => {
+    let state = createEmptyPattern();
+    state = pinNode(state, "Person", "n42", "Person · n42");
+    const query = toPatternQuery(state);
+
+    // The label is never persisted in PatternQuery itself — it must come back identical to what
+    // pinning the same node fresh would have produced, not merely non-null.
+    expect(fromPatternQuery(query)).toEqual(state);
+  });
+
+  it("leaves pinnedNodeId and pinnedLabel null for an ordinary (unpinned) variable", () => {
+    const loaded = fromPatternQuery({
+      nodes: [{ var: "a", entity_type: "Person", node_id: null }],
+      edges: [],
+      limit: 1000,
+    });
+    expect(loaded.nodes[0]?.pinnedNodeId).toBeNull();
+    expect(loaded.nodes[0]?.pinnedLabel).toBeNull();
+  });
+
+  it("defaults entityType to an empty string when entity_type is absent", () => {
+    const loaded = fromPatternQuery({
+      nodes: [{ var: "a", node_id: null }],
+      edges: [],
+      limit: 1000,
+    });
+    expect(loaded.nodes[0]?.entityType).toBe("");
   });
 });

@@ -130,3 +130,24 @@ export function toPatternQuery(state: PatternBuilderState, limit = 1000): Patter
   }));
   return { nodes, edges, limit };
 }
+
+/** The inverse of `toPatternQuery`, for loading a saved pattern back into the builder
+ * (`06_DECISIONS.md` ADR-032/036/040). `pinnedLabel` is display-only and was never persisted in
+ * `PatternQuery` itself, so it is regenerated here in the same `"${entityType} · ${nodeId}"` shape
+ * `handlePinFromSearch` already produces at pin time — the two are indistinguishable once
+ * rendered, which is the point: a reloaded pinned node looks exactly like one just pinned. */
+export function fromPatternQuery(definition: PatternQuery): PatternBuilderState {
+  return {
+    nodes: definition.nodes.map((n) => ({
+      var: n.var,
+      entityType: n.entity_type ?? "",
+      pinnedNodeId: n.node_id ?? null,
+      pinnedLabel: n.node_id ? `${n.entity_type} · ${n.node_id}` : null,
+    })),
+    edges: definition.edges.map((e) => ({
+      edgeType: e.edge_type,
+      fromVar: e.from_var,
+      toVar: e.to_var,
+    })),
+  };
+}

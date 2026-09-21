@@ -14,19 +14,36 @@
 // **Delete/Backspace on a focused pattern node** removes it (and every edge touching it) — real
 // state-mutating logic, not a native control, so it gets its own `keyboard/query-builder.spec.ts`
 // case (`delete-focused-pattern-element`) the same way `MetricsPanel`'s row activation does.
-import { useMemo, useState } from "react";
+//
+// **Save/load — Phase 7 Stage 4's own "saveable ... and versioned" promise, closed here
+// (`06_DECISIONS.md` ADR-032/036/040).** Save always writes the *next version* of whatever pattern
+// is currently loaded (`currentPatternId`), or starts a brand-new one if nothing is loaded yet —
+// there is no separate "save as new" control, matching the store's own `pattern_id=None` shape.
+// No share control exists: ADR-040 (pattern sharing) is Proposed, not accepted, so a saved pattern
+// is loadable only by the analyst who saved it.
+import { useEffect, useMemo, useState } from "react";
 import type { KeyboardEvent } from "react";
 
-import type { Node, OntologySchema } from "../../../../packages/schemas/generated";
+import type { Node, OntologySchema, SavedPattern } from "../../../../packages/schemas/generated";
 import { Button } from "../design/primitives/Button";
+import { Input } from "../design/primitives/Input";
 import { Panel } from "../design/primitives/Panel";
 import { Select } from "../design/primitives/Select";
 import { GlobalSearch } from "../search/GlobalSearch";
-import { fetchPatternPreview, runPattern, type PatternPreview, type PatternRunAccepted } from "./api";
+import {
+  fetchPatternPreview,
+  listPatterns,
+  loadPattern,
+  runPattern,
+  savePattern,
+  type PatternPreview,
+  type PatternRunAccepted,
+} from "./api";
 import {
   addEdge,
   addVariableNode,
   createEmptyPattern,
+  fromPatternQuery,
   isPatternRunnable,
   pinNode,
   removeElement,
@@ -50,6 +67,25 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, schema }: QueryBuil
   const [preview, setPreview] = useState<PatternPreview | null>(null);
   const [runResult, setRunResult] = useState<PatternRunAccepted | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [patternName, setPatternName] = useState("");
+  const [currentPatternId, setCurrentPatternId] = useState<string | null>(null);
+  const [savedPatterns, setSavedPatterns] = useState<SavedPattern[]>([]);
+  const [selectedPatternId, setSelectedPatternId] = useState("");
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Silently leaves the list empty on failure — an analyst who has never saved anything, or
+    // whose session can't reach `/v1/patterns` yet, sees an empty "Load" select rather than an
+    // error banner before they have done anything. `handleSave`/`handleLoad` surface a real
+    // `error` state for a failure the analyst actually triggered.
+    listPatterns(apiBaseUrl, bearerToken)
+      .then(setSavedPatterns)
+      .catch(() => undefined);
+    // Only ever needs to run once, on mount — `handleSave` and `handleLoad` each refresh the list
+    // themselves after their own network call completes, rather than this effect re-running.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const flaggedVars = useMemo(
     () => new Set(unpinnedSecondaryRoots(pattern).map((n) => n.var)),
@@ -101,6 +137,38 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, schema }: QueryBuil
     setError(null);
     try {
       setRunResult(await runPattern(apiBaseUrl, bearerToken, toPatternQuery(pattern)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function handleSave(): Promise<void> {
+    setError(null);
+    setSaveStatus(null);
+    try {
+      const saved = await savePattern(apiBaseUrl, bearerToken, {
+        pattern_id: currentPatternId,
+        name: patternName || "Untitled pattern",
+        definition: toPatternQuery(pattern),
+      });
+      setCurrentPatternId(saved.pattern_id);
+      setSaveStatus(`Saved as version ${saved.version}.`);
+      setSavedPatterns(await listPatterns(apiBaseUrl, bearerToken));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function handleLoad(): Promise<void> {
+    if (!selectedPatternId) return;
+    setError(null);
+    setSaveStatus(null);
+    try {
+      const saved = await loadPattern(apiBaseUrl, bearerToken, selectedPatternId);
+      setPattern(fromPatternQuery(saved.definition));
+      setCurrentPatternId(saved.pattern_id);
+      setPatternName(saved.name);
+      resetResults();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -215,6 +283,45 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, schema }: QueryBuil
             </Button>
           </div>
         )}
+
+        <div
+          role="group"
+          aria-label="Save this pattern"
+          style={{ display: "flex", gap: "var(--sp-4)" }}
+        >
+          <Input
+            aria-label="Pattern name"
+            value={patternName}
+            onChange={(e) => setPatternName(e.target.value)}
+            placeholder="Untitled pattern"
+          />
+          <Button type="button" onClick={() => void handleSave()} disabled={pattern.nodes.length === 0}>
+            {currentPatternId ? "Save new version" : "Save"}
+          </Button>
+        </div>
+        {saveStatus && <p aria-live="polite">{saveStatus}</p>}
+
+        <div
+          role="group"
+          aria-label="Load a saved pattern"
+          style={{ display: "flex", gap: "var(--sp-4)" }}
+        >
+          <Select
+            aria-label="Saved patterns"
+            value={selectedPatternId}
+            onChange={(e) => setSelectedPatternId(e.target.value)}
+          >
+            <option value="">Choose a saved pattern…</option>
+            {savedPatterns.map((p) => (
+              <option key={p.pattern_id} value={p.pattern_id}>
+                {p.name} (v{p.version})
+              </option>
+            ))}
+          </Select>
+          <Button type="button" onClick={() => void handleLoad()} disabled={!selectedPatternId}>
+            Load
+          </Button>
+        </div>
 
         {error && <p style={{ color: "var(--error)" }}>{error}</p>}
 

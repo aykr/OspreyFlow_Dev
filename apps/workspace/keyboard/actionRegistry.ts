@@ -142,4 +142,6 @@ export const QUERY_BUILDER_ACTIONS = defineActionRegistry("QUERY_BUILDER_ACTIONS
   "delete-focused-pattern-element",
   "run-preview",
   "submit-run",
+  "save-pattern",
+  "load-saved-pattern",
 ] as const);

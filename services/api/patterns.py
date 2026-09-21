@@ -30,7 +30,7 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 from ports.graph import GraphPort
-from schemas.domain import PatternQuery, Principal, Subgraph, TxId
+from schemas.domain import PatternQuery, Principal, SavedPattern, Subgraph, TxId
 
 from .jobs import JobQueue
 
@@ -57,6 +57,22 @@ class PatternPreview(BaseModel):
 
     estimated_count: int
     is_floor: bool
+
+
+class SavePatternRequest(BaseModel):
+    """`POST /v1/patterns/save`'s body — `06_DECISIONS.md` ADR-032/036/040. `pattern_id=None`
+    starts a new pattern at version 1; a given `pattern_id` saves the next version of a pattern
+    the caller already owns (`PatternStore.save`'s own `PatternNotFoundError` otherwise)."""
+
+    pattern_id: str | None = None
+    name: str
+    definition: PatternQuery
+
+
+class SavedPatternList(BaseModel):
+    """`GET /v1/patterns`'s response — the latest version of every pattern the caller owns."""
+
+    patterns: list[SavedPattern]
 
 
 class PatternRunAccepted(BaseModel):
@@ -130,6 +146,8 @@ __all__ = [
     "PREVIEW_COUNT_CEILING",
     "PatternPreview",
     "PatternRunAccepted",
+    "SavePatternRequest",
+    "SavedPatternList",
     "preview_pattern",
     "run_pattern",
     "run_pattern_match_job",

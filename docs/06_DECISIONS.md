@@ -43,11 +43,11 @@ confirmed.
 | 029 | Neither compute tier can run Leiden; both run Louvain with a connected-components fix | | **Accepted** — 20 Sep 2026 |
 | 030 | `PatternQuery` widened for a pinned second root; `match()` does not work on ArcadeDB | | **Accepted** — 20 Sep 2026 |
 | 031 | The repository splits into `spec/` and `process/`; `docs/` is dissolved at Phase 8's close | | **Accepted, scheduled** — 20 Sep 2026 |
-| 032 | The visual query builder is a list/palette editor, not a second drawing canvas | | **Accepted, partially implemented** — 20 Sep 2026, save/version scoped to Stage 4, not yet built |
+| 032 | The visual query builder is a list/palette editor, not a second drawing canvas | | **Accepted, partially implemented** — 20 Sep 2026; save/load/list/version built 21 Sep (Part 3), sharing still deferred to ADR-040 |
 | 033 | `Path.nodes`/`Path.edges` carry hydrated objects, not bare ids | | **Accepted** — 20 Sep 2026 |
 | 034 | Publication and licence boundary; supersedes ADR-031 | | **Accepted** — 21 Sep 2026 |
 | 035 | Demo distribution classes (`shipped`/`internal`); Fixture Corp is the shippable demo | | **Accepted** — 21 Sep 2026, one item declined as written |
-| 036 | Saved-pattern monitor principal identity | | **Accepted, contingent on pattern persistence** — 21 Sep 2026 |
+| 036 | Saved-pattern monitor principal identity | | **Accepted** — 21 Sep 2026, its pattern-persistence contingency satisfied same day (Part 3) |
 | 037 | Monitor trigger model and execution bounds | | **Accepted, amended** — 21 Sep 2026 |
 | 038 | Hotlist membership and existence | | **Accepted, two-mode deployment policy** — 21 Sep 2026 |
 | 039 | Alert inbox lifecycle | | **Accepted, two additions** — 21 Sep 2026 |
@@ -56,9 +56,10 @@ confirmed.
 Thirty-nine records (001–039) are accepted, including all seven overrides of the input documents.
 ADR-036 through ADR-039 were drafted Proposed and accepted in the same session, two (037, 038)
 with changes from their own first draft recorded in place rather than rewritten silently — see
-each record's own amendment/decision section. ADR-036's acceptance is contingent on pattern
-persistence, scoped to Stage 4 and built later in the same session that accepted it (Part 3).
-ADR-040 is **Proposed**, not accepted —
+each record's own amendment/decision section. ADR-036's acceptance was contingent on pattern
+persistence existing; Part 3 of the same session built it (save/load/list/version, Stage 4's own
+unfinished business), so the contingency is satisfied and the owning-principal reference ADR-036
+needs now lives on `SavedPattern.owner_id`. ADR-040 is **Proposed**, not accepted —
 it presents three options for pattern sharing without deciding one, and pattern sharing is not
 built until it is accepted; a saved pattern is readable only by its own owner until then.
 `07_BUILD_PLAN.md`'s Phase 7 Stage 6 entry is cross-referenced to ADR-036–039, and its Phase 7
@@ -2379,11 +2380,11 @@ moving, the same reasoning that sets this timing in the first place.
 
 **Status.** Accepted, 20 September 2026. **Partially implemented — recorded explicitly here
 because this record had been reading as done.** Stage 4 (20 September 2026) built compose, preview
-and run only. Save and version are scoped to Stage 4's own unfinished business and are built
-**later in the same session** that accepts ADR-036–039 (Part 3, not yet landed as of this
-acceptance) — see the updated paragraph below and `07_BUILD_PLAN.md`'s Phase 7 Stage 4 known-gaps
-entry, both to be updated again once Part 3 closes. Sharing is deferred to ADR-040, Proposed, not
-accepted — a saved pattern remains readable only by its own owner until that record is decided.
+and run only. **Save, load, list and version built 21 September 2026 (Part 3 of the same session
+that accepted ADR-036–039)** — see the updated paragraph below and `07_BUILD_PLAN.md`'s Phase 7
+Stage 4 known-gaps entry, both updated to record what shipped. Sharing is deferred to ADR-040,
+Proposed, not accepted — a saved pattern remains readable only by its own owner until that record
+is decided.
 
 **The premise.** `02_GLASS_FRONTEND.md` §3.3 specifies the visual query builder as "a
 node-and-edge pattern the analyst draws" — language that reads, and was built against elsewhere in
@@ -2464,13 +2465,14 @@ list editor `QueryBuilderPanel.tsx` actually is, not the canvas the original phr
 **On "saveable, shareable and versioned," the same bullet's own third promise — updated 21
 September 2026, not left as originally drafted.** At first checked and found not built at all, in
 any of the three: `PatternQuery` had no persistence path, no owner or share target, and no version
-history — Stage 4 built the compose/preview/run loop only. **Save and version are scoped to be
-built next, in Part 3 of this same session, not yet built as of this entry:** a `PatternQuery`
-will be saveable, loadable, listable and versionable, with an owner field satisfying ADR-036's own
-contingency, once that work lands. **Sharing is not built** — a saved pattern is readable only by
-its own owner — and stays that way until ADR-040 (pattern sharing and query-definition disclosure,
-Proposed) is accepted; ADR-040 records why sharing is a distinct leak from the result-time leaks
-ADR-038 already settled for hotlists. B19's
+history — Stage 4 built the compose/preview/run loop only. **Save, load, list and version are
+built, 21 September 2026 (Part 3 of this same session):** `services/api/pattern_store.py`'s
+`PatternStore` and `POST/GET /v1/patterns*` (`services/api/app.py`) make a `PatternQuery`
+saveable, loadable, listable and versionable, with an `owner_id` field satisfying ADR-036's own
+contingency. **Sharing is not built** — a saved pattern is readable only by its own owner — and
+stays that way until ADR-040 (pattern sharing and query-definition disclosure, Proposed) is
+accepted; ADR-040 records why sharing is a distinct leak from the result-time leaks ADR-038
+already settled for hotlists. B19's
 own assertion does not need any of the three (it is a one-shot expand-and-return); B20's does
 ("save the pattern as a monitor"), and save/version is what B20 actually needed — sharing was
 never B20's own requirement, only this bullet's separate, broader promise. **This gap now lives in
@@ -2480,8 +2482,9 @@ version existing (Stage 4's own unfinished bullet), and the two should not be sc
 second time.
 
 **Cost.** One corrected word in `02_GLASS_FRONTEND.md` §3.3 (20 September), this record, real
-implementation work for save/load/list/version still to come (Part 3 of this same session —
-`07_BUILD_PLAN.md`'s Stage 4 entry to be updated once it lands), and a residual, still-open gap for
+implementation work for save/load/list/version (21 September, Part 3 — a new Postgres-backed
+store, three routes, TS type regeneration, direct-Postgres access-control tests, and two new
+keyboard-registered actions with their own Playwright proof), and a residual, still-open gap for
 sharing, priced separately once ADR-040 is decided.
 
 **Revisit if.** ADR-030's own pinned-root mechanism is superseded by a general multi-root join
@@ -2979,12 +2982,14 @@ to match, by an edit to this record, not a new ADR.
 
 **Status.** Accepted, 21 September 2026. Accepted exactly as proposed — the saving-analyst
 principal, resolved fresh at each evaluation, stop rather than degrade on revocation — with one
-condition attached at acceptance, not a change to the reasoning: this record is **contingent on
-pattern persistence existing**, since the owning-principal reference this ADR requires has nowhere
-to live until a saved pattern is itself a persisted object. Part 3 of the same session that
-accepted this record builds that persistence (save/load/list/version/owner, no sharing); the
-owning-principal reference lives on the persisted `PatternQuery` record's own `owner` field. Until
-Part 3 lands, this ADR is accepted in principle but not yet buildable end to end.
+condition attached at acceptance, not a change to the reasoning: this record was **contingent on
+pattern persistence existing**, since the owning-principal reference this ADR requires had nowhere
+to live until a saved pattern was itself a persisted object. **Contingency satisfied, same day**:
+Part 3 of this session built that persistence (`services/api/pattern_store.py`'s `PatternStore`,
+`SavedPattern.owner_id` in `packages/schemas/domain.py`) — save/load/list/version, no sharing. The
+owning-principal reference this ADR needs is `SavedPattern.owner_id`, set to `principal.id` at
+save time. This ADR is now buildable end to end; the monitor evaluator itself (reading that field,
+applying it per the two halves below) is Stage 6's own still-unbuilt work.
 
 **The gap, as the spec states it.** `02_GLASS_FRONTEND.md` §3.3: "Saved-pattern monitors. A saved
 visual query run on a schedule against new data. Matches raise alerts with the same shape as

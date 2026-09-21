@@ -956,23 +956,28 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
 4. **The visual query builder** — `01_DOMAIN_MODEL.md` §8.1's own pattern-binding-rule question
    (flagged since Phase 3, still unresolved) settled here, before an analyst is put in front of a
    canvas drawing arbitrary patterns. **Unfinished business, moved here from Stage 6's own scope
-   21 September 2026:** ADR-032's own "saveable, shareable and versioned" promise for
-   `PatternQuery` was left two-thirds unbuilt after this stage first shipped compose/preview/run —
-   save, load, list, version and owner are this stage's own gap, not a monitor feature, and belong
-   here rather than inside Stage 6 (see the known-gaps entry below and ADR-032's own updated
-   record). Sharing is out of scope pending ADR-040 (Proposed, not accepted).
+   21 September 2026 and closed the same day (Part 3):** ADR-032's own "saveable, shareable and
+   versioned" promise for `PatternQuery` was left two-thirds unbuilt after this stage first shipped
+   compose/preview/run — save, load, list, version and owner are this stage's own gap, not a
+   monitor feature. Now built: `services/api/pattern_store.py`'s `PatternStore` (Postgres-backed,
+   owner-only, versioned by insert-not-update, the same shape `investigations.py`/`sites.py`
+   already use), `POST /v1/patterns/save`, `GET /v1/patterns`, `GET /v1/patterns/{pattern_id}`, the
+   `QueryBuilderPanel.tsx` Save/Load controls, and two new `QUERY_BUILDER_ACTIONS` keyboard entries
+   (`save-pattern`, `load-saved-pattern`) with their own Playwright proof, red then green (see the
+   known-gaps entry below and ADR-032's own updated record for what shipped). Sharing is out of
+   scope pending ADR-040 (Proposed, not accepted) — a saved pattern is loadable only by the analyst
+   who saved it.
 5. **The pathfinder.**
 6. **Hotlists, saved-pattern monitors, alert inbox** — genuinely demonstrable only once Stage 1
    exists. **ADR-036 through ADR-039 (`06_DECISIONS.md`) are Accepted, 21 September 2026** —
    monitor principal identity (ADR-036), monitor trigger model and execution bounds (ADR-037,
    amended to a unified change stream), hotlist membership and existence (ADR-038, decided as a
    deployment-level `strict`/`notify` policy switch), and alert inbox lifecycle (ADR-039, accepted
-   with two additions) are no longer open decisions. **Stage 6 remains blocked on one thing:
-   pattern persistence**, moved to Stage 4's own known-gaps entry above rather than left inside
-   this bullet — ADR-036's own owning-principal reference has nowhere to live and a monitor has
-   nothing to save until Stage 4's save/load/list/version work lands. Stage 6 itself does not
-   start building monitor evaluation, hotlist alerting or the alert inbox until that dependency
-   closes.
+   with two additions) are no longer open decisions. **Stage 6's one remaining precondition —
+   pattern persistence — is also closed, same day (Stage 4's own Part 3 above):** ADR-036's own
+   owning-principal reference now lives on `SavedPattern.owner_id`. Stage 6 itself — monitor
+   evaluation, hotlist alerting, the alert inbox — is not built; this entry records that its
+   design and structural preconditions are now clear, not that the stage is done.
 
 **Exit.** Acceptance scenario B, scoped to B1 (its two-CDR-files half only; the device-extraction
 half stays unowned, ADR-027), B2–B5, B7, B12, B13 (via a CDR-carried hotlisted identifier, not the
@@ -1068,23 +1073,34 @@ disclose something — this list did not exist before Stage 1 found it needed on
   registers in Phase 8a's `cluster` profile instead — Phase 7's own exit criterion's "all three
   compute tiers return identical values within tolerance" is therefore demonstrated for two tiers
   inside this phase, not three, disclosed here rather than silently narrowed.
-- **`02_GLASS_FRONTEND.md` §3.3's "Patterns are saveable, shareable and versioned" — scoped 21
-  September 2026, save/version queued for the same session's Part 3, recorded here rather than
-  left as the open question the paragraph below originally posed.** Stage 4 (the visual query
-  builder, `06_DECISIONS.md` ADR-032) built compose, preview and run only, on 20 September;
-  `PatternQuery` had no persistence path, no owner or share target, and no version history.
-  **The scoping decision:** this is Stage
+- **`02_GLASS_FRONTEND.md` §3.3's "Patterns are saveable, shareable and versioned" — scoped and
+  two-thirds closed 21 September 2026, recorded here rather than left as the open question the
+  paragraph below originally posed.** Stage 4 (the visual query builder, `06_DECISIONS.md`
+  ADR-032) built compose, preview and run only, on 20 September; `PatternQuery` had no persistence
+  path, no owner or share target, and no version history. **The scoping decision:** this is Stage
   4's own unfinished business, not Stage 6's — a monitor (Stage 6's own concern) is one consumer of
   a saved pattern, not a demonstration that generic save/share/version exists, and B20 ("save the
   pattern as a monitor") only ever needed save/version, never sharing. Moved to Stage 4's own
-  bullet above accordingly. **Save, load, list and version are scoped to be built next**, in Part
-  3 of the same session that accepted ADR-036–039 — not yet built as of this entry; an owner field
-  on every persisted pattern is what closes ADR-036's own contingency. This entry is updated again
-  once Part 3 lands. **Sharing is not built and stays out of scope pending ADR-040**
-  (`06_DECISIONS.md`, Proposed, not accepted) — a saved pattern will be readable only by its own
-  owner until that record is decided, because sharing a pattern's own query definition (named
-  entity types and literal attribute values) is a distinct leak from anything a fired match
-  already discloses, per ADR-040's own reasoning.
+  bullet above accordingly. **Save, load, list and version are built**, same day, Part 3 of the
+  session that accepted ADR-036–039: `services/api/pattern_store.py`'s `PatternStore`
+  (Postgres-backed, owner-only via `SavedPattern.owner_id`, versioned by inserting a new row per
+  save rather than updating in place, so no prior version is ever lost), `POST /v1/patterns/save`,
+  `GET /v1/patterns` and `GET /v1/patterns/{pattern_id}` (`services/api/app.py`), direct-Postgres
+  access-control tests (`tests/services/api/test_pattern_store.py`, mirroring
+  `test_sites_store.py`'s own existence-leak discipline), and `QueryBuilderPanel.tsx`'s Save/Load
+  controls with two new `QUERY_BUILDER_ACTIONS` (`save-pattern`, `load-saved-pattern`), each proven
+  by its own Playwright case in `keyboard/query-builder.spec.ts` — shown red (both ids named as
+  missing by `assertAllCovered`) before the cases existed, green after. The `owner_id` field this
+  work adds is what closes ADR-036's own contingency. **Sharing is not built and stays out of
+  scope pending ADR-040** (`06_DECISIONS.md`, Proposed, not accepted) — a saved pattern is readable
+  only by its own owner until that record is decided, because sharing a pattern's own query
+  definition (named entity types and literal attribute values) is a distinct leak from anything a
+  fired match already discloses, per ADR-040's own reasoning. **Neither Acceptance Scenario A nor
+  B exercises this persistence directly** — checked against `08_ACCEPTANCE_SCENARIOS.md` rather
+  than assumed: B19 is a one-shot expand-and-return with no save; B20's own assertion is about the
+  *alert* a monitor raises, not about save/load/list/version as objects in their own right, and
+  Stage 6 (not yet built) is what would ever make B20 exercise this code path at all. Owned here
+  rather than left to be rediscovered at Phase 7's own exit gate.
 
 ---
 
@@ -1761,6 +1777,102 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
     whatever host or sandbox it is run in, or a real statelessness regression — until that
     determination is made, treat `03_CONDUIT_MIDDLEWARE.md` §1 as unverified in this environment,
     not as verified-and-then-regressed.
+
+- **`sweep_stale_conformance_databases` (`packages/adapters/graph_arcadedb/testing.py`) has now
+  failed to prevent a disk-exhaustion incident twice, and this session found why, live, rather
+  than by inspection: it is not one gap but three independent ones, each capable of defeating it
+  on its own.**
+
+  **One — the sweep only runs when something collects `tests/conformance/graph_port`, and the
+  routine local/CI invocation never does.** The sweep is a session-scoped autouse fixture in that
+  directory's own `conftest.py`; pytest never instantiates a fixture from a directory it does not
+  collect. `Makefile`'s `test` target — the one this build's own headline test count has been
+  reported against all week — carries `--ignore=tests/conformance/graph_port` as the first of ten
+  `--ignore` flags (see the entry below, found the same session). A developer or session running
+  `make test` alone, repeatedly, against a persistent local `make dev-up` stack accumulates
+  `conformance_*` databases across every one of those sessions with the sweep never once firing,
+  until the volume fills — exactly the shape of the incident this module's own docstring already
+  describes. Only `make conformance`, `make test-all`, or CI's `conformance` job (which invoke
+  pytest against that directory directly) ever trigger it.
+
+  **Two — even when the sweep runs, it can only drop what the live server's own `list databases`
+  reports, and a database can exist on disk without ever being registered.** Found live, not
+  hypothesised: this session's initial disk audit found `conformance_1789987107_b63147993fc8` on
+  disk (via `docker exec ... ls`), 172 minutes old, well past the 60-minute staleness window — yet
+  it was absent from `curl .../api/v1/databases` before the sweep ran, and the sweep's own return
+  value (`sweep_stale_conformance_databases` dropped exactly one database that same run) confirms
+  it was never a candidate. A `create_database_if_absent()` interrupted after the directory is
+  created but before the server's own registration completes leaves exactly this: present on disk,
+  invisible to the one call the sweep uses to find what to drop. Removed by hand
+  (`docker exec compose-arcadedb-1 rm -rf`) this session — no code path removes it.
+
+  **Three — a hard-killed run can leave a database that crashes the server itself at boot, before
+  the sweep's own owning fixture ever gets a server to call.** Also reproduced live, not
+  hypothesised: this session's own `make test` run OOM-killed the ArcadeDB container mid-suite
+  (`docker inspect` confirmed `OOMKilled=true`, `ExitCode=137` — see the memory-pressure finding
+  below for why), leaving `conformance_1789998411_5906c2b40764` mid-transaction. On restart,
+  `ArcadeDBServer.loadDatabases` threw an uncaught `com.arcadedb.exception.SchemaException: File
+  with id '0' was not found` while reopening it, and the JVM's `main` thread exited — the container
+  stayed "Up" (its outer entrypoint survived) but never became healthy and refused every
+  connection. The sweep fixture needs a running server to call `list databases` against; a
+  database that prevents the server from starting is by construction unreachable by a sweep that
+  runs inside a test session against that same server. Recovered only by deleting the corrupted
+  directory directly from the container filesystem before ArcadeDB would boot at all.
+
+  **A fourth, related finding, not a sweep gap but the reason the sweep keeps having work to do:**
+  the OOM kill above is not a one-off — reproduced twice in this session alone (once during a full
+  `make test` run, once during an isolated single-test rerun with Ollama freshly restarted).
+  `deploy/compose/dev.yaml`'s own comment already names cross-container memory contention with
+  Ollama's resting footprint against ArcadeDB's `-Xmx6G` heap on the shared Docker Desktop VM
+  (measured this session at 8GB total) as a known, previously-hit case, with "restart recovers
+  cleanly" as the stated remedy — true for a clean kill, false when the kill lands mid-transaction
+  and produces finding three above instead.
+
+  Owning phase: **Phase 8**, the same closing-pass home as this section's two immediately preceding
+  entries. Concretely, in order of leverage: (a) move `sweep_stale_conformance_databases` (or an
+  equivalent) to run from something that always executes before a local or CI test session touches
+  ArcadeDB, not from a fixture scoped to a directory ten `--ignore` flags routinely skip; (b) make
+  the sweep's own candidate list disk-based (or reconcile disk against `list databases` and treat
+  a mismatch as itself stale) rather than trusting server registration alone; (c) either lower
+  ArcadeDB's configured heap or raise the VM's memory budget so the documented contention case
+  stops being reproducible on a single ordinary session's first run, since a corrupted database is
+  a strictly worse outcome than the orphan the sweep was built to handle, and recovering from it
+  today requires a human with container filesystem access, not a test fixture.
+
+- **`Makefile`'s `test` target's ten `--ignore` flags mean the port conformance suites are not
+  routinely run by the one target this build's own headline pass/fail count has been reported
+  against all week — found while diagnosing the sweeper gap above, not the original object of the
+  search.** Checked each of the ten directly rather than assumed:
+
+  | Ignored path | Why | Run by (routine) | Runs in CI |
+  | --- | --- | --- | --- |
+  | `tests/conformance/graph_port` | needs a live ArcadeDB | `make conformance`, `make test-all` | Yes — `conformance` job, every PR/push |
+  | `tests/conformance/model_port` | needs a live LiteLLM/Ollama | `make conformance-model`, `make test-all` | Yes — `conformance-model` job, every PR/push |
+  | `tests/golden` | needs the same live LiteLLM/Ollama | `make golden-set`, `make test-all` | Yes — folded into `conformance-model` job's own pytest invocation |
+  | `tests/ingest` | needs live ArcadeDB (+ MinIO for `test_staging.py`) | `make conformance`, `make test-all` | Yes — `conformance` job |
+  | `tests/scenarios/test_witness_statement_extraction.py` | needs live LiteLLM/Ollama | `make conformance-model`, `make test-all` | Yes — `conformance-model` job |
+  | `tests/scenarios/test_hmp_graph.py` | needs live ArcadeDB | `make test-all` only | **No** — not named anywhere in `ci.yml` |
+  | `tests/services/api/test_sites_store.py` | needs live MinIO | `make test-all` only | **No** |
+  | `tests/services/api/test_tile_cache.py` | needs live Valkey | `make test-all` only | **No** |
+  | `tests/services/api/test_prefetch.py` | needs live Valkey | `make test-all` only | **No** |
+  | `tests/geocoder/test_match_live.py` | hits a live external geocoder | `make test-all` only | **No** |
+
+  So the honest state is split, not uniform: five of the ten (`graph_port`, `model_port`, `golden`,
+  `ingest`, `test_witness_statement_extraction.py`) run on every PR and push, via CI's own direct
+  `pytest` invocations in dedicated jobs — not via `make conformance`/`make conformance-model`
+  themselves, which is why those CI job commands and the Makefile targets of the same apparent
+  purpose have quietly drifted apart (CI's `conformance-model` job also runs `tests/golden` inline;
+  `make conformance-model` does not). The other five — `test_hmp_graph.py`, `test_sites_store.py`,
+  `test_tile_cache.py`, `test_prefetch.py`, `test_match_live.py` — are reachable only by a developer
+  running `make test-all` against a `make dev-up` stack by hand; nothing in `ci.yml` runs them, ever.
+  Rule 1's suites are not the gap here — they run on every PR. The gap is that `make test`'s own
+  passing count, quoted all week as "the suite is green," has never included any of the ten, and a
+  reader of that count has no way to know five of the ten are additionally uncovered by CI too
+  without reading this table. Owning phase: **Phase 8** — either wire the five CI-dark suites into a
+  CI job (`test_match_live.py` may need an explicit "hits a real external service, nightly only"
+  carve-out rather than every-PR, the same reasoning `conformance-model-vision` already uses for
+  its own heavier model), or record explicitly, next to wherever `make test`'s count is reported,
+  which suites it excludes and which of those are and are not covered elsewhere.
 
 ---
 
