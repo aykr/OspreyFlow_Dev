@@ -1725,20 +1725,41 @@ first, not the one that is easiest to start.
    discipline named for it directly, after two sessions in this project died mid-flight.** 4-spec
    above is the first of eight; the remaining seven, in the order they are built:
 
-   - **4a — Fixture Corp (R24), moved ahead of the assessment/export build itself.**
-     `06_DECISIONS.md` ADR-035 §C5 has owned Fixture Corp to Phase 8 with no stage since that
-     record was written — "R24 has been the only backlog item with no owning phase," in its own
-     words, and the single longest-unscheduled item in this project. It is also the demo an
-     analyst review runs against, and `06_DECISIONS.md` ADR-042 makes that review this build's own
-     only external signal before alpha — it cannot be left to 4g's own closing pass, where a
-     regression would be the first thing that finds it broken with nothing left in the stage to fix
-     it against. Builds the AMLSim-/gen-fraud-graph-generated fixture ADR-035 §C5 already
-     specifies: entity resolution at τ 0.99/0.95/0.80 producing visibly different projections;
-     Louvain community structure; path lengths across the pathfinder's `max_hops ≤ 8` range; an
-     access-control boundary where a hidden hop lengthens rather than removes a path. **Exit
-     criterion, a test:** an assertion against each of ADR-035 §C5's four named properties, proved
-     directly against the generated fixture — the same fixture-shape-proven-early discipline
-     Phase 2's own HMP fixture test already established for Scenario A.
+   - **4a — Fixture Corp (R24), moved ahead of the assessment/export build itself — built, 22
+     September 2026.** `06_DECISIONS.md` ADR-035 §C5 has owned Fixture Corp to Phase 8 with no
+     stage since that record was written — "R24 has been the only backlog item with no owning
+     phase," in its own words, and the single longest-unscheduled item in this project. It is also
+     the demo an analyst review runs against, and `06_DECISIONS.md` ADR-042 makes that review this
+     build's own only external signal before alpha — it cannot be left to 4g's own closing pass,
+     where a regression would be the first thing that finds it broken with nothing left in the
+     stage to fix it against.
+
+     **Neither AMLSim nor gen-fraud-graph turned out to be pip-installable — checked directly, not
+     assumed, once this sub-stage actually started.** AMLSim is a Java/Python source checkout with
+     its own build toolchain, not a package; `gen-fraud-graph` has no PyPI distribution either.
+     Built instead: an original, 100%-owned, seeded generator (`tests/scenarios/fixtures/
+     fixture_corp.py`) implementing the same fan-in/fan-out fraud-ring typology AMLSim itself
+     models — "AMLSim-*shaped*, not AMLSim-generated," disclosed in the module's own docstring, the
+     same "Enron-*shaped*, not Enron-derived" framing ADR-035 §C5 already uses for its own naming.
+     No third-party dependency, no personal data, deterministic.
+
+     Proves all four of ADR-035 §C5's named properties against this build's own real adapters, not
+     mocks (`tests/scenarios/test_fixture_corp_shape.py`, all four run and independently
+     re-verified passing): entity resolution at τ 0.99/0.95/0.80 producing visibly different
+     projections (real Splink scores — 0.999991/0.981285/0.867624/0.0001 across four measured
+     pairs — landing in different clusters at each detent); Louvain community structure over three
+     disjoint rings, recovered exactly by the real `ComputeRustworkxAdapter`; path lengths spanning
+     the pathfinder's full `max_hops` 1–8 range, each found at its exact length via real
+     `GraphPort.paths`; a `SECRET`-classified hidden hop that lengthens a path from 1 to 3 hops for
+     an `OFFICIAL` principal rather than removing it, against a real ArcadeDB. A seeding script
+     (`scripts/seed_fixture_corp.py`, this project's own "no `osprey` CLI yet" convention) writes
+     all three sub-fixtures — including the real, computed `SAME_AS` edges, not stand-ins — into a
+     live Conduit; run live against dev `ArcadeDB` as part of this sub-stage's own closing check.
+
+     **Exit criterion, a test — met:** an assertion against each of ADR-035 §C5's four named
+     properties, proved directly against the generated fixture through real adapters — the same
+     fixture-shape-proven-early discipline Phase 2's own HMP fixture test already established for
+     Scenario A.
    - **4b — Assessment objects, backend.** `Judgement`/`IntelligenceGap`/`Assumption` persistence,
      the evidence-link validation A13 requires (reject a save with zero supporting references), the
      yardstick loader, the review-flag-on-supersede wiring `01_DOMAIN_MODEL.md` §5 already states,

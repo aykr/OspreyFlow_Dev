@@ -2970,6 +2970,18 @@ reasoning: it is the demo an analyst review runs against, and `06_DECISIONS.md` 
 review this build's own only external signal before alpha). This addendum exists so a reader of
 this record alone, not only of the build plan, finds the placement rather than just the phase.
 
+**Addendum, 22 September 2026 — built, and neither candidate generator named above turned out to
+be usable.** Checked directly once Stage 4a actually started, not assumed from this record's own
+text: neither AMLSim (a Java/Python source checkout with its own build toolchain, not a package)
+nor `gen-fraud-graph` (no PyPI distribution) is pip-installable. Built instead — and disclosed as
+such in its own module docstring — an original, 100%-owned generator implementing the same
+fan-in/fan-out fraud-ring typology AMLSim itself models: "AMLSim-*shaped*, not AMLSim-generated,"
+the same distinction this record's own "Enron-*shaped*, not Enron-derived" framing already draws
+for the HMP fixture, above. Still synthetic, still no third-party licence, still no personal data —
+this record's own governing constraints are unaffected; only the named candidate tooling was not
+actually available. `07_BUILD_PLAN.md`'s own Stage 4a entry has the full build record and its four
+proven properties.
+
 ### C6 — IBM AML-Data, conditional
 
 If ever used as data rather than AMLSim as a generator: CDLA-Sharing-1.0 carries a share-alike
