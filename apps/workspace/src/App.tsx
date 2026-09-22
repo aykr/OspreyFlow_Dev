@@ -39,6 +39,9 @@ import { IngestStudio } from "./ingest/IngestStudio";
 import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
 import { StatusBar } from "./statusbar/StatusBar";
 import { Timeline } from "./timeline/Timeline";
+import { AlertInbox } from "./watches/AlertInbox";
+import { HotlistPanel } from "./watches/HotlistPanel";
+import { MonitorPanel } from "./watches/MonitorPanel";
 import { connectDeltaClient, type SocketLike } from "./workingset/deltaClient";
 import { createWorkingSet } from "./workingset/store";
 
@@ -106,7 +109,7 @@ export function App() {
     edges: 0,
     filteredCount: 0,
   });
-  const [view, setView] = useState<"graph" | "map" | "ingest" | "dossier">("graph");
+  const [view, setView] = useState<"graph" | "map" | "ingest" | "dossier" | "watches">("graph");
   const [dossierNodeId, setDossierNodeId] = useState<string | null>(null);
   const [mapConfig, setMapConfig] = useState<PublicMapConfig | null>(null);
   const [siteWizardOpen, setSiteWizardOpen] = useState(false);
@@ -311,6 +314,9 @@ export function App() {
         <Button aria-pressed={view === "ingest"} onClick={() => setView("ingest")}>
           Ingest
         </Button>
+        <Button aria-pressed={view === "watches"} onClick={() => setView("watches")}>
+          Watches
+        </Button>
         {dossierNodeId && (
           <Button aria-pressed={view === "dossier"} onClick={() => setView("dossier")}>
             Messages
@@ -366,7 +372,26 @@ export function App() {
             }}
           />
         )}
-        {view !== "ingest" && view !== "dossier" && (
+        {view === "watches" && (
+          // Owner-only, not investigation-scoped — the same reasoning `/v1/patterns/*` already
+          // gives (`patterns/api.ts`'s own module docstring) — so this view, like "ingest" and
+          // "dossier", opts out of the investigation-scoped side panel/timeline/status bar below
+          // rather than being squeezed into `view === "graph"`'s own 320px column.
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--sp-8)", overflowY: "auto", padding: "var(--sp-8)" }}>
+            <HotlistPanel apiBaseUrl={API_BASE_URL} bearerToken={DEV_BEARER_TOKEN} />
+            <MonitorPanel apiBaseUrl={API_BASE_URL} bearerToken={DEV_BEARER_TOKEN} />
+            <AlertInbox
+              apiBaseUrl={API_BASE_URL}
+              bearerToken={DEV_BEARER_TOKEN}
+              onOpenInvestigation={(newInvestigationId) => {
+                sessionStorage.setItem("ospreyflow.investigationId", newInvestigationId);
+                setInvestigationId(newInvestigationId);
+                setView("graph");
+              }}
+            />
+          </div>
+        )}
+        {view !== "ingest" && view !== "dossier" && view !== "watches" && (
         <div style={{ flex: 1, position: "relative" }}>
           {view === "graph" && (
             <GlassCanvas
@@ -480,7 +505,7 @@ export function App() {
             })()}
         </div>
         )}
-        {view !== "ingest" && view !== "dossier" && (
+        {view !== "ingest" && view !== "dossier" && view !== "watches" && (
         <div
           style={{
             width: 320,
@@ -511,7 +536,7 @@ export function App() {
         </div>
         )}
       </div>
-      {view !== "ingest" && view !== "dossier" && (
+      {view !== "ingest" && view !== "dossier" && view !== "watches" && (
       <div style={{ height: 220, borderTop: "1px solid var(--border-subtle)" }}>
         <Timeline
           apiBaseUrl={API_BASE_URL}
@@ -522,7 +547,7 @@ export function App() {
         />
       </div>
       )}
-      {view !== "ingest" && view !== "dossier" && (
+      {view !== "ingest" && view !== "dossier" && view !== "watches" && (
       <StatusBar
         nodeCount={counts.nodes}
         edgeCount={counts.edges}

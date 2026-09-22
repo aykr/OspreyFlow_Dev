@@ -156,3 +156,19 @@ export const QUERY_BUILDER_ACTIONS = defineActionRegistry("QUERY_BUILDER_ACTIONS
   "save-pattern",
   "load-saved-pattern",
 ] as const);
+
+/**
+ * Hotlists/monitors/the alert inbox — Phase 7 Stage 6c Part 2, the fourth keyboard-driven surface
+ * (`keyboard/watch-panels-harness.tsx`'s own docstring has the reasoning for a separate
+ * harness/spec pair). Every native `Input`/`Select`'s own Tab-reachability needs no case here, the
+ * same exemption `QUERY_BUILDER_ACTIONS`'s own docstring already establishes — only an action with
+ * real state mutation or a real network call does: creating a hotlist or a monitor, jumping from
+ * an alert into a branched investigation, and opening that investigation once the jump result is
+ * shown (a real callback out of the component, not only a local state flip).
+ */
+export const WATCH_PANEL_ACTIONS = defineActionRegistry("WATCH_PANEL_ACTIONS", [
+  "submit-create-hotlist",
+  "submit-create-monitor",
+  "alert-row-jump",
+  "jump-result-open-investigation",
+] as const);

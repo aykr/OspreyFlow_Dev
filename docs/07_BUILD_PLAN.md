@@ -1306,6 +1306,85 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
    `authorized-query-check` itself: run against this stage's own new stores, clean — 42 files under
    `services/api`, no offenders.
 
+   **6c Part 2 — the Glass UI half, built the same session.** `apps/workspace/src/watches/`:
+   `HotlistPanel.tsx` (create + list, `Hotlist.status` rendered via a shared `StatusBadge`),
+   `MonitorPanel.tsx` (a saved-pattern `Select`, reusing `patterns/api.ts::listPatterns` rather than
+   duplicating it, + list with the same status badge), `AlertInbox.tsx` (list, per-row `full`/
+   `notify_stub` rendering, the jump action and its result summary), `api.ts` (fetch wrappers for
+   all six routes). Wired into `App.tsx` as a fifth top-level `view`, `"watches"` — owner-only, not
+   investigation-scoped, the same reasoning `/v1/patterns/*` already has, so it sits beside
+   `"ingest"`/`"dossier"` rather than inside the investigation-scoped graph-view side panel; a
+   successful jump sets `investigationId`/`sessionStorage` and switches `view` back to `"graph"`,
+   the same transition the existing "create a new investigation" effect already performs. Errors
+   surface as the same inline `error` banner `QueryBuilderPanel.tsx` already established for a
+   non-canvas panel, not `ActionErrorOverlay` (an x/y-positioned `Popover` built for the canvas) —
+   disclosed in each panel's own doc comment so the departure from a literal reading of "surface via
+   `ActionErrorOverlay`" isn't mistaken for an oversight.
+
+   **`AlertView`/`AlertJumpResult` are hand-mirrored TypeScript interfaces in `watches/api.ts`, not
+   generated.** Checked directly against `packages/schemas/generate_ts.py`: its own model list is
+   `schemas.{analytics,compute,domain,ingest,model,profile,provider_profile}` — `services/api/
+   watch_routes.py` (where both live) and `services/api/investigations.py` (`Investigation`, needed
+   for the jump result) are outside that scope by construction, neither being a `packages/schemas`
+   module. `Hotlist`/`Monitor` *are* generated and imported, not redeclared. A drift gate exists for
+   every `packages/schemas` model (`generate_ts.py` itself, run as part of `schemas-check`); these
+   three hand-mirrored shapes have no equivalent — an edit to `AlertView`/`AlertJumpResult`/
+   `Investigation` server-side has nothing to fail a build the way a `Hotlist` field rename already
+   would. No owning phase decided here; recorded as a gap for whichever phase next revisits
+   `generate_ts.py`'s own scope (widening it to `services/api` route-response models generally,
+   not just this one route module, would be the shape of the fix).
+
+   **The three named render-layer tests this session's own task required, each confirmed to fail
+   against a real reverted implementation, not only against a self-contained regression stand-in
+   (`src/watches/AlertInbox.test.tsx`, `src/watches/StatusBadge.test.tsx`):**
+   - `test_a_notify_mode_alert_renders_with_no_referent_the_viewer_cannot_read` — a `notify_stub`
+     `AlertView` fixture renders with no id-shaped token anywhere in the DOM; its own second case
+     feeds a non-empty `referent_node_ids` on a `notify_stub` alert (a shape the real server-side
+     `AlertView` never produces) to prove `AlertRow` itself enforces the redaction, not merely an
+     accident of an already-empty fixture — confirmed live by deleting both of `AlertRow`'s own
+     `mode === "full"` guards and watching this fail, then restoring them.
+   - `test_a_stopped_hotlist_is_visibly_stopped_not_only_flagged_in_data` — a `status: "stopped"`
+     fixture renders a distinct "Stopped" label, not merely a prop; confirmed live by hardcoding
+     `StatusBadge`'s own `stopped` to `false` and watching this fail.
+   - `test_jump_result_never_frames_unreadable_count_as_newly_visible_content` — pins the actual
+     safety argument, confirmed by reading `services/api/alerts.py` this session:
+     `AlertStore.get_authorized`/`list_authorized` filter `WHERE owner_id = $1` (ADR-041) — an alert
+     is only ever reachable by its own recipient — and `fetch_jumpable_referents` re-checks every
+     referent fresh as the *current* viewer's own principal, never a cached one, so
+     `unreadable_count` can only ever recount referents the viewer already had a standing claim to
+     receive, never reveal a new one. The test asserts the rendered copy is framed accordingly ("no
+     longer accessible", never "found"/"new"/"hidden") and is scoped to the `unreadable_count`
+     sentence specifically, not the whole summary (which legitimately says "new investigation"
+     elsewhere, about the investigation itself, not the referents) — confirmed live by changing the
+     real component's own copy to "N new referents found." and watching this fail.
+
+   Component-render testing (`@testing-library/react`, `jsdom`) had no precedent in this
+   workspace's `vitest` suite before this — every prior `*.test.ts` was pure logic under
+   `environment: "node"`. Added `jsdom`/`@testing-library/react` as new devDependencies and a
+   per-file `// @vitest-environment jsdom` docblock convention (`vitest.config.ts`'s own global
+   `environment: "node"` is unchanged, so no existing test is affected) plus the `@vitejs/
+   plugin-react` plugin `vitest.config.ts` itself now also loads, for JSX transform in `.test.tsx`
+   files.
+
+   **Keyboard reachability — the fourth keyboard-driven surface** (`keyboard/watch-panels-
+   harness.tsx`/`.html`, `keyboard/watch-panels.spec.ts`, a new `WATCH_PANEL_ACTIONS` registry in
+   `keyboard/actionRegistry.ts`): `submit-create-hotlist`, `submit-create-monitor`, `alert-row-jump`
+   (a real `POST /v1/alerts/{id}/jump`, mocked at the transport, not the component), and
+   `jump-result-open-investigation` (the real callback out of `AlertInbox`, proven via
+   `window.__WATCH_HARNESS__`, the same shape `window.__KEYBOARD__` already establishes for
+   `GlassCanvas`). Every native `Input`/`Select`'s own Tab-reachability is exempted, the same
+   precedent `QUERY_BUILDER_ACTIONS`'s own docstring already sets. **Confirmed non-vacuous, not
+   only asserted**: commenting out one `registerCovered` call and re-running made
+   `assertAllCovered` fail by name; restoring it passed again. All 35 Playwright specs across all
+   four registries pass together, and `registryCoverage.test.ts` (the static half — every declared
+   registry has some `*.spec.ts` actually asserting it) picked up `WATCH_PANEL_ACTIONS` with no
+   wiring beyond the registry declaration itself.
+
+   **Vitest: 174 → 181 tests, 24 → 26 files** (`AlertInbox.test.tsx` + `StatusBadge.test.tsx`; the
+   movement includes one additional case inside the pre-existing `registryCoverage.test.ts`, which
+   iterates every declared registry and so grew by exactly one entry when `WATCH_PANEL_ACTIONS` was
+   added, not a padded count). `npx tsc --noEmit` clean across the whole workspace.
+
 **Exit.** Acceptance scenario B, scoped to B1 (its two-CDR-files half only; the device-extraction
 half stays unowned, ADR-027), B2–B5, B7, B12, B13 (via a CDR-carried hotlisted identifier, not the
 literal seizure-record fixture, ADR-027), B14, B15 (its `imsi→Device` leg only, ADR-022's own

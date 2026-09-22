@@ -1,0 +1,123 @@
+// Fetch wrappers for `POST`/`GET /v1/hotlists`, `POST`/`GET /v1/monitors`, `GET /v1/alerts` and
+// `POST /v1/alerts/{alert_id}/jump` (`services/api/watch_routes.py`) — mirrors `patterns/api.ts`'s
+// own conventions (Bearer auth, throw on a non-`ok` response).
+//
+// **`AlertView`/`AlertJumpResult`/`Investigation` are hand-mirrored here, not imported from
+// `packages/schemas/generated/`.** Checked directly against `packages/schemas/generate_ts.py`
+// before writing this: its own model list is `schemas.{analytics,compute,domain,ingest,model,
+// profile,provider_profile}` only — `services/api/watch_routes.py` (where `AlertView`/
+// `AlertJumpResult` live) and `services/api/investigations.py` (where `Investigation` lives) are
+// both outside that scope, by construction, since neither is a `packages/schemas` module at all.
+// `Hotlist`/`Monitor` *are* generated (`schemas.domain.ALL_MODELS`) and imported below rather than
+// redeclared. Recorded as a disclosed gap in `07_BUILD_PLAN.md`'s Stage 6c entry rather than left
+// silently hand-mirrored with no note — a future edit to either Python shape has nothing to make
+// this file's own copy drift-check the way `Hotlist`/`Monitor` already do.
+import type { Hotlist, Monitor } from "../../../../packages/schemas/generated";
+
+export type AlertMode = "full" | "notify_stub";
+
+/** Mirrors `services/api/watch_routes.py::AlertView` field-for-field. */
+export interface AlertView {
+  id: string;
+  rule_id: string;
+  owner_id: string;
+  mode: AlertMode;
+  referent_node_ids: string[];
+  evidence_available: boolean;
+  investigation_id: string | null;
+  created_at: string;
+}
+
+/** Mirrors `services/api/investigations.py::Investigation` field-for-field. */
+export interface InvestigationSummary {
+  id: string;
+  created_at: string;
+  created_by: string;
+  owning_unit: string;
+  branched_from: string | null;
+}
+
+/** Mirrors `services/api/watch_routes.py::AlertJumpResult` field-for-field. */
+export interface AlertJumpResult {
+  investigation: InvestigationSummary;
+  seeded_count: number;
+  unreadable_count: number;
+}
+
+function authHeaders(bearerToken: string): Record<string, string> {
+  return { Authorization: `Bearer ${bearerToken}` };
+}
+
+export async function createHotlist(
+  apiBaseUrl: string,
+  bearerToken: string,
+  request: { identifier: string; review_date: string },
+): Promise<Hotlist> {
+  const response = await fetch(`${apiBaseUrl}/v1/hotlists`, {
+    method: "POST",
+    headers: { ...authHeaders(bearerToken), "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(`POST /v1/hotlists failed: ${response.status}`);
+  }
+  return (await response.json()) as Hotlist;
+}
+
+export async function listHotlists(apiBaseUrl: string, bearerToken: string): Promise<Hotlist[]> {
+  const response = await fetch(`${apiBaseUrl}/v1/hotlists`, { headers: authHeaders(bearerToken) });
+  if (!response.ok) {
+    throw new Error(`GET /v1/hotlists failed: ${response.status}`);
+  }
+  const body = (await response.json()) as { hotlists: Hotlist[] };
+  return body.hotlists;
+}
+
+export async function createMonitor(
+  apiBaseUrl: string,
+  bearerToken: string,
+  request: { pattern_id: string },
+): Promise<Monitor> {
+  const response = await fetch(`${apiBaseUrl}/v1/monitors`, {
+    method: "POST",
+    headers: { ...authHeaders(bearerToken), "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(`POST /v1/monitors failed: ${response.status}`);
+  }
+  return (await response.json()) as Monitor;
+}
+
+export async function listMonitors(apiBaseUrl: string, bearerToken: string): Promise<Monitor[]> {
+  const response = await fetch(`${apiBaseUrl}/v1/monitors`, { headers: authHeaders(bearerToken) });
+  if (!response.ok) {
+    throw new Error(`GET /v1/monitors failed: ${response.status}`);
+  }
+  const body = (await response.json()) as { monitors: Monitor[] };
+  return body.monitors;
+}
+
+export async function listAlerts(apiBaseUrl: string, bearerToken: string): Promise<AlertView[]> {
+  const response = await fetch(`${apiBaseUrl}/v1/alerts`, { headers: authHeaders(bearerToken) });
+  if (!response.ok) {
+    throw new Error(`GET /v1/alerts failed: ${response.status}`);
+  }
+  const body = (await response.json()) as { alerts: AlertView[] };
+  return body.alerts;
+}
+
+export async function jumpAlert(
+  apiBaseUrl: string,
+  bearerToken: string,
+  alertId: string,
+): Promise<AlertJumpResult> {
+  const response = await fetch(`${apiBaseUrl}/v1/alerts/${alertId}/jump`, {
+    method: "POST",
+    headers: authHeaders(bearerToken),
+  });
+  if (!response.ok) {
+    throw new Error(`POST /v1/alerts/${alertId}/jump failed: ${response.status}`);
+  }
+  return (await response.json()) as AlertJumpResult;
+}
