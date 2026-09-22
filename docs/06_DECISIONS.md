@@ -3162,6 +3162,20 @@ Phase 8 or later — at which point `principal_for_owner` gains a real implement
 amendment's own narrowing is lifted, restoring the original "resolved fresh at each evaluation" text
 as literally true rather than true-for-one-case.
 
+**Condition met, Phase 8 Stage 1, 22 September 2026 — for ingest and manual assertion, not yet for
+corpus-wide resolution.** `06_DECISIONS.md` ADR-043 (OAuth2 Token Exchange) gives `principal_for_
+owner` its real implementation; `test_a_hotlist_owned_by_one_analyst_fires_from_a_different_
+analysts_own_ingest` (`tests/scenarios/test_phase7_stage6c_watch_routes.py`) proves the narrowing
+this amendment describes is lifted for both of `run_studio_recipe`'s and `link_resolution_route`'s
+own producers — "resolved fresh at each evaluation" is literally true for any owner, not only the
+requester, on those two paths. **Not lifted for corpus-wide resolution** — checked directly,
+not assumed carried by the same fix: nothing in `services/resolve/` or `services/api/resolution_
+trigger.py` ever calls the evaluator at all for a `source="resolution"` entry, a structural gap
+`principal_for_owner`'s own new implementation has nothing to plug into
+(`07_BUILD_PLAN.md`'s Stage 1 entry has the full finding). This amendment's own text is therefore
+still not restored to unqualified truth — narrower than "any producer," now precisely "any
+producer that calls the evaluator at all," which resolution still does not.
+
 ---
 
 ## ADR-037 — Monitor trigger model and execution bounds: accepted, amended to a unified change stream

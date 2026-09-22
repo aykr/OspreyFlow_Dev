@@ -1575,20 +1575,49 @@ the whole build has landed here with no ordering ever assigned to it.** Ordered 
 not convenience: the stage with no established shape and the least precedent to build against goes
 first, not the one that is easiest to start.
 
-1. **Principal resolution** — green-field; nothing in this codebase resolves a `Principal` from a
-   stored `owner_id` with no live session token, and no prior stage's work bears on how to build
-   one. **Code + decision.** Unblocks both halves of the same gap at once, not two separate fixes:
-   `services/api/evaluation.py`'s own `principal_for_owner: Callable[[str], Principal | None]` is
-   already the mechanism both the cross-analyst case and the corpus-wide-resolution case need — it
-   returns `None` unconditionally today; a real implementation closes both the moment it exists,
-   with no further wiring in either producer. **Exit criterion, a test:**
-   `test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_ingest` — a hotlist
-   owned by analyst A, an ingest triggered by analyst B, asserting a real alert fires for A, using
-   a principal resolved for A with no token from A in flight — currently red by construction (the
-   gap this stage exists to close), and the two tests ADR-036 already names
+1. **Principal resolution — built, 22 September 2026 (`06_DECISIONS.md` ADR-043: OAuth2 Token
+   Exchange, RFC 8693).** `PrincipalResolver.resolve_for_owner`/`resolve_for_owner_detailed`
+   (`services/api/auth.py`) exchange this Conduit's own client credentials for a token minted as
+   the target `owner_id`, decoded through the existing, unchanged `resolve()` — no second
+   claims-construction path. `principal_for_owner` (`services/api/evaluation.py`, both
+   `evaluate_hotlists_for_entry` and `evaluate_monitors_for_entry`) and every one of its call
+   sites are now async (`app.py`'s `_evaluate_watches_best_effort`, and ~15 test call sites in
+   `tests/services/api/test_evaluation.py`) — the requester's own id still resolves instantly with
+   no network call; any other owner now goes through the real exchange. **Code + decision, both
+   discharged.**
+
+   **Only one of the two halves this entry originally expected to close together actually
+   closed — checked directly, not assumed, and the record corrected rather than left overclaiming
+   it.** Cross-analyst hotlist/monitor firing (B12/B13/B14/B20's own operational case) is
+   unblocked: `test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_ingest`
+   passes, through the real `run_studio_recipe` route, two real principals, neither one the
+   other (`tests/scenarios/test_phase7_stage6c_watch_routes.py`). **Resolution-triggered monitors
+   are not** — confirmed by reading `services/api/resolution_trigger.py::resolve_now` and
+   `services/resolve/trigger.py::run_resolve_entity_type_job` again, fresh, rather than trusting
+   the earlier finding unchecked: `run_resolve_entity_type_job`'s own fixed `JobWorker` dispatch
+   signature (`payload, *, graph, tx, ontology, scheme, valkey`) still carries no principal, and —
+   the more fundamental fact, not merely "no principal to give it" — nothing anywhere in
+   `services/resolve/` or `services/api/resolution_trigger.py` ever calls
+   `evaluate_hotlists_for_entry`/`evaluate_monitors_for_entry`/`_evaluate_watches_best_effort` at
+   all for a `source="resolution"` change-stream entry. A working principal-resolution mechanism
+   has nothing to plug into on this path; the blocker is the missing call site, not (only) the
+   missing principal — a structural gap this stage's own scope does not touch, still open, still
+   Phase 8's own (no stage number yet assigned — the job/worker boundary needs its own design
+   pass, not a one-line fix).
+
+   **Exit criterion, a test — met:** `test_a_hotlist_owned_by_one_analyst_fires_from_a_different_
+   analysts_own_ingest` (`tests/scenarios/test_phase7_stage6c_watch_routes.py`) passes. The two
+   tests ADR-036 already named
    (`test_monitor_never_fires_on_a_match_the_saving_analyst_cannot_see`,
-   `test_monitor_stops_evaluating_once_the_saving_principal_is_revoked`) must keep passing as
-   regressions, not be treated as already covering this stage's own new case.
+   `test_monitor_stops_evaluating_once_the_saving_principal_is_revoked`) still pass as
+   regressions. **The containment test the task named as the one that matters** —
+   `test_principal_for_owner_returns_exactly_that_owners_own_claims_not_a_broader_principal`
+   (`tests/services/api/test_auth.py`) — passes, and was confirmed non-vacuous by injecting a
+   broken implementation (hardcoding `requested_subject` to a broader principal's own id) and
+   observing the real failure output before reverting. **The freshness test** —
+   `test_a_revoked_principal_stops_firing_at_the_next_evaluation_no_cache_to_invalidate`
+   (`tests/services/api/test_evaluation.py`) — passes against the real mechanism, not the
+   in-memory test stand-in every other test in that file uses.
 2. **The harness / packaging pipeline** — the only stage this build's own alpha gate depends on
    (`06_DECISIONS.md` ADR-042), and, like Stage 1, largely green-field: no packaging step, no
    backup/restore/upgrade mechanism and no generated-manifest tooling exists anywhere in this

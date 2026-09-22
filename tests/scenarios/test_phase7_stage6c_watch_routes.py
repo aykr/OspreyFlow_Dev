@@ -3,29 +3,43 @@
 was (`test_phase6a_glass_surfaces.py`'s own module docstring has the full reasoning for the
 pattern): real FastAPI app, real ArcadeDB/Postgres/Valkey, real HTTP, one principal.
 
-**What this does not attempt.** A real ingest driving the synchronous evaluation wiring
-(`app.py`'s `run_studio_recipe`) through the full recipe-publish pipeline — `evaluate_hotlists_
-for_entry`/`evaluate_monitors_for_entry` are already proven, exhaustively, against real
-Postgres/ArcadeDB/Valkey in `tests/services/api/test_evaluation.py`; reproducing that same proof a
-second time through the recipe-publish machinery (`tests/ingest/test_studio_publish_pipeline.py`'s
-own, separately-proven concern) would cost real test-infrastructure work for no new coverage —
-this file's own job is the route surface those functions did not have until this stage: creating a
-hotlist/monitor over HTTP, and reading/jumping from an alert over HTTP, neither of which existed
-before this stage regardless of how the alert underneath was produced.
+**A real ingest driving the synchronous evaluation wiring, through the full recipe-publish
+pipeline, cross-analyst — Phase 8 Stage 1 (`06_DECISIONS.md` ADR-043).** This file's own docstring
+used to disclaim this as out of scope ("would cost real test-infrastructure work for no new
+coverage") — true while every producer only ever resolved its own requester's own principal; false
+once `PrincipalResolver.resolve_for_owner` (OAuth2 Token Exchange) made a genuinely different
+owner's own principal reachable, which is exactly the new coverage
+`test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_ingest` below exists to
+prove — `evaluate_hotlists_for_entry` alone (already proven in `test_evaluation.py`) cannot show
+the route-level wiring (`app.py`'s new `principal_resolver` dependency, `_evaluate_watches_best_
+effort`'s own async `_principal_for_owner`) actually reaches it for a second principal.
 """
 
 from __future__ import annotations
 
 import asyncio
+import csv
+import subprocess
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from pathlib import Path
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 from services.api.alerts import AlertStore
+from services.api.app import get_recipes_repo_root
 from services.api.config import PostgresConfig
-from tests.conftest import default_claims, sign_token
+from services.api.hotlists import HotlistStore
+from services.api.studio_publish import build_recipe, write_and_commit_recipe
+from services.api.studio_recipes import StudioRecipeStore
+from tests.conftest import (
+    TOKEN_EXCHANGE_CLIENT_ID,
+    TOKEN_EXCHANGE_CLIENT_SECRET,
+    TokenExchangeRegistry,
+    default_claims,
+    sign_token,
+)
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
@@ -42,6 +56,7 @@ from schemas.domain import (
     ProvenanceState,
     SourceRef,
 )
+from schemas.ingest import FieldBinding, RecipeEntity, RowTemplate
 
 PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
 
@@ -363,4 +378,216 @@ def test_app_lifespan_does_not_reopen_the_unbounded_pool_ceiling(
         f"app.py's lifespan opened {during - before} new Postgres connections (before={before}, "
         f"during={during}) — a bounded-pool regression, the same class this stage's own "
         "TooManyConnectionsError finding fixed"
+    )
+
+
+# --- Phase 8 Stage 1 exit criterion (06_DECISIONS.md ADR-043) --------------------------------
+
+
+@pytest.fixture
+def api_env_with_exchange(jwks_url: str, token_exchange_url: str) -> Iterator[None]:
+    """`api_env` above, extended with `06_DECISIONS.md` ADR-043's own token-exchange
+    configuration — kept as its own fixture rather than changing `api_env` itself, since every
+    other test in this file deliberately runs with token exchange unconfigured (the pre-Stage-1
+    default, `PrincipalResolver.resolve_for_owner`'s own disclosed fallback)."""
+    import os
+
+    previous = {
+        key: os.environ.get(key)
+        for key in (
+            "OIDC_JWKS_URL",
+            "OIDC_ALGORITHMS",
+            "ARCADEDB_DATABASE",
+            "OIDC_TOKEN_EXCHANGE_URL",
+            "OIDC_TOKEN_EXCHANGE_CLIENT_ID",
+            "OIDC_TOKEN_EXCHANGE_CLIENT_SECRET",
+        )
+    }
+    os.environ["OIDC_JWKS_URL"] = jwks_url
+    os.environ["OIDC_ALGORITHMS"] = "RS256"
+    os.environ["ARCADEDB_DATABASE"] = "ospreyflow"
+    os.environ["OIDC_TOKEN_EXCHANGE_URL"] = token_exchange_url
+    os.environ["OIDC_TOKEN_EXCHANGE_CLIENT_ID"] = TOKEN_EXCHANGE_CLIENT_ID
+    os.environ["OIDC_TOKEN_EXCHANGE_CLIENT_SECRET"] = TOKEN_EXCHANGE_CLIENT_SECRET
+    try:
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+def _row_template() -> RowTemplate:
+    return RowTemplate(
+        entities=[
+            RecipeEntity(
+                ref="a",
+                pole_class="object",
+                type="Endpoint",
+                match_on="value_normalised",
+                on_match="reference",
+                properties={
+                    "value_normalised": FieldBinding(field="a_party"),
+                    "endpoint_kind": FieldBinding(literal="msisdn"),
+                },
+            )
+        ]
+    )
+
+
+async def _publish_a_recipe_touching(
+    identifier: str, *, author: Principal, approver: Principal, tmp_path: Path, git_repo: Path
+) -> str:
+    """Real Postgres (`StudioRecipeStore`), a real throwaway git commit — the identical shape
+    `tests/ingest/test_studio_publish_pipeline.py`'s own `_publish_a_verified_recipe` already
+    establishes, reused rather than re-derived, since recipe publishing itself is that file's own
+    proven concern, not this test's."""
+    store = await StudioRecipeStore.connect(PostgresConfig.from_env().dsn)
+    try:
+        csv_path = tmp_path / "stage1.csv"
+        with csv_path.open("w", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=["a_party"])
+            writer.writeheader()
+            writer.writerows([{"a_party": identifier}])
+
+        draft = await store.create_draft(
+            author,
+            label="stage1-cross-analyst",
+            connector_profile="generic-csv",
+            source_location=str(csv_path),
+            handling={
+                "classification": "OFFICIAL",
+                "handling_code": "P",
+                "originator": author.org_unit,
+                "owning_unit": author.org_unit,
+            },
+            legal_basis="RIPA s22 acquisition — authorisation 2026/0114",
+        )
+        draft = await store.update_row_template(
+            draft.recipe_id, author, row_template=_row_template(), unmapped_fields=[]
+        )
+        await store.mark_verified(draft.recipe_id, draft.version, now=datetime.now(UTC))
+        draft = await store.get(draft.recipe_id)
+
+        ontology = load_default_ontology()
+        built = build_recipe(
+            draft, ontology_version=ontology.version, schedule_cron=None, schedule_watch=None
+        )
+        git_path = await write_and_commit_recipe(built, repo_root=git_repo)
+        published = await store.publish(
+            draft.recipe_id,
+            approver,
+            ontology_version=ontology.version,
+            git_path=git_path,
+            schedule_cron=None,
+            schedule_watch=None,
+            now=datetime.now(UTC),
+        )
+        return published.recipe_id
+    finally:
+        await store.close()
+
+
+@pytest.fixture
+def git_repo(tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+    return repo
+
+
+def test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_ingest(
+    api_env_with_exchange: None,
+    keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey],
+    token_exchange_registry: TokenExchangeRegistry,
+    tmp_path: Path,
+    git_repo: Path,
+) -> None:
+    """Phase 8 Stage 1's own named exit criterion (`07_BUILD_PLAN.md`) — currently red by
+    construction until this stage's own mechanism exists, turned green here. Real FastAPI app,
+    real ArcadeDB/Postgres/Valkey, real HTTP, real recipe-publish pipeline, two real principals —
+    A (the hotlist's own owner) and B (whose own ingest triggers evaluation), neither one the
+    other. Before Stage 1, `_principal_for_owner` returned `None` for any owner but the requester;
+    B's own ingest could never reach A's own hotlist. Now `principal_resolver.resolve_for_owner`
+    exchanges for A's own principal, and `record_match` — always called with the *owner's* own
+    principal, never the unscoped matcher (`06_DECISIONS.md` ADR-038's own addendum) — can finally
+    fire for A."""
+    private_key, _ = keypair
+    identifier = f"+44-cross-analyst-{new_id()[:10]}"
+    review_date = date(2027, 1, 1)
+
+    analyst_a = Principal(id="analyst-a", clearance="OFFICIAL", org_unit="unit-1")
+    author_approver = Principal(
+        id="analyst-b",
+        clearance="OFFICIAL",
+        org_unit="unit-1",
+        roles=["source_author", "source_approver", "loader"],
+    )
+    token_exchange_registry.register(
+        "analyst-a",
+        {
+            "sub": "analyst-a",
+            "clearance": "OFFICIAL",
+            "org_unit": "unit-1",
+            "receivable_handling_codes": [],
+            "roles": ["analyst"],
+        },
+    )
+
+    async def _seed() -> str:
+        hotlist_store = await HotlistStore.connect(PostgresConfig.from_env().dsn)
+        try:
+            await hotlist_store.create(analyst_a, identifier=identifier, review_date=review_date)
+        finally:
+            await hotlist_store.close()
+        return await _publish_a_recipe_touching(
+            identifier,
+            author=author_approver,
+            approver=author_approver,
+            tmp_path=tmp_path,
+            git_repo=git_repo,
+        )
+
+    # A's own hotlist, then a real published recipe authored/approved/run by B — the loader who
+    # never owns A's hotlist. Real Postgres for both, the same stores every other test in this
+    # file already uses.
+    recipe_id = asyncio.run(_seed())
+
+    from services.api.app import app
+
+    app.dependency_overrides[get_recipes_repo_root] = lambda: git_repo
+    token_b = sign_token(private_key, default_claims(sub="analyst-b", roles=["loader"]))
+    try:
+        with TestClient(app) as client:
+            inv_response = client.post(
+                "/v1/investigations", headers={"Authorization": f"Bearer {token_b}"}
+            )
+            assert inv_response.status_code == 201, inv_response.text
+            investigation_id = inv_response.json()["id"]
+
+            run_response = client.post(
+                f"/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/run",
+                headers={"Authorization": f"Bearer {token_b}"},
+                json={},
+            )
+            assert run_response.status_code == 200, run_response.text
+    finally:
+        app.dependency_overrides.pop(get_recipes_repo_root, None)
+
+    async def _read_alerts() -> list[Alert]:
+        alert_store = await AlertStore.connect(PostgresConfig.from_env().dsn)
+        try:
+            return await alert_store.list_authorized(analyst_a)
+        finally:
+            await alert_store.close()
+
+    alerts = asyncio.run(_read_alerts())
+
+    assert any(a.rule_id.startswith("hotlist:") for a in alerts), (
+        "no alert reached analyst A from analyst B's own ingest — the cross-analyst gap "
+        "Phase 8 Stage 1 exists to close is still open"
     )

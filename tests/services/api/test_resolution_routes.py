@@ -24,6 +24,7 @@ from services.api.app import (
     get_monitors_store,
     get_patterns_store,
     get_principal,
+    get_principal_resolver,
     get_valkey,
     get_working_set,
 )
@@ -142,6 +143,7 @@ def client() -> TestClient:
     # file's own fakes, since `_FakeWorkingSet.manual_link` always returns `entry=None`, so these
     # only need to satisfy FastAPI's dependency graph, not behave like the real stores.
     app.dependency_overrides[get_handling_scheme] = lambda: None
+    app.dependency_overrides[get_principal_resolver] = lambda: None
     app.dependency_overrides[get_config] = lambda: None
     app.dependency_overrides[get_graph] = lambda: None
     app.dependency_overrides[get_hotlists_store] = lambda: None

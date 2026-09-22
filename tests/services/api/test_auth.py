@@ -23,10 +23,22 @@ from pathlib import Path
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.algorithms import RSAAlgorithm
-from services.api.auth import PrincipalResolutionError, PrincipalResolver
+from services.api.auth import (
+    PrincipalExchangeRefused,
+    PrincipalExchangeUnavailable,
+    PrincipalResolutionError,
+    PrincipalResolver,
+)
 from services.api.config import ApiConfig, PostgresConfig, ValkeyConfig
 
-from tests.conftest import DEFAULT_KID, default_claims, sign_token
+from tests.conftest import (
+    DEFAULT_KID,
+    TOKEN_EXCHANGE_CLIENT_ID,
+    TOKEN_EXCHANGE_CLIENT_SECRET,
+    TokenExchangeRegistry,
+    default_claims,
+    sign_token,
+)
 
 
 def _config(jwks_url: str, **overrides: object) -> ApiConfig:
@@ -40,6 +52,9 @@ def _config(jwks_url: str, **overrides: object) -> ApiConfig:
         oidc_issuer=None,
         oidc_algorithms=("RS256",),
         oidc_jwks_ttl_seconds=300.0,
+        oidc_token_exchange_url=None,
+        oidc_token_exchange_client_id=None,
+        oidc_token_exchange_client_secret=None,
         supersede_job_degree_threshold=500,
         osprey_config_path="osprey.yaml",
         analytics_db_path=":memory:",
@@ -143,3 +158,100 @@ def test_an_unknown_kid_triggers_a_jwks_refresh_and_then_succeeds(
     principal = resolver.resolve(sign_token(new_key, default_claims(), kid=DEFAULT_KID))
 
     assert principal.id == "analyst-1"
+
+
+# --- resolve_for_owner / resolve_for_owner_detailed (06_DECISIONS.md ADR-043) -------------------
+
+
+def _config_with_exchange(jwks_url: str, token_exchange_url: str, **overrides: object) -> ApiConfig:
+    return _config(
+        jwks_url,
+        oidc_token_exchange_url=token_exchange_url,
+        oidc_token_exchange_client_id=TOKEN_EXCHANGE_CLIENT_ID,
+        oidc_token_exchange_client_secret=TOKEN_EXCHANGE_CLIENT_SECRET,
+        **overrides,
+    )
+
+
+async def test_principal_for_owner_returns_exactly_that_owners_own_claims_not_a_broader_principal(
+    keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey],
+    jwks_url: str,
+    token_exchange_url: str,
+    token_exchange_registry: TokenExchangeRegistry,
+) -> None:
+    """The containment test — `07_BUILD_PLAN.md` Phase 8 Stage 1's own named exit requirement,
+    mirroring `tests/services/api/test_evaluation.py::
+    test_a_monitor_never_evaluates_with_a_principal_broader_than_its_owner`'s own reasoning: an
+    outcome assertion cannot catch a broader-principal bug, only inspecting the actual returned
+    object can. Two real principals, A (narrow) and B (broad) — resolving A must return exactly
+    A's own claims, never B's, checked against A's independently-minted ground truth (a token
+    signed for A directly, run through `resolve()` on its own, never through the exchange path
+    under test) rather than trusting the exchange to prove itself correct."""
+    private_key, _ = keypair
+    principal_a_claims = default_claims(
+        sub="analyst-narrow", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"]
+    )
+    principal_b_claims = default_claims(
+        sub="analyst-broad", clearance="TOP_SECRET", org_unit="unit-9", roles=["admin"]
+    )
+    token_exchange_registry.register("analyst-narrow", principal_a_claims)
+    token_exchange_registry.register("analyst-broad", principal_b_claims)
+
+    resolver = PrincipalResolver(_config_with_exchange(jwks_url, token_exchange_url))
+    ground_truth = resolver.resolve(sign_token(private_key, principal_a_claims))
+
+    resolved = await resolver.resolve_for_owner("analyst-narrow")
+
+    assert resolved is not None
+    assert resolved.id == ground_truth.id == "analyst-narrow"
+    assert resolved.clearance == ground_truth.clearance == "OFFICIAL"
+    assert resolved.org_unit == ground_truth.org_unit == "unit-1"
+    assert resolved.roles == ground_truth.roles == ["analyst"]
+    # The actual containment claim: resolving A never returns B's own broader fields.
+    assert resolved.clearance != principal_b_claims["clearance"]
+    assert resolved.org_unit != principal_b_claims["org_unit"]
+    assert resolved.roles != principal_b_claims["roles"]
+
+
+async def test_a_revoked_principal_is_refused_not_treated_as_unreachable(
+    keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey],
+    jwks_url: str,
+    token_exchange_url: str,
+    token_exchange_registry: TokenExchangeRegistry,
+) -> None:
+    """`06_DECISIONS.md` ADR-044's own still-undecided question is whether a *caller* should treat
+    refusal and unreachability differently — this test only pins that the distinction exists at
+    this layer, via the two named exception types, regardless of what a future caller does with
+    it."""
+    token_exchange_registry.register("analyst-narrow", default_claims(sub="analyst-narrow"))
+    resolver = PrincipalResolver(_config_with_exchange(jwks_url, token_exchange_url))
+    await resolver.resolve_for_owner_detailed("analyst-narrow")  # sanity: registered, succeeds
+
+    token_exchange_registry.disable("analyst-narrow")
+
+    with pytest.raises(PrincipalExchangeRefused):
+        await resolver.resolve_for_owner_detailed("analyst-narrow")
+    # The collapsed, caller-facing form used by every real producer today.
+    assert await resolver.resolve_for_owner("analyst-narrow") is None
+
+
+async def test_an_unreachable_token_exchange_endpoint_is_unavailable_not_refused(
+    jwks_url: str,
+) -> None:
+    resolver = PrincipalResolver(
+        _config_with_exchange(jwks_url, "http://127.0.0.1:1/token-exchange")
+    )
+
+    with pytest.raises(PrincipalExchangeUnavailable):
+        await resolver.resolve_for_owner_detailed("analyst-narrow")
+    assert await resolver.resolve_for_owner("analyst-narrow") is None
+
+
+async def test_an_unconfigured_deployment_is_unavailable_not_refused(jwks_url: str) -> None:
+    """`oidc_token_exchange_url` unset (`None`, the default) — `06_DECISIONS.md` ADR-043's own
+    "narrower-but-honest" default for a deployment that has not configured exchange at all."""
+    resolver = PrincipalResolver(_config(jwks_url))
+
+    with pytest.raises(PrincipalExchangeUnavailable):
+        await resolver.resolve_for_owner_detailed("analyst-narrow")
+    assert await resolver.resolve_for_owner("analyst-narrow") is None

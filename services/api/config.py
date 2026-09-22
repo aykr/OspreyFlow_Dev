@@ -87,6 +87,18 @@ class ApiConfig:
     oidc_issuer: str | None
     oidc_algorithms: tuple[str, ...]
     oidc_jwks_ttl_seconds: float
+    #: `06_DECISIONS.md` ADR-043 — OAuth2 Token Exchange (RFC 8693). `None` (the default, no
+    #: environment variable set) means this deployment has not configured exchange:
+    #: `PrincipalResolver.resolve_for_owner` then has no path to a non-requester owner and
+    #: `services/api/app.py`'s `_principal_for_owner` falls back to the pre-ADR-043 behaviour
+    #: (resolves only the requester's own id) rather than raising — the same
+    #: "narrower-but-honest" default ADR-036 already commits this codebase to elsewhere, not a
+    #: hard requirement every existing deployment/test must satisfy to keep working.
+    oidc_token_exchange_url: str | None
+    #: The Conduit's own confidential client — ADR-043's own "what that configuration must be":
+    #: scoped by the realm's own policy to exchange for an arbitrary subject and nothing broader.
+    oidc_token_exchange_client_id: str | None
+    oidc_token_exchange_client_secret: str | None
     supersede_job_degree_threshold: int
     #: `osprey.yaml` itself is never a secret (`05_DEPLOYMENT.md` §7) — only
     #: its *path* is environment configuration, the same way a connector's
@@ -128,6 +140,11 @@ class ApiConfig:
             oidc_issuer=os.environ.get("OIDC_ISSUER") or None,
             oidc_algorithms=algorithms,
             oidc_jwks_ttl_seconds=_env_float("OIDC_JWKS_TTL_SECONDS", 300.0),
+            oidc_token_exchange_url=os.environ.get("OIDC_TOKEN_EXCHANGE_URL") or None,
+            oidc_token_exchange_client_id=os.environ.get("OIDC_TOKEN_EXCHANGE_CLIENT_ID") or None,
+            oidc_token_exchange_client_secret=(
+                os.environ.get("OIDC_TOKEN_EXCHANGE_CLIENT_SECRET") or None
+            ),
             supersede_job_degree_threshold=int(
                 os.environ.get(
                     "SUPERSEDE_JOB_DEGREE_THRESHOLD", str(DEFAULT_SUPERSEDE_JOB_DEGREE_THRESHOLD)

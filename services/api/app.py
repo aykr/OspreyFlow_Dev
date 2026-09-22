@@ -384,6 +384,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await studio_recipes.close()
         await extraction_candidates.close()
         await litellm_client.aclose()
+        await app.state.principal_resolver.aclose()
         analytics_con.close()
 
 
@@ -522,6 +523,13 @@ async def get_principal(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
 
 
+def get_principal_resolver(request: Request) -> PrincipalResolver:
+    """`06_DECISIONS.md` ADR-043 — the same process-lifetime resolver `get_principal` above
+    already uses, exposed as its own dependency so `_evaluate_watches_best_effort`'s own
+    `principal_for_owner` can reach `resolve_for_owner` without a second resolver being built."""
+    return request.app.state.principal_resolver  # type: ignore[no-any-return]
+
+
 WorkingSetDep = Annotated[WorkingSetService, Depends(get_working_set)]
 AuditDep = Annotated[AuditWriter, Depends(get_audit)]
 InvestigationsDep = Annotated[InvestigationStore, Depends(get_investigations)]
@@ -530,6 +538,7 @@ GraphDep = Annotated[GraphPort, Depends(get_graph)]
 OntologyDep = Annotated[OntologySchema, Depends(get_ontology)]
 MapConfigDep = Annotated[MapConfig, Depends(get_map_config)]
 PrincipalDep = Annotated[Principal, Depends(get_principal)]
+PrincipalResolverDep = Annotated[PrincipalResolver, Depends(get_principal_resolver)]
 SitesDep = Annotated[SiteStore, Depends(get_sites)]
 PatternsStoreDep = Annotated[PatternStore, Depends(get_patterns_store)]
 ConfigDep = Annotated[ApiConfig, Depends(get_config)]
@@ -1225,6 +1234,7 @@ async def link_resolution_route(
     monitors_store: MonitorsStoreDep,
     patterns_store: PatternsStoreDep,
     alerts_store: AlertsStoreDep,
+    principal_resolver: PrincipalResolverDep,
 ) -> DeltaReproject:
     """Phase 7 Stage 6c: a manual link is a `SAME_AS` write that can grow a saved pattern's own
     match set (`06_DECISIONS.md` ADR-037's own change-stream amendment names manual assertion as
@@ -1249,6 +1259,7 @@ async def link_resolution_route(
             valkey=valkey,
             investigation_id=investigation.id,
             action_on_failure="watch_evaluation_failed",
+            principal_resolver=principal_resolver,
         )
     await audit.record(
         principal=principal,
@@ -2659,6 +2670,7 @@ async def run_studio_recipe(
     monitors_store: MonitorsStoreDep,
     patterns_store: PatternsStoreDep,
     alerts_store: AlertsStoreDep,
+    principal_resolver: PrincipalResolverDep,
 ) -> LoadReport:
     """§8: "Loader: run a published recipe against a file at or below
     their own clearance" — `body.source_location`, when given, is that
@@ -2681,12 +2693,16 @@ async def run_studio_recipe(
     amendment, Phase 7 Stage 6a — `services/api/change_stream.py`'s own docstring).
 
     **Phase 7 Stage 6c: the change-stream entry, once published, is also evaluated synchronously,
-    in this same request — `06_DECISIONS.md` ADR-036's own amendment has the full reasoning for why
-    (no principal directory exists to resolve any other owner's principal from), what this
-    narrows (only a hotlist/monitor this *same* principal owns can fire from this ingest — the
-    cross-analyst case is disclosed, not silently narrowed), and why only ingest is wired here
-    (manual-assertion and resolution are not — B13/B20, the rows this exists for, are both about
-    ingest specifically). Bounded per-hotlist/monitor by `evaluation.py`'s own overlap lock and
+    in this same request.** `06_DECISIONS.md` ADR-036's own amendment recorded why the
+    cross-analyst case did not fire before Phase 8 Stage 1 (no principal directory existed to
+    resolve any other owner's principal from); **ADR-043 (Phase 8 Stage 1) closes that** — a
+    hotlist/monitor owned by an analyst other than this route's own requester can now fire too,
+    via `PrincipalResolver.resolve_for_owner`'s own OAuth2 Token Exchange, not only this same
+    principal's own. Ingest and manual-assertion (`link_resolution_route`) are both wired to
+    synchronous evaluation; corpus-wide resolution still is not — a separate, structural
+    job/worker-boundary gap ADR-043 does not touch (see that ADR's own amendment). B13/B20, the
+    rows Stage 6 exists for, are both about ingest specifically. Bounded per-hotlist/monitor by
+    `evaluation.py`'s own overlap lock and
     `MAX_TOUCHED_NODES_PER_EVALUATION`; **not** bounded in aggregate — this request now blocks on
     evaluating every active hotlist and monitor this principal owns, not a fixed number of them,
     the cost disclosed in `07_BUILD_PLAN.md` rather than silently absorbed into ingest latency. A
@@ -2730,6 +2746,7 @@ async def run_studio_recipe(
             investigation_id=investigation.id,
             action_on_failure="watch_evaluation_failed",
             error_context={"load_id": load_id},
+            principal_resolver=principal_resolver,
         )
     await audit.record(
         principal=principal,
@@ -2756,17 +2773,27 @@ async def _evaluate_watches_best_effort(
     valkey: Valkey,
     investigation_id: str,
     action_on_failure: str,
+    principal_resolver: PrincipalResolver,
     error_context: dict[str, Any] | None = None,
 ) -> None:
     """Shared by every producer route wired to synchronous evaluation this stage
-    (`run_studio_recipe`, `link_resolution_route`) — the identical `principal_for_owner`
-    ("only the requester's own hotlists/monitors fire", `06_DECISIONS.md` ADR-036's own amendment)
-    and the identical best-effort failure containment, factored out rather than duplicated a
-    second time verbatim. A failure here is caught and audited, never allowed to fail the
-    caller's own already-succeeded primary operation."""
+    (`run_studio_recipe`, `link_resolution_route`) — the identical `principal_for_owner` and the
+    identical best-effort failure containment, factored out rather than duplicated a second time
+    verbatim. A failure here is caught and audited, never allowed to fail the caller's own
+    already-succeeded primary operation.
 
-    def _principal_for_owner(owner_id: str) -> Principal | None:
-        return principal if owner_id == principal.id else None
+    **`principal_for_owner`, `06_DECISIONS.md` ADR-043 (Phase 8 Stage 1).** The requester's own id
+    resolves instantly, with no network call — no exchange is needed to learn what this route
+    already knows. Any other owner goes through `principal_resolver.resolve_for_owner` (OAuth2
+    Token Exchange) — a real, live, per-call resolution, never cached (ADR-036's own "resolved
+    fresh" requirement, ADR-043's own freshness argument): a revoked or otherwise-unreachable
+    owner resolves to `None` on this call and the next, with nothing here holding onto whatever a
+    prior call once returned."""
+
+    async def _principal_for_owner(owner_id: str) -> Principal | None:
+        if owner_id == principal.id:
+            return principal
+        return await principal_resolver.resolve_for_owner(owner_id)
 
     try:
         await evaluate_hotlists_for_entry(

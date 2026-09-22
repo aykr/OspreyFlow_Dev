@@ -122,17 +122,19 @@ async def evaluate_hotlists_for_entry(
     alert_store: AlertStore,
     audit: AuditWriter,
     valkey: Valkey,
-    principal_for_owner: Callable[[str], Principal | None],
+    principal_for_owner: Callable[[str], Awaitable[Principal | None]],
     policy: DisclosurePolicy,
 ) -> list[Alert]:
     """One overlap-guarded evaluation per active hotlist. `principal_for_owner` is supplied by the
     caller, never resolved here — `06_DECISIONS.md` ADR-036's own "resolved fresh, never cached"
-    requirement means a live, current `Principal` for the owner, which this module has no way to
-    produce on its own (there is no principal directory anywhere in this codebase — `Principal` is
-    "resolved by the Conduit from the session token", `schemas.domain.Principal`'s own docstring —
-    and a scheduled evaluator has no session token in flight). Returning `None` from this callable
-    is the disclosed stand-in for ADR-036's own "the monitor stops" when a principal cannot be
-    resolved: this evaluation is skipped for that owner, not run against a stale or invented one.
+    requirement means a live, current `Principal` for the owner. **Async since `06_DECISIONS.md`
+    ADR-043 (Phase 8 Stage 1):** a real caller's own implementation is a live OAuth2 Token Exchange
+    call, not a synchronous lookup — `app.py`'s own `_evaluate_watches_best_effort` is the real
+    implementation; this module still makes no assumption about what the callable does beyond
+    awaiting it once per owner. Returning `None` is the disclosed stand-in for ADR-036's own "the
+    monitor stops" when a principal cannot be resolved (unset, refused, or unreachable — ADR-044's
+    own still-undecided question about distinguishing those is not this module's to answer): this
+    evaluation is skipped for that owner, not run against a stale or invented one.
 
     `matcher` below is deliberately unscoped — `06_DECISIONS.md` ADR-038's own addendum records
     why this is a justified exemption rather than an oversight `authorized-query-check` missed
@@ -146,7 +148,7 @@ async def evaluate_hotlists_for_entry(
     all_alerts: list[Alert] = []
 
     for hotlist in await hotlist_store.list_all_active():
-        recipient = principal_for_owner(hotlist.owner_id)
+        recipient = await principal_for_owner(hotlist.owner_id)
         if recipient is None:
             await hotlist_store.set_status(hotlist.id, "stopped")
             continue
@@ -191,9 +193,11 @@ async def evaluate_monitors_for_entry(
     alert_store: AlertStore,
     audit: AuditWriter,
     valkey: Valkey,
-    principal_for_owner: Callable[[str], Principal | None],
+    principal_for_owner: Callable[[str], Awaitable[Principal | None]],
 ) -> list[Alert]:
-    """One overlap-guarded evaluation per active monitor. `policy` is not a parameter here — a
+    """One overlap-guarded evaluation per active monitor. Async since `06_DECISIONS.md` ADR-043
+    (Phase 8 Stage 1) — see `evaluate_hotlists_for_entry`'s own docstring above for the full
+    reasoning, identical here. `policy` is not a parameter here — a
     monitor's own match is always principal-filtered by construction (this module's own docstring
     has the full reasoning), so `record_match` always takes its "visible" branch and the
     `strict`/`notify` switch is never reached for a monitor alert, not merely defaulted to one
@@ -207,7 +211,7 @@ async def evaluate_monitors_for_entry(
     all_alerts: list[Alert] = []
 
     for monitor in await monitor_store.list_all_active():
-        recipient = principal_for_owner(monitor.owner_id)
+        recipient = await principal_for_owner(monitor.owner_id)
         if recipient is None:
             await monitor_store.set_status(monitor.id, "stopped")
             continue

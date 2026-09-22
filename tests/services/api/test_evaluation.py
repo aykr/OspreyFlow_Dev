@@ -53,11 +53,22 @@ OWNER = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
 OTHER_ANALYST = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="unit-1")
 
 
-def _principal_for(owner_id: str) -> Principal | None:
-    """The caller-supplied stand-in `evaluation.py`'s own docstring calls for — no principal
-    directory exists anywhere in this codebase, so a test (like a future scheduled consumer) must
-    supply its own resolution."""
+async def _principal_for(owner_id: str) -> Principal | None:
+    """The caller-supplied stand-in `evaluation.py`'s own docstring calls for. Async since
+    `06_DECISIONS.md` ADR-043 (Phase 8 Stage 1) — a real caller's own implementation
+    (`app.py`'s `_evaluate_watches_best_effort`) is a live OAuth2 Token Exchange call; this
+    fixture stays a plain in-memory lookup, since exercising the exchange itself is
+    `test_principal_for_owner_returns_exactly_that_owners_own_claims_not_a_broader_principal`'s
+    own job in `test_auth.py`, not every other test's."""
     return {OWNER.id: OWNER, OTHER_ANALYST.id: OTHER_ANALYST}.get(owner_id)
+
+
+async def _no_principal(owner_id: str) -> Principal | None:
+    return None
+
+
+async def _only_owner(owner_id: str) -> Principal | None:
+    return OWNER if owner_id == OWNER.id else None
 
 
 def _endpoint_write(
@@ -365,7 +376,7 @@ async def test_a_skipped_hotlist_evaluation_is_observable_as_stopped_and_a_later
             alert_store=alert_store,
             audit=audit,
             valkey=valkey,
-            principal_for_owner=lambda owner_id: None,  # every owner unresolvable, this one too
+            principal_for_owner=_no_principal,  # every owner unresolvable, this one too
             policy="strict",
         )
         stopped = await hotlist_store.get_authorized(hotlist.id, OWNER)
@@ -384,6 +395,108 @@ async def test_a_skipped_hotlist_evaluation_is_observable_as_stopped_and_a_later
         )
         active_again = await hotlist_store.get_authorized(hotlist.id, OWNER)
         assert active_again.status == "active"
+
+
+async def test_a_revoked_principal_stops_firing_at_the_next_evaluation_no_cache_to_invalidate(
+    hotlist_store,
+    alert_store,
+    audit,
+    valkey,
+    keypair,
+    jwks_url,
+    token_exchange_url,
+    token_exchange_registry,
+) -> None:
+    """The freshness test — `06_DECISIONS.md` ADR-043/ADR-036's own "resolved fresh, never
+    cached" requirement, proven against the real mechanism (`PrincipalResolver.resolve_for_owner`,
+    a live OAuth2 Token Exchange call each time), not the in-memory `_principal_for` stand-in
+    every other test in this file uses. No code-level cache-clearing step exists between the two
+    evaluations below because there is nothing to clear: revoking the owner in the fixture's own
+    registry is the *only* state change, and the second evaluation calls the exchange endpoint
+    fresh, exactly as the first one did."""
+    from services.api.auth import PrincipalResolver
+    from services.api.config import ApiConfig
+
+    owner_id = f"revocable-analyst-{uuid.uuid4().hex[:8]}"
+    owner = Principal(id=owner_id, clearance="OFFICIAL", org_unit="unit-1")
+    token_exchange_registry.register(
+        owner_id,
+        {
+            "sub": owner_id,
+            "clearance": "OFFICIAL",
+            "org_unit": "unit-1",
+            "receivable_handling_codes": [],
+            "roles": ["analyst"],
+        },
+    )
+    config = ApiConfig(
+        valkey=ValkeyConfig.from_env(),
+        postgres=PostgresConfig.from_env(),
+        oidc_jwks_url=jwks_url,
+        oidc_audience=None,
+        oidc_issuer=None,
+        oidc_algorithms=("RS256",),
+        oidc_jwks_ttl_seconds=300.0,
+        oidc_token_exchange_url=token_exchange_url,
+        oidc_token_exchange_client_id="conduit-service-account",
+        oidc_token_exchange_client_secret="test-client-secret",
+        supersede_job_degree_threshold=500,
+        osprey_config_path="osprey.yaml",
+        analytics_db_path=":memory:",
+        hotlist_alert_policy="strict",
+    )
+    resolver = PrincipalResolver(config)
+
+    ontology = load_default_ontology()
+    scheme = load_uk_le_scheme()
+    identifier = f"+44-hotlist-revoke-{uuid.uuid4().hex[:10]}"
+    hotlist = await hotlist_store.create(owner, identifier=identifier, review_date=date(2027, 1, 1))
+
+    try:
+        async with arcadedb_adapter(ontology, scheme) as graph:
+            tx = await graph.begin_transaction()
+            (node_id_1,) = await graph.upsert_nodes(
+                [_endpoint_write(identifier, owning_unit=owner.org_unit)], tx
+            )
+            await graph.commit_transaction(tx)
+
+            first = await evaluate_hotlists_for_entry(
+                _entry([node_id_1]),
+                graph=graph,
+                scheme=scheme,
+                hotlist_store=hotlist_store,
+                alert_store=alert_store,
+                audit=audit,
+                valkey=valkey,
+                principal_for_owner=resolver.resolve_for_owner,
+                policy="strict",
+            )
+            assert [a for a in first if a.rule_id == f"hotlist:{hotlist.id}"] != []
+            assert (await hotlist_store.get_authorized(hotlist.id, owner)).status == "active"
+
+            token_exchange_registry.disable(owner_id)
+
+            tx = await graph.begin_transaction()
+            (node_id_2,) = await graph.upsert_nodes(
+                [_endpoint_write(identifier, owning_unit=owner.org_unit)], tx
+            )
+            await graph.commit_transaction(tx)
+
+            second = await evaluate_hotlists_for_entry(
+                _entry([node_id_2]),
+                graph=graph,
+                scheme=scheme,
+                hotlist_store=hotlist_store,
+                alert_store=alert_store,
+                audit=audit,
+                valkey=valkey,
+                principal_for_owner=resolver.resolve_for_owner,
+                policy="strict",
+            )
+            assert [a for a in second if a.rule_id == f"hotlist:{hotlist.id}"] == []
+            assert (await hotlist_store.get_authorized(hotlist.id, owner)).status == "stopped"
+    finally:
+        await resolver.aclose()
 
 
 async def test_a_hotlist_evaluation_already_in_progress_is_skipped_not_queued(
@@ -569,7 +682,7 @@ async def test_a_monitor_never_evaluates_with_a_principal_broader_than_its_owner
             alert_store=alert_store,
             audit=audit,
             valkey=valkey,
-            principal_for_owner=lambda owner_id: OWNER if owner_id == OWNER.id else None,
+            principal_for_owner=_only_owner,
         )
 
         assert recording_graph.match_principals, (
@@ -716,7 +829,7 @@ async def test_a_skipped_monitor_evaluation_is_observable_as_stopped_and_a_later
             alert_store=alert_store,
             audit=audit,
             valkey=valkey,
-            principal_for_owner=lambda owner_id: None,
+            principal_for_owner=_no_principal,
         )
         stopped = await monitor_store.get_authorized(monitor.id, OWNER)
         assert stopped.status == "stopped"
@@ -729,7 +842,7 @@ async def test_a_skipped_monitor_evaluation_is_observable_as_stopped_and_a_later
             alert_store=alert_store,
             audit=audit,
             valkey=valkey,
-            principal_for_owner=lambda owner_id: OWNER if owner_id == OWNER.id else None,
+            principal_for_owner=_only_owner,
         )
         active_again = await monitor_store.get_authorized(monitor.id, OWNER)
         assert active_again.status == "active"
@@ -829,7 +942,7 @@ async def test_a_monitor_does_not_fire_on_a_match_created_by_resolution_with_no_
                     # The only honest `principal_for_owner` a resolution-sourced entry can be
                     # evaluated with — there is no requester to compare `owner_id` against, per
                     # this test's own docstring.
-                    principal_for_owner=lambda owner_id: None,
+                    principal_for_owner=_no_principal,
                 )
             )
         assert [a for a in alerts if a.rule_id == f"monitor:{monitor.id}"] == []
