@@ -1886,9 +1886,40 @@ first, not the one that is easiest to start.
        comment already found once for a different file. Fixed alongside this stage's own three new
        files rather than filed separately, since discovering it was a direct side effect of
        auditing where those three needed to go.
-   - **4e — Export, Glass surface.** `02_GLASS_FRONTEND.md` §10, built in full: the three export
-     triggers, the handling-gate UI with its named blocker list, the justification form, the
-     manifest and mark display.
+   - **4e — Export, Glass surface — built, 22 September 2026.** `02_GLASS_FRONTEND.md` §10:
+     `src/export/ExportPanel.tsx` (the drawer), `src/export/api.ts` (typed `ExportBlockedApiError`/
+     `OverrideRequiredApiError`, the same named-error posture `assessment/api.ts`'s own
+     `UnverifiableCitationApiError` already established), wired into `App.tsx`'s own header next to
+     `ResolutionThresholdControl` (`02_GLASS_FRONTEND.md` §2's own mockup: "Resolution: ●Balanced
+     Export ⚙"). The named blocker list, the justification/originator-reference override form
+     (disabled until both fields are non-empty, the same pattern `JudgementsPanel`'s own Save
+     button already uses), the manifest ("N hidden by handling" — the exact status-bar phrasing,
+     not a second wording) and the mark, and the refusal path — an item that became inaccessible
+     between selection and export is named specifically, via the same inline-banner mechanism as
+     every other blocked item, never a generic message. 11 new vitest cases (`api.test.ts`,
+     `ExportPanel.test.tsx`), vitest 190 → 201, all passing. The keyboard-reachability gate gained
+     its own sixth registry, `EXPORT_PANEL_ACTIONS` (`keyboard/actionRegistry.ts`), with its own
+     harness/spec pair — both new actions plus the pre-existing five surfaces' own 40 cases pass
+     together (43 total), no regression; verified non-vacuous by removing the manifest's own render
+     line, watching all three `export-panel.spec.ts` cases fail for real (including the registry's
+     own coverage assertion, cascading correctly), then restoring it and confirming green again.
+
+     **Known gap, disclosed as found, not silently narrowed to look done.** `services/api/
+     export.py`'s own module docstring names Stage 4e as the renderer of "the three artefact
+     shapes (chart/subgraph/report)" — read literally, that means producing each shape's own
+     downloadable bytes (a PNG, an assembled report document), not only submitting the selection to
+     the gate and rendering its response. **No such rendering engine exists anywhere in `apps/
+     workspace`** — checked directly: `GlassCanvasHandle` has no `exportImage`-shaped method,
+     `@sigma/export-image` is listed as a dependency (`02_GLASS_FRONTEND.md` §1) but never imported
+     by any component, and no report-assembly code exists at all. This drawer submits the real
+     selection (the current working set's own nodes/edges, each carrying its own real `handling`
+     block) to the real gate for all three `artefact_kind` values and renders the real mark/
+     manifest/ledger response — the safety-critical half A15 actually tests, and the half this
+     stage's own gates (the keyboard walkthrough, the named-blocker assertions) could verify — but
+     produces no downloadable file. **Owning phase: whichever phase next builds a chart-image or
+     report-assembly pipeline** — real, separately-scoped design work (a canvas-capture mechanism
+     for `chart`, a document-assembly pass over assessment objects for `report`), not invented here
+     to make this entry read as more finished than it is.
    - **4f — B16 and B18.** Cross-case timeline overlay and playback-driven snail trail (ADR-022):
      "small, incremental additions to Timeline and Map," lower uncertainty than 4a–4e, no
      dependency on any open ADR above.

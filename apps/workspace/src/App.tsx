@@ -19,6 +19,7 @@ import {
 import { Button } from "./design/primitives/Button";
 import { Toast } from "./design/primitives/Toast";
 import { Dossier } from "./dossier/Dossier";
+import { ExportPanel } from "./export/ExportPanel";
 import { HistoryPanel } from "./history/HistoryPanel";
 import { Inspector } from "./inspector/Inspector";
 import { computeCommunityHulls } from "./metrics/hulls";
@@ -103,6 +104,7 @@ export function App() {
   const [ontologySchema, setOntologySchema] = useState<OntologySchema | null>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [counts, setCounts] = useState({
     nodes: 0,
@@ -330,6 +332,13 @@ export function App() {
             store={workingSetRef.current.store}
             onChangeSummary={setToast}
           />
+        )}
+        {view === "graph" && (
+          // `02_GLASS_FRONTEND.md` §2's own workspace-layout mockup: "Resolution: ●Balanced
+          // Export ⚙" — the top-bar trigger for the export drawer (§10).
+          <Button aria-pressed={exportOpen} onClick={() => setExportOpen((open) => !open)}>
+            Export ⚙
+          </Button>
         )}
         {view === "map" && (
           <Button
@@ -573,6 +582,14 @@ export function App() {
         onRestored={(snapshot) =>
           workingSetRef.current.store.getState().applyDelta(snapshot)
         }
+      />
+      <ExportPanel
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        apiBaseUrl={API_BASE_URL}
+        bearerToken={DEV_BEARER_TOKEN}
+        investigationId={investigationId}
+        graph={workingSetRef.current.graph}
       />
       {toast && (
         <div style={{ position: "fixed", bottom: 16, right: 16 }}>

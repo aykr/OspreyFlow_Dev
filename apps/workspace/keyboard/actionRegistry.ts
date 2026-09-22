@@ -190,3 +190,17 @@ export const ASSESSMENT_PANEL_ACTIONS = defineActionRegistry("ASSESSMENT_PANEL_A
   "submit-save-assumption",
   "judgement-row-select-highlights-evidence",
 ] as const);
+
+/**
+ * The export drawer's own keyboard-reachable actions — Phase 8 Stage 4e, the sixth
+ * keyboard-driven surface (`keyboard/export-panel-harness.tsx`'s own docstring has the reasoning
+ * for a separate harness/spec pair, the same shape `ASSESSMENT_PANEL_ACTIONS` already establishes
+ * for the fifth). The artefact-kind `Select` needs no case here, the same native-control exemption
+ * every other registry above already establishes — only a real network call does: submitting an
+ * export that succeeds outright, and submitting one that is first blocked (`consult_originator`),
+ * then re-submitted with both override fields filled.
+ */
+export const EXPORT_PANEL_ACTIONS = defineActionRegistry("EXPORT_PANEL_ACTIONS", [
+  "submit-export-succeeds",
+  "submit-export-after-override",
+] as const);
