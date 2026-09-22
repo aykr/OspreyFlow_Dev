@@ -129,6 +129,20 @@ export interface GlassCanvasHandle {
    * and pans the camera to centre it, without changing the current zoom ratio — a no-op if
    * `nodeId` is not in `graph` (e.g. a stale metrics-panel row after a working-set change). */
   focusOnNode: (nodeId: string) => void;
+  /** Phase 8 Stage 4c: the Judgements tab's own bidirectional evidence highlighting
+   * (`02_GLASS_FRONTEND.md` §9.2). **A disclosed simplification against §9.2's own original text**
+   * ("reusing the existing 8% channel opacity overlay convention") — that convention is a
+   * per-*region* hull polygon (`communityHulls`, above) or a per-*text-span* background
+   * (`dossier/HighlightedMessage.tsx`), neither of which has a per-*node* shape; building one
+   * would mean a new WebGL node-program visual channel, real rendering-engine work `07_
+   * BUILD_PLAN.md`'s own Stage 4c entry discloses as out of this stage's own scope. Reuses the
+   * *selected* state instead (already a first-class, real multi-node state this canvas supports
+   * via lasso) — every id in `nodeIds` that exists in `graph` is selected together; ids that do
+   * not exist (a citation to a node not in the current working set) are silently skipped, not an
+   * error, since evidence can legitimately live outside the working set the canvas currently
+   * renders. No camera pan — unlike `focusOnNode`, a multi-node "fit view to selection" is its
+   * own real feature this method does not attempt. */
+  highlightNodes: (nodeIds: readonly string[]) => void;
 }
 
 interface PendingRadialMenu {
@@ -439,6 +453,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
         // nothing else, the simplest deterministic behaviour to both implement and assert against
         // in `keyboard/metrics-panel.spec.ts`.
         sigma.getCamera().animate({ x, y }, { duration: 200 });
+      },
+      highlightNodes: (nodeIds: readonly string[]) => {
+        const present = nodeIds.filter((id) => graph.hasNode(id));
+        setSelected(new Set(present));
+        onSelectionChange?.(present);
       },
     }),
     [graph, onSelectionChange],

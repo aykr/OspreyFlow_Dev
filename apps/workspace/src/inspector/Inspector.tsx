@@ -1,21 +1,40 @@
+import type Graph from "graphology";
 import type { Node } from "../../../../packages/schemas/generated";
+import { JudgementsPanel } from "../assessment/JudgementsPanel";
 import { Panel } from "../design/primitives/Panel";
 import { Tabs } from "../design/primitives/Tabs";
 import { useState } from "react";
 
 export interface InspectorProps {
   node: Node | null;
+  /** Phase 8 Stage 4c: the Judgements tab, `02_GLASS_FRONTEND.md` §9. `undefined` when the
+   * caller has not wired assessment production up yet (an existing test harness) — the tab is
+   * then simply not offered, the same optional-prop pattern `dimmedNodeIds`/`communityHulls`
+   * already establish on `GlassCanvas` for exactly this reason. */
+  assessment?: {
+    apiBaseUrl: string;
+    bearerToken: string;
+    investigationId: string;
+    workingSetGraph: Graph;
+    onHighlightNodes: (nodeIds: string[]) => void;
+  };
 }
 
 /** `docs/02_GLASS_FRONTEND.md` §2's workspace layout: "▸ Properties ▸
- * Provenance ▸ Relationships ▸ Judgements ▸ Source document" — Judgements
- * and Relationships are Phase 8/Phase 4-canvas-adjacent respectively and
- * out of this checkpoint's scope; Properties, Provenance and Source
- * document are what a single selected node actually needs shown now. */
-export function Inspector({ node }: InspectorProps) {
+ * Provenance ▸ Relationships ▸ Judgements ▸ Source document" — Relationships
+ * is out of this checkpoint's scope; Properties, Provenance, Source document
+ * and (Phase 8 Stage 4c) Judgements are what this Inspector now covers.
+ *
+ * **The Judgements tab does not require a selected node** — unlike
+ * Properties/Provenance/Source, assessment production is investigation-
+ * scoped, not node-scoped (`02_GLASS_FRONTEND.md` §9's own framing: the
+ * analytical product, not a per-node fact) — so `Tabs` renders even when
+ * `node` is `null`, with only the node-specific tabs' own content gated on
+ * it. */
+export function Inspector({ node, assessment }: InspectorProps) {
   const [tab, setTab] = useState("properties");
 
-  if (!node) {
+  if (!node && !assessment) {
     return (
       <Panel title="Inspector" className="inspector">
         <p style={{ color: "var(--text-tertiary)" }}>Select a node to inspect it.</p>
@@ -23,18 +42,31 @@ export function Inspector({ node }: InspectorProps) {
     );
   }
 
+  const tabs = [
+    { id: "properties", label: "Properties" },
+    { id: "provenance", label: "Provenance" },
+    { id: "source", label: "Source" },
+    ...(assessment ? [{ id: "judgements", label: "Judgements" }] : []),
+  ];
+  const activeTab = node ? tab : "judgements";
+
   return (
     <Panel title="Inspector" className="inspector">
-      <Tabs
-        tabs={[
-          { id: "properties", label: "Properties" },
-          { id: "provenance", label: "Provenance" },
-          { id: "source", label: "Source" },
-        ]}
-        activeId={tab}
-        onChange={setTab}
-      />
-      {tab === "properties" && (
+      <Tabs tabs={tabs} activeId={activeTab} onChange={setTab} />
+      {activeTab === "judgements" && assessment && (
+        <JudgementsPanel
+          apiBaseUrl={assessment.apiBaseUrl}
+          bearerToken={assessment.bearerToken}
+          investigationId={assessment.investigationId}
+          workingSetGraph={assessment.workingSetGraph}
+          selectedNodeId={node?.id ?? null}
+          onHighlightNodes={assessment.onHighlightNodes}
+        />
+      )}
+      {!node && activeTab !== "judgements" && (
+        <p style={{ color: "var(--text-tertiary)" }}>Select a node to inspect it.</p>
+      )}
+      {node && tab === "properties" && (
         <dl>
           <div>
             <dt style={{ color: "var(--text-secondary)" }}>Type</dt>
@@ -52,7 +84,7 @@ export function Inspector({ node }: InspectorProps) {
           ))}
         </dl>
       )}
-      {tab === "provenance" && (
+      {node && tab === "provenance" && (
         <div>
           <p>
             State: <span className="value">{node.provenance.state}</span>
@@ -62,7 +94,7 @@ export function Inspector({ node }: InspectorProps) {
           </p>
         </div>
       )}
-      {tab === "source" && (
+      {node && tab === "source" && (
         <ul style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
           {node.provenance.sources.map((source, i) => (
             <li key={i} className="value">

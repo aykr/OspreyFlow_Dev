@@ -82,6 +82,7 @@ from knowledge_adapters import ARITY, REGISTRY
 from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme, load_uk_le_scheme
 from ontology.loader import load_default_ontology
+from ontology.yardstick import Yardstick, load_phia_yardstick
 from ports.analytics import AnalyticsPort
 from ports.compute import ComputePort
 from ports.graph import GraphPort
@@ -95,9 +96,12 @@ from schemas.analytics import (
     HistogramRequest,
 )
 from schemas.domain import (
+    Assumption,
     Edge,
     ExpandRequest,
     Hotlist,
+    IntelligenceGap,
+    Judgement,
     Monitor,
     Node,
     NodeId,
@@ -138,7 +142,27 @@ from . import resolution_trigger as resolution_trigger_module
 from . import review as review_module
 from . import search as search_module
 from .alerts import AlertNotFoundError, AlertStore
-from .assessments import JudgementStore, flag_judgements_citing_superseded_node
+from .assessments import (
+    AssumptionListResponse,
+    AssumptionNotFoundError,
+    AssumptionStore,
+    GapNotFoundError,
+    IntelligenceGapListResponse,
+    IntelligenceGapStore,
+    JudgementListResponse,
+    JudgementNotFoundError,
+    JudgementStore,
+    NoSupportingReferenceError,
+    SaveAssumptionRequest,
+    SaveGapRequest,
+    SaveJudgementRequest,
+    UnverifiableCitationError,
+    flag_judgements_citing_superseded_node,
+    list_visible_judgements,
+    new_assumption,
+    new_gap,
+    new_judgement,
+)
 from .audit import AuditWriteError, AuditWriter
 from .auth import PrincipalResolutionError, PrincipalResolver, bearer_scheme
 from .change_stream import ChangeStreamEntry, ChangeStreamWriter
@@ -272,6 +296,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     arcadedb_client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
     await arcadedb_client.create_database_if_absent()
     handling_scheme = load_uk_le_scheme()
+    yardstick = load_phia_yardstick()
     ontology = load_default_ontology()
     graph: GraphPort = GraphArcadeDBAdapter(arcadedb_client, handling_scheme)
     await graph.apply_schema(ontology)
@@ -286,6 +311,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     monitors_store = await MonitorStore.connect(config.postgres.dsn)
     alerts_store = await AlertStore.connect(config.postgres.dsn)
     judgements_store = await JudgementStore.connect(config.postgres.dsn)
+    gaps_store = await IntelligenceGapStore.connect(config.postgres.dsn)
+    assumptions_store = await AssumptionStore.connect(config.postgres.dsn)
     studio_recipes = await StudioRecipeStore.connect(config.postgres.dsn)
     extraction_candidates = await ExtractionCandidateStore.connect(config.postgres.dsn)
     litellm_client = LiteLLMClient(LiteLLMConfig.from_env())
@@ -330,11 +357,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.monitors_store = monitors_store
     app.state.alerts_store = alerts_store
     app.state.judgements_store = judgements_store
+    app.state.gaps_store = gaps_store
+    app.state.assumptions_store = assumptions_store
     app.state.studio_recipes = studio_recipes
     app.state.extraction_candidates = extraction_candidates
     app.state.model = model
     app.state.recipes_repo_root = _RECIPES_REPO_ROOT
     app.state.handling_scheme = handling_scheme
+    app.state.yardstick = yardstick
     app.state.site_image_storage = site_image_storage_config()
     app.state.tile_cache_storage = tile_cache_storage_config()
     app.state.analytics = analytics
@@ -388,6 +418,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await monitors_store.close()
         await alerts_store.close()
         await judgements_store.close()
+        await gaps_store.close()
+        await assumptions_store.close()
         await studio_recipes.close()
         await extraction_candidates.close()
         await litellm_client.aclose()
@@ -487,6 +519,14 @@ def get_judgements_store(request: Request) -> JudgementStore:
     return request.app.state.judgements_store  # type: ignore[no-any-return]
 
 
+def get_gaps_store(request: Request) -> IntelligenceGapStore:
+    return request.app.state.gaps_store  # type: ignore[no-any-return]
+
+
+def get_assumptions_store(request: Request) -> AssumptionStore:
+    return request.app.state.assumptions_store  # type: ignore[no-any-return]
+
+
 def get_studio_recipes(request: Request) -> StudioRecipeStore:
     return request.app.state.studio_recipes  # type: ignore[no-any-return]
 
@@ -505,6 +545,10 @@ def get_recipes_repo_root(request: Request) -> Path:
 
 def get_handling_scheme(request: Request) -> HandlingScheme:
     return request.app.state.handling_scheme  # type: ignore[no-any-return]
+
+
+def get_yardstick(request: Request) -> Yardstick:
+    return request.app.state.yardstick  # type: ignore[no-any-return]
 
 
 def get_site_image_storage(request: Request) -> ObjectStorageConfig:
@@ -557,12 +601,15 @@ HotlistsStoreDep = Annotated[HotlistStore, Depends(get_hotlists_store)]
 MonitorsStoreDep = Annotated[MonitorStore, Depends(get_monitors_store)]
 AlertsStoreDep = Annotated[AlertStore, Depends(get_alerts_store)]
 JudgementsStoreDep = Annotated[JudgementStore, Depends(get_judgements_store)]
+GapsStoreDep = Annotated[IntelligenceGapStore, Depends(get_gaps_store)]
+AssumptionsStoreDep = Annotated[AssumptionStore, Depends(get_assumptions_store)]
 StudioRecipesDep = Annotated[StudioRecipeStore, Depends(get_studio_recipes)]
 ExtractionCandidatesDep = Annotated[ExtractionCandidateStore, Depends(get_extraction_candidates)]
 ModelDep = Annotated[ModelPort, Depends(get_model)]
 ComputeDep = Annotated[ComputePort, Depends(get_compute)]
 RecipesRepoRootDep = Annotated[Path, Depends(get_recipes_repo_root)]
 HandlingSchemeDep = Annotated[HandlingScheme, Depends(get_handling_scheme)]
+YardstickDep = Annotated[Yardstick, Depends(get_yardstick)]
 JobsDep = Annotated[JobQueue, Depends(get_jobs)]
 ValkeyDep = Annotated[Valkey, Depends(get_valkey)]
 SiteImageStorageDep = Annotated[ObjectStorageConfig, Depends(get_site_image_storage)]
@@ -740,6 +787,60 @@ async def _hotlist_not_found_handler(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND, content={"error": "hotlist_not_found"}
+    )
+
+
+@app.exception_handler(JudgementNotFoundError)
+async def _judgement_not_found_handler(
+    request: Request, exc: JudgementNotFoundError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND, content={"error": "judgement_not_found"}
+    )
+
+
+@app.exception_handler(GapNotFoundError)
+async def _gap_not_found_handler(request: Request, exc: GapNotFoundError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "gap_not_found"})
+
+
+@app.exception_handler(AssumptionNotFoundError)
+async def _assumption_not_found_handler(
+    request: Request, exc: AssumptionNotFoundError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND, content={"error": "assumption_not_found"}
+    )
+
+
+@app.exception_handler(NoSupportingReferenceError)
+async def _no_supporting_reference_handler(
+    request: Request, exc: NoSupportingReferenceError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "error": "no_supporting_reference",
+            "detail": "a judgement cannot be saved without at least one supporting reference",
+        },
+    )
+
+
+@app.exception_handler(UnverifiableCitationError)
+async def _unverifiable_citation_handler(
+    request: Request, exc: UnverifiableCitationError
+) -> JSONResponse:
+    """A `save` refusal, named per-citation, per the invisible-judgement defect's own fix
+    (`services/api/assessments.py::UnverifiableCitationError`'s own docstring) — the Glass's own
+    error surfacing (`02_GLASS_FRONTEND.md` §4.1) reads `citation_ids` to name the offending
+    reference directly, not just `str(exc)`."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "error": "unverifiable_citation",
+            "detail": str(exc),
+            "citation_ids": exc.citation_ids,
+        },
     )
 
 
@@ -1760,6 +1861,130 @@ async def list_hotlists_route(
     return HotlistList(hotlists=await hotlists_store.list_authorized(principal))
 
 
+@app.post(
+    "/v1/investigations/{investigation_id}/judgements", status_code=status.HTTP_201_CREATED
+)
+async def save_judgement_route(
+    investigation: AuthorizedInvestigationDep,
+    principal: PrincipalDep,
+    body: SaveJudgementRequest,
+    judgements_store: JudgementsStoreDep,
+    graph: GraphDep,
+    audit: AuditDep,
+) -> Judgement:
+    """`investigation.id` (path, `AuthorizedInvestigationDep`-verified), never `body.
+    investigation_id` — `SaveJudgementRequest`'s own docstring states this is deliberate, the same
+    "path wins over body" rule `create_site` already follows. `NoSupportingReferenceError`/
+    `UnverifiableCitationError` propagate to their own handlers above; a raised exception here
+    means nothing was written (`JudgementStore.save`'s own docstring)."""
+    judgement = new_judgement(
+        investigation_id=investigation.id,
+        statement=body.statement,
+        probability_band=body.probability_band,
+        supporting=body.supporting,
+        contradicting=body.contradicting,
+        author=principal.id,
+    )
+    saved = await judgements_store.save(judgement, principal, graph)
+    await audit.record(
+        principal=principal,
+        action="judgement_save",
+        investigation_id=investigation.id,
+        resolved_query={"judgement_id": saved.id},
+        result_cardinality=1,
+    )
+    return saved
+
+
+@app.get("/v1/investigations/{investigation_id}/judgements")
+async def list_judgements_route(
+    investigation: AuthorizedInvestigationDep,
+    principal: PrincipalDep,
+    judgements_store: JudgementsStoreDep,
+    graph: GraphDep,
+) -> JudgementListResponse:
+    """`list_visible_judgements`, not `list_for_investigation` — ADR-046's own hide-in-full rule
+    and the lazy `contradicting`-unreadable flag both apply here, not only the ownership check."""
+    return JudgementListResponse(
+        judgements=await list_visible_judgements(
+            judgements_store, investigation.id, principal, graph
+        )
+    )
+
+
+@app.post("/v1/investigations/{investigation_id}/gaps", status_code=status.HTTP_201_CREATED)
+async def save_gap_route(
+    investigation: AuthorizedInvestigationDep,
+    principal: PrincipalDep,
+    body: SaveGapRequest,
+    gaps_store: GapsStoreDep,
+    audit: AuditDep,
+) -> IntelligenceGap:
+    gap = new_gap(
+        investigation_id=investigation.id,
+        question=body.question,
+        raised_by=principal.id,
+        linked_entities=body.linked_entities,
+        status=body.status,
+    )
+    saved = await gaps_store.save(gap, principal)
+    await audit.record(
+        principal=principal,
+        action="gap_save",
+        investigation_id=investigation.id,
+        resolved_query={"gap_id": saved.id},
+        result_cardinality=1,
+    )
+    return saved
+
+
+@app.get("/v1/investigations/{investigation_id}/gaps")
+async def list_gaps_route(
+    investigation: AuthorizedInvestigationDep, principal: PrincipalDep, gaps_store: GapsStoreDep
+) -> IntelligenceGapListResponse:
+    return IntelligenceGapListResponse(
+        gaps=await gaps_store.list_for_investigation(investigation.id, principal)
+    )
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/assumptions", status_code=status.HTTP_201_CREATED
+)
+async def save_assumption_route(
+    investigation: AuthorizedInvestigationDep,
+    principal: PrincipalDep,
+    body: SaveAssumptionRequest,
+    assumptions_store: AssumptionsStoreDep,
+    audit: AuditDep,
+) -> Assumption:
+    assumption = new_assumption(
+        investigation_id=investigation.id,
+        statement=body.statement,
+        if_false_impact=body.if_false_impact,
+        linked_judgements=body.linked_judgements,
+    )
+    saved = await assumptions_store.save(assumption, principal)
+    await audit.record(
+        principal=principal,
+        action="assumption_save",
+        investigation_id=investigation.id,
+        resolved_query={"assumption_id": saved.id},
+        result_cardinality=1,
+    )
+    return saved
+
+
+@app.get("/v1/investigations/{investigation_id}/assumptions")
+async def list_assumptions_route(
+    investigation: AuthorizedInvestigationDep,
+    principal: PrincipalDep,
+    assumptions_store: AssumptionsStoreDep,
+) -> AssumptionListResponse:
+    return AssumptionListResponse(
+        assumptions=await assumptions_store.list_for_investigation(investigation.id, principal)
+    )
+
+
 @app.post("/v1/monitors", status_code=status.HTTP_201_CREATED)
 async def create_monitor_route(
     body: CreateMonitorRequest,
@@ -2301,6 +2526,15 @@ async def get_handling_scheme_route(
     treatment as `GET /v1/ontology`: schema metadata, not a disclosure of
     any record's own handling."""
     return scheme
+
+
+@app.get("/v1/yardstick")
+async def get_yardstick_route(principal: PrincipalDep, yardstick: YardstickDep) -> Yardstick:
+    """The active deployment's probability yardstick (`01_DOMAIN_MODEL.md` §5) — what the
+    Judgements tab's own band `Select` populates from (`02_GLASS_FRONTEND.md` §9.3: "generated
+    from the loaded yardstick file, not hardcoded"). Same treatment as `GET /v1/handling-scheme`:
+    schema/config metadata, not a disclosure of any record's own content."""
+    return yardstick
 
 
 @app.post("/v1/ingest/recipes", status_code=status.HTTP_201_CREATED)

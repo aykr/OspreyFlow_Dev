@@ -486,10 +486,16 @@ judgements via multi-select against the investigation's own judgement list.
 
 ### 9.2 Bidirectional evidence highlighting
 
-- Selecting a judgement highlights its own `supporting`/`contradicting` items on the canvas, reusing
-  the existing "8% channel opacity" overlay convention (§1.1's community hulls, and the message-span
-  highlighting Stage 4 already established there) rather than inventing a fourth visual language for
-  "this is relevant, not selected."
+- **Selecting a judgement highlights its own `supporting`/`contradicting` items on the canvas —
+  built as the *selected* node state (`GlassCanvasHandle.highlightNodes`), not the "8% channel
+  opacity" overlay this section originally specified.** Corrected here rather than left
+  contradicting the shipped build (Phase 8 Stage 4c): the opacity convention is a per-*region*
+  hull polygon or a per-*text-span* background, neither of which has a per-*node* shape — building
+  one would be a new WebGL node-program visual channel, real rendering-engine work Stage 4c was
+  not scoped for. Reusing the existing multi-node *selected* state (already real, via lasso) needs
+  no new channel and reaches the same practical goal — "this is relevant" — at the cost of not
+  being visually distinct from an analyst's own manual selection while a judgement's evidence is
+  highlighted. `GlassCanvasHandle.highlightNodes`'s own docstring has the full record.
 - Selecting a node lists, in the Judgements tab, every judgement resting on it —
   `01_DOMAIN_MODEL.md` §5's own "selecting a node lists the judgements that rest on it," given a
   concrete surface for the first time.

@@ -63,6 +63,7 @@ disclosure already accepted for a different feature, disclosed here for this one
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Literal
 
 import asyncpg
 from pydantic import BaseModel
@@ -541,9 +542,56 @@ def new_judgement(
     )
 
 
+def new_gap(
+    *,
+    investigation_id: str,
+    question: str,
+    raised_by: str,
+    linked_entities: list[str] | None = None,
+    status: Literal["open", "tasked", "answered", "closed"] = "open",
+) -> IntelligenceGap:
+    """`new_judgement`'s own twin, for the same reason: a thin constructor, not a route, so Stage
+    4c's route handler builds the model the same way a test fixture does."""
+    from conduit_common.identity import new_id
+
+    return IntelligenceGap(
+        id=new_id(),
+        investigation_id=investigation_id,
+        question=question,
+        raised_by=raised_by,
+        linked_entities=linked_entities or [],
+        status=status,
+        created_at=datetime.now(UTC),
+    )
+
+
+def new_assumption(
+    *,
+    investigation_id: str,
+    statement: str,
+    if_false_impact: str,
+    linked_judgements: list[str] | None = None,
+) -> Assumption:
+    """`new_judgement`'s own twin, for the same reason."""
+    from conduit_common.identity import new_id
+
+    return Assumption(
+        id=new_id(),
+        investigation_id=investigation_id,
+        statement=statement,
+        if_false_impact=if_false_impact,
+        linked_judgements=linked_judgements or [],
+        created_at=datetime.now(UTC),
+    )
+
+
 class SaveJudgementRequest(BaseModel):
-    """The wire shape for the eventual Stage 4c route — not routed here (backend-only scope), but
-    shaped now so Stage 4c does not need to re-derive it."""
+    """The wire shape for the Stage 4c route (`services/api/app.py`'s own `POST
+    /v1/investigations/{investigation_id}/judgements`). `investigation_id` here is *not* trusted —
+    the route always uses the path's own `AuthorizedInvestigationDep`-verified id instead, the same
+    "never trust a body-supplied scope over the authorized path" discipline `create_site`
+    (`services/api/app.py`) already establishes; this field exists only so a caller building the
+    body from `Judgement.model_dump()` does not need to strip it out first."""
 
     investigation_id: str
     statement: str
@@ -552,18 +600,55 @@ class SaveJudgementRequest(BaseModel):
     contradicting: list[str] = []
 
 
+class SaveGapRequest(BaseModel):
+    """`SaveJudgementRequest`'s own twin for `IntelligenceGap` — same "path wins over body" rule."""
+
+    investigation_id: str
+    question: str
+    linked_entities: list[str] = []
+    status: Literal["open", "tasked", "answered", "closed"] = "open"
+
+
+class SaveAssumptionRequest(BaseModel):
+    """`SaveJudgementRequest`'s own twin for `Assumption` — same "path wins over body" rule."""
+
+    investigation_id: str
+    statement: str
+    if_false_impact: str
+    linked_judgements: list[str] = []
+
+
+class JudgementListResponse(BaseModel):
+    judgements: list[Judgement]
+
+
+class IntelligenceGapListResponse(BaseModel):
+    gaps: list[IntelligenceGap]
+
+
+class AssumptionListResponse(BaseModel):
+    assumptions: list[Assumption]
+
+
 __all__ = [
+    "AssumptionListResponse",
     "AssumptionNotFoundError",
     "AssumptionStore",
     "GapNotFoundError",
+    "IntelligenceGapListResponse",
     "IntelligenceGapStore",
+    "JudgementListResponse",
     "JudgementNotFoundError",
     "JudgementStore",
     "NoSupportingReferenceError",
+    "SaveAssumptionRequest",
+    "SaveGapRequest",
     "SaveJudgementRequest",
     "UnverifiableCitationError",
     "flag_judgements_citing_superseded_node",
     "judgement_visible_to",
     "list_visible_judgements",
+    "new_assumption",
+    "new_gap",
     "new_judgement",
 ]

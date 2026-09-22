@@ -1766,9 +1766,62 @@ first, not the one that is easiest to start.
      and — **now unblocked: `06_DECISIONS.md` ADR-046 accepted, 22 September 2026** — the read-time
      access recheck on every citation, the viewer-scoped hidden-not-shown filter on judgement
      reads, and the review-flag extension to an unreadable `contradicting` reference.
-   - **4c — Assessment objects, Glass surface.** `02_GLASS_FRONTEND.md` §9, built in full: the
-     Judgements tab, authoring surfaces, bidirectional evidence highlighting, yardstick display,
-     the review-flag chip.
+   - **4c — Assessment objects, Glass surface — built, 22 September 2026.** `02_GLASS_FRONTEND.md`
+     §9, built in full: the Judgements tab (`apps/workspace/src/assessment/JudgementsPanel.tsx`),
+     authoring surfaces for all three object types, bidirectional evidence highlighting
+     (`GlassCanvasHandle.highlightNodes`, §9.2's own corrected text has the mechanism), yardstick
+     display (fetched from the real `GET /v1/yardstick`, never hardcoded), the review-flag chip
+     (`ReviewFlagChip.tsx`, always-visible text, not hover-gated).
+
+     **Scope expansion, disclosed rather than silent: this sub-stage also builds the HTTP routes
+     Stage 4b's own entry explicitly deferred** ("no Glass surface, no export-gate change, and no
+     routes"). `SaveJudgementRequest`'s own docstring already anticipated this — `POST`/`GET
+     /v1/investigations/{id}/judgements`, `.../gaps`, `.../assumptions`, and `GET /v1/yardstick`
+     (`services/api/app.py`), all `AuthorizedInvestigationDep`-gated, the path's own verified
+     investigation id always winning over any body-supplied one (`test_save_judgement_route_uses_
+     the_path_investigation_id_not_the_bodys`, proving it directly rather than assuming FastAPI's
+     own binding order is enough).
+
+     **The citation-type restriction (Part 1 of this session's own fix) is surfaced in the picker,
+     not merely documented:** the evidence picker's own option list is built exclusively from
+     `workingSetGraph.nodes()` — structurally incapable of offering an edge or a document, since
+     neither is ever a candidate value in the first place, proven directly
+     (`test_the_evidence_picker_never_offers_an_edge_as_a_citation_option`) with a graph carrying
+     a real edge alongside two real nodes.
+
+     **Gates, all run for real:** `authorized-query-check` — clean. Route-level tests
+     (`tests/services/api/test_assessment_routes.py`, 8 cases) against the real app lifespan, real
+     Postgres and real ArcadeDB — the same `with TestClient(app) as client:` pattern `tests/
+     scenarios/test_phase7_stage6c_watch_routes.py` already established, not `dependency_overrides`
+     (which binds a store to a different event loop than `TestClient`'s own internal one and fails
+     with `asyncpg.exceptions.InterfaceError` — found live, not assumed, before landing on the
+     working pattern). `vitest` — 181 passing before this sub-stage's own new test files, 190
+     after (8 new cases across `api.test.ts`, `ReviewFlagChip.test.tsx`, `JudgementsPanel.test.tsx`
+     — the save-button-disabled and edge-exclusion claims each proven with a companion case
+     reproducing the regression they exist to catch, not asserted alone). The keyboard-
+     reachability gate (`CLAUDE.md` rule 13) gained its own fifth registry,
+     `ASSESSMENT_PANEL_ACTIONS` (`keyboard/actionRegistry.ts`), with its own harness/spec pair
+     (`keyboard/assessment-panel-harness.tsx`, `assessment-panel.spec.ts`) — all 4 new actions
+     plus the pre-existing 4 surfaces' own 40 cases pass together, no regression; the row-select
+     evidence-highlight action was verified non-vacuous by breaking its own handler, watching the
+     real Playwright test fail (`Timeout 5000ms exceeded`, empty array where `["n1"]` was
+     expected), then restoring it and confirming green again.
+
+     **Known gaps, disclosed as found:**
+     - **§9.2's own "8% channel opacity" evidence-highlight text did not survive contact with a
+       real WebGL renderer** — corrected in `02_GLASS_FRONTEND.md` §9.2 itself, not left
+       contradicting the shipped build: highlighting reuses the existing multi-node *selected*
+       state instead, at the cost of not being visually distinct from a manual lasso selection
+       while a judgement's own evidence is highlighted. A dedicated highlight channel remains real,
+       undesigned work — **owning phase: none yet**, named here rather than invented a home for.
+     - **No `limit_exceeded`-shaped handling for a very large judgement/gap/assumption list** —
+       `list_visible_judgements`/`list_for_investigation` return every row with no server-side cap
+       or pagination. Checked against this stage's own realistic scale (an investigation's own
+       assessment count, not a 50k-node working set) and judged low-risk rather than exempted by
+       assumption — but genuinely unbounded, and `CLAUDE.md` standing rule 2 applies to any list
+       this build renders, not only the canvas. **Owning phase: whichever phase next has a concrete
+       reason to want it** — not built speculatively here, the same "not a reason to add it
+       speculatively" discipline this document already applies elsewhere.
    - **4d — Export pipeline and handling gate, backend.** `POST /export`, the `consult_originator`
      block-by-name, the justification/originator-reference override, the withheld-item manifest,
      the Osprey mark, and — **now unblocked: `06_DECISIONS.md` ADR-047 accepted, 22 September

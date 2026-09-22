@@ -515,7 +515,16 @@ export function App() {
             overflowY: "auto",
           }}
         >
-          <Inspector node={selectedNode} />
+          <Inspector
+            node={selectedNode}
+            assessment={{
+              apiBaseUrl: API_BASE_URL,
+              bearerToken: DEV_BEARER_TOKEN,
+              investigationId,
+              workingSetGraph: workingSetRef.current.graph,
+              onHighlightNodes: (nodeIds) => glassCanvasRef.current?.highlightNodes(nodeIds),
+            }}
+          />
           {view === "graph" && (
             <MetricsPanel
               apiBaseUrl={API_BASE_URL}

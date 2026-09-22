@@ -172,3 +172,21 @@ export const WATCH_PANEL_ACTIONS = defineActionRegistry("WATCH_PANEL_ACTIONS", [
   "alert-row-jump",
   "jump-result-open-investigation",
 ] as const);
+
+/**
+ * The Judgements tab's own keyboard-reachable actions — Phase 8 Stage 4c, the fifth
+ * keyboard-driven surface (`keyboard/assessment-panel-harness.tsx`'s own docstring has the
+ * reasoning for a separate harness/spec pair, the same shape `WATCH_PANEL_ACTIONS` already
+ * establishes for the fourth). Every native `Input`/`Select`'s own Tab-reachability needs no case
+ * here — only an action with real state mutation or a real network call, or a real
+ * canvas-touching effect, does: saving a judgement, a gap or an assumption; selecting a judgement
+ * row to highlight its own evidence (`GlassCanvasHandle.highlightNodes`, a real effect on the
+ * canvas, the same class of action `METRICS_PANEL_ACTIONS`'s own `row-select-and-centre` already
+ * is for `focusOnNode`).
+ */
+export const ASSESSMENT_PANEL_ACTIONS = defineActionRegistry("ASSESSMENT_PANEL_ACTIONS", [
+  "submit-save-judgement",
+  "submit-save-gap",
+  "submit-save-assumption",
+  "judgement-row-select-highlights-evidence",
+] as const);
