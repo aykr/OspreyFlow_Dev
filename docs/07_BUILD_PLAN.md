@@ -1741,9 +1741,10 @@ first, not the one that is easiest to start.
      Phase 2's own HMP fixture test already established for Scenario A.
    - **4b — Assessment objects, backend.** `Judgement`/`IntelligenceGap`/`Assumption` persistence,
      the evidence-link validation A13 requires (reject a save with zero supporting references), the
-     yardstick loader, and the review-flag-on-supersede wiring `01_DOMAIN_MODEL.md` §5 already
-     states. **Blocked on `06_DECISIONS.md` ADR-046** (assessment evidence lifecycle) being
-     accepted, not started against an assumed answer.
+     yardstick loader, the review-flag-on-supersede wiring `01_DOMAIN_MODEL.md` §5 already states,
+     and — **now unblocked: `06_DECISIONS.md` ADR-046 accepted, 22 September 2026** — the read-time
+     access recheck on every citation, the viewer-scoped hidden-not-shown filter on judgement
+     reads, and the review-flag extension to an unreadable `contradicting` reference.
    - **4c — Assessment objects, Glass surface.** `02_GLASS_FRONTEND.md` §9, built in full: the
      Judgements tab, authoring surfaces, bidirectional evidence highlighting, yardstick display,
      the review-flag chip.

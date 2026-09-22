@@ -493,10 +493,14 @@ judgements via multi-select against the investigation's own judgement list.
 - Selecting a node lists, in the Judgements tab, every judgement resting on it —
   `01_DOMAIN_MODEL.md` §5's own "selecting a node lists the judgements that rest on it," given a
   concrete surface for the first time.
-- A citation whose evidence has become inaccessible renders as a distinct "unavailable" state, never
-  silently dropped from the list — the mechanism this section commits to; which trigger produces
-  that state (an access change, a content change, or both) is `06_DECISIONS.md` ADR-046's own open
-  question, not assumed here.
+- **A judgement is hidden from the Judgements tab in full, not shown with a citation marked
+  unavailable, when the viewing principal's access does not cover at least one of its own
+  `supporting` references** — `06_DECISIONS.md` ADR-046's own decision: a conclusion a viewer
+  cannot verify is an unsupported assertion wearing the same formatting as a supported one, and
+  displaying it invites the deference the evidence-link requirement exists to prevent. An
+  unreadable `contradicting` reference does not hide the judgement; it renders a distinct
+  review-flag chip (§9.4) instead, since a fuller-access reviewer should know a counter-
+  consideration existed that this viewer could not see.
 
 ### 9.3 Yardstick display
 
@@ -542,10 +546,11 @@ it its own surface. Three artefact shapes share one handling gate — there is o
   §6's "Override requires a justification and an originator reference, both recorded." The `Export`
   button stays disabled until both fields are non-empty — the same disabled-until-valid pattern
   §9.1's judgement `Save` button already uses.
-- A report export additionally walks every assessment object's own cited evidence, not only the
-  canvas selection — pending `06_DECISIONS.md` ADR-046's own decision on whether this check is
-  built (its option (b)). This section names where such a block renders (the same named-blocker
-  list above) without assuming the ADR's outcome.
+- **A report export additionally walks every assessment object's own `supporting` citations, not
+  only the canvas selection** — `06_DECISIONS.md` ADR-046's own decision, required rather than
+  optional: a judgement citing evidence outside the *exporting analyst's own* access is refused and
+  named in the same blocker list above, since no recheck against the eventual recipient's access is
+  possible once the artefact has left the boundary (ADR-045).
 
 ### 10.3 Manifest and mark
 

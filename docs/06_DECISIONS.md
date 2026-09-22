@@ -4285,11 +4285,15 @@ record's own reasoning against it (an unverifiable declaration) no longer holds.
 
 ---
 
-## ADR-046 — Assessment evidence lifecycle: proposed, decide nothing
+## ADR-046 — Assessment evidence lifecycle: accepted, option (a), with one addition and an export requirement
 
-**Status.** Proposed, 22 September 2026, during Phase 8 Stage 4's own read-first pass. Three
-options below; none is decided. Stage 4a (assessment objects, backend) is not built until this
-record is accepted.
+**Status.** Accepted, 22 September 2026. The three-option analysis below is the record as
+originally drafted — kept in place, not rewritten, per this document's own discipline of showing
+what changed and why. The owner's decision, superseding "none is decided" in that analysis, is at
+the end of this record: option (a) is accepted; option (b)'s own export-time check is folded into
+the decision as a requirement rather than kept as a discarded alternative; option (c) is declined.
+One question the three options never themselves asked — what a judgement looks like to a viewer
+who cannot read its own evidence — is also settled there.
 
 **What the spec already answers.** `01_DOMAIN_MODEL.md` §5 states the content-change trigger:
 "When a supporting node is later split, corrected or retracted, every judgement resting on it is
@@ -4364,6 +4368,65 @@ to assessments.**
 - *The test that would prove it.* `test_judgement_evidence_copy_remains_readable_after_referent_
   access_is_revoked` — the test that would prove this option was chosen, and the one a reviewer
   should treat as a regression if option (a) or (b) is chosen instead.
+
+**Decision, 22 September 2026.** Option (a) is accepted for the live read path: a judgement's
+cited evidence is a reference, not a copy, and access is re-checked at every read — the same
+mechanism ADR-039 already built for alerts, extended here rather than duplicated. Option (c) is
+declined for the reason already given above: it reopens the exact failure ADR-039 exists to
+prevent, and a judgement's own durability is a reason to take that failure more seriously, not a
+reason to accept it.
+
+**One question the three options above did not themselves ask, settled here: what does a judgement
+look like to a viewer who cannot read at least one of its own `supporting` references?** Two shapes
+are possible — the judgement renders with its statement and band intact and the unreadable citation
+marked unavailable (option (a) as drafted), or the judgement itself does not render to that viewer
+at all. **Decided: hidden, not shown with its basis missing.** A judgement is this platform's own
+analytical product — a stated conclusion, not a data record — and a conclusion a viewer cannot
+verify is not a weaker version of the same conclusion, it is an unsupported assertion wearing the
+same formatting as a supported one. Displaying it invites exactly the deference the evidence-link
+requirement (`01_DOMAIN_MODEL.md` §5: "a judgement cannot be saved without at least one supporting
+reference") exists to prevent — a viewer who cannot check the basis but sees the conclusion anyway
+is worse off than a viewer who never saw it at all, because the former has been handed a conclusion
+with no way to weigh it and every reason, in the platform's own presentation of it, to trust it
+regardless. **A judgement is hidden from a viewer, in full, when that viewer's access does not
+cover at least one of its own `supporting` references.** An unreadable `contradicting` reference
+does not hide the judgement — a contradicting item's own absence does not remove the basis for the
+stated conclusion, only a possible qualifier to it — but is recorded distinctly, flagged for review
+the same way a content change already is (`01_DOMAIN_MODEL.md` §5), since a reviewer with fuller
+access should know a counter-consideration existed that this viewer could not see.
+
+**The test.** `test_a_judgement_is_hidden_from_a_viewer_who_cannot_read_at_least_one_of_its_
+supporting_references` — write a judgement citing two supporting nodes, one visible and one not to
+principal B; list judgements as B; assert the judgement is absent from B's own list entirely, not
+present with a placeholder or an "unavailable" marker in its place. A companion,
+`test_an_unreadable_contradicting_reference_does_not_hide_the_judgement`, asserts the same
+judgement, with its `contradicting` list (not `supporting`) carrying the inaccessible node instead,
+still renders in full to the same viewer.
+
+**Export, stated rather than left to option (b)'s own conditional framing.** `06_DECISIONS.md`
+ADR-045's own finding applies here without qualification: once an assessment is exported, "no
+principal re-checks anything ever again," so a judgement whose citation the *recipient* cannot
+verify has left the boundary carrying exactly the same problem this record's own hidden-not-shown
+decision exists to prevent in the live product — with the one control that could catch it (the
+read-time recheck) structurally unavailable on the far side of the boundary. **The only remaining
+control point is the export gate itself, before the artefact is produced** — option (b) restated as
+a requirement rather than a discarded alternative: the export handling gate (Stage 4d) must
+independently verify every exported judgement's own `supporting` citations against the *exporting
+analyst's* own access, and refuse or name the judgement — the same shape a `consult_originator`
+block already takes — if any citation falls outside it. This does not, and cannot, solve the
+recipient's own, potentially different access: the recipient may hold no principal in this system
+at all (ADR-045's own finding). It guarantees only that the exporting analyst themselves could see
+everything they are about to hand someone else — the one fact this system can still verify at the
+one remaining moment it has any control at all.
+
+**The test.** `test_export_refuses_a_judgement_citing_evidence_outside_the_exporting_analysts_
+access` — a judgement citing a node the exporting analyst cannot see; attempt export; assert it is
+blocked and the judgement is named.
+
+**Cost.** The read-time recheck hook, extended from alerts to judgement/gap/assumption citations;
+the hidden-not-shown filter on every judgement list read, keyed to the viewing principal;
+review-flag wiring extended to an unreadable `contradicting` reference, not only a content change;
+the export-gate citation walk (Stage 4d's own scope to build, not priced here beyond naming it).
 
 **Revisit if.** Option (a) or (b) is chosen and a real case surfaces where a judgement's own
 evidentiary basis needs to survive a later correction to remain legally or operationally
