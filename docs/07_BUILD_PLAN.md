@@ -1797,6 +1797,7 @@ first, not the one that is easiest to start.
    hidden-not-shown/export-citation-check decision; 4d/4e build against ADR-045's disclose-by-default
    manifest switch and ADR-047's handling-encoding mark plus its own compliance ledger. Build order
    otherwise follows 4a's own precedent: nothing here is a design decision still to be made in code.
+
 5. **The smaller, already-scoped code fixes** — `PathStaleError` for the `paths()` hydration race
    plus a server-side traversal budget; `nodeAttributes.ts`'s combined on-path-and-selected
    rendering (the spec decision is made, `02_GLASS_FRONTEND.md` §4 — only the implementation
@@ -1846,6 +1847,46 @@ first, not the one that is easiest to start.
    within this stage's own scope (in which case it is no longer excepted, and `make ci` really is
    fully green), or a specific, evidenced reason the failure can only be reproduced or fixed against
    Phase 8a's own multi-instance infrastructure, handed to that phase rather than left unexplained.
+7. **Export mark signing and verification — owning this phase's own residual from ADR-047's Gap 1
+   ("a real escalation this record does not decide").** `06_DECISIONS.md` ADR-047 accepted that the
+   export pipeline never produces an artefact without a mark, and explicitly declined to decide
+   whether that mark is signed. **Unsigned, today, a forged mark is not distinguishable from a
+   genuine one** — nothing in Stage 4d's own scope verifies a mark's own authenticity, only that the
+   pipeline wrote one. Does not change this phase's own already-stated exit criterion — checked
+   against `08_ACCEPTANCE_SCENARIOS.md` directly, A15's own assertion is that the manifest and mark
+   are *present*, never that either is *verified* — but is real, scheduled, owned work, not a
+   someday item: an unsigned mark is the one control this build places on an artefact after it
+   permanently leaves the boundary (ADR-045/047), and leaving that control forgeable is a materially
+   different risk from a feature this build simply hasn't built yet.
+
+   **What signing would protect against.** The export gate signing the mark's own content (handling
+   level, investigation reference, timestamp, τ) with a deployment-held key lets any verifier — the
+   recipient, or this system reading an artefact back in later — confirm the mark was written by
+   this system's own gate and has not been altered since: a downgraded handling level, a forged
+   provenance field, or a mark fabricated on an artefact that never actually passed through the gate
+   at all, lending it false authority it never earned.
+
+   **What it would not protect against, stated so this stage's eventual design does not overclaim
+   it.** It does not stop a recipient stripping the mark entirely — a stripped-and-unsigned artefact
+   and one that genuinely never passed through this system's own export gate remain indistinguishable
+   from each other either way, signed or not; signing strengthens "if a mark is present, is its
+   content trustworthy," never "was a mark ever present." It does not stop a re-rendering (a
+   screenshot of a chart) from keeping a visible watermark while losing embedded metadata, or the
+   reverse. It does not, by itself, stop a valid signature being carried over onto substantively
+   altered content unless the signed payload covers a hash of the artefact's own substance, not the
+   mark's fields alone — a real design requirement this stage owns, named here rather than assumed
+   solved by "signing" as a word. And it says nothing about what a recipient does with a verified
+   artefact — downstream handling compliance stays a human and process control this platform cannot
+   reach past the boundary, the same limit ADR-045/047 already establish for everything else that
+   crosses it.
+
+   **Scope.** Key provisioning, rotation and storage for the deployment-held signing key (a harness/
+   deployment concern, coordinated with Stage 2's own packaging work rather than duplicating it); the
+   export gate signing the mark payload at write time; a verification path — both a standalone
+   verifier a recipient can run, and this system's own check when an artefact is read back in.
+   **Exit criterion, a test:** `test_a_tampered_mark_fails_verification_and_an_untampered_one_
+   passes` — sign a real export, alter one field of its mark, assert verification fails; assert the
+   unaltered original still verifies.
 
 **Before the restructure below: refresh the published documentation set. Sequencing matters —
 refresh first, restructure second, recorded here so it is not left to whoever reaches this close

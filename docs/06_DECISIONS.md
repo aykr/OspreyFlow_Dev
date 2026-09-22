@@ -3607,6 +3607,13 @@ nothing produced under `strict`, and a `notify`-mode alert whose serialised form
 of the owner's own principal, this test would start asserting a full alert leaked instead — the
 regression this record depends on that test catching, not merely hopes it would.
 
+**Addendum, 22 September 2026 — cross-reference.** `strict`'s own full-suppression shape is one
+instance of the general disclosure principle `06_DECISIONS.md` ADR-048 states: no safe
+partial-disclosure shape exists here because any existence signal to this viewer, an authenticated,
+actionable principal in this system, is itself the leak rule 3 forbids. See ADR-048 for the
+reasoning that also produced ADR-045's opposite answer and ADR-046's same answer for a different
+reason.
+
 ---
 
 ## ADR-039 — Alert inbox lifecycle: accepted as proposed, with two additions
@@ -4354,6 +4361,13 @@ recipient (a delivery/handover workflow rather than a downloaded file) — at wh
 (b)'s recipient-class mechanism becomes enforceable rather than declarative-only, and this
 record's own reasoning against it (an unverifiable declaration) no longer holds.
 
+**Addendum, 22 September 2026 — cross-reference.** `disclose`'s own default is one instance of the
+general disclosure principle `06_DECISIONS.md` ADR-048 states: a safe, inert partial-disclosure
+shape exists here (a count, never a referent), and this viewer typically cannot leverage it inside
+the system at all, so the surface's own implicit claim of completeness — an exported artefact reads
+as a finished product — is the duty that governs. See ADR-048 for the reasoning that also produced
+ADR-038's opposite answer and ADR-046's opposite answer for a third, distinct reason.
+
 ---
 
 ## ADR-046 — Assessment evidence lifecycle: accepted, option (a), with one addition and an export requirement
@@ -4504,6 +4518,14 @@ evidentiary basis needs to survive a later correction to remain legally or opera
 defensible (e.g. a tribunal record) — at which point a fourth option, an immutable audit-grade
 snapshot taken independently of the live citation (distinct from option (c)'s silent copy, and
 itself access-controlled), is the shape to design, not a reason to fall back to (c).
+
+**Addendum, 22 September 2026 — cross-reference.** The hidden-not-shown decision is one instance
+of the general disclosure principle `06_DECISIONS.md` ADR-048 states, but not for ADR-038's own
+reason despite landing on the same full-suppression shape: no rule-3 existence leak is at stake in
+showing a judgement with a redacted citation, but showing the conclusion's full authority while
+silently removing its own support misrepresents the assertion's warrant, which this record judges
+worse than either full suppression or full disclosure of the gap. See ADR-048 for the reasoning
+that also produced ADR-038's identical shape for a different reason and ADR-045's opposite answer.
 
 ---
 
@@ -4673,3 +4695,105 @@ by a customer) — at which point that requirement, not this record's own option
 final shape. Tamper-evidence against a stripped mark specifically (Gap 1's own residual, above) is
 its own trigger: a signed mark, or a hash recorded in the Gap 2 ledger, is the shape to design then,
 not assumed into this decision now.
+
+---
+
+## ADR-048 — The disclosure doctrine: what makes "something was withheld" safe, unsafe or required to be visible
+
+**Status.** Accepted, 22 September 2026. A reconciling record — it decides nothing new. ADR-038,
+ADR-045 and ADR-046 each already answered, independently, the same underlying question for a
+different surface, and this record states the principle that generated all three, rather than
+leaving three pairwise-consistent defaults to be re-derived by inference. Cross-referenced from,
+and cross-references, all three.
+
+**The question, restated once rather than three times.** For a given surface, when something has
+been withheld from a given viewer, does that viewer learn that anything was withheld at all?
+Three surfaces in this build already answer it, and the three answers are not the same:
+
+| | Surface | Viewer's answer | Disclosure shape |
+| --- | --- | --- | --- |
+| ADR-038 (`strict`) | A hotlist owner's own alert inbox | Learns nothing — no alert, no trace | Full suppression |
+| ADR-045 | An exported artefact | Learns a count of withheld items | Disclosed (count only) |
+| ADR-046 | A judgement in the Judgements tab | Learns nothing — the judgement itself does not render | Full suppression |
+
+Two of the three suppress fully; one discloses. Stated as a bare table, this looks like an
+inconsistency waiting to be found by anyone who reads more than one of these records — exactly the
+kind of question `06_DECISIONS.md`'s own discipline of cross-referencing exists to answer before a
+customer's security function has to ask it.
+
+**Why a single axis — "internal viewer vs. external viewer" — does not explain the table.** ADR-038
+and ADR-046 both suppress fully, but their viewers are not the same kind of outsider: ADR-038's
+viewer (the hotlist owner) is a fully authenticated principal *in this system*, on their own
+session, looking at their own inbox; ADR-046's viewer (a fellow analyst) is also a fully
+authenticated principal *in this system*, on their own session, looking at the same investigation's
+own Judgements tab. Both are as "internal" as a viewer gets. Meanwhile ADR-045's viewer may hold no
+principal in this system at all — the most "external" viewer of the three — and is the one who gets
+told something. A rule built only on "is this viewer inside or outside the system" predicts the
+opposite of what these three records actually decided. The real distinction runs along three
+different questions, asked together, not one:
+
+**1. What does the surface itself already claim about its own completeness, independent of this
+decision?** An alert inbox (ADR-038) is, by its own nature, a personal, scoped notification
+surface — nothing about "receiving alerts" ever implied "a census of everything in the corpus,"
+so a viewer never formed a completeness expectation this decision could break. An exported artefact
+(ADR-045) is, by its own nature, presented as a finished product — a chart or report handed to a
+reader carries an implicit claim of completeness unless stated otherwise, precisely because it has
+no status bar, no live session, no ongoing view an analyst already knows is partial. A judgement
+(ADR-046) is, by its own nature, an assertion — not a data view at all, but a stated conclusion
+that, if shown, claims to be supportable. Each surface's own implicit claim is the thing this
+decision must not let become false.
+
+**2. What could this viewer do with an existence signal, given who they are and their relationship
+to the system?** ADR-038's viewer holds an ongoing, actionable relationship to this system — they
+could escalate, ask a colleague, re-request access, or simply keep trying, all *within* the system,
+turning a bare existence signal into a live investigative lever against an access boundary rule 3
+exists to hold. ADR-046's viewer holds the identical kind of relationship — the same actionable,
+in-system position — which is why its own answer echoes ADR-038's, not ADR-045's. ADR-045's viewer,
+often, cannot act on the signal *inside this system at all*: an external reader with no session, no
+principal and no way to query further gains nothing actionable from a bare count beyond the one
+thing they are owed — that the picture in front of them is not the whole one.
+
+**3. Is there a safe partial-disclosure shape, or does any disclosure at all collapse into full
+leak (or into false completeness)?** ADR-045's count is a safe partial shape precisely because it
+discloses a fact (something exists) without disclosing anything actionable about it (what, where,
+which) — the same shape `CLAUDE.md` standing rule 3 already accepts for the status bar and the
+delta protocol's `notice` op, extended once more here. ADR-038 has no safe partial shape available
+to it at all: any existence signal to an in-system principal *is* the leak rule 3 forbids, so
+nothing short of full suppression avoids it — this is `strict`'s own reasoning, unchanged.
+**ADR-046 is the case worth naming most carefully, because it is not the same kind of "no safe
+partial shape" as ADR-038's.** A judgement shown with an unreadable citation is not a leak in
+rule 3's sense at all — no unauthorised existence is disclosed by rendering a statement and a
+probability band. It fails for a different reason: the *conclusion itself* keeps its full
+presentational authority while the one thing that would let a viewer weigh it has been silently
+removed, which is worse than either extreme — worse than full suppression, because a viewer who
+never sees the judgement forms no false belief, where a viewer who sees an unweighable conclusion
+may defer to it anyway; and worse than full disclosure of the gap, because "conclusion, evidence
+redacted" still reads as an authoritative assertion in a way "N items withheld" never claims to be
+one. Hiding the judgement in full is therefore not ADR-038's rule applied a second time — it is a
+different rule (protect the integrity of an assertion, not the existence of a record) that happens
+to land on the same disclosure shape.
+
+**The principle, stated once.** *A surface must not let a viewer form a false belief about
+completeness, and it must not let a viewer, or a third party the viewer can reach, learn something
+this system owes no one but an authorised principal the right to learn. Where those two duties
+conflict, resolve toward whichever failure is worse for **this** surface, decided by what the
+surface itself already claims to be (a scoped view, a finished product, or an asserted conclusion),
+what the viewer could do with a bare existence signal, and whether a safe, inert partial-disclosure
+shape (a count, never a referent) actually exists for this case or collapses into one of the two
+failures regardless.* Where a safe partial shape exists and the viewer cannot leverage it inside
+the system, disclose (ADR-045). Where no safe partial shape exists because any signal is itself
+the leak, suppress (ADR-038). Where no safe partial shape exists because showing anything at all
+would misrepresent an assertion's own warrant, suppress the assertion whole (ADR-046) — not for
+ADR-038's reason, but to the same visible effect.
+
+**Applying this to a future surface, so the next one is derived rather than guessed.** Ask, in
+order: (1) what does this surface already claim about its own completeness? (2) who is the viewer,
+and what could they do inside this system with a bare existence signal? (3) does a count-only,
+referent-free disclosure exist for this case that is actually inert, or does any disclosure here
+collapse into a leak or a false endorsement? The answer to (3), given (1) and (2), is the
+disclosure shape — not a fourth option invented per-surface, and not an assumption that whatever
+the last surface decided is the default for the next one.
+
+**Cross-references.** `06_DECISIONS.md` ADR-038's own `strict`/`notify` decision, ADR-045's own
+disclose-by-default decision, and ADR-046's own hidden-not-shown decision each carry a short
+addendum pointing back to this record, added alongside this one.
