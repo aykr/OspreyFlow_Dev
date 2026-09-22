@@ -1,0 +1,160 @@
+"""Seeds a real, running Conduit's ArcadeDB with Fixture Corp (R24) — `06_DECISIONS.md` ADR-035
+§C5, Phase 8 Stage 4a. Fixture Corp is the `shipped`-class demo an analyst review runs against
+(ADR-035 §C1), so this is the concrete mechanism that makes it loadable into a live Glass session,
+the same role `seed_hmp_fixture.py` plays for Scenario A.
+
+**No `osprey` CLI** (`CLAUDE.md`'s own Conventions) — a plain, directly-runnable script, the shape
+an eventual `osprey seed --fixture fixture-corp` would wrap. `python -m scripts.seed_fixture_corp`
+from the repo root, with `PYTHONPATH=.:packages` set (neither `pytest`'s own `pythonpath =
+["packages"]` nor a bare `python -m` invocation puts the repo root and `packages/` on `sys.path`
+by itself — the same note `seed_hmp_fixture.py` already carries).
+
+Writes three independent sub-fixtures from `tests/scenarios/fixtures/fixture_corp.py` into one
+real `GraphPort`, under the given `--investigation-scope`:
+
+- The four resolution `Person` pairs, plus the real `SAME_AS` edges Splink computes over them —
+  so an analyst opening the demo sees ADR-035 §C5's own "visibly different projections" the
+  moment they move the resolution threshold, without first having to trigger a corpus-wide
+  resolution run by hand.
+- The three community rings — visible as Louvain community hulls the moment the metrics panel's
+  community-detection view is opened.
+- The path-spoke hub, for the pathfinder to walk end to end (B21,
+  `08_ACCEPTANCE_SCENARIOS.md`).
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import os
+import sys
+
+from services.resolve.resolver import resolve_entity_type
+from services.resolve.same_as_writer import write_same_as_edges
+from tests.scenarios.fixtures.fixture_corp import (
+    build_path_spokes,
+    generate_community_rings,
+    generate_resolution_persons,
+)
+
+from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
+from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
+from conduit_common.identity import now_utc
+from ontology.handling import load_uk_le_scheme
+from ontology.loader import load_default_ontology
+from ports.graph import GraphPort
+from schemas.domain import Edge, EdgeWrite, Node, NodeWrite
+
+_CREATED_BY = "fixture-corp-seed-worker"
+
+
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="python -m scripts.seed_fixture_corp",
+        description=(
+            "Seeds Fixture Corp (R24, 06_DECISIONS.md ADR-035 §C5) into a real Conduit's "
+            "ArcadeDB, under a real investigation's scope."
+        ),
+    )
+    parser.add_argument(
+        "--investigation-scope",
+        required=True,
+        help="The real investigation id these nodes/edges should be written under.",
+    )
+    return parser.parse_args(argv)
+
+
+def _node_write(node: Node, *, load_id: str) -> NodeWrite:
+    return NodeWrite(
+        id=node.id,
+        type=node.type,
+        properties=node.properties,
+        provenance=node.provenance,
+        handling=node.handling,
+        created_by=_CREATED_BY,
+        created_at=now_utc(),
+        load_id=load_id,
+    )
+
+
+def _edge_write(edge: Edge, *, load_id: str) -> EdgeWrite:
+    return EdgeWrite(
+        id=edge.id,
+        type=edge.type,
+        source=edge.source,
+        target=edge.target,
+        properties=edge.properties,
+        provenance=edge.provenance,
+        handling=edge.handling,
+        created_by=_CREATED_BY,
+        created_at=now_utc(),
+        load_id=load_id,
+    )
+
+
+async def _seed_resolution_persons(graph: GraphPort, *, load_id: str) -> tuple[int, int]:
+    pairs = generate_resolution_persons()
+    person_nodes = [p.node_a for p in pairs] + [p.node_b for p in pairs]
+    ontology = load_default_ontology()
+    person_type = next(e for e in ontology.entity_types if e.name == "Person")
+    scheme = load_uk_le_scheme()
+
+    candidates = resolve_entity_type(person_nodes, person_type)
+    nodes_by_id = {n.id: n for n in person_nodes}
+
+    tx = await graph.begin_transaction()
+    await graph.upsert_nodes([_node_write(n, load_id=load_id) for n in person_nodes], tx)
+    edge_ids = await write_same_as_edges(
+        graph, candidates, nodes_by_id, created_by=_CREATED_BY, tx=tx, scheme=scheme
+    )
+    await graph.commit_transaction(tx)
+    return len(person_nodes), len(edge_ids)
+
+
+async def _seed_community_rings(graph: GraphPort, *, load_id: str) -> tuple[int, int]:
+    result = generate_community_rings()
+    tx = await graph.begin_transaction()
+    await graph.upsert_nodes([_node_write(n, load_id=load_id) for n in result.nodes], tx)
+    await graph.upsert_edges([_edge_write(e, load_id=load_id) for e in result.edges], tx)
+    await graph.commit_transaction(tx)
+    return len(result.nodes), len(result.edges)
+
+
+async def _run(args: argparse.Namespace) -> int:
+    ontology = load_default_ontology()
+    scheme = load_uk_le_scheme()
+
+    database = os.environ.get("ARCADEDB_DATABASE", "ospreyflow")
+    client = ArcadeDBClient(ArcadeDBConfig.from_env(database))
+    await client.create_database_if_absent()
+    graph = GraphArcadeDBAdapter(client, scheme)
+    await graph.apply_schema(ontology)
+
+    load_id = f"fixture-corp:{args.investigation_scope}"
+    try:
+        resolution_nodes, resolution_edges = await _seed_resolution_persons(graph, load_id=load_id)
+        ring_nodes, ring_edges = await _seed_community_rings(graph, load_id=load_id)
+        spokes = await build_path_spokes(graph)
+    finally:
+        await client.aclose()
+
+    print(
+        f"Seeded {resolution_nodes} resolution Person nodes and {resolution_edges} real "
+        f"SAME_AS edges."
+    )
+    print(f"Seeded {ring_nodes} community-ring nodes and {ring_edges} edges across 3 rings.")
+    print(
+        f"Seeded the path-spoke hub {spokes.hub_id!r} with spokes of length "
+        f"{sorted(spokes.terminal_by_length)}, including a SECRET shortcut on the "
+        f"length-{spokes.shortcut_spoke_length} spoke."
+    )
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv if argv is not None else sys.argv[1:])
+    return asyncio.run(_run(args))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
