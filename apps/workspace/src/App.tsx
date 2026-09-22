@@ -7,8 +7,9 @@ import type {
   Node,
   OntologySchema,
   PublicMapConfig,
+  Sighting,
 } from "../../../packages/schemas/generated";
-import { fetchGeoBins } from "./analytics/api";
+import { fetchGeoBins, fetchSightings } from "./analytics/api";
 import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
 import {
   buildEventFilter,
@@ -30,6 +31,7 @@ import { resolveNodeCoordinates } from "./map/geometries";
 import { HotspotHistogram } from "./map/HotspotHistogram";
 import { MapView } from "./map/MapView";
 import { defaultProvider, fetchMapConfig } from "./map/providers";
+import { instantAtFraction, itemsUpTo } from "./playback/math";
 import {
   fetchOntologyRegistry,
   type OntologyRegistry,
@@ -105,6 +107,16 @@ export function App() {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  // B16's own cross-case overlay — the second investigation's own scope,
+  // analyst-entered (this build has no cross-investigation picker anywhere
+  // yet; typing the id directly is this stage's own minimal, real input,
+  // not a placeholder for a picker that doesn't exist).
+  const [crossCaseScope, setCrossCaseScope] = useState("");
+  // B18's own playback fraction, reported by `Timeline`'s own clock
+  // (`playback/usePlayback.ts`) and consumed here to filter `sightings`
+  // down to what the map's own snail trail should currently reveal.
+  const [playbackFraction, setPlaybackFraction] = useState(0);
+  const [sightings, setSightings] = useState<Sighting[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [counts, setCounts] = useState({
     nodes: 0,
@@ -252,6 +264,52 @@ export function App() {
     });
     return () => unsubscribe();
   }, [investigationId]);
+
+  // B18's own snail trail — one entity's own ordered sightings over the
+  // active brush window. "The device's sightings" (`08_ACCEPTANCE_
+  // SCENARIOS.md` B18) generalises here to whichever node the analyst has
+  // currently selected in the Inspector — this build has no separate
+  // "pick an entity for the trail" control, and the Inspector's own
+  // selection is already the entity an analyst is looking at. No window
+  // set, or no node selected: no fetch, and the trail is empty.
+  useEffect(() => {
+    const crossFilter = crossFilterRef.current;
+    if (!crossFilter || !investigationId || !selectedNode) {
+      setSightings([]);
+      return;
+    }
+    const scope = investigationId;
+    const entityId = selectedNode.id;
+    let cancelled = false;
+    function refresh(window: CrossFilterStoreState["window"]) {
+      if (!window) {
+        setSightings([]);
+        return;
+      }
+      void fetchSightings(API_BASE_URL, DEV_BEARER_TOKEN, {
+        filter: buildEventFilter(scope, window, [entityId]),
+      }).then((result) => {
+        if (!cancelled) setSightings(result);
+      });
+    }
+    refresh(crossFilter.store.getState().window);
+    const unsubscribe = crossFilter.store.subscribe((state) => refresh(state.window));
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [investigationId, selectedNode]);
+
+  // The revealed prefix of `sightings` at the current playback position —
+  // recomputed on every animation frame (`playbackFraction` changes), the
+  // real content change B18's own "animates under playback" names, not a
+  // CSS trick layered over a static list.
+  const revealedSightings = useMemo(() => {
+    const crossFilter = crossFilterRef.current;
+    const window = crossFilter?.store.getState().window;
+    if (!window || sightings.length === 0) return sightings;
+    return itemsUpTo(sightings, instantAtFraction(window, playbackFraction));
+  }, [sightings, playbackFraction]);
 
   // Recomputed only when the fetched `communities` result itself changes, not on every render —
   // `metrics/hulls.ts`'s own benchmark (2.6ms at the 20k-node sync boundary) makes per-render
@@ -452,6 +510,7 @@ export function App() {
                     provider={provider}
                     nodeCoordinates={nodeCoordinates}
                     geoBins={geoBins}
+                    snailTrail={revealedSightings}
                     apiBaseUrl={API_BASE_URL}
                     bearerToken={DEV_BEARER_TOKEN}
                     onMapReady={setLiveMap}
@@ -555,14 +614,50 @@ export function App() {
         )}
       </div>
       {view !== "ingest" && view !== "dossier" && view !== "watches" && (
-      <div style={{ height: 220, borderTop: "1px solid var(--border-subtle)" }}>
-        <Timeline
-          apiBaseUrl={API_BASE_URL}
-          bearerToken={DEV_BEARER_TOKEN}
-          investigationScope={investigationId}
-          crossFilterStore={crossFilterStore}
-          getNodeIds={() => workingSetRef.current.graph.nodes()}
-        />
+      <div
+        style={{
+          height: 252,
+          borderTop: "1px solid var(--border-subtle)",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {/* B16's own cross-case overlay trigger — this build has no
+            cross-investigation picker anywhere yet, so a directly-entered
+            investigation id is this stage's own real, minimal input, not
+            a placeholder for a picker that doesn't exist. */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--sp-8)",
+            padding: "var(--sp-4) var(--sp-8)",
+          }}
+        >
+          <label htmlFor="cross-case-scope" style={{ fontSize: 11, color: "var(--text-secondary)" }}>
+            Overlay investigation
+          </label>
+          <input
+            id="cross-case-scope"
+            type="text"
+            aria-label="Cross-case overlay investigation id"
+            placeholder="investigation id"
+            value={crossCaseScope}
+            onChange={(e) => setCrossCaseScope(e.target.value)}
+            style={{ width: 200 }}
+          />
+        </div>
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <Timeline
+            apiBaseUrl={API_BASE_URL}
+            bearerToken={DEV_BEARER_TOKEN}
+            investigationScope={investigationId}
+            crossFilterStore={crossFilterStore}
+            getNodeIds={() => workingSetRef.current.graph.nodes()}
+            crossCaseInvestigationScope={crossCaseScope || undefined}
+            onPlaybackFractionChange={setPlaybackFraction}
+          />
+        </div>
       </div>
       )}
       {view !== "ingest" && view !== "dossier" && view !== "watches" && (

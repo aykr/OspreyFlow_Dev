@@ -9,6 +9,8 @@ import type {
   GeometryRecord,
   Histogram,
   HistogramRequest,
+  Sighting,
+  SightingRequest,
 } from "../../../../packages/schemas/generated";
 
 function authHeaders(bearerToken: string): HeadersInit {
@@ -76,6 +78,18 @@ export async function fetchGeometries(
     { geometry_refs: geometryRefs },
     "POST .../geometries",
   );
+}
+
+/** B18's own snail-trail data source, ordered by `occurred_at` server-side
+ * (`packages/ports/analytics.py::AnalyticsPort.list_sightings`'s own
+ * docstring) — Phase 8 Stage 4f, a real backend gap found and closed while
+ * building this, not assumed to already exist. */
+export async function fetchSightings(
+  apiBaseUrl: string,
+  bearerToken: string,
+  request: SightingRequest,
+): Promise<Sighting[]> {
+  return postJson(apiBaseUrl, bearerToken, "/v1/analytics/sightings", request, "POST .../sightings");
 }
 
 export type { EventFilter };

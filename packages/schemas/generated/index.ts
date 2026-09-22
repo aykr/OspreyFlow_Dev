@@ -43,6 +43,8 @@ export type { HistogramBucket } from "./HistogramBucket";
 export type { Histogram } from "./Histogram";
 export type { GeoBinRequest } from "./GeoBinRequest";
 export type { GeoBin } from "./GeoBin";
+export type { SightingRequest } from "./SightingRequest";
+export type { Sighting } from "./Sighting";
 export type { BaselineRequest } from "./BaselineRequest";
 export type { BaselineResult } from "./BaselineResult";
 export type { CrossFilterDimension } from "./CrossFilterDimension";

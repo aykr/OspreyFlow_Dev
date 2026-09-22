@@ -1920,9 +1920,85 @@ first, not the one that is easiest to start.
      document's own new disclosure-convention rule** (see this stage list's own closing paragraph):
      a disclosure naming no real stage is a note, not a disclosure, and this one is corrected to a
      real stage in the same session that wrote it, not left for a future sweep to catch.
-   - **4f — B16 and B18.** Cross-case timeline overlay and playback-driven snail trail (ADR-022):
-     "small, incremental additions to Timeline and Map," lower uncertainty than 4a–4e, no
-     dependency on any open ADR above.
+   - **4f — B16 and B18. ADR-022's own "small, incremental additions to Timeline and Map" was
+     checked against the real components before building, not carried forward assumed, and does
+     not hold.** ADR-022 was written before Phase 5's own playback deferral; `apps/workspace/src/
+     timeline/Timeline.tsx`'s own header comment states directly what actually shipped: "Playback,
+     multi-track and cross-case overlay are named in §3.4 too but exercised by no A1-A11 step;
+     deferred, not built here." Checked directly, not assumed from the comment alone: neither
+     `Timeline.tsx` nor `apps/workspace/src/map/MapView.tsx` contains any animation loop, multi-track
+     rendering mode, or cross-case data path today — `grep` for `animat`/`requestAnimationFrame`/
+     `snail`/`track`/`playback`/`multi-track`/`cross-case` across both files returns nothing.
+     **B18 needs a playback mechanism this codebase has never built at all** — an animation clock,
+     play/pause/speed control, position state, and `02_GLASS_FRONTEND.md` §3.4's own
+     `prefers-reduced-motion` requirement ("playback becomes stepped and re-layout becomes an
+     instant move with a persistent control that shows previous positions") — applied to the map's
+     own snail-trail track, not a small addition to an existing scrubber. **B16 needs a multi-track
+     timeline rendering mode and a second investigation's own event data loaded alongside the
+     first** — also unbuilt. Both are real, from-scratch capabilities sharing no existing partial
+     implementation to extend. **Correction, not abandonment: still owned by this stage, built
+     honestly at its real size rather than under a "small" label that would have undersold the
+     work to the next reader who trusted it.** ADR-022's own record (`06_DECISIONS.md`) is not
+     rewritten — this entry states what checking it against the current codebase actually found,
+     the same "checked directly, not assumed" discipline every other correction in this document
+     already applies to a stale characterisation.
+
+     **Built, 22 September 2026.** A shared playback clock (`playback/usePlayback.ts` over pure,
+     independently-tested math in `playback/math.ts`) drives both surfaces off one fraction, so a
+     timeline scrub and a map trail can never drift out of sync with each other — `Timeline.tsx`
+     itself renders the Play/Pause/speed controls (§3.4's own natural home for them) and reports
+     the fraction via a callback, rather than each consuming surface running its own clock.
+     `prefers-reduced-motion` is honoured for real, not merely checked and ignored: a reduced-
+     motion `play()` advances one step (10% of the window) and stops, never starting a
+     `requestAnimationFrame` loop at all.
+
+     **B18 needed a real backend capability this codebase did not have at all — found while
+     building, not assumed to exist, and closed in the same pass rather than left as a second
+     "whichever phase" placeholder.** `AnalyticsPort` had `histogram`/`geo_bins`/`cross_filter`,
+     every one aggregate-shaped; nothing returned ordered, timestamped, per-entity points. Added
+     `AnalyticsPort.list_sightings` (`packages/ports/analytics.py`), implemented in
+     `adapters/analytics_duckdb` reusing the existing `_predicate`/access-filter machinery
+     unchanged, with its own conformance-suite cases
+     (`test_sightings_are_ordered_by_time_and_exclude_null_coordinates`,
+     `test_unauthorised_sighting_is_absent_not_a_gap_in_the_track`) — `CLAUDE.md` rule 1's own
+     "conformance suite before adapter" discipline, applied to a method added to an existing
+     port/adapter pair rather than a brand-new one. A new route, `POST /v1/analytics/sightings`.
+     **This is the class of read `scripts/authorized_query_check.py` does not, and structurally
+     cannot, cover** — it scans `services/api` store methods, not `AnalyticsPort` adapter methods,
+     whose own access-control proof is the conformance suite's `test_unauthorised_*` case above,
+     the same split every other `AnalyticsPort` method already has. `authorized-query-check`
+     itself was run and reported clean (44 files, no new offenders) since this stage's own route
+     handler is a thin pass-through with nothing for that script to flag.
+
+     `MapView.tsx` renders the snail trail as two native MapLibre layers (a `LineString` for the
+     revealed path, a `Point` for the current position) over the sightings the caller has already
+     filtered down to the current playback fraction (`itemsUpTo`) — the real content change over
+     time B18's own "animates under playback" names, not a rendering trick over a static list.
+     `Timeline.tsx`'s own density mode grows a second ECharts grid, sharing identical category
+     data with the primary track's own xAxis so the two align pixel-for-pixel, satisfying B16's
+     own "distinct tracks against a shared axis" without ECharts having (or needing) a literal
+     shared-axis primitive between two independent grids.
+
+     **Tests, all run for real:** `playback/math.test.ts` (12 cases — the pure functions this
+     stage's own clock and reveal logic are built on), `analytics/api.test.ts` (2 cases —
+     `fetchSightings`). vitest 202 → 218. The keyboard-reachability gate gained its own seventh
+     registry, `TIMELINE_PLAYBACK_ACTIONS` (`keyboard/actionRegistry.ts`), with its own harness/
+     spec pair — both new actions plus the pre-existing six surfaces' own 43 cases pass together
+     (46 total), no regression; the playback-advance action verified non-vacuous by commenting out
+     `usePlayback`'s own `setFraction` call, watching the real Playwright test fail
+     (`TimeoutError: page.waitForFunction: Timeout 5000ms exceeded`), then restoring it and
+     confirming green again.
+
+     **Known gap, disclosed with a real disposition, not a placeholder: general multi-track mode
+     (`02_GLASS_FRONTEND.md` §3.4's own "one row per selected entity") is not built — only the
+     narrower cross-case two-track overlay B16 itself needs.** `Timeline.tsx`'s own header comment
+     states this directly at the point it was decided, not left implicit. **Disposition: Out of
+     scope for v1** — checked against `08_ACCEPTANCE_SCENARIOS.md` directly, no row in either
+     scenario exercises viewing more than one *entity's* own events each on their own track
+     (B16's own "second investigation" axis is a different dimension, already built); the
+     relay-and-cut-out use case §3.4 names it for is real but not acceptance-gated. Building it —
+     an arbitrary-N-row layout, entity selection UI, per-row data fetching — is real, separately-
+     scoped work a future phase can start from this disclosure rather than rediscovering the gap.
    - **4g — B21 and the closing pass.** B21 — decided, this document's own "Legacy disclosures"
      entry below has the reasoning — exercises `POST /v1/paths` end to end through the Glass,
      added to `08_ACCEPTANCE_SCENARIOS.md`'s own Scenario B table; then the full
@@ -2594,6 +2670,16 @@ finding rather than rediscovering the gap.
   The real fix (a durable-record consumer, not a synchronous in-handler call) is real, separately-
   scoped design work for whichever phase builds a proper asynchronous change-stream consumer —
   ADR-037's own amendment names the shape, not built here.
+- **General multi-track timeline mode — `02_GLASS_FRONTEND.md` §3.4's own "one row per selected
+  entity, events as marks."** Phase 8 Stage 4f built B16's own cross-case overlay (a second
+  investigation's events on a distinct track against a shared axis — `Timeline.tsx`'s own two-grid
+  ECharts layout) but not the more general capability §3.4 names it alongside: an arbitrary number
+  of *entities*, each own row, for spotting a relay-and-cut-out pattern (two endpoints that never
+  overlap in time). Checked against `08_ACCEPTANCE_SCENARIOS.md` directly: no row in either
+  scenario asks an analyst to view more than one entity's own events each on their own timeline
+  row — B16's own "second investigation" axis is a different dimension from "second entity,"
+  already built. Real, separately-scoped work if ever wanted (an arbitrary-N-row layout, an entity
+  picker, per-row data fetching) — not invented speculatively here.
 
 ## Permanently accepted, not built
 

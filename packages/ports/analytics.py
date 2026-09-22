@@ -23,6 +23,8 @@ from schemas.analytics import (
     GeometryRecord,
     Histogram,
     HistogramRequest,
+    Sighting,
+    SightingRequest,
 )
 from schemas.domain import Principal
 
@@ -30,6 +32,15 @@ from schemas.domain import Principal
 class AnalyticsPort(Protocol):
     async def histogram(self, req: HistogramRequest, principal: Principal) -> Histogram: ...
     async def geo_bins(self, req: GeoBinRequest, principal: Principal) -> list[GeoBin]: ...
+
+    async def list_sightings(
+        self, req: SightingRequest, principal: Principal
+    ) -> list[Sighting]:
+        """Phase 8 Stage 4f's own addition, found missing while building B18's snail trail —
+        `docs/07_BUILD_PLAN.md` has the full record. Ordered by `occurred_at` ascending; a row with
+        no `lat`/`lon` is excluded, the same `lat IS NOT NULL AND lon IS NOT NULL` filter
+        `geo_bins` already applies."""
+        ...
 
     async def cross_filter(
         self, req: CrossFilterRequest, principal: Principal

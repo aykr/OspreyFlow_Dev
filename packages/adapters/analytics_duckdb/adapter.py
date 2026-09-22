@@ -33,6 +33,8 @@ from schemas.analytics import (
     HistogramBucket,
     HistogramBucketing,
     HistogramRequest,
+    Sighting,
+    SightingRequest,
 )
 from schemas.domain import Handling, Interval, Principal
 
@@ -205,6 +207,33 @@ class AnalyticsDuckDBAdapter:
                 )
             )
         return result
+
+    # --- sightings (Stage 4f, B18's own snail trail) --------------------------
+
+    #: A defensive cap, not a corpus-scale one — `list_sightings` is scoped to one entity's own
+    #: `node_ids` restriction over an already-brushed window (`SightingRequest`'s own docstring),
+    #: a population that practically never approaches this, unlike `geo_bins`'s genuine
+    #: corpus-wide concern. Capped rather than left unbounded anyway, per `CLAUDE.md` standing
+    #: rule 2 — silently truncated here (documented, not typed as `limit_exceeded`): a partial
+    #: snail trail is still a legible one, and the caller-scoped `EventFilter` this method requires
+    #: makes reaching the cap itself the signal something is mis-scoped, not ordinary use.
+    _MAX_SIGHTINGS = 5000
+
+    async def list_sightings(self, req: SightingRequest, principal: Principal) -> list[Sighting]:
+        predicate = self._predicate(req.filter, principal)
+        rows = self._con.execute(
+            "SELECT occurred_at, lat, lon FROM events "
+            f"WHERE ({predicate.where}) AND lat IS NOT NULL AND lon IS NOT NULL "
+            "ORDER BY occurred_at ASC LIMIT ?",
+            [*predicate.params, self._MAX_SIGHTINGS],
+        ).fetchall()
+        # DuckDB returns naive `datetime`s regardless of the column's own TIMESTAMPTZ-shaped
+        # storage — reattached here, the same `tz=UTC` fix-up `_fixed_interval_histogram` already
+        # applies to its own `datetime.fromtimestamp` construction, above.
+        return [
+            Sighting(occurred_at=occurred_at.replace(tzinfo=UTC), lat=lat, lon=lon)
+            for occurred_at, lat, lon in rows
+        ]
 
     # --- baseline ------------------------------------------------------------
 

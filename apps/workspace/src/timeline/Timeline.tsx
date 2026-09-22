@@ -1,11 +1,20 @@
 // The timeline — `docs/02_GLASS_FRONTEND.md` §3.4,
-// `08_ACCEPTANCE_SCENARIOS.md` A4/A5/A11. Density strip (bucketed event
-// counts) with a drag-to-select brush, plus a cyclical weekday×hour mode —
-// the two temporal modes this checkpoint's acceptance scenarios actually
-// exercise. Playback, multi-track and cross-case overlay are named in §3.4
-// too but exercised by no A1-A11 step; deferred, not built here
-// (`07_BUILD_PLAN.md` Phase 5 Checkpoint 2 plan, "Deferred past this
-// phase").
+// `08_ACCEPTANCE_SCENARIOS.md` A4/A5/A11/B16/B18. Density strip (bucketed
+// event counts) with a drag-to-select brush, plus a cyclical weekday×hour
+// mode — the two temporal modes Phase 5's own A1-A11 acceptance scenario
+// exercised, built there (`07_BUILD_PLAN.md` Phase 5 Checkpoint 2 plan).
+//
+// Playback and the cross-case overlay are built here, Phase 8 Stage 4f
+// (`07_BUILD_PLAN.md` — read its own Stage 4f entry: ADR-022's "small,
+// incremental additions" characterisation was checked against this file's
+// own then-current state and did not hold; both were real, from-scratch
+// work, not a small addition). Multi-track mode (§3.4's own "one row per
+// selected entity") is *not* built here — B16's own cross-case overlay
+// needed only a second investigation's own track against a shared axis,
+// which this file's own two-grid layout below satisfies without needing
+// the more general per-entity multi-track mode; that remains its own,
+// separately-scoped gap (`07_BUILD_PLAN.md`'s own Stage 4f entry has the
+// disposition).
 //
 // ECharts, used imperatively via a ref/instance — the same pattern this
 // codebase already uses for Sigma (`canvas/GlassCanvas.tsx`) and MapLibre
@@ -36,6 +45,8 @@ import {
 } from "../color/tokens";
 import { buildEventFilter, type CrossFilterStore } from "../crossfilter/store";
 import { Button } from "../design/primitives/Button";
+import { Select } from "../design/primitives/Select";
+import { PLAYBACK_SPEEDS, usePlayback } from "../playback/usePlayback";
 import { windowFromZoomPercent } from "./math";
 
 echarts.use([
@@ -72,6 +83,20 @@ export interface TimelineProps {
    * instead of a value here since a working set's node ids have no single
    * stable snapshot to hold onto). */
   getNodeIds: () => readonly string[];
+  /** B16's own cross-case overlay (`08_ACCEPTANCE_SCENARIOS.md`) — a second
+   * investigation's own `investigation_scope` to fetch and render as a
+   * second track sharing this component's own time axis. `undefined`
+   * renders the single-track view unchanged, the same optional-prop shape
+   * `geoBins`/`onMapReady` already use elsewhere in this codebase for a
+   * feature not every caller wants mounted. */
+  crossCaseInvestigationScope?: string;
+  /** B18's own playback clock, surfaced here since the timeline is where
+   * `02_GLASS_FRONTEND.md` §3.4 places play/pause/speed — a sibling
+   * surface (the map's own snail trail) reads the same `fraction` this
+   * callback reports, so both animate off one clock, never two that could
+   * drift apart. Called on every animation frame while playing; a caller
+   * that doesn't need playback (no snail trail mounted) simply omits it. */
+  onPlaybackFractionChange?: (fraction: number) => void;
 }
 
 export function Timeline({
@@ -80,6 +105,8 @@ export function Timeline({
   investigationScope,
   crossFilterStore,
   getNodeIds,
+  crossCaseInvestigationScope,
+  onPlaybackFractionChange,
 }: TimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
@@ -100,6 +127,40 @@ export function Timeline({
       }),
     [crossFilterStore],
   );
+
+  // B18's own playback clock — driven off the active brush window, since
+  // "animate the brush forward" (`02_GLASS_FRONTEND.md` §3.4) has nothing
+  // to animate across without one set.
+  const playback = usePlayback(activeWindow);
+  useEffect(() => {
+    onPlaybackFractionChange?.(playback.fraction);
+  }, [playback.fraction, onPlaybackFractionChange]);
+
+  // B16's own cross-case overlay — a second investigation's own histogram,
+  // fetched with the *same* filter shape as the primary track (no node-id
+  // restriction; `02_GLASS_FRONTEND.md` §3.4's own "events from a second
+  // investigation on a distinct track" names no cross-filter narrowing for
+  // the overlay itself) so the two tracks' own bucket boundaries line up
+  // exactly on the shared axis below.
+  const [crossCaseHistogram, setCrossCaseHistogram] = useState<Histogram | null>(null);
+  useEffect(() => {
+    if (!crossCaseInvestigationScope) {
+      setCrossCaseHistogram(null);
+      return;
+    }
+    const request: HistogramRequest = {
+      filter: buildEventFilter(crossCaseInvestigationScope, null, null),
+      bucketing: "fixed_interval",
+      interval_seconds: DAILY_INTERVAL_SECONDS,
+    };
+    let cancelled = false;
+    void fetchHistogram(apiBaseUrl, bearerToken, request).then((result) => {
+      if (!cancelled) setCrossCaseHistogram(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, bearerToken, crossCaseInvestigationScope]);
 
   // The density strip and cyclical view always show the *full* time range
   // regardless of the timeline's own active brush window — only the
@@ -144,34 +205,118 @@ export function Timeline({
     if (mode === "density") {
       const buckets = histogram.buckets;
       chart.off("datazoom");
+
+      // B16's own cross-case overlay: a second grid stacked below the
+      // primary track, sharing the *same* category data on its own xAxis
+      // — identical bucket boundaries at identical pixel positions is what
+      // makes the two tracks read as "against a shared axis"
+      // (`08_ACCEPTANCE_SCENARIOS.md` B16's own literal wording), not one
+      // ECharts axis object literally shared between two grids (ECharts
+      // has no such primitive for two independent grids). Only the bottom
+      // track's own axis labels render, so the pair reads as one shared
+      // axis rather than two competing label rows.
+      const overlayActive = crossCaseHistogram != null;
+      const primaryHeight = overlayActive ? "38%" : undefined;
+      const categoryData = buckets.map((b) => (b.start ?? "").slice(0, 10));
+
       chart.setOption(
         {
           backgroundColor: "transparent",
-          grid: { left: 8, right: 8, top: 8, bottom: 40, containLabel: true },
-          xAxis: {
-            type: "category",
-            data: buckets.map((b) => (b.start ?? "").slice(0, 10)),
-            axisLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
-            axisLabel: { color: TEXT_SECONDARY_DARK_HEX, fontSize: 11 },
-          },
-          yAxis: {
-            type: "value",
-            axisLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
-            axisLabel: { color: TEXT_SECONDARY_DARK_HEX, fontSize: 11 },
-            splitLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
-          },
-          dataZoom: [
-            { type: "slider", height: 20, bottom: 4 },
-            { type: "inside" },
-          ],
-          series: [
-            {
-              type: "bar",
-              data: buckets.map((b) => b.count),
-              itemStyle: { color: BRASS_HEX },
-              barMinWidth: 1,
-            },
-          ],
+          grid: overlayActive
+            ? [
+                { left: 8, right: 8, top: 8, height: primaryHeight, containLabel: true },
+                { left: 8, right: 8, bottom: 40, height: "38%", containLabel: true },
+              ]
+            : { left: 8, right: 8, top: 8, bottom: 40, containLabel: true },
+          xAxis: overlayActive
+            ? [
+                {
+                  type: "category",
+                  gridIndex: 0,
+                  data: categoryData,
+                  axisLabel: { show: false },
+                  axisLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
+                },
+                {
+                  type: "category",
+                  gridIndex: 1,
+                  data: categoryData,
+                  axisLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
+                  axisLabel: { color: TEXT_SECONDARY_DARK_HEX, fontSize: 11 },
+                },
+              ]
+            : {
+                type: "category",
+                data: categoryData,
+                axisLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
+                axisLabel: { color: TEXT_SECONDARY_DARK_HEX, fontSize: 11 },
+              },
+          yAxis: overlayActive
+            ? [
+                {
+                  type: "value",
+                  gridIndex: 0,
+                  axisLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
+                  axisLabel: { color: TEXT_SECONDARY_DARK_HEX, fontSize: 11 },
+                  splitLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
+                },
+                {
+                  type: "value",
+                  gridIndex: 1,
+                  axisLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
+                  axisLabel: { color: TEXT_SECONDARY_DARK_HEX, fontSize: 11 },
+                  splitLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
+                },
+              ]
+            : {
+                type: "value",
+                axisLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
+                axisLabel: { color: TEXT_SECONDARY_DARK_HEX, fontSize: 11 },
+                splitLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
+              },
+          dataZoom: overlayActive
+            ? [
+                { type: "slider", height: 16, bottom: 4, xAxisIndex: [0, 1] },
+                { type: "inside", xAxisIndex: [0, 1] },
+              ]
+            : [
+                { type: "slider", height: 20, bottom: 4 },
+                { type: "inside" },
+              ],
+          series: overlayActive
+            ? [
+                {
+                  type: "bar",
+                  xAxisIndex: 0,
+                  yAxisIndex: 0,
+                  data: buckets.map((b) => b.count),
+                  itemStyle: { color: BRASS_HEX },
+                  barMinWidth: 1,
+                  name: "this investigation",
+                },
+                {
+                  type: "bar",
+                  xAxisIndex: 1,
+                  yAxisIndex: 1,
+                  data: categoryData.map((label) => {
+                    const match = crossCaseHistogram?.buckets.find(
+                      (b) => (b.start ?? "").slice(0, 10) === label,
+                    );
+                    return match?.count ?? 0;
+                  }),
+                  itemStyle: { color: SEQ_HEX[2] },
+                  barMinWidth: 1,
+                  name: crossCaseInvestigationScope,
+                },
+              ]
+            : [
+                {
+                  type: "bar",
+                  data: buckets.map((b) => b.count),
+                  itemStyle: { color: BRASS_HEX },
+                  barMinWidth: 1,
+                },
+              ],
           tooltip: { trigger: "axis" },
         },
         true,
@@ -230,7 +375,14 @@ export function Timeline({
         true,
       );
     }
-  }, [histogram, mode, crossFilterStore, getNodeIds]);
+  }, [
+    histogram,
+    mode,
+    crossFilterStore,
+    getNodeIds,
+    crossCaseHistogram,
+    crossCaseInvestigationScope,
+  ]);
 
   useEffect(() => {
     function handleResize() {
@@ -301,6 +453,33 @@ export function Timeline({
           >
             Clear filter
           </Button>
+        )}
+        {activeWindow && (
+          <>
+            {/* B18's own playback control — `02_GLASS_FRONTEND.md` §3.4:
+                "animate the brush forward at 0.5x to 8x." Disabled with no
+                active brush window: there is nothing to animate across yet
+                (the same reasoning the input fields above already assume
+                by rendering only in density mode). */}
+            <Button
+              aria-label={playback.isPlaying ? "Pause playback" : "Play playback"}
+              aria-pressed={playback.isPlaying}
+              onClick={() => (playback.isPlaying ? playback.pause() : playback.play())}
+            >
+              {playback.isPlaying ? "Pause" : "Play"}
+            </Button>
+            <Select
+              aria-label="Playback speed"
+              value={String(playback.speed)}
+              onChange={(e) => playback.setSpeed(Number(e.target.value) as typeof playback.speed)}
+            >
+              {PLAYBACK_SPEEDS.map((speed) => (
+                <option key={speed} value={speed}>
+                  {speed}×
+                </option>
+              ))}
+            </Select>
+          </>
         )}
       </div>
       <div ref={containerRef} style={{ flex: 1, minHeight: 0 }} />

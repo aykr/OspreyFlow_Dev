@@ -94,6 +94,8 @@ from schemas.analytics import (
     GeometryRecord,
     Histogram,
     HistogramRequest,
+    Sighting,
+    SightingRequest,
 )
 from schemas.domain import (
     Assumption,
@@ -2397,6 +2399,23 @@ async def geo_bins_route(
         investigation_id=body.filter.investigation_scope,
         resolved_query=body.model_dump(mode="json"),
         result_cardinality=sum(b.count for b in result),
+    )
+    return result
+
+
+@app.post("/v1/analytics/sightings")
+async def sightings_route(
+    body: SightingRequest, principal: PrincipalDep, analytics: AnalyticsDep, audit: AuditDep
+) -> list[Sighting]:
+    """Phase 8 Stage 4f, B18's own snail trail — `packages/ports/analytics.py::AnalyticsPort.
+    list_sightings`'s own docstring has the full record of why this route is new."""
+    result = await analytics.list_sightings(body, principal)
+    await audit.record(
+        principal=principal,
+        action="analytics_sightings",
+        investigation_id=body.filter.investigation_scope,
+        resolved_query=body.model_dump(mode="json"),
+        result_cardinality=len(result),
     )
     return result
 

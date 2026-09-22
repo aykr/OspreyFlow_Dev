@@ -204,3 +204,19 @@ export const EXPORT_PANEL_ACTIONS = defineActionRegistry("EXPORT_PANEL_ACTIONS",
   "submit-export-succeeds",
   "submit-export-after-override",
 ] as const);
+
+/**
+ * The timeline's own playback and cross-case-overlay controls — Phase 8 Stage 4f, the seventh
+ * keyboard-driven surface (`keyboard/timeline-playback-harness.tsx`'s own docstring has the
+ * reasoning for a separate harness/spec pair, the same shape every registry above already
+ * establishes). The speed `Select` and the cross-case-scope `Input` need no case here of their
+ * own, the same native-control exemption every other registry above already establishes — only an
+ * action with a real timed effect or a real network call does: pressing Play actually advances the
+ * playback clock forward (proven by observing the reported fraction change, not just that the
+ * button's own `aria-pressed` flips), and entering a second investigation's own id triggers the
+ * real cross-case histogram fetch and renders the second track.
+ */
+export const TIMELINE_PLAYBACK_ACTIONS = defineActionRegistry("TIMELINE_PLAYBACK_ACTIONS", [
+  "toggle-playback-advances-the-clock",
+  "cross-case-overlay-loads-second-track",
+] as const);

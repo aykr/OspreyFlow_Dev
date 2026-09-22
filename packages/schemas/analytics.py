@@ -223,6 +223,25 @@ class GeoBin(BaseModel):
     count: int = Field(ge=0)
 
 
+class SightingRequest(BaseModel):
+    """B18's own backend dependency, found genuinely missing while building it, not assumed to
+    exist — `AnalyticsPort` had `histogram`/`geo_bins`/`cross_filter`, all aggregate-shaped, and no
+    method returning ordered, timestamped, per-entity points at all. `filter.node_ids` names the
+    one entity; `filter.window` is the brush window `02_GLASS_FRONTEND.md` §3.5's own "Snail trail"
+    row scopes the track to. Raw points, not server-side binned like `geo_bins` — deliberately: a
+    snail trail is one entity's own sighting history inside an already-brushed window, not a
+    corpus-wide density query, so the "never ship a million points" concern `geo_bins`'s own
+    docstring names does not apply at this scale."""
+
+    filter: EventFilter
+
+
+class Sighting(BaseModel):
+    occurred_at: datetime
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+
+
 class BaselineRequest(BaseModel):
     """Compares a comparison window against a baseline window over the
     same filter and bucketing. The HMP finding — four cells at ~52% of
@@ -277,6 +296,8 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     Histogram,
     GeoBinRequest,
     GeoBin,
+    SightingRequest,
+    Sighting,
     BaselineRequest,
     BaselineResult,
     CrossFilterDimension,

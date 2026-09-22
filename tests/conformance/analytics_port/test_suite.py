@@ -18,10 +18,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import duckdb
 import pytest
 from ulid import ULID
-
-import duckdb
 
 from schemas.analytics import (
     BaselineRequest,
@@ -34,6 +33,7 @@ from schemas.analytics import (
     GeometryRecord,
     HistogramBucketing,
     HistogramRequest,
+    SightingRequest,
 )
 from schemas.domain import Handling, Interval, Principal
 from tests.conformance.registry import ANALYTICS_PORT_ADAPTERS, AnalyticsAdapterFactory
@@ -547,6 +547,52 @@ async def test_unauthorised_geo_bin_count_matches_a_corpus_without_the_hidden_ev
 
         authorised = await adapter.geo_bins(req, CLEARED)
         assert authorised[0].count == 2
+
+
+# --- sightings (Stage 4f, B18's own snail trail) ---------------------------------
+
+
+async def test_sightings_are_ordered_by_time_and_exclude_null_coordinates(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    t0 = datetime(2026, 1, 1, 8, tzinfo=UTC)
+    t1 = datetime(2026, 1, 1, 9, tzinfo=UTC)
+    t2 = datetime(2026, 1, 1, 10, tzinfo=UTC)
+    events = [
+        _event(occurred_at=t2, lat=51.52, lon=-0.10),
+        _event(occurred_at=t0, lat=51.50, lon=-0.12),
+        _event(occurred_at=t1, lat=None, lon=None),  # no coordinates — excluded
+        _event(occurred_at=t1, lat=51.51, lon=-0.11),
+    ]
+    async with factory.context(events) as adapter:
+        req = SightingRequest(filter=_filter())
+        sightings = await adapter.list_sightings(req, CLEARED)
+        assert [s.occurred_at for s in sightings] == [t0, t1, t2]
+        assert len(sightings) == 3
+
+
+async def test_unauthorised_sighting_is_absent_not_a_gap_in_the_track(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """The existence-leak discipline applied to a track rather than a bucket count: an
+    OFFICIAL-cleared analyst's own snail trail must be identical whether or not a SECRET sighting
+    exists in the population — never a differently-shaped track, never a visible gap that would
+    itself disclose that something was omitted."""
+    t0 = datetime(2026, 1, 1, 8, tzinfo=UTC)
+    t1 = datetime(2026, 1, 1, 9, tzinfo=UTC)
+    visible = [_event(occurred_at=t0, lat=51.50, lon=-0.12, classification="OFFICIAL")]
+    req = SightingRequest(filter=_filter())
+
+    async with factory.context(visible) as adapter:
+        before = await adapter.list_sightings(req, OFFICIAL)
+
+    with_hidden = [*visible, _event(occurred_at=t1, lat=51.51, lon=-0.11, classification="SECRET")]
+    async with factory.context(with_hidden) as adapter:
+        after = await adapter.list_sightings(req, OFFICIAL)
+        assert before == after
+
+        authorised = await adapter.list_sightings(req, CLEARED)
+        assert len(authorised) == 2
 
 
 async def test_unauthorised_baseline_matches_a_corpus_without_the_hidden_event(

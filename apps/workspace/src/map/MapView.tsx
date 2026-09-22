@@ -38,13 +38,50 @@ import { Protocol as PMTilesProtocol } from "pmtiles";
 import Sigma from "sigma";
 import { useEffect, useRef } from "react";
 
-import type { GeoBin, PublicMapProvider } from "../../../../packages/schemas/generated";
-import { SEQ_HEX } from "../color/tokens";
+import type {
+  GeoBin,
+  PublicMapProvider,
+  Sighting,
+} from "../../../../packages/schemas/generated";
+import { BRASS_HEX, SEQ_HEX } from "../color/tokens";
 import type { WorkingSetGraph } from "../workingset/store";
 import { resolveBundledStyle } from "./style";
 
 const GEO_BINS_SOURCE_ID = "ospreyflow-geo-bins";
 const GEO_BINS_LAYER_ID = "ospreyflow-geo-bins-heat";
+
+// B18's own snail trail (`docs/02_GLASS_FRONTEND.md` §3.5, `08_
+// ACCEPTANCE_SCENARIOS.md`) — two MapLibre layers over one source: the
+// accumulated path so far (a `LineString`) and the current position (the
+// most recent revealed sighting, a `Point`). Native MapLibre layers, not
+// added to the Sigma `mapGraph` above — a sighting is a point-in-time
+// observation, not a working-set node, and has no place in that graph.
+const SNAIL_TRAIL_SOURCE_ID = "ospreyflow-snail-trail";
+const SNAIL_TRAIL_LINE_LAYER_ID = "ospreyflow-snail-trail-line";
+const SNAIL_TRAIL_POINT_LAYER_ID = "ospreyflow-snail-trail-point";
+
+function snailTrailFeatureCollection(
+  revealedSightings: readonly Sighting[],
+): GeoJSON.FeatureCollection {
+  const coordinates = revealedSightings.map((s) => [s.lon, s.lat]);
+  const features: GeoJSON.Feature[] = [];
+  if (coordinates.length >= 2) {
+    features.push({
+      type: "Feature",
+      geometry: { type: "LineString", coordinates },
+      properties: {},
+    });
+  }
+  const current = coordinates.at(-1);
+  if (current) {
+    features.push({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: current },
+      properties: { current: true },
+    });
+  }
+  return { type: "FeatureCollection", features };
+}
 
 function geoBinsFeatureCollection(geoBins: readonly GeoBin[]): GeoJSON.FeatureCollection {
   return {
@@ -137,6 +174,12 @@ export interface MapViewProps {
    * A1-A11 needs it. Defaults to empty so a caller with no cross-filter
    * wiring yet (an existing test harness) draws no heat layer. */
   geoBins?: readonly GeoBin[];
+  /** B18's own snail trail — sightings already filtered to "revealed so
+   * far" by the caller's own playback fraction (`playback/math.ts`'s
+   * `itemsUpTo`), not the full window's population; this component only
+   * ever renders exactly what it is given. `undefined`/empty draws no
+   * trail layer at all. */
+  snailTrail?: readonly Sighting[];
   /** Fired once the underlying `maplibregl.Map` exists, so a sibling
    * feature (`site/SiteCalibrationWizard.tsx`) can add its own
    * sources/layers directly — this component knows nothing about sites
@@ -152,6 +195,8 @@ export interface MapViewProps {
 
 const EMPTY_GEO_BINS: readonly GeoBin[] = [];
 
+const EMPTY_SIGHTINGS: readonly Sighting[] = [];
+
 export function MapView({
   graph,
   provider,
@@ -159,6 +204,7 @@ export function MapView({
   apiBaseUrl,
   bearerToken,
   geoBins = EMPTY_GEO_BINS,
+  snailTrail = EMPTY_SIGHTINGS,
   onMapReady,
   onNodeClick,
 }: MapViewProps) {
@@ -171,6 +217,8 @@ export function MapView({
   // not on `geoBins`) every time new bins arrive.
   const geoBinsRef = useRef(geoBins);
   geoBinsRef.current = geoBins;
+  const snailTrailRef = useRef(snailTrail);
+  snailTrailRef.current = snailTrail;
   // Same reasoning as `geoBinsRef` — `sigma.on("clickNode", ...)` is
   // registered once, in the mount effect below, and would otherwise close
   // over whichever `onNodeClick` App.tsx happened to pass on that render
@@ -265,6 +313,32 @@ export function MapView({
           ],
         },
       });
+
+      if (!layer.map.getSource(SNAIL_TRAIL_SOURCE_ID)) {
+        layer.map.addSource(SNAIL_TRAIL_SOURCE_ID, {
+          type: "geojson",
+          data: snailTrailFeatureCollection(snailTrailRef.current),
+        });
+        layer.map.addLayer({
+          id: SNAIL_TRAIL_LINE_LAYER_ID,
+          type: "line",
+          source: SNAIL_TRAIL_SOURCE_ID,
+          filter: ["==", ["geometry-type"], "LineString"],
+          paint: { "line-color": BRASS_HEX, "line-width": 2, "line-opacity": 0.85 },
+        });
+        layer.map.addLayer({
+          id: SNAIL_TRAIL_POINT_LAYER_ID,
+          type: "circle",
+          source: SNAIL_TRAIL_SOURCE_ID,
+          filter: ["==", ["geometry-type"], "Point"],
+          paint: {
+            "circle-color": BRASS_HEX,
+            "circle-radius": 6,
+            "circle-stroke-color": "#ffffff",
+            "circle-stroke-width": 1.5,
+          },
+        });
+      }
     });
 
     return () => {
@@ -279,6 +353,12 @@ export function MapView({
     const source = map?.getSource(GEO_BINS_SOURCE_ID) as GeoJSONSource | undefined;
     source?.setData(geoBinsFeatureCollection(geoBins));
   }, [geoBins]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const source = map?.getSource(SNAIL_TRAIL_SOURCE_ID) as GeoJSONSource | undefined;
+    source?.setData(snailTrailFeatureCollection(snailTrail));
+  }, [snailTrail]);
 
   return (
     <div style={{ width: "100%", height: "100%", position: "relative" }}>

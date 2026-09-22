@@ -265,7 +265,11 @@ The timeline is the second most important control in the product after the canva
   to it, the histograms recompute. Brush endpoints are editable as text.
 - **Playback** — animate the brush forward at 0.5× to 8×. Nodes interpolate position and never
   cross-fade, so identity is continuous through a re-layout. The design system fixes the
-  interpolation at 420ms with a dedicated easing curve.
+  interpolation at 420ms with a dedicated easing curve. **A base duration for "1×" was left
+  unstated here — a real spec gap, found and closed while building Stage 4f
+  (`07_BUILD_PLAN.md`): a full traverse of the brush window at 1× takes 8 real seconds**
+  (`playback/math.ts`'s own `PLAYBACK_DURATION_MS_AT_1X`), chosen as long enough to read a dense
+  timeline's own movement and short enough not to feel stalled at 0.5× (4s) or rushed at 8× (1s).
 - **Cyclical view** — the HMP analysis is a day-of-week and hour-of-day analysis, and a linear
   timeline cannot show that. Provide a second mode that folds the window into a weekday × hour
   grid with counts, which is the same finding the source report reached with a polar plot.
