@@ -3129,6 +3129,19 @@ approximation now (caching a principal from a prior request, say) would reintrod
 "durable grant outliving whatever permission produced it" failure shape this ADR's own second half
 already rejects — narrower-but-honest was chosen over broader-but-wrong.
 
+**Confirmed, not merely suspected, while attempting to wire the corpus-wide resolution trigger
+(Phase 7 Stage 6c's own second carry-over): resolution has no live principal for *any* caller, not
+only the cross-analyst case above.** `services/api/resolution_trigger.py`'s own `resolve_now`
+docstring: "Always submits a job, never runs synchronously." `run_resolve_entity_type_job`'s own
+fixed `JobWorker` dispatch signature carries no principal at all, for the automatic post-ingest
+trigger or the manual "resolve now" route alike — both cross the identical job/worker boundary
+before resolution ever executes, so even the same-analyst-owns-the-monitor case this amendment's
+own narrowing otherwise permits cannot reach resolution's own producer today. Ingest and manual
+assertion (`app.py`'s `run_studio_recipe`/`link_resolution_route`) both retain a live requester and
+are wired; resolution is not, pinned by
+`test_a_monitor_does_not_fire_on_a_match_created_by_resolution_with_no_new_ingest`
+(`tests/services/api/test_evaluation.py`) rather than left unverified.
+
 **Consequence for Scenario B, stated here and at the exit criterion itself
 (`07_BUILD_PLAN.md`'s own Phase 7 outcome), not only in this record.** B12/B13/B14/B20 pass for the
 walkthrough as `08_ACCEPTANCE_SCENARIOS.md` narrates it — one analyst, start to finish — because

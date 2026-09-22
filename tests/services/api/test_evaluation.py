@@ -15,7 +15,7 @@ from datetime import UTC, date, datetime
 import pytest
 from services.api.alerts import AlertStore
 from services.api.audit import AuditWriter
-from services.api.change_stream import ChangeStreamEntry
+from services.api.change_stream import ChangeStreamEntry, ChangeStreamWriter
 from services.api.config import PostgresConfig, ValkeyConfig
 from services.api.evaluation import (
     _HOTLIST_LOCK_PREFIX,
@@ -26,7 +26,7 @@ from services.api.evaluation import (
 from services.api.hotlists import HotlistStore
 from services.api.monitors import MonitorStore
 from services.api.pattern_store import PatternStore
-from services.resolve.trigger import service_principal
+from services.resolve.trigger import run_resolution_for_entity_type, service_principal
 from valkey.asyncio import Valkey
 
 from adapters.graph_arcadedb.testing import arcadedb_adapter
@@ -35,6 +35,7 @@ from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from ports.graph import GraphPort
 from schemas.domain import (
+    Alert,
     EdgeWrite,
     Handling,
     NodeWrite,
@@ -732,3 +733,103 @@ async def test_a_skipped_monitor_evaluation_is_observable_as_stopped_and_a_later
         )
         active_again = await monitor_store.get_authorized(monitor.id, OWNER)
         assert active_again.status == "active"
+
+
+async def test_a_monitor_does_not_fire_on_a_match_created_by_resolution_with_no_new_ingest(
+    monitor_store, pattern_store, alert_store, audit, valkey
+) -> None:
+    """Phase 7 Stage 6c's own second carry-over — pins the actual current boundary rather than
+    the passing test `06_DECISIONS.md` ADR-037's own amendment originally named
+    (`test_monitor_fires_on_a_match_created_by_resolution_with_no_new_ingest`), which this
+    codebase cannot make pass: checked directly, not assumed, `services/api/resolution_trigger.py`
+    `resolve_now`'s own docstring is explicit — "Always submits a job, never runs synchronously" —
+    and `services/resolve/trigger.py::run_resolve_entity_type_job`'s own fixed dispatch shape
+    (`JobWorker`'s `(payload, *, graph, tx)`, `ontology`/`scheme`/`valkey` bound at registration,
+    nothing carrying a principal) confirms there is no code path anywhere in this codebase where
+    `run_resolution_for_entity_type` executes with a live analyst principal in scope — not for the
+    automatic post-ingest trigger, and not for the manual "resolve now" route either, since both
+    dispatch through the identical job/worker boundary. Stage 6c's own synchronous-evaluation
+    design (`06_DECISIONS.md` ADR-036's own amendment) has no principal to substitute here, not
+    even for the analyst who owns the affected monitor — recorded as a real, structural block
+    rather than forced with an invented or cached principal (ADR-036's own explicit rejection of
+    exactly that shape).
+
+    Proven through the real mechanism, not only at the stream: `run_resolution_for_entity_type`
+    (`services/resolve/trigger.py`) is called for real, against two real, pre-existing `Person`
+    nodes it resolves into a `SAME_AS` edge with no ingest anywhere in this test — the identical
+    setup `test_change_stream.py::test_change_stream_carries_a_same_as_edge_written_by_resolution_
+    with_no_new_ingest` already establishes proves the change stream *carries* this entry. This
+    test goes one step further: even though the entry is real and carries the edge, and the
+    monitor's own pattern genuinely now matches, no alert results — because nothing with a
+    resolvable principal ever calls the evaluator for a `source="resolution"` entry. If a
+    principal directory is ever built (Phase 8, per this codebase's own disclosed dependency) and
+    resolution's own trigger is wired to evaluation using it, this test's own assertion is exactly
+    what would need to flip from `== []` to a real alert, at which point this test's own name
+    stops matching what it proves and should be rewritten to assert the new behaviour, not kept
+    as a stale regression guard for a gap that has closed."""
+    ontology = load_default_ontology()
+    scheme = load_uk_le_scheme()
+    same_as_pattern = PatternQuery(
+        nodes=[
+            PatternNode(var="a", entity_type="Person"),
+            PatternNode(var="b", entity_type="Person"),
+        ],
+        edges=[PatternEdge(edge_type="SAME_AS", from_var="a", to_var="b")],
+    )
+    saved = await pattern_store.save(
+        OWNER, pattern_id=None, name="Resolution-only fixture", definition=same_as_pattern
+    )
+    monitor = await monitor_store.create(OWNER, pattern_id=saved.pattern_id)
+
+    async with arcadedb_adapter(ontology, scheme) as graph:
+        tx = await graph.begin_transaction()
+        await graph.upsert_nodes(
+            [
+                _person_write("Mercer", owning_unit=OWNER.org_unit),
+                _person_write("Mercer", owning_unit=OWNER.org_unit),
+            ],
+            tx,
+        )
+        await graph.commit_transaction(tx)
+
+        tx = await graph.begin_transaction()
+        result = await run_resolution_for_entity_type(
+            "Person", graph=graph, tx=tx, ontology=ontology, scheme=scheme, valkey=valkey
+        )
+        await graph.commit_transaction(tx)
+        assert result.same_as_written >= 1, (
+            "test setup is broken: resolution must actually write a SAME_AS edge, or this test "
+            "would pass whether or not evaluation is wired to it"
+        )
+
+        # Sanity: the monitor's own pattern genuinely matches now, as its owner would see it —
+        # proving the gap is "nothing evaluates this," not "there is nothing to find."
+        # `GraphPort.match`'s own contract returns matched *nodes* only (`Subgraph.edges` is
+        # always `[]` by construction — confirmed directly against the adapter, not assumed);
+        # `evaluate_monitors_for_entry`'s own "found anything" check is `subgraph.nodes` for the
+        # same reason.
+        subgraph = await graph.match(same_as_pattern, OWNER)
+        assert len(subgraph.nodes) == 2, "test setup is broken: the pattern does not actually match"
+
+        entries = await ChangeStreamWriter(valkey).read_since()
+        resolution_entries = [e for e in entries if e.source == "resolution"]
+        assert resolution_entries, "resolution must have published to the change stream"
+
+        alerts: list[Alert] = []
+        for entry in resolution_entries:
+            alerts.extend(
+                await evaluate_monitors_for_entry(
+                    entry,
+                    graph=graph,
+                    monitor_store=monitor_store,
+                    pattern_store=pattern_store,
+                    alert_store=alert_store,
+                    audit=audit,
+                    valkey=valkey,
+                    # The only honest `principal_for_owner` a resolution-sourced entry can be
+                    # evaluated with — there is no requester to compare `owner_id` against, per
+                    # this test's own docstring.
+                    principal_for_owner=lambda owner_id: None,
+                )
+            )
+        assert [a for a in alerts if a.rule_id == f"monitor:{monitor.id}"] == []

@@ -1157,19 +1157,41 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
    request/response shapes, wired into `app.py`).
 
    **The synchronous-evaluation decision (`06_DECISIONS.md` ADR-036's own new amendment has the
-   full reasoning) wired into exactly one producer: ingest.** `app.py`'s `run_studio_recipe`
-   calls `evaluate_hotlists_for_entry`/`evaluate_monitors_for_entry` synchronously, right after
-   publishing to the change stream, with `principal_for_owner` resolving only when `owner_id`
-   equals the requesting analyst's own id — B13/B20 are both specifically about ingest, so
-   manual-assertion and the resolution trigger are deliberately not wired this stage, a scope
-   narrowing stated here rather than left to be discovered by grepping for call sites. A failure in
-   this best-effort side evaluation is caught and audited (`action="watch_evaluation_failed"`),
-   never allowed to fail the ingest response the load itself already succeeded at.
+   full reasoning) wired into two of ADR-037's three producers — ingest and manual assertion — the
+   third (corpus-wide resolution) found structurally unwireable while building the carry-over
+   below, not deferred by choice.** `app.py`'s `run_studio_recipe` and `link_resolution_route`
+   (a manual link only — `manual_split` cannot grow a match set, ADR-037's own reasoning) both call
+   the shared `_evaluate_watches_best_effort` helper right after publishing to the change stream,
+   with `principal_for_owner` resolving only when `owner_id` equals the requesting analyst's own
+   id. A failure in this best-effort side evaluation is caught and audited
+   (`action="watch_evaluation_failed"`), never allowed to fail the primary operation (the load, or
+   the link) that already succeeded.
 
-   **The ingest-path cost this adds, disclosed rather than silently absorbed into latency.** Each
-   hotlist/monitor evaluation is bounded (the overlap lock, `MAX_TOUCHED_NODES_PER_EVALUATION`,
-   both Stage 6b's own) — the *aggregate* is not: `run_studio_recipe` now blocks on evaluating
-   every hotlist and monitor this requesting principal owns, not a fixed number of them, unlike
+   **Corpus-wide resolution — checked, not assumed, and found to have no code path with a live
+   principal anywhere, for any caller.** `services/api/resolution_trigger.py`'s own `resolve_now`
+   docstring: "Always submits a job, never runs synchronously." `services/resolve/trigger.py::
+   run_resolve_entity_type_job`'s own fixed `JobWorker` dispatch shape (`payload, *, graph, tx`,
+   with `ontology`/`scheme`/`valkey` bound at registration) carries no principal, for the automatic
+   post-ingest trigger or the manual "resolve now" route alike — both cross the identical job/worker
+   boundary before `run_resolution_for_entity_type` ever executes. Wiring evaluation in here would
+   need either an invented identity (defeats the whole point of `principal_for_owner` returning
+   `None` rather than guessing) or a principal captured at job-submission time and carried through
+   the queue — exactly the cached-principal shape ADR-036 already rejects as "a durable grant
+   outliving whatever permission produced it." Not fixed here; recorded, with the test that pins the
+   boundary rather than assumes it: `test_a_monitor_does_not_fire_on_a_match_created_by_resolution_
+   with_no_new_ingest` (`tests/services/api/test_evaluation.py`) — a real resolution run, via
+   `run_resolution_for_entity_type` itself, genuinely writes a `SAME_AS` edge a real monitor's own
+   pattern genuinely matches (both asserted, not assumed), and still produces no alert, because
+   nothing with a resolvable principal ever calls the evaluator for a `source="resolution"` entry.
+   Owning phase: **Phase 8**, the same principal-directory dependency ADR-036's amendment already
+   names — this is not a second, separate gap, only its first concrete instance found by trying
+   to close it rather than only naming it.
+
+   **The request-path cost this adds, disclosed rather than silently absorbed into latency —
+   both routes now carrying it, not only ingest.** Each hotlist/monitor evaluation is bounded (the
+   overlap lock, `MAX_TOUCHED_NODES_PER_EVALUATION`, both Stage 6b's own) — the *aggregate* is
+   not: `run_studio_recipe` and `link_resolution_route` alike now block on evaluating every
+   hotlist and monitor the requesting principal owns, not a fixed number of them, unlike
    `services/resolve/trigger.py`'s own precedent of one dispatched job regardless of population
    size. Acceptable at the scale a single analyst's own watch list reaches today; not a bound that
    holds at arbitrary scale, and not fixed here — a job-queue dispatch (`services/api/jobs.py`,
@@ -1212,20 +1234,63 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
    (`tests/scenarios/test_phase7_stage6c_watch_routes.py`), against a real revocation
    (`supersede_node`), at both `GET /v1/alerts` and `GET /v1/alerts/{id}`.
 
-   **A real connection-pool ceiling, found and fixed while writing this stage's own real-service
-   tests, not left for whoever next opens a `TestClient` against the real app to rediscover.**
-   `asyncpg.create_pool`'s own default (`min_size=10`) times the roughly ten Postgres-backed stores
-   `app.py`'s lifespan already opened was already within reach of Postgres's own
-   `max_connections=100` before this stage; adding `HotlistStore`/`MonitorStore`/`AlertStore` (three
-   more pools at the same default) pushed a real `TestClient(app)` lifespan over it, reproduced
-   directly as `asyncpg.exceptions.TooManyConnectionsError`, not merely suspected. Fixed for these
-   three (`min_size=1, max_size=4` each — a small, low-traffic control-plane store needs nowhere
-   near ten idle connections) rather than by raising Postgres's own ceiling, which would have
-   papered over the other seven stores' identical unbounded default rather than these three's own
-   actual load. **The other seven stores' own identical `min_size=10` default is untouched and
-   still a live risk** — not fixed here, since bounding pools this stage did not add is a separate,
-   broader change; owning phase: **Phase 8**, or whenever the next store addition tips the same
-   ceiling again.
+   **A real connection-pool ceiling, found while writing this stage's own real-service tests and
+   now closed for all ten Postgres-backed stores, not only the three this stage added.**
+   `asyncpg.create_pool`'s own default (`min_size=10`, `max_size=10`) times the ten Postgres-backed
+   stores `app.py`'s lifespan opens was already within reach of Postgres's own
+   `max_connections=100` before this stage; adding `HotlistStore`/`MonitorStore`/`AlertStore`
+   (three more pools at the same default) pushed a real `TestClient(app)` lifespan over it,
+   reproduced directly as `asyncpg.exceptions.TooManyConnectionsError`, not merely suspected.
+   Bounding only the three new stores would have left the other seven's identical unbounded
+   default as live a risk as before — checked and found true (a single reverted bound was enough
+   to push the measured delta back over this section's own regression test's threshold), so all
+   ten are now explicitly sized, each store's own `.connect()` carrying `hotlists.py::
+   HotlistStore.connect`'s comment as the shared reference for why.
+
+   **The arithmetic, stated explicitly rather than left implicit in ten separate numbers.**
+
+   | Store | `min_size` | `max_size` |
+   | --- | --- | --- |
+   | `AuditWriter` | 2 | 10 |
+   | `InvestigationStore` | 2 | 8 |
+   | `InvestigationHistoryStore` | 1 | 5 |
+   | `PatternStore` | 1 | 5 |
+   | `SiteStore` | 1 | 5 |
+   | `StudioRecipeStore` | 1 | 5 |
+   | `ExtractionCandidateStore` | 1 | 5 |
+   | `HotlistStore` | 1 | 4 |
+   | `MonitorStore` | 1 | 4 |
+   | `AlertStore` | 1 | 4 |
+   | **Total** | **12** | **55** |
+
+   At lifespan **startup**, one Conduit instance opens 12 connections (measured directly —
+   `test_app_lifespan_does_not_reopen_the_unbounded_pool_ceiling`,
+   `tests/scenarios/test_phase7_stage6c_watch_routes.py`); at its own **worst case under load**
+   (every pool saturated at once), 55. Against Postgres's own `max_connections=100` — the
+   `postgres:16` image's own unmodified default; confirmed directly (`SHOW max_connections`), not
+   assumed, since neither `deploy/compose/dev.yaml` nor `ci.yml`'s own `conformance` job overrides
+   it: one instance is safe in both cases (12 and 55 both well under 100). **Two instances — the same stateless-multi-instance shape Phase 3's own exit criterion
+   and Phase 8a's own outcome bullet already name as this build's real target
+   (`test_statelessness.py`; Phase 8a: "The Postgres connection-pool hardening Phase 7 Stage 1
+   found — two live Conduit instances together exhausted `max_connections` — real here for the
+   first time") — are safe at startup (24) but not at worst case (110, over the 100 limit).**
+   This is not a new problem this stage introduces: it is the identical, already-named Phase 8a
+   gap, now given an exact bound instead of an untested "eventually OOMs under load" description —
+   this stage's own fix makes **one** instance safe under any load and makes **multiple** instances
+   safe at rest, narrowing the gap from "unknown, found only under load" to "known, and only under
+   simultaneous multi-instance saturation," still Phase 8a's own scope to close (raising Postgres's
+   own `max_connections`, or a shared connection-pooler such as PgBouncer, are the two shapes
+   already implied by that phase's own hardening language).
+
+   **The test that would fail if an eleventh store were added without a bound, named and
+   confirmed both directions, not only proposed.**
+   `test_app_lifespan_does_not_reopen_the_unbounded_pool_ceiling`
+   (`tests/scenarios/test_phase7_stage6c_watch_routes.py`) measures the actual delta in live
+   Postgres connections one full `TestClient(app)` lifespan opens (`12`, matching the table above)
+   against a threshold (`20`) tight enough that any single store regressing to
+   `asyncpg.create_pool`'s own unbounded default fails it — confirmed by reverting one store's own
+   bound during this stage and watching the test fail, then restoring it and watching the test
+   pass again, not assumed from the arithmetic alone.
 
    **What 6c's backend half does not build, named precisely:** no Glass UI (no hotlist/monitor
    creation panel, no alert inbox render, no jump affordance), no keyboard actions registered for
@@ -1505,8 +1570,14 @@ too.
   no change owed to that suite (ADR-028's own design already accommodates a third tier).
 - The Postgres connection-pool hardening Phase 7 Stage 1 found (two live Conduit instances
   together exhausted `max_connections`) — real here for the first time, since concurrent
-  instances are the `cluster` profile's own defining property and cannot be demonstrated on
-  `local-lite` at all.
+  instances are the `cluster` profile's own defining property and cannot be *demonstrated* on
+  `local-lite` at all. **Bounded arithmetically, not yet demonstrated, by Phase 7 Stage 6c**
+  (that phase's own outcome bullets): all ten Postgres-backed stores' pools are now explicitly
+  sized (`min_size`/`max_size` each), with the resulting per-instance and two-instance totals
+  against Postgres's own `max_connections=100` computed and recorded there. One instance is safe
+  under any load; two are safe at rest but not at simultaneous worst-case saturation (110 against
+  100) — the arithmetic this bullet's own gap lacked before, though a live two-instance
+  reproduction is still this phase's own to run.
 
 **Exit.** Both acceptance scenarios pass unchanged on the `cluster` profile. ComputePort's three
 registered tiers (Tier 1 `graphology`, Tier 2 `rustworkx`, Tier 3) return identical values within

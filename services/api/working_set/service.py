@@ -39,7 +39,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from services.api.access import narrow_to_visible
-from services.api.change_stream import ChangeStreamWriter
+from services.api.change_stream import ChangeStreamEntry, ChangeStreamWriter
 from services.resolve.projection import DEFAULT_THRESHOLD, compute_clusters, diff_clusters
 from valkey.asyncio import Valkey
 
@@ -260,14 +260,21 @@ class WorkingSetService:
 
     async def manual_link(
         self, investigation_id: str, node_a: NodeId, node_b: NodeId, principal: Principal
-    ) -> DeltaReproject:
+    ) -> tuple[DeltaReproject, ChangeStreamEntry | None]:
         """`POST /v1/resolution/link` (`03_CONDUIT_MIDDLEWARE.md` §3.5): "analyst-asserted
         `SAME_AS`" — `01_DOMAIN_MODEL.md` §4: "a manual link is a `SAME_AS` with score 1.0 and
         `provenance.state = asserted`." Only `score` is set on the new edge: `model_version`/
         `comparison_vector` are Splink's own output fields (`01_DOMAIN_MODEL.md` §4), and a manual
         decision was not produced by any model run — leaving them unset rather than inventing a
         placeholder value keeps `explain`'s `manually_asserted` flag the one honest signal for
-        "why is this pair linked", not a fabricated model tag."""
+        "why is this pair linked", not a fabricated model tag.
+
+        Returns the change-stream entry `_manual_assertion` published alongside the reprojection
+        (Phase 7 Stage 6c) — `app.py`'s `link_resolution_route` is the one caller with a live
+        principal in scope to evaluate hotlists/monitors against it; `manual_split` below returns
+        the identical shape for interface consistency, but a `NOT_SAME_AS` write can only shrink a
+        pattern's match set (`06_DECISIONS.md` ADR-037's own "removing an edge can only shrink a
+        match set, never grow it"), so nothing calls evaluation from that route."""
         return await self._manual_assertion(
             investigation_id,
             node_a,
@@ -280,7 +287,7 @@ class WorkingSetService:
 
     async def manual_split(
         self, investigation_id: str, node_a: NodeId, node_b: NodeId, principal: Principal
-    ) -> DeltaReproject:
+    ) -> tuple[DeltaReproject, ChangeStreamEntry | None]:
         """`POST /v1/resolution/split` (`03_CONDUIT_MIDDLEWARE.md` §3.5): "analyst-asserted
         `NOT_SAME_AS`" — `01_DOMAIN_MODEL.md` §4: "a manual split is a `NOT_SAME_AS` edge that the
         projection always honours and no future resolution run may override." `compute_clusters`
@@ -308,7 +315,7 @@ class WorkingSetService:
         edge_type: str,
         properties: dict[str, Any],
         reason: str,
-    ) -> DeltaReproject:
+    ) -> tuple[DeltaReproject, ChangeStreamEntry | None]:
         if node_a == node_b:
             raise SameNodeAssertionError(node_a)
 
@@ -397,9 +404,10 @@ class WorkingSetService:
             raise
         await self._graph.commit_transaction(tx)
 
+        entry: ChangeStreamEntry | None = None
         if self._valkey is not None:
-            await ChangeStreamWriter(self._valkey).publish(
-                "manual_assertion", edge_ids=[new_edge.id]
+            entry = await ChangeStreamWriter(self._valkey).publish(
+                "manual_assertion", edge_ids=[new_edge.id], investigation_id=investigation_id
             )
 
         if edge_type == SAME_AS:
@@ -431,7 +439,7 @@ class WorkingSetService:
             affected_cluster_ids=delta_counts.affected_cluster_ids,
         )
         await self._store.append_delta(investigation_id, delta)
-        return delta
+        return delta, entry
 
     async def explain_cluster(
         self, investigation_id: str, cluster_id: ClusterId, principal: Principal

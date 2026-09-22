@@ -140,7 +140,7 @@ from . import search as search_module
 from .alerts import AlertNotFoundError, AlertStore
 from .audit import AuditWriteError, AuditWriter
 from .auth import PrincipalResolutionError, PrincipalResolver, bearer_scheme
-from .change_stream import ChangeStreamWriter
+from .change_stream import ChangeStreamEntry, ChangeStreamWriter
 from .compute_routes import (
     JOB_TYPE_COMPUTE_METRIC,
     ComputeMetricAccepted,
@@ -1218,9 +1218,38 @@ async def link_resolution_route(
     working_set: WorkingSetDep,
     audit: AuditDep,
     valkey: Annotated[Valkey, Depends(get_valkey)],
+    handling_scheme: HandlingSchemeDep,
+    config: ConfigDep,
+    graph: GraphDep,
+    hotlists_store: HotlistsStoreDep,
+    monitors_store: MonitorsStoreDep,
+    patterns_store: PatternsStoreDep,
+    alerts_store: AlertsStoreDep,
 ) -> DeltaReproject:
-    delta = await resolution_module.link(working_set, investigation.id, body, principal)
+    """Phase 7 Stage 6c: a manual link is a `SAME_AS` write that can grow a saved pattern's own
+    match set (`06_DECISIONS.md` ADR-037's own change-stream amendment names manual assertion as
+    one of its three producers) — evaluated synchronously here, the identical shape and the
+    identical `run_studio_recipe`'s own docstring reasoning for why only this principal's own
+    hotlists/monitors can fire from it. `split_resolution_route` below does not call evaluation at
+    all — a `NOT_SAME_AS` write can only shrink a match set, never grow one."""
+    delta, entry = await resolution_module.link(working_set, investigation.id, body, principal)
     await publish_delta(valkey, investigation.id, delta)
+    if entry is not None:
+        await _evaluate_watches_best_effort(
+            entry,
+            principal=principal,
+            graph=graph,
+            handling_scheme=handling_scheme,
+            config=config,
+            hotlists_store=hotlists_store,
+            monitors_store=monitors_store,
+            patterns_store=patterns_store,
+            alerts_store=alerts_store,
+            audit=audit,
+            valkey=valkey,
+            investigation_id=investigation.id,
+            action_on_failure="watch_evaluation_failed",
+        )
     await audit.record(
         principal=principal,
         action="manual_link",
@@ -1240,7 +1269,7 @@ async def split_resolution_route(
     audit: AuditDep,
     valkey: Annotated[Valkey, Depends(get_valkey)],
 ) -> DeltaReproject:
-    delta = await resolution_module.split(working_set, investigation.id, body, principal)
+    delta, _entry = await resolution_module.split(working_set, investigation.id, body, principal)
     await publish_delta(valkey, investigation.id, delta)
     await audit.record(
         principal=principal,
@@ -2686,42 +2715,22 @@ async def run_studio_recipe(
         investigation_id=investigation.id,
     )
     if entry is not None:
-
-        def _principal_for_owner(owner_id: str) -> Principal | None:
-            return principal if owner_id == principal.id else None
-
-        try:
-            await evaluate_hotlists_for_entry(
-                entry,
-                graph=graph,
-                scheme=handling_scheme,
-                hotlist_store=hotlists_store,
-                alert_store=alerts_store,
-                audit=audit,
-                valkey=valkey,
-                principal_for_owner=_principal_for_owner,
-                policy=config.hotlist_alert_policy,
-            )
-            await evaluate_monitors_for_entry(
-                entry,
-                graph=graph,
-                monitor_store=monitors_store,
-                pattern_store=patterns_store,
-                alert_store=alerts_store,
-                audit=audit,
-                valkey=valkey,
-                principal_for_owner=_principal_for_owner,
-            )
-        except Exception as exc:  # noqa: BLE001 - a best-effort side channel, see this route's
-            # own docstring: must never fail the ingest response the load itself already succeeded
-            # at. Audited, not silently swallowed.
-            await audit.record(
-                principal=principal,
-                action="watch_evaluation_failed",
-                investigation_id=investigation.id,
-                resolved_query={"load_id": load_id, "error": str(exc)},
-                result_cardinality=0,
-            )
+        await _evaluate_watches_best_effort(
+            entry,
+            principal=principal,
+            graph=graph,
+            handling_scheme=handling_scheme,
+            config=config,
+            hotlists_store=hotlists_store,
+            monitors_store=monitors_store,
+            patterns_store=patterns_store,
+            alerts_store=alerts_store,
+            audit=audit,
+            valkey=valkey,
+            investigation_id=investigation.id,
+            action_on_failure="watch_evaluation_failed",
+            error_context={"load_id": load_id},
+        )
     await audit.record(
         principal=principal,
         action="run_studio_recipe",
@@ -2730,6 +2739,67 @@ async def run_studio_recipe(
         result_cardinality=report.nodes_created + report.edges_created,
     )
     return report
+
+
+async def _evaluate_watches_best_effort(
+    entry: ChangeStreamEntry,
+    *,
+    principal: Principal,
+    graph: GraphPort,
+    handling_scheme: HandlingScheme,
+    config: ApiConfig,
+    hotlists_store: HotlistStore,
+    monitors_store: MonitorStore,
+    patterns_store: PatternStore,
+    alerts_store: AlertStore,
+    audit: AuditWriter,
+    valkey: Valkey,
+    investigation_id: str,
+    action_on_failure: str,
+    error_context: dict[str, Any] | None = None,
+) -> None:
+    """Shared by every producer route wired to synchronous evaluation this stage
+    (`run_studio_recipe`, `link_resolution_route`) — the identical `principal_for_owner`
+    ("only the requester's own hotlists/monitors fire", `06_DECISIONS.md` ADR-036's own amendment)
+    and the identical best-effort failure containment, factored out rather than duplicated a
+    second time verbatim. A failure here is caught and audited, never allowed to fail the
+    caller's own already-succeeded primary operation."""
+
+    def _principal_for_owner(owner_id: str) -> Principal | None:
+        return principal if owner_id == principal.id else None
+
+    try:
+        await evaluate_hotlists_for_entry(
+            entry,
+            graph=graph,
+            scheme=handling_scheme,
+            hotlist_store=hotlists_store,
+            alert_store=alerts_store,
+            audit=audit,
+            valkey=valkey,
+            principal_for_owner=_principal_for_owner,
+            policy=config.hotlist_alert_policy,
+        )
+        await evaluate_monitors_for_entry(
+            entry,
+            graph=graph,
+            monitor_store=monitors_store,
+            pattern_store=patterns_store,
+            alert_store=alerts_store,
+            audit=audit,
+            valkey=valkey,
+            principal_for_owner=_principal_for_owner,
+        )
+    except Exception as exc:  # noqa: BLE001 - a best-effort side channel, see this function's
+        # own docstring: must never fail the caller's own already-succeeded primary operation.
+        # Audited, not silently swallowed.
+        await audit.record(
+            principal=principal,
+            action=action_on_failure,
+            investigation_id=investigation_id,
+            resolved_query={**(error_context or {}), "error": str(exc)},
+            result_cardinality=0,
+        )
 
 
 # --- the delta stream --------------------------------------------------------

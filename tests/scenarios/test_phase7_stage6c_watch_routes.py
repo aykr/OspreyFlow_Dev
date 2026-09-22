@@ -315,3 +315,52 @@ def test_jump_branches_a_new_investigation_seeded_with_the_alerts_entities(
             f"/v1/investigations/{result['investigation']['id']}", headers=headers
         )
         assert membership.status_code == 200, membership.text
+
+
+def test_app_lifespan_does_not_reopen_the_unbounded_pool_ceiling(
+    api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+) -> None:
+    """Phase 7 Stage 6c's own first carry-over — a regression guard for the connection-pool
+    ceiling found and fixed while writing this stage's own real-service tests, not merely a
+    one-off manual reproduction. `asyncpg.create_pool`'s own default (`min_size=10`) times all ten
+    Postgres-backed stores `app.py`'s lifespan opens was already within reach of Postgres's own
+    `max_connections=100` before this stage; adding three more at that default (`Hotlist`/
+    `Monitor`/`AlertStore`) pushed a real lifespan over it, reproduced directly as
+    `asyncpg.exceptions.TooManyConnectionsError`. All ten stores are now explicitly bounded
+    (`hotlists.py::HotlistStore.connect`'s own comment has the arithmetic;
+    `07_BUILD_PLAN.md`'s own Stage 6c entry has the full reconciliation against Postgres's
+    configured limit and more than one Conduit instance).
+
+    This test measures the actual delta in live Postgres connections one full `TestClient(app)`
+    lifespan opens — measured directly at `12` with today's ten bounded stores, not assumed.
+    Threshold `20`: generous enough to absorb that measurement's own minor run-to-run variance,
+    tight enough that any *one* store regressing to `asyncpg.create_pool`'s own unbounded default
+    (`min_size=10` — at least `+8` over this stage's own smallest bound) pushes the delta past it
+    and fails this test. Confirmed both directions while writing it, not assumed from the
+    arithmetic alone: reverting one store's own bound reproduces the failure; restoring it passes
+    again."""
+    import asyncpg
+
+    async def _connection_count() -> int:
+        conn = await asyncpg.connect(dsn=PostgresConfig.from_env().dsn)
+        try:
+            return await conn.fetchval("SELECT count(*) FROM pg_stat_activity")
+        finally:
+            await conn.close()
+
+    before = asyncio.run(_connection_count())
+
+    from services.api.app import app
+
+    with TestClient(app):
+        during = asyncio.run(_connection_count())
+
+    # A generous ceiling, not today's own precise sum (`~13` at `min_size`) — real headroom for
+    # this test to stay green as individual stores' own `min_size` is tuned, while still catching
+    # the exact class of regression this stage found: a new store, or a reverted bound, opening
+    # ten more connections than budgeted at once.
+    assert during - before < 20, (
+        f"app.py's lifespan opened {during - before} new Postgres connections (before={before}, "
+        f"during={during}) — a bounded-pool regression, the same class this stage's own "
+        "TooManyConnectionsError finding fixed"
+    )

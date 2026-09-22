@@ -65,7 +65,10 @@ class AuditWriter:
 
     @classmethod
     async def connect(cls, dsn: str) -> AuditWriter:
-        pool = await asyncpg.create_pool(dsn=dsn)
+        # `min_size`/`max_size` — `hotlists.py::HotlistStore.connect`'s own comment has the full
+        # Stage 6c connection-ceiling reasoning. Sized larger than the control-plane stores: every
+        # route audits, so this is this deployment's own busiest store, not a low-traffic one.
+        pool = await asyncpg.create_pool(dsn=dsn, min_size=2, max_size=10)
         async with pool.acquire() as conn:
             await conn.execute(_BOOTSTRAP_SQL)
         return cls(pool)

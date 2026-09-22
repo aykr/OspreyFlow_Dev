@@ -105,7 +105,9 @@ class SiteStore:
 
     @classmethod
     async def connect(cls, dsn: str) -> SiteStore:
-        pool = await asyncpg.create_pool(dsn=dsn)
+        # `min_size`/`max_size` — `hotlists.py::HotlistStore.connect`'s own comment has the full
+        # Stage 6c connection-ceiling reasoning.
+        pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=5)
         async with pool.acquire() as conn:
             await conn.execute(_BOOTSTRAP_SQL)
         return cls(pool)

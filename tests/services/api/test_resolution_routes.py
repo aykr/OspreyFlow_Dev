@@ -14,12 +14,20 @@ import pytest
 from fastapi.testclient import TestClient
 from services.api.app import (
     app,
+    get_alerts_store,
     get_audit,
+    get_config,
+    get_graph,
+    get_handling_scheme,
+    get_hotlists_store,
     get_investigations,
+    get_monitors_store,
+    get_patterns_store,
     get_principal,
     get_valkey,
     get_working_set,
 )
+from services.api.change_stream import ChangeStreamEntry
 from services.api.investigations import Investigation, InvestigationNotFoundError
 from services.api.working_set.models import (
     ClusterExplanation,
@@ -61,19 +69,22 @@ class _FakeWorkingSet:
 
     async def manual_link(
         self, investigation_id: str, node_a: str, node_b: str, principal: Principal
-    ) -> DeltaReproject:
+    ) -> tuple[DeltaReproject, ChangeStreamEntry | None]:
         self.link_calls.append((investigation_id, node_a, node_b, principal))
         if self.link_error is not None:
             raise self.link_error
-        return DeltaReproject(seq=2, reason="manual link", merged=1, split=0, affected=2)
+        # `entry=None` — this file only proves route wiring (see its own module docstring); a
+        # non-`None` entry would exercise `_evaluate_watches_best_effort`'s own live-store path,
+        # which `test_evaluation.py` already covers with real fakes at the right grain.
+        return DeltaReproject(seq=2, reason="manual link", merged=1, split=0, affected=2), None
 
     async def manual_split(
         self, investigation_id: str, node_a: str, node_b: str, principal: Principal
-    ) -> DeltaReproject:
+    ) -> tuple[DeltaReproject, ChangeStreamEntry | None]:
         self.split_calls.append((investigation_id, node_a, node_b, principal))
         if self.split_error is not None:
             raise self.split_error
-        return DeltaReproject(seq=3, reason="manual split", merged=0, split=1, affected=2)
+        return DeltaReproject(seq=3, reason="manual split", merged=0, split=1, affected=2), None
 
     async def explain_cluster(
         self, investigation_id: str, cluster_id: str, principal: Principal
@@ -127,6 +138,16 @@ def client() -> TestClient:
     app.dependency_overrides[get_audit] = lambda: audit
     app.dependency_overrides[get_investigations] = lambda: _FakeInvestigations()
     app.dependency_overrides[get_valkey] = lambda: valkey
+    # `link_resolution_route`'s own Stage 6c evaluation wiring (`app.py`) — never reached by this
+    # file's own fakes, since `_FakeWorkingSet.manual_link` always returns `entry=None`, so these
+    # only need to satisfy FastAPI's dependency graph, not behave like the real stores.
+    app.dependency_overrides[get_handling_scheme] = lambda: None
+    app.dependency_overrides[get_config] = lambda: None
+    app.dependency_overrides[get_graph] = lambda: None
+    app.dependency_overrides[get_hotlists_store] = lambda: None
+    app.dependency_overrides[get_monitors_store] = lambda: None
+    app.dependency_overrides[get_patterns_store] = lambda: None
+    app.dependency_overrides[get_alerts_store] = lambda: None
 
     test_client = TestClient(app)
     test_client.working_set = working_set  # type: ignore[attr-defined]

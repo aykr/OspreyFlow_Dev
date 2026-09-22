@@ -88,7 +88,7 @@ async def test_manual_link_merges_two_nodes_and_writes_the_edge() -> None:
     service = WorkingSetService(graph, store, SCHEME)
     await store.add_nodes(INVESTIGATION, [_person("n1"), _person("n2")])
 
-    delta = await service.manual_link(INVESTIGATION, "n1", "n2", PRINCIPAL)
+    delta, _entry = await service.manual_link(INVESTIGATION, "n1", "n2", PRINCIPAL)
 
     assert delta.merged == 1
     assert delta.affected == 2
@@ -111,7 +111,7 @@ async def test_manual_split_separates_two_nodes_even_at_a_broad_threshold() -> N
     await store.add_nodes(INVESTIGATION, [_person("n1"), _person("n2")])
     await store.set_threshold(INVESTIGATION, THRESHOLD_STRICT)
 
-    delta = await service.manual_split(INVESTIGATION, "n1", "n2", PRINCIPAL)
+    delta, _entry = await service.manual_split(INVESTIGATION, "n1", "n2", PRINCIPAL)
 
     assert delta.split == 1  # 0.999 >= Strict's 0.99: merged pre-split, split by the new edge
     nodes = await store.source_fidelity_nodes(INVESTIGATION)

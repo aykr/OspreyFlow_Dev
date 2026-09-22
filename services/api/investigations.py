@@ -62,7 +62,10 @@ class InvestigationStore:
 
     @classmethod
     async def connect(cls, dsn: str) -> InvestigationStore:
-        pool = await asyncpg.create_pool(dsn=dsn)
+        # `min_size`/`max_size` — `hotlists.py::HotlistStore.connect`'s own comment has the full
+        # Stage 6c connection-ceiling reasoning. Sized larger than the control-plane stores: every
+        # investigation-scoped route depends on this one via `AuthorizedInvestigationDep`.
+        pool = await asyncpg.create_pool(dsn=dsn, min_size=2, max_size=8)
         async with pool.acquire() as conn:
             await conn.execute(_BOOTSTRAP_SQL)
         return cls(pool)
