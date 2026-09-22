@@ -1543,8 +1543,8 @@ operable from the browser or a script — all of it provable on `local-lite`.
   by a script.
 - Generated Kubernetes manifests and the per-deployment runbook.
 - The two Scenario B Glass features no earlier phase built (ADR-022): cross-case timeline overlay
-  and playback-driven snail trail (B16, B18) — small, incremental additions to Timeline and Map,
-  the components Phase 5 already shipped, not a new surface the way Phase 6a is over Phase 6.
+  and playback-driven snail trail (B16, B18) — built at their real size, not the "small, incremental"
+  size ADR-022 assumed before checking; Stage 4f's own entry, below, has the correction.
 - **The demo distribution-class registry and Fixture Corp (R24) — `06_DECISIONS.md` ADR-035.** The
   `shipped`/`internal` manifest schema, its fail-closed registry, the packaging-time exclusion gate
   (both asserting no internal demo's id/path/dataset filename reaches a built artefact, including
@@ -1560,9 +1560,22 @@ operable from the browser or a script — all of it provable on `local-lite`.
   not an ADR accepting its absence.** `07_BUILD_PLAN.md`'s own "Legacy disclosures" entry has the
   full reasoning; `08_ACCEPTANCE_SCENARIOS.md` carries the new row.
 
-**Exit.** Both acceptance scenarios pass unchanged on `local-lite`. A `backup` → `restore` cycle
-reproduces the graph from staged Parquet. An export containing an `S2`-marked item is blocked,
-names the item, and proceeds only with a recorded justification.
+**The milestone this phase exists to reach, defined once and referred to by name for the rest of
+this document:**
+
+> **V1 END TO END = both acceptance scenarios pass unchanged on `local-lite`.**
+> Nothing else is part of it.
+
+This is `08_ACCEPTANCE_SCENARIOS.md`'s own A1–A15 and B1–B21, run end to end, unchanged from their
+own written form, against the laptop profile. Every stage below is either required to reach that
+state or it is not; the split immediately following this section is exactly that test, applied to
+every stage in this phase. An `S2`-marked item blocking on export, named, proceeding only with a
+recorded justification is not a separate exit clause — it is A15's own assertion
+(`08_ACCEPTANCE_SCENARIOS.md`), already inside "both acceptance scenarios pass." A `backup` →
+`restore` cycle reproducing the graph from staged Parquet is a real capability this phase builds,
+but it is not exercised by any row in either scenario — checked directly, not assumed — so it is
+not part of the milestone; it is the harness/packaging stage's own exit criterion, stated where
+that stage now sits, after the milestone.
 
 `adapters/graph_janusgraph`, `adapters/analytics_clickhouse`, ComputePort Tier 3 and the
 `cluster` half of this phase's own former exit criterion move to Phase 8a
@@ -1571,122 +1584,21 @@ needs real multi-node infrastructure this phase's own bullet list does not, so e
 criterion is now a test it can actually run on the infrastructure it has, not a criterion split
 across two without saying so.
 
-**This phase now has the stage breakdown it has lacked for two weeks — every deferred item across
-the whole build has landed here with no ordering ever assigned to it.** Ordered by uncertainty,
-not convenience: the stage with no established shape and the least precedent to build against goes
-first, not the one that is easiest to start.
+**This phase's own stage list is split into two sections, in build order: what the milestone
+above needs, then everything else.** Restructured 22 September 2026 — nothing below was deleted
+or newly invented; only the order and the framing changed, checking each stage against the
+milestone's own literal text rather than assuming its place in the original flat numbering. Stage
+numbers are kept stable across the split (every other document in this project cites a stage by
+its own number — `4a` through `4h`, `5`, `6` — not by its position in this list), so a stage
+appearing "out of numerical order" below is the reordering working as intended, not a mistake.
 
-1. **Principal resolution — built, 22 September 2026 (`06_DECISIONS.md` ADR-043: OAuth2 Token
-   Exchange, RFC 8693).** `PrincipalResolver.resolve_for_owner`/`resolve_for_owner_detailed`
-   (`services/api/auth.py`) exchange this Conduit's own client credentials for a token minted as
-   the target `owner_id`, decoded through the existing, unchanged `resolve()` — no second
-   claims-construction path. `principal_for_owner` (`services/api/evaluation.py`, both
-   `evaluate_hotlists_for_entry` and `evaluate_monitors_for_entry`) and every one of its call
-   sites are now async (`app.py`'s `_evaluate_watches_best_effort`, and ~15 test call sites in
-   `tests/services/api/test_evaluation.py`) — the requester's own id still resolves instantly with
-   no network call; any other owner now goes through the real exchange. **Code + decision, both
-   discharged.**
+### Before the milestone
 
-   **Only one of the two halves this entry originally expected to close together actually
-   closed — checked directly, not assumed, and the record corrected rather than left overclaiming
-   it.** Cross-analyst hotlist/monitor firing (B12/B13/B14/B20's own operational case) is
-   unblocked: `test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_ingest`
-   passes, through the real `run_studio_recipe` route, two real principals, neither one the
-   other (`tests/scenarios/test_phase7_stage6c_watch_routes.py`). **Resolution-triggered monitors
-   are not — attempted directly, not left as a missing call site, and found blocked by a
-   different, more precise reason once one was actually built.** A real call site was wired
-   (`run_resolution_for_entity_type` calling `evaluate_monitors_for_entry` after publishing to the
-   change stream, threaded through `try_run_resolution_with_overlap_guard`/
-   `run_resolve_entity_type_job` and bound at job registration in `app.py`) and reverted, not kept
-   half-working: `services/api/worker.py`'s own `JobWorker._process` begins the job's transaction,
-   runs the handler, and commits only *after* the handler returns — so the evaluation call, running
-   from inside the handler, executes before the very `SAME_AS` write it exists to alert on is
-   committed. `GraphPort.match` has no transaction parameter, so it genuinely cannot see an
-   uncommitted write from inside the same handler — standard transaction-isolation behaviour, not a
-   port oversight this stage could route around. **Confirmed empirically:** the in-handler call
-   found no match and alerted nothing for a freshly-created monitor in a real test build of this
-   wiring; a second, manual call to the identical function immediately after the test's own commit
-   correctly found the match and fired the alert. `06_DECISIONS.md` ADR-037's own amendment has the
-   full record: a `GraphPort` transaction-scoped read is disqualified on correctness, not priced
-   against — a job's own transaction can still roll back after the handler returns, and reading
-   uncommitted state would let a rolled-back job raise an alert for a `SAME_AS` edge that never
-   existed. The complete fix is a durable-record consumer (evaluation reading from the change
-   stream itself, the shape ADR-037's own amendment already describes), not a post-commit hook
-   alone — correct, but a process dying between commit and hook loses that evaluation with nothing
-   recording it should have happened. **Checked against `08_ACCEPTANCE_SCENARIOS.md` directly, not
-   assumed: no Scenario B row needs a monitor to fire from resolution alone** (B20's own assertion
-   is ingest-triggered, already covered). Recorded in "Out of scope for v1" below, not inside this
-   stage or any other Phase 8 stage — nothing v1 commits to depends on it.
+Required for V1 END TO END, in build order. Stage 4, in full — the product-feature core the
+milestone is actually made of — plus the one item each from Stages 5 and 6 whose absence would
+fail a scenario; every other Stage 5/6 item is checked against the milestone below and moves, with
+the reasoning for each move stated at the point it moves.
 
-   **Exit criterion, a test — met:** `test_a_hotlist_owned_by_one_analyst_fires_from_a_different_
-   analysts_own_ingest` (`tests/scenarios/test_phase7_stage6c_watch_routes.py`) passes. The two
-   tests ADR-036 already named
-   (`test_monitor_never_fires_on_a_match_the_saving_analyst_cannot_see`,
-   `test_monitor_stops_evaluating_once_the_saving_principal_is_revoked`) still pass as
-   regressions. **The containment test the task named as the one that matters** —
-   `test_principal_for_owner_returns_exactly_that_owners_own_claims_not_a_broader_principal`
-   (`tests/services/api/test_auth.py`) — passes, and was confirmed non-vacuous by injecting a
-   broken implementation (hardcoding `requested_subject` to a broader principal's own id) and
-   observing the real failure output before reverting. **The freshness test** —
-   `test_a_revoked_principal_stops_firing_at_the_next_evaluation_no_cache_to_invalidate`
-   (`tests/services/api/test_evaluation.py`) — passes against the real mechanism, not the
-   in-memory test stand-in every other test in that file uses.
-2. **The harness / packaging pipeline** — the only stage this build's own alpha gate depends on
-   (`06_DECISIONS.md` ADR-042), and, like Stage 1, largely green-field: no packaging step, no
-   backup/restore/upgrade mechanism and no generated-manifest tooling exists anywhere in this
-   repository yet. **Code + infrastructure.** **Exit criterion, mostly a test, honestly not
-   entirely one:** ADR-034 §B7's two assertions (no private-tree file, no B5 identifier in the
-   built artefact) are mechanical and testable, the same containment-check shape already proven
-   against `scripts/mint_dev_token.py`; a scripted golden-path deploy (clean checkout → harness or
-   its CLI equivalent → a running, health-checked stack) is testable too. **Whether the six setup
-   screens are actually usable by an operator who has never seen them is a judgement, not a test —
-   said plainly rather than dressed as one; a usability pass by someone other than whoever built
-   the screens is this sub-item's own honest exit criterion.**
-
-   **New requirement, named here rather than left to be discovered while building the screens:
-   Preflight must verify the token-exchange grant `06_DECISIONS.md` ADR-043 depends on.** ADR-043
-   places part of its own containment in realm-level IdP configuration — outside this repository,
-   unversioned, invisible to `make ci` or any gate this codebase can run. Left unchecked, a
-   misconfigured or missing grant surfaces only as watches marked `"stopped"` after an evaluation
-   fails — which an operator reads as an access problem (something wrong with an analyst's own
-   clearance) rather than a deployment one (something wrong with how this instance was set up),
-   the exact wrong diagnosis for the actual fault. This is the one part of the mechanism no gate in
-   this repository can reach — `05_DEPLOYMENT.md`'s own "Preflight runs live" is the only place
-   left able to catch it before an analyst ever sees a falsely-stopped watch.
-
-   **What Preflight must assert**, alongside the environment checks `05_DEPLOYMENT.md` §"Preflight"
-   already lists (memory, disk, GPU, port availability, container runtime, cluster connectivity):
-   attempt a real token exchange for a known, disposable preflight-only test subject (not a real
-   analyst account) and confirm it succeeds; then attempt an exchange for a subject the realm's own
-   policy should refuse (a deliberately-out-of-scope or disabled test subject) and confirm it is
-   actually refused, not silently granted — the same two-sided check ADR-043's own "how an operator
-   verifies it" section already names, run automatically rather than left to a manual step someone
-   has to remember. A grant that only ever gets exercised on the happy path is unverified on the
-   half that actually matters for containment.
-
-   **What it tells the operator on failure** — the same "explains what is wrong and what to do
-   about it, with a Re-check button" standard `05_DEPLOYMENT.md` already sets for every other
-   Preflight check, applied here specifically: name it as an IdP configuration problem, not an
-   access problem — "token exchange is not correctly configured on your identity provider; watches
-   will appear stopped for every owner but the analyst who triggered them until this is fixed" —
-   distinct wording from whatever `StatusBadge` shows an analyst later, so the two failure surfaces
-   are never mistaken for the same fact by whoever reads either one first.
-3. **Documentation refresh, then the Trigger A restructure** — already the most fully specified
-   stage of the six, worked out in detail below this list rather than duplicated here. **Documentation
-   + code (two coverage gates, the licence-check leg, `doc_citations_check.py`) + two owner
-   decisions** (per-file headers; commit-SHA citations in published guides). **Also owns relocating
-   the 23 entries in "Legacy disclosures (dispositioned, relocation pending)" into wherever their
-   own stated disposition actually names** — assigned here rather than left implicit, since this
-   stage already rewrites this build plan's own structure and is the one stage with the obvious
-   reason to also do this; not a new obligation invented for this stage, the same document-hygiene
-   character as its licence/citation-check work. **Exit criterion, a test:** `tests/fixtures/
-   domain_model_coverage_allowlist.txt` and `tests/fixtures/route_coverage_allowlist.txt` are both
-   empty and deleted (`domain-model-coverage-check`/`route-coverage-check` passing against a
-   repository with no allowlist file to read is what "done" means, not a judgement that the docs
-   read well enough); every command in each of the 11 guides runs clean on a fresh checkout, per
-   this entry's own already-stated criterion above; **and "Legacy disclosures" itself is empty and
-   deleted** — the same "empty and deleted," not "empty and kept as a header," standard the two
-   allowlists already hold this stage to.
 4. **Assessment, export, the remaining Scenario B steps** — the product-feature core, following
    established patterns (evidence linking, export pipelines, handling gates) this build already has
    precedent for in earlier phases, so less uncertain than Stages 1–2 despite being the largest
@@ -1729,10 +1641,9 @@ first, not the one that is easiest to start.
      September 2026.** `06_DECISIONS.md` ADR-035 §C5 has owned Fixture Corp to Phase 8 with no
      stage since that record was written — "R24 has been the only backlog item with no owning
      phase," in its own words, and the single longest-unscheduled item in this project. It is also
-     the demo an analyst review runs against, and `06_DECISIONS.md` ADR-042 makes that review this
-     build's own only external signal before alpha — it cannot be left to 4g's own closing pass,
-     where a regression would be the first thing that finds it broken with nothing left in the
-     stage to fix it against.
+     the demo the analyst review (`docs/PRODUCT_DELIVERY.md`) runs against — it cannot be left to
+     4g's own closing pass, where a regression would be the first thing that finds it broken with
+     nothing left in the stage to fix it against.
 
      **Neither AMLSim nor gen-fraud-graph turned out to be pip-installable — checked directly, not
      assumed, once this sub-stage actually started.** AMLSim is a Java/Python source checkout with
@@ -1815,21 +1726,21 @@ first, not the one that is easiest to start.
        while a judgement's own evidence is highlighted. **Not a standalone gap — one symptom of a
        single node-state-channel shortage this document consolidates into one entry with one
        owner, Phase 8 Stage 5, alongside the on-path/selected WCAG item it shares a root cause
-       with** (this document's own "`Path.nodes`/`Path.edges`' on-path node styling" entry above,
-       its "Widened, 22 September 2026" addendum).
+       with** (this document's own "`Path.nodes`/`Path.edges`' on-path node styling" entry, in
+       "After the milestone," below, its "Widened, 22 September 2026" addendum).
      - **No `limit_exceeded`-shaped handling for a very large judgement/gap/assumption list** —
        `list_visible_judgements`/`list_for_investigation` return every row with no server-side cap
        or pagination. Checked against this stage's own realistic scale (an investigation's own
        assessment count, not a 50k-node working set) and judged low-risk rather than exempted by
        assumption — but genuinely unbounded, and `CLAUDE.md` standing rule 2 applies to any list
        this build renders, not only the canvas. **Not carried as an independent judgement call —
-       linked to Phase 8 Stage 5's own already-scoped `limit_exceeded` item below, which now builds
-       the Glass-side rendering generically (any typed `limit_exceeded` response, not only the
-       working set's) precisely so this list is a second, later consumer of the same fix rather
-       than a separate design.** The backend half specific to this list — a real cap and a typed
-       response shape for judgement/gap/assumption listing — remains genuinely unbuilt and is not
-       invented here; once Stage 5's Glass component exists, adding that backend half is the only
-       remaining work, not a second full feature.
+       linked to Phase 8 Stage 5's own already-scoped `limit_exceeded` item, in "After the
+       milestone" below, which now builds the Glass-side rendering generically (any typed
+       `limit_exceeded` response, not only the working set's) precisely so this list is a second,
+       later consumer of the same fix rather than a separate design.** The backend half specific to
+       this list — a real cap and a typed response shape for judgement/gap/assumption listing —
+       remains genuinely unbuilt and is not invented here; once Stage 5's Glass component exists,
+       adding that backend half is the only remaining work, not a second full feature.
    - **4d — Export pipeline and handling gate, backend — built, 22 September 2026.** `POST /v1/
      investigations/{id}/export` (`services/api/export.py`, `03_CONDUIT_MIDDLEWARE.md` §6): every
      node/edge evaluated against the handling scheme, a `consult_originator` item blocking by name
@@ -2129,6 +2040,175 @@ first, not the one that is easiest to start.
      Stage 4d). `SaveJudgementRequest` (`services/api/assessments.py`) shapes the wire request
      Stage 4c's own route will need, so that stage does not re-derive it, but no route exists yet.
 
+5. **Pulled forward from Stage 5, below: `PathStaleError` for the `paths()` hydration race, plus
+   the server-side traversal budget.** The one Stage 5 item whose absence could fail a scenario —
+   B21 (Stage 4g) exercises `POST /v1/paths` end to end, and a stale-path race or an unbounded
+   traversal is exactly the class of failure that row could hit. Named here as required; the rest
+   of Stage 5 is checked against the milestone at its own entry, in "After the milestone," below,
+   and moves there.
+
+6. **Pulled forward from Stage 6, below: the `Makefile`/`ci.yml` reconciliation — built, 22
+   September 2026.** A milestone defined by a green criterion needs "green" to mean one thing;
+   `Makefile`'s own `test`/`test-all` targets and `.github/workflows/ci.yml` had drifted 22 files
+   apart before this session, so a developer running `make test`/`make test-all` locally was
+   getting a materially weaker signal than CI actually enforced. `scripts/test_file_coverage_check.py`
+   (`Makefile`'s `test-file-coverage-check`, wired into `ci`) now catches this mechanically: every
+   test file reachable by some job or an explicit allowlisted exception; every live-service-marked
+   file present in *both* the fast job's `--ignore` list *and* a live-service job's own explicit
+   file list. **Resolved, not merely measured: `ci.yml` was the correct, complete list throughout,
+   and the 22 files were added to `Makefile` to match it** — `ci.yml` itself was not altered.
+   First real run found two more instances beyond the four already known
+   (`tests/scenarios/test_fixture_corp_shape.py`, `tests/services/api/test_worker.py`), both fixed
+   the same way. Ten new tests (`tests/test_test_file_coverage_check.py`). The rest of Stage 6 —
+   the lint backlog, the statelessness diagnosis, the sweeper causes, the fake-double class — is
+   checked against the milestone at its own entry, in "After the milestone," below, and moves
+   there; none of it is exercised by either acceptance scenario.
+
+### After the milestone
+
+Everything else. Recorded in full below — nothing deleted — reordered because none of it is
+required for V1 END TO END, checked against `08_ACCEPTANCE_SCENARIOS.md` directly at each item
+rather than assumed.
+
+**Why this stage sits after the milestone, stated rather than left for a reader to work out.**
+`08_ACCEPTANCE_SCENARIOS.md`'s own literal text for B12/B13/B14/B20 is a single, continuous
+session — the analyst who sets the hotlist/monitor is the same analyst whose later ingest
+triggers it, so `owner_id == requester` holds by construction and the milestone's own closing-pass
+test (Stage 4g) never exercises cross-analyst resolution at all. This stage's own real value —
+principal resolution for a *different* analyst's later action, the operational case B13 is
+actually modelled on — is genuine and already built, but is not what the milestone's own literal
+wording requires. Kept here, not deleted or downgraded; only its place in the read order changed.
+
+1. **Principal resolution — built, 22 September 2026 (`06_DECISIONS.md` ADR-043: OAuth2 Token
+   Exchange, RFC 8693).** `PrincipalResolver.resolve_for_owner`/`resolve_for_owner_detailed`
+   (`services/api/auth.py`) exchange this Conduit's own client credentials for a token minted as
+   the target `owner_id`, decoded through the existing, unchanged `resolve()` — no second
+   claims-construction path. `principal_for_owner` (`services/api/evaluation.py`, both
+   `evaluate_hotlists_for_entry` and `evaluate_monitors_for_entry`) and every one of its call
+   sites are now async (`app.py`'s `_evaluate_watches_best_effort`, and ~15 test call sites in
+   `tests/services/api/test_evaluation.py`) — the requester's own id still resolves instantly with
+   no network call; any other owner now goes through the real exchange. **Code + decision, both
+   discharged.**
+
+   **Only one of the two halves this entry originally expected to close together actually
+   closed — checked directly, not assumed, and the record corrected rather than left overclaiming
+   it.** Cross-analyst hotlist/monitor firing (B12/B13/B14/B20's own operational case) is
+   unblocked: `test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_ingest`
+   passes, through the real `run_studio_recipe` route, two real principals, neither one the
+   other (`tests/scenarios/test_phase7_stage6c_watch_routes.py`). **Resolution-triggered monitors
+   are not — attempted directly, not left as a missing call site, and found blocked by a
+   different, more precise reason once one was actually built.** A real call site was wired
+   (`run_resolution_for_entity_type` calling `evaluate_monitors_for_entry` after publishing to the
+   change stream, threaded through `try_run_resolution_with_overlap_guard`/
+   `run_resolve_entity_type_job` and bound at job registration in `app.py`) and reverted, not kept
+   half-working: `services/api/worker.py`'s own `JobWorker._process` begins the job's transaction,
+   runs the handler, and commits only *after* the handler returns — so the evaluation call, running
+   from inside the handler, executes before the very `SAME_AS` write it exists to alert on is
+   committed. `GraphPort.match` has no transaction parameter, so it genuinely cannot see an
+   uncommitted write from inside the same handler — standard transaction-isolation behaviour, not a
+   port oversight this stage could route around. **Confirmed empirically:** the in-handler call
+   found no match and alerted nothing for a freshly-created monitor in a real test build of this
+   wiring; a second, manual call to the identical function immediately after the test's own commit
+   correctly found the match and fired the alert. `06_DECISIONS.md` ADR-037's own amendment has the
+   full record: a `GraphPort` transaction-scoped read is disqualified on correctness, not priced
+   against — a job's own transaction can still roll back after the handler returns, and reading
+   uncommitted state would let a rolled-back job raise an alert for a `SAME_AS` edge that never
+   existed. The complete fix is a durable-record consumer (evaluation reading from the change
+   stream itself, the shape ADR-037's own amendment already describes), not a post-commit hook
+   alone — correct, but a process dying between commit and hook loses that evaluation with nothing
+   recording it should have happened. **Checked against `08_ACCEPTANCE_SCENARIOS.md` directly, not
+   assumed: no Scenario B row needs a monitor to fire from resolution alone** (B20's own assertion
+   is ingest-triggered, already covered). Recorded in "Out of scope for v1" below, not inside this
+   stage or any other Phase 8 stage — nothing v1 commits to depends on it.
+
+   **Exit criterion, a test — met:** `test_a_hotlist_owned_by_one_analyst_fires_from_a_different_
+   analysts_own_ingest` (`tests/scenarios/test_phase7_stage6c_watch_routes.py`) passes. The two
+   tests ADR-036 already named
+   (`test_monitor_never_fires_on_a_match_the_saving_analyst_cannot_see`,
+   `test_monitor_stops_evaluating_once_the_saving_principal_is_revoked`) still pass as
+   regressions. **The containment test the task named as the one that matters** —
+   `test_principal_for_owner_returns_exactly_that_owners_own_claims_not_a_broader_principal`
+   (`tests/services/api/test_auth.py`) — passes, and was confirmed non-vacuous by injecting a
+   broken implementation (hardcoding `requested_subject` to a broader principal's own id) and
+   observing the real failure output before reverting. **The freshness test** —
+   `test_a_revoked_principal_stops_firing_at_the_next_evaluation_no_cache_to_invalidate`
+   (`tests/services/api/test_evaluation.py`) — passes against the real mechanism, not the
+   in-memory test stand-in every other test in that file uses.
+2. **The harness / packaging pipeline** — like Stage 1, largely green-field: no packaging step, no
+   backup/restore/upgrade mechanism and no generated-manifest tooling exists anywhere in this
+   repository yet. Not required for V1 END TO END — checked directly against
+   `08_ACCEPTANCE_SCENARIOS.md`, no row in either scenario exercises packaging, backup or restore
+   — but a real capability the phase's own outcome bullets already commit to. **Code +
+   infrastructure.** **Exit criterion:** a `backup` → `restore` cycle reproduces the graph from
+   staged Parquet (Phase 8's own original outcome bullet, stated here rather than as a separate
+   milestone clause, since backup/restore is this stage's own capability, not either scenario's).
+   ADR-034 §B7's two assertions (no private-tree file in the built artefact, no B5 identifier in
+   it, including build-time version metadata) are mechanical and testable, the same
+   containment-check shape already proven against `scripts/mint_dev_token.py` — properties of this
+   pipeline producing an artefact at all, stated that way in ADR-034 itself
+   (`06_DECISIONS.md`), not as a condition on who ever receives one; `docs/PRODUCT_DELIVERY.md`
+   has the distribution-readiness framing (who receives an artefact and when) that used to sit
+   here instead. A scripted golden-path deploy (clean checkout → harness or its CLI equivalent → a
+   running, health-checked stack) is testable too. **Whether the six setup screens are actually
+   usable by an operator who has never seen them is a judgement, not a test — said plainly rather
+   than dressed as one; a usability pass by someone other than whoever built the screens is this
+   sub-item's own honest exit criterion.**
+
+   **New requirement, named here rather than left to be discovered while building the screens:
+   Preflight must verify the token-exchange grant `06_DECISIONS.md` ADR-043 depends on.** ADR-043
+   places part of its own containment in realm-level IdP configuration — outside this repository,
+   unversioned, invisible to `make ci` or any gate this codebase can run. Left unchecked, a
+   misconfigured or missing grant surfaces only as watches marked `"stopped"` after an evaluation
+   fails — which an operator reads as an access problem (something wrong with an analyst's own
+   clearance) rather than a deployment one (something wrong with how this instance was set up),
+   the exact wrong diagnosis for the actual fault. This is the one part of the mechanism no gate in
+   this repository can reach — `05_DEPLOYMENT.md`'s own "Preflight runs live" is the only place
+   left able to catch it before an analyst ever sees a falsely-stopped watch.
+
+   **What Preflight must assert**, alongside the environment checks `05_DEPLOYMENT.md` §"Preflight"
+   already lists (memory, disk, GPU, port availability, container runtime, cluster connectivity):
+   attempt a real token exchange for a known, disposable preflight-only test subject (not a real
+   analyst account) and confirm it succeeds; then attempt an exchange for a subject the realm's own
+   policy should refuse (a deliberately-out-of-scope or disabled test subject) and confirm it is
+   actually refused, not silently granted — the same two-sided check ADR-043's own "how an operator
+   verifies it" section already names, run automatically rather than left to a manual step someone
+   has to remember. A grant that only ever gets exercised on the happy path is unverified on the
+   half that actually matters for containment.
+
+   **What it tells the operator on failure** — the same "explains what is wrong and what to do
+   about it, with a Re-check button" standard `05_DEPLOYMENT.md` already sets for every other
+   Preflight check, applied here specifically: name it as an IdP configuration problem, not an
+   access problem — "token exchange is not correctly configured on your identity provider; watches
+   will appear stopped for every owner but the analyst who triggered them until this is fixed" —
+   distinct wording from whatever `StatusBadge` shows an analyst later, so the two failure surfaces
+   are never mistaken for the same fact by whoever reads either one first.
+3. **Documentation refresh, then the Trigger A restructure** — already the most fully specified
+   stage of the six, worked out in detail below this list rather than duplicated here. **Documentation
+   + code (two coverage gates, the licence-check leg, `doc_citations_check.py`) + two owner
+   decisions** (per-file headers; commit-SHA citations in published guides). **Also owns relocating
+   the 23 entries in "Legacy disclosures (dispositioned, relocation pending)" into wherever their
+   own stated disposition actually names** — assigned here rather than left implicit, since this
+   stage already rewrites this build plan's own structure and is the one stage with the obvious
+   reason to also do this; not a new obligation invented for this stage, the same document-hygiene
+   character as its licence/citation-check work. **Exit criterion, a test:** `tests/fixtures/
+   domain_model_coverage_allowlist.txt` and `tests/fixtures/route_coverage_allowlist.txt` are both
+   empty and deleted (`domain-model-coverage-check`/`route-coverage-check` passing against a
+   repository with no allowlist file to read is what "done" means, not a judgement that the docs
+   read well enough); every command in each of the 11 guides runs clean on a fresh checkout, per
+   this entry's own already-stated criterion above; **and "Legacy disclosures" itself is empty and
+   deleted** — the same "empty and deleted," not "empty and kept as a header," standard the two
+   allowlists already hold this stage to.
+**Stage 4, in full — moved to "Before the milestone," above.** Every sub-stage (4-spec,
+4a–4h) and its own detailed record now sits there, not here, since none of it is optional
+against V1 END TO END; this heading is kept only so a reader scanning stage numbers in order
+finds a pointer rather than a gap.
+
+**`PathStaleError` and the server-side traversal budget were pulled forward to "Before the
+milestone," above — B21's own `POST /v1/paths` walkthrough could hit the race or the unbounded
+traversal, so both were required, not optional.** Everything else in this stage's own list below
+was checked against `08_ACCEPTANCE_SCENARIOS.md` directly and does not gate either scenario, so it
+stays here.
+
 5. **The smaller, already-scoped code fixes** — `PathStaleError` for the `paths()` hydration race
    plus a server-side traversal budget; **`nodeAttributes.ts`'s combined on-path-and-selected
    rendering, widened 22 September 2026 into a single node-state-channel item: implement the
@@ -2153,6 +2233,11 @@ first, not the one that is easiest to start.
    disclosed it, not an open design question. **Exit criterion, a test:** each item ships with its
    own named regression test proving the specific failure its own disclosure describes, not a
    shared or generic one.
+**The `Makefile`/`ci.yml` reconciliation was pulled forward to "Before the milestone," above, and
+is already built** — a milestone defined by a green criterion needs "green" to mean the same thing
+locally and in CI. Everything else below was checked against `08_ACCEPTANCE_SCENARIOS.md` directly
+and gates neither scenario, so it stays here.
+
 6. **Test-infrastructure and CI hygiene** — the lowest-uncertainty stage: `sweep_stale_
    conformance_databases`'s three-part fix, wiring or documenting `test_tile_cache.py`/`test_
    prefetch.py`/`test_match_live.py`, resyncing `Makefile`'s `test`/`test-all` with `ci.yml`, the
@@ -2293,8 +2378,9 @@ the move:
   it is the file Trigger A moves and renames, not a different one built later.
 - `docs/DEMO_GUIDE.md`
 
-`docs/06_DECISIONS.md` and `docs/07_BUILD_PLAN.md` itself are excluded — ADR-034 §B2's own
-"excluded and private" list — and out of this step's scope.
+`docs/06_DECISIONS.md`, `docs/07_BUILD_PLAN.md` itself, and `docs/PRODUCT_DELIVERY.md` (new, 22
+September 2026, the same "excluded and private" class the other two already are — ADR-034 §B2)
+are excluded and out of this step's scope.
 
 **Exit criterion, a test rather than a judgement: every command in each guide above has been run
 on a clean checkout and produced the result the guide claims.** Any command that did not is listed
@@ -2512,22 +2598,26 @@ both runs matter.
 **This same close step is Trigger A under `06_DECISIONS.md` ADR-034** (21 September 2026, supersedes
 ADR-031 — read ADR-031 for the physical `spec`/`process` layout, ADR-034 for the licence boundary,
 the publication trigger, and everything downstream of it). Trigger A fires here and moves files; it
-does **not** fire Trigger B (publication), which is owner-instructed only, after alpha and beta
-testing, and is a new seeded repository rather than this one made public. Six deliverables are owed
-at this close step, per ADR-034, beyond the restructure itself:
+does **not** fire Trigger B (publication) — `docs/PRODUCT_DELIVERY.md` has what triggers that and
+when, not this document, since it is a distribution decision rather than a build step. Six
+deliverables are owed at this close step, per ADR-034, beyond the restructure itself:
 
 - **B3/B4 — record, do not build:** the destination account (`github.com/ospreyflow`, a personal
   account today) and the reserved-but-unclaimed `github.com/ospreyflow/ospreyflow` name stay exactly
-  as ADR-034 records them; whether the account converts to an organisation is Trigger B's own open
-  item, not this close step's.
+  as ADR-034 records them; further detail (`docs/PRODUCT_DELIVERY.md`) is a distribution question,
+  not this close step's.
 - **B5 — authorship record.** A dated authorship record, created in the private build tree at this
-  close step (ADR-034's own B6 deliverable, cross-referenced from B5) — without it, Trigger B's
-  neutral-identity squash later removes the evidence of who wrote the build along with the name.
-- **B7 — tester-artefact gates are a blocking prerequisite of Phase 8's own harness/packaging work,
-  not a follow-up to it.** The harness this phase's own outcome bullets already build must ship, from
-  its first version, with both ADR-034 assertions (no private-tree file in the artefact; no B5
-  identifier in the artefact, including in build-time version metadata) — no artefact reaches any
-  third party, alpha or beta tester included, until both exist.
+  close step (ADR-034's own B6 deliverable, cross-referenced from B5) — without it, a later
+  neutral-identity squash (`docs/PRODUCT_DELIVERY.md` has when that happens and why) removes the
+  evidence of who wrote the build along with the name.
+- **B7 — the packaging pipeline's own artefact-hygiene properties, a blocking prerequisite of Phase
+  8's own harness/packaging work, not a follow-up to it.** The harness this phase's own outcome
+  bullets already build must ship, from its first version, with both ADR-034 assertions (no
+  private-tree file in any artefact it produces; no B5 identifier in one, including in build-time
+  version metadata) — properties of producing an artefact at all, restated here and against Stage
+  2's own exit criterion, above, in exactly those terms (`06_DECISIONS.md` ADR-034 §B7 itself now
+  states them the same way). `docs/PRODUCT_DELIVERY.md` has the separate question of who receives
+  an artefact and when.
 - **`scripts/doc_citations_check.py` gains the ADR-citation scope ADR-034's own B2 finding names** —
   flagging any product-tree docstring's own `06_DECISIONS.md` ADR-number citation, since that file
   stays private past publication even though it stays inside `spec/` at this close step.
@@ -2665,8 +2755,8 @@ finding rather than rediscovering the gap.
   this specific case — B20's own assertion is "subsequent matching *ingest* raises an alert,"
   already covered by Stage 1's own ingest-triggered fix; B8/B9/B11 exercise resolution and manual
   assertion themselves, never a monitor firing from either with no ingest alongside it.
-  `06_DECISIONS.md` ADR-042 gates alpha on both acceptance scenarios passing, not on this
-  amendment's own broader "any producer" language, so nothing committed to v1 depends on this case.
+  V1 END TO END, defined above, is both acceptance scenarios passing, not this amendment's own
+  broader "any producer" language, so nothing committed to v1 depends on this case.
   The real fix (a durable-record consumer, not a synchronous in-handler call) is real, separately-
   scoped design work for whichever phase builds a proper asynchronous change-stream consumer —
   ADR-037's own amendment names the shape, not built here.
@@ -3268,12 +3358,13 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
   (`08_ACCEPTANCE_SCENARIOS.md`, this session). Owning sub-stage: Phase 8 Stage **4g**, alongside
   the closing pass, since it is new scenario coverage rather than a standalone product feature.
 
-  **Consequence, recorded rather than left implicit.** `06_DECISIONS.md` ADR-042 gates alpha on
-  both acceptance scenarios passing in their full, unchanged form on `local-lite`. B21 is now part
-  of Scenario B's own full form, so it is now part of what must be green before a tester receives
-  a build — exactly like every other row in either scenario already is. This adds to, not merely
-  records, what Stage 4g's own closing pass and Phase 8's own exit criterion must prove; accepting
-  B21 was not free.
+  **Consequence, recorded rather than left implicit.** B21 is now part of Scenario B's own full,
+  unchanged form, and V1 END TO END (defined above) is both scenarios passing in exactly that
+  form — B21 is therefore now part of what must be green to reach the milestone, exactly like
+  every other row in either scenario already is. This adds to, not merely records, what Stage 4g's
+  own closing pass and this phase's own exit criterion must prove; accepting B21 was not free. The
+  further consequence for who receives a build and when (`docs/PRODUCT_DELIVERY.md`, "The alpha
+  gate") is a distribution fact downstream of this one, not restated here.
 
 - **Two items this session found while re-establishing a clean baseline** (`docker compose down -v`
   then a single `make dev-up` then one full, uninterrupted `make test` run — not layered on top of a

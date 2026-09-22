@@ -2589,10 +2589,13 @@ through `spec/05_DEPLOYMENT.md`, `spec/08_ACCEPTANCE_SCENARIOS.md`, `spec/09_ING
 already places outside `docs/`.
 
 **Excluded and private** — the build framework: the prompt register (`.claude/`, including
-`CLAUDE.md`), the phase plan (`07_BUILD_PLAN.md`), the decision log (`06_DECISIONS.md`), design
-provenance (`DESIGN_PROVENANCE.md`), the gap inventory (contained entirely within
-`07_BUILD_PLAN.md` — no separate file), and handover documents (`SESSION_HANDOVER.md`,
-`NEXT_STEPS_PHASE7.md`, `archive/`).
+`CLAUDE.md`), the phase plan (`07_BUILD_PLAN.md`), the decision log (`06_DECISIONS.md`), the
+distribution/delivery record (`PRODUCT_DELIVERY.md`, new 22 September 2026 — the alpha gate, the
+analyst review, and every owner action described in `docs/PRODUCT_DELIVERY.md`'s own text, the
+same "how the product reaches people rather than how it gets built" material this list already
+excludes elsewhere in `07_BUILD_PLAN.md`'s own case), design provenance (`DESIGN_PROVENANCE.md`),
+the gap inventory (contained entirely within `07_BUILD_PLAN.md` — no separate file), and handover
+documents (`SESSION_HANDOVER.md`, `NEXT_STEPS_PHASE7.md`, `archive/`).
 
 **This is not the same axis as ADR-031's `spec/`/`process/` split, and the overlap needs stating
 precisely rather than left to be inferred.** ADR-031 places `06_DECISIONS.md` inside `spec/`
@@ -2746,10 +2749,15 @@ Year set at Trigger B, being the year of first publication.
 "Osprey Flow" as at 2026-09-20. Companies House availability is not trademark availability — the
 IPO register is a separate check, an owner action with months of lead time, not addressed here.
 
-### B7 — Tester-artefact gates
+### B7 — Packaging's own artefact-hygiene properties
 
-Alpha and beta testers receive a built product and never repository access. Two assertions are
-required on the packaging step, both failing the build:
+**Restated 22 September 2026, when `07_BUILD_PLAN.md` was restructured to read as construction
+only: these are properties of the packaging pipeline producing an artefact at all, not a condition
+on who receives one.** A built artefact that leaks the private build tree or an authorship
+identifier is wrong the moment it exists — the same way an access-control bug is wrong whether or
+not an unauthorised principal ever actually exploits it — independent of whether that artefact is
+ever handed to anyone. Two assertions are required on the packaging step itself, both failing the
+build:
 
 1. **No file originating in the private build tree appears in the built artefact.** If a packaging
    step copies the repository root, `docs/`/`spec/`/`process/` and `.claude/` ride along inside
@@ -2757,13 +2765,15 @@ required on the packaging step, both failing the build:
    check already run for `scripts/mint_dev_token.py`; never run for `docs/`.
 2. **No identifier from B5's set appears in the built artefact**, including whatever the build
    reads out of git for version metadata — a version string built from an author field would
-   reintroduce the name into the one thing a tester actually receives.
+   reintroduce the name into an artefact this pipeline produced.
 
 **Not addable in this session** — no packaging/harness step exists yet to attach either assertion
 to (the browser harness and its packaging pipeline are Phase 8's own outcome, not built until then).
 **Recorded here as required work owned by Trigger A**, per this ADR's own §B3: the harness that
-Phase 8 builds must ship with both assertions from its first version, not add them later, and no
-artefact may be given to any third party — alpha or beta tester included — until they exist.
+Phase 8 builds must ship with both assertions from its first version, not add them later —
+`07_BUILD_PLAN.md`'s own packaging stage states and tests them as its own exit criterion. Who an
+artefact satisfying both may then be given to, and when, is a distribution decision downstream of
+this one, recorded in `docs/PRODUCT_DELIVERY.md`, not in this ADR or in the build plan.
 
 **Cost.** Documentation only in this session: two ADR cross-references (this record, and ADR-031's
 own superseded pointer), one `07_BUILD_PLAN.md` amendment (below), and one open item added to
