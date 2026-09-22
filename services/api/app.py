@@ -2060,6 +2060,7 @@ async def submit_export_route(
     scheme: HandlingSchemeDep,
     judgements_store: JudgementsStoreDep,
     export_ledger: ExportLedgerDep,
+    working_set: WorkingSetDep,
     config: ConfigDep,
     audit: AuditDep,
 ) -> ExportResult:
@@ -2067,7 +2068,8 @@ async def submit_export_route(
     Phase 8 Stage 4d. `ExportBlockedError`/`OverrideRequiredError`/`ComplianceRoleRequiredError`
     propagate to their own handlers above; a raised exception here means nothing was written to
     the ledger and no `ExportResult` — with its required `mark` — was ever constructed
-    (`services/api/export.py::submit_export`'s own docstring)."""
+    (`services/api/export.py::submit_export`'s own docstring). `body` carries no `withheld_count`
+    field at all — `submit_export` obtains it from `working_set` itself, never from the client."""
     result = await submit_export(
         investigation_id=investigation.id,
         request=body,
@@ -2076,6 +2078,7 @@ async def submit_export_route(
         scheme=scheme,
         judgements=judgements_store,
         ledger=export_ledger,
+        working_set=working_set,
         manifest_policy=config.export_manifest_policy,
     )
     await audit.record(

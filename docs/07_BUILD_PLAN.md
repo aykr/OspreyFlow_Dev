@@ -2053,6 +2053,37 @@ first, not the one that is easiest to start.
    within this stage's own scope (in which case it is no longer excepted, and `make ci` really is
    fully green), or a specific, evidenced reason the failure can only be reproduced or fixed against
    Phase 8a's own multi-instance infrastructure, handed to that phase rather than left unexplained.
+
+   **"Resyncing `Makefile`'s `test`/`test-all` with `ci.yml`" — this stage's own bullet, above,
+   named it and left it unbuilt; built now, alongside a real mechanical gate rather than a one-time
+   resync alone.** `scripts/test_file_coverage_check.py` (`Makefile`'s `test-file-coverage-check`,
+   wired into `ci`; `.github/workflows/ci.yml`'s own job of the same name) catches the exact class
+   of gap `test_pattern_store.py`/`test_alerts.py`/`test_change_stream.py`/`test_assessment_
+   routes.py` each hit before it existed — a test file needing a real Postgres/ArcadeDB/Valkey
+   that the fast `test` job's own default collection silently picked up anyway (nothing excluded
+   it), rather than one no job ever touched, which is why a gate checking only "does some job
+   reference this file" would not have caught any of the four. Two checks: every test file
+   reachable by some job or an explicit allowlisted exception; every file whose own source imports
+   a live-service marker (`arcadedb_adapter`, `ArcadeDBClient`, `Valkey`, `asyncpg`, a real
+   `PostgresConfig.from_env()` call) present in *both* the fast job's `--ignore` list *and* a
+   live-service job's own explicit file list. **First real run found two more instances beyond the
+   four already known** — `tests/scenarios/test_fixture_corp_shape.py` (Stage 4a) and
+   `tests/services/api/test_worker.py` — run nowhere in CI since each was written; both fixed the
+   same way (added to `conformance` and to `test`'s own ignore list) and confirmed passing against
+   real services before this entry was written. **`Makefile`'s own `test`/`test-all` targets were
+   separately found 22 files out of sync with `ci.yml`** (a strict subset — every file `ci.yml`
+   correctly wires, `Makefile` silently didn't), fixed in the same change; the gate itself checks
+   `ci.yml` only, not the `Makefile` a second time — a disclosed, not silently narrower, scope:
+   `Makefile`'s own line-continuation shape is a second text format this gate does not parse, so
+   the two can drift again without the gate noticing. **Owning phase for widening the gate to check
+   `Makefile` too: whichever phase next has a concrete reason to want it** — not built speculatively
+   here, the same discipline this document already applies elsewhere. Ten new tests (`tests/
+   test_test_file_coverage_check.py`), including the two false positives this gate's own first
+   draft produced and fixed before landing (a docstring merely *naming* a marker to explain its own
+   absence; `PostgresConfig` imported only to build an inert, never-connected config object) —
+   proof that AST-based import detection, not substring search, is required for this class of
+   check, the same lesson `route_coverage_check.py`'s own ELSEWHERE-bar correction already learned
+   once for a different gate.
 7. **Export mark signing and verification — owning this phase's own residual from ADR-047's Gap 1
    ("a real escalation this record does not decide").** `06_DECISIONS.md` ADR-047 accepted that the
    export pipeline never produces an artefact without a mark, and explicitly declined to decide

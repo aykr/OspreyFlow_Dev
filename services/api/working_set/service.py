@@ -641,6 +641,23 @@ class WorkingSetService:
         edges = await self._store.source_fidelity_edges(investigation_id)
         return list(nodes.values()), list(edges.values())
 
+    async def withheld_count_for(self, investigation_id: str, principal: Principal) -> int:
+        """The export gate's own trusted source for the withheld-item manifest
+        (`06_DECISIONS.md` ADR-045, `services/api/export.py::submit_export`) — computed here,
+        server-side against `principal`'s own current access over the investigation's real,
+        unfiltered membership, never accepted from a client submission. The identical arithmetic
+        `_project` already uses for the status bar's own "N hidden by handling" figure
+        (`02_GLASS_FRONTEND.md` §2) and every delta this service emits, reused rather than a second
+        count invented for export: an artefact's own manifest should say the same thing the status
+        bar already told this analyst all session, not a second, independently-computed number
+        that could drift from it. A client-supplied count would let an artefact state that nothing
+        was withheld when items were — an active misstatement of completeness, not merely an
+        omission, which is a materially worse failure than the leak ADR-045's own `disclose`
+        default already accepts the cost of."""
+        nodes, edges = await self.current_membership(investigation_id)
+        _, _, hidden = self._project(nodes, edges, principal)
+        return hidden
+
     async def restore(
         self,
         investigation_id: str,

@@ -103,6 +103,20 @@ jobs:
       - run: uv run python scripts/route_coverage_check.py
       - run: uv run pytest tests/test_route_coverage_check.py
 
+  # Same shape, for test-file CI coverage — found four test files running in no intended job
+  # before this gate existed (test_pattern_store.py, test_alerts.py, test_change_stream.py,
+  # test_assessment_routes.py), each by accident, and two more (test_fixture_corp_shape.py,
+  # test_worker.py) on this gate's own first real run. See
+  # scripts/test_file_coverage_check.py's own docstring.
+  test-file-coverage-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - run: uv run python scripts/test_file_coverage_check.py
+      - run: uv run pytest tests/test_test_file_coverage_check.py
+
   trivy:
     runs-on: ubuntu-latest
     steps:
@@ -322,6 +336,12 @@ jobs:
       # ADR-045/046/047) — Postgres (the export ledger, the judgement store) and ArcadeDB (the
       # handling-scheme gate, the cross-session access recheck); wired in on landing, not found
       # missing later.
+      # `test_fixture_corp_shape.py` (Phase 8 Stage 4a, `06_DECISIONS.md` ADR-035 §C5) and
+      # `test_worker.py` (`JobWorker`'s own Valkey-Streams consumer-group mechanics) — found by
+      # `scripts/test_file_coverage_check.py`'s own first real run, this same change: both had
+      # run nowhere in CI since the day each was written, the identical gap class this gate exists
+      # to catch, now caught by the gate itself rather than found by accident a fifth and sixth
+      # time.
       - run: >-
           uv run pytest tests/conformance/graph_port tests/ingest
           tests/services/api/test_valkey_store.py
@@ -355,6 +375,8 @@ jobs:
           tests/services/api/test_assessment_routes.py
           tests/services/api/test_export.py
           tests/services/api/test_export_routes.py
+          tests/scenarios/test_fixture_corp_shape.py
+          tests/services/api/test_worker.py
       - run: npm ci
       # `deltaClient.integration.test.ts` (Phase 4) spawns the real
       # `services.api.app` (`apps/workspace/test/glass_test_server.py`)
@@ -605,6 +627,8 @@ jobs:
           --ignore=tests/services/api/test_assessment_routes.py
           --ignore=tests/services/api/test_export.py
           --ignore=tests/services/api/test_export_routes.py
+          --ignore=tests/scenarios/test_fixture_corp_shape.py
+          --ignore=tests/services/api/test_worker.py
       # The Glass's fast, no-live-infra unit tests (`store.test.ts`,
       # `zoomBands.test.ts`) — `*.integration.test.ts` is excluded by
       # `vitest.config.ts` and runs in the `conformance` job instead.

@@ -8,7 +8,7 @@ MYPY := .venv/bin/mypy
 # Phase 0 exit criterion (docs/07_BUILD_PLAN.md): CI green; a PR adding a GPL
 # dependency fails; a Pydantic model change not reflected in the generated
 # TypeScript fails the build. See the Phase 0 plan for what each target proves.
-ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check conformance-guard
+ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check test-file-coverage-check conformance-guard
 
 lint:
 	$(RUFF) check .
@@ -45,6 +45,14 @@ domain-model-coverage-check:
 route-coverage-check:
 	$(PY) scripts/route_coverage_check.py
 	@echo "route-coverage-check: see tests/test_route_coverage_check.py for the deterministic proof"
+
+# Found and fixed four test files running in no intended CI job — `test_pattern_store.py`,
+# `test_alerts.py`, `test_change_stream.py`, `test_assessment_routes.py` — before this gate
+# existed, each by accident. Found two more (`test_fixture_corp_shape.py`, `test_worker.py`) on
+# this gate's own first real run. See scripts/test_file_coverage_check.py's own docstring.
+test-file-coverage-check:
+	$(PY) scripts/test_file_coverage_check.py
+	@echo "test-file-coverage-check: see tests/test_test_file_coverage_check.py for the deterministic proof"
 
 trivy:
 	trivy fs --exit-code 1 --severity HIGH,CRITICAL --include-dev-deps --skip-dirs node_modules,.venv .
@@ -102,8 +110,12 @@ conformance-model-vision:
 golden-set:
 	$(PYTEST) tests/golden
 
+# Kept in sync with .github/workflows/ci.yml's own `test` job ignore list — found badly out of
+# sync (22 files ci.yml correctly wires into `conformance` were neither ignored here nor listed in
+# `test-all` below, so `make test` would attempt them with no live service up) by
+# scripts/test_file_coverage_check.py's own first real run; fixed alongside that gate landing.
 test:
-	$(PYTEST) --ignore=tests/conformance/graph_port --ignore=tests/conformance/model_port --ignore=tests/golden --ignore=tests/ingest --ignore=tests/scenarios/test_hmp_graph.py --ignore=tests/scenarios/test_witness_statement_extraction.py --ignore=tests/services/api/test_sites_store.py --ignore=tests/services/api/test_tile_cache.py --ignore=tests/services/api/test_prefetch.py --ignore=tests/geocoder/test_match_live.py --ignore=tests/services/api/test_assessments.py --ignore=tests/services/api/test_assessment_routes.py --ignore=tests/services/api/test_export.py --ignore=tests/services/api/test_export_routes.py
+	$(PYTEST) --ignore=tests/conformance/graph_port --ignore=tests/conformance/model_port --ignore=tests/golden --ignore=tests/ingest --ignore=tests/scenarios/test_hmp_graph.py --ignore=tests/scenarios/test_witness_statement_extraction.py --ignore=tests/services/api/test_sites_store.py --ignore=tests/services/api/test_tile_cache.py --ignore=tests/services/api/test_prefetch.py --ignore=tests/geocoder/test_match_live.py --ignore=tests/services/api/test_assessments.py --ignore=tests/services/api/test_assessment_routes.py --ignore=tests/services/api/test_export.py --ignore=tests/services/api/test_export_routes.py --ignore=tests/services/api/test_valkey_store.py --ignore=tests/services/api/test_statelessness.py --ignore=tests/scenarios/test_phase3_working_set.py --ignore=tests/services/api/test_change_stream.py --ignore=tests/services/api/test_alerts.py --ignore=tests/services/api/test_pattern_store.py --ignore=tests/services/api/test_hotlists.py --ignore=tests/services/api/test_monitors.py --ignore=tests/services/api/test_evaluation.py --ignore=tests/scenarios/test_phase6_extraction_and_resolution.py --ignore=tests/resolve/test_projection_access_control.py --ignore=tests/resolve/test_trigger.py --ignore=tests/scenarios/test_phase6a_glass_surfaces.py --ignore=tests/services/api/test_access.py --ignore=tests/services/api/test_dossier_access_control.py --ignore=tests/services/api/test_review.py --ignore=tests/services/api/test_review_store.py --ignore=tests/services/api/test_studio_recipes_store.py --ignore=tests/services/api/working_set/test_compute_access_control.py --ignore=tests/services/api/working_set/test_explain_cluster_access_control.py --ignore=tests/services/api/working_set/test_manual_resolution_access_control.py --ignore=tests/services/api/working_set/test_resolution_threshold_access_control.py --ignore=tests/scenarios/test_phase7_stage6c_watch_routes.py --ignore=tests/scenarios/test_fixture_corp_shape.py --ignore=tests/services/api/test_worker.py
 	npm test --workspace apps/workspace
 
 # Phase 3 (docs/07_BUILD_PLAN.md): "Add make dev-up bringing up ArcadeDB,
@@ -124,7 +136,7 @@ dev-down:
 # test:integration` (apps/workspace) is here too, not in `make test` — its
 # `deltaClient.integration.test.ts` needs the same dev-up stack.
 test-all:
-	$(PYTEST) tests/conformance/graph_port tests/conformance/model_port tests/golden tests/scenarios/test_witness_statement_extraction.py tests/ingest tests/scenarios/test_phase3_working_set.py tests/scenarios/test_hmp_graph.py tests/services/api/test_valkey_store.py tests/services/api/test_statelessness.py tests/services/api/test_sites_store.py tests/services/api/test_tile_cache.py tests/services/api/test_prefetch.py tests/geocoder/test_match_live.py tests/services/api/test_assessments.py tests/services/api/test_assessment_routes.py tests/services/api/test_export.py tests/services/api/test_export_routes.py
+	$(PYTEST) tests/conformance/graph_port tests/conformance/model_port tests/golden tests/scenarios/test_witness_statement_extraction.py tests/ingest tests/scenarios/test_phase3_working_set.py tests/scenarios/test_hmp_graph.py tests/services/api/test_valkey_store.py tests/services/api/test_statelessness.py tests/services/api/test_sites_store.py tests/services/api/test_tile_cache.py tests/services/api/test_prefetch.py tests/geocoder/test_match_live.py tests/services/api/test_assessments.py tests/services/api/test_assessment_routes.py tests/services/api/test_export.py tests/services/api/test_export_routes.py tests/services/api/test_change_stream.py tests/services/api/test_alerts.py tests/services/api/test_pattern_store.py tests/services/api/test_hotlists.py tests/services/api/test_monitors.py tests/services/api/test_evaluation.py tests/resolve/test_projection_access_control.py tests/resolve/test_trigger.py tests/scenarios/test_phase6a_glass_surfaces.py tests/services/api/test_access.py tests/services/api/test_dossier_access_control.py tests/services/api/test_review.py tests/services/api/test_review_store.py tests/services/api/test_studio_recipes_store.py tests/services/api/working_set/test_compute_access_control.py tests/services/api/working_set/test_explain_cluster_access_control.py tests/services/api/working_set/test_manual_resolution_access_control.py tests/services/api/working_set/test_resolution_threshold_access_control.py tests/scenarios/test_phase7_stage6c_watch_routes.py tests/scenarios/test_fixture_corp_shape.py tests/services/api/test_worker.py
 	npm run test:integration --workspace apps/workspace
 
 # `docs/02_GLASS_FRONTEND.md` §5's performance budget, as a CI gate

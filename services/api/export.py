@@ -52,6 +52,7 @@ from ports.graph import GraphPort
 from schemas.domain import Handling, Principal
 
 from .assessments import JudgementStore, judgement_visible_to
+from .working_set.service import WorkingSetService
 
 # --- ADR-045: the withheld-item manifest policy ----------------------------------------------
 
@@ -253,6 +254,22 @@ class ComplianceRoleRequiredError(Exception):
 
 
 class ExportLedgerEntry(BaseModel):
+    """**Metadata only — never content.** The fields below are exactly what a compliance
+    principal needs to establish, after the fact, that an export happened and that process was
+    followed: who exported, when, from which investigation, at what handling level, whether the
+    withheld-item manifest was disclosed or suppressed, and whether an override justification and
+    originator reference were recorded at all. **`justification`/`originator_reference` were
+    found and fixed as a real defect, not kept as a disclosed limitation**: the field names
+    originally carried the analyst's own free-text content — exactly the shape a `consult_
+    originator` override's own justification would naturally take ("cleared because..."), which
+    could itself name the withheld item, the originator, or other investigation content a
+    compliance principal has no clearance for, reachable through the one route
+    (`GET /v1/exports`) this system deliberately built to need none. Fixed to booleans:
+    `justification_given`/`originator_reference_given` record the *fact* an override was properly
+    recorded, never its content. The full text remains exactly where investigation-scoped access
+    already governs it — the audit stream (`services/api/app.py::submit_export_route`'s own
+    `audit.record(..., justification=body.justification)` call, `CLAUDE.md` standing rule 4)."""
+
     id: str
     investigation_id: str
     principal_id: str
@@ -262,8 +279,8 @@ class ExportLedgerEntry(BaseModel):
     item_count: int
     withheld_count: int
     manifest_policy: ExportManifestPolicy
-    justification: str | None = None
-    originator_reference: str | None = None
+    justification_given: bool = False
+    originator_reference_given: bool = False
 
 
 _LEDGER_BOOTSTRAP_SQL = """
@@ -277,8 +294,8 @@ CREATE TABLE IF NOT EXISTS export_ledger (
     item_count INTEGER NOT NULL,
     withheld_count INTEGER NOT NULL,
     manifest_policy TEXT NOT NULL,
-    justification TEXT,
-    originator_reference TEXT
+    justification_given BOOLEAN NOT NULL DEFAULT FALSE,
+    originator_reference_given BOOLEAN NOT NULL DEFAULT FALSE
 );
 CREATE INDEX IF NOT EXISTS export_ledger_investigation_id_idx ON export_ledger (investigation_id);
 """
@@ -309,7 +326,7 @@ class ExportLedgerStore:
             await conn.execute(
                 "INSERT INTO export_ledger (id, investigation_id, principal_id, artefact_kind, "
                 "handling_level, exported_at, item_count, withheld_count, manifest_policy, "
-                "justification, originator_reference) "
+                "justification_given, originator_reference_given) "
                 "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
                 entry.id,
                 entry.investigation_id,
@@ -320,8 +337,8 @@ class ExportLedgerStore:
                 entry.item_count,
                 entry.withheld_count,
                 entry.manifest_policy,
-                entry.justification,
-                entry.originator_reference,
+                entry.justification_given,
+                entry.originator_reference_given,
             )
 
     async def list_all(self, principal: Principal) -> list[ExportLedgerEntry]:
@@ -346,8 +363,8 @@ class ExportLedgerStore:
                 item_count=row["item_count"],
                 withheld_count=row["withheld_count"],
                 manifest_policy=row["manifest_policy"],
-                justification=row["justification"],
-                originator_reference=row["originator_reference"],
+                justification_given=row["justification_given"],
+                originator_reference_given=row["originator_reference_given"],
             )
             for row in rows
         ]
@@ -375,15 +392,20 @@ class ExportResult(BaseModel):
 
 
 class ExportRequest(BaseModel):
+    """No `withheld_count` field. **Found and fixed rather than left as the original disclosed
+    limitation implied it could safely stay**: a caller-supplied count is not a narrower version
+    of the real figure, it is a channel through which a client can make the manifest actively
+    misstate completeness — the exact "an artefact that silently omits material misleads its
+    reader" failure `06_DECISIONS.md` ADR-045 exists to prevent, now reachable through the one
+    field that was supposed to be reporting it. `submit_export` (below) obtains the real count
+    itself, server-side, from `WorkingSetService.withheld_count_for` — the same fix shape this
+    stage's own node-handling recheck already applied to a client-submitted `handling` block,
+    applied here to a client-submitted count instead."""
+
     artefact_kind: Literal["chart", "subgraph", "report"]
     items: list[ExportItem]
     judgement_ids: list[str] = Field(default_factory=list)
     resolution_threshold: float
-    withheld_count: int = 0  #: Supplied by the caller, not recomputed here — the same figure
-    #: `Subgraph.filtered_count` already computes at the Working-Set Service layer
-    #: (`07_BUILD_PLAN.md` Phase 3's own reasoning for why only that layer can do it safely,
-    #: without a second, less-audited query). This module's own job is disclosing it per policy,
-    #: not re-deriving it.
     justification: str | None = None
     originator_reference: str | None = None
 
@@ -397,6 +419,7 @@ async def submit_export(
     scheme: HandlingScheme,
     judgements: JudgementStore,
     ledger: ExportLedgerStore,
+    working_set: WorkingSetService,
     manifest_policy: ExportManifestPolicy,
 ) -> ExportResult:
     """The one function that produces an `ExportResult` — every artefact shape (Stage 4e) calls
@@ -450,9 +473,16 @@ async def submit_export(
         handling_level=handling_level,
     )
 
+    # The withheld count is never accepted from the client — `withheld_count_for` computes it
+    # server-side, against `principal`'s own current access over the investigation's real,
+    # unfiltered membership, the same figure the status bar already shows this analyst all
+    # session. See `WorkingSetService.withheld_count_for`'s own docstring for why a caller-supplied
+    # count was found and fixed as a real defect, not kept as a disclosed limitation.
+    withheld_count = await working_set.withheld_count_for(investigation_id, principal)
+
     manifest = ExportManifest(
         policy=manifest_policy,
-        withheld_count=request.withheld_count if manifest_policy == "disclose" else None,
+        withheld_count=withheld_count if manifest_policy == "disclose" else None,
     )
 
     entry = ExportLedgerEntry(
@@ -463,10 +493,10 @@ async def submit_export(
         handling_level=handling_level,
         exported_at=exported_at,
         item_count=len(request.items),
-        withheld_count=request.withheld_count,
+        withheld_count=withheld_count,
         manifest_policy=manifest_policy,
-        justification=request.justification,
-        originator_reference=request.originator_reference,
+        justification_given=bool(request.justification),
+        originator_reference_given=bool(request.originator_reference),
     )
     await ledger.record(entry)
 
