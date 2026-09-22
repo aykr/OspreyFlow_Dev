@@ -1,4 +1,4 @@
-.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check demo-guide-check conformance-guard conformance test dev-up dev-down test-all glass-perf glass-a11y glass-keyboard glass-map-verify
+.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check conformance-guard conformance test dev-up dev-down test-all glass-perf glass-a11y glass-keyboard glass-map-verify
 
 PY := .venv/bin/python
 PYTEST := .venv/bin/pytest
@@ -8,7 +8,7 @@ MYPY := .venv/bin/mypy
 # Phase 0 exit criterion (docs/07_BUILD_PLAN.md): CI green; a PR adding a GPL
 # dependency fails; a Pydantic model change not reflected in the generated
 # TypeScript fails the build. See the Phase 0 plan for what each target proves.
-ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check demo-guide-check conformance-guard
+ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check conformance-guard
 
 lint:
 	$(RUFF) check .
@@ -34,6 +34,17 @@ authorized-query-check:
 demo-guide-check:
 	$(PY) scripts/demo_guide_check.py
 	@echo "demo-guide-check: see tests/test_demo_guide_registry_check.py for the deterministic proof"
+
+# `07_BUILD_PLAN.md`'s Phase 8 documentation-refresh entry. Allowlists of current debt at
+# tests/fixtures/{domain_model_coverage,route_coverage}_allowlist.txt — see each script's own
+# docstring.
+domain-model-coverage-check:
+	$(PY) scripts/domain_model_coverage_check.py
+	@echo "domain-model-coverage-check: see tests/test_domain_model_coverage_check.py for the deterministic proof"
+
+route-coverage-check:
+	$(PY) scripts/route_coverage_check.py
+	@echo "route-coverage-check: see tests/test_route_coverage_check.py for the deterministic proof"
 
 trivy:
 	trivy fs --exit-code 1 --severity HIGH,CRITICAL --include-dev-deps --skip-dirs node_modules,.venv .

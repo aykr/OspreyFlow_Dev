@@ -1658,6 +1658,63 @@ the missing demo, rather than being discovered at publication. Proven non-vacuou
 synthetic entry the real guide does not carry. Wired into `Makefile`'s `ci` target as
 `demo-guide-check`, alongside `licence-check`/`authorized-query-check`.
 
+**Two more drift gates, same shape, added once the demo-guide one proved the shape works —
+covering the two areas the "what has landed" survey above found the largest gaps in.** Each pairs
+a real check (the live domain model, the live FastAPI route table — not a hand-maintained shadow
+list either could fall out of sync with) against an explicit allowlist file of currently-missing
+items, so new drift fails the build immediately while the existing debt stays enumerated and
+countable, rather than judged. **Each allowlist is this refresh step's own checklist for its axis:
+the step is complete for domain-model coverage when `tests/fixtures/
+domain_model_coverage_allowlist.txt` is empty and deleted, and complete for route coverage when
+`tests/fixtures/route_coverage_allowlist.txt` is empty and deleted — not when someone judges either
+doc close enough.**
+
+- **Domain model coverage.** `scripts/domain_model_coverage_check.py` / `tests/
+  test_domain_model_coverage_check.py::test_no_new_drift_beyond_the_allowlist` — every class in
+  `packages/schemas/domain.py` (`BaseModel`s and `StrEnum`s alike) must be named somewhere in
+  `docs/01_DOMAIN_MODEL.md`, or carry an allowlist entry. **Allowlist length at the time this gate
+  was built: 16 of 35 classes** (`PoleClass`, `PropertyType`, `PropertyDef`, `ResolutionConfig`,
+  `EntityTypeDef`, `EdgeTypeDef`, `OntologySchema`, `SchemaReport`, `ProvenanceState`, `NodeWrite`,
+  `EdgeWrite`, `SavedPattern`, `AlertMode`, `Alert`, `Hotlist`, `Monitor`) — the last four confirm
+  the "what has landed" finding above: Stage 6's own hotlist/monitor/alert entities have no
+  domain-model write-up at all.
+- **Route coverage.** `scripts/route_coverage_check.py` / `tests/
+  test_route_coverage_check.py::test_no_new_drift_beyond_the_allowlist` — every route FastAPI has
+  actually registered (imported live from `services.api.app.app`, not statically parsed) must
+  appear, after path-parameter-name normalisation, in `docs/03_CONDUIT_MIDDLEWARE.md`'s own route
+  table, or carry an allowlist entry. **Allowlist length at the time this gate was built: 49 of 66
+  routes** (`tests/fixtures/route_coverage_allowlist.txt` has the full list) — confirming the
+  survey's own finding that this is the largest gap found: the entire Ingest Studio route surface
+  (13 routes, superseded by `docs/09_INGEST_STUDIO.md` but never removed from this table), sites,
+  ontology, map, hotlists/monitors/alerts, node confirm/retract, the corpus-wide resolution trigger,
+  and pattern persistence's three routes are all missing, plus every resolution route the table
+  illustrates as a bare `/v1/resolution/...` path rather than the nested
+  `/v1/investigations/{investigation_id}/resolution/...` shape it actually is (a known, accepted
+  departure — `services/api/resolution.py`'s own docstring already discloses it — that this gate
+  still counts as debt rather than silently exempts, since the allowlist's job is to enumerate the
+  gap, not judge which instances of it are acceptable).
+
+Both proven non-vacuous the same way as the demo-guide gate: a positive case against the real
+allowlist (must stay empty of new drift) and negative cases against synthetic entries, including
+one proving a placeholder-name difference (`{id}` vs `{investigation_id}`) does **not** count as
+drift and one proving a genuinely different nesting shape **does**. Wired into `Makefile`'s `ci`
+target as `domain-model-coverage-check`/`route-coverage-check`.
+
+**Highest-consequence single item in the "what has landed" drift list above, recorded separately
+because a stand-in registry and a route table are correctness tools, not what makes this one
+urgent.** `06_DECISIONS.md` ADR-038's `strict`/`notify` disclosure-policy switch appears nowhere in
+the Apache-scoped spec — not `docs/02_GLASS_FRONTEND.md`, not `docs/01_DOMAIN_MODEL.md`, and, most
+consequentially, not `docs/05_DEPLOYMENT.md` either. This is a **deployment-time setting governing
+whether an analyst learns of a hotlist match outside their own clearance at all** — the difference
+between an alert that names nothing (`notify`) and one that is suppressed entirely (`strict`) —
+and, checked directly against `05_DEPLOYMENT.md`'s own full text, **no deployer reading this
+repository's own published operational documentation can currently discover that this switch
+exists, let alone which mode a given deployment runs in.** Every other Phase 8 documentation gap
+this entry names is a doc that has not caught up to code already built; this one is an
+operationally load-bearing decision with no public surface at all. Belongs in
+`docs/05_DEPLOYMENT.md` as a named deployment setting, and in `docs/02_GLASS_FRONTEND.md` §3.3
+alongside the hotlist paragraph it qualifies — the refresh step's own work, not fixed here.
+
 **Open item for the owner, recorded rather than decided:** whether the published guides should
 carry any commit-SHA citations at all. `06_DECISIONS.md` ADR-034 §B5 already flags that a SHA cited
 from this private repository will not resolve for a reader of the published artefact — the same

@@ -78,6 +78,31 @@ jobs:
       # tests/test_demo_guide_registry_check.py's own two negative cases.
       - run: uv run pytest tests/test_demo_guide_registry_check.py
 
+  # `07_BUILD_PLAN.md`'s Phase 8 documentation-refresh entry, same shape as demo-guide-check
+  # above: an allowlist of current debt (tests/fixtures/domain_model_coverage_allowlist.txt) so
+  # new drift fails immediately while existing debt stays enumerated and countable. See
+  # scripts/domain_model_coverage_check.py's own docstring.
+  domain-model-coverage-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - run: uv run python scripts/domain_model_coverage_check.py
+      - run: uv run pytest tests/test_domain_model_coverage_check.py
+
+  # Same shape, for `docs/03_CONDUIT_MIDDLEWARE.md`'s own route table — allowlist at
+  # tests/fixtures/route_coverage_allowlist.txt. See scripts/route_coverage_check.py's own
+  # docstring, including why paths are normalised before comparing.
+  route-coverage-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - run: uv run python scripts/route_coverage_check.py
+      - run: uv run pytest tests/test_route_coverage_check.py
+
   trivy:
     runs-on: ubuntu-latest
     steps:

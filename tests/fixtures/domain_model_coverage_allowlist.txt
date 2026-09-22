@@ -1,0 +1,21 @@
+# Classes in packages/schemas/domain.py not yet documented in docs/01_DOMAIN_MODEL.md.
+# scripts/domain_model_coverage_check.py enforces this list; 07_BUILD_PLAN.md's Phase 8
+# documentation-refresh step is complete for this axis when this file is empty and deleted.
+# One class name per line. Remove a line only once the class is actually documented — a
+# stale entry (already documented, or no longer a class in domain.py) fails the check too.
+PoleClass
+PropertyType
+PropertyDef
+ResolutionConfig
+EntityTypeDef
+EdgeTypeDef
+OntologySchema
+SchemaReport
+ProvenanceState
+NodeWrite
+EdgeWrite
+SavedPattern
+AlertMode
+Alert
+Hotlist
+Monitor
