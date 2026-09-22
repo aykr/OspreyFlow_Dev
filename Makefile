@@ -103,7 +103,7 @@ golden-set:
 	$(PYTEST) tests/golden
 
 test:
-	$(PYTEST) --ignore=tests/conformance/graph_port --ignore=tests/conformance/model_port --ignore=tests/golden --ignore=tests/ingest --ignore=tests/scenarios/test_hmp_graph.py --ignore=tests/scenarios/test_witness_statement_extraction.py --ignore=tests/services/api/test_sites_store.py --ignore=tests/services/api/test_tile_cache.py --ignore=tests/services/api/test_prefetch.py --ignore=tests/geocoder/test_match_live.py
+	$(PYTEST) --ignore=tests/conformance/graph_port --ignore=tests/conformance/model_port --ignore=tests/golden --ignore=tests/ingest --ignore=tests/scenarios/test_hmp_graph.py --ignore=tests/scenarios/test_witness_statement_extraction.py --ignore=tests/services/api/test_sites_store.py --ignore=tests/services/api/test_tile_cache.py --ignore=tests/services/api/test_prefetch.py --ignore=tests/geocoder/test_match_live.py --ignore=tests/services/api/test_assessments.py
 	npm test --workspace apps/workspace
 
 # Phase 3 (docs/07_BUILD_PLAN.md): "Add make dev-up bringing up ArcadeDB,
@@ -124,7 +124,7 @@ dev-down:
 # test:integration` (apps/workspace) is here too, not in `make test` — its
 # `deltaClient.integration.test.ts` needs the same dev-up stack.
 test-all:
-	$(PYTEST) tests/conformance/graph_port tests/conformance/model_port tests/golden tests/scenarios/test_witness_statement_extraction.py tests/ingest tests/scenarios/test_phase3_working_set.py tests/scenarios/test_hmp_graph.py tests/services/api/test_valkey_store.py tests/services/api/test_statelessness.py tests/services/api/test_sites_store.py tests/services/api/test_tile_cache.py tests/services/api/test_prefetch.py tests/geocoder/test_match_live.py
+	$(PYTEST) tests/conformance/graph_port tests/conformance/model_port tests/golden tests/scenarios/test_witness_statement_extraction.py tests/ingest tests/scenarios/test_phase3_working_set.py tests/scenarios/test_hmp_graph.py tests/services/api/test_valkey_store.py tests/services/api/test_statelessness.py tests/services/api/test_sites_store.py tests/services/api/test_tile_cache.py tests/services/api/test_prefetch.py tests/geocoder/test_match_live.py tests/services/api/test_assessments.py
 	npm run test:integration --workspace apps/workspace
 
 # `docs/02_GLASS_FRONTEND.md` §5's performance budget, as a CI gate

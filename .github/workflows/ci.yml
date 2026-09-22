@@ -308,6 +308,11 @@ jobs:
       # Phase 6a's own exit-criterion scenario (B6/B9/B10/B11) end to end. `test_review.py`/
       # `test_review_store.py`/`test_studio_recipes_store.py` are Postgres-store/business-logic
       # correctness; `test_prefetch.py`/`test_tile_cache.py` are MinIO round-trip correctness.
+      # `test_assessments.py` (Phase 8 Stage 4b, `06_DECISIONS.md` ADR-046) needs Postgres (the
+      # judgement store) and ArcadeDB (the per-citation access recheck, the review-flag loop's own
+      # `supersede_node` trigger) — the same "new service-backed tests get wired into the
+      # live-service CI job, not added to an ignore list" gate `test_alerts.py`'s own comment above
+      # already names, applied here on the same session it was named for.
       - run: >-
           uv run pytest tests/conformance/graph_port tests/ingest
           tests/services/api/test_valkey_store.py
@@ -337,6 +342,7 @@ jobs:
           tests/services/api/working_set/test_manual_resolution_access_control.py
           tests/services/api/working_set/test_resolution_threshold_access_control.py
           tests/scenarios/test_phase7_stage6c_watch_routes.py
+          tests/services/api/test_assessments.py
       - run: npm ci
       # `deltaClient.integration.test.ts` (Phase 4) spawns the real
       # `services.api.app` (`apps/workspace/test/glass_test_server.py`)
@@ -583,6 +589,7 @@ jobs:
           --ignore=tests/services/api/working_set/test_manual_resolution_access_control.py
           --ignore=tests/services/api/working_set/test_resolution_threshold_access_control.py
           --ignore=tests/scenarios/test_phase7_stage6c_watch_routes.py
+          --ignore=tests/services/api/test_assessments.py
       # The Glass's fast, no-live-infra unit tests (`store.test.ts`,
       # `zoomBands.test.ts`) — `*.integration.test.ts` is excluded by
       # `vitest.config.ts` and runs in the `conformance` job instead.

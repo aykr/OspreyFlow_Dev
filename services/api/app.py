@@ -138,6 +138,7 @@ from . import resolution_trigger as resolution_trigger_module
 from . import review as review_module
 from . import search as search_module
 from .alerts import AlertNotFoundError, AlertStore
+from .assessments import JudgementStore, flag_judgements_citing_superseded_node
 from .audit import AuditWriteError, AuditWriter
 from .auth import PrincipalResolutionError, PrincipalResolver, bearer_scheme
 from .change_stream import ChangeStreamEntry, ChangeStreamWriter
@@ -284,6 +285,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     hotlists_store = await HotlistStore.connect(config.postgres.dsn)
     monitors_store = await MonitorStore.connect(config.postgres.dsn)
     alerts_store = await AlertStore.connect(config.postgres.dsn)
+    judgements_store = await JudgementStore.connect(config.postgres.dsn)
     studio_recipes = await StudioRecipeStore.connect(config.postgres.dsn)
     extraction_candidates = await ExtractionCandidateStore.connect(config.postgres.dsn)
     litellm_client = LiteLLMClient(LiteLLMConfig.from_env())
@@ -327,6 +329,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.hotlists_store = hotlists_store
     app.state.monitors_store = monitors_store
     app.state.alerts_store = alerts_store
+    app.state.judgements_store = judgements_store
     app.state.studio_recipes = studio_recipes
     app.state.extraction_candidates = extraction_candidates
     app.state.model = model
@@ -353,7 +356,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # itself does not spin up that loop — running the worker is deployment
     # wiring (its own process/container), not additional Conduit logic.
     job_worker = JobWorker(valkey, jobs, graph)
-    job_worker.register(JOB_TYPE_SUPERSEDE_NODE, run_supersede_node_job)
+    job_worker.register(
+        JOB_TYPE_SUPERSEDE_NODE,
+        functools.partial(run_supersede_node_job, judgement_store=judgements_store),
+    )
     job_worker.register(
         JOB_TYPE_RESOLVE_ENTITY_TYPE,
         functools.partial(
@@ -381,6 +387,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await hotlists_store.close()
         await monitors_store.close()
         await alerts_store.close()
+        await judgements_store.close()
         await studio_recipes.close()
         await extraction_candidates.close()
         await litellm_client.aclose()
@@ -476,6 +483,10 @@ def get_alerts_store(request: Request) -> AlertStore:
     return request.app.state.alerts_store  # type: ignore[no-any-return]
 
 
+def get_judgements_store(request: Request) -> JudgementStore:
+    return request.app.state.judgements_store  # type: ignore[no-any-return]
+
+
 def get_studio_recipes(request: Request) -> StudioRecipeStore:
     return request.app.state.studio_recipes  # type: ignore[no-any-return]
 
@@ -545,6 +556,7 @@ ConfigDep = Annotated[ApiConfig, Depends(get_config)]
 HotlistsStoreDep = Annotated[HotlistStore, Depends(get_hotlists_store)]
 MonitorsStoreDep = Annotated[MonitorStore, Depends(get_monitors_store)]
 AlertsStoreDep = Annotated[AlertStore, Depends(get_alerts_store)]
+JudgementsStoreDep = Annotated[JudgementStore, Depends(get_judgements_store)]
 StudioRecipesDep = Annotated[StudioRecipeStore, Depends(get_studio_recipes)]
 ExtractionCandidatesDep = Annotated[ExtractionCandidateStore, Depends(get_extraction_candidates)]
 ModelDep = Annotated[ModelPort, Depends(get_model)]
@@ -1497,7 +1509,11 @@ async def get_dossier_document_route(
 
 @app.post("/v1/nodes/{node_id}/confirm")
 async def confirm_node_route(
-    node_id: str, principal: PrincipalDep, graph: GraphDep, audit: AuditDep
+    node_id: str,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    audit: AuditDep,
+    judgements: JudgementsStoreDep,
 ) -> NodeIdResponse:
     tx = await graph.begin_transaction()
     try:
@@ -1506,10 +1522,17 @@ async def confirm_node_route(
         await graph.rollback_transaction(tx)
         raise
     await graph.commit_transaction(tx)
+    # `01_DOMAIN_MODEL.md` §5's own review-flag loop: a confirmation is a content change to the
+    # node a judgement may cite as `supporting` evidence (`GraphPort.supersede_node`'s own
+    # docstring already names this route as one of its two intended callers), so it flags the same
+    # way a correction or a retraction does — within the same session, per `08_ACCEPTANCE_
+    # SCENARIOS.md`'s own "retraction propagates" assertion, generalised here to every supersede
+    # this route performs, not only a retraction specifically.
+    flagged = await flag_judgements_citing_superseded_node(judgements, node_id)
     await audit.record(
         principal=principal,
         action="confirm_node",
-        resolved_query={"node_id": node_id},
+        resolved_query={"node_id": node_id, "judgements_flagged": flagged},
         result_cardinality=1,
     )
     return NodeIdResponse(node_id=new_node_id)
@@ -1517,7 +1540,11 @@ async def confirm_node_route(
 
 @app.post("/v1/nodes/{node_id}/retract")
 async def retract_node_route(
-    node_id: str, principal: PrincipalDep, graph: GraphDep, audit: AuditDep
+    node_id: str,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    audit: AuditDep,
+    judgements: JudgementsStoreDep,
 ) -> NodeIdResponse:
     tx = await graph.begin_transaction()
     try:
@@ -1526,10 +1553,13 @@ async def retract_node_route(
         await graph.rollback_transaction(tx)
         raise
     await graph.commit_transaction(tx)
+    # See `confirm_node_route`'s own comment — the identical review-flag loop, for the case
+    # `08_ACCEPTANCE_SCENARIOS.md`'s own "retraction propagates" assertion names directly.
+    flagged = await flag_judgements_citing_superseded_node(judgements, node_id)
     await audit.record(
         principal=principal,
         action="retract_node",
-        resolved_query={"node_id": node_id},
+        resolved_query={"node_id": node_id, "judgements_flagged": flagged},
         result_cardinality=1,
     )
     return NodeIdResponse(node_id=new_node_id)

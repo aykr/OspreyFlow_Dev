@@ -18,6 +18,7 @@ from services.api.app import (
     get_extraction_candidates,
     get_graph,
     get_investigations,
+    get_judgements_store,
     get_model,
     get_ontology,
     get_principal,
@@ -212,6 +213,24 @@ class _FakeAudit:
         self.records.append(kwargs)
 
 
+class _FakeJudgements:
+    """`services/api/assessments.py::flag_judgements_citing_superseded_node`'s own store
+    interface — `confirm_node_route`/`retract_node_route` now call it on every supersede, so this
+    file's own route-wiring scope (not `assessments.py`'s real behaviour, proven with real
+    Postgres/ArcadeDB in `tests/services/api/test_assessments.py`) needs a fake that satisfies the
+    interface without a live store, the same reason this file already fakes `graph`/
+    `investigations`."""
+
+    def __init__(self) -> None:
+        self.flagged: list[str] = []
+
+    async def list_citing(self, referent_id: str) -> list[object]:
+        return []
+
+    async def flag_for_review(self, judgement_id: str, *, reason: str) -> None:
+        self.flagged.append(judgement_id)
+
+
 class _FakeInvestigations:
     async def get_authorized(self, investigation_id: str, principal: Principal) -> Investigation:
         if investigation_id != "inv-1":
@@ -241,6 +260,7 @@ def fakes():
     app.dependency_overrides[get_ontology] = lambda: ONTOLOGY
     app.dependency_overrides[get_audit] = lambda: audit
     app.dependency_overrides[get_investigations] = lambda: _FakeInvestigations()
+    app.dependency_overrides[get_judgements_store] = lambda: _FakeJudgements()
 
     client = TestClient(app)
     try:

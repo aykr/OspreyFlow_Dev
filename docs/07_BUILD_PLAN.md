@@ -1798,6 +1798,63 @@ first, not the one that is easiest to start.
    manifest switch and ADR-047's handling-encoding mark plus its own compliance ledger. Build order
    otherwise follows 4a's own precedent: nothing here is a design decision still to be made in code.
 
+   **4b — assessment objects, backend — built, 22 September 2026.** `Judgement`/`IntelligenceGap`/
+   `Assumption` persistence (`services/api/assessments.py`), the evidence-link validation A13
+   requires, the yardstick loader (`packages/ontology/yardstick.py`, `ontology/yardstick/phia.yaml`
+   shipped), ADR-046's own hidden-not-shown access rule, and the review-flag loop, wired into the
+   two real callers that exist today (`confirm_node_route`/`retract_node_route`,
+   `services/api/app.py`) and, for consistency with `GraphPort.supersede_node`'s own docstring
+   naming both intended callers, into `services/api/supersede.py`'s still-callerless
+   `submit_supersede_node`/`run_supersede_node_job` too, as an optional parameter each existing
+   test/caller is unaffected by. `tests/services/api/test_assessments.py` (9 cases) and
+   `tests/ontology/test_yardstick.py` (4 cases) all pass against real Postgres/ArcadeDB, wired into
+   the live-service CI job. The hide-in-full access check was verified non-vacuous by breaking it
+   (returning `True` unconditionally) and confirming the named test fails before restoring it — the
+   same "prove the test would catch the regression" discipline `CLAUDE.md` rule 12 asks for.
+
+   **Stage 4b known gaps, disclosed as found, not left in a code comment:**
+   - **Only a `NodeId` citation in a judgement's `supporting`/`contradicting` can be positively
+     confirmed visible.** `GraphPort` has no `get_edge` (the same absence `07_BUILD_PLAN.md`'s own
+     Phase 6 Stage 6 entry already names for a different reason), and no document store exists
+     anywhere in this build. `Judgement.supporting`/`contradicting` is `list[NodeId | EdgeId |
+     DocumentId]` (`01_DOMAIN_MODEL.md` §5) — all three collapse to plain `str` with no structural
+     way to tell them apart, so an `EdgeId`/`DocumentId` citation is treated as unreadable by
+     construction, the same fail-closed default this codebase already applies wherever it cannot
+     positively confirm access. **Consequence, stated plainly:** a judgement whose *only*
+     supporting evidence is an edge or a document is hidden from every viewer, including its own
+     author, until `GraphPort` grows a real `get_edge` (its own conformance-suite work, `CLAUDE.md`
+     rule 1) or a document store exists. **Owning phase: whichever phase first builds `GraphPort.
+     get_edge` or a document store** — not this stage, and not invented here; recorded so the next
+     reader does not mistake a permanently-hidden judgement for a bug in this stage's own access
+     check.
+   - **The review-flag loop matches a `supporting` citation's content change only, per
+     `01_DOMAIN_MODEL.md` §5's own literal text** ("When a supporting node is later split,
+     corrected or retracted, every judgement resting on it is flagged for review") — a
+     `contradicting` citation's own content change (as opposed to its *readability*, which the
+     lazy check below does cover) is not flagged. A narrower, disclosed scope decision, not an
+     oversight: broadening it is real, small, additional work (`flag_judgements_citing_superseded_
+     node`'s own `if node_id not in judgement.supporting: continue` line is the one guard to
+     relax), left to whoever next has a concrete reason to want it, per this document's own "not a
+     reason to add it speculatively" discipline elsewhere.
+   - **The unreadable-`contradicting` flag is lazy, not proactively scanned.** It is written the
+     first time a read discovers the reference has become unreadable
+     (`_flag_unreadable_contradicting_lazily`), not at the moment access actually changed — the
+     same "re-flags only on process restart" class of timing gap Phase 5a's own ontology
+     reverse-index disclosure already accepted for a different feature (§6 above), disclosed here
+     for this one. A judgement nobody reads after its `contradicting` reference becomes unreadable
+     stays unflagged indefinitely; a proactive scheduled scan would close this and is real,
+     unbuilt work, not assumed free.
+   - **`IntelligenceGap`/`Assumption` grew `investigation_id`/`created_at` fields beyond
+     `01_DOMAIN_MODEL.md` §5's own illustrative Pydantic snippet.** Both are needed for the same
+     investigation-scoped, `owning_unit`-authorized persistence `Judgement` itself needs
+     (`services/api/assessments.py`'s own module docstring) — the same "grown past its own
+     illustrative sketch" precedent `GraphPort`/`SAME_AS`/`Subgraph.filtered_count` each already
+     set, not a silent divergence from the spec.
+   - **No Glass surface, no export-gate change, and no routes.** Backend-only per this stage's own
+     scope (`02_GLASS_FRONTEND.md` §9 is Stage 4c; the export citation check ADR-046 requires is
+     Stage 4d). `SaveJudgementRequest` (`services/api/assessments.py`) shapes the wire request
+     Stage 4c's own route will need, so that stage does not re-derive it, but no route exists yet.
+
 5. **The smaller, already-scoped code fixes** — `PathStaleError` for the `paths()` hydration race
    plus a server-side traversal budget; `nodeAttributes.ts`'s combined on-path-and-selected
    rendering (the spec decision is made, `02_GLASS_FRONTEND.md` §4 — only the implementation

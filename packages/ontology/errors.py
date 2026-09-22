@@ -12,3 +12,8 @@ class OntologyError(Exception):
 class HandlingSchemeError(Exception):
     """The handling-scheme YAML is malformed or references an undefined
     code from a node/edge's `Handling` block."""
+
+
+class YardstickError(Exception):
+    """The probability-yardstick YAML (`01_DOMAIN_MODEL.md` §5) is malformed, or a probability
+    band label used by a judgement is not declared in the loaded yardstick."""

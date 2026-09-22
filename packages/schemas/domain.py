@@ -34,6 +34,9 @@ type OrgUnitId = str
 type CommunityId = str
 type CliqueScore = float
 type Vector = list[float]
+type JudgementId = str
+type GapId = str
+type AssumptionId = str
 
 
 # --- Ontology (01_DOMAIN_MODEL.md §1) -----------------------------------
@@ -545,6 +548,70 @@ class Monitor(BaseModel):
     created_at: datetime
 
 
+class Judgement(BaseModel):
+    """`01_DOMAIN_MODEL.md` §5, `06_DECISIONS.md` ADR-046 (accepted), Phase 8 Stage 4b. "A
+    judgement cannot be saved without at least one supporting reference" (§5) — enforced by
+    `services/api/assessments.py::save_judgement`, not by this model alone (a `Field(min_length=1)`
+    constraint would also reject an *update* that legitimately removes the last supporting item
+    while adding a replacement in the same call — the store's own validation composes the two
+    lists correctly; this model only shapes the row).
+
+    `supporting`/`contradicting` are references, never copies (`06_DECISIONS.md` ADR-046, following
+    ADR-039) — a `NodeId | EdgeId | DocumentId`, collapsed to `str` here the same way the domain
+    model's own illustrative type union already is (all three are opaque ULID-shaped strings with
+    no structural way to tell them apart). **Disclosed limitation, not fixed here:**
+    `GraphPort` has no `get_edge`, and no document store exists yet
+    (`07_BUILD_PLAN.md`'s own "Stage 4b known gaps" entry has the full record) — only a `NodeId`
+    citation can be positively confirmed visible today; an `EdgeId`/`DocumentId` citation is always
+    treated as unreadable by `services/api/assessments.py`'s own access check, the same fail-closed
+    default this codebase already applies everywhere else it cannot positively confirm access.
+
+    `flagged_for_review`/`flag_reason` are not in `01_DOMAIN_MODEL.md` §5's own illustrative
+    Pydantic snippet — grown past it the same way `GraphPort`, `SAME_AS`'s own properties and
+    `Subgraph.filtered_count` each already grew past their own doc's illustrative sketch
+    (`00_ARCHITECTURE.md` §2.1, `01_DOMAIN_MODEL.md` §4, §8.2's own precedent) — the review-flag
+    loop (§5: "every judgement resting on it is flagged for review") needs somewhere to persist
+    that state, and the spec names the behaviour without naming a field for it."""
+
+    id: JudgementId
+    investigation_id: str
+    statement: str
+    probability_band: str
+    supporting: list[str] = Field(default_factory=list)
+    contradicting: list[str] = Field(default_factory=list)
+    author: PrincipalId
+    created_at: datetime
+    #: Set when a cited node/edge is superseded (content change) or when a `contradicting`
+    #: reference becomes unreadable (`06_DECISIONS.md` ADR-046's own "flagged for review the same
+    #: way a content change already is") — never cleared automatically; a human reviewing the flag
+    #: is what closes the loop, not a re-run of whatever set it.
+    flagged_for_review: bool = False
+    flag_reason: str | None = None
+
+
+class IntelligenceGap(BaseModel):
+    """`01_DOMAIN_MODEL.md` §5, Phase 8 Stage 4b."""
+
+    id: GapId
+    investigation_id: str
+    question: str
+    raised_by: PrincipalId
+    linked_entities: list[NodeId] = Field(default_factory=list)
+    status: Literal["open", "tasked", "answered", "closed"] = "open"
+    created_at: datetime
+
+
+class Assumption(BaseModel):
+    """`01_DOMAIN_MODEL.md` §5, Phase 8 Stage 4b."""
+
+    id: AssumptionId
+    investigation_id: str
+    statement: str
+    if_false_impact: str
+    linked_judgements: list[JudgementId] = Field(default_factory=list)
+    created_at: datetime
+
+
 class NeighbourhoodStats(BaseModel):
     node_id: NodeId
     degree: int
@@ -604,6 +671,9 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     Alert,
     Hotlist,
     Monitor,
+    Judgement,
+    IntelligenceGap,
+    Assumption,
     NeighbourhoodStats,
     Subgraph,
     ListNodesPage,
