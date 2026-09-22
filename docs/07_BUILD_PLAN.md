@@ -1684,23 +1684,41 @@ write, reclassify, or exempt."
   (`is_not_scoped`, the script's own docstring has the full reasoning): a `StrEnum` is `NOT_SCOPED`
   (a value vocabulary, not a shaped entity) and a `<X>Write` class whose own docstring identifies
   it as `<X>`'s pre-persistence counterpart is `NOT_SCOPED` (the shape is `<X>` itself). Every
-  other class must be named somewhere in **any** Apache-scoped document, not only
-  `01_DOMAIN_MODEL.md`, or carry an allowlist entry.
+  other class must be *defined* — its fields, identity, lifecycle, access semantics, not merely its
+  name — in `01_DOMAIN_MODEL.md`, or carry an allowlist entry.
+
+  **The `ELSEWHERE` bar, corrected once, and the correction itself is the finding worth keeping.**
+  A first pass counted a class as `ELSEWHERE` if its name appeared *anywhere* in *any*
+  Apache-scoped document, and moved four classes there on that basis. Wrong bar, caught by its own
+  inconsistency: `Monitor` — introduced by the identical stage, against the identical
+  specification, as `Hotlist`/`Alert` — never appeared in a second document and stayed `GAP`; its
+  two siblings moved to a different bucket for having merely been *named* in a scenario row
+  (`08_ACCEPTANCE_SCENARIOS.md` B12/B14) or a protocol signature (`00_ARCHITECTURE.md` §2.1's
+  `async def apply_schema(self, schema: OntologySchema) -> SchemaReport: ...`) — neither defines
+  the entity's own fields, identity, lifecycle or access semantics; both are name mentions. The
+  search is single-document again (`01_DOMAIN_MODEL.md` only — the one document CLAUDE.md's own
+  routing table assigns entities to, and, checked empirically, the only one that ever actually
+  defines one), and the same bar is enforced *within* that document too: a class mentioned only on
+  a bare protocol-stub line (`_mentioned_only_in_stub_signatures`) does not count, though a full
+  `class X(BaseModel): ...` field listing — `01_DOMAIN_MODEL.md` §8's own `ExpandRequest`/
+  `PathRequest` — does.
 
   | | Count | Items |
   | --- | --- | --- |
   | `NOT_SCOPED` | 6 | `PoleClass`, `PropertyType`, `ProvenanceState`, `AlertMode` (all `StrEnum`); `NodeWrite`, `EdgeWrite` (pre-persistence counterparts of already-documented `Node`/`Edge`) |
-  | `ELSEWHERE` | 4 | `OntologySchema`, `SchemaReport` — `00_ARCHITECTURE.md` §2.1, the `GraphPort` protocol listing (`apply_schema`/`revert_schema`); `Hotlist` — `08_ACCEPTANCE_SCENARIOS.md` row B12 ("The hotlist records owner and review date"); `Alert` — `08_ACCEPTANCE_SCENARIOS.md` row B14 ("Alert workflow") |
-  | **`GAP`** | **6** | `PropertyDef`, `ResolutionConfig`, `EntityTypeDef`, `EdgeTypeDef`, `SavedPattern`, `Monitor` |
+  | `ELSEWHERE` | 0 | — |
+  | **`GAP`** | **10** | `PropertyDef`, `ResolutionConfig`, `EntityTypeDef`, `EdgeTypeDef`, `SavedPattern`, `Monitor`, `Hotlist`, `Alert`, `OntologySchema`, `SchemaReport` |
 
-  **Allowlist now holds only the 6 `GAP` entries** (down from an original, untriaged 16). Four of
-  the six ontology-schema classes moved to `GAP` rather than `ELSEWHERE` even though
-  `01_DOMAIN_MODEL.md` §1/§1.1 describes their own YAML shape in prose at length — the *concept* is
-  covered, the Pydantic *class* is never named or cross-referenced against that prose anywhere, so
-  a reader searching for `EntityTypeDef` specifically would not find it. Narrower work for the
-  refresh than writing from scratch (map five/six existing paragraphs onto the classes they already
-  describe), but still real, still `GAP` by the letter of the definition. `SavedPattern` and
-  `Monitor` have no prose coverage of any kind, anywhere.
+  **Allowlist now holds all 10 `GAP` entries** (down from an original, untriaged 16 — up from a
+  mistaken first correction of 6, once the four wrongly-`ELSEWHERE` classes moved back). Four of
+  the ten ontology-schema classes (`PropertyDef`/`ResolutionConfig`/`EntityTypeDef`/`EdgeTypeDef`,
+  plus `OntologySchema`/`SchemaReport` themselves) sit alongside `01_DOMAIN_MODEL.md` §1/§1.1's own
+  thorough prose description of the same YAML shape — the *concept* is covered, the Pydantic
+  *class* is never named or cross-referenced against that prose anywhere, so a reader searching for
+  `EntityTypeDef` specifically would not find it. Narrower work for the refresh than writing from
+  scratch (map existing paragraphs onto the classes they already describe), but still real, still
+  `GAP` by the letter of the definition. `SavedPattern`, `Monitor`, `Hotlist` and `Alert` have no
+  prose coverage of their own field shape anywhere in `01_DOMAIN_MODEL.md`.
 
 - **Route coverage.** `scripts/route_coverage_check.py` / `tests/
   test_route_coverage_check.py::test_no_new_drift_beyond_the_allowlist`. Checks every
@@ -2456,13 +2474,17 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
   (`nodeAttributes.ts:105-137`) gives both states the identical `borderSize: 2` and differs only in
   `borderColor` — for the one pair of states this applies to, colour is the sole visual means of
   distinguishing them, which is exactly what 1.4.1 prohibits regardless of how many other states
-  are involved or how minor the practical consequence. **Disclosed gap, owning phase Phase 8.** Not
-  fixed here: `02_GLASS_FRONTEND.md` §1.1/§4 is the authoritative statement of this surface's own
-  interaction-state vocabulary (nine channels, three provenance strokes, six interaction states),
-  and a size/shape distinction added only for this one pairing is a change to that vocabulary, not
-  a local code tweak — a spec decision (which non-colour channel, and whether it belongs on the
-  on-path state, the selected state, or both) rather than something to pick unreviewed. Recording
-  it, not choosing for the spec's own owner.
+  are involved or how minor the practical consequence. **Resolved, not merely disclosed** —
+  `02_GLASS_FRONTEND.md` §4's own "Node state vocabulary" table now states the fix directly: the
+  surface gap (selected) and thickened incident edges (on-path) are independent non-colour cues
+  that both apply when both states hold on one node, so stroke hue is never the sole signal
+  distinguishing the combined state from selected-alone. The spec decision this entry had left open
+  (which non-colour channel, and whether it belongs to the on-path state, the selected state, or
+  both) is answered: both, via the channel each already had — no new palette entry needed, only the
+  combined case stated explicitly rather than left implicit. `nodeAttributes.ts`'s own
+  implementation of the combined case (ensuring both cues render together, not only whichever
+  `borderColor` wins) is the remaining code-side work, owning phase **Phase 8**, narrowed from "a
+  spec decision to make" to "a spec decision already made, now to implement and test."
 
 - **The `PathBuilder`'s own `elementMap()`-inside-`path()` ArcadeDB limitation is already recorded
   correctly, not only as a workaround-site comment.** ADR-033 (`06_DECISIONS.md`) is the primary

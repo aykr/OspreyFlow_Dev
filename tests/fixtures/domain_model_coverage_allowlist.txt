@@ -1,7 +1,8 @@
-# Classes in packages/schemas/domain.py genuinely undocumented anywhere in the Apache-scoped
-# spec (GAP, not ELSEWHERE or NOT_SCOPED — scripts/domain_model_coverage_check.py's own
-# docstring has the full triage). 07_BUILD_PLAN.md's Phase 8 documentation-refresh step is
-# complete for this axis when this file is empty and deleted.
+# Classes in packages/schemas/domain.py genuinely undocumented in docs/01_DOMAIN_MODEL.md
+# (GAP, not ELSEWHERE or NOT_SCOPED — scripts/domain_model_coverage_check.py's own docstring
+# has the full triage, including why the ELSEWHERE bar moved Hotlist/Alert/OntologySchema/
+# SchemaReport back here after a first, too-loose classification). 07_BUILD_PLAN.md's Phase 8
+# documentation-refresh step is complete for this axis when this file is empty and deleted.
 # One class name per line. Remove a line only once the class is actually documented — a
 # stale entry (already documented, no longer a class in domain.py, or now NOT_SCOPED under
 # the rule) fails the check too.
@@ -11,3 +12,7 @@ EntityTypeDef
 EdgeTypeDef
 SavedPattern
 Monitor
+Hotlist
+Alert
+OntologySchema
+SchemaReport

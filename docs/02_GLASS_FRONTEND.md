@@ -338,6 +338,19 @@ Node state vocabulary, implemented once in the Sigma node program:
 | Inferred | 1.5px dashed 4-2, channel colour |
 | Unresolved | 1.5px dotted, channel colour |
 
+**Selected and on-path, combined — resolved here rather than left as a disclosed gap
+(`07_BUILD_PLAN.md`'s own Phase 8 entry had recorded the finding, not the fix).** Selected and
+on-path are both a 2px stroke, and the code that first implemented them differentiated a
+select-and-on-path node from a selected-only one by stroke hue alone — a colour-only distinction,
+WCAG 1.4.1, for that one combination. Both states already carry their own non-colour cue in the
+table above — the 1px surface gap (selected) and the thickened incident edges (on-path) — so the
+fix asks nothing new of the palette: **the two cues are independent and both apply when both
+states hold.** A selected node on the active path shows the surface gap *and* thickened incident
+edges together; stroke hue is decorative reinforcement in that combined case, never the only
+signal distinguishing it from a selected-but-off-path node. Binding on both states, not a choice
+between them — the "which state owns the non-colour channel" question the disclosed gap left open
+is answered: both, via the channel each already had.
+
 Dark is the working default. Light is a separately tuned ramp, not an inversion, and exists for
 screenshots pasted into reports and for print. Both meet the same contrast floor. An exported
 chart destined for an intelligence product should default to light.
@@ -346,6 +359,30 @@ Type: Atkinson Hyperlegible Next for interface, IBM Plex Mono for literal values
 tabular figure. The reason is operational, not aesthetic — analysts read identifiers all day and
 a confusable `1 l I` or `0 O` is a real error. Every identifier, hash, timestamp and account
 number in the product is set in mono. Mono means "this is a value you can copy."
+
+### 4.1 Error surfacing
+
+A client-side call that fails must never be dropped silently — the working set's own binding
+requirement (`06_DECISIONS.md`, standing rule 2) extended to every surface that issues a request,
+not only the canvas. Two patterns, not one, because the two classes of surface that issue a
+request are not interchangeable:
+
+- **`ActionErrorOverlay` — canvas-anchored.** A `Popover` positioned at the `x`/`y` of the
+  cursor or selection that triggered the failed action (`manualAssertion`, `expandNode`,
+  `explainCluster`, the pathfinder's own error state), Escape-dismissed like every other canvas
+  overlay. Applies where the failure is a consequence of a specific point on the canvas the
+  analyst was just looking at — the overlay's own position is part of what makes the failure
+  legible, tying it back to the node, edge or selection it came from.
+- **The panel inline banner — non-canvas surfaces.** A plain `error` state rendered as a
+  `role="alert"` paragraph inside the panel itself (`QueryBuilderPanel`'s own precedent, reused
+  by the hotlist/monitor/alert-inbox panels), not positioned relative to anything on the canvas.
+  Applies to every ordinary form-and-list panel beside the canvas — there is no cursor position or
+  selected element for the failure to anchor to, and forcing an `x`/`y` popover onto a surface with
+  neither would need an invented anchor point the failure has no real relationship to.
+
+Both satisfy the same requirement — a thrown client call is always visible, never swallowed — by
+the mechanism proper to where the request was issued from, not by one component doing double duty
+across two different kinds of surface.
 
 ## 5. Performance budget
 

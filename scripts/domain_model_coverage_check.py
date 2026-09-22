@@ -31,49 +31,49 @@ defect: a list that can never shrink to its own genuine size teaches nobody to t
 Every class in `domain.py` that is neither is a domain entity in scope for this gate, full stop —
 no third, judgement-based exclusion.
 
-**Multi-document search — the ELSEWHERE fix.** `find_undocumented` checks every Apache-scoped
-document (`06_DECISIONS.md` ADR-034 §B2's own list), not only `01_DOMAIN_MODEL.md` — a class
-belonging to the domain model conceptually can be correctly documented in `00_ARCHITECTURE.md`
-(the `GraphPort` protocol listing names `OntologySchema`/`SchemaReport` directly) or
-`08_ACCEPTANCE_SCENARIOS.md` (`Hotlist`/`Alert` both appear by name in Scenario B's own rows).
-**Disclosed, not silently accepted as precise:** this inherits the same weak, presence-only
-imprecision as every gate in this family — a class name appearing anywhere in another doc's text
-counts as "documented" even where the mention is a type reference in a signature rather than a
-description of the class's own shape (`OntologySchema`/`SchemaReport` in `00_ARCHITECTURE.md` are
-exactly this case). Narrower than that would need per-class judgement this mechanical gate does not
-make.
+**The ELSEWHERE bar, and why the search is single-document again after a first attempt got it
+wrong.** A first version of this gate counted a class as `ELSEWHERE` if its name appeared *anywhere*
+in *any* Apache-scoped document, and moved four classes there on that basis. Wrong bar: `ELSEWHERE`
+requires the named document to **define** the entity — its fields, its identity, its lifecycle, its
+access semantics — not merely mention its name. Re-examined against that bar, all four failed it:
+`OntologySchema`/`SchemaReport` appeared only inside a `GraphPort` protocol *signature* in
+`00_ARCHITECTURE.md` (`async def apply_schema(self, schema: OntologySchema) -> SchemaReport: ...`)
+— a type reference, not a definition; `Hotlist`/`Alert` appeared only in
+`08_ACCEPTANCE_SCENARIOS.md` rows describing an analyst's own action ("Add the endpoint to a
+hotlist", "Alert workflow") — a scenario step, not a domain-model entry. **The tell that the
+multi-document search itself was the defect, not the four classes:** `Monitor` — introduced by the
+identical stage, against the identical specification, as `Hotlist`/`Alert` — never appeared in any
+second document at all and so stayed correctly on `GAP`; a search that placed its two siblings in a
+different bucket for having merely been *named* somewhere was measuring document-wide word
+frequency, not documentation.
+
+**The bar, written into the rule rather than left to judgement:** `find_undocumented` checks only
+`01_DOMAIN_MODEL.md` — the one Apache-scoped document CLAUDE.md's own routing table assigns to
+"anything touching entities, edges, provenance, handling, resolution," and, checked empirically
+across this whole exercise, the *only* document that ever actually defines one. No class was found,
+in this triage, genuinely defined in a second document; a future one that genuinely is would need a
+deliberate, named exception here, not a blanket "any mention counts" search reinstated to catch a
+one-off. (`scripts/route_coverage_check.py`'s own multi-document search is not this same mistake —
+a route's own documented shape is a `METHOD /path` line, which cannot appear "incidentally" the way
+a bare class name can; a match there is definitional by construction, not merely a name mention.)
 
 **The allowlist (`tests/fixtures/domain_model_coverage_allowlist.txt`) now holds only `GAP`
-entries** — six, at the time this triage ran, down from the original 16 that mixed all three
-categories. Complete for this axis when it is empty and this file is deleted.
+entries** — ten, after this correction (six unchanged, plus `Hotlist`/`Alert`/`OntologySchema`/
+`SchemaReport` moved back from the mistaken `ELSEWHERE` classification), down from the original 16
+that mixed all three categories. Complete for this axis when it is empty and this file is deleted.
 """
 
 from __future__ import annotations
 
 import ast
+import re
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOMAIN_MODULE_PATH = REPO_ROOT / "packages" / "schemas" / "domain.py"
+DOC_PATH = REPO_ROOT / "docs" / "01_DOMAIN_MODEL.md"
 ALLOWLIST_PATH = REPO_ROOT / "tests" / "fixtures" / "domain_model_coverage_allowlist.txt"
-
-#: `06_DECISIONS.md` ADR-034 §B2's own Apache-scoped list, current (pre-Trigger-A) paths.
-APACHE_DOC_PATHS: tuple[Path, ...] = tuple(
-    REPO_ROOT / "docs" / name
-    for name in (
-        "00_ARCHITECTURE.md",
-        "01_DOMAIN_MODEL.md",
-        "02_GLASS_FRONTEND.md",
-        "03_CONDUIT_MIDDLEWARE.md",
-        "04_VAULT_BACKEND.md",
-        "05_DEPLOYMENT.md",
-        "08_ACCEPTANCE_SCENARIOS.md",
-        "09_INGEST_STUDIO.md",
-        "DEMO_GUIDE.md",
-        "README.md",
-    )
-)
 
 #: `<X>Write` classes confirmed, by reading their own docstrings, to be the pre-persistence
 #: counterpart of an already-documented class — rule 2 above. Not derived automatically from a
@@ -118,27 +118,43 @@ def load_allowlist(path: Path = ALLOWLIST_PATH) -> set[str]:
     return entries
 
 
-def _read_all_docs(doc_paths: tuple[Path, ...] = APACHE_DOC_PATHS) -> str:
-    return "\n".join(p.read_text(encoding="utf-8") for p in doc_paths if p.exists())
+#: A bare protocol/interface stub line — `async def apply_schema(self, schema: OntologySchema) ->
+#: SchemaReport: ...`, `00_ARCHITECTURE.md`'s own actual shape — carries a type *reference*, not a
+#: *definition*. A class mentioned only on lines matching this is not documented; the same class
+#: mentioned on any other line (prose, a table row, a full `class X(BaseModel): ...` field listing
+#: such as `01_DOMAIN_MODEL.md` §8's own `ExpandRequest`/`PathRequest`) is.
+_STUB_SIGNATURE_LINE = re.compile(r"^\s*(async\s+)?def\s+\w+\(.*\)\s*(->\s*\S+)?\s*:\s*\.\.\.\s*$")
 
 
-def find_undocumented(all_docs_text: str, classes: list[tuple[str, list[str]]]) -> list[str]:
-    """Every in-scope (not `is_not_scoped`) class name absent from `all_docs_text` — the full
-    undocumented set, before the allowlist is subtracted."""
+def _mentioned_only_in_stub_signatures(name: str, doc_text: str) -> bool:
+    lines_with_name = [line for line in doc_text.splitlines() if name in line]
+    if not lines_with_name:
+        return False
+    return all(_STUB_SIGNATURE_LINE.match(line) for line in lines_with_name)
+
+
+def find_undocumented(doc_text: str, classes: list[tuple[str, list[str]]]) -> list[str]:
+    """Every in-scope (not `is_not_scoped`) class name absent from `doc_text`, or present only on
+    bare protocol-stub lines (the ELSEWHERE bar's "a type in a protocol signature is not a
+    domain-model entry", applied within this one document too, not only across documents) — the
+    full undocumented set, before the allowlist is subtracted. `doc_text` is `01_DOMAIN_MODEL.md`'s
+    own text — see this module's own docstring for why the search is single-document, not every
+    Apache-scoped doc."""
     return [
         name
         for name, bases in classes
-        if not is_not_scoped(name, bases) and name not in all_docs_text
+        if not is_not_scoped(name, bases)
+        and (name not in doc_text or _mentioned_only_in_stub_signatures(name, doc_text))
     ]
 
 
 def find_stale_entries(
-    all_docs_text: str, classes: list[tuple[str, list[str]]], allowlist: set[str]
+    doc_text: str, classes: list[tuple[str, list[str]]], allowlist: set[str]
 ) -> list[str]:
     """An allowlist entry is stale if the class it names no longer exists, is now NOT_SCOPED under
-    the rule above, or the docs have caught up to it — any of these must be removed by hand."""
+    the rule above, or the doc has caught up to it — any of these must be removed by hand."""
     class_map = dict(classes)
-    undocumented = set(find_undocumented(all_docs_text, classes))
+    undocumented = set(find_undocumented(doc_text, classes))
     stale = []
     for entry in allowlist:
         if entry not in class_map:
@@ -152,18 +168,18 @@ def find_stale_entries(
 
 def main() -> int:
     classes = list_domain_classes(DOMAIN_MODULE_PATH.read_text(encoding="utf-8"))
-    all_docs_text = _read_all_docs()
+    doc_text = DOC_PATH.read_text(encoding="utf-8")
     allowlist = load_allowlist()
-    undocumented = find_undocumented(all_docs_text, classes)
+    undocumented = find_undocumented(doc_text, classes)
     new_drift = sorted(set(undocumented) - allowlist)
-    stale = find_stale_entries(all_docs_text, classes, allowlist)
+    stale = find_stale_entries(doc_text, classes, allowlist)
 
     ok = True
     if new_drift:
         ok = False
         print(
-            "domain-model-coverage-check: in-scope class(es) in domain.py not documented in any "
-            f"Apache-scoped doc and not in the allowlist: {', '.join(new_drift)}",
+            f"domain-model-coverage-check: in-scope class(es) in domain.py not documented in "
+            f"{DOC_PATH.relative_to(REPO_ROOT)} and not in the allowlist: {', '.join(new_drift)}",
             file=sys.stderr,
         )
     if stale:
