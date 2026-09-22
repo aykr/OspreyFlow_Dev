@@ -1812,16 +1812,24 @@ first, not the one that is easiest to start.
        real WebGL renderer** — corrected in `02_GLASS_FRONTEND.md` §9.2 itself, not left
        contradicting the shipped build: highlighting reuses the existing multi-node *selected*
        state instead, at the cost of not being visually distinct from a manual lasso selection
-       while a judgement's own evidence is highlighted. A dedicated highlight channel remains real,
-       undesigned work — **owning phase: none yet**, named here rather than invented a home for.
+       while a judgement's own evidence is highlighted. **Not a standalone gap — one symptom of a
+       single node-state-channel shortage this document consolidates into one entry with one
+       owner, Phase 8 Stage 5, alongside the on-path/selected WCAG item it shares a root cause
+       with** (this document's own "`Path.nodes`/`Path.edges`' on-path node styling" entry above,
+       its "Widened, 22 September 2026" addendum).
      - **No `limit_exceeded`-shaped handling for a very large judgement/gap/assumption list** —
        `list_visible_judgements`/`list_for_investigation` return every row with no server-side cap
        or pagination. Checked against this stage's own realistic scale (an investigation's own
        assessment count, not a 50k-node working set) and judged low-risk rather than exempted by
        assumption — but genuinely unbounded, and `CLAUDE.md` standing rule 2 applies to any list
-       this build renders, not only the canvas. **Owning phase: whichever phase next has a concrete
-       reason to want it** — not built speculatively here, the same "not a reason to add it
-       speculatively" discipline this document already applies elsewhere.
+       this build renders, not only the canvas. **Not carried as an independent judgement call —
+       linked to Phase 8 Stage 5's own already-scoped `limit_exceeded` item below, which now builds
+       the Glass-side rendering generically (any typed `limit_exceeded` response, not only the
+       working set's) precisely so this list is a second, later consumer of the same fix rather
+       than a separate design.** The backend half specific to this list — a real cap and a typed
+       response shape for judgement/gap/assumption listing — remains genuinely unbuilt and is not
+       invented here; once Stage 5's Glass component exists, adding that backend half is the only
+       remaining work, not a second full feature.
    - **4d — Export pipeline and handling gate, backend.** `POST /export`, the `consult_originator`
      block-by-name, the justification/originator-reference override, the withheld-item manifest,
      the Osprey mark, and — **now unblocked: `06_DECISIONS.md` ADR-047 accepted, 22 September
@@ -1941,10 +1949,19 @@ first, not the one that is easiest to start.
      Stage 4c's own route will need, so that stage does not re-derive it, but no route exists yet.
 
 5. **The smaller, already-scoped code fixes** — `PathStaleError` for the `paths()` hydration race
-   plus a server-side traversal budget; `nodeAttributes.ts`'s combined on-path-and-selected
-   rendering (the spec decision is made, `02_GLASS_FRONTEND.md` §4 — only the implementation
-   remains); `limit_exceeded`'s three options rendered in the Glass instead of a generic message;
-   the non-Latin-family-name resolver crash; **node size scaled by the active metric's own value —
+   plus a server-side traversal budget; **`nodeAttributes.ts`'s combined on-path-and-selected
+   rendering, widened 22 September 2026 into a single node-state-channel item: implement the
+   already-decided combined rendering (`02_GLASS_FRONTEND.md` §4 — the spec decision is made, only
+   the implementation remains), and design and build one genuine additional non-colour visual
+   channel the interaction-state vocabulary can spend on a third, distinct meaning — closing Stage
+   4c's own disclosed "evidence-of-judgement highlighting borrows `selected`" gap as the same fix,
+   not a second one (this document's own "Widened, 22 September 2026" addendum, above, has the
+   full reasoning for why these are one item, not two)**; `limit_exceeded`'s three options rendered
+   in the Glass **as a reusable component taking any typed `limit_exceeded` response, not
+   hardcoded to the working set's own shape — deliberately, so Stage 4b's own disclosed
+   judgement/gap/assumption-list gap becomes a second, later consumer of this same component once
+   that list gains a real backend cap, rather than a separate design done twice**; the non-Latin-
+   family-name resolver crash; **node size scaled by the active metric's own value —
    the one third of Phase 7's own metrics-panel bullet ("two-metric comparison; size encoding;
    community hull overlay") Stage 3 left unbuilt.** Real design work of its own (normalising a
    fetched value to a size range, its interaction with the existing zoom-band scaling in
@@ -2941,10 +2958,37 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
   distinguishing the combined state from selected-alone. The spec decision this entry had left open
   (which non-colour channel, and whether it belongs to the on-path state, the selected state, or
   both) is answered: both, via the channel each already had — no new palette entry needed, only the
-  combined case stated explicitly rather than left implicit. `nodeAttributes.ts`'s own
-  implementation of the combined case (ensuring both cues render together, not only whichever
-  `borderColor` wins) is the remaining code-side work, owning phase **Phase 8**, narrowed from "a
-  spec decision to make" to "a spec decision already made, now to implement and test."
+  combined case stated explicitly rather than left implicit.
+
+  **Widened, 22 September 2026, rather than left as a two-state fix a third feature would
+  immediately outgrow.** Phase 8 Stage 4c (`02_GLASS_FRONTEND.md` §9.2, "Assessment production")
+  needed to highlight a judgement's own cited evidence on the canvas and, finding no distinct
+  channel free to use, reused the existing multi-node `selected` state for it — disclosed there as
+  its own known gap, and consolidated into this entry rather than carried as a second, independent
+  one, since both are the same underlying shortage seen twice. **The root cause, stated once
+  rather than left implicit across two disclosures:** the node interaction-state vocabulary
+  (`02_GLASS_FRONTEND.md` §4's own table) has exactly one non-colour ring/stroke channel budget to
+  spend on "this node is currently notable, and here is why" — a 2px border, present or absent,
+  varied only by hue and (for on-path) a paired edge-thickening cue. Two meanings already shared
+  it, distinguished only by combining independent cues (above). A third meaning —
+  evidence-of-judgement — has nothing independent left to combine with, so it borrowed `selected`
+  outright rather than gaining its own cue, which is worse than the original two-state problem:
+  a highlighted-evidence node is now genuinely indistinguishable from an actually lasso-selected
+  one, not merely colour-ambiguous when two states happen to coincide. **Every future feature that
+  needs "this node matters, and here is why" will hit the same wall** unless the vocabulary itself
+  grows a real channel, not another borrowed one.
+
+  **One item, one owner: Phase 8 Stage 5** (`nodeAttributes.ts`'s own combined on-path-and-selected
+  rendering is already that stage's own named item, below — widened here rather than left as a
+  narrower two-state fix that a third state would need reopening the moment it landed). Stage 5's
+  own scope for this item now explicitly includes: implementing the already-decided on-path+
+  selected combined rendering (unchanged), *and* designing and building one genuine additional
+  non-colour visual channel the interaction-state vocabulary can spend on a third, distinct
+  meaning — evidence-of-judgement highlighting reuses that new channel instead of `selected` once
+  it exists, closing Stage 4c's own disclosed gap as the same fix, not a second one. **Exit
+  criterion, a test:** a node that is simultaneously selected and evidence-highlighted is
+  distinguishable from a merely-selected one by a non-colour cue, the same `axe-core`/manual-check
+  discipline `02_GLASS_FRONTEND.md` §6 already holds every other state pairing to.
 
 - **The `PathBuilder`'s own `elementMap()`-inside-`path()` ArcadeDB limitation is already recorded
   correctly, not only as a workaround-site comment.** ADR-033 (`06_DECISIONS.md`) is the primary
