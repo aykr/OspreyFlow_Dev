@@ -126,6 +126,7 @@ One later seizure record with two SIMs and a handset identifier.
 | B18 | Plot the device's sightings | Snail trail | An ordered track renders and animates under playback |
 | B19 | Expand to common contacts across the two principal endpoints | Pattern query | The intersection set is returned, with the estimated count shown before running |
 | B20 | Save the pattern as a monitor | Saved-pattern monitor | Subsequent matching ingest raises an alert with the same shape as B13 |
+| B21 | Run the pathfinder between the two principal endpoints, one from each investigation | Pathfinder | `POST /v1/paths` returns k-shortest paths through the Glass end to end; the shortest path traces the same cross-case link B16 found by timeline alone, and the on-path node state matches §3.1's own convention |
 
 ### What B1–B3 prove
 

@@ -1556,8 +1556,9 @@ operable from the browser or a script — all of it provable on `local-lite`.
   `make licence-check`'s own scope (ADR-035 §C7: Python/npm package metadata only, never a data
   file's own licence) is extended in the same pass, so a future fixture carrying its own data
   licence (ADR-035 §C6's IBM AML-Data case) does not pass unexamined the way it does today.
-- **A pathfinder acceptance-scenario step (B21, or an ADR addendum accepting its absence) —
-  `07_BUILD_PLAN.md`'s own "Legacy disclosures" entry, this session's Part A.**
+- **A pathfinder acceptance-scenario step — decided, 22 September 2026: B21 added to Scenario B,
+  not an ADR accepting its absence.** `07_BUILD_PLAN.md`'s own "Legacy disclosures" entry has the
+  full reasoning; `08_ACCEPTANCE_SCENARIOS.md` carries the new row.
 
 **Exit.** Both acceptance scenarios pass unchanged on `local-lite`. A `backup` → `restore` cycle
 reproduces the graph from staged Parquet. An export containing an `S2`-marked item is blocked,
@@ -1689,7 +1690,8 @@ first, not the one that is easiest to start.
 4. **Assessment, export, the remaining Scenario B steps** — the product-feature core, following
    established patterns (evidence linking, export pipelines, handling gates) this build already has
    precedent for in earlier phases, so less uncertain than Stages 1–2 despite being the largest
-   single body of new code. **Code**, one **decision** (B21 vs. an ADR accepting its absence).
+   single body of new code. **Code**; B21 decided (added to Scenario B, not an ADR accepting its
+   absence — this document's own "Legacy disclosures" entry below has the reasoning).
    **Exit criterion, a test — this phase's own already-stated one:** both acceptance scenarios pass
    unchanged on `local-lite` (a `test_phase8_exit_criterion_end_to_end`-shaped scenario test, the
    same pattern Phase 6's own exit criterion already uses); an export containing an `S2`-marked
@@ -1756,7 +1758,9 @@ first, not the one that is easiest to start.
    - **4f — B16 and B18.** Cross-case timeline overlay and playback-driven snail trail (ADR-022):
      "small, incremental additions to Timeline and Map," lower uncertainty than 4a–4e, no
      dependency on any open ADR above.
-   - **4g — B21 and the closing pass.** B21, decided below; then the full
+   - **4g — B21 and the closing pass.** B21 — decided, this document's own "Legacy disclosures"
+     entry below has the reasoning — exercises `POST /v1/paths` end to end through the Glass,
+     added to `08_ACCEPTANCE_SCENARIOS.md`'s own Scenario B table; then the full
      `test_phase8_exit_criterion_end_to_end`-shaped scenario test against both acceptance scenarios
      on `local-lite`, plus the S2-export-blocks test — the same closing-pass discipline Phase 6's
      Stage 6 and Phase 5a's Publish stage already used.
@@ -2739,22 +2743,32 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
   adapter still finds the full record. No move needed; this entry exists only to confirm the check
   was made rather than assumed, per this session's own A4.
 
-- **The pathfinder (`POST /v1/paths`, ADR-033) appears in no acceptance scenario, and that gap has
-  been disclosed (`07_BUILD_PLAN.md` §978-991, Phase 7's own exit-criterion note) but never
-  owned.** That note explains *why* Phase 7 can close without it (standing rule 9) and draws the
-  parallel to hotlists/saved-pattern monitors — but that parallel does not actually hold past
-  Phase 7's own close: hotlists/monitors get B20 to run against once Stage 6 lands, inside Phase 7
-  itself, while nothing anywhere commits the pathfinder to ever gaining a scenario step. Checked
-  directly, not assumed: unlike the pathfinder, both of the other two corpus-wide query surfaces the
-  Stage 5 code comment (`app.py:1509-1521`) compares itself to — `/v1/search` (B4, B5, B7) and
-  `/v1/patterns/*` (B19) — are themselves exercised by named acceptance-scenario steps, so
-  "permanently accepted, the same class as `/v1/search`" is not available as a disposition here; the
-  precedent it would lean on does not support it. **Owning phase: Phase 8.** Concretely: either add
-  a step to Scenario B (a B21, in the same "journey" table `08_ACCEPTANCE_SCENARIOS.md` §105
-  already uses) that exercises `POST /v1/paths` end to end through the Glass, or — if the owner
-  judges the pathfinder to be a general-purpose tool like search rather than a scenario-bound step —
-  record that decision explicitly as an ADR addendum at that point. Recording the gap is not owning
-  it; this entry gives it a phase.
+- **The pathfinder (`POST /v1/paths`, ADR-033) — decided, 22 September 2026: B21 added to
+  Scenario B, not an ADR accepting its absence.** The gap was disclosed (`07_BUILD_PLAN.md`
+  §978-991, Phase 7's own exit-criterion note) but never owned. That note explains *why* Phase 7
+  can close without it (standing rule 9) and draws a parallel to hotlists/saved-pattern monitors —
+  but the parallel does not hold past Phase 7's own close: hotlists/monitors get B20 to run against
+  once Stage 6 lands, inside Phase 7 itself, while nothing anywhere committed the pathfinder to
+  ever gaining a scenario step. **Checked directly, not assumed, and this is what settles the
+  decision rather than merely owning the gap:** the note's own fallback reading — the pathfinder as
+  a general-purpose tool exempt from scenario coverage, the same class as `/v1/search` — has no
+  precedent in this project that actually supports it. Unlike the pathfinder, both of the other two
+  corpus-wide query surfaces the Stage 5 code comment (`app.py:1509-1521`) compares itself to —
+  `/v1/search` (B4, B5, B7) and `/v1/patterns/*` (B19) — are themselves exercised by named
+  acceptance-scenario steps. The one thing that would have justified accepting the pathfinder's
+  absence turns out, checked rather than assumed, to argue the opposite way.
+
+  **Decision: B21 exercises `POST /v1/paths` end to end through the Glass**, added to Scenario B
+  in the same journey-table shape the other twenty rows already use
+  (`08_ACCEPTANCE_SCENARIOS.md`, this session). Owning sub-stage: Phase 8 Stage **4g**, alongside
+  the closing pass, since it is new scenario coverage rather than a standalone product feature.
+
+  **Consequence, recorded rather than left implicit.** `06_DECISIONS.md` ADR-042 gates alpha on
+  both acceptance scenarios passing in their full, unchanged form on `local-lite`. B21 is now part
+  of Scenario B's own full form, so it is now part of what must be green before a tester receives
+  a build — exactly like every other row in either scenario already is. This adds to, not merely
+  records, what Stage 4g's own closing pass and Phase 8's own exit criterion must prove; accepting
+  B21 was not free.
 
 - **Two items this session found while re-establishing a clean baseline** (`docker compose down -v`
   then a single `make dev-up` then one full, uninterrupted `make test` run — not layered on top of a
