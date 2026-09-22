@@ -4183,3 +4183,275 @@ evaluator-side write per attempt. No consumer changes required unless a consumer
 amendment names for wiring resolution) — this decision is real and accepted, but implementing it is
 separately scoped work, the same "decided, not yet built" gap this document's own discipline already
 distinguishes from "undecided."
+
+---
+
+## ADR-045 — Export withheld-item manifest and the recipient outside the boundary: proposed, decide nothing
+
+**Status.** Proposed, 22 September 2026, during Phase 8 Stage 4's own read-first pass
+(`07_BUILD_PLAN.md`, this session). Three options below; none is decided. The owner chooses.
+Stage 4c (export pipeline, handling gate) is not built until this record is accepted.
+
+**The finding that frames this record, checked rather than assumed.** `03_CONDUIT_MIDDLEWARE.md`
+§6 already commits to the manifest's shape: "Exports carry the Osprey mark, the investigation
+reference, the export timestamp, the resolution threshold in force, and a manifest of withheld
+items by count." Count only, never content or identity — the same shape `CLAUDE.md` standing
+rule 3 already accepts for the working-set status bar ("6 hidden by handling") and the delta
+protocol's `notice` operation (`03_CONDUIT_MIDDLEWARE.md` §3.2: "carries a count and never carries
+the withheld content, not even its identifiers"). The exporting analyst has already legitimately
+seen this same count, live, in the status bar for the whole session the export is drawn from — the
+manifest discloses nothing to them that the platform hasn't already shown them on screen.
+
+**What is actually undecided.** The manifest ships inside the exported artefact, which — unlike a
+live Glass session — has no session, no authenticated principal and no access boundary of its own
+once it leaves the Conduit. Its reader may be the exporting analyst's own colleague, may be an
+external stakeholder, a court, or another agency with no account in this system at all. A count
+that was safe to show a principal the platform had already authenticated and filtered for is a
+different disclosure once it travels with a file that can be forwarded to anyone. This is standing
+rule 3's own concern ("an unauthorised principal must not be able to detect a filtered node's
+existence... via degree count or histogram bucket") applied to a reader the system has no way to
+authenticate or scope at all.
+
+**Why ADR-038's `strict`/`notify` switch does not apply, checked rather than assumed.** ADR-038
+governs disclosure to one *specific, identified* principal — the hotlist owner — at alert-write
+time, and its two modes are both keyed to that principal's own access relative to the match. It
+has no concept of "the recipient of this specific export," because an export has no analogous
+identified recipient at write time — the exporting analyst chooses who eventually reads the file,
+often after the export completes, outside anything this system observes. Applying ADR-038's switch
+here would require inventing a recipient concept the export pipeline does not have and this record
+does not assume into existence.
+
+**Option (a) — the manifest ships unconditionally, exactly as `03_CONDUIT_MIDDLEWARE.md` §6
+already states.**
+- *What the recipient observes.* A count of withheld items on every exported chart, subgraph and
+  report, regardless of who eventually reads it.
+- *What leaks.* To a reader of the artefact with no principal in this system: that the underlying
+  investigation held more material than the artefact shows, and roughly how much. Nothing about
+  which items, their type, or their content.
+- *What it costs to build.* Nothing beyond Stage 4c's already-scoped work — this is the shape the
+  spec text already commits to; no new mechanism.
+- *The test that would prove it.* `test_export_manifest_reports_withheld_count_regardless_of_
+  declared_recipient` — export a working set with items filtered by handling; assert the
+  artefact's manifest carries the count with no recipient-conditional branch anywhere in the
+  export path.
+
+**Option (b) — a recipient-aware gate at export time: the exporting analyst declares an intended
+recipient class, and the manifest's presence (or its count) is conditioned on it.**
+- *What the recipient observes.* An artefact exported for internal use carries the full manifest;
+  one the analyst marks as destined for an external or lower-clearance recipient either omits the
+  manifest or reduces it to a coarser signal (e.g. "material was withheld" with no count).
+- *What leaks.* Bounded by the analyst's own declaration — but the declaration itself is
+  unverified and unenforceable once the file leaves the boundary; a mismarked or dishonest
+  declaration produces exactly option (a)'s leak with an added false sense of control.
+- *What it costs to build.* A new recipient-class concept on the export request, a second
+  manifest-rendering path, and a policy decision (mirroring ADR-038's `strict`/`notify`) for what
+  each class is allowed to see — real, undesigned work, and it introduces a control this system
+  cannot actually verify once the artefact is out.
+- *The test that would prove it.* `test_export_declared_for_external_recipient_omits_manifest_
+  count` — export the same working set twice with different declared recipient classes; assert
+  the manifest differs exactly as the declared class's own policy states, and that an unset or
+  unrecognised class fails closed to the narrowest disclosure, the same fail-closed shape
+  ADR-038's own policy switch already uses.
+
+**Option (c) — the manifest is omitted from the artefact entirely; the count is retained only in
+the Conduit's own audit record of the export.**
+- *What the recipient observes.* Nothing about withheld material at all — an artefact that looks
+  complete to anyone who reads it, whatever their access.
+- *What leaks.* Nothing to the artefact's reader — but it also silently drops the honesty
+  guarantee `02_GLASS_FRONTEND.md` §2's own rule 4 states for the live product ("the status bar
+  never lies... an analyst must never mistake a filtered picture for a complete one"), extended to
+  the exported artefact: a reader with no way to know material was withheld cannot apply the same
+  caution an analyst using the live Glass is given by design.
+- *What it costs to build.* The least new mechanism of the three — drop one field from the export
+  payload — but it is a real behavioural regression against `03_CONDUIT_MIDDLEWARE.md` §6's own
+  already-written commitment, which would need to be corrected alongside this ADR if chosen, not
+  left contradicting it.
+- *The test that would prove it.* `test_export_artefact_carries_no_withheld_count_but_audit_
+  record_does` — export a working set with handling-filtered items; assert the artefact's own
+  payload contains no manifest field, and a corresponding audit-stream entry for the same export
+  carries the count.
+
+**Revisit if.** A future deployment introduces any notion of a tracked, authenticated export
+recipient (a delivery/handover workflow rather than a downloaded file) — at which point option
+(b)'s recipient-class mechanism becomes enforceable rather than declarative-only, and this
+record's own reasoning against it (an unverifiable declaration) no longer holds.
+
+---
+
+## ADR-046 — Assessment evidence lifecycle: proposed, decide nothing
+
+**Status.** Proposed, 22 September 2026, during Phase 8 Stage 4's own read-first pass. Three
+options below; none is decided. Stage 4a (assessment objects, backend) is not built until this
+record is accepted.
+
+**What the spec already answers.** `01_DOMAIN_MODEL.md` §5 states the content-change trigger:
+"When a supporting node is later split, corrected or retracted, every judgement resting on it is
+flagged for review." This rests on the same non-mutation discipline `03_CONDUIT_MIDDLEWARE.md` §3
+already states for edges — correction goes through `supersede_node`/`supersede_edge`, never an
+in-place rewrite, "for the same reason a `Person` is never overwritten: `Judgement.supporting`/
+`contradicting` can cite a[n] [id] directly, and a correction must leave that citation resolvable
+to something rather than silently rewriting what it pointed at." A judgement's citation always
+resolves to *something*, and a content change to what it resolves to trips the review flag.
+
+**What the spec does not answer.** ADR-039 settled the access-change question for alerts:
+references not copies, access re-checked at read, an alert whose referent access is later revoked
+stays listed but goes unreadable ("marked unavailable, rather than vanishing"). Nothing in `docs/`
+states whether a judgement's cited evidence is re-checked for access the same way. ADR-039's own
+text is scoped to alerts throughout — it never claims to cover assessments, and inheriting its
+answer silently would be exactly the "an answer given only in conversation... not fixed in the
+spec" failure `CLAUDE.md` standing rule 11 exists to catch.
+
+**Why assessments are the harder case, not a smaller version of the same question.** An alert is
+transient — it fires, is read or not, and its own operational relevance fades once the
+investigation moves on. A judgement is durable by design: `01_DOMAIN_MODEL.md` §5 calls the
+assessment "the analytical product," the thing this platform exists to produce, and it is meant to
+outlive the investigation that produced it — read by a reviewer, cited in a later assessment,
+exported into a report that itself leaves the system boundary (ADR-045, above). An
+access-re-check-at-read answer that is sufficient for an alert someone glances at once may not be
+sufficient for a citation a reader returns to months later, or one that has already been baked
+into an exported artefact where no re-check is even possible (ADR-045's own finding: once
+exported, "no principal re-checks anything ever again").
+
+**Option (a) — apply ADR-039's mechanism unchanged: reference not copy, access re-checked at every
+read, unavailable-but-listed on revocation.**
+- *What the analyst observes.* A judgement whose cited evidence they can no longer access shows
+  its own statement and probability band, with the specific citation rendered as unavailable
+  rather than removed — the same shape ADR-039 Addition 2 gives a revoked alert.
+- *What it costs to build.* Extending the existing read-time recheck hook (once built for alerts)
+  to judgement/gap/assumption citations — the smallest, most consistent option, reusing a
+  mechanism rather than inventing a second one.
+- *The test that would prove it.* `test_judgement_citation_becomes_unavailable_after_referent_
+  access_is_revoked` — write a judgement citing a node visible to principal A; revoke A's access
+  to that node; read the judgement as A; assert the judgement's own statement and band still
+  render but the citation is marked unavailable, not silently dropped from `supporting`.
+
+**Option (b) — option (a), plus an independent evidence re-verification at export time, specific
+to assessments.**
+- *What the analyst observes.* The same in-session behaviour as (a); additionally, exporting a
+  judgement whose cited evidence the exporting analyst's own access no longer covers is refused or
+  flagged by the export handling gate (Stage 4c) the same way a `consult_originator` item is —
+  named specifically, not silently included.
+- *What it costs to build.* Everything option (a) costs, plus a second check inside the export
+  gate that walks every assessment's own citations, not only the canvas selection — real,
+  additional work inside Stage 4c, priced here rather than assumed to fall out of (a) for free.
+  Justified by ADR-045's own finding that export is the one point after which no further recheck
+  is possible — belt-and-braces at the last controllable moment, not a duplicate of (a)'s ongoing
+  in-session check.
+- *The test that would prove it.* `test_export_refuses_a_judgement_citing_evidence_outside_the_
+  exporting_analysts_access` — a judgement citing a node the exporting analyst cannot see; attempt
+  export; assert it is blocked and the judgement is named, the same shape A15's own
+  `consult_originator` assertion already uses.
+
+**Option (c) — capture cited evidence as a copy at judgement authorship time, not a reference.**
+- *What the analyst observes.* A judgement's evidence is exactly as it was when cited, regardless
+  of any later access change to the source node — the judgement's own evidentiary basis can never
+  become unavailable or contradict itself under a later correction.
+- *What leaks.* This directly reopens the failure ADR-039 was written to prevent: "a durable grant
+  outliving the permission that justified it." A principal who later loses access to a node would
+  still be able to read that node's content forever, frozen inside every judgement that ever cited
+  it — the same shape ADR-039's own proposal explicitly rejected for alerts, here with a
+  durability problem, not a smaller one.
+- *What it costs to build.* Cheap to build, expensive to have built: no read-time recheck needed,
+  but it is inconsistent with ADR-039's own accepted reasoning and would need its own
+  justification for why assessments are exempt from a principle just accepted for alerts.
+- *The test that would prove it.* `test_judgement_evidence_copy_remains_readable_after_referent_
+  access_is_revoked` — the test that would prove this option was chosen, and the one a reviewer
+  should treat as a regression if option (a) or (b) is chosen instead.
+
+**Revisit if.** Option (a) or (b) is chosen and a real case surfaces where a judgement's own
+evidentiary basis needs to survive a later correction to remain legally or operationally
+defensible (e.g. a tribunal record) — at which point a fourth option, an immutable audit-grade
+snapshot taken independently of the live citation (distinct from option (c)'s silent copy, and
+itself access-controlled), is the shape to design, not a reason to fall back to (c).
+
+---
+
+## ADR-047 — The Osprey export mark, and the durable record of what left the boundary: proposed, decide nothing
+
+**Status.** Proposed, 22 September 2026, during Phase 8 Stage 4's own read-first pass. Two related
+gaps, both in what happens once an export permanently leaves the system boundary; neither is
+decided here. Stage 4c is not built until both are settled.
+
+**Gap 1 — the Osprey mark is named once and defined nowhere.** `03_CONDUIT_MIDDLEWARE.md` §6
+states that "Exports carry the Osprey mark, the investigation reference, the export timestamp, the
+resolution threshold in force, and a manifest of withheld items by count" — checked directly, this
+is the only occurrence of the phrase anywhere in `docs/`. What the mark contains, and what it is
+for, is undefined. Four questions an acceptance answer must settle, not a code default:
+
+- **Does it encode handling or classification, or is it purely provenance?** A mark that states
+  the artefact's own handling level is a control a recipient can act on (know not to forward it
+  further); a mark that only records where the artefact came from (Osprey, this investigation,
+  this timestamp) is an attribution, not a control. `docs/` never says which.
+- **What does it look like on each of the three exportable artefact shapes named in
+  `07_BUILD_PLAN.md`'s Phase 8 outcome bullet — chart, subgraph, report?** A chart is an image; a
+  subgraph is structured data (presumably JSON or a graph interchange format); a report is prose
+  plus embedded evidence. A visible watermark suits an image; a structured artefact needs the same
+  information as a field, not a rendered mark; a report needs both — one mark shape does not fit
+  all three without saying how.
+- **Is it machine-readable?** A visible mark a human reads is sufficient for A15's own literal
+  assertion; a mark a receiving system could parse (to auto-apply a handling policy on ingest
+  elsewhere, for instance) is a materially larger commitment. `docs/` states neither.
+- **Is an artefact without a mark distinguishable from one that never had one?** If the mark can
+  be stripped, cropped out of an image, or omitted by an older export path, nothing states whether
+  a recipient (or this system, reading an artefact back in) can tell an unmarked file was never
+  exported through the handling gate at all, versus one that was and lost its mark afterward.
+
+**Gap 2 — nothing specifies a durable record of what left the boundary, independent of the
+Conduit's own audit stream.** `CLAUDE.md` standing rule 4 and `03_CONDUIT_MIDDLEWARE.md` §6's
+audit paragraph both require every export to be recorded in the audit stream — principal,
+timestamp, resolved query, result cardinality, and the justification where a handling boundary was
+crossed. That record is real, but it lives entirely inside the Conduit, readable only by a
+principal with access to query it. **Once the exported artefact leaves the boundary, its eventual
+reader — an external stakeholder, a court, another agency — has no way to reach that record, and
+no way this system can show them what left, by whom, or under what handling, after the fact.**
+This is, by the acceptance-scenario doc's own framing of A15, "the operation with the least
+reversibility in the product," and it is currently the one operation whose only accountability
+record is invisible to everyone except an internal principal who thinks to query the audit stream.
+
+**Options for Gap 1, the mark's content.**
+
+**Option (a) — provenance only: Osprey identifier, investigation reference, export timestamp, τ.
+No handling content.**
+- *What it costs.* Nothing beyond what §6 already lists — the mark is exactly the four fields
+  already named, formalised rather than extended.
+- *What it does not do.* Gives a recipient no way to learn the artefact's own handling level from
+  the mark itself; a recipient who needs to know how to treat the file must be told out of band.
+- *The test.* `test_export_mark_carries_provenance_fields_and_no_handling_value` — export an
+  artefact containing an `S2` item under an approved override; assert the mark's own fields never
+  include a handling or classification value.
+
+**Option (b) — provenance plus the artefact's own highest handling level, rendered and
+machine-readable.**
+- *What it costs.* A defined mark schema (not just a rendered watermark), a renderer for each of
+  the three artefact shapes, and a decision about what "highest handling level" means for an
+  artefact assembled from items at mixed levels — real design work `docs/` does not currently
+  scope.
+- *What it buys.* A recipient, or a downstream system ingesting the artefact, can act on the mark
+  directly rather than needing the originating investigation's own context.
+- *The test.* `test_export_mark_reports_the_highest_handling_level_present_in_the_artefact` —
+  export a selection mixing two handling levels; assert the mark's own machine-readable field
+  carries the higher of the two, and that a chart, a subgraph and a report export of the same
+  selection all carry the same value in their own shape's own mark location.
+
+**Options for Gap 2, the durable record.**
+
+**Option (a) — extend the existing audit stream's own export entries with a compliance-queryable
+view, no new store.** A role (not the investigation's own analyst population) can list every
+export by principal, artefact type and handling level, without needing per-investigation access to
+read individual audit entries.
+- *The test.* `test_a_compliance_principal_can_list_every_export_without_investigation_access` —
+  export from two different investigations as two different analysts; list exports as a principal
+  holding only the compliance role; assert both appear with principal, timestamp and handling, and
+  that the principal cannot read either investigation's own graph content.
+
+**Option (b) — a separate export ledger, independent of the audit stream, written transactionally
+with the export gate.** Its own store, its own retention policy (potentially longer than the audit
+stream's), explicitly designed to survive an investigation's own deletion or archival.
+- *The test.* `test_export_ledger_entry_survives_investigation_deletion` — export from an
+  investigation; delete or archive the investigation; assert the ledger entry for that export
+  still exists and is still readable by a compliance principal.
+
+**Revisit if.** Either gap surfaces a real customer requirement this record did not anticipate (a
+specific regulatory retention period, a specific machine-readable marking standard already in use
+by a customer) — at which point that requirement, not this record's own options, should drive the
+final shape.
