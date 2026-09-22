@@ -1694,6 +1694,30 @@ first, not the one that is easiest to start.
    unchanged on `local-lite` (a `test_phase8_exit_criterion_end_to_end`-shaped scenario test, the
    same pattern Phase 6's own exit criterion already uses); an export containing an `S2`-marked
    item is blocked, names the item, and proceeds only with a recorded justification.
+
+   **4-spec, a prerequisite sub-stage inserted ahead of the rest of this stage, per standing rule
+   11.** `02_GLASS_FRONTEND.md` had no section describing the Judgements tab's own contents or the
+   export surface at all — a real spec gap, not a UI detail this stage's own implementers could
+   fill in correctly by inference, since rule 11 blocks writing UI code against spec the docs don't
+   state. Closed in this session: `02_GLASS_FRONTEND.md` §9 (Assessment production) and §10
+   (Export), written against `01_DOMAIN_MODEL.md` §5 and `03_CONDUIT_MIDDLEWARE.md` §6's own
+   already-existing backend text, not invented independently of it. The rest of this stage's own
+   UI work does not start ahead of 4-spec.
+
+   **The gap this exposes: the documentation drift gates (`domain-model-coverage-check`,
+   `route-coverage-check`, Stage 3 above) catch a missing model or route, never a missing UI
+   section.** Both gates work by enumerating something mechanically real and checkable in code — a
+   Pydantic class, a live FastAPI route table — and flagging when `docs/` doesn't mention it. A
+   Glass surface has no equivalent canonical, enumerable source: "the Judgements tab needs its own
+   spec section" is not a fact derivable from a component name or a route the way "`Hotlist` needs
+   a domain-model entry" is derivable from the class existing. **A mechanical gate for this class of
+   gap is not straightforwardly possible** — building one would need a maintained registry of
+   "named UI surfaces that require documentation" in the first place, which is exactly the kind of
+   hand-maintained shadow list both existing gates were deliberately built to avoid depending on
+   (this document's own Stage 3 entry, above: "not a hand-maintained shadow list either could fall
+   out of sync with"). This gap was found by a person reading the spec against this stage's own
+   scope, the same way every other case in this document's own gaps lists was found — not by a
+   gate, and no gate proposed here would have caught it either.
 5. **The smaller, already-scoped code fixes** — `PathStaleError` for the `paths()` hydration race
    plus a server-side traversal budget; `nodeAttributes.ts`'s combined on-path-and-selected
    rendering (the spec decision is made, `02_GLASS_FRONTEND.md` §4 — only the implementation

@@ -450,3 +450,116 @@ Twenty primitives, built once, in `src/design/`:
 
 Docked panels get a hairline and no shadow; overlays get a shadow and no hairline. Never both.
 Radii: 0 for canvas and cells, 2px controls, 4px panels, 6px overlays, 999px status chips.
+
+## 9. Assessment production
+
+The HMP report is the model this platform exists to produce: a set of judgements, each resting on
+named evidence, plus explicit gaps and assumptions (`01_DOMAIN_MODEL.md` §5). "Judgements" has
+been named as one of the Inspector's five tabs (§2) since Phase 4; this section is the first place
+that names what the tab actually contains.
+
+### 9.1 The Judgements tab
+
+A `Table` (§8; headless, per §1's TanStack Table choice) listing every judgement in the current
+investigation: statement (truncated), probability band, evidence count, author. Selecting a row
+opens a `Drawer` (§8) holding the full authoring surface below. Gaps and assumptions get their own
+`Tabs` (§8) panes within the same Drawer, not separate top-level Inspector tabs — all three are one
+assessment surface, and splitting them across the Inspector's own limited tab budget would scatter
+a single analytical object across three places.
+
+**Judgement authoring.** Statement (`Input`, multi-line); probability band via `Select`, populated
+from the active deployment's yardstick file (§9.3); an evidence picker drawing from the current
+canvas selection or `Combobox` search, split into `supporting`/`contradicting`
+(`01_DOMAIN_MODEL.md` §5's own field names). **A judgement cannot be saved with zero supporting
+references** — A13's own literal assertion — so the `Save` `Button` is disabled, not merely
+validated on submit, until at least one evidence item is attached: the constraint is visible
+before the analyst attempts to save, per §7's own copy-rule discipline of saying what will happen
+rather than erroring after the fact.
+
+**Gap authoring.** Question (`Input`); linked entities via multi-select from the canvas selection;
+status via `Select` (`open`/`tasked`/`answered`/`closed`, `01_DOMAIN_MODEL.md` §5's
+`IntelligenceGap.status`).
+
+**Assumption authoring.** Statement (`Input`); `if_false_impact` (`Input`, free text — the
+domain model's own field, carried through verbatim rather than renamed for the UI); linked
+judgements via multi-select against the investigation's own judgement list.
+
+### 9.2 Bidirectional evidence highlighting
+
+- Selecting a judgement highlights its own `supporting`/`contradicting` items on the canvas, reusing
+  the existing "8% channel opacity" overlay convention (§1.1's community hulls, and the message-span
+  highlighting Stage 4 already established there) rather than inventing a fourth visual language for
+  "this is relevant, not selected."
+- Selecting a node lists, in the Judgements tab, every judgement resting on it —
+  `01_DOMAIN_MODEL.md` §5's own "selecting a node lists the judgements that rest on it," given a
+  concrete surface for the first time.
+- A citation whose evidence has become inaccessible renders as a distinct "unavailable" state, never
+  silently dropped from the list — the mechanism this section commits to; which trigger produces
+  that state (an access change, a content change, or both) is `06_DECISIONS.md` ADR-046's own open
+  question, not assumed here.
+
+### 9.3 Yardstick display
+
+The active deployment's yardstick (`01_DOMAIN_MODEL.md` §5, `ontology/yardstick/*.yaml`) renders as
+a fixed reference strip inside the judgement authoring `Drawer` — band label and numeric range — so
+an analyst chooses against the organisation's own configured scale, never one hardcoded into the
+component. The band `Select`'s own options are generated from the loaded yardstick file; swapping
+the file changes the options with no Glass code change, matching `01_DOMAIN_MODEL.md` §5's "a
+revision is a config change."
+
+### 9.4 Review flag
+
+A judgement flagged for review (`01_DOMAIN_MODEL.md` §5 — triggered when a node it cites is split,
+corrected or retracted) shows a status chip on its own row in the Judgements tab (the `999px`
+status-chip radius §8 already specifies), and a corresponding marker on the flagging node if it is
+currently on the canvas — the same list-row-plus-canvas-marker pairing the resolution-conflict
+pattern (Phase 6a) already establishes for "something here needs a human's attention."
+
+## 10. Export
+
+The workspace layout (§2) already sketches an `Export ⚙` control in the top bar; this section gives
+it its own surface. Three artefact shapes share one handling gate — there is one gate, not three.
+
+### 10.1 Triggers
+
+| Shape | Source |
+| --- | --- |
+| Chart | The current canvas (`@sigma/export-image`, §1) or a saved metric/histogram/timeline view (ECharts' own export) |
+| Subgraph | The current working set, or a lassoed selection via the same "Branch to new tab" mechanism §3.1 already defines |
+| Report | The investigation's assessment objects (§9), assembled with their own cited evidence — the artefact A15 itself names ("Export the chart and the assessment") |
+
+### 10.2 Handling gate
+
+- Evaluates every node and edge in the selection against the handling scheme
+  (`03_CONDUIT_MIDDLEWARE.md` §6: "`POST /export` evaluates every node and edge in the selection
+  against the handling scheme").
+- A blocked item renders in a named list inside the export `Drawer` — entity or edge label, its own
+  blocking handling code (e.g. `S2`) — never a generic "export blocked" message: A15's own literal
+  assertion is that blocking items are named, and §7's own copy rule ("Errors say what happened and
+  what to do") applies here as much as anywhere else in the product.
+- **Justification form.** Overriding a block requires a free-text justification (`Input`,
+  multi-line) and an originator reference (`Input`), both recorded, per `03_CONDUIT_MIDDLEWARE.md`
+  §6's "Override requires a justification and an originator reference, both recorded." The `Export`
+  button stays disabled until both fields are non-empty — the same disabled-until-valid pattern
+  §9.1's judgement `Save` button already uses.
+- A report export additionally walks every assessment object's own cited evidence, not only the
+  canvas selection — pending `06_DECISIONS.md` ADR-046's own decision on whether this check is
+  built (its option (b)). This section names where such a block renders (the same named-blocker
+  list above) without assuming the ADR's outcome.
+
+### 10.3 Manifest and mark
+
+- Every export carries a withheld-item manifest by count (`03_CONDUIT_MIDDLEWARE.md` §6) and the
+  Osprey mark. The export `Drawer`'s own footer is reserved for both; their final content and
+  rendering follow whichever options `06_DECISIONS.md` ADR-045 and ADR-047 settle — not assumed
+  here.
+- The manifest renders as plain text beside the `Export` button — "N items withheld by handling" —
+  reusing the exact status-bar phrasing (§2's own "6 hidden by handling") rather than a second
+  wording for the same fact, so an analyst who has read that count all session recognises it on the
+  export screen without re-learning it.
+
+### 10.4 Theme
+
+Light is the default rendering for a chart export (§4: "An exported chart destined for an
+intelligence product should default to light"), regardless of which theme the analyst is currently
+working in; a toggle lets them override back to dark before exporting.
