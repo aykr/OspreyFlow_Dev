@@ -1,21 +1,13 @@
-# Classes in packages/schemas/domain.py not yet documented in docs/01_DOMAIN_MODEL.md.
-# scripts/domain_model_coverage_check.py enforces this list; 07_BUILD_PLAN.md's Phase 8
-# documentation-refresh step is complete for this axis when this file is empty and deleted.
+# Classes in packages/schemas/domain.py genuinely undocumented anywhere in the Apache-scoped
+# spec (GAP, not ELSEWHERE or NOT_SCOPED — scripts/domain_model_coverage_check.py's own
+# docstring has the full triage). 07_BUILD_PLAN.md's Phase 8 documentation-refresh step is
+# complete for this axis when this file is empty and deleted.
 # One class name per line. Remove a line only once the class is actually documented — a
-# stale entry (already documented, or no longer a class in domain.py) fails the check too.
-PoleClass
-PropertyType
+# stale entry (already documented, no longer a class in domain.py, or now NOT_SCOPED under
+# the rule) fails the check too.
 PropertyDef
 ResolutionConfig
 EntityTypeDef
 EdgeTypeDef
-OntologySchema
-SchemaReport
-ProvenanceState
-NodeWrite
-EdgeWrite
 SavedPattern
-AlertMode
-Alert
-Hotlist
 Monitor

@@ -1,5 +1,5 @@
-"""A drift gate for `docs/03_CONDUIT_MIDDLEWARE.md`'s own route table — `07_BUILD_PLAN.md`'s
-Phase 8 documentation-refresh entry. Same shape as `scripts/demo_guide_check.py`/`scripts/
+"""A drift gate for the Apache-scoped spec's own route documentation — `07_BUILD_PLAN.md`'s Phase
+8 documentation-refresh entry. Same shape as `scripts/demo_guide_check.py`/`scripts/
 domain_model_coverage_check.py`: a real check against a real source (the live FastAPI app, not a
 hand-maintained list) paired with an explicit allowlist of routes currently missing from the doc.
 
@@ -19,6 +19,28 @@ docstring already discloses it is actually nested under `/v1/investigations/{inv
 still does not normalise to a match — nesting is a real shape difference, not a placeholder-naming
 one, so it correctly lands in the allowlist alongside the rest of the debt.
 
+**Checks every Apache-scoped document, not only `docs/03_CONDUIT_MIDDLEWARE.md`'s table — the
+gate's own original ELSEWHERE bug, found by the same triage that fixed the domain-model gate.**
+`03_CONDUIT_MIDDLEWARE.md`'s own table is the natural home and, checked directly, the *only*
+Apache-scoped document that documents a route in this shape — `09_INGEST_STUDIO.md` in particular
+was expected to cover the Ingest Studio's own routes and, checked directly
+(`grep -c "/v1/" docs/09_INGEST_STUDIO.md` → 0), does not mention a single one, even inline. That
+finding did not shrink today's allowlist — every route this gate flags is `GAP`, not `ELSEWHERE`,
+since none is documented in a second file today — but the search itself is real, across every
+Apache-scoped doc, not hardcoded to one file, so a route documented elsewhere in the future is
+recognised without this gate needing a second fix.
+
+**`03_CONDUIT_MIDDLEWARE.md`'s own stale Ingest Studio rows were left in place, not pruned.** The
+table's §3.4 still illustrates an abandoned design (`/v1/ingest/upload`, `/v1/ingest/connector/
+{name}/run`, `/v1/documents/{id}`) matching no route this app has ever registered under that
+shape — not merely undocumented-but-plausible, but describing a interface that was superseded by
+the Ingest Studio's own recipe-based routes before this repository's current route surface existed.
+Pruning was considered and rejected: the condition for pruning was "genuinely superseded by
+`09_INGEST_STUDIO.md`," and the check above found that document carries no replacement route
+content at all — removing the stale rows would trade a wrong row for a blank one, not a correct
+one, in the one document whose job is exactly this inventory. Left for the Phase 8 refresh, which
+writes real content; this gate enforces coverage, not prose quality.
+
 **The allowlist (`tests/fixtures/route_coverage_allowlist.txt`) is the enumerated, countable form of
 existing debt, not a permanent exemption list** — same discipline as the domain-model gate. Complete
 for this axis when the allowlist is empty and this file is deleted.
@@ -31,8 +53,30 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DOC_PATH = REPO_ROOT / "docs" / "03_CONDUIT_MIDDLEWARE.md"
 ALLOWLIST_PATH = REPO_ROOT / "tests" / "fixtures" / "route_coverage_allowlist.txt"
+
+#: `06_DECISIONS.md` ADR-034 §B2's own Apache-scoped list, current (pre-Trigger-A) paths — the
+#: same set `scripts/domain_model_coverage_check.py`'s own `APACHE_DOC_PATHS` uses.
+APACHE_DOC_PATHS: tuple[Path, ...] = tuple(
+    REPO_ROOT / "docs" / name
+    for name in (
+        "00_ARCHITECTURE.md",
+        "01_DOMAIN_MODEL.md",
+        "02_GLASS_FRONTEND.md",
+        "03_CONDUIT_MIDDLEWARE.md",
+        "04_VAULT_BACKEND.md",
+        "05_DEPLOYMENT.md",
+        "08_ACCEPTANCE_SCENARIOS.md",
+        "09_INGEST_STUDIO.md",
+        "DEMO_GUIDE.md",
+        "README.md",
+    )
+)
+
+#: `03_CONDUIT_MIDDLEWARE.md`'s own route table is the primary reference cited in messages below —
+#: kept as a named constant since it is still, in practice, the only document this gate ever finds
+#: a route in.
+DOC_PATH = REPO_ROOT / "docs" / "03_CONDUIT_MIDDLEWARE.md"
 
 # Run standalone via `python scripts/route_coverage_check.py` (as `make route-coverage-check`
 # does), not only under pytest's own `pythonpath = ["packages"]` — both the repo root (for
@@ -67,7 +111,13 @@ def list_live_routes() -> list[str]:
 
 
 def list_doc_routes(doc_text: str) -> set[str]:
+    """Route lines from one document's text. `main()`/the tests concatenate every Apache-scoped
+    doc's text before calling this, so a route documented in any of them is found."""
     return {f"{m} {p}" for m, p in _DOC_ROUTE_LINE.findall(doc_text)}
+
+
+def _read_all_docs(doc_paths: tuple[Path, ...] = APACHE_DOC_PATHS) -> str:
+    return "\n".join(p.read_text(encoding="utf-8") for p in doc_paths if p.exists())
 
 
 def load_allowlist(path: Path = ALLOWLIST_PATH) -> set[str]:
@@ -87,8 +137,10 @@ def _normalize_route(route: str) -> str:
 
 
 def find_undocumented(live_routes: list[str], doc_routes: set[str]) -> list[str]:
-    """Every live route whose normalised `METHOD path` has no match among the doc's own
-    normalised routes — the full undocumented set, before the allowlist is subtracted."""
+    """Every live route whose normalised `METHOD path` has no match among the doc route set's
+    own normalised routes — the full undocumented set, before the allowlist is subtracted. Pass
+    `list_doc_routes` of every Apache-scoped doc's text concatenated to check all of them at
+    once."""
     doc_normalized = {_normalize_route(route) for route in doc_routes}
     return [route for route in live_routes if _normalize_route(route) not in doc_normalized]
 
@@ -96,7 +148,7 @@ def find_undocumented(live_routes: list[str], doc_routes: set[str]) -> list[str]
 def find_stale_entries(
     live_routes: list[str], doc_routes: set[str], allowlist: set[str]
 ) -> list[str]:
-    """An allowlist entry is stale if the route it names no longer exists at all, or the doc has
+    """An allowlist entry is stale if the route it names no longer exists at all, or the docs have
     caught up to it — either way it must be removed by hand."""
     live_set = set(live_routes)
     undocumented = set(find_undocumented(live_routes, doc_routes))
@@ -107,8 +159,7 @@ def find_stale_entries(
 
 def main() -> int:
     live_routes = list_live_routes()
-    doc_text = DOC_PATH.read_text(encoding="utf-8")
-    doc_routes = list_doc_routes(doc_text)
+    doc_routes = list_doc_routes(_read_all_docs())
     allowlist = load_allowlist()
     undocumented = find_undocumented(live_routes, doc_routes)
     new_drift = sorted(set(undocumented) - allowlist)
@@ -119,7 +170,7 @@ def main() -> int:
         ok = False
         print(
             "route-coverage-check: route(s) registered in services/api/app.py not documented in "
-            f"{DOC_PATH.relative_to(REPO_ROOT)} and not in the allowlist: {', '.join(new_drift)}",
+            f"any Apache-scoped doc and not in the allowlist: {', '.join(new_drift)}",
             file=sys.stderr,
         )
     if stale:

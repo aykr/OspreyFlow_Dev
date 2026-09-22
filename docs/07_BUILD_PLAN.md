@@ -1669,36 +1669,79 @@ domain_model_coverage_allowlist.txt` is empty and deleted, and complete for rout
 `tests/fixtures/route_coverage_allowlist.txt` is empty and deleted — not when someone judges either
 doc close enough.**
 
+**Triaged before being trusted, not allowlisted on first count — every entry in both original
+allowlists was classified into exactly one of `GAP` (genuinely undocumented anywhere — stays),
+`ELSEWHERE` (correctly documented in a different Apache-scoped document — the gate's own search
+scope was wrong, not the documentation) or `NOT_SCOPED` (not a domain entity / not a public route
+by a stated rule).** Both gates were then changed so `ELSEWHERE` and `NOT_SCOPED` are handled by
+that rule, mechanically, rather than by a human judgement call recorded once in an allowlist entry
+that could go stale unnoticed. An allowlist mixing real debt with classification error cannot
+shrink to a meaningful zero — "empty" has to mean "nothing left to write," not "nothing left to
+write, reclassify, or exempt."
+
 - **Domain model coverage.** `scripts/domain_model_coverage_check.py` / `tests/
-  test_domain_model_coverage_check.py::test_no_new_drift_beyond_the_allowlist` — every class in
-  `packages/schemas/domain.py` (`BaseModel`s and `StrEnum`s alike) must be named somewhere in
-  `docs/01_DOMAIN_MODEL.md`, or carry an allowlist entry. **Allowlist length at the time this gate
-  was built: 16 of 35 classes** (`PoleClass`, `PropertyType`, `PropertyDef`, `ResolutionConfig`,
-  `EntityTypeDef`, `EdgeTypeDef`, `OntologySchema`, `SchemaReport`, `ProvenanceState`, `NodeWrite`,
-  `EdgeWrite`, `SavedPattern`, `AlertMode`, `Alert`, `Hotlist`, `Monitor`) — the last four confirm
-  the "what has landed" finding above: Stage 6's own hotlist/monitor/alert entities have no
-  domain-model write-up at all.
+  test_domain_model_coverage_check.py::test_no_new_drift_beyond_the_allowlist`. The rule
+  (`is_not_scoped`, the script's own docstring has the full reasoning): a `StrEnum` is `NOT_SCOPED`
+  (a value vocabulary, not a shaped entity) and a `<X>Write` class whose own docstring identifies
+  it as `<X>`'s pre-persistence counterpart is `NOT_SCOPED` (the shape is `<X>` itself). Every
+  other class must be named somewhere in **any** Apache-scoped document, not only
+  `01_DOMAIN_MODEL.md`, or carry an allowlist entry.
+
+  | | Count | Items |
+  | --- | --- | --- |
+  | `NOT_SCOPED` | 6 | `PoleClass`, `PropertyType`, `ProvenanceState`, `AlertMode` (all `StrEnum`); `NodeWrite`, `EdgeWrite` (pre-persistence counterparts of already-documented `Node`/`Edge`) |
+  | `ELSEWHERE` | 4 | `OntologySchema`, `SchemaReport` — `00_ARCHITECTURE.md` §2.1, the `GraphPort` protocol listing (`apply_schema`/`revert_schema`); `Hotlist` — `08_ACCEPTANCE_SCENARIOS.md` row B12 ("The hotlist records owner and review date"); `Alert` — `08_ACCEPTANCE_SCENARIOS.md` row B14 ("Alert workflow") |
+  | **`GAP`** | **6** | `PropertyDef`, `ResolutionConfig`, `EntityTypeDef`, `EdgeTypeDef`, `SavedPattern`, `Monitor` |
+
+  **Allowlist now holds only the 6 `GAP` entries** (down from an original, untriaged 16). Four of
+  the six ontology-schema classes moved to `GAP` rather than `ELSEWHERE` even though
+  `01_DOMAIN_MODEL.md` §1/§1.1 describes their own YAML shape in prose at length — the *concept* is
+  covered, the Pydantic *class* is never named or cross-referenced against that prose anywhere, so
+  a reader searching for `EntityTypeDef` specifically would not find it. Narrower work for the
+  refresh than writing from scratch (map five/six existing paragraphs onto the classes they already
+  describe), but still real, still `GAP` by the letter of the definition. `SavedPattern` and
+  `Monitor` have no prose coverage of any kind, anywhere.
+
 - **Route coverage.** `scripts/route_coverage_check.py` / `tests/
-  test_route_coverage_check.py::test_no_new_drift_beyond_the_allowlist` — every route FastAPI has
-  actually registered (imported live from `services.api.app.app`, not statically parsed) must
-  appear, after path-parameter-name normalisation, in `docs/03_CONDUIT_MIDDLEWARE.md`'s own route
-  table, or carry an allowlist entry. **Allowlist length at the time this gate was built: 49 of 66
-  routes** (`tests/fixtures/route_coverage_allowlist.txt` has the full list) — confirming the
-  survey's own finding that this is the largest gap found: the entire Ingest Studio route surface
-  (13 routes, superseded by `docs/09_INGEST_STUDIO.md` but never removed from this table), sites,
-  ontology, map, hotlists/monitors/alerts, node confirm/retract, the corpus-wide resolution trigger,
-  and pattern persistence's three routes are all missing, plus every resolution route the table
+  test_route_coverage_check.py::test_no_new_drift_beyond_the_allowlist`. Checks every
+  Apache-scoped document, not only `03_CONDUIT_MIDDLEWARE.md`'s table — checked directly, no other
+  document ever turned out to carry one (`09_INGEST_STUDIO.md` in particular: `grep -c "/v1/"` is
+  0, not merely under-detailed). No `NOT_SCOPED` route was found either — every one of the 66 live
+  routes is genuine public API surface with no principled reason to exclude it from a route
+  inventory.
+
+  | | Count |
+  | --- | --- |
+  | `NOT_SCOPED` | 0 |
+  | `ELSEWHERE` | 0 |
+  | **`GAP`** | **49 of 66** |
+
+  Allowlist unchanged in size (49 — `tests/fixtures/route_coverage_allowlist.txt` has the full
+  list), since the triage found no misclassification to remove, but the gate's own mechanism now
+  checks every document rather than one by construction, so a route documented elsewhere in the
+  future is recognised without a further fix. The 49: the entire Ingest Studio route surface (13
+  routes), sites, ontology, map, hotlists/monitors/alerts, node confirm/retract, the corpus-wide
+  resolution trigger, and pattern persistence's three routes, plus every resolution route the table
   illustrates as a bare `/v1/resolution/...` path rather than the nested
   `/v1/investigations/{investigation_id}/resolution/...` shape it actually is (a known, accepted
   departure — `services/api/resolution.py`'s own docstring already discloses it — that this gate
   still counts as debt rather than silently exempts, since the allowlist's job is to enumerate the
   gap, not judge which instances of it are acceptable).
 
-Both proven non-vacuous the same way as the demo-guide gate: a positive case against the real
-allowlist (must stay empty of new drift) and negative cases against synthetic entries, including
-one proving a placeholder-name difference (`{id}` vs `{investigation_id}`) does **not** count as
-drift and one proving a genuinely different nesting shape **does**. Wired into `Makefile`'s `ci`
-target as `domain-model-coverage-check`/`route-coverage-check`.
+  **`03_CONDUIT_MIDDLEWARE.md`'s stale Ingest Studio rows were not pruned.** The instruction to
+  prune was conditional on the rows being genuinely superseded by `09_INGEST_STUDIO.md`; checked
+  directly and found false — that document carries no route content at all to supersede them with.
+  The existing rows (`/v1/ingest/upload`, `/v1/ingest/connector/{name}/run`, `/v1/documents/{id}`)
+  describe an abandoned design matching no route this app has ever registered under that shape, but
+  removing them now would trade a wrong row for a blank one in the one document whose job is this
+  inventory — real replacement content is the refresh step's own work, not a deletion this pass
+  can discharge instead of it.
+
+Both gates proven non-vacuous the same way as the demo-guide gate, plus a case proving the
+`ELSEWHERE` widening actually works (a class/route named only in a second document must not count
+as drift) and, for the domain gate, cases proving each `NOT_SCOPED` rule fires and that an
+allowlist entry reclassified to `NOT_SCOPED` is reported stale, not left silently exempting
+nothing. Wired into `Makefile`'s `ci` target as `domain-model-coverage-check`/`route-coverage-check`.
 
 **Highest-consequence single item in the "what has landed" drift list above, recorded separately
 because a stand-in registry and a route table are correctness tools, not what makes this one
