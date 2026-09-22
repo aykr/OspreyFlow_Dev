@@ -1,4 +1,4 @@
-.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check conformance-guard conformance test dev-up dev-down test-all glass-perf glass-a11y glass-keyboard glass-map-verify
+.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check demo-guide-check conformance-guard conformance test dev-up dev-down test-all glass-perf glass-a11y glass-keyboard glass-map-verify
 
 PY := .venv/bin/python
 PYTEST := .venv/bin/pytest
@@ -8,7 +8,7 @@ MYPY := .venv/bin/mypy
 # Phase 0 exit criterion (docs/07_BUILD_PLAN.md): CI green; a PR adding a GPL
 # dependency fails; a Pydantic model change not reflected in the generated
 # TypeScript fails the build. See the Phase 0 plan for what each target proves.
-ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check conformance-guard
+ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check demo-guide-check conformance-guard
 
 lint:
 	$(RUFF) check .
@@ -28,6 +28,12 @@ licence-check:
 authorized-query-check:
 	$(PY) scripts/authorized_query_check.py
 	@echo "authorized-query-check: see tests/authorized_query_check/ for the deterministic proof"
+
+# `07_BUILD_PLAN.md`'s Phase 8 documentation-refresh entry: a stand-in for ADR-035's own
+# still-unbuilt fail-closed demo registry. See scripts/demo_guide_check.py's own docstring.
+demo-guide-check:
+	$(PY) scripts/demo_guide_check.py
+	@echo "demo-guide-check: see tests/test_demo_guide_registry_check.py for the deterministic proof"
 
 trivy:
 	trivy fs --exit-code 1 --severity HIGH,CRITICAL --include-dev-deps --skip-dirs node_modules,.venv .

@@ -1569,6 +1569,101 @@ needs real multi-node infrastructure this phase's own bullet list does not, so e
 criterion is now a test it can actually run on the infrastructure it has, not a criterion split
 across two without saying so.
 
+**Before the restructure below: refresh the published documentation set. Sequencing matters —
+refresh first, restructure second, recorded here so it is not left to whoever reaches this close
+step to reorder on their own.** Moving a stale document and then editing it in its new home makes
+both diffs harder to read than doing the two in the right order once. This step is documentation
+only, save for the drift gate named at its own end, which already exists (below).
+
+**Scope, enumerated from `06_DECISIONS.md` ADR-034 §B2 rather than from memory.** ADR-034 places
+under Apache 2.0 "the installation, developer, architecture and user guides" plus the root-level
+product documentation — named there, checked against this repository's own current (pre-Trigger-A)
+paths rather than the post-move `spec/` paths ADR-034 itself uses, since the refresh happens before
+the move:
+
+- `docs/00_ARCHITECTURE.md`
+- `docs/01_DOMAIN_MODEL.md`
+- `docs/02_GLASS_FRONTEND.md`
+- `docs/03_CONDUIT_MIDDLEWARE.md`
+- `docs/04_VAULT_BACKEND.md`
+- `docs/05_DEPLOYMENT.md`
+- `docs/08_ACCEPTANCE_SCENARIOS.md`
+- `docs/09_INGEST_STUDIO.md`
+- `docs/design/` (including `tokens.css`)
+- `docs/README.md` — ADR-031's own already-disclosed gap: this is "an internal docs-index page,"
+  not yet the root `README.md` ADR-031/034 both describe; refreshing it now still applies, since
+  it is the file Trigger A moves and renames, not a different one built later.
+- `docs/DEMO_GUIDE.md`
+
+`docs/06_DECISIONS.md` and `docs/07_BUILD_PLAN.md` itself are excluded — ADR-034 §B2's own
+"excluded and private" list — and out of this step's scope.
+
+**Exit criterion, a test rather than a judgement: every command in each guide above has been run
+on a clean checkout and produced the result the guide claims.** Any command that did not is listed
+in this entry, at the time this step is actually executed, with what happened instead — the same
+"checked against the repository rather than transcribed from the specification" discipline
+`docs/DEMO_GUIDE.md`'s own opening paragraph already states for itself, extended to every guide in
+the list above, not only that one. Not executed against a clean checkout in this pass — the scope
+below is what makes that run purposeful rather than a blind re-read, per this entry's own next
+paragraph, but running it is this close step's own work, not this entry's.
+
+**What has landed since each was last touched, found by checking content against the seven named
+areas rather than assumed from dates — the actual scope this refresh has to close, not a re-read of
+material already current.**
+
+- **Pattern persistence — stale.** `docs/02_GLASS_FRONTEND.md` §3.3 still reads "Patterns are
+  saveable, shareable and versioned is this bullet's own unbuilt promise — Stage 4 built
+  compose/preview/run only." False since `06_DECISIONS.md` ADR-036's own text ("Part 3 of this
+  session built that persistence... save/load/list/version, no sharing"): save/load/list/version
+  are built; only "shareable" (ADR-040, Proposed) remains unbuilt. `docs/03_CONDUIT_MIDDLEWARE.md`
+  §3.3's own route table lists `POST /v1/patterns/preview`/`run` but not `POST /v1/patterns/save`,
+  `GET /v1/patterns`, or `GET /v1/patterns/{id}` — checked directly against `services/api/app.py`'s
+  own routes, all three exist and are missing from the table.
+- **The pathfinder — checked, current, no drift found.** `docs/02_GLASS_FRONTEND.md` (the Pathfinder
+  row, §3), `docs/03_CONDUIT_MIDDLEWARE.md` (`POST /v1/paths` in §3.3) and `docs/01_DOMAIN_MODEL.md`
+  (§8.1's own "k-shortest paths" row) all already describe it correctly.
+- **Hotlists, monitors, the alert inbox — the largest gap found, an entirely missing section,
+  not a stale sentence.** `docs/03_CONDUIT_MIDDLEWARE.md` has no route listing anywhere for
+  `POST`/`GET /v1/hotlists`, `POST`/`GET /v1/monitors`, or `GET /v1/alerts`/`GET /v1/alerts/{id}`/
+  `POST /v1/alerts/{id}/jump` — a real, shipped route surface (Phase 7 Stage 6c, both backend and
+  now Glass) this doc's own job (§3's route inventory) does not mention at all. `docs/
+  01_DOMAIN_MODEL.md` has no entity write-up for `Hotlist`/`Monitor`/`Alert` (`WatchStatus`, the
+  `full`/`notify_stub` split, referent redaction) the way every other `schemas.domain` object gets
+  one. `docs/02_GLASS_FRONTEND.md` §3.3's own hotlist/monitor paragraphs describe the intended
+  behaviour correctly but predate `status` (active/stopped, ADR-036) and mention no distribution
+  between `strict` and `notify` disclosure.
+- **Disclosure policy switch (`strict`/`notify`, ADR-038) — undocumented anywhere in the
+  Apache-scoped spec, checked directly across all eight numbered docs.** Exists only in
+  `07_BUILD_PLAN.md` (private) and the code (`services/api/alerts.py`). An analyst-facing behaviour
+  — what a hotlist owner sees when a match falls outside their own access — with no public spec
+  sentence anywhere; belongs most naturally in `docs/02_GLASS_FRONTEND.md` §3.3 alongside the
+  hotlist paragraph it qualifies.
+- **Demo distribution classes — not a documentation gap, a dependency, disclosed rather than
+  forced.** `docs/DEMO_GUIDE.md` §1 already carries every currently-known demo with its own
+  distribution class, and already states precisely why it's prose rather than a mechanism: "Until
+  that registry exists, treat the column below as the same binding statement in prose that the
+  registry will enforce mechanically." ADR-035's own fail-closed registry is this same phase's own
+  still-unbuilt outcome bullet — nothing to refresh here until it lands; the guide is already
+  correctly scoped to that gap, not behind it.
+
+**The drift gate, built now rather than at this close step, since it is small and the drift above
+shows it is already accumulating.** `scripts/demo_guide_check.py` / `tests/
+test_demo_guide_registry_check.py::test_every_registered_demo_is_documented_with_its_distribution_
+class` — asserts every demo in `DEMO_REGISTRY` (a small, explicit stand-in for ADR-035's own
+still-unbuilt registry, the module's own docstring says so directly) is named in `docs/
+DEMO_GUIDE.md` together with its own `` `shipped` ``/`` `internal` `` marker; fails loudly, naming
+the missing demo, rather than being discovered at publication. Proven non-vacuous by
+`test_the_check_fails_for_a_registered_demo_the_guide_does_not_document` and
+`test_the_check_fails_for_a_registered_demo_documented_with_no_distribution_class`, both against a
+synthetic entry the real guide does not carry. Wired into `Makefile`'s `ci` target as
+`demo-guide-check`, alongside `licence-check`/`authorized-query-check`.
+
+**Open item for the owner, recorded rather than decided:** whether the published guides should
+carry any commit-SHA citations at all. `06_DECISIONS.md` ADR-034 §B5 already flags that a SHA cited
+from this private repository will not resolve for a reader of the published artefact — the same
+open question that record leaves to the owner for ADR-number citations in product-code docstrings
+applies equally to any SHA a guide itself cites, and is not decided here either.
+
 **This phase's own close is also when `06_DECISIONS.md` ADR-031 schedules the repository split —
 `docs/` into `spec/` and `process/`, `README.md`/`DEMO_GUIDE.md` to the repository root — not
 before, regardless of whether Phase 8a has closed by then.** Not built as part of this phase's own

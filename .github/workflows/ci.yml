@@ -63,6 +63,21 @@ jobs:
       # tests/authorized_query_check/test_principal_predicate_required.py.
       - run: uv run pytest tests/authorized_query_check
 
+  # `07_BUILD_PLAN.md`'s Phase 8 documentation-refresh entry: a small, real stand-in for
+  # ADR-035's own still-unbuilt fail-closed demo registry, so a demo added with no matching
+  # docs/DEMO_GUIDE.md update fails here rather than being found at publication. See
+  # scripts/demo_guide_check.py's own docstring.
+  demo-guide-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - run: uv run python scripts/demo_guide_check.py
+      # Deterministic proof it is not vacuous — see
+      # tests/test_demo_guide_registry_check.py's own two negative cases.
+      - run: uv run pytest tests/test_demo_guide_registry_check.py
+
   trivy:
     runs-on: ubuntu-latest
     steps:
