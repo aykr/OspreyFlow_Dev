@@ -1936,20 +1936,39 @@ as drift) and, for the domain gate, cases proving each `NOT_SCOPED` rule fires a
 allowlist entry reclassified to `NOT_SCOPED` is reported stale, not left silently exempting
 nothing. Wired into `Makefile`'s `ci` target as `domain-model-coverage-check`/`route-coverage-check`.
 
-**Highest-consequence single item in the "what has landed" drift list above, recorded separately
-because a stand-in registry and a route table are correctness tools, not what makes this one
-urgent.** `06_DECISIONS.md` ADR-038's `strict`/`notify` disclosure-policy switch appears nowhere in
-the Apache-scoped spec — not `docs/02_GLASS_FRONTEND.md`, not `docs/01_DOMAIN_MODEL.md`, and, most
-consequentially, not `docs/05_DEPLOYMENT.md` either. This is a **deployment-time setting governing
-whether an analyst learns of a hotlist match outside their own clearance at all** — the difference
-between an alert that names nothing (`notify`) and one that is suppressed entirely (`strict`) —
-and, checked directly against `05_DEPLOYMENT.md`'s own full text, **no deployer reading this
-repository's own published operational documentation can currently discover that this switch
-exists, let alone which mode a given deployment runs in.** Every other Phase 8 documentation gap
-this entry names is a doc that has not caught up to code already built; this one is an
-operationally load-bearing decision with no public surface at all. Belongs in
-`docs/05_DEPLOYMENT.md` as a named deployment setting, and in `docs/02_GLASS_FRONTEND.md` §3.3
-alongside the hotlist paragraph it qualifies — the refresh step's own work, not fixed here.
+**Highest-consequence items in the "what has landed" drift list above, recorded separately from it
+because a stand-in registry and a route table are correctness tools, not what makes these two
+urgent.** Both are real product behaviours an analyst or an operator relies on, documented — if at
+all — only on the private side of `06_DECISIONS.md` ADR-034's own publication boundary
+(`06_DECISIONS.md`/`07_BUILD_PLAN.md`, never published; the guides below, Apache 2.0, are what a
+customer actually reads). **The rule that catches this whole class, stated once rather than left to
+be re-derived at each instance:** a behaviour a user relies on belongs in a user-facing document,
+not only in a decision record — a private ADR explaining *why* a limitation exists is not a
+substitute for the public guide stating *that* it exists, and a gap recorded only in the former is,
+from the reader who only ever sees the latter, not recorded at all.
+
+- **`06_DECISIONS.md` ADR-038's `strict`/`notify` disclosure-policy switch appears nowhere in the
+  Apache-scoped spec** — not `docs/02_GLASS_FRONTEND.md`, not `docs/01_DOMAIN_MODEL.md`, and, most
+  consequentially, not `docs/05_DEPLOYMENT.md` either. This is a **deployment-time setting governing
+  whether an analyst learns of a hotlist match outside their own clearance at all** — the difference
+  between an alert that names nothing (`notify`) and one that is suppressed entirely (`strict`) —
+  and, checked directly against `05_DEPLOYMENT.md`'s own full text, **no deployer reading this
+  repository's own published operational documentation can currently discover that this switch
+  exists, let alone which mode a given deployment runs in.** Belongs in `docs/05_DEPLOYMENT.md` as a
+  named deployment setting, and in `docs/02_GLASS_FRONTEND.md` §3.3 alongside the hotlist paragraph
+  it qualifies — the refresh step's own work, not fixed here.
+- **Saved-pattern monitors do not fire on a match created by corpus-wide entity resolution alone —
+  only on ingest and manual assertion — and the Apache-scoped spec says nothing of the kind.**
+  `06_DECISIONS.md` ADR-037's own amendment and this document's own Stage 1 entry above both record
+  the deferral in full, but both live only on the private side of the boundary. **Two identities
+  resolving into one — exactly the case an investigator most wants a monitor watching for — is the
+  case this limitation applies to**, and `docs/02_GLASS_FRONTEND.md` §3.3's own monitor paragraph
+  ("Matches raise alerts with the same shape as hotlist alerts") states no such exception; a reader
+  of the published guide alone has no way to learn a saved-pattern monitor can silently fail to
+  catch the one match it most exists for. Belongs in `docs/02_GLASS_FRONTEND.md` §3.3 alongside the
+  monitor paragraph it qualifies, stated as what the product does today, not as the reasoning behind
+  it (that reasoning stays in ADR-037, where it belongs) — the refresh step's own work, not fixed
+  here.
 
 **Open item for the owner, recorded rather than decided:** whether the published guides should
 carry any commit-SHA citations at all. `06_DECISIONS.md` ADR-034 §B5 already flags that a SHA cited
