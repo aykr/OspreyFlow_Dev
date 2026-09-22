@@ -1606,9 +1606,16 @@ first, not the one that is easiest to start.
    found no match and alerted nothing for a freshly-created monitor in a real test build of this
    wiring; a second, manual call to the identical function immediately after the test's own commit
    correctly found the match and fired the alert. `06_DECISIONS.md` ADR-037's own amendment has the
-   full record and the two fix shapes (a `GraphPort` transaction-scoped read, or a `JobWorker`
-   post-commit hook), neither built here — real, separately-scoped design work, still Phase 8's
-   own, no stage number yet assigned.
+   full record: a `GraphPort` transaction-scoped read is disqualified on correctness, not priced
+   against — a job's own transaction can still roll back after the handler returns, and reading
+   uncommitted state would let a rolled-back job raise an alert for a `SAME_AS` edge that never
+   existed. The complete fix is a durable-record consumer (evaluation reading from the change
+   stream itself, the shape ADR-037's own amendment already describes), not a post-commit hook
+   alone — correct, but a process dying between commit and hook loses that evaluation with nothing
+   recording it should have happened. **Checked against `08_ACCEPTANCE_SCENARIOS.md` directly, not
+   assumed: no Scenario B row needs a monitor to fire from resolution alone** (B20's own assertion
+   is ingest-triggered, already covered). Recorded in "Out of scope for v1" below, not inside this
+   stage or any other Phase 8 stage — nothing v1 commits to depends on it.
 
    **Exit criterion, a test — met:** `test_a_hotlist_owned_by_one_analyst_fires_from_a_different_
    analysts_own_ingest` (`tests/scenarios/test_phase7_stage6c_watch_routes.py`) passes. The two
@@ -2105,6 +2112,22 @@ finding rather than rediscovering the gap.
   deterministic MSISDN↔IMSI `SAME_AS` write depends on a structured record only such a connector
   would produce, but ADR-024 itself is not required for v1's acceptance criteria either, so its own
   dependency does not pull this connector into scope by association.
+- **Monitors firing from a resolution-only match (no accompanying ingest).** `06_DECISIONS.md`
+  ADR-037's own amendment names this as the trigger model's own unified design — ingest, the
+  corpus-wide resolution trigger, and manual assertion all publishing to one change stream a
+  monitor evaluates against — and Phase 8 Stage 1 (22 September 2026) attempted to build it, found
+  it genuinely blocked (a transaction-visibility problem, not a missing principal or a missing call
+  site — ADR-037's own amendment has the full record and the disqualification of the obvious
+  transaction-read fix shape on correctness grounds), and reverted the non-working attempt rather
+  than ship it. Checked against `08_ACCEPTANCE_SCENARIOS.md` directly: no Scenario B row exercises
+  this specific case — B20's own assertion is "subsequent matching *ingest* raises an alert,"
+  already covered by Stage 1's own ingest-triggered fix; B8/B9/B11 exercise resolution and manual
+  assertion themselves, never a monitor firing from either with no ingest alongside it.
+  `06_DECISIONS.md` ADR-042 gates alpha on both acceptance scenarios passing, not on this
+  amendment's own broader "any producer" language, so nothing committed to v1 depends on this case.
+  The real fix (a durable-record consumer, not a synchronous in-handler call) is real, separately-
+  scoped design work for whichever phase builds a proper asynchronous change-stream consumer —
+  ADR-037's own amendment names the shape, not built here.
 
 ## Permanently accepted, not built
 

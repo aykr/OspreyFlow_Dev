@@ -3168,17 +3168,24 @@ owner` its real implementation; `test_a_hotlist_owned_by_one_analyst_fires_from_
 analysts_own_ingest` (`tests/scenarios/test_phase7_stage6c_watch_routes.py`) proves the narrowing
 this amendment describes is lifted for both of `run_studio_recipe`'s and `link_resolution_route`'s
 own producers — "resolved fresh at each evaluation" is literally true for any owner, not only the
-requester, on those two paths. **Not lifted for corpus-wide resolution — attempted the same day, and found blocked by a different,
-more precise reason than "no call site" now that one was actually built.** A real call site was
-wired (`run_resolution_for_entity_type` calling `evaluate_monitors_for_entry`, threaded through to
-job registration in `app.py`) and reverted, not kept: `JobWorker._process` commits the job's own
+requester, on those two paths. **Not lifted for corpus-wide resolution — attempted the same day,
+found blocked by a different, more precise reason than "no call site" now that one was actually
+built, and now scoped outside v1 rather than left inside Phase 8's own backlog.** A real call site
+was wired (`run_resolution_for_entity_type` calling `evaluate_monitors_for_entry`, threaded through
+to job registration in `app.py`) and reverted, not kept: `JobWorker._process` commits the job's own
 transaction only after the handler returns, so the evaluation call — running from inside the
 handler — cannot see the very `SAME_AS` write it exists to alert on, confirmed empirically against
-a real test build of the wiring, not inferred. ADR-037's own amendment has the full finding and the
-two fix shapes it would need (a `GraphPort.match` transaction parameter, or a `JobWorker`
-post-commit hook), neither built here. This amendment's own text is therefore still not restored to
-unqualified truth — narrower than "any producer," now precisely "any producer whose write is
-durable before evaluation runs against it," which resolution's own job-transaction shape is not.
+a real test build of the wiring, not inferred. ADR-037's own amendment has the full finding — the
+`GraphPort` transaction-read shape is disqualified on correctness (a rolled-back job would alert on
+a fact that never existed), not merely priced against; the complete fix is a durable-record
+consumer, the shape this amendment's own change stream already describes, not a post-commit hook
+alone (correct, but loses an evaluation if the process dies before running it). Checked against
+`08_ACCEPTANCE_SCENARIOS.md` directly: no Scenario B row needs this, so it is recorded in
+`07_BUILD_PLAN.md`'s "Out of scope for v1," not built here and not owed before v1. This amendment's
+own text is therefore still not restored to unqualified truth for the general case — narrower than
+"any producer," now precisely "any producer whose write is durable before evaluation runs against
+it, and only ingest and manual assertion are v1's own scope" — but the gap that remains is
+deliberately out of scope, not merely unclosed.
 
 ---
 
@@ -3187,7 +3194,13 @@ durable before evaluation runs against it," which resolution's own job-transacti
 **Status.** Accepted, 21 September 2026, amended. The ingest-delta proposal below is the record as
 originally drafted — kept in place rather than rewritten, per this document's own discipline of
 showing what changed and why — and is superseded by the amendment at the end of this record, which
-is what was actually accepted.
+is what was actually accepted. **What is actually delivered, as of Phase 8 Stage 1 (22 September
+2026), is narrower than "accepted" alone would suggest, and is stated at the point in this record
+that finding was made, not only here:** change-triggered evaluation covers ingest and manual
+assertion; it does not cover the corpus-wide resolution trigger. An accepted ADR whose own opening
+line implies a unified mechanism the product does not have is the same defect class ADR-036 carried
+before it was amended to say the same thing about itself — stated here so this record does not
+repeat that mistake by omission.
 
 **The finding, stated plainly rather than resolved.** `02_GLASS_FRONTEND.md` §3.3 describes a
 saved-pattern monitor as run "on a schedule" *and* "against new data" in the same sentence. These
@@ -3283,34 +3296,63 @@ the resolution trigger (not ingest) so it writes that edge; assert the monitor f
 parallel case for manual assertion: `test_monitor_fires_on_a_match_created_by_manual_link_with_
 no_new_ingest`.
 
-**Attempted, Phase 8 Stage 1, 22 September 2026 — the principal-resolution half of this gap is
-closed (ADR-043), and closing it exposed a second, independent blocker this amendment's own text
-had not yet named, found and confirmed empirically rather than assumed away.** A real call site was
-built — `run_resolution_for_entity_type` (`services/resolve/trigger.py`) calling
+**Attempted, Phase 8 Stage 1, 22 September 2026 — built, run, and found not to work; not left as an
+untested call-site gap.** The principal-resolution half of this gap is closed (ADR-043). Closing it
+exposed a second, independent blocker this amendment's own text had not yet named. A real call site
+was built — `run_resolution_for_entity_type` (`services/resolve/trigger.py`) calling
 `evaluate_monitors_for_entry` immediately after publishing to the change stream, threaded through
 `try_run_resolution_with_overlap_guard`/`run_resolve_entity_type_job` and bound at job registration
-in `app.py`, the identical shape `run_studio_recipe`/`link_resolution_route` already use. **It does
-not work, and the reason is transactional, not a missing principal or a missing call site anymore.**
-`services/api/worker.py`'s own `JobWorker._process` begins the job's transaction, calls the
-registered handler (which is where the new evaluation call lives), and commits **only after the
-handler returns** — so the evaluation call executes *before* the very `SAME_AS` write it is meant
-to alert on is committed. `packages/ports/graph.py`'s own `GraphPort.match(pattern, principal)` has
-no transaction parameter — no way to read within the same in-flight transaction the write happened
-in — so a `graph.match` call from inside the handler genuinely cannot see that write; this is
-standard transaction-isolation behaviour, not a `GraphPort` oversight this stage could route around
-by calling a different method. **Confirmed empirically, not inferred:** in a test build of this
-wiring, the in-handler call found no match and produced no alert for the newly-created monitor;
-a second, manual call to the identical function *after* the test's own `commit_transaction`
-correctly found the match and fired the alert. The wiring was reverted rather than kept half-working
-— code that silently misses the exact case it exists to catch is worse than code that is honestly
-absent. **Two real fix shapes, neither built here:** extend `GraphPort.match` (and whichever other
-methods a monitor's own pattern might need) to accept an optional in-flight transaction handle, a
-port-level change needing its own conformance-suite update per standing rule 1; or give `JobWorker`
-a post-commit hook a job type can register, so `run_resolve_entity_type_job` triggers evaluation
-after `_process`'s own commit rather than before it, from outside the handler rather than inside it.
-Owning phase: **Phase 8**, alongside the rest of Stage 1's own unfinished business — this is not a
-new gap distinct from what this amendment already named, it is the same gap, now understood one
-layer more precisely than "no principal, no call site" described it.
+in `app.py`, the identical shape `run_studio_recipe`/`link_resolution_route` already use. Run
+against a real test build: the in-handler call found no match and produced no alert for a freshly
+created monitor. Diagnosis confirmed, not assumed — a second, manual call to the identical function
+made immediately after the test's own `commit_transaction` correctly found the match and fired the
+alert, isolating the difference to exactly one variable: whether the `SAME_AS` write was committed
+yet. **The reason is transactional.** `services/api/worker.py`'s own `JobWorker._process` begins
+the job's transaction, calls the registered handler (where the new evaluation call lived), and
+commits **only after the handler returns** — the evaluation call therefore executed *before* the
+very write it exists to alert on was committed, and `packages/ports/graph.py`'s own
+`GraphPort.match(pattern, principal)` has no transaction parameter, so it cannot see an uncommitted
+write from inside the same handler by any route this stage could take. The wiring was reverted
+rather than kept half-working — code that silently misses the exact case it exists to catch is
+worse than code that is honestly absent.
+
+**The fix shape, and why the obvious alternative is ruled out on correctness, not merely cost.** A
+`GraphPort` extension letting `match` read within the caller's own in-flight transaction was the
+first shape considered, and is disqualified, not merely expensive: a job's own transaction can still
+roll back after the handler returns (a later step failing, a conflict the overlap guard did not
+catch) — reading uncommitted state and alerting on it means a rolled-back job can raise a real alert
+for a `SAME_AS` edge that, once the rollback completes, never existed. That is an analyst told a
+fact the corpus does not contain, not a performance or elegance objection, and it disqualifies the
+approach before any discussion of the cost of extending a `Protocol` every adapter implements. **The
+post-commit-hook shape is correct but incomplete as an in-process mechanism.** Triggering evaluation
+from a hook `JobWorker` calls after its own commit reads only committed state, closing the
+correctness objection above — but a process that dies between that commit and the hook running
+loses the evaluation entirely, with nothing anywhere recording that it should have happened at all.
+**The complete shape is a durable record of the change, with evaluation consuming from it** — which
+is what this amendment's own "accepted trigger" paragraph above already described: one unified
+change stream, evaluated against, not a synchronous call riding inside the producer's own request or
+job. **The synchronous in-request call `_evaluate_watches_best_effort` actually builds
+(`run_studio_recipe`/`link_resolution_route`) was a deliberate shortcut, not the design this
+amendment describes, and it works for those two producers only because of an ordering property
+specific to them: each producer's own write commits before `_evaluate_watches_best_effort` is ever
+called, at the route level, well before the HTTP response returns.** That property does not hold
+for the job path — `JobWorker`'s own commit happens strictly after the whole handler, including
+anything the handler calls, returns — so the shortcut that works for ingest and manual assertion
+does not generalise to resolution, and building a third variant of it for the job path would still
+carry the roll-back correctness risk above unless it consumed from a durable record rather than
+running synchronously inside the handler. Neither the durable-record consumer nor the disqualified
+transaction-read shape is built here.
+
+**Owning phase: outside v1, not Phase 8's own unassigned backlog — checked against
+`08_ACCEPTANCE_SCENARIOS.md` directly, not assumed.** No row in Scenario B exercises a monitor
+firing from resolution alone: B20's own assertion is "Subsequent matching *ingest* raises an alert
+with the same shape as B13," the case ingest-triggered evaluation (Stage 1, already unblocked)
+already covers; B8/B9/B11 exercise resolution and manual assertion themselves, not a monitor firing
+from either with no accompanying ingest. `06_DECISIONS.md` ADR-042 gates alpha on both acceptance
+scenarios, not on this amendment's own broader "any producer" language — nothing committed to v1
+depends on resolution-triggered monitor firing. Recorded in `07_BUILD_PLAN.md`'s "Out of scope for
+v1" list rather than left inside Phase 8's own numbered stages, on the same "checked against the
+acceptance scenarios directly" standard that list's own other entries already use.
 
 **The bounds, unchanged.** Concurrency, the per-evaluation cost cap and overrun behaviour stand
 exactly as already stated above — none of the three is trigger-model-specific, and A2's own
