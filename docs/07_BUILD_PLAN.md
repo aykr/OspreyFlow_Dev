@@ -1718,6 +1718,53 @@ first, not the one that is easiest to start.
    out of sync with"). This gap was found by a person reading the spec against this stage's own
    scope, the same way every other case in this document's own gaps lists was found — not by a
    gate, and no gate proposed here would have caught it either.
+
+   **This stage's own sub-split, sized so each sub-stage is one committable session — the same
+   discipline named for it directly, after two sessions in this project died mid-flight.** 4-spec
+   above is the first of eight; the remaining seven, in the order they are built:
+
+   - **4a — Fixture Corp (R24), moved ahead of the assessment/export build itself.**
+     `06_DECISIONS.md` ADR-035 §C5 has owned Fixture Corp to Phase 8 with no stage since that
+     record was written — "R24 has been the only backlog item with no owning phase," in its own
+     words, and the single longest-unscheduled item in this project. It is also the demo an
+     analyst review runs against, and `06_DECISIONS.md` ADR-042 makes that review this build's own
+     only external signal before alpha — it cannot be left to 4g's own closing pass, where a
+     regression would be the first thing that finds it broken with nothing left in the stage to fix
+     it against. Builds the AMLSim-/gen-fraud-graph-generated fixture ADR-035 §C5 already
+     specifies: entity resolution at τ 0.99/0.95/0.80 producing visibly different projections;
+     Louvain community structure; path lengths across the pathfinder's `max_hops ≤ 8` range; an
+     access-control boundary where a hidden hop lengthens rather than removes a path. **Exit
+     criterion, a test:** an assertion against each of ADR-035 §C5's four named properties, proved
+     directly against the generated fixture — the same fixture-shape-proven-early discipline
+     Phase 2's own HMP fixture test already established for Scenario A.
+   - **4b — Assessment objects, backend.** `Judgement`/`IntelligenceGap`/`Assumption` persistence,
+     the evidence-link validation A13 requires (reject a save with zero supporting references), the
+     yardstick loader, and the review-flag-on-supersede wiring `01_DOMAIN_MODEL.md` §5 already
+     states. **Blocked on `06_DECISIONS.md` ADR-046** (assessment evidence lifecycle) being
+     accepted, not started against an assumed answer.
+   - **4c — Assessment objects, Glass surface.** `02_GLASS_FRONTEND.md` §9, built in full: the
+     Judgements tab, authoring surfaces, bidirectional evidence highlighting, yardstick display,
+     the review-flag chip.
+   - **4d — Export pipeline and handling gate, backend.** `POST /export`, the `consult_originator`
+     block-by-name, the justification/originator-reference override, the withheld-item manifest,
+     the Osprey-mark/investigation-ref/timestamp/τ artefact header. **Blocked on `06_DECISIONS.md`
+     ADR-045 and ADR-047** being accepted — this stage's single largest open design surface, and
+     the reason it does not start until both are settled.
+   - **4e — Export, Glass surface.** `02_GLASS_FRONTEND.md` §10, built in full: the three export
+     triggers, the handling-gate UI with its named blocker list, the justification form, the
+     manifest and mark display.
+   - **4f — B16 and B18.** Cross-case timeline overlay and playback-driven snail trail (ADR-022):
+     "small, incremental additions to Timeline and Map," lower uncertainty than 4a–4e, no
+     dependency on any open ADR above.
+   - **4g — B21 and the closing pass.** B21, decided below; then the full
+     `test_phase8_exit_criterion_end_to_end`-shaped scenario test against both acceptance scenarios
+     on `local-lite`, plus the S2-export-blocks test — the same closing-pass discipline Phase 6's
+     Stage 6 and Phase 5a's Publish stage already used.
+
+   **4b/4c and 4d/4e are each a backend/Glass pair sharing one blocked-on-ADR precondition, not two
+   independent sub-stages.** A decision on evidence lifecycle or export disclosure changes both
+   halves of its own pair; accepting the relevant ADR is the actual unblock for two sub-stages at
+   once, not one.
 5. **The smaller, already-scoped code fixes** — `PathStaleError` for the `paths()` hydration race
    plus a server-side traversal budget; `nodeAttributes.ts`'s combined on-path-and-selected
    rendering (the spec decision is made, `02_GLASS_FRONTEND.md` §4 — only the implementation

@@ -2963,6 +2963,13 @@ exercise, at minimum:
 md`'s Phase 8 outcome bullets are amended below to claim it, alongside C1's demo-manifest registry
 it is the first real `shipped`-class citizen of.
 
+**Addendum, 22 September 2026 — stage confirmed, not only phase.** Phase 8's own stage breakdown
+gives Fixture Corp sub-stage **4a**, ahead of the assessment/export build it would otherwise be
+mistaken for a closing-pass afterthought of (`07_BUILD_PLAN.md`'s own Stage 4 entry has the full
+reasoning: it is the demo an analyst review runs against, and `06_DECISIONS.md` ADR-042 makes that
+review this build's own only external signal before alpha). This addendum exists so a reader of
+this record alone, not only of the build plan, finds the placement rather than just the phase.
+
 ### C6 — IBM AML-Data, conditional
 
 If ever used as data rather than AMLSim as a generator: CDLA-Sharing-1.0 carries a share-alike
