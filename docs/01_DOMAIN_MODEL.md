@@ -488,28 +488,32 @@ prose and exercised by nothing" gap `CLAUDE.md` rule 12 warns about, closed now 
 its_base_letters` (`_soundex("müller") == _soundex("muller")` and `_soundex("josé") ==
 _soundex("jose")`), the one test that would notice a future regression of this specific behaviour.
 
-**A known residual gap in the same fix, not resolved by it: a family name with no Latin letters at
-all still crashes the entire resolution pass for its whole population.** `_soundex` returns `None`
-when nothing letter-shaped survives sanitisation — an entirely non-Latin-script family name (fully
-Chinese, Cyrillic, Arabic, Devanagari, etc.) sanitises to nothing, same as an empty string. DuckDB's
-own scalar-UDF registration (`con.create_function(...)`, no `null_handling` argument passed)
-defaults to `null_handling='DEFAULT'`, under which **a UDF is contractually never allowed to return
-`NULL` for a non-`NULL` input** — confirmed directly, not assumed: `resolve_entity_type` raises
-`SplinkException` (wrapping DuckDB's own `Invalid Input Error: ... The UDF is not expected to
-return NULL values`) the moment even one `Person` in the population being resolved has a family
-name that sanitises to nothing, exactly the same "Splink compiles blocking into one SQL statement
-over the whole population" blast radius the original hyphen defect had — not the "every non-Latin
-name silently blocks with every other one" false-positive risk that seemed the more likely failure
-mode before this was checked. **Not fixed here** (Stage 6b's own scope was the crash class a
-hyphenated/apostrophised/spaced/digit-bearing Latin name hits, not this one) — **owning phase:
-Phase 8**, alongside the resolver-internals work the original soundex finding was filed under.
-**The test that would prove it, once owned:** `test_a_non_latin_family_name_does_not_crash_the_
-entire_resolution_pass` — a `Person` population including one entirely non-Latin-script family
-name (Chinese, Cyrillic, or similar), asserting `resolve_entity_type` does not raise and that
-unrelated members of the population still resolve. Not added to the suite un-owned: a permanently
-failing test with no fix behind it would be indistinguishable from a real regression to the next
-reader, the same reasoning `07_BUILD_PLAN.md`'s own "no skip mechanism" discipline already argues
-for treating every failure as real rather than expected.
+**A residual gap in the same fix, found and then fixed separately, 22 September 2026 — recorded
+here as closed, not left reading as still open.** `_soundex` returns `None` when nothing
+letter-shaped survives sanitisation — an entirely non-Latin-script family name (fully Chinese,
+Cyrillic, Arabic, Devanagari, etc.) sanitises to nothing, same as an empty string. DuckDB's own
+scalar-UDF registration defaulted to `null_handling=DEFAULT`, under which **a UDF is contractually
+never allowed to return `NULL` for a non-`NULL` input** — confirmed directly, not assumed:
+`resolve_entity_type` raised `SplinkException` (wrapping DuckDB's own `Invalid Input Error: ... The
+UDF is not expected to return NULL values`) the moment even one `Person` in the population being
+resolved had a family name that sanitised to nothing, exactly the same "Splink compiles blocking
+into one SQL statement over the whole population" blast radius the original hyphen defect had —
+not the "every non-Latin name silently blocks with every other one" false-positive risk that
+seemed the more likely failure mode before this was checked.
+
+**Fixed:** `services/resolve/duckdb_setup.py::new_connection` registers `soundex` with
+`null_handling=duckdb.func.FunctionNullHandling.SPECIAL` — DuckDB now accepts the `NULL` this
+function was already correctly returning, so a person with no letter-shaped soundex key simply
+never blocks with anyone via that rule (standard SQL: `NULL` never equals `NULL`), the same
+"no blocking key" outcome an empty `family_name` already produced, instead of crashing before that
+behaviour is ever reached. Proven at the actual point of failure — a real, registered DuckDB
+connection, not only the pure `_soundex` function, which never crashed —
+`tests/resolve/test_duckdb_setup.py::test_a_fully_non_latin_family_name_does_not_crash_the_
+registered_udf`, verified non-vacuous by reverting the fix, watching the real
+`duckdb.InvalidInputException` this defect always raised, and restoring it. `tests/scenarios/
+fixtures/fixture_corp.py` (`07_BUILD_PLAN.md`'s own Stage 4a, "Before the milestone") now carries a
+non-Latin-script resolution pair too, so this fix is exercised by every run of Fixture Corp's own
+real resolution pass, not only by its own dedicated unit test.
 
 Deterministic identifiers short-circuit the probabilistic path entirely: two `Endpoint` nodes
 with the same normalised E.164 value are the same endpoint, full stop. Only run Splink on types

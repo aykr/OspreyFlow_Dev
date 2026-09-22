@@ -1671,6 +1671,12 @@ the reasoning for each move stated at the point it moves.
      properties, proved directly against the generated fixture through real adapters — the same
      fixture-shape-proven-early discipline Phase 2's own HMP fixture test already established for
      Scenario A.
+
+     **Grown, 22 September 2026: a fifth resolution pair, `identical_non_latin_script`, added so
+     this fixture's own real resolution pass exercises the non-Latin-family-name resolver crash
+     fix** (`services/resolve/duckdb_setup.py`) **on every run, rather than leaving whether that
+     fix is ever exercised an accident of what this fixture happened to contain.** This document's
+     own "Legacy disclosures" section has the full defect, fix and test record; not restated here.
    - **4b — Assessment objects, backend.** `Judgement`/`IntelligenceGap`/`Assumption` persistence,
      the evidence-link validation A13 requires (reject a save with zero supporting references), the
      yardstick loader, the review-flag-on-supersede wiring `01_DOMAIN_MODEL.md` §5 already states,
@@ -2221,8 +2227,8 @@ stays here.
    in the Glass **as a reusable component taking any typed `limit_exceeded` response, not
    hardcoded to the working set's own shape — deliberately, so Stage 4b's own disclosed
    judgement/gap/assumption-list gap becomes a second, later consumer of this same component once
-   that list gains a real backend cap, rather than a separate design done twice**; the non-Latin-
-   family-name resolver crash; **node size scaled by the active metric's own value —
+   that list gains a real backend cap, rather than a separate design done twice**; **node size
+   scaled by the active metric's own value —
    the one third of Phase 7's own metrics-panel bullet ("two-metric comparison; size encoding;
    community hull overlay") Stage 3 left unbuilt.** Real design work of its own (normalising a
    fetched value to a size range, its interaction with the existing zoom-band scaling in
@@ -3726,18 +3732,59 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
   unrelated `Person` in the same pass to prove the *population-wide* failure mode is gone, not only
   the one hyphenated row.
 
-- **NEW, found while closing the entry above, not fixed by it: an entirely non-Latin-script family
-  name still crashes the whole `Person` resolution pass, same blast radius as the hyphen defect,
-  different mechanism.** Full reasoning and reproduction: `01_DOMAIN_MODEL.md` §4's own "Splink
-  configuration" section, in the note right after the accent-folding record. One line here: the fix
-  above sanitises down to `None` when nothing letter-shaped survives sanitisation (a fully Chinese,
-  Cyrillic, Arabic, etc. family name), and DuckDB's own UDF registration — `null_handling='DEFAULT'`
-  by construction, no argument overriding it — forbids a UDF from ever returning `NULL` for a
-  non-`NULL` input, so `resolve_entity_type` raises `SplinkException` the moment one such `Person`
-  exists anywhere in the population, not only "every non-Latin name silently blocks with every
-  other one" as first suspected. Owning phase: **Phase 8**, alongside the resolver-internals work
-  the fix above was already filed under. Named test, not written un-owned:
-  `test_a_non_latin_family_name_does_not_crash_the_entire_resolution_pass`.
+- **Fixed, 22 September 2026, and moved to "Before the milestone" — not because the acceptance
+  scenarios themselves ever named a non-Latin family name, but because whether this crash could
+  reach the milestone was an accident of what this project's own synthetic fixtures happened to
+  contain, and that is not a property anyone should be relying on.** An entirely non-Latin-script
+  family name crashed the whole `Person` resolution pass, same blast radius as the hyphen defect
+  above, different mechanism: the accent-folding fix above already sanitises down to `None` when
+  nothing letter-shaped survives (a fully Chinese, Cyrillic, Arabic, Devanagari, etc. family name),
+  and DuckDB's own UDF registration — `null_handling` defaulting to `DEFAULT`, no argument
+  overriding it — forbade a registered UDF from ever returning `NULL` for a non-`NULL` input, so
+  `resolve_entity_type` raised `SplinkException` the moment one such `Person` existed anywhere in
+  the population, taking the *whole* population's resolution down, not only that one person's own
+  match candidacy.
+
+  **Fix, at the point of input, the same way the hyphen/apostrophe crash was repaired:**
+  `services/resolve/duckdb_setup.py::new_connection` now registers `soundex` with
+  `null_handling=duckdb.func.FunctionNullHandling.SPECIAL` — telling DuckDB that a `NULL` return is
+  a legitimate, intentional value this function produces, so the already-correct "no blocking key"
+  behaviour `_soundex` already implemented actually reaches the blocking SQL instead of crashing
+  before it gets there. A person with no letter-shaped soundex key simply never blocks with anyone
+  via that rule (standard SQL: `NULL` never equals `NULL`) — the same outcome an empty
+  `family_name` already produced, without taking the rest of the population down with it.
+
+  **Proven, at the actual point of failure, not only against the pure function:**
+  `tests/resolve/test_duckdb_setup.py::test_a_fully_non_latin_family_name_does_not_crash_the_
+  registered_udf` — calls `soundex()` through a real, registered DuckDB connection (`_soundex`
+  alone never crashed; the registration boundary did) for a Chinese, Cyrillic, Arabic and Devanagari
+  family name, asserting `NULL`, not an exception. Verified non-vacuous: the fix reverted, the test
+  failed with the real `duckdb.InvalidInputException` this defect always raised, then restored and
+  confirmed green. A companion, `test_a_latin_family_name_still_produces_a_real_soundex_value_
+  through_the_registered_udf`, proves `null_handling="special"` did not make every call return
+  `NULL` regardless of input.
+
+  **The fixture, fixed alongside the crash, not left to depend on chance.**
+  `tests/scenarios/fixtures/fixture_corp.py::generate_resolution_persons` gained a fifth pair,
+  `identical_non_latin_script` ("李, 伟" x2, `merges_from_tau=0.99`) — real family name, real
+  given names, in the one fixture this session's own restructuring already placed inside "Before
+  the milestone" (Stage 4a). `test_fixture_corp_entity_resolution_projections_differ_by_threshold`
+  now runs the real resolver over a population that includes a non-Latin name on every run,
+  measured directly (0.999991 — identical to the plain-ASCII `identical` pair's own score, since
+  `jaro_winkler`/`levenshtein` compare Unicode strings directly and `year(date_of_birth)` still
+  blocks the pair even though `soundex` no longer does), not merely asserted. The test's own
+  `strict`/`balanced`/`broad` merge-set assertions were updated to include the new pair at every
+  detent it actually merges at.
+
+  **No other blocking or comparison function in the registry shares this fragility, checked
+  directly, not assumed:** `exact` and `year` (`packages/ontology/resolution_functions.py`'s
+  `BLOCKING_FUNCTIONS`/`COMPARISON_FUNCTIONS`) compile to plain DuckDB SQL with no custom function
+  at all; `jaro_winkler`/`levenshtein` resolve to Splink's own `comparison_library` constructors
+  (`services/resolve/splink_config.py`), native DuckDB string functions operating on raw Unicode
+  input with no Python-UDF null-handling boundary in the middle. `soundex` was, and remains, the
+  only registered function in this pipeline backed by bespoke Python code — the only one that could
+  have this exact failure shape, and the only one checked because it is the only one that could
+  fail this way.
 
 ---
 

@@ -21,6 +21,7 @@ import re
 import unicodedata
 
 import duckdb
+import duckdb.func
 import phonetics
 
 #: What survives sanitisation before `phonetics.soundex` ever sees it — everything else in the
@@ -53,7 +54,32 @@ def new_connection() -> duckdb.DuckDBPyConnection:
     """A fresh, private in-memory connection per resolution run — mirrors
     `adapters/analytics_duckdb/testing.py`'s own per-test-connection pattern. Never shared across
     calls: Splink mutates the connection it's given (temp tables, registered UDFs), so reuse
-    across concurrent resolution runs would race."""
+    across concurrent resolution runs would race.
+
+    **`null_handling="special"` — the non-Latin-family-name crash's own fix, repaired at the point
+    of input the same way the hyphen/apostrophe crash was.** `_soundex` above already returns
+    `None` for a name that sanitises to nothing letter-shaped — an entirely non-Latin-script family
+    name (Chinese, Cyrillic, Arabic, Devanagari, etc.) folds to nothing the same way an
+    all-punctuation value does, and `_soundex`'s own docstring already names this as "the same
+    'no blocking key' result... already returns," not a new failure mode. **Without this
+    parameter, that already-correct return value crashed anyway** — DuckDB's own default UDF
+    contract (`FunctionNullHandling.DEFAULT`) forbids a registered function from ever returning
+    `NULL` for a non-`NULL` input, so `resolve_entity_type` raised `SplinkException` (wrapping
+    DuckDB's own `Invalid Input Error: ... The UDF is not expected to return NULL values`) the
+    moment even one person in the population being resolved had a family name that sanitised to
+    nothing — taking down the whole population's resolution pass, not only that one person's own
+    match candidacy. `null_handling="special"` tells DuckDB a `NULL` return is a legitimate value
+    this function produces on purpose, letting the already-intended "no blocking key" behaviour
+    actually reach the blocking SQL instead of crashing before it gets there: a person with no
+    letter-shaped soundex key simply never blocks with anyone via this rule (standard SQL — `NULL`
+    never equals `NULL`), the same outcome an empty `family_name` already produces today, without
+    taking the rest of the population down with them."""
     con = duckdb.connect(":memory:")
-    con.create_function("soundex", _soundex, ["VARCHAR"], "VARCHAR")
+    con.create_function(
+        "soundex",
+        _soundex,
+        ["VARCHAR"],
+        "VARCHAR",
+        null_handling=duckdb.func.FunctionNullHandling.SPECIAL,
+    )
     return con

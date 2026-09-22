@@ -27,8 +27,11 @@ hop share the fourth, since both need the same hub-and-spokes graph), kept struc
 so no test's assertion depends on another's construction — the same "no spurious correlation...
 introduced by construction" discipline `hmp.py` already follows:
 
-- `generate_resolution_persons()` — four `Person` pairs at four empirically-checked separation
-  bands (property 1: τ 0.99/0.95/0.80 producing visibly different projections).
+- `generate_resolution_persons()` — five `Person` pairs: four at empirically-checked separation
+  bands (property 1: τ 0.99/0.95/0.80 producing visibly different projections), plus one pair
+  with a fully non-Latin-script family name, so this fixture's own real resolution pass exercises
+  the non-Latin-family-name crash fix (`services/resolve/duckdb_setup.py`) rather than leaving
+  whether that fix is ever exercised an accident of what this fixture happened to contain.
 - `generate_community_rings()` — three dense, disjoint fraud rings (property 2: Louvain community
   structure).
 - `build_path_spokes()` — a hub with eight `ASSOCIATE_OF` spokes of length 1..8, one carrying a
@@ -108,7 +111,7 @@ def _person(node_id: str, family_name: str, given_names: str, date_of_birth: str
 
 
 def generate_resolution_persons() -> list[ResolutionPair]:
-    """Four `Person` pairs, chosen empirically against the real, untrained Splink defaults this
+    """Five `Person` pairs, chosen empirically against the real, untrained Splink defaults this
     ontology's `resolution` block configures for `Person`
     (`jaro_winkler(family_name)`/`levenshtein(given_names)`/`exact(date_of_birth)`, blocked on
     `soundex(family_name)`/`year(date_of_birth)`) — not assumed. Scores measured directly against
@@ -123,6 +126,17 @@ def generate_resolution_persons() -> list[ResolutionPair]:
     - **shared_surname_different_person** ("Volkov, Anna" vs "Volkov, Mikhail", different DOB):
       0.0001 — never merges at any of the three detents, the negative control proving the
       mechanism does not over-merge on a bare shared surname.
+    - **identical_non_latin_script** ("李, 伟" x2): 0.999991, identical to the plain-ASCII
+      `identical` pair's own score, measured the same way, not assumed — the resolution pipeline
+      does not merely avoid crashing on a non-Latin-script family name
+      (`services/resolve/duckdb_setup.py`'s own `null_handling="special"` fix), it produces the
+      same meaningful match score a Latin-script identical pair gets, since `jaro_winkler`/
+      `levenshtein` compare Unicode strings directly and `soundex` returning `NULL` for this pair
+      only removes it from *one* of two blocking rules — `year(date_of_birth)` still blocks it,
+      so the pair is still compared. Before the fix, this pair's mere presence in the population
+      being resolved would have raised `SplinkException` for the *whole* population, not only
+      failed to score this one pair — `test_fixture_corp_entity_resolution_projections_differ_by_
+      threshold` running at all, end to end, is itself part of what proves the fix.
 
     `test_fixture_corp_entity_resolution_projections_differ_by_threshold` re-derives these scores
     live against the real resolver rather than trusting the numbers above to still hold if the
@@ -153,6 +167,12 @@ def generate_resolution_persons() -> list[ResolutionPair]:
             _person("corp-res-distinct-1", "Volkov", "Anna", "1990-07-01"),
             _person("corp-res-distinct-2", "Volkov", "Mikhail", "1975-03-12"),
             merges_from_tau=None,
+        ),
+        ResolutionPair(
+            "identical_non_latin_script",
+            _person("corp-res-non-latin-1", "李", "伟", "1988-11-02"),
+            _person("corp-res-non-latin-2", "李", "伟", "1988-11-02"),
+            merges_from_tau=0.99,
         ),
     ]
 

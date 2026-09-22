@@ -109,9 +109,14 @@ def test_fixture_corp_entity_resolution_projections_differ_by_threshold() -> Non
         merged_pair_labels(THRESHOLD_BROAD),
     )
 
-    assert strict == {"identical"}
-    assert balanced == {"identical", "close_given_name"}
-    assert broad == {"identical", "close_given_name", "close_surname_and_given"}
+    assert strict == {"identical", "identical_non_latin_script"}
+    assert balanced == {"identical", "identical_non_latin_script", "close_given_name"}
+    assert broad == {
+        "identical",
+        "identical_non_latin_script",
+        "close_given_name",
+        "close_surname_and_given",
+    }
     # Visibly different at every one of the three detents, not merely "some difference somewhere."
     assert strict < balanced < broad
 

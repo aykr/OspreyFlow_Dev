@@ -4,11 +4,17 @@ closed here rather than re-scoped. `phonetics.soundex` indexes its digit table w
 raised `IndexError` before this fix — not only a hyphen, checked directly below for an apostrophe,
 a space, a digit and an accented letter too, since a narrower fix that only handled hyphens would
 have left `O'Brien` (as ordinary a UK surname as `Smith-Jones`) still crashing.
+
+**The non-Latin-family-name crash — a second, later defect in the same function's own neighbourhood,
+fixed at the point of input the same way.** `_soundex` itself already returned `None` correctly for
+a fully non-Latin-script name; the crash was one level up, at UDF registration
+(`new_connection`'s own `null_handling="special"`) — see the tests against a real DuckDB connection
+below, which exercise the actual point the crash occurred, not only the pure function.
 """
 
 from __future__ import annotations
 
-from services.resolve.duckdb_setup import _soundex
+from services.resolve.duckdb_setup import _soundex, new_connection
 
 
 def test_a_hyphenated_family_name_does_not_raise() -> None:
@@ -60,3 +66,35 @@ def test_hyphenated_and_plain_variants_of_the_same_surname_still_share_a_blockin
     plain-ASCII variant of the same name would, or a hyphenated surname would silently stop
     matching its own unhyphenated spelling."""
     assert _soundex("smithjones") == _soundex("smith-jones")
+
+
+# --- The non-Latin-family-name crash — real DuckDB, the actual point of failure -------------------
+
+
+def test_a_fully_non_latin_family_name_does_not_crash_the_registered_udf() -> None:
+    """The crash this test exists to catch: `_soundex` already returns `None` for a name that
+    sanitises to nothing letter-shaped, but before `null_handling="special"` was added to
+    `new_connection`'s own `create_function` call, DuckDB's default UDF contract forbade a
+    registered function from ever returning `NULL` for a non-`NULL` input — so calling `soundex()`
+    through the real, registered connection (not `_soundex` directly, which never crashed) raised
+    `duckdb.InvalidInputException` for a fully Chinese, Cyrillic or Arabic-script family name. A
+    single name of this shape anywhere in a population being resolved took down
+    `resolve_entity_type` for the *whole* population, not only that one person's own match
+    candidacy — the same "clean, confident, wrong" -> here, "loud and total" -> failure shape this
+    project's own disclosure discipline treats as the worst a filtering/sanitisation mistake can
+    take."""
+    con = new_connection()
+    for family_name in ("李", "Иванов", "محمد", "अग्रवाल"):
+        result = con.execute("SELECT soundex(?)", [family_name]).fetchone()
+        assert result == (None,), f"{family_name!r} should soundex to NULL, not raise"
+
+
+def test_a_latin_family_name_still_produces_a_real_soundex_value_through_the_registered_udf() -> (
+    None
+):
+    """The companion to the test above — `null_handling="special"` must not have made every
+    `soundex()` call return `NULL` regardless of input; an ordinary Latin-script name still
+    produces a real blocking key through the same registered connection."""
+    con = new_connection()
+    result = con.execute("SELECT soundex(?)", ["Mercer"]).fetchone()
+    assert result is not None and result[0] is not None
