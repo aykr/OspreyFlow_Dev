@@ -462,7 +462,7 @@ to the graph or gave a human a way to promote it.
   the same way `extract()` is. `03_CONDUIT_MIDDLEWARE.md` §5.1's "index — full text and embeddings
   into OpenSearch" step remains genuinely unowned by any phase — that gap is about the *consumer*
   (no OpenSearch adapter exists anywhere in this plan), not the `ModelPort` method. Recorded in
-  full under "Gaps with no owning phase" below, not only here, precisely so it is findable by a
+  full under "Legacy disclosures" below, not only here, precisely so it is findable by a
   reader auditing gaps rather than only one reading Phase 6 top to bottom — the same failure mode
   that let the witness-statement fixture drift unbuilt after being named in this same phase's own
   scoping.
@@ -702,7 +702,7 @@ than a new surface).
   `explain`, manual link — working correctly against any `SAME_AS` edge, regardless of how it was
   written. It does **not** demonstrate ADR-024's own specific claim (a device extraction reporting
   an MSISDN and an IMSI together writes the link automatically) — that connector does not exist
-  (this document's Phase 2 known-gaps list and its `Gaps with no owning phase` entry both record
+  (this document's Phase 2 known-gaps list and its `Legacy disclosures` entry both record
   it). B15's *imsi→Device* leg is demonstrable end to end (`PAIRED_WITH`, already
   conformance-tested); its *msisdn→imsi* leg is demonstrable only by manual assertion in this
   phase's own review, not by the automatic mechanism ADR-024 describes, until that connector
@@ -720,7 +720,7 @@ than a new surface).
    the whole working set) and an App-level `Toast` summary.** Scoping this stage surfaced two
    access-control gaps neither `_manual_assertion`'s own Stage 1 fix nor `explain_cluster` had
    closed — both fixed here, not deferred, and both folded into the `FakeGraphPort` gaps entry as
-   instances three and four of one pattern (`Gaps with no owning phase`, above): `set_resolution_
+   instances three and four of one pattern (`Legacy disclosures`, above): `set_resolution_
    threshold`/`_manual_assertion` clustered the investigation-*shared*, unfiltered node population
    rather than the principal-visible subset (a write-path bug — a principal blind to a node could
    silently reset its persisted `cluster_id` — proved against the real adapter in `tests/services/
@@ -786,7 +786,7 @@ than a new surface).
    rejected candidates stay the still-separate, still-unbuilt review-queue screen's own concern
    (`09_INGEST_STUDIO.md` §7), not this stage's. **A third independent copy of the "narrow node
    ids to what a principal can see" pattern, closed rather than added:** `set_resolution_
-   threshold` and `explain_cluster` (instances three and four, `Gaps with no owning phase` above)
+   threshold` and `explain_cluster` (instances three and four, `Legacy disclosures` above)
    each still inlined that logic independently; the Dossier's own assembly would have been a
    fourth. Extracted instead into `services/api/access.py`'s `narrow_to_visible`, and both
    existing call sites retrofitted to it — verified unchanged by the existing threshold/explain
@@ -801,7 +801,7 @@ than a new surface).
    documents mention it. Trigger: a new "View messages" radial-menu item, `Endpoint`-type nodes
    only (B6's own wording).
 
-   **The keyboard-action-registry decision (`Gaps with no owning phase` above) is decided here:
+   **The keyboard-action-registry decision (`Legacy disclosures` above) is decided here:
    built, not deferred.** `apps/workspace/keyboard/actionRegistry.ts` — a plain list of
    `GlassCanvas`'s own action ids, `registerCovered(id)` called at the point each `keyboard.
    spec.ts` case actually proves one, and a final test asserting every registered id was covered.
@@ -1105,7 +1105,7 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
    once 6c exists, so 6c's own job is a principal-resolution strategy for a backgrounded caller
    (a service-level re-resolution against a stored `owner_id`, most plausibly), not a full
    principal directory; recorded here so it is not silently assumed solved by 6b's own test double.
-   **This is manifestation one of three of a single gap** — see "Gaps with no owning phase"'s own
+   **This is manifestation one of three of a single gap** — see "Legacy disclosures"'s own
    consolidated entry, below, for the other two and the combined operational consequence.
 
    Proven — the task's own named test and five more exercising what it implies:
@@ -1284,7 +1284,7 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
    simultaneous multi-instance saturation," still Phase 8a's own scope to close (raising Postgres's
    own `max_connections`, or a shared connection-pooler such as PgBouncer, are the two shapes
    already implied by that phase's own hardening language). **One of three disclosures now bearing
-   on the same horizontal-scalability claim** — see "Gaps with no owning phase"'s own consolidated
+   on the same horizontal-scalability claim** — see "Legacy disclosures"'s own consolidated
    entry for the other two and the combined finding.
 
    **The test that would fail if an eleventh store were added without a bound, named and
@@ -1557,7 +1557,7 @@ operable from the browser or a script — all of it provable on `local-lite`.
   file's own licence) is extended in the same pass, so a future fixture carrying its own data
   licence (ADR-035 §C6's IBM AML-Data case) does not pass unexamined the way it does today.
 - **A pathfinder acceptance-scenario step (B21, or an ADR addendum accepting its absence) —
-  `07_BUILD_PLAN.md`'s own "Gaps with no owning phase" entry, this session's Part A.**
+  `07_BUILD_PLAN.md`'s own "Legacy disclosures" entry, this session's Part A.**
 
 **Exit.** Both acceptance scenarios pass unchanged on `local-lite`. A `backup` → `restore` cycle
 reproduces the graph from staged Parquet. An export containing an `S2`-marked item is blocked,
@@ -1603,12 +1603,19 @@ first, not the one that is easiest to start.
 3. **Documentation refresh, then the Trigger A restructure** — already the most fully specified
    stage of the six, worked out in detail below this list rather than duplicated here. **Documentation
    + code (two coverage gates, the licence-check leg, `doc_citations_check.py`) + two owner
-   decisions** (per-file headers; commit-SHA citations in published guides). **Exit criterion, a
-   test:** `tests/fixtures/domain_model_coverage_allowlist.txt` and `tests/fixtures/
-   route_coverage_allowlist.txt` are both empty and deleted (`domain-model-coverage-check`/
-   `route-coverage-check` passing against a repository with no allowlist file to read is what
-   "done" means, not a judgement that the docs read well enough); every command in each of the 11
-   guides runs clean on a fresh checkout, per this entry's own already-stated criterion above.
+   decisions** (per-file headers; commit-SHA citations in published guides). **Also owns relocating
+   the 23 entries in "Legacy disclosures (dispositioned, relocation pending)" into wherever their
+   own stated disposition actually names** — assigned here rather than left implicit, since this
+   stage already rewrites this build plan's own structure and is the one stage with the obvious
+   reason to also do this; not a new obligation invented for this stage, the same document-hygiene
+   character as its licence/citation-check work. **Exit criterion, a test:** `tests/fixtures/
+   domain_model_coverage_allowlist.txt` and `tests/fixtures/route_coverage_allowlist.txt` are both
+   empty and deleted (`domain-model-coverage-check`/`route-coverage-check` passing against a
+   repository with no allowlist file to read is what "done" means, not a judgement that the docs
+   read well enough); every command in each of the 11 guides runs clean on a fresh checkout, per
+   this entry's own already-stated criterion above; **and "Legacy disclosures" itself is empty and
+   deleted** — the same "empty and deleted," not "empty and kept as a header," standard the two
+   allowlists already hold this stage to.
 4. **Assessment, export, the remaining Scenario B steps** — the product-feature core, following
    established patterns (evidence linking, export pipelines, handling gates) this build already has
    precedent for in earlier phases, so less uncertain than Stages 1–2 despite being the largest
@@ -1649,9 +1656,23 @@ first, not the one that is easiest to start.
    api.ts` with no drift gate the way every `packages/schemas` model already has — widening the
    model list to cover `services/api` route-response models generally, not just this one route
    module, is the shape of the fix). **Code/test-scaffolding**, no product dependency on any stage
-   above. **Exit criterion, a test:** `make ci` fully green with zero pre-existing-red items — every
-   item on this stage's own list is itself a named, individually fixable check, not a bundle
-   requiring a judgement call about "clean enough."
+   above. **Exit criterion, a test, narrowed rather than left contradicting this stage's own scope:**
+   `make ci` fully green with zero pre-existing-red items, **except `test_statelessness.py` itself**
+   — this stage's own scope is diagnosis only (whether the refused connection is a local process-
+   spawn/port-binding artefact of this environment or a real statelessness regression), and the
+   reproduction that would let it genuinely pass — two live Conduit instances under sustained load —
+   is Phase 8a's own scope, needing infrastructure this stage does not have. A stage that requires
+   its own exit criterion to be green while its own scope stops short of what that criterion needs
+   is the same defect class as a gate proving less than its name implies (`06_DECISIONS.md`'s own
+   `authorized-query-check` finding); narrowing the criterion here is the same fix Phase 7/Phase 8a's
+   own split already used for an identical shape of problem ("each phase's exit criterion is now a
+   test it can actually run on the infrastructure it has, not a criterion split across two without
+   saying so," this document's own Phase 8 outcome text, above). **This stage's own diagnosis is
+   still a real, checkable deliverable, not an escape hatch:** it must conclude with one of two
+   findings, stated as such, not left open — either a named local fix that makes the test pass
+   within this stage's own scope (in which case it is no longer excepted, and `make ci` really is
+   fully green), or a specific, evidenced reason the failure can only be reproduced or fixed against
+   Phase 8a's own multi-instance infrastructure, handed to that phase rather than left unexplained.
 
 **Before the restructure below: refresh the published documentation set. Sequencing matters —
 refresh first, restructure second, recorded here so it is not left to whoever reaches this close
@@ -2024,7 +2045,7 @@ finding rather than rediscovering the gap.
 
 ## Permanently accepted, not built
 
-The second disposition a "Gaps with no owning phase" entry could resolve to, alongside an owning
+The second disposition a "Legacy disclosures" entry could resolve to, alongside an owning
 phase and "Out of scope for v1" above — a finding stays real and disclosed, but the decision is to
 keep the current behaviour rather than build the fix, with the reasoning recorded rather than the
 item left to be silently rediscovered as an open question.
@@ -2061,30 +2082,42 @@ item left to be silently rediscovered as an open question.
   whether narrowing alone was enough) that produced this decision, not assumed to hold forever
   unchecked.
 
-## Gaps with no owning phase
+## Legacy disclosures (dispositioned, relocation pending)
 
-**Every entry below has a disposition — checked directly against each one's own closing sentence,
-not assumed from the section title — even though the section is not literally empty of text.**
-Unlike the known-gaps lists inside Phase 5, Phase 5a and Phase 6 above — each a thing that stage's
-or phase's own work found and deferred — an entry here was, at the time it was written, something
-no phase's bullet list claimed at all. A disposition sweep this session checked all 31 entries then
-present against their own text (not their heading) and found: two were stale — already resolved by
-Phase 7 Stage 1 and never removed when that stage closed, now deleted rather than left as the next
-false positive; eight named genuinely orphaned findings with no disposition anywhere, now given one
-(an owning phase, an explicit permanent acceptance recorded in the new "Permanently accepted, not
-built" section above, or a place on "Out of scope for v1"); the remaining twenty-three already
-stated their own disposition within their own text (most commonly "Owning phase: **Phase 8**") but
-were never physically moved out of this section once they had one. **Those twenty-three are left in
-place here, not relocated, because physically moving each into wherever its own stated disposition
-lives is a separate, larger reorganisation this sweep did not undertake — the claim this note makes
-is narrower and checked: nothing below is *undispositioned*, whether or not it has been *filed*
-correctly.** Read each entry's own closing sentence for its actual disposition, not this section's
-own heading, until that reorganisation happens. **Swept as a standing step of the phase-close
-procedure from here on:** when a phase closes, this document's own author checks every entry that
-phase's own work resolved and removes it here — the discipline `06_DECISIONS.md`'s own "Confirmed,
-not merely suspected" standard already applies to a claim, applied here to a claim of absence — so
-a closed finding does not sit here inflating a future phase's own inventory the way the two stale
-entries above did for weeks before this sweep found them.
+**Renamed from "Gaps with no owning phase" — the old heading inverted the signal it was meant to
+carry.** Every one of the 23 entries below already carries a disposition, checked directly against
+each one's own closing sentence, not assumed from a heading — most commonly an existing "Owning
+phase: **Phase 8**" stated within the entry's own text. A section titled "no owning phase"
+containing 23 entries that all name one is not a residual worklist any more; it is a legacy
+holding area for findings whose disposition was recorded in place, at the point each was found,
+rather than filed into the section that disposition actually names. Kept here, not deleted, for
+the same reason the old section was kept rather than each entry silently dropped: the finding
+itself (what was checked, what it found, why it matters) is worth more than the convenience of not
+moving it.
+
+**Relocation is real work, not a rename — assigned to Stage 3 (`07_BUILD_PLAN.md`'s own
+documentation-refresh stage above), which is already rewriting this build plan's own structure and
+is the one stage with the obvious reason to also do this.** Physically moving each of the 23
+entries below into the section its own stated disposition names (a Phase 8 stage's own bullet list,
+"Out of scope for v1," or "Permanently accepted, not built") is not undertaken here — naming the
+owning stage is this correction's own job, doing the move is Stage 3's. Until that relocation
+happens, read each entry's own closing sentence for its actual disposition, not this section's own
+heading or its physical location.
+
+**A disposition sweep this session checked all 31 entries then present against their own text (not
+their heading) and found:** two were stale — already resolved by Phase 7 Stage 1 and never removed
+when that stage closed, now deleted rather than left as the next false positive; eight named
+genuinely orphaned findings with no disposition anywhere, now given one (an owning phase, an
+explicit permanent acceptance recorded in the new "Permanently accepted, not built" section above,
+or a place on "Out of scope for v1"); the remaining twenty-three, below, already stated their own
+disposition within their own text but were never physically moved out of this section once they had
+one — the gap this rename and Stage 3's own relocation task both exist to close. **Swept as a
+standing step of the phase-close procedure from here on:** when a phase closes, this document's own
+author checks every entry that phase's own work resolved and removes it here — the discipline
+`06_DECISIONS.md`'s own "Confirmed, not merely suspected" standard already applies to a claim,
+applied here to a claim of absence — so a closed finding does not sit here inflating a future
+phase's own inventory the way the two stale entries above did for weeks before this sweep found
+them.
 
 - **Highest-consequence item in this list for Phase 8 — the principal-resolution gap, consolidated
   from three separate disclosures of what is one missing capability, not three.** Stated once,
@@ -2460,7 +2493,7 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
   to fail under load: the same file's own comment records two concurrent conformance suites OOM'ing
   at the unset ~2GB default, a single sequential HMP graph build OOM'ing at 4G, and `ollama`'s
   resting footprint OOM-killing ArcadeDB repeatedly in Phase 6 Stage 6 — `07_BUILD_PLAN.md`'s own
-  Phase 6 known-gaps list (§647-668) and this document's "Gaps with no owning phase" entries record
+  Phase 6 known-gaps list (§647-668) and this document's "Legacy disclosures" entries record
   a fourth and (with `test_statelessness`'s Postgres-exhaustion incident) fifth occurrence of the
   same class. An 8-hop `repeat()`/`simplePath()` traversal over a dense neighbourhood — exactly the
   shape a real corpus can produce and a fixture graph is unlikely to — is unbounded work with no
@@ -2588,7 +2621,7 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
     whatever host or sandbox it is run in, or a real statelessness regression — until that
     determination is made, treat `03_CONDUIT_MIDDLEWARE.md` §1 as unverified in this environment,
     not as verified-and-then-regressed. **One of three disclosures now bearing on the same
-    horizontal-scalability claim** — see "Gaps with no owning phase"'s own consolidated entry,
+    horizontal-scalability claim** — see "Legacy disclosures"'s own consolidated entry,
     above, for the other two and the combined finding.
 
 - **`sweep_stale_conformance_databases` (`packages/adapters/graph_arcadedb/testing.py`) has now
