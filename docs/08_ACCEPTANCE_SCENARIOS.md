@@ -38,7 +38,7 @@ points.
 | A12 | Run the Clique Metric on the working set | ComputePort | The relay group passing items between cells scores high on clique and low on degree centrality |
 | A13 | Record four judgements against the yardstick, each with evidence | Assessment objects | A judgement cannot be saved without at least one supporting reference |
 | A14 | Record seven intelligence gaps and three assumptions | Assessment objects | Gaps link to the entities they concern; assumptions link to the judgements they support |
-| A15 | Export the chart and the assessment | Export, handling gate | Items marked consult-originator block the export by name; export proceeds only with a recorded justification and carries a withheld-item manifest |
+| A15 | Export the chart and the assessment | Export, handling gate | Items marked consult-originator block the export by name; export proceeds only with a recorded justification and carries a withheld-item manifest; the export produces a real artefact of the requested shape (chart/subgraph/report), carrying the mark |
 
 ### What A13–A15 prove
 
@@ -47,6 +47,23 @@ platform exists: the analytical picture and the intelligence product are the sam
 the product cannot be exported without the handling policy being applied to every element in it.
 If a later change makes A15 pass without evaluating handling on each element, the platform has
 regressed in the way that matters most.
+
+**A15's own assertion was strengthened rather than left to read as proving more than it did.**
+Before this addition, A15 tested the gate — blocks by name, requires justification, carries a
+manifest — and stopped there, silent on whether anything a recipient could actually open ever
+came out the other side. `07_BUILD_PLAN.md`'s own Phase 8 exit criterion, and through it the alpha
+gate (`06_DECISIONS.md` ADR-042), were both satisfiable by an export feature that exported
+nothing: the gate could pass every check and still hand nobody a file. **This is the second
+instance of the same pattern this document's own standing rule 12 names — a gate proving less
+than its name implies — found at the acceptance-scenario level, not only in a test file.** The
+first was Scenario B's own "B12/B13/B14/B20 pass end to end," which `07_BUILD_PLAN.md`'s Phase 7
+entry found true of the single-session walkthrough as written and not a claim that hotlists and
+monitors fire across different analysts — the operational case B13's own CoLP framing is actually
+modelled on. Both instances share the same shape: an acceptance row whose literal wording is
+narrower than what a reader assumes it proves, discovered only by checking the row against the
+system's real behaviour rather than against its own passing test. A15's own assertion now says
+what it means: the artefact must exist, in the requested shape, carrying the mark — not only that
+the gate around producing one behaved correctly.
 
 ### Implementation note — A2's mechanism (found during Phase 5 Checkpoint 2's live verification)
 

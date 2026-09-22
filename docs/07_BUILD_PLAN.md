@@ -1916,10 +1916,10 @@ first, not the one that is easiest to start.
      block) to the real gate for all three `artefact_kind` values and renders the real mark/
      manifest/ledger response — the safety-critical half A15 actually tests, and the half this
      stage's own gates (the keyboard walkthrough, the named-blocker assertions) could verify — but
-     produces no downloadable file. **Owning phase: whichever phase next builds a chart-image or
-     report-assembly pipeline** — real, separately-scoped design work (a canvas-capture mechanism
-     for `chart`, a document-assembly pass over assessment objects for `report`), not invented here
-     to make this entry read as more finished than it is.
+     produces no downloadable file. **Owning stage: 4h, below — not "whichever phase," per this
+     document's own new disclosure-convention rule** (see this stage list's own closing paragraph):
+     a disclosure naming no real stage is a note, not a disclosure, and this one is corrected to a
+     real stage in the same session that wrote it, not left for a future sweep to catch.
    - **4f — B16 and B18.** Cross-case timeline overlay and playback-driven snail trail (ADR-022):
      "small, incremental additions to Timeline and Map," lower uncertainty than 4a–4e, no
      dependency on any open ADR above.
@@ -1929,6 +1929,33 @@ first, not the one that is easiest to start.
      `test_phase8_exit_criterion_end_to_end`-shaped scenario test against both acceptance scenarios
      on `local-lite`, plus the S2-export-blocks test — the same closing-pass discipline Phase 6's
      Stage 6 and Phase 5a's Publish stage already used.
+   - **4h — the export rendering pipeline, a real sub-stage inside v1, not a placeholder — directly
+     continuing 4e's own work.** `08_ACCEPTANCE_SCENARIOS.md` names A13–A15 as the reason this
+     platform exists, and their own product is a document handed to someone. Stage 4e wired the
+     real gate, mark, manifest and ledger for all three artefact shapes and renders the response —
+     the safety-critical half — but produces no downloadable file for any of them; an export
+     feature that exports nothing is an absent feature, not a partial one, and belongs in v1's own
+     scope on that basis alone, not deferred past it.
+
+     **Scope, against the formats `02_GLASS_FRONTEND.md` §10.1 now states** (a real spec gap found
+     and closed in the same pass that gave this stage its own number, not left open): **chart** —
+     `GlassCanvasHandle` gains a real `exportImage` method wired to `@sigma/export-image`
+     (`02_GLASS_FRONTEND.md` §1's own already-listed dependency, never imported anywhere until this
+     stage), producing a real PNG; a saved metric/histogram/timeline view uses ECharts' own export
+     the same way. **subgraph** — the current selection serialised as JSON in the working set's own
+     `Node`/`Edge` wire shape, no new format invented. **report** — a self-contained HTML document
+     assembling the investigation's judgement/gap/assumption content with their own cited evidence
+     inline, styled against `design/tokens.css`'s light theme; real document-assembly work, not
+     reducible to a one-line addition the way the chart/subgraph shapes are.
+
+     **Exit criterion, a test per shape, not one shared assertion:** `test_chart_export_produces_a_
+     real_png_carrying_the_mark`, `test_subgraph_export_produces_real_json_carrying_the_mark`,
+     `test_report_export_produces_a_self_contained_html_document_carrying_the_mark` — each
+     downloads real bytes (not the API response alone) and asserts the artefact is well-formed in
+     its own format *and* carries the mark `02_GLASS_FRONTEND.md` §10.3 already specifies for it
+     (embedded PNG metadata for chart; a top-level field for subgraph; both for report). This is
+     also `08_ACCEPTANCE_SCENARIOS.md`'s own strengthened A15 assertion, below — the acceptance row
+     and this stage's own exit criterion are the same claim, checked twice on purpose.
 
    **4b/4c and 4d/4e were each a backend/Glass pair sharing one blocked-on-ADR precondition — all
    three now accepted (`06_DECISIONS.md` ADR-045/046/047, 22 September 2026), so no sub-stage in
@@ -2103,10 +2130,18 @@ first, not the one that is easiest to start.
    same way (added to `conformance` and to `test`'s own ignore list) and confirmed passing against
    real services before this entry was written. **`Makefile`'s own `test`/`test-all` targets were
    separately found 22 files out of sync with `ci.yml`** (a strict subset — every file `ci.yml`
-   correctly wires, `Makefile` silently didn't), fixed in the same change; the gate itself checks
-   `ci.yml` only, not the `Makefile` a second time — a disclosed, not silently narrower, scope:
-   `Makefile`'s own line-continuation shape is a second text format this gate does not parse, so
-   the two can drift again without the gate noticing. **Owning phase for widening the gate to check
+   correctly wires, `Makefile` silently didn't) — meaning "green locally" (`make test`/`make
+   test-all`) and "green in CI" had been answering two different questions for some unknown span of
+   time, a developer running the Makefile's own targets locally getting a materially weaker signal
+   than the pipeline actually enforced, with nothing surfacing the gap either way. **Resolved, not
+   merely measured: fixed in the same change, and `ci.yml` is the direction that won** — its own 22
+   extra files were added to the `Makefile`'s `test`/`test-all` targets; `ci.yml` itself was not
+   altered to match a narrower `Makefile`, since checking directly found `ci.yml` was the correct,
+   complete list throughout and the `Makefile` was the one that had fallen behind. The gate itself
+   checks `ci.yml` only, not the `Makefile` a second time — a disclosed, not silently narrower,
+   scope: `Makefile`'s own line-continuation shape is a second text format this gate does not parse,
+   so the two can drift again, the same way, without the gate noticing next time. **Owning phase for
+   widening the gate to check
    `Makefile` too: whichever phase next has a concrete reason to want it** — not built speculatively
    here, the same discipline this document already applies elsewhere. Ten new tests (`tests/
    test_test_file_coverage_check.py`), including the two false positives this gate's own first
@@ -2635,6 +2670,26 @@ author checks every entry that phase's own work resolved and removes it here —
 applied here to a claim of absence — so a closed finding does not sit here inflating a future
 phase's own inventory the way the two stale entries above did for weeks before this sweep found
 them.
+
+**A rule added to the convention itself, 22 September 2026, not only a fix to two instances of
+its absence: a disclosure naming no real owning phase or stage is a note, not a disclosure.**
+"Owning phase: whichever phase next builds X" names no phase at all — it is a sentence shaped like
+a disposition, occupying the place a disposition belongs, without being one. The phase-close sweep
+above is the only mechanism that has ever caught this category, and it runs once, at the end of a
+phase, checking entries against *removal* (has this been resolved), never against *validity* (did
+this ever name a real owner in the first place) — so a placeholder written mid-phase survives
+untouched until the next sweep, or longer, exactly the gap that let this section balloon to 31
+entries before the first sweep ever ran. **Two instances were written into this very document
+since that first sweep emptied the old "Gaps with no owning phase" heading**, both caught and
+fixed within the same session that wrote them rather than left for a future sweep: the
+node-interaction-highlight-channel gap (Stage 4c's own disclosure, briefly read "owning phase:
+none yet" before being folded into Stage 5, above) and the export-rendering-pipeline gap (Stage
+4e's own disclosure, briefly read "owning phase: whichever phase next builds a chart-image or
+report-assembly pipeline" before Stage 4h, above, gave it one). **The rule this session draws from
+both: a disclosure's own closing sentence must name a real stage, an explicit "Out of scope for
+v1," or an explicit "Permanently accepted, not built" *at the moment it is written*, not as a
+placeholder to be resolved by whoever next reads it or by the next phase-close sweep.** A
+disclosure that cannot yet name one of the three has not finished being written.
 
 - **Highest-consequence item in this list for Phase 8 — the principal-resolution gap, consolidated
   from three separate disclosures of what is one missing capability, not three.** Stated once,

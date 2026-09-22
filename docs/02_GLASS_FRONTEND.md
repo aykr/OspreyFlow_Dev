@@ -532,11 +532,33 @@ it its own surface. Three artefact shapes share one handling gate — there is o
 
 ### 10.1 Triggers
 
-| Shape | Source |
-| --- | --- |
-| Chart | The current canvas (`@sigma/export-image`, §1) or a saved metric/histogram/timeline view (ECharts' own export) |
-| Subgraph | The current working set, or a lassoed selection via the same "Branch to new tab" mechanism §3.1 already defines |
-| Report | The investigation's assessment objects (§9), assembled with their own cited evidence — the artefact A15 itself names ("Export the chart and the assessment") |
+| Shape | Source | Format |
+| --- | --- | --- |
+| Chart | The current canvas (`@sigma/export-image`, §1) or a saved metric/histogram/timeline view (ECharts' own export) | PNG |
+| Subgraph | The current working set, or a lassoed selection via the same "Branch to new tab" mechanism §3.1 already defines | JSON |
+| Report | The investigation's assessment objects (§9), assembled with their own cited evidence — the artefact A15 itself names ("Export the chart and the assessment") | Self-contained HTML |
+
+**File formats, recorded here rather than left undetermined.** This document named where each
+shape's content comes from without ever stating what file it becomes — a real spec gap, found
+while Stage 4h (`07_BUILD_PLAN.md`) gave the rendering pipeline an owning stage rather than
+leaving it a placeholder. Decided, not merely disclosed as open:
+
+- **Chart — PNG**, `@sigma/export-image`'s own native output for the canvas case; ECharts' own
+  export for a histogram/timeline/metric view produces the same.
+- **Subgraph — JSON**, the working set's own `Node`/`Edge` wire shape
+  (`03_CONDUIT_MIDDLEWARE.md` §3.2's delta protocol already defines it, `model_dump(mode="json")`)
+  — no new format invented; a subgraph export is a snapshot in the same shape the Glass already
+  receives over the wire.
+- **Report — a self-contained HTML document.** Judgement/gap/assumption content, cited evidence
+  and the yardstick band render inline as prose, styled against `design/tokens.css`'s own light
+  theme (§4's "an exported chart destined for an intelligence product should default to light,"
+  extended here to the report as a whole). Chosen over a PDF pipeline deliberately: this build
+  does not need to own a PDF-rendering dependency to produce "a document handed to someone" (`08_
+  ACCEPTANCE_SCENARIOS.md`'s own framing of what A13–A15 exist to prove) — a single HTML file
+  opens in any browser and is printable to PDF by the recipient, at their own discretion, with
+  nothing lost from the source document in that conversion. **Revisit if** a recipient-side print
+  step turns out to be an unacceptable hand-off in practice; the shape to build then is a real PDF
+  pipeline, not assumed necessary now.
 
 ### 10.2 Handling gate
 
