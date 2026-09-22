@@ -4436,11 +4436,14 @@ itself access-controlled), is the shape to design, not a reason to fall back to 
 
 ---
 
-## ADR-047 — The Osprey export mark, and the durable record of what left the boundary: proposed, decide nothing
+## ADR-047 — The Osprey export mark, and the durable record of what left the boundary: accepted, both gaps
 
-**Status.** Proposed, 22 September 2026, during Phase 8 Stage 4's own read-first pass. Two related
-gaps, both in what happens once an export permanently leaves the system boundary; neither is
-decided here. Stage 4c is not built until both are settled.
+**Status.** Accepted, 22 September 2026. Two related gaps, both in what happens once an export
+permanently leaves the system boundary. Gap 1 (the mark's own content) is decided: option (b), a
+mark that encodes handling, not only provenance. Gap 2 (the durable record) is decided separately,
+as its own decision rather than folded into Gap 1's, per this record's own original framing: option
+(b), a compliance-facing export ledger independent of the audit stream. Both analyses below are
+kept as originally drafted; both decisions are recorded at the end of this record.
 
 **Gap 1 — the Osprey mark is named once and defined nowhere.** `03_CONDUIT_MIDDLEWARE.md` §6
 states that "Exports carry the Osprey mark, the investigation reference, the export timestamp, the
@@ -4521,7 +4524,81 @@ stream's), explicitly designed to survive an investigation's own deletion or arc
   investigation; delete or archive the investigation; assert the ledger entry for that export
   still exists and is still readable by a compliance principal.
 
+**Decision, Gap 1 — 22 September 2026. Option (b): the mark encodes handling, not only
+provenance.** A provenance-only stamp (option (a)) tells a recipient where an artefact came from
+and nothing about how to treat it — and the mark is the *last* control that applies once the file
+is outside the system (`06_DECISIONS.md` ADR-045's own finding: "no principal re-checks anything
+ever again"). A control that expires at the one moment it would matter most is not a control worth
+building only halfway.
+
+**What it encodes.** The four provenance fields §6 already names (Osprey identifier, investigation
+reference, export timestamp, τ) plus the artefact's own highest handling level present at export
+time. "Highest" because an artefact assembled from mixed-handling items must be treated at the
+level of its most sensitive component by whoever receives it — the same dominance-order reasoning
+`HandlingScheme`'s own machinery already applies elsewhere (ADR-025's `SAME_AS`-handling
+inheritance, ADR-040's declined option (b)), reused rather than a new rule invented for export.
+
+**What it looks like on each shape.**
+- **Chart.** A visible footer or watermark carrying the human-readable fields, *and* the same
+  fields embedded as machine-readable image metadata (a PNG text chunk or the export format's own
+  equivalent) — visible to a human reading the picture, and parseable by a system that ingests it
+  without OCR.
+- **Subgraph.** A top-level field on the structured payload itself — not a rendered mark at all,
+  since the artefact has no visual surface to render one on. The same field names and values as the
+  chart's own embedded metadata, so a consumer reading either shape finds the mark the same way.
+- **Report.** Both: a visible header/footer stamp on the document (the chart's own convention) and
+  the same embedded structured field the subgraph carries, since a report is prose plus embedded
+  evidence and needs to be readable by a person and machine-checkable by a downstream system at
+  once.
+
+**Machine-readable: yes, in every shape, not only human-visible.** A rendered watermark alone would
+satisfy A15's own literal assertion but not a downstream system trying to auto-apply a handling
+policy on ingest — exactly the capability a provenance-only mark (option (a)) would have foreclosed.
+
+**Distinguishable from never having had one: only from this system's own side, not
+unconditionally.** The export pipeline is changed so that it **never produces an artefact without a
+mark** — the mark is written by the gate itself as part of producing the artefact, not an optional
+step an export path could skip, so nothing this system exports is ever genuinely unmarked. What
+this decision does **not** solve, recorded honestly rather than implied solved: a recipient holding
+a file with no mark cannot tell "this never passed through the gate" apart from "the mark was
+stripped or cropped out after export" without cryptographic signing, which is a real escalation
+this record does not decide.
+
+**The test.** `test_export_mark_carries_handling_and_is_machine_readable_on_every_artefact_shape` —
+export the same selection as a chart, a subgraph and a report; assert each artefact's own mark
+carries the same handling value, that the chart's and report's own visible rendering agrees with
+their embedded metadata, and that the subgraph's field is present with no visual rendering
+expected. A companion, `test_the_export_pipeline_never_produces_an_artefact_with_no_mark`, asserts
+every code path that can produce an artefact writes one.
+
+**Decision, Gap 2 — 22 September 2026. Option (b): a separate export ledger, independent of the
+audit stream.** The recommendation this record adopts: a compliance-facing log, its own store, not
+an extension of the Conduit's own audit stream (option (a)) — because the audit stream's entire
+value to an *investigation* is that it is scoped to that investigation's own access, and the
+durable record's entire value to *compliance* is that it must be readable by someone who is not,
+and should not need to be, a principal on any investigation at all. Folding the two into one store
+with a second access path (option (a)) risks the compliance view quietly inheriting an
+investigation-scoping assumption the audit stream was never built to shed; a separate store never
+has that assumption to shed in the first place.
+
+**Retention, named rather than left to the store's own default.** The ledger is explicitly designed
+to survive an investigation's own deletion or archival — the reason a durable record exists at all
+is to answer "what left the boundary" after the investigation itself may no longer be queryable, so
+tying its lifetime to the investigation's would defeat its own purpose.
+
+**The test.** A companion to the one already named above,
+`test_a_compliance_principal_can_list_every_export_without_investigation_access`, asserts the
+ledger's own read path needs no per-investigation grant at all.
+
+**Cost.** A new store (schema, retention policy, its own access-control role distinct from any
+investigation's own principals); the mark-writing change to every export code path, for both gaps
+together; the mixed-handling "highest level" computation reusing `HandlingScheme`'s existing
+dominance order rather than a new one. Real, additional Stage 4d work, priced here rather than
+assumed to fall out of the export gate's own existing scope for free.
+
 **Revisit if.** Either gap surfaces a real customer requirement this record did not anticipate (a
 specific regulatory retention period, a specific machine-readable marking standard already in use
 by a customer) — at which point that requirement, not this record's own options, should drive the
-final shape.
+final shape. Tamper-evidence against a stripped mark specifically (Gap 1's own residual, above) is
+its own trigger: a signed mark, or a hash recorded in the Gap 2 ledger, is the shape to design then,
+not assumed into this decision now.

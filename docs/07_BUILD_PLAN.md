@@ -1750,9 +1750,11 @@ first, not the one that is easiest to start.
      the review-flag chip.
    - **4d — Export pipeline and handling gate, backend.** `POST /export`, the `consult_originator`
      block-by-name, the justification/originator-reference override, the withheld-item manifest,
-     the Osprey-mark/investigation-ref/timestamp/τ artefact header. **Blocked on `06_DECISIONS.md`
-     ADR-045 and ADR-047** being accepted — this stage's single largest open design surface, and
-     the reason it does not start until both are settled.
+     the Osprey mark, and — **now unblocked: `06_DECISIONS.md` ADR-047 accepted, 22 September
+     2026** — the mixed-handling "highest level" mark computation, the per-shape mark rendering
+     (chart/subgraph/report), and the new compliance-facing export ledger, independent of the audit
+     stream, that ADR-047's own Gap 2 decision requires. Still depends on `06_DECISIONS.md`
+     **ADR-045** for the manifest's own default-vs-deployment-option shape.
    - **4e — Export, Glass surface.** `02_GLASS_FRONTEND.md` §10, built in full: the three export
      triggers, the handling-gate UI with its named blocker list, the justification form, the
      manifest and mark display.
