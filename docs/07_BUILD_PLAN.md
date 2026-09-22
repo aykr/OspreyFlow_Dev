@@ -2070,76 +2070,88 @@ the reasoning for each move stated at the point it moves.
    checked against the milestone at its own entry, in "After the milestone," below, and moves
    there; none of it is exercised by either acceptance scenario.
 
+### Delivered, not milestone-gated
+
+Neither "required for V1 END TO END" nor "remaining work" — already built, checked against the
+milestone and found not to gate it. Kept out of both lists above and below on purpose: filing
+finished work inside "Before the milestone" would misstate it as something the milestone depends
+on, and filing it inside "After the milestone" would misstate it as a queue item still to be done.
+Whatever else in either list turns out to be already built moves here too, at the point that is
+found, rather than staying filed as if it were still outstanding.
+
+- **Stage 1 — principal resolution, built, 22 September 2026 (`06_DECISIONS.md` ADR-043: OAuth2
+  Token Exchange, RFC 8693).** `PrincipalResolver.resolve_for_owner`/`resolve_for_owner_detailed`
+  (`services/api/auth.py`) exchange this Conduit's own client credentials for a token minted as
+  the target `owner_id`, decoded through the existing, unchanged `resolve()` — no second
+  claims-construction path. `principal_for_owner` (`services/api/evaluation.py`, both
+  `evaluate_hotlists_for_entry` and `evaluate_monitors_for_entry`) and every one of its call
+  sites are now async (`app.py`'s `_evaluate_watches_best_effort`, and ~15 test call sites in
+  `tests/services/api/test_evaluation.py`) — the requester's own id still resolves instantly with
+  no network call; any other owner now goes through the real exchange. **Code + decision, both
+  discharged.**
+
+  **Why this sits here rather than "Before the milestone," stated rather than left for a reader to
+  work out.** `08_ACCEPTANCE_SCENARIOS.md`'s own literal text for B12/B13/B14/B20 is a single,
+  continuous session — the analyst who sets the hotlist/monitor is the same analyst whose later
+  ingest triggers it, so `owner_id == requester` holds by construction and the milestone's own
+  closing-pass test (Stage 4g) never exercises cross-analyst resolution at all. This stage's own
+  real value — principal resolution for a *different* analyst's later action, the operational case
+  B13 is actually modelled on — is genuine and already built, but is not what the milestone's own
+  literal wording requires.
+
+  **Only one of the two halves this entry originally expected to close together actually
+  closed — checked directly, not assumed, and the record corrected rather than left overclaiming
+  it.** Cross-analyst hotlist/monitor firing (B12/B13/B14/B20's own operational case) is
+  unblocked: `test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_ingest`
+  passes, through the real `run_studio_recipe` route, two real principals, neither one the
+  other (`tests/scenarios/test_phase7_stage6c_watch_routes.py`). **Resolution-triggered monitors
+  are not — attempted directly, not left as a missing call site, and found blocked by a
+  different, more precise reason once one was actually built.** A real call site was wired
+  (`run_resolution_for_entity_type` calling `evaluate_monitors_for_entry` after publishing to the
+  change stream, threaded through `try_run_resolution_with_overlap_guard`/
+  `run_resolve_entity_type_job` and bound at job registration in `app.py`) and reverted, not kept
+  half-working: `services/api/worker.py`'s own `JobWorker._process` begins the job's transaction,
+  runs the handler, and commits only *after* the handler returns — so the evaluation call, running
+  from inside the handler, executes before the very `SAME_AS` write it exists to alert on is
+  committed. `GraphPort.match` has no transaction parameter, so it genuinely cannot see an
+  uncommitted write from inside the same handler — standard transaction-isolation behaviour, not a
+  port oversight this stage could route around. **Confirmed empirically:** the in-handler call
+  found no match and alerted nothing for a freshly-created monitor in a real test build of this
+  wiring; a second, manual call to the identical function immediately after the test's own commit
+  correctly found the match and fired the alert. `06_DECISIONS.md` ADR-037's own amendment has the
+  full record: a `GraphPort` transaction-scoped read is disqualified on correctness, not priced
+  against — a job's own transaction can still roll back after the handler returns, and reading
+  uncommitted state would let a rolled-back job raise an alert for a `SAME_AS` edge that never
+  existed. The complete fix is a durable-record consumer (evaluation reading from the change
+  stream itself, the shape ADR-037's own amendment already describes), not a post-commit hook
+  alone — correct, but a process dying between commit and hook loses that evaluation with nothing
+  recording it should have happened. **Checked against `08_ACCEPTANCE_SCENARIOS.md` directly, not
+  assumed: no Scenario B row needs a monitor to fire from resolution alone** (B20's own assertion
+  is ingest-triggered, already covered). Recorded in "Out of scope for v1" below, not inside this
+  stage or any other Phase 8 stage — nothing v1 commits to depends on it.
+
+  **Exit criterion, a test — met:** `test_a_hotlist_owned_by_one_analyst_fires_from_a_different_
+  analysts_own_ingest` (`tests/scenarios/test_phase7_stage6c_watch_routes.py`) passes. The two
+  tests ADR-036 already named
+  (`test_monitor_never_fires_on_a_match_the_saving_analyst_cannot_see`,
+  `test_monitor_stops_evaluating_once_the_saving_principal_is_revoked`) still pass as
+  regressions. **The containment test the task named as the one that matters** —
+  `test_principal_for_owner_returns_exactly_that_owners_own_claims_not_a_broader_principal`
+  (`tests/services/api/test_auth.py`) — passes, and was confirmed non-vacuous by injecting a
+  broken implementation (hardcoding `requested_subject` to a broader principal's own id) and
+  observing the real failure output before reverting. **The freshness test** —
+  `test_a_revoked_principal_stops_firing_at_the_next_evaluation_no_cache_to_invalidate`
+  (`tests/services/api/test_evaluation.py`) — passes against the real mechanism, not the
+  in-memory test stand-in every other test in that file uses.
+
 ### After the milestone
 
-Everything else. Recorded in full below — nothing deleted — reordered because none of it is
-required for V1 END TO END, checked against `08_ACCEPTANCE_SCENARIOS.md` directly at each item
-rather than assumed.
+Everything else genuinely remaining. Recorded in full below — nothing deleted — reordered because
+none of it is required for V1 END TO END, checked against `08_ACCEPTANCE_SCENARIOS.md` directly at
+each item rather than assumed. **Stage 1 is not here** — it is already built; "Delivered, not
+milestone-gated," above, has it, so a reader scanning this section for remaining work does not
+find something already finished sitting in the queue.
 
-**Why this stage sits after the milestone, stated rather than left for a reader to work out.**
-`08_ACCEPTANCE_SCENARIOS.md`'s own literal text for B12/B13/B14/B20 is a single, continuous
-session — the analyst who sets the hotlist/monitor is the same analyst whose later ingest
-triggers it, so `owner_id == requester` holds by construction and the milestone's own closing-pass
-test (Stage 4g) never exercises cross-analyst resolution at all. This stage's own real value —
-principal resolution for a *different* analyst's later action, the operational case B13 is
-actually modelled on — is genuine and already built, but is not what the milestone's own literal
-wording requires. Kept here, not deleted or downgraded; only its place in the read order changed.
-
-1. **Principal resolution — built, 22 September 2026 (`06_DECISIONS.md` ADR-043: OAuth2 Token
-   Exchange, RFC 8693).** `PrincipalResolver.resolve_for_owner`/`resolve_for_owner_detailed`
-   (`services/api/auth.py`) exchange this Conduit's own client credentials for a token minted as
-   the target `owner_id`, decoded through the existing, unchanged `resolve()` — no second
-   claims-construction path. `principal_for_owner` (`services/api/evaluation.py`, both
-   `evaluate_hotlists_for_entry` and `evaluate_monitors_for_entry`) and every one of its call
-   sites are now async (`app.py`'s `_evaluate_watches_best_effort`, and ~15 test call sites in
-   `tests/services/api/test_evaluation.py`) — the requester's own id still resolves instantly with
-   no network call; any other owner now goes through the real exchange. **Code + decision, both
-   discharged.**
-
-   **Only one of the two halves this entry originally expected to close together actually
-   closed — checked directly, not assumed, and the record corrected rather than left overclaiming
-   it.** Cross-analyst hotlist/monitor firing (B12/B13/B14/B20's own operational case) is
-   unblocked: `test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_ingest`
-   passes, through the real `run_studio_recipe` route, two real principals, neither one the
-   other (`tests/scenarios/test_phase7_stage6c_watch_routes.py`). **Resolution-triggered monitors
-   are not — attempted directly, not left as a missing call site, and found blocked by a
-   different, more precise reason once one was actually built.** A real call site was wired
-   (`run_resolution_for_entity_type` calling `evaluate_monitors_for_entry` after publishing to the
-   change stream, threaded through `try_run_resolution_with_overlap_guard`/
-   `run_resolve_entity_type_job` and bound at job registration in `app.py`) and reverted, not kept
-   half-working: `services/api/worker.py`'s own `JobWorker._process` begins the job's transaction,
-   runs the handler, and commits only *after* the handler returns — so the evaluation call, running
-   from inside the handler, executes before the very `SAME_AS` write it exists to alert on is
-   committed. `GraphPort.match` has no transaction parameter, so it genuinely cannot see an
-   uncommitted write from inside the same handler — standard transaction-isolation behaviour, not a
-   port oversight this stage could route around. **Confirmed empirically:** the in-handler call
-   found no match and alerted nothing for a freshly-created monitor in a real test build of this
-   wiring; a second, manual call to the identical function immediately after the test's own commit
-   correctly found the match and fired the alert. `06_DECISIONS.md` ADR-037's own amendment has the
-   full record: a `GraphPort` transaction-scoped read is disqualified on correctness, not priced
-   against — a job's own transaction can still roll back after the handler returns, and reading
-   uncommitted state would let a rolled-back job raise an alert for a `SAME_AS` edge that never
-   existed. The complete fix is a durable-record consumer (evaluation reading from the change
-   stream itself, the shape ADR-037's own amendment already describes), not a post-commit hook
-   alone — correct, but a process dying between commit and hook loses that evaluation with nothing
-   recording it should have happened. **Checked against `08_ACCEPTANCE_SCENARIOS.md` directly, not
-   assumed: no Scenario B row needs a monitor to fire from resolution alone** (B20's own assertion
-   is ingest-triggered, already covered). Recorded in "Out of scope for v1" below, not inside this
-   stage or any other Phase 8 stage — nothing v1 commits to depends on it.
-
-   **Exit criterion, a test — met:** `test_a_hotlist_owned_by_one_analyst_fires_from_a_different_
-   analysts_own_ingest` (`tests/scenarios/test_phase7_stage6c_watch_routes.py`) passes. The two
-   tests ADR-036 already named
-   (`test_monitor_never_fires_on_a_match_the_saving_analyst_cannot_see`,
-   `test_monitor_stops_evaluating_once_the_saving_principal_is_revoked`) still pass as
-   regressions. **The containment test the task named as the one that matters** —
-   `test_principal_for_owner_returns_exactly_that_owners_own_claims_not_a_broader_principal`
-   (`tests/services/api/test_auth.py`) — passes, and was confirmed non-vacuous by injecting a
-   broken implementation (hardcoding `requested_subject` to a broader principal's own id) and
-   observing the real failure output before reverting. **The freshness test** —
-   `test_a_revoked_principal_stops_firing_at_the_next_evaluation_no_cache_to_invalidate`
-   (`tests/services/api/test_evaluation.py`) — passes against the real mechanism, not the
-   in-memory test stand-in every other test in that file uses.
 2. **The harness / packaging pipeline** — like Stage 1, largely green-field: no packaging step, no
    backup/restore/upgrade mechanism and no generated-manifest tooling exists anywhere in this
    repository yet. Not required for V1 END TO END — checked directly against
@@ -2189,9 +2201,14 @@ wording requires. Kept here, not deleted or downgraded; only its place in the re
    distinct wording from whatever `StatusBadge` shows an analyst later, so the two failure surfaces
    are never mistaken for the same fact by whoever reads either one first.
 3. **Documentation refresh, then the Trigger A restructure** — already the most fully specified
-   stage of the six, worked out in detail below this list rather than duplicated here. **Documentation
-   + code (two coverage gates, the licence-check leg, `doc_citations_check.py`) + two owner
-   decisions** (per-file headers; commit-SHA citations in published guides). **Also owns relocating
+   stage of the six, worked out in detail below this list rather than duplicated here. **Not
+   wholly outstanding — the mechanical half is already built, the documentation-writing half is
+   not, and the two should not be read as one undifferentiated block of remaining work.** The three
+   drift gates (`domain-model-coverage-check`, `route-coverage-check`, `demo-guide-check`) exist and
+   run today; what remains is writing the content that empties their own allowlists, not building
+   the gates themselves. **Documentation + code (two coverage gates, the licence-check leg,
+   `doc_citations_check.py`) + two owner decisions** (per-file headers; commit-SHA citations in
+   published guides). **Also owns relocating
    the 23 entries in "Legacy disclosures (dispositioned, relocation pending)" into wherever their
    own stated disposition actually names** — assigned here rather than left implicit, since this
    stage already rewrites this build plan's own structure and is the one stage with the obvious
