@@ -26,9 +26,26 @@ confirmed visible today** — `GraphPort` has no `get_edge`, and no document sto
 (`07_BUILD_PLAN.md`'s own "Stage 4b known gaps" entry). An `EdgeId`/`DocumentId` citation
 (`Judgement.supporting`/`contradicting`'s own docstring in `schemas/domain.py`) therefore always
 reads as unreadable — the same fail-closed default this codebase already applies wherever it
-cannot positively confirm access, not a new posture invented here. A judgement whose *only*
-supporting evidence is an edge or a document is consequently hidden from every viewer, including
-its own author, until that gap closes — disclosed, not silently accepted.
+cannot positively confirm access, not a new posture invented here.
+
+**The invisible-judgement defect, found and fixed rather than left as the disclosed limitation
+above implied it could safely stay.** The limitation above, read carelessly, sounds like a
+narrowing of *content* ("an edge/document citation isn't verifiable *yet*"). What it actually was,
+before this fix, was a silent *save-time* failure wearing a read-time disclosure: `save` below
+never checked a `supporting` citation's own resolvability at all, so a judgement citing only an
+`EdgeId`/`DocumentId` saved cleanly and then vanished from every future read, permanently,
+including for its own author — the same "clean, confident, wrong answer" shape `08_
+ACCEPTANCE_SCENARIOS.md`'s own "What B1-B3 prove" section already warns is the worst failure a
+filtering mistake can take. **Fixed by moving the check to `save`, not by building the read paths
+this stage does not own.** `GraphPort.get_edge` and a document store are real, separately-scoped
+work (`07_BUILD_PLAN.md`'s own "Stage 4b known gaps" entry has the disposition); building either
+here would be exactly the kind of unscoped expansion `CLAUDE.md`'s own "don't design for
+hypothetical future requirements" rule warns against. What this stage *can* do without either is
+turn a silent failure into a loud one — the same posture `02_GLASS_FRONTEND.md` §4.1 already
+requires of `manualAssertion`/`expandNode`/`explainCluster`/the pathfinder's own error state: a
+client-side call that fails must never be dropped silently. `save` now refuses, by name, any
+`supporting` citation it cannot positively confirm as a visible graph node — the analyst learns at
+the point of writing, not never.
 
 **The review-flag loop.** `flag_judgements_citing_superseded_node` is the function
 `services/extract/writer.py`'s `confirm_node`/`retract_node` and `services/api/supersede.py`'s
@@ -101,6 +118,26 @@ class NoSupportingReferenceError(Exception):
     reference" — A13's own literal assertion."""
 
 
+class UnverifiableCitationError(Exception):
+    """The invisible-judgement defect's own fix: a `supporting` citation `save` cannot positively
+    confirm as a visible graph node — an `EdgeId`, a `DocumentId`, a typo, or a node this principal
+    genuinely cannot see — is refused at the point of writing, named specifically, rather than
+    accepted and silently hidden forever by `judgement_visible_to`'s own hide-in-full rule at every
+    future read."""
+
+    def __init__(self, judgement_id: str, citation_ids: list[str]) -> None:
+        self.judgement_id = judgement_id
+        self.citation_ids = citation_ids
+        joined = ", ".join(citation_ids)
+        super().__init__(
+            f"judgement {judgement_id}: citation(s) {joined} could not be confirmed as a visible "
+            "graph node and were refused. Only a node citation can be verified today — an edge or "
+            "document citation is not yet supported (07_BUILD_PLAN.md's own Stage 4b known-gaps "
+            "entry) — and a node this principal cannot currently see cannot be cited as evidence "
+            "either."
+        )
+
+
 class JudgementNotFoundError(Exception):
     """Also raised — deliberately, not a 403 — when the judgement exists but `owning_unit` does
     not match the calling principal's own `org_unit`: the same existence-leak discipline
@@ -169,12 +206,22 @@ class JudgementStore:
     async def close(self) -> None:
         await self._pool.close()
 
-    async def save(self, judgement: Judgement, principal: Principal) -> Judgement:
+    async def save(self, judgement: Judgement, principal: Principal, graph: GraphPort) -> Judgement:
         """`01_DOMAIN_MODEL.md` §5's own evidence-link constraint, enforced here — the one place
         every route saving a judgement must go through — not left to a model-level validator that
-        cannot distinguish a legitimate in-progress edit from a genuinely empty save."""
+        cannot distinguish a legitimate in-progress edit from a genuinely empty save.
+
+        **Also the invisible-judgement defect's own fix.** Every `supporting` citation is checked
+        against `graph` as `principal` (the author) *before* the write, not only at read: a
+        citation `save` cannot positively confirm as a visible node — an `EdgeId`, a `DocumentId`,
+        a typo, or a node even the author cannot see — is refused here, loudly, rather than
+        accepted and left for `judgement_visible_to` to hide permanently and silently at every
+        future read."""
         if not judgement.supporting:
             raise NoSupportingReferenceError(judgement.id)
+        unverifiable = await _unverifiable_citations(graph, principal, judgement.supporting)
+        if unverifiable:
+            raise UnverifiableCitationError(judgement.id, unverifiable)
         async with self._pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO judgements (id, investigation_id, owning_unit, statement, "
@@ -379,16 +426,27 @@ class AssumptionStore:
         return [_row_to_assumption(row) for row in rows]
 
 
-async def _all_visible(graph: GraphPort, principal: Principal, ref_ids: list[str]) -> bool:
-    """`06_DECISIONS.md` ADR-046's own per-citation check, the same `alerts.py::evidence_available`
-    shape — every id must resolve to a real, visible node for the whole list to count as visible.
-    An empty list is vacuously visible (nothing to hide behind); callers of this function for
-    `supporting` never pass one, since `JudgementStore.save` already refuses to store a judgement
-    with no supporting references."""
+async def _unverifiable_citations(
+    graph: GraphPort, principal: Principal, ref_ids: list[str]
+) -> list[str]:
+    """Every id in `ref_ids` that `GraphPort.get_node` cannot confirm as a real, visible node for
+    `principal` — the same `alerts.py::evidence_available` shape, naming *which* citation failed
+    rather than only that one did, so `save` (below) can refuse loudly and `judgement_visible_to`
+    can still refuse silently at read for the *access*-limited case (a real node the current viewer
+    specifically cannot see) that `save`'s own check, run as the author, cannot catch."""
+    unverifiable: list[str] = []
     for ref_id in ref_ids:
         if await graph.get_node(ref_id, principal) is None:
-            return False
-    return True
+            unverifiable.append(ref_id)
+    return unverifiable
+
+
+async def _all_visible(graph: GraphPort, principal: Principal, ref_ids: list[str]) -> bool:
+    """`06_DECISIONS.md` ADR-046's own per-citation check — every id must resolve to a real,
+    visible node for the whole list to count as visible. An empty list is vacuously visible
+    (nothing to hide behind); callers of this function for `supporting` never pass one, since
+    `JudgementStore.save` already refuses to store a judgement with no supporting references."""
+    return not await _unverifiable_citations(graph, principal, ref_ids)
 
 
 async def judgement_visible_to(
@@ -503,6 +561,7 @@ __all__ = [
     "JudgementStore",
     "NoSupportingReferenceError",
     "SaveJudgementRequest",
+    "UnverifiableCitationError",
     "flag_judgements_citing_superseded_node",
     "judgement_visible_to",
     "list_visible_judgements",

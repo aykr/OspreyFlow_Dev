@@ -1806,27 +1806,59 @@ first, not the one that is easiest to start.
    `services/api/app.py`) and, for consistency with `GraphPort.supersede_node`'s own docstring
    naming both intended callers, into `services/api/supersede.py`'s still-callerless
    `submit_supersede_node`/`run_supersede_node_job` too, as an optional parameter each existing
-   test/caller is unaffected by. `tests/services/api/test_assessments.py` (9 cases) and
+   test/caller is unaffected by. `tests/services/api/test_assessments.py` (11 cases) and
    `tests/ontology/test_yardstick.py` (4 cases) all pass against real Postgres/ArcadeDB, wired into
    the live-service CI job. The hide-in-full access check was verified non-vacuous by breaking it
    (returning `True` unconditionally) and confirming the named test fails before restoring it — the
    same "prove the test would catch the regression" discipline `CLAUDE.md` rule 12 asks for.
 
+   **The invisible-judgement defect, found and fixed the same day, 22 September 2026 — see the
+   known-gaps entry immediately below for the full record.** `save` now refuses, by name, any
+   `supporting` citation it cannot positively confirm as a visible graph node
+   (`UnverifiableCitationError`), instead of accepting it and letting `judgement_visible_to` hide
+   the resulting judgement permanently and silently at every future read. Two new named tests
+   (`test_a_judgement_citing_an_unverifiable_reference_is_rejected_at_save_not_hidden_at_read`,
+   `test_a_judgement_citing_one_good_and_one_unverifiable_reference_names_only_the_bad_one`),
+   verified non-vacuous the same way as the hide-in-full check above.
+
    **Stage 4b known gaps, disclosed as found, not left in a code comment:**
-   - **Only a `NodeId` citation in a judgement's `supporting`/`contradicting` can be positively
-     confirmed visible.** `GraphPort` has no `get_edge` (the same absence `07_BUILD_PLAN.md`'s own
+   - **Only a `NodeId` citation in a judgement's `supporting` list can be *saved* at all — found as
+     a real defect, not disclosed as a residual limitation, and fixed at save rather than left
+     hidden at read.** `GraphPort` has no `get_edge` (the same absence `07_BUILD_PLAN.md`'s own
      Phase 6 Stage 6 entry already names for a different reason), and no document store exists
      anywhere in this build. `Judgement.supporting`/`contradicting` is `list[NodeId | EdgeId |
      DocumentId]` (`01_DOMAIN_MODEL.md` §5) — all three collapse to plain `str` with no structural
-     way to tell them apart, so an `EdgeId`/`DocumentId` citation is treated as unreadable by
-     construction, the same fail-closed default this codebase already applies wherever it cannot
-     positively confirm access. **Consequence, stated plainly:** a judgement whose *only*
-     supporting evidence is an edge or a document is hidden from every viewer, including its own
-     author, until `GraphPort` grows a real `get_edge` (its own conformance-suite work, `CLAUDE.md`
-     rule 1) or a document store exists. **Owning phase: whichever phase first builds `GraphPort.
-     get_edge` or a document store** — not this stage, and not invented here; recorded so the next
-     reader does not mistake a permanently-hidden judgement for a bug in this stage's own access
-     check.
+     way to tell them apart, so an `EdgeId`/`DocumentId` citation could not be positively confirmed
+     visible. **What this actually meant before the fix: a judgement citing only an edge or a
+     document saved cleanly — validation passed, the write succeeded — and then vanished from
+     every future read, permanently, including for its own author**, because `judgement_
+     visible_to`'s own hide-in-full rule (ADR-046) treated the unconfirmable citation as
+     unreadable at every subsequent load. A clean, confident, wrong outcome — the exact failure
+     shape `08_ACCEPTANCE_SCENARIOS.md`'s own "What B1–B3 prove" section already warns is the
+     worst a filtering mistake can take, here reached from a different direction. **Fixed: `save`
+     now checks every `supporting` citation against the *saving* principal's own `GraphPort`
+     access before writing, and refuses — naming the specific citation — anything it cannot
+     confirm** (`UnverifiableCitationError`, `services/api/assessments.py`). The analyst learns at
+     the point of writing, not never — the same "a client-side call that fails must never be
+     dropped silently" posture `02_GLASS_FRONTEND.md` §4.1 already requires of `manualAssertion`/
+     `expandNode`/`explainCluster`/the pathfinder's own error state. Building `GraphPort.get_edge`
+     or a document store, so an edge/document citation becomes *savable* rather than merely
+     *refused loudly*, is real, separately-owned work — deliberately not built here, the same
+     "belongs where it is owned" reasoning that already keeps this stage from reaching into
+     Stage 4d's own scope. **Owning phase: whichever phase first builds `GraphPort.get_edge` or a
+     document store** — not this stage, and not invented here.
+   - **What A13 can and cannot cite today, stated plainly, since the acceptance row itself says
+     "each with evidence" and an analyst's most natural evidence for an intelligence judgement is
+     a document, not a graph node.** A13 can be satisfied, today, only by citing one or more
+     `NodeId`s the saving analyst can currently see — a person, an endpoint, a location, any
+     entity already in the working set. **A13 cannot currently be satisfied by citing a source
+     document or a specific relationship (an edge) as a judgement's sole evidence** — `save`
+     refuses it outright, named, per the fix above. A real intelligence judgement resting only on
+     "this witness statement says X," with no entity node to point at instead, cannot be recorded
+     until `GraphPort.get_edge` or a document store lands. This is a genuine functional gap in
+     what A13 can express today, not merely a visibility quirk — recorded here so a reader
+     evaluating Stage 4b's own completeness does not assume citing a document already works
+     because the citation type itself is accepted at the schema layer.
    - **The review-flag loop matches a `supporting` citation's content change only, per
      `01_DOMAIN_MODEL.md` §5's own literal text** ("When a supporting node is later split,
      corrected or retracted, every judgement resting on it is flagged for review") — a

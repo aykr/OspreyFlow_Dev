@@ -14,6 +14,7 @@ from services.api.assessments import (
     JudgementNotFoundError,
     JudgementStore,
     NoSupportingReferenceError,
+    UnverifiableCitationError,
     flag_judgements_citing_superseded_node,
     judgement_visible_to,
     list_visible_judgements,
@@ -75,37 +76,104 @@ def _node_write(
 
 
 async def test_a_judgement_cannot_be_saved_with_zero_supporting_references(judgement_store) -> None:
-    empty = new_judgement(
-        investigation_id="inv-1",
-        statement="The subject is the principal organiser.",
-        probability_band="likely",
-        supporting=[],
-        author=AUTHOR.id,
-    )
-    with pytest.raises(NoSupportingReferenceError):
-        await judgement_store.save(empty, AUTHOR)
+    ontology = load_default_ontology()
+    scheme = load_uk_le_scheme()
+    async with arcadedb_adapter(ontology, scheme) as graph:
+        empty = new_judgement(
+            investigation_id="inv-1",
+            statement="The subject is the principal organiser.",
+            probability_band="likely",
+            supporting=[],
+            author=AUTHOR.id,
+        )
+        with pytest.raises(NoSupportingReferenceError):
+            await judgement_store.save(empty, AUTHOR, graph)
 
-    # And it genuinely never reached the table — not merely that the call raised.
-    with pytest.raises(JudgementNotFoundError):
-        await judgement_store.get(empty.id)
+        # And it genuinely never reached the table — not merely that the call raised.
+        with pytest.raises(JudgementNotFoundError):
+            await judgement_store.get(empty.id)
 
 
 async def test_a_judgement_with_a_supporting_reference_saves_and_reads_back(
     judgement_store,
 ) -> None:
-    j = new_judgement(
-        investigation_id="inv-1",
-        statement="The subject is the principal organiser.",
-        probability_band="likely",
-        supporting=["node-1"],
-        author=AUTHOR.id,
-    )
-    saved = await judgement_store.save(j, AUTHOR)
-    assert saved.id == j.id
-    reread = await judgement_store.get_authorized(j.id, AUTHOR)
-    assert reread.statement == j.statement
-    assert reread.supporting == ["node-1"]
-    assert reread.flagged_for_review is False
+    ontology = load_default_ontology()
+    scheme = load_uk_le_scheme()
+    async with arcadedb_adapter(ontology, scheme) as graph:
+        tx = await graph.begin_transaction()
+        (node_id,) = await graph.upsert_nodes([_node_write(owning_unit=AUTHOR.org_unit)], tx)
+        await graph.commit_transaction(tx)
+
+        j = new_judgement(
+            investigation_id="inv-1",
+            statement="The subject is the principal organiser.",
+            probability_band="likely",
+            supporting=[node_id],
+            author=AUTHOR.id,
+        )
+        saved = await judgement_store.save(j, AUTHOR, graph)
+        assert saved.id == j.id
+        reread = await judgement_store.get_authorized(j.id, AUTHOR)
+        assert reread.statement == j.statement
+        assert reread.supporting == [node_id]
+        assert reread.flagged_for_review is False
+
+
+# --- The invisible-judgement defect's own fix — fail at save, not at read -------------------------
+
+
+async def test_a_judgement_citing_an_unverifiable_reference_is_rejected_at_save_not_hidden_at_read(
+    judgement_store,
+) -> None:
+    """The defect: a `supporting` citation `save` could not positively confirm (an `EdgeId`, a
+    `DocumentId`, a typo — all structurally indistinguishable `str`s from a `NodeId`, per
+    `01_DOMAIN_MODEL.md` §5) used to save cleanly and then vanish from every future read,
+    permanently, including for its own author — validation passed, the save succeeded, and the
+    judgement never appeared. Fixed: `save` now refuses it, named, before the write."""
+    ontology = load_default_ontology()
+    scheme = load_uk_le_scheme()
+    async with arcadedb_adapter(ontology, scheme) as graph:
+        unresolvable = new_id()  # stands in for an EdgeId/DocumentId — no matching node exists
+        j = new_judgement(
+            investigation_id="inv-1",
+            statement="The subject is the principal organiser.",
+            probability_band="likely",
+            supporting=[unresolvable],
+            author=AUTHOR.id,
+        )
+        with pytest.raises(UnverifiableCitationError) as excinfo:
+            await judgement_store.save(j, AUTHOR, graph)
+        assert excinfo.value.citation_ids == [unresolvable]
+        assert unresolvable in str(excinfo.value)
+
+        # Loud, not silent: it genuinely never reached the table.
+        with pytest.raises(JudgementNotFoundError):
+            await judgement_store.get(j.id)
+
+
+async def test_a_judgement_citing_one_good_and_one_unverifiable_reference_names_only_the_bad_one(
+    judgement_store,
+) -> None:
+    """Names the specific offending citation, not a blanket refusal — an author citing three real
+    nodes and one typo should learn which one is wrong."""
+    ontology = load_default_ontology()
+    scheme = load_uk_le_scheme()
+    async with arcadedb_adapter(ontology, scheme) as graph:
+        tx = await graph.begin_transaction()
+        (node_id,) = await graph.upsert_nodes([_node_write(owning_unit=AUTHOR.org_unit)], tx)
+        await graph.commit_transaction(tx)
+        unresolvable = new_id()
+
+        j = new_judgement(
+            investigation_id="inv-1",
+            statement="The subject is the principal organiser.",
+            probability_band="likely",
+            supporting=[node_id, unresolvable],
+            author=AUTHOR.id,
+        )
+        with pytest.raises(UnverifiableCitationError) as excinfo:
+            await judgement_store.save(j, AUTHOR, graph)
+        assert excinfo.value.citation_ids == [unresolvable]
 
 
 # --- owning_unit scoping — the existence-leak discipline CLAUDE.md rule 4 requires ----------------
@@ -114,32 +182,48 @@ async def test_a_judgement_with_a_supporting_reference_saves_and_reads_back(
 async def test_a_judgement_owned_by_a_different_unit_is_not_found_not_forbidden(
     judgement_store,
 ) -> None:
-    j = new_judgement(
-        investigation_id="inv-1",
-        statement="Statement.",
-        probability_band="likely",
-        supporting=["node-1"],
-        author=AUTHOR.id,
-    )
-    await judgement_store.save(j, AUTHOR)
-    with pytest.raises(JudgementNotFoundError):
-        await judgement_store.get_authorized(j.id, VIEWER_OTHER_UNIT)
+    ontology = load_default_ontology()
+    scheme = load_uk_le_scheme()
+    async with arcadedb_adapter(ontology, scheme) as graph:
+        tx = await graph.begin_transaction()
+        (node_id,) = await graph.upsert_nodes([_node_write(owning_unit=AUTHOR.org_unit)], tx)
+        await graph.commit_transaction(tx)
+
+        j = new_judgement(
+            investigation_id="inv-1",
+            statement="Statement.",
+            probability_band="likely",
+            supporting=[node_id],
+            author=AUTHOR.id,
+        )
+        await judgement_store.save(j, AUTHOR, graph)
+        with pytest.raises(JudgementNotFoundError):
+            await judgement_store.get_authorized(j.id, VIEWER_OTHER_UNIT)
 
 
 async def test_list_never_returns_another_units_judgement(judgement_store) -> None:
-    investigation_id = new_id()
-    j = new_judgement(
-        investigation_id=investigation_id,
-        statement="Statement.",
-        probability_band="likely",
-        supporting=["node-1"],
-        author=AUTHOR.id,
-    )
-    await judgement_store.save(j, AUTHOR)
-    listed = await judgement_store.list_for_investigation(investigation_id, VIEWER_OTHER_UNIT)
-    assert listed == []
-    same_unit = await judgement_store.list_for_investigation(investigation_id, VIEWER_SAME_UNIT)
-    assert any(row.id == j.id for row in same_unit)
+    ontology = load_default_ontology()
+    scheme = load_uk_le_scheme()
+    async with arcadedb_adapter(ontology, scheme) as graph:
+        tx = await graph.begin_transaction()
+        (node_id,) = await graph.upsert_nodes([_node_write(owning_unit=AUTHOR.org_unit)], tx)
+        await graph.commit_transaction(tx)
+
+        investigation_id = new_id()
+        j = new_judgement(
+            investigation_id=investigation_id,
+            statement="Statement.",
+            probability_band="likely",
+            supporting=[node_id],
+            author=AUTHOR.id,
+        )
+        await judgement_store.save(j, AUTHOR, graph)
+        listed = await judgement_store.list_for_investigation(investigation_id, VIEWER_OTHER_UNIT)
+        assert listed == []
+        same_unit = await judgement_store.list_for_investigation(
+            investigation_id, VIEWER_SAME_UNIT
+        )
+        assert any(row.id == j.id for row in same_unit)
 
 
 # --- ADR-046's access rule — real ArcadeDB -------------------------------------------------------
@@ -150,7 +234,15 @@ async def test_a_judgement_is_hidden_from_a_viewer_who_cannot_read_at_least_one_
 ) -> None:
     """`06_DECISIONS.md` ADR-046's own named test: write a judgement citing two supporting nodes,
     one visible and one not to principal B; list judgements as B; assert the judgement is absent
-    from B's own list entirely, not present with a placeholder or an "unavailable" marker."""
+    from B's own list entirely, not present with a placeholder or an "unavailable" marker.
+
+    **Saved by a `SECRET`-cleared principal, not `AUTHOR`.** `save`'s own new citation check
+    (the invisible-judgement defect's fix, above) validates every `supporting` citation against
+    the *saving* principal — an `OFFICIAL`-cleared author could never save this judgement in the
+    first place, since they cannot confirm the `SECRET` node any more than `VIEWER_SAME_UNIT`
+    can. This test's own point is the *cross-principal* case: someone cleared enough to cite the
+    evidence does, and a colleague without that clearance still cannot see the resulting
+    judgement — the realistic shape of the scenario, not a workaround for the fix."""
     ontology = load_default_ontology()
     scheme = load_uk_le_scheme()
     async with arcadedb_adapter(ontology, scheme) as graph:
@@ -171,10 +263,12 @@ async def test_a_judgement_is_hidden_from_a_viewer_who_cannot_read_at_least_one_
             supporting=[visible_id, hidden_id],
             author=AUTHOR.id,
         )
-        await judgement_store.save(j, AUTHOR)
+        secret_cleared_author = Principal(
+            id=AUTHOR.id, clearance="SECRET", org_unit=AUTHOR.org_unit
+        )
+        await judgement_store.save(j, secret_cleared_author, graph)
 
-        # Sanity: the author's own principal (OFFICIAL, unit-1) cannot see the SECRET/unit-9 node
-        # either — this is the same viewer class as `VIEWER_SAME_UNIT` for clearance purposes.
+        # Sanity: `VIEWER_SAME_UNIT` (OFFICIAL, unit-1) cannot see the SECRET/unit-9 node.
         assert await judgement_visible_to(j, VIEWER_SAME_UNIT, graph) is False
 
         visible_list = await list_visible_judgements(
@@ -203,7 +297,7 @@ async def test_a_judgement_with_all_supporting_references_visible_is_not_hidden(
             supporting=[node_id],
             author=AUTHOR.id,
         )
-        await judgement_store.save(j, AUTHOR)
+        await judgement_store.save(j, AUTHOR, graph)
 
         visible_list = await list_visible_judgements(
             judgement_store, investigation_id, VIEWER_SAME_UNIT, graph
@@ -238,7 +332,7 @@ async def test_an_unreadable_contradicting_reference_does_not_hide_the_judgement
             contradicting=[hidden_id],
             author=AUTHOR.id,
         )
-        await judgement_store.save(j, AUTHOR)
+        await judgement_store.save(j, AUTHOR, graph)
         assert j.flagged_for_review is False
 
         visible_list = await list_visible_judgements(
@@ -266,8 +360,12 @@ async def test_retracting_a_cited_node_flags_the_judgement_within_the_same_sessi
     scheme = load_uk_le_scheme()
     async with arcadedb_adapter(ontology, scheme) as graph:
         tx = await graph.begin_transaction()
-        (node_id,) = await graph.upsert_nodes(
-            [_node_write(owning_unit=AUTHOR.org_unit, state=ProvenanceState.ASSERTED)], tx
+        (node_id, other_node_id) = await graph.upsert_nodes(
+            [
+                _node_write(owning_unit=AUTHOR.org_unit, state=ProvenanceState.ASSERTED),
+                _node_write(owning_unit=AUTHOR.org_unit, state=ProvenanceState.ASSERTED),
+            ],
+            tx,
         )
         await graph.commit_transaction(tx)
 
@@ -283,11 +381,11 @@ async def test_retracting_a_cited_node_flags_the_judgement_within_the_same_sessi
             investigation_id=investigation_id,
             statement="An unrelated judgement citing a different node.",
             probability_band="unlikely",
-            supporting=["some-other-node"],
+            supporting=[other_node_id],
             author=AUTHOR.id,
         )
-        await judgement_store.save(cites_it, AUTHOR)
-        await judgement_store.save(unrelated, AUTHOR)
+        await judgement_store.save(cites_it, AUTHOR, graph)
+        await judgement_store.save(unrelated, AUTHOR, graph)
 
         # The actual retraction — the same call `retract_node_route` makes.
         tx = await graph.begin_transaction()

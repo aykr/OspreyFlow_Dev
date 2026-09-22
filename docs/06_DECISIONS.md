@@ -4786,6 +4786,32 @@ the leak, suppress (ADR-038). Where no safe partial shape exists because showing
 would misrepresent an assertion's own warrant, suppress the assertion whole (ADR-046) — not for
 ADR-038's reason, but to the same visible effect.
 
+**A sharper, single-test restatement of factors 1 and 2 together, checked against all three cases
+rather than assumed to fit.** Disclosure is owed where the viewer has no other means of knowing
+the view in front of them is incomplete; it is not owed where they already do. An in-session
+analyst has the working-set status bar and its own "N hidden by handling" convention, trained
+across every other surface of this same product, in the same session — they already carry a
+standing expectation that any given view may be partial, before this decision ever renders
+anything. A recipient holding an exported file has no such training: no prior exposure to this
+product's own conventions, no session, nothing that would tell them a chart or report can be
+partial at all. **This crisply explains ADR-038 against ADR-045 — the two cases with the same
+kind of viewer (an authenticated, in-session principal) is not what distinguishes them; whether
+that viewer's own general experience of this product already discloses partiality is.** `strict`'s
+own silence costs nothing new, because the hotlist owner already knows, from using the rest of the
+product, that a view being partial is normal; the export's own manifest is owed precisely because
+its reader has never seen this product's own conventions at all.
+
+**Where this single test does not reach, and why that is not a gap in it.** ADR-046 is not decided
+by this test — a fellow analyst reading the Judgements tab *does* have the same in-session
+training as ADR-038's own viewer, so this test alone would predict silence is safe there too, and
+it is not. The reason, restated from factor 3 above: ADR-046's failure is not a viewer mistaking a
+partial *view* for a complete one — it is a viewer trusting a *conclusion* whose own presentation
+claims a warrant it cannot demonstrate having. The "does the viewer know views can be partial"
+test answers a question about the surface (a list, an inbox, an artefact); it has nothing to say
+about a surface whose content is itself an assertion. Both tests are needed, and applying only the
+sharper one to every future case would silently drop the assertion-integrity case this document
+already had to name separately to get ADR-046 right.
+
 **Applying this to a future surface, so the next one is derived rather than guessed.** Ask, in
 order: (1) what does this surface already claim about its own completeness? (2) who is the viewer,
 and what could they do inside this system with a bare existence signal? (3) does a count-only,
