@@ -3151,7 +3151,10 @@ later ingest — the operational case B13's own CoLP framing is modelled on ("a 
 logged by a unit other than the one that set the original hotlist entry") — does not fire under
 this amendment, and does not silently fire wrong; it is skipped, observably (`Hotlist.status`/
 `Monitor.status`, Stage 6c). Owning phase for the general case: **Phase 8**, alongside the
-principal-directory dependency this amendment names.
+principal-directory dependency this amendment names. **Manifestation two of three of one
+consolidated gap** — `07_BUILD_PLAN.md`'s own "Gaps with no owning phase" entry has the other two
+(general background evaluation; resolution-triggered monitors) and the combined operational
+consequence: as delivered, a monitor or hotlist fires only on its own owner's action.
 
 **Revisit this amendment if.** A principal directory (or equivalent — a service-account credential
 an evaluator can present on an owner's behalf, an identity-provider lookup endpoint) is built at

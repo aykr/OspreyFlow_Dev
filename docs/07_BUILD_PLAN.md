@@ -1105,6 +1105,8 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
    once 6c exists, so 6c's own job is a principal-resolution strategy for a backgrounded caller
    (a service-level re-resolution against a stored `owner_id`, most plausibly), not a full
    principal directory; recorded here so it is not silently assumed solved by 6b's own test double.
+   **This is manifestation one of three of a single gap** — see "Gaps with no owning phase"'s own
+   consolidated entry, below, for the other two and the combined operational consequence.
 
    Proven — the task's own named test and five more exercising what it implies:
    `test_a_hotlist_match_outside_the_owners_access_leaks_nothing_in_strict_or_notify` (renamed
@@ -1185,7 +1187,8 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
    nothing with a resolvable principal ever calls the evaluator for a `source="resolution"` entry.
    Owning phase: **Phase 8**, the same principal-directory dependency ADR-036's amendment already
    names — this is not a second, separate gap, only its first concrete instance found by trying
-   to close it rather than only naming it.
+   to close it rather than only naming it. **Manifestation three of three** — see "Gaps with no
+   owning phase"'s own consolidated entry, below, for the combined operational consequence.
 
    **The request-path cost this adds, disclosed rather than silently absorbed into latency —
    both routes now carrying it, not only ingest.** Each hotlist/monitor evaluation is bounded (the
@@ -1280,7 +1283,9 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
    safe at rest, narrowing the gap from "unknown, found only under load" to "known, and only under
    simultaneous multi-instance saturation," still Phase 8a's own scope to close (raising Postgres's
    own `max_connections`, or a shared connection-pooler such as PgBouncer, are the two shapes
-   already implied by that phase's own hardening language).
+   already implied by that phase's own hardening language). **One of three disclosures now bearing
+   on the same horizontal-scalability claim** — see "Gaps with no owning phase"'s own consolidated
+   entry for the other two and the combined finding.
 
    **The test that would fail if an eleventh store were added without a bound, named and
    confirmed both directions, not only proposed.**
@@ -1600,6 +1605,81 @@ or phase's own work found and deferred — an entry here is something no phase's
 at all. A phase about to close checks this list the same way Phase 6's own stages checked the
 previous phase's known gaps before scoping their work, so an orphaned intention doesn't sit
 findable only from whichever phase happened to notice it.
+
+- **Highest-consequence item in this list for Phase 8 — the principal-resolution gap, consolidated
+  from three separate disclosures of what is one missing capability, not three.** Stated once,
+  plainly: there is no way to obtain a live `Principal` for a stored `owner_id` without a request
+  in flight carrying that owner's own bearer token — `services/api/auth.py`'s
+  `PrincipalResolver.resolve()` is the only place a `Principal` is ever constructed, and it builds
+  one from JWT claims only; no id-keyed directory exists anywhere in this codebase to look one up
+  cold. Three manifestations, each found independently, each previously recorded as if it were its
+  own gap:
+  1. **General background evaluation** — Phase 7 Stage 6b's own "no-principal-directory gap" entry
+     (this document, Phase 7's own bullets, `principal_for_owner: Callable[[str], Principal |
+     None]`), proven by `test_a_hotlist_with_no_resolvable_owner_principal_is_skipped_not_run_as_a_
+     stale_one`.
+  2. **Cross-analyst hotlist/monitor firing** — `06_DECISIONS.md` ADR-036's own Phase 7 Stage 6c
+     amendment: access is resolved fresh only when the saving analyst is the current requester, so
+     a hotlist or monitor owned by anyone else is skipped, not evaluated, for every trigger that
+     isn't that owner's own action.
+  3. **Resolution-triggered monitors** — this document's own Phase 7 Stage 6c entry (Part 1 of
+     this session's own carry-over work): corpus-wide resolution has no live principal for *any*
+     caller, proven by
+     `test_a_monitor_does_not_fire_on_a_match_created_by_resolution_with_no_new_ingest`.
+
+  **Stage 6's own operational value is blocked on this, stated plainly rather than left to be
+  inferred from three separately-qualified exit criteria.** As delivered across 6a, 6b and 6c, a
+  monitor or hotlist fires only when the owning analyst's own studio-recipe run or manual
+  assertion is what triggers the check — every other route to a match (a different analyst's
+  ingest, a different analyst's manual link, corpus-wide resolution regardless of who triggers it)
+  produces no alert, observably skipped rather than silently wrong, but skipped all the same. The
+  CoLP walkthrough `08_ACCEPTANCE_SCENARIOS.md` Scenario B narrates end to end (B12/B13/B14/B20)
+  passes only because it is one analyst throughout; the operational case the feature exists for — a
+  warrant seizure logged by a different unit than the one that set the original hotlist entry —
+  does not. Everything built across three stages of Phase 7's own Stage 6 is waiting on this one
+  capability, not on any of its three symptoms individually. Owning phase: **Phase 8**, alongside
+  the harness/identity-provider work already deferred there — the fix is a principal directory (or
+  an equivalent service-account/lookup mechanism), not a third patch to `principal_for_owner`.
+
+- **The Conduit's horizontal scalability is asserted and unverified, three ways, and that is one
+  finding, not three separate ones.** `03_CONDUIT_MIDDLEWARE.md` §1 states the claim plainly: "Any
+  Conduit instance can serve any request for any session; kill one mid-investigation and the
+  analyst notices nothing." Three independent things now bear on whether that sentence is true:
+  1. **The claim's own only proof cannot run.** `test_statelessness.py`'s
+     `test_a_second_process_continues_an_investigation_the_first_was_killed_mid` (below, in this
+     same list) is the *only* place in the repository that exercises the claim at all, and it
+     currently fails to even connect (`httpcore.ConnectError`) in this environment — undiagnosed as
+     to whether that is a test-harness process-spawn problem or a real regression.
+  2. **The one number that has been computed says two instances do not fit.** Phase 7 Stage 6c's
+     own connection-pool arithmetic (this document, that stage's outcome bullets): 55 connections
+     per instance at worst-case saturation, against Postgres's own `max_connections=100` — two
+     instances' simultaneous worst case is 110, over the ceiling. One instance is safe under any
+     load; concurrent instances are not, under load, regardless of whether session state is
+     correctly stateless.
+  3. **Phase 8a's own outcome bullet already names this as work still to do**, not yet done: "a
+     live two-instance reproduction is still this phase's own to run."
+
+     Individually, each of these three is disclosed already, in its own place, as its own finding.
+     Together they mean something stronger than any one of them alone: the specific architectural
+     property this platform's horizontal-scaling story depends on has never been demonstrated
+     true, has one arithmetic finding suggesting a real ceiling under concurrent load, and has its
+     one intended proof currently unable to run — three independent reasons to distrust the same
+     claim, not three unrelated gaps that happen to sit near each other. Owning phase: **Phase
+     8a**, the same phase already carrying the two-instance reproduction and the only phase with
+     the real multi-node infrastructure (`06_DECISIONS.md` ADR-022's second/third addenda) to prove
+     or disprove any of the three at once; Phase 8's own diagnosis of why `test_statelessness.py`
+     cannot currently connect (below) is this phase's prerequisite, not a substitute for it.
+
+     **Cheapest first step, stated rather than left for Phase 8a to rediscover:** raising
+     Postgres's own `max_connections` past 110 (a one-line configuration change, no code touched)
+     removes the two-instance worst-case ceiling the arithmetic above found, immediately, without
+     waiting on either the harder fix (a shared pooler such as PgBouncer, or tighter per-store caps
+     across ten files for diminishing returns) or the slower one (diagnosing and fixing
+     `test_statelessness.py`'s own inability to run, which verifies session continuity, a different
+     half of the same claim, and buys no connection headroom by itself). Raising the limit does not
+     make the claim *true* — only the statelessness test running green does that — but it is the
+     cheapest lever on the one part of the claim already known, arithmetically, to be false at
+     scale today.
 
 - **The ingest pipeline's OpenSearch full-text-and-embeddings index has no owning phase.**
   `03_CONDUIT_MIDDLEWARE.md` §5.1 names it as the ingest pipeline's own `index` step ("full text
@@ -2175,7 +2255,9 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
     refused connection is this test's own process-spawn/port-binding mechanism failing under
     whatever host or sandbox it is run in, or a real statelessness regression — until that
     determination is made, treat `03_CONDUIT_MIDDLEWARE.md` §1 as unverified in this environment,
-    not as verified-and-then-regressed.
+    not as verified-and-then-regressed. **One of three disclosures now bearing on the same
+    horizontal-scalability claim** — see "Gaps with no owning phase"'s own consolidated entry,
+    above, for the other two and the combined finding.
 
 - **`sweep_stale_conformance_databases` (`packages/adapters/graph_arcadedb/testing.py`) has now
   failed to prevent a disk-exhaustion incident twice, and this session found why, live, rather
