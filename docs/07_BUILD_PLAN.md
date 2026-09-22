@@ -1592,18 +1592,23 @@ first, not the one that is easiest to start.
    unblocked: `test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_ingest`
    passes, through the real `run_studio_recipe` route, two real principals, neither one the
    other (`tests/scenarios/test_phase7_stage6c_watch_routes.py`). **Resolution-triggered monitors
-   are not** — confirmed by reading `services/api/resolution_trigger.py::resolve_now` and
-   `services/resolve/trigger.py::run_resolve_entity_type_job` again, fresh, rather than trusting
-   the earlier finding unchecked: `run_resolve_entity_type_job`'s own fixed `JobWorker` dispatch
-   signature (`payload, *, graph, tx, ontology, scheme, valkey`) still carries no principal, and —
-   the more fundamental fact, not merely "no principal to give it" — nothing anywhere in
-   `services/resolve/` or `services/api/resolution_trigger.py` ever calls
-   `evaluate_hotlists_for_entry`/`evaluate_monitors_for_entry`/`_evaluate_watches_best_effort` at
-   all for a `source="resolution"` change-stream entry. A working principal-resolution mechanism
-   has nothing to plug into on this path; the blocker is the missing call site, not (only) the
-   missing principal — a structural gap this stage's own scope does not touch, still open, still
-   Phase 8's own (no stage number yet assigned — the job/worker boundary needs its own design
-   pass, not a one-line fix).
+   are not — attempted directly, not left as a missing call site, and found blocked by a
+   different, more precise reason once one was actually built.** A real call site was wired
+   (`run_resolution_for_entity_type` calling `evaluate_monitors_for_entry` after publishing to the
+   change stream, threaded through `try_run_resolution_with_overlap_guard`/
+   `run_resolve_entity_type_job` and bound at job registration in `app.py`) and reverted, not kept
+   half-working: `services/api/worker.py`'s own `JobWorker._process` begins the job's transaction,
+   runs the handler, and commits only *after* the handler returns — so the evaluation call, running
+   from inside the handler, executes before the very `SAME_AS` write it exists to alert on is
+   committed. `GraphPort.match` has no transaction parameter, so it genuinely cannot see an
+   uncommitted write from inside the same handler — standard transaction-isolation behaviour, not a
+   port oversight this stage could route around. **Confirmed empirically:** the in-handler call
+   found no match and alerted nothing for a freshly-created monitor in a real test build of this
+   wiring; a second, manual call to the identical function immediately after the test's own commit
+   correctly found the match and fired the alert. `06_DECISIONS.md` ADR-037's own amendment has the
+   full record and the two fix shapes (a `GraphPort` transaction-scoped read, or a `JobWorker`
+   post-commit hook), neither built here — real, separately-scoped design work, still Phase 8's
+   own, no stage number yet assigned.
 
    **Exit criterion, a test — met:** `test_a_hotlist_owned_by_one_analyst_fires_from_a_different_
    analysts_own_ingest` (`tests/scenarios/test_phase7_stage6c_watch_routes.py`) passes. The two
@@ -1629,6 +1634,35 @@ first, not the one that is easiest to start.
    screens are actually usable by an operator who has never seen them is a judgement, not a test —
    said plainly rather than dressed as one; a usability pass by someone other than whoever built
    the screens is this sub-item's own honest exit criterion.**
+
+   **New requirement, named here rather than left to be discovered while building the screens:
+   Preflight must verify the token-exchange grant `06_DECISIONS.md` ADR-043 depends on.** ADR-043
+   places part of its own containment in realm-level IdP configuration — outside this repository,
+   unversioned, invisible to `make ci` or any gate this codebase can run. Left unchecked, a
+   misconfigured or missing grant surfaces only as watches marked `"stopped"` after an evaluation
+   fails — which an operator reads as an access problem (something wrong with an analyst's own
+   clearance) rather than a deployment one (something wrong with how this instance was set up),
+   the exact wrong diagnosis for the actual fault. This is the one part of the mechanism no gate in
+   this repository can reach — `05_DEPLOYMENT.md`'s own "Preflight runs live" is the only place
+   left able to catch it before an analyst ever sees a falsely-stopped watch.
+
+   **What Preflight must assert**, alongside the environment checks `05_DEPLOYMENT.md` §"Preflight"
+   already lists (memory, disk, GPU, port availability, container runtime, cluster connectivity):
+   attempt a real token exchange for a known, disposable preflight-only test subject (not a real
+   analyst account) and confirm it succeeds; then attempt an exchange for a subject the realm's own
+   policy should refuse (a deliberately-out-of-scope or disabled test subject) and confirm it is
+   actually refused, not silently granted — the same two-sided check ADR-043's own "how an operator
+   verifies it" section already names, run automatically rather than left to a manual step someone
+   has to remember. A grant that only ever gets exercised on the happy path is unverified on the
+   half that actually matters for containment.
+
+   **What it tells the operator on failure** — the same "explains what is wrong and what to do
+   about it, with a Re-check button" standard `05_DEPLOYMENT.md` already sets for every other
+   Preflight check, applied here specifically: name it as an IdP configuration problem, not an
+   access problem — "token exchange is not correctly configured on your identity provider; watches
+   will appear stopped for every owner but the analyst who triggered them until this is fixed" —
+   distinct wording from whatever `StatusBadge` shows an analyst later, so the two failure surfaces
+   are never mistaken for the same fact by whoever reads either one first.
 3. **Documentation refresh, then the Trigger A restructure** — already the most fully specified
    stage of the six, worked out in detail below this list rather than duplicated here. **Documentation
    + code (two coverage gates, the licence-check leg, `doc_citations_check.py`) + two owner

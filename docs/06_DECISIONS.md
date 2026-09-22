@@ -3168,13 +3168,17 @@ owner` its real implementation; `test_a_hotlist_owned_by_one_analyst_fires_from_
 analysts_own_ingest` (`tests/scenarios/test_phase7_stage6c_watch_routes.py`) proves the narrowing
 this amendment describes is lifted for both of `run_studio_recipe`'s and `link_resolution_route`'s
 own producers — "resolved fresh at each evaluation" is literally true for any owner, not only the
-requester, on those two paths. **Not lifted for corpus-wide resolution** — checked directly,
-not assumed carried by the same fix: nothing in `services/resolve/` or `services/api/resolution_
-trigger.py` ever calls the evaluator at all for a `source="resolution"` entry, a structural gap
-`principal_for_owner`'s own new implementation has nothing to plug into
-(`07_BUILD_PLAN.md`'s Stage 1 entry has the full finding). This amendment's own text is therefore
-still not restored to unqualified truth — narrower than "any producer," now precisely "any
-producer that calls the evaluator at all," which resolution still does not.
+requester, on those two paths. **Not lifted for corpus-wide resolution — attempted the same day, and found blocked by a different,
+more precise reason than "no call site" now that one was actually built.** A real call site was
+wired (`run_resolution_for_entity_type` calling `evaluate_monitors_for_entry`, threaded through to
+job registration in `app.py`) and reverted, not kept: `JobWorker._process` commits the job's own
+transaction only after the handler returns, so the evaluation call — running from inside the
+handler — cannot see the very `SAME_AS` write it exists to alert on, confirmed empirically against
+a real test build of the wiring, not inferred. ADR-037's own amendment has the full finding and the
+two fix shapes it would need (a `GraphPort.match` transaction parameter, or a `JobWorker`
+post-commit hook), neither built here. This amendment's own text is therefore still not restored to
+unqualified truth — narrower than "any producer," now precisely "any producer whose write is
+durable before evaluation runs against it," which resolution's own job-transaction shape is not.
 
 ---
 
@@ -3278,6 +3282,35 @@ with_no_new_ingest` — save a pattern requiring a `SAME_AS` edge between two pr
 the resolution trigger (not ingest) so it writes that edge; assert the monitor fires. A second,
 parallel case for manual assertion: `test_monitor_fires_on_a_match_created_by_manual_link_with_
 no_new_ingest`.
+
+**Attempted, Phase 8 Stage 1, 22 September 2026 — the principal-resolution half of this gap is
+closed (ADR-043), and closing it exposed a second, independent blocker this amendment's own text
+had not yet named, found and confirmed empirically rather than assumed away.** A real call site was
+built — `run_resolution_for_entity_type` (`services/resolve/trigger.py`) calling
+`evaluate_monitors_for_entry` immediately after publishing to the change stream, threaded through
+`try_run_resolution_with_overlap_guard`/`run_resolve_entity_type_job` and bound at job registration
+in `app.py`, the identical shape `run_studio_recipe`/`link_resolution_route` already use. **It does
+not work, and the reason is transactional, not a missing principal or a missing call site anymore.**
+`services/api/worker.py`'s own `JobWorker._process` begins the job's transaction, calls the
+registered handler (which is where the new evaluation call lives), and commits **only after the
+handler returns** — so the evaluation call executes *before* the very `SAME_AS` write it is meant
+to alert on is committed. `packages/ports/graph.py`'s own `GraphPort.match(pattern, principal)` has
+no transaction parameter — no way to read within the same in-flight transaction the write happened
+in — so a `graph.match` call from inside the handler genuinely cannot see that write; this is
+standard transaction-isolation behaviour, not a `GraphPort` oversight this stage could route around
+by calling a different method. **Confirmed empirically, not inferred:** in a test build of this
+wiring, the in-handler call found no match and produced no alert for the newly-created monitor;
+a second, manual call to the identical function *after* the test's own `commit_transaction`
+correctly found the match and fired the alert. The wiring was reverted rather than kept half-working
+— code that silently misses the exact case it exists to catch is worse than code that is honestly
+absent. **Two real fix shapes, neither built here:** extend `GraphPort.match` (and whichever other
+methods a monitor's own pattern might need) to accept an optional in-flight transaction handle, a
+port-level change needing its own conformance-suite update per standing rule 1; or give `JobWorker`
+a post-commit hook a job type can register, so `run_resolve_entity_type_job` triggers evaluation
+after `_process`'s own commit rather than before it, from outside the handler rather than inside it.
+Owning phase: **Phase 8**, alongside the rest of Stage 1's own unfinished business — this is not a
+new gap distinct from what this amendment already named, it is the same gap, now understood one
+layer more precisely than "no principal, no call site" described it.
 
 **The bounds, unchanged.** Concurrency, the per-evaluation cost cap and overrun behaviour stand
 exactly as already stated above — none of the three is trigger-model-specific, and A2's own
@@ -4013,13 +4046,13 @@ alone.
 
 ---
 
-## ADR-044 — Distinguishing an unreachable identity provider from a revoked principal: proposed, decide nothing
+## ADR-044 — Distinguishing an unreachable identity provider from a revoked principal: accepted, `WatchStatus` stays binary with a separate reason field
 
-**Status.** Proposed, 22 September 2026. Recorded so it is not silently decided in code once
-ADR-043's own mechanism starts returning a third kind of failure (unreachable) alongside the two
-`principal_for_owner` already distinguishes today (resolved; not this requester). Nothing below is
-decided — per standing rule 11, a genuine spec gap gets an ADR or a fix in `docs/`, not an answer
-given only in a build session and lost by the next one.
+**Status.** Accepted, 22 September 2026. Proposed the same day, reviewed rather than rubber-stamped
+before acceptance — the reasoning below was checked on its own merits, not carried over unread from
+the proposal. Recorded so it is not silently decided in code once ADR-043's own mechanism starts
+returning a third kind of failure (unreachable) alongside the two `principal_for_owner` already
+distinguishes today (resolved; not this requester).
 
 **The gap, restated from Stage 1's own read-first pass.** `Hotlist`/`Monitor.status` is
 `WatchStatus = Literal["active", "stopped"]`, and every path that can make `principal_for_owner`
@@ -4029,7 +4062,7 @@ third: the token-exchange call itself can fail because the identity provider is 
 is not the same fact as a revoked or insufficient principal, and `WatchStatus`'s own binary has no
 room for the difference without deciding something first.
 
-**Proposal: keep `WatchStatus` binary; record the reason separately, not as a third status
+**Decision: keep `WatchStatus` binary; record the reason separately, not as a third status
 value.** A third status value changes the exhaustiveness of every existing consumer (`StatusBadge`,
 any future status-driven UI or query) for something that, examined honestly, is not a third
 *state* of the watch itself — the watch is still, from the owner's own point of view, either
@@ -4051,43 +4084,60 @@ about the analyst's own entitlements at all. Conflating them risks an analyst ei
 access-review ticket for what was really a five-minute network blip, or dismissing a genuine
 revocation as "the IdP being flaky again" and never investigating it.
 
-**Two candidate shapes for the same information, not chosen between here:**
+**Chosen: a reason field alongside the existing status.** `Hotlist.status_detail:
+Literal["revoked", "unreachable"] | None` (or similar), written whenever `status` is set to
+`"stopped"`, read nowhere `status` itself isn't already read. Smallest schema change; every
+existing consumer of the binary `status` keeps working unchanged, and only a consumer that wants
+the finer distinction opts in. **The test, named:** `test_a_revoked_principal_sets_status_detail_
+revoked_not_unreachable` and `test_an_unreachable_identity_provider_sets_status_detail_
+unreachable_not_revoked` — two evaluations, one where the exchange is refused by the IdP for a
+disabled account, one where the exchange call itself errors (connection refused/timeout), each
+asserting the row's own `status` is `"stopped"` in both cases but `status_detail` differs.
 
-1. **A reason field alongside the existing status** — `Hotlist.status_detail: Literal["revoked",
-   "unreachable"] | None` (or similar), written whenever `status` is set to `"stopped"`, read
-   nowhere `status` itself isn't already read. Smallest schema change; every existing consumer of
-   the binary `status` keeps working unchanged, and only a consumer that wants the finer distinction
-   opts in. **The test each shape needs, named:** `test_a_revoked_principal_sets_status_detail_
-   revoked_not_unreachable` and `test_an_unreachable_identity_provider_sets_status_detail_
-   unreachable_not_revoked` — two evaluations, one where the exchange is refused by the IdP for a
-   disabled account, one where the exchange call itself errors (connection refused/timeout), each
-   asserting the row's own `status` is `"stopped"` in both cases but `status_detail` differs.
-2. **A third `WatchStatus` value** (e.g. `"unreachable"`, sitting alongside `"active"`/`"stopped"`),
-   changing what "stopped" itself is scoped to mean (revocation only) rather than adding a second
-   field beside it. Larger change — every existing `Literal["active", "stopped"]` consumer becomes
-   exhaustively wrong until updated — but a single source of truth rather than a status plus a
-   detail that could, in principle, disagree with each other if a future bug set one without the
-   other. **The test:** the same two evaluations as above, asserting `status` itself is
-   `"unreachable"` in the second case, `"stopped"` only in the first, and a companion test asserting
-   every current `Literal["active", "stopped"]` match/switch site in the codebase has been updated
-   to handle the third value exhaustively (a static check, the same shape `check-registry-coverage.
-   mjs` already proves for a keyboard-action registry, not a runtime assertion).
+**Declined, not silently dropped: a third `WatchStatus` value** (e.g. `"unreachable"`, sitting
+alongside `"active"`/`"stopped"`), changing what "stopped" itself is scoped to mean (revocation
+only) rather than adding a second field beside it. A single source of truth, rather than a status
+plus a detail that could, in principle, disagree with each other if a future bug set one without
+the other — the real advantage this shape had — but it changes the exhaustiveness of every
+existing `Literal["active", "stopped"]` consumer in the codebase for a distinction that is not, on
+the reasoning above, a third state of the watch itself. Revisit if the status/detail pair is ever
+found to have drifted apart in practice (the exact failure mode this shape alone would prevent
+structurally) — at which point the migration cost priced below is the thing to weigh against that
+observed drift, not against a hypothetical one.
 
-**Whether repeated transient failures should escalate to `"stopped"` — a real question, also not
-decided here.** An IdP that has been unreachable for the last twenty consecutive evaluations is a
-materially different fact from one unreachable on a single attempt, and an analyst might reasonably
-want the first to read as durably actionable even though no single evaluation within it was a
-revocation. **Not proposed as part of either shape above** — it is a policy question (how many
-consecutive failures, over what window, before "probably transient" stops being the honest
-read) genuinely orthogonal to which of the two shapes is chosen, and answering it here would
-smuggle a second undecided question into a record meant to decide neither.
+**Escalation: repeated transient failures do become `"stopped"`, since an identity provider
+unreachable indefinitely is not transient by any honest reading of the word.** A single unreachable
+evaluation is exactly the case the freshness test already proves resolves itself with nothing to
+invalidate — the very next evaluation tries fresh, no cache in the way. But an IdP that stays
+unreachable across many consecutive evaluations is, from the owner's own point of view,
+indistinguishable in practice from a revoked principal: nothing is being evaluated, and it has been
+true for a while — the "may resolve unattended" half of the transient case stops being the honest
+read once "unattended" has had ample chance to happen and has not. **Threshold: three consecutive
+unreachable evaluations for the same hotlist or monitor.** Disclosed as a reasoned starting point,
+not a measurement — the same "conservative and disclosed as a guess" standard this codebase already
+holds itself to for `LOCK_TTL_SECONDS`/`MAX_TOUCHED_NODES_PER_EVALUATION` elsewhere, chosen because
+a single failure is cheaply explained by ordinary network jitter but a second consecutive one starts
+to suggest something more, and evaluations are event-triggered rather than clock-scheduled, so a
+consecutive-count threshold needs no wall-clock state to track (a running counter per watch,
+already the same shape `set_status` already writes on every attempt) where a time-based threshold
+would need one. **Escalation changes `status` only, never `status_detail`** — a `status_detail` of
+`"unreachable"` stays `"unreachable"` through escalation, never silently reclassified as
+`"revoked"`; the escalation is honest about *what remains unknown* (still, for all this mechanism
+can tell, an infrastructure problem) even while surfacing it with the same durability-implying word
+a real revocation gets, once persistence alone has earned that word. **The test, named:**
+`test_three_consecutive_unreachable_evaluations_escalate_status_to_stopped_while_status_detail_
+stays_unreachable` — three evaluations in a row where the exchange call errors (not refuses); assert
+`status` is `"active"` (or unset) after the first two and `"stopped"` only after the third, with
+`status_detail == "unreachable"` throughout, never `"revoked"`. A companion,
+`test_a_successful_evaluation_resets_the_consecutive_unreachable_count`, asserts a single success
+between two failures prevents escalation — the counter is consecutive, not cumulative.
 
-**Cost, priced for both shapes rather than assumed equal.** Shape 1: one nullable column, one
-evaluator-side write, no consumer changes required unless a consumer chooses to read it. Shape 2:
-a `WatchStatus` migration, every existing switch/match site audited and updated, a new static
-exhaustiveness check. Neither is built here.
+**Cost.** One nullable column (`status_detail`), one small counter (consecutive-unreachable, reset
+on any success — a new column or a Valkey key, implementation's own choice, not decided here), one
+evaluator-side write per attempt. No consumer changes required unless a consumer chooses to read
+`status_detail`. Not built here — Stage 1's own scope was principal resolution, not this.
 
-**Revisit if.** This proposal sits unresolved past ADR-043's own mechanism landing in production
-use — at which point "unreachable" stops being a hypothetical failure mode Stage 1's read-first
-pass anticipated and starts being a real, observed one, which is the point past which deciding
-nothing here stops being defensible.
+**Owning phase: Phase 8**, alongside Stage 1's own unfinished business (the two fix shapes ADR-037's
+amendment names for wiring resolution) — this decision is real and accepted, but implementing it is
+separately scoped work, the same "decided, not yet built" gap this document's own discipline already
+distinguishes from "undecided."
