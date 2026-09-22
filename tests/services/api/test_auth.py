@@ -59,6 +59,7 @@ def _config(jwks_url: str, **overrides: object) -> ApiConfig:
         osprey_config_path="osprey.yaml",
         analytics_db_path=":memory:",
         hotlist_alert_policy="strict",
+        export_manifest_policy="disclose",
     )
     defaults.update(overrides)
     return ApiConfig(**defaults)  # type: ignore[arg-type]

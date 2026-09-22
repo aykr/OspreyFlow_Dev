@@ -444,6 +444,7 @@ async def test_a_revoked_principal_stops_firing_at_the_next_evaluation_no_cache_
         osprey_config_path="osprey.yaml",
         analytics_db_path=":memory:",
         hotlist_alert_policy="strict",
+        export_manifest_policy="disclose",
     )
     resolver = PrincipalResolver(config)
 

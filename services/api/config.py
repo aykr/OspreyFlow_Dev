@@ -15,6 +15,7 @@ import os
 from dataclasses import dataclass
 
 from .alerts import DisclosurePolicy, disclosure_policy_from_value
+from .export import ExportManifestPolicy, export_manifest_policy_from_value
 
 
 def _env_float(name: str, default: float) -> float:
@@ -119,6 +120,10 @@ class ApiConfig:
     #: is what actually enforces the fail-closed default; this field only carries whatever that
     #: function resolved, once, here.
     hotlist_alert_policy: DisclosurePolicy
+    #: `06_DECISIONS.md` ADR-045 — deployment-level, the same shape as `hotlist_alert_policy`
+    #: above, with the *opposite* fail-closed default (`export_manifest_policy_from_value`'s own
+    #: docstring has the reasoning): unset/empty/unrecognised means `disclose`, not `omit`.
+    export_manifest_policy: ExportManifestPolicy
 
     @classmethod
     def from_env(cls) -> ApiConfig:
@@ -154,5 +159,8 @@ class ApiConfig:
             analytics_db_path=os.environ.get("ANALYTICS_DB_PATH", "data/analytics.duckdb"),
             hotlist_alert_policy=disclosure_policy_from_value(
                 os.environ.get("HOTLIST_ALERT_POLICY")
+            ),
+            export_manifest_policy=export_manifest_policy_from_value(
+                os.environ.get("EXPORT_MANIFEST_POLICY")
             ),
         )

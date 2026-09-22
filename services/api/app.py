@@ -176,6 +176,16 @@ from .compute_routes import (
 from .config import ApiConfig
 from .dossier import DocumentView
 from .evaluation import evaluate_hotlists_for_entry, evaluate_monitors_for_entry
+from .export import (
+    ComplianceRoleRequiredError,
+    ExportBlockedError,
+    ExportLedgerEntry,
+    ExportLedgerStore,
+    ExportRequest,
+    ExportResult,
+    OverrideRequiredError,
+    submit_export,
+)
 from .history import (
     HistoryStep,
     HistoryStepNotFoundError,
@@ -313,6 +323,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     judgements_store = await JudgementStore.connect(config.postgres.dsn)
     gaps_store = await IntelligenceGapStore.connect(config.postgres.dsn)
     assumptions_store = await AssumptionStore.connect(config.postgres.dsn)
+    export_ledger = await ExportLedgerStore.connect(config.postgres.dsn)
     studio_recipes = await StudioRecipeStore.connect(config.postgres.dsn)
     extraction_candidates = await ExtractionCandidateStore.connect(config.postgres.dsn)
     litellm_client = LiteLLMClient(LiteLLMConfig.from_env())
@@ -359,6 +370,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.judgements_store = judgements_store
     app.state.gaps_store = gaps_store
     app.state.assumptions_store = assumptions_store
+    app.state.export_ledger = export_ledger
     app.state.studio_recipes = studio_recipes
     app.state.extraction_candidates = extraction_candidates
     app.state.model = model
@@ -420,6 +432,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await judgements_store.close()
         await gaps_store.close()
         await assumptions_store.close()
+        await export_ledger.close()
         await studio_recipes.close()
         await extraction_candidates.close()
         await litellm_client.aclose()
@@ -527,6 +540,10 @@ def get_assumptions_store(request: Request) -> AssumptionStore:
     return request.app.state.assumptions_store  # type: ignore[no-any-return]
 
 
+def get_export_ledger(request: Request) -> ExportLedgerStore:
+    return request.app.state.export_ledger  # type: ignore[no-any-return]
+
+
 def get_studio_recipes(request: Request) -> StudioRecipeStore:
     return request.app.state.studio_recipes  # type: ignore[no-any-return]
 
@@ -603,6 +620,7 @@ AlertsStoreDep = Annotated[AlertStore, Depends(get_alerts_store)]
 JudgementsStoreDep = Annotated[JudgementStore, Depends(get_judgements_store)]
 GapsStoreDep = Annotated[IntelligenceGapStore, Depends(get_gaps_store)]
 AssumptionsStoreDep = Annotated[AssumptionStore, Depends(get_assumptions_store)]
+ExportLedgerDep = Annotated[ExportLedgerStore, Depends(get_export_ledger)]
 StudioRecipesDep = Annotated[StudioRecipeStore, Depends(get_studio_recipes)]
 ExtractionCandidatesDep = Annotated[ExtractionCandidateStore, Depends(get_extraction_candidates)]
 ModelDep = Annotated[ModelPort, Depends(get_model)]
@@ -840,6 +858,54 @@ async def _unverifiable_citation_handler(
             "error": "unverifiable_citation",
             "detail": str(exc),
             "citation_ids": exc.citation_ids,
+        },
+    )
+
+
+@app.exception_handler(OverrideRequiredError)
+async def _override_required_handler(request: Request, exc: OverrideRequiredError) -> JSONResponse:
+    """Registered ahead of `ExportBlockedError` below (Starlette resolves the exact exception
+    type first) — `OverrideRequiredError` is a subclass carrying the same named blocked items, but
+    the copy tells the analyst what to *do*, not only what is wrong (`02_GLASS_FRONTEND.md` §7's
+    own "Errors say what happened and what to do")."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "error": "override_required",
+            "detail": "a justification and an originator reference are both required to export "
+            "past this block",
+            "blocked": [b.model_dump(mode="json") for b in exc.blocked],
+        },
+    )
+
+
+@app.exception_handler(ExportBlockedError)
+async def _export_blocked_handler(request: Request, exc: ExportBlockedError) -> JSONResponse:
+    """A15's own literal assertion: a blocking item is named. `exc.blocked` carries every named
+    item and its own reason — `access_denied`/`citation_unverifiable` (never overridable) and
+    `consult_originator` (overridable, but this handler only fires when `submit_export` itself
+    decided not to proceed — e.g. an access-denied item sits alongside an overridable one, and the
+    harder block wins)."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "error": "export_blocked",
+            "detail": str(exc),
+            "blocked": [b.model_dump(mode="json") for b in exc.blocked],
+        },
+    )
+
+
+@app.exception_handler(ComplianceRoleRequiredError)
+async def _compliance_role_required_handler(
+    request: Request, exc: ComplianceRoleRequiredError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={
+            "error": "compliance_role_required",
+            "detail": "the export ledger's own cross-investigation listing requires the "
+            "compliance role",
         },
     )
 
@@ -1983,6 +2049,59 @@ async def list_assumptions_route(
     return AssumptionListResponse(
         assumptions=await assumptions_store.list_for_investigation(investigation.id, principal)
     )
+
+
+@app.post("/v1/investigations/{investigation_id}/export")
+async def submit_export_route(
+    investigation: AuthorizedInvestigationDep,
+    principal: PrincipalDep,
+    body: ExportRequest,
+    graph: GraphDep,
+    scheme: HandlingSchemeDep,
+    judgements_store: JudgementsStoreDep,
+    export_ledger: ExportLedgerDep,
+    config: ConfigDep,
+    audit: AuditDep,
+) -> ExportResult:
+    """`03_CONDUIT_MIDDLEWARE.md` §6, `06_DECISIONS.md` ADR-045/046/047 — the export gate,
+    Phase 8 Stage 4d. `ExportBlockedError`/`OverrideRequiredError`/`ComplianceRoleRequiredError`
+    propagate to their own handlers above; a raised exception here means nothing was written to
+    the ledger and no `ExportResult` — with its required `mark` — was ever constructed
+    (`services/api/export.py::submit_export`'s own docstring)."""
+    result = await submit_export(
+        investigation_id=investigation.id,
+        request=body,
+        principal=principal,
+        graph=graph,
+        scheme=scheme,
+        judgements=judgements_store,
+        ledger=export_ledger,
+        manifest_policy=config.export_manifest_policy,
+    )
+    await audit.record(
+        principal=principal,
+        action="export",
+        investigation_id=investigation.id,
+        resolved_query={"artefact_kind": body.artefact_kind, "item_count": len(body.items)},
+        result_cardinality=len(body.items),
+        justification=body.justification,
+    )
+    return result
+
+
+class ExportLedgerListResponse(BaseModel):
+    entries: list[ExportLedgerEntry]
+
+
+@app.get("/v1/exports")
+async def list_exports_route(
+    principal: PrincipalDep, export_ledger: ExportLedgerDep
+) -> ExportLedgerListResponse:
+    """`06_DECISIONS.md` ADR-047's own Gap 2 — the compliance-facing export ledger's own read
+    path. `ExportLedgerStore.list_all` itself raises `ComplianceRoleRequiredError` for a principal
+    without the role; deliberately no `AuthorizedInvestigationDep` here at all, since this route's
+    entire point is a listing that needs no per-investigation access."""
+    return ExportLedgerListResponse(entries=await export_ledger.list_all(principal))
 
 
 @app.post("/v1/monitors", status_code=status.HTTP_201_CREATED)

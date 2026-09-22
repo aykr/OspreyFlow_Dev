@@ -1830,15 +1830,62 @@ first, not the one that is easiest to start.
        response shape for judgement/gap/assumption listing — remains genuinely unbuilt and is not
        invented here; once Stage 5's Glass component exists, adding that backend half is the only
        remaining work, not a second full feature.
-   - **4d — Export pipeline and handling gate, backend.** `POST /export`, the `consult_originator`
-     block-by-name, the justification/originator-reference override, the withheld-item manifest,
-     the Osprey mark, and — **now unblocked: `06_DECISIONS.md` ADR-047 accepted, 22 September
-     2026** — the mixed-handling "highest level" mark computation, the per-shape mark rendering
-     (chart/subgraph/report), and the new compliance-facing export ledger, independent of the audit
-     stream, that ADR-047's own Gap 2 decision requires. **Also now unblocked: `06_DECISIONS.md`
-     ADR-045 accepted, 22 September 2026** — the withheld-item manifest ships by default
-     (`disclose`), with a deployment-level `omit` switch, fail-closed to `disclose` when
-     unconfigured.
+   - **4d — Export pipeline and handling gate, backend — built, 22 September 2026.** `POST /v1/
+     investigations/{id}/export` (`services/api/export.py`, `03_CONDUIT_MIDDLEWARE.md` §6): every
+     node/edge evaluated against the handling scheme, a `consult_originator` item blocking by name
+     (`ExportBlockedError`/`OverrideRequiredError`), the justification-and-originator-reference
+     override, `06_DECISIONS.md` ADR-045's own disclose-by-default manifest (fail-closed to
+     `disclose`, `export_manifest_policy_from_value`), ADR-046's own export-time judgement-citation
+     recheck (reusing `judgement_visible_to`, never the in-session view), ADR-047's own mark
+     (highest handling level present, `ExportResult.mark` a required field so the type itself
+     guarantees one is never omitted) and its own compliance-facing ledger (`ExportLedgerStore`,
+     `GET /v1/exports`, gated by a `"compliance"` role, not by investigation). Ten named tests in
+     `tests/services/api/test_export.py` plus four route-level tests in `test_export_routes.py`,
+     all passing against real Postgres/ArcadeDB; `authorized-query-check` clean (44 files); wired
+     into the `conformance` CI job, `make test-all`, with matching `--ignore`s added to the fast
+     `test` job/`make test` (below).
+
+     **The cross-session access question, stated as this module's own decision, not left to be
+     inferred.** The export gate re-checks the exporting analyst's own *current* access at export
+     time — a real `graph.get_node` call for every node item, never the client's own submitted
+     handling — proven by `test_export_is_refused_when_an_item_becomes_inaccessible_between_
+     selection_and_export`: a node visible when the selection was built, reclassified `SECRET` by
+     a real `supersede_node` before the export call, is refused and named. For an edge item this is
+     only a *partial* recheck — see the module's own docstring and the disclosed limitation below.
+
+     **The mark test's own red-then-green.** `ExportResult.mark` was temporarily forced to `None`
+     past Pydantic's own validation (`.model_construct()`); `test_the_export_pipeline_never_
+     produces_an_artefact_with_no_mark` failed with `AssertionError: assert None is not None`,
+     naming the exact field; the fix was restored and the same test passed clean.
+
+     **Known gaps, disclosed as found:**
+     - **The `GraphPort.get_edge` limitation now has a real, live consequence, not only a build
+       note.** An edge item's own `Handling` is taken from the client's submission and evaluated
+       against the scheme (so a stale-but-honest client is still caught), but — unlike a node —
+       cannot be independently re-fetched to confirm that submission is still current or was never
+       fabricated. **Consequence, stated plainly in the module's own docstring:** a malicious or
+       stale client could in principle submit a lower-than-real edge classification and pass a
+       check that should have blocked it. Owning phase: whichever phase first builds `GraphPort.
+       get_edge` — the same disposition every other consequence of this absence already carries
+       (`07_BUILD_PLAN.md`'s own Phase 6 Stage 6 and Stage 4b entries).
+     - **`withheld_count` is caller-supplied, not recomputed by this module.** The same figure
+       `Subgraph.filtered_count` already computes at the Working-Set Service layer (Phase 3's own
+       reasoning: only that layer holds both the full and filtered result server-side without a
+       second, less-audited query) — this module discloses it per ADR-045's policy, it does not
+       re-derive it. Stage 4e's own job is supplying the real figure from the working set the
+       artefact is drawn from.
+     - **Chart/subgraph/report rendering is explicitly out of this stage's own scope, a stated
+       call, not a silent omission.** This module wraps any artefact shape via `artefact_kind` —
+       the actual chart image (`@sigma/export-image`) or assembled report document is Stage 4e's
+       own job, client-side or a later stage's; nothing here renders either.
+     - **`test_assessment_routes.py` (Phase 8 Stage 4c) had never been wired into any CI job at
+       all — found live while wiring this stage's own new files, not assumed safe.** It needs the
+       identical real Postgres/ArcadeDB the `conformance` job already stands up, and had been
+       running (and would fail) in the plain `test`/`make test` job instead, which stands up
+       neither — the exact gap class `.github/workflows/ci.yml`'s own `test_pattern_store.py`
+       comment already found once for a different file. Fixed alongside this stage's own three new
+       files rather than filed separately, since discovering it was a direct side effect of
+       auditing where those three needed to go.
    - **4e — Export, Glass surface.** `02_GLASS_FRONTEND.md` §10, built in full: the three export
      triggers, the handling-gate UI with its named blocker list, the justification form, the
      manifest and mark display.
