@@ -554,9 +554,11 @@ it its own surface. Three artefact shapes share one handling gate — there is o
 
 ### 10.3 Manifest and mark
 
-- Every export carries a withheld-item manifest by count (`03_CONDUIT_MIDDLEWARE.md` §6) — whether
-  it ships by default or is deployment-suppressed follows `06_DECISIONS.md` ADR-045 — and the
-  Osprey mark, rendered in the export `Drawer`'s own footer. Per `06_DECISIONS.md` ADR-047, the
+- Every export carries a withheld-item manifest by count (`03_CONDUIT_MIDDLEWARE.md` §6). Per
+  `06_DECISIONS.md` ADR-045, this ships by default (`disclose`); a deployment may configure `omit`
+  to suppress it, in which case the export `Drawer` shows no manifest text at all rather than a
+  zeroed or placeholder count. The export `Drawer`'s own footer is where the manifest and the
+  Osprey mark both render. Per `06_DECISIONS.md` ADR-047, the
   mark carries the artefact's own highest handling level, not only provenance: a chart gets a
   visible footer/watermark plus embedded machine-readable image metadata carrying the same fields;
   a subgraph carries the mark as a top-level structured field with no visual rendering; a report

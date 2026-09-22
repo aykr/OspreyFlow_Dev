@@ -4193,11 +4193,13 @@ distinguishes from "undecided."
 
 ---
 
-## ADR-045 — Export withheld-item manifest and the recipient outside the boundary: proposed, decide nothing
+## ADR-045 — Export withheld-item manifest and the recipient outside the boundary: accepted, a deployment-level switch defaulting to disclosure
 
-**Status.** Proposed, 22 September 2026, during Phase 8 Stage 4's own read-first pass
-(`07_BUILD_PLAN.md`, this session). Three options below; none is decided. The owner chooses.
-Stage 4c (export pipeline, handling gate) is not built until this record is accepted.
+**Status.** Accepted, 22 September 2026. The three-option analysis below is the record as
+originally drafted — kept in place, not rewritten. The owner's decision, superseding "none is
+decided" in that analysis, is at the end of this record: a deployment-level policy switch between
+option (a) (ships unconditionally) and option (c) (omitted from the artefact), **defaulting to
+(a)**. Option (b) is not selected.
 
 **The finding that frames this record, checked rather than assumed.** `03_CONDUIT_MIDDLEWARE.md`
 §6 already commits to the manifest's shape: "Exports carry the Osprey mark, the investigation
@@ -4277,6 +4279,63 @@ the Conduit's own audit record of the export.**
   record_does` — export a working set with handling-filtered items; assert the artefact's own
   payload contains no manifest field, and a corresponding audit-stream entry for the same export
   carries the count.
+
+**Decision, 22 September 2026 — a deployment-level policy switch between (a) and (c), named
+`disclose` and `omit`. `disclose` is the default.**
+
+**Why disclose is the default, not omit.** An artefact that silently omits material misleads its
+reader by omission. A recipient treating a chart or a report as complete when items were in fact
+removed is a more serious failure than disclosing a count, because the count discloses only that
+something exists, while the silence disclaims a completeness the artefact does not actually have.
+In an evidential context — which is what every export from this platform is — the duty runs to the
+recipient: a reader relying on the artefact to make a decision is owed the knowledge that the
+picture in front of them is partial, even where they are not owed the content that was withheld.
+
+**The counter-argument, recorded fairly rather than only as the position that lost.** The
+artefact's eventual recipient may hold no principal in this system at all — an external
+stakeholder, a court, another agency — and a disclosed count is information about data they have no
+established right to know exists: the exact existence-leak shape `CLAUDE.md` standing rule 3 exists
+to prevent, applied here to a reader this system cannot authenticate or scope at all. `omit` costs
+this argument nothing — it is available, not merely theorised, for exactly the deployment that
+weighs this risk above the misleading-by-omission risk the default is built around.
+
+**Why a switch rather than either option alone, and why its fail-closed direction is not
+ADR-038's own.** Which risk a given deployment should optimise against — misleading a recipient by
+silent omission, or disclosing a count to a recipient with no established right to know it — is a
+genuine trade a customer's own information-security regime should make, the same reasoning
+ADR-038 already used for its own two-mode decision. `disclose` is the default because, on the
+reasoning above, an artefact that lies by omission is judged the worse failure absent a
+deployment's own explicit instruction otherwise — **the opposite fail-closed direction from
+ADR-038's own `strict` default, and deliberately so.** ADR-038's default optimises against
+disclosing a third party's existence to a principal *in this system*; this default optimises
+against misleading a reader relying on an artefact *outside it* as a complete picture. The two
+switches answer different questions, and there is no reason their safer defaults should point the
+same way.
+
+**Binding requirements, the same shape ADR-038's own switch already established.**
+- **Deployment-level, not per-user, and not toggleable by an analyst at export time.**
+  Configuration read once at deployment/service start, the same class of setting ADR-038's own
+  policy mode already is.
+- **Fails closed to `disclose`.** An unset, empty or unrecognised configuration value means
+  `disclose`, not the reverse — the reasoning above treats silent omission as the more serious
+  default failure. **The test:** `test_export_manifest_policy_defaults_to_disclose_when_
+  deployment_config_is_unset` — start the service with the policy variable absent, then empty,
+  then unrecognised; assert all three produce an artefact carrying the manifest.
+- **Audited in both modes**, the same discipline ADR-038's `strict`/`notify` audit requirement
+  already establishes: every export writes an audit record and, per ADR-047's own Gap 2 decision,
+  a compliance-ledger entry, carrying the policy mode in force whether or not the artefact itself
+  carries a manifest.
+
+**If the owner overrules this default, recorded here so the reversal is not a silent edit to this
+record: the default inverts — `omit` becomes the default, `disclose` the deployment opt-in — and
+the reasoning above (duty to the recipient, silent omission as the more serious failure) becomes
+the recorded counter-argument to that reversed default, in exactly the shape this record gives the
+counter-argument here.** This paragraph is written to stay true either way, rather than requiring
+this record to be rewritten if the owner's own call goes the other way.
+
+**Cost.** A deployment-level config surface (the same class ADR-038's own mode already is); a
+fail-closed default check; an audit/ledger write recording the mode in force on every export
+regardless of which mode is active.
 
 **Revisit if.** A future deployment introduces any notion of a tracked, authenticated export
 recipient (a delivery/handover workflow rather than a downloaded file) — at which point option

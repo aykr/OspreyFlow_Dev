@@ -1753,8 +1753,10 @@ first, not the one that is easiest to start.
      the Osprey mark, and — **now unblocked: `06_DECISIONS.md` ADR-047 accepted, 22 September
      2026** — the mixed-handling "highest level" mark computation, the per-shape mark rendering
      (chart/subgraph/report), and the new compliance-facing export ledger, independent of the audit
-     stream, that ADR-047's own Gap 2 decision requires. Still depends on `06_DECISIONS.md`
-     **ADR-045** for the manifest's own default-vs-deployment-option shape.
+     stream, that ADR-047's own Gap 2 decision requires. **Also now unblocked: `06_DECISIONS.md`
+     ADR-045 accepted, 22 September 2026** — the withheld-item manifest ships by default
+     (`disclose`), with a deployment-level `omit` switch, fail-closed to `disclose` when
+     unconfigured.
    - **4e — Export, Glass surface.** `02_GLASS_FRONTEND.md` §10, built in full: the three export
      triggers, the handling-gate UI with its named blocker list, the justification form, the
      manifest and mark display.
@@ -1768,10 +1770,12 @@ first, not the one that is easiest to start.
      on `local-lite`, plus the S2-export-blocks test — the same closing-pass discipline Phase 6's
      Stage 6 and Phase 5a's Publish stage already used.
 
-   **4b/4c and 4d/4e are each a backend/Glass pair sharing one blocked-on-ADR precondition, not two
-   independent sub-stages.** A decision on evidence lifecycle or export disclosure changes both
-   halves of its own pair; accepting the relevant ADR is the actual unblock for two sub-stages at
-   once, not one.
+   **4b/4c and 4d/4e were each a backend/Glass pair sharing one blocked-on-ADR precondition — all
+   three now accepted (`06_DECISIONS.md` ADR-045/046/047, 22 September 2026), so no sub-stage in
+   this stage remains blocked on an open design question.** 4b/4c build against ADR-046's own
+   hidden-not-shown/export-citation-check decision; 4d/4e build against ADR-045's disclose-by-default
+   manifest switch and ADR-047's handling-encoding mark plus its own compliance ledger. Build order
+   otherwise follows 4a's own precedent: nothing here is a design decision still to be made in code.
 5. **The smaller, already-scoped code fixes** — `PathStaleError` for the `paths()` hydration race
    plus a server-side traversal budget; `nodeAttributes.ts`'s combined on-path-and-selected
    rendering (the spec decision is made, `02_GLASS_FRONTEND.md` §4 — only the implementation
