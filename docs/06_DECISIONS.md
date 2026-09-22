@@ -3880,3 +3880,200 @@ wrong in practice — a partial build genuinely would have caught something the 
 alone did not — at which point a harness-only alpha gate, or a narrower "early access" tier below
 full alpha, becomes the thing to weigh against this record's own stated consequence, not
 reintroduced silently.
+
+---
+
+## ADR-043 — Principal resolution for a stored owner_id: OAuth2 Token Exchange (RFC 8693)
+
+**Status.** Accepted, 22 September 2026. Phase 8 Stage 1's own read-first pass (this document's
+own companion session note) set out three candidates and priced each without choosing; this record
+is the owner's choice among them.
+
+**The gap this closes, restated rather than re-derived.** `services/api/auth.py`'s
+`PrincipalResolver.resolve()` is the only place a `Principal` is ever constructed in this
+codebase, and it takes a bearer token, not an id — there is no id-keyed lookup anywhere.
+`services/api/evaluation.py`'s `principal_for_owner: Callable[[str], Principal | None]` returns
+`None` unconditionally for any owner who is not the current requester, which is `06_DECISIONS.md`
+ADR-036's own disclosed stand-in for "the monitor stops," not a resolved answer. This record
+supplies the missing mechanism.
+
+**Decision: OAuth2 Token Exchange (RFC 8693), candidate (b) from the read-first pass.** The
+Conduit's own confidential client exchanges its own credentials for a token minted *as* the target
+`owner_id` (RFC 8693's `requested_subject`), and that token is decoded through the **existing,
+unchanged** `PrincipalResolver.resolve()` — the identical verification, claims-parsing and
+`Principal` construction a live analyst session already gets, not a second implementation of it.
+
+**Argument one, against candidate (a) — the Admin API route needs a second claims-construction
+path.** (a) would build a `Principal` directly from Admin API JSON (a user's raw attribute set),
+alongside `resolve()`'s own construction from verified JWT claims — two code paths producing the
+same security-critical object, which must be kept in sync indefinitely (a new custom attribute
+added to one, a claim renamed in the other, a validation rule present in one but not replicated in
+the other), with nothing in this codebase gating their divergence. (b) reuses `resolve()`
+unchanged: the exchanged token is, from `resolve()`'s own perspective, indistinguishable from a
+live session's token, so there is exactly one place a `Principal` is ever built from IdP data, not
+two that must agree.
+
+**Argument two, against (a)'s own containment — "parameterise the id, never interpolate" is a
+control class that has already failed three times in this exact codebase.** `06_DECISIONS.md`
+ADR-041 names all three, independently found: `services/api/review.py`'s
+`ExtractionCandidateStore.get_authorized` (fetched unscoped, compared after retrieval, fixed to a
+query-scoped `WHERE`); the fake-double instance that let twenty-two tests pass identically either
+side of that same fix, because the fake never ran the query the fix changed at all; and
+`services/api/pattern_store.py`'s `PatternStore.get_authorized`, the same bug written a third time
+in the same session ADR-041's own record of the first two already existed. App-code discipline
+("always scope the query," "always parameterise the id") is exactly the control class this
+codebase's own history shows fails silently and repeatedly, not a hypothetical risk being
+disclosed for the first time here. (b)'s containment sits somewhere structurally different: the
+IdP's own claims-mapping pipeline, the same one every live user session already goes through,
+which cannot inject the exchanging client's own broader claims into the exchanged token — correct
+`requested_subject` in, a token scoped to that subject's own real entitlements out, by the
+protocol's own construction, not by an app-code habit this codebase has already shown it cannot
+sustain across three independent authors.
+
+**Argument three — RFC 8693 is a standard; the Admin API route is Keycloak-specific, and that is a
+commercial constraint bought for no technical gain.** `docs/03_CONDUIT_MIDDLEWARE.md` §6 names
+Keycloak as *this deployment's own* choice of IdP, not a commitment this platform makes to every
+customer's — a platform sold to run against a police force's or a bank's own existing identity
+infrastructure cannot assume every customer's IdP exposes Keycloak's own Admin API shape. (a)
+would tie principal resolution to one vendor's proprietary endpoint for a capability RFC 8693
+standardises precisely so it does not have to be. Nothing about (a) resolves the gap any more
+completely than (b) does; the vendor lock-in is pure cost, not a trade for anything.
+
+**Argument four — candidate (c) (a locally cached/synced principal record) is rejected by
+`06_DECISIONS.md` ADR-036's own words, quoted directly rather than re-argued:** *"Building a
+synchronous approximation now (caching a principal from a prior request, say) would reintroduce
+exactly the 'durable grant outliving whatever permission produced it' failure shape this ADR's own
+second half already rejects — narrower-but-honest was chosen over broader-but-wrong."* A
+TTL-bounded cache is a durable grant with extra steps regardless of how short the TTL is set; (b)'s
+own freshness is bounded by the IdP's own current state at the instant of exchange, not by a sync
+interval this codebase would have to choose and defend.
+
+**The trade, recorded honestly rather than left to look costless.** Part of this mechanism's own
+containment sits in realm-level IdP configuration — outside this repository, unversioned, and
+invisible to `make ci` or any gate this codebase can run. **What that configuration must be:** a
+confidential client, scoped by the realm's own token-exchange policy to exchange for an arbitrary
+subject *and no broader capability than that* (no realm-admin grant, no scope beyond the specific
+custom claims `resolve()` already reads — `clearance`, `org_unit`, `receivable_handling_codes`,
+`roles`). **How an operator verifies it, since no repository gate can:** attempt an exchange for a
+known, deliberately-scoped test account and confirm the resulting token's claims match that
+account's own real, independently-known attributes, not a broader set; and confirm the client's
+own exchange grant is actually scoped (attempt an exchange the realm's own policy should refuse,
+and confirm it is refused) rather than assumed correct because the happy path worked once. Exact
+click-by-click realm configuration is Keycloak-version-dependent and belongs in
+`05_DEPLOYMENT.md`'s own operational material, not repeated here; this record states the
+requirement the operational guide must satisfy, not the guide itself.
+
+**Blast radius on Conduit compromise is identical under both candidates, and (a) must not be
+allowed to look safer than it is in this record.** Under (a), the Conduit itself constructs the
+`Principal` object from whatever JSON the Admin API returns — a compromised Conduit process can
+already fabricate that JSON, or skip the Admin API call entirely and construct a `Principal`
+directly in memory, since nothing after construction cryptographically binds a `Principal` to the
+data it claims to represent. Under (b), a compromised Conduit can request an exchange for any
+subject its client credentials are scoped to, or — identically to (a) — simply construct a
+`Principal` object directly without calling the IdP at all. Neither candidate defends against a
+compromised Conduit; both defend, differently, against a *correctly-running* Conduit being
+misconfigured or containing a bug that resolves the wrong principal for a *legitimate* evaluation
+— which is the property Q4 of the read-first pass actually tested, and the property this decision
+is actually about. Recorded here so the record itself does not imply a security property neither
+candidate has.
+
+**Cost.** A new `httpx`-based token-exchange client alongside `PyJWKClient`'s own JWKS handling; a
+new `ApiConfig` surface (the confidential client's own credentials, the token endpoint URL); every
+`principal_for_owner` call site becomes async, since a token exchange is a live network call —
+enumerated and changed as Stage 1's own build, not this record's. No live Keycloak exists in this
+development environment today (`deploy/compose/dev.yaml` names Keycloak only in a comment on the
+eventual twelve-container deployment target, not as a running service) — the test-side proof this
+mechanism needs is therefore a local, ephemeral HTTP fixture implementing RFC 8693's token-endpoint
+contract well enough to exercise the real request/response/refusal shapes, the identical "real, if
+ephemeral, HTTP server rather than a mock" precedent `auth.py`'s own JWKS fixture already
+establishes for the same reason. That fixture proves this codebase's own protocol handling; it does
+not and cannot prove a real deployed Keycloak realm is correctly configured — the operator
+verification above is what closes that remaining gap, and it is a permanent operational step, not
+one this build ever retires.
+
+**Revisit if.** A future deployment's own IdP does not support RFC 8693 (older or non-standard
+identity providers exist) — at which point candidate (a)'s own reasoning (a vendor-specific
+admin-API route) becomes a real per-deployment fallback to weigh against building a second,
+divergent claims-construction path, not dismissed on this record's own general-case reasoning
+alone.
+
+---
+
+## ADR-044 — Distinguishing an unreachable identity provider from a revoked principal: proposed, decide nothing
+
+**Status.** Proposed, 22 September 2026. Recorded so it is not silently decided in code once
+ADR-043's own mechanism starts returning a third kind of failure (unreachable) alongside the two
+`principal_for_owner` already distinguishes today (resolved; not this requester). Nothing below is
+decided — per standing rule 11, a genuine spec gap gets an ADR or a fix in `docs/`, not an answer
+given only in a build session and lost by the next one.
+
+**The gap, restated from Stage 1's own read-first pass.** `Hotlist`/`Monitor.status` is
+`WatchStatus = Literal["active", "stopped"]`, and every path that can make `principal_for_owner`
+return `None` today writes `"stopped"` — correct while the only two reasons for `None` were "no
+principal directory exists at all" and "this owner is not the current requester." ADR-043 adds a
+third: the token-exchange call itself can fail because the identity provider is unreachable, which
+is not the same fact as a revoked or insufficient principal, and `WatchStatus`'s own binary has no
+room for the difference without deciding something first.
+
+**Proposal: keep `WatchStatus` binary; record the reason separately, not as a third status
+value.** A third status value changes the exhaustiveness of every existing consumer (`StatusBadge`,
+any future status-driven UI or query) for something that, examined honestly, is not a third
+*state* of the watch itself — the watch is still, from the owner's own point of view, either
+currently able to fire or not. What a third value would really be encoding is *why* it currently
+cannot, which is a different axis from *whether* it can. **`"stopped"` also carries a durability
+connotation an unreachable IdP does not deserve**: an analyst reading "stopped" reasonably infers
+something requires their own action to resume — exactly correct for a revoked principal, actively
+wrong for a transient IdP outage that may resolve, unattended, by the very next evaluation. Setting
+`"stopped"` for a reachability failure makes `StatusBadge` assert something false until the next
+attempt succeeds.
+
+**What an analyst actually needs to distinguish, stated as the two questions "stopped" alone
+cannot answer.** (1) *Is this a revocation needing an access review?* — clearance withdrawn, the
+account disabled, an `org_unit` reassignment the saved principal reference no longer resolves to
+usefully; nothing resolves this without a human changing something about the analyst's own access.
+(2) *Is this infrastructure that may resolve unattended?* — the identity provider was unreachable
+at the moment of one evaluation; the very next evaluation may succeed with nothing having changed
+about the analyst's own entitlements at all. Conflating them risks an analyst either opening an
+access-review ticket for what was really a five-minute network blip, or dismissing a genuine
+revocation as "the IdP being flaky again" and never investigating it.
+
+**Two candidate shapes for the same information, not chosen between here:**
+
+1. **A reason field alongside the existing status** — `Hotlist.status_detail: Literal["revoked",
+   "unreachable"] | None` (or similar), written whenever `status` is set to `"stopped"`, read
+   nowhere `status` itself isn't already read. Smallest schema change; every existing consumer of
+   the binary `status` keeps working unchanged, and only a consumer that wants the finer distinction
+   opts in. **The test each shape needs, named:** `test_a_revoked_principal_sets_status_detail_
+   revoked_not_unreachable` and `test_an_unreachable_identity_provider_sets_status_detail_
+   unreachable_not_revoked` — two evaluations, one where the exchange is refused by the IdP for a
+   disabled account, one where the exchange call itself errors (connection refused/timeout), each
+   asserting the row's own `status` is `"stopped"` in both cases but `status_detail` differs.
+2. **A third `WatchStatus` value** (e.g. `"unreachable"`, sitting alongside `"active"`/`"stopped"`),
+   changing what "stopped" itself is scoped to mean (revocation only) rather than adding a second
+   field beside it. Larger change — every existing `Literal["active", "stopped"]` consumer becomes
+   exhaustively wrong until updated — but a single source of truth rather than a status plus a
+   detail that could, in principle, disagree with each other if a future bug set one without the
+   other. **The test:** the same two evaluations as above, asserting `status` itself is
+   `"unreachable"` in the second case, `"stopped"` only in the first, and a companion test asserting
+   every current `Literal["active", "stopped"]` match/switch site in the codebase has been updated
+   to handle the third value exhaustively (a static check, the same shape `check-registry-coverage.
+   mjs` already proves for a keyboard-action registry, not a runtime assertion).
+
+**Whether repeated transient failures should escalate to `"stopped"` — a real question, also not
+decided here.** An IdP that has been unreachable for the last twenty consecutive evaluations is a
+materially different fact from one unreachable on a single attempt, and an analyst might reasonably
+want the first to read as durably actionable even though no single evaluation within it was a
+revocation. **Not proposed as part of either shape above** — it is a policy question (how many
+consecutive failures, over what window, before "probably transient" stops being the honest
+read) genuinely orthogonal to which of the two shapes is chosen, and answering it here would
+smuggle a second undecided question into a record meant to decide neither.
+
+**Cost, priced for both shapes rather than assumed equal.** Shape 1: one nullable column, one
+evaluator-side write, no consumer changes required unless a consumer chooses to read it. Shape 2:
+a `WatchStatus` migration, every existing switch/match site audited and updated, a new static
+exhaustiveness check. Neither is built here.
+
+**Revisit if.** This proposal sits unresolved past ADR-043's own mechanism landing in production
+use — at which point "unreachable" stops being a hypothetical failure mode Stage 1's read-first
+pass anticipated and starts being a real, observed one, which is the point past which deciding
+nothing here stops being defensible.
