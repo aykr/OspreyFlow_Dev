@@ -3828,3 +3828,55 @@ renamed off the `*_authorized` pattern (option (a)'s structural guarantee would 
 failure mode; that specific incident is the strongest evidence for eventually building it).
 
 ---
+
+## ADR-042 — The alpha gate: testers receive a build only after Phase 8's full exit criterion is green; the analyst review is decoupled and not blocked by it
+
+**Status.** Accepted, 22 September 2026.
+
+**The question, found genuinely undecided rather than assumed.** A Phase 8 stage-breakdown pass
+this session confirmed, checking rather than assuming, that neither `06_DECISIONS.md` nor
+`07_BUILD_PLAN.md` states when a tester receives a build. `06_DECISIONS.md` ADR-034 §B7 requires
+two assertions (no private-tree file, no B5 identifier) to exist in the harness's own first
+version *before* any artefact reaches an alpha or beta tester — a necessary gate, not a sufficient
+one. Nothing before this record connected "the harness exists and passes its own two assertions"
+to "testers may now receive a build," and nothing considered the alternative: gating on Phase 8's
+own full exit criterion instead of only on the harness.
+
+**Decision.** Testers receive a build only after Phase 8's own full exit criterion is green — both
+acceptance scenarios (`08_ACCEPTANCE_SCENARIOS.md`) passing unchanged on `local-lite`. Not after
+the harness alone (this record's own stage 2, the packaging pipeline); not after the
+product-feature core (this record's own stage 4, assessment/export/the remaining Scenario B
+steps) reaches its own exit criterion in isolation. The harness's own B7 gates remain a necessary
+precondition, unchanged — this decision adds a second, stricter one on top, not a replacement.
+
+**Why, stated plainly.** A tester evaluates a product, not a component. A build that passes the
+harness's own packaging assertions but cannot yet complete Scenario A or B end to end hands a
+tester something that looks shippable and is not — the same "narrower-but-honest over
+broader-but-wrong" reasoning `06_DECISIONS.md` ADR-036 already applies to a different question.
+Gating on the harness alone would let "Phase 8's packaging work is done" stand in for "the
+platform is done," which is exactly the two facts this session's own decomposition found nothing
+connecting — deciding to connect them at the *lower* bar (harness only) would be choosing the
+weaker claim by default, not by reasoning.
+
+**Consequence, stated rather than left implicit.** No external feedback reaches the product before
+it is complete. Every stage in this record's own Phase 8 breakdown — principal resolution, the
+harness, the documentation refresh, the assessment/export core, the smaller code fixes, the test
+infrastructure — finishes before an alpha tester ever opens the product. This is a real cost,
+accepted here as the owner's own call: a much longer stretch with zero outside signal than a
+harness-only gate would produce, in exchange for never handing a tester a build that fails a core
+walkthrough partway through.
+
+**The analyst review is decoupled from alpha, and not blocked by it.** It needs a running dev
+instance, not a packaged, tester-safe artefact — none of ADR-034 §B7's assertions apply, since a
+dev instance is not distributed to a third party the way a packaged build is. Under the decision
+above, it is therefore the *only* external input this build receives before completion: alpha is
+gated on the full exit criterion, but a dev-instance analyst review has no such gate and can run
+as soon as there is enough of the product for an analyst to usefully react to. **Owner action,
+lead time measured in weeks, not a Phase 8 stage** — scheduling and running it is not development
+work any stage above produces or consumes, and nothing in this record schedules it.
+
+**Revisit if.** The cost stated above (no outside signal until full completion) turns out to be
+wrong in practice — a partial build genuinely would have caught something the analyst review
+alone did not — at which point a harness-only alpha gate, or a narrower "early access" tier below
+full alpha, becomes the thing to weigh against this record's own stated consequence, not
+reintroduced silently.

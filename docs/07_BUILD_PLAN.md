@@ -1330,9 +1330,10 @@ with compute/analytics and two of this phase's own bullets (hotlists, alert inbo
    every `packages/schemas` model (`generate_ts.py` itself, run as part of `schemas-check`); these
    three hand-mirrored shapes have no equivalent — an edit to `AlertView`/`AlertJumpResult`/
    `Investigation` server-side has nothing to fail a build the way a `Hotlist` field rename already
-   would. No owning phase decided here; recorded as a gap for whichever phase next revisits
-   `generate_ts.py`'s own scope (widening it to `services/api` route-response models generally,
-   not just this one route module, would be the shape of the fix).
+   would. **Owning phase: Phase 8, Stage 6** (test-infrastructure and CI hygiene) — the same class of
+   drift-gate-parity work as that stage's other items, not left unassigned; widening
+   `generate_ts.py`'s own scope to `services/api` route-response models generally, not just this
+   one route module, is the shape of the fix.
 
    **The three named render-layer tests this session's own task required, each confirmed to fail
    against a real reverted implementation, not only against a self-contained regression stand-in
@@ -1483,9 +1484,9 @@ disclose something — this list did not exist before Stage 1 found it needed on
   retirement needed every one of `ComputePort`'s five names replaced, not only the ones this
   phase's own outcome bullet names — but that bullet lists only "Degree, betweenness, eigenvector,
   clustering coefficient, Louvain, Clique Metric." The type is real
-  (`01_DOMAIN_MODEL.md` §10); the algorithm itself has no owning phase, the same "gaps with no
-  owning phase" shape the OpenSearch index and the corpus-wide trigger both had before something
-  claimed them.
+  (`01_DOMAIN_MODEL.md` §10); the algorithm itself is **resolved as out of scope for v1**
+  (`07_BUILD_PLAN.md`'s own "Out of scope for v1" section has the full reasoning: no acceptance
+  scenario requires it) rather than left as a "gaps with no owning phase" entry.
 - **Tier 3 (`GraphFrames`/HugeGraph Vermeer, >2M nodes) does not register in Phase 7, on this
   host.** `06_DECISIONS.md` ADR-028 has the full reasoning and its own "revisit if": this
   development host's ~7.65GB Docker VM has produced five distinct memory/resource incidents across
@@ -1568,6 +1569,89 @@ names the item, and proceeds only with a recorded justification.
 needs real multi-node infrastructure this phase's own bullet list does not, so each phase's exit
 criterion is now a test it can actually run on the infrastructure it has, not a criterion split
 across two without saying so.
+
+**This phase now has the stage breakdown it has lacked for two weeks — every deferred item across
+the whole build has landed here with no ordering ever assigned to it.** Ordered by uncertainty,
+not convenience: the stage with no established shape and the least precedent to build against goes
+first, not the one that is easiest to start.
+
+1. **Principal resolution** — green-field; nothing in this codebase resolves a `Principal` from a
+   stored `owner_id` with no live session token, and no prior stage's work bears on how to build
+   one. **Code + decision.** Unblocks both halves of the same gap at once, not two separate fixes:
+   `services/api/evaluation.py`'s own `principal_for_owner: Callable[[str], Principal | None]` is
+   already the mechanism both the cross-analyst case and the corpus-wide-resolution case need — it
+   returns `None` unconditionally today; a real implementation closes both the moment it exists,
+   with no further wiring in either producer. **Exit criterion, a test:**
+   `test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_ingest` — a hotlist
+   owned by analyst A, an ingest triggered by analyst B, asserting a real alert fires for A, using
+   a principal resolved for A with no token from A in flight — currently red by construction (the
+   gap this stage exists to close), and the two tests ADR-036 already names
+   (`test_monitor_never_fires_on_a_match_the_saving_analyst_cannot_see`,
+   `test_monitor_stops_evaluating_once_the_saving_principal_is_revoked`) must keep passing as
+   regressions, not be treated as already covering this stage's own new case.
+2. **The harness / packaging pipeline** — the only stage this build's own alpha gate depends on
+   (`06_DECISIONS.md` ADR-042), and, like Stage 1, largely green-field: no packaging step, no
+   backup/restore/upgrade mechanism and no generated-manifest tooling exists anywhere in this
+   repository yet. **Code + infrastructure.** **Exit criterion, mostly a test, honestly not
+   entirely one:** ADR-034 §B7's two assertions (no private-tree file, no B5 identifier in the
+   built artefact) are mechanical and testable, the same containment-check shape already proven
+   against `scripts/mint_dev_token.py`; a scripted golden-path deploy (clean checkout → harness or
+   its CLI equivalent → a running, health-checked stack) is testable too. **Whether the six setup
+   screens are actually usable by an operator who has never seen them is a judgement, not a test —
+   said plainly rather than dressed as one; a usability pass by someone other than whoever built
+   the screens is this sub-item's own honest exit criterion.**
+3. **Documentation refresh, then the Trigger A restructure** — already the most fully specified
+   stage of the six, worked out in detail below this list rather than duplicated here. **Documentation
+   + code (two coverage gates, the licence-check leg, `doc_citations_check.py`) + two owner
+   decisions** (per-file headers; commit-SHA citations in published guides). **Exit criterion, a
+   test:** `tests/fixtures/domain_model_coverage_allowlist.txt` and `tests/fixtures/
+   route_coverage_allowlist.txt` are both empty and deleted (`domain-model-coverage-check`/
+   `route-coverage-check` passing against a repository with no allowlist file to read is what
+   "done" means, not a judgement that the docs read well enough); every command in each of the 11
+   guides runs clean on a fresh checkout, per this entry's own already-stated criterion above.
+4. **Assessment, export, the remaining Scenario B steps** — the product-feature core, following
+   established patterns (evidence linking, export pipelines, handling gates) this build already has
+   precedent for in earlier phases, so less uncertain than Stages 1–2 despite being the largest
+   single body of new code. **Code**, one **decision** (B21 vs. an ADR accepting its absence).
+   **Exit criterion, a test — this phase's own already-stated one:** both acceptance scenarios pass
+   unchanged on `local-lite` (a `test_phase8_exit_criterion_end_to_end`-shaped scenario test, the
+   same pattern Phase 6's own exit criterion already uses); an export containing an `S2`-marked
+   item is blocked, names the item, and proceeds only with a recorded justification.
+5. **The smaller, already-scoped code fixes** — `PathStaleError` for the `paths()` hydration race
+   plus a server-side traversal budget; `nodeAttributes.ts`'s combined on-path-and-selected
+   rendering (the spec decision is made, `02_GLASS_FRONTEND.md` §4 — only the implementation
+   remains); `limit_exceeded`'s three options rendered in the Glass instead of a generic message;
+   the non-Latin-family-name resolver crash; **node size scaled by the active metric's own value —
+   the one third of Phase 7's own metrics-panel bullet ("two-metric comparison; size encoding;
+   community hull overlay") Stage 3 left unbuilt.** Real design work of its own (normalising a
+   fetched value to a size range, its interaction with the existing zoom-band scaling in
+   `canvas/nodeAttributes.ts`'s `computeNodeFrameAttributes`, its own perf proof against `perf/
+   perf.spec.ts`) rather than a one-line addition, which is why it sits in this stage rather than
+   Stage 4 alongside the rest of the metrics panel's own already-shipped two-thirds. **Code.** Lower
+   uncertainty than every stage above — each already has a known fix shape from the finding that
+   disclosed it, not an open design question. **Exit criterion, a test:** each item ships with its
+   own named regression test proving the specific failure its own disclosure describes, not a
+   shared or generic one.
+6. **Test-infrastructure and CI hygiene** — the lowest-uncertainty stage: `sweep_stale_
+   conformance_databases`'s three-part fix, wiring or documenting `test_tile_cache.py`/`test_
+   prefetch.py`/`test_match_live.py`, resyncing `Makefile`'s `test`/`test-all` with `ci.yml`, the
+   `make lint` backlog, an `InvestigationStore` direct-Postgres test file, the unbound-test-double
+   class fix, `_NullExtractionCandidateStore.store_document_text`, diagnosing (not fixing — that is
+   Phase 8a's own reproduction) why `test_statelessness.py` cannot currently connect;
+   **`deltaClient.integration.test.ts`'s own harness cannot exercise any resolution endpoint that
+   checks real node existence** (`POST .../seed` only writes the working-set store, never
+   `GraphPort` — a node seeded through it fails `resolution/link`/`split`/`threshold`'s own real
+   `GraphPort.get_node` check with a genuine `404`, not a fixture artefact; closing it means giving
+   the harness, or a small explicit test-only route, a way to write a real node into `GraphPort`
+   before seeding; `test_resolution_threshold_access_control.py`'s own direct-adapter proof stands
+   in meanwhile); and **`generate_ts.py`'s own model list doesn't cover `services/api` route-
+   response models** (`AlertView`/`AlertJumpResult`/`Investigation` are hand-mirrored in `watches/
+   api.ts` with no drift gate the way every `packages/schemas` model already has — widening the
+   model list to cover `services/api` route-response models generally, not just this one route
+   module, is the shape of the fix). **Code/test-scaffolding**, no product dependency on any stage
+   above. **Exit criterion, a test:** `make ci` fully green with zero pre-existing-red items — every
+   item on this stage's own list is itself a named, individually fixable check, not a bundle
+   requiring a judgement call about "clean enough."
 
 **Before the restructure below: refresh the published documentation set. Sequencing matters —
 refresh first, restructure second, recorded here so it is not left to whoever reaches this close
@@ -1890,13 +1974,117 @@ correctly stayed there, being small additions reusing components Phase 5 already
 
 ---
 
+## Out of scope for v1
+
+A named list, not silence — the third disposition every item that once sat in "Gaps with no owning
+phase" (below) had to resolve to, alongside an owning phase or an explicit permanent acceptance.
+An item lands here when it is real, disclosed, and genuinely not required by either acceptance
+scenario — checked against `08_ACCEPTANCE_SCENARIOS.md` directly for each entry below, not
+assumed. Out of scope for v1 is not out of scope forever; it means nothing currently planned
+depends on it, and a future phase choosing to build it starts from a real, already-disclosed
+finding rather than rediscovering the gap.
+
+- **`ComputePort.temporal_motifs`'s own algorithm (convoy/relay/burst detection).** The type is
+  real (`MotifRequest`/`MotifMatch`, `01_DOMAIN_MODEL.md` §10); the algorithm was never claimed by
+  any phase's own outcome bullet (Phase 7's own list names only "degree, betweenness, eigenvector,
+  clustering coefficient, Louvain, Clique Metric"). Checked against `08_ACCEPTANCE_SCENARIOS.md`:
+  A12's own "relay group" language is answered by Clique Metric plus degree centrality, not motif
+  detection — no acceptance-scenario row requires this algorithm. A standalone analytical capability
+  with its own accuracy questions (the same shape Brandes-sampling below has), not a small addition
+  to something already built.
+- **The ingest pipeline's OpenSearch full-text-and-embeddings index.** Three points in the spec
+  assume it exists (`03_CONDUIT_MIDDLEWARE.md` §5.1's ingest `index` step, §3.3's `/v1/search`
+  description, `02_GLASS_FRONTEND.md` §2's "Search entities, identifiers, documents" mockup copy)
+  and no phase ever built it — `services/api/search.py`'s own docstring already discloses the
+  index leg is unwired. Checked against `08_ACCEPTANCE_SCENARIOS.md`: every search-shaped row (A9,
+  B4, B5, B7) is graph-leg search or "Search Around" expansion, already real; none needs full-text
+  document/embedding search. **Corollary, not fixed here:** the three spec passages above overclaim
+  current functionality and should be corrected to state the index leg is unbuilt, the same
+  discipline `docs/DEMO_GUIDE.md`'s own "documents only what is built and verified today" already
+  applies to itself — left for whoever next touches those sections, not done as part of this
+  disposition sweep.
+- **Betweenness's Brandes-sampling fallback for large working sets.** The exact `rustworkx.
+  betweenness_centrality` call runs regardless of population size — slower at scale, never
+  incorrect — where `02_GLASS_FRONTEND.md`'s own performance table assumes an approximation exists.
+  Real algorithmic work (a sampled Brandes estimator, on both compute tiers, with its own
+  accuracy/tolerance question for cross-tier agreement) that no acceptance scenario requires — the
+  gap is a performance-budget mismatch against the spec's own claimed complexity, not a correctness
+  or acceptance-scenario failure. **Same corollary as above:** the performance table should be
+  corrected to state the current exact-computation behaviour rather than assume sampling exists;
+  not fixed here.
+- **A device-extraction connector or format (Cellebrite UFDR, XRY).** `packages/schemas/
+  ingest.py`'s connector catalogue carries these as labels only; Phase 2's own "CSV, JSON and
+  generic delimited" outcome bullet never promised them. Checked against
+  `08_ACCEPTANCE_SCENARIOS.md` directly, confirmed by Phase 7's own exit criterion (ADR-027): B1 is scoped to its two-CDR-
+  files half only and B13 to a CDR-carried hotlisted identifier, neither through a device-extraction
+  fixture — no acceptance scenario needs this connector to exist. `06_DECISIONS.md` ADR-024's own
+  deterministic MSISDN↔IMSI `SAME_AS` write depends on a structured record only such a connector
+  would produce, but ADR-024 itself is not required for v1's acceptance criteria either, so its own
+  dependency does not pull this connector into scope by association.
+
+## Permanently accepted, not built
+
+The second disposition a "Gaps with no owning phase" entry could resolve to, alongside an owning
+phase and "Out of scope for v1" above — a finding stays real and disclosed, but the decision is to
+keep the current behaviour rather than build the fix, with the reasoning recorded rather than the
+item left to be silently rediscovered as an open question.
+
+- **The `graphify` `PreToolUse` hook stays advisory — not made blocking — a decision, not a
+  postponement.** `.claude/settings.json` (in place since 13 September) runs `graphify hook-guard
+  read`/`search` before every `Read`/`Glob`/`Bash`/`Grep` call, printing a `MANDATORY` instruction
+  to consult `graphify query`/`path`/`explain` first; checked directly, `graphify hook-guard read`/
+  `search` both exit `0` unconditionally, so the hook cannot deny a call today — advisory by
+  construction of the installed tool, not a configuration choice. Measured at zero compliance
+  across the whole of Phase 6a's Dossier work (`CLAUDE.md` rule 13's own "depends on being
+  remembered" admission, made concrete, not merely suspected), and a live test of the narrowed
+  instruction's own accuracy found the tool itself is also wrong often enough in the common case to
+  teach ignoring it: a focused, well-formed query against the exact bug a closing pass had just
+  fixed returned a 197-node BFS neighbourhood with the useful answer plausibly among 164 truncated
+  nodes, where a direct `Read` found the real defect faster and more precisely. `CLAUDE.md`'s own
+  graphify section is narrowed accordingly (a scoped query for broad "how does X relate to Y"
+  orientation with no file already identified; a direct `Read` for a file already named by
+  reasoning, a prior message, or a file-path reference already in hand).
+
+  **Decision: stay advisory, permanently, rather than build a blocking enforcement hook.** Building
+  one is real, scoped work (`graphify hook-guard` itself cannot deny a call; a blocking gate needs a
+  new, locally-written hook script this repository would own and maintain, correctly classifying
+  which case a `Read`/`Grep` falls into on every call) for a tool this same session's own live test
+  found gives a worse answer than a direct read in exactly the case — a file already identified —
+  that dominates ordinary development work. Enforcing a narrowed-but-still-imperfect instruction
+  would guarantee the over-broad cases the live test found, not only the compliance the narrowing
+  itself already improves. This is an internal development-process convention, not a product
+  correctness or access-control control the rest of this document's own testing discipline exists
+  to gate — the cost of building and maintaining a classifier hook outweighs the value for a tool
+  whose own accuracy is disclosed, not proven, in the case it would be enforcing. **Revisit if** a
+  future measurement finds the narrowed instruction's own compliance has fallen back toward zero
+  despite being genuinely accurate in the common case — the same two-part test (narrow, then check
+  whether narrowing alone was enough) that produced this decision, not assumed to hold forever
+  unchecked.
+
 ## Gaps with no owning phase
 
+**Every entry below has a disposition — checked directly against each one's own closing sentence,
+not assumed from the section title — even though the section is not literally empty of text.**
 Unlike the known-gaps lists inside Phase 5, Phase 5a and Phase 6 above — each a thing that stage's
-or phase's own work found and deferred — an entry here is something no phase's bullet list claims
-at all. A phase about to close checks this list the same way Phase 6's own stages checked the
-previous phase's known gaps before scoping their work, so an orphaned intention doesn't sit
-findable only from whichever phase happened to notice it.
+or phase's own work found and deferred — an entry here was, at the time it was written, something
+no phase's bullet list claimed at all. A disposition sweep this session checked all 31 entries then
+present against their own text (not their heading) and found: two were stale — already resolved by
+Phase 7 Stage 1 and never removed when that stage closed, now deleted rather than left as the next
+false positive; eight named genuinely orphaned findings with no disposition anywhere, now given one
+(an owning phase, an explicit permanent acceptance recorded in the new "Permanently accepted, not
+built" section above, or a place on "Out of scope for v1"); the remaining twenty-three already
+stated their own disposition within their own text (most commonly "Owning phase: **Phase 8**") but
+were never physically moved out of this section once they had one. **Those twenty-three are left in
+place here, not relocated, because physically moving each into wherever its own stated disposition
+lives is a separate, larger reorganisation this sweep did not undertake — the claim this note makes
+is narrower and checked: nothing below is *undispositioned*, whether or not it has been *filed*
+correctly.** Read each entry's own closing sentence for its actual disposition, not this section's
+own heading, until that reorganisation happens. **Swept as a standing step of the phase-close
+procedure from here on:** when a phase closes, this document's own author checks every entry that
+phase's own work resolved and removes it here — the discipline `06_DECISIONS.md`'s own "Confirmed,
+not merely suspected" standard already applies to a claim, applied here to a claim of absence — so
+a closed finding does not sit here inflating a future phase's own inventory the way the two stale
+entries above did for weeks before this sweep found them.
 
 - **Highest-consequence item in this list for Phase 8 — the principal-resolution gap, consolidated
   from three separate disclosures of what is one missing capability, not three.** Stated once,
@@ -1972,61 +2160,6 @@ findable only from whichever phase happened to notice it.
      make the claim *true* — only the statelessness test running green does that — but it is the
      cheapest lever on the one part of the claim already known, arithmetically, to be false at
      scale today.
-
-- **The ingest pipeline's OpenSearch full-text-and-embeddings index has no owning phase.**
-  `03_CONDUIT_MIDDLEWARE.md` §5.1 names it as the ingest pipeline's own `index` step ("full text
-  and embeddings into OpenSearch"), `03_CONDUIT_MIDDLEWARE.md` §3.3 specifies `POST /v1/search` as
-  "federated search across graph, documents, index", and `02_GLASS_FRONTEND.md` §2's workspace
-  mockup already shows the search box as "Search entities, identifiers, documents" — three
-  separate points in the spec assume this exists, and no phase's own bullet list above builds it.
-  `services/api/search.py`'s own docstring already discloses half of this live in the code
-  (`SearchRequest`/`search()`): "the index leg is OpenSearch, which is not wired into any
-  deployment profile until later... document content itself does not exist as a searchable thing
-  until extraction, Phase 6" — Phase 6 is what makes document content extractable, not a commitment
-  to build the OpenSearch adapter itself, and no phase after it picks that commitment up either.
-  **Not the same gap as Phase 8's own OpenSearch use** — `04_VAULT_BACKEND.md` §1.4 ties OpenSearch
-  to `adapters/graph_janusgraph` (Phase 8) as JanusGraph's own cluster-profile mixed index for
-  graph-property search, a different consumer of the same underlying store. Phase 8 closing does
-  not close this gap. Needs a scoping decision — its own phase, or folded into an existing one
-  (Phase 2's ingest pipeline is the natural producer of the index writes; Phase 4's Glass search
-  box is the natural consumer of reading it) — before a future phase assumes `/v1/search`'s
-  document/index legs already work because the graph leg does.
-
-- **Nothing triggers resolution or alerting against a live corpus.** `services/resolve`'s
-  `resolve_entity_type`/`write_same_as_edges`/`detect_conflicts`/`record_conflicts` are real and
-  tested — Phase 6's own gaps list already discloses "no ingest hook, no cron, no manual endpoint
-  ... every test calls them directly" — and no hotlist/alert code exists anywhere in `services/`
-  or `packages/` to consume a match once one is found. `08_ACCEPTANCE_SCENARIOS.md` Scenario B's
-  B8 (a scored `SAME_AS` edge exists to examine) and B13/B20 (ingest raises an alert) all presume
-  this trigger runs; Phase 7's hotlist/saved-pattern-monitor bullet builds the alert's display, not
-  the corpus-wide job that would ever fire one outside a test calling the functions directly.
-  **No longer just a scoping question** — see `06_DECISIONS.md` ADR-025 for the full design (what
-  runs it, on what event, against which population, under what principal, what happens when a run
-  overlaps the previous one, how a partial run is recovered) and the Phase 7 outcome bullets above
-  for where it lands.
-
-- **`GraphPort` has no method to list a type's population.** Found while designing ADR-025's own
-  trigger, not by inspection alone: `resolve_entity_type` is a pure function over a
-  caller-supplied node list, and nothing in `packages/ports/graph.py` can produce "every `Person`
-  node" or "every node of type X touched since Y" — `find_node`/`search_nodes` need an exact
-  identifier value, `expand`/`paths` need a known seed, `match` needs a bounded pattern. A
-  structural port gap, not an orchestration one: `06_DECISIONS.md` ADR-025 proposes a new,
-  paginated, access-controlled `GraphPort` method, conformance-suite-first per standing rule 1 —
-  needed before any corpus-wide resolution job can run against more than a caller-already-knows
-  population.
-
-- **No device-extraction connector or format exists, and no phase has ever claimed one.** Phase
-  2's own outcome bullet promised "CSV, JSON and generic delimited" (its own known-gaps list above
-  now records that only CSV shipped) — but device-extraction formats (Cellebrite UFDR, XRY) were
-  never promised by that bullet or any other; `packages/schemas/ingest.py`'s connector catalogue
-  carries them as labels only. `06_DECISIONS.md` ADR-024 depends on this: the deterministic
-  MSISDN↔IMSI `SAME_AS` write it proposes needs a structured record that reports both values
-  together, which only a device-extraction (or equivalent) connector would ever produce. Needs a
-  scoping decision — its own stage inside whichever phase eventually builds it, per ADR-024 — not
-  an assumption that Phase 2 closing or Phase 6a's Glass work already covers it. **Phase 7's own
-  exit criterion (ADR-027) confirms this gap is not closed by that phase either** — B1 and B13 are
-  both scoped around it, not through it: B1 to its two-CDR-files half only, B13 to a CDR-carried
-  hotlisted identifier rather than the literal seizure-record fixture.
 
 - **Fake-based tests in this repository do not exercise security-relevant paths, and that is now
   a pattern across four independent findings, not a property of any one fake.** Each instance was
@@ -2165,27 +2298,6 @@ findable only from whichever phase happened to notice it.
   here — recorded as a class, owning phase Phase 8**, the same close-of-build hardening pass this
   session's other disclosed gaps (A1, A2 above) already land in.
 
-- **`deltaClient.integration.test.ts`'s own harness (`apps/workspace/test/glass_test_server.py`,
-  its `seedOneNode` helper) cannot exercise any resolution endpoint that checks real node
-  existence — `manual_link`/`manual_split`/`set_resolution_threshold` all now do, correctly, via
-  `GraphPort`.** Found while trying to add a real WebSocket-level proof that `DeltaReproject.
-  affected_cluster_ids` (Phase 6a Stage 2) round-trips end to end: `POST .../seed` only writes into
-  the *working-set store* (`WorkingSetService.seed`'s own docstring: the caller-supplied objects
-  are never handed to `GraphPort`), never into the real ArcadeDB adapter this harness's app
-  actually runs against. A node seeded this way passes every working-set-store check but fails
-  `GraphPort.get_node`/`expand`'s own seed-node query — a real `404 node_not_in_working_set` from
-  the live server, not a fixture artefact — so `resolution/link`, `resolution/split` and `PUT
-  resolution/threshold` are all, today, untestable through this particular harness. The existing
-  three WebSocket-level tests never needed a real graph node (`add`/live-push/resync all work over
-  the working-set store alone), so this went unnoticed until Stage 2 needed one. **Not fixed
-  here** — closing it means giving the harness (or a small, explicit test-only route) a way to
-  write a real node into `GraphPort` before seeding the working set, which is its own scoped piece
-  of infrastructure work, not a Stage 2 line item. The Python-level proof
-  (`tests/services/api/working_set/test_resolution_threshold_access_control.py`, against the real
-  adapter directly) stands in for the WebSocket-level one in the meantime; `models.ts`'s own
-  `DeltaReproject.affected_cluster_ids` addition is otherwise unverified against the real wire
-  format beyond type-checking.
-
 - **`keyboard.spec.ts`'s walkthrough had no auto-discovery of new canvas actions, and `CLAUDE.md`
   rule 13's standing rule was a stopgap for that, not a fix — closed by Phase 6a Stage 4, not left
   open.** Confirmed directly while closing Phase 6a Stage 1's own keyboard gap: the spec was a
@@ -2272,34 +2384,6 @@ findable only from whichever phase happened to notice it.
   an executed proof, and says so in its own header, rather than letting "the keyboard suite is
   green" imply more than a static scan can support.
 
-- **Betweenness has no size-triggered Brandes-sampling fallback, though `02_GLASS_FRONTEND.md`
-  line 206 already documents one should exist ("Betweenness (exact to 20k nodes, Brandes-sampled
-  above)").** Found while building `services/api/compute_routes.py` (Phase 7 Stage 3): the same
-  20,000-node figure is this route's own sync/job boundary, but neither `CentralityRequest`
-  (Stage 2) nor `adapters/compute_rustworkx`'s own `centrality` method carries a sampling
-  parameter or branch — the job-mode path runs the identical exact `rustworkx.
-  betweenness_centrality` call regardless of population size, so a working set at or beyond the
-  sync boundary gets an exact (slower, but not incorrect) result rather than the approximation
-  the spec's own performance table assumes. Not fixed here — real algorithmic work (a sampled
-  Brandes estimator, on both tiers, with its own accuracy/tolerance question for the cross-tier
-  agreement case) that this route's own scope did not extend to invent unprompted, the same
-  "disclose, don't silently fill" instruction the `Endpoint`-to-`Device` gap above and B15's own
-  scoping already follow.
-
-- **Phase 7's own metrics-panel bullet names three things — "two-metric comparison; size
-  encoding; community hull overlay" — and Stage 3 built two of the three.** The ranked list, the
-  second-metric comparison column and the community hull overlay (`metrics/MetricsPanel.tsx`,
-  `metrics/hulls.ts`, `canvas/CommunityHullOverlay.tsx`) are real and tested; **node size scaled
-  by the active metric's own value is not built.** `07_BUILD_PLAN.md`'s own Stage 3 plan priced
-  size encoding's *performance* cost ("an `O(1)` reducer touch per node, not a new bottleneck")
-  but that was a feasibility measurement, not the feature itself — actually threading a fetched
-  metric value through to `canvas/nodeAttributes.ts`'s own per-frame `computeNodeFrameAttributes`
-  (which currently sizes a node from its zoom band alone, `BAND_SIZE[band]`, nothing else) needs a
-  real design pass of its own: how a value is normalised to a size range, how that interacts with
-  the existing zoom-band scaling, and its own perf proof against `perf/perf.spec.ts`'s fixture —
-  not assumed free just because the *per-node* cost was shown to be cheap. Disclosed rather than
-  silently dropped from the bullet; not fixed here.
-
 **On Phase 6's own citation of `test_review_routes.py`'s denial tests as evidence access control
 is real (above): checked against this finding, and it survives unnarrowed, because it was never a
 claim about `GraphPort`.** `run_extraction`/`accept_candidate`/`reject_candidate`'s access control
@@ -2323,54 +2407,6 @@ Scenario B re-check that surfaced the entries above, but it is a live contradict
 things the ontology already declares (`packages/ontology/default.yaml`'s `Endpoint.endpoint_kind`
 and `Device.identifiers` both claiming `imei`), not an unclaimed intention — standing rule 7 makes
 that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than left open here.
-
-- **The `graphify` `PreToolUse` hook had a zero compliance rate across the whole of Phase 6a,
-  undetected for six days, and it took a direct question to surface it — not a test, not a review,
-  not the hook itself.** `.claude/settings.json` (in place since 13 September) runs `graphify
-  hook-guard read`/`search` before every `Read`/`Glob`/`Bash`/`Grep` call, printing a `MANDATORY`
-  instruction to consult `graphify query`/`path`/`explain` first. Checked directly, not assumed:
-  `graphify hook-guard read` and `graphify hook-guard search` both exit `0` unconditionally — the
-  hook is advisory, not blocking, by construction of the installed tool itself, not a
-  configuration choice this repository made. Across the whole of Phase 6a's Dossier work, `graphify
-  query`/`path`/`explain` were called zero times; every lookup went through `Read`/`grep` instead,
-  the `MANDATORY` reminder printed and not acted on, repeatedly, without anyone — human or model —
-  noticing until asked directly whether the tool had been used at all. This is `CLAUDE.md` rule
-  13's own admission ("depends on being remembered, which is the exact failure mode it exists to
-  close") made concrete: not a suspicion this time, a measured zero.
-
-  **A live test of the instruction's own accuracy, run in response to being asked, found a second,
-  compounding problem: the instruction is also wrong often enough to teach ignoring it.**
-  `graphify query "how does the radial menu handle Escape and keyboard dismissal in GlassCanvas"`
-  — a real, focused question about the exact bug this phase's own closing pass fixed — returned a
-  197-node BFS neighbourhood including files with no relationship to the question
-  (`ConnectScreen.tsx`, `ingest/api.ts`), truncated at a 1200-token budget with the actually-useful
-  answer plausibly among the 164 cut nodes. A direct `Read` of `GlassCanvas.tsx` and `Popover.tsx`
-  found the real defect (a focus-loss bug, not anything a keyword-shaped BFS query was suited to
-  surface) faster and more precisely. `CLAUDE.md`'s own instruction as written does not distinguish
-  this case — a targeted read of a file already identified by reasoning — from the case the tool
-  is actually built for: a broad "how does X connect to Y" question with no starting file in mind.
-  An instruction that is wrong in the common case trains ignoring it in the case it would actually
-  help, which is a real cost to every other "MUST"/"MANDATORY" instruction in `CLAUDE.md` by
-  association, not only this one.
-
-  **Decision: narrow the instruction, then enforce the narrower one — not one without the other.**
-  Leaving it advisory, now that the compliance rate is measured at zero, changes nothing about why
-  it was zero. Making the existing, over-broad instruction blocking (a `PreToolUse` hook can deny a
-  call outright; `graphify hook-guard` itself cannot today, so this would need a new,
-  locally-written hook script, not a settings change) would guarantee compliance and also guarantee
-  the over-broad cases the live test above just found — forcing a worse answer on exactly the kind
-  of question that surfaced this finding. Narrowing first closes the reason compliance was zero
-  (an instruction wrong often enough to be worth ignoring); enforcing after narrowing closes the
-  fact that "worth following" and "actually followed" are not the same thing once a control has an
-  active mechanism and nobody is checking it. Narrowing alone, left advisory, repeats this same
-  finding under a better-worded rule. **Narrowed** (`CLAUDE.md`'s own graphify section, this
-  change): a scoped subgraph query is for a broad "how does X relate to Y" question or unfamiliar-
-  codebase orientation with no file already identified; a targeted read of a file already named by
-  reasoning, a prior message, or this document's own file-path references is a direct `Read`, not a
-  query first. **Not yet enforced**: making the narrowed rule blocking needs a hook script this
-  repository would own and maintain (deciding, per call, which case a `Read`/`Grep` falls into),
-  real scoped work of its own, not a one-line `settings.json` change — named here as the next step,
-  not built as part of recording this finding.
 
 - **`graphify export wiki` had never been run on this repository; `graphify-out/wiki/index.md` did
   not exist, and `CLAUDE.md`'s own instruction to use it for broad navigation pointed at nothing.**
