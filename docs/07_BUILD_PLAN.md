@@ -2587,6 +2587,135 @@ find something already finished sitting in the queue.
    densely-connected neighbourhood remains a plausible way to hit the same missing budget from a
    different direction; nothing above rules that out, it only rules it out as the explanation for
    *this* run's own numbers.
+
+   **Superseding correction, 23 September 2026: "the write volume is the better-evidenced
+   explanation" (above) was wrong — measured directly, not merely re-argued.** That conclusion
+   named `_build_a_graph()`'s ~400-node/~1,700-edge write as the plausible dominant cost and
+   flagged it as a hypothesis ("more consistent with either the bulk write itself or ArcadeDB's own
+   buffer-pool/page-cache sizing... which `docker stats` cannot distinguish"). It has since been
+   distinguished, with a controlled experiment, and the write itself is not the cause.
+
+   **Item 1 — the cost curve, measured on an empty `ospreyflow`, fresh restart, nothing else
+   running:** a real, throwaway writer script drove `GraphArcadeDBAdapter.upsert_nodes` directly
+   (chunks of 100 per transaction, matching production's own chunking discipline), sampling
+   ArcadeDB's own `/api/v1/server` profiler metrics — `ramHeapUsed`/`ramOsUsed`, not `docker
+   stats`'s cgroup-level figure, which conflates JVM heap, ArcadeDB's own off-heap page cache and
+   OS file-cache — at each checkpoint:
+
+   | Point | ramOsUsed | ramHeapUsed | createRecord | commands | txCommits |
+   | --- | --- | --- | --- | --- | --- |
+   | before schema | 1.453GiB | 0.033GiB | 0 | 0 | 1 |
+   | after `apply_schema` (0 elements written) | 6.393GiB | 3.043GiB | 0 | 370 | 1809 |
+   | 100 nodes | 6.657GiB | 3.771GiB | 100 | 470 | 1815 |
+   | 500 nodes | 6.698GiB | 3.632GiB | 500 | 870 | 1819 |
+   | 2,000 nodes | 6.293GiB | 3.200GiB | 2,000 | 2,370 | 1,834 |
+   | 5,000 nodes | 6.370GiB | 3.200GiB | 5,000 | 5,370 | 1,864 |
+
+   **This is a step function, not a per-element cost, and the step is `apply_schema`, not the
+   data.** `ramOsUsed` jumps ~4.9GiB between "before schema" and "after schema, zero elements
+   written" — before a single node exists — then stays flat (6.29–6.70GiB, no trend) across the
+   entire 100→5,000 range, a 50× change in element count producing no detectable memory change
+   outside noise. `ramHeapUsed` at 5,000 nodes (3.200GiB) is *lower* than at 100 nodes (3.771GiB).
+   There is no ~2MB-per-element signal anywhere in this data — the hypothesis this measurement was
+   built to test is not what is happening.
+
+   **Item 2 — adapter versus raw ArcadeDB HTTP API, on the cost that actually showed up (schema
+   creation, since per-element write cost had nothing to isolate).** The 370 DDL commands
+   `adapters/graph_arcadedb/schema.py::apply_schema` issues were harvested (by intercepting the one
+   method it calls, `client.sql()`, rather than sending them) and replayed verbatim via raw
+   `httpx` POSTs directly against `/api/v1/command/<db>` — no `ArcadeDBClient`, no
+   `GraphArcadeDBAdapter`, no retry wrapper — against a second, independent, empty database on the
+   same server, fresh restart, nothing else running:
+
+   | Path | Before | After | commands | txCommits |
+   | --- | --- | --- | --- | --- |
+   | Adapter (`GraphArcadeDBAdapter.apply_schema`) | 1.453GiB | 6.119GiB | 370 | 1,809 |
+   | Raw HTTP, same 370 statements, no adapter code | 1.478GiB | 5.971GiB | 370 | 1,809 |
+
+   **Identical, within noise. This is ArcadeDB's own behaviour under this configuration, not
+   something the adapter path adds** — unsurprising once read alongside item 3 below: the adapter
+   issues literally the same DDL a raw caller would have to issue (ArcadeDB SQL has no
+   multi-statement batched DDL over this endpoint), so there was no meaningful "adapter-added" path
+   for a cost to hide in.
+
+   **Item 3 — the write path, quoted, for what happens per DDL statement and per element.**
+   `apply_schema` (`packages/adapters/graph_arcadedb/schema.py:107-130`) issues one `CREATE VERTEX
+   TYPE`/`CREATE EDGE TYPE` per ontology type, plus — per its own module docstring — "a unique index
+   on `id`... a composite index on `(type, handling.classification)`, plus `handling_code`,
+   `owning_unit` and `originator`... one per ontology-declared `identifiers` field... one per
+   `properties` entry the ontology marks `indexed: true`" for *every* type: several indexes each,
+   over however many entity/edge types the ontology declares, is exactly the 370 individual
+   `CREATE PROPERTY`/`CREATE INDEX IF NOT EXISTS` statements measured above, each a separate,
+   synchronous HTTP round trip (`_ddl()` calls `client.sql(command)` in a loop, no batching), each
+   triggering — per the measured `txCommits` delta (1 → 1,809 for those 370 commands) — roughly
+   five internal ArcadeDB transaction commits per statement, not one. **Repeating the call is not
+   free, even though the DDL is idempotent**: `apply_schema` called three times in a row against
+   an already-schema'd database issued 370 fresh commands and ~370 fresh `txCommits` *every time*
+   (1,809 → 2,179 → 2,549) — `IF NOT EXISTS` is evaluated server-side per statement, not
+   short-circuited client-side — though the *memory* cost is paid once, not repeated (`ramOsUsed`
+   stayed flat, 6.119 → 5.865 → 5.923GiB, across the three repeats). `_graph_client()`
+   (`tests/scenarios/test_phase8_exit_criterion_end_to_end.py:237-244`) calls `apply_schema` on
+   every one of its own several call sites in a single closing-pass run — a real, separate,
+   quantifiable inefficiency (on the order of 370 redundant round trips per extra call), but not,
+   per the measurement above, a further memory cost each time.
+
+   For per-element work: `upsert_nodes` (`adapter.py:128-154`) does one `INSERT INTO {type} SET
+   ...` per node, one round trip, no batching. `upsert_edges` (`adapter.py:254-357`) does
+   substantially more per edge — two `_node_type` lookups (source, target), one
+   `_find_existing_edge` lookup, then `_weigh_edge` → `_corpus_edge_stats`
+   (`adapter.py:193-220`), which is not scoped to the write's own neighbourhood: its third query is
+   `g.E().hasLabel(label).has("reverted",false).values("occurrences").sum()` — an **unscoped scan
+   over every edge of that type in the whole database**, run again on every single edge write of
+   that type, growing more expensive as more edges of that type accumulate. This was not exercised
+   by the node-only measurement above (chosen deliberately to isolate one code path); it is real,
+   quoted, and is the one piece of this write path whose *per-element* cost plausibly grows with
+   database size rather than staying flat — a distinct concern from the schema-creation step
+   function this measurement was built to characterise, not yet itself measured.
+
+   **A plausible connection to the fifth, previously undiagnosed cause (the `IndexException` on
+   throwaway-schema DDL, above), found while reading this same file:** `schema.py`'s own comment
+   (lines 36-48) records an *earlier*, Phase 5 incident with the identical symptom — "a wave of
+   `IndexException` on `CREATE INDEX` across the full suite" — root-caused that time to the host's
+   Docker Desktop VM disk filling up, not memory; "no code change was actually the fix." Given
+   `apply_schema`'s own real cost is now measured at ~4.5-4.9GiB per first application, a heap
+   genuinely under pressure during concurrent or back-to-back schema DDL is at least as plausible a
+   trigger for the same exception class as the disk-space case already on file — recorded here as a
+   second candidate explanation, not a resolution; still observed-not-diagnosed.
+
+   **Item 4 — retention, sampled after the run, all connections closed, over 4 minutes of complete
+   idle:** 6.128 → 6.146 → 6.185 → 6.188 → 6.191 → 6.200GiB, sampled every 40s. `gcTime` (the
+   profiler's own GC-run counter) held constant at 157 throughout — not "GC hasn't run yet," GC had
+   already run and the heap did not shrink afterward. **Nothing is reclaimed at idle.** No
+   compaction or checkpoint call exists anywhere in `packages/adapters/graph_arcadedb/` (checked
+   directly — no match for `compact`/`checkpoint`/`flush` in that package). One plausible
+   server-level command was probed directly (`check database <name>` via `/api/v1/server`) and
+   rejected outright ("Server command not valid") — this rules out that one specific guess, not
+   ArcadeDB's full command vocabulary, which was not exhaustively searched here.
+
+   **Item 5 — the finding, at its real size, with the arithmetic shown.** Not "~2MB of heap per
+   graph element" — the data above does not support a per-element figure at all, flat or
+   otherwise, up to 5,000 elements. The real number: **applying this ontology's schema to an empty
+   ArcadeDB database costs ~4.5-4.9GiB of the container's own memory, once, before any
+   investigation data exists**, on a container configured with a 6GB JVM heap inside a ~7.65GiB
+   total budget — and that memory is never released for the life of the server process. A second
+   database on the same server, or a second schema-triggering call, adds to — or at minimum does
+   not free room from — an already near-exhausted budget. **This is why Phase 5 Checkpoint 2's own
+   original note — the HMP fixture's graph side "OOM'd at 4G... including at container startup
+   before any client request" — was recorded and never measured further at the time: it was
+   already observing this same mechanism, correctly, years before this session had the
+   instrumentation (ArcadeDB's own `/api/v1/server` profiler metrics, not `docker stats`) to
+   separate "the schema" from "the 400 people" as the actual cause.** A freshly restarted container
+   holding only `ospreyflow`'s own already-created schema (measured this session, zero data
+   elements at the time) reached 7.522GiB on server boot alone, nearly this container's entire
+   budget, confirming the same mechanism operates at server-startup/database-reload time, not only
+   at first `apply_schema`. **Read as a product capacity question, not a test-environment one
+   (per this stage's own reclassification, above): a platform whose schema alone consumes most of
+   a 6GB heap before an analyst has opened a single investigation cannot hold an investigation
+   graph of any realistic size on a laptop also running the other four containers this milestone
+   requires.** No fix is proposed here — root-causing *why* ArcadeDB's own schema/index creation
+   costs this much under this configuration (JVM heap sizing, off-heap page-cache/buffer-pool
+   sizing, the sheer count of indexes this ontology's own §1.4 discipline declares, or some
+   combination) is real, separately-scoped work for whoever closes this stage next.
 3. **Documentation refresh — MILESTONE-BLOCKING, promoted 23 September 2026** (see this list's own
    opening summary), **then the Trigger A restructure, not itself milestone-blocking** — already
    the most fully specified stage of the six, worked out in detail below this list rather than
