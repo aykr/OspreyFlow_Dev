@@ -103,6 +103,20 @@ jobs:
       - run: uv run python scripts/route_coverage_check.py
       - run: uv run pytest tests/test_route_coverage_check.py
 
+  # Same shape, for the product-tree link-integrity gate — `06_DECISIONS.md` ADR-034 §B8.
+  # Allowlist at tests/fixtures/product_tree_link_allowlist.txt. See
+  # scripts/product_tree_link_check.py's own docstring, including why it is scoped to
+  # documentation-to-documentation references only and how it differs from the still-open
+  # doc_citations_check.py question.
+  product-tree-link-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - run: uv run python scripts/product_tree_link_check.py
+      - run: uv run pytest tests/test_product_tree_link_check.py
+
   # Same shape, for test-file CI coverage — found four test files running in no intended job
   # before this gate existed (test_pattern_store.py, test_alerts.py, test_change_stream.py,
   # test_assessment_routes.py), each by accident, and two more (test_fixture_corp_shape.py,

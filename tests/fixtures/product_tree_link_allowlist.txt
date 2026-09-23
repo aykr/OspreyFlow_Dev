@@ -1,0 +1,31 @@
+# Known private-tree references from an Apache-scoped document, found 23 September 2026 when
+# `scripts/product_tree_link_check.py` was built. Every line here is a real, current violation —
+# a document destined for the product tree citing a file destined for the private tree — not a
+# permanent exception. This list shrinks to zero as part of Trigger A's own exit criterion
+# (`06_DECISIONS.md` ADR-034 §B3, `07_BUILD_PLAN.md`'s own Trigger A entry): each reference is
+# rewritten or removed as the restructure lands, the same "allowlist shrinks, never grows for a
+# case already covered" discipline `route_coverage_check.py`/`domain_model_coverage_check.py`
+# already hold their own allowlists to. A new violation not on this list fails CI immediately.
+#
+# Format: <path relative to repo root>\t<private-tree marker matched>
+docs/01_DOMAIN_MODEL.md	06_DECISIONS.md
+docs/01_DOMAIN_MODEL.md	07_BUILD_PLAN.md
+docs/01_DOMAIN_MODEL.md	CLAUDE.md
+docs/02_GLASS_FRONTEND.md	06_DECISIONS.md
+docs/02_GLASS_FRONTEND.md	07_BUILD_PLAN.md
+docs/02_GLASS_FRONTEND.md	CLAUDE.md
+docs/04_VAULT_BACKEND.md	06_DECISIONS.md
+docs/05_DEPLOYMENT.md	07_BUILD_PLAN.md
+docs/08_ACCEPTANCE_SCENARIOS.md	06_DECISIONS.md
+docs/08_ACCEPTANCE_SCENARIOS.md	07_BUILD_PLAN.md
+docs/09_INGEST_STUDIO.md	07_BUILD_PLAN.md
+docs/09_INGEST_STUDIO.md	CLAUDE.md
+docs/DEMO_GUIDE.md	06_DECISIONS.md
+docs/DEMO_GUIDE.md	07_BUILD_PLAN.md
+docs/DEMO_GUIDE.md	CLAUDE.md
+docs/README.md	06_DECISIONS.md
+docs/README.md	07_BUILD_PLAN.md
+docs/README.md	DESIGN_PROVENANCE.md
+docs/README.md	NEXT_STEPS_PHASE7.md
+docs/README.md	SESSION_HANDOVER.md
+docs/README.md	archive/

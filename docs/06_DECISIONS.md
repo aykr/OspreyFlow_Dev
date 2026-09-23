@@ -2859,12 +2859,103 @@ extension or the current directory.**
 **Decision, owned by Trigger A, not made here as a side effect of finding it:** `docs/design/
 tokens.css` moves with the product tree (a real candidate location: `apps/workspace/src/design/
 tokens.css`, updating all thirteen real consumers' own paths in the same pass, mechanically
-verified by the link-integrity gate below), not into `spec/design/` alongside
-`OspreyFlow_Brand_Foundations.html`, which stays exactly where ADR-031 already puts it. **This is
-Trigger A's own seventh deliverable: the product tree must contain everything the product actually
-reads, and this split cannot be decided by which top-level directory a file happens to sit in
-today.** Not built here — the physical move waits for Trigger A, per this document's own standing
-instruction that a rewrite against a structure that has not happened yet drifts before it lands.
+verified by `scripts/product_tree_link_check.py` — built the same session this was found, §B9
+below has the full record), not into `spec/design/` alongside `OspreyFlow_Brand_Foundations.html`,
+which stays exactly where ADR-031 already puts it. **This is Trigger A's own seventh deliverable:
+the product tree must contain everything the product actually reads, and this split cannot be
+decided by which top-level directory a file happens to sit in today.** Not built here — the
+physical move waits for Trigger A, per this document's own standing instruction that a rewrite
+against a structure that has not happened yet drifts before it lands.
+
+### B9 — `README.md`/`docs/README.md` audited against this ADR's own boundary; a link-integrity
+gate built; the build process itself found mentioned throughout the Apache-scoped set, not only
+in the READMEs
+
+**Found and built 23 September 2026.** Two things this session's own instruction asked for
+separately, reported together since the gate exists specifically to make the audit's own findings
+mechanically enforceable rather than a one-time report that goes stale.
+
+**No root `README.md` exists yet — checked directly, not assumed** (matches ADR-031's own already-
+recorded gap: "this repository currently has no root-level `README.md` at all"). `docs/README.md`
+is the only one that exists, and is the one audited below; ADR-031's own text already names it as
+the file `README.md`'s eventual content is drawn from.
+
+**Every reference in `docs/README.md`, classified:**
+
+| Reference | Category | Disposition |
+| --- | --- | --- |
+| "for implementation by Claude Code" (L3); "Supersedes the v1.0 draft… folded into this folder at the start of the project" (L3-5) | **PROVENANCE** | Goes |
+| `06_DECISIONS.md` (L64, L78) | **LINKS PRIVATE** | Must go — stays inside `spec/` but excluded from the Apache-scoped/published set (`route_coverage_check.py`'s own `APACHE_DOC_PATHS` deliberately excludes it); dangles the moment this becomes the published root `README.md` |
+| `07_BUILD_PLAN.md` (L65) | **LINKS PRIVATE** | Must go — same reasoning as `06_DECISIONS.md` |
+| `NEXT_STEPS_PHASE7.md`, `SESSION_HANDOVER.md`, `DESIGN_PROVENANCE.md`, `archive/` (L70-73) | **LINKS PRIVATE** | Must go — explicitly `process/`-destined under ADR-031's own target layout |
+| `00_ARCHITECTURE.md`, `01_DOMAIN_MODEL.md`, `02_GLASS_FRONTEND.md`, `03_CONDUIT_MIDDLEWARE.md`, `04_VAULT_BACKEND.md`, `05_DEPLOYMENT.md`, `08_ACCEPTANCE_SCENARIOS.md`, `09_INGEST_STUDIO.md`, `design/tokens.css`, `DEMO_GUIDE.md` (L58-69) | **PUBLISHED DOCUMENTATION** | Stays — not removed, per this session's own instruction that orphaning deliberately-published documentation is the opposite failure |
+
+**Not removed here** — per the same instruction, and per this document's own standing rule that a
+rewrite against a structure that has not happened yet drifts before it lands. Recorded as Trigger
+A's own work, below.
+
+**The build process, found mentioned well beyond the two READMEs — grepped across every
+Apache-scoped document, not assumed absent.** `CLAUDE.md` — this project's own AI-assistant
+instruction file, squarely build-process material — is cited by name and by numbered rule
+(`CLAUDE.md` rule 3/7/9/12) from **six** Apache-scoped documents: `01_DOMAIN_MODEL.md` (×2),
+`02_GLASS_FRONTEND.md`, `09_INGEST_STUDIO.md` (×2), `DEMO_GUIDE.md` (×2), plus `docs/README.md`'s
+own "for implementation by Claude Code." Each is both a **LINKS PRIVATE** case (`CLAUDE.md` is not
+Apache-scoped) and a direct instance of what this search was for.
+
+**Separately, and at far greater scale: "Phase N"/"Stage N"/"found during"/"found while"
+annotations — a real, pervasive provenance pattern embedded throughout the spec's own prose, not
+a README-only phenomenon.** Counted directly (`grep -c`), not estimated: `00_ARCHITECTURE.md` (7),
+`01_DOMAIN_MODEL.md` (28), `02_GLASS_FRONTEND.md` (20), `03_CONDUIT_MIDDLEWARE.md` (7),
+`05_DEPLOYMENT.md` (2), `08_ACCEPTANCE_SCENARIOS.md` (11), `09_INGEST_STUDIO.md` (8),
+`DEMO_GUIDE.md` (17), `docs/README.md` (2) — 102 in total, `04_VAULT_BACKEND.md` the only
+Apache-scoped document with none. These are **PROVENANCE** by this session's own category
+definition (they describe how the product was designed or built — "Implementation note (Phase 5
+Checkpoint 3a)," "found during Phase 5 Checkpoint 2's live verification" — not what it is or how
+to use it), and the volume is the finding: this is not a handful of stray mentions to excise from
+two READMEs, it is a load-bearing citation style this entire specification pack was written in.
+**Not rewritten here** — 102 instances across the core spec, several load-bearing for a reader
+tracing *why* a decision was made, is real editorial work (rewrite to remove the process framing
+while keeping the reasoning, not a bulk delete), not a mechanical pass, and belongs to whoever
+does the documentation refresh and Trigger A together, not invented as a side effect of an audit.
+
+**One false positive worth naming, so it is not later mistaken for a hit:** `03_CONDUIT_
+MIDDLEWARE.md`:290's own "prompt" ("Changing a prompt or a model runs the set and reports
+precision and recall") is the product's own extraction-pipeline configuration — a real runtime
+concept the Conduit exposes, not a reference to prompts given to a build-time AI assistant. Found
+by the same grep, correctly excluded from the count above.
+
+**Built: `scripts/product_tree_link_check.py`, a link-integrity gate — `make product-tree-link-
+check`, wired into `make ci` and `.github/workflows/ci.yml` as its own job.** Scoped to
+documentation-to-documentation references, not every citation in the repository — its own
+docstring has the full reasoning, including why the 1,150 source-comment citations ADR-031 already
+counts are deliberately out of scope (a different, much larger concern `doc_citations_check.py`
+already owns). Checks every Apache-scoped document (the same `APACHE_DOC_PATHS`
+`route_coverage_check.py` already defines, imported rather than redeclared) against a private-tree
+marker list (`06_DECISIONS.md`, `07_BUILD_PLAN.md`, `CLAUDE.md`, `SESSION_HANDOVER.md`,
+`NEXT_STEPS_PHASE7.md`, `DESIGN_PROVENANCE.md`, `PRODUCT_DELIVERY.md`, `archive/`). **Runs today,
+against the real repository: 72 violations found**, all real, all allowlisted (`tests/fixtures/
+product_tree_link_allowlist.txt`) rather than fixed, per this document's own instruction not to
+rewrite yet — the same "known debt enumerated, new debt fails immediately, list shrinks to zero as
+part of Trigger A's own exit criterion" shape `route_coverage_check.py`/`domain_model_coverage_
+check.py` already hold their own allowlists to. **Proven non-vacuous**: `tests/test_product_tree_
+link_check.py::test_the_checker_actually_flags_a_private_tree_citation` plants a real violation in
+an isolated fixture file and asserts the checker reports it — this caught a real bug in the first
+implementation (a bare `Path.relative_to()` call that raised on a path outside the repository,
+exactly what a fixture file needs) before it shipped, the "prove it can fail" discipline doing its
+actual job, not a formality.
+
+**Relationship to `scripts/doc_citations_check.py`'s own still-open ADR-citation question
+(ADR-031, above), stated directly: genuinely different checks, not one wearing two names.**
+`doc_citations_check.py` asks whether a citation *resolves* — true or false depending only on the
+filesystem, the same answer regardless of where the citing file lives; a `06_DECISIONS.md`
+docstring citing `07_BUILD_PLAN.md` must keep resolving after Trigger A, since both move into
+`spec/` together. `product_tree_link_check.py` asks whether an Apache-scoped file cites a
+non-Apache-scoped one at all — the identical citation, from `docs/README.md`, must not exist,
+because one side of it never publishes. **The two checks reach opposite verdicts on structurally
+identical citations, depending only on the citing file's own destination — they cannot be merged
+into one mechanical rule.** A shared citation-*extraction* utility is a reasonable future
+refactor; the *judgement* applied to what each extracts cannot be shared without one gate silently
+doing the other's job wrong.
 
 ---
 

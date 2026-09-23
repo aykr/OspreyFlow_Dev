@@ -1,4 +1,4 @@
-.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check conformance-guard conformance test dev-up dev-down test-all glass-perf glass-a11y glass-keyboard glass-map-verify
+.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check conformance-guard conformance test dev-up dev-down test-all glass-perf glass-a11y glass-keyboard glass-map-verify
 
 PY := .venv/bin/python
 PYTEST := .venv/bin/pytest
@@ -8,7 +8,7 @@ MYPY := .venv/bin/mypy
 # Phase 0 exit criterion (docs/07_BUILD_PLAN.md): CI green; a PR adding a GPL
 # dependency fails; a Pydantic model change not reflected in the generated
 # TypeScript fails the build. See the Phase 0 plan for what each target proves.
-ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check test-file-coverage-check conformance-guard
+ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check test-file-coverage-check conformance-guard
 
 lint:
 	$(RUFF) check .
@@ -45,6 +45,14 @@ domain-model-coverage-check:
 route-coverage-check:
 	$(PY) scripts/route_coverage_check.py
 	@echo "route-coverage-check: see tests/test_route_coverage_check.py for the deterministic proof"
+
+# `06_DECISIONS.md` ADR-034 §B8. Allowlist of current debt at
+# tests/fixtures/product_tree_link_allowlist.txt — see scripts/product_tree_link_check.py's own
+# docstring for why this is scoped to documentation-to-documentation references only, and how it
+# differs from the still-open doc_citations_check.py question.
+product-tree-link-check:
+	$(PY) scripts/product_tree_link_check.py
+	@echo "product-tree-link-check: see tests/test_product_tree_link_check.py for the deterministic proof"
 
 # Found and fixed four test files running in no intended CI job — `test_pattern_store.py`,
 # `test_alerts.py`, `test_change_stream.py`, `test_assessment_routes.py` — before this gate
