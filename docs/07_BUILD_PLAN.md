@@ -2408,9 +2408,27 @@ find something already finished sitting in the queue.
    documentation-refresh stages it sits alongside in build order).
 
    **Under a test-suite milestone this was a background nuisance, disclosed but not gating.
-   Under an install-and-demo milestone it is not: 8 of the last 13 closing-pass attempts
-   (`tests/scenarios/test_phase8_exit_criterion_end_to_end.py`) never reached a meaningful
-   assertion — a stack that fails more often than it completes cannot demonstrate anything.**
+   Under an install-and-demo milestone it is not: this stage's own closing-pass attempts have
+   repeatedly failed before completing, and a stack that fails more often than it completes cannot
+   demonstrate anything.**
+
+   **Evidence correction, 23 September 2026: the original "8 of the last 13 closing-pass attempts"
+   figure is withdrawn.** An unknown share of those 13 attempts ran while a second agent — the
+   subagent that built this test, which kept running and pushing commits after handing its own
+   report back — was independently re-running the same test against the same shared ArcadeDB
+   container at the same time, unbeknownst to whoever recorded the figure. Two processes contending
+   for one container's memory and one database's locks is expected to fail regardless of whether
+   either process, run alone, is sound — a measurement taken while an unknown process shares the
+   resource under test is not a measurement of that resource's own reliability, and cannot be
+   retroactively separated into "caused by contention" versus "caused by a real defect" once the
+   processes are gone. **The stage itself stands regardless of this correction** — the six-plus OOM
+   incidents in causes one through four below were diagnosed individually, with `docker inspect`
+   evidence, predating any subagent's involvement, and the fifth cause (the `IndexException`) was
+   reproduced twice, back to back, by a single actor. **The general point is worth stating once,
+   for reuse beyond this one figure: any reliability measurement taken against a shared local
+   resource is only as trustworthy as the claim that nothing else was using that resource at the
+   same time — a claim this document did not check before recording the withdrawn figure, and
+   should have.**
 
    Four independent causes, three already found and diagnosed, a fourth newly observed this
    session:
@@ -2478,11 +2496,26 @@ find something already finished sitting in the queue.
    `tests/scenarios/test_phase8_exit_criterion_end_to_end.py` against a freshly-restarted stack,
    N = 5.** Chosen, not derived: two consecutive clean runs were already achieved once in the
    session that built the test (296.84s and 552.16s, no changes between them), which is evidence
-   the underlying logic is sound but is not itself the bar — five is a real, uncomfortable-to-reach
-   number under today's own failure rate (8 of the last 13 attempts failed before completing) that
-   would not be met by luck, and is small enough to run in one sitting once the four/five causes
-   above are actually fixed rather than merely diagnosed. Whoever closes this stage may revise N
-   with a stated reason; the default is not silently accepted as sufficient without one.
+   the underlying logic is sound but is not itself the bar — five is meant to be a real,
+   uncomfortable-to-reach number that would not be met by luck, small enough to run in one sitting
+   once the causes above are actually fixed. (The failure-rate figure originally cited here to
+   justify N is the same one withdrawn above for contamination; N=5 itself is not withdrawn, only
+   the number that was used to argue it was hard to reach by chance.)
+
+   **Attempted under genuinely controlled conditions, 23 September 2026 — not met.** Confirmed no
+   other agent running (`ListAgents`) immediately before starting; ArcadeDB fully restarted; five
+   runs launched back-to-back in one uninterrupted sequence, nothing else issued against the stack
+   between them. Result: run 1 passed (196.56s); the container was OOM-killed during or immediately
+   after that single pass (`docker inspect` confirmed `ExitCode=137` afterward); runs 2 through 5
+   each failed in under 10 seconds, unable to reach the server at all. **This rules out the
+   contention explanation for at least this failure mode**: with contention definitively excluded,
+   a single successful, uncontended run of this test still exhausted the container's own 6GB
+   budget. The exit criterion is not met, and "avoid running two agents against the container"
+   (item 4, below) is not sufficient on its own to meet it — cause four's own remedies (raise
+   ArcadeDB's heap or the VM's memory budget) or a real reduction in this test's own footprint
+   against the persistent `ospreyflow` database are both still needed. Whoever closes this stage
+   may revise N with a stated reason; the default is not silently accepted as sufficient without
+   one.
 3. **Documentation refresh — MILESTONE-BLOCKING, promoted 23 September 2026** (see this list's own
    opening summary), **then the Trigger A restructure, not itself milestone-blocking** — already
    the most fully specified stage of the six, worked out in detail below this list rather than
