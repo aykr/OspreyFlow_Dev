@@ -2970,6 +2970,114 @@ into one mechanical rule.** A shared citation-*extraction* utility is a reasonab
 refactor; the *judgement* applied to what each extracts cannot be shared without one gate silently
 doing the other's job wrong.
 
+### B10 — The source-code citation census, and the filtered decision-log proposal: counted and
+classified, disposition proposed, decide nothing
+
+**Counted 23 September 2026, against the live repository, not reused from an earlier session's
+figures — those figures do not reproduce and are superseded here.**
+
+**Method, stated because six variants were tried and none reproduced ADR-031's own approximate
+`392`/`1,150`, or the `195`/`94` figures an earlier session cited for `07_BUILD_PLAN.md`/
+`06_DECISIONS.md` specifically.** The citation shape ADR-031 itself gives — `` `01_DOMAIN_
+MODEL.md` §8.1 `` — is a backtick-quoted filename, so that is the pattern counted: `` `NN_NAME.md`
+`` across `packages/`, `services/`, `apps/`, `scripts/`, `tests/` (`*.py`/`*.ts`/`*.tsx`). Result:
+**1,046** total, the closest of six tried methodologies to ADR-031's own `1,150` (bare-substring
+matching over-counts to 1,491; restricting to `packages`/`services`/`apps` alone under-counts to
+775 or 1,042 depending on quoting; counting unique citing files rather than occurrences gives
+216–447). **The `195`/`94` figures do not reproduce under any of these** and are not reused. Per
+target, with product/private classification against `scripts/route_coverage_check.py`'s own
+`APACHE_DOC_PATHS`:
+
+| Document | Citations | Tree |
+| --- | --- | --- |
+| `00_ARCHITECTURE.md` | 71 | product |
+| `01_DOMAIN_MODEL.md` | 245 | product |
+| `02_GLASS_FRONTEND.md` | 109 | product |
+| `03_CONDUIT_MIDDLEWARE.md` | 100 | product |
+| `04_VAULT_BACKEND.md` | 13 | product |
+| `05_DEPLOYMENT.md` | 13 | product |
+| `08_ACCEPTANCE_SCENARIOS.md` | 68 | product |
+| `09_INGEST_STUDIO.md` | 98 | product |
+| `06_DECISIONS.md` | 212 | private |
+| `07_BUILD_PLAN.md` | 117 | private |
+
+Product-tree total **717**; private-tree total **329**; sum **1,046**. **Every product-tree
+citation needs a path rewrite at Trigger A and nothing more** — the cited file moves into `spec/`
+with the citing file, the leading path segment changes, the reasoning it carries does not. **Every
+private-tree citation becomes a dangling reference in shipped Apache 2.0 source unless something
+else is done about it** — sized below.
+
+**The decision-log question: classify every ADR as PRODUCT or PROCESS.** Rule applied — PRODUCT
+is a decision about the shipped system itself (a port, a data model, an algorithm, a security or
+behavioural contract) that a contributor building or extending the product needs; PROCESS is a
+decision about how this build was scoped, phased, released, or published — the project's own
+management, not the product's behaviour. Checked ADR-by-ADR against that rule, not assumed from
+the number's own neighbourhood:
+
+**PROCESS (8):** ADR-012 (vendor demo dropped from the requirements baseline), ADR-019 (Scenario
+A's exit criterion split across phases), ADR-022 (Scenario B's exit criterion split across
+phases), ADR-026 (VAST dataset admission / fixture policy), ADR-027 (B1/B13 ownership split
+across phases), ADR-031 (the repository split, above), ADR-034 (this document, above), ADR-042
+(the alpha gate / release timing).
+
+**PRODUCT (40):** every other accepted ADR, ADR-001 through ADR-048.
+
+**How many of the 94 decision-log citations resolve if the product ADRs are published, and how
+many remain — the 94 figure itself does not reproduce (above), so this is answered against the
+verified counts instead, at the grain that actually matters: which specific decision a citation
+points at, not merely whether it names the file.** Citations naming a specific ADR number, counted
+across the same five directories: **426** in total. Of those, only **10** cite a PROCESS ADR
+(ADR-022 ×6, ADR-031 ×1, ADR-034 ×3; the other five PROCESS ADRs are cited zero times in source).
+**416 of 426 (97.7%) would resolve** if every PRODUCT ADR were published in a filtered log; 10
+would not. Separately, **26** of the 212 `06_DECISIONS.md` filename citations carry no ADR number
+on the same line — they cite the document as a whole, not one decision, and this classification
+does not resolve them either way; each needs its own read before a rewrite, not a rule applied in
+bulk. Checked directly, not assumed: no PRODUCT ADR's own text in this document currently cites a
+PROCESS ADR, so a filtered log is internally consistent today — nothing already written would need
+rewriting to publish only the PRODUCT set.
+
+**The cost, stated as asked.** A filtered log is not a one-time edit: it is a second, standing
+publication filter, plus a guarantee — enforced, not assumed — that no published ADR ever comes to
+cite a private one. That is `product_tree_link_check.py`'s own job, one level down: a citation
+gate over ADR numbers inside `06_DECISIONS.md` itself, not over document filenames. Today it costs
+nothing to build (the check above found zero violations), but "zero today" is not "zero forever"
+without a gate watching for the next one.
+
+**What remains after a filtered log, and where it lives.** `07_BUILD_PLAN.md`'s **117** citations
+remain in full — it has no PRODUCT counterpart, filtered or not. Add the **10** confirmed
+PROCESS-ADR citations and the **26** filename-only, unclassified citations: **153** citations
+across all five source directories remain candidates for a private-tree dangling reference after
+filtering, not concentrated in `tests/`/`scripts/` alone — `packages/` and `services/` between
+them carry 18+33 of the `07_BUILD_PLAN.md` citations and 0+1 of the confirmed PROCESS-ADR
+citations, real shipped product code, not build tooling.
+
+**Does the documentation rewrite method — keep the reasoning, drop the coordinate — work the same
+way for a one-line code comment, or does code need a different answer?** The method generalises;
+its application does not scale down unchanged. A documentation annotation is prose with a
+build-calendar coordinate embedded in it ("found during Phase 6a Stage 4") — the rewrite drops the
+coordinate and keeps a sentence. A source citation is already terse, typically one line (`` #
+07_BUILD_PLAN.md Stage 3b: only batch ingestion ships in v1 ``) — there is no paragraph to trim,
+only the private pointer to drop, leaving the constraint it names (`` # only batch ingestion ships
+in v1 ``). **Restated directly, since the instruction's own steer is the point: the risk is not
+that the method fails at this grain, it is that someone doing the rewrite manufactures the
+over-explanation the source line never had.** `` # ADR-024: cross-kind Endpoint pairs an asserted
+source writes score 1.0, not Splink-scored `` is a citation to a PRODUCT ADR and needs no rewrite
+at all beyond the Trigger A path prefix; `` # 07_BUILD_PLAN.md Stage 3b `` with no reasoning
+attached at the citing line needs the reasoning pulled forward from wherever the build plan states
+it, in one line, not restated as three.
+
+**Where this belongs is not decided here.** Two options, sized against what is already in Stage
+3b: (a) fold into 3b's own scope, alongside the other citation-rewrite items it already carries,
+since it is the same kind of work at a larger scale (153 code-comment rewrites plus a possible
+ADR-level link-integrity gate, against 3b's existing 102 annotations + 6 `CLAUDE.md` citations +
+72 link violations); (b) its own stage, on the grounds that a filtered decision log is a real
+scope decision this document has not yet made (publish PRODUCT ADRs at all, versus leave
+`06_DECISIONS.md` private in full and only rewrite the citations) — 3b's other items rewrite
+citations of documents already decided to publish; this one's citation count depends on a
+publication decision not yet taken. Not folded into 3b and not given its own stage number here —
+that choice, and the underlying filtered-log decision it depends on, is not this document's own to
+make.
+
 ---
 
 ## ADR-035 — Demo distribution classes (`shipped`/`internal`), fail-closed and enforced at packaging time; Fixture Corp (R24) is the shippable demo; Enron and VAST stay internal, one of them narrower than requested

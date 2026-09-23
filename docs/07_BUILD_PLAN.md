@@ -3394,6 +3394,18 @@ find something already finished sitting in the queue.
    allowlist emptied — a different piece of work this stage also owns, not a formality the
    "already empty" allowlist implies is already done.
 
+   **Open, deliberately not folded in here — the source-code citation census (`06_DECISIONS.md`
+   ADR-034 §B10).** 1,046 source-code citations counted by target and classified product/private;
+   every ADR classified PRODUCT or PROCESS; 153 citations (`07_BUILD_PLAN.md` in full, plus
+   PROCESS-ADR and unclassified `06_DECISIONS.md` citations) sized as what remains after a
+   filtered decision log. **Not added to 3b's own numbered scope above, and not given its own
+   stage, because it depends on a decision 3b's other items do not: whether a filtered,
+   PRODUCT-only decision log is published at all.** 3b's existing items rewrite citations of
+   documents already decided to publish; this one's own citation count changes depending on an
+   answer not yet given. Sits here, flagged with real numbers rather than left as a bare mention,
+   until that answer is given — at which point it is either folded into 3b (if the filtered log is
+   built) or resolved as pure private-tree citation debt with no filtering to do (if it is not).
+
    **Nothing currently placed in Trigger A's own scope (3b) belongs before the milestone instead —
    checked against 3a's own definition directly, not assumed.** Every item above is about a reader
    of the *published* repository being able to follow a citation or read a rule without landing on
