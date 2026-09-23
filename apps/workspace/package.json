@@ -11,7 +11,8 @@
     "test:perf": "playwright test --config perf/playwright.config.ts",
     "test:a11y": "playwright test --config a11y/playwright.config.ts",
     "test:keyboard": "playwright test --config keyboard/playwright.config.ts",
-    "test:map-verify": "playwright test --config map-verify/playwright.config.ts"
+    "test:map-verify": "playwright test --config map-verify/playwright.config.ts",
+    "test:export-capture": "playwright test --config export-capture/playwright.config.ts"
   },
   "dependencies": {
     "@sigma/edge-curve": "^3.1.0",

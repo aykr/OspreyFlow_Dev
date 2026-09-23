@@ -1993,20 +1993,28 @@ the reasoning for each move stated at the point it moves.
      touches no backend Python at all (`authorized-query-check`: 44 files under `services/api`, no
      offenders — unaffected, confirming this stage is purely Glass-side).
 
-     **Known gap, disclosed rather than silently narrowed: `captureChartImage` is real code, not
-     unit-testable in this project's own toolchain.** `vitest.config.ts`'s own default `node`
-     environment has no WebGL context for a live `Sigma` instance to render into, and no existing
-     test in this codebase mounts one at all (checked directly: `src/canvas/*.test.ts` are pure
-     data-transform tests, never a render); `OffscreenCanvas`/`createImageBitmap` are real browser
-     APIs jsdom does not implement either. The pure half (`embedChartMark`/`chartMarkFields`) is
-     split out and fully covered by `chartExport.test.ts`; `captureChartImage` itself is trusted to
-     the real, already-tested `@sigma/export-image` library plus a human/Playwright check against
-     the real running app — the same "proven by contract, not by a vitest render" posture
-     `GlassCanvas.tsx`'s own `highlightNodes` already discloses. **Owning stage: none needed — this
-     is a permanent property of the toolchain (no headless-WebGL harness exists in this repo), not
-     a deferred piece of work with a future owner.** If a future stage adds a headless-WebGL test
-     harness for another reason, extending it to cover `captureChartImage` is a natural addition to
-     that stage, not a gap this one leaves open on its own.
+     **Correction, 23 September 2026: the entry originally here read "not unit-testable in this
+     project's own toolchain," and that overclaimed the gap — it was untestable in vitest
+     specifically, not untestable, and A15's own strengthened assertion (a real artefact of the
+     requested shape) is exactly the claim a pipeline that emits a blank canvas would still satisfy
+     under the weaker reading.** `vitest.config.ts`'s own default `node` environment genuinely has
+     no WebGL context for a live `Sigma` instance to render into — that part of the original entry
+     was accurate — but this project's own Playwright suites (`perf/`, `a11y/`, `map-verify/`)
+     already run a real Chromium browser with a real WebGL context, the same one `captureChartImage`
+     needs. **`captureChartImage` is proven there now, not merely trusted to the library it
+     wraps.** `apps/workspace/export-capture/` (`harness.tsx`, `capture.spec.ts`,
+     `npm run test:export-capture`) mounts a real, populated `GlassCanvas` (four nodes across two
+     entity-type channels, two edges) and calls the real `GlassCanvasHandle.exportImage` through it.
+     The test asserts real content, not merely that bytes exist or that a mark was appended to
+     whatever bytes the test itself supplied: the captured PNG's own pixels are read back and
+     checked for more than five distinct colours and more than 500 non-background pixels — a blank
+     or placeholder canvas fails this immediately (verified directly: stripping the harness's own
+     nodes/edges to an empty graph, the test failed with `distinctColourCount` of exactly `1`,
+     confirming the assertion is not vacuous — restored afterwards). The pure half
+     (`embedChartMark`/`chartMarkFields`) stays covered by `chartExport.test.ts` in vitest, unchanged
+     — this new suite proves the one thing vitest genuinely cannot, not a duplicate of what it
+     already does. **Owning suite: `apps/workspace/export-capture/` — a real, permanent test, not a
+     disclosed gap with no owner.**
 
    **4b/4c and 4d/4e were each a backend/Glass pair sharing one blocked-on-ADR precondition — all
    three now accepted (`06_DECISIONS.md` ADR-045/046/047, 22 September 2026), so no sub-stage in
