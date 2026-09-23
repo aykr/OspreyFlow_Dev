@@ -2982,6 +2982,74 @@ find something already finished sitting in the queue.
    `tests/scenarios/test_phase8_exit_criterion_end_to_end.py` itself was never wired into the CI
    ignore-list/live-service job when it was committed earlier this session — a real, separate gap,
    noted here rather than silently fixed since it is outside this instruction's own two parts).
+
+   **PART 2 of the same follow-up instruction: what a demo actually requires — measured per
+   service, not assumed from `make dev-up`'s own default list. No decision on the memory floor
+   (option E, above) made here; this establishes the number that decision would turn on.**
+
+   `make dev-up` brings up seven containers by default (`docs/DEMO_GUIDE.md` §3.1): ArcadeDB,
+   MinIO, Valkey, Postgres, Ollama, LiteLLM, speaches. Checked directly against
+   `08_ACCEPTANCE_SCENARIOS.md`'s own A1-A15/B1-B21 text and `services/api`'s own route
+   dependencies, not assumed from what the compose file happens to start:
+
+   | Service | Required by A1-A15/B1-B21? | Measured footprint |
+   | --- | --- | --- |
+   | ArcadeDB | **Yes** — the graph store every step touches | Peak 5.2-6.9GiB under a real run of both scenarios (this stage's own repeated measurements today); baseline ~1.5GiB before any schema |
+   | Postgres | **Yes** — audit log, alerts, hotlists, monitors (B12-B14, B20) | 24-63MiB under the same real run |
+   | Valkey | **Yes** — working-set store and delta pub/sub, load-bearing for every canvas update | 5-17MiB under the same real run |
+   | MinIO | **Yes** — the recipe engine's raw-row staging (`services/ingest/staging.py`), used by every recipe-driven ingest step in both scenarios (B1, Scenario A's own structured ingest) | 89-98MiB under the same real run |
+   | LiteLLM | **No** — see Ollama below; kept running has negligible cost regardless | 37-41MiB idle, unchanged across the whole run (never called) |
+   | Ollama | **No — checked directly, not assumed** (below) | 622.8MiB with one model loaded (`qwen2.5:0.5b-instruct`, `extract()`'s own model); 2.849GiB with all three pinned models loaded (`+all-minilm:22m-l6-v2-fp16` embed, `+moondream:1.8b-v2-q4_K_M` vision) |
+   | speaches | **No** — zero references anywhere in `services/api` or `08_ACCEPTANCE_SCENARIOS.md`; not checked further | Not measured — not part of the required set |
+   | The Conduit (`uvicorn`, a host process, not a container — `docs/DEMO_GUIDE.md` §3.2) | **Yes** | 243.0MiB RSS, measured directly (real process launched, minted token, real startup) |
+   | The Glass (`vite` dev server, also a host process — no packaged build exists yet) | **Yes** | 244.3MiB RSS after one real page load (91.5MiB before any request) |
+
+   **Ollama, answered directly: neither scenario requires extraction against a live model.**
+   `08_ACCEPTANCE_SCENARIOS.md` checked line by line for any call to `ModelPort`/extraction — none
+   exists. "Device extractions" (B1) is forensic-artifact terminology (phone dumps), not model
+   output; "Endpoint model" (B15) is a data-model term; the one cross-cutting row naming
+   "model-derived node" states a general platform discipline, not a requirement that either
+   scenario's own steps produce one. Both fixtures are built entirely through structured
+   CSV/recipe-driven Knowledge Adapters (`hmp_persons_recipe.yaml`, `cdr_recipe.yaml`, etc.), never
+   free-text extraction. **If Ollama (and LiteLLM, its only caller) is absent, or the model port is
+   stubbed: the two acceptance scenarios are unaffected — checked, not assumed.** What is lost is a
+   real, separate, already-built Phase 6 capability — "ingest a witness statement, extracted
+   entities appear as `inferred` with correct source spans"
+   (`tests/scenarios/test_phase6_extraction_and_resolution.py`'s own exit criterion) — genuinely
+   valuable, already working, just not exercised by either of the two scenarios this milestone is
+   currently defined by.
+
+   **Total, required set only (ArcadeDB, Postgres, Valkey, MinIO, the Conduit, the Glass — LiteLLM
+   included at negligible cost since nothing currently gates it out cleanly, Ollama/speaches
+   excluded):** ArcadeDB's own peak (5.2-6.9GiB, the dominant term by roughly an order of
+   magnitude) **+** ~700MiB combined for everything else (Postgres + Valkey + MinIO + LiteLLM +
+   Conduit + Glass) **≈ 6.0-7.6GiB**, matching — not coincidentally, since it is the same
+   mechanism — the range this stage's own schema-cost measurements already found for ArcadeDB
+   alone.
+
+   **The minimum machine, with Docker Desktop's own VM allocation accounted for, not raw host RAM
+   — reasoned from the measurements above, not asserted as a vendor specification.** Two budgets
+   exist, not one: the Docker Desktop VM (which ArcadeDB/Postgres/Valkey/MinIO/LiteLLM all share,
+   currently configured at 7.65GiB total on this host — the same figure every `docker stats`
+   reading in this stage's own work has been measured against) and the host's own RAM (which the
+   VM's budget is carved out of, alongside everything else macOS and Docker Desktop itself need,
+   plus the Conduit and Glass, which are host processes, not containers, and are not inside the VM
+   budget at all). **The current VM budget (7.65GiB) is already inadequate for the containers
+   alone** — this stage's own repeated OOM-kills today, at a measured peak of 5.2-6.9GiB against a
+   7.65GiB ceiling with essentially no other container load, is the direct evidence, not an
+   inference. A genuinely stable floor needs real headroom above the peak, not a ceiling equal to
+   it: call it **10GiB for the Docker Desktop VM** (peak ~6.9GiB plus the same order of headroom
+   this stage's own exit criterion already treats as necessary — five clean runs, not one, without
+   a kill). Layered on top: the Conduit (243MiB) + the Glass dev server (244MiB, before a real
+   canvas has rendered any graph data, which this measurement did not attempt to load) + a browser
+   tab actually running the Glass (not measured this pass — a WebGL canvas in a Chromium-family
+   browser commonly runs several hundred MiB to over a gigabyte on its own) + whatever macOS and
+   Docker Desktop's own control-plane processes need outside the VM (commonly a further 1-2GiB on
+   a modern macOS install, not measured on this specific host this pass). **A 10GiB VM budget on a
+   16GiB host leaves the remaining 6GiB to cover all of that — tight, not comfortable; 32GiB
+   total system RAM is the more honestly comfortable floor for "install-and-demo," 16GiB the
+   absolute minimum this reasoning supports, and neither number is a specification quoted from
+   anywhere — both are arithmetic from this pass's own measurements, stated as such.**
 3. **Documentation refresh — MILESTONE-BLOCKING, promoted 23 September 2026** (see this list's own
    opening summary), **then the Trigger A restructure, not itself milestone-blocking** — already
    the most fully specified stage of the six, worked out in detail below this list rather than
