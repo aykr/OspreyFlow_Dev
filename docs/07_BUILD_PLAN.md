@@ -2388,6 +2388,89 @@ find something already finished sitting in the queue.
    will appear stopped for every owner but the analyst who triggered them until this is fixed" —
    distinct wording from whatever `StatusBadge` shows an analyst later, so the two failure surfaces
    are never mistaken for the same fact by whoever reads either one first.
+2a. **ArcadeDB stability — MILESTONE-BLOCKING, new stage, promoted 23 September 2026** from
+   "Legacy disclosures," where it sat with an inline "Owning phase: Phase 8" disposition never
+   physically moved. No prior stage number (the numbering `4a`–`4h`, `5`, `6` this document holds
+   stable is a Stage-4 sub-scheme; this is a new, independent stage, not a Stage-4 sub-stage,
+   labelled `2a` only for its position in this list, between the harness/packaging and
+   documentation-refresh stages it sits alongside in build order).
+
+   **Under a test-suite milestone this was a background nuisance, disclosed but not gating.
+   Under an install-and-demo milestone it is not: 8 of the last 13 closing-pass attempts
+   (`tests/scenarios/test_phase8_exit_criterion_end_to_end.py`) never reached a meaningful
+   assertion — a stack that fails more often than it completes cannot demonstrate anything.**
+
+   Four independent causes, three already found and diagnosed, a fourth newly observed this
+   session:
+
+   **One — the sweep only runs when something collects `tests/conformance/graph_port`, and the
+   routine local/CI invocation never does.** `sweep_stale_conformance_databases`
+   (`packages/adapters/graph_arcadedb/testing.py`) is a session-scoped autouse fixture in that
+   directory's own `conftest.py`; pytest never instantiates a fixture from a directory it does not
+   collect. `Makefile`'s `test` target carries `--ignore=tests/conformance/graph_port` as the first
+   of ten `--ignore` flags (see the `Makefile`-ignore entry, still in "Legacy disclosures," found
+   the same session as this one). A developer or session running `make test` alone, repeatedly,
+   against a persistent local `make dev-up` stack accumulates `conformance_*` databases with the
+   sweep never once firing, until the volume fills. Only `make conformance`, `make test-all`, or
+   CI's `conformance` job ever trigger it.
+
+   **Two — even when the sweep runs, it can only drop what the live server's own `list databases`
+   reports, and a database can exist on disk without ever being registered.** Found live: a disk
+   audit found `conformance_1789987107_b63147993fc8` on disk, 172 minutes old, well past the
+   60-minute staleness window — yet absent from `curl .../api/v1/databases` before the sweep ran,
+   confirming it was never a candidate. A `create_database_if_absent()` interrupted after the
+   directory is created but before the server's own registration completes leaves exactly this:
+   present on disk, invisible to the one call the sweep uses to find what to drop.
+
+   **Three — a hard-killed run can leave a database that crashes the server itself at boot, before
+   the sweep's own owning fixture ever gets a server to call.** Also reproduced live: a `make test`
+   run OOM-killed the ArcadeDB container mid-suite (`docker inspect` confirmed `OOMKilled=true`,
+   `ExitCode=137`), leaving `conformance_1789998411_5906c2b40764` mid-transaction. On restart,
+   `ArcadeDBServer.loadDatabases` threw an uncaught `com.arcadedb.exception.SchemaException: File
+   with id '0' was not found`, and the JVM's `main` thread exited — the container stayed "Up" but
+   never became healthy. A database that prevents the server from starting is by construction
+   unreachable by a sweep that needs that same server running to call `list databases` against.
+
+   **Four — cross-container OOM contention, not a sweep gap but the reason the sweep keeps having
+   work to do.** `deploy/compose/dev.yaml`'s own comment already names cross-container memory
+   contention (Ollama's resting footprint against ArcadeDB's `-Xmx6G` heap on a shared Docker
+   Desktop VM, measured at 8GB total) as a known, previously-hit case, "restart recovers cleanly"
+   as the stated remedy — true for a clean kill, false when the kill lands mid-transaction (cause
+   three above).
+
+   **A fifth cause, newly observed this session, not previously disclosed anywhere in this
+   document: a non-OOM `ArcadeDBError`/`IndexException` on throwaway-schema DDL.** Reproduced
+   twice, back to back, in the same session that built the closing-pass test, container confirmed
+   healthy and *not* OOM-killed both times (`docker inspect` showed no restart): `"Error on
+   creating index on type 'mx_PRESENT_AT', properties [reverted]"` and, on the very next attempt,
+   `"...on type 'mx_Asset', properties [handling_classification]"` — different types, same failure
+   shape, both inside `apply_schema`'s own common-index pass against a freshly-provisioned
+   throwaway database. Not yet root-caused (unlike causes one through four, which were fully
+   diagnosed before this addition) — recorded here, honestly, as observed-not-diagnosed, the
+   distinction this document's own Stage 6 entry already draws for `test_statelessness.py`'s
+   connection refusal. Plausibly the same root pressure as cause four (heap exhaustion degrading
+   index construction before triggering an OOM kill outright, rather than after), but that is a
+   hypothesis, not yet a finding — this stage's own work includes settling which.
+
+   Concretely, in order of leverage: (a) move `sweep_stale_conformance_databases` (or an
+   equivalent) to run from something that always executes before a local or CI test session touches
+   ArcadeDB, not from a fixture scoped to a directory ten `--ignore` flags routinely skip; (b) make
+   the sweep's own candidate list disk-based (or reconcile disk against `list databases` and treat
+   a mismatch as itself stale) rather than trusting server registration alone; (c) either lower
+   ArcadeDB's configured heap or raise the VM's memory budget so the documented contention case
+   stops being reproducible on a single ordinary session's first run; (d) root-cause the fifth,
+   newly-observed `IndexException` cause and fold its own fix into whichever of (a)–(c) it turns
+   out to share a root with, or add a fourth remedy if it does not.
+
+   **Exit criterion, a measurement, not a judgement: N consecutive clean runs of
+   `tests/scenarios/test_phase8_exit_criterion_end_to_end.py` against a freshly-restarted stack,
+   N = 5.** Chosen, not derived: two consecutive clean runs were already achieved once in the
+   session that built the test (296.84s and 552.16s, no changes between them), which is evidence
+   the underlying logic is sound but is not itself the bar — five is a real, uncomfortable-to-reach
+   number under today's own failure rate (8 of the last 13 attempts failed before completing) that
+   would not be met by luck, and is small enough to run in one sitting once the four/five causes
+   above are actually fixed rather than merely diagnosed. Whoever closes this stage may revise N
+   with a stated reason; the default is not silently accepted as sufficient without one.
 3. **Documentation refresh — MILESTONE-BLOCKING, promoted 23 September 2026** (see this list's own
    opening summary), **then the Trigger A restructure, not itself milestone-blocking** — already
    the most fully specified stage of the six, worked out in detail below this list rather than
@@ -3623,66 +3706,11 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
     horizontal-scalability claim** — see "Legacy disclosures"'s own consolidated entry,
     above, for the other two and the combined finding.
 
-- **`sweep_stale_conformance_databases` (`packages/adapters/graph_arcadedb/testing.py`) has now
-  failed to prevent a disk-exhaustion incident twice, and this session found why, live, rather
-  than by inspection: it is not one gap but three independent ones, each capable of defeating it
-  on its own.**
-
-  **One — the sweep only runs when something collects `tests/conformance/graph_port`, and the
-  routine local/CI invocation never does.** The sweep is a session-scoped autouse fixture in that
-  directory's own `conftest.py`; pytest never instantiates a fixture from a directory it does not
-  collect. `Makefile`'s `test` target — the one this build's own headline test count has been
-  reported against all week — carries `--ignore=tests/conformance/graph_port` as the first of ten
-  `--ignore` flags (see the entry below, found the same session). A developer or session running
-  `make test` alone, repeatedly, against a persistent local `make dev-up` stack accumulates
-  `conformance_*` databases across every one of those sessions with the sweep never once firing,
-  until the volume fills — exactly the shape of the incident this module's own docstring already
-  describes. Only `make conformance`, `make test-all`, or CI's `conformance` job (which invoke
-  pytest against that directory directly) ever trigger it.
-
-  **Two — even when the sweep runs, it can only drop what the live server's own `list databases`
-  reports, and a database can exist on disk without ever being registered.** Found live, not
-  hypothesised: this session's initial disk audit found `conformance_1789987107_b63147993fc8` on
-  disk (via `docker exec ... ls`), 172 minutes old, well past the 60-minute staleness window — yet
-  it was absent from `curl .../api/v1/databases` before the sweep ran, and the sweep's own return
-  value (`sweep_stale_conformance_databases` dropped exactly one database that same run) confirms
-  it was never a candidate. A `create_database_if_absent()` interrupted after the directory is
-  created but before the server's own registration completes leaves exactly this: present on disk,
-  invisible to the one call the sweep uses to find what to drop. Removed by hand
-  (`docker exec compose-arcadedb-1 rm -rf`) this session — no code path removes it.
-
-  **Three — a hard-killed run can leave a database that crashes the server itself at boot, before
-  the sweep's own owning fixture ever gets a server to call.** Also reproduced live, not
-  hypothesised: this session's own `make test` run OOM-killed the ArcadeDB container mid-suite
-  (`docker inspect` confirmed `OOMKilled=true`, `ExitCode=137` — see the memory-pressure finding
-  below for why), leaving `conformance_1789998411_5906c2b40764` mid-transaction. On restart,
-  `ArcadeDBServer.loadDatabases` threw an uncaught `com.arcadedb.exception.SchemaException: File
-  with id '0' was not found` while reopening it, and the JVM's `main` thread exited — the container
-  stayed "Up" (its outer entrypoint survived) but never became healthy and refused every
-  connection. The sweep fixture needs a running server to call `list databases` against; a
-  database that prevents the server from starting is by construction unreachable by a sweep that
-  runs inside a test session against that same server. Recovered only by deleting the corrupted
-  directory directly from the container filesystem before ArcadeDB would boot at all.
-
-  **A fourth, related finding, not a sweep gap but the reason the sweep keeps having work to do:**
-  the OOM kill above is not a one-off — reproduced twice in this session alone (once during a full
-  `make test` run, once during an isolated single-test rerun with Ollama freshly restarted).
-  `deploy/compose/dev.yaml`'s own comment already names cross-container memory contention with
-  Ollama's resting footprint against ArcadeDB's `-Xmx6G` heap on the shared Docker Desktop VM
-  (measured this session at 8GB total) as a known, previously-hit case, with "restart recovers
-  cleanly" as the stated remedy — true for a clean kill, false when the kill lands mid-transaction
-  and produces finding three above instead.
-
-  Owning phase: **Phase 8**, the same closing-pass home as this section's two immediately preceding
-  entries. Concretely, in order of leverage: (a) move `sweep_stale_conformance_databases` (or an
-  equivalent) to run from something that always executes before a local or CI test session touches
-  ArcadeDB, not from a fixture scoped to a directory ten `--ignore` flags routinely skip; (b) make
-  the sweep's own candidate list disk-based (or reconcile disk against `list databases` and treat
-  a mismatch as itself stale) rather than trusting server registration alone; (c) either lower
-  ArcadeDB's configured heap or raise the VM's memory budget so the documented contention case
-  stops being reproducible on a single ordinary session's first run, since a corrupted database is
-  a strictly worse outcome than the orphan the sweep was built to handle, and recovering from it
-  today requires a human with container filesystem access, not a test fixture.
+- **ArcadeDB stability (the sweeper's three causes, the OOM-contention finding, and a fourth,
+  newly-observed cause) — relocated 23 September 2026 into Phase 8's own stage list as a
+  MILESTONE-BLOCKING stage,** not left here: an install-and-demo milestone cannot stand on a store
+  that fails more often than it completes. Full finding at its own new entry, in build order,
+  alongside the harness/packaging and documentation-refresh stages.
 
 - **`Makefile`'s `test` target's ten `--ignore` flags mean the port conformance suites are not
   routinely run by the one target this build's own headline pass/fail count has been reported
