@@ -46,8 +46,14 @@ outside the stated scope of the change — a correction to one section must not 
 7. **The Glass never sees Gremlin**, a source-system identifier, or an unfiltered count.
 8. **No expression or scripting language in the Ingest Studio.** Transforms are Knowledge
    Adapters with golden test files.
-9. **Fixtures are synthetic and in-repo.** No real intelligence data anywhere, ever. Map data in
-   the demo and CI is tier 1 only.
+9. **Fixtures are synthetic and in-repo.** No real intelligence data anywhere, in this repository
+   or in CI, ever — with one narrow exception: a dataset the owner has explicitly named in the
+   local, never-committed real-data exceptions list (`scripts/real_data_exceptions.py` —
+   `config/real_data_exceptions.yaml`, gitignored; `06_DECISIONS.md` ADR-035 §C3 has the decision
+   record), admitted only for local development, scale/realism testing, or an owner-run
+   demonstration on the owner's own secured device — never committed, never in CI, never
+   distributed to an attendee. No other real dataset is admitted without its own such entry. Map
+   data in the demo and CI is tier 1 only.
 10. **The performance budget in `docs/02_GLASS_FRONTEND.md` §5 is a CI gate**, not a target.
 11. **A genuine spec gap gets fixed in the spec, not answered in chat.** An answer given only in
     conversation is lost by the next session — if `docs/` is ambiguous or silent on something

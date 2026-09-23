@@ -1,0 +1,20 @@
+# Schema for config/real_data_exceptions.yaml (gitignored, never committed).
+# See scripts/real_data_exceptions.py's own docstring for the full mechanism, and
+# docs/06_DECISIONS.md ADR-035 §C3 for the decision this exists to implement.
+#
+# Managed with `python -m scripts.real_data_exceptions add/remove/list` — do not
+# hand-edit the real file; the CLI validates every field.
+#
+# This example file is committed so the schema is reviewable. It names no real dataset.
+
+exceptions:
+  - dataset: "Example Corpus Name"
+    approved_uses:
+      - local_development       # scripts/real_data_exceptions.py's own APPROVED_USES
+      - scale_testing
+      - owner_run_demonstration
+    added_by: "owner"
+    added_date: "2026-01-01"
+    device: "example-hostname"
+    justification: "One sentence: why this dataset, why these uses, why this device only."
+    revisit: "Optional: a condition or date that should trigger re-review."

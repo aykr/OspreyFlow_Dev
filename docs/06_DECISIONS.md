@@ -3420,20 +3420,30 @@ applies with more force to a standing rule than to an ADR. **This record does no
 rule 3 or `CLAUDE.md` rule 9, and does not grant the "demos run by the owner" permission as
 requested.**
 
-**What this record does accept, because it does not touch either rule's own explicit scope:**
-distribution class `internal`, permitted for **local development and scale/realism testing only** —
-neither the repository, CI, nor a demo of any kind, the three channels standing rule 3 actually
-names. The corpus may sit on the owner's own machine, outside `/demo-data/` and outside git
-entirely (it is 1.7GB and ungitignorable-by-size regardless), used to stress-test the platform at a
-scale Fixture Corp does not reach, and never rendered to any audience, the owner included, as a
-"demo."
+**What this record originally accepted, before the amendment below, because it did not touch
+either rule's own explicit scope:** distribution class `internal`, permitted for **local
+development and scale/realism testing only** — neither the repository, CI, nor a demo of any
+kind, the three channels standing rule 3 actually names. The corpus could sit on the owner's own
+machine, outside `/demo-data/` and outside git entirely (it is 1.7GB and ungitignorable-by-size
+regardless), used to stress-test the platform at a scale Fixture Corp does not reach, and never
+rendered to any audience, the owner included, as a "demo."
 
-**Open item for the owner, not decided here:** whether standing rule 3 and `CLAUDE.md` rule 9 should
-be amended to carve out an "owner-only demo, never distributed" exception — the request as written
-needs exactly that amendment to be actionable, and this record surfaces the need rather than making
-the amendment itself. **Separately, and regardless of that amendment:** whether even
-development-only use requires a documented lawful basis and retention period under UK GDPR is
-recorded as requiring legal advice before alpha, per the original request.
+**Open item for the owner — decided, 23 September 2026, by the owner directly, not inferred.**
+Standing rule 3 and `CLAUDE.md` rule 9 are amended: both now admit a dataset explicitly named in
+the local, never-committed real-data exceptions list (`scripts/real_data_exceptions.py` —
+`config/real_data_exceptions.yaml`, gitignored), for local development, scale/realism testing, or
+an owner-run demonstration on the owner's own secured device — never committed, never in CI, never
+distributed to any attendee. **This record's own disposition above is superseded to match**: the
+Enron email corpus may now also be used for an owner-run demonstration, on the same terms, once
+the owner adds it to that list themselves — the repository, CI, and distribution to any attendee
+remain absolutely excluded, unchanged. No other real dataset is admitted by this decision; each
+needs its own entry and, for anything beyond Enron, its own record. **"Revisit if" — fired**: the
+condition this open item existed to track (an explicit owner decision on the amendment) has
+occurred; this paragraph is that record, not a placeholder awaiting one. **Separately, and
+regardless of the amendment:** whether even development-only use requires a documented lawful
+basis and retention period under UK GDPR is recorded as requiring legal advice before alpha, per
+the original request — **that requirement now also covers demonstration use**, added by this same
+amendment, not narrower than the development-only case it already applied to.
 
 ### C4 — VAST Challenge datasets, and the same conflict in miniature
 

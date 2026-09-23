@@ -61,7 +61,7 @@ column below as the same binding statement in prose that the registry will enfor
 | Scenario B (comms and identity pivot) | `shipped` | Partly built; split across Phases 6a, 7 and 8 by ADR-022 | — |
 | **Extraction and entity resolution** | `shipped` | Built, **API only** | Demonstrable to engineers through the API; there are no screens until Phase 6a |
 | **Scenario C — "Fixture Corp"** (Enron-*shaped*, R24) | `shipped` | **Script written, fixture never built** — owning phase Phase 8 | See §6 |
-| **The real Enron email corpus** | `internal`, **narrower than the raw corpus itself suggests — see §6** | Never provisioned as a demo, for anyone | — |
+| **The real Enron email corpus** | `internal`, **admitted only via the owner's own local exceptions list — see §6** | Owner-run demonstration only, on the owner's own device, never distributed to an attendee | — |
 | **VAST Challenge dataset** (generated fixture) | `internal` | Decided (ADR-026); fixture not yet built | See §7 |
 | **VAST Challenge dataset** (the published files themselves) | Not admitted, any class | ADR-026: "standing rule 3 is not amended" — never used, shaped or verbatim | See §7 |
 
@@ -271,18 +271,15 @@ on published Enron corpus research — has never been built as a fixture. `06_DE
 gives it an owning phase (Phase 8) and its own distribution class (`shipped`) — it is the demo this
 platform can actually put in front of a customer, once built.
 
-**The real Enron corpus is `internal`, and narrower than "usable for a demo."** `CLAUDE.md` rule 9
-is unqualified: "No real intelligence data anywhere, ever." Standing rule 3 names the demo
-explicitly: "No real intelligence data in the repository, in CI, **or in a demo**" — including one
-run by the owner, for the owner's own purposes; that phrase is still, in the rule's own words, a
-demo. ADR-035 §C3 records this precisely rather than working around it: the real corpus may be used
-for local development and scale/realism testing only, never committed, never in CI, and never
-rendered to any audience — the owner included — as a demo, unless and until the owner amends
-standing rule 3 and `CLAUDE.md` rule 9 to add that exception explicitly. It is the private
-correspondence of about 150 identifiable people, most never charged with anything, and loading it
-into an intelligence platform to demonstrate network analysis is precisely the thing the rule
-prevents — quite apart from being a data-protection problem in its own right (ADR-035 §C3 has the
-full GDPR/redaction/licence reasoning).
+**The real Enron corpus is `internal`, and stays narrower than "usable for any demo audience."**
+`CLAUDE.md` rule 9 and standing rule 3 admit a real dataset only if it is explicitly named in the
+local, never-committed real-data exceptions list (`scripts/real_data_exceptions.py`), and only for
+local development, scale/realism testing, or an owner-run demonstration on the owner's own secured
+device — never committed, never in CI, and never distributed to any attendee. ADR-035 §C3 has the
+decision record and the amendment. It is the private correspondence of about 150 identifiable
+people, most never charged with anything; that this exception exists at all does not lessen the
+data-protection question in its own right (ADR-035 §C3 has the full GDPR/redaction/licence
+reasoning, which now also covers demonstration use, not only development).
 
 Fixture Corp gets you what makes Enron the canonical social-network case study — the hierarchy, the
 community structure, the communication asymmetries that betray it — with none of that. That it is

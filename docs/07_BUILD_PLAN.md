@@ -1595,7 +1595,11 @@ operable from the browser or a script — all of it provable on `local-lite`.
 - Export: chart, subgraph, report. The handling gate with named blockers and recorded
   justification. Withheld-item manifest on every export.
 - The browser harness and the admin console it becomes: the six setup screens, live preflight,
-  the generated-artefact diff, and the backup, restore, upgrade and verify screens.
+  the generated-artefact diff, and the backup, restore, upgrade and verify screens. **A new
+  screen, added 23 September 2026**: managing the real-data exceptions list (standing rule 3,
+  `CLAUDE.md` rule 9, `06_DECISIONS.md` ADR-035 §C3) — the shape
+  `scripts/real_data_exceptions.py`'s own CLI already wraps, the same "plain module now, harness
+  screen eventually" pattern every other pre-Phase-8 operational script in this build follows.
 - Harness-driven orchestration (`05_DEPLOYMENT.md` §2.4): target confirmation, drift detection,
   change preview, enforced backup-before-switch, and downgrade capacity checks against the
   existing data volume.
@@ -5145,9 +5149,15 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
 2. **No feature ships without its access-control test.** Every read path gets a test asserting
    that an unauthorised principal cannot observe the data or infer its existence.
 3. **Fixtures are synthetic and in-repo.** No real intelligence data in the repository, in CI,
-   or in a demo. Generate fixtures with a seeded generator so they are reproducible. The same
-   applies to map data: the demo and CI run on tier 1 providers only, enforced by rejecting any
-   non-`open` provider in the demo configuration.
+   or in a demo, ever — with one narrow exception: a dataset the owner has explicitly named in
+   the local, never-committed real-data exceptions list (`scripts/real_data_exceptions.py` —
+   `config/real_data_exceptions.yaml`, gitignored; `06_DECISIONS.md` ADR-035 §C3 has the decision
+   record), admitted only for local development, scale/realism testing, or an owner-run
+   demonstration on the owner's own secured device — never committed, never in CI, never
+   distributed to an attendee. No other real dataset is admitted without its own such entry.
+   Generate fixtures with a seeded generator so they are reproducible. The same applies to map
+   data: the demo and CI run on tier 1 providers only, enforced by rejecting any non-`open`
+   provider in the demo configuration.
 4. **The performance budget is a CI gate, not a report.** A regression fails the build.
 5. **Every model-facing prompt is versioned and evaluated.** A prompt change runs the golden set
    and reports the delta on the pull request.
