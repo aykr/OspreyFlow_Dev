@@ -91,6 +91,26 @@ outside the stated scope of the change — a correction to one section must not 
     dev-up`'s shared containers, confirm nothing else was using them for the duration of the
     measurement — a measurement taken under unknown contention is not a measurement of the thing
     it claims to measure.
+15. **A gate's first green is not a result, it is an untested state. A new gate is not wired into
+    `make ci` until it has been shown red.** Worked example, 23 September 2026:
+    `scripts/decision_log_publication_check.py` was built, given a fixture test, and reported
+    "0 violations" against the real decision log — accepted and recorded as a finding without
+    first confirming the comparison itself worked. It didn't: the regex extracting a cited ADR
+    number captured two digits after `ADR-0`, compared against a three-digit classification key
+    (`"34" != "034"`), so every comparison silently failed regardless of the document's actual
+    content. The fixture test itself later caught this before the gate shipped — but the "0
+    violations, checked directly" claim had already been written down and trusted in the interim,
+    exactly the failure rule 12 names: an invariant stated in prose, exercised by a check that
+    could not have found a violation if one existed. A full project audit afterwards found every
+    other gate already followed this discipline (`CLAUDE.md` rule 12's own "name the test" habit,
+    applied as a `test_the_check_fails_for_X`/`test_X_is_flagged` case built alongside each gate)
+    — except one: the Node half of `make licence-check` (`scripts/licence_check.mjs`) had run in
+    CI since Phase 0 with no test at all, its own `isAllowed` predicate never shown red. **Before
+    trusting or citing a gate's own "0 violations"/"all pass" result, confirm that gate has an
+    on-record red-then-green demonstration — a test that plants a real violation and asserts the
+    gate reports it — not merely that the gate currently reports none.** Before wiring a new gate
+    into `make ci`, that demonstration is what "the gate is ready" means; a gate that has only ever
+    been run against content it happens to pass has not been tested, only exercised.
 
 ## Conventions
 

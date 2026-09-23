@@ -36,7 +36,7 @@ const ALLOWED_MARKERS = [
   "blueoak",
 ];
 
-function isAllowed(licenseText) {
+export function isAllowed(licenseText) {
   const text = String(licenseText).toLowerCase();
   if (text.includes("lesser general public license") || text.includes("lgpl")) {
     return true; // LGPL-3.0, dynamic linking only — linkage not checked, see file docstring.
@@ -79,4 +79,6 @@ function main() {
   console.log(`licence-check: ${Object.keys(report).length} packages, all allowed.`);
 }
 
-main();
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}

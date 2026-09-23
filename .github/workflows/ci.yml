@@ -45,6 +45,9 @@ jobs:
       # (Phase 0 exit criterion, docs/07_BUILD_PLAN.md) — see
       # tests/licence_check/test_gpl_rejection.py.
       - run: uv run pytest tests/licence_check
+      # Same proof for the Node half's own isAllowed predicate — had no test at all until
+      # 06_DECISIONS.md ADR-034 §B10's own gate audit found it.
+      - run: node --test tests/licence_check/*.test.mjs
 
   # `docs/06_DECISIONS.md` ADR-041 (accepted, option (b)): mechanical control for the
   # fetch-then-check authorization bug class found three times over (review.py, the fakes that

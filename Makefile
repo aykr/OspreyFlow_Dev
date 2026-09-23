@@ -21,7 +21,9 @@ typecheck:
 licence-check:
 	$(PY) scripts/licence_check.py
 	npm run licence-check
-	@echo "licence-check: see tests/licence_check/test_gpl_rejection.py for the deterministic proof"
+	node --test tests/licence_check/*.test.mjs
+	@echo "licence-check: see tests/licence_check/test_gpl_rejection.py (Python half) and"
+	@echo "tests/licence_check/test_licence_check_mjs.test.mjs (Node half) for the deterministic proof"
 
 # `06_DECISIONS.md` ADR-041 (accepted, option (b)): mechanical, not documentary, control for the
 # fetch-then-check authorization bug class. See scripts/authorized_query_check.py's own docstring.
