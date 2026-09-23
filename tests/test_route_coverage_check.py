@@ -51,7 +51,7 @@ def test_no_stale_allowlist_entries() -> None:
 
 
 def test_the_check_fails_for_a_route_the_doc_does_not_document() -> None:
-    """Proves the gate is not vacuous — `CLAUDE.md` rule 12: name the test that would fail."""
+    """Proves the gate is not vacuous by naming the test that would fail."""
     doc_routes: set[str] = set()
 
     undocumented = find_undocumented(["GET /v1/totally-fictional-route"], doc_routes)

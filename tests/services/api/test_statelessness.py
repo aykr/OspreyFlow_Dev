@@ -107,7 +107,17 @@ class _ConduitInstance:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        _wait_until_up(self.base_url)
+        # A deeper root cause than `_spawn_two_instances`'s own list-based cleanup covers: `Popen`
+        # above already spawned a real process by the time `_wait_until_up` can fail. If it does,
+        # this constructor raises and `self` is never returned to any caller — the process it just
+        # started has no reference anywhere a `finally` could reach. Caught and killed here, at
+        # the point of failure, rather than relying on a caller that never gets the object back.
+        try:
+            _wait_until_up(self.base_url)
+        except Exception:
+            self._process.kill()
+            self._process.wait(timeout=10)
+            raise
 
     def kill(self) -> None:
         """Not `terminate()` — this proves the *second* instance's
@@ -117,17 +127,31 @@ class _ConduitInstance:
         self._process.wait(timeout=10)
 
 
-@pytest.fixture
-def two_instances(jwks_url: str) -> Iterator[tuple[_ConduitInstance, _ConduitInstance]]:
-    instance_a = _ConduitInstance(jwks_url)
-    instance_b = _ConduitInstance(jwks_url)
+def _spawn_two_instances(jwks_url: str) -> Iterator[tuple[_ConduitInstance, _ConduitInstance]]:
+    """The real bug 18 orphaned processes across two days of runs turned out to be: if the
+    *second* `_ConduitInstance`'s own constructor raises (`_wait_until_up`'s 15s timeout, under
+    resource contention this session has independently documented elsewhere), the exception fires
+    before this function's own `try:` is ever entered — the already-running first instance is
+    never referenced in a `finally` at all, not merely killed ungracefully. Accumulating into a
+    list as each instance is actually constructed, and tearing down only what the list holds,
+    closes that gap: a failure constructing instance two still tears down instance one. A plain
+    generator, not the `@pytest.fixture`-decorated one below, so
+    `test_a_failed_second_instance_does_not_orphan_the_first` can drive it directly."""
+    instances: list[_ConduitInstance] = []
     try:
-        yield instance_a, instance_b
+        instances.append(_ConduitInstance(jwks_url))
+        instances.append(_ConduitInstance(jwks_url))
+        yield instances[0], instances[1]
     finally:
-        for instance in (instance_a, instance_b):
+        for instance in instances:
             if instance._process.poll() is None:
                 instance._process.kill()
                 instance._process.wait(timeout=10)
+
+
+@pytest.fixture
+def two_instances(jwks_url: str) -> Iterator[tuple[_ConduitInstance, _ConduitInstance]]:
+    yield from _spawn_two_instances(jwks_url)
 
 
 def _bearer(private_key: rsa.RSAPrivateKey) -> dict[str, str]:
@@ -183,6 +207,63 @@ def test_a_second_process_continues_an_investigation_the_first_was_killed_mid(
         snapshot = socket_.recv()
     assert '"from-a"' in snapshot
     assert '"from-b"' in snapshot
+
+
+def test_a_failed_second_instance_does_not_orphan_the_first(
+    jwks_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Proves both fixes by naming the test that would fail. Spawns a real
+    first `_ConduitInstance`, forces the second one's own `_wait_until_up` to raise (the real
+    failure mode 18 orphaned processes across two days of runs turned out to be), drives
+    `_spawn_two_instances` far enough to hit that exception, and asserts *both* processes are
+    dead: the first instance's (via `_spawn_two_instances`'s own list-based `finally`) and the
+    second, failed instance's own (via `_ConduitInstance.__init__`'s own try/except) — `Popen`
+    there runs before `_wait_until_up`, so a failure at that point had already spawned a real
+    process that no caller-held reference could otherwise reach."""
+    this_module = sys.modules[__name__]
+    real_wait_until_up = this_module._wait_until_up
+    completed: list[_ConduitInstance] = []
+    attempted: list[_ConduitInstance] = []
+    real_init = _ConduitInstance.__init__
+    calls = {"n": 0}
+
+    def _tracking_init(self: _ConduitInstance, jwks_url_: str) -> None:
+        try:
+            real_init(self, jwks_url_)
+        except Exception:
+            attempted.append(self)
+            raise
+        else:
+            completed.append(self)
+
+    def _fail_on_second_call(base_url: str, *, timeout_s: float = 15.0) -> None:
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise TimeoutError("forced failure for this test")
+        real_wait_until_up(base_url, timeout_s=timeout_s)
+
+    monkeypatch.setattr(_ConduitInstance, "__init__", _tracking_init)
+    monkeypatch.setattr(this_module, "_wait_until_up", _fail_on_second_call)
+
+    generator = _spawn_two_instances(jwks_url)
+    with pytest.raises(TimeoutError):
+        next(generator)
+
+    assert len(completed) == 1, "only the first instance should have fully constructed"
+    assert len(attempted) == 1, "the second instance's own construction should have failed"
+
+    first_instance, second_attempt = completed[0], attempted[0]
+    first_instance._process.wait(timeout=10)
+    assert first_instance._process.poll() is not None, (
+        "the first instance's own uvicorn process must be dead once the second instance's "
+        "construction fails and the generator raises"
+    )
+    second_attempt._process.wait(timeout=10)
+    assert second_attempt._process.poll() is not None, (
+        "the second, failed instance's own uvicorn process must already be dead by the time its "
+        "own constructor's exception propagates -- Popen ran before _wait_until_up could fail, so "
+        "nothing outside __init__ itself ever gets a reference to clean it up"
+    )
 
 
 def _seed_node(node_id: str) -> dict[str, object]:

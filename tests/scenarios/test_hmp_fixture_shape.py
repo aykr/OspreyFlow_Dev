@@ -99,7 +99,7 @@ async def test_weekend_is_around_34_percent_of_the_total() -> None:
 
 
 async def test_the_fixture_is_deterministic_across_calls() -> None:
-    """Seeded and deterministic (`CLAUDE.md` rule 9) — a re-run must
+    """Seeded and deterministic — a re-run must
     reproduce the identical fixture, not merely the same statistics."""
     first = generate_hmp_events()
     second = generate_hmp_events()

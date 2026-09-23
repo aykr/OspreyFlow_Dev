@@ -210,7 +210,7 @@ def test_threshold_routes_404_for_an_unknown_investigation(client: TestClient) -
 
 
 def test_get_threshold_denies_a_principal_in_a_different_org_unit(client: TestClient) -> None:
-    """`CLAUDE.md` rule 4: every read path gets its own access-control test, no exceptions for an
+    """Every read path gets its own access-control test, no exceptions for an
     internal endpoint — mirrors `test_app.py`'s
     `test_get_investigation_denies_a_principal_in_a_different_org_unit`."""
     other_unit_principal = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="unit-2")

@@ -20,7 +20,7 @@ for every node in `nodes_by_id`, meaning a principal who cannot see a node at al
 reset that node's own persisted `resolution.cluster_id` — collapsing state a higher-clearance
 principal had legitimately established — purely by calling their own threshold endpoint. That is
 an unauthorised mutation of state outside the caller's own view, not an information disclosure,
-but it is the same boundary standing rule 3 draws for a write. The fix narrows both the
+but it is the same boundary access control draws for a write. The fix narrows both the
 `compute_clusters` population *and* which nodes `updated_nodes` is allowed to touch to the
 principal-visible subset `expand` returned, so a call that cannot see a node cannot move its
 stored cluster state either.

@@ -13,8 +13,8 @@ its adapter registration always landed in the same phase/stage, so gating
 the module's deletion on "are all three of `ANALYTICS_PORT_ADAPTERS`/
 `COMPUTE_PORT_ADAPTERS`/`MODEL_PORT_ADAPTERS` populated" was a correct proxy
 for "does any placeholder content remain" — the two conditions never
-diverged. Phase 7 Stage 2 is the first point they do: standing rule 1
-(conformance suites, and the schemas they need, before any adapter) moves
+diverged. Phase 7 Stage 2 is the first point they do: the rule that
+conformance suites, and the schemas they need, come before any adapter moves
 `ComputePort`'s real schemas (`schemas/compute.py`) ahead of
 `adapters/compute_rustworkx`'s own registration by a full stage.
 Checked directly, not assumed, before writing the module off: keying
@@ -35,7 +35,7 @@ import importlib.util
 def test_pending_port_placeholders_module_is_gone() -> None:
     """`ComputePort` was the last port carrying placeholder content
     (`schemas/compute.py` replaced it in Phase 7 Stage 2, ahead of
-    `adapters/compute_rustworkx`'s own registration — standing rule 1).
+    `adapters/compute_rustworkx`'s own registration — conformance suites come before the adapter).
     Every port now has real domain content; this module must never come
     back, the same permanent regression `test_phase0_placeholders_module_
     is_gone` already proves for its own Phase 0 predecessor."""

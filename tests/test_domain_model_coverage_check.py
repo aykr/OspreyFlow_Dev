@@ -51,7 +51,7 @@ def test_no_stale_allowlist_entries() -> None:
 
 
 def test_the_check_fails_for_a_class_the_doc_does_not_document() -> None:
-    """Proves the gate is not vacuous — `CLAUDE.md` rule 12: name the test that would fail."""
+    """Proves the gate is not vacuous by naming the test that would fail."""
     undocumented = find_undocumented(
         "This doc never mentions the fictional class at all.",
         [("TotallyFictionalModel", ["BaseModel"])],

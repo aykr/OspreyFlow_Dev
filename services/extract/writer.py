@@ -5,7 +5,7 @@ already-graph-resident `inferred` node to `asserted` (or reverses that) — `01_
 **Accept ≠ confirm.** `write_candidate` writes `provenance.state = inferred`, never `asserted` —
 accepting a review-queue candidate means "let this exist in the graph as a first-class, honestly
 model-attributed entity", not "I attest this is true". Writing it straight to `asserted` would be
-exactly the automatic promotion `CLAUDE.md` rule 5 forbids, dressed up as a queue action instead
+exactly the automatic promotion this codebase forbids, dressed up as a queue action instead
 of a confidence threshold; it would also make the Phase 6 exit criterion's own "extracted entities
 appear as `inferred`" unreachable for anything that had passed through the review queue at all.
 Confirmation is `confirm_node`, a separate, later, explicit action, exactly as
@@ -34,8 +34,8 @@ says "not a confirmed fact", which is the only thing retraction is actually asse
 
 **Edge confirm/retract are not built this stage.** `GraphPort` has no `get_edge` method — there is
 no way to fetch an existing edge's current state before deciding whether a requested transition is
-valid, and adding one is a real port change needing its own conformance-suite coverage (`CLAUDE.md`
-rule 1), not a small addition folded in here. This is deferred alongside edge/relationship
+valid, and adding one is a real port change needing its own conformance-suite coverage first,
+not a small addition folded in here. This is deferred alongside edge/relationship
 candidate extraction itself (`candidates.py`'s own module docstring — "Proposed links" in
 `09_INGEST_STUDIO.md` §7's mockup), which is the only thing that would produce an inferred edge
 needing this in the first place.

@@ -745,7 +745,7 @@ def test_match_single_chain_pattern_compiles_to_the_same_gremlin_as_before(
     proof, checked as a compiled-string comparison rather than only "the query still returns the
     right nodes," since the latter could pass even if the compiler now takes a slower or
     differently-shaped path to the same answer. This golden string was captured directly from the
-    unmodified `MatchBuilder` before Stage 4's own widening, per standing rule 1."""
+    unmodified `MatchBuilder` before Stage 4's own widening."""
     from adapters.graph_arcadedb.access_filter import AccessFilter
     from adapters.graph_arcadedb.builders import MatchBuilder
     from ontology.handling import load_uk_le_scheme
@@ -924,7 +924,7 @@ async def test_match_count_agrees_with_the_filtered_results_own_count(
 
 
 async def test_match_count_never_leaks_a_hidden_node(factory: GraphAdapterFactory) -> None:
-    """`CLAUDE.md` rule 7 (the Glass never sees an unfiltered count) and rule 3 (an unauthorised
+    """The Glass never sees an unfiltered count, and an unauthorised
     principal must not detect a filtered node's existence via an aggregate) — applied to the
     visual query builder's own estimate, which is shown to the analyst directly rather than
     reconciled by an authorised caller the way `expand_candidate_count` is. A principal who

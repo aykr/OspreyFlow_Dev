@@ -51,7 +51,7 @@ def test_no_stale_allowlist_entries() -> None:
 
 
 def test_the_orphan_check_fires_for_a_file_referenced_by_no_job() -> None:
-    """Proves the gate is not vacuous — `CLAUDE.md` rule 12: name the test that would fail. A file
+    """Proves the gate is not vacuous by naming the test that would fail. A file
     ignored by `test` (so not covered by its own default collection) and absent from every
     live-service job's own explicit list is reachable by nothing at all."""
     orphaned = find_orphaned(

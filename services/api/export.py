@@ -267,7 +267,7 @@ class ExportLedgerEntry(BaseModel):
     `justification_given`/`originator_reference_given` record the *fact* an override was properly
     recorded, never its content. The full text remains exactly where investigation-scoped access
     already governs it — the audit stream (`services/api/app.py::submit_export_route`'s own
-    `audit.record(..., justification=body.justification)` call, `CLAUDE.md` standing rule 4)."""
+    `audit.record(..., justification=body.justification)` call)."""
 
     id: str
     investigation_id: str

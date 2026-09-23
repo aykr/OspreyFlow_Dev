@@ -1881,7 +1881,7 @@ async def patterns_list_route(
     patterns_store: PatternsStoreDep,
 ) -> SavedPatternList:
     """Never another principal's patterns — `PatternStore.list_authorized` filters by owner in
-    the query itself (`CLAUDE.md` rule 3), not after fetching everything."""
+    the query itself, not after fetching everything."""
     return SavedPatternList(patterns=await patterns_store.list_authorized(principal))
 
 

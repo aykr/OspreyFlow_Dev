@@ -197,7 +197,8 @@ class WorkingSetService:
         rendering in place instead of re-fetching via `sync`/`current_membership` on every move.
 
         `node_ids` is narrowed to `principal`'s own visible subset of the investigation-shared
-        population before either `compute_clusters` call — standing rule 3. `source_fidelity_
+        population before either `compute_clusters` call — access control lives in the adapter.
+        `source_fidelity_
         nodes` is investigation-shared, not scoped to this caller's clearance (the same fact
         `_manual_assertion` documents). Checked precisely: this does *not* leak through the
         `merged`/`split`/`affected` counts themselves — `GraphPort.expand` already excludes any
@@ -332,7 +333,7 @@ class WorkingSetService:
         # other read already goes through, before writing a permanent edge naming them. `None`
         # here is indistinguishable from "not in the working set" — the same existence-leak
         # discipline the route already applies to `NodeNotInWorkingSetError`, extended to a write
-        # standing rule 2 gives no exception for.
+        # no silent-truncation exception applies to.
         if await self._graph.get_node(node_a, principal) is None:
             raise NodeNotInWorkingSetError(node_a)
         if await self._graph.get_node(node_b, principal) is None:
@@ -461,7 +462,7 @@ class WorkingSetService:
         narrowed to `expand`'s own principal-filtered result before being returned, the same
         pattern as `set_resolution_threshold`; an empty result after narrowing raises
         `ClusterNotFoundError`, indistinguishable from the cluster never having existed, per
-        standing rule 3's existence-leak discipline."""
+        the same existence-leak discipline access control must hold to."""
         nodes_by_id = await self._store.source_fidelity_nodes(investigation_id)
         candidate_ids = {
             node_id

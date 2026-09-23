@@ -295,7 +295,7 @@ test("the radial list's own auto-focused first item is itself reachable and acti
   registerCovered("CANVAS_ACTIONS", "menu-item-expand-by-edge-type");
 });
 
-test("the radial list reaches Explain cluster, and the explanation actually renders — CLAUDE.md rule 13", async ({
+test("the radial list reaches Explain cluster, and the explanation actually renders end to end", async ({
   page,
 }) => {
   // B10: the same bar the two tests above already set for

@@ -213,8 +213,8 @@ class AnalyticsDuckDBAdapter:
     #: A defensive cap, not a corpus-scale one — `list_sightings` is scoped to one entity's own
     #: `node_ids` restriction over an already-brushed window (`SightingRequest`'s own docstring),
     #: a population that practically never approaches this, unlike `geo_bins`'s genuine
-    #: corpus-wide concern. Capped rather than left unbounded anyway, per `CLAUDE.md` standing
-    #: rule 2 — silently truncated here (documented, not typed as `limit_exceeded`): a partial
+    #: corpus-wide concern. Capped rather than left unbounded anyway — silently truncated here
+    #: (documented, not typed as `limit_exceeded`): a partial
     #: snail trail is still a legible one, and the caller-scoped `EventFilter` this method requires
     #: makes reaching the cap itself the signal something is mis-scoped, not ordinary use.
     _MAX_SIGHTINGS = 5000

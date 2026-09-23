@@ -82,7 +82,7 @@ async def match_place_mention(
 
     A candidate the given `principal` cannot view under `scheme` is never
     matched against, exactly the access-control-in-the-adapter discipline
-    every other read path in this codebase has (`CLAUDE.md` rule 3),
+    every other read path in this codebase has,
     applied here even though this is a write path: an inferred link to
     something the calling principal cannot see would itself be a
     disclosure via the edge's own existence.

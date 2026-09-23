@@ -155,8 +155,8 @@ class PatternStore:
     ) -> SavedPattern:
         """The one method every route should call. `owner_id` is filtered in the query itself,
         not after fetch — the same shape `ExtractionCandidateStore.get_authorized`/
-        `get_document_text` (`services/api/review.py`) use, and `CLAUDE.md` rule 3 requires even
-        for a Conduit-internal Postgres store like this one, not only the four ports: existence
+        `get_document_text` (`services/api/review.py`) use — access control lives in the adapter
+        even for a Conduit-internal Postgres store like this one, not only the four ports: existence
         and content are refused by the same query, not a fetch followed by a Python-side check
         that already holds what it is about to reject. `review.py`'s own disclosed gap
         ("the twenty-two `review.py` tests that passed identically either

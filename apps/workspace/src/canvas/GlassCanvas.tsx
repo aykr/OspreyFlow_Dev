@@ -125,7 +125,7 @@ export interface GlassCanvasProps {
 
 /** Phase 7 Stage 3: what the metrics panel needs from outside the canvas's own event handlers —
  * "row-select-and-centre" is real application logic (a camera pan, not merely a browser default),
- * so it is proven end-to-end by `keyboard/metrics-panel.spec.ts`, per standing rule 13. */
+ * so it is proven end-to-end by `keyboard/metrics-panel.spec.ts`. */
 export interface GlassCanvasHandle {
   /** Selects `nodeId` (firing `onSelectionChange`/`onFocusChange` exactly as a mouse click would)
    * and pans the camera to centre it, without changing the current zoom ratio — a no-op if
@@ -586,7 +586,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
         }),
       });
       if (!response.ok) {
-        // `limit_exceeded` (409, the working-set cap) included — CLAUDE.md rule 2 requires the
+        // `limit_exceeded` (409, the working-set cap) included — no silent drop is allowed; the
         // typed error surface itself, not a silent drop; the response body's own `options` (the
         // three the cap offers) are not yet rendered here — flagged, not solved, by this fix.
         throw new Error(`Expand failed (${response.status}). Try again.`);
@@ -653,7 +653,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
         { headers: { Authorization: `Bearer ${bearerToken}` } },
       );
       if (!response.ok) {
-        // A stale cluster id 404s (`ClusterNotFoundError`, standing rule 3's own indistinguishable-
+        // A stale cluster id 404s (`ClusterNotFoundError`, access control's own indistinguishable-
         // from-never-existed shape) — worth saying plainly rather than leaving the analyst to
         // wonder why nothing happened, the same reasoning `PathfinderOverlay`'s own "No path
         // found" already gives for a different, but equally silent-by-default, empty outcome.

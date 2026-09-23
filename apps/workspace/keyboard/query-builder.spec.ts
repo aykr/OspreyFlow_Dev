@@ -1,5 +1,5 @@
-// A scripted, keyboard-only walkthrough of the visual query builder — Phase 7 Stage 4, `CLAUDE.md`
-// rule 13 applied to the third keyboard-driven surface (`keyboard/query-builder-harness.tsx`'s own
+// A scripted, keyboard-only walkthrough of the visual query builder — Phase 7 Stage 4, proving
+// reachability end to end for the third keyboard-driven surface (`keyboard/query-builder-harness.tsx`'s own
 // docstring has the reasoning for a separate harness/spec pair rather than folding into either
 // existing one). Like the other two, this file never calls `page.mouse`/`.click()`.
 //

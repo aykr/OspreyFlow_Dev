@@ -112,6 +112,20 @@ outside the stated scope of the change — a correction to one section must not 
     into `make ci`, that demonstration is what "the gate is ready" means; a gate that has only ever
     been run against content it happens to pass has not been tested, only exercised.
 
+    **An injection that any default-deny fallthrough would have caught proves nothing about the
+    specific branch it was meant to exercise.** Found building `licence_check.mjs`'s own first
+    red-then-green proof, the same day as the worked example above: the first attempt removed the
+    GPL-rejection branch from `isAllowed` and asserted a bare `"GPL-3.0"` string was still
+    rejected — it was, because `isAllowed`'s own fallthrough (`ALLOWED_MARKERS.some(...)`) already
+    rejects any string matching no allowlisted marker, with or without the branch under test. The
+    real risk only appeared testing the shape `main()` actually produces at its own call site
+    (`licenses.join(" AND ")` for a dual-licensed package): with the branch removed,
+    `isAllowed("MIT AND GPL-3.0")` returned `true`, since `"mit"` alone satisfied the fallthrough.
+    **The planted violation must take the shape the code under test actually emits or receives at
+    its own real call site, not a convenient hand-written approximation of it** — a bare string
+    that happens to fail by a different path proves the test can fail, but not that it fails for
+    the reason it claims to.
+
 ## Conventions
 
 - Python 3.12, FastAPI, async throughout. Pydantic models in `packages/schemas` are the source

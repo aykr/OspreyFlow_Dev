@@ -24,7 +24,7 @@ def test_every_registered_demo_is_documented_with_its_distribution_class() -> No
 
 
 def test_the_check_fails_for_a_registered_demo_the_guide_does_not_document() -> None:
-    """Proves the gate is not vacuous — `CLAUDE.md` rule 12: name the test that would fail."""
+    """Proves the gate is not vacuous by naming the test that would fail."""
     guide_text = DEMO_GUIDE_PATH.read_text(encoding="utf-8")
     registry_plus_one = (*DEMO_REGISTRY, ("Totally Fictional Demo XYZ", "shipped"))
 

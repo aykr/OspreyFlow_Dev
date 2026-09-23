@@ -1,4 +1,4 @@
-"""The golden-set evaluation harness — `docs/03_CONDUIT_MIDDLEWARE.md` §5.2, standing rule 5:
+"""The golden-set evaluation harness — `docs/03_CONDUIT_MIDDLEWARE.md` §5.2:
 "Every model-facing prompt is versioned and evaluated. A prompt change
 runs the golden set and reports the delta on the pull request." Phase 6 Stage 3.
 

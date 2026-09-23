@@ -73,7 +73,7 @@ def test_inferred_provenance_may_carry_a_confidence_score() -> None:
 def test_confirming_an_inferred_node_flips_state_and_records_who() -> None:
     """No automatic promotion, no confidence threshold — an explicit analyst
     action is the only thing that flips `inferred` to `asserted`
-    (`01_DOMAIN_MODEL.md` §2.1, `CLAUDE.md` rule 5)."""
+    (`01_DOMAIN_MODEL.md` §2.1)."""
     prov = Provenance(
         state=ProvenanceState.INFERRED,
         sources=[_source()],

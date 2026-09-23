@@ -8,7 +8,7 @@ up as a wrong place rather than a plausible-looking wrong number:
 - EPSG:32139 — NAD83 Texas Central State Plane, US survey feet.
 - EPSG:2227 — NAD83 California Zone III State Plane, US survey feet.
 
-Seeded and deterministic (`CLAUDE.md` rule 9) — the random component only
+Seeded and deterministic — the random component only
 varies which reference point is listed first, never the coordinate pairs
 themselves, since those are real published grid references and must not
 drift.

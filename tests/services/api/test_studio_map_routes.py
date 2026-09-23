@@ -2,8 +2,7 @@
 `/v1/ingest/transforms`, `PUT .../row-template`,
 `GET .../map/sample-rows/{row_index}`, `POST .../map/handling-preview`.
 Mirrors `test_studio_recipe_routes.py`'s own discipline: a fake store, no
-live Postgres, and one access-control test per new read path
-(`CLAUDE.md` rule 4).
+live Postgres, and one access-control test per new read path.
 
 Reuses `test_studio_recipe_routes.py`'s own `client` fixture rather than
 duplicating its setup — pytest registers a fixture under the name it is

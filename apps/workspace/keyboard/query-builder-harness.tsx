@@ -1,4 +1,4 @@
-// Query-builder keyboard harness — `CLAUDE.md` rule 13's "or its equivalent for a new surface":
+// Query-builder keyboard harness — a new surface needing its own equivalent of `keyboard.spec.ts`:
 // the visual query builder is the third keyboard-driven surface (`keyboard/harness.tsx`'s own
 // `CANVAS_ACTIONS`, `keyboard/metrics-panel-harness.tsx`'s own `METRICS_PANEL_ACTIONS`), so it
 // gets its own harness rather than being folded into either. Renders `QueryBuilderPanel` alone —

@@ -83,7 +83,7 @@ async def test_list_for_document_is_scoped_to_owning_unit(store: ExtractionCandi
 async def test_get_authorized_denies_a_principal_in_a_different_org_unit(
     store: ExtractionCandidateStore,
 ) -> None:
-    """`CLAUDE.md` rule 4: every read path gets its own access-control test. Raises the same
+    """Every read path gets its own access-control test. Raises the same
     not-found error as a genuinely missing id — the existence-leak discipline this store's own
     docstring names."""
     (record,) = await store.store([_candidate()], ANALYST)
@@ -142,7 +142,7 @@ async def test_storing_document_text_twice_upserts_rather_than_conflicts(
 async def test_get_document_text_denies_a_principal_in_a_different_org_unit(
     store: ExtractionCandidateStore,
 ) -> None:
-    """`CLAUDE.md` rule 4: every read path gets its own access-control test."""
+    """Every read path gets its own access-control test."""
     document_id = new_id()
     await store.store_document_text(document_id, "Dana called at noon.", ANALYST)
 

@@ -2,8 +2,9 @@
 not documentary, control for the fetch-then-check authorization bug class `review.py`,
 `sites.py`, `investigations.py`, `studio_recipes.py` and `pattern_store.py` each independently
 carried at one point: a `*_authorized` store method that fetches a row unscoped and compares the
-owner in Python after, rather than filtering the principal into the query's own `WHERE` clause
-(`CLAUDE.md` rule 3). Documentation named this shape and its fix three times before this script
+owner in Python after, rather than filtering the principal into the query's own `WHERE` clause —
+access control lives in the adapter. Documentation named this shape and its fix three times
+before this script
 existed and it kept recurring; this is the forcing function ADR-041 accepted instead.
 
 Static, not runtime: an AST walk over every `services/api/*.py` file, not a live-database probe.

@@ -365,7 +365,8 @@ class MatchBuilder:
         """`GraphPort.match_count`'s compiler — `01_DOMAIN_MODEL.md` §8.1, Phase 7 Stage 4's
         query-builder surface. Deliberately routed through `_render_single_chain`/
         `_render_matched` with `count_only=True` rather than a separate step-building method:
-        the whole point (`CLAUDE.md` rule 3/7 — an estimate must be filtered exactly like the
+        the whole point (access control lives in the adapter, and the Glass never sees an
+        unfiltered count — an estimate must be filtered exactly like the
         real result) is that this can never drift from `render_gremlin`'s own access-filtered
         steps, which duplicating the walk logic here would risk the moment one of the two copies
         was edited and the other wasn't. Only the tail differs: `.dedup().limit(ceiling).count()`

@@ -1,5 +1,5 @@
-// Assessment-panel keyboard harness — `CLAUDE.md` rule 13's "or its equivalent for a new
-// surface": the Judgements tab is the fifth keyboard-driven surface (`keyboard/harness.tsx`'s own
+// Assessment-panel keyboard harness — a new surface needing its own equivalent of
+// `keyboard.spec.ts`: the Judgements tab is the fifth keyboard-driven surface (`keyboard/harness.tsx`'s own
 // `CANVAS_ACTIONS`, `metrics-panel-harness.tsx`'s own `METRICS_PANEL_ACTIONS`,
 // `query-builder-harness.tsx`'s own `QUERY_BUILDER_ACTIONS`, `watch-panels-harness.tsx`'s own
 // `WATCH_PANEL_ACTIONS`), so it gets its own harness. Mounts `JudgementsPanel` directly rather

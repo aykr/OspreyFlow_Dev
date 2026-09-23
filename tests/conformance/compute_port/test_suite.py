@@ -12,7 +12,8 @@ covered its own absence until Tier 1 joined.
 **What this suite does not, and cannot, prove — named rather than left to be assumed covered.**
 `ComputePort` takes no `Principal` (`01_DOMAIN_MODEL.md` §10): every request below carries an
 explicit `Subgraph`, so `test_centrality_never_returns_a_node_outside_the_requested_subgraph` is
-the structural half of `CLAUDE.md` rule 3's concern — an adapter cannot leak a node it was never
+the structural half of the access-control-in-the-adapter concern — an adapter cannot leak a
+node it was never
 given. It is *not* the composed claim that a real caller always assembles that `Subgraph` through
 an access-filtered `GraphPort.expand`/`match` first; that is
 `tests/services/api/working_set/test_compute_access_control.py`'s own shape of test (real

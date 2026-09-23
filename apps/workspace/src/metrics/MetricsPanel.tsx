@@ -12,7 +12,7 @@
 // **Row activation is real canvas-touching logic, not a native-only interaction** — unlike
 // `resolution/ThresholdControl.tsx`'s own slider, selecting a row calls `GlassCanvas`'s own
 // `focusOnNode` (a camera pan), which is why this panel's row button gets a
-// `keyboard/metrics-panel.spec.ts` case (standing rule 13) while the metric/compare/hull toggles
+// `keyboard/metrics-panel.spec.ts` case (a keyboard-reachability proof) while the metric/compare/hull toggles
 // below, built from plain `Select`/`Toggle` with no custom key handling, do not need one — the
 // same distinction `ThresholdControl.tsx`'s own docstring already draws for its native `<input>`.
 import { useEffect, useState } from "react";

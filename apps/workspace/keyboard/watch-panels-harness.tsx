@@ -1,4 +1,4 @@
-// Watch-panels keyboard harness — `CLAUDE.md` rule 13's "or its equivalent for a new surface":
+// Watch-panels keyboard harness — a new surface needing its own equivalent of `keyboard.spec.ts`:
 // hotlists/monitors/the alert inbox are the fourth keyboard-driven surface
 // (`keyboard/harness.tsx`'s own `CANVAS_ACTIONS`, `metrics-panel-harness.tsx`'s own
 // `METRICS_PANEL_ACTIONS`, `query-builder-harness.tsx`'s own `QUERY_BUILDER_ACTIONS`), so it gets

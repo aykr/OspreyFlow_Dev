@@ -1,5 +1,5 @@
 // A scripted, keyboard-only walkthrough of the Judgements tab (judgements, gaps, assumptions,
-// evidence highlighting) — Phase 8 Stage 4c, `CLAUDE.md` rule 13 applied to the fifth
+// evidence highlighting) — Phase 8 Stage 4c, proving reachability end to end for the fifth
 // keyboard-driven surface (`keyboard/assessment-panel-harness.tsx`'s own docstring has the
 // reasoning for a separate harness/spec pair). Like the other four, this file never calls
 // `page.mouse`/`.click()`.

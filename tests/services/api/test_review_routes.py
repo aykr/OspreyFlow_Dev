@@ -3,7 +3,7 @@
 route wiring — `docs/09_INGEST_STUDIO.md` §4/§7, `docs/01_DOMAIN_MODEL.md` §2.1. The underlying
 logic is proven in `tests/services/api/test_review.py`/`test_review_store.py` and
 `tests/extract/test_writer.py`; this file proves each route calls it with the right arguments,
-audits, and — per `CLAUDE.md` rule 4 — denies a principal without access.
+audits, and denies a principal without access.
 """
 
 from __future__ import annotations
@@ -408,7 +408,7 @@ def test_confirm_node_route_flips_state_and_audits(fakes) -> None:
 
 
 def test_confirm_node_route_404_for_a_node_in_a_different_org_unit(fakes) -> None:
-    """`CLAUDE.md` rule 4 — the same existence-leak discipline every other node read in this app
+    """The same existence-leak discipline every other node read in this app
     already uses: a principal without access gets the same 404 an unknown node id would."""
     client, _model, _candidates, graph, _audit = fakes
     graph.nodes["n1"] = _node("n1", ProvenanceState.INFERRED, owning_unit="unit-2")

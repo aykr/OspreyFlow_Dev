@@ -4,7 +4,8 @@ owed: "that composed claim is owed by whichever stage builds `ComputePort`'s fir
 
 `WorkingSetService.current_membership` is **deliberately unfiltered** (its own docstring). Feeding
 it straight into `ComputePort` would let a hidden node's own existence leak through a *visible*
-node's own degree or centrality score — `CLAUDE.md` rule 3's concern named directly, and the same
+node's own degree or centrality score — the access-control-in-the-adapter concern named
+directly, and the same
 shape of defect `test_resolution_threshold_access_control.py` and
 `test_projection_access_control.py` already proved for resolution's own read/write paths. This
 test proves the actual, composed
@@ -187,8 +188,8 @@ async def test_a_hidden_neighbour_never_inflates_a_visible_nodes_computed_degree
 
         assert accepted.mode == "sync"
         assert accepted.values is not None
-        # `H` itself must never appear at all — the same existence-leak discipline standing rule 3
-        # names for any filtered node, not merely a degree miscount for `A`.
+        # `H` itself must never appear at all — the same existence-leak discipline access control
+        # holds for any filtered node, not merely a degree miscount for `A`.
         assert id_h not in accepted.values
         # The real check: `A`'s own computed degree counts only the `A–B` edge `OFFICIAL` can see.
         # If a future change ever feeds `current_membership`'s unfiltered edges straight into

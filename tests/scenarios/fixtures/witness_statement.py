@@ -2,7 +2,7 @@
 extraction (this stage's own scoping), later folded into Stage 3's
 golden set as its first hand-labelled example rather than writing a second document.
 
-Wholly fictional (`CLAUDE.md` rule 9: no real intelligence data anywhere, ever) — the names,
+Wholly fictional (no real intelligence data anywhere, ever) — the names,
 dates and location are invented for this fixture. The scenario echoes the worked example already
 in `09_INGEST_STUDIO.md` §7 (a communications-department call reporting alleged harassment) so the
 extraction smoke test exercises the exact narrative shape the review-queue design was written

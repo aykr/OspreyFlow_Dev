@@ -1,5 +1,5 @@
 // A scripted, keyboard-only walkthrough of the export drawer (`02_GLASS_FRONTEND.md` §10) —
-// Phase 8 Stage 4e, `CLAUDE.md` rule 13 applied to the sixth keyboard-driven surface
+// Phase 8 Stage 4e, proving reachability end to end for the sixth keyboard-driven surface
 // (`keyboard/export-panel-harness.tsx`'s own docstring has the reasoning for a separate
 // harness/spec pair). Like the other five, this file never calls `page.mouse`/`.click()`.
 //

@@ -1,5 +1,5 @@
-// A scripted, keyboard-only walkthrough of the metrics panel — Phase 7 Stage 3, `CLAUDE.md` rule
-// 13 applied to a second keyboard-driven surface (`keyboard/metrics-panel-harness.tsx`'s own
+// A scripted, keyboard-only walkthrough of the metrics panel — Phase 7 Stage 3, proving
+// reachability end to end for a second keyboard-driven surface (`keyboard/metrics-panel-harness.tsx`'s own
 // docstring has the full reasoning for why this is a separate harness/spec pair rather than an
 // addition to `keyboard.spec.ts`). Like that file, this test never calls `page.mouse`/`.click()`.
 //

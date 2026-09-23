@@ -9,7 +9,7 @@ always. A pair that is byte-identical proves nothing about that rule; one
 carrier's `2026-01-10T10:00:00Z` and another's `2026-01-10 10:00:00+00:00`
 describing the same call is the actual failure mode the rule exists for.
 
-Seeded and deterministic (`CLAUDE.md` rule 9) — the random component only
+Seeded and deterministic — the random component only
 varies call duration, never the structural cases the Phase 2 exit criterion
 checks for.
 """

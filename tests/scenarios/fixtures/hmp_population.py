@@ -3,7 +3,7 @@ side — `08_ACCEPTANCE_SCENARIOS.md` Scenario A's "a population of ~400
 person entities with wing and cell locations; a subset with recorded
 group affiliations and family relationships."
 
-Deterministic (`CLAUDE.md` rule 9): every row list below is built from
+Deterministic: every row list below is built from
 fixed seeded choices — two calls to any function here produce
 byte-identical output, the same discipline `hmp.py`'s own
 `generate_hmp_events` already follows.

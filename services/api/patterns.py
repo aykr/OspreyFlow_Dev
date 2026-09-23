@@ -12,7 +12,7 @@ investigation is a separate, later `/seed` call, already access-checked on its o
 shape.** That method is the unfiltered half of a comparison only one authorised caller
 (`WorkingSetService`) ever sees, never itself shown to an analyst. A pattern's own estimate has
 no such reconciling caller and is shown directly, so it must be filtered exactly like `match()`
-itself — `GraphPort.match_count`'s own docstring has the full reasoning (`CLAUDE.md` rules 3
+itself — `GraphPort.match_count`'s own docstring has the full reasoning (access control and the
 and 7).
 
 **The cap is a job hand-off, not `working_set.models.LimitExceeded`.** That typed error's three
@@ -103,8 +103,8 @@ async def run_pattern(
     limit, the count and the eventual `Subgraph` are proven to agree (`GraphPort.match_count`'s
     docstring — they share the identical compiled traversal up to the tail, so nothing was
     truncated because nothing needed to be); at or above it, this hands off to a job rather than
-    ever returning a `Subgraph` silently capped at `pattern.limit` (`CLAUDE.md` rule 2 — no
-    exceptions)."""
+    ever returning a `Subgraph` silently capped at `pattern.limit` (no exceptions to silent
+    truncation)."""
     count = await graph.match_count(pattern, principal, ceiling=pattern.limit)
     if count < pattern.limit:
         subgraph = await graph.match(pattern, principal)

@@ -636,7 +636,7 @@ class ListNodesPage(BaseModel):
     further on, if every node in this page's key range happens to be
     hidden from `principal`. A caller that stops on an empty page rather
     than checking `next_cursor` recreates, one layer up, exactly the
-    silent truncation `CLAUDE.md` rule 2 forbids `GraphPort` itself from
+    silent truncation this codebase forbids `GraphPort` itself from
     producing."""
 
     nodes: list[Node]

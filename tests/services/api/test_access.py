@@ -1,5 +1,6 @@
 """`narrow_to_visible` (`services/api/access.py`) — the specific gap found and fixed while
-building `ComputePort`'s first real caller (Phase 7 Stage 3), named per standing rule 12: a test
+building `ComputePort`'s first real caller (Phase 7 Stage 3), named directly rather than left
+implicit: a test
 proving the exact defect, not only the composed access-control property one hop up.
 
 **The defect, precisely.** `GraphPort.expand(node_ids, depth=1)` traverses one hop past its own

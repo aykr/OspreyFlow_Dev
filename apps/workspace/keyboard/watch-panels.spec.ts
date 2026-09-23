@@ -1,5 +1,5 @@
 // A scripted, keyboard-only walkthrough of the watch panels (hotlists, monitors, the alert
-// inbox) — Phase 7 Stage 6c Part 2, `CLAUDE.md` rule 13 applied to the fourth keyboard-driven
+// inbox) — Phase 7 Stage 6c Part 2, proving reachability end to end for the fourth keyboard-driven
 // surface (`keyboard/watch-panels-harness.tsx`'s own docstring has the reasoning for a separate
 // harness/spec pair). Like the other three, this file never calls `page.mouse`/`.click()`.
 //

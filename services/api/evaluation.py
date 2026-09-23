@@ -17,7 +17,8 @@ decision, `06_DECISIONS.md` ADR-038's own `strict`/`notify` switch, applied via 
 
 `evaluate_monitors_for_entry` — a saved-pattern monitor evaluates as the saving analyst's own
 principal, never a service principal (`06_DECISIONS.md` ADR-036, quoted directly: "no new
-privileged code path, nothing standing rule 2/CLAUDE.md rule 3 does not already require of every
+privileged code path, nothing the existing silent-truncation and access-control discipline does
+not already require of every
 other read"). `GraphPort.match` is already principal-filtered, so a monitor's own query can never
 return a match its owner cannot see — there is no out-of-access case for `record_match`'s
 `strict`/`notify` branch to ever take for a monitor, and this module does not pretend one exists;

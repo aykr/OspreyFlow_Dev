@@ -17,7 +17,7 @@ is retained — `09_INGEST_STUDIO.md` §7 — never deleted); `confirm`/`retract
 (`services/extract/writer.py`) operate on a *graph node* `accept` already created, promoting it
 from `inferred` to `asserted` or reversing that. Conflating "accept" with "confirm" would make
 every accepted candidate silently asserted the moment a human first saw it, which is exactly the
-automatic promotion `CLAUDE.md` rule 5 forbids.
+automatic promotion this codebase forbids.
 
 **No bulk accept, by construction, not by a checked rule.** `09_INGEST_STUDIO.md` §7: "No bulk
 accept above a confidence threshold. Not as a default, not as a setting." `accept_candidate`/
@@ -267,7 +267,8 @@ class ExtractionCandidateStore:
         self, candidate_id: str, principal: Principal
     ) -> ExtractionCandidateRecord:
         """`owning_unit` is filtered in the query itself, not after fetch — the same
-        `list_for_document`'s own shape, and `CLAUDE.md` rule 3's reasoning even though this store
+        `list_for_document`'s own shape, and the same access-control-in-the-adapter reasoning
+        even though this store
         is Conduit-internal Postgres, not one of the four ports: a bare `SELECT *` pulls every
         column of a candidate derived from an intelligence document into process memory for a
         principal who is not cleared for it, before anything checks, from where it can reach a log

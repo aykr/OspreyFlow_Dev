@@ -15,15 +15,16 @@ claiming caller yet.
 is **deliberately unfiltered** — its own docstring: "the full source-fidelity... membership...
 `restore` re-projects fresh against whoever is restoring." Feeding it straight to `ComputePort`
 would let a hidden node's own existence leak through a visible node's own degree or centrality
-score — exactly `CLAUDE.md` rule 3's concern, and the same shape of defect already found and fixed
+score — exactly the access-control-in-the-adapter concern, and the same shape of defect already
+found and fixed
 for `set_resolution_threshold`/`explain_cluster` (the third and fourth instances of the same
 repeated pattern). `narrow_to_visible` (`services/api/access.py`) is the same narrowing
 function those two, and the Dossier, already use — this is disclosed as its fourth caller, not a
 fifth independent copy of the pattern. Proven by
 `tests/services/api/working_set/test_compute_access_control.py`.
 
-**A second, distinct gap found while building this caller, in `narrow_to_visible` itself, per
-standing rule 12's own naming discipline — not the same property as the paragraph above.**
+**A second, distinct gap found while building this caller, in `narrow_to_visible` itself, named
+directly rather than left implicit — not the same property as the paragraph above.**
 `GraphPort.expand`'s own `depth=1` traversal can return an edge to a neighbour that is fully
 *visible* to the principal but was never part of the *requested* node set — no classification
 violation at all, since `expand` has no reason to exclude a visible node from anything. Before the

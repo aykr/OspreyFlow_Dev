@@ -1,7 +1,7 @@
 """Fixture Corp (R24) — `06_DECISIONS.md` ADR-035 §C5: the shippable, `shipped`-class demo an
 analyst review runs against, and the first real citizen of ADR-035's own demo-distribution
 registry. This module builds the graph shape §C5 pins, in the same synthetic, seeded, in-repo
-style `hmp.py`/`cdr.py` already establish (`CLAUDE.md` standing rule 9) — no live service needed
+style `hmp.py`/`cdr.py` already establish — no live service needed
 to construct any of it; only the path-spoke half (`build_path_spokes`) needs a real `GraphPort`
 to write into, the same way `hmp_graph.py` needs one for its own graph side.
 

@@ -1,4 +1,4 @@
-// Metrics-panel keyboard harness — `CLAUDE.md` rule 13's "or its equivalent for a new surface":
+// Metrics-panel keyboard harness — a new surface needing its own equivalent of `keyboard.spec.ts`:
 // the metrics panel is a second, separate keyboard-driven surface from `GlassCanvas`'s own canvas
 // actions (`keyboard/harness.tsx`), so it gets its own harness rather than being folded into that
 // one. Renders `GlassCanvas` and `MetricsPanel` together, wired exactly as `App.tsx` wires them —

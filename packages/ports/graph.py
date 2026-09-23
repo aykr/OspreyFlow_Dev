@@ -211,8 +211,8 @@ class GraphPort(Protocol):
         (`WorkingSetService`) reconciles against its own already-filtered result; it is never
         itself shown to an analyst. A pattern's estimate has no such reconciling caller and is
         shown directly, so it must be filtered by this same call, the same way `match()` itself
-        is — an unfiltered count here is `CLAUDE.md` rule 7's "unfiltered count" the Glass must
-        never see, and rule 3's existence-leak-by-aggregate, not a shortcut.
+        is — an unfiltered count here is exactly what the Glass must never see, and the same
+        existence-leak-by-aggregate access control must prevent, not a shortcut.
 
         Compiles the identical access-filtered traversal `match()` does (same `has_access`
         injected at every step) up to a `.dedup().count()` tail in place of `match()`'s own

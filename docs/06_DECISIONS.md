@@ -1967,8 +1967,8 @@ it. **Not built in Phase 7 Stage 2** — schemas and the suite only, standing ru
 whichever stage registers Tier 1 is not blocked re-deriving the mechanism.
 
 **Tier 3 — not feasible on this development host; deferred to Phase 8a's `cluster` profile (named
-Phase 8 at the time this ADR was first accepted; split out by ADR-022's third addendum, 20
-September 2026), not tested and found wanting.** `docker info` on this host reports a fixed 8,214,585,344-byte
+Phase 8 at the time this ADR was first accepted; the naming was later split out into its own
+addendum, 20 September 2026), not tested and found wanting.** `docker info` on this host reports a fixed 8,214,585,344-byte
 (~7.65GiB) Docker Desktop VM. `deploy/compose/dev.yaml`'s own `arcadedb` service already carries
 four dated incident notes on exactly this budget: two concurrent conformance suites OOM'd at the
 JVM's default heap; a single heavy sequential HMP graph build OOM'd at 4G; `ollama`'s own resting
@@ -1984,7 +1984,7 @@ already on file, not a proposal worth spending a sixth incident to confirm.
 **Decision: Tier 3 registers in Phase 8a's `cluster` profile, not in Phase 7, and not on this
 host.** Phase 8a already owns exactly this class of work — `adapters/graph_janusgraph`,
 `adapters/analytics_clickhouse`, "runs on more than a laptop" (`07_BUILD_PLAN.md`) — so this is not
-inventing a new home for orphaned scope, the same shape ADR-022 already used once for Scenario B's
+inventing a new home for orphaned scope, the same shape already used once for Scenario B's
 own six Glass screens. `tests/conformance/compute_port/test_suite.py`'s cross-tier agreement case
 (`test_all_registered_tiers_agree_within_tolerance`) already collects zero cases with fewer than two
 tiers registered and needs no change when Tier 3 eventually joins — the suite this ADR is attached
@@ -2415,7 +2415,7 @@ built something else: `apps/workspace/src/patterns/QueryBuilderPanel.tsx`, a `Pa
 controls — an entity-type palette that places a pattern node, `GlobalSearch` reused to pin one, a
 list of the pattern's own nodes and edges, and Preview/Run. This was disclosed as a scope choice in
 the implementation session's own summary rather than recorded in `docs/`, which this repository's
-own standing discipline (ADR-019, 022, 023, 027, 028, 029, 030 each correcting spec text the moment
+own standing discipline (ADR-023, 028, 029, 030 each correcting spec text the moment
 implementation diverged from it) does not permit a session summary to substitute for. This record
 is that correction, made after the fact rather than before — the deviation is real and already
 built, and what follows is the case for keeping it, not a proposal.
@@ -2645,9 +2645,14 @@ discovered by an external reader.
 
 **Correction, 23 September 2026 — "not to remove... so the gap is measured" no longer describes
 the whole of this gap, only the larger part of it this session did not touch.** This paragraph's
-own 1,150-citation figure is almost entirely source-code docstrings (`packages/`/`services/`/
-`apps/`) — genuinely still unsettled, "measured, not removed" remains the right call for that set,
-unchanged here. **The documentation-to-documentation subset of the identical gap — an
+own 1,150-citation figure (ADR-031's own original estimate, and this paragraph's — both left as
+originally written, above and here, rather than edited after the fact) is superseded: §B10's own
+later, gate-derived census puts the real source-code figure at 1,579, found the same day this
+correction was written. Wherever this document quotes a citation count for the source-code half
+of this gap, treat it as a snapshot dated to its own paragraph, not a fixed number — §B10 has the
+reasoning for why a bespoke regex kept undercounting it. This paragraph's own reasoning stands:
+still almost entirely source-code docstrings (`packages/`/`services/`/`apps/`), genuinely still
+unsettled, "measured, not removed" remains the right call for that set, unchanged here. **The documentation-to-documentation subset of the identical gap — an
 Apache-scoped *document* citing `06_DECISIONS.md`/`07_BUILD_PLAN.md`/`CLAUDE.md`, not a source
 file's own docstring — is now settled, differently: `scripts/product_tree_link_check.py`
 (§B9, below) measures it exactly as this paragraph proposed, but the decision on what to do with
@@ -3200,6 +3205,103 @@ together as an expected result:
   2 when it is not.** A run reporting more than this, in either state, is real drift; a run
   reporting fewer without either floor being fixed is a measurement taken wrong, not progress.
 
+### B12 — CLAUDE.md rule 15's second clause, and the injection-shape audit it demands
+
+**Rule 15 gained a second paragraph**, from the `licence_check.mjs` finding: an injection any
+default-deny fallthrough would have caught proves nothing about the specific branch under test.
+The planted violation must take the shape the code under test actually emits or receives at its
+own real call site — for `licence_check.mjs` that was `main()`'s own `licenses.join(" AND ")`
+dual-licence string, not a bare `"GPL-3.0"`. Full text in `CLAUDE.md` rule 15.
+
+**Applied as an audit to all 9 gates' own red-then-green tests — one line each, real-shape or
+hand-written:**
+
+| Gate | Injection shape | Real call-site shape? |
+| --- | --- | --- |
+| `demo-guide-check` | Real `DEMO_GUIDE.md` text + real `DEMO_REGISTRY` with one fabricated entry appended | Yes — identical to `main()`'s own inputs |
+| `domain-model-coverage-check` | Synthetic doc string + a `(name, bases)` tuple, passed straight to `find_undocumented` | Yes — `main()` calls `find_undocumented(doc_text, classes)` with the same two argument types; content is synthetic, the interface is real |
+| `route-coverage-check` | Synthetic route list + empty doc-route set, passed straight to `find_undocumented` | Yes — same reasoning: `main()` calls `find_undocumented(live_routes, doc_routes)` |
+| `authorized-query-check` | A fabricated Python source string passed to `check_source(path, text)` | Yes — `main()` calls the identical function on real files' own text |
+| `test-file-coverage-check` | Synthetic file list + ignore/job-token dicts, passed straight to `find_orphaned` | Yes — `main()` calls `find_orphaned(test_files, test_job_ignored, live_job_tokens)` with the same shapes |
+| `product-tree-link-check` | A real file written to `tmp_path` with a deliberate citation, read via `find_violations(doc_paths=...)` | Yes — the most end-to-end of the nine: real file I/O through the real function |
+| `decision-log-publication-check` | A real `06_DECISIONS.md`-shaped file written to `tmp_path`, read via `find_violations(decisions_path=...)` | Yes — same shape as above |
+| `schemas-check` | A real `pydantic.BaseModel` subclass with a genuinely different field, run through the real `generate()`/`diff_against_committed` pipeline | Yes — actual codegen, not a stand-in |
+| `licence-check` (Python) | A fabricated `dist-info` directory read through the real `run_pip_licenses` path | Yes — reads actual package metadata the same way the real scanner does |
+| `licence-check` (Node) | **Originally no** (bare `"GPL-3.0"`, caught by the audit itself, already fixed before this commit — rule 15's own worked example); now `"MIT AND GPL-3.0"`, `main()`'s own `licenses.join(" AND ")` shape | Yes, after the fix |
+
+**No other test's injection was found provably vacuous.** The synthetic-content cases (domain-
+model/route/test-file coverage) are not the same defect class as `licence_check.mjs`'s original
+one: they pass fabricated *content* through the real function *signature* `main()` itself calls,
+so the comparison logic under test is fully exercised even though the string wasn't scraped from
+a real file. `licence_check.mjs`'s original version was different in kind — the fallthrough,
+not the branch under test, was what actually caught the bare string, so the test passed for the
+wrong reason. Nothing else in this audit matched that shape; nothing else was changed.
+
+### B13 — Stage 3b executed: the census corrected again, the 60 mechanical rewrites done, the
+6 ADR violations mostly rewritten, one reported not decided
+
+**a. Every stale citation-count figure found, and disposed by whether it presents a number as
+current or as a frozen historical record.** `07_BUILD_PLAN.md`'s Trigger A blast-radius section
+("~1,150 citations, already tooled for") rewritten to point at `scripts/product_tree_link_check.py`
+as the authoritative, live census rather than quote a fourth number due to go stale in turn — and,
+found in the same passage, a second real defect: it credited `scripts/doc_citations_check.py` with
+already running clean pre/post-move, but that script **does not exist**, checked directly. Both
+fixed together. Grepped the whole of `docs/` for `1,150`, `1,046`, `195`, `94`, `117`, `212`: every
+other hit is either (i) ADR-031's own original accepted text (`06_DECISIONS.md` lines in its own
+body) — left untouched, per this document's own standing instruction not to edit an accepted ADR's
+own words, or (ii) this document's own later addenda (§B2's correction paragraph, §B9's citation
+count) — given a short pointer to §B10's corrected figure rather than a fourth restated number.
+None referred to `195`/`94`/`117`/`212` outside material already superseded in §B10/§B11 above.
+
+**b/c. The 83 `CLAUDE.md` source-code citations, re-enumerated — the split moved, the same class
+of bug §B10 already found.** The first pass (60 rule-numbered, 21 not, 2 exempt) undercounted the
+rule-numbered set the same way the original citation census did: a single-line grep missed
+citations where the rule number wraps to the next line (`` `CLAUDE.md` rule\n2 `` split across a
+comment's own line break). A two-line-window structural check found **5 more** — the real split is
+**65 rule-numbered, 15 not, 2 exempt** (65 + 15 + 2 = 82, plus the one new citation this session's
+own `test_statelessness.py` work added = 83 counted before the rewrite). All 65 rewritten: state
+the rule's substance, drop the reference, the same method already proven on `07_BUILD_PLAN.md`.
+`packages/schemas/generated/ListNodesPage.ts` regenerated, not hand-edited. `product-tree-link-
+check` before/after: **72 / 72, unchanged** — expected, since that gate scans only the Apache-
+scoped *documents*, not source code; this rewrite's own population was never in its scope. Full
+suite run before and after this rewrite (see this change's own commit for the count).
+
+**The 15 non-numbered citations, tabled rather than rewritten, grouped by what they cite:**
+
+| File:line | Text | Points at | One-line proposal |
+| --- | --- | --- | --- |
+| `packages/schemas/generate_ts.py:3` | "Pydantic is the source of truth (``docs/CLAUDE.md`` conventions)" | §"Conventions" section | Drop the citation; the sentence already states the fact standalone |
+| `services/resolve/conflicts.py:11` | "flagged as such per `CLAUDE.md`'s "before you write code" rule" | §"Before you write code" section heading | "flagged as such rather than folded in as if the spec already said so" — drop the section name |
+| `services/api/alerts.py:55` | "(`CLAUDE.md`: "No `osprey` CLI yet")" | §Conventions, quoted | "(this codebase has no migration tooling yet)" — the quote is redundant with the sentence's own words |
+| `services/api/assessments.py:42` | "`CLAUDE.md`'s own "don't design for hypothetical future requirements" rule" | A "Doing tasks" bullet, not a numbered rule | "exactly the kind of unscoped, speculative expansion this codebase avoids" |
+| `apps/workspace/src/canvas/GlassCanvas.tsx:618` | "(CLAUDE.md's own session priority)" | Unclear — no "session priority" concept found in `CLAUDE.md`'s current text | Needs the owner: either name what this actually refers to, or it is drift and should be cut |
+| `apps/workspace/src/export/pngMark.ts:82` | "(`CLAUDE.md`'s own "fail loudly, never dropped silently" posture)" | No literal match in `CLAUDE.md`'s current text — closest is rule 2's "never truncate silently" | Likely drift from rule 2, paraphrased loosely; restate as "the same never-silently-drop posture rule 2 states for truncation" or confirm with the owner |
+| `scripts/seed_hmp_fixture.py:5`, `scripts/verify_map.py:9`, `scripts/register_tier4_provider.py:3`, `scripts/build_local_basemap.py:8`, `scripts/build_local_basemap.py:281`, `scripts/seed_fixture_corp.py:6`, `scripts/osprey_bundle.py:5` | "No `osprey` CLI yet (`CLAUDE.md`'s own Conventions)" — 7 near-identical instances | §Conventions' "No `osprey` CLI yet" bullet | Mechanical once agreed: "No `osprey` CLI yet" stands alone, drop the parenthetical every time — same shape as the other 65, held back only because the fix is identical prose repeated 7 times, worth a single agreed pattern rather than 7 separate judgement calls |
+| `scripts/domain_model_coverage_check.py:51` | "the one Apache-scoped document CLAUDE.md's own routing table assigns to…" | The file-routing table near the top of `CLAUDE.md` | "the one Apache-scoped document this build's own routing convention assigns to…" |
+| `tests/scenarios/fixtures/fixture_corp.py:16` | '...around one," `CLAUDE.md`) does not extend to' | §Conventions' CLI-shape convention, quoted | Drop the trailing `CLAUDE.md` attribution; the quote already carries the content |
+
+**Kind breakdown**: 9 are the same "No `osprey` CLI yet" convention repeated (mechanical once a
+single pattern is agreed, held back only for that reason); 3 point at a real section (Conventions,
+"Before you write code," the routing table) and can be restated without the pointer; 2
+(`GlassCanvas.tsx`, `pngMark.ts`) are paraphrases that do not match `CLAUDE.md`'s current text
+exactly and need the owner's own confirmation of what they meant, not a rewrite guessed at; 1
+(`assessments.py`) paraphrases a "Doing tasks" bullet correctly and can be restated directly.
+**This comes back to the owner as a method question, per the instruction — not rewritten here.**
+
+**d. The 6 ADR cross-reference violations: 5 of 6 rewritten, 1 reported rather than decided.**
+`028→022` (×2), `032→019`, `035→034` (×5), `035→042`, `037→042` — all ten instances rewritten:
+state the constraint, drop the process-ADR pointer, exactly the disposition §B11 already gave each.
+`035→026`: **4 of 5 instances rewritten** (the technical consequence — "shaped, not verbatim" —
+restated directly, dropping the citation). **The fifth is reported, not decided**: "**One
+clarification, checked against ADR-026 rather than assumed:** ADR-026's own title states it
+plainly — …" — this sentence's own point *is* the verification act itself, checking a specific
+document rather than assuming; removing the citation would remove a reader's ability to confirm
+that check was real, not merely restate a fact it produced. Whether that verification act needs
+its own citation to stand as a check, or can be restated without one, is a judgement call left to
+the owner. **`tests/fixtures/decision_log_publication_allowlist.txt` reduced from 6 entries to 1**
+(only `035	026` remains) — not empty and deleted, because one real violation remains by design,
+not by oversight. `make decision-log-publication-check`: green, "1 known (allowlisted), 0 new."
+
 ---
 
 ## ADR-035 — Demo distribution classes (`shipped`/`internal`), fail-closed and enforced at packaging time; Fixture Corp (R24) is the shippable demo; Enron and VAST stay internal, one of them narrower than requested
@@ -3266,7 +3368,7 @@ inspectable before shipping rather than after.
 schema, registry, packaging hook or Glass unavailable-state component exists anywhere in this
 repository today (checked: `git grep -li "distribution.*class\|demo.*manifest"` over `packages/`,
 `services/`, `apps/` returns nothing), and Phase 8 is the first phase that builds any packaging
-pipeline at all (ADR-034's own B7 finding: "the browser harness and its packaging pipeline are
+pipeline at all ("the browser harness and its packaging pipeline are
 Phase 8's own outcome, not built until then"). Building C1's registry ahead of Phase 8's own
 packaging work would have nothing to attach to. `07_BUILD_PLAN.md`'s Phase 8 outcome bullets are
 amended below to own this design.
@@ -3278,7 +3380,7 @@ or dataset filename appears anywhere in the built artefact — **including insid
 merely the running filesystem: if a packaging step copies the repository root, `/demo-data/`'s own
 gitignore exclusion is irrelevant to what a `docker build` context includes unless the `Dockerfile`
 also excludes it (`.dockerignore`), the same "check the build context, not just the running
-container" finding ADR-034's own B7 already makes for the private build tree.
+container" finding already made for the private build tree.
 
 **The test, named prospectively (not built — no packaging step exists to test yet):**
 `tests/packaging/test_internal_demo_exclusion.py::test_reclassifying_an_internal_demo_to_shipped_
@@ -3289,7 +3391,7 @@ correct state passes is not proof it would catch either the reclassification mis
 removal.
 
 **Not completed in this session; recorded, per this item's own explicit instruction, as required
-work owned by Trigger A (Phase 8's close, per ADR-034 §B3), and no artefact may be given to any
+work owned by Trigger A (Phase 8's own close), and no artefact may be given to any
 third party until it exists.**
 
 ### C3 — The Enron email corpus, narrower than requested
@@ -3335,8 +3437,8 @@ recorded as requiring legal advice before alpha, per the original request.
 
 ### C4 — VAST Challenge datasets, and the same conflict in miniature
 
-Distribution class `internal`, for the **generated, VAST-shaped fixture** `06_DECISIONS.md` ADR-026
-already designs — no licence or terms found on any host checked (the moved benchmark repository,
+Distribution class `internal`, for the **generated, VAST-shaped fixture** already designed as
+shaped, not verbatim — no licence or terms found on any host checked (the moved benchmark repository,
 the GitHub organisation, PNNL Datahub, OSTI, or the GitHub repositories; none carries a `LICENSE`
 file), and publication for challenge participation reads as a reasonable implied licence to
 participate, a thin one for redistribution. No personal data, so no GDPR question — a materially
@@ -3345,12 +3447,13 @@ different risk profile from Enron.
 **One clarification, checked against ADR-026 rather than assumed:** ADR-026's own title states it
 plainly — "the VAST Challenge datasets are admitted shaped, not verbatim; standing rule 3 is not
 amended." If "distribution class `internal`" is read as license to keep the *actual published VAST
-files* on this project's own infrastructure for any purpose, that already conflicts with ADR-026's
-own express holding, the same shape as C3's conflict above, just already resolved rather than newly
+files* on this project's own infrastructure for any purpose, that already conflicts with the
+datasets-admitted-shaped-not-verbatim holding, the same shape as C3's conflict above, just already resolved rather than newly
 found. Read correctly, C4's `internal` class attaches to the *generated fixture's own build
 artefacts* (intermediate files a seeded generator might produce before the final fixture is
-committed as `shipped` test data) — not to a cached copy of VAST's own files, which ADR-026 already
-declines to admit into this project at all, in any distribution class.
+committed as `shipped` test data) — not to a cached copy of VAST's own files, which the
+datasets-admitted-shaped-not-verbatim rule already declines to admit into this project at all, in
+any distribution class.
 
 ### C5 — Fixture Corp (R24) — distribution class `shipped`
 
@@ -3380,8 +3483,8 @@ it is the first real `shipped`-class citizen of.
 **Addendum, 22 September 2026 — stage confirmed, not only phase.** Phase 8's own stage breakdown
 gives Fixture Corp sub-stage **4a**, ahead of the assessment/export build it would otherwise be
 mistaken for a closing-pass afterthought of (`07_BUILD_PLAN.md`'s own Stage 4 entry has the full
-reasoning: it is the demo an analyst review runs against, and `06_DECISIONS.md` ADR-042 makes that
-review this build's own only external signal before alpha). This addendum exists so a reader of
+reasoning: it is the demo an analyst review runs against — this build's own
+only external signal before alpha). This addendum exists so a reader of
 this record alone, not only of the build plan, finds the placement rather than just the phase.
 
 **Addendum, 22 September 2026 — built, and neither candidate generator named above turned out to
@@ -3400,7 +3503,7 @@ proven properties.
 
 If ever used as data rather than AMLSim as a generator: CDLA-Sharing-1.0 carries a share-alike
 obligation on published modifications. It does not reach the code — a data licence, not a code one
-— but complicates the single-licence (Apache 2.0) story ADR-034 §B2 otherwise tells cleanly.
+— but complicates the single-licence (Apache 2.0) story this repository otherwise tells cleanly.
 Recorded as a constraint on a path not currently taken, not a decision to avoid it outright.
 
 ### C7 — `make licence-check`'s actual coverage, verified rather than assumed
@@ -3431,7 +3534,7 @@ exactly the class of thing C1's `make demo-manifest` output should also be able 
 Amended in this session (see the file itself) with a new provisioning section describing how
 internal demo datasets are obtained and placed (`OSPREYFLOW_INTERNAL_DEMO_DATA_DIR`, by reference
 from a manifest, never committed) without containing or linking the datasets themselves — the guide
-stays in the Apache tree (ADR-034 §B2) and must describe the mechanism, not the content. The
+stays in the Apache tree and must describe the mechanism, not the content. The
 existing demo table is amended to state each entry's distribution class plainly.
 
 **Cost.** One gitignore entry (done). Two ADR sections (C3, C4) that decline part of what was asked
@@ -3781,7 +3884,7 @@ transaction-read shape is built here.
 firing from resolution alone: B20's own assertion is "Subsequent matching *ingest* raises an alert
 with the same shape as B13," the case ingest-triggered evaluation (Stage 1, already unblocked)
 already covers; B8/B9/B11 exercise resolution and manual assertion themselves, not a monitor firing
-from either with no accompanying ingest. `06_DECISIONS.md` ADR-042 gates alpha on both acceptance
+from either with no accompanying ingest. release is gated on both acceptance
 scenarios, not on this amendment's own broader "any producer" language — nothing committed to v1
 depends on resolution-triggered monitor firing. Recorded in `07_BUILD_PLAN.md`'s "Out of scope for
 v1" list rather than left inside Phase 8's own numbered stages, on the same "checked against the

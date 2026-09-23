@@ -1,6 +1,6 @@
 """Fixtures for `ModelPort`'s `transcribe()`/`describe_image()` conformance cases.
 
-`sample_speech.wav` is synthetic TTS output (`CLAUDE.md` rule 9: no real intelligence data, ever)
+`sample_speech.wav` is synthetic TTS output (no real intelligence data, ever)
 — generated once via macOS `say -o sample_speech.aiff "testing one two three"` then `ffmpeg -i
 sample_speech.aiff -ar 16000 -ac 1 -sample_fmt s16 sample_speech.wav`, and committed rather than
 regenerated at test time because `say`/`ffmpeg` are not available on every CI runner. A pure

@@ -1,6 +1,6 @@
 """Access control compiled into a SQL predicate — injected into the `WHERE`
 clause before aggregation, never applied to a result after the fact
-(`00_ARCHITECTURE.md` §2.2, `CLAUDE.md` rule 3).
+(`00_ARCHITECTURE.md` §2.2).
 
 Mirrors `adapters/graph_arcadedb/access_filter.py`'s two axes exactly: both
 adapters enforce the same `Handling` model against the same

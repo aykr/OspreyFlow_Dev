@@ -26,7 +26,7 @@ one always exists. The `SAME_AS` itself is written `{"score": 1.0}`,
 Splink-scored) link — a device extraction reading both fields off one SIM
 is a direct observation, not a probabilistic match.
 
-Seeded and deterministic (`CLAUDE.md` rule 9) — the random component varies
+Seeded and deterministic — the random component varies
 only the pairing dates, never the identifiers themselves.
 """
 

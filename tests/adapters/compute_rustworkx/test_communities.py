@@ -9,7 +9,7 @@ not this split pass exists at all, which would be exactly the kind of test that 
 against the defect it claims to guard, a shape this repository already warns against. This
 file tests the
 *function*, feeding it a partition that is deliberately wrong regardless of what any real Louvain
-run would produce, per ADR-029's own naming and per standing rule 12.
+run would produce, per ADR-029's own naming, named directly rather than left implicit.
 """
 
 from __future__ import annotations

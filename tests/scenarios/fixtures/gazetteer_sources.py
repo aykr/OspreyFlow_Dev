@@ -3,7 +3,7 @@ sources. Each function's
 column names mirror that source's own real, published schema (not a
 copy-pasted generic shape), so a wrong-field-name bug in a recipe shows up
 immediately rather than passing by accident. Real, well-known place
-coordinates throughout (`CLAUDE.md` rule 9's "synthetic and in-repo" is
+coordinates throughout ("synthetic and in-repo" is
 about the *rows*, not about inventing implausible coordinates) — reusing
 `geo_locations.py`'s own already-verified British National Grid reference
 points for the two BNG-sourced fixtures (OS Open Names, Code-Point Open)

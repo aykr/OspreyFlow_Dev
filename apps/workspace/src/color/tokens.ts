@@ -5,7 +5,7 @@
 // parses that file directly and asserts these stay in sync, so drift
 // fails a test rather than surviving as a silently-stale copy (the exact
 // "invariant stated in prose that no test exercises" failure mode
-// `CLAUDE.md` rule 12 warns about).
+// this codebase warns about).
 export const CHANNEL_HEX: Record<string, string> = {
   ochre: "#b34917",
   rose: "#b74b5e",

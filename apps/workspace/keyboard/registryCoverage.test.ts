@@ -1,4 +1,4 @@
-// The static half of `CLAUDE.md` rule 13's own gap, exposed by Phase 7 Stage 4's third registry
+// The static half of the keyboard-reachability gap, exposed by Phase 7 Stage 4's third registry
 // (`actionRegistry.ts`'s own module docstring has the full incident). `assertAllCovered` proves a
 // *declared* registry's own actions each got a proving test case — but nothing before this proved
 // a registry *itself* ever got an `assertAllCovered` call written for it at all. A registry with

@@ -3323,6 +3323,47 @@ find something already finished sitting in the queue.
    recovering, memory climbing with every clean pass until the failure point. **The stage's own
    milestone-relevant question — does a clean install-and-demo run reliably — is answered yes, by
    measurement.**
+
+2b. **Orphaned `uvicorn` test servers — found and fixed, 23 September 2026.** No prior "rule-14
+   stage" existed in this document to file this under, despite the instruction that requested it
+   assuming one did; recorded here, next to 2a, as the closest existing kin (both are container/
+   process-hygiene findings CLAUDE.md rule 14 covers) rather than inventing a stage number.
+
+   **18 real, live `uvicorn services.api.app:app` processes found running, dated across Sunday and
+   Monday, 20–21 September 2026, `ppid=1` (reparented — their own spawning `pytest` process had
+   already exited).** `tests/services/api/test_statelessness.py` is the only test file that
+   references `uvicorn` — confirmed by grep across the whole tree, not assumed. Diagnosed, not
+   guessed: the 18 timestamps are individually distinct, none within seconds of another, which
+   rules out a whole `pytest` process being killed (that would orphan a *pair* — both
+   `_ConduitInstance`s the `two_instances` fixture spawns — together). It matches instead a real
+   bug, confirmed by reading the fixture: if the *second* `_ConduitInstance`'s own constructor
+   raises (`_wait_until_up`'s 15s timeout, under the same resource contention 2a's own measurement
+   already documents), the exception fires before the fixture generator's own `try:` is ever
+   entered — the first, already-running instance is never referenced in any `finally` at all.
+
+   **A second, deeper cause found while proving the fix — `Popen` runs before `_wait_until_up` can
+   fail.** Fixing only the fixture's own list-based cleanup left the *failing* instance's own
+   process leaking too: `_ConduitInstance.__init__` starts the real process, then calls
+   `_wait_until_up`; if that raises, the constructor itself raises and `self` — the only thing
+   holding the process reference — is never returned to any caller. Confirmed by a deliberately
+   forced failure during this fix's own red-then-green proof, which left 3 further real orphans
+   before this second cause was found and fixed too.
+
+   **Both fixed in `tests/services/api/test_statelessness.py`**: the fixture (`_spawn_two_instances`,
+   `two_instances`) now accumulates into a list as each instance actually completes construction,
+   tearing down only what the list holds; `_ConduitInstance.__init__` now catches its own
+   `_wait_until_up` failure, kills the process it just spawned, and re-raises. **Proven
+   non-vacuous**: `test_a_failed_second_instance_does_not_orphan_the_first` forces the second
+   instance's construction to fail and asserts *both* processes are dead afterward — run against
+   the pre-fix code first, confirmed red (a real `TimeoutExpired` waiting on a process nothing had
+   asked to die); against the fix, confirmed green.
+
+   **21 total orphans killed** (18 historical plus 3 more this fix's own red-then-green
+   demonstration produced), `ps` confirmed clean afterward. **Not closed as a general guarantee**:
+   nothing in this fix protects against the pytest process itself being sent `SIGKILL` externally
+   (this machine is macOS, with no `PR_SET_PDEATHSIG`-equivalent available to a child process) —
+   that class of leak, the one CLAUDE.md rule 14's own worked example is about, remains a real,
+   disclosed limitation of any in-process Python cleanup, not something this fix claims to solve.
 3. **Documentation refresh — split in two, 23 September 2026, so "documentation refresh" is never
    read as proofreading.** The two parts were previously one undifferentiated stage; they are
    different work, with different owners of "done," and only one of them gates the milestone.
@@ -3900,12 +3941,21 @@ against ADR-031's own text directly, not assumed from the word "restructure" alo
 
 Two different kinds of thing inside that scope, with two different real risks:
 
-- **~1,150 citations, already tooled for.** `grep` across `Makefile`/`deploy/compose/dev.yaml`
-  confirms every `docs/`-referencing line found there is a comment citing a spec file by path
-  (`# docs/07_BUILD_PLAN.md Phase 3: "Add make dev-up..."`), not a functional dependency — no
-  volume mount, no `--config`/`--file` flag pointing into `docs/`. This is exactly what
-  `scripts/doc_citations_check.py` (ADR-031, above) exists to rewrite and then gate; the checker
-  running clean, pre- and post-move, already covers this half.
+- **The source-code citation count is a snapshot, not a fixed figure — the census is the gate's
+  own resolution logic, not a number to keep re-quoting.** `scripts/product_tree_link_check.py`'s
+  marker-matching (`find_violations`, run against the source tree rather than only the Apache
+  docs it gates by default) is the authoritative count; any figure quoted from it is a snapshot as
+  of the date given, superseded the moment more citations are added or rewritten.
+  `06_DECISIONS.md` ADR-034 §B10 corrected the last quoted figure the same way (1,046, itself
+  already stale, corrected to 1,579 as of 23 September 2026) — this bullet's own former "~1,150,
+  already tooled for" is the same kind of stale snapshot, now replaced with this pointer instead
+  of a fourth number due to go stale in turn. **Also corrected here: `scripts/
+  doc_citations_check.py` does not exist** — checked directly, not assumed — so the previous
+  claim that "the checker running clean, pre- and post-move, already covers this half" was never
+  true; `grep` across `Makefile`/`deploy/compose/dev.yaml` still confirms every `docs/`-referencing
+  line there is a citing comment, not a functional dependency (no volume mount, no
+  `--config`/`--file` flag into `docs/`), so the *risk* this bullet names is still low, but the
+  *checker* it credited with covering it is unbuilt, not merely unrun.
 - **A real, functional, compile-time dependency the six deliverables above do not name —
   generalised, 23 September 2026, into `06_DECISIONS.md` ADR-034's own new B8 deliverable, not
   left as a single instance.** Thirteen real source files depend on `docs/design/tokens.css`

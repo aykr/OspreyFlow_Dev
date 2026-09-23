@@ -175,7 +175,7 @@ async def test_a_judgement_citing_one_good_and_one_unverifiable_reference_names_
         assert excinfo.value.citation_ids == [unresolvable]
 
 
-# --- owning_unit scoping — the existence-leak discipline CLAUDE.md rule 4 requires ----------------
+# --- owning_unit scoping — the existence-leak discipline every read path requires --------------
 
 
 async def test_a_judgement_owned_by_a_different_unit_is_not_found_not_forbidden(

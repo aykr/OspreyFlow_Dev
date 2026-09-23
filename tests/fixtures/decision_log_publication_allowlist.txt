@@ -1,11 +1,8 @@
-# Known PRODUCT-ADR-cites-PROCESS-ADR references, found when scripts/decision_log_publication_check.py
-# was first run (23 September 2026). Format: product_adr<TAB>process_adr.
-# Shrinks to zero as 06_DECISIONS.md's own prose is edited to state each constraint without the
-# private pointer -- not fixed here, since that is editorial work on the decision log's own text,
-# not the source-code comment rewrite this session's task was scoped to.
-028	022
-032	019
+# Known PRODUCT-ADR-cites-PROCESS-ADR references. 5 of the original 6 rewritten 23 September 2026
+# (06_DECISIONS.md ADR-034 §B12 has the record); one remains, deliberately not decided here.
+# 035 -> 026: ADR-035 checks its own C4 clarification directly against ADR-026's own title
+# ("checked against ADR-026 rather than assumed") -- removing the citation would remove the
+# reader's ability to verify that check was real, not merely restate a technical fact. Whether
+# that verification act itself needs a citation to stand, or can be restated without one, is a
+# judgement call reported to the owner rather than decided unilaterally.
 035	026
-035	034
-035	042
-037	042

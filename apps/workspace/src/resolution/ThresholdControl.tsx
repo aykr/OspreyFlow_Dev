@@ -3,7 +3,7 @@
 //
 // A native `<input type="range">` (via the `Slider` primitive), not a canvas action — it lives
 // outside `GlassCanvas`'s own keydown trap and needs no `keyboard.spec.ts` case of its own
-// (`CLAUDE.md` rule 13's own "or its equivalent for a new surface": a native range input is
+// (a native range input is
 // keyboard-operable by browser default, with no custom key handling whose correctness a scripted
 // walkthrough would need to prove — unlike the canvas's own hand-rolled `onKeyDown`).
 import { useEffect, useState } from "react";

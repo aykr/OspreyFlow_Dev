@@ -867,7 +867,7 @@ async def test_unauthorised_list_boundaries_omits_a_hidden_boundary(
     """The existence-leak discipline applies to `list_boundaries` exactly
     as it does to `get_geometries`: a hidden boundary must not appear, and
     must not be distinguishable from one that was never loaded at all
-    (CLAUDE.md rule 3/4)."""
+    (access control lives in the adapter, and every read path is tested for it)."""
     visible = _boundary(geometry_ref="boundary-open", classification="OFFICIAL")
     hidden = _boundary(geometry_ref="boundary-secret", classification="SECRET")
     async with factory.context([]) as adapter:

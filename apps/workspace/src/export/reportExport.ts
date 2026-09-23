@@ -5,8 +5,8 @@
 // to PDF by the recipient at their own discretion") and §10.3 (the mark carried both visibly, as
 // a header/footer stamp, and as an embedded structured field).
 //
-// Every judgement/gap/assumption passed in is rendered — no cap, no slice. `CLAUDE.md` standing
-// rule 2 ("never truncate a result silently") is satisfied here by construction rather than by a
+// Every judgement/gap/assumption passed in is rendered — no cap, no slice. Never truncating a
+// result silently is satisfied here by construction rather than by a
 // typed `limit_exceeded` escape hatch: unlike a working-set query, a report assembles a bounded,
 // already-fetched list the caller chose (via the same handling gate `ExportPanel.tsx` already
 // applies before this function is ever called), so there is no unbounded server-side result to

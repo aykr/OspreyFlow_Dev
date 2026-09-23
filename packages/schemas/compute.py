@@ -1,7 +1,7 @@
 """`ComputePort` domain types — `docs/00_ARCHITECTURE.md` §2.3, `docs/01_DOMAIN_MODEL.md` §10.
 
 Real types replacing `_pending_port_placeholders`'s stand-ins — Phase 7 Stage 2, ahead of any
-adapter (standing rule 1: the conformance suite, and the schemas it needs, come before the
+adapter (the conformance suite, and the schemas it needs, come before the
 adapter that would otherwise define the contract by accident). See
 `tests/schemas/test_placeholder_lifecycle.py` for the retirement this completes.
 

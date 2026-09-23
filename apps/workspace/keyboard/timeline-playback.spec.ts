@@ -1,5 +1,5 @@
 // A scripted, keyboard-only walkthrough of the timeline's own playback and cross-case-overlay
-// controls (`02_GLASS_FRONTEND.md` §3.4) — Phase 8 Stage 4f, `CLAUDE.md` rule 13 applied to the
+// controls (`02_GLASS_FRONTEND.md` §3.4) — Phase 8 Stage 4f, proving reachability end to end for the
 // seventh keyboard-driven surface (`keyboard/timeline-playback-harness.tsx`'s own docstring has
 // the reasoning for a separate harness/spec pair). Like the other six, this file never calls
 // `page.mouse`/`.click()`.
