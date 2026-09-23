@@ -178,15 +178,22 @@ B8's own corrected pair — there is nothing for the threshold to newly admit. `
 asserted 1.0 does not have. Both assertions are real and provable, on a real `Person` pair, which is
 what B9/B10 now target.
 
-**A fixture gap this correction surfaces, disclosed rather than filled in silently:** `Person`
-resolution needs a genuinely close-but-not-exact pair — this scenario's own two cohorts
-(`_seed_cohort`/`_seed_handle_cohort`, `tests/scenarios/test_phase8_exit_criterion_end_to_end.py`)
-currently write each cohort's own four `Person` nodes with a shared, identical `family_name` and
-sequential `given_names` ("Member0", "Member1", ...) — structurally simple, no near-duplicate
-signal for Splink to score. **Scenario B's own fixture does not yet contain a `Person` pair B9/B10
-can be genuinely exercised against**; `tests/scenarios/fixtures/fixture_corp.py` already builds
-this shape for a different demo case and is not reused here without a real decision to do so.
-Real, unscoped work — owning phase Phase 8 — not built under this correction.
+**The fixture gap above — closed, 23 September 2026.** `Person` resolution needed a genuinely
+close-but-not-exact pair; neither of this scenario's own two cohorts provides one
+(`_seed_cohort`/`_seed_handle_cohort` write each cohort's own four `Person` nodes with a shared,
+identical `family_name` and sequential `given_names`, no near-duplicate signal at all). **Closed by
+reusing `tests/scenarios/fixtures/fixture_corp.py`'s own generator
+(`generate_resolution_persons()`), not a second, hand-rolled pair** —
+`test_phase8_exit_criterion_end_to_end.py`'s own `_seed_and_resolve_b9_b10_person_pair` extracts
+that generator's own `close_given_name` pair's property values ("Volkov"/"Mikael" vs.
+"Volkov"/"Mikhail", same DOB), writes them under fresh ids (avoiding a node-id collision with
+Fixture Corp's own literal fixed ids in the same shared, persistent `ospreyflow` database), and
+resolves them for real. **The measured, live score: 0.9812853391529271** — inside
+(Balanced 0.95, Strict 0.99) by a real margin either side, asserted directly in that helper
+(`THRESHOLD_BALANCED <= score < THRESHOLD_STRICT`) before the edge is even written, so a pair that
+happened to land outside the band fails loudly rather than silently making B9/B10 vacuous again.
+B9 now proves the threshold move for real (Strict: `merged == 0`; Balanced: `merged == 1`,
+`affected == 2`); B10's `explain` shows a real `comparison_vector` and `manually_asserted: false`.
 
 **Every other citation of B8 checked, none resting on it being Splink-scored.** `06_DECISIONS.md`
 ADR-023 names B8 as its own precedent for using the `SAME_AS` edge *type* for a duplicate-identity

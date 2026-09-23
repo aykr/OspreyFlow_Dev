@@ -69,8 +69,12 @@ from services.api.studio_publish import build_recipe, write_and_commit_recipe
 from services.api.studio_recipes import StudioRecipeStore
 from services.ingest.engine import run_recipe
 from services.ingest.recipe_loader import load_recipe
+from services.resolve.projection import THRESHOLD_BALANCED, THRESHOLD_STRICT
+from services.resolve.resolver import resolve_entity_type
+from services.resolve.same_as_writer import write_same_as_edges
 from tests.conftest import default_claims, sign_token
 from tests.scenarios.fixtures.cdr import A_PARTY_RENDERINGS, B_PARTY, generate_cdr_rows
+from tests.scenarios.fixtures.fixture_corp import generate_resolution_persons
 from tests.scenarios.fixtures.hmp_graph import build_hmp_graph
 from tests.scenarios.fixtures.seizure_record import (
     HANDSET_IMEI_NORMALISED,
@@ -427,6 +431,79 @@ async def _seed_handle_cohort(
     return person_ids, handle_id
 
 
+async def _seed_and_resolve_b9_b10_person_pair(
+    graph: GraphArcadeDBAdapter, *, scheme
+) -> tuple[str, str, str, float]:
+    """B9/B10's own real `Person` pair — closing the fixture gap `docs/08_ACCEPTANCE_SCENARIOS.md`
+    B8's own disposition surfaced: B9's threshold move and B10's `explain` need a genuinely
+    close-but-not-exact `Person` pair, scoring between Balanced (0.95) and Strict (0.99) — excluded
+    at Strict, included at Balanced — which neither cohort in this scenario's own fixture provides
+    (both cohorts' persons share one flat family name and sequential given names, no near-duplicate
+    signal at all).
+
+    **Using the same generator that already carries the non-Latin pair** —
+    `tests.scenarios.fixtures.fixture_corp.generate_resolution_persons()` — rather than a second,
+    hand-rolled near-duplicate invented here: its own `close_given_name` pair ("Volkov, Mikael" vs
+    "Volkov, Mikhail", same DOB) is already measured, live, at 0.981285 — inside the exact band
+    needed, not merely close to it. Reusing its own values (not its own fixed node ids, which
+    would collide across repeated runs against this file's own shared, persistent `ospreyflow`
+    database — the same reason every other helper in this file mints fresh ids) keeps this pair
+    provably the same generator's own output, not a duplicate that could drift from it.
+
+    Resolved directly (`resolve_entity_type`/`write_same_as_edges`), the same real mechanism
+    `tests/scenarios/test_phase6_extraction_and_resolution.py`'s own Clause 2 already uses — no
+    HTTP route triggers Splink resolution synchronously in this build (`06_DECISIONS.md` ADR-025:
+    "manual resolve now" is still a proposal, not a route) — before the real HTTP `/seed`,
+    threshold-move and `explain` calls this function's own caller makes against the edge this
+    writes. Returns `(node_a_id, node_b_id, cluster_id, score)` — the score is asserted here, in
+    the band, live, not assumed from the docstring above: a pair that happened to land outside the
+    band would make B9/B10 vacuous again, exactly the failure this fixture gap was found to be."""
+    person_type = next(e for e in load_default_ontology().entity_types if e.name == "Person")
+    corp_pairs = generate_resolution_persons()
+    (close_given_name,) = (p for p in corp_pairs if p.label == "close_given_name")
+    props_a = close_given_name.node_a.properties
+    props_b = close_given_name.node_b.properties
+
+    run = new_id()[:8]
+    node_a_id = f"b9b10-{run}-person-a"
+    node_b_id = f"b9b10-{run}-person-b"
+    tx = await graph.begin_transaction()
+    await graph.upsert_nodes(
+        [
+            _person_write(node_a_id, props_a["family_name"], props_a["given_names"]),
+            _person_write(node_b_id, props_b["family_name"], props_b["given_names"]),
+        ],
+        tx,
+    )
+    await graph.commit_transaction(tx)
+    node_a = await graph.get_node(node_a_id, PRINCIPAL)
+    node_b = await graph.get_node(node_b_id, PRINCIPAL)
+    assert node_a is not None
+    assert node_b is not None
+
+    candidates = resolve_entity_type([node_a, node_b], person_type)
+    assert len(candidates) == 1, "the pair must be one blocking-rule candidate, not zero or many"
+    score = candidates[0].score
+    assert THRESHOLD_BALANCED <= score < THRESHOLD_STRICT, (
+        f"B9/B10's own pair scored {score}, outside (Balanced, Strict) — the band the row's own "
+        "assertions require; a pair outside this band makes both rows vacuous, per this helper's "
+        "own docstring."
+    )
+
+    tx = await graph.begin_transaction()
+    await write_same_as_edges(
+        graph,
+        candidates,
+        {node_a_id: node_a, node_b_id: node_b},
+        created_by="resolve-service",
+        tx=tx,
+        scheme=scheme,
+    )
+    await graph.commit_transaction(tx)
+    cluster_id = min(node_a_id, node_b_id)
+    return node_a_id, node_b_id, cluster_id, score
+
+
 async def _write_seizure_device_legs(graph: GraphArcadeDBAdapter) -> dict[str, str]:
     """B15: the handset/SIM (IMSI) legs the seizure-record fixture describes — no device-
     extraction connector or recipe exists (this module's own docstring, point 3), so these are
@@ -628,8 +705,17 @@ def test_phase8_exit_criterion_end_to_end(
             cohort_2_person_ids, handle_id = await _seed_handle_cohort(graph, prefix="c2")
 
             # B8/B11: Endpoint carries no resolution config (this module's own docstring, point
-            # 2) — the handle-to-endpoint link is a manual assertion, score 1.0, provenance
-            # asserted, exactly B11's own shape, standing in for B8's unbuildable literal claim.
+            # 2) — the handle-to-endpoint link is a deterministic, asserted SAME_AS at score 1.0
+            # (ADR-024's own pattern), exactly B11's own shape — the corrected B8 disposition
+            # (`docs/08_ACCEPTANCE_SCENARIOS.md`) says this is what the edge actually is, not a
+            # stand-in for something else.
+
+            # B9/B10: the real Person pair — see this file's own helper docstring for why neither
+            # cohort above can serve this, and why this pair is provably the same generator's own
+            # output.
+            b9_a_id, b9_b_id, b9_cluster_id, b9_score = await _seed_and_resolve_b9_b10_person_pair(
+                graph, scheme=load_uk_le_scheme()
+            )
 
             # B15: the seizure record's device/SIM legs.
             seizure_ids = await _write_seizure_device_legs(graph)
@@ -638,6 +724,10 @@ def test_phase8_exit_criterion_end_to_end(
                 "cohort_1_person_ids": cohort_1_person_ids,
                 "cohort_2_person_ids": cohort_2_person_ids,
                 "handle_id": handle_id,
+                "b9_a_id": b9_a_id,
+                "b9_b_id": b9_b_id,
+                "b9_cluster_id": b9_cluster_id,
+                "b9_score": b9_score,
                 **seizure_ids,
             }
         finally:
@@ -712,10 +802,12 @@ def test_phase8_exit_criterion_end_to_end(
         expanded_2_node_ids = {n["id"] for n in expand_b7.json()["delta"]["nodes"]}
         assert b_graph["handle_id"] in expanded_2_node_ids
 
-        # === B8/B11: a manual SAME_AS, score 1.0, provenance asserted, attributed to the analyst
-        # === — standing in for B8's own unbuildable literal claim (this module's own docstring,
-        # === point 2), and B11's own literal shape. `manual_link` requires both nodes already be
-        # === members of this investigation's own working set.
+        # === B8/B11: a deterministic, asserted SAME_AS at score 1.0 (ADR-024's own pattern for
+        # === identifier systems with no lexical overlap) — B11's own literal shape, and, per the
+        # === corrected B8 disposition (`docs/08_ACCEPTANCE_SCENARIOS.md`), what B8's own edge
+        # === actually is, not a stand-in for a Splink score it was never going to have.
+        # === `manual_link` requires both nodes already be members of this investigation's own
+        # === working set.
         handle_node = asyncio.run(_fetch(b_graph["handle_id"]))
         b_party_node = asyncio.run(_fetch(cdr_ids["b_party_endpoint_id"]))
         seed_b11 = client.post(
@@ -732,27 +824,59 @@ def test_phase8_exit_criterion_end_to_end(
         )
         assert link_b11.status_code == 200, link_b11.text
         assert link_b11.json()["merged"] == 1
-        cluster_id = min(b_graph["handle_id"], cdr_ids["b_party_endpoint_id"])
 
-        # === B9: move the threshold — Strict to Balanced. A manual assertion is threshold-
-        # === independent (`test_phase6a_glass_surfaces.py`'s own B9 docstring has the full
-        # === reasoning for why this specific call reports a truthfully empty change).
-        threshold_b9 = client.put(
+        # === B9/B10: the real `Person` pair (`_seed_and_resolve_b9_b10_person_pair`'s own
+        # === docstring has the full reasoning for why B8's own pair cannot serve this and why
+        # === this one provably can — its live score is asserted in-band there, not assumed here).
+        # === Seed, then set Strict first: the row's own words are "move... from Strict to
+        # === Balanced," which only demonstrates anything if Strict is shown not to merge it.
+        b9_node_a = asyncio.run(_fetch(b_graph["b9_a_id"]))
+        b9_node_b = asyncio.run(_fetch(b_graph["b9_b_id"]))
+        seed_b9 = client.post(
+            f"/v1/investigations/{inv_b_id}/seed",
+            headers=headers,
+            json={"nodes": [b9_node_a, b9_node_b], "edges": []},
+        )
+        assert seed_b9.status_code == 200, seed_b9.text
+
+        strict_b9 = client.put(
             f"/v1/investigations/{inv_b_id}/resolution/threshold",
             headers=headers,
-            json={"threshold": 0.95},
+            json={"threshold": THRESHOLD_STRICT},
         )
-        assert threshold_b9.status_code == 200, threshold_b9.text
+        assert strict_b9.status_code == 200, strict_b9.text
+        assert strict_b9.json()["merged"] == 0, (
+            f"the pair scored {b_graph['b9_score']}, below Strict ({THRESHOLD_STRICT}) by "
+            "construction — Strict must not merge it, or B9's own threshold move proves nothing"
+        )
 
-        # === B10: explain the merged cluster — per-comparison weights, and the "Asserted by
-        # === analyst" basis, driven by a real field.
+        balanced_b9 = client.put(
+            f"/v1/investigations/{inv_b_id}/resolution/threshold",
+            headers=headers,
+            json={"threshold": THRESHOLD_BALANCED},
+        )
+        assert balanced_b9.status_code == 200, balanced_b9.text
+        assert balanced_b9.json()["merged"] == 1
+        assert balanced_b9.json()["affected"] == 2
+
+        # === B10: explain the merged cluster — real per-comparison match weights, not just the
+        # === total score, and `manually_asserted: false` — the one signal that distinguishes a
+        # === genuine Splink match from B8/B11's own asserted one at the same layer.
         explain_b10 = client.get(
-            f"/v1/investigations/{inv_b_id}/resolution/explain/{cluster_id}", headers=headers
+            f"/v1/investigations/{inv_b_id}/resolution/explain/{b_graph['b9_cluster_id']}",
+            headers=headers,
         )
         assert explain_b10.status_code == 200, explain_b10.text
         (pair,) = explain_b10.json()["pairs"]
-        assert pair["manually_asserted"] is True
-        assert pair["score"] == 1.0
+        assert pair["manually_asserted"] is False
+        assert pair["comparison_vector"], (
+            "explain must show per-comparison weights, not just the total"
+        )
+        assert THRESHOLD_BALANCED <= pair["score"] < THRESHOLD_STRICT
+        assert pair["score"] == pytest.approx(b_graph["b9_score"]), (
+            "explain's own score must be the same value the seeding helper measured and asserted "
+            "was in-band, not a different computation"
+        )
 
         # === B12: add the endpoint to a hotlist. A fresh identifier each run, not the seizure
         # === fixture's own literal frozen `SIM_B_MSISDN_RAW` — `_fresh_uk_msisdn_raw`'s own
