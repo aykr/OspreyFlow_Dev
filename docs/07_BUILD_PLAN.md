@@ -3817,16 +3817,22 @@ Two different kinds of thing inside that scope, with two different real risks:
   volume mount, no `--config`/`--file` flag pointing into `docs/`. This is exactly what
   `scripts/doc_citations_check.py` (ADR-031, above) exists to rewrite and then gate; the checker
   running clean, pre- and post-move, already covers this half.
-- **A real, functional, compile-time dependency the six deliverables above do not name:** twelve
-  real source files import `docs/design/tokens.css` directly — every Playwright harness under
-  `apps/workspace/{export-capture,map-verify,perf,a11y,keyboard}/` **and `apps/workspace/src/
-  main.tsx` itself, the Glass's own real entry point.** `doc_citations_check.py`, as ADR-031
-  describes it, checks that a *cited* path resolves — whether it also validates a TypeScript
-  `import` statement's own path, as opposed to a docstring/comment citation, is not established
-  anywhere in ADR-031's own text and should not be assumed; if it does not, the closing-pass test
-  above would still catch a broken import indirectly (the Glass fails to build), but only after
-  the fact, not as a named, pre-move check the way citation drift already is. **Named here so it
-  is not discovered on the day**, per this entry's own instruction — not fixed or re-scoped here.
+- **A real, functional, compile-time dependency the six deliverables above do not name —
+  generalised, 23 September 2026, into `06_DECISIONS.md` ADR-034's own new B8 deliverable, not
+  left as a single instance.** Thirteen real source files depend on `docs/design/tokens.css`
+  directly (twelve TypeScript `import`s, including `apps/workspace/src/main.tsx` itself, the
+  Glass's own real entry point, plus one `readFileSync` in `apps/workspace/src/color/
+  tokens.test.ts`) — checked, not assumed, to be the *only* file under `docs/` with this shape of
+  dependency; every other `docs/`-reading code path (`scripts/route_coverage_check.py`/
+  `domain_model_coverage_check.py`/`demo_guide_check.py`, reading spec prose to check it against
+  real code) reads files already destined for `spec/` or root, from `scripts/`, which does not
+  move — a within-repository dependency ADR-031's own "one repository, two top-level directories"
+  reasoning already covers, needing a path rewrite, not a reclassification. `tokens.css` is
+  different in kind: the product cannot build without it, which by this session's own stated
+  principle ("a file the product links against is product source regardless of which directory it
+  sits in") means it moves with the product tree, not into `spec/design/` alongside
+  `OspreyFlow_Brand_Foundations.html` (which nothing code-links and stays there). ADR-034 §B8 has
+  the full table and reasoning; not built here — the move itself is Trigger A's own work.
 
 **Recorded, not decided: per-file Apache 2.0 headers across the product tree — an open item for the
 owner, the same "not made here" treatment ADR-034 §B6 already gives DCO-vs-CLA.** Nothing in

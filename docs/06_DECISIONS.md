@@ -2812,6 +2812,60 @@ Apache 2.0 headers are a distinct, still-open question for the owner, the same "
 treatment §B6 already gives DCO-vs-CLA — recorded in the same `07_BUILD_PLAN.md` entry, not answered
 by this addendum.
 
+### B8 — The split cannot be decided by directory name alone: what the product actually reads
+
+**Found 23 September 2026, generalising a single instance (`docs/design/tokens.css`) that
+Trigger A's own exit criterion (`07_BUILD_PLAN.md`, above) had already named.** Every file under
+`docs/` that any code path actually reads or imports, at build time or run time, checked directly
+— `grep` for `import`/`open`/`Path`-construction patterns combined with a `docs/` path, across
+every `.py`/`.ts`/`.tsx` file in the repository, not assumed from directory structure:
+
+| File | Real consumer(s) | Mechanism |
+| --- | --- | --- |
+| `docs/design/tokens.css` | 12 real source files under `apps/workspace/{export-capture,map-verify,perf,a11y,keyboard}/` and, critically, `apps/workspace/src/main.tsx` — the Glass's own real entry point; plus `apps/workspace/src/color/tokens.test.ts` | TypeScript `import` (compile-time, 12) + `readFileSync` (run-time, 1) |
+| `docs/00_ARCHITECTURE.md`, `02_GLASS_FRONTEND.md`, `04_VAULT_BACKEND.md`, `05_DEPLOYMENT.md`, `08_ACCEPTANCE_SCENARIOS.md`, `09_INGEST_STUDIO.md` | `scripts/route_coverage_check.py`'s own `APACHE_DOC_PATHS` | `Path.read_text()` |
+| `docs/01_DOMAIN_MODEL.md` | `scripts/route_coverage_check.py` (via `APACHE_DOC_PATHS`) and `scripts/domain_model_coverage_check.py` (its own dedicated `DOC_PATH`) | `Path.read_text()` |
+| `docs/03_CONDUIT_MIDDLEWARE.md` | `scripts/route_coverage_check.py`, both via `APACHE_DOC_PATHS` and its own dedicated `DOC_PATH` (route-table extraction) | `Path.read_text()` |
+| `docs/DEMO_GUIDE.md` | `scripts/route_coverage_check.py` (via `APACHE_DOC_PATHS`) and `scripts/demo_guide_check.py` (its own dedicated `DEMO_GUIDE_PATH`) | `Path.read_text()` |
+| `docs/README.md` | `scripts/route_coverage_check.py` (via `APACHE_DOC_PATHS`) | `Path.read_text()` |
+| `docs/06_DECISIONS.md`, `07_BUILD_PLAN.md`, `docs/design/OspreyFlow_Brand_Foundations.html`, everything under `docs/archive/`, `SESSION_HANDOVER.md`, `NEXT_STEPS_PHASE7.md`, `DESIGN_PROVENANCE.md` | **None found** | — |
+
+**Two different relationships, not one, and the split follows the relationship, not the file
+extension or the current directory.**
+
+- **`scripts/route_coverage_check.py`/`domain_model_coverage_check.py`/`demo_guide_check.py`
+  reading spec prose to check it against real code (a drift gate) is not the case this session's
+  own instruction names.** Every file these three scripts read is already destined for `spec/` or
+  the repository root under ADR-031's own existing target layout — `scripts/` itself is not named
+  in that layout and does not move (`07_BUILD_PLAN.md`'s own Trigger-A exit-criterion entry has
+  the full check). Both sides of this dependency move together, inside the same repository,
+  exactly the shape ADR-031's own "one repository, two top-level directories" reasoning already
+  covers — this needs the path strings rewritten (`docs/` → `spec/` or root), the same mechanical
+  pass every other citation gets, not a reclassification.
+- **`docs/design/tokens.css` is a different relationship in kind, not only in count.** The Glass
+  does not check this file for drift against something else — it **cannot build or render without
+  it**: `main.tsx`, the application's own real entry point, imports it directly, and a build with
+  the import unresolved fails outright. **Per this session's own principle, stated plainly: a file
+  the product links against to function is product source, regardless of which directory it
+  currently sits in.** ADR-031's own target layout currently places `design/` (`tokens.css`, brand
+  foundations) inside `spec/` — correct for `OspreyFlow_Brand_Foundations.html`, which nothing
+  code-linked touches, but **not correct for `tokens.css` by this same principle, and this ADR's
+  own text should not be read as having settled that question already.** `06_DECISIONS.md` ADR-032
+  and `02_GLASS_FRONTEND.md` both already treat `tokens.css` as the authoritative source of the
+  Glass's own design tokens, not as prose about them — the file is closer in kind to
+  `packages/schemas/domain.py` (authoritative, code-linked, not merely descriptive) than to
+  `01_DOMAIN_MODEL.md` (describes the schema; does not run as it).
+
+**Decision, owned by Trigger A, not made here as a side effect of finding it:** `docs/design/
+tokens.css` moves with the product tree (a real candidate location: `apps/workspace/src/design/
+tokens.css`, updating all thirteen real consumers' own paths in the same pass, mechanically
+verified by the link-integrity gate below), not into `spec/design/` alongside
+`OspreyFlow_Brand_Foundations.html`, which stays exactly where ADR-031 already puts it. **This is
+Trigger A's own seventh deliverable: the product tree must contain everything the product actually
+reads, and this split cannot be decided by which top-level directory a file happens to sit in
+today.** Not built here — the physical move waits for Trigger A, per this document's own standing
+instruction that a rewrite against a structure that has not happened yet drifts before it lands.
+
 ---
 
 ## ADR-035 — Demo distribution classes (`shipped`/`internal`), fail-closed and enforced at packaging time; Fixture Corp (R24) is the shippable demo; Enron and VAST stay internal, one of them narrower than requested
