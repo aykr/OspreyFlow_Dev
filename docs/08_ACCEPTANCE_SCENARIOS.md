@@ -182,9 +182,11 @@ Run against both scenarios, on both the `local-lite` and `cluster` profiles.
 | Results are identical on both profiles, allowing only floating-point tolerance on iterative metrics | Transportability |
 | Disconnecting the network mid-scenario on `local-lite` changes nothing | Air-gap capability is a claim that must be tested |
 
-**The two rows above are not part of V1 END TO END — owner's explicit decision, 23 September
-2026.** `07_BUILD_PLAN.md`'s own milestone is a `local-lite`-only, clean-laptop install-and-demo;
-neither row is exercised by that milestone, and both remain real, standing claims for this
-document to prove once their own owning work exists. Profile-parity testing's home is Phase 8a
-(the `cluster` profile); network-partition resilience has no owning phase yet — both entries, with
-the full reasoning, are in `07_BUILD_PLAN.md`'s "Out of scope for v1" list, not deleted from here.
+**The two rows above are not part of V1 END TO END — recorded here by the checker, pending the
+owner's own confirmation, 23 September 2026.** The owner defined `07_BUILD_PLAN.md`'s own milestone
+as a `local-lite`-only, clean-laptop install-and-demo; neither row is exercised by that milestone
+as a consequence of that definition — this document does not claim the owner separately stated a
+view on these two rows in these terms. Both remain real, standing claims for this document to prove
+once their own owning work exists. Profile-parity testing's home is Phase 8a (the `cluster`
+profile); network-partition resilience has no owning phase yet — both entries, with the full
+reasoning, are in `07_BUILD_PLAN.md`'s "Out of scope for v1" list, not deleted from here.
