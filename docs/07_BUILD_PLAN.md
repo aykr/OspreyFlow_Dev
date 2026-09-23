@@ -1,5 +1,52 @@
 # 07 — Build Plan
 
+## Standing status summary
+
+**Kept current at the end of every stage and at every phase close (below, "phase-close
+procedure") — a map, not a substitute for the detail below it. A stale summary is worse than
+none, because it is what gets read.**
+
+**The milestone, in one sentence.** V1 END TO END = the product can be installed on a clean
+laptop from the documentation, started, and demonstrated (both acceptance scenarios passing on
+`local-lite` is one component of that, not the whole of it).
+
+**Complete, by stage:**
+- Stage 4 (4-spec, 4a–4h) — the product-feature core. Built.
+- Stage 1 — principal resolution (OAuth2 Token Exchange, ADR-043). Built; delivered, not
+  milestone-gated.
+- Stage 2a — ArcadeDB stability. Closed; the 10GiB VM floor resolved causes one through four,
+  cause five reduced to the same mechanism, the criterion re-pointed to a clean install.
+- `Makefile`/`ci.yml` reconciliation (pulled forward from Stage 6). Built.
+- `PathStaleError` and the server-side traversal budget (pulled forward from Stage 5). Built.
+
+**Remains before the milestone, numbered, with a word on size:**
+1. **The harness/packaging pipeline** — large, green-field: no packaging step, `backup`/`restore`,
+   scripted golden-path deploy, setup screens or Preflight exist anywhere in this repository yet.
+2. **The documentation refresh** — moderate: the three drift gates (`domain-model-coverage-check`,
+   `route-coverage-check`, `demo-guide-check`) exist and run; the content that empties their own
+   allowlists does not exist yet.
+
+**Remains after the milestone:**
+- **Structural** (real design work, not a known shape yet): Phase 8a (`cluster` profile,
+  `graph_janusgraph`/`analytics_clickhouse`, ComputePort Tier 3); ADR-025's own second trigger,
+  "manual resolve now," never built; the sustained-load memory/query-latency characterisation
+  (`05_DEPLOYMENT.md` §8); Scenario B's own missing close-but-not-exact `Person`-pair fixture
+  (B9/B10); Trigger A, the restructure (a real, one-time move, now with its own reinstall-and-rerun
+  exit criterion); Trigger B, publication (owner-gated, no date).
+- **Bounded** (already-scoped, a known fix shape from the finding that disclosed it): the rest of
+  Stage 5 (the node-state-channel item, the reusable `limit_exceeded` component, node size by
+  metric); Stage 6 (test-infrastructure/CI hygiene, itemised); export mark signing (item 7); the
+  `_weigh_edge` quadratic-ingest-cost defect; "Legacy disclosures"'s own relocation into wherever
+  each entry's stated disposition names (assigned to Stage 3).
+
+**Outside the build entirely: `docs/PRODUCT_DELIVERY.md`** — the alpha gate, demo distribution
+classes, tester/alpha/beta material, and Trigger B's own downstream distribution questions. Not a
+build step, a stage, or a precondition of anything above; a different question, answered there.
+
+**Last updated:** 23 September 2026.
+
+---
+
 Nine phases. Each has a single demonstrable outcome and an exit criterion that is a test, not a
 judgement. Do not start a phase until the previous one's exit criterion is green in CI.
 
@@ -1402,21 +1449,34 @@ before this phase's Session 5 (schemas and the `ComputePort` conformance suite) 
 against a graph topology about to change.
 
 **Read precisely, not assumed from the sentence above, a second time: "B12/B13/B14/B20 pass end to
-end" is not the same claim for every principal who could set a hotlist or a monitor.** The pattern
-this document's own standing rule 12 names — a gate proving less than its name implies — applies to
-this exit criterion itself, not only to a test file, and is recorded here rather than only in
-`06_DECISIONS.md` ADR-036's own amendment. What actually passes: the walkthrough
+end" was not the same claim for every principal who could set a hotlist or a monitor — corrected,
+23 September 2026, now that it no longer holds.** The pattern this document's own standing rule 12
+names — a gate proving less than its name implies — applied to this exit criterion itself when it
+was written, not only to a test file, and was recorded here rather than only in `06_DECISIONS.md`
+ADR-036's own amendment. At the time: what passed was the walkthrough
 `08_ACCEPTANCE_SCENARIOS.md` narrates, where the analyst who sets the hotlist/monitor in B12/B20 is
-the same analyst whose later action in B13/B20 triggers it — `owner_id == requester` holds by
-construction, because it is one continuous session. What does not pass, and is not exercised by
-this exit criterion at all: a hotlist or monitor firing from a *different* analyst's later ingest —
-the operational case B13's own CoLP framing is actually modelled on ("a warrant seizure logged by a
-unit other than the one that set the original hotlist entry"), which is precisely the case this
-document's own acceptance scenario does not test, because ADR-036's amendment (`06_DECISIONS.md`)
-means the built system does not yet handle it. "Scenario B passes end to end" is therefore true of
-the walkthrough as written and not a claim that hotlists/monitors work operationally across
-analysts — that remains Phase 8's own scope, alongside the principal-directory dependency the
-amendment names. B15's own "Platform capability" column
+the same analyst whose later action in B13/B20 triggers it — `owner_id == requester` by
+construction, one continuous session; a hotlist or monitor firing from a *different* analyst's
+later ingest — the operational case B13's own CoLP framing is actually modelled on ("a warrant
+seizure logged by a unit other than the one that set the original hotlist entry") — was not
+exercised at all, because ADR-036's amendment meant the built system did not yet handle it.
+
+**Superseded by Stage 1 (principal resolution, built 22 September 2026, `06_DECISIONS.md`
+ADR-043) — this is no longer the state of the system, checked directly, not assumed stale.**
+`test_phase7_stage6c_watch_routes.py::test_a_hotlist_owned_by_one_analyst_fires_from_a_different_
+analysts_own_ingest` proves the exact cross-analyst case this passage once said was untested: a
+hotlist owned by one analyst fires from a genuinely different analyst's own ingest, through the
+real route-level `principal_resolver` wiring, not a same-session artefact. **"Scenario B passes end
+to end" now is a claim that hotlists/monitors work operationally across analysts, for the
+*ingest*-triggered path (ADR-025's own trigger 1, "post-ingest hook") B13/B20 both use.**
+
+**What remains genuinely unsupported, and is a different gap from the one just closed: ADR-025's
+own second trigger, "manual 'resolve now,'" was never built — recorded there only as "a small,
+analyst-facing route mirroring `submit_supersede_node`'s own sync-vs-job split," still a proposal,
+not code.** Resolution triggered by an analyst directly (as opposed to resolution's own downstream
+alerting being triggered by a new ingest event) has no route, no job, no test — a genuinely
+different mechanism from the cross-analyst principal question Stage 1 closed, not a residue of it.
+Owning phase: Phase 8, alongside ADR-025's own remaining design. B15's own "Platform capability" column
 (`08_ACCEPTANCE_SCENARIOS.md`) names "Endpoint model," not "Pathfinder" — the traversal it
 re-verifies is a direct `GraphPort.expand`-shaped one over the corrected ontology, not a `POST
 /v1/paths` call. The sentence above names the pathfinder only as *why the phase orders ADR-023
@@ -3994,6 +4054,15 @@ author checks every entry that phase's own work resolved and removes it here —
 applied here to a claim of absence — so a closed finding does not sit here inflating a future
 phase's own inventory the way the two stale entries above did for weeks before this sweep found
 them.
+
+**A second standing step, added 23 September 2026, alongside the gap sweep above — the standing
+status summary at the top of this document is updated at the end of every stage, not only at every
+phase close.** A stage closing or a genuine finding landing (a new "before"/"after" item, a stage
+moving from one bucket to another, a structural item turning out to be bounded or vice versa) is
+exactly the moment the summary drifts from the detail below it if nothing touches it — checking it
+at phase-close alone leaves it stale for however many stages closed inside that phase, which for
+Phase 8 alone has already been several. The same discipline as the gap sweep: this document's own
+author updates the summary as part of closing the stage, not as a separate pass remembered later.
 
 **A rule added to the convention itself, 22 September 2026, not only a fix to two instances of
 its absence: a disclosure naming no real owning phase or stage is a note, not a disclosure.**

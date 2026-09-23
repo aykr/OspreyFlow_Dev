@@ -57,9 +57,13 @@ nothing: the gate could pass every check and still hand nobody a file. **This is
 instance of the same pattern this document's own standing rule 12 names — a gate proving less
 than its name implies — found at the acceptance-scenario level, not only in a test file.** The
 first was Scenario B's own "B12/B13/B14/B20 pass end to end," which `07_BUILD_PLAN.md`'s Phase 7
-entry found true of the single-session walkthrough as written and not a claim that hotlists and
-monitors fire across different analysts — the operational case B13's own CoLP framing is actually
-modelled on. Both instances share the same shape: an acceptance row whose literal wording is
+entry originally found true only of the single-session walkthrough as written, not a claim that
+hotlists and monitors fire across different analysts — the operational case B13's own CoLP framing
+is actually modelled on. **That finding no longer holds — superseded by Stage 1 (principal
+resolution, `06_DECISIONS.md` ADR-043), proven by `test_a_hotlist_owned_by_one_analyst_fires_
+from_a_different_analysts_own_ingest` (`07_BUILD_PLAN.md` has the full record) — cited here as the
+historical example the pattern was first found from, not as a still-open gap.** Both instances
+share the same shape: an acceptance row whose literal wording is
 narrower than what a reader assumes it proves, discovered only by checking the row against the
 system's real behaviour rather than against its own passing test. A15's own assertion now says
 what it means: the artefact must exist, in the requested shape, carrying the mark — not only that
