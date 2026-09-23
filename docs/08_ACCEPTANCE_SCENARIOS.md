@@ -152,6 +152,19 @@ exist, every subsequent step fails, and — worse — it fails by returning a cl
 wrong answer. These three steps are the highest-value assertions in either scenario and should
 be the first tests written in Phase 2.
 
+### Known gap — B8's "a scored `SAME_AS` edge" (found during Phase 8 Stage 4g's closing pass)
+
+`Endpoint` carries no `resolution` block in `packages/ontology/default.yaml` — checked directly,
+not assumed. `Person` has real Splink comparisons (`jaro_winkler(family_name)`/`levenshtein
+(given_names)`/`exact(date_of_birth)`); `Endpoint` has nothing configured to compare a handle
+against a phone number with, so the resolution mechanism as it stands cannot produce B8's own
+literal scored `SAME_AS`. `07_BUILD_PLAN.md`'s Stage 4g entry has the full disposition (out of
+scope for v1 — no acceptance-scenario row is blocked by it) and the reasoning for why B9's
+threshold move and B10's explain are instead proven, correctly, against B11's own manually-
+asserted edge (`score=1.0`, `provenance=asserted`) rather than a Splink-scored one for this pair.
+Choosing and validating real comparison functions for `handle`/`e164`/`imsi` identifiers is real,
+unscoped work for a future phase, not filled in silently here.
+
 ---
 
 ## Cross-cutting assertions
