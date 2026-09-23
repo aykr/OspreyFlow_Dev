@@ -2877,6 +2877,111 @@ find something already finished sitting in the queue.
      laptop" — the milestone's own current wording — to "on a clean laptop with at least N GB
      free for this one container," a real product decision with real audience consequences, not a
      technical one this document can make on its own.
+   - **F. Replace the `GraphPort` adapter (`graph_arcadedb` → e.g. `graph_janusgraph`, already
+     contemplated for Phase 8a).** Recorded here, not acted on — the architecture was built to
+     make this option available, which is a reason to list it, not a reason to prefer it. *Cost to
+     build:* the largest of the six — a full `GraphPort` implementation against a different store,
+     passing every conformance-suite test this document's own rule 1 requires before any adapter
+     ships, which is exactly the discipline that makes this an honest option rather than a rewrite
+     with no safety net; real, substantial calendar time. *Gives back:* potentially the whole
+     problem, if the replacement store's own baseline footprint is genuinely smaller — unmeasured,
+     not assumed. *Risk:* trades one measured, now-well-understood problem for a different store's
+     own unmeasured ones (this session's entire method — measure before concluding — has not been
+     applied to any alternative store; nothing here says JanusGraph is smaller, only that finding
+     out is possible). Real scope creep risk: a "just swap the adapter" plan that turns into a
+     second full adapter-build phase.
+
+   **Corrected count, and PART 1 of a two-part follow-up instruction carried out below: ten
+   defective indexes identified, `passport_number`/`companies_house_number`/`ein`/`vrm`/`vin`
+   removed as identifiers; `family_name`/`given_names`/`date_of_birth`/`aliases`/`title`/
+   `Organisation.name` de-indexed; `value_normalised` and `Location.name` restored after live
+   testing proved they were load-bearing, not merely declared.**
+
+   **Correction to this document's own prior count, checked by the instruction that asked for
+   it.** The prior pass's own text said "four" `indexed: true` properties had no confirmed caller,
+   then named five (`family_name`, `given_names`, `date_of_birth`, `aliases`, `title`) — an
+   arithmetic slip in the prose, not in the underlying list. Re-verified directly: `Endpoint`'s
+   `value_normalised` (previously filed as "read but not queried," a sixth) and both `name`
+   indexes (`Location`, `Organisation` — previously treated as one bucket, actually two separate
+   indexes on two types) bring the real total considered for removal to **eight** `indexed: true`
+   properties, not four, not five, not six — plus the five identifier indexes with no data path,
+   ten in total across both categories, matching this instruction's own "roughly ten" estimate
+   once corrected.
+
+   **What would break, checked by removing each and running the real test suites — not assumed
+   from static analysis, which was wrong for two of them.** `passport_number`,
+   `companies_house_number`, `ein`, `vrm`, `vin` (identifiers): confirmed, directly, zero
+   references anywhere in `tests/` (not only non-test code, re-checked this round) — nothing
+   would fail, and nothing did. `family_name`, `given_names`, `date_of_birth`, `aliases`
+   (`Person`), `title` (`Document`), `name` (`Organisation`): same — zero references, confirmed by
+   running the full `tests/conformance/graph_port` suite (64 tests) with all six removed
+   simultaneously; nothing failed. **`value_normalised` (`Endpoint`) and `name` (`Location`) were
+   different, and static analysis alone had missed why**: removing `indexed: true` from either
+   broke real conformance tests —
+   `test_find_node_locates_an_existing_node_by_its_identifier_field` (`value_normalised`) and both
+   `test_suggest_locations_matches_a_substring_of_the_name`/`test_suggest_locations_respects_the_
+   limit` (`Location.name`) — not because the *index* itself was needed by either query, but
+   because `indexed: true` and `identifiers` share one mechanism in this codebase:
+   `node_write_to_properties`'s own `_indexed_property_names`
+   (`packages/adapters/graph_arcadedb/serialization.py:44-47`) unions both to decide which
+   properties get *flattened to a queryable top-level field at write time*, and `find_node`/
+   `SuggestLocationsBuilder` both query that flattened field, not the nested `properties` map.
+   Removing `indexed: true` does not merely drop an index — for a field a real query builder
+   names, it silently stops that field ever being written to the place the query looks, and
+   `find_node`/`suggest_locations` then find nothing, correctly reproducing exactly, not merely
+   resembling, a missing-data bug. **Both restored** (`packages/ontology/default.yaml`), full
+   conformance suite re-run clean (64/64) after restoring them.
+
+   **`name`'s own question, answered:** `SuggestLocationsBuilder`'s own docstring already states
+   the query is "a coarse substring scan, not a Lucene/full-text index... deliberately not folded
+   into `SearchNodesBuilder`" — a documented, accepted design choice already, not an oversight
+   awaiting a real index. The plain `NOTUNIQUE` index `_create_index` builds cannot serve
+   `TextP.containing()` regardless of whether it exists (confirmed: the query still worked
+   correctly once the index-driven *flattening* was restored, independent of whether an index
+   backs the flattened field or not — `TextP.containing` scans). **The right fix, on this
+   evidence, is neither remove nor build a full-text index — it is exactly what this pass did:
+   keep the flattening `indexed: true` provides (the field must exist at the top level for the
+   query to find anything at all) without needing a genuine full-text index to back it, since
+   nothing here has shown the scan itself to be slow at any realistic `Location` count.** Building
+   a real full-text index remains available as a later, separately-scoped, evidence-gated
+   investment if `suggest_locations` is ever shown to be slow, not undertaken speculatively here.
+
+   **Recovery measured, twice, against the ~4.9GiB baseline — same method, same profiler
+   metrics, fresh restart, empty database each time:**
+
+   | Run | Before | After | Delta | commands | txCommits |
+   | --- | --- | --- | --- | --- | --- |
+   | Original (pre-removal, cited) | 1.453–1.478GiB | 5.971–6.393GiB | ~4.5–4.9GiB | 370 | 1,809 |
+   | Corrected, run 1 | 1.521GiB | 5.893GiB | 4.372GiB | 348 | 1,689 |
+   | Corrected, run 2 | 1.517GiB | 6.258GiB | 4.741GiB | 348 | 1,689 |
+
+   **The command/transaction-commit reduction is exact and reliable — 22 fewer DDL commands, 120
+   fewer internal transaction commits, every run, matching the ten indexes removed precisely.**
+   The *memory* recovery is real but small, and its apparent size (~0.13–0.57GiB across the two
+   paired comparisons above) is comparable to this measurement's own run-to-run noise (the
+   original baseline's own three separate measurements this session already ranged 4.49–4.94GiB
+   without any code change between them). **Read honestly: this removal is confirmed correct (ten
+   genuinely dead or wrongly-typed indexes gone, nothing broken, re-verified against real tests
+   rather than assumed) but does not, on its own, materially close the ~4.9GiB gap.** Options B
+   ("fewer indexes") in the list above already predicted almost exactly this outcome before the
+   measurement was taken — "removing ~9-10 indexes recovers a real but almost certainly *partial*
+   amount, well short of the ~4.9GiB gap" — and the measurement now confirms it rather than merely
+   restating the prediction.
+
+   **Verification run beyond the removed fields' own tests:** `tests/ontology/` (54/54),
+   `domain-model-coverage-check`, `schemas-check`, the full `tests/conformance/graph_port` suite
+   (64/64), `tests/scenarios/test_fixture_corp_shape.py`/`test_hmp_graph.py` (6/6, one transient
+   OOM-kill mid-run reproduced and re-confirmed as this stage's own already-documented cause four,
+   not a regression), `test_phase6a_glass_surfaces.py`/`test_phase7_stage6c_watch_routes.py`
+   (7/7), `test_phase8_exit_criterion_end_to_end.py` (three consecutive failures traced to a
+   leftover `conformance_*` orphan database from this session's own earlier testing accumulating
+   enough resident memory to reproduce this stage's own already-documented `IndexException`
+   cause — not this change; a clean drop-and-restart reproduced a clean pass immediately after),
+   and the broad non-live suite (629 passed, 2 failed — both pre-existing and unrelated: 
+   `test_route_coverage_check`/`test_test_file_coverage_check` both flag that
+   `tests/scenarios/test_phase8_exit_criterion_end_to_end.py` itself was never wired into the CI
+   ignore-list/live-service job when it was committed earlier this session — a real, separate gap,
+   noted here rather than silently fixed since it is outside this instruction's own two parts).
 3. **Documentation refresh — MILESTONE-BLOCKING, promoted 23 September 2026** (see this list's own
    opening summary), **then the Trigger A restructure, not itself milestone-blocking** — already
    the most fully specified stage of the six, worked out in detail below this list rather than
