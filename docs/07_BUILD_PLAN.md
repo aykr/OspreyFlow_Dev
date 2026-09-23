@@ -1692,9 +1692,14 @@ repeated in full here, so this summary stays a map, not a second copy:**
 2. **The harness / packaging pipeline** (previously "Stage 2," listed further down this same list,
    now tagged **MILESTONE-BLOCKING**) — an install needs something to install: the packaging step,
    the `backup`/`restore` cycle, the scripted golden-path deploy, the six setup screens, Preflight.
-3. **The documentation refresh** (previously "Stage 3," listed further down, now tagged
-   **MILESTONE-BLOCKING**) — an install needs instructions that actually work: every command in
-   every guide ADR-034 §B2 names, run clean on a fresh checkout.
+3. **The documentation refresh — split in two, 23 September 2026, sized honestly rather than left
+   as one undifferentiated block.** **3a (MILESTONE-BLOCKING): the installation and deployment
+   documentation, and `DEMO_GUIDE.md`** — an install needs instructions that actually work: every
+   command in each, run clean on a fresh checkout, producing the result the document claims. That
+   is the whole of this part. **3b (Trigger A's own scope, not milestone-blocking): publication
+   readiness** — the provenance rewrite (102 annotations), the `CLAUDE.md` citations (6 files), the
+   allowlists (four gates), and the README work already recorded — sized with real numbers, below
+   and at its own detailed entry, precisely so it is never read as proofreading.
 4. **Trigger A, the restructure** (`06_DECISIONS.md` ADR-034 §B3) — follows the documentation
    refresh, as this document's own existing text already ordered it; its own detailed entry,
    further down this list, now carries its own exit criterion (added 23 September 2026), not
@@ -3318,29 +3323,85 @@ find something already finished sitting in the queue.
    recovering, memory climbing with every clean pass until the failure point. **The stage's own
    milestone-relevant question — does a clean install-and-demo run reliably — is answered yes, by
    measurement.**
-3. **Documentation refresh — MILESTONE-BLOCKING, promoted 23 September 2026** (see this list's own
-   opening summary), **then the Trigger A restructure, not itself milestone-blocking** — already
-   the most fully specified stage of the six, worked out in detail below this list rather than
-   duplicated here. **Not
-   wholly outstanding — the mechanical half is already built, the documentation-writing half is
-   not, and the two should not be read as one undifferentiated block of remaining work.** The three
-   drift gates (`domain-model-coverage-check`, `route-coverage-check`, `demo-guide-check`) exist and
-   run today; what remains is writing the content that empties their own allowlists, not building
-   the gates themselves. **Documentation + code (two coverage gates, the licence-check leg,
-   `doc_citations_check.py`) + two owner decisions** (per-file headers; commit-SHA citations in
-   published guides). **Also owns relocating
-   the 23 entries in "Legacy disclosures (dispositioned, relocation pending)" into wherever their
-   own stated disposition actually names** — assigned here rather than left implicit, since this
-   stage already rewrites this build plan's own structure and is the one stage with the obvious
-   reason to also do this; not a new obligation invented for this stage, the same document-hygiene
-   character as its licence/citation-check work. **Exit criterion, a test:** `tests/fixtures/
-   domain_model_coverage_allowlist.txt` and `tests/fixtures/route_coverage_allowlist.txt` are both
-   empty and deleted (`domain-model-coverage-check`/`route-coverage-check` passing against a
-   repository with no allowlist file to read is what "done" means, not a judgement that the docs
-   read well enough); every command in each of the 11 guides runs clean on a fresh checkout, per
-   this entry's own already-stated criterion above; **and "Legacy disclosures" itself is empty and
-   deleted** — the same "empty and deleted," not "empty and kept as a header," standard the two
-   allowlists already hold this stage to.
+3. **Documentation refresh — split in two, 23 September 2026, so "documentation refresh" is never
+   read as proofreading.** The two parts were previously one undifferentiated stage; they are
+   different work, with different owners of "done," and only one of them gates the milestone.
+
+   **3a — MILESTONE-BLOCKING: what an install needs.** The installation and deployment
+   documentation and `DEMO_GUIDE.md`, and nothing else — every command in each, executed on a
+   clean checkout, producing the result the document claims. Any command that does not is listed
+   with what actually happened, not silently skipped. **That is the whole of this part**: it exists
+   so someone can install and demo the product, not to make the prose read well. **Exit criterion,
+   a test:** every command in the installation/deployment guides and `DEMO_GUIDE.md` runs clean on
+   a fresh checkout; any that does not is a named finding with a real disposition, not a passing
+   check with an asterisk.
+
+   **3b — Trigger A's own scope, not milestone-blocking: what publication needs.** Scoped with the
+   numbers measured building `06_DECISIONS.md` ADR-034 §B9, so this is never read as a vague
+   "clean up the docs" line item:
+   - **102 provenance annotations** across the Apache-scoped specs ("Phase N"/"Stage N"/"found
+     during"/"found while" — `00_ARCHITECTURE.md` 7, `01_DOMAIN_MODEL.md` 28,
+     `02_GLASS_FRONTEND.md` 20, `03_CONDUIT_MIDDLEWARE.md` 7, `05_DEPLOYMENT.md` 2,
+     `08_ACCEPTANCE_SCENARIOS.md` 11, `09_INGEST_STUDIO.md` 8, `DEMO_GUIDE.md` 17, `README.md` 2).
+     **Method: rewritten, never deleted outright — each keeps its own reasoning and loses its own
+     coordinate.** "Found during Phase 6a Stage 4" becomes a description of what was actually being
+     built when the finding was made; "deferred to Phase 8" becomes "not yet implemented." **The
+     rule's own justification survives this rewrite; only the build-calendar coordinate does** — a
+     rule published without its own reason is a rule the next reader who finds it inconvenient can
+     repeal, which is the actual risk this method is written against, not tidiness.
+   - **6 files citing `CLAUDE.md` by name and rule number** (`01_DOMAIN_MODEL.md` ×2,
+     `02_GLASS_FRONTEND.md`, `09_INGEST_STUDIO.md` ×2, `DEMO_GUIDE.md` ×2). **Same method, stated
+     separately since it is a citation of a whole private file, not an annotation with a
+     coordinate to strip: state the rule the citation was standing in for, drop the reference to
+     `CLAUDE.md` itself.** A sentence reading "the access filter runs on every read (`CLAUDE.md`
+     rule 3)" becomes "the access filter runs on every read, never applied after retrieval" — the
+     rule stated in full, not cited by number from a file the reader will never have.
+   - **72 allowlisted link-integrity violations** (`tests/fixtures/product_tree_link_allowlist.txt`,
+     `scripts/product_tree_link_check.py`, ADR-034 §B9) — fixed by the same rewrite discipline
+     above wherever the reference is inside prose (most of them), or removed outright where it is
+     a bare citation with no surrounding reasoning to preserve.
+   - **The domain-model (10 entries) and route (49 entries) coverage allowlists** — writing the
+     content that empties them (the two gates already exist and run today; what is missing is the
+     documentation content itself, not the checking mechanism).
+   - **The README rewrites already recorded** (ADR-034 §B9's own classification table) — LINKS
+     PRIVATE references removed, PROVENANCE material removed, PUBLISHED DOCUMENTATION references
+     kept exactly as they are.
+
+     Also owns relocating every entry in "Legacy disclosures (dispositioned, relocation pending)"
+     — 25 as of this correction, checked directly rather than assumed still 23, the count that
+     section's own intro text records for a past sweep, not a live count — into wherever their own
+     stated disposition already names
+     — assigned here rather than left implicit, since this stage already rewrites this build
+     plan's own structure and is the one stage with the obvious reason to also do this.
+
+   **One file both parts touch, for different reasons — worth stating so the split is not read as
+   3a skipping it: `DEMO_GUIDE.md`.** 3a verifies its own commands actually work; 3b rewrites its
+   own prose (17 of the 102 provenance annotations, 2 of the 6 `CLAUDE.md` citations live there).
+   Neither part's own work substitutes for the other's.
+
+   **Exit criterion, 3b, a test:** all four allowlist-based gates
+   (`domain-model-coverage-check`, `route-coverage-check`, `product-tree-link-check`,
+   `test-file-coverage-check`) pass against a repository with no allowlist file to read, not merely
+   an allowlist with fewer entries — the same "empty and deleted," not "empty and kept as a
+   header," standard already applied elsewhere in this document; no provenance annotation and no
+   `CLAUDE.md` citation remains in any Apache-scoped document; and "Legacy disclosures" is itself
+   empty and deleted. **`test-file-coverage-check`'s own allowlist currently has no file at all
+   (already, trivially, empty) — checked directly, not assumed clean: the gate itself still fails
+   today, for a real, already-disclosed, unrelated reason** (`tests/scenarios/
+   test_phase8_exit_criterion_end_to_end.py` was never wired into the `test` job's ignore list or
+   a live-service job when it was committed — `07_BUILD_PLAN.md`'s own earlier entry has the
+   record). Closing this exit criterion's own fourth gate needs that wiring fixed, not an
+   allowlist emptied — a different piece of work this stage also owns, not a formality the
+   "already empty" allowlist implies is already done.
+
+   **Nothing currently placed in Trigger A's own scope (3b) belongs before the milestone instead —
+   checked against 3a's own definition directly, not assumed.** Every item above is about a reader
+   of the *published* repository being able to follow a citation or read a rule without landing on
+   a file that was never published; none of it changes whether the product installs or runs. A
+   provenance annotation left in `02_GLASS_FRONTEND.md` does not stop `make dev-up` from starting
+   ArcadeDB, and a dangling `CLAUDE.md` citation does not stop the Conduit from enforcing the
+   access filter it describes. The two parts' own exit criteria are independent by construction,
+   which is exactly why splitting them was the right move rather than a formality.
 **Stage 4, in full — moved to "Before the milestone," above.** Every sub-stage (4-spec,
 4a–4h) and its own detailed record now sits there, not here, since none of it is optional
 against V1 END TO END; this heading is kept only so a reader scanning stage numbers in order

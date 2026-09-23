@@ -2643,6 +2643,19 @@ citation inside a file that itself lives in the Apache tree — not to remove th
 stay true and useful to this repository's own maintainers, but so the gap is measured rather than
 discovered by an external reader.
 
+**Correction, 23 September 2026 — "not to remove... so the gap is measured" no longer describes
+the whole of this gap, only the larger part of it this session did not touch.** This paragraph's
+own 1,150-citation figure is almost entirely source-code docstrings (`packages/`/`services/`/
+`apps/`) — genuinely still unsettled, "measured, not removed" remains the right call for that set,
+unchanged here. **The documentation-to-documentation subset of the identical gap — an
+Apache-scoped *document* citing `06_DECISIONS.md`/`07_BUILD_PLAN.md`/`CLAUDE.md`, not a source
+file's own docstring — is now settled, differently: `scripts/product_tree_link_check.py`
+(§B9, below) measures it exactly as this paragraph proposed, but the decision on what to do with
+what it finds is rewrite, not permanent measurement** — state the rule, lose the private-file
+reference (§B9 has the method and the 72 current instances). The two subsets share one underlying
+gap and now have two different, deliberate dispositions, not one paragraph quietly describing
+both.
+
 ### B3 — Two triggers
 
 - **Trigger A, restructure.** Fires at the close of Phase 8. Moves files per ADR-031/B1. The
