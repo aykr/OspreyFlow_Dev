@@ -333,6 +333,13 @@ repository by accident — `.gitignore` excludes exactly that path so a dataset 
 committed even by mistake, but the environment variable has no default, precisely so an unset
 variable means "nothing provisioned" rather than silently resolving to a path that might exist.
 
+**A dataset must be admitted before it is placed.** `CLAUDE.md` rule 9 and standing rule 3 require
+this independently of the mechanism above: before placing any real dataset at its manifest path,
+admit it with `python -m scripts.real_data_exceptions add` (the local, never-committed exceptions
+list this platform's own rule 9 now points to). A dataset placed at its manifest path without a
+matching admitted entry is treated exactly as an unprovisioned one — "dataset not provisioned,"
+never an error, never a signal that distinguishes "not admitted" from "not placed."
+
 **What happens if it is not set, or the file it names is absent.** The Glass renders that demo as
 unavailable, with the reason "dataset not provisioned" — never an error, never a stack trace naming
 a path that doesn't exist on the machine an analyst is looking at (design target; the rendering
