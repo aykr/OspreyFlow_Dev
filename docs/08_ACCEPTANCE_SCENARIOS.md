@@ -181,3 +181,10 @@ Run against both scenarios, on both the `local-lite` and `cluster` profiles.
 | The performance budget holds throughout | `02_GLASS_FRONTEND.md` §5 |
 | Results are identical on both profiles, allowing only floating-point tolerance on iterative metrics | Transportability |
 | Disconnecting the network mid-scenario on `local-lite` changes nothing | Air-gap capability is a claim that must be tested |
+
+**The two rows above are not part of V1 END TO END — owner's explicit decision, 23 September
+2026.** `07_BUILD_PLAN.md`'s own milestone is a `local-lite`-only, clean-laptop install-and-demo;
+neither row is exercised by that milestone, and both remain real, standing claims for this
+document to prove once their own owning work exists. Profile-parity testing's home is Phase 8a
+(the `cluster` profile); network-partition resilience has no owning phase yet — both entries, with
+the full reasoning, are in `07_BUILD_PLAN.md`'s "Out of scope for v1" list, not deleted from here.

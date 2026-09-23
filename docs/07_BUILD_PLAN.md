@@ -2034,11 +2034,20 @@ remaining ones are, and each says so at its own entry rather than by virtue of a
      "results are identical on both profiles" (`local-lite`/`cluster`) needs a real `cluster`
      profile deployment this development environment does not have running — not attempted;
      "disconnecting the network mid-scenario on `local-lite` changes nothing" needs a real
-     network-partition harness around a live run — not attempted. Both are genuine, unclosed gaps
-     in this milestone's own cross-cutting proof, not silently assumed to hold. **Disposition: Out
-     of scope for v1** — the harness/packaging stage (`07_BUILD_PLAN.md`'s "After the milestone")
-     is the natural home for a `cluster`-profile parity run and a network-partition drill, once that
-     stage's own infrastructure exists; nothing about either gap is specific to Stage 4g's own work.
+     network-partition harness around a live run — not attempted. **Correction, 23 September
+     2026: this entry originally recorded its own "out of scope for v1" call for both rows,
+     unilaterally, inside this same closing pass — retracted.** That was not this pass's own call
+     to make; per the milestone's then-current, literal "both scenarios pass unchanged" text, an
+     unattempted cross-cutting row meant the milestone was not met, full stop, and saying otherwise
+     from inside a test-writing pass was exactly the kind of scope call this document's own
+     standing discipline warns against. **The correct disposition, recorded now as the owner's own
+     explicit decision, not this pass's inference:** under the milestone as redefined above
+     (installed, started, demonstrated on a clean laptop), neither row is part of V1 END TO END —
+     see "Out of scope for v1," below, for both entries and their own stated reasoning. Cluster-
+     profile parity already has a designated home (`adapters/graph_janusgraph`/`adapters/
+     analytics_clickhouse`/ComputePort Tier 3/the cluster profile itself all already moved to Phase
+     8a, above); network-partition resilience does not yet have one and is recorded as such, not
+     assumed to share Phase 8a's home merely because both rows were grouped together here.
    - **4h — the export rendering pipeline, a real sub-stage inside v1, not a placeholder — directly
      continuing 4e's own work — built, 23 September 2026.** `08_ACCEPTANCE_SCENARIOS.md` names A13–A15 as the reason this
      platform exists, and their own product is a document handed to someone. Stage 4e wired the
@@ -3002,6 +3011,30 @@ scenario — checked against `08_ACCEPTANCE_SCENARIOS.md` directly for each entr
 assumed. Out of scope for v1 is not out of scope forever; it means nothing currently planned
 depends on it, and a future phase choosing to build it starts from a real, already-disclosed
 finding rather than rediscovering the gap.
+
+- **`08_ACCEPTANCE_SCENARIOS.md`'s own cross-cutting "results are identical on both `local-lite`
+  and `cluster` profiles" row — owner's explicit decision, 23 September 2026, recorded here rather
+  than inferred by whoever was running Phase 8 Stage 4g's own closing-pass test.** V1 END TO END,
+  redefined the same day as an install-and-demo milestone on a clean laptop, has no `cluster`
+  profile in it at all — the `cluster` half of this phase's own former exit criterion, and
+  `adapters/graph_janusgraph`/`adapters/analytics_clickhouse`/ComputePort Tier 3 with it, already
+  moved to Phase 8a (`06_DECISIONS.md` ADR-022's third addendum, above) before this decision was
+  recorded, so this row's own natural home already existed — Phase 8a is where profile-parity
+  testing belongs, not a new item invented here. **This entry replaces, not adds to, Stage 4g's own
+  closing-pass entry's original "out of scope for v1" note for this row**, which was struck as a
+  scope call that pass had no standing to make on its own.
+- **`08_ACCEPTANCE_SCENARIOS.md`'s own cross-cutting "disconnecting the network mid-scenario on
+  `local-lite` changes nothing" row — owner's explicit decision, 23 September 2026, same reasoning
+  as the profile-parity row above: not part of an install-and-demo milestone.** Unlike profile
+  parity, this row is not cluster-specific — it is about `local-lite` alone, this platform's own
+  air-gap capability claim (`00_ARCHITECTURE.md`) — so Phase 8a is not its home, and this document
+  names no phase that is. **Disposition: Out of scope for v1**, this entry itself, per this
+  section's own standing rule that a disclosure must name a real stage, an explicit "out of scope
+  for v1," or an explicit "permanently accepted, not built" and not a placeholder — recorded here
+  honestly as its own, independent entry rather than assumed to share Phase 8a's home merely
+  because it was found alongside the row above. A future phase with a concrete reason to build a
+  network-partition harness around a live `local-lite` run starts from this disclosure, not from
+  rediscovering the gap. This entry replaces Stage 4g's own struck note for this row.
 
 - **`ComputePort.temporal_motifs`'s own algorithm (convoy/relay/burst detection).** The type is
   real (`MotifRequest`/`MotifMatch`, `01_DOMAIN_MODEL.md` §10); the algorithm was never claimed by
