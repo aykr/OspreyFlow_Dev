@@ -3050,6 +3050,47 @@ find something already finished sitting in the queue.
    total system RAM is the more honestly comfortable floor for "install-and-demo," 16GiB the
    absolute minimum this reasoning supports, and neither number is a specification quoted from
    anywhere — both are arithmetic from this pass's own measurements, stated as such.**
+
+   **Decision, 23 September 2026: Option E, accept the floor and state the minimum machine.**
+   Recorded here with what was tried and failed, not just the choice:
+
+   - **Option B (fewer indexes) was measured, not merely estimated, and disproven — the removal
+     itself is kept (ten genuinely dead or wrong-type indexes, none of them load-bearing, is a
+     real correctness improvement in its own right), but it does not solve this stage's own
+     problem.** Ten indexes removed; recovery measured twice, 4.372GiB and 4.741GiB, against an
+     original baseline of 4.493-4.940GiB across three measurements — the "recovery" is smaller
+     than this measurement's own run-to-run noise. **Disproven, not deprioritised.**
+   - **Options A (configuration change) and D (a different page/cache strategy) are blocked**, not
+     merely unexplored: the cost is predominantly off-heap (lowering `-Xmx` from 6G to 2G left
+     total `ramOsUsed` unchanged), and no page-cache or per-index memory setting was found exposed
+     anywhere in this ArcadeDB version's own `/api/v1/server` settings surface from inside this
+     running environment.
+   - **Option C (lazy index creation) is more expensive than its own entry above estimated** —
+     found only while auditing which indexes are load-bearing (PART 1, above):
+     `node_write_to_properties`'s own `_indexed_property_names` couples `indexed: true` and
+     `identifiers` into one mechanism that decides whether a property is flattened to a queryable
+     top-level field *at write time*, not only whether an index exists. A lazy-creation scheme
+     cannot simply defer `CREATE INDEX` calls; it would first need to separate "is this field
+     queryable at all" from "does a database index accelerate that query," which today are the
+     same flag. Real, separately-scoped work, larger than a first read of the option suggested.
+   - **Option F (replace the adapter) stays recorded and unchosen** — nothing in this session's own
+     measurements argues for or against it; it was never evaluated against real numbers, by design
+     (that would be its own multi-week investigation, not a diagnostic pass).
+
+   **Recorded as an open question, not resolved, for whoever next touches index cost on this
+   adapter:** the index-count scaling measurement (single test type, 0/1/5/10 indexes: roughly
+   linear, ~58-105MB per index) and the ten-index removal (no measurable recovery, within noise)
+   **contradict each other.** If the scaling measurement's own rate held, removing ten indexes
+   should have recovered somewhere in the range of 0.6-1.0GiB, not an amount indistinguishable
+   from noise. Whatever the real cost model for an individual index is, the isolated single-type
+   scaling test did not correctly predict the real ontology's own behaviour when indexes were
+   actually removed from it — a fixed, largely non-per-index cost (paid once per `apply_schema`
+   call, roughly independent of how many indexes that call happens to create, closer to what the
+   original "before schema" vs. "after schema, zero elements" step in this stage's own first
+   measurement already showed) fits the *removal* evidence better than the scaling curve does.
+   **Anyone later attempting Option C must treat the scaling test's own per-index rate as
+   unvalidated against real removal behaviour, not as a settled premise to build a lazy-creation
+   design on.**
 3. **Documentation refresh — MILESTONE-BLOCKING, promoted 23 September 2026** (see this list's own
    opening summary), **then the Trigger A restructure, not itself milestone-blocking** — already
    the most fully specified stage of the six, worked out in detail below this list rather than
