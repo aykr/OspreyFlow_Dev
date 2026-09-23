@@ -2021,17 +2021,30 @@ remaining ones are, and each says so at its own entry rather than by virtue of a
         directly against the live YAML, not assumed) — `Person` has real Splink comparisons
         (`jaro_winkler(family_name)`/...); `Endpoint` has none. B8's own literal "a scored `SAME_AS`
         edge links the handle to the shared endpoint" cannot be produced by the resolution
-        mechanism as it stands — there is nothing configured to score the comparison with. Not
-        routed around: the closing pass uses B11's own manual-link shape (`score=1.0`, `provenance=
-        asserted`) for the handle-to-endpoint edge, one step earlier in the mechanism than B8's own
-        table position implies, and B9/B10's threshold-move/explain mechanics are proven against
-        that manually-asserted pair exactly as `test_phase6a_glass_surfaces.py` already proved them
-        for a different one. **Disposition: Out of scope for v1** — checked directly against
+        mechanism as it stands — there is nothing configured to score the comparison with.
+
+        **Correction, 23 September 2026: the disposition below — proving B9/B10 against B11's own
+        manually-asserted pair — is retracted, not merely superseded.** It made both assertions
+        vacuous (a score of 1.0 is already included at every threshold; there is nothing for
+        moving Strict to Balanced to newly admit, and an asserted score has no per-comparison
+        weights for `explain` to show) and called that "fully proven." `08_ACCEPTANCE_SCENARIOS.md`
+        now carries the real fix: B8 is corrected to say what the edge actually is (an asserted
+        `SAME_AS` at score 1.0, `06_DECISIONS.md` ADR-024's own pattern for identifier systems with
+        no lexical overlap — the scenario catching up with an already-accepted ADR), and B9/B10
+        move to genuine `Person` resolution, where their own literal assertions are true. See
+        `08_ACCEPTANCE_SCENARIOS.md`'s own "B8's own disposition" note for the full reasoning,
+        every citation of B8 checked, and a real fixture gap this surfaces (Scenario B's own two
+        cohorts have no close-but-not-exact `Person` pair yet — real, unscoped work, not built
+        here either).
+
+        ~~**Disposition: Out of scope for v1** — checked directly against
         `08_ACCEPTANCE_SCENARIOS.md`, no acceptance-scenario row is blocked by this (B9/B10/B11's
         own mechanism is fully proven via the manual-link substitute), so it does not gate the
         milestone; choosing and validating real comparison functions for `handle`/`e164`/`imsi`
         identifiers is real, separately-scoped work for whichever future phase next extends entity
-        resolution to `Endpoint`, not invented under this closing pass.
+        resolution to `Endpoint`, not invented under this closing pass.~~ (struck, not deleted, per
+        this document's own convention for a retracted rather than superseded claim — the
+        cross-cutting-rows retraction two entries below this one already uses the same discipline.)
 
      **Two cross-cutting rows this closing pass could not reach, disclosed rather than faked:**
      "results are identical on both profiles" (`local-lite`/`cluster`) needs a real `cluster`

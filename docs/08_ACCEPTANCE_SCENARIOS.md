@@ -130,9 +130,9 @@ One later seizure record with two SIMs and a handset identifier.
 | B5 | Expand each to their endpoints, then one hop out | Search Around | One shared `Endpoint` is common to all four |
 | B6 | Inspect the shared endpoint's messages | Document view | Message content renders with the entity spans highlighted in place |
 | B7 | Repeat for the second cohort | Search Around | A shared messaging handle is common to that cohort |
-| B8 | Examine the handle | Entity resolution | A scored `SAME_AS` edge links the handle to the shared endpoint |
-| B9 | Move the resolution threshold from Strict to Balanced | Resolution projection | The merge applies; the change summary reports entities merged and nodes affected |
-| B10 | Open `explain` on the merged cluster | Resolution explainability | Per-comparison match weights are shown, not just the total score |
+| B8 | Examine the handle | Entity resolution | A `SAME_AS` edge, asserted at score 1.0 (ADR-024's own pattern for identifier systems with no lexical overlap — a handle and an `e164` number share none), links the handle to the shared endpoint |
+| B9 | Move the resolution threshold from Strict to Balanced, on a genuinely close-but-not-exact `Person` pair the fixture provides (not the handle/endpoint pair — B8 is now a deterministic assertion, never threshold-sensitive; see the note after this table) | Resolution projection | The merge applies; the change summary reports entities merged and nodes affected |
+| B10 | Open `explain` on the merged `Person` cluster | Resolution explainability | Per-comparison match weights are shown, not just the total score |
 | B11 | Attribute the handle to a person | Manual link | A `SAME_AS` with score 1.0, provenance `asserted`, attributed to the analyst |
 | B12 | Add the endpoint to a hotlist | Hotlist | The hotlist records owner and review date |
 | B13 | Ingest the later seizure record | Hotlist alert | An alert fires naming the matched identifier, the triggering document and the rule |
@@ -152,18 +152,50 @@ exist, every subsequent step fails, and — worse — it fails by returning a cl
 wrong answer. These three steps are the highest-value assertions in either scenario and should
 be the first tests written in Phase 2.
 
-### Known gap — B8's "a scored `SAME_AS` edge" (found during Phase 8 Stage 4g's closing pass)
+### B8's own disposition — the chain split, 23 September 2026, correcting the scenario rather than working around it
 
-`Endpoint` carries no `resolution` block in `packages/ontology/default.yaml` — checked directly,
-not assumed. `Person` has real Splink comparisons (`jaro_winkler(family_name)`/`levenshtein
-(given_names)`/`exact(date_of_birth)`); `Endpoint` has nothing configured to compare a handle
-against a phone number with, so the resolution mechanism as it stands cannot produce B8's own
-literal scored `SAME_AS`. `07_BUILD_PLAN.md`'s Stage 4g entry has the full disposition (out of
-scope for v1 — no acceptance-scenario row is blocked by it) and the reasoning for why B9's
-threshold move and B10's explain are instead proven, correctly, against B11's own manually-
-asserted edge (`score=1.0`, `provenance=asserted`) rather than a Splink-scored one for this pair.
-Choosing and validating real comparison functions for `handle`/`e164`/`imsi` identifiers is real,
-unscoped work for a future phase, not filled in silently here.
+**B8, B9 and B10 were one chain until this correction; they no longer are.** `Endpoint` carries no
+`resolution` block in `packages/ontology/default.yaml` — checked directly, not assumed — and the
+closed comparison-function registry (`packages/ontology/resolution_functions.py`:
+`jaro_winkler`/`levenshtein`/`soundex`/`exact`) compares values of the same kind, the same reason
+`06_DECISIONS.md` ADR-024 already gives for why an MSISDN and the IMSI it is dialled through
+cannot be Splink-matched: "no lexical resemblance a comparison function could ever detect." A
+handle and an `e164` number are the identical shape of problem. **This is the scenario catching up
+with an already-accepted ADR, not the ADR being worked around**: ADR-024 decided this exact class
+of identifier — two systems naming the same real-world thing with no shared lexical space — gets a
+deterministic, asserted `SAME_AS` at score 1.0, written at ingest, never a Splink comparison. B8 is
+corrected to say that (above).
+
+**B9 and B10 move to `Person` resolution, unchanged in their own assertion text, because on
+`Person` those assertions are literally true.** A deterministic score of 1.0 is already included
+at every threshold, so "the merge applies" when moving Strict to Balanced would be vacuous against
+B8's own corrected pair — there is nothing for the threshold to newly admit. `explain`'s own
+"per-comparison match weights" likewise requires a real multi-comparison Splink score, which an
+asserted 1.0 does not have. Both assertions are real and provable, on a real `Person` pair, which is
+what B9/B10 now target.
+
+**A fixture gap this correction surfaces, disclosed rather than filled in silently:** `Person`
+resolution needs a genuinely close-but-not-exact pair — this scenario's own two cohorts
+(`_seed_cohort`/`_seed_handle_cohort`, `tests/scenarios/test_phase8_exit_criterion_end_to_end.py`)
+currently write each cohort's own four `Person` nodes with a shared, identical `family_name` and
+sequential `given_names` ("Member0", "Member1", ...) — structurally simple, no near-duplicate
+signal for Splink to score. **Scenario B's own fixture does not yet contain a `Person` pair B9/B10
+can be genuinely exercised against**; `tests/scenarios/fixtures/fixture_corp.py` already builds
+this shape for a different demo case and is not reused here without a real decision to do so.
+Real, unscoped work — owning phase Phase 8 — not built under this correction.
+
+**Every other citation of B8 checked, none resting on it being Splink-scored.** `06_DECISIONS.md`
+ADR-023 names B8 as its own precedent for using the `SAME_AS` edge *type* for a duplicate-identity
+question — quoted alongside B11's own manual (asserted) link in the same sentence, never
+distinguishing scored from asserted, so its reasoning holds unchanged; ADR-023 needs no correction.
+Every remaining citation (`06_DECISIONS.md` ADR-025 and its own references, `07_BUILD_PLAN.md`'s
+Phase 7/8 entries) groups B8 with B9/B13/B20 as needing the corpus-wide resolution trigger
+(ADR-025) to run against a live deployment — **this grouping is now stale for B8 specifically**:
+under the corrected, ADR-024-pattern write, B8's own edge is produced by the ingest recipe engine
+at load time (ADR-024's own "natural home"), not by a later batch resolution job, so B8 no longer
+depends on ADR-025's trigger at all. B9/B10, now pointed at genuine `Person` resolution, still do.
+Not swept across every citation site here — recorded as a known, real consequence for whoever next
+touches those references.
 
 ---
 

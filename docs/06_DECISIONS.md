@@ -289,6 +289,22 @@ buy, and the projection is a pure function over a bounded working set.
 endpoints keyed on normalised E.164 — the merge is already deterministic and the probabilistic
 path is bypassed.
 
+**Addendum, 23 September 2026 — the same bypass, extended to a case this ADR's own text did not
+yet name: two `Endpoint`s of *different* kinds, where a source asserts the link rather than
+Splink inferring it.** The clause above covers person-like entities under genuine Splink scoring
+and E.164-keyed endpoints under deterministic matching; it was silent on two differently-typed
+endpoints (a messaging handle and a phone number, say) being linked at all — found while
+correcting `08_ACCEPTANCE_SCENARIOS.md` B8 (`07_BUILD_PLAN.md`, 23 September 2026): `Endpoint`
+carries no `resolution` block (`packages/ontology/default.yaml`), and the closed comparison
+registry (`packages/ontology/resolution_functions.py`) has nothing that could meaningfully compare
+a handle's own lexical space against an `e164` number's — the identical reasoning ADR-024 already
+applied to MSISDN/IMSI. **The same bypass applies here as there**: where a data source states,
+rather than infers, that two differently-typed identifiers name the same addressable point — a
+device extraction's own record linking a handle to a phone number, the same category as an HLR
+record linking an IMSI to an MSISDN — the write is a deterministic, asserted `SAME_AS` at score
+1.0 (`WorkingSetService.manual_link`'s own shape, ADR-024's own precedent), never a Splink
+comparison. This names a case the original text left silent; it is not a new exception to it.
+
 ---
 
 ## ADR-007 — Working set is server-side, capped, and delta-streamed
