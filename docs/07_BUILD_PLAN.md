@@ -3993,6 +3993,24 @@ disclosure that cannot yet name one of the three has not finished being written.
   already applies) — not built here; this entry states the defect and names the test, per this
   section's own standing rule, and leaves the fix for whoever takes the stage next.
 
+- **New, 23 September 2026 — the graph store neither reclaims memory across workloads nor holds
+  its own query performance steady as data accumulates, found while closing the (separate,
+  now-closed) ArcadeDB-stability stage and deliberately not folded into it — that stage answered
+  "does a clean install-and-demo run reliably," this is "what happens after," a different
+  question with its own owner.** Measured, not inferred: across a sequence of otherwise-identical
+  closing-pass runs against the same, never-reset database, memory climbed with every successful
+  run (8.651GiB → 9.097GiB → 9.396GiB, never released) and the same fixture load took measurably
+  longer each time (117s → 151s → 203s, a 74% slowdown by the third repetition). Every one of
+  those runs passed — this degrades quietly, not with a failure. **Full reasoning and the
+  operational consequence are recorded where an operator will actually read them:**
+  `docs/05_DEPLOYMENT.md` §8, new — a running instance should be expected to need periodic
+  restarts to recover memory, and the safe interval is not yet known, since nobody has measured
+  whether the degradation plateaus or continues without bound. **Named test, not built:**
+  `test_arcadedb_memory_and_query_latency_under_sustained_ingest_cycles` — sustained load across
+  many ingest cycles against one long-lived database, measuring memory and a representative
+  query's own latency after each cycle. **Owning phase: Phase 8**, a new, separate item — not
+  fixed here, not scheduled beyond being named, sized for its own pass.
+
 - **Highest-consequence item in this list for Phase 8 — the principal-resolution gap, consolidated
   from three separate disclosures of what is one missing capability, not three.** Stated once,
   plainly: there is no way to obtain a live `Principal` for a stored `owner_id` without a request

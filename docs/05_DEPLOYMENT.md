@@ -276,3 +276,34 @@ separately, with its own retention policy set by the deployment's legal basis.
 - Images signed and verified at pull; digests pinned in `deploy/versions.lock`.
 - Audit written to a separate volume with a separate retention policy and separate access.
 - No telemetry leaves the deployment. OpenTelemetry collection terminates inside it.
+
+## 8. A running instance will need periodic restarts — the interval is not yet known
+
+**Found 23 September 2026, measured directly against the real `local-lite` graph store, not
+inferred.** Across a sequence of closing-pass runs against the same, never-reset ArcadeDB
+database — the same store every profile uses — memory climbed with every successful run
+(8.651GiB → 9.097GiB → 9.396GiB) and never gave any of it back, and the same fixture load took
+measurably longer each time it ran (117s → 151s → 203s, a 74% slowdown by the third repetition of
+an identical workload against the same, larger database). **This happened while every one of
+those runs passed** — this is not a bug that fails loudly; it is a live store that neither
+reclaims memory across workloads nor holds its own query performance steady as data accumulates.
+In any real deployment, data always accumulates — an investigation is added to, not replaced.
+
+**The operational consequence, stated plainly:** a running instance should be expected to need
+periodic restarts to recover memory, and **the safe interval between them is not yet known** —
+nobody has measured how far this degradation goes, whether it plateaus at some working-set size
+or continues climbing without bound toward the same resource ceiling that a single heavy session
+can already reach on its own (`07_BUILD_PLAN.md`'s own Phase 8 "ArcadeDB stability" stage has the
+single-session measurement this finding sits alongside, not on top of — that stage closed against
+a fresh-install criterion; this finding is what happens *after* a fresh install, under continued
+real use, and neither stage's own measurement answers the other's question).
+
+**Named, not built: `test_arcadedb_memory_and_query_latency_under_sustained_ingest_cycles`** (or
+its eventual real name) — sustained load across many ingest cycles against one long-lived
+database, measuring memory and a representative query's own latency after each cycle, to find
+whether either plateaus or continues climbing without bound. That test does not exist; this is
+the first time this behaviour has been observed at all, in either direction — not fixed here, not
+scheduled here beyond being named, and deliberately not folded into `07_BUILD_PLAN.md`'s now
+-closed ArcadeDB-stability stage, which answered a different question. Owning phase: **Phase 8**,
+a new, separate item — real, disclosed, sized for its own pass rather than left as the tail end of
+an investigation into something else.
