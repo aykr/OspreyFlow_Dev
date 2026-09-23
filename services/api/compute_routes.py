@@ -16,8 +16,8 @@ is **deliberately unfiltered** — its own docstring: "the full source-fidelity.
 `restore` re-projects fresh against whoever is restoring." Feeding it straight to `ComputePort`
 would let a hidden node's own existence leak through a visible node's own degree or centrality
 score — exactly `CLAUDE.md` rule 3's concern, and the same shape of defect already found and fixed
-for `set_resolution_threshold`/`explain_cluster` (`07_BUILD_PLAN.md`'s `Gaps with no owning phase`,
-instances three and four). `narrow_to_visible` (`services/api/access.py`) is the same narrowing
+for `set_resolution_threshold`/`explain_cluster` (the third and fourth instances of the same
+repeated pattern). `narrow_to_visible` (`services/api/access.py`) is the same narrowing
 function those two, and the Dossier, already use — this is disclosed as its fourth caller, not a
 fifth independent copy of the pattern. Proven by
 `tests/services/api/working_set/test_compute_access_control.py`.
@@ -48,8 +48,8 @@ betweenness should switch to an approximation above the same 20k boundary this r
 sync/job split — but neither `CentralityRequest` (Stage 2) nor `adapters/compute_rustworkx`'s own
 `centrality` method (Stage 3) carries a sampling parameter or branch at all; the job-mode path
 below runs the identical exact `rustworkx.betweenness_centrality` call regardless of population
-size. Recorded in `07_BUILD_PLAN.md`'s `Gaps with no owning phase` — real algorithmic work, not
-this route's own scope to invent unprompted.
+size — real algorithmic work, disclosed as its own gap, not this route's own scope to invent
+unprompted.
 """
 
 from __future__ import annotations

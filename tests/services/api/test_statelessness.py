@@ -1,6 +1,6 @@
 """Statelessness — `docs/03_CONDUIT_MIDDLEWARE.md` §1: "Any Conduit
 instance can serve any request for any session; kill one mid-investigation
-and the analyst notices nothing." `docs/07_BUILD_PLAN.md` Phase 3's exit
+and the analyst notices nothing." This phase's exit
 criterion asks this to be proven, not assumed.
 
 **Two real `uvicorn` processes**, not two Python objects in one process —

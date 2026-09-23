@@ -1,5 +1,4 @@
-// The MapLibre view — `docs/02_GLASS_FRONTEND.md` §3.5, ADR-014
-// (`docs/06_DECISIONS.md`), `docs/07_BUILD_PLAN.md` Phase 5.
+// The MapLibre view — `docs/02_GLASS_FRONTEND.md` §3.5, ADR-014.
 //
 // **A separate Sigma instance over a local node clone, not the shared
 // working-set graph.** `@sigma/layer-maplibre`'s `bindMaplibreLayer`
@@ -169,8 +168,8 @@ export interface MapViewProps {
   /** Server-side-binned event density (`AnalyticsPort.geo_bins`,
    * `02_GLASS_FRONTEND.md` §3.5's "Heat map" row) — rendered as a native
    * MapLibre `heatmap` layer. Point clustering (Supercluster) for
-   * individual un-binned markers is explicitly deferred past this
-   * checkpoint (`07_BUILD_PLAN.md` Phase 5 Checkpoint 2 plan); nothing in
+   * individual un-binned markers is explicitly deferred to later work;
+   * nothing in
    * A1-A11 needs it. Defaults to empty so a caller with no cross-filter
    * wiring yet (an existing test harness) draws no heat layer. */
   geoBins?: readonly GeoBin[];

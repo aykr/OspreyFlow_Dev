@@ -1,5 +1,5 @@
-"""`services/api/prefetch.py` — `docs/07_BUILD_PLAN.md`'s Phase 5
-known-gaps closure's scheduled AOI pre-warm job. Against a live MinIO
+"""`services/api/prefetch.py` — a disclosed known-gaps
+closure's scheduled AOI pre-warm job. Against a live MinIO
 instance, not a mock —
 the same reasoning `test_tile_cache.py`'s own module docstring gives, and
 this module reuses `tile_cache.py`'s `read_cached_tile`/`write_cached_tile`

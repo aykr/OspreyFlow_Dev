@@ -1,5 +1,5 @@
-"""Source profiler shapes — `09_INGEST_STUDIO.md` §3, `07_BUILD_PLAN.md`
-Phase 2: "Source profiler: type inference, null and cardinality
+"""Source profiler shapes — `09_INGEST_STUDIO.md` §3: "Source profiler: type inference,
+null and cardinality
 statistics, and pattern recognition against the Knowledge Adapters."
 
 Headless in Phase 2: `services/ingest/profiler.py` produces a

@@ -23,7 +23,7 @@ in full, when that viewer's access does not cover at least one of its own `suppo
 references" — `_all_visible` below is the one function both `list_visible_judgements` (the
 hide-in-full filter) and the citation checks read. **Only a `NodeId` citation can be positively
 confirmed visible today** — `GraphPort` has no `get_edge`, and no document store exists yet
-(`07_BUILD_PLAN.md`'s own "Stage 4b known gaps" entry). An `EdgeId`/`DocumentId` citation
+(a disclosed gap). An `EdgeId`/`DocumentId` citation
 (`Judgement.supporting`/`contradicting`'s own docstring in `schemas/domain.py`) therefore always
 reads as unreadable — the same fail-closed default this codebase already applies wherever it
 cannot positively confirm access, not a new posture invented here.
@@ -38,7 +38,7 @@ including for its own author — the same "clean, confident, wrong answer" shape
 ACCEPTANCE_SCENARIOS.md`'s own "What B1-B3 prove" section already warns is the worst failure a
 filtering mistake can take. **Fixed by moving the check to `save`, not by building the read paths
 this stage does not own.** `GraphPort.get_edge` and a document store are real, separately-scoped
-work (`07_BUILD_PLAN.md`'s own "Stage 4b known gaps" entry has the disposition); building either
+work, already disclosed; building either
 here would be exactly the kind of unscoped expansion `CLAUDE.md`'s own "don't design for
 hypothetical future requirements" rule warns against. What this stage *can* do without either is
 turn a silent failure into a loud one — the same posture `02_GLASS_FRONTEND.md` §4.1 already
@@ -53,8 +53,8 @@ the point of writing, not never.
 `supersede_node` succeeds — `01_DOMAIN_MODEL.md` §5's own literal text ("When a supporting node is
 later split, corrected or retracted, every judgement resting on it is flagged for review") names
 `supporting` only; a `contradicting` citation's own content change is **not** flagged by this
-function — a narrower, disclosed scope decision, not an oversight (`07_BUILD_PLAN.md`'s own gaps
-entry has the reasoning). An unreadable (not content-changed) `contradicting` reference is a
+function — a narrower, disclosed scope decision, not an oversight. An unreadable (not
+content-changed) `contradicting` reference is a
 *different* trigger, flagged lazily the first time a read discovers it
 (`_flag_unreadable_contradicting_lazily` below) — there is no proactive, scheduled scan for this in
 Stage 4b, the same "re-flags only on process restart"-class timing gap Phase 5a's own reverse-index
@@ -133,7 +133,7 @@ class UnverifiableCitationError(Exception):
         super().__init__(
             f"judgement {judgement_id}: citation(s) {joined} could not be confirmed as a visible "
             "graph node and were refused. Only a node citation can be verified today — an edge or "
-            "document citation is not yet supported (07_BUILD_PLAN.md's own Stage 4b known-gaps "
+            "document citation is not yet supported (a disclosed gap "
             "entry) — and a node this principal cannot currently see cannot be cited as evidence "
             "either."
         )
@@ -502,7 +502,7 @@ async def flag_judgements_citing_superseded_node(
     via a `judgement_store` parameter that defaults to `None` so every existing caller and test of
     those four functions is unaffected). Matches `supporting` only, per the spec's own literal
     text — a `contradicting` citation's own content change is not flagged here, a narrower,
-    disclosed scope decision (`07_BUILD_PLAN.md`'s own Stage 4b known-gaps entry).
+    disclosed scope decision.
 
     Returns the flagged judgement ids, so a caller (a route, a test) can report exactly what was
     affected rather than trusting the write happened."""

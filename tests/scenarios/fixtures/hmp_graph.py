@@ -1,5 +1,5 @@
 """Gives the HMP fixture a graph side — `08_ACCEPTANCE_SCENARIOS.md`
-Scenario A, `07_BUILD_PLAN.md` Phase 5. `tests/scenarios/fixtures/hmp.py`'s
+Scenario A. `tests/scenarios/fixtures/hmp.py`'s
 own `generate_hmp_events()` stays untouched: its 262 `EventRecord`s and
 their statistical shape are already proved correct against a real
 `AnalyticsPort` (`test_hmp_fixture_shape.py`), and nothing here changes
@@ -307,8 +307,8 @@ async def build_hmp_graph(
     `investigation_scope` defaults to this fixture's own constant, exactly
     as every existing test that doesn't pass it already expects — but a
     live seed against a real, analyst-created investigation
-    (`scripts/seed_hmp_fixture.py`, `07_BUILD_PLAN.md` Phase 5 Checkpoint
-    2) needs its events tagged with *that* investigation's own id instead,
+    (`scripts/seed_hmp_fixture.py`) needs its events tagged with *that*
+    investigation's own id instead,
     since `EventFilter.investigation_scope` is what every analytics query
     actually filters on."""
     await _run_structural_recipes(

@@ -1,7 +1,7 @@
 """Synthetic population and relationship rows for the HMP fixture's graph
 side — `08_ACCEPTANCE_SCENARIOS.md` Scenario A's "a population of ~400
 person entities with wing and cell locations; a subset with recorded
-group affiliations and family relationships." `07_BUILD_PLAN.md` Phase 5.
+group affiliations and family relationships."
 
 Deterministic (`CLAUDE.md` rule 9): every row list below is built from
 fixed seeded choices — two calls to any function here produce

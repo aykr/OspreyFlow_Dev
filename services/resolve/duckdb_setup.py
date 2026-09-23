@@ -4,8 +4,8 @@ against a bare DuckDB connection raises `Catalog Error: Scalar Function with nam
 exist!`. `phonetics` (MIT) is already a transitive dependency of `splink==3.9.9` itself, so this
 adds no new dependency.
 
-**`_soundex` sanitises its input — fixed, not merely disclosed, `07_BUILD_PLAN.md`'s own
-Stage 6b carry-over 2.** `phonetics.soundex` indexes a 27-character digit table with
+**`_soundex` sanitises its input — fixed, not merely disclosed.** `phonetics.soundex`
+indexes a 27-character digit table with
 `ord(c) - ord('a')` for every character after the first, with no bounds check: any character
 outside `a`-`z` — a hyphen, an apostrophe, a space, a digit, an accented letter — makes that
 either negative or too large and raises `IndexError: string index out of range`, not a graceful

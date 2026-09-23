@@ -19,7 +19,7 @@ below is the recovery — invoked from a session-scoped autouse fixture in
 sweeps.
 
 **The sweep is safe sequentially; concurrently, only past its staleness
-window.** `docs/07_BUILD_PLAN.md` Phase 1's own known-gap names an
+window.** A disclosed gap names an
 artificial two-concurrent-conformance-process run as a real stress case
 this build has hit before. Under it, an unconditional sweep would drop the
 *other* session's still-running database mid-test, surfacing as an

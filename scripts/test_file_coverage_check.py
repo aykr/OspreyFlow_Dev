@@ -45,8 +45,8 @@ gate cares about is "which `tests/...` tokens appear, ignored or not, in which j
 `ci.yml`'s equivalents, meaning a developer running either target locally would hit the identical
 failure mode this gate exists to catch, just outside CI. Fixed in the same change that added this
 gate (`Makefile`'s own `test`/`test-all` targets, now kept in sync by eye until this gate's own
-scope is widened to check the Makefile too — recorded as a known gap in `07_BUILD_PLAN.md` rather
-than solved here, since parsing `Makefile`'s own line-continuation shape is a second, different
+scope is widened to check the Makefile too — a disclosed gap, not solved here, since parsing
+`Makefile`'s own line-continuation shape is a second, different
 text format from `ci.yml`'s YAML).
 """
 

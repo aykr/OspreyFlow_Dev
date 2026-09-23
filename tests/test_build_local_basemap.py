@@ -1,6 +1,6 @@
 """`scripts/build_local_basemap.py`'s stages that need no live store —
-`docs/00_ARCHITECTURE.md` §1.2's tier-1 "one-button" pipeline,
-`docs/07_BUILD_PLAN.md` Phase 5. The full orchestration against a live
+`docs/00_ARCHITECTURE.md` §1.2's tier-1 "one-button" pipeline.
+The full orchestration against a live
 `GraphPort` is `tests/ingest/test_build_local_basemap_end_to_end.py`,
 kept separate so this file stays inside `make test`'s no-live-store
 boundary (`tests/ingest` is what that target ignores) while that one sits

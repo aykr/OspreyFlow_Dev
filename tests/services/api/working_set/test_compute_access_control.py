@@ -13,8 +13,8 @@ assert `OFFICIAL`'s own computed degree for `A` is `1`, not `2` — the assertio
 future change ever feeds `current_membership`'s own unfiltered edges straight to `ComputePort`.
 
 Uses the **real** `graph_arcadedb` adapter and the **real** `ComputeRustworkxAdapter` — the same
-"no fake stands in for an access-control claim" discipline every other test in this family follows
-(`07_BUILD_PLAN.md`'s own `FakeGraphPort` gaps entry). `FakeWorkingSetStore` and `_FakeJobQueue`
+"no fake stands in for an access-control claim" discipline every other test in this family
+follows. `FakeWorkingSetStore` and `_FakeJobQueue`
 are still fakes here, deliberately: neither the working-set store's own storage logic nor the job
 queue's own dispatch mechanics are what this test is about — only whether the population handed to
 `ComputePort` was narrowed to what `OFFICIAL` can actually see.

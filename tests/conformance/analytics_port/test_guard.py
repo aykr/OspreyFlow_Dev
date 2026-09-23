@@ -2,7 +2,7 @@
 
 `ANALYTICS_PORT_ADAPTERS` was asserted empty through Phase 1; this is the
 guard turning red on purpose, per the Phase 2 exit criterion
-(`docs/07_BUILD_PLAN.md`) — the expected handover once `analytics_duckdb`
+— the expected handover once `analytics_duckdb`
 is registered, not a regression.
 """
 

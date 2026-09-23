@@ -1,4 +1,4 @@
-"""Phase 2 exit criterion (`docs/07_BUILD_PLAN.md`): "Load the synthetic CDR
+"""Phase 2 exit criterion: "Load the synthetic CDR
 fixture through a hand-written recipe. Every phone-number variant in the
 fixture resolves to one `Endpoint`. Duplicate rows collapse to one event
 with both source references retained. A timeline histogram over the loaded

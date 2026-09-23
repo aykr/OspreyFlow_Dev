@@ -1,10 +1,10 @@
 """A drift gate for `docs/DEMO_GUIDE.md` §1's own "What you can demo today" table —
-`06_DECISIONS.md` ADR-035, `07_BUILD_PLAN.md`'s Phase 8 documentation-refresh entry.
+`06_DECISIONS.md` ADR-035, part of the documentation-refresh work.
 
 **`DEMO_REGISTRY` below is a stand-in, not the real thing, and says so rather than pretending
 otherwise.** ADR-035's own fail-closed `shipped`/`internal` registry — the packaging-time gate that
-mechanically enforces which demo ships in a built artefact — is Phase 8's own still-unbuilt outcome
-(`07_BUILD_PLAN.md`'s Phase 8 bullets). `DEMO_GUIDE.md` §1 already says as much: "Until that
+mechanically enforces which demo ships in a built artefact — is still unbuilt, a disclosed
+gap. `DEMO_GUIDE.md` §1 already says as much: "Until that
 registry exists, treat the column below as the same binding statement in prose that the registry
 will enforce mechanically." This module is that same idea taken one small step further — a real,
 checkable list, not only prose — so "a new demo was added and the guide wasn't updated" fails a

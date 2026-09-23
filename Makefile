@@ -1,4 +1,4 @@
-.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check conformance-guard conformance test dev-up dev-down test-all glass-perf glass-a11y glass-keyboard glass-map-verify
+.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test dev-up dev-down test-all glass-perf glass-a11y glass-keyboard glass-map-verify
 
 PY := .venv/bin/python
 PYTEST := .venv/bin/pytest
@@ -8,7 +8,7 @@ MYPY := .venv/bin/mypy
 # Phase 0 exit criterion (docs/07_BUILD_PLAN.md): CI green; a PR adding a GPL
 # dependency fails; a Pydantic model change not reflected in the generated
 # TypeScript fails the build. See the Phase 0 plan for what each target proves.
-ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check test-file-coverage-check conformance-guard
+ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check test-file-coverage-check conformance-guard
 
 lint:
 	$(RUFF) check .
@@ -53,6 +53,13 @@ route-coverage-check:
 product-tree-link-check:
 	$(PY) scripts/product_tree_link_check.py
 	@echo "product-tree-link-check: see tests/test_product_tree_link_check.py for the deterministic proof"
+
+# tests/fixtures/decision_log_publication_allowlist.txt — 06_DECISIONS.md ADR-034 §B10's own filtered
+# decision log, checked one level down from product-tree-link-check: does a PRODUCT ADR cite a PROCESS
+# one by number. See scripts/decision_log_publication_check.py's own docstring for the full reasoning.
+decision-log-publication-check:
+	$(PY) scripts/decision_log_publication_check.py
+	@echo "decision-log-publication-check: see tests/test_decision_log_publication_check.py for the deterministic proof"
 
 # Found and fixed four test files running in no intended CI job — `test_pattern_store.py`,
 # `test_alerts.py`, `test_change_stream.py`, `test_assessment_routes.py` — before this gate

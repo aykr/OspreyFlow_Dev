@@ -17,8 +17,8 @@ rather than sharing one ontology-applied schema.
 per `06_DECISIONS.md` ADR-028 — no browser or `Worker` involved, since the
 claim this suite owes is algorithmic agreement, not a threading one) — the
 cross-tier agreement case in `compute_port/test_suite.py` now actually runs
-against both. Tier 3 (deferred to Phase 8a's `cluster` profile, ADR-028 /
-ADR-022's third addendum) is still not registered here. `ModelPort` is real
+against both. Tier 3 (deferred to Phase 8a's `cluster` profile, ADR-028)
+is still not registered here. `ModelPort` is real
 from Phase 6 Stage 1: `MODEL_PORT_ADAPTERS` holds one `ModelAdapterFactory`
 for `adapters/model_litellm`, calling the pinned conformance model
 (`adapters.model_litellm.CONFORMANCE_MODEL`, `06_DECISIONS.md` ADR-020)

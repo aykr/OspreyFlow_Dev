@@ -1,8 +1,8 @@
 """`services/api/export.py` — `03_CONDUIT_MIDDLEWARE.md` §6, `02_GLASS_FRONTEND.md` §10, Phase 8
-Stage 4d, against the accepted `06_DECISIONS.md` ADR-045/046/047. Real Postgres (the judgement
+Against the accepted `06_DECISIONS.md` ADR-045/046/047. Real Postgres (the judgement
 store, the export ledger, the investigations table) and real ArcadeDB (the handling-scheme gate,
 the cross-session access recheck) — the same "a fake cannot stand in for this class of claim"
-discipline `07_BUILD_PLAN.md`'s own "Fake-based tests" gaps entry already established.
+discipline every other test in this family already established.
 
 `WorkingSetService` in these tests is built over a minimal, module-local `_MembershipOnlyStore`,
 not `FakeWorkingSetStore` (a cross-directory import this file avoids) and not a real

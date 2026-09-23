@@ -14,7 +14,7 @@ export interface StatusBarProps {
  * store's actual membership. `filteredCount` comes verbatim from the
  * server (`WorkingSetStoreState.filteredCount`, set only by a
  * `DeltaSnapshot`/accumulated from a `DeltaNotice`) — never recomputed
- * client-side (`docs/07_BUILD_PLAN.md` Phase 4's own stated constraint:
+ * client-side (a stated constraint:
  * a client-side recount would silently diverge from a stale view). */
 export function StatusBar({ nodeCount, edgeCount, dimmedCount, filteredCount }: StatusBarProps) {
   return (

@@ -33,8 +33,8 @@ of," which is not true here. This is the right scope cut for what Phase 2
 needs (proving the statistical shape against `AnalyticsPort` alone), but
 it means this fixture cannot stand in for anything that needs graph/
 analytics consistency, unlike the CDR fixture, which builds both sides
-together through the real recipe engine. `07_BUILD_PLAN.md`'s Phase 5
-scope records giving this fixture a graph side as its own item, rather
+together through the real recipe engine — giving this fixture a graph side
+is recorded as its own item, rather
 than leaving the gap implicit.
 """
 

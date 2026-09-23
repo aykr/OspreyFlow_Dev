@@ -1,4 +1,4 @@
-// Community hull geometry — Phase 7 Stage 3's metrics panel, `docs/07_BUILD_PLAN.md`'s "community
+// Community hull geometry — the metrics panel's own "community
 // hull overlay" bullet. Pure graph-space geometry only: `canvas/CommunityHullOverlay.tsx` is what
 // converts these points to viewport space against a live camera and renders them; this module has
 // no dependency on Sigma or the DOM, so it is plain-`vitest`-testable the same way
@@ -8,7 +8,7 @@
 // (`d3-polygon`'s `polygonHull`, the real dependency this module uses) over 40 communities
 // spanning the working set's own 20,000-node synchronous-budget boundary took 2.6ms total, three
 // orders of magnitude of headroom against `02_GLASS_FRONTEND.md` §5's 500ms budget — see
-// `docs/07_BUILD_PLAN.md`'s Stage 3 write-up for the full figure.
+// this file's own commit history has the full figure.
 import { polygonHull } from "d3-polygon";
 
 import type { WorkingSetGraph } from "../workingset/store";

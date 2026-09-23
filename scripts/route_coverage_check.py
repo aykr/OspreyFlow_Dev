@@ -1,5 +1,5 @@
-"""A drift gate for the Apache-scoped spec's own route documentation — `07_BUILD_PLAN.md`'s Phase
-8 documentation-refresh entry. Same shape as `scripts/demo_guide_check.py`/`scripts/
+"""A drift gate for the Apache-scoped spec's own route documentation, part of the
+documentation-refresh work. Same shape as `scripts/demo_guide_check.py`/`scripts/
 domain_model_coverage_check.py`: a real check against a real source (the live FastAPI app, not a
 hand-maintained list) paired with an explicit allowlist of routes currently missing from the doc.
 
@@ -55,7 +55,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ALLOWLIST_PATH = REPO_ROOT / "tests" / "fixtures" / "route_coverage_allowlist.txt"
 
-#: `06_DECISIONS.md` ADR-034 §B2's own Apache-scoped list, current (pre-Trigger-A) paths — the
+#: The Apache-scoped document list, current (pre-Trigger-A) paths — the
 #: same set `scripts/domain_model_coverage_check.py`'s own `APACHE_DOC_PATHS` uses.
 APACHE_DOC_PATHS: tuple[Path, ...] = tuple(
     REPO_ROOT / "docs" / name

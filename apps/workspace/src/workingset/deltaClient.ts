@@ -1,5 +1,5 @@
 // The delta client — `docs/03_CONDUIT_MIDDLEWARE.md` §3.2's wire protocol,
-// `docs/07_BUILD_PLAN.md` Phase 4. Drives `WorkingSetDelta` messages off a
+// Drives `WorkingSetDelta` messages off a
 // `/v1/investigations/{id}/stream` WebSocket into `workingset/store.ts`'s
 // `applyDelta`.
 //

@@ -1,4 +1,4 @@
-"""Phase 6's own exit criterion, verified end to end against the live stack — `07_BUILD_PLAN.md`:
+"""Phase 6's own exit criterion, verified end to end against the live stack:
 "Ingest a witness statement. Extracted entities appear as `inferred` with correct source spans.
 Moving τ from Strict to Broad merges the expected clusters and reports the delta. A manual split
 survives a subsequent resolution run that would have merged the pair, and the conflict is
@@ -126,7 +126,7 @@ async def test_phase6_exit_criterion_end_to_end() -> None:
             # `8`, `14`, `92`, `150` for extractions of comparable actual quality), which
             # `candidates.py`'s single divide-by-100-if->1 normalisation cannot recover correctly
             # in every case. That is exactly the disclosed, uncalibrated-self-report limitation
-            # `07_BUILD_PLAN.md`'s Phase 6 known-gaps list already names; a confidence *floor* is a
+            # already named; a confidence *floor* is a
             # production filtering concern already covered by `tests/extract/test_candidates.py`'s
             # unit tests, not what this clause is asking to prove. Retried up to three times, the
             # same discipline `06_DECISIONS.md` ADR-020 already established for this pinned

@@ -1,5 +1,5 @@
 """Synthetic witness statement — the running smoke-test document for schema-constrained text
-extraction (`docs/07_BUILD_PLAN.md` Phase 6 Stage 1's own scoping), later folded into Stage 3's
+extraction (this stage's own scoping), later folded into Stage 3's
 golden set as its first hand-labelled example rather than writing a second document.
 
 Wholly fictional (`CLAUDE.md` rule 9: no real intelligence data anywhere, ever) — the names,

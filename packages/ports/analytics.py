@@ -37,7 +37,7 @@ class AnalyticsPort(Protocol):
         self, req: SightingRequest, principal: Principal
     ) -> list[Sighting]:
         """Phase 8 Stage 4f's own addition, found missing while building B18's snail trail —
-        `docs/07_BUILD_PLAN.md` has the full record. Ordered by `occurred_at` ascending; a row with
+        a disclosed gap. Ordered by `occurred_at` ascending; a row with
         no `lat`/`lon` is excluded, the same `lat IS NOT NULL AND lon IS NOT NULL` filter
         `geo_bins` already applies."""
         ...
@@ -48,7 +48,7 @@ class AnalyticsPort(Protocol):
 
     async def baseline(self, req: BaselineRequest, principal: Principal) -> BaselineResult: ...
 
-    # --- writes (07_BUILD_PLAN.md Phase 5) ----------------------------------
+    # --- writes --------------------------------------------------------------
     #
     # Not principal-scoped writes: an ingest/gazetteer load is a backend
     # operation attributed by the caller's own audit trail (the connector or
@@ -80,8 +80,8 @@ class AnalyticsPort(Protocol):
     async def list_boundaries(
         self, principal: Principal, *, version: int | None = None
     ) -> list[GeometryRecord]:
-        """The "select an existing boundary" read path
-        (`07_BUILD_PLAN.md`'s Phase 5 known-gaps list): every stored
+        """The "select an existing boundary" read path,
+        a disclosed gap: every stored
         `GeometryKind.POLYGON` row at the resolved partition version — the
         server-backed counterpart to the transient, browser-only drawn-
         boundary filter (`apps/workspace/src/map/BoundaryFilterTool.tsx`).

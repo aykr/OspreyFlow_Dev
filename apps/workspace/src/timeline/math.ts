@@ -1,6 +1,6 @@
 // Pure math extracted out of `Timeline.tsx` so it is testable without an
 // ECharts/canvas instance — the "pure-function-first" half of this
-// checkpoint's own test plan (`07_BUILD_PLAN.md` Phase 5 Checkpoint 2).
+// checkpoint's own test plan.
 import type { HistogramBucket } from "../../../../packages/schemas/generated";
 import type { TimeWindow } from "../crossfilter/store";
 

@@ -4,7 +4,7 @@ load_map_config`'s `yaml.safe_load` + `model_validate` shape exactly
 
 Resolving a `MapProvider.profile` reference into an effective provider (so
 `GET /v1/map/providers` can serve it, proxied like any tier-3/4 entry) is
-the tile-proxy checkpoint's job (`07_BUILD_PLAN.md` Phase 5 Checkpoint 3b)
+the tile proxy's own job
 — this module only proves a profile file itself is well-formed, the same
 narrower scope `load_map_config` had before the Conduit wired it up.
 """

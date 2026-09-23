@@ -1,5 +1,5 @@
 """The job-based path for `GraphPort.supersede_node` above a degree
-threshold — `docs/07_BUILD_PLAN.md` Phase 3: "measured (not assumed) at
+threshold: "measured (not assumed) at
 ~41 seconds for a 5,000-degree node against a local ArcadeDB instance...
 a request that takes 41 seconds is not a reasonable synchronous operation
 ... Same job/status-id shape as `PatternQuery`'s 'large results return a

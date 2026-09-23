@@ -1,5 +1,5 @@
 """`WorkingSetService` — `docs/03_CONDUIT_MIDDLEWARE.md` §4,
-`docs/07_BUILD_PLAN.md` Phase 3's exit criterion. Exercises the cap check,
+this phase's exit criterion. Exercises the cap check,
 `filtered_count`'s derivation and the reconnect/resnapshot decision against
 `FakeWorkingSetStore`/`FakeGraphPort` — the service's own logic, not
 `ValkeyWorkingSetStore` or a real adapter, which is why this needs neither

@@ -1,7 +1,7 @@
 """Guard test for the `ModelPort` conformance suite — Phase 6 Stage 1 handover.
 
 `MODEL_PORT_ADAPTERS` was asserted empty through Phase 5; this is the guard turning red on
-purpose, per Phase 6 Stage 1 (`docs/07_BUILD_PLAN.md`) — the expected handover once
+purpose, per this phase's own stage — the expected handover once
 `adapters/model_litellm` is registered, not a regression.
 """
 

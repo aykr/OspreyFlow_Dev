@@ -1,6 +1,6 @@
 """The shipped `providers/` profiles — `docs/00_ARCHITECTURE.md` §1.2's
 "Profiles to ship in `providers/`, each with a Verify fixture", scoped to
-one UK and one US profile for `07_BUILD_PLAN.md` Phase 5 Checkpoint 3a.
+one UK and one US profile.
 
 **What "Verify fixture" means at this checkpoint.** A profile's own
 `zoom`/`projection`/`attribution` are typed in by hand when the profile is

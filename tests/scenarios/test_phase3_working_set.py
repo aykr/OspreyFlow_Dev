@@ -1,4 +1,4 @@
-"""Phase 3's exit criterion, end to end — `docs/07_BUILD_PLAN.md`:
+"""Phase 3's exit criterion, end to end:
 
 "A scripted client seeds a working set, expands three times, disconnects
 mid-stream, reconnects and arrives at a byte-identical set. Every action

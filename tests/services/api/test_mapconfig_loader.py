@@ -1,5 +1,4 @@
-"""`services/api/mapconfig_loader.py` — `docs/00_ARCHITECTURE.md` §1.2,
-`docs/07_BUILD_PLAN.md` Phase 5."""
+"""`services/api/mapconfig_loader.py` — `docs/00_ARCHITECTURE.md` §1.2."""
 
 from __future__ import annotations
 

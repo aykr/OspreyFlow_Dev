@@ -1,7 +1,7 @@
 """Proves Fixture Corp (`tests/scenarios/fixtures/fixture_corp.py`) actually exercises the four
 properties `06_DECISIONS.md` ADR-035 §C5 pins, against real adapters — not a docstring claim
 nobody checks, the same "fixture-shape-proven-early" discipline `test_hmp_fixture_shape.py`
-already established for Scenario A's own fixture (`07_BUILD_PLAN.md` Phase 8 Stage 4a).
+already established for Scenario A's own fixture.
 
 Properties 1 and 2 need no live service — `resolve_entity_type`/`compute_clusters` and
 `ComputeRustworkxAdapter` are both pure, in-process functions. Properties 3 and 4 need a real

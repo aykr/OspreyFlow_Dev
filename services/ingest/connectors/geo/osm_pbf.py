@@ -8,8 +8,8 @@ polygons) are not parsed. That is the right slice for a *gazetteer*
 connector (`osm.py`'s job is "Place names ... POIs, coarse addresses" per
 `00_ARCHITECTURE.md` §1.2's tier-1 gazetteer row): named point places.
 Roads and polygon boundaries are a separate, later capability (tier 4's
-OGC features / the UK-US gazetteer connectors' boundary sources in
-`07_BUILD_PLAN.md` Phase 5's later checkpoint), not something this
+OGC features / the UK-US gazetteer connectors' boundary sources,
+built later), not something this
 connector silently drops from an otherwise-complete parse — it never
 reads a `PrimitiveGroup`'s `ways`/`relations` fields at all. Plain (as
 opposed to dense) `Node` messages are equally out of scope: no extractor

@@ -1,4 +1,4 @@
-"""The drift gate `07_BUILD_PLAN.md`'s Phase 8 documentation-refresh entry names:
+"""The drift gate the documentation-refresh work names:
 `scripts/demo_guide_check.py`'s own docstring has the full reasoning for why `DEMO_REGISTRY` is a
 stand-in for ADR-035's own still-unbuilt fail-closed registry, not the real thing.
 """

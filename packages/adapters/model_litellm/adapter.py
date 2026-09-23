@@ -1,6 +1,6 @@
 """`ModelLiteLLMAdapter` — `ModelPort` over a LiteLLM proxy (`docs/00_ARCHITECTURE.md` §2.4).
 
-All four `ModelPort` methods are real from Stage 2 (`docs/07_BUILD_PLAN.md` Phase 6).
+All four `ModelPort` methods are real from Stage 2.
 `transcribe()` does not support diarisation yet — `TranscribeRequest.diarize=True` raises
 `NotImplementedError` rather than silently returning every segment's `speaker` as `None` as if
 diarisation had run and found nothing; a disclosed Phase 6 gap, not a silent stub.
@@ -47,7 +47,7 @@ class ModelLiteLLMAdapter:
         if req.diarize:
             raise NotImplementedError(
                 "ModelLiteLLMAdapter.transcribe: diarisation is not implemented "
-                "(docs/07_BUILD_PLAN.md Phase 6's own disclosed gap) — call with diarize=False"
+                "(a disclosed gap) — call with diarize=False"
             )
         body = await self._client.transcribe(
             model=req.model, audio=req.audio, language=req.language

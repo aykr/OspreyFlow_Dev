@@ -24,7 +24,7 @@ re-read within the same run; it exists for a *later* run (a corrected
 recipe, a new ontology version) to read from instead of asking for the
 source file again.
 
-Object storage is MinIO (`docs/07_BUILD_PLAN.md` Phase 2), reached through
+Object storage is MinIO, reached through
 `pyarrow.fs.S3FileSystem` — MinIO is S3-protocol-compatible, so no separate
 client library is needed.
 """

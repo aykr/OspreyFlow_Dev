@@ -9,8 +9,8 @@ a resolution decision with a confidence, not a fact. It follows the same
 provenance rules as a model extraction and is confirmable by an analyst."
 
 No real caller exists yet — Phase 6's extraction pipeline is the eventual
-one (`07_BUILD_PLAN.md` Phase 5 Checkpoint 3c's own "build the capability
-before its eventual caller" position, the same shape `GraphPort` (Phase 1)
+one (the same "build the capability
+before its eventual caller" position `GraphPort`
 preceding the Conduit (Phase 3) already took).
 
 **Candidate retrieval is explicitly not this module's job.**

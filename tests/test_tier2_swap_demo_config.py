@@ -1,5 +1,5 @@
-"""The tier-1 -> tier-2 swap demonstration fixture — `docs/07_BUILD_PLAN.md`
-Phase 5 Checkpoint 3a's exit demonstration. Proves the fixture itself is
+"""The tier-1 -> tier-2 swap demonstration fixture — this
+checkpoint's exit demonstration. Proves the fixture itself is
 well-formed and stays within the "open, redistributable" bar the committed
 demo config also holds to (`test_demo_osprey_config_is_tier_1_only.py`),
 even though this fixture deliberately isn't that file (see its own header

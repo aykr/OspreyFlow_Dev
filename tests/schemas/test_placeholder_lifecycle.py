@@ -2,7 +2,7 @@
 
 `GraphPort`'s placeholder types moved to the real domain model
 (`schemas/domain.py`) in Phase 1 once `graph_arcadedb` was registered —
-`_phase0_placeholders.py` is gone (`docs/07_BUILD_PLAN.md` Phase 1 exit
+`_phase0_placeholders.py` is gone (this phase's own exit
 criterion). `AnalyticsPort`'s moved to `schemas/analytics.py` in Phase 2 once
 `analytics_duckdb` was registered. `ModelPort`'s moved to `schemas/model.py`
 across Phase 6 Stages 1 and 2 as `adapters/model_litellm` implemented each

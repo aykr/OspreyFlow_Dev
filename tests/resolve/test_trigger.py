@@ -14,7 +14,7 @@ Four layers, each proven at the level that actually needs it:
 - The overlap guard and the full orchestration — real Valkey and real ArcadeDB
   (`adapters.graph_arcadedb.testing.arcadedb_adapter`), no fakes, since this is exactly the kind
   of security/concurrency-relevant path the four-instances finding
-  (`07_BUILD_PLAN.md`'s "Gaps with no owning phase") says a fake cannot stand in for.
+  says a fake cannot stand in for.
 """
 
 from __future__ import annotations

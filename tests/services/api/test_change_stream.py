@@ -1,7 +1,7 @@
-"""`services/api/change_stream.py` — `06_DECISIONS.md` ADR-037's amendment, Phase 7 Stage 6a.
+"""`services/api/change_stream.py` — `06_DECISIONS.md` ADR-037's amendment.
 Real Valkey, real ArcadeDB for the resolution-producer case: the whole point of this module is
 proving a *consumer* sees what a *producer* actually wrote, which a fake on either side cannot
-prove (`07_BUILD_PLAN.md`'s "Fake-based tests" gaps entry).
+prove.
 """
 
 from __future__ import annotations

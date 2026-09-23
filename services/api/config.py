@@ -106,8 +106,8 @@ class ApiConfig:
     #: recipe path is. Relative to the process's working directory, which
     #: `deploy/compose/dev.yaml` and CI both run from the repo root.
     osprey_config_path: str
-    #: A persistent (not `:memory:`) DuckDB file — `07_BUILD_PLAN.md` Phase 5
-    #: Checkpoint 2. `analytics_duckdb/testing.py`'s own docstring records
+    #: A persistent (not `:memory:`) DuckDB file. `analytics_duckdb/testing.py`'s own
+    #: docstring records
     #: the longer-term intent (Parquet in object storage); this is the
     #: deliberately narrower, already-conformance-tested native-table store
     #: standing in for it, a stated and recorded deferral (this phase's plan

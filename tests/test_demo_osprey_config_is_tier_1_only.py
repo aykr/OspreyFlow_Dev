@@ -1,4 +1,4 @@
-"""`docs/07_BUILD_PLAN.md` standing rule 3: "the demo and CI run on tier 1
+"""Standing rule 9: "the demo and CI run on tier 1
 providers only" — enforced by rejecting any non-`open` provider in the
 committed `osprey.yaml`, the same way `tests/licence_check` proves the
 dependency-licence gate against a fixture lockfile rather than only

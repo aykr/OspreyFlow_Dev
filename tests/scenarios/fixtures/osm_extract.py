@@ -1,5 +1,5 @@
-"""A synthetic `.osm.pbf` file — standing rule 3 (`07_BUILD_PLAN.md`):
-"Fixtures are synthetic and in-repo... generated with a seeded generator."
+"""A synthetic `.osm.pbf` file — the standing rule that fixtures are
+synthetic and in-repo, generated with a seeded generator, not sourced from real intelligence data.
 A real Geofabrik extract cannot be a test dependency (it is neither
 synthetic nor in-repo, and CI must never depend on a network download),
 so this hand-encodes the same `DenseNodes` wire shape

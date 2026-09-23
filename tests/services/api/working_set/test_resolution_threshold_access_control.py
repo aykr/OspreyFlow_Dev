@@ -1,5 +1,5 @@
-"""Standing rule 2, applied to `set_resolution_threshold` itself — `07_BUILD_PLAN.md` Phase 6a
-Stage 2's own fourth question.
+"""The standing rule that access control lives in the adapter, applied to
+`set_resolution_threshold` itself — this phase's own fourth question.
 
 `tests/resolve/test_projection_access_control.py` already proves `compute_clusters` is safe
 *given already-filtered input*, and that `GraphPort.expand` filters out an edge if *either*
@@ -28,7 +28,7 @@ stored cluster state either.
 Uses the **real** `graph_arcadedb` adapter, not `FakeGraphPort` — the same reasoning
 `test_projection_access_control.py` and `test_manual_resolution_access_control.py` already
 established: a fake's own simulated access control could drift from the real adapter's, proving
-nothing about the actual boundary (`07_BUILD_PLAN.md`'s own `FakeGraphPort` gaps entry).
+nothing about the actual boundary.
 `FakeWorkingSetStore` is still a fake here, deliberately — the working-set store's own logic is
 not what this test is about.
 """

@@ -1,5 +1,5 @@
-"""Phase 8's own V1 END TO END exit criterion (`docs/07_BUILD_PLAN.md`, right after Phase 8's
-outcome bullets): "both acceptance scenarios pass unchanged on `local-lite`. Nothing else is part
+"""Phase 8's own V1 END TO END exit criterion, right after its own
+outcome bullets: "both acceptance scenarios pass unchanged on `local-lite`. Nothing else is part
 of it." This is Stage 4g's own closing pass — the single test the whole milestone rests on.
 
 Real FastAPI app (`services.api.app`), real ArcadeDB/Postgres/Valkey (`make dev-up`) — the same
@@ -32,7 +32,7 @@ hand-off report, so a future reader of this file's own history sees it in place.
    one step earlier in the mechanism than B8's own table position implies, and B9/B10's own
    threshold-move/explain mechanics are proven against that manually-asserted edge exactly the way
    `test_phase6a_glass_surfaces.py` already proved them against a different manually-asserted pair.
-   Disposition recorded in `07_BUILD_PLAN.md`'s Stage 4g entry: real, unscoped work (choosing and
+   Disposition: real, unscoped work (choosing and
    validating comparison functions for `handle`/`e164`/`imsi` identifiers) for a future stage, not
    invented under this closing pass.
 3. **No seizure-record connector or recipe exists** (already disclosed in `seizure_record.py`'s

@@ -9,7 +9,7 @@
 // `AlertJumpResult` live) and `services/api/investigations.py` (where `Investigation` lives) are
 // both outside that scope, by construction, since neither is a `packages/schemas` module at all.
 // `Hotlist`/`Monitor` *are* generated (`schemas.domain.ALL_MODELS`) and imported below rather than
-// redeclared. Recorded as a disclosed gap in `07_BUILD_PLAN.md`'s Stage 6c entry rather than left
+// redeclared — a disclosed gap, rather than left
 // silently hand-mirrored with no note — a future edit to either Python shape has nothing to make
 // this file's own copy drift-check the way `Hotlist`/`Monitor` already do.
 import type { Hotlist, Monitor } from "../../../../packages/schemas/generated";

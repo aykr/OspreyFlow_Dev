@@ -1,6 +1,7 @@
-"""Standing rule 2, applied to `explain_cluster` (`GET .../resolution/explain/{cluster_id}`) —
-found alongside Phase 6a Stage 2's own `set_resolution_threshold` gap
-(`07_BUILD_PLAN.md`'s `FakeGraphPort` gaps entry, instance four), and worse in kind: this route
+"""The standing rule that access control lives in the adapter, applied to
+`explain_cluster` (`GET .../resolution/explain/{cluster_id}`) —
+found alongside the same `set_resolution_threshold` gap, the fourth instance
+of one repeated pattern, and worse in kind: this route
 resolves a caller-named `cluster_id` to its member node ids from `source_fidelity_nodes` — the
 investigation-*shared*, unfiltered node set — with nothing that previously checked every member
 was visible to the calling principal before returning `member_node_ids` directly. A lower-

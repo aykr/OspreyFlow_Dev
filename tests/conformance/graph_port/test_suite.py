@@ -1,4 +1,4 @@
-"""`GraphPort` conformance suite — `docs/07_BUILD_PLAN.md` Phase 1,
+"""`GraphPort` conformance suite —
 `docs/04_VAULT_BACKEND.md` §6, `docs/00_ARCHITECTURE.md` §2.1 and §5.
 
 Parametrised over `GRAPH_PORT_ADAPTERS` in `tests/conformance/registry.py` —
@@ -740,7 +740,7 @@ async def test_match_finds_the_declared_pattern(factory: GraphAdapterFactory) ->
 def test_match_single_chain_pattern_compiles_to_the_same_gremlin_as_before(
     factory: GraphAdapterFactory,
 ) -> None:
-    """`06_DECISIONS.md` §8.1's widening (Phase 7 Stage 4) must not change one character of the
+    """`06_DECISIONS.md` ADR-030's widening (Phase 7 Stage 4) must not change one character of the
     Gremlin an existing single-chain pattern already compiled to — this is the no-regression
     proof, checked as a compiled-string comparison rather than only "the query still returns the
     right nodes," since the latter could pass even if the compiler now takes a slower or
@@ -785,7 +785,7 @@ async def test_match_finds_the_intersection_across_two_independent_roots(
     endpoints" — a diamond, not a chain: two independent starting nodes (`a`, `b`) converging on a
     shared third (`e`), which the pre-Stage-4 single-chain-only compiler could not express at all
     (`e`'s own second incoming edge referenced a `from_var` — `b` — the linear walk never bound).
-    `06_DECISIONS.md` §8.1's widening addresses exactly this pattern."""
+    `06_DECISIONS.md` ADR-030's widening addresses exactly this pattern."""
     async with factory.context() as adapter:
         (a, b, e, other), _ = await _write(
             adapter,
@@ -1146,7 +1146,7 @@ async def test_unauthorised_search_matches_a_graph_where_the_node_never_existed(
         assert await adapter.search_nodes("AB123456C", OFFICIAL) == []
 
 
-# --- suggest_locations (07_BUILD_PLAN.md Phase 5 known-gaps closure) --------
+# --- suggest_locations (a disclosed known-gaps closure) ---------------------
 #
 # The geocoder's own candidate retrieval — a coarse, bounded substring scan
 # over Location.name, deliberately separate from search_nodes's exact-match
@@ -1419,7 +1419,7 @@ async def test_upserting_the_same_pair_twice_retains_both_source_references(
 async def test_edge_weight_is_derived_not_hardcoded_and_persists_its_components(
     factory: GraphAdapterFactory,
 ) -> None:
-    """Phase 1 wrote a hardcoded `0.0` (`docs/07_BUILD_PLAN.md` Phase 2) —
+    """Phase 1 wrote a hardcoded `0.0`, fixed in Phase 2 —
     `weight` must now be a real, positive value, and `weight_components`
     must persist the counts behind it so a later recompute is arithmetic
     over stored numbers, not a corpus rescan (`01_DOMAIN_MODEL.md` §6.1)."""

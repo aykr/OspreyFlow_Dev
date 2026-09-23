@@ -1,5 +1,5 @@
 """The `supersede_node` sync/job routing decision —
-`docs/07_BUILD_PLAN.md` Phase 3's job-based-path bullet,
+the job-based-path bullet,
 `01_DOMAIN_MODEL.md` §8.2's measured ~41s/5,000-degree figure. Exercised
 against minimal fakes, not a live ArcadeDB or Valkey: the thing under
 test is the *decision*, not `GraphPort.supersede_node` or `JobQueue`

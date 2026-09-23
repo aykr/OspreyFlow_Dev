@@ -3,7 +3,7 @@ recipe against one source file, per ADR-013 (batch and micro-batch only, no
 streaming lane). This is the container's own process entrypoint, invoked
 directly by whatever schedules the batch (a Kubernetes Job, `docker run`,
 cron) — not an `osprey` unified CLI, which this build deliberately does not
-have (`docs/07_BUILD_PLAN.md`'s Phase 2 amendment).
+have.
 
 Connection details come from the environment, the same variables
 `adapters/graph_arcadedb`'s conformance suite reads

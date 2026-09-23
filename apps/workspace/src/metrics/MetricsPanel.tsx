@@ -1,9 +1,9 @@
-// The metrics panel — `docs/07_BUILD_PLAN.md` Phase 7: "Metrics panel with two-metric comparison;
+// The metrics panel: "Metrics panel with two-metric comparison;
 // size encoding; community hull overlay." `ComputePort`'s first real Glass caller (Phase 7 Stage
 // 3), talking to `services/api/compute_routes.py` via `metrics/api.ts`.
 //
 // **"Two-metric comparison," a spec-silent detail filled and disclosed rather than guessed
-// silently.** `02_GLASS_FRONTEND.md`/`07_BUILD_PLAN.md` name the feature but not its exact
+// silently.** `02_GLASS_FRONTEND.md` names the feature but not its exact
 // interaction shape. Read here as: two independent metric selectors (A, always shown and used to
 // rank the list; B, shown as a second column only while "Compare" is on) — the simplest reading
 // consistent with both the bullet's own wording and a11y's own "a dense two-metric comparison"

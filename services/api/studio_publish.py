@@ -155,8 +155,7 @@ async def write_and_commit_recipe(
     (republishing byte-identical content) is not an error — every other
     non-zero exit is.
 
-    **A stated gap, not a silent one** (`07_BUILD_PLAN.md`'s Phase 5a known
-    gaps): this commits to whichever local checkout `repo_root` names —
+    **A stated gap, not a silent one**: this commits to whichever local checkout `repo_root` names —
     correct for the single-instance dev deployment this phase targets, not
     yet correct for a horizontally-scaled one, where a second Conduit
     instance's own checkout would never see this commit. Pushing to a

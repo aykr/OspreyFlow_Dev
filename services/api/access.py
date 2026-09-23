@@ -2,8 +2,8 @@
 `services/api/working_set/service.py`'s `set_resolution_threshold` and `explain_cluster` each
 inlined this independently (`explain_cluster`'s own docstring: "the same pattern as
 `set_resolution_threshold`" — the same *pattern*, not the same *function*), and Phase 6a Stage 4's
-own Dossier assembly needed the same narrowing a third time. `07_BUILD_PLAN.md`'s `Gaps with no
-owning phase` entry on fake-based tests already names three independent instances of one repeated
+own Dossier assembly needed the same narrowing a third time — fake-based tests already show three
+independent instances of one repeated
 defect shape in this codebase; a third independent copy of *this* pattern would have been the same
 kind of finding again, just about duplication rather than a fake — closed here instead by
 extracting one function and retrofitting both existing call sites to it.

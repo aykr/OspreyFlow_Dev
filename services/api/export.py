@@ -23,8 +23,8 @@ see the `GraphPort.get_edge` limitation below — disclosed, not silently narrow
 case without saying so.
 
 **The `GraphPort.get_edge` limitation, inherited rather than newly introduced.** `GraphPort` has
-no `get_edge` (`07_BUILD_PLAN.md`'s own Phase 6 Stage 6 and Stage 4b entries already name this
-absence for two other reasons). An edge's own `Handling` block is instead taken from the client's
+no `get_edge` (already disclosed, for two other reasons). An edge's own `Handling` block is
+instead taken from the client's
 own submission (`ExportItem.handling`) — the edge *does* still get evaluated against the handling
 scheme (`consult_originator`, classification dominance), so a stale-but-honest client is still
 caught by the scheme check; what this module cannot do, and a node-shaped item's own `get_node`
@@ -33,9 +33,8 @@ that the edge itself has not been revoked since the analyst selected it. **Conse
 plainly:** a malicious or stale client could in principle submit fabricated edge-handling data
 lower than the edge's real current classification and have it pass the scheme check that should
 have blocked it — a real gap, not a theoretical one, closed only once `GraphPort.get_edge` exists.
-**Owning phase: whichever phase first builds `GraphPort.get_edge`** — the same disposition
-`07_BUILD_PLAN.md` already gives every other consequence of this same missing method, not invented
-here.
+**Disposition: whichever future work first builds `GraphPort.get_edge`** — the same disposition
+already given to every other consequence of this same missing method, not invented here.
 """
 
 from __future__ import annotations

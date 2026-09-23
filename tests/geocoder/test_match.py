@@ -1,6 +1,6 @@
 """`services/geocoder/match.py` — `docs/01_DOMAIN_MODEL.md` §4's
 entity-resolution design mirrored for gazetteer matching,
-`docs/07_BUILD_PLAN.md` Phase 5 Checkpoint 3c. `GraphPort` is faked (only
+`GraphPort` is faked (only
 `upsert_edges` is ever called) — the same "prove only the wiring, fake the
 port" discipline `test_sites_routes.py` already established; nothing here
 needs a live ArcadeDB.

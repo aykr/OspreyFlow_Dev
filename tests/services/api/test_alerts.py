@@ -1,7 +1,6 @@
-"""`services/api/alerts.py` — `06_DECISIONS.md` ADR-038/039, Phase 7 Stage 6a. Real Postgres (the
+"""`services/api/alerts.py` — `06_DECISIONS.md` ADR-038/039. Real Postgres (the
 alert store, the audit log) and real ArcadeDB (the referent recheck) — access control and
-"revoked access" are exactly the class of claim `07_BUILD_PLAN.md`'s "Fake-based tests" gaps entry
-says a fake cannot stand in for.
+"revoked access" are exactly the class of claim a fake cannot stand in for.
 """
 
 from __future__ import annotations

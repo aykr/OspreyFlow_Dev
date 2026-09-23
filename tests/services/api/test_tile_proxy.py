@@ -1,5 +1,5 @@
 """`services/api/tile_proxy.py` — `docs/00_ARCHITECTURE.md` §1.2's tile
-proxy, `docs/07_BUILD_PLAN.md` Phase 5 Checkpoint 3b, Phase 5's known-gaps
+proxy — a disclosed known-gaps
 closure's WMTS KVP fix for the `MapProvider.endpoint` conflict Checkpoint
 3b/3c left open."""
 

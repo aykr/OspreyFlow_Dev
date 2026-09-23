@@ -1,4 +1,4 @@
-"""The drift gate `07_BUILD_PLAN.md`'s Phase 8 documentation-refresh entry names:
+"""The drift gate the documentation-refresh work names:
 `scripts/route_coverage_check.py`'s own docstring has the full reasoning, including why paths are
 normalised before comparing and why every Apache-scoped doc is checked, not only
 `03_CONDUIT_MIDDLEWARE.md`'s table.

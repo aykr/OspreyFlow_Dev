@@ -1,5 +1,5 @@
-"""The golden-set CI gate — `docs/03_CONDUIT_MIDDLEWARE.md` §5.2, standing rule 5
-(`docs/07_BUILD_PLAN.md`): "A change that degrades recall on any type fails the build unless
+"""The golden-set CI gate — `docs/03_CONDUIT_MIDDLEWARE.md` §5.2, standing rule 5:
+"A change that degrades recall on any type fails the build unless
 explicitly accepted with a recorded reason."
 
 **The tolerance, and where it comes from.** `RECALL_TOLERANCE`/`PRECISION_TOLERANCE` are not round

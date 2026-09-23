@@ -2,7 +2,7 @@
 
 `GRAPH_PORT_ADAPTERS` was asserted empty through Phase 0; this is the guard
 turning red on purpose, per the Phase 1 exit criterion
-(`docs/07_BUILD_PLAN.md`) — the expected handover once `graph_arcadedb` is
+— the expected handover once `graph_arcadedb` is
 registered, not a regression.
 """
 

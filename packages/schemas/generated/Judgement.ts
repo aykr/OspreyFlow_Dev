@@ -24,7 +24,7 @@ export type FlagReason = string | null;
  * model's own illustrative type union already is (all three are opaque ULID-shaped strings with
  * no structural way to tell them apart). **Disclosed limitation, not fixed here:**
  * `GraphPort` has no `get_edge`, and no document store exists yet
- * (`07_BUILD_PLAN.md`'s own "Stage 4b known gaps" entry has the full record) — only a `NodeId`
+ * (a disclosed gap, not fixed here) — only a `NodeId`
  * citation can be positively confirmed visible today; an `EdgeId`/`DocumentId` citation is always
  * treated as unreadable by `services/api/assessments.py`'s own access check, the same fail-closed
  * default this codebase already applies everywhere else it cannot positively confirm access.

@@ -89,7 +89,7 @@ class ComputeGraphologyTier1Adapter:
     async def temporal_motifs(self, req: MotifRequest) -> list[MotifMatch]:
         raise NotImplementedError(
             "convoy/relay/burst detection is unclaimed by any phase's own bullet list "
-            "(07_BUILD_PLAN.md Phase 7 known-gaps list) — MotifRequest/MotifMatch exist as real "
+            "(a disclosed gap) — MotifRequest/MotifMatch exist as real "
             "schemas because _pending_port_placeholders.py's retirement needed them, not because "
             "the algorithm has an owning phase yet"
         )

@@ -1,5 +1,5 @@
-"""The golden-set evaluation harness — `docs/03_CONDUIT_MIDDLEWARE.md` §5.2, standing rule 5
-(`docs/07_BUILD_PLAN.md`): "Every model-facing prompt is versioned and evaluated. A prompt change
+"""The golden-set evaluation harness — `docs/03_CONDUIT_MIDDLEWARE.md` §5.2, standing rule 5:
+"Every model-facing prompt is versioned and evaluated. A prompt change
 runs the golden set and reports the delta on the pull request." Phase 6 Stage 3.
 
 **What this baseline number is, and what it is not.** `tests/golden/baseline.json`'s numbers
@@ -24,7 +24,7 @@ and Stage 3 inherits that same shape rather than inventing POLE awareness ahead 
 "category" here is simply an array-valued top-level field of a case's own `json_schema` (e.g.
 `persons_mentioned`) — the closest schema-agnostic analogue to "entity type" available before
 Stage 6 lands, narrower than the spec's literal wording and disclosed as such in
-`docs/07_BUILD_PLAN.md`'s Phase 6 known gaps rather than silently assumed to be the same thing.
+a disclosed gap rather than silently assumed to be the same thing.
 
 **Why every case runs `N_RUNS` times, not once.** Stage 1's witness-statement smoke test and
 Stage 2's own repeated-run checks both found genuine run-to-run recall variance from the pinned

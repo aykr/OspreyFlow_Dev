@@ -1,4 +1,4 @@
-"""`ModelPort` conformance suite (`docs/07_BUILD_PLAN.md` Phase 6, `00_ARCHITECTURE.md` §2.4).
+"""`ModelPort` conformance suite (`00_ARCHITECTURE.md` §2.4).
 
 Parametrised over `MODEL_PORT_ADAPTERS` in `tests/conformance/registry.py`. `extract()`, `embed()`
 and `transcribe()` are tested here — `describe_image()` has its own file

@@ -342,9 +342,8 @@ def test_app_lifespan_does_not_reopen_the_unbounded_pool_ceiling(
     `max_connections=100` before this stage; adding three more at that default (`Hotlist`/
     `Monitor`/`AlertStore`) pushed a real lifespan over it, reproduced directly as
     `asyncpg.exceptions.TooManyConnectionsError`. All ten stores are now explicitly bounded
-    (`hotlists.py::HotlistStore.connect`'s own comment has the arithmetic;
-    `07_BUILD_PLAN.md`'s own Stage 6c entry has the full reconciliation against Postgres's
-    configured limit and more than one Conduit instance).
+    (`hotlists.py::HotlistStore.connect`'s own comment has the arithmetic and the full
+    reconciliation against Postgres's configured limit and more than one Conduit instance).
 
     This test measures the actual delta in live Postgres connections one full `TestClient(app)`
     lifespan opens — measured directly at `12` with today's ten bounded stores, not assumed.
@@ -507,7 +506,7 @@ def test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_inge
     tmp_path: Path,
     git_repo: Path,
 ) -> None:
-    """Phase 8 Stage 1's own named exit criterion (`07_BUILD_PLAN.md`) — currently red by
+    """This phase's own named exit criterion — currently red by
     construction until this stage's own mechanism exists, turned green here. Real FastAPI app,
     real ArcadeDB/Postgres/Valkey, real HTTP, real recipe-publish pipeline, two real principals —
     A (the hotlist's own owner) and B (whose own ingest triggers evaluation), neither one the

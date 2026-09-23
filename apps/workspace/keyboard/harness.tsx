@@ -1,6 +1,6 @@
 // Keyboard-only walkthrough harness — `docs/02_GLASS_FRONTEND.md` §6's
 // accessibility floor ("Every canvas action reachable by keyboard"),
-// `docs/07_BUILD_PLAN.md` Phase 4's exit criterion ("Keyboard navigation
+// This phase's exit criterion ("Keyboard navigation
 // reaches every canvas action"). A small, real graph (not the 50k perf
 // fixture — this test is about reachability, not scale) rendered with
 // `GlassCanvas` alone, exposing `window.__KEYBOARD__` so

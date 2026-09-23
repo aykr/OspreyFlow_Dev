@@ -1,6 +1,6 @@
 // The "hotspot cells" filter panel — `08_ACCEPTANCE_SCENARIOS.md` A2/A3,
-// `07_BUILD_PLAN.md` Phase 5 Checkpoint 2's "Filter panel wired for real
-// onto the existing unwired Histogram.tsx" bullet.
+// The "filter panel wired for real
+// onto the existing unwired Histogram.tsx" capability.
 //
 // **Why this exists alongside the map's own geo_bins heat layer, not
 // instead of it.** Manual verification against a live seeded HMP fixture

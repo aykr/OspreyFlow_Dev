@@ -1,5 +1,4 @@
-"""The basemap provider registry — `docs/00_ARCHITECTURE.md` §1.2,
-`docs/07_BUILD_PLAN.md` Phase 5."""
+"""The basemap provider registry — `docs/00_ARCHITECTURE.md` §1.2."""
 
 from __future__ import annotations
 

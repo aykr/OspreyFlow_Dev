@@ -1,5 +1,5 @@
-"""Phase 6a's own exit criterion, end to end — `docs/07_BUILD_PLAN.md`: "Acceptance scenario B's
-B6, B9, B10 and B11 (ADR-022) pass end to end against Phase 6's existing API." Four stages with
+"""Phase 6a's own exit criterion, end to end: "Acceptance scenario B's
+B6, B9, B10 and B11 pass end to end against Phase 6's existing API." Four stages with
 their own passing tests is not that, per this repository's own precedent: `test_phase3_working_
 set.py` and `test_phase6_extraction_and_resolution.py` both exist because a scenario-shaped exit
 criterion gets a test that runs the scenario, "against the live stack... rather than trusting each
@@ -23,7 +23,7 @@ own right, not an extension of an existing pattern, so it is not attempted here 
 asserted without having been run. This test proves what `test_phase3_working_set.py` already
 established counts as "end to end" for an exit criterion in this codebase: the API surface the
 Glass calls composes correctly, against the live stack, in one session. It does not prove a human
-can operate the four screens — `07_BUILD_PLAN.md`'s own Phase 6a known-gaps list records that
+can operate the four screens — a disclosed gap, recorded
 separately, as still outstanding.
 
 **The two entities are minted by accepting real extraction candidates over the real accept

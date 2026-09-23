@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS events (
 #: primary key is `(geometry_ref, version)`, not `geometry_ref` alone — a
 #: gazetteer refresh loads a new version without deleting the old one, so
 #: the same ref legitimately has one row per version it has ever appeared
-#: in (Phase 5, `07_BUILD_PLAN.md`).
+#: in.
 #: `kind`/`geometry` added in Phase 5's known-gaps closure: `kind` discriminates `point`/`polygon`
 #: (`schemas.analytics.GeometryKind`); `geometry` is `NULL` for a point row
 #: (which keeps carrying `lon`/`lat` as before) and a real `GEOMETRY` value

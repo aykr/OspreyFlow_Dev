@@ -1,5 +1,5 @@
 // The Sigma-bound canvas — `docs/02_GLASS_FRONTEND.md` §1/§1.1,
-// `docs/07_BUILD_PLAN.md` Phase 4 Checkpoint 2: "Sigma renderer with the
+// This checkpoint's own plan: "Sigma renderer with the
 // full node state vocabulary... Canvas interaction: pan, zoom, select,
 // lasso, radial context menu, expand... Semantic zoom."
 //
@@ -510,8 +510,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
     // `Popover`, opened from the same radial-menu-item shape.
     if (inspectedEdge || clusterExplain || pathResult || pathError || actionError) return;
     // Tab/Shift+Tab are deliberately never intercepted here — `02_GLASS_FRONTEND.md` §6's own
-    // Tab-cycling wording was corrected in Phase 7 Stage 4 (found while wiring a second
-    // keyboard-driven surface beside this canvas, `07_BUILD_PLAN.md`'s own gaps entry has the
+    // Tab-cycling wording was corrected after being found while wiring a second
+    // keyboard-driven surface beside this canvas (a disclosed gap has the
     // full incident): a container that calls `preventDefault()` on every Tab keydown once it
     // holds focus traps a keyboard user inside it for the container's own lifetime, with no way
     // to reach a sibling panel at all. Tab now behaves exactly like every other control on the
@@ -599,7 +599,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
     store.getState().applyDelta(outcome.delta);
   }
 
-  // `08_ACCEPTANCE_SCENARIOS.md` B11 / `07_BUILD_PLAN.md` Phase 6a Stage 1: "a SAME_AS with
+  // `08_ACCEPTANCE_SCENARIOS.md` B11: "a SAME_AS with
   // score 1.0, provenance asserted, attributed to the analyst" — attribution needs no plumbing
   // here beyond the same `bearerToken` `expandNode` already sends, since `link_resolution_route`/
   // `split_resolution_route` (`services/api/app.py`) resolve the writing principal from that same
@@ -641,7 +641,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
     store.getState().applyDelta(delta);
   }
 
-  // `08_ACCEPTANCE_SCENARIOS.md` B10 / `07_BUILD_PLAN.md` Phase 6a Stage 3: "per-comparison match
+  // `08_ACCEPTANCE_SCENARIOS.md` B10: "per-comparison match
   // weights, not just the total." A `GET`, unlike `expandNode`/`manualAssertion` — `explain_cluster`
   // is a pure read of the working set's own last-computed clustering, nothing to attribute to this
   // principal beyond the bearer token every other read here already sends.

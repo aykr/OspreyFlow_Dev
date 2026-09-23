@@ -1,5 +1,6 @@
-"""Standing rule 2, applied to `_manual_assertion`'s own write path — `07_BUILD_PLAN.md` Phase 6a
-Stage 1's own third question. `source_fidelity_nodes` (`FakeWorkingSetStore` here, `ValkeyWorkingSetStore`
+"""The standing rule that access control lives in the adapter, applied to
+`_manual_assertion`'s own write path — this phase's own third question.
+`source_fidelity_nodes` (`FakeWorkingSetStore` here, `ValkeyWorkingSetStore`
 for real) is the *investigation-shared* node set, not a projection scoped to the calling
 principal's own clearance — two principals can share one investigation at different clearances,
 both authorized via the same `org_unit`. `_manual_assertion` (`services/api/working_set/

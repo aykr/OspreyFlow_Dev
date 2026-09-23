@@ -51,8 +51,8 @@ export type DistanceTolerance = number | null;
 export type TimeToleranceSeconds = number | null;
 
 /**
- * Real types, honestly scoped — `07_BUILD_PLAN.md`'s Phase 7 known-gaps list has the full
- * disclosure: this schema exists because `_pending_port_placeholders.py`'s retirement needs it,
+ * Real types, honestly scoped — a disclosed gap: this schema exists because
+ * `_pending_port_placeholders.py`'s retirement needs it,
  * not because any phase's bullet list has yet claimed the convoy/relay/burst algorithms
  * themselves. `distance_tolerance`/`time_tolerance_seconds` are named directly from
  * `02_GLASS_FRONTEND.md`'s own Convoy analysis line ("co-located within a distance and time

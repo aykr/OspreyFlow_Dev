@@ -7,9 +7,9 @@ from there rather than redeclared, so the two gates cannot silently diverge on w
 means) cite, link to, or reference by path a file destined for the private build tree (`spec/`'s
 own non-Apache-scoped members — `06_DECISIONS.md`, `07_BUILD_PLAN.md` — and everything destined
 for `process/`, plus `CLAUDE.md` and `docs/PRODUCT_DELIVERY.md`). It does **not** scan
-`packages/`/`services/`/`apps/` source comments for the same pattern — `06_DECISIONS.md`'s own ADR
-numbers are cited from source docstrings throughout this codebase (`06_DECISIONS.md` ADR-031: "392
-source files carry 1,150 citations"), and every one of those is a legitimate, currently-resolving
+`packages/`/`services/`/`apps/` source comments for the same pattern — those same files' own ADR
+numbers are cited from source docstrings throughout this codebase (392 source files carry 1,150
+such citations), and every one of those is a legitimate, currently-resolving
 citation from inside the private repository to another file that also stays inside it after
 Trigger A (both move into `spec/` together). Flagging those here would not be a bug this gate
 exists to catch, and enumerating 1,150 lines into an allowlist would swamp the handful of real

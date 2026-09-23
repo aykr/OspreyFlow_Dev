@@ -2,8 +2,8 @@
 after any provider change: it fetches a sample tile at three zoom levels,
 asserts the CRS and the zoom range the platform expects, renders a fixture
 graph over it and compares against a stored reference for contrast floor
-compliance, and confirms attribution is present", `docs/07_BUILD_PLAN.md`
-Phase 5's own "Verify parity check... CRS, zoom range, contrast floor over
+compliance, and confirms attribution is present", the same
+"Verify parity check... CRS, zoom range, contrast floor over
 a fixture graph, attribution presence" bullet.
 
 No `osprey` CLI yet (`CLAUDE.md`'s own Conventions) — a plain,

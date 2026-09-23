@@ -1,6 +1,6 @@
 """Proves the HMP fixture's graph side (`tests/scenarios/fixtures/
-hmp_graph.py`) — `08_ACCEPTANCE_SCENARIOS.md` Scenario A, `07_BUILD_PLAN.md`
-Phase 5. `test_hmp_fixture_shape.py` already proves the untouched
+hmp_graph.py`) — `08_ACCEPTANCE_SCENARIOS.md` Scenario A.
+`test_hmp_fixture_shape.py` already proves the untouched
 analytics-only shape; this proves the graph side built on top of it: real
 `Location`/`Person`/`Organisation` nodes, `PRESENT_AT`/`FAMILY_OF`/
 `MEMBER_OF`/`ASSOCIATE_OF`/`MENTIONED_IN` edges, and that

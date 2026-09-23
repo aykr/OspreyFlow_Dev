@@ -1,5 +1,4 @@
-"""`ModelPort` over a LiteLLM proxy — `docs/00_ARCHITECTURE.md` §2.4, `docs/07_BUILD_PLAN.md`
-Phase 6."""
+"""`ModelPort` over a LiteLLM proxy — `docs/00_ARCHITECTURE.md` §2.4."""
 
 from __future__ import annotations
 

@@ -376,8 +376,8 @@ async def accept_candidate(
 ) -> NodeId:
     """`09_INGEST_STUDIO.md` §7's "Edit" is folded into "Accept" here, as an optional property
     override applied on top of the candidate's own extracted+adapter-normalised properties — a
-    deliberately minimal shape rather than a second, stateful draft-edit round trip (flagged in
-    `07_BUILD_PLAN.md`'s Phase 6 known gaps). Writes through a fresh transaction, following the
+    deliberately minimal shape rather than a second, stateful draft-edit round trip (a
+    disclosed gap). Writes through a fresh transaction, following the
     same begin/commit-or-rollback shape `services/api/working_set/service.py`'s manual
     link/split already established."""
     record = await store.get_authorized(candidate_id, principal)

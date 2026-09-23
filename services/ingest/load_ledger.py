@@ -1,7 +1,7 @@
 """Builds the load ledger entry a completed run of the recipe engine
 produces — `01_DOMAIN_MODEL.md` §2.4, ADR-018. Where a `LoadRecord` lives
-durably (the same object storage as the Parquet staging layer,
-`07_BUILD_PLAN.md` Phase 2) is not decided here; this module only shapes
+durably (the same object storage as the Parquet staging layer)
+is not decided here; this module only shapes
 the record `revert_load` (`revert.py`) needs, from the `LoadReport`
 `engine.run_recipe` already returns.
 """

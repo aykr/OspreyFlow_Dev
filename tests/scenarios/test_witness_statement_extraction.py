@@ -1,5 +1,5 @@
 """Extraction against a real paragraph of prose, not a one-line toy string —
-`docs/07_BUILD_PLAN.md` Phase 6 Stage 1's own scoping named this fixture explicitly: a short
+This stage's own scoping named this fixture explicitly: a short
 synthetic witness statement as the running smoke-test document for schema-constrained text
 extraction, to be folded into Stage 3's golden set as its first hand-labelled example.
 

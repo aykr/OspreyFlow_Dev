@@ -1,4 +1,4 @@
-"""`ModelPort` domain types — `docs/00_ARCHITECTURE.md` §2.4, `docs/07_BUILD_PLAN.md` Phase 6.
+"""`ModelPort` domain types — `docs/00_ARCHITECTURE.md` §2.4.
 
 Real types replacing `_pending_port_placeholders`'s stand-ins once each pair's own stage registers
 an adapter that implements it — `ExtractionRequest`/`ExtractionResult` in Stage 1,
@@ -56,8 +56,8 @@ class TranscribeRequest(BaseModel):
     audio: bytes
     #: BCP-47-ish language hint (e.g. `"en"`) or `None` to let the model detect it.
     language: str | None = None
-    #: Speaker diarisation is not implemented this stage (`07_BUILD_PLAN.md` Phase 6's own
-    #: disclosed gap) — `transcribe()` raises `NotImplementedError` if this is `True`, rather than
+    #: Speaker diarisation is not implemented yet, a disclosed gap — `transcribe()` raises
+    #: `NotImplementedError` if this is `True`, rather than
     #: silently returning `TranscriptSegment.speaker = None` as if diarisation had run and found
     #: nothing.
     diarize: bool = False

@@ -1,6 +1,6 @@
 // The bundled dark MapLibre style — `docs/00_ARCHITECTURE.md` §1.2's
 // tier-1 "Two MapLibre styles ship with it, dark and light, built
-// against `design/tokens.css`", `docs/07_BUILD_PLAN.md` Phase 5.
+// against `design/tokens.css`".
 //
 // **Dark only for now.** Same deferral `color/tokens.ts`'s
 // `SURFACE_PANEL_DARK_HEX` already states for node rendering: Checkpoint 2
@@ -140,8 +140,8 @@ export function buildBundledDarkStyle(provider: PublicMapProvider): StyleSpecifi
   };
 }
 
-/** A `kind: raster` provider's style — `07_BUILD_PLAN.md` Phase 5
- * Checkpoint 3b. One XYZ `raster` source/layer; `tileUrl` is either the
+/** A `kind: raster` provider's style. One XYZ `raster` source/layer;
+ * `tileUrl` is either the
  * provider's own direct `source` (an unproxied raster provider) or the
  * Conduit's tile-proxy route (`resolveBundledStyle`'s own caller builds
  * whichever applies — this function only renders the URL it's given). */

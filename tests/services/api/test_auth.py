@@ -180,7 +180,7 @@ async def test_principal_for_owner_returns_exactly_that_owners_own_claims_not_a_
     token_exchange_url: str,
     token_exchange_registry: TokenExchangeRegistry,
 ) -> None:
-    """The containment test — `07_BUILD_PLAN.md` Phase 8 Stage 1's own named exit requirement,
+    """The containment test — this phase's own named exit requirement,
     mirroring `tests/services/api/test_evaluation.py::
     test_a_monitor_never_evaluates_with_a_principal_broader_than_its_owner`'s own reasoning: an
     outcome assertion cannot catch a broader-principal bug, only inspecting the actual returned

@@ -1,4 +1,4 @@
-"""The link-integrity gate `06_DECISIONS.md` ADR-034 §B8 names — `scripts/product_tree_link_
+"""The link-integrity gate this repository's own decision log names — `scripts/product_tree_link_
 check.py`'s own docstring has the full reasoning, including why it is scoped to documentation-to-
 documentation references only, not every citation in the repository."""
 

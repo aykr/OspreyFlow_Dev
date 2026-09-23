@@ -1,4 +1,4 @@
-"""End-to-end proof of `07_BUILD_PLAN.md` Phase 6's own exit criterion: "A manual split survives
+"""End-to-end proof of Phase 6's own exit criterion: "A manual split survives
 a subsequent resolution run that would have merged the pair, and the conflict is recorded for
 review." `tests/resolve/test_conflicts.py` and `test_same_as_writer.py` each prove one stage of
 this pipeline against synthetic `SameAsCandidate`/`Edge` fixtures; this file wires

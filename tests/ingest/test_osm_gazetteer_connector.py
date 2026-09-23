@@ -1,5 +1,5 @@
 """The OSM-derived gazetteer connector — `docs/00_ARCHITECTURE.md` §1.2,
-`docs/07_BUILD_PLAN.md` Phase 5. `pbf_wire.py`'s own varint/zigzag
+`pbf_wire.py`'s own varint/zigzag
 round-trip is exercised implicitly by every test here (the synthetic
 fixture is encoded with it, the connector decodes with it) rather than in
 a separate unit test — the two directions have no meaning apart from each

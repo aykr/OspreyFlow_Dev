@@ -3,7 +3,7 @@
 export type GeometryRef = string;
 export type Version = number;
 /**
- * `07_BUILD_PLAN.md` Phase 5's known-gaps closure: `GeometryRecord` was
+ * A known-gaps closure: `GeometryRecord` was
  * point-only through Phase 2/5 Checkpoint 3c. `POLYGON` is the boundary/jurisdiction shape a
  * `Location` with no single point (a ward, an administrative area — see
  * `packages/ontology/default.yaml`'s own "a jurisdiction... must be able
@@ -54,7 +54,7 @@ export type LegalBasis = string | null;
  * an explicit older one to pin a historical read.
  *
  * `handling` **is** carried per row, unlike the note this docstring used
- * to make — Phase 5 (`07_BUILD_PLAN.md`) builds this partition's real,
+ * to make — this partition now has a real,
  * access-controlled read path, and geometry is not uniformly public
  * reference data: a site's own control-point/grid geometry (the HMP
  * case) is exactly as sensitive as the `Location` entities it backs, so

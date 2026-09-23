@@ -1,7 +1,7 @@
 """`revert_load` — `09_INGEST_STUDIO.md` §6: "A load is a unit.
 `osprey ingest revert <load_id>` supersedes everything the load created,
-leaving the audit trail intact." There is no `osprey` CLI in this build
-(`07_BUILD_PLAN.md`'s Phase 2 amendment) — this is that operation as a
+leaving the audit trail intact." There is no `osprey` CLI in this build yet — this is that
+operation as a
 plain function, tested directly, with the harness's admin console (Phase
 8) as its eventual caller.
 

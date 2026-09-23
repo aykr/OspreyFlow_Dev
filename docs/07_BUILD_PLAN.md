@@ -3379,32 +3379,48 @@ find something already finished sitting in the queue.
    own prose (17 of the 102 provenance annotations, 2 of the 6 `CLAUDE.md` citations live there).
    Neither part's own work substitutes for the other's.
 
-   **Exit criterion, 3b, a test:** all four allowlist-based gates
+   **Exit criterion, 3b, a test:** all five allowlist-based gates
    (`domain-model-coverage-check`, `route-coverage-check`, `product-tree-link-check`,
-   `test-file-coverage-check`) pass against a repository with no allowlist file to read, not merely
-   an allowlist with fewer entries — the same "empty and deleted," not "empty and kept as a
-   header," standard already applied elsewhere in this document; no provenance annotation and no
-   `CLAUDE.md` citation remains in any Apache-scoped document; and "Legacy disclosures" is itself
-   empty and deleted. **`test-file-coverage-check`'s own allowlist currently has no file at all
-   (already, trivially, empty) — checked directly, not assumed clean: the gate itself still fails
-   today, for a real, already-disclosed, unrelated reason** (`tests/scenarios/
-   test_phase8_exit_criterion_end_to_end.py` was never wired into the `test` job's ignore list or
-   a live-service job when it was committed — `07_BUILD_PLAN.md`'s own earlier entry has the
-   record). Closing this exit criterion's own fourth gate needs that wiring fixed, not an
-   allowlist emptied — a different piece of work this stage also owns, not a formality the
-   "already empty" allowlist implies is already done.
+   `decision-log-publication-check`, `test-file-coverage-check`) pass against a repository with no
+   allowlist file to read, not merely an allowlist with fewer entries — the same "empty and
+   deleted," not "empty and kept as a header," standard already applied elsewhere in this document;
+   no provenance annotation and no `CLAUDE.md` citation remains in any Apache-scoped document; and
+   "Legacy disclosures" is itself empty and deleted. **`test-file-coverage-check`'s own allowlist
+   currently has no file at all (already, trivially, empty) — checked directly, not assumed clean:
+   the gate itself still fails today, for a real, already-disclosed, unrelated reason**
+   (`tests/scenarios/test_phase8_exit_criterion_end_to_end.py` was never wired into the `test`
+   job's ignore list or a live-service job when it was committed — `07_BUILD_PLAN.md`'s own earlier
+   entry has the record). Closing this exit criterion's own fourth gate needs that wiring fixed,
+   not an allowlist emptied — a different piece of work this stage also owns, not a formality the
+   "already empty" allowlist implies is already done. **`decision-log-publication-check`'s own
+   allowlist has 6 entries today** (`06_DECISIONS.md` ADR-034 §B10 — 6 PRODUCT ADR sections citing
+   a PROCESS ADR by number, found on this gate's own first real run), which this stage's own
+   documentation-refresh work empties by editing those 6 sections' prose, the same discipline
+   already applied to the source-code rewrite below.
 
-   **Open, deliberately not folded in here — the source-code citation census (`06_DECISIONS.md`
-   ADR-034 §B10).** 1,046 source-code citations counted by target and classified product/private;
-   every ADR classified PRODUCT or PROCESS; 153 citations (`07_BUILD_PLAN.md` in full, plus
-   PROCESS-ADR and unclassified `06_DECISIONS.md` citations) sized as what remains after a
-   filtered decision log. **Not added to 3b's own numbered scope above, and not given its own
-   stage, because it depends on a decision 3b's other items do not: whether a filtered,
-   PRODUCT-only decision log is published at all.** 3b's existing items rewrite citations of
-   documents already decided to publish; this one's own citation count changes depending on an
-   answer not yet given. Sits here, flagged with real numbers rather than left as a bare mention,
-   until that answer is given — at which point it is either folded into 3b (if the filtered log is
-   built) or resolved as pure private-tree citation debt with no filtering to do (if it is not).
+   **Done, not open — the source-code citation census (`06_DECISIONS.md` ADR-034 §B10).** The
+   first count (1,046, product/private split 717/329) was wrong — a backtick-anchored regex missed
+   the `` `docs/NN_NAME.md` `` and bare-string-literal citation forms, undercounting by roughly a
+   third. Re-derived by taking `product_tree_link_check.py`'s own marker-matching logic as the
+   census rather than a second regex: **1,579** source-code citations (1,023 product, 556 private —
+   `06_DECISIONS.md` 247, `07_BUILD_PLAN.md` 221, `CLAUDE.md` 82, five others 6). The filtered
+   decision log is **accepted**, not proposed: 8 ADRs classified PROCESS (012, 019, 022, 026, 027,
+   031, 034, 042), 40 PRODUCT, publishing with the product tree. The rewrite (keep the constraint,
+   drop the private pointer, comment-only) is **complete**: every real `07_BUILD_PLAN.md`
+   source-code citation rewritten (221 → 0 real remaining; 3 hits left are
+   `product_tree_link_check.py`'s own exempt marker-list data); `06_DECISIONS.md`'s own citations
+   left almost entirely untouched (247 → 250) because the overwhelming majority already name a
+   PRODUCT ADR and never needed rewriting — only 6 bare or PROCESS-ADR citations needed real edits.
+   `packages/schemas/generated/*.ts` regenerated, not hand-edited. Full suite green before and
+   after. `scripts/decision_log_publication_check.py` built and wired into `make ci`, per the exit
+   criterion above.
+
+   **Still open — `CLAUDE.md`'s 82 source-code citations, found on this same re-derivation, not
+   actioned.** A different, larger population than 3b's existing 6-*file* documentation citation
+   count above (which is READMEs and spec prose, not source code). Sized and named here so it does
+   not go missing the way the original miscount nearly buried it; not rewritten in this pass —
+   folded into this stage's own scope as its next item, using the same method already proven on
+   `07_BUILD_PLAN.md`.
 
    **Nothing currently placed in Trigger A's own scope (3b) belongs before the milestone instead —
    checked against 3a's own definition directly, not assumed.** Every item above is about a reader

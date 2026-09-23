@@ -4,8 +4,8 @@ The dispatch decision (which handler a `job_type` maps to) and the transaction w
 commit/rollback behaviour are simple enough to prove with a recording fake `GraphPort`,
 consistent with `tests/services/api/test_supersede.py`'s own precedent of faking the *decision*
 under test, not a security-relevant read path — nothing here exercises access control, so a fake
-is the right tool, not a shortcut around the four-instances lesson (`07_BUILD_PLAN.md`'s "Gaps
-with no owning phase"). The Valkey Streams consumer-group mechanics themselves (`xgroup_create`,
+is the right tool, not a shortcut around the four-instances lesson. The Valkey Streams
+consumer-group mechanics themselves (`xgroup_create`,
 `xreadgroup`, `xack`) run against the real client, the same discipline `test_valkey_store.py`
 already established for `ValkeyWorkingSetStore`.
 """

@@ -2,7 +2,7 @@
 Stage 6a deferred (concurrency limit, per-evaluation cost cap, overrun behaviour) land here,
 because this is the first scheduled/event-driven consumer of the change stream Stage 6a built with
 none — writing a lock with nothing yet acquiring it repeatedly would have been bounding a
-mechanism that could not yet run unbounded (6a's own disclosed reasoning, `07_BUILD_PLAN.md`).
+mechanism that could not yet run unbounded (6a's own disclosed reasoning).
 
 **Two evaluators, not one, because hotlists and monitors have genuinely different leak shapes —
 `06_DECISIONS.md` ADR-036 and ADR-038 each already say so, not invented here.**

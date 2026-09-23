@@ -1,5 +1,5 @@
-"""The seven remaining UK/US gazetteer connectors — `docs/07_BUILD_PLAN.md`
-Phase 5 Checkpoint 3c. Mirrors `test_crs_reprojection.py`'s exact shape
+"""The seven remaining UK/US gazetteer connectors. Mirrors
+`test_crs_reprojection.py`'s exact shape
 (connector → recipe engine → `GraphPort`, `geometry_ref` checked against
 `geometry_reference()` computed independently) rather than `osm.py`'s own
 two-test-file split — none of these seven sources needed a bespoke
@@ -228,8 +228,8 @@ async def test_tiger_line_locations_carry_a_representative_point(tmp_path: Path)
 
 
 async def test_nad_locations_carry_a_geometry_ref(tmp_path: Path) -> None:
-    """National Address Database coverage is voluntary and uneven per
-    `docs/07_BUILD_PLAN.md`'s own caveat — a property of the real data,
+    """National Address Database coverage is voluntary and uneven — a
+    disclosed caveat, a property of the real data,
     not something this recipe/connector handles specially."""
     from tests.scenarios.fixtures.gazetteer_sources import generate_nad_rows
 

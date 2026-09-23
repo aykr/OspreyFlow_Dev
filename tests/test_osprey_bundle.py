@@ -1,7 +1,6 @@
 """`scripts/osprey_bundle.py` — `docs/00_ARCHITECTURE.md` §1.2's "the
 bundle step refuses to package tiles or gazetteers whose profile says
-`redistributable: false`, and names them", `docs/07_BUILD_PLAN.md` Phase 5
-Checkpoint 3a. Proves the refusal against a fixture config that
+`redistributable: false`, and names them". Proves the refusal against a fixture config that
 deliberately violates it — the same "prove the gate with a fixture that
 intentionally violates it" pattern `tests/licence_check/
 test_gpl_rejection.py` already established for package licences (a

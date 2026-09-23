@@ -1,5 +1,5 @@
 // A scripted, keyboard-only walkthrough — `docs/02_GLASS_FRONTEND.md` §6's
-// accessibility floor and `docs/07_BUILD_PLAN.md` Phase 4's exit
+// accessibility floor and this phase's exit
 // criterion, "Keyboard navigation reaches every canvas action", taken
 // literally: this test never calls `page.mouse` or `.click()`. It proves
 // the behaviours §6 actually specifies — arrow keys walk edges, Enter
@@ -8,7 +8,7 @@
 // `onSelectionChange` props, a real `expand` network call, a real menu in
 // the DOM), not just that the key handlers exist.
 //
-// **Tab's own role, corrected in Phase 7 Stage 4** (`06_DECISIONS.md`'s Stage 4 write-up has the
+// **Tab's own role, corrected here** (see the surrounding fix for the
 // full incident): Tab/Shift+Tab are never intercepted by the canvas any more — they behave
 // exactly like every other control on the page, which is what lets a keyboard user reach a
 // sibling panel beside the canvas at all. Focusing the canvas (by Tab, by click, by
@@ -168,7 +168,7 @@ test("Ctrl+ArrowRight cycles the focused node forward through an existing ring",
 test("Space, then the radial list, reaches manual link — a real POST, not a stub", async ({
   page,
 }) => {
-  // `07_BUILD_PLAN.md` Phase 6a Stage 1 (B11): the same bar the "Enter
+  // B11: the same bar the "Enter
   // expands" test above already sets — the backslash test alone only
   // proves the menu opens as a keyboard-navigable list, never that an item
   // in it is reachable and activatable. This is the first test in this
@@ -298,7 +298,7 @@ test("the radial list's own auto-focused first item is itself reachable and acti
 test("the radial list reaches Explain cluster, and the explanation actually renders — CLAUDE.md rule 13", async ({
   page,
 }) => {
-  // `07_BUILD_PLAN.md` Phase 6a Stage 3 (B10): the same bar the two tests above already set for
+  // B10: the same bar the two tests above already set for
   // a canvas action — reachable *and* activatable, not merely present in the DOM. `n2`/`n3` are
   // the harness's own cluster pair (`harness.tsx`'s own `resolution.cluster_id` fixture data);
   // this is a single-node trigger, unlike B11's pair requirement above, since `explain` takes one

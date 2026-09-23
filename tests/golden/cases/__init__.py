@@ -1,4 +1,4 @@
-"""Hand-labelled golden-set cases (`docs/07_BUILD_PLAN.md` Phase 6 Stage 3). Each module exports
+"""Hand-labelled golden-set cases. Each module exports
 one `GoldenCase`; `ALL_CASES` is what `tests/golden/test_golden_set.py` runs."""
 
 from __future__ import annotations

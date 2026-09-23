@@ -1,6 +1,6 @@
 """Named-step history — `docs/03_CONDUIT_MIDDLEWARE.md` §3.1's two routes,
-pulled forward into Phase 4 by `07_BUILD_PLAN.md`'s "Named-step history with
-restore" bullet (the generic mechanism only — the rest of §3.1's "Network
+pulled forward as the "named-step history with
+restore" capability (the generic mechanism only — the rest of §3.1's "Network
 analysis" table, Search Around/Pathfinder/Branch-to-new-tab, stays out of
 scope for this phase).
 

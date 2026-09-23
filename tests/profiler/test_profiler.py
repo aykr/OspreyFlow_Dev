@@ -1,5 +1,4 @@
-"""`services/ingest/profiler.py` — `09_INGEST_STUDIO.md` §3,
-`07_BUILD_PLAN.md` Phase 2's "type inference, null and cardinality
+"""`services/ingest/profiler.py` — `09_INGEST_STUDIO.md` §3's "type inference, null and cardinality
 statistics, and pattern recognition against the Knowledge Adapters" —
 including shape-masking, §3's redaction rule.
 

@@ -342,8 +342,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await studio_recipes.flag_stale(ontology.version)
 
     # A persistent (not `:memory:`) DuckDB file — first production wiring of
-    # `AnalyticsPort` anywhere in the Conduit (`07_BUILD_PLAN.md` Phase 5
-    # Checkpoint 2; `analytics_duckdb/testing.py`'s own docstring records why
+    # `AnalyticsPort` anywhere in the Conduit yet; `analytics_duckdb/testing.py`'s own
+    # docstring records why
     # this isn't yet the Parquet-in-object-storage store that module names
     # as the longer-term design — a stated, deliberate deferral, not this
     # checkpoint's job). `IF NOT EXISTS` in `schema.py` makes re-running this
@@ -384,7 +384,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.analytics = analytics
     # `06_DECISIONS.md` ADR-029/Phase 7 Stage 3: Tier 2 only, registered here — Tier 1
     # (`graphology`, a Node harness, conformance-only) and Tier 3 (Phase 8a's `cluster` profile,
-    # ADR-028/ADR-022's third addendum) have no Conduit-side adapter to construct yet. Stateless,
+    # ADR-028) have no Conduit-side adapter to construct yet. Stateless,
     # same shape as `ComputeRustworkxAdapter`'s
     # own `tests/conformance/registry.py` factory — no client, no lifecycle to close.
     compute: ComputePort = ComputeRustworkxAdapter()
@@ -1217,7 +1217,7 @@ async def _record_history_step(
     principal: Principal,
 ) -> HistoryStep:
     """Called after every mutation that changes working-set membership
-    (`07_BUILD_PLAN.md` Phase 4's "Named-step history with restore") — full
+    (the "named-step history with restore" capability) — full
     current membership, not just the mutation's own delta, so the step is
     independently restorable (`history.py`'s module docstring)."""
     nodes, edges = await working_set.current_membership(investigation_id)
@@ -2343,7 +2343,7 @@ async def get_map_tile_route(
     return Response(content=tile_bytes, media_type=image_content_type(tile_bytes))
 
 
-# --- analytics (07_BUILD_PLAN.md Phase 5 Checkpoint 2) -----------------------
+# --- analytics -----------------------------------------------------------
 #
 # Global routes, `EventFilter.investigation_scope` carried in the request
 # body rather than the URL path — mirroring `/v1/search`'s own existing
@@ -2583,8 +2583,7 @@ async def set_site_grid(
 
     **A stated gap, not a silent one**: this does not call
     `AnalyticsPort.load_geometries` for the cells it creates — the Conduit
-    has no `AnalyticsPort` wired in yet (`07_BUILD_PLAN.md` Phase 5
-    Checkpoint 2's job). Every `Location` gets a real, deterministic
+    has no `AnalyticsPort` wired in yet. Every `Location` gets a real, deterministic
     `geometry_ref`, but that reference does not resolve to a point until
     Checkpoint 2 wires geometry loading through — exactly the same
     already-documented gap `test_osm_gazetteer_recipe_end_to_end.py`'s own
@@ -3110,7 +3109,7 @@ async def run_studio_recipe(
     `evaluation.py`'s own overlap lock and
     `MAX_TOUCHED_NODES_PER_EVALUATION`; **not** bounded in aggregate — this request now blocks on
     evaluating every active hotlist and monitor this principal owns, not a fixed number of them,
-    the cost disclosed in `07_BUILD_PLAN.md` rather than silently absorbed into ingest latency. A
+    a disclosed cost rather than one silently absorbed into ingest latency. A
     failure in this best-effort side evaluation is caught and audited, never allowed to fail the
     ingest response itself — the load already happened; a failure to also check watches against it
     is a narrower, disclosed problem, not a reason to tell the caller their load failed when it

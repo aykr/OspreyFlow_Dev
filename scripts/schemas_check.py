@@ -1,4 +1,4 @@
-"""`make schemas-check` — Phase 0 exit criterion 3 (`docs/07_BUILD_PLAN.md`):
+"""`make schemas-check` — Phase 0 exit criterion 3:
 a Pydantic model change not reflected in the generated TypeScript fails the build.
 
 Regenerates the TypeScript into a temp directory and diffs it against what is

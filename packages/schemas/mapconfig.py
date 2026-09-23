@@ -1,6 +1,6 @@
 """The basemap provider registry — `docs/00_ARCHITECTURE.md` §1.2 ("The
-provider registry"), ADR-014, ADR-015, ADR-016, `docs/07_BUILD_PLAN.md`
-Phase 5. `osprey.yaml`'s `map:` section is data, not code: MapLibre
+provider registry"), ADR-014, ADR-015, ADR-016.
+`osprey.yaml`'s `map:` section is data, not code: MapLibre
 consumes any style plus vector or raster sources, so adding a provider is a
 config change, never a code change (`00_ARCHITECTURE.md` §1.2's own line).
 
@@ -211,7 +211,7 @@ class PublicMapProvider(BaseModel):
     #: `source`). `None` for anything reached through the Conduit's tile
     #: proxy (a proxied tier-3/4 `endpoint`) or an unresolved `profile`
     #: reference — those get a proxy-relative URL once the tile proxy
-    #: itself is built (`07_BUILD_PLAN.md` Phase 5's tier 2-4 checkpoint).
+    #: itself is built.
     source: str | None
 
 

@@ -1,5 +1,5 @@
 """Proves the schemas-check drift gate is sensitive to real change — Phase 0
-exit criterion 3 (`docs/07_BUILD_PLAN.md`): a Pydantic model change not
+exit criterion 3: a Pydantic model change not
 reflected in the generated TypeScript fails the build.
 """
 

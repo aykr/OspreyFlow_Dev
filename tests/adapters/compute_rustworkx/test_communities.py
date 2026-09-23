@@ -5,8 +5,9 @@ bug.** Checked directly, not assumed: `networkx.algorithms.community.louvain_com
 separates two disjoint edges into two communities on a trivial graph with nothing else in it —
 confirmed by running it (`{'a','b'}` and `{'c','d'}` came back as two communities, unprompted). A
 conformance-level test that only feeds such a graph through the real adapter would pass whether or
-not this split pass exists at all, which would be exactly the kind of test ADR-022's own precedent
-warns about — one that cannot fail against the defect it claims to guard. This file tests the
+not this split pass exists at all, which would be exactly the kind of test that cannot fail
+against the defect it claims to guard, a shape this repository already warns against. This
+file tests the
 *function*, feeding it a partition that is deliberately wrong regardless of what any real Louvain
 run would produce, per ADR-029's own naming and per standing rule 12.
 """

@@ -1,5 +1,5 @@
 """Dossier document assembly — `docs/08_ACCEPTANCE_SCENARIOS.md` B6: "Message content renders
-with the entity spans highlighted in place." `07_BUILD_PLAN.md` Phase 6a Stage 4.
+with the entity spans highlighted in place."
 
 **Accepted candidates only, deliberately.** `09_INGEST_STUDIO.md` §7's own review queue (pending
 candidates awaiting accept/reject) is a different, still-unbuilt screen — B6 is post-hoc

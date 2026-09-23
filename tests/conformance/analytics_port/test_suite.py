@@ -1,4 +1,4 @@
-"""`AnalyticsPort` conformance suite — `docs/07_BUILD_PLAN.md` Phase 2,
+"""`AnalyticsPort` conformance suite —
 `docs/04_VAULT_BACKEND.md` §6, `docs/00_ARCHITECTURE.md` §2.2,
 `docs/01_DOMAIN_MODEL.md` §9.
 
@@ -713,7 +713,7 @@ async def test_an_unrecognised_clearance_sees_nothing_rather_than_everything(
         assert (await adapter.histogram(req, unknown)).total == 0
 
 
-# --- the geometry reference partition (07_BUILD_PLAN.md Phase 5) ------------
+# --- the geometry reference partition ---------------------------------------
 #
 # `load_geometries`/`get_geometry`/`get_geometries` are exercised directly —
 # there is no shared "context seeds this" fixture the way `EventRecord`s are
@@ -807,7 +807,7 @@ async def test_unauthorised_get_geometries_batch_silently_omits_hidden_refs(
         assert {r.geometry_ref for r in result} == {"geo-open"}
 
 
-# --- polygon geometry storage (07_BUILD_PLAN.md Phase 5 known-gaps closure) -
+# --- polygon geometry storage (a disclosed known-gaps closure) -------------
 
 
 async def test_load_geometries_and_get_geometry_round_trips_a_polygon(
@@ -879,7 +879,7 @@ async def test_unauthorised_list_boundaries_omits_a_hidden_boundary(
         assert {r.geometry_ref for r in cleared_result} == {"boundary-open", "boundary-secret"}
 
 
-# --- load_events (07_BUILD_PLAN.md Phase 5 Checkpoint 2) --------------------
+# --- load_events --------------------------------------------------------
 #
 # Every existing test above seeds events through `factory.context(events)`,
 # which itself calls `load_events` internally (`analytics_duckdb/testing.py`)

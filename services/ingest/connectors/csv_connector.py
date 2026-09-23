@@ -1,5 +1,5 @@
-"""Generic CSV connector — `07_BUILD_PLAN.md` Phase 2's "CSV, JSON and
-generic delimited" bullet, scoped here to CSV. Every connector yields the
+"""Generic CSV connector — one of the "CSV, JSON and
+generic delimited" formats scoped for v1, scoped here to CSV. Every connector yields the
 same `Iterable[Mapping[str, str]]` row shape the engine consumes, so a
 second format is an additional connector module, not a change to
 `services/ingest/engine.py`.

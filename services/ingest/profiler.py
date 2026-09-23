@@ -1,5 +1,5 @@
-"""The source profiler — `09_INGEST_STUDIO.md` §3, `07_BUILD_PLAN.md`
-Phase 2: "Source profiler: type inference, null and cardinality
+"""The source profiler — `09_INGEST_STUDIO.md` §3: "Source profiler: type inference, null
+and cardinality
 statistics, and pattern recognition against the Knowledge Adapters."
 
 Headless: `profile_source` takes the same `Iterable[Mapping[str, str]]`

@@ -1,5 +1,5 @@
 """Deterministic proof of Phase 0's exit criterion: a GPL dependency fails the
-build (`docs/07_BUILD_PLAN.md` Phase 0). Phase 0 plan §3.4 item 3 / §2 amendment 3:
+build. Phase 0's own plan, §3.4 item 3 / §2 amendment 3:
 no scratch branch, no manual step — this runs on every PR.
 
 `tests/fixtures/licence_check/gpl_dependency/site-packages/` holds a fabricated

@@ -6,7 +6,7 @@ Why this exists rather than a mock WebSocket server: the constraint this
 phase's plan set is "a test that actually drives the client against the
 real WebSocket, not a canned fixture of deltas — a mock that only ever
 sends well-formed sequential ops won't catch a client that mishandles a
-resnapshot" (`docs/07_BUILD_PLAN.md` Phase 4). `deltaClient.ts` runs in the
+resnapshot". `deltaClient.ts` runs in the
 browser; proving it against the real wire contract means a real Python
 process serving `/v1/investigations/{id}/stream`, reachable from a Node
 `ws` client — not FastAPI's in-process `TestClient`, which never opens an

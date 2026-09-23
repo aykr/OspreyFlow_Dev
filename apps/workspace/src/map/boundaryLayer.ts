@@ -1,6 +1,6 @@
 // Renders the drawn-boundary spatial filter's live preview on the
-// `maplibregl.Map` `MapView.tsx` exposes via `onMapReady` — `07_BUILD_PLAN.md`
-// Phase 5 Checkpoint 3c, `02_GLASS_FRONTEND.md` §3.5's "a drawn or selected
+// `maplibregl.Map` `MapView.tsx` exposes via `onMapReady` —
+// `02_GLASS_FRONTEND.md` §3.5's "a drawn or selected
 // boundary is a spatial filter like any other". Mirrors `site/siteLayer.ts`'s
 // own GeoJSON source/layer shape exactly (same "remove-then-add, since
 // MapLibre has no upsert" idiom), rendered as a `LineString` while fewer

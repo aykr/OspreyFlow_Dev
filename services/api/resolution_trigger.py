@@ -62,7 +62,7 @@ async def submit_post_ingest_resolution_jobs(
 ) -> list[str]:
     """`06_DECISIONS.md` ADR-025's post-ingest hook — the real caller
     `resolve_entity_type`/`write_same_as_edges`/`detect_conflicts`/
-    `record_conflicts` never had (`07_BUILD_PLAN.md`'s Phase 6 gaps list).
+    `record_conflicts` never had, a disclosed gap.
     Called from `POST .../ingest/recipes/{recipe_id}/run` once a load
     actually creates something. Takes the recipe's own `row_template`
     directly, not a whole `Recipe`/`StudioRecipeDraft` — the caller's own

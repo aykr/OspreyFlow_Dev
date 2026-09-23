@@ -1,4 +1,4 @@
-// The resolution-threshold control — `docs/07_BUILD_PLAN.md` Phase 6a Stage 2 (B9): "a global,
+// The resolution-threshold control — `08_ACCEPTANCE_SCENARIOS.md` B9: "a global,
 // session-level control... move the resolution threshold from Strict to Balanced."
 //
 // A native `<input type="range">` (via the `Slider` primitive), not a canvas action — it lives

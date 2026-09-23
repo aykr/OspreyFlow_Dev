@@ -1,7 +1,7 @@
 """The corpus-wide resolution and alerting trigger — `06_DECISIONS.md` ADR-025. The real caller
 `resolve_entity_type`/`write_same_as_edges`/`detect_conflicts`/`record_conflicts` never had:
-every test in `tests/resolve/` calls them directly, and `07_BUILD_PLAN.md`'s Phase 6 gaps list
-already discloses that nothing schedules or triggers a run against the live corpus.
+every test in `tests/resolve/` calls them directly; nothing yet schedules or triggers a run
+against the live corpus, a disclosed gap.
 
 **Population.** Paginates `GraphPort.list_nodes` (`06_DECISIONS.md` ADR-025, `01_DOMAIN_MODEL.md`
 §8.2) to exhaustion — `next_cursor is None` is the only exhaustion signal this loop trusts, never

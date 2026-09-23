@@ -1,5 +1,5 @@
 /**
- * Phase 6a Stage 4's own resolution of `07_BUILD_PLAN.md`'s "Gaps with no owning phase" entry on
+ * This registry's own resolution of a disclosed gap on
  * `keyboard.spec.ts`: that walkthrough was a hardcoded sequence with no auto-discovery, so a new
  * action with no case added was invisible to it — the stage assigned to build the stronger,
  * machine-checked fix, once the second keyboard-driven surface (the Dossier) made rule 13 alone
@@ -97,7 +97,7 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   "menu-item-explain-cluster",
   "menu-item-view-messages",
   "overlay-dismiss-cluster-explain",
-  // Phase 7 Stage 5 (the pathfinder) — `07_BUILD_PLAN.md`'s own keyboard-walkthrough entry drew
+  // The pathfinder — the keyboard-walkthrough's own entry drew
   // the line this follows: a further canvas radial-menu item extends this registry rather than
   // getting its own, the same shape `menu-item-manual-link`/`explain-cluster` already are.
   "menu-item-find-paths",

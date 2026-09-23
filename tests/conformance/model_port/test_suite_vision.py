@@ -1,5 +1,5 @@
 """`ModelPort.describe_image()` conformance cases — split from `test_suite.py` deliberately
-(`docs/07_BUILD_PLAN.md` Phase 6 Stage 2, `docs/06_DECISIONS.md` ADR-020's Stage 2 addendum).
+(`docs/06_DECISIONS.md` ADR-020's Stage 2 addendum).
 
 A vision-language model is materially heavier than the text/embedding/transcription pins
 `test_suite.py` runs (1.8GB against 45MB–397MB), so its own CI job runs on a scheduled/

@@ -1,11 +1,11 @@
 // The timeline — `docs/02_GLASS_FRONTEND.md` §3.4,
 // `08_ACCEPTANCE_SCENARIOS.md` A4/A5/A11/B16/B18. Density strip (bucketed
 // event counts) with a drag-to-select brush, plus a cyclical weekday×hour
-// mode — the two temporal modes Phase 5's own A1-A11 acceptance scenario
-// exercised, built there (`07_BUILD_PLAN.md` Phase 5 Checkpoint 2 plan).
+// mode — the two temporal modes the A1-A11 acceptance scenario
+// exercised, built there.
 //
-// Playback and the cross-case overlay are built here, Phase 8 Stage 4f
-// (`07_BUILD_PLAN.md` — read its own Stage 4f entry: ADR-022's "small,
+// Playback and the cross-case overlay are built here
+// (a "small,
 // incremental additions" characterisation was checked against this file's
 // own then-current state and did not hold; both were real, from-scratch
 // work, not a small addition). Multi-track mode (§3.4's own "one row per
@@ -13,8 +13,7 @@
 // needed only a second investigation's own track against a shared axis,
 // which this file's own two-grid layout below satisfies without needing
 // the more general per-entity multi-track mode; that remains its own,
-// separately-scoped gap (`07_BUILD_PLAN.md`'s own Stage 4f entry has the
-// disposition).
+// separately-scoped, disclosed gap.
 //
 // ECharts, used imperatively via a ref/instance — the same pattern this
 // codebase already uses for Sigma (`canvas/GlassCanvas.tsx`) and MapLibre

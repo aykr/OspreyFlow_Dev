@@ -1,7 +1,6 @@
 // The performance budget — `docs/02_GLASS_FRONTEND.md` §5 — as a CI gate,
 // against the 50k-node/250k-edge fixture (`fixture.ts`), per this
-// checkpoint's own decision (see `docs/07_BUILD_PLAN.md` Phase 4's
-// Checkpoint 1 review): GitHub Actions' hosted runners have no GPU, so
+// checkpoint's own decision: GitHub Actions' hosted runners have no GPU, so
 // Chromium here falls back to software WebGL (SwiftShader) — dramatically
 // slower than the §5 table's real-hardware numbers. The thresholds below
 // are a *regression* gate calibrated for that software path, not a

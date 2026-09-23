@@ -4,8 +4,7 @@ recipe engine -> `GraphPort` -> (constructed the same way
 `GeometryRecord` itself yet — see that module's docstring for the stated
 gap this shares) -> `AnalyticsPort`'s geometry reference partition.
 
-`docs/00_ARCHITECTURE.md` §1.2's tier-1 gazetteer row, `docs/07_BUILD_PLAN.md`
-Phase 5.
+`docs/00_ARCHITECTURE.md` §1.2's tier-1 gazetteer row.
 """
 
 from __future__ import annotations

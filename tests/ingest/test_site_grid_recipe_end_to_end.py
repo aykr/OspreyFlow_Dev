@@ -5,7 +5,7 @@ for the OSM connector, and the same stated gap that test's docstring
 records (the recipe engine does not write a `GeometryRecord` itself yet).
 
 `docs/00_ARCHITECTURE.md` §1.2's site-plan row, `08_ACCEPTANCE_SCENARIOS.md`
-A1, `07_BUILD_PLAN.md` Phase 5.
+A1.
 """
 
 from __future__ import annotations

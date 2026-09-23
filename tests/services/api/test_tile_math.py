@@ -1,5 +1,5 @@
-"""`services/api/tile_math.py` — `docs/07_BUILD_PLAN.md`'s Phase 5
-known-gaps closure's prefetch job needs a bbox-to-tile-range conversion;
+"""`services/api/tile_math.py` — a disclosed known-gaps
+closure's prefetch job needs a bbox-to-tile-range conversion;
 nothing in the repo had one before this."""
 
 from __future__ import annotations

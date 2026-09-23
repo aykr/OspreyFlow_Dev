@@ -1,5 +1,5 @@
-"""`GeometryRecord`'s `kind`/payload validator — `docs/07_BUILD_PLAN.md`
-Phase 5 known-gaps closure's polygon-storage addition. `AnalyticsPort`/`analytics_duckdb`'s
+"""`GeometryRecord`'s `kind`/payload validator — a disclosed known-gaps
+closure's polygon-storage addition. `AnalyticsPort`/`analytics_duckdb`'s
 own conformance suite (`tests/conformance/analytics_port/test_suite.py`)
 covers the write/read round trip; this file covers only the schema-level
 `kind`/payload agreement `model_validator` enforces before either adapter

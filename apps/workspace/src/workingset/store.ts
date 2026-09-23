@@ -1,6 +1,6 @@
 // The graphology working-set store — `docs/02_GLASS_FRONTEND.md` §2's "one
 // working set, many views" and §1.1's "zoom never changes what exists,
-// only what is drawn". `docs/07_BUILD_PLAN.md` Phase 4.
+// only what is drawn".
 //
 // The graphology `Graph` instance IS the working set. It is deliberately
 // kept *outside* the Zustand-managed state tree: graphology mutates a live

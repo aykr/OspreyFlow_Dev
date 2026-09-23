@@ -1,6 +1,6 @@
 """`scripts/build_local_basemap.py`'s full orchestration against a live
-`GraphPort` — `docs/00_ARCHITECTURE.md` §1.2, `docs/07_BUILD_PLAN.md`
-Phase 5. Split out from `tests/test_build_local_basemap.py`'s pure unit
+`GraphPort` — `docs/00_ARCHITECTURE.md` §1.2. Split out from
+`tests/test_build_local_basemap.py`'s pure unit
 tests (`download_extract`/`run_planetiler`/`register_local_provider` need
 no live store) precisely so that file can stay outside `make test`'s
 `--ignore=tests/ingest` boundary while this one, needing ArcadeDB, sits

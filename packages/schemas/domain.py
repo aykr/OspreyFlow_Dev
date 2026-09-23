@@ -411,7 +411,8 @@ class PatternNode(BaseModel):
     var: str
     entity_type: str | None = None
     #: Pins this variable to one already-known node — `01_DOMAIN_MODEL.md` §8.1's own widening
-    #: (Phase 7 Stage 4, `06_DECISIONS.md`): a pattern with more than one root is only compiled
+    #: (Phase 7 Stage 4, `06_DECISIONS.md` ADR-030): a pattern with more than one root is
+    #: only compiled
     #: when every root beyond the first is pinned this way (B19's own shape — "the two principal
     #: endpoints" are nodes the analyst already selected, not an open type). An unpinned second
     #: root remains unsupported — confirmed empirically that ArcadeDB's own Gremlin `match()` step
@@ -561,7 +562,7 @@ class Judgement(BaseModel):
     model's own illustrative type union already is (all three are opaque ULID-shaped strings with
     no structural way to tell them apart). **Disclosed limitation, not fixed here:**
     `GraphPort` has no `get_edge`, and no document store exists yet
-    (`07_BUILD_PLAN.md`'s own "Stage 4b known gaps" entry has the full record) — only a `NodeId`
+    (a disclosed gap, not fixed here) — only a `NodeId`
     citation can be positively confirmed visible today; an `EdgeId`/`DocumentId` citation is always
     treated as unreadable by `services/api/assessments.py`'s own access check, the same fail-closed
     default this codebase already applies everywhere else it cannot positively confirm access.

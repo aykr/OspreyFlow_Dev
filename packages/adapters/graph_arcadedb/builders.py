@@ -110,7 +110,7 @@ class ListNodesBuilder:
 @dataclass(frozen=True)
 class SuggestLocationsBuilder:
     """`GraphPort.suggest_locations` — the geocoder's own candidate
-    retrieval (`07_BUILD_PLAN.md`'s Phase 5 known-gaps list), scoped to `Location.name`
+    retrieval (a disclosed gap), scoped to `Location.name`
     only. Uses TinkerPop's `TextP.containing` predicate — confirmed
     live against a real ArcadeDB instance to work over its Gremlin command
     endpoint (`SearchNodesBuilder`'s own docstring had flagged this as
@@ -322,7 +322,8 @@ class NeighbourhoodStatsBuilder:
 @dataclass(frozen=True)
 class MatchBuilder:
     """Compiles a bounded `PatternQuery` into Gremlin — `01_DOMAIN_MODEL.md` §8.1, widened in
-    Phase 7 Stage 4 (`06_DECISIONS.md`). A pattern that linearises into a single chain from one
+    Phase 7 Stage 4 (`06_DECISIONS.md` ADR-030). A pattern that linearises into a single
+    chain from one
     root (every edge's `from_var` already bound when it's declared) compiles via
     `_render_single_chain` — byte-identical to the pre-widening compiler
     (`test_match_single_chain_pattern_compiles_to_the_same_gremlin_as_before`'s own no-regression

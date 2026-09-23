@@ -158,8 +158,8 @@ class PatternStore:
         `get_document_text` (`services/api/review.py`) use, and `CLAUDE.md` rule 3 requires even
         for a Conduit-internal Postgres store like this one, not only the four ports: existence
         and content are refused by the same query, not a fetch followed by a Python-side check
-        that already holds what it is about to reject. `review.py`'s own known-gaps entry
-        (`07_BUILD_PLAN.md`, "the twenty-two `review.py` tests that passed identically either
+        that already holds what it is about to reject. `review.py`'s own disclosed gap
+        ("the twenty-two `review.py` tests that passed identically either
         side of the real `AND owning_unit = $2` fix") is exactly this class of bug, already found
         and fixed once elsewhere in this codebase — not reintroduced here."""
         async with self._pool.acquire() as conn:

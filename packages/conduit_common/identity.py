@@ -1,6 +1,5 @@
 """`NodeId`/`EdgeId` and `AuditStub.created_at` assignment — Conduit-owned,
-never a source system's or an adapter's (`01_DOMAIN_MODEL.md` §2,
-`07_BUILD_PLAN.md` Phase 3's carry-forward from Phase 1). Every caller that
+never a source system's or an adapter's (`01_DOMAIN_MODEL.md` §2). Every caller that
 builds a `NodeWrite`/`EdgeWrite` — `services/api`'s Working-Set Service and
 `services/ingest`'s load path alike — mints through here, so there is one
 place that generates identifiers rather than each adapter inventing its own.

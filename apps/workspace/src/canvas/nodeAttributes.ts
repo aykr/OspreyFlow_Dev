@@ -1,7 +1,7 @@
 // Turns a domain `Node`/`Edge` plus its current interaction/filter/zoom
 // context into Sigma-ready display attributes — `docs/02_GLASS_FRONTEND.md`
 // §4's node-state vocabulary and §1.1's semantic zoom, wired together for
-// real (`docs/07_BUILD_PLAN.md` Phase 4, Checkpoint 2).
+// real.
 //
 // **Two different attribute pipelines, deliberately split.** Sigma's
 // `nodeReducer` return type (`Partial<NodeDisplayData>`) is a *fixed*

@@ -113,7 +113,7 @@ def test_a_soundex_variant_still_blocks_together(_run: int) -> None:
 
 
 def test_a_hyphenated_family_name_does_not_crash_the_entire_resolution_pass() -> None:
-    """`07_BUILD_PLAN.md`'s own Stage 6b carry-over 2, proven through the real reachable path, not
+    """A disclosed carry-over, proven through the real reachable path, not
     only against `_soundex` in isolation: before the fix, `resolve_entity_type` raised `IndexError`
     for the *entire population* the moment any one `Person` in it had a hyphenated family name —
     `Smith-Jones` is ordinary UK data, not a constructed edge case. A third, unrelated node is

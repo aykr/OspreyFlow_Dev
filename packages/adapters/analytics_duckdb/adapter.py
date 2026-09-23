@@ -300,7 +300,7 @@ class AnalyticsDuckDBAdapter:
                 result[dimension.name] = self._categorical_histogram(predicate, dimension.field)
         return result
 
-    # --- writes (07_BUILD_PLAN.md Phase 5 Checkpoint 2) ---------------------
+    # --- writes -------------------------------------------------------------
 
     async def load_events(self, records: Sequence[EventRecord]) -> None:
         if not records:
@@ -321,7 +321,7 @@ class AnalyticsDuckDBAdapter:
             ],
         )
 
-    # --- the geometry reference partition (07_BUILD_PLAN.md Phase 5) -------
+    # --- the geometry reference partition -----------------------------------
 
     async def load_geometries(self, records: Sequence[GeometryRecord]) -> None:
         if not records:

@@ -1,8 +1,7 @@
-"""`services/api/assessments.py` — `01_DOMAIN_MODEL.md` §5, `06_DECISIONS.md` ADR-046 (accepted),
-Phase 8 Stage 4b. Real Postgres (the judgement store) and real ArcadeDB (the citation visibility
+"""`services/api/assessments.py` — `01_DOMAIN_MODEL.md` §5, `06_DECISIONS.md` ADR-046 (accepted).
+Real Postgres (the judgement store) and real ArcadeDB (the citation visibility
 recheck, the review-flag loop's own `supersede_node` trigger) — access control and "a cited node
-was retracted" are exactly the class of claim `07_BUILD_PLAN.md`'s "Fake-based tests" gaps entry
-says a fake cannot stand in for.
+was retracted" are exactly the class of claim a fake cannot stand in for.
 """
 
 from __future__ import annotations

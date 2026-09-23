@@ -1,5 +1,5 @@
-"""A drift gate for the domain model's own documentation coverage — `07_BUILD_PLAN.md`'s Phase 8
-documentation-refresh entry. Same weak, presence-based check `scripts/demo_guide_check.py` already
+"""A drift gate for the domain model's own documentation coverage, part of the
+documentation-refresh work. Same weak, presence-based check `scripts/demo_guide_check.py` already
 established (a class is "documented" if its own name appears somewhere in the text, not a
 line-level cross-reference), paired with an explicit allowlist of currently-undocumented classes.
 

@@ -1,5 +1,5 @@
 """`services/api/credentials.py` — `docs/00_ARCHITECTURE.md` §1.2's "a
-reference, never a value", `docs/07_BUILD_PLAN.md` Phase 5 Checkpoint 3b.
+reference, never a value".
 """
 
 from __future__ import annotations

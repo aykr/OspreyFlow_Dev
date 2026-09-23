@@ -4,8 +4,8 @@ first-class: every job is addressable, has a progress stream, and reports
 partial results where partial results are meaningful." `GET /v1/jobs/{id}/
 events` (§3.3) is the read side this backs; `PatternQuery`'s "large
 results return a job id" is the existing pattern this reuses rather than
-inventing a second shape (§3.3, §07_BUILD_PLAN.md Phase 3's supersede_node
-bullet).
+inventing a second shape (§3.3, the same pattern `supersede_node`
+already set).
 
 **Deliberately not a `QueuePort`.** `03_CONDUIT_MIDDLEWARE.md` §2 names a
 `QueuePort` behind which Valkey Streams and NATS JetStream (`cluster`)

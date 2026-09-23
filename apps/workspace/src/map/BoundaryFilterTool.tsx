@@ -1,6 +1,6 @@
 // The drawn-boundary spatial filter — `docs/02_GLASS_FRONTEND.md` §3.5's
 // "a drawn or selected boundary is a spatial filter like any other",
-// `07_BUILD_PLAN.md` Phase 5 Checkpoint 3c. Only the *drawn* half:
+// Only the *drawn* half:
 // rendering a real Boundary-Line-derived boundary as a selectable overlay
 // needs a polygon-geometry storage capability that does not exist in
 // `AnalyticsPort`/`GeometryRecord` yet (this checkpoint's own doc note) —

@@ -1,7 +1,7 @@
 """Scheduled area-of-operations tile pre-warm — `docs/00_ARCHITECTURE.md`
 §1.2's tile proxy, `docs/05_DEPLOYMENT.md` §2.2's "Prefetch area of
 operations" (tier 3's own harness offer: "a drawn or uploaded boundary"),
-`docs/07_BUILD_PLAN.md`'s Phase 5 known-gaps list. Distinct from `services/api/tile_cache.py`'s
+a disclosed known-gaps entry. Distinct from `services/api/tile_cache.py`'s
 read-through cache: that module caches a tile the first time it is
 requested; this module warms a named area's tiles *before* anyone asks,
 so routine work over that area makes zero live upstream requests

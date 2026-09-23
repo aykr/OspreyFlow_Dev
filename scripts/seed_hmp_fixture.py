@@ -1,7 +1,6 @@
 """Seeds a real, running Conduit's stores with the HMP fixture — the
 concrete mechanism that makes `08_ACCEPTANCE_SCENARIOS.md` Scenario A
-(A3–A11) demonstrable against a live Glass, not only against automated
-tests (`07_BUILD_PLAN.md` Phase 5 Checkpoint 2).
+(A3–A11) demonstrable against a live Glass, not only against automated tests.
 
 **No `osprey` CLI** (`CLAUDE.md`'s own Conventions, reconfirmed
 this phase) — a plain, directly-runnable script now, the same correction

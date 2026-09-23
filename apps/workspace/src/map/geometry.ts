@@ -1,5 +1,5 @@
-// A shared, coordinate-system-agnostic point-in-polygon test —
-// `07_BUILD_PLAN.md` Phase 5 Checkpoint 3c. Standard even-odd ray
+// A shared, coordinate-system-agnostic point-in-polygon test.
+// Standard even-odd ray
 // casting; consolidated here rather than left duplicated because the
 // exact same algorithm already existed in `canvas/GlassCanvas.tsx` for
 // screen-space lasso selection (`{x, y}` viewport pixels) — the boundary

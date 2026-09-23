@@ -1,5 +1,5 @@
-// Pure rendering-boundary logic for `explain_cluster`'s response — `docs/07_BUILD_PLAN.md`
-// Phase 6a Stage 3 (B10). `explain_cluster` (`services/api/working_set/service.py`, fixed in
+// Pure rendering-boundary logic for `explain_cluster`'s response —
+// `08_ACCEPTANCE_SCENARIOS.md` B10. `explain_cluster` (`services/api/working_set/service.py`, fixed in
 // Stage 2) already guarantees every id in its response — `member_node_ids` and every
 // `pairs[i].node_a`/`node_b` — is visible to the calling principal *today*: `member_ids` is
 // narrowed to `expand`'s own principal-filtered result before anything is returned, and a `pairs`

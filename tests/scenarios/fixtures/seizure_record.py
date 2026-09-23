@@ -10,7 +10,7 @@ rather than normalised by the fixture itself. Here that step is this
 fixture's own shape test (`test_seizure_fixture_shape.py`), which proves the
 raw values are genuinely well-formed by running them through the real
 `imei`/`imsi`/`msisdn` Knowledge Adapters, since no seizure-record connector
-or recipe exists yet to do it end to end (`07_BUILD_PLAN.md`'s Phase 2 gap:
+or recipe exists yet to do it end to end (a disclosed gap:
 only the CSV connector is built; a device-extraction format is not).
 
 **The MSISDN leg.** SIM B — the one active at seizure — also carries the

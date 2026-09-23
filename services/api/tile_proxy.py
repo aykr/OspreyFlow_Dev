@@ -8,7 +8,7 @@ module's `fetch_tile` feeds — `services/api/app.py`).
 `httpx`'s actual network call is injected out via `http_get`, the same
 shape `scripts/build_local_basemap.py`'s `download_extract` already uses
 for its own network call — CI never depends on a third party's
-availability (`07_BUILD_PLAN.md` standing rule 3), so this is exercised in
+availability, so this is exercised in
 tests only for its argument-construction/error-handling, with a real
 network call happening only against a local loopback stand-in server.
 
@@ -64,8 +64,8 @@ def _build_wmts_kvp_url(provider: MapProvider, z: int, x: int, y: int) -> str:
         )
     if provider.credential is not None:
         # Resolving *where* a credential belongs in a KVP GetTile request is
-        # a real, separate naming gap `docs/07_BUILD_PLAN.md`'s Phase 5
-        # known-gaps list already records for the template path
+        # a real, separate naming gap, already disclosed for the
+        # template path
         # (`{credential}`'s own placeholder-naming flag below) — no shipped
         # or tested provider exercises a credentialed WMTS KVP request yet,
         # so this raises rather than guessing a query-parameter name.

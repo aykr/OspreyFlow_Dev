@@ -22,8 +22,7 @@ drop. `packages/ontology/loader.py`'s `_SYSTEM_EDGE_PROPERTIES[NOT_SAME_AS]` car
 **Why this stops at detection+recording, not a review surface.** No endpoint here or elsewhere
 lists "all pending conflicts" for an investigation or the corpus — an analyst who already knows
 which pair to check can query `explain`/the graph directly for `conflict_pending = true`, but
-nothing proactively surfaces it. `07_BUILD_PLAN.md`'s Phase 6 known-gaps list records this as a
-deliberate gap, not an oversight.
+nothing proactively surfaces it — a deliberate, disclosed gap, not an oversight.
 
 **What "would have merged" means with no session-specific τ available here.** This module runs
 against the whole corpus, outside any one investigation's session — there is no per-investigation

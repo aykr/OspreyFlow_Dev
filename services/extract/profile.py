@@ -18,8 +18,7 @@ bullet ("extraction profiles in the studio: POLE-class checklist generating the
 constrained-decoding schema, per-type confidence floors, adapter selection") asks for publish/
 version/schedule semantics the way a recipe explicitly does — only the schema-generation
 capability. A profile here is inline, caller-supplied configuration on each extraction run, not a
-database row with its own lifecycle. Flagged in `07_BUILD_PLAN.md`'s Phase 6 known gaps as a
-scoping choice, not an oversight.
+database row with its own lifecycle — a disclosed scoping choice, not an oversight.
 
 **Deliberately not built: entity `identifiers`.** Only an entity type's declared `properties` are
 offered to the model — `identifiers` (`nino`, `pnc_id`, `e164`, ...) are exactly the

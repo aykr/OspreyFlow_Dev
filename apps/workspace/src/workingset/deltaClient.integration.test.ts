@@ -1,5 +1,5 @@
 // Drives `deltaClient.ts` against the *real* `services.api.app` FastAPI
-// app over a real socket — `docs/07_BUILD_PLAN.md` Phase 4's own
+// app over a real socket — this phase's own
 // constraint: "a test that actually drives the client against the real
 // WebSocket, not a canned fixture of deltas... a mock that only ever
 // sends well-formed sequential ops won't catch a client that mishandles a

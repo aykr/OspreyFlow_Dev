@@ -1,5 +1,5 @@
 """Synthetic row generators for the seven remaining UK/US gazetteer
-sources — `docs/07_BUILD_PLAN.md` Phase 5 Checkpoint 3c. Each function's
+sources. Each function's
 column names mirror that source's own real, published schema (not a
 copy-pasted generic shape), so a wrong-field-name bug in a recipe shows up
 immediately rather than passing by accident. Real, well-known place

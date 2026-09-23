@@ -122,7 +122,7 @@ class GraphPort(Protocol):
         self, query: str, principal: Principal, *, limit: int = 20
     ) -> list[Node]:
         """The Glass's global search box (`02_GLASS_FRONTEND.md`'s workspace
-        layout, `07_BUILD_PLAN.md` Phase 4) — `find_node` generalised across
+        layout) — `find_node` generalised across
         every entity type's declared `identifiers`
         (`schemas.domain.EntityTypeDef.identifiers`) instead of one
         caller-named `(entity_type, identifier_field)` pair, since the
@@ -153,8 +153,7 @@ class GraphPort(Protocol):
     async def suggest_locations(
         self, name: str, principal: Principal, *, limit: int = 20
     ) -> list[Node]:
-        """The geocoder's own candidate retrieval (`07_BUILD_PLAN.md`'s
-        Phase 5 known-gaps list) — `services/geocoder/
+        """The geocoder's own candidate retrieval, a disclosed gap — `services/geocoder/
         match.py`'s `match_place_mention` scores caller-supplied
         candidates but has never had a way to find its own; this closes
         that gap for `Location.name` specifically.
@@ -182,7 +181,7 @@ class GraphPort(Protocol):
 
     async def expand_candidate_count(self, req: ExpandRequest) -> int:
         """The unfiltered half of `Subgraph.filtered_count`'s comparison
-        (`01_DOMAIN_MODEL.md` §8.2, Phase 3 — `07_BUILD_PLAN.md`): how many
+        (`01_DOMAIN_MODEL.md` §8.2): how many
         nodes the *same* seed set, depth, edge-type and temporal scope as
         `expand(req, principal)` would reach with neither access axis
         applied. No `Principal` argument, matching `revert_elements` — not

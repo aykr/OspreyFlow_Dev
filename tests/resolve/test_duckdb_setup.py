@@ -1,4 +1,4 @@
-"""`services/resolve/duckdb_setup.py`'s `_soundex` — `07_BUILD_PLAN.md`'s Stage 6b carry-over 2,
+"""`services/resolve/duckdb_setup.py`'s `_soundex`, a disclosed carry-over,
 closed here rather than re-scoped. `phonetics.soundex` indexes its digit table with
 `ord(c) - ord('a')` and no bounds check, so anything outside `a`-`z` after the first character
 raised `IndexError` before this fix — not only a hyphen, checked directly below for an apostrophe,

@@ -1,5 +1,4 @@
-"""Fixtures for `ModelPort`'s `transcribe()`/`describe_image()` conformance cases (Phase 6
-Stage 2, `docs/07_BUILD_PLAN.md`).
+"""Fixtures for `ModelPort`'s `transcribe()`/`describe_image()` conformance cases.
 
 `sample_speech.wav` is synthetic TTS output (`CLAUDE.md` rule 9: no real intelligence data, ever)
 — generated once via macOS `say -o sample_speech.aiff "testing one two three"` then `ffmpeg -i

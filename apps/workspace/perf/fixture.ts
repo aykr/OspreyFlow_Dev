@@ -1,7 +1,7 @@
 // The 50k-node/250k-edge performance fixture — `docs/02_GLASS_FRONTEND.md`
 // §5's performance budget table names this exact shape as the measurement
-// baseline. Synthetic and in-repo (`docs/07_BUILD_PLAN.md`'s standing rule
-// 3): a seeded pseudo-random generator, no real intelligence data.
+// baseline. Synthetic and in-repo, standing rule 9: a seeded
+// pseudo-random generator, no real intelligence data.
 import type { Edge, Node } from "../../../packages/schemas/generated";
 
 export const FIXTURE_NODE_COUNT = 50_000;

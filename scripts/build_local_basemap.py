@@ -4,7 +4,7 @@ harness's Geospatial screen downloads a Geofabrik extract, runs planetiler
 to produce PMTiles, and loads the OSM-derived gazetteer") and
 `docs/05_DEPLOYMENT.md` §2.2 ("Build local basemap").
 
-**No harness exists yet** (`harness/` is Phase 8 scope, `docs/07_BUILD_PLAN.md`)
+**No harness exists yet** (`harness/` is Phase 8 scope)
 and there is no `osprey` CLI (`CLAUDE.md`'s own Conventions,
 reconfirmed for Phase 5). This module is the real functionality the
 eventual `osprey geo build`/harness button wraps — a plain, importable,
@@ -18,8 +18,8 @@ and `register_local_provider` need no external resource and are fully
 tested (`tests/test_build_local_basemap.py`) against the synthetic OSM
 fixture the gazetteer connector's own tests already use. `download_extract`
 and `run_planetiler` need a real network call and a real Java process
-respectively — standing rule 3 (`07_BUILD_PLAN.md`: "CI never depends on a
-third party's availability") means neither can run in CI, so both are
+respectively — the standing rule that "CI never depends on a
+third party's availability" means neither can run in CI, so both are
 exercised only for their *argument-construction and error-handling* logic,
 with the actual network/subprocess call injected out — the same shape
 `test_websocket_auth.py` uses for a `WebSocket` it never really opens.
