@@ -3091,6 +3091,43 @@ find something already finished sitting in the queue.
    **Anyone later attempting Option C must treat the scaling test's own per-index rate as
    unvalidated against real removal behaviour, not as a settled premise to build a lazy-creation
    design on.**
+
+   **The floor set and tested, 23 September 2026 — real result, not the one expected.** Docker
+   Desktop's own VM allocation raised from 8092MiB to 10240MiB (`~/Library/Group
+   Containers/group.com.docker/settings-store.json`'s own `MemoryMiB`, the only place this setting
+   lives outside the GUI — backed up before editing, Docker Desktop restarted via `docker desktop
+   restart` to apply it, confirmed via `docker info`: 10416386048 bytes ≈ 9.70GiB, matching the
+   target). The closing-pass test run five times consecutively against a fresh restart, twice (ten
+   runs total, two separate attempts):
+
+   | Attempt | Runs 1-5 | OOM-killed, any run |
+   | --- | --- | --- |
+   | 1 | pass, fail, fail, fail, fail | **No — `OOMKilled: false` on every run** |
+   | 2 | pass, pass, pass, fail, fail | **No — `OOMKilled: false` on every run** |
+
+   **The memory floor works — checked directly, not inferred from the pass count.** Across both
+   attempts, ten consecutive test invocations, the container was never once OOM-killed
+   (`docker inspect`'s own `OOMKilled` field, checked after every run) — a real, measured change
+   from this stage's own prior evidence, where the identical test OOM-killed the container
+   reliably at the original 8GiB allocation. **Five consecutive clean runs was still not
+   achieved — best result three in a row — but not for the reason this stage's own exit criterion
+   was built to catch.** Every failure in both attempts raised the same, already-disclosed "fifth
+   cause" (`ArcadeDBError`/`IndexException` on throwaway-schema DDL, this stage's own entry above)
+   — confirmed by re-running once more and reading the error directly
+   (`"Error on creating index on type 'mx_USES', properties [originator]"`), and by checking disk
+   space immediately after (65% used, 20GiB free — not the disk-exhaustion mechanism either).
+   **This is a different failure mode than the one the exit criterion's own "5 consecutive clean
+   runs" was written against, and the instruction that set this floor said plainly what to do if
+   it recurred: report it rather than raise the ceiling again, since raising further would not
+   address a cause that has nothing to do with available memory.** Cause five remains exactly what
+   it already was — observed, not diagnosed — and now, with causes one through four's own memory
+   pressure genuinely resolved, is the sole remaining blocker to a literal five-for-five pass.
+   **The stage is therefore not marked met.** The memory-floor decision (Option E) stands and is
+   recorded as correct on its own terms — a demo genuinely needs the machine `docs/DEMO_GUIDE.md`
+   §0 now states, and that machine genuinely stops the OOM this stage was originally opened
+   to track — but this stage's own exit criterion, five consecutive clean runs, is a broader
+   promise than "no OOM," and root-causing the fifth cause is real, undone work, not a formality
+   left over after the real fix.
 3. **Documentation refresh — MILESTONE-BLOCKING, promoted 23 September 2026** (see this list's own
    opening summary), **then the Trigger A restructure, not itself milestone-blocking** — already
    the most fully specified stage of the six, worked out in detail below this list rather than

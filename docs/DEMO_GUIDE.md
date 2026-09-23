@@ -13,6 +13,37 @@ instruction that will fail.
 
 ---
 
+## 0. System requirements
+
+**Minimum: 16GiB system RAM, with the Docker Desktop VM allocated 10GiB of it** (Docker Desktop
+→ Settings → Resources → Memory). **32GiB total system RAM is the comfortable floor**, not the
+minimum — 16GiB leaves the remaining 6GiB to cover macOS/Docker Desktop's own overhead, the
+Conduit, the Glass, and a browser tab actually rendering the Glass, which is tight rather than
+comfortable. Both numbers come from measuring this stack directly, not from a vendor
+specification (`07_BUILD_PLAN.md`'s Phase 8 "ArcadeDB stability" stage has the full measurement:
+ArcadeDB alone peaks at 5.2–6.9GiB under a real run of both acceptance scenarios, and the Docker
+Desktop VM's default allocation on a typical machine, 8GiB, is not enough headroom above that
+peak to run reliably — this was measured as repeated out-of-memory kills before the VM allocation
+was raised).
+
+**The containers this demo actually needs: ArcadeDB, Postgres, Valkey, MinIO.** Plus the Conduit
+(`uvicorn`, a host process — §3.2 below) and the Glass (a Vite dev server, also a host process —
+no packaged build exists yet). `make dev-up` starts three more — **Ollama, LiteLLM and speaches —
+and none of the three is required for either acceptance scenario** (`08_ACCEPTANCE_SCENARIOS.md`'s
+own A1–A15/B1–B21, checked directly: neither calls `ModelPort` anywhere; both fixtures are built
+entirely through structured recipe/CSV ingest, never free-text extraction). Stopping all three
+after `make dev-up` (`docker stop compose-ollama-1 compose-litellm-1 compose-speaches-1`) does not
+affect either scenario and meaningfully reduces the memory this demo needs to survive.
+
+**What is unavailable without Ollama/LiteLLM:** free-text entity extraction — "ingest a witness
+statement, extracted entities appear as `inferred` with correct source spans," Phase 6's own exit
+criterion, real and already built, demonstrable through the API — and anything built on top of it.
+Neither of the two acceptance-scenario demo cases in §1 below needs it. `speaches` (speech-to-text)
+is not used anywhere in this codebase's own routes or either scenario; nothing is lost by leaving
+it stopped.
+
+---
+
 ## 1. What you can demo today
 
 Every demo case below has a **distribution class** (`06_DECISIONS.md` ADR-035): `shipped` means it
