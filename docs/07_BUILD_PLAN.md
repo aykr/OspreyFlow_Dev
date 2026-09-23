@@ -3128,6 +3128,80 @@ find something already finished sitting in the queue.
    to track — but this stage's own exit criterion, five consecutive clean runs, is a broader
    promise than "no OOM," and root-causing the fifth cause is real, undone work, not a formality
    left over after the real fix.
+
+   **Cause five, diagnosed, 23 September 2026. Report only — no fix built, no criterion changed.**
+
+   **1. The exception, in full — this is all of it, not an excerpt.** API response body:
+   `{"error":"Internal error","detail":"Error on creating index on type 'mx_USES', properties
+   [originator]","exception":"com.arcadedb.index.IndexException"}`. The server log, at the same
+   moment, carries the identical one-line message on every retry
+   (`_ddl`'s own six-attempt backoff, `schema.py:34-35`) and nothing else — **no Java stack trace
+   exists for this exception, on either the API response or the server log side; this one line is
+   the complete information ArcadeDB exposes for it.** One unrelated exception co-occurred once
+   during this session's reproduction, with its own real stack trace (`ClosedSelectorException`,
+   an XNIO network-listener error, distinct code path) — investigated as a candidate (via
+   `totalOpenFiles`/`maxOpenFiles`, ArcadeDB's own profiler metrics) and ruled out below; it did
+   not recur across ten further reproductions and is not part of this cause.
+
+   **2. The accumulation hypothesis, tested directly, confirmed.** Five consecutive runs, dropping
+   and recreating `ospreyflow` before each: **5/5 passed, clean, no exceptions.** Five consecutive
+   runs against the same database with no drop between them, from a fresh restart: passed, passed,
+   passed, **failed at run 4**, failed at run 5 — **it never recovered within the remaining runs.**
+   `ramOsUsed` alongside each run: 8.651 → 9.097 → 9.396GiB (climbing with each clean pass, and
+   run time climbing with it: 117s → 151s → 203s) → 9.214GiB (run 4, failed) → 9.262GiB (run 5,
+   failed) — against this container's own 9.70GiB ceiling (the 10GiB VM allocation set to close
+   this stage, above). **This is not independent random failure — the failure point tracks
+   accumulated memory pressure directly, and the drop-between-runs condition alone was sufficient
+   for a clean 5/5.**
+
+   **3. Repeated `CREATE INDEX IF NOT EXISTS` against an index that already exists, and what a
+   half-built one would do.** Confirmed earlier in this same investigation (the repeat-`apply_
+   schema` test, three calls in a row against an already-schema'd database): re-issuing the
+   identical 370 DDL statements against indexes that already exist costs the same ~370 commands
+   and ~370 `txCommits` every time, but **no additional memory** — `ramOsUsed` stayed flat across
+   three repeats (6.119 → 5.865 → 5.923GiB). `IF NOT EXISTS` is therefore a cheap, working check
+   against a healthy existing index under normal conditions, not the site of the cost. **This
+   reproduction's own run 4 failure is not a half-built index from an earlier interrupted run** —
+   `mx_USES.originator` had already been created successfully in runs 1 through 3 of the same
+   no-drop sequence, proving the index itself was intact and complete at the moment run 4 failed
+   against it. What changed between run 3 and run 4 was available memory, not the index's own
+   state. A half-built index from a genuinely interrupted run remains a real, separate risk this
+   diagnostic did not need to invoke to reproduce cause five, and was not ruled out in general —
+   only ruled out as *this* reproduction's own mechanism.
+
+   **4. Uniqueness constraints, checked directly against the code, not assumed.** `id` is the only
+   index anywhere in this schema created with `unique=True`
+   (`packages/adapters/graph_arcadedb/schema.py:164`) — every other index this module creates,
+   including every one that has ever appeared in an `IndexException` across this whole
+   investigation (`mx_USES.originator`, `mx_Person.owning_unit`, `mx_Endpoint.reverted`,
+   `mx_Document.owning_unit`, `mx_PRESENT_AT.reverted`, `mx_Asset.handling_classification`,
+   `mx_MENTIONED_IN`), is created `unique=False`
+   (`schema.py:128,170,176,189`). `id` values are fresh per run (`new_id()`/`new_edge_id()`); the
+   fields that *do* repeat constantly across runs and across every single row (`originator`,
+   `owning_unit` — both hardcoded to `"unit-1"` by every fixture writer's own `_handling()`) sit on
+   `NOTUNIQUE` indexes, for which a repeating value is not a constraint violation, it is the normal
+   case the index type exists to serve. **No — ruled out directly, not inferred.**
+
+   **Conclusion: cause five is not a fifth, independent mechanism. It is causes one through four's
+   own accumulation/memory-pressure mechanism, manifesting differently now that the container has
+   real headroom.** At the original 8GiB ceiling, this same pressure crossed into a hard Docker
+   OOM-kill before a graceful failure was possible. At 10GiB, the process survives as a process,
+   but a specific, memory-hungry operation — `CREATE INDEX`, evaluated fresh against every one of
+   `_graph_client()`'s own repeated `apply_schema` calls within a single run, compounding across
+   runs against a database that is never cleaned between them — is the first thing to fail once
+   available memory tightens enough, throwing a checked Java exception rather than crashing the
+   whole process. The two are the same underlying resource question at two different ceilings, not
+   two different defects.
+
+   **The question this now opens, held rather than acted on, exactly as instructed.** A clean run
+   against a freshly dropped database passed five times out of five; only repeated runs against an
+   accumulating database, never cleaned between them — an artefact of how this stage's own
+   diagnostic testing has been run today, not of how an actual install-and-demo would ever be
+   used — produced the failures this stage's own exit criterion is written against. Whether "five
+   consecutive clean runs against the same accumulating database" is the right criterion for an
+   install-and-demo milestone, where a demo is a single run from a clean install, is a legitimate
+   question now that the cause is known — not decided here, and not a reason to have relaxed the
+   criterion before knowing it, per the instruction that asked for this diagnosis.
 3. **Documentation refresh — MILESTONE-BLOCKING, promoted 23 September 2026** (see this list's own
    opening summary), **then the Trigger A restructure, not itself milestone-blocking** — already
    the most fully specified stage of the six, worked out in detail below this list rather than
