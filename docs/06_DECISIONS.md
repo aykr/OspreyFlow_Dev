@@ -3107,6 +3107,99 @@ Not rewritten in this pass — scoped, sized, and left as its own open item so i
 into "already handled" the way the original miscount nearly did. See `07_BUILD_PLAN.md`'s own
 entry, below, for its placement.
 
+### B11 — The gate audit the digit-width bug provoked; three items sized, not solved
+
+**Every gate in `make ci` checked for the same class of defect §B10's bug was: has it ever been
+shown red by deliberate injection, not only observed green.** Eight already held themselves to
+this — each with its own `test_the_check_fails_for_X`/`test_X_is_flagged` case, `CLAUDE.md` rule
+12's "name the test" discipline already applied at the time each gate was built: `demo-guide-
+check`, `domain-model-coverage-check`, `route-coverage-check`, `authorized-query-check`, `test-
+file-coverage-check`, `product-tree-link-check`, `schemas-check`, and the Python half of
+`licence-check`. Re-run live (23 September 2026), all pass. `decision-log-publication-check`
+itself received an additional live `make`-level demonstration beyond its own unit fixture, being
+the gate specifically found broken: a real `(ADR-006, ADR-042)` reference injected into
+`docs/06_DECISIONS.md`, `make decision-log-publication-check` failed with the new pair named,
+reverted, passed again clean.
+
+**One gate had never been tested at all.** The Node half of `licence-check`
+(`scripts/licence_check.mjs`) has run in CI since Phase 0 with no test file — its own `isAllowed`
+predicate never shown red. Built `tests/licence_check/test_licence_check_mjs.test.mjs`. First
+injection attempt (removing the GPL-rejection branch, asserting a bare `"GPL-3.0"` string still
+correctly rejected) passed even with the bug present — the default-deny fallthrough
+(`ALLOWED_MARKERS.some(...)`) already rejects any string matching no allowlisted marker, so a bare
+GPL string is caught either way. The real risk is `main()`'s own `licenses.join(" AND ")` shape: a
+dual-licensed package naming an allowed marker *and* GPL in one string. With the branch removed,
+`isAllowed("MIT AND GPL-3.0")` returned `true`. Test corrected to cover this case; now genuinely
+red-then-green. Wired into `make licence-check` and CI. **`CLAUDE.md` rule 15 records the standing
+rule this incident makes: a gate's first green is not a result, it is an untested state; a new
+gate is not wired into `make ci` until it has been shown red.**
+
+**a. The 6 real ADR cross-reference violations — disposition, not fix.** All six: **rewrite the
+citation**, none need reclassifying the cited ADR.
+
+- **ADR-028 → ADR-022 (×2).** Both citations are build-process history attached to a PRODUCT
+  decision ("split out by ADR-022's third addendum, 20 September 2026"; "the same shape ADR-022
+  already used once for Scenario B's own six Glass screens") — precedent for how a phase's scope
+  was reorganised, not architecture content. Rewrite: state the precedent without the ADR number.
+- **ADR-032 → ADR-019.** Cites a mixed list (ADR-019, 022, 023, 027, 028, 029, 030) as examples of
+  "this repository's own standing discipline" of correcting spec text immediately. The claim being
+  illustrated is a documentation habit, not a technical fact; the PROCESS numbers in the list
+  (019, 022, 027) can be dropped, keeping only the PRODUCT ones (023, 028, 029, 030) as the
+  illustration, or dropping the enumerated list entirely.
+- **ADR-035 → ADR-026 (×5), reconsidered, not reclassified.** First read: ADR-026 seemed
+  misclassified, since ADR-035 cites it for a real technical fact ("the generated, VAST-shaped
+  fixture ADR-026 already designs") a fixture-builder needs. Re-examined against ADR-026's own
+  title — "the VAST Challenge datasets are admitted shaped, not verbatim; standing rule 3 is not
+  amended" — the decision itself is a data-admission *policy ruling* (does this violate the
+  fixtures-synthetic rule, and is that rule changed): governance of what the build is allowed to
+  use, not a description of the shipped system. The technical consequence (fixtures must be
+  shaped, not verbatim) is real, but it is a *consequence* of the policy, restatable directly in
+  ADR-035's own prose without depending on ADR-026's number. **PROCESS stands.** Rewrite.
+- **ADR-035 → ADR-034 (×5).** Cites the publication/licence boundary itself — "ADR-034's own B7
+  finding," "ADR-034 §B3," "ADR-034 §B2." Unambiguously process: ADR-034 *is* the product/private
+  split: it cannot be reclassified PRODUCT without contradicting its own purpose. Rewrite.
+- **ADR-035 → ADR-042 (×1) and ADR-037 → ADR-042 (×1).** Cites the alpha gate/release-timing
+  decision to explain why a demo review's timing matters, and to scope an amendment against it.
+  Release gating, not architecture. Rewrite both.
+
+**b. `CLAUDE.md`'s 82 source-code citations, broken down — where and for what.** By directory:
+`packages/` 8, `services/` 15, `apps/` 21, `scripts/` 11, `tests/` 27. By shape: **59 of 82 (72%)
+name a specific numbered rule** (`` `CLAUDE.md` rule 2/3/7 ``, "standing rule 2/`CLAUDE.md` rule
+3") — the same rewrite already agreed for `07_BUILD_PLAN.md`: state the rule, drop the reference.
+**23 of 82 (28%) cite it as a document, not a rule** — two are exempt (`scripts/product_tree_link_
+check.py`'s own marker-list data and docstring, functional, not narrative), the other 21 cite a
+named *section* ("Conventions," "before you write code") or paraphrase a rule without its number
+("standing... no `osprey` CLI yet," "fail loudly, never dropped silently posture," "own session
+priority"). **That is different, as asked**: "state the rule, drop the reference" only works when
+the citation already names which rule; a section-name or paraphrased citation needs the actual
+constraint pulled forward first, the same judgement call the `07_BUILD_PLAN.md` "standing rule 3"
+cases needed earlier this session. Not rewritten here — sized for whoever does the `CLAUDE.md`
+source-code rewrite next: 59 mechanical, 21 needing individual judgement, 2 exempt.
+
+**c. The known-failure baseline, restated so it does not move unnamed.** Two floors, not one,
+found and named together for the first time this session — previously real but never written down
+together as an expected result:
+
+- **Floor A — pre-existing CI-gate drift, unchanged by this session's own work, confirmed via
+  `git stash` A/B against the pre-session commit.** 2 failing tests: `test_route_coverage_check.py
+  ::test_no_new_drift_beyond_the_allowlist` (6 routes registered with no matching documentation or
+  allowlist entry) and `test_test_file_coverage_check.py::test_no_new_drift_beyond_the_allowlist`
+  (`test_phase8_exit_criterion_end_to_end.py` wired into neither the `test` job's ignore list nor
+  a live-service job) — the latter already disclosed earlier in `07_BUILD_PLAN.md`, the former not
+  previously named as a standing floor anywhere.
+- **Floor B — the local model backend unreachable, newly named.** 7 failing tests (4
+  `tests/conformance/model_port`, `tests/golden/test_golden_set.py`,
+  `tests/scenarios/test_phase6_extraction_and_resolution.py`,
+  `tests/scenarios/test_witness_statement_extraction.py`), confirmed via `compose-litellm-1`'s own
+  logs (`litellm.APIConnectionError: Cannot connect to host ollama:11434`) and `compose-ollama-1`'s
+  own logs (`dial tcp: lookup registry.ollama.ai ... server misbehaving` — this sandbox has no
+  route to the public internet, so Ollama cannot pull its model even when started). `DEMO_GUIDE.md`
+  §0 already discloses Ollama/LiteLLM/speaches are not required for either demo scenario; this is
+  the same fact restated as a test-suite floor, not a new constraint.
+- **The full baseline: 9 known-failing tests** (`tests/` run whole) **when Ollama is unreachable,
+  2 when it is not.** A run reporting more than this, in either state, is real drift; a run
+  reporting fewer without either floor being fixed is a measurement taken wrong, not progress.
+
 ---
 
 ## ADR-035 — Demo distribution classes (`shipped`/`internal`), fail-closed and enforced at packaging time; Fixture Corp (R24) is the shippable demo; Enron and VAST stay internal, one of them narrower than requested
