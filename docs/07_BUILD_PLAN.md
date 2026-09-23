@@ -2715,7 +2715,168 @@ find something already finished sitting in the queue.
    requires.** No fix is proposed here — root-causing *why* ArcadeDB's own schema/index creation
    costs this much under this configuration (JVM heap sizing, off-heap page-cache/buffer-pool
    sizing, the sheer count of indexes this ontology's own §1.4 discipline declares, or some
-   combination) is real, separately-scoped work for whoever closes this stage next.
+   combination) was real, separately-scoped work — the second diagnostic pass immediately below is
+   that work, still report-only, no fix built.
+
+   **Second pass, 23 September 2026 — index count, ArcadeDB's own configuration, and which indexes
+   are load-bearing. Still report only; nothing below was implemented.**
+
+   **Index-count scaling, measured directly.** A single test vertex type, ten properties
+   pre-declared and unindexed (so the type/property overhead is fixed and only index count moves
+   between checkpoints), on a fresh empty database, fresh restart:
+
+   | Point | ramOsUsed | ramHeapUsed | commands |
+   | --- | --- | --- | --- |
+   | before | 1.560GiB | 0.033GiB | 0 |
+   | type + 10 props, 0 indexes | 1.578GiB | 0.044GiB | 11 |
+   | + 1 index | 1.683GiB | 0.108GiB | 12 |
+   | + 4 more (5 total) | 2.052GiB | 0.359GiB | 16 |
+   | + 5 more (10 total) | 2.344GiB | 0.431GiB | 21 |
+
+   The type and its properties cost almost nothing (+0.018GiB for 0 indexes). Indexes cost real,
+   roughly-linear memory with *diminishing* marginal cost as more accumulate: the first index costs
+   ~105MB, indexes 2-5 average ~92MB each, indexes 6-10 average ~58MB each — consistent with a
+   per-index allocation plus some shared, amortised subsystem cost that is mostly paid once. **This
+   is linear-with-diminishing-returns, not a hard step at some threshold** — it does not, on its
+   own, explain a jump from ~2.3GiB at 10 indexes to ~6.4GiB for the full ontology by simple
+   extrapolation of the *early* per-index rate, but the *later*, lower rate (~58MB/index) applied to
+   the ontology's own real index count is in the right order of magnitude: this ontology declares 9
+   entity types and 11 edge types (20 total), each carrying at minimum 7 "common" indexes
+   (`id` unique, the four-field access-filter composite, `reverted`, `superseded_by` —
+   `packages/adapters/graph_arcadedb/schema.py:141-181`, one more than this document's own prior
+   pass estimated, which missed `reverted`/`superseded_by`), plus 23 identifier indexes, 8
+   `indexed: true` property indexes and 4 temporal `valid_from` indexes — on the order of 175
+   indexes in total. 175 × ~58MB ≈ 10.2GiB, 175 × the full curve's own blended average is closer to
+   the measured ~4.9GiB; **read this as "the right order of magnitude, from a real measured
+   per-index cost, not a fabricated one," not as an exact reconciliation** — the controlled
+   experiment varied index count on one type, the real ontology varies it across twenty, and this
+   pass did not measure whether per-*type* overhead (as opposed to per-index) behaves the same way.
+
+   **ArcadeDB's own configuration, checked, with an honest account of what could not be found.**
+   The only ArcadeDB memory setting this deployment actually sets is `ARCADEDB_OPTS_MEMORY: "-Xms1G
+   -Xmx6G"` (`deploy/compose/dev.yaml`) — the JVM heap. `/api/v1/server`'s own `settings` array (53
+   entries) was read in full: it covers server mode, networking, TLS, HA/replication and the
+   Postgres/Redis/Mongo protocol shims — **nothing exposed there governs page size, per-index
+   memory, or disk-cache sizing**; those may exist as ArcadeDB `GlobalConfiguration` keys not
+   surfaced by this endpoint, but none could be discovered from within this running environment,
+   and this was not cross-checked against ArcadeDB's own upstream documentation (no fetch tool was
+   used to avoid an unverifiable claim). One runtime-observable default was found regardless: the
+   profiler's own `cacheMax` reports 1.5GiB (ArcadeDB's own disk read-cache ceiling) with no
+   corresponding entry in `dev.yaml` — an un-configured default, not something this deployment
+   chose.
+
+   **The one setting actually available was tested, per this pass's own instruction — a
+   measurement, not a fix, and reverted immediately after ($`git diff` confirms `dev.yaml` is
+   clean).** `ARCADEDB_OPTS_MEMORY` temporarily changed to `-Xms256M -Xmx2G` (a third of the
+   configured heap), container recreated, full ontology `apply_schema` run again:
+
+   | | ramHeapUsed | ramHeapMax | ramOsUsed |
+   | --- | --- | --- | --- |
+   | `-Xmx6G` (original) | 3.043GiB | 6.0GiB | 6.393GiB |
+   | `-Xmx2G` (test) | 1.114GiB | 2.0GiB | 6.188GiB |
+
+   **Schema application still succeeded at a third of the configured heap, using well under the
+   smaller ceiling — and total OS-level memory was unchanged.** This is a real, useful negative
+   result: `ramHeapUsed` scaled down with the smaller ceiling (the JVM did more GC work to stay
+   under it, successfully), but `ramOsUsed` — the figure that determines whether the container gets
+   OOM-killed — did not move. **The ~4.9GiB cost is predominantly off-heap** (native buffers,
+   ArcadeDB's own file/page cache, or OS page cache from the WAL and index-file writes the 370 DDL
+   statements perform), which `-Xmx` does not bound at all. Simply lowering the configured heap is
+   therefore not, on this evidence, a viable single-lever fix — it would free heap headroom without
+   reducing the total memory the container needs to survive schema creation.
+
+   **Which indexes are load-bearing, checked against real callers in this codebase, not assumed
+   from the ontology's own declaration.** Every `identifiers` field (23 across the ontology) is
+   reachable through one real, generic query path — `search_nodes`
+   (`adapter.py:417-428`) unions every declared `identifiers` field into its own search — so all 23
+   are load-bearing for that capability regardless of whether any current recipe populates them.
+   **Five have that query path but no data path**: `passport_number`, `companies_house_number`,
+   `ein`, `vrm`, `vin` appear in no recipe, fixture, connector or test anywhere in this repository
+   (checked directly, whole-repo search) — real capability, currently zero rows any of these five
+   indexes would ever match. The `id`/access-filter-composite/`reverted`/`superseded_by` "common"
+   indexes are each named, with the specific caller, in `schema.py`'s own module docstring and
+   confirmed against `access_filter.py`'s own every-read use — load-bearing, all of them. The
+   temporal `valid_from` index on four edge types is used by timeline-filtered expansion
+   (`08_ACCEPTANCE_SCENARIOS.md` B17) — load-bearing.
+
+   **Four of the eight `indexed: true` declared *properties* (as distinct from `identifiers`)
+   appear to have no real caller at all**, checked directly against every query builder in
+   `packages/adapters/graph_arcadedb/`: `family_name`, `given_names`, `date_of_birth`, `aliases`
+   (`Person`) and `title` (`Document`) — zero matches. `search_nodes` does not include them (it
+   only unions `identifiers`, not `indexed: true` properties — a real distinction in the code, not
+   a documentation gap). Their real use is in DuckDB/Splink resolution comparisons, a separate
+   store this ArcadeDB index does not serve. `value_normalised` (`Endpoint`) has one reference
+   (`services/api/evaluation.py:163`) that reads the property off an already-fetched node — not a
+   query filtering by it — so it too has no confirmed ArcadeDB-side caller. **`name`
+   (`Location`/`Organisation`) has exactly one real caller, `SuggestLocationsBuilder`
+   (`builders.py:132`), and that caller queries it with `TextP.containing(...)` — a substring
+   predicate. `_create_index` (`schema.py:211-215`) only ever creates a plain `UNIQUE`/`NOTUNIQUE`
+   index, never a full-text one, so this index is very likely unable to accelerate the one query
+   that names it at all** — a stronger finding than "unused": plausibly the wrong index type for
+   its own single real caller. **None of the above were removed; this is the audit, not the edit.**
+
+   **Phase 5's own `IndexException`/disk-space attribution, re-examined with what is now known.**
+   That entry's own words: freeing disk space "resolved the vast majority of failures outright" —
+   already, at the time, an admission that it did not resolve all of them, left unexplained rather
+   than closed. With `apply_schema`'s own real cost now measured at ~4.5-4.9GiB, a heap genuinely
+   under pressure during concurrent or back-to-back schema DDL is a second, independently plausible
+   cause for the same exception class, on the same code path, that was never considered at the
+   time because the cost had not yet been measured. **The disk-space attribution still holds for
+   what it actually claimed — the majority of that incident's own failures — and is not
+   overturned. It should no longer be read as the complete explanation for that incident**; the
+   residual, previously-unexplained minority is at least as plausibly this same memory mechanism as
+   an unconsidered second cause of the identical symptom, not a settled loose end.
+
+   **Options, with costs and risks. The owner chooses — the last two times a scope call was made
+   inside an investigation, it had to be retracted (the false "owner's explicit decision"
+   attribution, and this stage's own original "out of scope for v1" call on the cross-cutting
+   rows), and this is exactly that kind of call.**
+
+   - **A. Configuration change (page-cache/heap tuning).** *Cost to build:* low, if a real lever
+     exists — but this pass could not find one that changes total memory (lowering `-Xmx` alone
+     did not); would need ArcadeDB's own upstream documentation to identify a genuine off-heap/page
+     -cache setting, not yet found from inside this environment. *Gives back:* potentially the
+     whole problem, if the real lever exists and is small. *Risk:* the one lever tested had no
+     effect; time spent hunting for an undocumented-here setting may find nothing, and a wrong
+     guess (as with `-Xmx`) costs a full measurement cycle to rule out.
+   - **B. Fewer indexes.** *Cost to build:* low-to-moderate — five identifier indexes
+     (`passport_number`/`companies_house_number`/`ein`/`vrm`/`vin`) and four-to-five property
+     indexes (`family_name`/`given_names`/`date_of_birth`/`aliases`/`title`, `value_normalised` if
+     its one caller is judged not to need it) have no confirmed caller today; removing them is a
+     schema change plus a migration story for `revert_schema`. *Gives back:* on this pass's own
+     per-index measurement (tens of MB each, more at low counts), removing ~9-10 indexes recovers a
+     real but almost certainly *partial* amount, well short of the ~4.9GiB gap on the evidence
+     above (which points at a largely fixed, per-`apply_schema`-call cost, not a purely linear
+     per-index one). *Risk:* removes real, if currently unpopulated, capability
+     (`search_nodes` across all declared identifier types); wrong to do inside this investigation
+     — the instruction not to remove anything here stands for exactly this reason.
+   - **C. Lazy index creation** (create a type's indexes on first real data for that type, or on
+     first query needing it, rather than unconditionally at `apply_schema` time). *Cost to build:*
+     moderate-to-high — changes a core, already-tested contract (`apply_schema` is idempotent and
+     total; a lazy variant needs its own conformance suite, per this document's own rule 1, and a
+     migration story for a type that already has data written before its indexes exist). *Gives
+     back:* plausibly the largest win of the four routes — an install-and-demo session that never
+     touches `passport_number`/`ein`/etc. would never pay for those indexes at all — but unproven
+     without a prototype. *Risk:* real correctness surface (a query racing an index that has not
+     yet been created), and the biggest scope of the four options.
+   - **D. A different page/cache strategy** (smaller page size, a disk-backed rather than
+     memory-resident index structure, or similar). *Cost to build:* unknown without first finding
+     the actual configuration surface option A could not locate — this route depends on A
+     succeeding first, or on reading ArcadeDB's own source. *Gives back:* unknown; could be large
+     or negligible depending on what is actually tunable. *Risk:* the least-evidenced of the four
+     options here — nothing in this pass's own measurements points at a specific page/cache lever
+     to pull, only that the cost is off-heap.
+   - **E. Accept a higher floor; state the minimum machine.** *Cost to build:* lowest of the five —
+     a documentation change (the install guide's own stated requirements) plus, if headroom is
+     still tight, raising `ARCADEDB_OPTS_MEMORY`/the Docker Desktop VM budget, which this pass's own
+     test showed does not by itself solve the OOM risk (item 1's original diagnostic pass found the
+     total *ramOsUsed* figure barely moved between 2GB and 6GB heap ceilings) — so this option may
+     need to pair with raising the *host's* own VM budget, not just the container's heap, to be
+     credible. *Gives back:* nothing to the actual footprint; converts a hidden capacity failure
+     into a stated, honest constraint. *Risk:* directly narrows "install-and-demo on a clean
+     laptop" — the milestone's own current wording — to "on a clean laptop with at least N GB
+     free for this one container," a real product decision with real audience consequences, not a
+     technical one this document can make on its own.
 3. **Documentation refresh — MILESTONE-BLOCKING, promoted 23 September 2026** (see this list's own
    opening summary), **then the Trigger A restructure, not itself milestone-blocking** — already
    the most fully specified stage of the six, worked out in detail below this list rather than
@@ -3434,6 +3595,37 @@ both: a disclosure's own closing sentence must name a real stage, an explicit "O
 v1," or an explicit "Permanently accepted, not built" *at the moment it is written*, not as a
 placeholder to be resolved by whoever next reads it or by the next phase-close sweep.** A
 disclosure that cannot yet name one of the three has not finished being written.
+
+- **New, 23 September 2026 — `upsert_edges`'s own `_weigh_edge` call is quadratic ingest cost,
+  named here as its own defect rather than left as a note inside the memory-footprint
+  investigation it was found during, so it is not read as part of a resolved finding.**
+  `GraphArcadeDBAdapter._corpus_edge_stats` (`packages/adapters/graph_arcadedb/adapter.py:193-220`)
+  runs three Gremlin queries on every single edge write, none scoped to the write's own pair — the
+  third is `g.E().hasLabel(label).has("reverted",false).values("occurrences").sum()`, an unscoped
+  scan over **every edge of that type currently in the database**, re-run on every subsequent edge
+  write of the same type. For $N$ edges of one type ingested in sequence, the $k$-th write scans
+  roughly $k$ existing edges, so total work across the ingest is $\sum_{k=1}^{N} k = N(N+1)/2$ —
+  quadratic in $N$, not linear. **Reasoned from the code, not measured** (no benchmark has been run
+  against a realistically-sized edge population): at $N=10{,}000$ edges of one type, roughly $5
+  \times 10^{7}$ cumulative edge-record touches from this one query alone; at $N=100{,}000$,
+  roughly $5 \times 10^{9}$; at $N=1{,}000{,}000$, roughly $5 \times 10^{11}$ — before counting the
+  two `_node_type` lookups, the `_find_existing_edge` lookup, or the other two (source/target
+  degree) queries `_corpus_edge_stats` also runs per write, each individually linear but none of
+  them free. A realistic single-type edge population reaching the tens or hundreds of thousands is
+  not a hypothetical for this platform's own domain (`08_ACCEPTANCE_SCENARIOS.md`'s own Scenario B
+  is built from CDR data — call/message records between two parties are exactly the shape that
+  produces a large, single-typed `COMMUNICATED_WITH` population in a real investigation, just at a
+  scale this project's own synthetic fixtures do not currently exercise). **Named test that would
+  demonstrate it, not yet written:** an ingest-throughput test asserting wall-clock (or
+  `_corpus_edge_stats`'s own call count) grows sub-quadratically with edge count for a single edge
+  type — e.g. `test_edge_ingest_throughput_does_not_degrade_quadratically_with_corpus_size`,
+  ingesting edges of one type in increasing batches (matching this session's own memory-cost-curve
+  shape, above) and asserting the *marginal* cost per edge does not grow with corpus size, the same
+  distinction item 1 of that investigation drew between a flat per-element cost and a step or
+  growing one. **Owning phase: Phase 8** (found during this phase's own memory-footprint work, and
+  the same "before the milestone can hold an investigation graph of realistic size" reasoning
+  already applies) — not built here; this entry states the defect and names the test, per this
+  section's own standing rule, and leaves the fix for whoever takes the stage next.
 
 - **Highest-consequence item in this list for Phase 8 — the principal-resolution gap, consolidated
   from three separate disclosures of what is one missing capability, not three.** Stated once,
