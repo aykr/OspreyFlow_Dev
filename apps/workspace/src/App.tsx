@@ -685,6 +685,13 @@ export function App() {
         bearerToken={DEV_BEARER_TOKEN}
         investigationId={investigationId}
         graph={workingSetRef.current.graph}
+        onExportChartImage={(mark) => {
+          const handle = glassCanvasRef.current;
+          if (!handle) {
+            return Promise.reject(new Error("chart export: canvas is not mounted"));
+          }
+          return handle.exportImage(mark);
+        }}
       />
       {toast && (
         <div style={{ position: "fixed", bottom: 16, right: 16 }}>

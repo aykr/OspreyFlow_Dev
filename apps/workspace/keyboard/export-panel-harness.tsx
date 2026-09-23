@@ -10,6 +10,14 @@
 // `POST /v1/investigations/{id}/export` and `GET .../resolution/threshold` are intercepted by
 // `export-panel.spec.ts` via `page.route` — the same "real network call, mocked at the transport,
 // not the component" shape every other keyboard spec in this directory already uses.
+//
+// Phase 8 Stage 4h: `onExportChartImage` is supplied as a fake here, not the real
+// `GlassCanvasHandle.exportImage` — this harness mounts `ExportPanel` alone, with no live
+// `GlassCanvas`/Sigma instance to capture from (this file's own header already establishes "mount
+// the panel, not the shell"). The download-triggering keyboard case exercises the *subgraph*
+// shape instead, which is fully real here (`buildSubgraphArtefact` needs only the graph already
+// built below), so the fake below exists only so the chart option in the `Select` is not left
+// broken if a future case exercises it.
 import Graph from "graphology";
 import { createRoot } from "react-dom/client";
 
@@ -44,6 +52,7 @@ function Harness() {
         graph={buildGraph()}
         open={true}
         onClose={() => undefined}
+        onExportChartImage={() => Promise.resolve(new Blob(["fake-png"], { type: "image/png" }))}
       />
     </div>
   );

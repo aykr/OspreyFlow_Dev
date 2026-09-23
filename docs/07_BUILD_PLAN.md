@@ -1923,7 +1923,7 @@ the reasoning for each move stated at the point it moves.
      on `local-lite`, plus the S2-export-blocks test — the same closing-pass discipline Phase 6's
      Stage 6 and Phase 5a's Publish stage already used.
    - **4h — the export rendering pipeline, a real sub-stage inside v1, not a placeholder — directly
-     continuing 4e's own work.** `08_ACCEPTANCE_SCENARIOS.md` names A13–A15 as the reason this
+     continuing 4e's own work — built, 23 September 2026.** `08_ACCEPTANCE_SCENARIOS.md` names A13–A15 as the reason this
      platform exists, and their own product is a document handed to someone. Stage 4e wired the
      real gate, mark, manifest and ledger for all three artefact shapes and renders the response —
      the safety-critical half — but produces no downloadable file for any of them; an export
@@ -1949,6 +1949,64 @@ the reasoning for each move stated at the point it moves.
      (embedded PNG metadata for chart; a top-level field for subgraph; both for report). This is
      also `08_ACCEPTANCE_SCENARIOS.md`'s own strengthened A15 assertion, below — the acceptance row
      and this stage's own exit criterion are the same claim, checked twice on purpose.
+
+     **Built as:** `src/export/pngMark.ts` (a hand-rolled PNG `tEXt`-chunk embedder/reader, no new
+     dependency — PNG chunk framing is simple enough that a library would cost more than it saves,
+     the same call `tests/scenarios/fixtures/fixture_corp.py`'s own AMLSim finding already made);
+     `src/export/chartExport.ts` (`embedChartMark`/`chartMarkFields`, pure and unit-tested, plus
+     `captureChartImage`, the real `@sigma/export-image`/`OffscreenCanvas` integration — see its own
+     disclosed gap immediately below); `src/export/subgraphExport.ts` (`buildSubgraphArtefact`,
+     reusing the working set's own `data` node/edge attribute directly, no reshaping); `src/export/
+     reportExport.ts` (`buildReportArtefact`, a self-contained HTML document with the light-theme
+     ramp copied verbatim from `design/tokens.css` rather than linked, since a standalone document
+     cannot depend on this repo's own stylesheet still existing at read time); `src/export/
+     triggerDownload.ts` (the one download mechanism all three shapes share — an anchor click
+     against an object URL). `GlassCanvasHandle` gained `exportImage`, wired to `captureChartImage`;
+     `ExportPanel.tsx` now builds and downloads the real artefact after a successful submit,
+     branching on `artefactKind`; `App.tsx` wires the chart path through `glassCanvasRef`. All three
+     named exit-criterion tests pass for real: `test_chart_export_produces_a_real_png_carrying_the_
+     mark` (asserts the real PNG signature/`IEND` bytes and every mark field read back through the
+     real chunk reader, not the input object); `test_subgraph_export_produces_real_json_carrying_
+     the_mark` (asserts real, parseable JSON reusing the graph's own node/edge attributes, mark and
+     manifest as top-level fields); `test_report_export_produces_a_self_contained_html_document_
+     carrying_the_mark` (asserts a real `DOMParser`-parsed document with no external stylesheet/
+     script, the mark both in a visible header/footer stamp and in an embedded `<script
+     type="application/json">` field, judgement content HTML-escaped, and every judgement/gap/
+     assumption passed in rendered — no cap). vitest 219 → 238 (19 new cases: `pngMark.test.ts` 5,
+     `chartExport.test.ts` 3, `subgraphExport.test.ts` 4, `reportExport.test.ts` 6, plus one added
+     to the pre-existing `ExportPanel.test.tsx` proving the subgraph shape's own download content
+     and filename). `EXPORT_PANEL_ACTIONS` gained a third action, `export-produces-a-downloadable-
+     artefact`, proven via the subgraph shape (fully real in the harness; the chart shape needs a
+     fake `onExportChartImage` callback since the harness mounts no live Sigma instance) — verified
+     non-vacuous by reverting `ExportPanel.tsx`'s own download wiring and confirming both the new
+     case (a real `page.waitForEvent("download")` timeout) and the registry's own coverage
+     assertion fail for real, then restoring it and confirming all four `export-panel.spec.ts` cases
+     pass green again. Full keyboard suite (47 cases across all seven surfaces) passes with
+     `--workers=1`; two cases in `keyboard.spec.ts`/`metrics-panel.spec.ts` (unrelated surfaces,
+     untouched by this stage) flaked under the default multi-worker run with an "Execution context
+     was destroyed" navigation error and passed cleanly both in isolation and against the
+     pre-Stage-4h baseline — cross-worker resource contention, not a regression this stage
+     introduced. `tsc --noEmit` and eslint both clean across every changed/created file (fixed two
+     real pre-existing `noUncheckedIndexedAccess` gaps in the inherited `pngMark.ts` along the way —
+     `crc32`/`readU32be`'s array-index reads were always in bounds by construction but the compiler
+     could not see that; non-null assertions added with a comment, no behaviour change). This stage
+     touches no backend Python at all (`authorized-query-check`: 44 files under `services/api`, no
+     offenders — unaffected, confirming this stage is purely Glass-side).
+
+     **Known gap, disclosed rather than silently narrowed: `captureChartImage` is real code, not
+     unit-testable in this project's own toolchain.** `vitest.config.ts`'s own default `node`
+     environment has no WebGL context for a live `Sigma` instance to render into, and no existing
+     test in this codebase mounts one at all (checked directly: `src/canvas/*.test.ts` are pure
+     data-transform tests, never a render); `OffscreenCanvas`/`createImageBitmap` are real browser
+     APIs jsdom does not implement either. The pure half (`embedChartMark`/`chartMarkFields`) is
+     split out and fully covered by `chartExport.test.ts`; `captureChartImage` itself is trusted to
+     the real, already-tested `@sigma/export-image` library plus a human/Playwright check against
+     the real running app — the same "proven by contract, not by a vitest render" posture
+     `GlassCanvas.tsx`'s own `highlightNodes` already discloses. **Owning stage: none needed — this
+     is a permanent property of the toolchain (no headless-WebGL harness exists in this repo), not
+     a deferred piece of work with a future owner.** If a future stage adds a headless-WebGL test
+     harness for another reason, extending it to cover `captureChartImage` is a natural addition to
+     that stage, not a gap this one leaves open on its own.
 
    **4b/4c and 4d/4e were each a backend/Glass pair sharing one blocked-on-ADR precondition — all
    three now accepted (`06_DECISIONS.md` ADR-045/046/047, 22 September 2026), so no sub-stage in

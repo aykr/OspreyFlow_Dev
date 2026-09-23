@@ -8,19 +8,18 @@
 // position or canvas selection for a failure to anchor to (`02_GLASS_FRONTEND.md` §4.1's own
 // "panel inline banner — non-canvas surfaces" rule).
 //
-// **Rendering the three artefact shapes' own bytes (a PNG, an assembled report document) is not
-// this component's job — disclosed, not silently narrowed.** `services/api/export.py`'s own
-// module docstring names Stage 4e as the renderer, but no chart-image or report-assembly engine
-// exists anywhere in `apps/workspace` yet (`GlassCanvasHandle` has no `exportImage` method;
-// `@sigma/export-image` is listed as a dependency, `02_GLASS_FRONTEND.md` §1, never wired to a
-// component). This drawer submits the real selection to the real gate and renders the real
-// mark/manifest/ledger response — the safety-critical half A15 actually tests — for all three
-// `artefact_kind` values; producing a downloadable file per shape is real, separately-owned work,
-// recorded in `07_BUILD_PLAN.md`'s own Stage 4e entry rather than stubbed out here to look done.
+// **Phase 8 Stage 4h now builds the downloadable half this header comment used to disclose as
+// missing.** Chart bytes come from the caller's own `onExportChartImage` (delegating to
+// `GlassCanvasHandle.exportImage`/`export/chartExport.ts`'s `captureChartImage`, since this
+// component has no Sigma instance of its own); subgraph and report bytes are assembled directly
+// here via `export/subgraphExport.ts`/`export/reportExport.ts`, both pure and unit-tested. This
+// drawer still submits the real selection to the real gate first — the safety-critical half A15
+// already tested — and only builds/downloads the artefact once that gate's own response
+// (`ExportResult`) confirms the export is allowed.
 import type Graph from "graphology";
 import { useState } from "react";
 
-import { listJudgements } from "../assessment/api";
+import { listAssumptions, listGaps, listJudgements, getYardstick } from "../assessment/api";
 import { Button } from "../design/primitives/Button";
 import { Drawer } from "../design/primitives/Drawer";
 import { Input } from "../design/primitives/Input";
@@ -32,8 +31,12 @@ import {
   submitExport,
   type BlockedItem,
   type ExportItemRequest,
+  type ExportMark,
   type ExportResult,
 } from "./api";
+import { buildReportArtefact } from "./reportExport";
+import { buildSubgraphArtefact, serialiseSubgraphArtefact } from "./subgraphExport";
+import { triggerDownload } from "./triggerDownload";
 
 export interface ExportPanelProps {
   apiBaseUrl: string;
@@ -44,6 +47,10 @@ export interface ExportPanelProps {
   graph: Graph;
   open: boolean;
   onClose: () => void;
+  /** The chart artefact's own real capture path — delegates to `GlassCanvasHandle.exportImage`.
+   * Optional so the keyboard harness (which mounts this drawer with no live `GlassCanvas`/Sigma
+   * instance at all) can supply a fake in its place; a real host always passes it. */
+  onExportChartImage?: (mark: ExportMark) => Promise<Blob>;
 }
 
 type ArtefactKind = "chart" | "subgraph" | "report";
@@ -94,6 +101,14 @@ function blockedListLabel(item: BlockedItem): string {
   return `${item.label} — ${reasonLabel}`;
 }
 
+/** The downloadable file's own name — one per shape, timestamped so repeat exports of the same
+ * investigation do not collide in a Downloads folder. */
+function artefactFilename(kind: ArtefactKind, mark: ExportMark): string {
+  const extension = kind === "chart" ? "png" : kind === "subgraph" ? "json" : "html";
+  const stamp = mark.exported_at.replace(/[:.]/g, "-");
+  return `osprey-${kind}-${mark.investigation_id}-${stamp}.${extension}`;
+}
+
 export function ExportPanel({
   apiBaseUrl,
   bearerToken,
@@ -101,6 +116,7 @@ export function ExportPanel({
   graph,
   open,
   onClose,
+  onExportChartImage,
 }: ExportPanelProps) {
   const [artefactKind, setArtefactKind] = useState<ArtefactKind>("subgraph");
   const [justification, setJustification] = useState("");
@@ -110,6 +126,43 @@ export function ExportPanel({
   const [result, setResult] = useState<ExportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  /** Builds the real artefact bytes for `kind` and triggers a download — called only once
+   * `submitExport` has already confirmed the gate allows it, so this never produces an artefact
+   * the gate has not itself already cleared. Errors here surface as the same inline banner a
+   * failed submit already uses, per this drawer's own established error-handling convention. */
+  async function downloadArtefact(kind: ArtefactKind, exported: ExportResult): Promise<void> {
+    if (kind === "chart") {
+      if (!onExportChartImage) {
+        throw new Error("chart export: no chart-capture callback was supplied");
+      }
+      const blob = await onExportChartImage(exported.mark);
+      triggerDownload(blob, artefactFilename(kind, exported.mark));
+      return;
+    }
+    if (kind === "subgraph") {
+      const artefact = buildSubgraphArtefact(graph, exported.mark, exported.manifest);
+      const blob = new Blob([serialiseSubgraphArtefact(artefact)], { type: "application/json" });
+      triggerDownload(blob, artefactFilename(kind, exported.mark));
+      return;
+    }
+    const [judgements, gaps, assumptions, yardstick] = await Promise.all([
+      listJudgements(apiBaseUrl, bearerToken, investigationId),
+      listGaps(apiBaseUrl, bearerToken, investigationId),
+      listAssumptions(apiBaseUrl, bearerToken, investigationId),
+      getYardstick(apiBaseUrl, bearerToken),
+    ]);
+    const html = buildReportArtefact({
+      judgements,
+      gaps,
+      assumptions,
+      yardstick,
+      mark: exported.mark,
+      manifest: exported.manifest,
+    });
+    const blob = new Blob([html], { type: "text/html" });
+    triggerDownload(blob, artefactFilename(kind, exported.mark));
+  }
 
   function reset(): void {
     setBlocked(null);
@@ -146,6 +199,7 @@ export function ExportPanel({
       setBlocked(null);
       setOverridable(false);
       setResult(exported);
+      await downloadArtefact(artefactKind, exported);
     } catch (err) {
       if (err instanceof OverrideRequiredApiError) {
         setBlocked(err.blocked);

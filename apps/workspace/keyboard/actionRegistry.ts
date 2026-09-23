@@ -199,10 +199,16 @@ export const ASSESSMENT_PANEL_ACTIONS = defineActionRegistry("ASSESSMENT_PANEL_A
  * every other registry above already establishes — only a real network call does: submitting an
  * export that succeeds outright, and submitting one that is first blocked (`consult_originator`),
  * then re-submitted with both override fields filled.
+ *
+ * `export-produces-a-downloadable-artefact` — Phase 8 Stage 4h: a successful submit now also
+ * triggers a real file download (`ExportPanel.tsx`'s own `downloadArtefact`); proven via the
+ * subgraph shape (fully real in the harness, no fake renderer needed, unlike chart) by observing
+ * Playwright's own `page.waitForEvent("download")` fire with the artefact's own filename.
  */
 export const EXPORT_PANEL_ACTIONS = defineActionRegistry("EXPORT_PANEL_ACTIONS", [
   "submit-export-succeeds",
   "submit-export-after-override",
+  "export-produces-a-downloadable-artefact",
 ] as const);
 
 /**

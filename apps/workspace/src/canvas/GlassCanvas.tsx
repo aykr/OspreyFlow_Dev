@@ -30,6 +30,8 @@ import Sigma from "sigma";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 import type { Edge, EdgeTypeDef, Node, Path as GraphPath } from "../../../../packages/schemas/generated";
+import type { ExportMark } from "../export/api";
+import { captureChartImage } from "../export/chartExport";
 import { pointInPolygon } from "../map/geometry";
 import type { OntologyRegistry } from "../ontology/schema";
 import type {
@@ -143,6 +145,15 @@ export interface GlassCanvasHandle {
    * renders. No camera pan — unlike `focusOnNode`, a multi-node "fit view to selection" is its
    * own real feature this method does not attempt. */
   highlightNodes: (nodeIds: readonly string[]) => void;
+  /** Phase 8 Stage 4h: the chart artefact's own real capture path
+   * (`02_GLASS_FRONTEND.md` §10.1/§10.3) — delegates to `captureChartImage`
+   * (`export/chartExport.ts`), which renders the live Sigma instance to a PNG via
+   * `@sigma/export-image`, composites the visible watermark, and embeds the mark's own fields
+   * as machine-readable `tEXt` chunks. Rejects if no Sigma instance is mounted yet (the same
+   * "no-op/rejects on an unready renderer" shape `focusOnNode`'s own `graph.hasNode` guard
+   * already establishes, made a rejection rather than a silent no-op here because a caller
+   * that requested a download needs to know it did not get one). */
+  exportImage: (mark: ExportMark) => Promise<Blob>;
 }
 
 interface PendingRadialMenu {
@@ -458,6 +469,13 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(funct
         const present = nodeIds.filter((id) => graph.hasNode(id));
         setSelected(new Set(present));
         onSelectionChange?.(present);
+      },
+      exportImage: (mark: ExportMark) => {
+        const sigma = sigmaRef.current;
+        if (!sigma) {
+          return Promise.reject(new Error("exportImage: no Sigma instance mounted"));
+        }
+        return captureChartImage(sigma, mark);
       },
     }),
     [graph, onSelectionChange],

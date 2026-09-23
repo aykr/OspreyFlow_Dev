@@ -122,6 +122,41 @@ test("a blocked export is overridden with justification and originator reference
   registerCovered("EXPORT_PANEL_ACTIONS", "submit-export-after-override");
 });
 
+test("a successful export triggers a real file download, reachable by keyboard alone", async ({
+  page,
+}) => {
+  await routeThreshold(page);
+  await page.route("**/*/v1/investigations/inv-1/export", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        mark: {
+          osprey_mark: "OspreyFlow",
+          investigation_id: "inv-1",
+          exported_at: "2026-09-23T00:00:00Z",
+          resolution_threshold: 0.95,
+          handling_level: "OFFICIAL",
+        },
+        manifest: { policy: "disclose", withheld_count: 0 },
+        ledger_entry_id: "led-3",
+      }),
+    });
+  });
+
+  await page.goto("/keyboard/export-panel-harness.html");
+  // The artefact-kind `Select` defaults to "subgraph" (`ExportPanel.tsx`'s own initial state) —
+  // no Tab/keyboard interaction with the `Select` itself is needed for this case, the same
+  // native-control exemption this registry's own docstring already establishes.
+  const downloadPromise = page.waitForEvent("download");
+  await tabToButtonNamed(page, "Export");
+  await page.keyboard.press("Enter");
+
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^osprey-subgraph-inv-1-.*\.json$/);
+  registerCovered("EXPORT_PANEL_ACTIONS", "export-produces-a-downloadable-artefact");
+});
+
 test("every registered export-panel action has its own proving test case above", () => {
   assertAllCovered("EXPORT_PANEL_ACTIONS", EXPORT_PANEL_ACTIONS);
 });
