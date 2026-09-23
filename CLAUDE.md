@@ -66,6 +66,31 @@ outside the stated scope of the change — a correction to one section must not 
     cannot detect its own violation. A new action's own author owns adding its own step in the
     same change, the same way rule 4 already makes an access-control test the author's
     responsibility rather than a follow-up.
+14. **One agent against this working tree and its local dev stack (`make dev-up`) at a time.** A
+    subagent that has handed back its report is not necessarily finished — it can keep running,
+    keep committing, and keep pushing in the background, and a second agent (the coordinator that
+    spawned it, or a person) resuming or continuing work against the same tree and the same
+    containers has no way to see that it is happening. Worked example, 23 September 2026: a
+    delegated agent handed back a completed report on Phase 8's closing-pass test, and the
+    coordinator began independent verification against the same `make dev-up` stack. The delegated
+    agent was still alive in the background; it went on to make and push four further commits of
+    its own, and separately kept re-running the same test against the same shared ArcadeDB
+    container the coordinator was debugging. The result: a reliability figure the delegated agent
+    recorded (`docs/07_BUILD_PLAN.md`'s Phase 8 "ArcadeDB stability" stage, before its 23 September
+    correction) was contaminated by unknown contention and had to be withdrawn as unmeasurable
+    after the fact; a real, finished deliverable (the closing-pass test file itself) sat uncommitted
+    for over an hour past its own four commits' claim that it existed and passed; the coordinator
+    spent real effort re-diagnosing environment failures that were, in unknown part, two agents
+    fighting over one container rather than a property of the container alone; and the coordinator
+    initially — reasonably, from the evidence available at the time, but wrongly — read the
+    delegated agent's own unreviewed pushes as a stranger's unauthorised commits to `origin/main`.
+    **Before resuming or continuing work that touches a shared working tree or a shared local
+    stack, confirm no other agent is still active against it** (`ListAgents`, and treat "handed
+    back a report" as distinct from "stopped running" for any agent whose task can keep going in
+    the background). Before trusting a reliability or timing measurement taken against `make
+    dev-up`'s shared containers, confirm nothing else was using them for the duration of the
+    measurement — a measurement taken under unknown contention is not a measurement of the thing
+    it claims to measure.
 
 ## Conventions
 
