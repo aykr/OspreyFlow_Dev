@@ -1637,9 +1637,11 @@ repeated in full here, so this summary stays a map, not a second copy:**
    every guide ADR-034 §B2 names, run clean on a fresh checkout.
 4. **Trigger A, the restructure** (`06_DECISIONS.md` ADR-034 §B3) — follows the documentation
    refresh, as this document's own existing text already ordered it; its own detailed entry,
-   further down this list, is unchanged in substance by this restructure. Not itself
-   milestone-blocking — moving files to their published-tree layout is not a condition of
-   "installed, started, and demonstrated."
+   further down this list, now carries its own exit criterion (added 23 September 2026), not
+   unchanged in substance by this restructure. Not itself milestone-blocking to *reach* — moving
+   files to their published-tree layout is not a condition of "installed, started, and
+   demonstrated" — **but it can invalidate an already-reached milestone if nothing re-proves the
+   install afterward, which is exactly what its own new exit criterion, further down, now does.**
 5. **Trigger B, publication** (`06_DECISIONS.md` ADR-034 §B3) — the final stage of this list,
    scheduled and visible rather than buried in a different document, not committed to a date. Its
    own entry condition, quoted rather than restated: *"Trigger B, publication. Fires only on
@@ -3727,6 +3729,44 @@ deliverables are owed at this close step, per ADR-034, beyond the restructure it
   scope, sibling to the two existing legs rather than folded into either: a third check (or a small
   script `licence_check.py` gains a mode for) asserting `LICENSE` is present and byte-identical to
   the canonical Apache 2.0 text, and `NOTICE` is present and contains the B6 holder string.
+
+**Trigger A's own missing exit criterion, added 23 September 2026 — the milestone certifies an
+install from the documentation, and nothing above re-certifies it after Trigger A changes the
+documentation.** Every deliverable listed above describes what Trigger A moves and creates; none
+of it says the result still installs. **Exit criterion: after the restructure, a clean install
+from the revised documentation succeeds, and the closing-pass test
+(`tests/scenarios/test_phase8_exit_criterion_end_to_end.py`) passes from a freshly created
+database — the same criterion the milestone itself now uses (the ArcadeDB-stability stage, above),
+not a re-read of the restructured guides.** An actual install, run against the moved files, not a
+review of whether the move looks complete.
+
+**What Trigger A actually moves, checked directly rather than assumed — the blast radius is real
+but narrower than "every path," and concentrated somewhere the six deliverables above do not
+mention.** ADR-031's own "target layout" is explicit and exhaustive: `docs/` splits into `spec/`
+(the numbered spec files, `06_DECISIONS.md`, `design/`) and `process/` (`SESSION_HANDOVER.md`,
+`NEXT_STEPS_PHASE7.md`, `DESIGN_PROVENANCE.md`, `archive/`); `README.md`/`DEMO_GUIDE.md` move to
+the repository root. **`packages/`, `services/` and `apps/` are not named anywhere in that layout
+and do not move** — this is a documentation restructure, not a product-root relocation; checked
+against ADR-031's own text directly, not assumed from the word "restructure" alone.
+
+Two different kinds of thing inside that scope, with two different real risks:
+
+- **~1,150 citations, already tooled for.** `grep` across `Makefile`/`deploy/compose/dev.yaml`
+  confirms every `docs/`-referencing line found there is a comment citing a spec file by path
+  (`# docs/07_BUILD_PLAN.md Phase 3: "Add make dev-up..."`), not a functional dependency — no
+  volume mount, no `--config`/`--file` flag pointing into `docs/`. This is exactly what
+  `scripts/doc_citations_check.py` (ADR-031, above) exists to rewrite and then gate; the checker
+  running clean, pre- and post-move, already covers this half.
+- **A real, functional, compile-time dependency the six deliverables above do not name:** twelve
+  real source files import `docs/design/tokens.css` directly — every Playwright harness under
+  `apps/workspace/{export-capture,map-verify,perf,a11y,keyboard}/` **and `apps/workspace/src/
+  main.tsx` itself, the Glass's own real entry point.** `doc_citations_check.py`, as ADR-031
+  describes it, checks that a *cited* path resolves — whether it also validates a TypeScript
+  `import` statement's own path, as opposed to a docstring/comment citation, is not established
+  anywhere in ADR-031's own text and should not be assumed; if it does not, the closing-pass test
+  above would still catch a broken import indirectly (the Glass fails to build), but only after
+  the fact, not as a named, pre-move check the way citation drift already is. **Named here so it
+  is not discovered on the day**, per this entry's own instruction — not fixed or re-scoped here.
 
 **Recorded, not decided: per-file Apache 2.0 headers across the product tree — an open item for the
 owner, the same "not made here" treatment ADR-034 §B6 already gives DCO-vs-CLA.** Nothing in
