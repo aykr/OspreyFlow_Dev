@@ -2407,6 +2407,18 @@ find something already finished sitting in the queue.
    labelled `2a` only for its position in this list, between the harness/packaging and
    documentation-refresh stages it sits alongside in build order).
 
+   **Reclassified, 23 September 2026, after a controlled measurement (below): this is a product
+   memory-footprint question, not test-environment fragility.** The stage's own name and its causes
+   one through four (below) originally framed this as an ArcadeDB/environment reliability problem —
+   orphaned databases, a sweep that does not run, cross-container contention. That framing is still
+   correct for those four causes, but it is not the whole story, and under the install-and-demo
+   milestone the distinction matters: a product that needs more than the 6GB this container is
+   configured with to survive one analyst session, on a laptop also running four lighter containers,
+   is a fact about the product's own memory footprint, not a fact about this test environment being
+   under-resourced. **The measurement, below, makes this the load-bearing framing — not raising the
+   heap or the Docker VM budget until the footprint itself has been examined, since doing so first
+   would hide the finding rather than close it.**
+
    **Under a test-suite milestone this was a background nuisance, disclosed but not gating.
    Under an install-and-demo milestone it is not: this stage's own closing-pass attempts have
    repeatedly failed before completing, and a stack that fails more often than it completes cannot
@@ -2516,6 +2528,65 @@ find something already finished sitting in the queue.
    against the persistent `ospreyflow` database are both still needed. Whoever closes this stage
    may revise N with a stated reason; the default is not silently accepted as sufficient without
    one.
+
+   **Diagnosis, 23 September 2026: per-run footprint, not accumulation, is the dominant mechanism
+   — measured, not inferred.** `ospreyflow` was dropped and recreated empty, ArcadeDB fully
+   restarted, and the closing-pass test run repeatedly with `compose-arcadedb-1`'s own memory
+   sampled every 2s throughout (`docker stats`), nothing else touching the stack:
+
+   | Run | Start mem | Peak mem | End mem | Result |
+   | --- | --- | --- | --- | --- |
+   | 1 (empty database) | 135.7MiB | 6.597GiB | 6.529GiB | passed, 77.54s |
+   | 2 (no restart between) | 6.526GiB | 6.864GiB | OOM-killed (`ExitCode=137`) | failed, ~65.79s |
+
+   Run 3 was never attempted — the container was dead. **Run 1 alone, starting from a genuinely
+   empty database, already reached 6.597GiB** — essentially the whole of the container's configured
+   6GB JVM heap plus off-heap/JVM overhead, before any second run's data had a chance to accumulate.
+   That single fact answers the diagnostic question directly: this is not primarily a leak building
+   up across runs (though memory also does not return to baseline between runs — run 2 starts
+   already at run 1's own end value, not back near run 1's own start — so whatever a "leak" means
+   for a database server that is supposed to hold its own data between requests, ArcadeDB is also
+   not releasing memory at rest between test invocations). **Both are true and are not competing
+   explanations: one run's own write volume is already most of the budget, and nothing frees that
+   memory afterward, so a second run has almost no headroom left before it, too, pushes over the
+   ceiling.**
+
+   **Where the footprint most plausibly comes from, with the evidence for it stated separately from
+   the parts that remain a hypothesis.** `_build_a_graph()` (this test's own Scenario A section)
+   writes `tests/scenarios/fixtures/hmp_graph.py`'s ~400 `Person` nodes and ~1,700 edges into the
+   persistent `ospreyflow` database on every single run, with no cleanup — unlike
+   `_ingest_cdr_fixture`'s own use of a throwaway `arcadedb_adapter()` database for Scenario B's
+   CDR ingest. **This is not a new finding**: this same document's own Phase 5 Checkpoint 2 entry
+   already recorded, independently, that a single sequential run of this identical fixture's graph
+   side "OOM'd at 4G on this host on every attempt, including at container startup before any client
+   request" — a bulk-write cost, not a traversal cost, established before this closing pass existed.
+   The sample log's own shape is consistent with a write-dominated ramp: memory jumps from 135.7MiB
+   to 4.12GiB within the first 4 seconds of run 1, far too fast to be the ~20 individual HTTP round
+   trips Scenario B's own steps make, and more consistent with either the bulk write itself or
+   ArcadeDB's own buffer-pool/page-cache sizing reacting to it — **which of those two, `docker
+   stats`'s own container-level, whole-JVM measurement cannot distinguish, and is not claimed to**.
+
+   **The traversal-budget question, checked rather than assumed to be the same cause.** The
+   before-milestone item naming ArcadeDB's own missing server-side execution budget (the Conduit's
+   30s timeout is client-side only) is real, and `PathBuilder.render_gremlin`
+   (`packages/adapters/graph_arcadedb/builders.py:243`) confirms it directly: the compiled query is
+   `repeat(bothE()...otherV()...simplePath()).until(has(target).or().loops().is(gte(max_hops)))`,
+   with `.limit(k)` applied only *after* `.has(target)` — the repeat phase itself carries no bound
+   on how many simple-path branches it may explore before that filter runs. B21's own call
+   (`max_hops=6`) is exactly the shape that risks this. **But for this specific test, the evidence
+   does not support this being the active mechanism**: B21's source and target are this run's own
+   freshly-`new_id()`-created nodes, reachable from each other only via the one cross-case bridge
+   node this same run just wrote two lines earlier — there is no large, richly-connected
+   neighbourhood for `simplePath()` to fan out into at either endpoint, by construction, regardless
+   of how much unrelated HMP or prior-run data sits elsewhere in the same database (a Gremlin
+   traversal anchored at a specific `id` does not scan unrelated vertices it never reaches by an
+   edge). **Conclusion: the missing traversal budget is a real, separately-standing architectural
+   gap — worth its own fix regardless of this stage — but it is not shown here to be a second
+   symptom of the same cause as this stage's own OOM; the write volume is the better-evidenced
+   explanation for what was actually measured.** A future, larger-scale pathfinder call against a
+   densely-connected neighbourhood remains a plausible way to hit the same missing budget from a
+   different direction; nothing above rules that out, it only rules it out as the explanation for
+   *this* run's own numbers.
 3. **Documentation refresh — MILESTONE-BLOCKING, promoted 23 September 2026** (see this list's own
    opening summary), **then the Trigger A restructure, not itself milestone-blocking** — already
    the most fully specified stage of the six, worked out in detail below this list rather than
