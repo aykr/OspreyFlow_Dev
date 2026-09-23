@@ -1621,12 +1621,44 @@ stage appearing "out of numerical order" below is the reordering working as inte
 mistake. What genuinely stays out of this list: anything about testers, alpha or beta testing —
 `docs/PRODUCT_DELIVERY.md` owns that and continues to.
 
-### Before the milestone
+### Phase 8's stage list, in build order
 
-Required for V1 END TO END, in build order. Stage 4, in full — the product-feature core the
-milestone is actually made of — plus the one item each from Stages 5 and 6 whose absence would
-fail a scenario; every other Stage 5/6 item is checked against the milestone below and moves, with
-the reasoning for each move stated at the point it moves.
+**Milestone-blocking stages, in the order this milestone now needs them — physically detailed at
+their own existing entry further down this list (marked **MILESTONE-BLOCKING** there) rather than
+repeated in full here, so this summary stays a map, not a second copy:**
+
+1. **Stage 4, in full** — the product-feature core; unchanged, detailed immediately below.
+2. **The harness / packaging pipeline** (previously "Stage 2," listed further down this same list,
+   now tagged **MILESTONE-BLOCKING**) — an install needs something to install: the packaging step,
+   the `backup`/`restore` cycle, the scripted golden-path deploy, the six setup screens, Preflight.
+3. **The documentation refresh** (previously "Stage 3," listed further down, now tagged
+   **MILESTONE-BLOCKING**) — an install needs instructions that actually work: every command in
+   every guide ADR-034 §B2 names, run clean on a fresh checkout.
+4. **Trigger A, the restructure** (`06_DECISIONS.md` ADR-034 §B3) — follows the documentation
+   refresh, as this document's own existing text already ordered it; its own detailed entry,
+   further down this list, is unchanged in substance by this restructure. Not itself
+   milestone-blocking — moving files to their published-tree layout is not a condition of
+   "installed, started, and demonstrated."
+5. **Trigger B, publication** (`06_DECISIONS.md` ADR-034 §B3) — the final stage of this list,
+   scheduled and visible rather than buried in a different document, not committed to a date. Its
+   own entry condition, quoted rather than restated: *"Trigger B, publication. Fires only on
+   explicit owner instruction, after all phases, stages, and alpha and beta testing are
+   complete."* Not itself milestone-blocking — V1 END TO END is reachable, and this document's own
+   exit criterion for it satisfiable, without Trigger B ever firing; alpha/beta testing itself is
+   `docs/PRODUCT_DELIVERY.md`'s own territory, named here only because ADR-034's own condition text
+   names it and this document does not get to edit an accepted ADR's own words to remove the
+   mention.
+6. **ArcadeDB stability** (previously filed in "Legacy disclosures," relocated into this list —
+   see its own entry, further down, tagged **MILESTONE-BLOCKING**) — a demo that fails more often
+   than it completes is not a background nuisance under an install-and-demo milestone.
+
+Everything else previously filed under this document's own retired "After the milestone" heading
+(the smaller already-scoped code fixes, test-infrastructure/CI hygiene apart from the ArcadeDB-
+stability item just promoted, export mark signing) remains listed below, in the same relative
+place, each stage's own entry stating plainly whether it is milestone-blocking — none of the
+remaining ones are, and each says so at its own entry rather than by virtue of a section heading.
+**What stays out of this list entirely: anything about testers, alpha or beta testing** —
+`docs/PRODUCT_DELIVERY.md` owns that, unchanged.
 
 4. **Assessment, export, the remaining Scenario B steps** — the product-feature core, following
    established patterns (evidence linking, export pipelines, handling gates) this build already has
@@ -2295,19 +2327,24 @@ found, rather than staying filed as if it were still outstanding.
   (`tests/services/api/test_evaluation.py`) — passes against the real mechanism, not the
   in-memory test stand-in every other test in that file uses.
 
-### After the milestone
+### The rest of Phase 8's stage list
 
-Everything else genuinely remaining. Recorded in full below — nothing deleted — reordered because
-none of it is required for V1 END TO END, checked against `08_ACCEPTANCE_SCENARIOS.md` directly at
-each item rather than assumed. **Stage 1 is not here** — it is already built; "Delivered, not
+**The "After the milestone" heading this document used from 22 September until 23 September 2026
+is retired** — the milestone redefinition above (V1 END TO END = installed, started, demonstrated)
+pulled most of what used to sit under that heading into the milestone-blocking set instead; what
+remains below genuinely is not milestone-blocking, and now says so at its own entry rather than by
+virtue of a heading whose own name implied "deferred past v1" for stages that, as of this
+restructure, no longer are. **Stage 1 is not here** — it is already built; "Delivered, not
 milestone-gated," above, has it, so a reader scanning this section for remaining work does not
 find something already finished sitting in the queue.
 
-2. **The harness / packaging pipeline** — like Stage 1, largely green-field: no packaging step, no
+2. **The harness / packaging pipeline — MILESTONE-BLOCKING, promoted 23 September 2026** (see this
+   list's own opening summary). Like Stage 1, largely green-field: no packaging step, no
    backup/restore/upgrade mechanism and no generated-manifest tooling exists anywhere in this
-   repository yet. Not required for V1 END TO END — checked directly against
-   `08_ACCEPTANCE_SCENARIOS.md`, no row in either scenario exercises packaging, backup or restore
-   — but a real capability the phase's own outcome bullets already commit to. **Code +
+   repository yet. Not exercised by either acceptance scenario, checked directly against
+   `08_ACCEPTANCE_SCENARIOS.md`, no row in either exercises packaging, backup or restore — but now
+   required by the milestone's own broader text regardless, since "installed... and demonstrated"
+   needs a real install path to exist, not only a passing test suite. **Code +
    infrastructure.** **Exit criterion:** a `backup` → `restore` cycle reproduces the graph from
    staged Parquet (Phase 8's own original outcome bullet, stated here rather than as a separate
    milestone clause, since backup/restore is this stage's own capability, not either scenario's).
@@ -2351,8 +2388,10 @@ find something already finished sitting in the queue.
    will appear stopped for every owner but the analyst who triggered them until this is fixed" —
    distinct wording from whatever `StatusBadge` shows an analyst later, so the two failure surfaces
    are never mistaken for the same fact by whoever reads either one first.
-3. **Documentation refresh, then the Trigger A restructure** — already the most fully specified
-   stage of the six, worked out in detail below this list rather than duplicated here. **Not
+3. **Documentation refresh — MILESTONE-BLOCKING, promoted 23 September 2026** (see this list's own
+   opening summary), **then the Trigger A restructure, not itself milestone-blocking** — already
+   the most fully specified stage of the six, worked out in detail below this list rather than
+   duplicated here. **Not
    wholly outstanding — the mechanical half is already built, the documentation-writing half is
    not, and the two should not be read as one undifferentiated block of remaining work.** The three
    drift gates (`domain-model-coverage-check`, `route-coverage-check`, `demo-guide-check`) exist and
