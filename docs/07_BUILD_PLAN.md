@@ -2734,6 +2734,77 @@ find something already finished sitting in the queue.
    deploy"; this was read as §3 and flagged, and the owner confirmed §3 on 24 September 2026 — "your
    reading of §3 is correct and stands".)*
 
+   **Stage 2 §3 — STOPPED AND REPORTED, 24 September 2026, at the brief's own instruction.** Three
+   product changes are built and tested; the deploy itself is not built, because measuring
+   Keycloak's token exchange first — as the brief directed, rather than after — found that the
+   verify step this stage's own exit depends on **cannot be built as specified**. Stubbing it was
+   explicitly forbidden and would have been the wrong answer anyway.
+
+   **Built and complete.**
+   - **`GET /healthz` on the Conduit** — unauthenticated, fixed body `{"status":"ok"}`, touching no
+     store. `03_CONDUIT_MIDDLEWARE.md` §3.0 has the route and the reasoning.
+     `services/api/Dockerfile` declares a `HEALTHCHECK` against it. Eight tests, including the
+     access-control property stated as **bytes**: the anonymous and authenticated responses must be
+     identical, because a route with two behaviours hands the attacker the unauthenticated one.
+     Three planted red cases — a body reporting a count, a body reporting store status, and a
+     handler that answers differently when a token is present.
+   - **`python -m services.api.worker_main`** — the loop `JobWorker`'s own docstring anticipated
+     ("deployment wiring, not additional logic to test"), and nothing more. Each replica takes a
+     distinct consumer name from its hostname.
+   - **The replica invariant, named and tested against real Valkey** (rule 12):
+     `tests/services/api/test_worker_replicas.py::test_two_replicas_never_process_the_same_job`.
+     Deliberately a live-service test — the guarantee is Valkey's `xreadgroup(…, ">")`, not this
+     codebase's, and a fake queue would prove only that the fake hands each entry out once, which
+     is ADR-041's own recorded failure. Three further cases: three replicas share rather than
+     repeat, consumer names vary per hostname, and a failed job is acknowledged rather than left
+     pending.
+
+   **The finding that stopped the round, measured against a real Keycloak 26.0 with
+   `token-exchange:v1` enabled — not inferred from documentation.** A realm, a confidential client
+   with the `impersonation` role, and two test subjects were created, and the exchange run four
+   ways:
+
+   | Attempt | Result |
+   | --- | --- |
+   | Privileged client → the disposable preflight subject | **granted** (a real token, `sub` = the target) |
+   | Privileged client → a *different, in-scope* subject | **granted** |
+   | Privileged client → a **disabled** subject | **granted** |
+   | **Unprivileged** client → a valid subject | **refused** — `access_denied`, "Client not allowed to exchange" |
+
+   **Keycloak scopes impersonation by requesting client, not by target subject.** There is no
+   per-target policy: a client holding the grant can exchange for every user in the realm. So the
+   refusal half of the two-sided check, as this document's own harness entry specifies it —
+   "attempt an exchange for a subject the realm's own policy should refuse (a deliberately-
+   out-of-scope or disabled test subject) and confirm it is actually refused" — **would never
+   refuse**. Built as written it is a check that cannot go red: exactly the vacuous gate rule 15
+   exists to prevent, and it would have been wired into the milestone's own exit test.
+
+   **The third row is worse than a vacuous gate and is reported as a security finding, not a spec
+   gap.** A **disabled** user is not a user whose token should be mintable. Keycloak issued one
+   anyway. `06_DECISIONS.md` ADR-044 distinguishes an unreachable identity provider from a revoked
+   principal on the premise that revocation is observable; ADR-043 places part of its containment in
+   "the realm's own token-exchange policy". On this measurement, disabling a principal in the IdP
+   does not stop the Conduit minting a token as that principal. Whether that is acceptable, and what
+   closes it, is an owner decision and possibly an amendment to ADR-043.
+
+   **What a genuinely two-sided check could assert instead**, offered as the proposal rather than
+   applied: success for the disposable subject, and refusal for an **unprivileged client** — the
+   one refusal Keycloak actually enforces, measured above. That tests whether the grant is scoped to
+   the right client, which is a real containment property; it does not test subject scoping, because
+   subject scoping does not exist. The operator wording this document already specifies is unchanged
+   and still correct for the failure it describes.
+
+   **Not built, and deliberately not half-built:** `harness/apply.py` and its five stages, the dev
+   realm import rendering, the client secret generated at apply time, seeding's ordering guard, the
+   post-launch verify, the fresh-clone exit test with wall time and peak memory, and the retirement
+   of `docs/demo/2026-09-24/demo_up.sh`. The verify step is the last stage of the deploy and part of
+   what "health-checked" means for exit test #2; building the other four stages around a verify that
+   cannot be honest would have produced a golden path whose final step was decorative.
+
+   **Not measured, and it should not be read as passing:** whether the twelve-container stack fits
+   the 10 GiB VM alongside ArcadeDB's floor. That measurement needs the stack this sub-stage did not
+   stand up.
+
    **Stage 2 §4 — Backup and restore. ACCEPTED.** `python -m harness.backup` writes to
    `backups/<UTC-timestamp>-<profile>-<git-sha>/` with a `manifest.json` naming every file, its
    checksum and the schema versions, covering **`05_DEPLOYMENT.md` §4's full set**: staged Parquet,

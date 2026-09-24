@@ -243,30 +243,22 @@ What is running afterwards: the workspace, one Conduit, three workers, ArcadeDB,
 in-process, Valkey, MinIO, OpenSearch single-node, PostgreSQL, Keycloak, Ollama, and a
 faster-whisper container. Twelve containers, roughly 11 GB of RAM at rest.
 
-**"Three workers" cannot be rendered from this repository, and the count is not silently changed
-here — Proposed, 24 September 2026, found by the deployable-service enumeration.** There is one
-worker *implementation* in the tree, a generic dispatcher keyed by job type, and it is a class
-inside the Conduit's own package with **no process entrypoint**: no `main()`, no `__main__`, nothing
-that runs it. So zero worker containers are buildable today, not three. Two readings are open and
-this section does not choose between them. **Either** "three workers" means three replicas of one
-worker process — coherent, matching the single generic dispatcher the design actually has, and
-needing only an entrypoint plus a replica count — **or** it means three distinct worker services,
-in which case the count is aspirational and the services do not exist. **The proposal is the
-first**, because it is what the code is shaped like; adopting it means this list should say "three
-worker replicas" and an entrypoint has to be written. Writing that entrypoint is product code and
-was out of scope for the sub-stage that found this.
+**Read "three workers" as three replicas of the job worker — owner's decision, 24 September
+2026.** There is one worker *implementation*, a generic dispatcher keyed by job type (ADR-025), and
+three replicas of it is what the code is shaped like rather than three distinct worker services.
+The entrypoint it needed now exists (`python -m services.api.worker_main`), and each replica takes
+a distinct consumer name from its hostname — which is the property the arrangement actually rests
+on, since Valkey's consumer group delivers each entry to exactly one consumer but keys its
+pending-entries list by consumer name.
 
-**Nothing here can be health-checked in the sense the scripted deploy needs — Proposed, 24
-September 2026, same enumeration.** "Wait for health" is the golden-path deploy's own step, and
-`docker compose --wait` needs each service to declare a health check. Checked directly: the Glass's
-image declares one; the Conduit's and the batch loader's do not, and the Conduit **exposes no
-health endpoint at all** — every route it serves is an authenticated `/v1/…` path, so there is
-nothing for a health check to poll even if one were declared. **The proposal:** the Conduit gains an
-unauthenticated liveness route that touches no store and discloses nothing, and its image declares
-a health check against it; the batch loader gets none, because a job that runs once and exits has no
-health to report and a health check on it would be a permanently-failing gate. **Not decided here**
-— adding a route is product code, and which of liveness and readiness the deploy should wait on is a
-real question this section should answer rather than the first implementer choosing.
+**What "wait for health" waits on — owner's decision, 24 September 2026.** The Conduit exposes
+`GET /healthz`, unauthenticated, fixed body, touching no store and disclosing nothing (§3.0 of
+`03_CONDUIT_MIDDLEWARE.md` has the route and the reasoning), and its image declares a health check
+against it. The Glass's image declares one too. **The batch loader declares none**, because a job
+that runs once and exits has no health to report and a check on it would be a permanently-failing
+gate. The deploy waits on **liveness**: readiness stays authenticated and is a different question,
+and a deploy that waited on readiness would be waiting on the identity provider to answer before it
+could tell whether its own processes had started.
 
 If Preflight finds less than 16 GB it offers a reduced variant that drops OpenSearch and falls
 back to PostgreSQL full-text, stating the trade-off on screen: search quality degrades and
