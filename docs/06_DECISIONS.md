@@ -60,7 +60,7 @@ confirmed.
 | 046 | Assessment evidence lifecycle | | **Accepted, option (a), one addition and an export requirement** — 22 Sep 2026 |
 | 047 | The Osprey export mark, and the durable record of what left the boundary | | **Accepted, both gaps** — 22 Sep 2026 |
 | 048 | The disclosure doctrine: what makes "something was withheld" safe, unsafe or required to be visible | | **Accepted** — 22 Sep 2026 |
-| 049 | The harness / packaging pipeline; Phase 8's Stage 2 §1–§7 | | **Proposed** — 24 Sep 2026; owner's rulings on all seven objections and D1–D3 recorded 24 Sep 2026, status unchanged |
+| 049 | The harness / packaging pipeline; Phase 8's Stage 2 §1–§7 | | **Accepted** — 24 Sep 2026, after rulings on all seven objections, D1 narrowed, and the four follow-on items settled |
 
 **This table lagged again, and is caught here for the second time.** Records 042 through 048 were
 written on 22 September 2026 and never added above — the identical omission this section's own
@@ -5421,11 +5421,13 @@ addendum pointing back to this record, added alongside this one.
 
 ## ADR-049 — The harness / packaging pipeline: `osprey.yaml` as the single source, and Phase 8's Stage 2 §1–§7
 
-**Status.** **Proposed**, 24 September 2026. Still Proposed after the owner's rulings of the same
-date (below): the owner ruled on all seven open objections and confirmed D1–D3, but did not say
-"Accepted", and this record does not promote itself. Per this document's own status register: build
-against it only if a delay would block you, and expect rework. Nothing in this record is built —
-`harness/` still contains only its own `__init__.py`.
+**Status.** **Accepted**, 24 September 2026, by the owner directly, after rulings on all seven open
+objections, the correction narrowing D1, and the settlement of the four follow-on items — every one
+of them recorded below rather than folded in silently. Binding on the same footing as every other
+accepted record: `07_BUILD_PLAN.md`'s Stage 2 §1–§7 entries are the plan, not a proposal.
+
+**Build state at acceptance.** `Stage 2 §1` is under construction in the session that recorded this
+acceptance; §2–§7 are not started.
 
 **Amended 24 September 2026 to record the owner's rulings.** Each ruling is recorded under the
 objection it answers, in "Owner's rulings" below, and the consequential edits each requires have
@@ -5583,7 +5585,11 @@ project venv; every service's bind address is consistent and printed; the basema
 over HTTP, not `file://`; the DuckDB lock holder is not running when seeding is requested).
 
 **Amendment 5 — `05_DEPLOYMENT.md` §3's reduced variant is missing, and it is squarely install-path
-material.** "If Preflight finds less than 16 GB it offers a reduced variant that drops OpenSearch and
+material.** *(Ownership confirmed by the owner, 24 September 2026, against a brief that had placed it
+in `Stage 2 §1`: the **offer** lives here, in Preflight; `Stage 2 §1` only has to be able to
+**render** the reduced variant when asked. The split is deliberate — §3's own words are "It is
+**offered**, not applied silently", which is a Preflight behaviour, not a renderer one.)*
+"If Preflight finds less than 16 GB it offers a reduced variant that drops OpenSearch and
 falls back to PostgreSQL full-text, stating the trade-off on screen: search quality degrades and
 semantic search is unavailable… **It is offered, not applied silently.**" A memory check that only
 compares against the profile floor fails a 16 GB laptop — the exact clean-laptop case the milestone
@@ -5658,12 +5664,14 @@ placement left the grant unverifiable at the milestone, because `Stage 2 §7` is
 milestone-blocking. Folding it into this sub-stage's own exit test makes it milestone-blocking, since
 this is Stage 2 exit test #2. That closes open item 2 as stated rather than deferring it.
 
-**One thing read against the instruction rather than from it, flagged so it is corrected in a line
-if wrong.** The owner's settlement names "Stage 2 §4's golden-path deploy". The golden-path deploy is
-**Stage 2 §3**; `Stage 2 §4` is backup and restore. Read as §3 on two grounds: the phrase quoted in
-the same sentence — "reaches a health-checked stack" — is this sub-stage's own exit test verbatim,
-and a token exchange has no place in a backup→restore cycle. If §4 was meant literally, this
-amendment moves one sub-stage down.
+**A reading flagged and then confirmed.** The owner's settlement named "Stage 2 §4's golden-path
+deploy"; the golden-path deploy is **Stage 2 §3**, and `Stage 2 §4` is backup and restore. This
+record read it as §3 — on the grounds that the phrase quoted in the same sentence, "reaches a
+health-checked stack", is this sub-stage's own exit test verbatim, and that a token exchange has no
+place in a backup→restore cycle — and flagged the reading rather than applying it silently. **The
+owner confirmed §3 on 24 September 2026**: "The 'Stage 2 §4' in my previous message meant the
+golden-path deploy; your reading of §3 is correct and stands." Kept here as a record of a
+correction that was caught by flagging rather than by a later audit.
 
 **Exit test, amended.** From a fresh clone, one command reaches a health-checked stack on
 `local-lite`, **with ADR-043's two-sided exchange green as its final step**. **The CI half must name
@@ -5830,15 +5838,30 @@ tree contains exactly one worker entrypoint (`services/ingest/__main__.py`).** E
 `extract`/`resolve`/`compute`/`geocoder` become processes with their own images, or §3's component
 count is wrong, and the enumeration is where that gets decided.
 
-**Standing rule 8, and the exception this decision creates — stated plainly rather than left for an
-audit to find.** Rule 8 reads: "Each service gets its Dockerfile, and a `trivy image` CI scan, in
-the phase that creates it — **never batched into Phase 8**." The owner's narrowed D1 directs exactly
-that batching for whatever the enumeration finds deployable. That is the owner's call and this
-record implements it; what this record will not do is implement it silently. **`07_BUILD_PLAN.md`'s
-standing rule 8 needs an explicit recorded exception naming this stage**, or the next audit reads a
-rule violation where a decision exists — the same "a decision record and the build step that
-discharges it are not the same thing" gap ADR-034's own addendum already had to close once. Flagged,
-not written: amending a standing rule is not this record's to do.
+**Standing rule 8 — owner's decision, 24 September 2026: the rule stands unchanged, and this is a
+repayment, not an exception.** An earlier draft of this amendment proposed that rule 8 gain a
+recorded exception naming this stage. The owner declined that and ruled the other way, which is the
+stronger reading and the one this record now carries. Rule 8 is unamended: "Each service gets its
+Dockerfile, and a `trivy image` CI scan, in the phase that creates it — **never batched into Phase
+8**."
+
+**The four services without Dockerfiles — `extract`, `resolve`, `compute`, `geocoder` — are recorded
+as a violation of standing rule 8 by the phases that created them.** Not a grey area and not a
+Phase 8 batching exception: the rule was in force, each of those phases owed an image and a `trivy
+image` job, and none delivered one. `Stage 2 §5` remedies it as a **one-time repayment of a recorded
+debt**, which leaves the rule's own force intact for every future service — a phase that skips its
+Dockerfile is still in violation, and cannot cite this stage as precedent for deferring one.
+
+**The distinction is not bookkeeping.** An exception would have made "batch it into Phase 8" a
+legitimate option next time; a repayment records that it was never legitimate and is being paid off
+once. The difference shows up the moment a ninth service is created.
+
+**A finding this stage must report before it builds any image.** The enumeration settles
+`05_DEPLOYMENT.md` §3's "the workspace, one Conduit, **three workers**" against the tree's single
+worker entrypoint (`services/ingest/__main__.py`) and **states which way it resolved** — either
+three of the four become processes needing their own images, or §3's component count is wrong and
+the specification is corrected. Reported as a finding first, imaged second; building four images
+against an unexamined component count would answer the question by accident.
 
 **Superseded, left visible because the earlier version was pushed and read:** this amendment
 previously concluded that the missing Dockerfiles were "owed debt from earlier phases" and that
@@ -6051,13 +6074,13 @@ line if it is not what was meant.
    `05_DEPLOYMENT.md` §3's "three workers" and the single worker entrypoint in the tree — is
    tabulated at amendment 20 above rather than repeated here.
 
-   **The exception this creates, flagged not written.** Standing rule 8 says a service's Dockerfile
-   and `trivy image` scan belong to the phase that created the service, "never batched into Phase
-   8", and this decision batches them into Phase 8 deliberately. That is the owner's call; what
-   follows from it is that `07_BUILD_PLAN.md`'s standing rule 8 needs an explicit recorded exception
-   naming this stage, or a later audit reads a rule violation where a decision exists. Amending a
-   standing rule is not this record's to do, so it is named here and in amendment 20 and nowhere
-   acted on.
+   **Settled 24 September 2026, and the other way round from how this record first proposed it.**
+   An earlier draft asked for standing rule 8 to gain a recorded exception naming this stage. The
+   owner declined: **rule 8 stands unchanged, and the four services without Dockerfiles —
+   `extract`, `resolve`, `compute`, `geocoder` — are recorded as a violation of it by the phases
+   that created them, remedied in `Stage 2 §5` as a one-time repayment.** That keeps the rule's
+   force intact for every future service, which an exception would have quietly spent. Amendment 20
+   above has the reasoning and the finding the enumeration must report before it builds anything.
 
 6. **The two Glass gates — ruled: `02_GLASS_FRONTEND.md` §6's accessibility floor applies to the
    harness application; §5's performance budget does not.** Applied as amendment 24 at `Stage 2 §6`,
@@ -6098,11 +6121,11 @@ own settlement, not by this record deciding it.
    **accepted by the owner as written.** No longer this record's reading; it is the specification,
    and `Stage 2 §6` states it as such.
 
-**What genuinely remains, and it is one thing, newly created rather than left over.** Standing rule 8
-in `07_BUILD_PLAN.md` says a service's Dockerfile and `trivy image` scan are "never batched into
-Phase 8", and the narrowed D1 batches them there on purpose. The rule needs an explicit recorded
-exception naming this stage. Flagged at ruling 5 and amendment 20; amending a standing rule is not
-this record's to do.
+**What remained after those four — one item, now also settled.** The narrowed D1 appeared to need an
+exception to standing rule 8. The owner ruled on 24 September 2026 that **rule 8 stands unchanged**
+and the four undockerised services are a recorded rule-8 violation by their own creating phases,
+repaid once in `Stage 2 §5`. Nothing under this heading is open; the record was accepted the same
+day.
 
 **Cost.** Documentation across three sessions. If accepted, `Stage 2 §5` grows three deliverables it
 did not have (ADR-035 §C1's registry; `LICENSE`/`NOTICE` and the third `licence-check` leg; the

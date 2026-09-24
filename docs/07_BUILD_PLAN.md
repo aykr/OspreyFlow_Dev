@@ -27,8 +27,9 @@ laptop from the documentation, started, and demonstrated (both acceptance scenar
    sub-stages **`Stage 2 §1`–`Stage 2 §7`** at this stage's own entry below. The owner ruled on all
    seven open objections and confirmed D1–D3 on 24 September 2026, then corrected D1 to its
    **narrowed** form and settled all four follow-on items the same day. The record stays
-   **Proposed** until he has read the result. One thing genuinely remains open: standing rule 8
-   needs a recorded exception for the Dockerfiles the narrowed D1 places in `Stage 2 §5`.
+   **Accepted** on 24 September 2026, with standing rule 8 left unchanged and the four undockerised
+   services recorded instead as a rule-8 violation by their creating phases, repaid once in
+   `Stage 2 §5`. `Stage 2 §1` is under construction; §2–§7 are not started.
 2. **The documentation refresh** — moderate: the three drift gates (`domain-model-coverage-check`,
    `route-coverage-check`, `demo-guide-check`) exist and run; the content that empties their own
    allowlists does not exist yet.
@@ -2522,7 +2523,8 @@ find something already finished sitting in the queue.
 
    ---
 
-   **Sub-stages `Stage 2 §1`–`Stage 2 §7` — PROPOSED, 24 September 2026, not started.** Design and
+   **Sub-stages `Stage 2 §1`–`Stage 2 §7` — ACCEPTED, 24 September 2026.** `Stage 2 §1` is built
+   (see its own entry); §2–§7 are not started. Design and
    adversarial review in `06_DECISIONS.md` **ADR-049**, status **Proposed**; each entry below is a
    summary of that record's own amended text, not a second copy of it, and each is Proposed for
    exactly as long as ADR-049 is. **The owner ruled on all seven of that record's open objections on
@@ -2533,8 +2535,8 @@ find something already finished sitting in the queue.
    consequential edits they required have been applied here rather than left as notes. **D1 was
    then corrected the same day to its narrowed form** — "each *deployable* service" — which moves
    the missing Dockerfiles into `Stage 2 §5` as this stage's own work; the four follow-on items were
-   settled in the same message. Status stays **Proposed** — the owner ruled, and has not yet said
-   Accepted.
+   settled in the same message, and the record was **Accepted** by the owner the same day. These
+   sub-stage entries are the plan, not a proposal.
 
    **On the labels, and the one thing they cost.** These were `2b`–`2h` when the design arrived;
    ruling 1 relabelled them because `2a` below is a *sibling* stage of this one — ArcadeDB stability,
@@ -2545,7 +2547,7 @@ find something already finished sitting in the queue.
    `05_DEPLOYMENT.md` §5 in sentences carrying both. Mapping, for anything written before this
    ruling: `2b`→`Stage 2 §1`, and so on in order to `2h`→`Stage 2 §7`.
 
-   **Stage 2 §1 — `osprey.yaml` as the single source. PROPOSED.** A Pydantic schema in `packages/schemas`
+   **Stage 2 §1 — `osprey.yaml` as the single source. ACCEPTED.** A Pydantic schema in `packages/schemas`
    for the whole `osprey.yaml` document (profile, components, models, governance, geospatial,
    cluster hosts), reusing `packages/schemas/mapconfig.py`'s `MapConfig` for the `map:` section
    rather than redefining it, and not invalidating the committed demo/CI `osprey.yaml` that
@@ -2563,7 +2565,7 @@ find something already finished sitting in the queue.
    comparison is a second, harder check and is named separately in ADR-049, not folded into this
    one.
 
-   **Stage 2 §2 — Preflight, headless. PROPOSED.** `harness/preflight/`, one module per check, each
+   **Stage 2 §2 — Preflight, headless. ACCEPTED.** `harness/preflight/`, one module per check, each
    returning `{status, what is wrong, what to do, re-checkable}`; `python -m harness.preflight`
    runs all or one. Memory against the profile floor **and `05_DEPLOYMENT.md` §3's reduced-variant
    offer below 16 GB** (drop OpenSearch, fall back to PostgreSQL full-text, state the trade-off —
@@ -2580,7 +2582,7 @@ find something already finished sitting in the queue.
    check has a red-then-green test whose planted failure takes the shape the check actually reads,
    and apply/launch refuses while any check is red.
 
-   **Stage 2 §3 — Scripted golden-path deploy. PROPOSED.** `python -m harness.apply`: fresh checkout →
+   **Stage 2 §3 — Scripted golden-path deploy. ACCEPTED.** `python -m harness.apply`: fresh checkout →
    render (Stage 2 §1) → preflight (Stage 2 §2) → start stack → wait for health → seed if requested, with
    **seed-ordering enforcement** (seeding precedes any lock-holding service; the database is reset
    first — stage 2a's cause five). *Seed-ordering enforcement is not `05_DEPLOYMENT.md` §2.4's
@@ -2599,12 +2601,11 @@ find something already finished sitting in the queue.
    harness never holds the secret. The CI half **names the services that must be healthy and the
    health checks that must pass without Ollama**, rather than "as far as CI can", which cannot fail,
    and must state whether CI runs a Keycloak at all, since that decides whether the exchange is
-   reachable there. **Stage 2 exit test #2.** *(The settlement names "Stage 2 §4's golden-path
-   deploy"; the golden-path deploy is `Stage 2 §3` and `Stage 2 §4` is backup/restore — read as §3
-   because the quoted phrase is this entry's own exit test and a token exchange has no place in a
-   backup cycle. `06_DECISIONS.md` ADR-049's amendment 26 flags it.)*
+   reachable there. **Stage 2 exit test #2.** *(The settlement named "Stage 2 §4's golden-path
+   deploy"; this was read as §3 and flagged, and the owner confirmed §3 on 24 September 2026 — "your
+   reading of §3 is correct and stands".)*
 
-   **Stage 2 §4 — Backup and restore. PROPOSED.** `python -m harness.backup` writes to
+   **Stage 2 §4 — Backup and restore. ACCEPTED.** `python -m harness.backup` writes to
    `backups/<UTC-timestamp>-<profile>-<git-sha>/` with a `manifest.json` naming every file, its
    checksum and the schema versions, covering **`05_DEPLOYMENT.md` §4's full set**: staged Parquet,
    **object store contents**, the PostgreSQL dump, ontology, handling scheme and `osprey.yaml` —
@@ -2623,7 +2624,7 @@ find something already finished sitting in the queue.
    multiset of pairs that ignores the score passes while every projection changes). **Stage 2 exit
    test #1**, and this stage's already-stated criterion above.
 
-   **Stage 2 §5 — Packaging, the `osprey bundle` shape. PROPOSED; D1 confirmed NARROWED, 24
+   **Stage 2 §5 — Packaging, the `osprey bundle` shape. ACCEPTED; D1 confirmed NARROWED, 24
    September 2026.** **First task, before any packaging code: the service enumeration.** Enumerate
    the six `services/` directories plus `apps/workspace`, state which are **deployable** and on what
    evidence, and build the `Dockerfile` and `trivy image` CI job for each deployable one that lacks
@@ -2635,10 +2636,16 @@ find something already finished sitting in the queue.
    entrypoint of any kind today, and `make ci` has `trivy-image-ingest` and `trivy-image-api` only.
    **The conflict the enumeration must resolve, not rediscover:** `05_DEPLOYMENT.md` §3 specifies
    that `local-lite` runs "the workspace, one Conduit, **three workers**", and the tree contains
-   exactly one worker entrypoint. **This creates a named exception to standing rule 8** ("never
-   batched into Phase 8"), which that rule needs recorded against it — flagged in
-   `06_DECISIONS.md` ADR-049's ruling 5, not written here, since amending a standing rule is not a
-   sub-stage entry's business.
+   exactly one worker entrypoint. **Report which way that resolved as a finding before building any
+   image** — either three of the four become processes needing their own images, or §3's component
+   count is wrong and the specification is corrected; building four images against an unexamined
+   count would answer the question by accident.
+
+   **Standing rule 8 stands unchanged — this is a repayment, not an exception** (owner's decision,
+   24 September 2026, declining the exception an earlier draft proposed). The four services without
+   Dockerfiles are recorded as a **violation of rule 8 by the phases that created them**, remedied
+   here once. The rule keeps its full force for every future service: a phase that skips its
+   Dockerfile is still in violation and cannot cite this stage as precedent for deferring one.
 
    **Wraps `scripts/osprey_bundle.py`** — which exists, is tested, and whose own docstring already
    says "The real `osprey bundle` command wraps `bundle_map_providers` below in Phase 8" — rather
@@ -2675,7 +2682,7 @@ find something already finished sitting in the queue.
    each planted violation fails the bundle, each taking the shape the gate actually receives at its
    own real call site. **Stage 2 exit test #3.**
 
-   **Stage 2 §6 — The six setup screens. PROPOSED; D2 confirmed 24 September 2026.** A browser
+   **Stage 2 §6 — The six setup screens. ACCEPTED; D2 confirmed 24 September 2026.** A browser
    application over Stage 2 §1–§5, bootstrapped by one Docker command, becoming `/admin` after
    launch. Profile, Components and Models write `osprey.yaml` through the Stage 2 §1 schema.
    Governance writes access-control/handling configuration and hosts the real-data exceptions panel
@@ -2711,7 +2718,7 @@ find something already finished sitting in the queue.
    divergence recorded at Stage 6 below is not reproduced for a third surface. *Judgement:* a usability pass by someone
    other than whoever built the screens, exactly as this stage's own entry already words it.
 
-   **Stage 2 §7 — Post-launch admin console operations. PROPOSED. Not milestone-blocking; still Phase 8.**
+   **Stage 2 §7 — Post-launch admin console operations. ACCEPTED. Not milestone-blocking; still Phase 8.**
    `05_DEPLOYMENT.md` §5's rolling upgrade and rollback to a previous digest, and §5's `verify` —
    "the port conformance suite against the *running* deployment rather than a test fixture", a
    capability nothing else in Stage 2 §1–§7 provides, and one this phase's own outcome bullet already
