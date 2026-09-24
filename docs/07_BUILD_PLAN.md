@@ -2809,11 +2809,106 @@ find something already finished sitting in the queue.
    is not rendered (Proposed, above) and the batch loader is on-demand — and it is a first-launch
    measurement, not a sustained-use one, which is what §8's named test is for.
 
-   **Remaining:** the seeded golden path (`--seed hmp,fixture-corp`) and the Glass reachability
-   check through the printed URL were not run — the stack is up and the ordering guard is
-   implemented and unit-tested, but the seeded end-to-end pass is owed.
+   **The seeded golden path, run 24 September 2026 — green, and it cost five further defects.**
+   The run owed above is done. From a fresh clone, `--seed hmp,fixture-corp` reaches a
+   health-checked, seeded stack in **66s**, with the counts the fixtures themselves report:
 
-   **Superseded — the fifth pass's entry, kept because it was pushed and read.**
+   ```
+     seed[hmp]: Seeded 400 Person nodes, 10 yards.
+     seed[hmp]: Loaded 262 current-window events and 4 prior-period events under
+                investigation_scope='01M3A9DN5C556JEC95TP2R7CSF'.
+     seed[fixture-corp]: Seeded 10 resolution Person nodes and 17 real SAME_AS edges.
+     seed[fixture-corp]: Seeded 21 community-ring nodes and 63 edges across 3 rings.
+     seed[fixture-corp]: Seeded the path-spoke hub 'corp-path-hub' with spokes of length
+                         [1..8], including a SECRET shortcut on the length-3 spoke.
+   apply: local-lite ready in 66s
+     seed: hmp, fixture-corp into investigation 01M3A9DN5C556JEC95TP2R7CSF
+           (Conduit stopped for the seed, then restarted)
+     verify: 3/3 assertions green
+   ```
+
+   Every figure the stage owed is there: HMP's 400 Person nodes and 10 yards, its 262 + 4 events,
+   and Fixture Corp's four properties (resolution Persons, real `SAME_AS` edges, community rings,
+   the path-spoke hub with its SECRET shortcut). The ordering guard sequenced it: the Conduit was
+   stopped for the seed and restarted and re-awaited after, and the guard still refuses outright if
+   asked to seed into a running Conduit.
+
+   **`seed()` as committed could not have worked, and nothing would have told us.** It invoked each
+   script with no arguments although `scripts/seed_hmp_fixture.py` requires `--investigation-scope`;
+   it ran on the host, where §7 puts every store on an internal network with no published ports; and
+   no image contains `scripts/`. It had been unit-tested for its *refusal* behaviour only — the
+   ordering guard — so every test of it passed and the path past the refusal had never once run.
+   The same class of gap as the omitted `subject_token` already in `CLAUDE.md` rule 15's second
+   worked example: **a function tested only where it says no.**
+
+   **The five defects, each found only by running it, each fixed with a red-then-green test:**
+
+   | Defect | How it presented | Test that now fails for it |
+   | --- | --- | --- |
+   | `osprey-data` and `osprey-staging` declared as volumes, mounted by **no service** | Nothing. The stack was healthy; the analytics DuckDB sat in the container layer and every seeded event died with `docker compose down` | `test_every_declared_volume_is_mounted_by_some_service` |
+   | A named volume's mount point absent from the image | Docker created it root-owned; the non-root process could not write to it — mounted but unusable | (fixed in `services/api/Dockerfile`; covered by the seeded run itself) |
+   | MinIO's credentials written only under `OSPREY_MINIO_*`, never `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY` | **Not** a missing-configuration error: the client falls back to `minioadmin` and MinIO answered `ACCESS_DENIED during HeadBucket` | `tests/harness/test_apply_env.py`, over every split credential name |
+   | ArcadeDB's heap left to JVM container ergonomics | `ArcadeDBError 500: "Error in execution in lock"`. The real cause — `java.lang.OutOfMemoryError` — was only in the server's own log | `test_arcadedb_gets_an_explicit_heap_rather_than_jvm_ergonomics` |
+   | `seed()` printed only each script's last line | The counts an operator checks a seed against were the ones discarded | — |
+
+   Two of these deserve naming beyond the table. The MinIO one is the **third** instance of one
+   value under two names, after ArcadeDB and Postgres; each of the first two was fixed the single
+   time it was hit in a live deploy and nothing was added that would have found the third before it
+   was hit too. `test_apply_env.py` now asserts the property over every pair at once. And the
+   ArcadeDB heap was **a number this repository had already paid to learn** — `deploy/compose/dev.yaml`
+   raised its own heap to `-Xms1G -Xmx6G` in Phase 5 for this exact fixture, and the renderer never
+   carried it across, so a rendered deployment was strictly worse-configured than the dev stack it
+   replaces.
+
+   **The Glass leg is NOT green, and it is not a harness defect.** Item 1's last requirement — the
+   seeded investigation reachable through the Glass at the printed URL via `?investigation=` — fails,
+   and re-running it will keep failing, because **the Glass has no sign-in and no runtime
+   configuration**. `apps/workspace/src/App.tsx` says so in its own words at line 55: "Phase 4's
+   bullets do not include a login flow (OIDC/Keycloak's own UI is server-side, Phase 3's territory)
+   — a bearer token supplied this way is a stand-in until a real sign-in screen exists, not a
+   production auth path." Two consequences, both measured against the running deployment:
+
+   - `API_BASE_URL` is `import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000"`, **baked into
+     the bundle at image-build time**. The deployment's own `OSPREY_API_PORT` override is invisible
+     to it; the browser console shows `ERR_CONNECTION_RESET` against `localhost:8000` for
+     `/v1/ontology`, `/v1/map/providers` and `/v1/analytics/geobins`.
+   - `DEV_BEARER_TOKEN` defaults to the empty string, so the delta WebSocket opens as
+     `…/stream?token=` and is refused.
+
+   The page loads and sits on "Loading…" indefinitely:
+   `docs/demo/2026-09-24/stage2-3-rendered-glass-cannot-reach-the-conduit.png`. The earlier
+   `A0-glass-loaded-with-seeded-investigation.png` in that same folder is not a counter-example — it
+   was taken against `npm run dev` with a hand-supplied token, which is the stand-in the comment
+   above describes.
+
+   **This is a spec gap, not a bug**, and per `CLAUDE.md` rule 11 it is recorded rather than
+   answered: `05_DEPLOYMENT.md` never says how the Glass learns the Conduit's address in a rendered
+   deployment, nor how an analyst signs in to one. Recorded as Proposed in `05_DEPLOYMENT.md` §2.6
+   with the two candidate shapes; it needs an owner decision and a phase, and it is the last thing
+   standing between this stack and a demonstrable one.
+
+   **One further honesty note on the run.** The build stage was skipped (`--no-build`, added this
+   round as a real affordance for registry-pull deployments and unchanged re-applies). The Conduit's
+   image *was* rebuilt, from the `python:3.12-slim` already in the daemon; the workspace image was
+   not, because its `node:22-slim` base is not in the local store and Docker Hub answered
+   `429 Too Many Requests` — the daemon is making **unauthenticated** pulls
+   (`~/.docker/config.json` has an empty `auths`), contrary to what was believed. The published API
+   port was moved to 8010 for the same run, because an unrelated container of the owner's holds
+   8000; Preflight caught that before anything was built and named the port, which is what it is
+   for.
+
+   ---
+
+   ### Stage 2 §3 — superseded working history, passes one to five (24 September 2026)
+
+   **Everything from here to the end of this stage's entry is history, not current state.** Each
+   pass below was accurate when written and was pushed and read, which is why none of it is
+   deleted — but **the current state of Stage 2 §3 is the COMPLETE/GREEN entry above, and nothing
+   below overrides it.** In particular, several passes below say exit test #2 is not green: that
+   was true when each was written and is not true now. Read the entries below only for how the
+   findings were arrived at.
+
+   **Superseded (fifth pass) — 24 September 2026.**
 
    **Stage 2 §3 — fifth pass, 24 September 2026. A diagnosis I reported was wrong, and correcting
    it is this entry's main content.**
@@ -2865,14 +2960,16 @@ find something already finished sitting in the queue.
    - **Memory: provisional.** Recorded as such in §3, with both of the owner's reasons — the Conduit
      was exited, and ArcadeDB was below its schema-creation floor.
 
-   **Exit test #2: still not green, and not re-run this round.** Docker Hub began returning `429 Too
+   **[Superseded, fifth pass — exit test #2 went green later the same day; see the COMPLETE entry
+   at the top of this stage.] Exit test #2: still not green, and not re-run this round.** Docker Hub
+   began returning `429 Too
    Many Requests` on image manifest and base-image pulls partway through, which blocks `docker
    compose build` from a fresh clone entirely. That is an environment limit rather than a defect,
    and it is why the PostgreSQL fix above is **not yet demonstrated end to end** — it is a code fix
    whose verification is owed. The three-sided verify against a deployed realm, its three mutations,
    and the seeded run with the ordering guard all remain blocked behind a healthy Conduit.
 
-   **Superseded — the fourth pass's entry, kept because it was pushed and read.**
+   **Superseded (fourth pass) — 24 September 2026. History; see the COMPLETE entry above.**
 
    **Stage 2 §3 — fourth pass, 24 September 2026. The deploy runs end to end; exit test #2 is
    still NOT green, and the last blocker is a specification gap rather than a defect.**
@@ -2935,7 +3032,7 @@ find something already finished sitting in the queue.
 
    **`docs/demo/2026-09-24/demo_up.sh` is deleted** and its runbook points at `harness.apply`.
 
-   **Superseded — the previous pass's entry, kept because it was pushed and read.**
+   **Superseded (previous pass) — 24 September 2026. History; see the COMPLETE entry above.**
 
    **Stage 2 §3 — the deploy is built; exit test #2 is NOT green, and four blockers are named.**
    Third pass, 24 September 2026. The machinery exists and its own gate works; running it from a
@@ -2982,7 +3079,7 @@ find something already finished sitting in the queue.
    that does not require one), and then the twelve-container memory measurement. Both are named
    here rather than worked around.
 
-   **Superseded — the previous pass's entry, kept because it was pushed and read.**
+   **Superseded (previous pass) — 24 September 2026. History; see the COMPLETE entry above.**
 
    **Stage 2 §3 — RESUMED 24 September 2026 under the owner's four decisions; the verify step is
    built and proven, the deploy script is not.** The round before this one stopped at the
@@ -3037,7 +3134,7 @@ find something already finished sitting in the queue.
    **Still not measured, and not to be read as passing:** wall time, peak Docker memory, and whether
    twelve containers fit the 10 GiB VM alongside ArcadeDB's floor.
 
-   **Superseded — the previous round's own entry, kept below because it was pushed and read.**
+   **Superseded (earlier round) — 24 September 2026. History; see the COMPLETE entry above.**
 
    **Stage 2 §3 — STOPPED AND REPORTED, 24 September 2026, at the brief's own instruction.** Three
    product changes are built and tested; the deploy itself is not built, because measuring

@@ -259,6 +259,55 @@ button.
   socket; the admin console it becomes afterwards does not, and runs with the same non-root,
   read-only-root posture as every other component (§7).
 
+### 2.6 How the Glass reaches the Conduit, and how an analyst signs in — GAP, Proposed
+
+**This specification does not say, and the build has reached the point where it must.** A gap in
+these documents is closed by editing them, never by an answer given somewhere that the next person
+to read this section will not see — so it is recorded here, unresolved and visible. **Status:
+Proposed. It needs an owner decision and an owning phase.**
+
+Found running the seeded golden path on 24 September 2026 (`07_BUILD_PLAN.md`'s Stage 2 §3 entry has
+the measurement and the screenshot). A rendered `local-lite` deployment comes up healthy, seeds both
+fixtures and passes its three-sided verify — and the Glass served by that same deployment cannot
+talk to it at all. Two distinct holes:
+
+1. **The Conduit's address is baked into the Glass's bundle at image-build time.**
+   `apps/workspace/src/App.tsx` resolves it as
+   `import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000"`, which Vite substitutes during
+   `docker build`. A deployment that moves its published API port — which §2.1's own Preflight
+   actively encourages, and which this run had to do because an unrelated container held 8000 —
+   cannot tell the Glass. Neither can a deployment on any host that is not the browser's own
+   `localhost`.
+2. **There is no sign-in.** `DEV_BEARER_TOKEN` is `import.meta.env.VITE_DEV_BEARER_TOKEN ?? ""`, and
+   `App.tsx` says so plainly at line 55: Phase 4's bullets did not include a login flow, and the
+   token is "a stand-in until a real sign-in screen exists, not a production auth path." No phase
+   has owned it since. Every rendered deployment therefore serves a Glass that sends an empty
+   bearer token to a Conduit that correctly refuses it.
+
+The consequence is that §2.3's "everything has a headless equivalent" currently runs in reverse:
+the headless path works and the interactive one does not.
+
+**Two candidate shapes for (1), for the decision to choose between:**
+
+- **Same-origin, with the workspace's nginx reverse-proxying `/v1` and the delta WebSocket to
+  `api:8000`.** The bundle is built with an empty base URL and uses relative paths, so the image
+  carries no address at all and is portable across deployments unchanged. It also removes CORS from
+  the picture entirely, and means §7's "only the workspace and the Conduit are exposed" could become
+  "only the workspace", narrowing the exposed surface. Against it: the Conduit stops being
+  separately addressable, which §3's own port table currently assumes.
+- **A runtime configuration document** — `/config.json`, written by the workspace container's
+  entrypoint from its environment and fetched by the Glass before it renders. Keeps the two
+  surfaces separate as §3 describes. Against it: it makes the Glass's boot asynchronous, which is a
+  real change to `App.tsx`'s top-level constants and to the tests around them.
+
+**(2) is the larger question and is not a deployment decision alone**: an OIDC authorization-code
+flow with PKCE against the realm §2.1.1 already renders is the obvious shape, but which claims the
+Glass reads, what it does when a token expires mid-investigation, and how it relates to ADR-043's
+Conduit-side exchange are domain and middleware questions. It needs its own ADR.
+
+Neither is in Stage 2's scope as accepted, and neither should be filled in silently by whoever next
+touches the harness.
+
 ## 3. Standing it up on a laptop
 
 ```bash
