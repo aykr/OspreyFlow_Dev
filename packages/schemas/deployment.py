@@ -1,0 +1,244 @@
+"""`osprey.yaml` as a whole — the deployment, as a schema.
+
+`05_DEPLOYMENT.md` §2.1: "`osprey.yaml` is the deployment. Version it, review it in a pull request,
+and never hand-edit a generated artefact — regenerate instead." Until now only its `map:` section
+had a schema (`schemas/mapconfig.py`); every other section existed as prose in `05_DEPLOYMENT.md`'s
+own six-screen table and nowhere a machine could check. This module is the rest of it —
+`06_DECISIONS.md` ADR-049's Stage 2 §1, accepted 24 September 2026.
+
+**Every top-level key is optional, and that is a constraint from the review rather than a
+convenience.** The committed root `osprey.yaml` contains a `map:` key and nothing else, and
+`services/api/mapconfig_loader.load_map_config` reads it as a bare `raw["map"]`. A schema that
+required `profile:`, `components:` or `governance:` would invalidate that file and break
+`tests/test_demo_osprey_config_is_tier_1_only.py` on the day it landed. So every section defaults,
+each default is documented at its own field, and
+`tests/harness/test_deployment_schema.py::test_the_committed_osprey_yaml_still_validates` holds the
+line against a future edit that quietly makes one required.
+
+**`map:` keeps the shape `schemas/mapconfig.py` already gives it** — reused here, never redefined.
+Two schemas for one section is how the section's two readers start disagreeing.
+
+**Extra keys are forbidden.** A misspelled `governence:` that silently did nothing would be
+indistinguishable, in a generated deployment, from one that was never written — and the failure
+would surface as a missing service rather than as a typo.
+
+TypeScript types are generated from these (`generate_ts.py`); a drift between the two fails the
+build (`scripts/schemas_check.py`), per `CLAUDE.md`'s own Conventions.
+"""
+
+from __future__ import annotations
+
+from enum import StrEnum
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from schemas.mapconfig import MapConfig
+
+
+class Profile(StrEnum):
+    """`05_DEPLOYMENT.md` §1's three, not two — ADR-011. The gap between one laptop and ten
+    machines is too wide to cross in one step, and `small` is the case that otherwise gets
+    improvised."""
+
+    LOCAL_LITE = "local-lite"
+    SMALL = "small"
+    CLUSTER = "cluster"
+
+
+class GraphStore(StrEnum):
+    """`05_DEPLOYMENT.md` §1's own profile table. `janusgraph` is declarable here before its
+    adapter exists — Phase 8a builds that (ADR-022's third addendum) — because a schema that
+    cannot express the `cluster` profile cannot validate a `cluster` deployment's own config."""
+
+    ARCADEDB = "arcadedb"
+    JANUSGRAPH = "janusgraph"
+
+
+class AnalyticsEngine(StrEnum):
+    """Same note as `GraphStore`: `clickhouse` is declarable before `analytics_clickhouse`
+    exists."""
+
+    DUCKDB = "duckdb"
+    CLICKHOUSE = "clickhouse"
+
+
+class SearchBackend(StrEnum):
+    """`05_DEPLOYMENT.md` §3's reduced variant, as a declarable component rather than a hidden
+    branch: "If Preflight finds less than 16 GB it offers a reduced variant that drops OpenSearch
+    and falls back to PostgreSQL full-text, stating the trade-off on screen: search quality
+    degrades and semantic search is unavailable."
+
+    **Offering it is Preflight's job, not this schema's** (ADR-049 amendment 5, ownership confirmed
+    by the owner 24 September 2026). Stage 2 §1 only has to be able to *render* the reduced variant
+    when asked, which is what this field makes possible: setting `search: postgres-fulltext` drops
+    the OpenSearch service from the rendered compose file. Nothing here decides when that is
+    offered, and nothing applies it silently."""
+
+    OPENSEARCH = "opensearch"
+    POSTGRES_FULLTEXT = "postgres-fulltext"
+
+
+class StorageRoots(BaseModel):
+    """`05_DEPLOYMENT.md` §2.1's Components screen: "the storage roots for data, staging and
+    backups". Paths on the deployment host, not in this repository."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    data: str = Field(default="/var/lib/osprey/data", description="Default: /var/lib/osprey/data")
+    staging: str = Field(
+        default="/var/lib/osprey/staging", description="Default: /var/lib/osprey/staging"
+    )
+    backups: str = Field(
+        default="/var/lib/osprey/backups", description="Default: /var/lib/osprey/backups"
+    )
+
+
+class ComponentsConfig(BaseModel):
+    """`05_DEPLOYMENT.md` §2.1's Components screen. Defaults are the `local-lite` row of §1's own
+    profile table, because that is the profile this repository is demonstrable on today."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    graph_store: GraphStore = Field(default=GraphStore.ARCADEDB, description="Default: arcadedb")
+    analytics_engine: AnalyticsEngine = Field(
+        default=AnalyticsEngine.DUCKDB, description="Default: duckdb"
+    )
+    search: SearchBackend = Field(
+        default=SearchBackend.OPENSEARCH,
+        description="Default: opensearch. postgres-fulltext is §3's reduced variant.",
+    )
+    storage: StorageRoots = Field(default_factory=StorageRoots)
+
+
+class ModelsConfig(BaseModel):
+    """`05_DEPLOYMENT.md` §2.1's Models screen: "Local only, or local with a named hosted fallback
+    — and if hosted, which handling codes may be sent to it. **Defaults to none**."
+
+    The default here is that sentence, enforced rather than described: no hosted fallback, and an
+    empty set of sendable handling codes. `04_VAULT_BACKEND.md` §4's egress exception is off unless
+    something turns it on."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    local_only: bool = Field(default=True, description="Default: true — no hosted fallback")
+    hosted_fallback: str | None = Field(
+        default=None, description="Default: none. A provider name, never a credential."
+    )
+    sendable_handling_codes: list[str] = Field(
+        default_factory=list,
+        description="Default: empty. Which handling codes may leave for a hosted model.",
+    )
+
+    @model_validator(mode="after")
+    def _hosted_fallback_and_local_only_are_consistent(self) -> ModelsConfig:
+        if self.local_only and self.hosted_fallback is not None:
+            raise ValueError(
+                "models.local_only is true but a hosted_fallback is named; set local_only: false "
+                "to declare the egress exception explicitly rather than by implication"
+            )
+        if self.sendable_handling_codes and self.hosted_fallback is None:
+            raise ValueError(
+                "models.sendable_handling_codes is set but no hosted_fallback is named; handling "
+                "codes cannot be sendable to nothing"
+            )
+        return self
+
+
+class GovernanceConfig(BaseModel):
+    """`05_DEPLOYMENT.md` §2.1's Governance screen: "Identity provider, handling scheme, ontology.
+    Ships with a UK law-enforcement scheme, a US criminal-intelligence scheme, and the default
+    ontology."
+
+    `real_data_exceptions` is the **reference** ADR-049's Stage 2 §6 puts on the Governance panel —
+    a path to the local, never-committed exceptions list, not its contents. The list itself is
+    gitignored (`config/real_data_exceptions.yaml`, standing rule 3 / `CLAUDE.md` rule 9 /
+    ADR-035 §C3) and must stay that way: this field records where to look, exactly as §2.5 requires
+    of every credential, and for the same reason."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    identity_provider: str = Field(
+        default="keycloak", description="Default: keycloak (03_CONDUIT_MIDDLEWARE.md §6)"
+    )
+    handling_scheme: str = Field(
+        default="uk-law-enforcement", description="Default: uk-law-enforcement"
+    )
+    ontology: str = Field(default="default", description="Default: default")
+    real_data_exceptions: str = Field(
+        default="config/real_data_exceptions.yaml",
+        description=(
+            "Default: config/real_data_exceptions.yaml. A path to the gitignored list, never its "
+            "contents."
+        ),
+    )
+
+
+class ClusterHost(BaseModel):
+    """One declared machine. `05_DEPLOYMENT.md` §2.1's Preflight screen runs "for `cluster`
+    connectivity to every declared host" against this list — Stage 2 §2's check, this schema's
+    declaration."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    address: str
+    roles: list[str] = Field(default_factory=list)
+
+
+class ClusterConfig(BaseModel):
+    """Only meaningful at `profile: cluster`; declarable (and empty) at the other two so a profile
+    change does not need the file restructured."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    hosts: list[ClusterHost] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _host_names_are_unique(self) -> ClusterConfig:
+        names = [h.name for h in self.hosts]
+        if len(set(names)) != len(names):
+            raise ValueError("cluster host names must be unique")
+        return self
+
+
+class OspreyConfig(BaseModel):
+    """The whole of `osprey.yaml`.
+
+    Validating the committed root file — which has only `map:` — must succeed, so every field here
+    has a default. `map` is `None` rather than a stub when absent: a deployment with no basemap is
+    a real state (nothing has been chosen on the Geospatial screen yet), and inventing an empty
+    `MapConfig` would fail `MapConfig`'s own `min_length=1` for no reason."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    profile: Profile = Field(default=Profile.LOCAL_LITE, description="Default: local-lite")
+    components: ComponentsConfig = Field(default_factory=ComponentsConfig)
+    models: ModelsConfig = Field(default_factory=ModelsConfig)
+    governance: GovernanceConfig = Field(default_factory=GovernanceConfig)
+    cluster: ClusterConfig = Field(default_factory=ClusterConfig)
+    map: MapConfig | None = Field(default=None, description="Default: none declared")
+
+    @model_validator(mode="after")
+    def _cluster_hosts_belong_to_the_cluster_profile(self) -> OspreyConfig:
+        if self.cluster.hosts and self.profile is not Profile.CLUSTER:
+            raise ValueError(
+                f"cluster.hosts is declared but profile is {self.profile.value!r}; hosts are only "
+                "meaningful at profile: cluster"
+            )
+        if self.profile is Profile.CLUSTER and not self.cluster.hosts:
+            raise ValueError("profile: cluster declares no cluster.hosts")
+        return self
+
+
+#: Exported to `generate_ts.py`. `MapConfig` and its own members are already exported by
+#: `schemas/mapconfig.py`'s own `ALL_MODELS` and are deliberately not repeated here — the generator
+#: writes one file per model name, so listing a model twice writes it twice.
+ALL_MODELS: tuple[type[BaseModel], ...] = (
+    StorageRoots,
+    ComponentsConfig,
+    ModelsConfig,
+    GovernanceConfig,
+    ClusterHost,
+    ClusterConfig,
+    OspreyConfig,
+)

@@ -1,0 +1,238 @@
+// AUTO-GENERATED — do not edit by hand.
+// Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
+/**
+ * Default: local-lite
+ */
+export type Profile = "local-lite" | "small" | "cluster";
+/**
+ * Default: arcadedb
+ */
+export type GraphStore = "arcadedb" | "janusgraph";
+/**
+ * Default: duckdb
+ */
+export type AnalyticsEngine = "duckdb" | "clickhouse";
+/**
+ * Default: opensearch. postgres-fulltext is §3's reduced variant.
+ */
+export type SearchBackend = "opensearch" | "postgres-fulltext";
+/**
+ * Default: /var/lib/osprey/data
+ */
+export type Data = string;
+/**
+ * Default: /var/lib/osprey/staging
+ */
+export type Staging = string;
+/**
+ * Default: /var/lib/osprey/backups
+ */
+export type Backups = string;
+/**
+ * Default: true — no hosted fallback
+ */
+export type LocalOnly = boolean;
+/**
+ * Default: none. A provider name, never a credential.
+ */
+export type HostedFallback = string | null;
+/**
+ * Default: empty. Which handling codes may leave for a hosted model.
+ */
+export type SendableHandlingCodes = string[];
+/**
+ * Default: keycloak (03_CONDUIT_MIDDLEWARE.md §6)
+ */
+export type IdentityProvider = string;
+/**
+ * Default: uk-law-enforcement
+ */
+export type HandlingScheme = string;
+/**
+ * Default: default
+ */
+export type Ontology = string;
+/**
+ * Default: config/real_data_exceptions.yaml. A path to the gitignored list, never its contents.
+ */
+export type RealDataExceptions = string;
+export type Name = string;
+export type Address = string;
+export type Roles = string[];
+export type Hosts = ClusterHost[];
+export type Default = string;
+/**
+ * @minItems 1
+ */
+export type Providers = [MapProvider, ...MapProvider[]];
+export type Id = string;
+export type Label = string;
+/**
+ * `00_ARCHITECTURE.md` §1.2: "Four source kinds cover the field."
+ */
+export type MapSourceKind = "vector" | "raster" | "image" | "dem";
+export type Id1 = string;
+export type Redistributable = boolean;
+/**
+ * `00_ARCHITECTURE.md` §1.2: "`client_scope` is a required field on
+ * every provider" — the three values named there exactly.
+ */
+export type ClientScope = "open" | "per-deployment" | "per-seat";
+export type Note = string | null;
+export type Source = string | null;
+/**
+ * Tier 4 (ADR-016): the four generic OGC service types. `None` on a
+ * provider means it is tiers 1-3 (a direct `source`), not tier 4.
+ */
+export type OgcServiceKind = "wmts" | "wms" | "wfs" | "ogc-features";
+export type Endpoint = string | null;
+export type Layer = string | null;
+export type TileMatrixSet = string | null;
+export type Format = string | null;
+export type WmtsStyle = string | null;
+export type ZoomMin = number | null;
+export type ZoomMax = number | null;
+export type Profile1 = string | null;
+export type Credential = string | null;
+export type Proxy = "required" | "recommended" | "none";
+export type TtlDays = number;
+export type PrefetchAreas = string[];
+export type Style = string | null;
+export type Attribution = string;
+
+/**
+ * The whole of `osprey.yaml`.
+ *
+ * Validating the committed root file — which has only `map:` — must succeed, so every field here
+ * has a default. `map` is `None` rather than a stub when absent: a deployment with no basemap is
+ * a real state (nothing has been chosen on the Geospatial screen yet), and inventing an empty
+ * `MapConfig` would fail `MapConfig`'s own `min_length=1` for no reason.
+ */
+export interface OspreyConfig {
+  profile?: Profile;
+  components?: ComponentsConfig;
+  models?: ModelsConfig;
+  governance?: GovernanceConfig;
+  cluster?: ClusterConfig;
+  /**
+   * Default: none declared
+   */
+  map?: MapConfig | null;
+}
+/**
+ * `05_DEPLOYMENT.md` §2.1's Components screen. Defaults are the `local-lite` row of §1's own
+ * profile table, because that is the profile this repository is demonstrable on today.
+ */
+export interface ComponentsConfig {
+  graph_store?: GraphStore;
+  analytics_engine?: AnalyticsEngine;
+  search?: SearchBackend;
+  storage?: StorageRoots;
+}
+/**
+ * `05_DEPLOYMENT.md` §2.1's Components screen: "the storage roots for data, staging and
+ * backups". Paths on the deployment host, not in this repository.
+ */
+export interface StorageRoots {
+  data?: Data;
+  staging?: Staging;
+  backups?: Backups;
+}
+/**
+ * `05_DEPLOYMENT.md` §2.1's Models screen: "Local only, or local with a named hosted fallback
+ * — and if hosted, which handling codes may be sent to it. **Defaults to none**."
+ *
+ * The default here is that sentence, enforced rather than described: no hosted fallback, and an
+ * empty set of sendable handling codes. `04_VAULT_BACKEND.md` §4's egress exception is off unless
+ * something turns it on.
+ */
+export interface ModelsConfig {
+  local_only?: LocalOnly;
+  hosted_fallback?: HostedFallback;
+  sendable_handling_codes?: SendableHandlingCodes;
+}
+/**
+ * `05_DEPLOYMENT.md` §2.1's Governance screen: "Identity provider, handling scheme, ontology.
+ * Ships with a UK law-enforcement scheme, a US criminal-intelligence scheme, and the default
+ * ontology."
+ *
+ * `real_data_exceptions` is the **reference** ADR-049's Stage 2 §6 puts on the Governance panel —
+ * a path to the local, never-committed exceptions list, not its contents. The list itself is
+ * gitignored (`config/real_data_exceptions.yaml`, standing rule 3 / `CLAUDE.md` rule 9 /
+ * ADR-035 §C3) and must stay that way: this field records where to look, exactly as §2.5 requires
+ * of every credential, and for the same reason.
+ */
+export interface GovernanceConfig {
+  identity_provider?: IdentityProvider;
+  handling_scheme?: HandlingScheme;
+  ontology?: Ontology;
+  real_data_exceptions?: RealDataExceptions;
+}
+/**
+ * Only meaningful at `profile: cluster`; declarable (and empty) at the other two so a profile
+ * change does not need the file restructured.
+ */
+export interface ClusterConfig {
+  hosts?: Hosts;
+}
+/**
+ * One declared machine. `05_DEPLOYMENT.md` §2.1's Preflight screen runs "for `cluster`
+ * connectivity to every declared host" against this list — Stage 2 §2's check, this schema's
+ * declaration.
+ */
+export interface ClusterHost {
+  name: Name;
+  address: Address;
+  roles?: Roles;
+}
+/**
+ * `osprey.yaml`'s `map:` section.
+ */
+export interface MapConfig {
+  default: Default;
+  providers: Providers;
+  [k: string]: unknown;
+}
+export interface MapProvider {
+  id: Id;
+  label: Label;
+  kind: MapSourceKind;
+  licence: ProviderLicence;
+  source?: Source;
+  service?: OgcServiceKind | null;
+  endpoint?: Endpoint;
+  layer?: Layer;
+  tile_matrix_set?: TileMatrixSet;
+  format?: Format;
+  wmts_style?: WmtsStyle;
+  zoom_min?: ZoomMin;
+  zoom_max?: ZoomMax;
+  profile?: Profile1;
+  variables?: Variables;
+  credential?: Credential;
+  proxy?: Proxy;
+  cache?: PrefetchCache | null;
+  style?: Style;
+  attribution: Attribution;
+  [k: string]: unknown;
+}
+export interface ProviderLicence {
+  id: Id1;
+  redistributable: Redistributable;
+  client_scope: ClientScope;
+  note?: Note;
+  [k: string]: unknown;
+}
+export interface Variables {
+  [k: string]: string;
+}
+/**
+ * Tier 3 only (`05_DEPLOYMENT.md` §2.2's "Prefetch area of
+ * operations") — absent for tiers 1/2/4, which either need no cache
+ * (local files) or aren't proxied through it the same way.
+ */
+export interface PrefetchCache {
+  ttl_days: TtlDays;
+  prefetch_areas?: PrefetchAreas;
+  [k: string]: unknown;
+}
