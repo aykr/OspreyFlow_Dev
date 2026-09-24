@@ -60,7 +60,7 @@ confirmed.
 | 046 | Assessment evidence lifecycle | | **Accepted, option (a), one addition and an export requirement** — 22 Sep 2026 |
 | 047 | The Osprey export mark, and the durable record of what left the boundary | | **Accepted, both gaps** — 22 Sep 2026 |
 | 048 | The disclosure doctrine: what makes "something was withheld" safe, unsafe or required to be visible | | **Accepted** — 22 Sep 2026 |
-| 049 | The harness / packaging pipeline; Phase 8 stage 2's sub-stages 2b–2h | | **Proposed** — 24 Sep 2026 |
+| 049 | The harness / packaging pipeline; Phase 8's Stage 2 §1–§7 | | **Proposed** — 24 Sep 2026; owner's rulings on all seven objections and D1–D3 recorded 24 Sep 2026, status unchanged |
 
 **This table lagged again, and is caught here for the second time.** Records 042 through 048 were
 written on 22 September 2026 and never added above — the identical omission this section's own
@@ -5410,12 +5410,18 @@ addendum pointing back to this record, added alongside this one.
 
 ---
 
-## ADR-049 — The harness / packaging pipeline: `osprey.yaml` as the single source, and Phase 8 stage 2's sub-stages 2b–2h
+## ADR-049 — The harness / packaging pipeline: `osprey.yaml` as the single source, and Phase 8's Stage 2 §1–§7
 
-**Status.** **Proposed**, 24 September 2026. Not accepted. Per this document's own status register:
-build against it only if a delay would block you, and expect rework. Nothing in this record is
-built — `harness/` still contains only its own `__init__.py`, and this session wrote no code under
-`apps/`, `services/`, `packages/`, `scripts/`, `harness/` or `deploy/`.
+**Status.** **Proposed**, 24 September 2026. Still Proposed after the owner's rulings of the same
+date (below): the owner ruled on all seven open objections and confirmed D1–D3, but did not say
+"Accepted", and this record does not promote itself. Per this document's own status register: build
+against it only if a delay would block you, and expect rework. Nothing in this record is built —
+`harness/` still contains only its own `__init__.py`.
+
+**Amended 24 September 2026 to record the owner's rulings.** Each ruling is recorded under the
+objection it answers, in "Owner's rulings" below, and the consequential edits each requires have
+been applied to the sub-stages above it rather than left as a note to act on later. The sub-stage
+labels changed in the same pass — see ruling 1.
 
 **Why this record is ADR-049 and not ADR-044.** The design this record writes up arrived numbered
 ADR-044. `06_DECISIONS.md` already has an ADR-044 (*Distinguishing an unreachable identity provider
@@ -5424,25 +5430,27 @@ above stopped at 041 and would not have shown it. Corrected here, and the regist
 in the same change — recorded rather than silently renumbered, because the near-miss is the second
 instance of the same failure this document has already had to record once.
 
-**Scope.** This record is documentation only. It amends no accepted decision. Where it disagrees
-with one, it says so under **Open objections** and stops there, per `CLAUDE.md`'s own standing
-instruction — in particular it does **not** implement the `decision_record` change to
-`scripts/real_data_exceptions.py` the design proposes (objection 3).
+**Scope.** This record is documentation. It amends no accepted decision on its own authority; where
+it disagreed with one it said so and stopped, and the owner has since ruled. The one such case —
+the `decision_record` field on `scripts/real_data_exceptions.py` — is now an owner decision (ruling
+3) and is recorded here as required work, **not built by this record**.
 
-**A gate this record turns red, disclosed rather than left to be discovered on the next `make ci`.**
-`make decision-log-publication-check` now reports two new violations — "ADR-049 cites ADR-034", "ADR-049
-cites ADR-042" — and it is correct to. **This record is PROCESS-classified** under ADR-034 §B10's own
-rule ("a decision about how this build was scoped, phased, released or published — the project's own
+**A gate this record turned red, and the fix, both recorded.** On first writing, `make
+decision-log-publication-check` reported two violations — "ADR-049 cites ADR-034", "ADR-049 cites
+ADR-042" — and it was correct to. **This record is PROCESS-classified** under ADR-034 §B10's own rule
+("a decision about how this build was scoped, phased, released or published — the project's own
 management, not the product's behaviour"): it divides a phase into sub-stages, sets their exit tests,
 and concerns release packaging. `scripts/decision_log_publication_check.py`'s `PROCESS_ADR_NUMBERS`
-therefore needs `"049"` added to it — a one-line change, **not made here** because this round's own
-instruction is documentation writes only, with no changes under `scripts/`. It is **not** an allowlist
-case: the allowlist is for known debt that shrinks to zero, and a correctly-classified record is not
-debt. Until that line lands, `make ci` is red on this gate, by this record's own doing and with this
-record's own notice. **Two other gates were already red on a clean `HEAD` before this record existed,
-and are not this record's:** `make route-coverage-check` (six undocumented routes) and `make
-test-file-coverage-check` (`tests/scenarios/test_phase8_exit_criterion_end_to_end.py` wired into
-neither job) — verified by running both against a stashed tree.
+gained `"049"` on 24 September 2026, with two fixture cases each shown red against the pre-change
+source first — one for the false positive the omission caused (an ADR-049 section citing ADR-034 and
+ADR-042 must not be flagged), one for the false negative (a PRODUCT ADR citing ADR-049 must be). The
+pre-existing case citing ADR-034 from ADR-006 passes identically either way, which is why neither new
+case reuses its shape — `CLAUDE.md` rule 15's second clause. Nothing was allowlisted: the allowlist
+is for known debt that shrinks to zero, and a correctly-classified record is not debt. **Two other
+gates were already red on a clean `HEAD` before this record existed, and are not this record's:**
+`make route-coverage-check` (six undocumented routes) and `make test-file-coverage-check`
+(`tests/scenarios/test_phase8_exit_criterion_end_to_end.py` wired into neither job) — verified by
+running both against a stashed tree.
 
 **A property of that gate worth naming once, since this is the first new ADR written since it
 shipped.** `PROCESS_ADR_NUMBERS` is a hand-maintained set inside the script. Every new PROCESS ADR
@@ -5450,27 +5458,25 @@ must be added to it by hand, and the gate's failure mode on omission is the *saf
 fires — which is why this was caught immediately rather than silently. Recorded so the next author of
 a PROCESS record expects the step rather than reads the failure as a defect in their own citations.
 
-### The three owner decisions this design rests on — awaiting owner confirmation
+### The three owner decisions this design rests on — all three confirmed
 
-None of the three has been stated by the owner in their own words. Until each is, it is the
-proposer's assumption, and every sub-stage below that depends on one says which.
-
-- **D1 — awaiting owner confirmation.** The packaged artefact is container images for each
-  OspreyFlow service **plus** a bundle tarball (manifests, the `osprey.yaml` schema, `LICENSE`/
-  `NOTICE`, documentation), built by a repository script of the `osprey bundle` shape, runnable in
-  CI and by the harness; `--images` for air-gapped install.
-- **D2 — awaiting owner confirmation.** The real-data exceptions list is a **panel on the Governance
-  screen**, not a seventh screen. This is the better reading of `05_DEPLOYMENT.md` §2.1, whose table
-  is explicitly "Six screens" — but `07_BUILD_PLAN.md`'s Phase 8 outcome bullet currently says the
-  opposite in as many words ("**A new screen, added 23 September 2026**: managing the real-data
-  exceptions list"). Confirming D2 means amending that bullet; leaving the two texts in
-  disagreement is not an option either way. See objection 4.
-- **D3 — awaiting owner confirmation.** Stage 2's exit is three named tests (below), and its entry
-  states in one sentence that this is not ADR-042's alpha gate. This **widens** the stage's existing
-  exit criterion, which today is one test: "a `backup` → `restore` cycle reproduces the graph from
-  staged Parquet." The golden-path deploy and the packaging assertions are described in that same
-  entry as "testable too" and "mechanical and testable", never as exit criteria. Widening an exit
-  criterion is the owner's call, not a drafting detail.
+- **D1 — owner's decision, 24 September 2026, confirmed as written and deliberately not narrowed.**
+  The packaged artefact is container images for each OspreyFlow service **plus** a bundle tarball
+  (manifests, the `osprey.yaml` schema, `LICENSE`/`NOTICE`, documentation), built by a repository
+  script of the `osprey bundle` shape, runnable in CI and by the harness; `--images` for air-gapped
+  install. The owner answered objection 5 by pointing at this decision rather than restating it,
+  which settles that objection's own disjunction — see ruling 5.
+- **D2 — owner's decision, 24 September 2026.** The real-data exceptions list is a **panel on the
+  Governance screen**, not a seventh screen. This matches `05_DEPLOYMENT.md` §2.1's table, which is
+  explicitly "Six screens". `07_BUILD_PLAN.md`'s Phase 8 outcome bullet said the opposite in as many
+  words ("**A new screen, added 23 September 2026**: managing the real-data exceptions list") and is
+  amended in the same change that records this — see ruling 4.
+- **D3 — owner's decision, 24 September 2026; the widening is deliberate.** Stage 2's exit is three
+  named tests (below), and its entry states in one sentence that this is not ADR-042's alpha gate.
+  This widens the stage's existing exit criterion, which was one test ("a `backup` → `restore` cycle
+  reproduces the graph from staged Parquet"); the golden-path deploy and the packaging assertions
+  were described in that same entry as "testable too" and "mechanical and testable", never as exit
+  criteria. Recorded as a deliberate widening rather than a drafting tidy — see ruling 7.
 
 ### The principle, kept as proposed
 
@@ -5479,21 +5485,30 @@ CLI equivalent (`05_DEPLOYMENT.md` §2.3) because they share one implementation,
 written. §2.5's three constraints bind throughout: no state beyond the repository, never sees a
 secret, not a privileged long-lived process.
 
-**One place the design as submitted breaks its own principle, and one place it risks breaking it.**
-The ADR-043 preflight check requires the harness to *use* a confidential client's secret, not merely
-reference it (objection 2). And `python -m harness.bundle` would be a second module claiming the
-command shape `scripts/osprey_bundle.py` already occupies — "they share one implementation, not
-because two were written" applies to this design's own modules first (amendment 12).
+**One place the design as submitted broke its own principle — now fixed by ruling 2 — and one place
+it risks breaking it.** The ADR-043 preflight check required the harness to *use* a confidential
+client's secret, not merely reference it; the owner has moved that check to the post-launch verify
+step, which resolves it. And `python -m harness.bundle` would be a second module claiming the command
+shape `scripts/osprey_bundle.py` already occupies — "they share one implementation, not because two
+were written" applies to this design's own modules first (amendment 12).
 
 ---
 
 ### The sub-stages as amended
 
-Labelled `2b`–`2h` as instructed. **These labels are contested — see objection 1**: `2a` is already
-taken by a *sibling* stage (ArcadeDB stability), not a sub-stage of the harness pipeline, and
-`07_BUILD_PLAN.md` says so in its own words.
+**Labelled `Stage 2 §1` through `Stage 2 §7`, per ruling 1**, replacing the `2b`–`2h` the design
+arrived with. That earlier scheme collided with `2a`, which `07_BUILD_PLAN.md` defines as a *sibling*
+stage (ArcadeDB stability, closed), not a sub-stage of this one; `2a` keeps its label and its
+meaning, and the sub-stages no longer look like its continuation.
 
-#### 2b — `osprey.yaml` as the single source
+**Always written in full — `Stage 2 §5`, never a bare `§5`.** This document, `05_DEPLOYMENT.md` and
+`07_BUILD_PLAN.md` all use `§N` for a *specification section*, and several of those references sit in
+the same sentences as these labels ("`05_DEPLOYMENT.md` §5's `verify`" beside "Stage 2 §5", the
+packaging sub-stage). The full form is the only thing keeping the two apart, so it is a rule of this
+record rather than a style preference. Commits and reports written before 24 September 2026 cite the
+old `2b`–`2h` labels; the mapping is `2b`→`Stage 2 §1`, and so on in order to `2h`→`Stage 2 §7`.
+
+#### Stage 2 §1 — `osprey.yaml` as the single source
 
 A Pydantic schema in `packages/schemas` for `osprey.yaml` covering profile, components, models,
 governance (including the real-data exceptions reference, D2), geospatial and cluster hosts. A
@@ -5513,8 +5528,8 @@ directly — no such file exists; `deploy/` holds `cluster/.gitkeep`, `compose/d
 `compose/litellm_config.yaml`.
 
 **Amendment 2 — the two `RUNBOOK.md`s are different files and the design conflated them.** §2.1's is
-*generated per deployment* and is a 2b output. §6's `deploy/RUNBOOK.md` states the recovery time for
-each path and is written, not generated (2e). Phase 8's own outcome bullet names the first —
+*generated per deployment* and is a Stage 2 §1 output. §6's `deploy/RUNBOOK.md` states the recovery time for
+each path and is written, not generated (Stage 2 §4). Phase 8's own outcome bullet names the first —
 "Generated Kubernetes manifests **and the per-deployment runbook**."
 
 **Amendment 3 — the schema must reuse `packages/schemas/mapconfig.py`, and must not invalidate the
@@ -5524,7 +5539,7 @@ reads it as an unguarded `raw["map"]`, with `tests/test_demo_osprey_config_is_ti
 asserting against it. A document-level schema that requires the other sections breaks both. The
 committed file's own header already states its status ("A real deployment's own `osprey.yaml` is
 generated by the harness (Phase 8)… this file is committed so the platform is demonstrable with zero
-configuration"), so 2b must decide explicitly what that file is under the new schema rather than
+configuration"), so Stage 2 §1 must decide explicitly what that file is under the new schema rather than
 discover it.
 
 **Exit test, amended.** Rendering a fixture `osprey.yaml` is byte-stable across runs; a hand edit to
@@ -5539,7 +5554,7 @@ running deployment** against `osprey.yaml` and shows any divergence." Comparing 
 against what is on disk is a different, easier check. Both are wanted; only the second was specified.
 The running-deployment comparison is the one §2.4 names and the one that catches `kubectl edit`.
 
-#### 2c — Preflight, headless
+#### Stage 2 §2 — Preflight, headless
 
 `harness/preflight/`, one module per check, each returning `{status, what is wrong, what to do,
 re-checkable}`. `python -m harness.preflight` runs all or one.
@@ -5558,33 +5573,44 @@ compares against the profile floor fails a 16 GB laptop — the exact clean-lapt
 is defined by — instead of offering the path the spec already specifies. Its own exit test: a
 preflight run under a below-floor memory reading offers the reduced variant and does not apply it.
 
-**The ADR-043 token-exchange check is real, required, and in the wrong place — see objection 2.** The
-design quotes `07_BUILD_PLAN.md`'s stage entry accurately: that entry does specify the exact operator
-wording ("token exchange is not correctly configured on your identity provider; watches will appear
-stopped for every owner but the analyst who triggered them until this is fixed") and the two-sided
-shape (success for a disposable preflight-only subject, refusal for an out-of-scope one). What the
-design does not resolve is that running it *before* Launch requires the harness to hold and use a
-confidential client's secret, against §2.5, at a moment when no IdP is running.
+**The ADR-043 token-exchange check is not here — moved to the post-launch verify step by ruling 2,
+and surfaced on this screen's own Re-check after launch.** It is not a pre-launch check and it is not
+in this sub-stage's check list. The reasoning it was moved for: running it before Launch would need
+the harness to hold and *use* a confidential client's secret, against §2.5's "never sees a secret",
+at a moment when no Keycloak is running to exchange against. Its implementation now sits with
+`Stage 2 §7`'s verify capability; what remains here is the *surface* — Preflight renders the check as
+an item that runs after launch, with the Re-check button `05_DEPLOYMENT.md` already specifies, and
+with the exact operator wording `07_BUILD_PLAN.md`'s stage entry gives verbatim ("token exchange is
+not correctly configured on your identity provider; watches will appear stopped for every owner but
+the analyst who triggered them until this is fixed"). The two-sided shape is unchanged: success for a
+disposable verify-only subject, refusal for a deliberately out-of-scope one.
+
+**A consequence of that move, stated rather than left to be found.** `Stage 2 §7` is not
+milestone-blocking, so the capability carrying this check is not either — the milestone can now be
+reached with the ADR-043 grant unverified. That is a real change in what the milestone certifies, and
+it follows from the ruling rather than being a second decision. If the owner wants the grant verified
+before the milestone, this one check is the thing to pull forward out of `Stage 2 §7`; named here,
+not decided here.
 
 **Exit test, as proposed and accepted.** Every check has a red-then-green test whose planted failure
 takes the shape the check actually reads, and `launch` refuses while any check is red. (Note the
 CLI's own name: §2.3 calls this `osprey apply`, not `osprey launch`.)
 
-#### 2d — Scripted golden-path deploy
+#### Stage 2 §3 — Scripted golden-path deploy
 
-`python -m harness.apply`: fresh checkout → render (2b) → preflight (2c) → start stack → wait for
+`python -m harness.apply`: fresh checkout → render (Stage 2 §1) → preflight (Stage 2 §2) → start stack → wait for
 health → seed if requested. `docs/demo/2026-09-24/demo_up.sh` is retired into this once it exists;
 until then it stays.
 
 **Amendment 6 — "ordering enforcement" is `05_DEPLOYMENT.md` §2.4's term for something else, and
 reusing it here hides a missing guard.** §2.4's ordering enforcement is: "A profile switch with live
 data cannot skip backup and restore. The harness greys out Launch until a current backup exists, and
-states why." 2d's ordering concern — seeding precedes any lock-holding service, the database is reset
+states why." Stage 2 §3's ordering concern — seeding precedes any lock-holding service, the database is reset
 first (stage 2a's cause five) — is real and belongs here, but it is not that guard, and a reader
 ticking off §2.4's five guards would score it as covered. Renamed here to **seed-ordering
 enforcement**; §2.4's guard is amendment 7's business.
 
-**Amendment 7 — two of §2.4's five guards appear nowhere in 2b–2h, and Phase 8's outcome bullet
+**Amendment 7 — two of §2.4's five guards appear nowhere in Stage 2 §1–§7, and Phase 8's outcome bullet
 claims all five** ("Harness-driven orchestration (`05_DEPLOYMENT.md` §2.4): target confirmation,
 drift detection, change preview, enforced backup-before-switch, and downgrade capacity checks against
 the existing data volume"). Missing: **target confirmation** (the resolved Docker context, or the
@@ -5592,25 +5618,25 @@ Kubernetes cluster, context and namespace, shown before every action and re-conf
 from the last one) and the **capacity check** (a downgrade's preflight run against the *existing data
 volume*, not the empty case, refusing if it will not fit). Also absent: the destroy path's own
 asymmetry (typing the environment's name; stating what is not recoverable from backup, the audit
-stream in particular). Target confirmation belongs in 2d, alongside the thing it guards; the capacity
-check and the backup-before-switch guard belong with 2e, which is where a backup exists to check for.
+stream in particular). Target confirmation belongs in Stage 2 §3, alongside the thing it guards; the capacity
+check and the backup-before-switch guard belong with Stage 2 §4, which is where a backup exists to check for.
 
 **Amendment 8 — the component list is unstated, and one component the milestone-blocking preflight
 check depends on does not exist anywhere.** §3 names what a `local-lite` launch must produce: "the
 workspace, one Conduit, three workers, ArcadeDB, DuckDB in-process, Valkey, MinIO, OpenSearch
 single-node, PostgreSQL, Keycloak, Ollama, and a faster-whisper container. Twelve containers."
-`deploy/compose/dev.yaml` stands up four and names Keycloak only in a comment. 2c's ADR-043 check has
-nothing to exchange against until 2b renders a Keycloak service and 2d starts it.
+`deploy/compose/dev.yaml` stands up four and names Keycloak only in a comment. Stage 2 §2's ADR-043 check has
+nothing to exchange against until Stage 2 §1 renders a Keycloak service and Stage 2 §3 starts it.
 
 **Amendment 9 — §3's "The seeded demo credentials are displayed once and written nowhere" is a §2.5
-property with no named test.** It belongs on 2d's seed step.
+property with no named test.** It belongs on Stage 2 §3's seed step.
 
 **Exit test, amended.** From a fresh clone, one command reaches a health-checked stack on
 `local-lite`. **The CI half must name its own stopping point** — which services must be healthy and
 which health checks must pass without Ollama — because "runs in CI as far as CI can without Ollama"
 cannot fail: any CI failure is attributable to "as far as CI can". This is Stage 2 exit test #2.
 
-#### 2e — Backup and restore
+#### Stage 2 §4 — Backup and restore
 
 `python -m harness.backup` writes to `backups/<UTC-timestamp>-<profile>-<git-sha>/` with a
 `manifest.json` naming every file, its checksum and the schema versions. `python -m harness.restore
@@ -5622,7 +5648,7 @@ cannot fail: any CI failure is attributable to "as far as CI can". This is Stage
 contents**, Postgres dump, ontology, handling scheme, and `osprey.yaml`." The design listed staged
 Parquet, a PostgreSQL dump and "the configuration". Object store contents (MinIO) is a distinct,
 named item, not configuration. §6 additionally makes audit data an explicit exception — "not
-rebuildable and… not deletable. Replicate it separately" — and 2e must state its disposition, because
+rebuildable and… not deletable. Replicate it separately" — and Stage 2 §4 must state its disposition, because
 §2.4's destroy confirmation depends on that being true.
 
 **Amendment 11 — restore has no dry run, and §4 requires one.** "Restore opens with a dry run showing
@@ -5647,7 +5673,7 @@ not payload. Three specific holes:
 
 This is Stage 2 exit test #1 and the stage's already-stated criterion.
 
-#### 2f — Packaging (the `osprey bundle` shape; D1)
+#### Stage 2 §5 — Packaging (the `osprey bundle` shape; D1)
 
 Builds the service images and the bundle tarball; `--images` for air-gapped install.
 
@@ -5662,12 +5688,12 @@ invocation convention: every existing operational module runs as `python -m scri
 deliberately, with `harness/__init__.py`'s own existing docstring as the warrant, rather than by
 accident.
 
-**Amendment 13 — ADR-035 §C1's registry is an input 2f cannot start without, and nothing builds it.**
+**Amendment 13 — ADR-035 §C1's registry is an input Stage 2 §5 cannot start without, and nothing builds it.**
 Checked directly: `make demo-manifest` does not exist in `Makefile` or `package.json`; neither does
 the `shipped`/`internal` manifest schema, the fail-closed registry, or the Glass's "dataset not
 provisioned" state. `scripts/demo_guide_check.py`'s `DEMO_REGISTRY` is, in its own words, "a stand-in
 for ADR-035's own still-unbuilt fail-closed registry, not the real thing". ADR-035 §C1's two
-fail-closed tests are already named there and are 2f's first deliverable, not a dependency it may
+fail-closed tests are already named there and are Stage 2 §5's first deliverable, not a dependency it may
 assume: `tests/demo_registry/test_fail_closed.py::test_a_manifest_with_no_distribution_field_is_
 excluded_from_a_shipped_build` and `test_an_unrecognised_distribution_value_is_treated_as_internal`.
 
@@ -5679,7 +5705,7 @@ itself; "each planted violation fails the bundle" does not imply it, which is ex
 separately.
 
 **Amendment 15 — there is no `.dockerignore` in this repository, and without one every assertion in
-2f is unenforceable.** Checked directly: no `.dockerignore` anywhere; two Dockerfiles exist
+Stage 2 §5 is unenforceable.** Checked directly: no `.dockerignore` anywhere; two Dockerfiles exist
 (`services/api/Dockerfile`, `services/ingest/Dockerfile`). ADR-035 §C2 already names the mechanism —
 "if a packaging step copies the repository root, `/demo-data/`'s own gitignore exclusion is irrelevant
 to what a `docker build` context includes unless the `Dockerfile` also excludes it (`.dockerignore`)".
@@ -5693,12 +5719,12 @@ publishes. §B8: `docs/design/tokens.css` is product source despite sitting unde
 `docs/` nor `spec/` is the right predicate. `scripts/product_tree_link_check.py` already holds the
 authoritative marker list (`06_DECISIONS.md`, `07_BUILD_PLAN.md`, `CLAUDE.md`, `SESSION_HANDOVER.md`,
 `NEXT_STEPS_PHASE7.md`, `DESIGN_PROVENANCE.md`, `PRODUCT_DELIVERY.md`, `archive/`), with
-`route_coverage_check.py`'s `APACHE_DOC_PATHS` as its complement; 2f imports it rather than restating
+`route_coverage_check.py`'s `APACHE_DOC_PATHS` as its complement; Stage 2 §5 imports it rather than restating
 it, the same way `product_tree_link_check.py` imports `APACHE_DOC_PATHS` rather than redeclaring it.
-**The rule-15 trap this closes:** 2f is built *before* Trigger A, so a planted violation written
+**The rule-15 trap this closes:** Stage 2 §5 is built *before* Trigger A, so a planted violation written
 against today's `docs/`-rooted paths passes, and then silently becomes a no-op the moment Trigger A
 renames the tree — a gate that could not find a violation if one existed. Trigger A's own exit
-criterion should re-run 2f's assertions for the same reason its existing criterion re-runs the
+criterion should re-run Stage 2 §5's assertions for the same reason its existing criterion re-runs the
 install.
 
 **Amendment 17 — a new assertion nobody has named: `config/real_data_exceptions.yaml` must never
@@ -5715,13 +5741,13 @@ release**, because it is the path that will be needed under time pressure." §7 
 requirement ("Images signed and verified at pull"). The design carried neither signing nor weight
 files.
 
-**Amendment 19 — `LICENSE`/`NOTICE` are 2f's own deliverable, not a red test waiting on Trigger A.**
+**Amendment 19 — `LICENSE`/`NOTICE` are Stage 2 §5's own deliverable, not a red test waiting on Trigger A.**
 The design says this assertion "is expected red until that lands" while also making exit test #3 part
 of a three-green stage exit — a self-contradiction. And the dependency runs the other way in the
 plan's own text: ADR-034 §B7 is "**a blocking prerequisite of Phase 8's own harness/packaging work,
 not a follow-up to it**", and for the two files, "the holder name, the licence text itself, and the
 files' own presence are not year-dependent and are not deferred." Trigger A is stage 4 in Phase 8's
-ordering and explicitly *not* milestone-blocking; stage 2 is. So 2f creates `LICENSE` and `NOTICE`
+ordering and explicitly *not* milestone-blocking; stage 2 is. So Stage 2 §5 creates `LICENSE` and `NOTICE`
 and builds the third `licence-check` leg the Trigger A entry already specifies — `LICENSE` present
 and byte-identical to the canonical Apache 2.0 text, `NOTICE` present and containing "The OspreyFlow
 Authors" — and Trigger A's own list records it as discharged early. **Only the copyright year stays
@@ -5729,13 +5755,13 @@ Trigger B's**, exactly as ADR-034 §B6 and the Trigger A entry already say; noth
 
 **Amendment 20 — the harness's own image is nobody's deliverable, and most services have no
 Dockerfile.** §2/§3's bootstrap is `docker run … ghcr.io/ospreyflow/harness:latest`; nothing in
-2b–2h builds or publishes that image, and 2g cannot be exercised by its own documented bootstrap
+Stage 2 §1–§7 builds or publishes that image, and Stage 2 §6 cannot be exercised by its own documented bootstrap
 until something does. Separately, checked directly: `services/` has six directories (`api`,
 `compute`, `extract`, `geocoder`, `ingest`, `resolve`) plus `apps/workspace`, and only `services/api`
 and `services/ingest` carry a Dockerfile; `make ci` has `trivy-image-ingest` and `trivy-image-api`
 only. D1's "container images for each OspreyFlow service" therefore lands on standing rule 8 — "Each
 service gets its Dockerfile, and a `trivy image` CI scan, in the phase that creates it — never
-batched into Phase 8." See objection 5: this is owed debt from earlier phases, and 2f absorbing it
+batched into Phase 8." See objection 5: this is owed debt from earlier phases, and Stage 2 §5 absorbing it
 silently is the thing rule 8 exists to prevent.
 
 `make licence-check` is extended per ADR-035 §C7 to data-file licences in the same pass, with its own
@@ -5745,17 +5771,35 @@ establishes.
 **Exit test.** Each planted violation fails the bundle, each violation taking the shape the gate
 actually receives at its own real call site. This is Stage 2 exit test #3.
 
-#### 2g — The six setup screens
+#### Stage 2 §6 — The six setup screens
 
-A browser application over 2b–2f, bootstrapped by one Docker command, becoming `/admin` after launch.
-Profile, Components and Models write `osprey.yaml` through the 2b schema. Governance writes
+A browser application over Stage 2 §1–§5, bootstrapped by one Docker command, becoming `/admin` after launch.
+Profile, Components and Models write `osprey.yaml` through the Stage 2 §1 schema. Governance writes
 access-control/handling configuration and hosts the real-data exceptions panel (D2). Geospatial wraps
 `build_local_basemap`, `register_tier4_provider` and the Verify step with progress shown. Preflight
-streams 2c's checks with per-check Re-check and gates Launch. Before Launch, the generated-artefacts
+streams Stage 2 §2's checks with per-check Re-check and gates Launch. Before Launch, the generated-artefacts
 diff is shown and confirmed.
 
-**The `decision_record` requirement is not folded in — see objection 3.** It is a change to an
-owner-decided mechanism and it contradicts 2f.
+**The `decision_record` requirement is folded in, in the form ruling 3 gives it: required, validated
+for presence and format only, never resolved.** This is the owner's decision of 24 September 2026 and
+it removes the contradiction the first draft of this record objected to. Because nothing resolves the
+reference, the Governance panel never reads `06_DECISIONS.md` — which is the file `Stage 2 §5`'s own
+first assertion excludes from every artefact — so the field works identically on this working tree
+and on a customer's deployment, which the resolving version could not.
+
+**What "format only" means here, stated so it is not left to the implementer** — this record's own
+reading, correctable in a line if it is not the owner's: a non-empty string matching an ADR
+reference, `ADR-` followed by three digits, optionally with a section suffix (`ADR-035 §C3`). Presence
+and shape are checked; existence, resolvability and correctness are not, and `is_permitted()` fails
+closed on a missing or malformed value exactly as it does on any other missing required field.
+
+**Two consequences that follow and are owed work, not discharged here.** `RealDataException`
+(`scripts/real_data_exceptions.py`) has six required fields today and this makes a seventh, so any
+entry already sitting in an owner's local, gitignored `config/real_data_exceptions.yaml` becomes
+invalid until the field is added — a real migration step on a file no clone contains and no gate can
+see, which is why it is stated here rather than assumed to be noticed. And the field needs its own
+red-then-green: a fixture entry with the field absent, and one with it malformed, each shown to fail
+closed. **Not built by this record** — this round amended documentation only.
 
 **Amendment 21 — a new keyboard-driven surface needs its own action registry and spec file, in the
 same change.** `CLAUDE.md` rule 13, and the machinery that now enforces it:
@@ -5771,7 +5815,7 @@ level up that the registry itself was built to close, and it is exactly the shap
 `CLAUDE.md` rule 4 / standing rule 2: "No exceptions for internal endpoints." `/admin` serves the
 governance configuration, the handling scheme, the real-data exceptions panel and the
 generated-artefacts diff — which carries real hostnames, ports, paths and credential *references*.
-2g must state which principal may open it and test that an unauthorised one cannot observe it or
+Stage 2 §6 must state which principal may open it and test that an unauthorised one cannot observe it or
 infer its existence. Separately, §2.5's third constraint has no named test: "During setup it needs
 the container socket; the admin console it becomes afterwards does not, and runs with the same
 non-root, read-only-root posture as every other component (§7)." The privilege drop at the
@@ -5785,26 +5829,64 @@ absent: "a persistent summary rail showing what has been decided and what is out
 round-trip through `osprey.yaml` is green with every option offered at every profile and no rail at
 all.
 
+**Amendment 24, from ruling 6 — `02_GLASS_FRONTEND.md` §6's accessibility floor applies to this
+surface; §5's performance budget does not.** The owner's split, and the right one: §5 is defined
+"against a 50k-node / 250k-edge working set" and measures canvas interactions a setup wizard does not
+have, while §6 is written as a floor rather than a workload ("Not negotiable and cheaper to build in
+than to retrofit"). The parts of §6 that reach these screens: every action reachable by keyboard with
+Tab and Shift+Tab behaving like any other control and no focus trap; focus as a 2px brass outline at
+2px offset, never suppressed; colour never the sole carrier; `prefers-reduced-motion` honoured; and
+the contrast floor met in both themes, "verified with automated checks in CI, not by eye". The
+canvas-specific bullets — the Matrix view as the screen-reader-navigable alternative, the ring-walk
+key bindings — are about the canvas and do not transfer.
+
+**The precedent to copy, and the one already-disclosed trap in it.** `make glass-a11y` runs
+`apps/workspace/a11y/a11y.spec.ts`, an axe-core DOM-rule check; the harness needs its own equivalent
+rather than an extension of that one, since it is a separate application. Two things to carry across
+deliberately: that target is **not** currently in `make ci`'s own target list (checked directly), so
+"applies to the harness" means deciding whether the harness's equivalent gates CI, which is a
+separate question from whether the floor applies; and this build has already recorded an `axe-core`
+finding where the spec exercised a *showcase* page rather than the real surface, which is exactly the
+failure this sub-stage would repeat if the harness's a11y spec ran against a mock of the six screens
+instead of the screens themselves.
+
 **Exit, two parts, stated separately.** *Test:* every screen round-trips its answers through
-`osprey.yaml`; the rendered output matches 2b's fixture for the same answers; option filtering by
-profile is asserted; the new surface's action registry is declared and asserted covered; `/admin`
-has its access-control test. *Judgement:* a usability pass by someone other than the builder,
-recorded as the plan already words it — "Whether the six setup screens are actually usable by an
-operator who has never seen them is a judgement, not a test." Retained unchanged; no finding.
+`osprey.yaml`; the rendered output matches Stage 2 §1's fixture for the same answers; option filtering
+by profile is asserted; the new surface's action registry is declared and asserted covered; `/admin`
+has its access-control test; and `02_GLASS_FRONTEND.md` §6's floor is asserted against the real
+screens by this surface's own a11y spec (ruling 6). `02_GLASS_FRONTEND.md` §5's performance budget is
+explicitly **out of scope** for this surface, per the same ruling. *Judgement:* a usability pass by
+someone other than the builder, recorded as the plan already words it — "Whether the six setup
+screens are actually usable by an operator who has never seen them is a judgement, not a test."
+Retained unchanged; no finding.
 
-#### 2h — Post-launch admin console operations
+#### Stage 2 §7 — Post-launch admin console operations
 
-Rolling upgrade and rollback to a previous digest (§5). **Not milestone-blocking — still Phase 8.**
-The design said "explicitly AFTER the milestone", which is right about the milestone and wrong about
-the phase: Phase 8's own outcome bullet claims "the backup, restore, **upgrade and verify** screens",
-and §5's `verify` is a capability nothing else in 2b–2h provides — "the port conformance suite against
-the **running** deployment rather than a test fixture". Worded here the way the plan words every other
-such stage. Note also that 2h's rollback consumes `versions.lock`, which is amendment 1's business in
-2b, not 2h's.
+Rolling upgrade and rollback to a previous digest (`05_DEPLOYMENT.md` §5). **Not milestone-blocking
+— still Phase 8.** The design said "explicitly AFTER the milestone", which is right about the
+milestone and wrong about the phase: Phase 8's own outcome bullet claims "the backup, restore,
+**upgrade and verify** screens", and §5's `verify` is a capability nothing else in Stage 2 §1–§7
+provides — "the port conformance suite against the **running** deployment rather than a test
+fixture". Worded here the way the plan words every other such stage. Note also that Stage 2 §7's
+rollback consumes `versions.lock`, which is amendment 1's business in Stage 2 §1, not Stage 2 §7's.
+
+**Amendment 25, from ruling 2 — the verify step here also carries ADR-043's two-sided token-exchange
+check.** Moved out of pre-launch Preflight by the owner's ruling of 24 September 2026: attempt a real
+exchange for a known, disposable verify-only subject and confirm it succeeds; attempt one for a
+subject the realm's own policy should refuse and confirm it is actually refused, not silently
+granted. This is ADR-043's own "how an operator verifies it" pair, run automatically. It belongs
+here because `verify` runs against the **running** deployment, where a Conduit holding the
+confidential client's credentials already exists — so the harness never handles the secret and
+§2.5's second constraint holds, which is the whole reason for the move. **Surfaced on `Stage 2 §6`'s
+Preflight screen** as a post-launch item with its own Re-check, carrying `07_BUILD_PLAN.md`'s stage
+entry's exact operator wording. **Its own exit test:** both sides red-then-green against an ephemeral
+RFC 8693 token-endpoint fixture — the same "a real, if ephemeral, HTTP server rather than a mock"
+precedent ADR-043 sets, and for its own stated reason, since a mock cannot exercise the refusal path
+the containment actually rests on.
 
 ---
 
-### Stage 2's exit (D3, awaiting owner confirmation)
+### Stage 2's exit (D3 — owner's decision, 24 September 2026)
 
 Tests #1, #2 and #3 green. **This is Stage 2's own completion, not ADR-042's alpha gate, which
 additionally requires both acceptance scenarios green on `local-lite`; no build goes to a tester on
@@ -5812,80 +5894,103 @@ Stage 2 alone.**
 
 ---
 
-### Open objections
+### Owner's rulings on the seven objections — 24 September 2026
 
-Unresolved. Each is a thing this record will not decide on the owner's behalf.
+All seven answered by the owner directly, in their own words, the same day the objections were
+written. Each ruling below states what was decided and what it changed above; none is a paraphrase
+standing in for a decision the owner did not make. **Two were answered by pointing at a D-decision
+rather than by restating one** (4 → D2, 5 → D1), which resolves them because both objections were
+written as disjunctions — confirming the D-decision as stated picks one horn and eliminates the
+other. That inference is recorded here rather than applied silently, so it can be corrected in a
+line if it is not what was meant.
 
-1. **The `2b`–`2h` labels collide with the existing `2a`.** `07_BUILD_PLAN.md` says it in its own
-   words: `2a` is "a new, independent stage, not a Stage-4 sub-stage, labelled `2a` only for its
-   position in this list, between the harness/packaging and documentation-refresh stages it sits
-   alongside in build order." So `2a` is a *sibling* of stage 2, positioned *after* it — while
-   `2b`–`2h` are *sub-stages of* it. The sequence 2, 2a, 2b…2h then means two categorically different
-   things with one notation, and every future citation of "stage 2a" inherits the ambiguity. The
-   labels are used as instructed and a disambiguating sentence is added at each end in
-   `07_BUILD_PLAN.md`. The clean fixes are `2.1`–`2.7` for the sub-stages, or renaming the ArcadeDB
-   stage — both cost stable stage numbers, which that document holds stable deliberately. Owner's
-   call.
+1. **Labels — ruled: the harness sub-stages are `Stage 2 §1`–`Stage 2 §7`; `2a` stays as the closed
+   sibling stage.** Applied throughout this record and `07_BUILD_PLAN.md`. The collision the
+   objection named is gone: `2a` keeps both its label and its meaning as an independent stage, and
+   nothing now reads as its continuation. **One thing the new scheme costs, handled rather than
+   absorbed:** `§N` already means "specification section" in all three of these documents, and the
+   two forms collide in sentences that carry both. The sub-stage form is therefore always written in
+   full (`Stage 2 §5`, never a bare `§5`), stated as a rule of this record at "The sub-stages as
+   amended" above. Old-label mapping, for commits and reports predating this ruling: `2b`→`Stage 2 §1`,
+   and so on in order to `2h`→`Stage 2 §7`.
 
-2. **The ADR-043 preflight check cannot run before Launch without breaking `05_DEPLOYMENT.md` §2.5.**
-   §2.5: the harness "**never sees a secret**. Credentials are entered as references — an environment
-   variable name or a secret-manager path. The harness records where to look, never what it found." A
-   real RFC 8693 exchange requires the Conduit's confidential-client secret to be read and used. And
-   Preflight runs before Launch, when no Keycloak is running to exchange against — `local-lite`'s
-   Keycloak is one of the twelve containers Launch brings up. The check itself is not in doubt: it is
-   required by `07_BUILD_PLAN.md`'s stage entry, its two-sided shape and its exact operator wording
-   are already specified there, and ADR-043 is explicit that "no repository gate can" reach this. What
-   is undecided is **where it runs**. The shape that satisfies both texts is §5's `verify` — the
-   launched Conduit performs the two exchanges and Preflight's Re-check reads the result back — which
-   moves a check the build plan currently places in Preflight. That is an edit to the build plan's own
-   stage entry and is not made here.
+2. **The ADR-043 two-sided exchange — ruled: approved; move it to the post-launch verify step,
+   surfaced through Preflight's Re-check after launch; amend the plan's stage entry.** Applied.
+   The check is out of `Stage 2 §2`'s pre-launch list; its implementation is amendment 25 under
+   `Stage 2 §7`'s verify capability; its surface stays the Preflight screen, as a post-launch item
+   with Re-check and the stage entry's own verbatim operator wording. `07_BUILD_PLAN.md`'s stage
+   entry is amended in the same change, as the ruling directs. §2.5's "never sees a secret" now holds
+   without exception, because the exchange runs where the credentials already are. **The consequence
+   this creates is recorded at `Stage 2 §2`, not buried here:** `Stage 2 §7` is not
+   milestone-blocking, so the milestone can now be reached with the ADR-043 grant unverified. That
+   follows from the ruling; pulling this one check forward, if wanted, is a separate call.
 
-3. **The `decision_record` requirement is a change to an owner-decided mechanism, and it contradicts
-   2f. Recorded and stopped on, not implemented.** The design would require every real-data exceptions
-   entry to carry "a `decision_record` reference that must resolve to a committed `06_DECISIONS.md`
-   section", with `is_permitted()` failing closed without it. Three problems. (a) **It cannot be
-   satisfied in a deployed artefact.** `06_DECISIONS.md` is excluded from everything that ships by
-   ADR-034 §B2 and by 2f's own first assertion; a shipped Governance panel resolving a reference into
-   a file the same pipeline is required to exclude can only ever fail closed, disabling the mechanism
-   on every machine that is not this working tree. (b) **It invalidates every existing entry.**
-   `scripts/real_data_exceptions.py` exists and is built; `RealDataException` has six required fields
-   (`dataset`, `approved_uses`, `added_by`, `added_date`, `device`, `justification`) and an optional
-   `revisit`. A seventh required field makes every entry already in an owner's local
-   `config/real_data_exceptions.yaml` invalid. (c) **It is an owner decision, made directly.** ADR-035
-   §C3's amendment is recorded as "decided, 23 September 2026, by the owner directly, not inferred".
-   Per `CLAUDE.md`, an accepted record believed wrong gets said so and stopped on. If the owner wants
-   the requirement, the resolvable target is an ADR *number* checked against a list the product can
-   actually carry — not a section of a file the product must never contain.
+3. **`decision_record` — ruled: it stays a required field, validated for presence and format only,
+   never resolved.** Applied at `Stage 2 §6`. This answers the objection rather than overriding it:
+   problem (a), the one the objection actually turned on, disappears entirely, because a field that
+   is never resolved never reads `06_DECISIONS.md` and so never depends on a file `Stage 2 §5` is
+   required to exclude. The mechanism now behaves identically on this working tree and on a
+   customer's deployment. Problems (b) and (c) are not objections any more but consequences the owner
+   has accepted, and both are recorded as owed work at `Stage 2 §6`: the seventh required field
+   invalidates any entry already in a local `config/real_data_exceptions.yaml` until it is added — a
+   migration on a file no clone contains and no gate can see — and the field needs its own
+   fail-closed red-then-green for the absent and the malformed case. **Not built by this record.**
+   What "format" means is this record's own reading (`ADR-` plus three digits, optional section
+   suffix), flagged as such at `Stage 2 §6` so it is corrected rather than inherited if wrong.
 
-4. **D2 contradicts `07_BUILD_PLAN.md`'s Phase 8 outcome bullet as written.** That bullet says "**A
-   new screen**, added 23 September 2026: managing the real-data exceptions list". D2 makes it a panel
-   on Governance, which is the better reading of §2.1's "Six screens" table — but confirming D2 means
-   amending that bullet, and the amendment is not made here because D2 is not confirmed.
+4. **The "a new screen" contradiction — ruled: see D2.** D2 stands as written, so the exceptions list
+   is a panel on Governance. `07_BUILD_PLAN.md`'s Phase 8 outcome bullet is amended from "**A new
+   screen**, added 23 September 2026: managing the real-data exceptions list" to the panel wording,
+   in the same change as this record. `05_DEPLOYMENT.md` §2.1's "Six screens" table needed no edit —
+   it already said six, which is why the objection existed.
 
-5. **Standing rule 8 and D1's "images for each OspreyFlow service".** Six service directories and one
-   app; two Dockerfiles; two `trivy image` CI jobs. Rule 8: "Each service gets its Dockerfile, and a
-   `trivy image` CI scan, in the phase that creates it — **never batched into Phase 8**." Either the
-   missing Dockerfiles are owed debt from the phases that created those services, and should be
-   recorded as such rather than absorbed into 2f, or D1's scope is narrower than "each service". Not
-   resolvable without the owner saying which.
+5. **Standing rule 8 and D1's scope — ruled: see D1.** D1 stands as written and is **not** narrowed,
+   which eliminates the objection's second horn ("D1's scope is narrower than 'each service'") and
+   leaves the first: **the missing Dockerfiles are owed debt from the phases that created those
+   services, and are recorded as such rather than absorbed into `Stage 2 §5`.** Checked directly, and
+   restated here as the finding this ruling converts into work: `services/` holds `api`, `compute`,
+   `extract`, `geocoder`, `ingest` and `resolve`, plus `apps/workspace`, and only `services/api` and
+   `services/ingest` carry a `Dockerfile`; `make ci` has `trivy-image-ingest` and `trivy-image-api`
+   and no others. Standing rule 8 — "Each service gets its Dockerfile, and a `trivy image` CI scan,
+   in the phase that creates it — never batched into Phase 8" — means this debt does not belong to
+   `Stage 2 §5` and must not be quietly discharged there. `Stage 2 §5` still builds the harness's own
+   image, which is genuinely new work of this stage and not debt.
 
-6. **Whether the harness browser application is in scope for `02_GLASS_FRONTEND.md` §5's performance
-   budget and §6's accessibility floor.** §5 is measured "against a 50k-node / 250k-edge working set"
-   and is plainly written for the Glass; `CLAUDE.md` rule 10 makes it a CI gate. A setup wizard has no
-   working set. Left open rather than assumed either way — but the accessibility floor is a different
-   question from the performance budget and probably has a different answer.
+6. **The two Glass gates — ruled: `02_GLASS_FRONTEND.md` §6's accessibility floor applies to the
+   harness application; §5's performance budget does not.** Applied as amendment 24 at `Stage 2 §6`,
+   with the floor in that surface's own exit test and the budget named as explicitly out of scope.
+   Two practical notes recorded with it, both checked: `make glass-a11y` is not in `make ci`'s own
+   target list today, so "the floor applies" leaves the separate question of whether the harness's
+   equivalent gates CI; and this build has already recorded an `axe-core` finding where the spec
+   exercised a showcase page rather than the real surface, which is the failure the harness's own
+   a11y spec must not repeat.
 
-7. **D3 widens Stage 2's exit criterion from one test to three.** Recorded here as the substantive
-   change it is, not as drafting.
+7. **D3's widening — ruled: confirmed; the widening is deliberate.** Stage 2's exit is tests #1, #2
+   and #3, not the single backup→restore criterion the stage entry carried before. Recorded at
+   "Stage 2's exit" above and in `07_BUILD_PLAN.md`'s stage entry, in both cases as a deliberate
+   widening rather than a clarification of what was already there.
 
-**Cost.** Documentation only in this session. If accepted as amended, 2f grows two deliverables it
-did not have (ADR-035 §C1's registry; `LICENSE`/`NOTICE` and the third `licence-check` leg), 2b grows
-two artefact kinds, 2c grows the reduced-variant offer, 2d and 2e grow three of §2.4's guards between
-them, and 2g grows an action registry, a spec file and an access-control test. None of that is new
-work in the sense of unclaimed scope — every item is already claimed by `05_DEPLOYMENT.md`, by
-Phase 8's own outcome bullets, or by an accepted ADR; the amendments move it from claimed to
-sub-staged.
+### What remains open after these rulings
 
-**Revisit if.** The owner settles any of D1–D3, or any numbered objection — each is written so
-settling it is a targeted edit to this record and its `07_BUILD_PLAN.md` sub-stage entry, not a new
-ADR.
+Not objections, and not blockers — named so the list above is not read as closing more than it does.
+
+- **Whether the harness's own a11y equivalent gates `make ci`** (ruling 6's own second note). The
+  floor applies; where it is enforced is unstated.
+- **Whether the ADR-043 check is pulled forward out of `Stage 2 §7`** so the milestone certifies a
+  verified grant (ruling 2's own consequence).
+- **Which phases own the Dockerfile debt ruling 5 leaves standing**, and whether it is repaid before
+  the milestone — standing rule 8 says whose it is, not when.
+- **This record's own reading of "format"** at `Stage 2 §6`, if the owner meant something narrower.
+
+**Cost.** Documentation in this session and the last. If accepted, `Stage 2 §5` grows two deliverables
+it did not have (ADR-035 §C1's registry; `LICENSE`/`NOTICE` and the third `licence-check` leg),
+`Stage 2 §1` grows two artefact kinds, `Stage 2 §2` grows the reduced-variant offer and loses the
+ADR-043 check, `Stage 2 §3` and `Stage 2 §4` grow three of §2.4's guards between them, `Stage 2 §6`
+grows an action registry, a spec file, an access-control test and an a11y spec, and `Stage 2 §7`
+grows the ADR-043 verify pair. None of that is new work in the sense of unclaimed scope — every item
+is already claimed by `05_DEPLOYMENT.md`, by Phase 8's own outcome bullets, or by an accepted ADR;
+the amendments move it from claimed to sub-staged.
+
+**Revisit if.** Any item under "What remains open" is settled, or the owner promotes this record to
+Accepted — each is written so settling it is a targeted edit to this record and its
+`07_BUILD_PLAN.md` stage entry, not a new ADR.
