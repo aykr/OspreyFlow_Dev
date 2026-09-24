@@ -573,3 +573,34 @@ def test_every_declared_volume_is_mounted_by_some_service(rendered: RenderResult
         f"declared but mounted by no service: {sorted(unmounted)} — a named volume that nothing "
         "mounts stores nothing, and the data an operator believes is persisted is not"
     )
+
+
+def test_arcadedb_gets_an_explicit_heap_rather_than_jvm_ergonomics(rendered: RenderResult) -> None:
+    """The graph store's heap is a rendered value, not whatever the JVM infers from the container.
+
+    **Found running the seeded golden path.** Unset, this image's heap is about a quarter of the
+    memory Docker exposes — around 2GiB here — and the HMP fixture's graph side does not fit. The
+    seed died on ArcadeDB error 500 "Error in execution in lock"; the `OutOfMemoryError` was only
+    in the server's own log. `deploy/compose/dev.yaml` had already measured this and raised its
+    heap in Phase 5, and the renderer did not carry the value across, so a rendered deployment was
+    worse-configured than the dev stack it replaces on a number this repository had already paid
+    for once.
+
+    `CLAUDE.md` rule 12's question, answered: the invariant is "the rendered graph store gets an
+    explicit heap", and this is the case that fails when it does not. The planted violation is the
+    real shape — the key absent from the service's environment, as it was.
+    """
+    document = yaml.safe_load(rendered.artefacts["compose.yaml"])
+    environment = document["services"]["arcadedb"]["environment"]
+
+    assert "ARCADEDB_OPTS_MEMORY" in environment, (
+        "ArcadeDB's heap is left to JVM container ergonomics — about a quarter of the VM, which "
+        "the HMP fixture does not fit in, and which fails as a lock error rather than as an "
+        "out-of-memory error"
+    )
+    assert "-Xmx" in environment["ARCADEDB_OPTS_MEMORY"], (
+        "the heap setting names no maximum, so it caps nothing"
+    )
+    assert "OSPREY_ARCADEDB_HEAP=" in rendered.artefacts["deployment.env"], (
+        "the heap is not tunable from the deployment's own environment file"
+    )

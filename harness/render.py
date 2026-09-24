@@ -248,7 +248,19 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
     },
     "arcadedb": {
         "environment": {
-            "JAVA_OPTS": "-Darcadedb.server.rootPassword=${OSPREY_ARCADEDB_PASSWORD:?}"
+            "JAVA_OPTS": "-Darcadedb.server.rootPassword=${OSPREY_ARCADEDB_PASSWORD:?}",
+            # **An explicit heap, not JVM ergonomics.** Unset, this image's heap is ~25% of the
+            # memory Docker exposes to the container — about 2GiB on a 10GiB VM — and the HMP
+            # fixture's graph side does not fit in it: the seeded golden path died on
+            # `java.lang.OutOfMemoryError: Java heap space`, surfacing to the seed as ArcadeDB
+            # error 500 "Error in execution in lock", which names neither memory nor the heap.
+            #
+            # `deploy/compose/dev.yaml` had already measured this and raised its own heap to
+            # `-Xms1G -Xmx6G` in Phase 5 for exactly this fixture. The renderer did not carry it
+            # over, so a rendered deployment was strictly worse-configured than the dev stack it
+            # replaces, on a value this repository had already paid to learn. Overridable, like
+            # every other tunable in the generated env file.
+            "ARCADEDB_OPTS_MEMORY": "${OSPREY_ARCADEDB_HEAP:--Xms1G -Xmx6G}",
         },
         "healthcheck": {
             # `curl`, not `/dev/tcp`: the latter is a bash builtin and `CMD-SHELL` runs `/bin/sh`,
@@ -385,6 +397,9 @@ def _render_env(config: OspreyConfig) -> str:
         f"OSPREY_DATA_ROOT={config.components.storage.data}",
         f"OSPREY_STAGING_ROOT={config.components.storage.staging}",
         f"OSPREY_BACKUP_ROOT={config.components.storage.backups}",
+        # See the `arcadedb` stanza in `_SERVICE_EXTRAS` for why this is explicit rather than left
+        # to the JVM's own container ergonomics.
+        "OSPREY_ARCADEDB_HEAP=-Xms1G -Xmx6G",
         # The analytics DuckDB file, placed *inside* the mounted data root rather than left on
         # `services/api/config.py`'s relative `data/analytics.duckdb` default — which resolves to
         # the container's own working directory, i.e. nowhere that survives the container.
