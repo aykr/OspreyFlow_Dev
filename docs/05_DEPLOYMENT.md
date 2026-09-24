@@ -452,6 +452,51 @@ A backup nobody has restored is a hypothesis.
 Audit data is the exception: it is not rebuildable and it is not deletable. Replicate it
 separately, with its own retention policy set by the deployment's legal basis.
 
+### 6.1 How secrets are re-supplied on a restore — GAP, Proposed
+
+**This section does not say, and it needs to.** Found building Stage 2 §4 and recorded here rather
+than settled in the code that found it.
+
+Every credential in a deployment is minted at apply time into the generated, gitignored environment
+file (§2.5, §7 — "never in `osprey.yaml`, never in an image"). A restore therefore lands old data in
+a **new** deployment holding **new** secrets: the PostgreSQL dump contains rows written under the
+previous set, and nothing reconciles the two.
+
+Today this works, and only for a reason that will not last: nothing in the backed-up data is
+encrypted with a deployment secret. The moment anything is — an export ledger entry, a stored
+connector credential, an at-rest volume — a restore begins to succeed while producing data nobody
+can read, which is the worst available failure mode because it reports success.
+
+Three shapes for the decision, none of them taken:
+
+- **The set carries no secrets and the restore re-mints them**, as it does now, with an explicit
+  statement that nothing in a backup may ever be encrypted with a deployment-scoped key. Simplest,
+  and it constrains everything downstream forever.
+- **Secrets are held outside the deployment** — a secret manager the restored deployment is pointed
+  at, which §2.5's "references, not values" already gestures at. Correct for `cluster`; heavy for a
+  laptop.
+- **The set carries a wrapped key**, unwrapped on restore with an operator-supplied passphrase. Puts
+  a secret in the backup, which §7 currently forbids without qualification.
+
+Until this is decided, `deploy/RUNBOOK.md` states the limitation and `harness/restore.py`'s own
+docstring records it, so it cannot be discovered during an incident.
+
+### 6.2 What the current implementation does and does not satisfy
+
+`deploy/RUNBOOK.md` is the operational document; this is the specification's own ledger of where the
+build stands against the table above, as of 24 September 2026 (ADR-049 Stage 2 §4):
+
+- **`pg_dump`, not `pg_basebackup`.** The table names the latter. `local-lite` has no WAL archive to
+  ship and a physical copy is tied to the server's page layout, so the implementation takes a
+  logical dump. A `small` or `cluster` profile must revisit it.
+- **The analytics DuckDB is in the backup set and in no row of the table above.** It holds every
+  event `/v1/analytics/*` reads and is not rebuildable from the graph store. The table should gain
+  a row for it.
+- **Audit data is not separately replicated.** `audit_log` shares a PostgreSQL instance with sites,
+  monitors, alerts, the export ledger and the review queue, so it shares their retention and their
+  backup. §2.4's destroy confirmation assumes the opposite. A deployment whose legal basis requires
+  this section's behaviour does not have it.
+
 ## 7. Security posture
 
 - Every service on an internal network. Only the workspace and the Conduit are exposed, behind a

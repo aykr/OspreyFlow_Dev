@@ -3275,6 +3275,100 @@ find something already finished sitting in the queue.
    multiset of pairs that ignores the score passes while every projection changes). **Stage 2 exit
    test #1**, and this stage's already-stated criterion above.
 
+   ---
+
+   **Stage 2 §4 — BUILT. Exit test #1 is GREEN, 24 September 2026.**
+
+   ```
+   exit test #1: 1978 record(s) restored in 8s
+   9 passed in 56.73s
+   ```
+
+   `python -m harness.backup` and `python -m harness.restore`, `harness/compare.py`'s deep
+   snapshot, `deploy/RUNBOOK.md`, and `tests/harness/test_restore_exit_test.py` — which takes a
+   backup of a seeded deployment, **destroys its volumes**, restores it, and compares the two.
+
+   **Measured on `local-lite`** against the seeded HMP + Fixture Corp fixture (1,978 records, a
+   4.0 MB set), with the Conduit quiesced:
+
+   | Path | Measured | Dominated by |
+   | --- | --- | --- |
+   | Backup, whole set | **10s** | ArcadeDB's `BACKUP DATABASE` — 2.57 GB of allocated pages to 3.2 MB |
+   | Short path: restore | **8s** | the offline restore tool |
+   | Long path: rebuild from staging | **35s** | re-running both fixtures' recipes |
+   | Stack back up, empty | 28s | container start-up, not data |
+   | End to end, destroyed → seeded → verified | **64s** | 28s start-up + 35s replay |
+
+   At this size the short path saves 27 seconds, which is not why it exists — §6 is explicit that
+   these backups "exist to shorten recovery, not to make it possible". The ratio is the point and it
+   does not hold still: the short path scales with stored data, the long path with the *work* that
+   produced it.
+
+   **The exit test's amended comparison, and the four mutations that show it can go red.** ADR-049
+   named three holes in the original comparison; `GraphSnapshot.differences_from` closes each, and
+   each is exercised against the real restored snapshot rather than a hand-built one:
+
+   | Mutation | Hole it covers | Signal |
+   | --- | --- | --- |
+   | Every `handling*` field dropped from every node | 1 — markings are first-class (ADR-010) and a multiset of identities passes without them, silently widening access | `node multiset differs` |
+   | The τ=0.99 projection emptied, every edge kept | 2 — `SAME_AS` is scored and resolution is a query-time projection (ADR-006); a pair-multiset passes while every projection changes | `resolution projection at τ=0.99 differs` |
+   | One edge removed | the ordinary loss | `edge multiset differs` |
+   | One `mx_Person` removed from the counts | the ordinary loss | `type mx_Person: … before, … after` |
+
+   Plus the three refusals, each shown firing against the live deployment: a **truncated** set (the
+   real shape — file shortened in place, manifest untouched) refused on checksum; a restore into the
+   **populated** store refused; and the dry run asserted to change nothing, by snapshotting either
+   side of it rather than by trusting the code path.
+
+   **Six defects found by running it, every one of them a thing the store does rather than a thing
+   it documents:**
+
+   1. **`SELECT count(*) FROM V` returns "empty" for a store holding 1,109 vertices.** ArcadeDB has
+      no `V`/`E` supertypes unless something creates them; the `SchemaException` read as "no such
+      database". That was the restore's emptiness refusal — **a refusal that could never fire**,
+      exactly rule 15's shape.
+   2. **`schema:types`' `records` field lags a bulk write.** Its replacement. Immediately after the
+      seed it reported 606 `mx_PRESENT_AT` where `count(*)` returned 614, catching up minutes later
+      with no write between. The exit test duly failed and **blamed the restore** — "614 before,
+      606 after" for byte-identical data. A comparison whose own instrument drifts produces false
+      accusations, which is worse than producing nothing. Counts now come from `count(*)` per type.
+   3. **ArcadeDB cannot be restored over HTTP.** `POST /api/v1/server` with SQL answers `Server
+      command not valid`; `POST /api/v1/command/<db>` answers `ParseException: Encountered
+      <IDENTIFIER> "RESTORE" at line 1, column 1`. Restore is offline — `bin/restore.sh` — because
+      the engine will not overwrite a database it has open. Both wrong paths looked entirely
+      plausible and were written before being tried.
+   4. **`/home/arcadedb/backups` does not survive the container.** It is created by the first
+      `BACKUP DATABASE` and lives in the image's filesystem, not a volume — so after the `down -v`
+      a restore exists to recover from, `docker compose cp` into it fails. The one situation a
+      restore always runs in was the one situation the copy could not work in.
+   5. **The object-store tar deleted itself.** Its staging directory was `<target>/objects`, the
+      same directory the tar was written into, and the cleanup `rmtree` took both. The backup
+      reported success and the set was missing its object store. Caught by the exit test's own
+      checksum verification on its first run, which is the argument for checksumming every file.
+   6. **The restore needs the Conduit's container to exist and not be running.** `docker compose cp`
+      addresses a container, not a volume, so the analytics DuckDB has nowhere to land without one;
+      and the Conduit holds an exclusive lock on that file, the same constraint that makes the seed
+      stop it. `docker compose create` is the shape that satisfies both.
+
+   **Three departures from §6's table, recorded in `05_DEPLOYMENT.md` §6.2 rather than made
+   quietly:** a logical `pg_dump` instead of `pg_basebackup` (no WAL archive on `local-lite`, and a
+   physical copy is tied to the page layout); the analytics DuckDB included although the table names
+   no row for it (266 events, not rebuildable from the graph store, and a backup without it restores
+   a graph with no timeline); and **audit data is not separately replicated** — `audit_log` shares
+   its PostgreSQL instance, and therefore its retention and its backup, with sites, monitors,
+   alerts, the export ledger and the review queue. §2.4's destroy confirmation assumes otherwise.
+   The manifest carries an `audit_disposition` block and the dry run prints it, so the limitation
+   cannot be discovered during an incident.
+
+   **The spec gap this stage was asked to find: how secrets are re-supplied on a restore.** §6 does
+   not say. A restore lands old data in a **new** deployment with **new** apply-time secrets, and
+   nothing reconciles them. It works today only because nothing in the set is encrypted with a
+   deployment secret — and the day anything is, a restore starts succeeding while producing data
+   nobody can read, the worst available failure because it reports success. Recorded as
+   `05_DEPLOYMENT.md` §6.1, Proposed, with three candidate shapes. **It needs an owner decision.**
+
+   ---
+
    **Stage 2 §5 — split into §5a and §5b, owner's decision, 24 September 2026.** `Stage 2 §3`
    cannot start a stack whose images do not exist, and the rendered compose file named three
    `ghcr.io/ospreyflow/…` images no registry publishes. **`Stage 2 §5a` runs before `Stage 2 §3`**
