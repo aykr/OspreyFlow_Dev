@@ -2748,6 +2748,51 @@ find something already finished sitting in the queue.
    deploy"; this was read as §3 and flagged, and the owner confirmed §3 on 24 September 2026 — "your
    reading of §3 is correct and stands".)*
 
+   **Stage 2 §3 — fifth pass, 24 September 2026. A diagnosis I reported was wrong, and correcting
+   it is this entry's main content.**
+
+   **The correction.** The fourth pass reported that the Conduit would not start because the
+   rendered stack has no model gateway, and the owner made a decision on that basis. **It was an
+   inference from a partial traceback, not a measurement, and it was wrong.** The exception class
+   belongs to `asyncpg`: the Conduit could not reach **PostgreSQL**. `services/api/config.py`
+   defaults `POSTGRES_PORT` to **5433** — a workaround for `deploy/compose/dev.yaml` publishing
+   there to dodge a native Postgres on 5432 — while a rendered container listens on 5432. The
+   generated env file set `POSTGRES_HOST` and none of the port, database or password, so three
+   values diverged silently and the Conduit dialled a port nothing was on.
+
+   **How the error was traceable and I did not trace it:** `LiteLLMClient.__init__` builds an
+   `httpx.AsyncClient` and opens no connection, so it could not have raised a refused connection at
+   that point. Reading the constructor would have ruled the model gateway out in a minute. I
+   matched a symptom to the most recently discussed component instead — and the cost was a decision
+   taken on a false premise.
+
+   **Fixed:** the generated env file now carries `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER` and
+   `POSTGRES_PASSWORD` alongside the host, with one value behind both the container's
+   `OSPREY_POSTGRES_*` names and the Conduit's `POSTGRES_*` ones.
+
+   **Owner's decisions of 24 September 2026, recorded.**
+   - **Basemap: decided, not awaiting.** A warning does not block Launch; `05_DEPLOYMENT.md` §2.1
+     now says so and §2.2 describes the basemap build as a post-install step. The "awaiting
+     confirmation" markers are gone from the code and the spec.
+   - **Model gateway: recorded, deliberately not built.** The decision — the Conduit tolerates the
+     gateway's absence, ModelPort routes return a typed "model backend unavailable" error, Preflight
+     reports it absent, the renderer includes the gateway when models are enabled (thirteen
+     containers on, eleven off) — is written into `05_DEPLOYMENT.md` §3 as the owner's. It is **not
+     implemented this round**, because the reason given for it has turned out not to be the reason,
+     and the owner should confirm it knowing that. The behaviour may still be right on its own
+     merits; that is a different argument.
+   - **Memory: provisional.** Recorded as such in §3, with both of the owner's reasons — the Conduit
+     was exited, and ArcadeDB was below its schema-creation floor.
+
+   **Exit test #2: still not green, and not re-run this round.** Docker Hub began returning `429 Too
+   Many Requests` on image manifest and base-image pulls partway through, which blocks `docker
+   compose build` from a fresh clone entirely. That is an environment limit rather than a defect,
+   and it is why the PostgreSQL fix above is **not yet demonstrated end to end** — it is a code fix
+   whose verification is owed. The three-sided verify against a deployed realm, its three mutations,
+   and the seeded run with the ordering guard all remain blocked behind a healthy Conduit.
+
+   **Superseded — the fourth pass's entry, kept because it was pushed and read.**
+
    **Stage 2 §3 — fourth pass, 24 September 2026. The deploy runs end to end; exit test #2 is
    still NOT green, and the last blocker is a specification gap rather than a defect.**
 

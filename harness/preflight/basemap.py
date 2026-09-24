@@ -61,8 +61,9 @@ def check(context: PreflightContext) -> CheckResult:
         # on it means a fresh clone can never reach a running system at all, which is a worse
         # failure than a blank map an operator can fix afterwards.
         #
-        # *Awaiting owner confirmation:* this softens `05_DEPLOYMENT.md` §2.1's "Preflight must
-        # pass before Launch is enabled", which is a real change to what that gate promises.
+        # Owner's decision, 24 September 2026: reaching a health-checked stack does not require a
+        # basemap. `05_DEPLOYMENT.md` §2.1 now says a warning does not block Launch, and §2.2
+        # describes the build as a post-install step.
         return warned(
             NAME,
             what_is_wrong=(

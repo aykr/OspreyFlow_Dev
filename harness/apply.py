@@ -264,6 +264,9 @@ def main(argv: list[str] | None = None) -> int:
         secret = generate_client_secret()
         admin_password = generate_client_secret()
         arcadedb_password = generate_client_secret()
+        postgres_password = generate_client_secret()
+        postgres_user = "osprey"
+        postgres_database = "ospreyflow"
         env_path = out_dir / "deployment.env"
         # Both minted here and written only into generated, gitignored output — 05_DEPLOYMENT.md
         # §2.5 ("never sees a secret… records where to look, never what it found") and §7
@@ -274,7 +277,7 @@ def main(argv: list[str] | None = None) -> int:
             + "\n# Generated at apply time, never version-controlled (05_DEPLOYMENT.md §2.5/§7).\n"
             + f"OSPREY_OIDC_CLIENT_SECRET={secret}\n"
             + f"OSPREY_KEYCLOAK_ADMIN_PASSWORD={admin_password}\n"
-            + f"OSPREY_POSTGRES_PASSWORD={generate_client_secret()}\n"
+            + f"OSPREY_POSTGRES_PASSWORD={postgres_password}\n"
             + f"OSPREY_MINIO_PASSWORD={generate_client_secret()}\n"
             # One value, two names: the compose file sets the server's own root password from
             # `OSPREY_ARCADEDB_PASSWORD`, and the Conduit's adapter reads `ARCADEDB_ROOT_PASSWORD`.
@@ -291,7 +294,20 @@ def main(argv: list[str] | None = None) -> int:
             + f"OIDC_TOKEN_EXCHANGE_CLIENT_ID={CONDUIT_CLIENT_ID}\n"
             + f"OIDC_TOKEN_EXCHANGE_CLIENT_SECRET={secret}\n"
             + f"OIDC_ADMIN_USERS_URL=http://keycloak:8080/admin/realms/{args.realm}/users\n"
-            + "ARCADEDB_HOST=arcadedb\nVALKEY_HOST=valkey\nPOSTGRES_HOST=postgres\n"
+            + "ARCADEDB_HOST=arcadedb\nVALKEY_HOST=valkey\n"
+            # **Every one of these four, not just the host.** `services/api/config.py` defaults
+            # `POSTGRES_PORT` to **5433** — a workaround for `deploy/compose/dev.yaml` publishing
+            # there to dodge a native Postgres on 5432 — while a rendered container listens on
+            # 5432 internally. Setting only the host left the Conduit dialling `postgres:5433` and
+            # failing with a refused connection that named neither the port nor Postgres. The
+            # database name and password diverge the same way: the container is configured from
+            # `OSPREY_POSTGRES_*` and the Conduit reads `POSTGRES_*`, so both names carry one
+            # value or they silently disagree.
+            + "POSTGRES_HOST=postgres\nPOSTGRES_PORT=5432\n"
+            + f"POSTGRES_USER={postgres_user}\nPOSTGRES_PASSWORD={postgres_password}\n"
+            + f"POSTGRES_DB={postgres_database}\n"
+            + f"OSPREY_POSTGRES_USER={postgres_user}\n"
+            + f"OSPREY_POSTGRES_DB={postgres_database}\n"
             + "MINIO_ENDPOINT=minio:9000\n",
             encoding="utf-8",
         )

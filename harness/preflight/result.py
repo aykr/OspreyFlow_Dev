@@ -28,9 +28,9 @@ class Status(StrEnum):
     #: nobody looked, and from `fail`, which blocks. A `warn` is a finding with a remedy the
     #: operator can apply *after* install — and it must have one, or it is a `fail` in disguise.
     #:
-    #: **Awaiting owner confirmation.** Introducing a fourth status softens `05_DEPLOYMENT.md`
-    #: §2.1's "Preflight must pass before Launch is enabled", which is a real change to what that
-    #: gate promises, so it is marked rather than assumed.
+    #: Owner's decision, 24 September 2026. `05_DEPLOYMENT.md` §2.1 states that a warning does not
+    #: block Launch — a deliberate softening of "Preflight must pass", not an accident of a fourth
+    #: status appearing.
     WARN = "warn"
 
 

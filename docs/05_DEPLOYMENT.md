@@ -72,6 +72,14 @@ availability, container runtime version, and for `cluster` connectivity to every
 failure explains what is wrong and what to do about it, with a **Re-check** button rather than a
 loop of edit-and-rerun. Preflight must pass before Launch is enabled.
 
+**A warning does not block Launch — owner's decision, 24 September 2026.** Not everything Preflight
+finds is a reason to refuse to start. A check reports a **warning** when it has found something
+real whose remedy is available *after* install, and Launch proceeds. The basemap is the case this
+was decided for: tiles that have not been built yet make the Map view show "Basemap not built" and
+affect nothing else, and blocking on it would mean a fresh install could never reach a running
+system at all. A warning still carries a remedy — one with none is noise, and noise is how a real
+finding gets missed.
+
 **A check that cannot run reports that it did not run — it never reports success.** Some of the
 list above is not answerable on every platform or in every profile: a GPU driver version cannot be
 read headlessly on macOS, and cluster connectivity has nothing to connect to at `local-lite`. Each
@@ -157,6 +165,11 @@ realm names the client, the deployment's own environment file carries the secret
 version-controlled contains either.
 
 ### 2.2 The geospatial screen
+
+**Building the basemap is a post-install step, not a precondition of Launch** (owner's decision,
+24 September 2026). The deployment comes up without it; the Map view says "Basemap not built" until
+one command has run, and Preflight reports it as a warning rather than refusing to start. Everything
+else — ingest, the graph, search, assessment, export — works meanwhile.
 
 Tier 1 is one button. **Build local basemap** asks for an area — Great Britain, a US state or
 region, or a custom bounding box — then downloads the extract, runs planetiler, loads the OSM
@@ -269,26 +282,37 @@ What is running afterwards: the workspace, one Conduit, three workers, ArcadeDB,
 in-process, Valkey, MinIO, OpenSearch single-node, PostgreSQL, Keycloak, Ollama, and a
 faster-whisper container. Twelve containers, roughly 11 GB of RAM at rest.
 
-**The model gateway is missing from this list, and the Conduit will not start without it —
-Proposed, 24 September 2026, found running the scripted deploy.** The Conduit constructs its model
-client during startup, unconditionally, so a stack rendered from the twelve containers named above
-fail-fasts with a refused connection against a service that has no entry here. The development
-stack has run one all along, which is why this went unnoticed: the list and the code disagreed and
-only the list was read. **The proposal:** name the model gateway here as a container of its own,
-making the count thirteen. **The alternative, worth weighing rather than dismissing:** the Conduit
-tolerates its absence and degrades — extraction and embedding unavailable, everything else working
-— which is arguably the better behaviour for a deployment whose models are optional at `local-lite`
-(§1: "Ollama, CPU or one consumer GPU"). **Not decided here:** the first is a one-line change to
-this list, the second changes how the Conduit starts, and which is right is a question about the
-product rather than about the deploy.
+**Correction, 24 September 2026 — the model gateway is missing from this list, but it is *not* why
+the Conduit would not start.** An earlier version of this paragraph said the Conduit fail-fasts
+against an absent model gateway. **That was an inference from a partial traceback and it was
+wrong.** The exception was `asyncpg`'s, not the model client's: the Conduit could not reach
+**PostgreSQL**, because `services/api/config.py` defaults `POSTGRES_PORT` to 5433 — a workaround for
+the development stack publishing there — while a rendered container listens on 5432. The model
+client is constructed during startup but **opens no connection**, so it cannot have raised it. The
+real fault is fixed; this paragraph is the correction, left in place rather than quietly rewritten.
 
-**A measurement for the "roughly 11 GB at rest" figure above, 24 September 2026.** Eleven of the
-twelve containers reached health on a 9.7 GiB Docker VM at a **peak total of 3.6 GiB** — ArcadeDB
-2.0 GiB at its schema-creation peak, OpenSearch 0.9 GiB with its heap capped at 512 MiB by the
-renderer, Keycloak 0.6 GiB, everything else under 250 MiB each. The stack fits the VM with
-considerable room. The 11 GB estimate appears high; it is left as written rather than edited,
-because a single measurement on one machine with the Conduit exiting early is not yet grounds to
-replace a figure this document has carried from the start.
+**The list does still omit the model gateway, and that remains a real gap.** The owner's decision of
+24 September 2026: **the Conduit tolerates its absence.** ModelPort-backed routes return a typed
+"model backend unavailable" error rather than a silent result, Preflight reports the gateway absent,
+and when `osprey.yaml` enables models the renderer includes the gateway beside Ollama — thirteen
+containers with models on, eleven off. **Recorded, not yet built:** the decision was taken on the
+mistaken premise corrected above, so it is written here as the owner's and left for him to confirm
+now that the reason he gave for it has turned out not to be the reason. The behaviour may well still
+be wanted on its own merits — a deployment whose models are optional at `local-lite` (§1: "Ollama,
+CPU or one consumer GPU") arguably should degrade rather than refuse to start — but that is a
+different argument from the one it was decided on.
+
+**A provisional measurement for the "roughly 11 GB at rest" figure above, 24 September 2026 —
+recorded as provisional on the owner's own instruction, and it should not be quoted as settled.**
+Eleven of the twelve containers reached health on a 9.7 GiB Docker VM at a **peak total of 3.6
+GiB** — ArcadeDB 2.0 GiB, OpenSearch 0.9 GiB with its heap capped at 512 MiB by the renderer,
+Keycloak 0.6 GiB, everything else under 250 MiB each.
+
+**Two reasons it is provisional, both named by the owner:** it was taken with **the Conduit exited**,
+so the one long-lived Python process in the stack contributed only its startup footprint before
+dying; and **ArcadeDB was below its schema-creation floor**, which this document's own §8 records as
+the point where its memory climbs and does not come back. A re-measurement with the Conduit up is
+owed. The 11 GB estimate is left as written until then.
 
 **Read "three workers" as three replicas of the job worker — owner's decision, 24 September
 2026.** There is one worker *implementation*, a generic dispatcher keyed by job type (ADR-025), and
