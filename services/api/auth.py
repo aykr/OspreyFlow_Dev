@@ -82,9 +82,23 @@ class PrincipalExchangeError(Exception):
 
 
 class PrincipalExchangeRefused(PrincipalExchangeError):
-    """The identity provider was reached and refused the exchange — the target subject is
-    disabled, unknown, or the realm's own policy does not permit exchanging for it. A real,
-    current fact about that principal, distinct from `PrincipalExchangeUnavailable` below."""
+    """The identity provider was reached and the exchange was refused — by the realm, or by this
+    Conduit's own pre-check below. A real, current fact about that principal, distinct from
+    `PrincipalExchangeUnavailable` below."""
+
+
+class PrincipalRevoked(PrincipalExchangeRefused):
+    """The target principal exists at the IdP and is **disabled**.
+
+    A subclass rather than a flag because ADR-044 needs the two apart: a revoked principal is a
+    decision the organisation made, and a watch owned by one is marked stopped with the
+    revoked-principal reason rather than the generic one. A caller that does not care still
+    catches `PrincipalExchangeRefused` and behaves exactly as before.
+
+    **This exists because the realm will not raise it.** Measured against a real Keycloak 26.0 on
+    24 September 2026: a client holding the impersonation grant is issued a token for a *disabled*
+    user. The refusal has to happen here, in the Conduit, before the exchange is attempted —
+    ADR-043's amendment of the same date."""
 
 
 class PrincipalExchangeUnavailable(PrincipalExchangeError):
@@ -126,6 +140,74 @@ class PrincipalResolver:
         except PrincipalExchangeError:
             return None
 
+    async def _refuse_if_revoked(self, owner_id: str) -> None:
+        """Refuses, before any exchange, if the target principal is disabled at the IdP.
+
+        **The finding this closes, measured rather than assumed** (ADR-043's amendment, 24
+        September 2026). Against a real Keycloak 26.0 with token exchange enabled, a client holding
+        the impersonation grant was issued a valid access token for a **disabled** user. Keycloak
+        scopes impersonation by *requesting client*, not by target subject, and has no per-target
+        policy — a bounded attempt to configure one through fine-grained admin permissions failed on
+        26.0 (`PUT /users/{id}/management/permissions` → 404; the realm-level
+        `adminPermissionsEnabled` toggle → 400). So the realm cannot refuse this, the Conduit must.
+
+        **Read through a separate grant on purpose.** The pre-check uses `oidc_admin_users_url` and
+        a view-users capability, not the impersonation client's own authority. Checking with the
+        same authority that fails open would be asking the component that already said yes.
+
+        **Unreachable is not revoked.** A network failure here raises
+        `PrincipalExchangeUnavailable`, so ADR-044's unreachable path is unchanged and a transient
+        IdP outage never marks a live analyst's watches as revoked.
+
+        **Off when unconfigured.** No `oidc_admin_users_url` means no pre-check and the previous
+        behaviour exactly, which is what keeps existing deployments working.
+        """
+        if not self._config.oidc_admin_users_url:
+            return
+        try:
+            response = await self._exchange_http.get(
+                self._config.oidc_admin_users_url,
+                params={"username": owner_id, "exact": "true"},
+                headers={"Authorization": f"Bearer {await self._client_credentials_token()}"},
+            )
+        except httpx.HTTPError as exc:
+            raise PrincipalExchangeUnavailable(
+                f"could not read enabled status for owner {owner_id!r}: {exc}"
+            ) from exc
+        if response.status_code != 200:
+            raise PrincipalExchangeUnavailable(
+                f"enabled-status read for owner {owner_id!r} returned "
+                f"{response.status_code} {response.text}"
+            )
+        users = response.json()
+        if not users:
+            raise PrincipalExchangeRefused(
+                f"owner {owner_id!r} is not known to the identity provider"
+            )
+        if not users[0].get("enabled", False):
+            raise PrincipalRevoked(
+                f"owner {owner_id!r} is disabled at the identity provider — refused by the "
+                "Conduit's own pre-check, because the realm will issue a token for a disabled "
+                "subject (06_DECISIONS.md ADR-043's amendment)"
+            )
+
+    async def _client_credentials_token(self) -> str:
+        """This client's own token — used both as the `subject_token` of an exchange and as the
+        bearer for the view-users pre-check read. Fetched per call rather than cached:
+        ADR-036's own "resolved fresh, never cached" requirement applies to anything that decides
+        whether a principal is still live, and a cached admin token would outlive a revoked grant
+        exactly the way a cached principal would."""
+        response = await self._exchange_http.post(
+            self._config.oidc_token_exchange_url or "",
+            data={
+                "grant_type": "client_credentials",
+                "client_id": self._config.oidc_token_exchange_client_id,
+                "client_secret": self._config.oidc_token_exchange_client_secret,
+            },
+        )
+        response.raise_for_status()
+        return response.json()["access_token"]
+
     async def resolve_for_owner_detailed(self, owner_id: str) -> Principal:
         """Raises rather than collapses — see the two exception classes above. Never caches
         anything between calls: `06_DECISIONS.md` ADR-036's own "resolved fresh, never cached"
@@ -137,6 +219,14 @@ class PrincipalResolver:
                 "OIDC_TOKEN_EXCHANGE_URL is not set — this deployment has not configured "
                 "token exchange (06_DECISIONS.md ADR-043)"
             )
+        await self._refuse_if_revoked(owner_id)
+        try:
+            subject_token = await self._client_credentials_token()
+        except httpx.HTTPError as exc:
+            raise PrincipalExchangeUnavailable(
+                f"could not obtain this client's own token before exchanging for {owner_id!r}: "
+                f"{exc}"
+            ) from exc
         try:
             response = await self._exchange_http.post(
                 self._config.oidc_token_exchange_url,
@@ -144,6 +234,17 @@ class PrincipalResolver:
                     "grant_type": TOKEN_EXCHANGE_GRANT_TYPE,
                     "client_id": self._config.oidc_token_exchange_client_id,
                     "client_secret": self._config.oidc_token_exchange_client_secret,
+                    # RFC 8693 §2.1 makes `subject_token` REQUIRED, and this request omitted it
+                    # until 24 September 2026. Nothing noticed, because the only thing this code
+                    # had ever been run against was the ephemeral fixture ADR-043's own cost note
+                    # describes — which accepted a request a real Keycloak refuses outright with
+                    # `access_denied` / "Client not allowed to exchange". Measured against
+                    # Keycloak 26.0: identical request, with and without this field, refused and
+                    # granted respectively. The token exchanged is this client's own
+                    # client-credentials token, which is what identifies the *acting* party; the
+                    # `requested_subject` below identifies the party acted for.
+                    "subject_token": subject_token,
+                    "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
                     "requested_subject": owner_id,
                     "requested_token_type": "urn:ietf:params:oauth:token-type:access_token",
                 },

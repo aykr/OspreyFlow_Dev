@@ -125,6 +125,16 @@ class ApiConfig:
     #: docstring has the reasoning): unset/empty/unrecognised means `disclose`, not `omit`.
     export_manifest_policy: ExportManifestPolicy
 
+    #: The IdP's own admin users endpoint, used **only** to read a target principal's `enabled`
+    #: status before exchanging for them — ADR-043's amendment of 24 September 2026. A separate
+    #: grant from the impersonation one on purpose: the containment this closes is that Keycloak
+    #: will mint a token for a *disabled* subject, and a pre-check that shared the impersonation
+    #: grant would be checking with the same authority that fails open.
+    #:
+    #: `None` leaves the pre-check off and the exchange behaves exactly as before, which is what
+    #: keeps every existing deployment and test working unchanged.
+    oidc_admin_users_url: str | None = None
+
     @classmethod
     def from_env(cls) -> ApiConfig:
         jwks_url = os.environ.get("OIDC_JWKS_URL")
@@ -147,6 +157,7 @@ class ApiConfig:
             oidc_jwks_ttl_seconds=_env_float("OIDC_JWKS_TTL_SECONDS", 300.0),
             oidc_token_exchange_url=os.environ.get("OIDC_TOKEN_EXCHANGE_URL") or None,
             oidc_token_exchange_client_id=os.environ.get("OIDC_TOKEN_EXCHANGE_CLIENT_ID") or None,
+            oidc_admin_users_url=os.environ.get("OIDC_ADMIN_USERS_URL") or None,
             oidc_token_exchange_client_secret=(
                 os.environ.get("OIDC_TOKEN_EXCHANGE_CLIENT_SECRET") or None
             ),

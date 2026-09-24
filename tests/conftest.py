@@ -89,6 +89,16 @@ class TokenExchangeRegistry:
 
     def __init__(self) -> None:
         self.subjects: dict[str, dict[str, object]] = {}
+        #: Claims for this client's *own* token, returned by the `client_credentials` grant. The
+        #: resolver needs one as the exchange's `subject_token`; it is never resolved into a
+        #: `Principal`, so the claim set only has to be signable.
+        self.client_claims: dict[str, object] = {
+            "sub": "osprey-conduit",
+            "clearance": "OFFICIAL",
+            "org_unit": "conduit",
+            "receivable_handling_codes": [],
+            "roles": ["service-account"],
+        }
 
     def register(self, principal_id: str, claims: dict[str, object]) -> None:
         self.subjects[principal_id] = claims
@@ -120,15 +130,40 @@ def _make_token_exchange_handler(
                 self.end_headers()
                 self.wfile.write(payload)
 
-            if grant_type != "urn:ietf:params:oauth:grant-type:token-exchange":
-                _error(400, "unsupported_grant_type")
-                return
             valid_client = (
                 client_id == TOKEN_EXCHANGE_CLIENT_ID
                 and client_secret == TOKEN_EXCHANGE_CLIENT_SECRET
             )
+
+            # `client_credentials` is served because a real token endpoint serves it and the
+            # resolver needs its own token as the exchange's `subject_token` — RFC 8693 §2.1 makes
+            # that field REQUIRED, and this fixture previously accepted an exchange without it,
+            # which is exactly why the omission survived until it was run against a real Keycloak
+            # (06_DECISIONS.md ADR-043's amendment, 24 September 2026). A fixture that accepts a
+            # request the real server rejects is worse than no fixture: it makes the wrong thing
+            # look tested.
+            if grant_type == "client_credentials":
+                if not valid_client:
+                    _error(401, "invalid_client")
+                    return
+                token = sign_token(private_key, dict(registry.client_claims))
+                payload = json.dumps({"access_token": token, "token_type": "Bearer"}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                return
+
+            if grant_type != "urn:ietf:params:oauth:grant-type:token-exchange":
+                _error(400, "unsupported_grant_type")
+                return
             if not valid_client:
                 _error(401, "invalid_client")
+                return
+            if not body.get("subject_token", [None])[0]:
+                # A real Keycloak refuses this outright. The fixture now does too.
+                _error(400, "invalid_request")
                 return
             claims = registry.subjects.get(requested_subject or "")
             if claims is None:
