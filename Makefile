@@ -15,7 +15,12 @@ lint:
 	npm run lint
 
 typecheck:
-	$(MYPY) packages services
+# `harness` joined this target on 24 September 2026 (ADR-049 Stage 2 §3/§4). It had been
+# outside it since Stage 2 §1 — new Phase 8 code written under a gate that never looked at
+# it — and adding it was a red-then-green, not a formality: seven real errors, every one an
+# untyped `dict`/`list` crossing a boundary this harness passes parsed compose documents and
+# Keycloak admin payloads across.
+	$(MYPY) packages services harness
 	npm run typecheck
 
 licence-check:

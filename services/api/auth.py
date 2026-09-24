@@ -206,7 +206,8 @@ class PrincipalResolver:
             },
         )
         response.raise_for_status()
-        return response.json()["access_token"]
+        token: str = response.json()["access_token"]
+        return token
 
     async def resolve_for_owner_detailed(self, owner_id: str) -> Principal:
         """Raises rather than collapses — see the two exception classes above. Never caches
@@ -297,9 +298,7 @@ class PrincipalResolver:
             # nothing) but silently, as a principal who can never see
             # anything rather than a rejected token — worse for whoever
             # has to debug an IdP misconfiguration than an explicit 401.
-            raise PrincipalResolutionError(
-                f"token is missing required claim: {exc}"
-            ) from exc
+            raise PrincipalResolutionError(f"token is missing required claim: {exc}") from exc
 
         return Principal(
             id=str(claims["sub"]),

@@ -22,6 +22,7 @@ import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -70,7 +71,7 @@ class PreflightContext:
     #: implying the number is derived.
     projected_staging_bytes: int = 20 * 1024**3
 
-    def rendered_compose(self) -> dict:
+    def rendered_compose(self) -> dict[str, Any]:
         """The compose file Stage 2 §1 wrote for this profile. Raises `RenderedOutputMissing` when
         it is absent, which the runner turns into a single clear failure rather than letting five
         checks each fail with their own `FileNotFoundError`."""

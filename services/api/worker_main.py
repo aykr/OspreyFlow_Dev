@@ -37,6 +37,10 @@ import os
 import signal
 import socket
 from contextlib import suppress
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # the import is deferred at runtime — see `main()`'s own comment.
+    from .worker import JobWorker
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +69,7 @@ def registered_job_types() -> dict[str, str]:
     }
 
 
-async def run_forever(worker, job_types: list[str], *, stop: asyncio.Event) -> None:
+async def run_forever(worker: JobWorker, job_types: list[str], *, stop: asyncio.Event) -> None:
     """One `run_once` per job type, round-robin, until asked to stop.
 
     Round-robin rather than one task per job type: `run_once` blocks, and two blocking reads from

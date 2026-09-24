@@ -17,6 +17,7 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
+from typing import Any
 
 REQUIRED_ROLES = ("impersonation", "view-users")
 
@@ -31,10 +32,10 @@ def _call(
     url: str,
     *,
     token: str | None = None,
-    data: dict | list | None = None,
+    data: dict[str, Any] | list[Any] | None = None,
     form: bool = False,
     method: str | None = None,
-):
+) -> Any:
     """`method` is explicit because `urllib` infers POST whenever a body is present, and Keycloak's
     admin API uses PUT for updates — a PUT sent as POST comes back 405, which reads like a wrong
     URL rather than a wrong verb. Found configuring the realm's user profile."""

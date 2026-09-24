@@ -17,6 +17,7 @@ import os
 import re
 import socket
 from collections.abc import Mapping
+from typing import Any
 
 from harness.preflight.context import PreflightContext, RenderedOutputMissing
 from harness.preflight.result import CheckResult, failed, passed
@@ -47,7 +48,7 @@ def _host_port(token: str, environ: Mapping[str, str]) -> int | None:
 
 
 def declared_ports(
-    compose: dict, environ: Mapping[str, str] | None = None
+    compose: dict[str, Any], environ: Mapping[str, str] | None = None
 ) -> list[tuple[str, int]]:
     """`(service, host_port)` for every published port, in declaration order.
 
