@@ -30,7 +30,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Final
 
 import duckdb
 from fastapi import (
@@ -2257,6 +2257,40 @@ async def resolve_now_route(
 
 
 # --- ontology -----------------------------------------------------------------
+
+
+#: The liveness body, as a module constant rather than a literal in the handler, so the test that
+#: compares the anonymous and authenticated responses byte for byte has one thing to compare
+#: against and a future edit cannot change one caller's answer without changing the other's.
+LIVENESS_BODY: Final[dict[str, str]] = {"status": "ok"}
+
+
+@app.get("/healthz")
+async def liveness_route() -> dict[str, str]:
+    """Is this process up — `03_CONDUIT_MIDDLEWARE.md` §3.0, the owner's decision of 24 September
+    2026.
+
+    **Unauthenticated, and outside `/v1` because it is not part of the API surface a client uses.**
+    It exists so an orchestrator can tell a started process from a healthy one: `docker compose up
+    --wait` has nothing to wait on without it, which is what stopped the scripted deploy reaching
+    its own exit criterion (`06_DECISIONS.md` ADR-049 Stage 2 §3).
+
+    **No principal, and deliberately no `PrincipalDep`.** Every other route on this app takes one;
+    this is the single exception, and it is the exception because requiring a token to answer "is
+    the process alive" makes liveness depend on the identity provider being reachable — which
+    inverts the whole point, since an unreachable IdP is one of the conditions an operator most
+    needs liveness to survive.
+
+    **It touches no store and says nothing else.** No version, no uptime, no component status, no
+    counts. §6's own reasoning applies in full: an unauthenticated endpoint reporting which stores
+    are reachable discloses the deployment's internal topology to an unauthenticated caller, and one
+    reporting counts is a count leak wearing a friendly name. Touching no store also means the
+    answer stays true when every store is down — exactly when an orchestrator needs to tell "the
+    process is up, its dependencies are not" from "the process is gone".
+
+    **Readiness is a different question and stays authenticated.** Nothing here should grow into it.
+    """
+    return LIVENESS_BODY
 
 
 @app.get("/v1/ontology")

@@ -40,6 +40,34 @@ REST for request/response, Server-Sent Events for job progress, WebSocket for wo
 deltas. Not GraphQL: the response shapes here are few and large, the clients are one, and the
 cost of a flexible query layer on top of an access-filtered graph is not worth paying.
 
+### 3.0 Liveness
+
+```
+GET    /healthz                                is this process up
+```
+
+**Owner's decision, 24 September 2026.** One unauthenticated route, outside `/v1` because it is
+not part of the API surface a client uses — it exists so an orchestrator can tell a started process
+from a healthy one. `docker compose up --wait` has nothing to wait on without it, which is what
+made the scripted deploy unable to reach its own exit criterion.
+
+**Its body is fixed and says nothing else.** `{"status":"ok"}`, byte for byte, always. No version,
+no build, no uptime, no component status, no counts. The reasoning is this document's own §6: an
+unauthenticated endpoint that reports which stores are reachable tells an unauthenticated caller
+about the deployment's internal topology, and one that reports counts is a count leak with a
+friendly name. **It touches no store**, so it stays true when every store is down, which is exactly
+when an orchestrator most needs to distinguish "the process is up but its dependencies are not"
+from "the process is gone".
+
+**Readiness stays authenticated and is a separate question.** "Can this process serve a request"
+and "is this deployment ready to be used" are different, and only the second needs to talk to the
+stores it depends on — which is why only the second can be allowed to describe them.
+
+**The test that holds this, per the standing access-control rule:** the anonymous response and the
+authenticated response are compared byte for byte and must be identical. A liveness route that
+quietly said more to an authenticated caller would be a route with two behaviours, and the
+unauthenticated one is the one an attacker gets.
+
 ### 3.1 Investigations
 
 ```

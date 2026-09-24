@@ -50,4 +50,18 @@ RUN /app/.venv/bin/python -c "import duckdb; duckdb.connect().install_extension(
 
 USER osprey
 EXPOSE 8000
+
+# `GET /healthz` — `03_CONDUIT_MIDDLEWARE.md` §3.0, the owner's decision of
+# 24 September 2026. Without a declared health check `docker compose up
+# --wait` has nothing to wait on, which is what stopped the scripted deploy
+# reaching its own exit criterion (ADR-049 Stage 2 §3).
+#
+# Liveness, not readiness: this asks whether the process is up, and it
+# deliberately stays true when every store is down. `start-period` is
+# generous because this process applies the graph schema at startup before
+# it serves anything.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=60s --retries=6 \
+    CMD ["/app/.venv/bin/python", "-c", \
+         "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2).status==200 else 1)"]
+
 ENTRYPOINT ["uvicorn", "services.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
