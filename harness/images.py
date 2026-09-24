@@ -39,12 +39,33 @@ DigestResolver = Callable[[ImageRef], str | None]
 
 @dataclass(frozen=True)
 class ServiceImage:
-    """One container in a rendered deployment."""
+    """One container in a rendered deployment.
+
+    **`build_context` is what separates the two kinds of image this deployment runs.** A
+    third-party image (ArcadeDB, PostgreSQL, Keycloak…) is pulled from a registry at a pinned tag
+    and has a digest a registry can vouch for. An OspreyFlow-owned image has neither: no registry
+    publishes `ghcr.io/ospreyflow/api` today, so a rendered compose file naming one produces a
+    stack that cannot start. Owned services therefore render a `build:` stanza pointing at the
+    Dockerfile in this repository plus a local tag, so `docker compose build` produces them with no
+    registry involved at all (ADR-049 Stage 2 §5a).
+    """
 
     service: str
     image: ImageRef
+    #: Repository-relative directory holding this service's Dockerfile. `None` for third-party
+    #: images, and the thing that makes "is this ours" a property of the data rather than a string
+    #: match on the image name.
+    build_context: str | None = None
+    #: Relative to `build_context`'s own parent — compose needs the Dockerfile path and the context
+    #: root separately, because the Python images build from the repository root (they COPY
+    #: `packages/` and `services/`) while their Dockerfile lives beside the service.
+    dockerfile: str | None = None
     #: False for the components a reduced or smaller profile drops.
     always: bool = True
+
+    @property
+    def owned(self) -> bool:
+        return self.build_context is not None
 
 
 def docker_digest_resolver(image: ImageRef) -> str | None:

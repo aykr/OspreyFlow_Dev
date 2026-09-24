@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import subprocess
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -80,6 +81,42 @@ class ClusterRendererNotBuilt(RuntimeError):
     built in Stage 2 §1."""
 
 
+class MissingDockerfileError(RuntimeError):
+    """Names every OspreyFlow-owned service whose Dockerfile is not in the tree.
+
+    A `build:` stanza pointing at a Dockerfile that does not exist renders a compose file that
+    fails at `docker compose build` with Docker's own error, several steps and one confusing
+    message later. Refusing here, by name, is the same "named refusal, not a silent partial" shape
+    `scripts/osprey_bundle.py` already uses for a non-redistributable provider.
+    """
+
+    def __init__(self, services: Sequence[str]) -> None:
+        self.services = tuple(services)
+        super().__init__(
+            "refusing to render: no Dockerfile for owned service(s) "
+            + ", ".join(services)
+            + " — every service rendered with a build: context must have one in the tree"
+        )
+
+
+def git_sha(repo_root: Path = REPO_ROOT) -> str:
+    """The commit a local build was made from. `unknown` rather than a raise when git is absent or
+    this is not a checkout: a lock file that says `unknown` is honest, and one that fails the whole
+    render because `git` is missing would make the renderer depend on a tool it does not need."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+    sha = result.stdout.strip()
+    return sha if result.returncode == 0 and sha else "unknown"
+
+
 class UnpinnedImagesError(RuntimeError):
     """Names every image whose digest could not be resolved, rather than writing a `versions.lock`
     that claims a pin it does not have."""
@@ -104,9 +141,21 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
     so they are not invented here.
     """
     images: list[ServiceImage] = [
-        ServiceImage("workspace", "ghcr.io/ospreyflow/workspace:0.1.0"),
-        ServiceImage("api", "ghcr.io/ospreyflow/api:0.1.0"),
-        ServiceImage("ingest", "ghcr.io/ospreyflow/ingest:0.1.0"),
+        ServiceImage(
+            "workspace",
+            "osprey/workspace:local",
+            build_context=".",
+            dockerfile="apps/workspace/Dockerfile",
+        ),
+        ServiceImage(
+            "api", "osprey/api:local", build_context=".", dockerfile="services/api/Dockerfile"
+        ),
+        ServiceImage(
+            "ingest",
+            "osprey/ingest:local",
+            build_context=".",
+            dockerfile="services/ingest/Dockerfile",
+        ),
     ]
     if config.components.graph_store.value == "arcadedb":
         images.append(ServiceImage("arcadedb", "arcadedata/arcadedb:24.11.1"))
@@ -129,12 +178,33 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
     return images
 
 
+#: Published host ports, as `service -> (env var, default)`. Every one is overridable, because
+#: Preflight found 8000 already held by an unrelated container on a real machine and a deployment
+#: that cannot move its own ports is one an operator has to fight. The defaults are the
+#: specification's (`05_DEPLOYMENT.md` §3: the workspace at 8080, the Conduit at 8000), so a
+#: deployment that overrides nothing matches the documentation exactly.
+PORT_OVERRIDES: dict[str, tuple[str, int]] = {
+    "workspace": ("OSPREY_WORKSPACE_PORT", 8080),
+    "api": ("OSPREY_API_PORT", 8000),
+}
+
+
 def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str:
     services: dict[str, object] = {}
     for entry in images:
-        service: dict[str, object] = {"image": entry.image, "restart": "unless-stopped"}
-        if entry.service in {"workspace", "api"}:
-            service["ports"] = ["8080:8080"] if entry.service == "workspace" else ["8000:8000"]
+        service: dict[str, object] = {"restart": "unless-stopped"}
+        if entry.owned:
+            # An owned image is built from this repository, not pulled. `image:` is still set, so
+            # the built image has a stable local tag that `versions.lock` can name and that a
+            # later `docker compose up` resolves without rebuilding.
+            service["build"] = {"context": entry.build_context, "dockerfile": entry.dockerfile}
+            service["image"] = entry.image
+        else:
+            service["image"] = entry.image
+        if entry.service in PORT_OVERRIDES:
+            variable, default = PORT_OVERRIDES[entry.service]
+            container_port = 8080 if entry.service == "workspace" else 8000
+            service["ports"] = [f"${{{variable}:-{default}}}:{container_port}"]
         services[entry.service] = service
     document = {
         "name": f"osprey-{config.profile.value}",
@@ -162,6 +232,12 @@ def _render_env(config: OspreyConfig) -> str:
         f"OSPREY_ONTOLOGY={config.governance.ontology}",
         f"OSPREY_REAL_DATA_EXCEPTIONS={config.governance.real_data_exceptions}",
         f"OSPREY_MODELS_LOCAL_ONLY={'true' if config.models.local_only else 'false'}",
+        "",
+        "# Published host ports. Every one is overridable: Preflight found 8000 already held by an",
+        "# unrelated container on a real machine, and a deployment that cannot move its own ports",
+        "# is one an operator has to fight. These are the specification's own defaults",
+        "# (05_DEPLOYMENT.md §3), so overriding nothing matches the documentation exactly.",
+        *[f"{variable}={default}" for variable, default in PORT_OVERRIDES.values()],
     ]
     if config.models.hosted_fallback is not None:
         lines.append(f"OSPREY_HOSTED_FALLBACK={config.models.hosted_fallback}")
@@ -175,8 +251,9 @@ def _render_versions_lock(
 ) -> str:
     entries = []
     unresolved = []
+    sha = git_sha()
     for entry in images:
-        digest = resolver(entry.image)
+        digest = None if entry.owned else resolver(entry.image)
         # `source` is recorded per entry, not once per file, because the two can differ within one
         # render: a machine that has pulled some of these images and not others produces a lock
         # file that is partly a real pin and partly a gap, and a reader needs to know which line is
@@ -184,6 +261,25 @@ def _render_versions_lock(
         # which is a snapshot, not an authority — Stage 2 §5's bundle resolves from the registry
         # manifest instead, and will write a different source here when it does.
         source = "local-docker-daemon"
+        if entry.owned:
+            # An OspreyFlow-owned image is built from this checkout and pushed nowhere, so there is
+            # no registry digest to record and never will be until Stage 2 §5b publishes one. What
+            # identifies it is the commit it was built from. Recording `local-build` plus that SHA
+            # is the honest answer; recording whatever digest the local daemon happens to hold for
+            # a tag anyone can overwrite would look like a pin and be worth nothing.
+            entries.append(
+                {
+                    "service": entry.service,
+                    "repository": entry.image.partition(":")[0],
+                    "tag": entry.image.partition(":")[2],
+                    "digest": "local-build",
+                    "source": "local-build",
+                    "built_from_git_sha": sha,
+                    "build_context": entry.build_context,
+                    "dockerfile": entry.dockerfile,
+                }
+            )
+            continue
         if digest is None:
             unresolved.append(entry.image)
             digest = "unresolved"
@@ -302,6 +398,13 @@ def render(
     if resolver is None:
         resolver = unresolved_digest_resolver if allow_unpinned else docker_digest_resolver
     images = service_images(config)
+    missing = [
+        entry.service
+        for entry in images
+        if entry.owned and not (REPO_ROOT / str(entry.dockerfile)).is_file()
+    ]
+    if missing:
+        raise MissingDockerfileError(missing)
     return RenderResult(
         profile=config.profile,
         artefacts={

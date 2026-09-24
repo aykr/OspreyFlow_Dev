@@ -26,9 +26,10 @@ from pathlib import Path
 
 import pytest
 import yaml
-from harness.images import ImageRef
+from harness.images import ImageRef, ServiceImage
 from harness.render import (
     ClusterRendererNotBuilt,
+    MissingDockerfileError,
     RenderResult,
     UnpinnedImagesError,
     diff_for,
@@ -122,11 +123,16 @@ def test_versions_lock_names_every_image_in_the_compose_file_with_a_digest(
     assert compose_images == lock_images, "versions.lock and compose.yaml name different images"
     assert compose_images, "the compose file declares no images at all"
     for row in lock["images"]:
-        assert row["digest"].startswith("sha256:"), f"{row['repository']} has no pinned digest"
-        assert row["source"] == "local-docker-daemon", (
-            f"{row['repository']} records no provenance for its digest; a lock file that does not "
-            "say where a digest came from cannot be told apart from one resolved against a registry"
-        )
+        # Two kinds of image, two kinds of identity (Stage 2 §5a). A third-party image is pinned by
+        # digest; an OspreyFlow-owned one is built here and pushed nowhere, so the commit it came
+        # from is what identifies it. Both must say which they are — a lock file that does not
+        # record provenance cannot be told apart from one resolved against a registry.
+        if row["source"] == "local-build":
+            assert row["digest"] == "local-build"
+            assert row["built_from_git_sha"]
+        else:
+            assert row["digest"].startswith("sha256:"), f"{row['repository']} has no pinned digest"
+            assert row["source"] == "local-docker-daemon"
 
 
 def test_the_runbook_carries_this_deployment_s_own_paths_not_a_template(
@@ -325,7 +331,9 @@ def test_strict_mode_refuses_to_write_an_unpinned_lock_and_names_the_images(
     with pytest.raises(UnpinnedImagesError) as raised:
         render(config, resolver=lambda _image: None)
 
-    expected = {image.image for image in service_images(config)}
+    # Owned images are never in the refusal: they are not resolved against a registry at all, so
+    # there is no digest for them to be missing.
+    expected = {image.image for image in service_images(config) if not image.owned}
     assert set(raised.value.images) == expected
     for image in expected:
         assert image in str(raised.value)
@@ -341,8 +349,10 @@ def test_allow_unpinned_marks_them_explicitly_rather_than_omitting_them(
     lock = yaml.safe_load(result.artefacts["versions.lock"])
 
     assert len(lock["images"]) == len(service_images(config))
-    assert {row["digest"] for row in lock["images"]} == {"unresolved"}
-    assert {row["source"] for row in lock["images"]} == {"unresolved"}
+    third_party = [row for row in lock["images"] if row["source"] != "local-build"]
+    assert third_party, "this fixture must declare at least one third-party image"
+    assert {row["digest"] for row in third_party} == {"unresolved"}
+    assert {row["source"] for row in third_party} == {"unresolved"}
 
 
 def test_a_partially_resolvable_set_still_refuses_and_names_only_the_missing_ones(
@@ -350,10 +360,109 @@ def test_a_partially_resolvable_set_still_refuses_and_names_only_the_missing_one
 ) -> None:
     """The realistic case, and the one a pass/fail-on-all check would get wrong: some images pulled
     locally, some not. The refusal must name the unresolved ones only."""
-    images = [image.image for image in service_images(config)]
+    images = [image.image for image in service_images(config) if not image.owned]
     missing = {images[0], images[-1]}
 
     with pytest.raises(UnpinnedImagesError) as raised:
         render(config, resolver=lambda image: None if image in missing else _fake_resolver(image))
 
     assert set(raised.value.images) == missing
+
+
+# --- Stage 2 §5a: owned images build, third-party images pull --------------------
+
+
+def test_owned_services_render_a_build_context_and_third_party_ones_do_not(
+    rendered: RenderResult,
+) -> None:
+    """The distinction Stage 2 §5a exists for. No registry publishes `ghcr.io/ospreyflow/api`, so
+    a compose file naming one renders a stack that cannot start; owned services build from this
+    repository instead. Third-party images keep their pinned upstream references, because those
+    registries do publish them and a `build:` for ArcadeDB would be absurd."""
+    compose = yaml.safe_load(rendered.artefacts["compose.yaml"])
+    services = compose["services"]
+
+    for owned in ("workspace", "api", "ingest"):
+        assert "build" in services[owned], f"{owned} is ours and must build from the tree"
+        assert services[owned]["build"]["dockerfile"].endswith("Dockerfile")
+        assert services[owned]["image"].startswith("osprey/"), (
+            f"{owned} must carry a local tag so versions.lock can name it and `up` need not rebuild"
+        )
+
+    for third_party in ("arcadedb", "postgres", "valkey", "minio", "keycloak"):
+        assert "build" not in services[third_party], f"{third_party} is not ours to build"
+        assert "/" in services[third_party]["image"] or ":" in services[third_party]["image"]
+
+
+def test_every_rendered_build_context_points_at_a_dockerfile_that_exists(
+    rendered: RenderResult,
+) -> None:
+    compose = yaml.safe_load(rendered.artefacts["compose.yaml"])
+    for name, spec in compose["services"].items():
+        if "build" not in spec:
+            continue
+        dockerfile = Path(__file__).resolve().parents[2] / spec["build"]["dockerfile"]
+        assert dockerfile.is_file(), f"{name} builds from {dockerfile}, which does not exist"
+
+
+def test_an_owned_service_without_a_dockerfile_fails_the_render_by_name(
+    config: OspreyConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Red-then-green for the refusal. A `build:` stanza pointing at a missing Dockerfile would
+    otherwise surface as Docker's own error several steps later, during `compose build`, with a
+    message that names a path rather than a service."""
+    import harness.render as render_module
+
+    real = render_module.service_images
+
+    def with_a_phantom_service(cfg):
+        images = list(real(cfg))
+        images.append(
+            ServiceImage(
+                "phantom",
+                "osprey/phantom:local",
+                build_context=".",
+                dockerfile="services/phantom/Dockerfile",
+            )
+        )
+        return images
+
+    monkeypatch.setattr(render_module, "service_images", with_a_phantom_service)
+
+    with pytest.raises(MissingDockerfileError, match="phantom"):
+        render_module.render(config, resolver=_fake_resolver)
+
+
+def test_owned_images_are_recorded_as_local_builds_with_the_commit_they_came_from(
+    rendered: RenderResult,
+) -> None:
+    """An image built here and pushed nowhere has no registry digest and never will until Stage 2
+    §5b publishes one. What identifies it is the commit. Recording a digest the local daemon
+    happens to hold for an overwritable tag would look like a pin and be worth nothing."""
+    rows = yaml.safe_load(rendered.artefacts["versions.lock"])["images"]
+    lock = {row["service"]: row for row in rows}
+
+    for owned in ("workspace", "api", "ingest"):
+        row = lock[owned]
+        assert row["source"] == "local-build"
+        assert row["digest"] == "local-build"
+        assert row["built_from_git_sha"], f"{owned} records no commit"
+        assert row["dockerfile"].endswith("Dockerfile")
+
+    assert lock["arcadedb"]["source"] == "local-docker-daemon"
+    assert "built_from_git_sha" not in lock["arcadedb"]
+
+
+def test_every_published_port_is_overridable_with_the_spec_s_own_default(
+    rendered: RenderResult,
+) -> None:
+    """Preflight found 8000 held by an unrelated container on a real machine. A deployment that
+    cannot move its own ports is one an operator has to fight — but the defaults stay the
+    specification's, so overriding nothing matches `05_DEPLOYMENT.md` §3 exactly."""
+    compose = yaml.safe_load(rendered.artefacts["compose.yaml"])
+    env = rendered.artefacts["deployment.env"]
+
+    assert compose["services"]["workspace"]["ports"] == ["${OSPREY_WORKSPACE_PORT:-8080}:8080"]
+    assert compose["services"]["api"]["ports"] == ["${OSPREY_API_PORT:-8000}:8000"]
+    assert "OSPREY_WORKSPACE_PORT=8080" in env
+    assert "OSPREY_API_PORT=8000" in env
