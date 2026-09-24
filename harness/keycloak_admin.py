@@ -87,6 +87,22 @@ def grant_service_account_roles(
             data={**found[0], "secret": client_secret},
         )
 
+    # The user-profile policy, which is not part of `RealmRepresentation` and so cannot travel in
+    # the realm import. Without it every custom attribute written below is silently discarded.
+    from harness.realm import UNMANAGED_ATTRIBUTE_POLICY
+
+    status, profile = _call(f"{issuer}/admin/realms/{realm}/users/profile", token=token)
+    if status == 200 and isinstance(profile, dict):
+        profile["unmanagedAttributePolicy"] = UNMANAGED_ATTRIBUTE_POLICY
+        status, _ = _call(
+            f"{issuer}/admin/realms/{realm}/users/profile", token=token, data=profile
+        )
+        if status not in (200, 204):
+            raise RealmConfigurationFailed(
+                f"could not enable unmanaged user attributes: {status} — every custom claim would "
+                "be silently discarded and principals would arrive with no clearance"
+            )
+
     status, conduit = _call(
         f"{issuer}/admin/realms/{realm}/clients?clientId={CONDUIT_CLIENT_ID}", token=token
     )

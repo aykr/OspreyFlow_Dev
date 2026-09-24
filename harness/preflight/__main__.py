@@ -21,7 +21,12 @@ from harness.preflight.reduced import accept, offer_for
 from harness.preflight.result import CheckResult, Status
 from harness.render import DEFAULT_CONFIG_PATH, DEFAULT_OUT_ROOT, load_config
 
-_SYMBOL = {Status.PASS: "PASS", Status.FAIL: "FAIL", Status.SKIP: "SKIP"}
+_SYMBOL = {
+    Status.PASS: "PASS",
+    Status.FAIL: "FAIL",
+    Status.SKIP: "SKIP",
+    Status.WARN: "WARN",
+}
 
 
 def run(context: PreflightContext, *, only: str | None = None) -> list[CheckResult]:
@@ -56,7 +61,7 @@ def _print(result: CheckResult) -> None:
         return
     label = "did not run" if result.status is Status.SKIP else "what is wrong"
     print(f"        {label}: {result.what_is_wrong}")
-    if result.status is Status.FAIL:
+    if result.status in (Status.FAIL, Status.WARN):
         print(f"        what to do:    {result.what_to_do}")
 
 
@@ -125,7 +130,11 @@ def main(argv: list[str] | None = None, *, context: PreflightContext | None = No
 
     passes = sum(1 for r in results if r.status is Status.PASS)
     skips = sum(1 for r in results if r.status is Status.SKIP)
-    print(f"\n{passes} passed, {len(failures)} failed, {skips} skipped.")
+    warns = sum(1 for r in results if r.status is Status.WARN)
+    print(f"\n{passes} passed, {len(failures)} failed, {warns} warned, {skips} skipped.")
+    if warns:
+        print("A warning is a real finding with a remedy you can apply after install. It does "
+              "not block Launch.")
     if skips:
         print("A skipped check did not run. It is not a statement that what it checks is correct.")
 

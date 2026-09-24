@@ -269,6 +269,27 @@ What is running afterwards: the workspace, one Conduit, three workers, ArcadeDB,
 in-process, Valkey, MinIO, OpenSearch single-node, PostgreSQL, Keycloak, Ollama, and a
 faster-whisper container. Twelve containers, roughly 11 GB of RAM at rest.
 
+**The model gateway is missing from this list, and the Conduit will not start without it —
+Proposed, 24 September 2026, found running the scripted deploy.** The Conduit constructs its model
+client during startup, unconditionally, so a stack rendered from the twelve containers named above
+fail-fasts with a refused connection against a service that has no entry here. The development
+stack has run one all along, which is why this went unnoticed: the list and the code disagreed and
+only the list was read. **The proposal:** name the model gateway here as a container of its own,
+making the count thirteen. **The alternative, worth weighing rather than dismissing:** the Conduit
+tolerates its absence and degrades — extraction and embedding unavailable, everything else working
+— which is arguably the better behaviour for a deployment whose models are optional at `local-lite`
+(§1: "Ollama, CPU or one consumer GPU"). **Not decided here:** the first is a one-line change to
+this list, the second changes how the Conduit starts, and which is right is a question about the
+product rather than about the deploy.
+
+**A measurement for the "roughly 11 GB at rest" figure above, 24 September 2026.** Eleven of the
+twelve containers reached health on a 9.7 GiB Docker VM at a **peak total of 3.6 GiB** — ArcadeDB
+2.0 GiB at its schema-creation peak, OpenSearch 0.9 GiB with its heap capped at 512 MiB by the
+renderer, Keycloak 0.6 GiB, everything else under 250 MiB each. The stack fits the VM with
+considerable room. The 11 GB estimate appears high; it is left as written rather than edited,
+because a single measurement on one machine with the Conduit exiting early is not yet grounds to
+replace a figure this document has carried from the start.
+
 **Read "three workers" as three replicas of the job worker — owner's decision, 24 September
 2026.** There is one worker *implementation*, a generic dispatcher keyed by job type (ADR-025), and
 three replicas of it is what the code is shaped like rather than three distinct worker services.

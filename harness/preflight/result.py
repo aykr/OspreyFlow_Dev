@@ -24,6 +24,14 @@ class Status(StrEnum):
     PASS = "pass"
     FAIL = "fail"
     SKIP = "skip"
+    #: Something is genuinely wrong and Launch may still proceed. Distinct from `skip`, which means
+    #: nobody looked, and from `fail`, which blocks. A `warn` is a finding with a remedy the
+    #: operator can apply *after* install — and it must have one, or it is a `fail` in disguise.
+    #:
+    #: **Awaiting owner confirmation.** Introducing a fourth status softens `05_DEPLOYMENT.md`
+    #: §2.1's "Preflight must pass before Launch is enabled", which is a real change to what that
+    #: gate promises, so it is marked rather than assumed.
+    WARN = "warn"
 
 
 @dataclass(frozen=True)
@@ -48,9 +56,10 @@ class CheckResult:
 
     @property
     def ok(self) -> bool:
-        """A skip does not block Launch. It is not a pass, and the summary line says so separately,
-        but a check that could not run is not evidence of a fault."""
-        return self.status is not Status.FAIL
+        """Does this result allow Launch? A `skip` does not block — a check that could not run is
+        not evidence of a fault. Nor does a `warn`: it is a real finding whose remedy is available
+        after install, which is precisely what distinguishes it from a `fail`."""
+        return self.status not in (Status.FAIL,)
 
 
 def passed(check: str, *, detail: tuple[str, ...] = ()) -> CheckResult:
@@ -69,6 +78,28 @@ def failed(
     return CheckResult(
         check=check,
         status=Status.FAIL,
+        what_is_wrong=what_is_wrong,
+        what_to_do=what_to_do,
+        detail=detail,
+    )
+
+
+def warned(
+    check: str, *, what_is_wrong: str, what_to_do: str, detail: tuple[str, ...] = ()
+) -> CheckResult:
+    """A finding that does not block Launch.
+
+    Requires a remedy for the same reason `failed()` does, and for a sharper one: a warning with no
+    remedy is noise an operator learns to scroll past, and the next real one scrolls past with it.
+    """
+    if not what_is_wrong or not what_to_do:
+        raise ValueError(
+            f"{check}: a warning must say both what is wrong and what to do about it — a warning "
+            "with no remedy is noise, and noise is how a real finding gets missed"
+        )
+    return CheckResult(
+        check=check,
+        status=Status.WARN,
         what_is_wrong=what_is_wrong,
         what_to_do=what_to_do,
         detail=detail,

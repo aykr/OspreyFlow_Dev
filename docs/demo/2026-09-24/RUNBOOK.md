@@ -1,3 +1,9 @@
+> **Superseded, 24 September 2026.** `demo_up.sh` is deleted; the scripted
+> bring-up is now `python -m harness.apply --profile local-lite`
+> (`06_DECISIONS.md` ADR-049 Stage 2 §3). That command renders, runs Preflight,
+> builds the owned images, brings the stack up and waits on health. Its own
+> remaining blockers are recorded in `07_BUILD_PLAN.md`'s Stage 2 §3 entry.
+
 # Live-demo runbook — 23 September 2026 rehearsal
 
 Only steps that actually passed tonight, against this checkout (`93acbe2`), are listed as runnable.

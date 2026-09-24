@@ -315,15 +315,54 @@ def test_localhost_resolving_to_ipv6_only_fails_with_the_rehearsal_s_own_diagnos
 # --- (g3) basemap --------------------------------------------------------------
 
 
-def test_a_real_file_url_for_tiles_that_do_not_exist_fails_with_the_build_remedy(
-    context: PreflightContext,
-) -> None:
-    """The fixture config carries a real `file://` URI pointing at a path that does not exist —
-    exactly the first half of the rehearsal's own basemap failure."""
+def test_tiles_that_do_not_exist_yet_warn_rather_than_block(context: PreflightContext) -> None:
+    """The two outcomes are different faults. Unbuilt tiles are a post-install step: the stack
+    comes up, everything else works, and the map is blank until one command is run. Blocking Launch
+    on it means a fresh clone can never reach a running system at all — a worse failure than a
+    blank map the operator can fix afterwards."""
     result = basemap.check(context)
-    assert result.status is Status.FAIL
-    assert "does not exist" in result.what_is_wrong
+
+    assert result.status is Status.WARN
+    assert result.ok, "a warning must not block Launch"
+    assert "does not exist yet" in result.what_is_wrong
     assert "scripts.build_local_basemap" in result.what_to_do
+
+
+def test_the_gate_passes_on_a_warning_and_still_fails_on_a_failure(
+    context: PreflightContext, tmp_path: Path
+) -> None:
+    """The property the split exists for, asserted through `ok` rather than by reading the status
+    name — a fourth status that everything still treated as blocking would pass the case above and
+    change nothing."""
+    unbuilt = basemap.check(context)
+    assert unbuilt.ok
+
+    tiles = tmp_path / "osm-local.pmtiles"
+    tiles.write_bytes(b"PMTiles")
+    context.config.map.providers[0].source = f"file://{tiles}"
+    unservable = basemap.check(context)
+    assert not unservable.ok, "an unservable URL must still block"
+
+
+def test_removing_the_split_makes_both_cases_wrong(
+    context: PreflightContext, tmp_path: Path
+) -> None:
+    """Rule 15's own lever for this change. The two cases must reach **different** statuses; a
+    check that collapsed them — whichever way — would satisfy one of the two assertions above and
+    fail this one. Without it, a regression that made both `fail` again (or both `warn`) would be
+    caught by exactly one test and might be read as that test being wrong."""
+    unbuilt = basemap.check(context)
+
+    tiles = tmp_path / "osm-local.pmtiles"
+    tiles.write_bytes(b"PMTiles")
+    context.config.map.providers[0].source = f"file://{tiles}"
+    unservable = basemap.check(context)
+
+    assert unbuilt.status is not unservable.status, (
+        "an absent file and an unservable URL are different faults with different urgencies; a "
+        "check that gives them the same status has lost the distinction the split was made for"
+    )
+    assert (unbuilt.ok, unservable.ok) == (True, False)
 
 
 def test_tiles_that_exist_but_are_still_served_from_file_url_fail_differently(
@@ -470,12 +509,20 @@ def _write_config(tmp_path: Path, body: str) -> Path:
 def test_gate_exits_non_zero_with_one_failing_check(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Red. The failing check is the real basemap one, failing for the real reason (a `file://`
-    provider whose tiles do not exist), reached through the real CLI."""
-    config_path = _write_config(tmp_path, FIXTURE_CONFIG)
+    """Red. The failing check is the real basemap one, failing for the real reason — a `file://`
+    provider whose tiles **do** exist, which is the unservable case rather than the unbuilt one.
+    (The unbuilt case now warns and the gate passes on it, which is exactly why this test had to
+    stop relying on it: a gate test whose "failure" stops being one silently starts proving
+    nothing.)"""
+    tiles = tmp_path / "osm-local.pmtiles"
+    tiles.write_bytes(b"PMTiles")
+    body = FIXTURE_CONFIG.replace(
+        "source: file:///data/tiles/osm-local.pmtiles", f"source: file://{tiles}"
+    )
+    config_path = _write_config(tmp_path, body)
     out_root = tmp_path / "generated"
     write(
-        render(OspreyConfig.model_validate(yaml.safe_load(FIXTURE_CONFIG)), allow_unpinned=True),
+        render(OspreyConfig.model_validate(yaml.safe_load(body)), allow_unpinned=True),
         out_root / "local-lite",
     )
 

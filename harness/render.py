@@ -151,16 +151,19 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
         ServiceImage(
             "workspace",
             "osprey/workspace:local",
-            build_context=".",
+            build_context=BUILD_CONTEXT_FROM_OUTPUT_DIR,
             dockerfile="apps/workspace/Dockerfile",
         ),
         ServiceImage(
-            "api", "osprey/api:local", build_context=".", dockerfile="services/api/Dockerfile"
+            "api",
+            "osprey/api:local",
+            build_context=BUILD_CONTEXT_FROM_OUTPUT_DIR,
+            dockerfile="services/api/Dockerfile",
         ),
         ServiceImage(
             "ingest",
             "osprey/ingest:local",
-            build_context=".",
+            build_context=BUILD_CONTEXT_FROM_OUTPUT_DIR,
             dockerfile="services/ingest/Dockerfile",
         ),
     ]
@@ -185,6 +188,14 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
     return images
 
 
+#: A compose `build.context` is resolved **relative to the compose file**, not to the working
+#: directory the command was run from. Rendered output lives at `deploy/generated/<profile>/`, so
+#: the repository root — which is what the Python images copy `packages/` and `services/` from — is
+#: three levels up. Found by running the golden path from a fresh clone: `.` resolved to the output
+#: directory itself and the build failed with `lstat .../deploy/generated/local-lite/services: no
+#: such file or directory`, which names the symptom and not the cause.
+BUILD_CONTEXT_FROM_OUTPUT_DIR = "../../.."
+
 #: Published host ports, as `service -> (env var, default)`. Every one is overridable, because
 #: Preflight found 8000 already held by an unrelated container on a real machine and a deployment
 #: that cannot move its own ports is one an operator has to fight. The defaults are the
@@ -204,6 +215,61 @@ _CONTAINER_PORTS: dict[str, int] = {"workspace": 8080, "api": 8000, "keycloak": 
 #: entry today and every line of it is load-bearing — `05_DEPLOYMENT.md` §2.1.1 records why each
 #: matters and that each fails silently when missing.
 _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
+    # Each of these is a variable the image refuses to start without. None was here until the
+    # golden path was actually run and postgres, minio and the Conduit all sat in `Restarting`.
+    "postgres": {
+        "environment": {
+            "POSTGRES_USER": "${OSPREY_POSTGRES_USER:-osprey}",
+            "POSTGRES_PASSWORD": "${OSPREY_POSTGRES_PASSWORD:?set in the deployment env file}",
+            "POSTGRES_DB": "${OSPREY_POSTGRES_DB:-osprey}",
+        },
+        "healthcheck": {
+            "test": ["CMD-SHELL", "pg_isready -U ${OSPREY_POSTGRES_USER:-osprey}"],
+            "interval": "10s",
+            "timeout": "5s",
+            "retries": 12,
+        },
+    },
+    "minio": {
+        "command": ["server", "/data"],
+        "environment": {
+            "MINIO_ROOT_USER": "${OSPREY_MINIO_USER:-ospreyflow}",
+            "MINIO_ROOT_PASSWORD": "${OSPREY_MINIO_PASSWORD:?set in the deployment env file}",
+        },
+    },
+    "opensearch": {
+        "environment": {
+            "discovery.type": "single-node",
+            "DISABLE_SECURITY_PLUGIN": "true",
+            # OpenSearch's own default heap is a quarter of the host's memory, which on a 10GiB VM
+            # is 2.5GiB for a single-node search index nothing has written to yet.
+            "OPENSEARCH_JAVA_OPTS": "-Xms512m -Xmx512m",
+        },
+    },
+    "arcadedb": {
+        "environment": {
+            "JAVA_OPTS": "-Darcadedb.server.rootPassword=${OSPREY_ARCADEDB_PASSWORD:?}"
+        },
+        "healthcheck": {
+            # `curl`, not `/dev/tcp`: the latter is a bash builtin and `CMD-SHELL` runs `/bin/sh`,
+            # which on this image is dash — the check failed every time with "cannot create
+            # /dev/tcp/...: Directory nonexistent", which reads like a missing path rather than an
+            # unsupported shell feature. Found running the golden path.
+            "test": ["CMD-SHELL", "curl -fsS http://127.0.0.1:2480/api/v1/ready || exit 1"],
+            "interval": "10s",
+            "timeout": "5s",
+            "retries": 18,
+            "start_period": "20s",
+        },
+    },
+    "valkey": {
+        "healthcheck": {
+            "test": ["CMD", "valkey-cli", "ping"],
+            "interval": "10s",
+            "timeout": "3s",
+            "retries": 10,
+        },
+    },
     "keycloak": {
         # `--import-realm` reads the realm this harness renders beside the compose file.
         # `--features=token-exchange` is not optional: without it the exchange grant does not
@@ -236,15 +302,35 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
 def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str:
     services: dict[str, object] = {}
     for entry in images:
-        service: dict[str, object] = {"restart": "unless-stopped"}
+        # A run-once batch job that exits is not a crash. `unless-stopped` restarts it forever,
+        # which looks exactly like a crash loop in `docker ps` and never becomes healthy — found
+        # running the golden path, where `ingest` sat in `Restarting (2)`.
+        restart = "no" if entry.service == "ingest" else "unless-stopped"
+        service: dict[str, object] = {"restart": restart}
         if entry.owned:
             # An owned image is built from this repository, not pulled. `image:` is still set, so
-            # the built image has a stable local tag that `versions.lock` can name and that a
-            # later `docker compose up` resolves without rebuilding.
+            # the built image has a stable local tag that `versions.lock` can name and that a later
+            # `docker compose up` resolves without rebuilding. `dockerfile` is relative to
+            # `context`, which is the repository root, so it stays repo-root-relative.
             service["build"] = {"context": entry.build_context, "dockerfile": entry.dockerfile}
             service["image"] = entry.image
+            # Without this the deployment's own generated environment file is written and then
+            # never reaches a container: the Conduit fail-fasts on a missing `OIDC_JWKS_URL` and
+            # restarts forever. Found running the golden path.
+            service["env_file"] = ["deployment.env"]
         else:
             service["image"] = entry.image
+
+        # The Conduit reaches its IdP's JWKS endpoint and its three stores *during startup* and
+        # fail-fasts if any is unreachable — deliberately, per `services/api/config.py`. So it must
+        # start after they are healthy, not merely after they are created. Found running the golden
+        # path: with no ordering it died on `httpx.ConnectError` reaching a Keycloak that was still
+        # importing its realm, and then restarted forever.
+        if entry.service == "api":
+            service["depends_on"] = {
+                dependency: {"condition": "service_healthy"}
+                for dependency in ("keycloak", "arcadedb", "valkey", "postgres")
+            }
         if entry.service in PORT_OVERRIDES:
             variable, default = PORT_OVERRIDES[entry.service]
             container_port = _CONTAINER_PORTS[entry.service]
@@ -307,6 +393,8 @@ def _render_versions_lock(
         # manifest instead, and will write a different source here when it does.
         source = "local-docker-daemon"
         if entry.owned:
+            # `dockerfile` is resolved relative to `context`, which is the repository root, so it
+            # stays a repo-root-relative path rather than becoming relative to the output dir too.
             # An OspreyFlow-owned image is built from this checkout and pushed nowhere, so there is
             # no registry digest to record and never will be until Stage 2 §5b publishes one. What
             # identifies it is the commit it was built from. Recording `local-build` plus that SHA

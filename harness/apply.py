@@ -47,6 +47,7 @@ from harness.keycloak_admin import grant_service_account_roles
 from harness.preflight import ALL_CHECKS, PreflightContext
 from harness.preflight.result import Status
 from harness.realm import (
+    CONDUIT_CLIENT_ID,
     generate_client_secret,
     render_realm_json,
 )
@@ -93,6 +94,24 @@ class ApplyResult:
         return time.monotonic() - self.started_at
 
 
+def _compose(compose_file: Path) -> list[str]:
+    """Every compose call reads the deployment's own env file.
+
+    Without `--env-file`, the secrets `apply` generates into `deployment.env` are invisible to
+    compose — interpolation falls back to defaults, and a `${...:?}` variable aborts the command
+    with a message about an unset variable rather than about a missing file. Found running the
+    golden path: the env file was written correctly and then never used.
+    """
+    return [
+        "docker",
+        "compose",
+        "--env-file",
+        str(compose_file.parent / "deployment.env"),
+        "-f",
+        str(compose_file),
+    ]
+
+
 def _run(args: list[str], *, stage: str, cwd: Path | None = None, timeout: int = 1800) -> str:
     result = subprocess.run(
         args, capture_output=True, text=True, cwd=cwd, timeout=timeout, check=False
@@ -104,7 +123,7 @@ def _run(args: list[str], *, stage: str, cwd: Path | None = None, timeout: int =
 
 def compose_services(compose_file: Path) -> list[str]:
     out = _run(
-        ["docker", "compose", "-f", str(compose_file), "config", "--services"], stage="inspect"
+        _compose(compose_file) + ["config", "--services"], stage="inspect"
     )
     return [line.strip() for line in out.splitlines() if line.strip()]
 
@@ -116,7 +135,7 @@ def services_declaring_a_health_check(compose_file: Path) -> list[str]:
     declared = []
     for service in compose_services(compose_file):
         inspected = _run(
-            ["docker", "compose", "-f", str(compose_file), "ps", "--format", "json", service],
+            _compose(compose_file) + ["ps", "--format", "json", service],
             stage="inspect",
         )
         for line in inspected.splitlines():
@@ -144,7 +163,7 @@ def wait_for_health(
     while pending and time.monotonic() < deadline:
         for service in sorted(pending):
             rows = _run(
-                ["docker", "compose", "-f", str(compose_file), "ps", "--format", "json", service],
+                _compose(compose_file) + ["ps", "--format", "json", service],
                 stage="health",
             )
             health = ""
@@ -168,7 +187,7 @@ def wait_for_health(
 
 def _conduit_is_running(compose_file: Path) -> bool:
     rows = _run(
-        ["docker", "compose", "-f", str(compose_file), "ps", "--format", "json", "api"],
+        _compose(compose_file) + ["ps", "--format", "json", "api"],
         stage="seed",
     )
     return any(
@@ -192,7 +211,7 @@ def seed(compose_file: Path, datasets: list[str], *, reset: bool = True) -> None
             "for you: that is a data-affecting decision and it is yours to make.",
         )
     if reset:
-        _run(["docker", "compose", "-f", str(compose_file), "stop", "api"], stage="seed")
+        _run(_compose(compose_file) + ["stop", "api"], stage="seed")
     for dataset in datasets:
         script = {"hmp": "scripts.seed_hmp_fixture", "fixture-corp": "scripts.seed_fixture_corp"}[
             dataset
@@ -244,6 +263,7 @@ def main(argv: list[str] | None = None) -> int:
         (out_dir / "realm.json").write_text(render_realm_json(config), encoding="utf-8")
         secret = generate_client_secret()
         admin_password = generate_client_secret()
+        arcadedb_password = generate_client_secret()
         env_path = out_dir / "deployment.env"
         # Both minted here and written only into generated, gitignored output — 05_DEPLOYMENT.md
         # §2.5 ("never sees a secret… records where to look, never what it found") and §7
@@ -253,7 +273,26 @@ def main(argv: list[str] | None = None) -> int:
             env_path.read_text(encoding="utf-8")
             + "\n# Generated at apply time, never version-controlled (05_DEPLOYMENT.md §2.5/§7).\n"
             + f"OSPREY_OIDC_CLIENT_SECRET={secret}\n"
-            + f"OSPREY_KEYCLOAK_ADMIN_PASSWORD={admin_password}\n",
+            + f"OSPREY_KEYCLOAK_ADMIN_PASSWORD={admin_password}\n"
+            + f"OSPREY_POSTGRES_PASSWORD={generate_client_secret()}\n"
+            + f"OSPREY_MINIO_PASSWORD={generate_client_secret()}\n"
+            # One value, two names: the compose file sets the server's own root password from
+            # `OSPREY_ARCADEDB_PASSWORD`, and the Conduit's adapter reads `ARCADEDB_ROOT_PASSWORD`.
+            # They were generated separately at first, and the Conduit died on a 403 "User/Password
+            # not valid" that named neither variable.
+            + f"OSPREY_ARCADEDB_PASSWORD={arcadedb_password}\n"
+            + f"ARCADEDB_ROOT_PASSWORD={arcadedb_password}\n"
+            # The Conduit reads these at startup and refuses to start without the first, which is
+            # its own deliberate fail-fast. Pointed at the Keycloak this same deploy renders.
+            + f"OIDC_JWKS_URL=http://keycloak:8080/realms/{args.realm}"
+            + "/protocol/openid-connect/certs\n"
+            + f"OIDC_TOKEN_EXCHANGE_URL=http://keycloak:8080/realms/{args.realm}"
+            + "/protocol/openid-connect/token\n"
+            + f"OIDC_TOKEN_EXCHANGE_CLIENT_ID={CONDUIT_CLIENT_ID}\n"
+            + f"OIDC_TOKEN_EXCHANGE_CLIENT_SECRET={secret}\n"
+            + f"OIDC_ADMIN_USERS_URL=http://keycloak:8080/admin/realms/{args.realm}/users\n"
+            + "ARCADEDB_HOST=arcadedb\nVALKEY_HOST=valkey\nPOSTGRES_HOST=postgres\n"
+            + "MINIO_ENDPOINT=minio:9000\n",
             encoding="utf-8",
         )
         result.record("render", f"{len(rendered.artefacts) + 1} artefact(s) → {out_dir}")
@@ -272,11 +311,11 @@ def main(argv: list[str] | None = None) -> int:
         compose_file = out_dir / "compose.yaml"
 
         # 3. Build the owned images.
-        _run(["docker", "compose", "-f", str(compose_file), "build"], stage="build")
+        _run(_compose(compose_file) + ["build"], stage="build")
         result.record("build", "owned images built from this checkout")
 
         # 4. Up, then a per-service wait that names what did not make it.
-        _run(["docker", "compose", "-f", str(compose_file), "up", "-d", "--wait"], stage="up")
+        _run(_compose(compose_file) + ["up", "-d", "--wait"], stage="up")
         health = wait_for_health(compose_file, timeout_seconds=args.health_timeout)
         result.record("up", f"{len(health)} service(s) healthy")
 
@@ -296,7 +335,7 @@ def main(argv: list[str] | None = None) -> int:
         datasets = [d for d in args.seed.split(",") if d]
         if datasets:
             seed(compose_file, datasets)
-            _run(["docker", "compose", "-f", str(compose_file), "start", "api"], stage="seed")
+            _run(_compose(compose_file) + ["start", "api"], stage="seed")
             wait_for_health(compose_file, timeout_seconds=args.health_timeout)
             result.record("seed", f"{', '.join(datasets)} (Conduit stopped, then restarted)")
 

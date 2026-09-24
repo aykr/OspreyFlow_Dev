@@ -37,6 +37,10 @@ def _daemon_available() -> bool:
     )
 
 
+#: Registry responses that mean "I will not tell you", as opposed to "it is not here". A skip for
+#: the first is honest; treating it as a pass would be a lie and as a failure would be noise.
+_REFUSED_TO_ANSWER = ("toomanyrequests", "rate limit", "unauthorized", "denied", "timeout")
+
 requires_docker = pytest.mark.skipif(
     not _daemon_available(), reason="needs a Docker daemon — a skip here means nobody checked"
 )
@@ -54,16 +58,17 @@ def test_the_renderer_names_some_third_party_images() -> None:
 @requires_docker
 @pytest.mark.parametrize("reference", THIRD_PARTY)
 def test_every_third_party_image_reference_resolves(reference: str) -> None:
-    """Resolvable means: the registry knows it, **or** this machine already has it.
+    """Three outcomes, not two, because the registry has three answers.
 
-    `docker manifest inspect` asks the registry without pulling layers, which is the same question
-    `docker compose up` asks at a fraction of the bytes — but some registries (quay.io among them)
-    refuse anonymous manifest inspection, and reporting a working image as missing would make this
-    check worse than useless. So a locally-present image counts.
+    **It resolves** — pass. **It says `manifest unknown`** — fail, which is the case this test was
+    written for: two of eight references written for Stage 2 §5a did not exist, and a real
+    `docker compose up` aborted the whole pull because of it. **It refuses to answer** — rate
+    limited, unauthorised, timed out — which is not evidence either way, so this skips with the
+    reason rather than inventing a verdict. A locally-present image satisfies any of the three,
+    since `compose` will not need the registry for it.
 
-    That fallback is weaker and the weakness is stated: an image nobody has ever pulled and whose
-    registry refuses inspection would pass here. It still catches the case this test was written
-    for — a reference that does not exist anywhere, which is neither inspectable nor local.
+    The skip is the honest weakness and is stated rather than hidden: a skipped reference is one
+    nobody checked.
     """
     from_registry = subprocess.run(
         ["docker", "manifest", "inspect", reference],
@@ -74,15 +79,32 @@ def test_every_third_party_image_reference_resolves(reference: str) -> None:
     )
     if from_registry.returncode == 0:
         return
+
+    error = (from_registry.stderr or "").strip().lower()
+
+    # **"The registry refused to answer" is not "the image does not exist", and conflating them
+    # makes this test worse than useless.** Anonymous Docker Hub manifest inspection is rate
+    # limited, and a suite that goes red from rate limiting is one people learn to ignore — taking
+    # the real finding with it the next time there is one. Observed directly: `postgres:16.4`
+    # answered `toomanyrequests` minutes after answering correctly, while a genuinely absent tag
+    # answers `manifest unknown`. The two are cleanly distinguishable, so they are distinguished.
+    if any(marker in error for marker in _REFUSED_TO_ANSWER):
+        locally = subprocess.run(
+            ["docker", "image", "inspect", reference], capture_output=True, timeout=60, check=False
+        )
+        if locally.returncode == 0:
+            return
+        pytest.skip(
+            f"the registry refused to answer for {reference} ({error.splitlines()[0]}) and it is "
+            "not present locally — nobody checked this reference, which is not the same as it "
+            "being fine"
+        )
+
     locally = subprocess.run(
-        ["docker", "image", "inspect", reference],
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
+        ["docker", "image", "inspect", reference], capture_output=True, timeout=60, check=False
     )
     assert locally.returncode == 0, (
-        f"{reference} resolves neither at its registry nor on this machine: "
-        f"{from_registry.stderr.strip()}. A reference that does not exist aborts the whole "
-        "`docker compose up`, taking every other image's download with it."
+        f"{reference} resolves neither at its registry nor on this machine: {error}. A reference "
+        "that does not exist aborts the whole `docker compose up`, taking every other image's "
+        "download with it."
     )

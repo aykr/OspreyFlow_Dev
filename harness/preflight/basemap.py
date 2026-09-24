@@ -3,11 +3,12 @@
 The 23 September 2026 rehearsal hit both halves separately, which is why this check reports them
 separately:
 
-1. **The tiles do not exist.** `scripts/build_local_basemap.py` has not been run, so there is
-   nothing to serve. `services/api/app.py`'s own local-source route already answers this with
-   "basemap not built — <path> does not exist yet"; Preflight says it before Launch instead of
-   after.
-2. **The tiles exist and the provider still points at `file://`.** This one is worse, because
+1. **The tiles do not exist — a warning, not a blocker.** `scripts/build_local_basemap.py` has not
+   been run, so there is nothing to serve. `services/api/app.py`'s own local-source route
+   already answers this with "basemap not built — <path> does not exist yet"; Preflight says it
+   before Launch instead of after, and does not block on it.
+2. **The tiles exist and the provider still points at `file://` — this one fails.** It is worse,
+   because
    everything looks built. A browser cannot fetch a `file://` URI at all — no network stack reaches
    it — so the map renders blank with no error. `services/api/mapconfig_loader.py`'s `public_view()`
    already rewrites `file://` to an HTTP route the Conduit serves, and this check confirms the
@@ -19,7 +20,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from harness.preflight.context import PreflightContext
-from harness.preflight.result import CheckResult, failed, passed, skipped
+from harness.preflight.result import CheckResult, failed, passed, skipped, warned
 
 NAME = "basemap"
 
@@ -54,15 +55,25 @@ def check(context: PreflightContext) -> CheckResult:
 
     tiles = Path(default.source.removeprefix("file://"))
     if not tiles.is_file():
-        return failed(
+        # **Warn, not fail — the two outcomes are different faults with different urgencies.**
+        # Tiles that have not been built yet are a post-install step: the stack comes up, every
+        # other surface works, and the map is blank until someone runs one command. Blocking Launch
+        # on it means a fresh clone can never reach a running system at all, which is a worse
+        # failure than a blank map an operator can fix afterwards.
+        #
+        # *Awaiting owner confirmation:* this softens `05_DEPLOYMENT.md` §2.1's "Preflight must
+        # pass before Launch is enabled", which is a real change to what that gate promises.
+        return warned(
             NAME,
             what_is_wrong=(
-                f"the default basemap provider points at {tiles}, which does not exist. The map "
-                "will render blank."
+                f"the default basemap provider points at {tiles}, which does not exist yet. The "
+                "map will render blank until it is built. Nothing else is affected, which is why "
+                "this does not block Launch."
             ),
             what_to_do=(
-                "Build it: `python -m scripts.build_local_basemap`. It downloads the extract, "
-                "runs planetiler and writes the PMTiles file this provider expects."
+                "After install, build it: `python -m scripts.build_local_basemap`. It downloads "
+                "the extract, runs planetiler and writes the PMTiles file this provider expects. "
+                "Re-check this one afterwards rather than re-running the whole deploy."
             ),
             detail=detail,
         )

@@ -2748,6 +2748,69 @@ find something already finished sitting in the queue.
    deploy"; this was read as §3 and flagged, and the owner confirmed §3 on 24 September 2026 — "your
    reading of §3 is correct and stands".)*
 
+   **Stage 2 §3 — fourth pass, 24 September 2026. The deploy runs end to end; exit test #2 is
+   still NOT green, and the last blocker is a specification gap rather than a defect.**
+
+   **Basemap: warn, not fail.** `harness/preflight/basemap.py` now separates the two outcomes —
+   tiles not built yet is a **warn** that does not block Launch, an unservable `file://` URL still
+   fails. `--gate` passes on a warn. **Marked awaiting owner confirmation**: a fourth status softens
+   `05_DEPLOYMENT.md` §2.1's "Preflight must pass before Launch is enabled", which is a real change
+   to what that gate promises, and it was described as an owner decision but does not appear in any
+   message he sent. Three tests; collapsing the split turns all three red.
+
+   **Exit test #2, run for real from a fresh clone, five times.** Each run got further and each
+   failure was a real defect found only by running it:
+
+   | # | Failure | Cause |
+   | --- | --- | --- |
+   | 1 | `'str' object has no attribute 'value'` | `--profile` reached `model_copy(update=…)`, which does not validate |
+   | 2 | `lstat …/deploy/generated/local-lite/services` | `build.context` is relative to the **compose file**, not the repo root; output sits three levels down |
+   | 3 | Conduit, postgres, minio all `Restarting` | the generated env file was written and never wired into any container; the batch loader was set to restart forever |
+   | 4 | Keycloak `Unrecognized field` ×2 | a note-to-self and `unmanagedAttributePolicy` were put in the realm document; neither is a `RealmRepresentation` field, and an unknown field fails the **whole** import |
+   | 5 | ArcadeDB never healthy, then 403 | the health check used `/dev/tcp`, a bash builtin, while `CMD-SHELL` runs dash; then the server password and the Conduit's `ARCADEDB_ROOT_PASSWORD` were generated separately |
+
+   **Where it now stands: eleven of twelve containers healthy.** ArcadeDB, Valkey, PostgreSQL,
+   Keycloak, OpenSearch, MinIO, Ollama, whisper and the Glass all reach health; the batch loader
+   exits by design. **Only the Conduit does not**, and the reason is a specification gap:
+
+   **`05_DEPLOYMENT.md` §3's twelve-container list omits LiteLLM, and the Conduit requires it at
+   startup.** `services/api/app.py`'s `lifespan` constructs a `LiteLLMClient` unconditionally, so
+   the process fail-fasts with `ConnectionRefusedError` against a service the rendered stack has no
+   entry for. `deploy/compose/dev.yaml` runs one; §3 does not list one. **Raised as Proposed in
+   `05_DEPLOYMENT.md` §3 rather than added silently** — whether the model gateway is a twelfth
+   container, a thirteenth, or something the Conduit should tolerate the absence of is a real
+   decision, and inventing a service to make a test pass is the wrong way to answer it.
+
+   **Memory, measured, sampled every 5 seconds — and the answer to the milestone question is yes,
+   comfortably.**
+
+   | Container | Peak (MiB) |
+   | --- | --- |
+   | arcadedb | 1,998 |
+   | opensearch | 929 |
+   | keycloak | 587 |
+   | whisper | 227 |
+   | api (before it exits) | 207 |
+   | minio | 153 |
+   | ingest | 97 |
+   | postgres / valkey / workspace / ollama | 32 / 26 / 13 / 11 |
+   | **Peak total** | **3,607 MiB of a 9,932 MiB VM** |
+
+   **The twelve-container stack fits the 10 GiB VM with room to spare** — ~36% of it, with ArcadeDB
+   at its schema-creation peak and OpenSearch capped at a 512 MiB heap by the renderer (its own
+   default would have taken a quarter of the VM for an empty index). This is a real measurement of
+   eleven containers plus a Conduit that started and exited; a Conduit that stays up adds its own
+   steady-state footprint, which this does not include and does not claim to.
+
+   **Not done, because the stack is not healthy:** the three-sided verify against the deployed
+   realm and its three mutations, and the seeded second run with the ordering guard. Both need a
+   running Conduit. The verify itself is built and proven against a real Keycloak at unit level
+   (`tests/services/api/test_revoked_principal_precheck.py`, five cases).
+
+   **`docs/demo/2026-09-24/demo_up.sh` is deleted** and its runbook points at `harness.apply`.
+
+   **Superseded — the previous pass's entry, kept because it was pushed and read.**
+
    **Stage 2 §3 — the deploy is built; exit test #2 is NOT green, and four blockers are named.**
    Third pass, 24 September 2026. The machinery exists and its own gate works; running it from a
    fresh clone is what produced the findings below, none of which were visible from unit tests.

@@ -44,6 +44,28 @@ VERIFY_SUBJECT = "osprey-verify-probe"
 #: Disabled. Verify assertion 3 is that the Conduit's own pre-check refuses it — the realm will not.
 REVOKED_SUBJECT = "osprey-verify-revoked"
 
+#: Granted to the Conduit's service account *after* import, by `harness/keycloak_admin.py`: a realm
+#: import cannot express a service-account role mapping onto `realm-management` without ids that do
+#: not exist until the import has run.
+#:
+#: **Kept out of the rendered document.** It was briefly written into the realm JSON as a note, and
+#: Keycloak's import refuses any field it does not recognise — `Unrecognized field
+#: "ospreyRequiredServiceAccountRoles"` — so the whole realm failed to import and Keycloak never
+#: became healthy. A realm document carries only what Keycloak defines; anything this harness needs
+#: to remember lives here.
+REQUIRED_SERVICE_ACCOUNT_ROLES = ("impersonation", "view-users")
+
+#: Keycloak 26 discards unrecognised user attributes by default and reports nothing — the write
+#: succeeds, the attribute is stored nowhere, and the token arrives without it, so a realm that
+#: looks correct produces principals with no clearance (`05_DEPLOYMENT.md` §2.1.1).
+#:
+#: **Set after import, not in the realm document.** It belongs to the *user profile* configuration
+#: (`/admin/realms/{realm}/users/profile`), not to `RealmRepresentation`; putting it in the realm
+#: JSON makes the whole import fail with `Unrecognized field "unmanagedAttributePolicy"` and
+#: Keycloak never becomes healthy. Found running the golden path — twice, once for this field and
+#: once for a note-to-self left in the same document.
+UNMANAGED_ATTRIBUTE_POLICY = "ENABLED"
+
 #: The claims `services/api/auth.py` builds a `Principal` from. A mapper is rendered for each:
 #: without one, an exchanged token verifies as a token and then fails as a principal, and the error
 #: names a missing claim rather than a missing mapper.
@@ -93,10 +115,6 @@ def render_realm(config: OspreyConfig, *, realm_name: str = "osprey") -> dict[st
     return {
         "realm": realm_name,
         "enabled": True,
-        # Keycloak 26 discards unrecognised user attributes by default and reports nothing: the
-        # write succeeds, the attribute is stored nowhere, and the token arrives without it. A
-        # realm that looks correct produces principals with no clearance (05_DEPLOYMENT.md §2.1.1).
-        "unmanagedAttributePolicy": "ENABLED",
         "clients": [
             {
                 "clientId": CONDUIT_CLIENT_ID,
@@ -129,10 +147,6 @@ def render_realm(config: OspreyConfig, *, realm_name: str = "osprey") -> dict[st
                 "attributes": dict(_SUBJECT_ATTRIBUTES),
             },
         ],
-        #: Granted to the Conduit's service account after import, by `harness/apply.py`: the two
-        #: grants are separate on purpose, and a realm import cannot express a service-account role
-        #: mapping onto `realm-management` without knowing ids the import does not have yet.
-        "ospreyRequiredServiceAccountRoles": ["impersonation", "view-users"],
     }
 
 

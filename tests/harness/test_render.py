@@ -486,3 +486,47 @@ def test_the_apply_profile_flag_is_validated_rather_than_assigned_raw() -> None:
         "the profile flag must be coerced through the enum, or an invalid one fails late and "
         "unhelpfully"
     )
+
+
+def test_the_build_context_resolves_to_the_repository_root_from_the_output_directory(
+    rendered: RenderResult, tmp_path: Path
+) -> None:
+    """A compose `build.context` is relative to the **compose file**, not to the working directory.
+    Rendered output lives three levels down at `deploy/generated/<profile>/`, so a context of `.`
+    points at the output directory — which has no `services/` — and the build fails with
+    `lstat .../deploy/generated/local-lite/services: no such file or directory`, naming the symptom
+    and not the cause. Found running the golden path from a fresh clone.
+    """
+    out = tmp_path / "deploy" / "generated" / "local-lite"
+    write(rendered, out)
+    compose = yaml.safe_load((out / "compose.yaml").read_text(encoding="utf-8"))
+
+    for name, spec in compose["services"].items():
+        if "build" not in spec:
+            continue
+        context = (out / spec["build"]["context"]).resolve()
+        assert context == tmp_path.resolve(), (
+            f"{name}'s build context resolves to {context}, not the repository root — compose "
+            "resolves it relative to the compose file"
+        )
+        assert (context / spec["build"]["dockerfile"]).parent.name in {"api", "ingest", "workspace"}
+
+
+def test_the_rendered_realm_carries_only_fields_keycloak_defines() -> None:
+    """Keycloak's realm import refuses any unrecognised field outright — the whole import fails and
+    the container never becomes healthy. A note-to-self left in the document
+    (`ospreyRequiredServiceAccountRoles`) did exactly that, and the error named the field rather
+    than the harness that wrote it. Anything this harness needs to remember lives in a module
+    constant, not in the realm."""
+    from harness.realm import REQUIRED_SERVICE_ACCOUNT_ROLES, render_realm
+
+    realm = render_realm(OspreyConfig.model_validate({}))
+
+    # `unmanagedAttributePolicy` is deliberately absent: it belongs to the user-profile
+    # endpoint, and including it makes the whole realm import fail.
+    known = {"realm", "enabled", "clients", "users"}
+    assert set(realm) <= known, (
+        f"unexpected top-level key(s) in the realm document: {sorted(set(realm) - known)}"
+    )
+    assert REQUIRED_SERVICE_ACCOUNT_ROLES == ("impersonation", "view-users")
+    assert "unmanagedAttributePolicy" not in realm
