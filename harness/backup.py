@@ -1,0 +1,465 @@
+"""`python -m harness.backup` — the backup half of ADR-049's Stage 2 §4.
+
+`05_DEPLOYMENT.md` §6 is the specification and its last line is the reason this module exists:
+**"A backup nobody has restored is a hypothesis."** So the deliverable is not this file. It is this
+file plus `harness/restore.py` plus the exit test that takes a seeded deployment, destroys it, and
+proves the restored one carries the same data down to its `SAME_AS` scores and handling markings.
+
+## What is in the backup set, and why each item is in it
+
+ADR-049's amendment 10 names it: "staged Parquet, **object store contents**, Postgres dump,
+ontology, handling scheme, and `osprey.yaml`." Object store contents is a separate named item from
+configuration, and the graph store and the analytics database are here too:
+
+| Item | How | §6's own row |
+| --- | --- | --- |
+| Graph store | ArcadeDB `BACKUP DATABASE` | "Engine-native snapshot" |
+| Object store | the whole `/data` tree, where staged Parquet lives | "Object store replication" |
+| PostgreSQL | `pg_dump --clean --if-exists` | "`pg_basebackup`" — see below |
+| Analytics | the DuckDB file off the data volume | **not in §6's table at all** |
+| Configuration | `osprey.yaml`, compose, realm, ontology, scheme | "Version control" |
+
+**Two honest departures from §6's table, both recorded rather than papered over.**
+
+- §6 says `pg_basebackup`. This takes a `pg_dump` instead. `pg_basebackup` is a physical, binary
+  copy tied to the server's major version and page layout; a logical dump restores into a fresh
+  container of the same image without the WAL machinery §6's hourly-WAL row implies, and
+  `local-lite` has no WAL archive to ship. For a profile whose entire purpose is one machine, the
+  logical dump is the honest mechanism. A `small` or `cluster` profile should revisit it, and
+  `deploy/RUNBOOK.md` says so.
+- **The analytics DuckDB is in no row of §6's table.** It holds every event the Conduit's
+  `/v1/analytics/*` routes read — 266 of them in the seeded fixture alone — and it is not
+  rebuildable from the graph store. Leaving it out because the table does not name it would produce
+  a backup that restores a graph with no timeline. It is included, and the omission is recorded as
+  a gap against §6.
+
+## Audit data, which §6 makes an explicit exception
+
+§6: audit data "is not rebuildable and it is not deletable. Replicate it separately, with its own
+retention policy set by the deployment's legal basis."
+
+`services/api/audit.py` puts `audit_log` in the **same** PostgreSQL instance as sites, monitors,
+alerts, the export ledger and the review queue. So on `local-lite` it is inside the same `pg_dump`
+as everything else, which is *not* separate replication and does *not* give it its own retention
+policy. This module does not pretend otherwise: the manifest carries an explicit
+`audit_disposition` block saying exactly that, and `deploy/RUNBOOK.md` repeats it. A deployment with
+a legal basis that requires the §6 behaviour does not have it yet.
+
+This matters beyond bookkeeping, because `05_DEPLOYMENT.md` §2.4's destroy confirmation is written
+on the assumption that audit data is separately replicated and therefore survives a destroy. On
+`local-lite` it does not.
+
+## What this module does not do
+
+It does not stop the deployment. A backup taken while the Conduit is writing can catch the graph
+store and the analytics database at different instants. §6 asks for nightly snapshots, not for a
+quiesced cluster-wide checkpoint, and building the latter is not Stage 2's scope — but a restore is
+only as consistent as the backup, so `--require-quiesced` refuses to run unless the Conduit is
+stopped, and the manifest records which of the two it was.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import shutil
+import subprocess
+import sys
+import tarfile
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+from harness.render import DEFAULT_CONFIG_PATH, DEFAULT_OUT_ROOT, git_sha, load_config
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+#: `05_DEPLOYMENT.md` §2.1's Components screen names `backups` as a storage root. This is the
+#: repository-local default for a `local-lite` machine; the rendered `OSPREY_BACKUP_ROOT` is what a
+#: real deployment uses, and `--out-root` is how an operator points at it.
+DEFAULT_BACKUP_ROOT = REPO_ROOT / "backups"
+
+#: The files that make a restore reproducible rather than merely possible. Each is copied verbatim
+#: and checksummed; `harness/restore.py` compares the ontology and handling scheme against the
+#: running deployment's own and refuses a mismatch, because a graph restored under a different
+#: ontology is a graph whose handling markings mean something else.
+CONFIGURATION_SOURCES: tuple[tuple[str, Path], ...] = (
+    ("config/osprey.yaml", REPO_ROOT / "osprey.yaml"),
+    ("config/ontology.yaml", REPO_ROOT / "packages" / "ontology" / "default.yaml"),
+    (
+        "config/handling-uk-le.yaml",
+        REPO_ROOT / "packages" / "ontology" / "handling" / "uk-le.yaml",
+    ),
+)
+
+
+class BackupFailed(RuntimeError):
+    """Named so the CLI can report the stage rather than a traceback."""
+
+    def __init__(self, item: str, detail: str) -> None:
+        super().__init__(f"{item}: {detail}")
+        self.item = item
+        self.detail = detail
+
+
+@dataclass(frozen=True)
+class BackupEntry:
+    """One file in the set. `sha256` is what makes a restore verifiable rather than hopeful."""
+
+    path: str
+    bytes: int
+    sha256: str
+    item: str
+
+
+def _compose(compose_file: Path) -> list[str]:
+    return [
+        "docker",
+        "compose",
+        "--env-file",
+        str(compose_file.parent / "deployment.env"),
+        "-f",
+        str(compose_file),
+    ]
+
+
+def _run(command: list[str], *, item: str, capture: bool = True) -> str:
+    completed = subprocess.run(  # noqa: S603 - a fixed argv, never a shell string
+        command,
+        capture_output=capture,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "").strip()[:800]
+        raise BackupFailed(
+            item, f"{' '.join(command[:6])}… exited {completed.returncode}\n{detail}"
+        )
+    return completed.stdout if capture else ""
+
+
+def _env_value(env_path: Path, name: str) -> str:
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        if line.startswith(f"{name}="):
+            return line.partition("=")[2].strip()
+    raise BackupFailed("environment", f"{name} is not in {env_path.name}")
+
+
+def _digest(path: Path) -> tuple[int, str]:
+    sha = hashlib.sha256()
+    size = 0
+    with path.open("rb") as handle:
+        while chunk := handle.read(1024 * 1024):
+            sha.update(chunk)
+            size += len(chunk)
+    return size, sha.hexdigest()
+
+
+def _conduit_is_running(compose_file: Path) -> bool:
+    return bool(_run(_compose(compose_file) + ["ps", "-q", "api"], item="quiesce").strip())
+
+
+def backup_graph_store(compose_file: Path, destination: Path, *, database: str) -> Path:
+    """§6's "engine-native snapshot", taken through ArcadeDB's own `BACKUP DATABASE`.
+
+    Deliberately not a copy of the database directory. ArcadeDB writes pages lazily and a
+    file-level copy of a live database is a copy of an arbitrary mid-write state — it would restore,
+    and it would restore something that was never a consistent database. The engine's own backup
+    takes the read lock and produces a zip it knows how to read back.
+    """
+    password = _env_value(compose_file.parent / "deployment.env", "OSPREY_ARCADEDB_PASSWORD")
+    command = json.dumps({"language": "sql", "command": "BACKUP DATABASE"})
+    raw = _run(
+        _compose(compose_file)
+        + [
+            "exec",
+            "-T",
+            "arcadedb",
+            "sh",
+            "-c",
+            # The password reaches the container's own shell and no further. It is not printed and
+            # not written into the manifest (05_DEPLOYMENT.md §2.5/§7).
+            f"curl -sf -u root:'{password}' -X POST "
+            f"http://127.0.0.1:2480/api/v1/command/{database} "
+            f"-H 'Content-Type: application/json' -d '{command}'",
+        ],
+        item="graph",
+    )
+    try:
+        backup_file = json.loads(raw)["result"][0]["backupFile"]
+    except (json.JSONDecodeError, KeyError, IndexError) as error:
+        raise BackupFailed(
+            "graph", f"ArcadeDB did not report a backup file: {raw[:300]}"
+        ) from error
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    _run(
+        _compose(compose_file)
+        + [
+            "cp",
+            f"arcadedb:/home/arcadedb/backups/{database}/{backup_file}",
+            str(destination),
+        ],
+        item="graph",
+    )
+    return destination
+
+
+def backup_postgres(compose_file: Path, destination: Path) -> Path:
+    """A logical dump — see this module's docstring for why, not `pg_basebackup`.
+
+    `--clean --if-exists` so the dump restores over an existing empty database without a manual
+    drop, which is what the restore's own "launch the new environment empty" step needs.
+    """
+    env_path = compose_file.parent / "deployment.env"
+    user = _env_value(env_path, "POSTGRES_USER")
+    database = _env_value(env_path, "POSTGRES_DB")
+    dump = _run(
+        _compose(compose_file)
+        + ["exec", "-T", "postgres", "pg_dump", "--clean", "--if-exists", "-U", user, database],
+        item="postgres",
+    )
+    if "CREATE TABLE" not in dump and "COPY " not in dump:
+        # An empty dump is a real outcome (a deployment nothing has written to) but it is far more
+        # often a silent authentication or database-name failure that `pg_dump` exited 0 on.
+        raise BackupFailed(
+            "postgres",
+            "the dump contains no schema and no data — check POSTGRES_USER/POSTGRES_DB against the "
+            f"running container (got {len(dump)} bytes)",
+        )
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(dump, encoding="utf-8")
+    return destination
+
+
+def backup_object_store(compose_file: Path, destination: Path, *, work_dir: Path) -> Path:
+    """The object store's whole `/data` tree, tarred.
+
+    §6 has two rows that both land here — "Staged Parquet / Object store replication" and the
+    staging bucket itself — because on `local-lite` MinIO *is* where the staged Parquet lives. A tar
+    rather than a directory copy so the manifest can checksum one artefact, and so empty buckets
+    survive the round trip: a bucket is a directory to MinIO, and an empty directory is exactly what
+    a naive copy drops.
+    """
+    # **Not `work_dir / "objects"`.** That is the directory `destination` lives in, and the
+    # `rmtree` below then deleted the tar that had just been written into it — the backup reported
+    # success and the set was missing its object store. Caught by the exit test's own checksum
+    # verification on the first run, which is the point of checksumming every file.
+    staging = work_dir / ".objects-staging"
+    if staging.exists():
+        shutil.rmtree(staging)
+    staging.mkdir(parents=True)
+    _run(_compose(compose_file) + ["cp", "minio:/data", str(staging)], item="objects")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(destination, "w:gz") as archive:
+        archive.add(staging, arcname="data")
+    shutil.rmtree(staging)
+    return destination
+
+
+def backup_analytics(compose_file: Path, destination: Path, *, container_path: str) -> Path | None:
+    """The analytics DuckDB file. Returns `None` when there is none yet, which is not an error.
+
+    In no row of §6's table, and included anyway — see this module's docstring. A deployment that
+    has never seeded or ingested has no file, and a backup of a fresh deployment is a legitimate
+    thing to take.
+    """
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    listing = subprocess.run(  # noqa: S603
+        _compose(compose_file) + ["cp", f"api:{container_path}", str(destination)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if listing.returncode != 0:
+        if "not exist" in (listing.stderr + listing.stdout).lower():
+            return None
+        raise BackupFailed("analytics", (listing.stderr or listing.stdout).strip()[:400])
+    return destination
+
+
+def schema_versions() -> dict[str, str]:
+    """What the restored data must be read back under.
+
+    `harness/restore.py` refuses a restore whose ontology version does not match the target
+    deployment's. A graph restored under a different ontology is not the same graph: the handling
+    markings the adapter filters on are defined by the scheme, and the edge types a traversal walks
+    are defined by the ontology.
+    """
+    from ontology.handling import load_uk_le_scheme
+    from ontology.loader import load_default_ontology
+
+    scheme = load_uk_le_scheme()
+    return {
+        "ontology": str(load_default_ontology().version),
+        "handling_scheme": getattr(scheme, "name", "uk-le"),
+        "git_sha": git_sha(),
+    }
+
+
+#: §6's audit exception, stated as data so the manifest carries it and `harness/restore.py` can
+#: print it rather than a reader having to know to look for it.
+AUDIT_DISPOSITION: dict[str, Any] = {
+    "separately_replicated": False,
+    "statement": (
+        "05_DEPLOYMENT.md §6 requires audit data to be replicated separately, with its own "
+        "retention policy. It is not. services/api/audit.py writes audit_log to the same "
+        "PostgreSQL instance as sites, monitors, alerts, the export ledger and the review queue, "
+        "so on this profile it is inside the same logical dump as everything else and shares its "
+        "retention. §2.4's destroy confirmation assumes audit data survives a destroy; on "
+        "local-lite it does not."
+    ),
+    "where_it_is": "postgres/dump.sql, table audit_log",
+}
+
+
+def run_backup(
+    *,
+    compose_file: Path,
+    out_root: Path,
+    profile: str,
+    database: str,
+    analytics_container_path: str,
+    require_quiesced: bool,
+) -> Path:
+    """Writes the set and its manifest. Returns the directory."""
+    if require_quiesced and _conduit_is_running(compose_file):
+        raise BackupFailed(
+            "quiesce",
+            "--require-quiesced was given and the Conduit is running. A backup taken while it "
+            "writes can catch the graph store and the analytics database at different instants. "
+            f"Stop it first: docker compose -f {compose_file} stop api",
+        )
+    quiesced = not _conduit_is_running(compose_file)
+
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    target = out_root / f"{stamp}-{profile}-{git_sha()}"
+    target.mkdir(parents=True, exist_ok=False)
+
+    written: list[tuple[str, Path]] = []
+    written.append(
+        (
+            "graph",
+            backup_graph_store(
+                compose_file, target / "graph" / "arcadedb-backup.zip", database=database
+            ),
+        )
+    )
+    written.append(("postgres", backup_postgres(compose_file, target / "postgres" / "dump.sql")))
+    written.append(
+        (
+            "objects",
+            backup_object_store(compose_file, target / "objects" / "data.tar.gz", work_dir=target),
+        )
+    )
+    analytics = backup_analytics(
+        compose_file,
+        target / "analytics" / "analytics.duckdb",
+        container_path=analytics_container_path,
+    )
+    if analytics is not None:
+        written.append(("analytics", analytics))
+    for relative, source in CONFIGURATION_SOURCES:
+        if not source.exists():
+            raise BackupFailed("configuration", f"{source} does not exist")
+        destination = target / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+        written.append(("configuration", destination))
+    for name in ("compose.yaml", "realm.json"):
+        rendered = compose_file.parent / name
+        if rendered.exists():
+            destination = target / "config" / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(rendered, destination)
+            written.append(("configuration", destination))
+
+    entries = []
+    for item, path in written:
+        size, sha = _digest(path)
+        entries.append(
+            BackupEntry(path=str(path.relative_to(target)), bytes=size, sha256=sha, item=item)
+        )
+
+    manifest: dict[str, Any] = {
+        "format": 1,
+        "taken_at": datetime.now(UTC).isoformat(),
+        "profile": profile,
+        "database": database,
+        "quiesced": quiesced,
+        "schema_versions": schema_versions(),
+        "audit_disposition": AUDIT_DISPOSITION,
+        "files": [entry.__dict__ for entry in sorted(entries, key=lambda e: e.path)],
+    }
+    (target / "manifest.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return target
+
+
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="python -m harness.backup",
+        description=(
+            "Takes a backup of a running OspreyFlow deployment (05_DEPLOYMENT.md §6). Restore it "
+            "with `python -m harness.restore <dir>`."
+        ),
+    )
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    parser.add_argument("--profile", default=None)
+    parser.add_argument("--out-root", type=Path, default=DEFAULT_BACKUP_ROOT)
+    parser.add_argument("--generated-root", type=Path, default=DEFAULT_OUT_ROOT)
+    parser.add_argument("--database", default="ospreyflow")
+    parser.add_argument(
+        "--require-quiesced",
+        action="store_true",
+        help="Refuse to run unless the Conduit is stopped. See this module's docstring.",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv if argv is not None else sys.argv[1:])
+    config = load_config(args.config)
+    profile = args.profile or config.profile.value
+    compose_file = args.generated_root / profile / "compose.yaml"
+    if not compose_file.exists():
+        print(
+            f"backup: no rendered deployment at {compose_file}. Run `python -m harness.apply "
+            f"--profile {profile}` first.",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        target = run_backup(
+            compose_file=compose_file,
+            out_root=args.out_root,
+            profile=profile,
+            database=args.database,
+            analytics_container_path=f"{config.components.storage.data}/analytics.duckdb",
+            require_quiesced=args.require_quiesced,
+        )
+    except BackupFailed as failure:
+        print(f"backup: FAILED on '{failure.item}'\n  {failure.detail}", file=sys.stderr)
+        return 1
+
+    manifest = json.loads((target / "manifest.json").read_text(encoding="utf-8"))
+    total = sum(entry["bytes"] for entry in manifest["files"])
+    print(f"backup: {target}")
+    for entry in manifest["files"]:
+        print(f"  {entry['item']:<13} {entry['path']:<34} {entry['bytes']:>12,} bytes")
+    print(f"  {'total':<13} {len(manifest['files']):>2} file(s){'':<26}{total:>12,} bytes")
+    if not manifest["quiesced"]:
+        print(
+            "\n  Taken with the Conduit running. The graph store and the analytics database were "
+            "captured at different instants; use --require-quiesced for a consistent set."
+        )
+    print(f"\n  audit data: {AUDIT_DISPOSITION['where_it_is']} — NOT separately replicated (§6).")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

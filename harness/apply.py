@@ -85,11 +85,18 @@ class SeedOrderingRefused(ApplyFailed):
 @dataclass
 class ApplyResult:
     profile: str
-    stages: list[tuple[str, str]] = field(default_factory=list)
+    #: `(stage, outcome, seconds)`. The duration is recorded because `deploy/RUNBOOK.md` has to
+    #: state a recovery time per path (`05_DEPLOYMENT.md` §6), and a total tells an operator
+    #: nothing about which stage to plan a window around — on `local-lite` the answer is
+    #: overwhelmingly container start-up rather than the data.
+    stages: list[tuple[str, str, float]] = field(default_factory=list)
     started_at: float = field(default_factory=time.monotonic)
+    _last: float = field(default_factory=time.monotonic)
 
     def record(self, stage: str, outcome: str) -> None:
-        self.stages.append((stage, outcome))
+        now = time.monotonic()
+        self.stages.append((stage, outcome, now - self._last))
+        self._last = now
 
     @property
     def elapsed_seconds(self) -> float:
@@ -531,13 +538,13 @@ def main(argv: list[str] | None = None) -> int:
 
     except ApplyFailed as failure:
         print(f"\napply: FAILED at stage '{failure.stage}'\n  {failure.detail}", file=sys.stderr)
-        for stage, outcome in result.stages:
-            print(f"  (completed) {stage}: {outcome}", file=sys.stderr)
+        for stage, outcome, seconds in result.stages:
+            print(f"  (completed) {stage} [{seconds:.0f}s]: {outcome}", file=sys.stderr)
         return 1
 
     print(f"apply: {result.profile} ready in {result.elapsed_seconds:.0f}s")
-    for stage, outcome in result.stages:
-        print(f"  {stage}: {outcome}")
+    for stage, outcome, seconds in result.stages:
+        print(f"  {stage:<10} [{seconds:>3.0f}s]  {outcome}")
     # The two exposed surfaces, and nothing else — `05_DEPLOYMENT.md` §7 puts every store on an
     # internal network. The investigation id is carried in the query string because the Glass reads
     # it from there on first load; without it the workspace opens on an empty working set and the
