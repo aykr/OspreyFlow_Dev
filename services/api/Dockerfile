@@ -48,6 +48,14 @@ ENV PATH="/app/.venv/bin:${PATH}" \
 RUN /app/.venv/bin/python -c "import duckdb; duckdb.connect().install_extension('spatial')" \
     && chown -R osprey:osprey /app
 
+# The deployment's data root, created here and owned by the runtime user.
+# Docker initialises a named volume from the image's own contents at the
+# mount point: if the directory does not exist in the image, the volume is
+# created root-owned and this non-root process cannot write its analytics
+# DuckDB file into it. Creating it with the right owner is what makes
+# `osprey-data` usable rather than merely mounted.
+RUN mkdir -p /var/lib/osprey/data && chown -R osprey:osprey /var/lib/osprey
+
 USER osprey
 EXPOSE 8000
 

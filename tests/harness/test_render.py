@@ -545,3 +545,31 @@ def test_the_batch_loader_is_not_started_by_up(rendered: RenderResult) -> None:
         assert "profiles" not in compose["services"][always_on], (
             f"{always_on} must start with `up`; a profile would silently exclude it"
         )
+
+
+def test_every_declared_volume_is_mounted_by_some_service(rendered: RenderResult) -> None:
+    """A declared volume no service mounts is configuration that reads as correct and does nothing.
+
+    **Found, not anticipated.** `osprey-data` and `osprey-staging` were emitted under the compose
+    file's `volumes:` key from the first render and mounted by nothing, so the Conduit's analytics
+    DuckDB lived in the container's own layer: every seeded event was discarded by `docker compose
+    down`, and Stage 2 §4's backup would have found no file to copy. Nothing failed — the stack came
+    up healthy, the deploy reported green, and the loss only appears the second time you look for
+    data you put in.
+
+    This is `CLAUDE.md` rule 12's question answered for the sentence "the deployment's storage roots
+    are volumes": the test that would fail is this one. The planted violation is the real shape —
+    a volume declared and left unmounted, exactly as it was.
+    """
+    document = yaml.safe_load(rendered.artefacts["compose.yaml"])
+    declared = set(document["volumes"])
+    mounted = {
+        mount.split(":", 1)[0]
+        for service in document["services"].values()
+        for mount in service.get("volumes", [])
+    }
+    unmounted = declared - mounted
+    assert not unmounted, (
+        f"declared but mounted by no service: {sorted(unmounted)} — a named volume that nothing "
+        "mounts stores nothing, and the data an operator believes is persisted is not"
+    )

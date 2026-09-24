@@ -295,7 +295,7 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
             "retries": 30,
             "start_period": "30s",
         },
-    }
+    },
 }
 
 
@@ -339,7 +339,18 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
             # read-only from the repository root, which is where a deployment's own file lives.
             # Relative to the **compose file**, like every other path in it.
             service["volumes"] = [
-                f"{BUILD_CONTEXT_FROM_OUTPUT_DIR}/osprey.yaml:/app/osprey.yaml:ro"
+                f"{BUILD_CONTEXT_FROM_OUTPUT_DIR}/osprey.yaml:/app/osprey.yaml:ro",
+                # **The declared volumes were mounted by nothing.** `osprey-data` and
+                # `osprey-staging` were emitted under `volumes:` from the first render and no
+                # service ever used them, so the Conduit's analytics DuckDB lived in the container
+                # layer and died with the container: `docker compose down` discarded every seeded
+                # event, and Stage 2 §4's backup would have had nothing to copy. Found doing the
+                # seeded run, which needs the seed container and the Conduit to reach *the same*
+                # file. A declared-but-unmounted volume is the shape rule 12 names — configuration
+                # that reads as correct and is exercised by nothing; `test_render.py`'s
+                # `test_every_declared_volume_is_mounted_by_some_service` is the case that fails
+                # if it recurs.
+                f"osprey-data:{config.components.storage.data}",
             ]
             service["depends_on"] = {
                 dependency: {"condition": "service_healthy"}
@@ -349,6 +360,8 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
             variable, default = PORT_OVERRIDES[entry.service]
             container_port = _CONTAINER_PORTS[entry.service]
             service["ports"] = [f"${{{variable}:-{default}}}:{container_port}"]
+        if entry.service == "ingest":
+            service["volumes"] = [f"osprey-staging:{config.components.storage.staging}"]
         service.update(_SERVICE_EXTRAS.get(entry.service, {}))
         services[entry.service] = service
     document = {
@@ -372,6 +385,10 @@ def _render_env(config: OspreyConfig) -> str:
         f"OSPREY_DATA_ROOT={config.components.storage.data}",
         f"OSPREY_STAGING_ROOT={config.components.storage.staging}",
         f"OSPREY_BACKUP_ROOT={config.components.storage.backups}",
+        # The analytics DuckDB file, placed *inside* the mounted data root rather than left on
+        # `services/api/config.py`'s relative `data/analytics.duckdb` default — which resolves to
+        # the container's own working directory, i.e. nowhere that survives the container.
+        f"ANALYTICS_DB_PATH={config.components.storage.data}/analytics.duckdb",
         f"OSPREY_IDENTITY_PROVIDER={config.governance.identity_provider}",
         f"OSPREY_HANDLING_SCHEME={config.governance.handling_scheme}",
         f"OSPREY_ONTOLOGY={config.governance.ontology}",
@@ -557,9 +574,7 @@ def render(
         artefacts={
             "compose.yaml": _render_compose(config, images),
             "deployment.env": _render_env(config),
-            "versions.lock": _render_versions_lock(
-                images, resolver, allow_unpinned=allow_unpinned
-            ),
+            "versions.lock": _render_versions_lock(images, resolver, allow_unpinned=allow_unpinned),
             "RUNBOOK.md": _render_runbook(config, images),
         },
     )
