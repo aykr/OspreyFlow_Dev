@@ -584,3 +584,39 @@ def test_accept_reduced_without_an_offer_changes_nothing_and_says_so(
     assert code == 1
     assert "not on offer" in capsys.readouterr().out
     assert {p.name: p.read_bytes() for p in sorted(rendered_dir.iterdir())} == before
+
+
+# --- Interpolated host ports (Stage 2 §5a made every published port overridable) ---
+
+
+def test_an_interpolated_host_port_resolves_to_its_compose_default() -> None:
+    """The bug this exists for, found the moment the renderer gained port overrides: the host side
+    of a `ports` entry stopped being a bare number, `split(":")` did not even tokenise
+    `${VAR:-8000}:8000` correctly, and `declared_ports` silently returned nothing — so the whole
+    port check passed vacuously on every deployment."""
+    compose = {"services": {"api": {"ports": ["${OSPREY_API_PORT:-8000}:8000"]}}}
+    assert ports.declared_ports(compose, {}) == [("api", 8000)]
+
+
+def test_an_interpolated_host_port_prefers_the_environment_over_the_default() -> None:
+    """Checking the default when the environment overrides it would check a port the deployment is
+    not going to use."""
+    compose = {"services": {"api": {"ports": ["${OSPREY_API_PORT:-8000}:8000"]}}}
+    assert ports.declared_ports(compose, {"OSPREY_API_PORT": "18000"}) == [("api", 18000)]
+
+
+def test_a_plain_and_an_ip_qualified_host_port_both_parse() -> None:
+    compose = {
+        "services": {
+            "plain": {"ports": ["9000:9000"]},
+            "bound": {"ports": ["127.0.0.1:9001:9001"]},
+        }
+    }
+    assert sorted(ports.declared_ports(compose, {})) == [("bound", 9001), ("plain", 9000)]
+
+
+def test_an_unresolvable_port_is_skipped_rather_than_guessed() -> None:
+    """A variable with no default and nothing in the environment names no port. Guessing one would
+    check something arbitrary and report it as this deployment's."""
+    compose = {"services": {"api": {"ports": ["${OSPREY_API_PORT}:8000"]}}}
+    assert ports.declared_ports(compose, {}) == []

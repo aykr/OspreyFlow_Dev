@@ -100,8 +100,9 @@ than the first.
 `osprey.yaml` is the deployment. Version it, review it in a pull request, and never hand-edit a
 generated artefact — regenerate instead.
 
-**Where the generated artefacts live — a gap in this section, found while building the renderer,
-24 September 2026. Proposed, not decided.** This document names two fixed paths for generated
+**Where the generated artefacts live — a gap in this section, found while building the renderer and
+settled by the owner the same day, 24 September 2026.** This document named two fixed paths for
+generated
 output, `deploy/compose/docker-compose.yaml` (§2.4) and `deploy/versions.lock` (§5, §7), and says
 nothing about how either coexists with the four artefacts listed above being renderable for more
 than one profile.
@@ -112,7 +113,7 @@ that can render `local-lite`, `small` and `cluster` — which the harness must b
 profile has been chosen at all — two renders overwrite each other at those paths silently: no
 error, and no drift report either, because the second render is self-consistent with itself.
 
-**Decided — awaiting the owner's own confirmation in writing.** Rendered output goes to
+**Owner's decision, 24 September 2026.** Rendered output goes to
 `deploy/generated/<profile>/`, and the two fixed paths named above are amended to that: there is no
 single `deploy/compose/docker-compose.yaml` and no single `deploy/versions.lock`, because a harness
 that can render three profiles cannot have one of either without the second render destroying the
@@ -126,9 +127,8 @@ rendered from it would assert something untrue. A real deployment's own reposito
 `deploy/generated/<profile>/` exactly as the paragraph above requires, and reviews it in a pull
 request along with `osprey.yaml` itself.
 
-*This amendment is recorded ahead of the owner's own wording and is marked awaiting confirmation
-until he gives it. The renderer already writes to these paths; what is unconfirmed is this
-document's own amendment, not the behaviour.*
+*Confirmed by the owner in writing on 24 September 2026, in the same message that split Stage 2 §5.
+The renderer already wrote to these paths; this amendment is the document catching up.*
 
 ### 2.2 The geospatial screen
 
@@ -242,6 +242,31 @@ nowhere.
 What is running afterwards: the workspace, one Conduit, three workers, ArcadeDB, DuckDB
 in-process, Valkey, MinIO, OpenSearch single-node, PostgreSQL, Keycloak, Ollama, and a
 faster-whisper container. Twelve containers, roughly 11 GB of RAM at rest.
+
+**"Three workers" cannot be rendered from this repository, and the count is not silently changed
+here — Proposed, 24 September 2026, found by the deployable-service enumeration.** There is one
+worker *implementation* in the tree, a generic dispatcher keyed by job type, and it is a class
+inside the Conduit's own package with **no process entrypoint**: no `main()`, no `__main__`, nothing
+that runs it. So zero worker containers are buildable today, not three. Two readings are open and
+this section does not choose between them. **Either** "three workers" means three replicas of one
+worker process — coherent, matching the single generic dispatcher the design actually has, and
+needing only an entrypoint plus a replica count — **or** it means three distinct worker services,
+in which case the count is aspirational and the services do not exist. **The proposal is the
+first**, because it is what the code is shaped like; adopting it means this list should say "three
+worker replicas" and an entrypoint has to be written. Writing that entrypoint is product code and
+was out of scope for the sub-stage that found this.
+
+**Nothing here can be health-checked in the sense the scripted deploy needs — Proposed, 24
+September 2026, same enumeration.** "Wait for health" is the golden-path deploy's own step, and
+`docker compose --wait` needs each service to declare a health check. Checked directly: the Glass's
+image declares one; the Conduit's and the batch loader's do not, and the Conduit **exposes no
+health endpoint at all** — every route it serves is an authenticated `/v1/…` path, so there is
+nothing for a health check to poll even if one were declared. **The proposal:** the Conduit gains an
+unauthenticated liveness route that touches no store and discloses nothing, and its image declares
+a health check against it; the batch loader gets none, because a job that runs once and exits has no
+health to report and a health check on it would be a permanently-failing gate. **Not decided here**
+— adding a route is product code, and which of liveness and readiness the deploy should wait on is a
+real question this section should answer rather than the first implementer choosing.
 
 If Preflight finds less than 16 GB it offers a reduced variant that drops OpenSearch and falls
 back to PostgreSQL full-text, stating the trade-off on screen: search quality degrades and

@@ -13,7 +13,10 @@ answer that is to try.
 from __future__ import annotations
 
 import contextlib
+import os
+import re
 import socket
+from collections.abc import Mapping
 
 from harness.preflight.context import PreflightContext, RenderedOutputMissing
 from harness.preflight.result import CheckResult, failed, passed
@@ -21,15 +24,52 @@ from harness.preflight.result import CheckResult, failed, passed
 NAME = "ports"
 
 
-def declared_ports(compose: dict) -> list[tuple[str, int]]:
-    """`(service, host_port)` for every published port, in declaration order. A compose `ports`
-    entry is `"HOST:CONTAINER"`; only the host side can collide with anything on this machine."""
+#: `${VAR:-default}` as compose writes it. Stage 2 §5a made every published host port overridable,
+#: which means the host side of a `ports` entry is no longer a bare number — and a naive
+#: `split(":")` does not even tokenise it correctly, because `:-` contains the same separator.
+#: Found by this module's own test the moment the renderer changed: without this, `declared_ports`
+#: returned nothing and the whole check passed vacuously on every deployment.
+_INTERPOLATED = re.compile(r"^\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?::-(?P<default>\d+))?\}$")
+
+
+def _host_port(token: str, environ: Mapping[str, str]) -> int | None:
+    """The port that will actually be published: the environment's value when the variable is set,
+    the compose default otherwise. Checking the default when the environment overrides it would
+    check a port the deployment is not going to use."""
+    token = token.strip()
+    if token.isdigit():
+        return int(token)
+    match = _INTERPOLATED.match(token)
+    if match is None:
+        return None
+    value = environ.get(match["name"]) or match["default"]
+    return int(value) if value and value.isdigit() else None
+
+
+def declared_ports(
+    compose: dict, environ: Mapping[str, str] | None = None
+) -> list[tuple[str, int]]:
+    """`(service, host_port)` for every published port, in declaration order.
+
+    A compose `ports` entry is `"HOST:CONTAINER"` or `"IP:HOST:CONTAINER"`; only the host side can
+    collide with anything on this machine. The host side may be an interpolated variable, so it is
+    resolved against the environment the deployment will actually run with.
+    """
+    environ = os.environ if environ is None else environ
     found: list[tuple[str, int]] = []
     for service, spec in (compose.get("services") or {}).items():
         for mapping in (spec or {}).get("ports") or []:
-            host_side = str(mapping).split(":")[0]
-            if host_side.isdigit():
-                found.append((service, int(host_side)))
+            text = str(mapping)
+            # Split off the container side only: the host side may itself contain `:-`.
+            host_side, _, _container = text.rpartition(":")
+            if not host_side:
+                continue
+            # An explicit bind address, `IP:HOST:CONTAINER`, leaves the IP on the front.
+            if host_side.count(":") and not host_side.startswith("${"):
+                host_side = host_side.rpartition(":")[2]
+            port = _host_port(host_side, environ)
+            if port is not None:
+                found.append((service, port))
     return found
 
 

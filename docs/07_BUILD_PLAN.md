@@ -32,7 +32,12 @@ laptop from the documentation, started, and demonstrated (both acceptance scenar
    `Stage 2 §5`. **`Stage 2 §1` and `Stage 2 §2` are built** — the `osprey.yaml` schema,
    `python -m harness.render` and its four artefacts with drift detection and change preview, and
    `python -m harness.preflight` with ten checks, Re-check, `--gate` and §3's offered-never-applied
-   reduced variant. The `cluster` renderer is a loud stub. §3–§7 are not started.
+   reduced variant. **`Stage 2 §5a` is built too** — the deployable-service enumeration, the Glass's
+   image as a standing-rule-8 repayment, and local builds of all three owned images — pulled ahead
+   of §3 by the owner's split of §5, since §3 cannot start a stack whose images do not exist. The
+   `cluster` renderer is a loud stub. §3, §4, §5b, §6 and §7 are not started, and §3 now has two
+   recorded blockers of its own (no health endpoint on the Conduit; §3's "three workers" not
+   renderable).
 2. **The documentation refresh** — moderate: the three drift gates (`domain-model-coverage-check`,
    `route-coverage-check`, `demo-guide-check`) exist and run; the content that empties their own
    allowlists does not exist yet.
@@ -2527,8 +2532,9 @@ find something already finished sitting in the queue.
    ---
 
    **Sub-stages `Stage 2 §1`–`Stage 2 §7` — ACCEPTED, 24 September 2026.** `Stage 2 §1` is **built**
-   apart from the `cluster` renderer and **`Stage 2 §2` is built** (see their own entries); §3–§7
-   are not started. Design and
+   apart from the `cluster` renderer, **`Stage 2 §2` is built**, and **`Stage 2 §5a` is built**
+   (the owner split §5 on 24 September 2026 so the images exist before §3 needs them); §3, §4, §5b,
+   §6 and §7 are not started. Design and
    adversarial review in `06_DECISIONS.md` **ADR-049**, status **Proposed**; each entry below is a
    summary of that record's own amended text, not a second copy of it, and each is Proposed for
    exactly as long as ADR-049 is. **The owner ruled on all seven of that record's open objections on
@@ -2611,11 +2617,9 @@ find something already finished sitting in the queue.
    `05_DEPLOYMENT.md` named fixed paths (`deploy/compose/docker-compose.yaml` §2.4,
    `deploy/versions.lock` §5/§7) which are right for a deployment and wrong for a repository that
    can render three profiles — two renders overwrite each other there silently, each
-   self-consistent, so no drift check fires. **Settled: rendered output goes to
+   self-consistent, so no drift check fires. **Settled — owner's decision, 24 September 2026: rendered output goes to
    `deploy/generated/<profile>/`, and §2.1's two fixed paths are amended to that.** Recorded in
-   `05_DEPLOYMENT.md` §2.1 and **marked awaiting the owner's own confirmation in writing** — the
-   renderer already behaves this way, so what is unconfirmed is the document's amendment, not the
-   code. The directory is gitignored here, which is a separate point from where it sits: this
+   `05_DEPLOYMENT.md` §2.1 and confirmed by the owner in writing. The directory is gitignored here, which is a separate point from where it sits: this
    repository is not a deployment, and the committed `osprey.yaml`'s own header says so. A real
    deployment's repository versions it.
 
@@ -2749,7 +2753,105 @@ find something already finished sitting in the queue.
    multiset of pairs that ignores the score passes while every projection changes). **Stage 2 exit
    test #1**, and this stage's already-stated criterion above.
 
-   **Stage 2 §5 — Packaging, the `osprey bundle` shape. ACCEPTED; D1 confirmed NARROWED, 24
+   **Stage 2 §5 — split into §5a and §5b, owner's decision, 24 September 2026.** `Stage 2 §3`
+   cannot start a stack whose images do not exist, and the rendered compose file named three
+   `ghcr.io/ospreyflow/…` images no registry publishes. **`Stage 2 §5a` runs before `Stage 2 §3`**
+   (enumeration, rule 8 repayment, Dockerfiles, local builds); **`Stage 2 §5b` stays after
+   `Stage 2 §4`** (the bundle, ADR-035's registry, the §B7/§C2 scans). Stage 2's three exit tests
+   are unchanged — this reorders work, it does not re-scope the stage.
+
+   **Stage 2 §5a — the images the golden-path deploy needs. BUILT, 24 September 2026.**
+
+   **The enumeration, run and reported before any image was built, as directed.** `harness/
+   service_inventory.py` holds it as code and `tests/harness/test_service_inventory.py` checks it
+   against the tree, so a directory that gains or loses an entrypoint fails the build until the
+   table and its reasoning are updated — a document table would have gone stale in silence.
+
+   | Directory | Kind | Entrypoint | Imported in-process by | Created | Image |
+   | --- | --- | --- | --- | --- | --- |
+   | `services/api` | **deployable** | `uvicorn services.api.app:app` | — | Phase 3 | existed |
+   | `services/ingest` | **deployable** | `python -m services.ingest` | — | Phase 2 | existed |
+   | `apps/workspace` | **deployable** | `vite build`, served static | — | Phase 4 | **new here** |
+   | `services/extract` | library | none | `services/api` (`review.py`, `app.py`) | Phase 6 | none needed |
+   | `services/resolve` | library | none | `services/api` (`evaluation.py`, `resolution_trigger.py`, `app.py`, `working_set/service.py`) | Phase 6 | none needed |
+   | `services/geocoder` | library | none | its own tests only | Phase 5 | none needed |
+   | `services/compute` | placeholder | none — `__init__.py` and nothing else | — | Phase 7 | none needed |
+
+   **The rule 8 repayment record, corrected by the enumeration that was run to produce it.** The
+   accepted text of ADR-049's ruling 5 records `extract`, `resolve`, `compute` and `geocoder` as a
+   rule 8 violation by their creating phases. **They are not, and no image is built for them.** All
+   four are libraries or an empty placeholder with no process entrypoint; they ship inside the
+   Conduit's image. Rule 8 says "each **service** gets its Dockerfile", and a package that only runs
+   inside another service's process is not a service in that sense — an image for one would be a
+   container that starts nothing. **The single real debt is `apps/workspace`, owed by Phase 4 and
+   paid here**, with its `trivy image` scan wired into both `make ci` and `ci.yml` as rule 8's pair
+   requires. `tests/harness/test_service_inventory.py` asserts both directions: every deployable
+   directory has a Dockerfile, and no library or placeholder does.
+
+   **Finding, raised as Proposed in `05_DEPLOYMENT.md` §3 (rule 11), not silently resolved: §3's
+   "three workers" cannot be rendered.** One worker implementation exists —
+   `services/api/worker.py`'s `JobWorker`, the generic job-type dispatcher ADR-025 specifies — and
+   it is a class with **no process entrypoint**. Zero worker containers are buildable today, not
+   three. The proposal is that "three workers" means three replicas of one worker process, which is
+   what the code is shaped like; adopting it needs an entrypoint, which is product code and outside
+   this sub-stage. A test asserts the finding stays true, so giving the worker an entrypoint fails
+   the build until the finding is revisited.
+
+   **Second finding, same section, and it is a `Stage 2 §3` blocker: nothing can be
+   health-checked.** `docker compose --wait` needs a declared health check per service. The Glass's
+   new image declares one; the Conduit's and the batch loader's do not, and **the Conduit exposes no
+   health endpoint at all** — every route is an authenticated `/v1/…` path, so there is nothing to
+   poll even if a check were declared. Proposed in §3: an unauthenticated liveness route touching no
+   store, and no health check on the batch loader, which exits by design. Adding a route is product
+   code; §3 cannot reach its own exit test until this is settled.
+
+   **Images built locally, from this checkout, with no registry.**
+
+   | Image | Size | Build | Isolation check |
+   | --- | --- | --- | --- |
+   | `osprey/workspace:local` | 66.3 MB | 40s | **healthy**; HTTP 200; SPA deep link 200; runs as `nginx` |
+   | `osprey/api:local` | 1.13 GB | 56s | starts only with a reachable IdP — correct fail-fast, see below |
+   | `osprey/ingest:local` | 599 MB | 0.7s (shared cached layers) | `--help` runs; a batch job, exits by design |
+
+   The Conduit's container **cannot** start in isolation and should not: it fail-fasts on a missing
+   `OIDC_JWKS_URL` and then on an unreachable JWKS endpoint, which is `services/api/config.py`'s own
+   deliberate behaviour. Isolation testing it is therefore not possible, and §3 must order Keycloak
+   before it.
+
+   **A latent bug found the first time the ingest image was ever actually run.** It died on import
+   with `PermissionError: /app/packages/adapters/graph_arcadedb/naming.py`. That file was mode
+   `0600` on this machine; `COPY` preserves the mode, so it landed in the image owned by root and
+   unreadable by the runtime user. **Git tracks it `100644` and a fresh clone is unaffected** — so
+   this was never a repository defect, which is exactly why it went unnoticed. The image should not
+   depend on every developer's umask: `services/ingest`'s Dockerfile now uses `COPY --chown`, and a
+   test asserts both Python images either `--chown` or `chown -R`. `services/api` was immune only by
+   accident, its DuckDB extension step running `chown -R` for an unrelated reason.
+
+   **The renderer now distinguishes the two kinds of image.** OspreyFlow-owned services render a
+   `build:` context plus a local tag, so `docker compose build` produces them with no registry;
+   third-party images keep their pinned upstream references. `versions.lock` records owned images as
+   `source: local-build` with the git SHA they were built from and their Dockerfile path — not a
+   digest, because an image pushed nowhere has none, and recording whatever the local daemon holds
+   for an overwritable tag would look like a pin and be worth nothing. A render naming an owned
+   service with no Dockerfile in the tree **fails by name**, rather than producing a compose file
+   that dies later inside `docker build`.
+
+   **Every published host port is overridable**, with the specification's own defaults
+   (`OSPREY_WORKSPACE_PORT=8080`, `OSPREY_API_PORT=8000`), because Preflight found 8000 already held
+   by an unrelated container on a real machine. That change broke `declared_ports()` in Stage 2 §2 —
+   the host side stopped being a bare number and `split(":")` could not even tokenise
+   `${VAR:-8000}:8000` — so the port check silently found nothing and passed vacuously. Caught by
+   Stage 2 §2's own test the moment the renderer changed, fixed, and given four cases of its own.
+
+   **Trivy, red then green, with the real flags.** A deliberately old base (`nginx:1.21-alpine`,
+   carrying CVE-2022-37434 among others) scanned with the identical
+   `--severity HIGH,CRITICAL --ignore-unfixed --exit-code 1` invocation exits **1**; the Glass's own
+   image exits **0** with zero findings on Alpine 3.21.3.
+
+   **Remaining in §5a:** nothing. The two §3 blockers above are §3's to resolve, and both are
+   recorded as Proposed rather than decided here.
+
+   **Stage 2 §5b — Packaging, the `osprey bundle` shape. ACCEPTED; D1 confirmed NARROWED, 24
    September 2026.** **First task, before any packaging code: the service enumeration.** Enumerate
    the six `services/` directories plus `apps/workspace`, state which are **deployable** and on what
    evidence, and build the `Dockerfile` and `trivy image` CI job for each deployable one that lacks
