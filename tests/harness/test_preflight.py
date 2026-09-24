@@ -1,0 +1,586 @@
+"""`harness/preflight/` — ADR-049's Stage 2 §2.
+
+**Every planted failure below is the shape the check actually reads** (`CLAUDE.md` rule 15's second
+clause). A real socket bound on a port taken out of a real rendered compose file; a real `file://`
+tile URL in a real rendered config; a real system-Python interpreter path; a real second process
+holding the DuckDB file. Not one stubbed return value among them.
+
+**Where a seam exists, it is because the machine cannot be put into the state.** Total RAM and free
+disk cannot be lowered by a test, so `PreflightContext` reaches both through a probe whose return
+shape is exactly the real one's (an integer of bytes; `shutil.disk_usage`'s triple). `localhost`
+resolving to IPv6 only would mean editing `/etc/hosts`, so that one case patches `getaddrinfo` —
+which is still the shape the check reads, and the passing case runs against this machine's real
+resolver. Each of those three is called out at its own test rather than left for a reader to notice.
+"""
+
+from __future__ import annotations
+
+import socket
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import pytest
+import yaml
+from harness.preflight import (
+    basemap,
+    bind_address,
+    cluster,
+    disk,
+    duckdb_lock,
+    memory,
+    ports,
+    runtime,
+)
+from harness.preflight import interpreter as interpreter_check
+from harness.preflight.__main__ import main, run
+from harness.preflight.context import PreflightContext
+from harness.preflight.reduced import accept, offer_for
+from harness.preflight.result import Status
+from harness.render import render, write
+
+from schemas.deployment import OspreyConfig, SearchBackend
+
+GIB = 1024**3
+
+FIXTURE_CONFIG = """
+profile: local-lite
+components:
+  storage:
+    data: /srv/osprey/data
+    staging: /srv/osprey/staging
+    backups: /srv/osprey/backups
+map:
+  default: osm-local
+  providers:
+    - id: osm-local
+      label: OpenStreetMap
+      kind: vector
+      source: file:///data/tiles/osm-local.pmtiles
+      attribution: "© OpenStreetMap contributors"
+      licence: {id: ODbL, redistributable: true, client_scope: open}
+"""
+
+
+@pytest.fixture
+def config() -> OspreyConfig:
+    return OspreyConfig.model_validate(yaml.safe_load(FIXTURE_CONFIG))
+
+
+@pytest.fixture
+def rendered_dir(config: OspreyConfig, tmp_path: Path) -> Path:
+    """A **real** render, written to disk. Every check that reads the rendered deployment reads
+    this, so a planted failure lands in a file the renderer actually produced."""
+    out = tmp_path / "generated" / config.profile.value
+    write(render(config, resolver=lambda _i: "sha256:" + "0" * 64), out)
+    return out
+
+
+@pytest.fixture
+def context(config: OspreyConfig, rendered_dir: Path) -> PreflightContext:
+    return PreflightContext(config=config, out_dir=rendered_dir)
+
+
+# --- (a) memory ---------------------------------------------------------------
+# Seam, named: this machine's RAM cannot be lowered by a test. The probe returns an integer of
+# bytes, which is exactly what the real one returns.
+
+
+def test_memory_below_the_floor_fails_and_says_what_to_do(context: PreflightContext) -> None:
+    context.memory_probe = lambda: 8 * GIB
+    result = memory.check(context)
+
+    assert result.status is Status.FAIL
+    assert "8.0GiB" in result.what_is_wrong and "16.0GiB" in result.what_is_wrong
+    assert "reduced variant" in result.what_to_do
+    assert result.what_to_do, "05 §2.1 requires a remedy, not only a diagnosis"
+
+
+def test_memory_at_the_floor_passes(context: PreflightContext) -> None:
+    context.memory_probe = lambda: 16 * GIB
+    assert memory.check(context).status is Status.PASS
+
+
+def test_memory_is_skipped_not_passed_when_it_cannot_be_read(context: PreflightContext) -> None:
+    """A platform without the sysconf keys must not report `pass`. A check that could not run is
+    not evidence the thing it checks is fine."""
+
+    def unreadable() -> int:
+        raise ValueError("SC_PHYS_PAGES unavailable")
+
+    context.memory_probe = unreadable
+    result = memory.check(context)
+    assert result.status is Status.SKIP
+    assert "not checked" in (result.what_is_wrong + result.what_to_do).lower()
+
+
+# --- (b) disk -----------------------------------------------------------------
+
+
+def test_disk_below_the_projection_fails(context: PreflightContext, tmp_path: Path) -> None:
+    """Planted for real on the free-space side: a real path, a real `shutil.disk_usage` reading,
+    and a projection set above it."""
+    context.config.components.storage.staging = str(tmp_path)
+    context.projected_staging_bytes = 1000 * GIB
+    result = disk.check(context)
+
+    assert result.status is Status.FAIL
+    assert str(tmp_path) in " ".join(result.detail)
+    assert "Staged Parquet" in result.what_is_wrong
+
+
+def test_disk_above_the_projection_passes(context: PreflightContext, tmp_path: Path) -> None:
+    context.config.components.storage.staging = str(tmp_path)
+    context.projected_staging_bytes = 1
+    assert disk.check(context).status is Status.PASS
+
+
+def test_disk_measures_the_nearest_existing_parent_of_an_uncreated_staging_root(
+    context: PreflightContext, tmp_path: Path
+) -> None:
+    """A staging root that does not exist yet is normal at Preflight time and must not be reported
+    as a disk fault."""
+    context.config.components.storage.staging = str(tmp_path / "not" / "created" / "yet")
+    context.projected_staging_bytes = 1
+    result = disk.check(context)
+    assert result.status is Status.PASS
+    assert str(tmp_path) in " ".join(result.detail)
+
+
+# --- (c) GPU ------------------------------------------------------------------
+
+
+def test_gpu_is_skipped_with_a_reason_rather_than_passed(context: PreflightContext) -> None:
+    """On macOS the driver version cannot be read headlessly, so this is `skip`. The brief's own
+    instruction: record it as skip-with-reason, not pass."""
+    from harness.preflight import gpu
+
+    result = gpu.check(context)
+    assert result.status in {Status.SKIP, Status.PASS, Status.FAIL}
+    if sys.platform == "darwin":
+        assert result.status is Status.SKIP
+        assert "macOS" in result.what_is_wrong
+        assert "not a statement" in result.what_is_wrong
+
+
+# --- (d) ports ----------------------------------------------------------------
+
+
+def test_a_port_from_the_real_rendered_compose_file_bound_by_a_real_socket_fails(
+    context: PreflightContext, rendered_dir: Path
+) -> None:
+    """The planted failure in its real shape: read a port out of the rendered compose file, bind it
+    with a real socket, and assert the check names that port and its service."""
+    compose = yaml.safe_load((rendered_dir / "compose.yaml").read_text(encoding="utf-8"))
+    declared = ports.declared_ports(compose)
+    assert declared, "the rendered compose file must publish at least one port for this test"
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as holder:
+        holder.bind(("127.0.0.1", 0))
+        taken_port = holder.getsockname()[1]
+        holder.listen(1)
+
+        # Re-render with a service published on the port we are actually holding, so the check
+        # reads a real file naming a real, really-bound port.
+        compose["services"]["api"]["ports"] = [f"{taken_port}:8000"]
+        (rendered_dir / "compose.yaml").write_text(yaml.safe_dump(compose), encoding="utf-8")
+
+        result = ports.check(context)
+
+    assert result.status is Status.FAIL
+    assert str(taken_port) in result.what_is_wrong
+    assert "api" in result.what_is_wrong
+    assert "make dev-down" in result.what_to_do
+
+
+def test_free_ports_pass(context: PreflightContext, rendered_dir: Path) -> None:
+    compose = yaml.safe_load((rendered_dir / "compose.yaml").read_text(encoding="utf-8"))
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        free_port = probe.getsockname()[1]
+    compose["services"] = {"api": {"image": "x", "ports": [f"{free_port}:8000"]}}
+    (rendered_dir / "compose.yaml").write_text(yaml.safe_dump(compose), encoding="utf-8")
+
+    assert ports.check(context).status is Status.PASS
+
+
+def test_ports_fails_clearly_when_nothing_has_been_rendered(
+    config: OspreyConfig, tmp_path: Path
+) -> None:
+    result = ports.check(PreflightContext(config=config, out_dir=tmp_path / "nothing-here"))
+    assert result.status is Status.FAIL
+    assert "harness.render" in result.what_to_do
+
+
+# --- (e) container runtime ----------------------------------------------------
+
+
+def test_a_missing_container_runtime_fails_and_names_the_remedy(
+    context: PreflightContext,
+) -> None:
+    context.container_runtime = "definitely-not-a-real-container-runtime"
+    result = runtime.check(context)
+    assert result.status is Status.FAIL
+    assert "not on PATH" in result.what_is_wrong
+    assert "Docker Desktop" in result.what_to_do
+
+
+# --- (f) cluster connectivity --------------------------------------------------
+
+
+def test_cluster_connectivity_is_skipped_for_local_lite(context: PreflightContext) -> None:
+    result = cluster.check(context)
+    assert result.status is Status.SKIP
+    assert "local-lite" in result.what_is_wrong
+
+
+def test_an_unreachable_declared_host_fails_and_names_it() -> None:
+    """A real TCP connect to a real address in the documentation-only range (TEST-NET-1,
+    192.0.2.0/24, reserved by RFC 5737 precisely so it routes nowhere)."""
+    config = OspreyConfig.model_validate(
+        {
+            "profile": "cluster",
+            "cluster": {"hosts": [{"name": "node-a", "address": "192.0.2.1"}]},
+        }
+    )
+    context = PreflightContext(config=config, out_dir=Path("/nonexistent"))
+    cluster._TIMEOUT_SECONDS = 1.0  # keep the suite quick; the connect is still real
+
+    result = cluster.check(context)
+    assert result.status is Status.FAIL
+    assert "node-a" in result.what_is_wrong and "192.0.2.1" in result.what_is_wrong
+
+
+# --- (g1) interpreter ----------------------------------------------------------
+
+
+def test_a_real_system_python_interpreter_path_fails(context: PreflightContext) -> None:
+    """The planted failure is a real interpreter that really is outside the project venv."""
+    system_python = Path("/usr/bin/python3")
+    if not system_python.exists():
+        pytest.skip("no /usr/bin/python3 on this machine to plant as the wrong interpreter")
+    context.interpreter = system_python
+
+    result = interpreter_check.check(context)
+    assert result.status is Status.FAIL
+    assert "/usr/bin/python3" in result.what_is_wrong
+    assert ".venv/bin/python" in result.what_to_do
+
+
+def test_the_project_venv_interpreter_passes(context: PreflightContext) -> None:
+    """The case that caught a real bug in this check before it had a test: `.venv/bin/python` is a
+    symlink to the base interpreter that created the venv, so resolving the *file* walks out of the
+    venv and reports a correct setup as broken. This asserts the interpreter actually running this
+    suite is accepted."""
+    context.interpreter = Path(sys.executable)
+    result = interpreter_check.check(context)
+    if not Path(sys.executable).parent.resolve().is_relative_to(
+        interpreter_check.PROJECT_VENV.resolve()
+    ):
+        pytest.skip("not running under the project venv, so there is nothing to prove")
+    assert result.status is Status.PASS
+
+
+# --- (g2) bind address ---------------------------------------------------------
+
+
+def test_bind_address_passes_against_this_machine_s_real_resolver(
+    context: PreflightContext,
+) -> None:
+    result = bind_address.check(context)
+    assert result.status is Status.PASS
+    assert any("localhost" in line for line in result.detail), (
+        "05 §2.1 needs this check to print what it saw, not only judge it"
+    )
+
+
+def test_localhost_resolving_to_ipv6_only_fails_with_the_rehearsal_s_own_diagnosis(
+    context: PreflightContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Seam, named: putting this machine into the IPv6-only state would mean editing `/etc/hosts`.
+    What is patched is `getaddrinfo`, whose return shape is exactly what the check reads."""
+
+    def ipv6_only(*_args: object, **_kwargs: object) -> list[tuple]:
+        return [(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::1", 0, 0, 0))]
+
+    monkeypatch.setattr(bind_address.socket, "getaddrinfo", ipv6_only)
+    result = bind_address.check(context)
+
+    assert result.status is Status.FAIL
+    assert "::1" in result.what_is_wrong
+    assert "127.0.0.1" in result.what_to_do
+
+
+# --- (g3) basemap --------------------------------------------------------------
+
+
+def test_a_real_file_url_for_tiles_that_do_not_exist_fails_with_the_build_remedy(
+    context: PreflightContext,
+) -> None:
+    """The fixture config carries a real `file://` URI pointing at a path that does not exist —
+    exactly the first half of the rehearsal's own basemap failure."""
+    result = basemap.check(context)
+    assert result.status is Status.FAIL
+    assert "does not exist" in result.what_is_wrong
+    assert "scripts.build_local_basemap" in result.what_to_do
+
+
+def test_tiles_that_exist_but_are_still_served_from_file_url_fail_differently(
+    context: PreflightContext, tmp_path: Path
+) -> None:
+    """The second half, and the one that looks like everything worked. A real file on disk, a real
+    `file://` URI pointing at it."""
+    tiles = tmp_path / "osm-local.pmtiles"
+    tiles.write_bytes(b"PMTiles")
+    context.config.map.providers[0].source = f"file://{tiles}"
+
+    result = basemap.check(context)
+    assert result.status is Status.FAIL
+    assert "cannot fetch file://" in result.what_is_wrong
+    assert "/v1/map/local-source" in result.what_to_do
+
+
+def test_a_provider_already_served_over_http_passes(context: PreflightContext) -> None:
+    context.config.map.providers[0].source = "https://tiles.example.org/osm/{z}/{x}/{y}.pbf"
+    assert basemap.check(context).status is Status.PASS
+
+
+# --- (g4) DuckDB lock ----------------------------------------------------------
+
+
+def test_a_real_process_holding_the_duckdb_file_fails_when_seeding(
+    context: PreflightContext, tmp_path: Path
+) -> None:
+    """The planted failure is a real second process with a real exclusive lock — not a patched
+    exception. `DEMO_GUIDE.md`'s own fault: "seeding needs the Conduit stopped"."""
+    db = tmp_path / "analytics.duckdb"
+    context.analytics_db_path = db
+    context.seeding = True
+
+    holder = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            # The connection must be *held*: an unassigned `duckdb.connect(...)` is collected
+            # immediately and releases the lock, which is how the first version of this test
+            # planted no failure at all and the check correctly passed.
+            f"import duckdb, time; _c = duckdb.connect({str(db)!r}); time.sleep(60)",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        deadline = time.time() + 20
+        while time.time() < deadline and not db.exists():
+            time.sleep(0.1)
+        time.sleep(1.0)  # let the holder actually take the lock, not merely create the file
+        result = duckdb_lock.check(context)
+    finally:
+        holder.terminate()
+        holder.wait(timeout=20)
+
+    assert result.status is Status.FAIL, "a live lock holder must block a seed"
+    assert "Stop the Conduit before seeding" in result.what_to_do
+
+
+def test_the_duckdb_lock_is_skipped_when_seeding_was_not_requested(
+    context: PreflightContext,
+) -> None:
+    context.seeding = False
+    result = duckdb_lock.check(context)
+    assert result.status is Status.SKIP
+    assert "--seeding" in result.what_is_wrong
+
+
+def test_an_unlocked_store_passes_when_seeding(context: PreflightContext, tmp_path: Path) -> None:
+    db = tmp_path / "analytics.duckdb"
+    context.analytics_db_path = db
+    context.seeding = True
+    assert duckdb_lock.check(context).status is Status.PASS
+
+
+# --- (h) the reduced variant: offered, never applied silently ------------------
+
+
+def test_below_floor_memory_produces_the_offer_and_changes_nothing_on_disk(
+    context: PreflightContext, rendered_dir: Path
+) -> None:
+    """§3's own last clause, as a test: "It is offered, not applied silently." The rendered output
+    is compared byte for byte before and after, so an offer that quietly re-rendered would fail
+    here rather than be noticed later."""
+    before = {p.name: p.read_bytes() for p in sorted(rendered_dir.iterdir())}
+    context.memory_probe = lambda: 8 * GIB
+
+    results = run(context)
+    offer = offer_for(results, context.config)
+
+    assert offer is not None
+    text = offer.render_text()
+    assert "opensearch" in text, "the offer must name the component it drops"
+    assert "PostgreSQL full-text" in text
+    assert "semantic search is unavailable" in text, "the trade-off must be stated, not implied"
+    assert "--accept-reduced" in text
+
+    after = {p.name: p.read_bytes() for p in sorted(rendered_dir.iterdir())}
+    assert after == before, "the offer must not change deploy/generated/ — §3 forbids it"
+
+
+def test_memory_at_or_above_the_floor_produces_no_offer(context: PreflightContext) -> None:
+    context.memory_probe = lambda: 32 * GIB
+    assert offer_for(run(context), context.config) is None
+
+
+def test_no_offer_when_the_reduced_variant_is_already_in_force(
+    context: PreflightContext,
+) -> None:
+    """Otherwise Preflight offers, every run, something already accepted."""
+    context.memory_probe = lambda: 8 * GIB
+    context.config.components.search = SearchBackend.POSTGRES_FULLTEXT
+    assert offer_for(run(context), context.config) is None
+
+
+def test_accepting_re_renders_through_the_stage_2_1_renderer(
+    context: PreflightContext, rendered_dir: Path
+) -> None:
+    """Accepting must regenerate rather than edit — §2.1: "never hand-edit a generated artefact"."""
+    reduced, written = accept(context.config, rendered_dir)
+
+    assert reduced.components.search is SearchBackend.POSTGRES_FULLTEXT
+    assert {p.name for p in written} == {
+        "compose.yaml",
+        "deployment.env",
+        "versions.lock",
+        "RUNBOOK.md",
+    }
+    compose = yaml.safe_load((rendered_dir / "compose.yaml").read_text(encoding="utf-8"))
+    assert "opensearch" not in compose["services"]
+    assert "reduced variant" in (rendered_dir / "RUNBOOK.md").read_text(encoding="utf-8")
+
+
+# --- --gate --------------------------------------------------------------------
+
+
+def _write_config(tmp_path: Path, body: str) -> Path:
+    path = tmp_path / "osprey.yaml"
+    path.write_text(body, encoding="utf-8")
+    return path
+
+
+def test_gate_exits_non_zero_with_one_failing_check(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Red. The failing check is the real basemap one, failing for the real reason (a `file://`
+    provider whose tiles do not exist), reached through the real CLI."""
+    config_path = _write_config(tmp_path, FIXTURE_CONFIG)
+    out_root = tmp_path / "generated"
+    write(
+        render(OspreyConfig.model_validate(yaml.safe_load(FIXTURE_CONFIG)), allow_unpinned=True),
+        out_root / "local-lite",
+    )
+
+    code = main(
+        ["--config", str(config_path), "--out-root", str(out_root), "--gate", "--only", "basemap"]
+    )
+
+    assert code == 1
+    assert "Launch is blocked" in capsys.readouterr().out
+
+
+def test_gate_exits_zero_with_no_failing_checks(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Green, through the same CLI path — otherwise the red case above proves only that the gate
+    can return 1, not that it distinguishes."""
+    body = FIXTURE_CONFIG.replace(
+        "source: file:///data/tiles/osm-local.pmtiles",
+        "source: https://tiles.example.org/osm/{z}/{x}/{y}.pbf",
+    )
+    config_path = _write_config(tmp_path, body)
+    out_root = tmp_path / "generated"
+    write(
+        render(OspreyConfig.model_validate(yaml.safe_load(body)), allow_unpinned=True),
+        out_root / "local-lite",
+    )
+
+    code = main(
+        ["--config", str(config_path), "--out-root", str(out_root), "--gate", "--only", "basemap"]
+    )
+
+    assert code == 0
+    assert "Launch may proceed" in capsys.readouterr().out
+
+
+def test_only_runs_exactly_one_check(context: PreflightContext) -> None:
+    """Re-check is one check, not a filtered full run — the difference an operator waiting on a
+    thirty-second cluster probe would notice."""
+    results = run(context, only="memory")
+    assert [r.check for r in results] == ["memory"]
+
+
+def test_a_crashing_check_is_reported_as_that_check_failing(context: PreflightContext) -> None:
+    """The other nine results are still worth having, and a traceback is not a remedy."""
+    context.config = None  # type: ignore[assignment]
+    results = run(context, only="memory")
+    assert results[0].status is Status.FAIL
+    assert "the check itself raised" in results[0].what_is_wrong
+
+
+def test_every_check_result_carries_a_recheck_timestamp(context: PreflightContext) -> None:
+    for result in run(context):
+        assert result.rechecked_at.endswith("Z")
+        assert result.check
+
+
+def test_the_cli_itself_does_not_apply_the_reduced_variant_without_the_flag(
+    context: PreflightContext, rendered_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """§3's "offered, not applied silently", exercised through the real CLI rather than through
+    `offer_for()` alone.
+
+    This case exists because of a mutation that got away: a planted silent-apply was caught by
+    nothing, since `offer_for()` has no access to the output directory and so structurally cannot
+    apply anything. The risk was never in that function — it was in this one, where the offer is
+    printed next to the code that could act on it.
+    """
+    context.memory_probe = lambda: 8 * GIB
+    before = {p.name: p.read_bytes() for p in sorted(rendered_dir.iterdir())}
+
+    code = main(["--config", "unused", "--out-root", "unused"], context=context)
+
+    out = capsys.readouterr().out
+    assert "OFFERED" in out
+    assert "--accept-reduced" in out
+    assert code == 1, "the failing memory check must still block"
+    assert {p.name: p.read_bytes() for p in sorted(rendered_dir.iterdir())} == before
+
+
+def test_the_cli_applies_the_reduced_variant_only_with_the_flag(
+    context: PreflightContext, rendered_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The other half: without this, the case above is satisfiable by a CLI that can never apply
+    the variant at all."""
+    context.memory_probe = lambda: 8 * GIB
+    before = (rendered_dir / "compose.yaml").read_text(encoding="utf-8")
+    assert "opensearch" in before
+
+    main(["--config", "unused", "--out-root", "unused", "--accept-reduced"], context=context)
+
+    out = capsys.readouterr().out
+    assert "ACCEPTED" in out
+    assert "opensearch" not in (rendered_dir / "compose.yaml").read_text(encoding="utf-8")
+
+
+def test_accept_reduced_without_an_offer_changes_nothing_and_says_so(
+    context: PreflightContext, rendered_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Passing the flag on a machine that is above the floor must not quietly degrade a deployment
+    that had no reason to be degraded."""
+    context.memory_probe = lambda: 32 * GIB
+    before = {p.name: p.read_bytes() for p in sorted(rendered_dir.iterdir())}
+
+    code = main(["--config", "unused", "--out-root", "unused", "--accept-reduced"], context=context)
+
+    assert code == 1
+    assert "not on offer" in capsys.readouterr().out
+    assert {p.name: p.read_bytes() for p in sorted(rendered_dir.iterdir())} == before
