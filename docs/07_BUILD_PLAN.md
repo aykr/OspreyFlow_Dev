@@ -3475,6 +3475,71 @@ find something already finished sitting in the queue.
    ArcadeDB, and a dangling `CLAUDE.md` citation does not stop the Conduit from enforcing the
    access filter it describes. The two parts' own exit criteria are independent by construction,
    which is exactly why splitting them was the right move rather than a formality.
+
+   **Addendum, 24 September 2026 — the 23 September rehearsal's six findings closed, two product
+   defects fixed with tests, disclosures below.** `docs/demo/2026-09-24/RUNBOOK.md` (23 September)
+   found six ways `DEMO_GUIDE.md` failed when followed literally, behind two real product defects.
+   Both fixed this round, each with a red-then-green test (rule 12/15 discipline):
+
+   - **The Glass ignored an investigation created via the API**, always creating its own empty one
+     on load. Fixed: a `?investigation=<id>` URL parameter now takes precedence over
+     `sessionStorage`, falling through to create-new only when neither is set
+     (`apps/workspace/src/investigation/investigationId.ts`,
+     `apps/workspace/src/investigation/investigationId.test.ts`). `02_GLASS_FRONTEND.md` §2.1 has
+     the full reasoning, recorded there as a proposal pending the owner's acceptance, not settled
+     spec.
+   - **The Glass requested the local basemap at `file:///data/tiles/osm-local.pmtiles`**, a URI no
+     browser can fetch at all. Fixed: `services/api/mapconfig_loader.py`'s `public_view()` rewrites
+     a `file://` tier-1/2 source to a new Conduit route, `GET
+     /v1/map/local-source/{provider_id}` (`services/api/app.py`), which serves the file with Range
+     support and 404s with a named `detail` when it has not been built; the Glass runs a preflight
+     check before mounting the map and shows "Basemap not built" with that detail instead of a
+     silent blank canvas (`apps/workspace/src/map/basemapAvailability.ts`,
+     `apps/workspace/src/map/MapView.tsx`). `02_GLASS_FRONTEND.md` §3.5 has the full reasoning,
+     recorded there as a proposal too — which tier serves a local PMTiles source was a genuine
+     spec silence, checked directly.
+   - Both fixes are covered by backend tests (`tests/services/api/test_map_local_source_route.py`,
+     updated `test_mapconfig_loader.py`/`test_map_providers_route.py`) and frontend unit tests
+     (`investigationId.test.ts`, `basemapAvailability.test.ts`, updated `style.test.ts`) — all
+     green; the pre-existing assertions of the old `file://` passthrough behaviour were updated to
+     assert the fix, not left contradicting it.
+   - `DEMO_GUIDE.md` §2–§3 rewritten to the sequence that actually works: the venv interpreter for
+     `mint_dev_token`, the `127.0.0.1`/`localhost` split with the reason stated, seed-before-Conduit
+     ordering corrected, investigation selection per the fix above, the basemap's remaining gap
+     (a real build needs `planetiler` and network access, neither guaranteed) named with its
+     owning stage rather than glossed over. §0's ArcadeDB memory range corrected to the rehearsal's
+     own 7.75GiB peak. §1's table and §6 corrected to what Fixture Corp actually is — see the
+     disclosure immediately below, not repeated here.
+   - `docs/demo/2026-09-24/demo_up.sh` (the checker's own scripted bring-up, written before this
+     round) reviewed, `bash -n` clean, simplified to use the URL-parameter fix instead of a manual
+     `sessionStorage` console step.
+
+   **Disclosure — Fixture Corp as built is the §C5 property fixture, not the Enron-shaped
+   corporation `DEMO_GUIDE.md` §6 and the Scenario C script (C1–C20) describe. Proposed, not
+   decided.** `scripts.seed_fixture_corp` builds five resolution `Person` pairs, three
+   community-ring fraud rings and one eight-spoke path hub (`06_DECISIONS.md` ADR-035 §C5's own
+   addendum has the exact counts) — proven structurally by
+   `tests/scenarios/test_fixture_corp_shape.py` against real adapters, not merely a docstring
+   claim. It is not the ~150-employee, five-level-hierarchy corporation the Scenario C script's own
+   C1–C20 narrative was written against. Whether that corporation is still to be built, and whether
+   it replaces or sits beside the property fixture, is the owner's decision — marked **Proposed**
+   here, not settled: the property fixture satisfies ADR-035 §C5's own minimum bar for a `shipped`
+   demo, but does not itself prove Scenario C's own script runs end to end.
+
+   **Disclosure — Stage 3a's own status after this round.** What now runs clean, checked directly:
+   every command in the rewritten `DEMO_GUIDE.md` §2–§3, run in order against a real stack; both
+   product defects behind the rehearsal's six findings, fixed with tests. What remains, named
+   rather than glossed: the actual local PMTiles basemap build (needs `planetiler` and a
+   network-reachable OSM extract — neither guaranteed in every environment this guide is followed
+   in, which is exactly why the Map view now fails with a named message instead of a blank one,
+   rather than this round attempting to build planetiler's network dependency away); Fixture
+   Corp's own interactive verification through the Glass (moving the resolution threshold live,
+   `explain` on a merged cluster, the pathfinder) — structurally proven, not yet fully walked
+   through a browser; and Scenario A's A12–A15 steps, built (Phase 7's Clique Metric, Phase 8's
+   judgements/gaps/assumptions/export) but likewise not yet fully walked through a browser. See
+   `docs/demo/2026-09-24/RUNBOOK.md`'s own 24 September continuation for exactly which steps were
+   and were not reached live.
+
 **Stage 4, in full — moved to "Before the milestone," above.** Every sub-stage (4-spec,
 4a–4h) and its own detailed record now sits there, not here, since none of it is optional
 against V1 END TO END; this heading is kept only so a reader scanning stage numbers in order
