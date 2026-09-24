@@ -132,6 +132,28 @@ outside the stated scope of the change — a correction to one section must not 
     that happens to fail by a different path proves the test can fail, but not that it fails for
     the reason it claims to.
 
+    **Second worked example, 24 September 2026 — a fixture that accepts what the real dependency
+    rejects cannot show a gate red for that defect, and hides it instead.** ADR-043's OAuth2 Token
+    Exchange was recorded "built" on 22 September and stayed that way for two days while **never
+    once having worked against a real identity provider**. The request omitted `subject_token`,
+    which RFC 8693 §2.1 makes REQUIRED; a real Keycloak refuses it outright (`access_denied`,
+    "Client not allowed to exchange") and grants the identical request with the field present —
+    measured both ways. Every test passed throughout, because the only thing that code had ever run
+    against was the ephemeral HTTP fixture ADR-043's own Cost section describes, and that fixture
+    happily accepted a request the real server rejects. Nothing was mis-implemented against its own
+    tests; the tests measured something more permissive than the dependency. ADR-043 had even
+    warned that its fixture "does not and cannot prove a real deployed Keycloak realm is correctly
+    configured" — the warning was narrower than the problem, which was in the request this codebase
+    sends, not in anyone's realm.
+
+    **So: a fixture standing in for an external dependency models that dependency's *refusals*, not
+    only its grants.** A fixture built only from the happy path is a specification of what we hope
+    the dependency accepts, and a test against it proves the code agrees with our hopes. Before
+    trusting one, ask which requests the real dependency rejects and make the fixture reject them
+    too — and where the answer is not known, that is itself the finding, because it means nobody
+    has run the code against the real thing. The same question applies to a fake standing in for a
+    store, a queue or an IdP: **what does the real one refuse, and does the fake refuse it?**
+
 ## Conventions
 
 - Python 3.12, FastAPI, async throughout. Pydantic models in `packages/schemas` are the source

@@ -4707,11 +4707,13 @@ alone.
 
 ---
 
-### Amendment, 24 September 2026 — containment moves into the Conduit. **Proposed.**
+### Amendment, 24 September 2026 — containment moves into the Conduit. **Accepted.**
 
-**Status of this amendment: Proposed.** The owner decided its substance on 24 September 2026; the
-record is written here for confirmation. ADR-043 itself remains Accepted — candidate (b) is
-unchanged, and this amends where the containment lives, not which mechanism was chosen.
+**Status of this amendment: Accepted**, 24 September 2026, by the owner directly, as written.
+ADR-043 itself is unchanged — candidate (b) stands; this amends where the containment lives, not
+which mechanism was chosen. The residual risk below is **accepted for V1** with the pre-check and
+ADR-044's stopped-watch reason as its mitigations, and is named for revisit if a realm-level
+per-target refusal becomes available.
 
 **The finding, measured against a real Keycloak 26.0 rather than inferred.** This record's own
 operator verification asks an operator to "attempt an exchange the realm's own policy should refuse,

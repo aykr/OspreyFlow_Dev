@@ -13,7 +13,9 @@ laptop from the documentation, started, and demonstrated (both acceptance scenar
 **Complete, by stage:**
 - Stage 4 (4-spec, 4a–4h) — the product-feature core. Built.
 - Stage 1 — principal resolution (OAuth2 Token Exchange, ADR-043). Built; delivered, not
-  milestone-gated.
+  milestone-gated. **Its 22 September "built" was wrong until 24 September** — the exchange omitted
+  `subject_token` and had only ever run against a fixture more permissive than the real server; see
+  the correction at its own entry.
 - Stage 2a — ArcadeDB stability. Closed; the 10GiB VM floor resolved causes one through four,
   cause five reduced to the same mechanism, the criterion re-pointed to a clean install.
 - `Makefile`/`ci.yml` reconciliation (pulled forward from Stage 6). Built.
@@ -2381,6 +2383,18 @@ finished work inside "Before the milestone" would misstate it as something the m
 on, and filing it inside "After the milestone" would misstate it as a queue item still to be done.
 Whatever else in either list turns out to be already built moves here too, at the point that is
 found, rather than staying filed as if it were still outstanding.
+
+- **Correction, 24 September 2026: this stage's own "built" of 22 September was wrong, and stayed
+  wrong for two days.** The exchange request omitted `subject_token`, which RFC 8693 §2.1 makes
+  REQUIRED — so a real Keycloak refused it outright (`access_denied`, "Client not allowed to
+  exchange") and **the mechanism had never once worked against a real identity provider**. It
+  passed its own tests throughout, because the only thing it had ever run against was the ephemeral
+  HTTP fixture ADR-043's own Cost section describes, and that fixture **accepted a request the real
+  server rejects**. Nothing in this stage was mis-implemented against its own tests; the tests were
+  measuring something more permissive than the dependency. Fixed 24 September 2026 and now covered
+  by a test that needs a real IdP by design; the fixture now serves `client_credentials` and refuses
+  an exchange with no `subject_token`, so it models the dependency's refusals rather than only its
+  grants. `CLAUDE.md` rule 15 carries this as its second worked example.
 
 - **Stage 1 — principal resolution, built, 22 September 2026 (`06_DECISIONS.md` ADR-043: OAuth2
   Token Exchange, RFC 8693).** `PrincipalResolver.resolve_for_owner`/`resolve_for_owner_detailed`

@@ -130,6 +130,32 @@ request along with `osprey.yaml` itself.
 *Confirmed by the owner in writing on 24 September 2026, in the same message that split Stage 2 §5.
 The renderer already wrote to these paths; this amendment is the document catching up.*
 
+### 2.1.1 What the rendered identity-provider realm must carry
+
+The Governance screen's answers render an identity-provider realm alongside the other artefacts.
+Three of its requirements are recorded here because each was found by running the thing rather than
+by reading the documentation, and each fails **silently** when missing — the deployment comes up,
+nothing errors, and the fault surfaces later as something else entirely.
+
+**Protocol mappers for the four custom claims.** The Conduit builds a principal from `clearance`,
+`org_unit`, `receivable_handling_codes` and `roles`. Without a mapper putting each into the issued
+token, an exchanged token verifies perfectly *as a token* and then fails *as a principal*, so the
+error names a missing claim rather than a missing mapper.
+
+**`unmanagedAttributePolicy` set to `ENABLED`.** Keycloak 26 discards user attributes it does not
+recognise, by default and **without reporting it**: the attributes are accepted on write, stored
+nowhere, and absent from the token, with no error at any point. A realm that looks correctly
+configured produces principals with no clearance.
+
+**A view-users grant separate from the impersonation grant.** The Conduit checks that a principal
+is still enabled before exchanging for them, and it must do so with an authority other than the one
+that would mint the token. A pre-check sharing the impersonation grant would be asking the
+component that has already said yes, which is no check at all.
+
+**Client secrets are generated at deployment time, never carried in the repository** (§2.5): the
+realm names the client, the deployment's own environment file carries the secret, and nothing
+version-controlled contains either.
+
 ### 2.2 The geospatial screen
 
 Tier 1 is one button. **Build local basemap** asks for an area — Great Britain, a US state or
