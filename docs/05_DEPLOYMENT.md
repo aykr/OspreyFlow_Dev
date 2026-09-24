@@ -82,6 +82,28 @@ than the first.
 `osprey.yaml` is the deployment. Version it, review it in a pull request, and never hand-edit a
 generated artefact — regenerate instead.
 
+**Where the generated artefacts live — a gap in this section, found while building the renderer,
+24 September 2026. Proposed, not decided.** This document names two fixed paths for generated
+output, `deploy/compose/docker-compose.yaml` (§2.4) and `deploy/versions.lock` (§5, §7), and says
+nothing about how either coexists with the four artefacts listed above being renderable for more
+than one profile.
+
+For a deployment the fixed paths are exactly right: a deployment is one profile, and a single
+`deploy/versions.lock` is what §5's rollback and §7's digest pinning both assume. For a repository
+that can render `local-lite`, `small` and `cluster` — which the harness must be able to do before a
+profile has been chosen at all — two renders overwrite each other at those paths silently: no
+error, and no drift report either, because the second render is self-consistent with itself.
+
+**The proposal, for the owner to accept or replace.** Rendered output goes to
+`deploy/generated/<profile>/`, and a deployment then promotes exactly one profile's output to the
+fixed paths above, as an explicit step with its own confirmation. The renderer writes to
+`deploy/generated/<profile>/` accordingly; the promotion step is not built and is not assumed. If
+the answer is instead that the fixed paths are simply the active deployment's, and that a profile
+switch is expected to overwrite them, that is the smaller change and this paragraph is where to
+record it. **Not decided here** — which of the two a real deployment wants is the owner's call, not
+the renderer's. It is written into this document rather than settled in conversation because a gap
+in the specification is fixed in the specification.
+
 ### 2.2 The geospatial screen
 
 Tier 1 is one button. **Build local basemap** asks for an area — Great Britain, a US state or

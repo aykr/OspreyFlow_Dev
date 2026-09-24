@@ -29,7 +29,9 @@ laptop from the documentation, started, and demonstrated (both acceptance scenar
    **narrowed** form and settled all four follow-on items the same day. The record stays
    **Accepted** on 24 September 2026, with standing rule 8 left unchanged and the four undockerised
    services recorded instead as a rule-8 violation by their creating phases, repaid once in
-   `Stage 2 §5`. `Stage 2 §1` is under construction; §2–§7 are not started.
+   `Stage 2 §5`. **`Stage 2 §1` is built** — the `osprey.yaml` schema, `python -m harness.render`
+   and its four artefacts, drift detection and change preview — apart from the `cluster` renderer,
+   which is a loud stub. §2–§7 are not started.
 2. **The documentation refresh** — moderate: the three drift gates (`domain-model-coverage-check`,
    `route-coverage-check`, `demo-guide-check`) exist and run; the content that empties their own
    allowlists does not exist yet.
@@ -2523,8 +2525,8 @@ find something already finished sitting in the queue.
 
    ---
 
-   **Sub-stages `Stage 2 §1`–`Stage 2 §7` — ACCEPTED, 24 September 2026.** `Stage 2 §1` is built
-   (see its own entry); §2–§7 are not started. Design and
+   **Sub-stages `Stage 2 §1`–`Stage 2 §7` — ACCEPTED, 24 September 2026.** `Stage 2 §1` is **built**
+   apart from the `cluster` renderer (see its own entry); §2–§7 are not started. Design and
    adversarial review in `06_DECISIONS.md` **ADR-049**, status **Proposed**; each entry below is a
    summary of that record's own amended text, not a second copy of it, and each is Proposed for
    exactly as long as ADR-049 is. **The owner ruled on all seven of that record's open objections on
@@ -2564,6 +2566,52 @@ find something already finished sitting in the queue.
    `versions.lock` or the per-deployment runbook at all. §2.4's *running-deployment* drift
    comparison is a second, harder check and is named separately in ADR-049, not folded into this
    one.
+
+   **BUILT, 24 September 2026.** `packages/schemas/deployment.py` (`OspreyConfig` and six
+   supporting models, reusing `MapConfig` rather than redefining it, seven new generated TypeScript
+   types, `make schemas-check` green at 112), `harness/render.py` (`python -m harness.render`, with
+   `--check` and `--diff`), `harness/images.py`, and 31 tests in `tests/harness/`. Every top-level
+   key is optional with a documented default, so the committed `osprey.yaml` still validates —
+   asserted against the real file, not a copy of its shape, and
+   `tests/test_demo_osprey_config_is_tier_1_only.py` is unchanged and passing. Extra top-level keys
+   are rejected, so a misspelled `governence:` fails loudly instead of rendering default governance
+   in silence.
+
+   **Red-then-green, demonstrated rather than asserted (rule 15).** Six mutations were applied to
+   `harness/render.py` in turn and the suite run against each: `find_drift` returning nothing (8
+   tests red), `versions.lock` omitting one image (2), only two artefacts rendered (4), a timestamp
+   injected into the compose file (2), the reduced-variant branch removed (2), and the cluster stub
+   removed (1). Each turned its own tests red and the tree returned green. Every planted drift edits
+   a file the renderer actually produced, in its own real content.
+
+   **Digests: the renderer refuses rather than invents.** Checked directly — this repository pins no
+   image digest anywhere; `deploy/compose/dev.yaml` carries tags only. `versions.lock` resolves each
+   digest from the local Docker daemon and **fails, naming every unresolved image**, rather than
+   writing a lock file whose own name claims a pin it has not got. `--allow-unpinned` marks them
+   `unresolved` in that word. Verified live: the daemon resolved the two images this machine had
+   pulled and the renderer refused on the other nine, by name.
+
+   **What remains in this sub-stage: the `cluster` renderer.** `profile: cluster` raises
+   `ClusterRendererNotBuilt` — a loud stub, per ADR-011's "a different renderer, not a toggle",
+   because a `cluster` render that silently emitted compose would be the worse failure. Kubernetes
+   manifest generation is not built and is not scheduled here.
+
+   **Spec gap raised, not decided (rule 11): where generated artefacts live.**
+   `05_DEPLOYMENT.md` names fixed paths (`deploy/compose/docker-compose.yaml` §2.4,
+   `deploy/versions.lock` §5/§7) which are right for a deployment and wrong for a repository that
+   can render three profiles — two renders overwrite each other there silently, each
+   self-consistent, so no drift check fires. The renderer writes to `deploy/generated/<profile>/`
+   and the question is **Proposed** in `05_DEPLOYMENT.md` §2.1 for the owner to settle. That
+   directory is gitignored: this repository is not a deployment, and the committed `osprey.yaml`'s
+   own header says so.
+
+   **Two smaller findings, recorded rather than fixed.** `generate_ts.py`'s `HEADER` names six
+   source modules and has omitted `mapconfig.py` and `provider_profile.py` since before this
+   sub-stage; adding `deployment.py` to it would have rewritten all 112 generated files for a
+   comment, burying the seven real new types, so the header is left stale and named here instead.
+   And `05_DEPLOYMENT.md` §3's twelve-container list includes "three workers" that have no image in
+   this tree — `service_images()` does not invent them, and settling that count is Stage 2 §5's own
+   directed finding.
 
    **Stage 2 §2 — Preflight, headless. ACCEPTED.** `harness/preflight/`, one module per check, each
    returning `{status, what is wrong, what to do, re-checkable}`; `python -m harness.preflight`
