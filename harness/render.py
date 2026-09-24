@@ -177,12 +177,26 @@ def _render_versions_lock(
     unresolved = []
     for entry in images:
         digest = resolver(entry.image)
+        # `source` is recorded per entry, not once per file, because the two can differ within one
+        # render: a machine that has pulled some of these images and not others produces a lock
+        # file that is partly a real pin and partly a gap, and a reader needs to know which line is
+        # which. `local-docker-daemon` means "this is the digest this machine happened to have",
+        # which is a snapshot, not an authority — Stage 2 §5's bundle resolves from the registry
+        # manifest instead, and will write a different source here when it does.
+        source = "local-docker-daemon"
         if digest is None:
             unresolved.append(entry.image)
             digest = "unresolved"
+            source = "unresolved"
         repository, _, tag = entry.image.partition(":")
         entries.append(
-            {"service": entry.service, "repository": repository, "tag": tag, "digest": digest}
+            {
+                "service": entry.service,
+                "repository": repository,
+                "tag": tag,
+                "digest": digest,
+                "source": source,
+            }
         )
     if unresolved and not allow_unpinned:
         raise UnpinnedImagesError(unresolved)

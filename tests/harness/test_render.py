@@ -123,6 +123,10 @@ def test_versions_lock_names_every_image_in_the_compose_file_with_a_digest(
     assert compose_images, "the compose file declares no images at all"
     for row in lock["images"]:
         assert row["digest"].startswith("sha256:"), f"{row['repository']} has no pinned digest"
+        assert row["source"] == "local-docker-daemon", (
+            f"{row['repository']} records no provenance for its digest; a lock file that does not "
+            "say where a digest came from cannot be told apart from one resolved against a registry"
+        )
 
 
 def test_the_runbook_carries_this_deployment_s_own_paths_not_a_template(
@@ -338,6 +342,7 @@ def test_allow_unpinned_marks_them_explicitly_rather_than_omitting_them(
 
     assert len(lock["images"]) == len(service_images(config))
     assert {row["digest"] for row in lock["images"]} == {"unresolved"}
+    assert {row["source"] for row in lock["images"]} == {"unresolved"}
 
 
 def test_a_partially_resolvable_set_still_refuses_and_names_only_the_missing_ones(
