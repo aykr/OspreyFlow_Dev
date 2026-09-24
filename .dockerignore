@@ -51,12 +51,26 @@ node_modules
 docs
 CLAUDE.md
 .claude
-# ADR-034 §B8 hazard, recorded where the next person will hit it: `docs/design/tokens.css` is
-# product source (twelve TypeScript imports including `apps/workspace/src/main.tsx`), not prose, and
-# excluding `docs` wholesale therefore breaks any future image that builds the Glass from this
-# context before Trigger A moves that file into the product tree. After Trigger A the problem
-# disappears on its own. Any such image built in the interim must handle `tokens.css` explicitly
-# rather than quietly relaxing the line above.
+
+# ADR-034 §B8: `docs/design/tokens.css` is product source, not prose — thirteen real consumers,
+# twelve TypeScript `import`s including `apps/workspace/src/main.tsx`, the Glass's own entry point,
+# plus one `readFileSync`. A build with that import unresolved fails outright, so excluding `docs`
+# wholesale would break any image that builds the Glass from this context. Re-included by name, as
+# the single deliberate exception to the line above, per the owner's instruction of 24 September
+# 2026. Everything else under `docs/` — including `docs/design/OspreyFlow_Brand_Foundations.html`,
+# which nothing code-links — stays excluded, and `tests/test_dockerignore.py` asserts both halves.
+#
+# **This exception is temporary by design.** ADR-034 §B8 decides that `tokens.css` moves with the
+# product tree at Trigger A (a real candidate location: `apps/workspace/src/design/tokens.css`). Once
+# it does, this line has nothing to re-include and should be deleted along with the `docs/` path it
+# rescues — not left behind as a pattern matching nothing.
+#
+# **On the semantics, checked rather than assumed.** Git itself would not honour this: "it is not
+# possible to re-include a file if a parent directory of that file is excluded." Docker's own
+# matcher does honour `!` exceptions, and `pathspec`'s gitignore matcher — what the test uses —
+# agrees with Docker here rather than with git. Verified directly against `pathspec` before this
+# line was added; a real `docker build` is the final authority if the two ever diverge.
+!docs/design/tokens.css
 
 # --- Real data, demo data, and local operator state ---------------------------
 # `CLAUDE.md` rule 9 / `07_BUILD_PLAN.md` standing rule 3 / ADR-035 §C1 and §C3. The exceptions list

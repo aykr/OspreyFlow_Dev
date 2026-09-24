@@ -25,9 +25,10 @@ laptop from the documentation, started, and demonstrated (both acceptance scenar
    exist anywhere in this repository yet (`harness/` holds only its own `__init__.py`). The design
    and its adversarial review are `06_DECISIONS.md` **ADR-049**, status **Proposed**, broken into
    sub-stages **`Stage 2 §1`–`Stage 2 §7`** at this stage's own entry below. The owner ruled on all
-   seven open objections and confirmed D1–D3 on 24 September 2026; the record stays **Proposed**
-   until he says Accepted, and four smaller questions the rulings themselves raised are listed under
-   its own "What remains open".
+   seven open objections and confirmed D1–D3 on 24 September 2026, then corrected D1 to its
+   **narrowed** form and settled all four follow-on items the same day. The record stays
+   **Proposed** until he has read the result. One thing genuinely remains open: standing rule 8
+   needs a recorded exception for the Dockerfiles the narrowed D1 places in `Stage 2 §5`.
 2. **The documentation refresh** — moderate: the three drift gates (`domain-model-coverage-check`,
    `route-coverage-check`, `demo-guide-check`) exist and run; the content that empties their own
    allowlists does not exist yet.
@@ -2470,10 +2471,13 @@ find something already finished sitting in the queue.
    than dressed as one; a usability pass by someone other than whoever built the screens is this
    sub-item's own honest exit criterion.**
 
-   **Amended 24 September 2026 by ADR-049's ruling 2: this check runs at the post-launch `verify`
-   step, not at pre-launch Preflight.** The requirement below is unchanged in substance — the grant
-   must be verified, two-sided, automatically, with the operator wording given here — and only its
-   placement moved. **Why:** performing a real RFC 8693 exchange means *using* the Conduit's
+   **Amended 24 September 2026 by ADR-049's ruling 2 and the owner's settlement the same day: this
+   check runs at the post-launch `verify` step, and that `verify` runs as the final step of
+   `Stage 2 §3`'s golden-path deploy — not at pre-launch Preflight.** The requirement below is
+   unchanged in substance — the grant must be verified, two-sided, automatically, with the operator
+   wording given here — and only its placement moved. **It remains milestone-blocking**, through
+   `Stage 2 §3`'s own exit test #2 rather than through Preflight. **Why:** performing a real RFC 8693
+   exchange means *using* the Conduit's
    confidential-client secret, not merely referencing it, which `05_DEPLOYMENT.md` §2.5 forbids the
    harness outright ("It never sees a secret… The harness records where to look, never what it
    found"); and pre-Launch there is no Keycloak running to exchange against, since it is one of the
@@ -2482,8 +2486,10 @@ find something already finished sitting in the queue.
    surface**: the check appears in its list as a post-launch item with its own Re-check button, and
    the failure wording below is what it shows. Read every "Preflight must/asserts" below as "the
    post-launch `verify` step performs, and Preflight's Re-check surfaces". **One consequence:** the
-   sub-stage carrying `verify` (`Stage 2 §7`) is not milestone-blocking, so the milestone can be
-   reached with this grant unverified — named in ADR-049's "What remains open", not decided here.
+   sub-stage carrying `verify` (`Stage 2 §7`) is not itself milestone-blocking — **settled the same
+   day by pulling that `verify` into `Stage 2 §3`'s golden-path deploy as its final step**, so the
+   grant is verified before the milestone rather than after it. `Stage 2 §7` keeps the Re-check
+   surface for a later re-run from the admin console.
 
    **New requirement, named here rather than left to be discovered while building the screens:
    the token-exchange grant `06_DECISIONS.md` ADR-043 depends on must be verified.** ADR-043
@@ -2520,11 +2526,15 @@ find something already finished sitting in the queue.
    adversarial review in `06_DECISIONS.md` **ADR-049**, status **Proposed**; each entry below is a
    summary of that record's own amended text, not a second copy of it, and each is Proposed for
    exactly as long as ADR-049 is. **The owner ruled on all seven of that record's open objections on
-   24 September 2026 and confirmed all three of its owner decisions** (D1, the artefact shape — as
-   written, not narrowed; D2, the real-data exceptions panel; D3, the three-test stage exit). The
+   24 September 2026 and confirmed all three of its owner decisions** (D1, the artefact shape,
+   **narrowed** to each *deployable* service; D2, the real-data exceptions panel; D3, the three-test
+   stage exit). The
    rulings and their consequences are recorded in ADR-049's own "Owner's rulings" section; the
-   consequential edits they required have been applied here rather than left as notes. Status stays
-   **Proposed** — the owner ruled, and did not say Accepted.
+   consequential edits they required have been applied here rather than left as notes. **D1 was
+   then corrected the same day to its narrowed form** — "each *deployable* service" — which moves
+   the missing Dockerfiles into `Stage 2 §5` as this stage's own work; the four follow-on items were
+   settled in the same message. Status stays **Proposed** — the owner ruled, and has not yet said
+   Accepted.
 
    **On the labels, and the one thing they cost.** These were `2b`–`2h` when the design arrived;
    ruling 1 relabelled them because `2a` below is a *sibling* stage of this one — ArcadeDB stability,
@@ -2562,9 +2572,11 @@ find something already finished sitting in the queue.
    to every declared host; and the four rehearsal-derived checks (the interpreter is the project
    venv; every service's bind address is consistent and printed; the basemap is built and served
    over HTTP, not `file://`; the DuckDB lock holder is not running when seeding is requested).
-   **The ADR-043 two-sided token-exchange check is not in this list** — ruling 2, 24 September 2026,
-   moved it to the post-launch verify step (`Stage 2 §7`), surfaced on this screen's own Re-check
-   after launch. See this stage's own amended "New requirement" paragraph above. **Exit test:** every
+   **The ADR-043 two-sided token-exchange check is not in this list** — ruling 2 moved it out of
+   pre-launch Preflight, and the owner's settlement of 24 September 2026 then placed it as the final
+   step of `Stage 2 §3`'s golden-path deploy, with `Stage 2 §7` keeping the Re-check surface.
+   Preflight still renders it as a post-launch item; it does not gate Launch on something that
+   cannot run before Launch. See this stage's own amended "New requirement" paragraph above. **Exit test:** every
    check has a red-then-green test whose planted failure takes the shape the check actually reads,
    and apply/launch refuses while any check is red.
 
@@ -2579,9 +2591,18 @@ find something already finished sitting in the queue.
    nowhere". The rendered stack is §3's twelve containers, **including Keycloak**, without which
    Stage 2 §2's token-exchange check has nothing to exchange against. `docs/demo/2026-09-24/demo_up.sh` is
    retired into this once it exists; until then it stays. **Exit test:** from a fresh clone, one
-   command reaches a health-checked stack on `local-lite`; the CI half **names the services that
-   must be healthy and the health checks that must pass without Ollama**, rather than "as far as CI
-   can", which cannot fail. **Stage 2 exit test #2.**
+   command reaches a health-checked stack on `local-lite`, **with ADR-043's two-sided exchange green
+   as its final step** — the owner's settlement of 24 September 2026, pulling the post-launch
+   `verify` into this deploy so "reaches a health-checked stack" includes a verified token-exchange
+   grant, and making the check milestone-blocking through this very exit test. `05_DEPLOYMENT.md`
+   §2.5 holds because it runs after Keycloak is up, against the deployment's own credentials, so the
+   harness never holds the secret. The CI half **names the services that must be healthy and the
+   health checks that must pass without Ollama**, rather than "as far as CI can", which cannot fail,
+   and must state whether CI runs a Keycloak at all, since that decides whether the exchange is
+   reachable there. **Stage 2 exit test #2.** *(The settlement names "Stage 2 §4's golden-path
+   deploy"; the golden-path deploy is `Stage 2 §3` and `Stage 2 §4` is backup/restore — read as §3
+   because the quoted phrase is this entry's own exit test and a token exchange has no place in a
+   backup cycle. `06_DECISIONS.md` ADR-049's amendment 26 flags it.)*
 
    **Stage 2 §4 — Backup and restore. PROPOSED.** `python -m harness.backup` writes to
    `backups/<UTC-timestamp>-<profile>-<git-sha>/` with a `manifest.json` naming every file, its
@@ -2602,13 +2623,30 @@ find something already finished sitting in the queue.
    multiset of pairs that ignores the score passes while every projection changes). **Stage 2 exit
    test #1**, and this stage's already-stated criterion above.
 
-   **Stage 2 §5 — Packaging, the `osprey bundle` shape. PROPOSED; shape depends on D1 (awaiting owner
-   confirmation).** **Wraps `scripts/osprey_bundle.py`** — which exists, is tested, and whose own
-   docstring already says "The real `osprey bundle` command wraps `bundle_map_providers` below in
-   Phase 8" — rather than writing a second implementation of the same command. Builds the service
-   images and the bundle tarball; `--images` produces the **signed** archive of every image **and
-   weight file** §5 requires, a path §5 also requires to be tested each release. **First
-   deliverable, because Stage 2 §5 consumes it and it does not exist:** ADR-035 §C1's `shipped`/`internal`
+   **Stage 2 §5 — Packaging, the `osprey bundle` shape. PROPOSED; D1 confirmed NARROWED, 24
+   September 2026.** **First task, before any packaging code: the service enumeration.** Enumerate
+   the six `services/` directories plus `apps/workspace`, state which are **deployable** and on what
+   evidence, and build the `Dockerfile` and `trivy image` CI job for each deployable one that lacks
+   them — **as Stage 2 work, not as debt owed by earlier phases**, per the owner's narrowed D1. The
+   harness's own image (`ghcr.io/ospreyflow/harness:latest`) is built here too, since Stage 2 §6
+   cannot be bootstrapped by its own documented `docker run` until it exists. Starting evidence,
+   checked directly 24 September 2026: only `services/api` (Conduit, `app.py`) and `services/ingest`
+   (batch, `__main__.py`) carry a Dockerfile; `extract`, `resolve`, `compute` and `geocoder` have no
+   entrypoint of any kind today, and `make ci` has `trivy-image-ingest` and `trivy-image-api` only.
+   **The conflict the enumeration must resolve, not rediscover:** `05_DEPLOYMENT.md` §3 specifies
+   that `local-lite` runs "the workspace, one Conduit, **three workers**", and the tree contains
+   exactly one worker entrypoint. **This creates a named exception to standing rule 8** ("never
+   batched into Phase 8"), which that rule needs recorded against it — flagged in
+   `06_DECISIONS.md` ADR-049's ruling 5, not written here, since amending a standing rule is not a
+   sub-stage entry's business.
+
+   **Wraps `scripts/osprey_bundle.py`** — which exists, is tested, and whose own docstring already
+   says "The real `osprey bundle` command wraps `bundle_map_providers` below in Phase 8" — rather
+   than writing a second implementation of the same command. Builds the images for each deployable
+   service and the bundle tarball; `--images` produces the **signed** archive of every image **and
+   weight file** `05_DEPLOYMENT.md` §5 requires, a path §5 also requires to be tested each release.
+   **Also a first deliverable, because this sub-stage consumes it and it does not exist:** ADR-035
+   §C1's `shipped`/`internal`
    manifest schema, its fail-closed registry and `make demo-manifest`, with C1's own two named
    tests (`tests/demo_registry/test_fail_closed.py`); `scripts/demo_guide_check.py`'s
    `DEMO_REGISTRY` is a stand-in for it by its own docstring, not the thing itself. Assertions,
@@ -2663,13 +2701,14 @@ find something already finished sitting in the queue.
    only that *declared* registries are asserted, so a surface declaring none is invisible to it);
    **`/admin` has its access-control test** (standing rule 2, no exceptions for internal endpoints);
    the §2.5 privilege drop from setup to console is asserted; and **`02_GLASS_FRONTEND.md` §6's
-   accessibility floor is asserted against the real screens** by this surface's own a11y spec —
-   ruling 6, which applies the floor here and rules **`02_GLASS_FRONTEND.md` §5's performance budget
-   out of scope** for this surface. Two notes carried with that ruling, both checked: `make
-   glass-a11y` is not in `make ci`'s own target list today, so where the harness's equivalent is
-   enforced is a separate question from whether the floor applies; and this build has already
-   recorded an `axe-core` finding where the spec exercised a showcase page rather than the real
-   surface, which is the failure this spec must not repeat. *Judgement:* a usability pass by someone
+   accessibility floor is asserted against the real screens** by this surface's own a11y spec,
+   **wired into `make ci`** — ruling 6 applies the floor here and rules **`02_GLASS_FRONTEND.md`
+   §5's performance budget out of scope** for this surface; the owner's settlement of 24 September
+   2026 adds the test to `make ci`, run against the real screens and **never a showcase page**. That
+   last clause is load-bearing: this build has already recorded an `axe-core` finding where the spec
+   exercised a showcase page rather than the real surface, and a harness spec pointed at a mock of
+   these six screens would repeat it exactly. Wired into both `make ci` and `ci.yml`, so the
+   divergence recorded at Stage 6 below is not reproduced for a third surface. *Judgement:* a usability pass by someone
    other than whoever built the screens, exactly as this stage's own entry already words it.
 
    **Stage 2 §7 — Post-launch admin console operations. PROPOSED. Not milestone-blocking; still Phase 8.**
@@ -2678,16 +2717,12 @@ find something already finished sitting in the queue.
    capability nothing else in Stage 2 §1–§7 provides, and one this phase's own outcome bullet already
    claims ("the backup, restore, upgrade and verify screens"). Listed here so the boundary is
    visible: not needed to install, start and demonstrate, and not therefore outside the phase.
-   Rollback consumes Stage 2 §1's `versions.lock`. **Also here, moved by ruling 2: ADR-043's
-   two-sided token-exchange check** — success for a disposable verify-only subject, refusal for a
-   deliberately out-of-scope one — because `verify` runs against the running deployment, where the
-   Conduit already holds the confidential client's credentials and the harness never touches the
-   secret. Its own exit test: both sides red-then-green against an ephemeral RFC 8693 token-endpoint
-   fixture, ADR-043's own "a real, if ephemeral, HTTP server rather than a mock" precedent, since a
-   mock cannot exercise the refusal path the containment rests on. **A consequence of the move,
-   stated rather than left implicit:** this sub-stage is not milestone-blocking, so the milestone can
-   now be reached with the ADR-043 grant unverified. Pulling this one check forward is a separate
-   call, named in ADR-049's "What remains open".
+   Rollback consumes Stage 2 §1's `versions.lock`. **This sub-stage keeps the Re-check surface for
+   ADR-043's two-sided check**, whose first run is `Stage 2 §3`'s final deploy step: an operator
+   opening the admin console re-triggers `verify` after a realm change, an IdP upgrade, or a
+   `"stopped"` watch nobody can explain, and sees the same two results from the same code. `verify`
+   is the right home for the mechanism either way, since it runs against the running deployment
+   where the Conduit already holds the credentials and the harness never touches the secret.
 
    **Stage 2's exit (D3 — owner's decision, 24 September 2026): tests #1, #2 and #3 green.** *This is
    Stage 2's own completion, not ADR-042's alpha gate, which additionally requires both acceptance
@@ -3888,7 +3923,9 @@ and gates neither scenario, so it stays here.
 
 6. **Test-infrastructure and CI hygiene** — the lowest-uncertainty stage: `sweep_stale_
    conformance_databases`'s three-part fix, wiring or documenting `test_tile_cache.py`/`test_
-   prefetch.py`/`test_match_live.py`, resyncing `Makefile`'s `test`/`test-all` with `ci.yml`, the
+   prefetch.py`/`test_match_live.py`, resyncing `Makefile`'s `test`/`test-all` with `ci.yml`,
+   **the three `glass-*` targets the earlier `Makefile`/`ci.yml` reconciliation did not cover (new,
+   24 September 2026)**, the
    `make lint` backlog, an `InvestigationStore` direct-Postgres test file, the unbound-test-double
    class fix, `_NullExtractionCandidateStore.store_document_text`, diagnosing (not fixing — that is
    Phase 8a's own reproduction) why `test_statelessness.py` cannot currently connect;
@@ -3902,8 +3939,28 @@ and gates neither scenario, so it stays here.
    response models** (`AlertView`/`AlertJumpResult`/`Investigation` are hand-mirrored in `watches/
    api.ts` with no drift gate the way every `packages/schemas` model already has — widening the
    model list to cover `services/api` route-response models generally, not just this one route
-   module, is the shape of the fix). **Code/test-scaffolding**, no product dependency on any stage
-   above. **Exit criterion, a test, narrowed rather than left contradicting this stage's own scope:**
+   module, is the shape of the fix).
+
+   **New finding, 24 September 2026 — `make ci` and `ci.yml` diverge on the three `glass-*` targets,
+   and the reconciliation this document records as *built* did not cover them.** Found while ruling
+   on ADR-049's accessibility question. Checked directly, both sides: `Makefile`'s `ci` target does
+   **not** list `glass-perf`, `glass-a11y` or `glass-keyboard`, while
+   `.github/workflows/ci.yml`'s own `glass-perf-a11y-keyboard` job runs all three (`npm run
+   test:perf`, `test:a11y`, `test:keyboard` under Playwright with a real Chromium). **So the gates do
+   run in CI** — this is a `make ci`/`ci.yml` divergence, not an ungated floor, and the distinction
+   matters because the weaker reading was briefly recorded before being checked. Why it is worth its
+   own entry: the `Makefile`/`ci.yml` reconciliation is recorded in this document's own standing
+   summary as **built** (22 September 2026, pulled forward from this stage), and these three fell
+   outside it — so "reconciled" currently means "reconciled except for the three browser gates",
+   which is exactly the kind of gap `CLAUDE.md` rule 12 says to name rather than assume closed. It
+   also means a developer running `make ci` locally gets a green that CI would not give them, for
+   the performance budget `CLAUDE.md` rule 10 calls a CI gate. **Fix:** either add the three to
+   `make ci`, or state in the `Makefile` why they are deliberately workflow-only (they need a
+   browser and `npx playwright install`, which is a real reason, just an unrecorded one). ADR-049's
+   `Stage 2 §6` wires the harness's own a11y spec into **both**, so the divergence is not reproduced
+   for a third surface.
+
+   **Code/test-scaffolding**, no product dependency on any stage above. **Exit criterion, a test, narrowed rather than left contradicting this stage's own scope:**
    `make ci` fully green with zero pre-existing-red items, **except `test_statelessness.py` itself**
    — this stage's own scope is diagnosis only (whether the refused connection is a local process-
    spawn/port-binding artefact of this environment or a real statelessness regression), and the

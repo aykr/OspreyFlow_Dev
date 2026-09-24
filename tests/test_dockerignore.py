@@ -56,7 +56,9 @@ MUST_BE_EXCLUDED: tuple[str, ...] = (
     "tests/fixtures/product_tree_link_allowlist.txt",
     "docs/06_DECISIONS.md",
     "docs/07_BUILD_PLAN.md",
-    "docs/design/tokens.css",
+    "docs/design/OspreyFlow_Brand_Foundations.html",
+    "docs/README.md",
+    "docs/archive/anything.md",
     "graphify-out/graph.json",
     ".playwright-mcp/trace.zip",
     ".claude/settings.json",
@@ -82,6 +84,9 @@ MUST_BE_INCLUDED: tuple[str, ...] = (
     "pyproject.toml",
     "uv.lock",
     "osprey.yaml",
+    # ADR-034 §B8: product source that happens to sit under `docs/` today. The single deliberate
+    # exception to the `docs` exclusion, and the reason this tuple is not just "the obvious ones".
+    "docs/design/tokens.css",
 )
 
 
@@ -164,3 +169,49 @@ def test_the_claude_md_line_is_what_excludes_claude_md() -> None:
     covered."""
     assert _repo_spec().match_file("CLAUDE.md")
     assert not _without_line("CLAUDE.md").match_file("CLAUDE.md")
+
+
+# --- The one deliberate exception to the `docs` exclusion (ADR-034 §B8) -------
+
+
+def test_tokens_css_is_included_while_the_rest_of_docs_stays_excluded() -> None:
+    """`docs/design/tokens.css` is product source — the Glass cannot build without it — and is
+    re-included by name, while everything else under `docs/` stays out. Both halves asserted
+    together, because either one alone is satisfiable by a mistake: a `.dockerignore` that dropped
+    the `docs` line entirely would pass the inclusion half, and one that dropped the negation would
+    pass the exclusion half.
+    """
+    spec = _repo_spec()
+    assert not spec.match_file("docs/design/tokens.css"), "tokens.css must reach the build"
+    for excluded in (
+        "docs/06_DECISIONS.md",
+        "docs/07_BUILD_PLAN.md",
+        "docs/00_ARCHITECTURE.md",
+        "docs/README.md",
+        "docs/DEMO_GUIDE.md",
+        "docs/archive/anything.md",
+        # Its own sibling in the same directory, and the sharpest case: the negation must be a
+        # named exception, not a relaxation of `docs/design/`.
+        "docs/design/OspreyFlow_Brand_Foundations.html",
+    ):
+        assert spec.match_file(excluded), f"{excluded} must stay out of the build context"
+
+
+def test_the_negation_line_is_what_includes_tokens_css() -> None:
+    """The load-bearing half: with `!docs/design/tokens.css` removed, the file is excluded again by
+    the `docs` line above it. Without this, the assertion above could be passing because of some
+    other pattern's shape rather than because of the exception that was actually added.
+    """
+    assert not _repo_spec().match_file("docs/design/tokens.css")
+    assert _without_line("!docs/design/tokens.css").match_file("docs/design/tokens.css")
+
+
+def test_the_negation_is_scoped_to_the_one_file_and_not_its_directory() -> None:
+    """Guards the failure this exception could quietly become: a negation widened to
+    `!docs/design/` (or `!docs/design/*`) would re-include the brand foundations HTML alongside
+    tokens.css, putting a private-tree file back in the build context while every other test here
+    still passed.
+    """
+    spec = _repo_spec()
+    assert spec.match_file("docs/design/OspreyFlow_Brand_Foundations.html")
+    assert spec.match_file("docs/design/some_future_note.md")
