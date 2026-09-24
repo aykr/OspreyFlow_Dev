@@ -95,4 +95,6 @@ apps/workspace/playwright-report
 apps/workspace/.env.local
 
 # --- Deployment and harness scaffolding not needed inside a service image ------
+# `deploy/generated/` is rendered deployment output (`python -m harness.render`) and is
+# covered by the `deploy` line below; named here so it is not later assumed absent.
 deploy
