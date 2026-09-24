@@ -3328,6 +3328,101 @@ find something already finished sitting in the queue.
    milestone-relevant question — does a clean install-and-demo run reliably — is answered yes, by
    measurement.**
 
+   **Addendum, 24 September 2026 — the known-failure baseline reconciled by test id, not by
+   count.** The 23 September baseline (`06_DECISIONS.md`, first recorded alongside the ADR
+   cross-reference work) named Floor A = 2 and Floor B = 7 = 9. Floor A's two members were given by
+   full test id there; Floor B's seven were given as four files-and-a-count
+   (`4 tests/conformance/model_port`) plus three individually named tests — **the four
+   `model_port` failures were never enumerated by individual test id in that record; this
+   addendum is the first time they are.** A later measurement inside this same stage's own closing
+   work (above, "Verification run beyond the removed fields' own tests") recorded "629 passed, 2
+   failed" for the broad non-live suite — Floor A alone, matching the original 2 exactly, no third
+   failure, because that specific run happened against a freshly-dropped `ospreyflow` database.
+
+   **Floor A, by test id, 24 September 2026 — three failures observed this round, not two, and
+   why that is not a new failure:**
+   - `tests/test_route_coverage_check.py::test_no_new_drift_beyond_the_allowlist` — unchanged.
+   - `tests/test_test_file_coverage_check.py::test_no_new_drift_beyond_the_allowlist` — unchanged.
+   - `tests/scenarios/test_phase8_exit_criterion_end_to_end.py::test_phase8_exit_criterion_end_to_end`
+     — **not a new Floor A member; this is cause five, diagnosed and closed above, reappearing
+     exactly as diagnosed.** `make test` runs this file (it is not in the `test` target's own
+     `--ignore` list) against whatever `ospreyflow` state already exists, never dropping it first —
+     exactly the "accumulating, never-dropped between runs" condition this stage's own diagnosis
+     identified as cause five's real trigger, distinct from a genuinely fresh install. It failed
+     this round with the identical, already-quoted exception shape (`IndexException` on `CREATE
+     INDEX`, this time on `mx_USES`/`mx_Vehicle`/`mx_Asset` rather than the originally-quoted
+     `mx_USES.originator`) after this same round's own `make test-all` had already run several
+     live-service suites against the same undropped database beforehand. **Whether this file
+     failed in the original baseline's own run cannot be determined from that record — it named a
+     failure count, not a run's own preceding database state** — reported here as an open
+     reconciliation question, not resolved either way. Recorded as **Floor A′ (conditional)**:
+     present when `make test` runs without a preceding database drop, per cause five's own
+     diagnosis; absent from a fresh database, per the "629 passed, 2 failed" measurement above.
+
+   **Floor B, by test id, 24 September 2026 — six of the original seven observed; the seventh out
+   of scope for the targets that measured it, not confirmed passing:**
+   - `tests/conformance/model_port/test_suite.py::test_extract_returns_data_conforming_to_the_requested_schema[model_litellm]`
+   - `tests/conformance/model_port/test_suite.py::test_embed_returns_one_equal_length_vector_per_text_in_order[model_litellm]`
+   - `tests/conformance/model_port/test_suite.py::test_transcribe_returns_correctly_shaped_segments_and_words[model_litellm]`
+   - `tests/conformance/model_port/test_suite_vision.py::test_describe_image_returns_data_conforming_to_the_requested_schema[model_litellm]`
+   - `tests/golden/test_golden_set.py::test_golden_set_recall_has_not_regressed`
+   - `tests/scenarios/test_witness_statement_extraction.py::test_extract_returns_nonempty_persons_from_the_witness_statement`
+
+   **The seventh, `tests/scenarios/test_phase6_extraction_and_resolution.py::
+   test_phase6_exit_criterion_end_to_end`, was not run this round — checked directly, not assumed
+   absent because it passed.** `grep` across `Makefile` finds it exactly once, in `test`'s own
+   `--ignore` list; `test-all`'s own target does not name it either. Neither Make target this round
+   used (`make test`, `make test-all`) ever collects this file; only the original baseline's own
+   "`tests/` run whole" invocation (an unfiltered `pytest tests/`, not re-run this round) would.
+   **Its absence from this round's six is a scope gap in the measurement, not a passing result** —
+   it is Floor B-shaped (needs the same unreachable model backend) and nothing here is evidence it
+   now passes.
+
+   **No test moved category and no new failure appeared, once the scope difference above is
+   accounted for.** Floor A's two static-gate members are identical to the original baseline.
+   Floor B's six directly-comparable members are identical (the fourth `model_port` file/test was
+   never previously named individually, so "identical" here means "matches the file-and-count
+   description," confirmed now by test id for the first time). The one apparent addition
+   (`test_phase8_exit_criterion_end_to_end`) is this stage's own already-diagnosed cause five, not
+   a new mechanism, surfacing because this round's own `make test` invocation did not drop the
+   database first — a real, disclosed condition of *how this round measured*, not a regression in
+   the product between the original baseline and today.
+
+   **Addendum, 24 September 2026 — `make test-all` needs two batches on this round's 10GiB Docker
+   Desktop VM, a fresh data point for the same, already-closed mechanism, not a new one.** Attempted
+   three times this round as a single `pytest` invocation across all 293 `test-all`-target items
+   (the target itself unmodified); ArcadeDB hit `java.lang.OutOfMemoryError: Java heap space` and
+   went `unhealthy` all three times (`docker logs`/`docker inspect` confirmed), the third time even
+   with `ollama`/`litellm`/`speaches` already stopped — matching this stage's own already-diagnosed
+   mechanism (schema/index-creation cost compounding across a long sequential run against one
+   accumulating database, never dropped between the suites `test-all` chains together), not a new
+   failure mode. Worked around, not fixed: split at `tests/services/api/test_prefetch.py` with an
+   ArcadeDB restart and an orphaned-`conformance_*`-database sweep between the two halves — no code
+   or Makefile change. Both halves then passed clean (287 passed, 6 failed — Floor B exactly,
+   above).
+
+   **Cross-referenced against `05_DEPLOYMENT.md` §8's own separate finding** (sustained-ingest
+   -cycle memory/latency degradation under continued real use after install,
+   `test_arcadedb_memory_and_query_latency_under_sustained_ingest_cycles`, named but not built,
+   owning Phase 8): that finding and this stage's own closed diagnosis answer different questions
+   — §8 is about a long-lived database under repeated real use after install; this stage is about
+   one session's own schema-creation cost — but both point at the same underlying resource
+   (ArcadeDB's off-heap memory, claimed and never released) from two different angles, and `make
+   test-all`'s own behaviour this round is a third data point for the same resource, in a
+   CI/local-test context rather than either's own.
+
+   **Proposed, not decided: pull `test_arcadedb_memory_and_query_latency_under_sustained_ingest_
+   cycles` forward, ahead of the harness stage, rather than leaving it at Phase 8 alongside work
+   that depends on the harness existing.** The case for pulling it forward: `make test-all` is now
+   a second, independent, reproducible instance of exactly the sustained-load question that test
+   was named to answer — CI/local development already needs an answer to "does memory/latency
+   degrade under repeated cycles" regardless of whether the harness ever ships, and today's finding
+   is a controlled instance of the same question, sitting unused. The case against: the harness
+   stage's own packaging work may change how ArcadeDB is deployed/configured (a different `-Xmx`, a
+   different VM-budget story) in ways that would make a test built now, against today's `deploy/
+   compose/dev.yaml` configuration, obsolete before it is ever exercised in the deployment it will
+   actually gate. Left for the owner — marked **Proposed**.
+
 2b. **Orphaned `uvicorn` test servers — found and fixed, 23 September 2026.** No prior "rule-14
    stage" existed in this document to file this under, despite the instruction that requested it
    assuming one did; recorded here, next to 2a, as the closest existing kin (both are container/
