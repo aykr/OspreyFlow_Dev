@@ -291,16 +291,18 @@ the development stack publishing there — while a rendered container listens on
 client is constructed during startup but **opens no connection**, so it cannot have raised it. The
 real fault is fixed; this paragraph is the correction, left in place rather than quietly rewritten.
 
-**The list does still omit the model gateway, and that remains a real gap.** The owner's decision of
-24 September 2026: **the Conduit tolerates its absence.** ModelPort-backed routes return a typed
-"model backend unavailable" error rather than a silent result, Preflight reports the gateway absent,
-and when `osprey.yaml` enables models the renderer includes the gateway beside Ollama — thirteen
-containers with models on, eleven off. **Recorded, not yet built:** the decision was taken on the
-mistaken premise corrected above, so it is written here as the owner's and left for him to confirm
-now that the reason he gave for it has turned out not to be the reason. The behaviour may well still
-be wanted on its own merits — a deployment whose models are optional at `local-lite` (§1: "Ollama,
-CPU or one consumer GPU") arguably should degrade rather than refuse to start — but that is a
-different argument from the one it was decided on.
+**The list does still omit the model gateway, and that remains a real gap — Proposed, after
+Stage 2 §3.** A decision on this was taken on 24 September 2026 and **withdrawn the same day by the
+owner**, because its premise was the misdiagnosis corrected above: the gateway was never why the
+Conduit would not start. It returns here on its own merits, to be decided separately.
+
+**The proposal:** the Conduit tolerates the gateway's absence. ModelPort-backed routes return a
+typed "model backend unavailable" error rather than a silent result, Preflight reports the gateway
+absent, and when `osprey.yaml` enables models the renderer includes the gateway beside Ollama —
+thirteen containers with models on, eleven off. **The argument for it, which is not the argument it
+was first decided on:** §1 makes models optional at `local-lite` ("Ollama, CPU or one consumer
+GPU"), so a deployment that refuses to start without a model backend refuses to start over an
+optional component. **Not decided**, and deliberately not built.
 
 **A provisional measurement for the "roughly 11 GB at rest" figure above, 24 September 2026 —
 recorded as provisional on the owner's own instruction, and it should not be quoted as settled.**

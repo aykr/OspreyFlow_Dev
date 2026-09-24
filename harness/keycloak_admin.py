@@ -27,7 +27,17 @@ class RealmConfigurationFailed(RuntimeError):
     loudly here rather than silently later."""
 
 
-def _call(url: str, *, token: str | None = None, data: dict | None = None, form: bool = False):
+def _call(
+    url: str,
+    *,
+    token: str | None = None,
+    data: dict | list | None = None,
+    form: bool = False,
+    method: str | None = None,
+):
+    """`method` is explicit because `urllib` infers POST whenever a body is present, and Keycloak's
+    admin API uses PUT for updates — a PUT sent as POST comes back 405, which reads like a wrong
+    URL rather than a wrong verb. Found configuring the realm's user profile."""
     body = None
     headers: dict[str, str] = {}
     if data is not None:
@@ -39,7 +49,9 @@ def _call(url: str, *, token: str | None = None, data: dict | None = None, form:
             headers["Content-Type"] = "application/json"
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    request = urllib.request.Request(url, data=body, headers=headers)
+    request = urllib.request.Request(
+        url, data=body, headers=headers, method=method or ("POST" if body is not None else "GET")
+    )
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             raw = response.read().decode()
@@ -85,6 +97,7 @@ def grant_service_account_roles(
             f"{issuer}/admin/realms/{realm}/clients/{uuid}",
             token=token,
             data={**found[0], "secret": client_secret},
+            method="PUT",
         )
 
     # The user-profile policy, which is not part of `RealmRepresentation` and so cannot travel in
@@ -95,7 +108,10 @@ def grant_service_account_roles(
     if status == 200 and isinstance(profile, dict):
         profile["unmanagedAttributePolicy"] = UNMANAGED_ATTRIBUTE_POLICY
         status, _ = _call(
-            f"{issuer}/admin/realms/{realm}/users/profile", token=token, data=profile
+            f"{issuer}/admin/realms/{realm}/users/profile",
+            token=token,
+            data=profile,
+            method="PUT",
         )
         if status not in (200, 204):
             raise RealmConfigurationFailed(

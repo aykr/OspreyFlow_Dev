@@ -160,7 +160,28 @@ async def run_verify(
             )
         )
     except PrincipalExchangeRefused as exc:
-        results.append(VerifyResult("2-unprivileged-client-refused-by-keycloak", True, str(exc)))
+        # **The refusal has to come from the token endpoint, not from claim verification.**
+        # `PrincipalExchangeRefused` covers both — "the IdP said no" and "the IdP said yes and the
+        # token it returned did not verify" — and only the first is what this assertion claims.
+        # Found by the mutation that was supposed to turn this red and did not: granting the
+        # unprivileged client the impersonation role made the exchange succeed at the HTTP level,
+        # and this assertion still reported green because the resulting token failed verification
+        # for an unrelated reason. A refusal counted without reading why is a gate that cannot go
+        # red, which is exactly what `CLAUDE.md` rule 15 is about.
+        message = str(exc)
+        refused_by_the_endpoint = "token exchange refused for owner" in message
+        results.append(
+            VerifyResult(
+                "2-unprivileged-client-refused-by-keycloak",
+                refused_by_the_endpoint,
+                message
+                if refused_by_the_endpoint
+                else (
+                    "the exchange was NOT refused by Keycloak — it succeeded and then failed for "
+                    f"another reason, which this assertion must not count as a refusal: {message}"
+                ),
+            )
+        )
     except PrincipalExchangeUnavailable as exc:
         results.append(VerifyResult("2-unprivileged-client-refused-by-keycloak", False, str(exc)))
     finally:

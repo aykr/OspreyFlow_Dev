@@ -530,3 +530,18 @@ def test_the_rendered_realm_carries_only_fields_keycloak_defines() -> None:
     )
     assert REQUIRED_SERVICE_ACCOUNT_ROLES == ("impersonation", "view-users")
     assert "unmanagedAttributePolicy" not in realm
+
+
+def test_the_batch_loader_is_not_started_by_up(rendered: RenderResult) -> None:
+    """`docker compose up --wait` reads any non-zero exit as a failed start, and the batch loader
+    takes required arguments and exits 2 without them — so a job behaving exactly as designed
+    failed the whole deploy. A compose profile keeps it out of `up` while leaving it runnable on
+    demand, which is what a run-once job is."""
+    compose = yaml.safe_load(rendered.artefacts["compose.yaml"])
+
+    assert compose["services"]["ingest"]["profiles"] == ["batch"]
+    assert compose["services"]["ingest"]["restart"] == "no"
+    for always_on in ("api", "workspace", "arcadedb", "keycloak"):
+        assert "profiles" not in compose["services"][always_on], (
+            f"{always_on} must start with `up`; a profile would silently exclude it"
+        )

@@ -307,6 +307,12 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
         # running the golden path, where `ingest` sat in `Restarting (2)`.
         restart = "no" if entry.service == "ingest" else "unless-stopped"
         service: dict[str, object] = {"restart": restart}
+        if entry.service == "ingest":
+            # A compose profile, so `up` does not start it at all. The batch loader takes required
+            # arguments and exits 2 without them, and `up --wait` reads any non-zero exit as a
+            # failed start — so a job behaving exactly as designed failed the whole deploy. It is
+            # run on demand (`--profile batch`, or `compose run`), which is what a run-once job is.
+            service["profiles"] = ["batch"]
         if entry.owned:
             # An owned image is built from this repository, not pulled. `image:` is still set, so
             # the built image has a stable local tag that `versions.lock` can name and that a later
@@ -327,6 +333,14 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
         # path: with no ordering it died on `httpx.ConnectError` reaching a Keycloak that was still
         # importing its realm, and then restarted forever.
         if entry.service == "api":
+            # The Conduit reads `osprey.yaml` at startup for its map-provider registry, and the
+            # image does not contain it — the Dockerfile copies `packages/` and `services/` only,
+            # deliberately, because a deployment's configuration is not part of its image. Mounted
+            # read-only from the repository root, which is where a deployment's own file lives.
+            # Relative to the **compose file**, like every other path in it.
+            service["volumes"] = [
+                f"{BUILD_CONTEXT_FROM_OUTPUT_DIR}/osprey.yaml:/app/osprey.yaml:ro"
+            ]
             service["depends_on"] = {
                 dependency: {"condition": "service_healthy"}
                 for dependency in ("keycloak", "arcadedb", "valkey", "postgres")

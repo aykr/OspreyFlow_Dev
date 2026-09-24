@@ -2748,8 +2748,89 @@ find something already finished sitting in the queue.
    deploy"; this was read as §3 and flagged, and the owner confirmed §3 on 24 September 2026 — "your
    reading of §3 is correct and stands".)*
 
+   **Stage 2 §3 — COMPLETE. Exit test #2 is GREEN, 24 September 2026.**
+
+   ```
+   apply: local-lite ready in 31s
+     render: 5 artefact(s) → deploy/generated/local-lite
+     preflight: all checks pass or skip
+     build: owned images built from this checkout
+     up: 6 service(s) healthy
+     grants: impersonation + view-users on the Conduit's service account
+     verify: 3/3 assertions green
+   ```
+
+   **From a fresh clone, one command reaches a health-checked stack with principal resolution
+   working.** Ten containers run (the batch loader is a compose profile and is not started by `up`);
+   six declare health checks and all six are healthy, the Conduit among them.
+
+   **Six further defects, each found only by running it, each fixed:** the generated env file set
+   `POSTGRES_HOST` but not the port, database or password, so the Conduit dialled 5433 where nothing
+   listened; the Conduit reads `osprey.yaml` at startup and the image deliberately does not contain
+   it, so it is mounted read-only from the repository root; `docker compose up --wait` read the
+   batch loader's by-design exit 2 as a failed start, so it became a compose profile; and
+   `keycloak_admin`'s HTTP helper never set a method, so a `PUT` went out as `POST` and Keycloak
+   answered 405 — which reads like a wrong URL rather than a wrong verb.
+
+   **The three-sided verify, and the mutation that found a hole in it.** All three assertions run
+   against the real deployed realm, and each was shown red by its own mutation and green again
+   after:
+
+   | Mutation | Assertion | Result |
+   | --- | --- | --- |
+   | Impersonation grant removed from the Conduit | 1 — exchange succeeds | **red**, then green |
+   | Unprivileged client granted impersonation | 2 — unprivileged client refused | **red**, then green |
+   | Pre-check removed (`OIDC_ADMIN_USERS_URL` unset) | 3 — disabled subject refused | **red**, then green |
+
+   **Mutation 2 initially failed to go red, and that was the round's most useful finding.**
+   `PrincipalExchangeRefused` covers two different events — "the IdP refused the exchange" and "the
+   IdP granted it and the token then failed verification" — and assertion 2 counted either as a
+   refusal. So a client that Keycloak had just been told to allow still scored green, because the
+   token it got back failed claim verification for an unrelated reason. **A refusal counted without
+   reading why is a gate that cannot go red.** Assertion 2 now requires the refusal to have come
+   from the token endpoint, and the mutation turns it red as it should.
+
+   **Memory, re-measured with the Conduit up, as the owner required** (sampled every 5s):
+
+   | Container | Peak (MiB) |
+   | --- | --- |
+   | arcadedb | 2,308 |
+   | opensearch | 936 |
+   | keycloak | 528 |
+   | **api (the Conduit, healthy)** | **233** |
+   | whisper | 152 |
+   | minio | 105 |
+   | postgres / valkey / ollama / workspace | 61 / 21 / 11 / 11 |
+   | **Peak total** | **4,456 MiB of a 9,932 MiB VM (45%)** |
+
+   Against the provisional figure taken with the Conduit exited (3,607 MiB), the Conduit contributes
+   ~233 MiB and ArcadeDB climbs ~310 MiB once real schema work happens. **The stack fits the 10 GiB
+   VM.** Still to note honestly: this is ten containers, not the twelve §3 names — the model gateway
+   is not rendered (Proposed, above) and the batch loader is on-demand — and it is a first-launch
+   measurement, not a sustained-use one, which is what §8's named test is for.
+
+   **Remaining:** the seeded golden path (`--seed hmp,fixture-corp`) and the Glass reachability
+   check through the printed URL were not run — the stack is up and the ordering guard is
+   implemented and unit-tested, but the seeded end-to-end pass is owed.
+
+   **Superseded — the fifth pass's entry, kept because it was pushed and read.**
+
    **Stage 2 §3 — fifth pass, 24 September 2026. A diagnosis I reported was wrong, and correcting
    it is this entry's main content.**
+
+   **The misdiagnosis, recorded as a worked example on the owner's instruction: a name standing in
+   for an examination.** The traceback carried an exception class. The class belonged to `asyncpg`
+   and I read it as the model gateway — because the model gateway was what the previous round had
+   been about, and the symptom ("connection refused during startup") fitted the story I already
+   had. Two cheap checks would each have refuted it in under a minute: grepping the exception class,
+   which names `asyncpg` and nothing else; and reading `LiteLLMClient.__init__`, which builds an
+   `httpx.AsyncClient` and opens no connection, so it cannot refuse one. **I did neither, and
+   reported a conclusion as though I had.** The cost was not the wasted time — it was a decision
+   the owner took on a premise I supplied and had not checked, which then had to be withdrawn.
+   **The rule this yields, narrower than "verify your claims": when a failure is attributed to a
+   component, the attribution is a claim about that component's code, and it is checked in that
+   component's code — not inferred from what the component is called or from what the session
+   happened to be discussing.**
 
    **The correction.** The fourth pass reported that the Conduit would not start because the
    rendered stack has no model gateway, and the owner made a decision on that basis. **It was an
@@ -4518,6 +4599,18 @@ and gates neither scenario, so it stays here.
    api.ts` with no drift gate the way every `packages/schemas` model already has — widening the
    model list to cover `services/api` route-response models generally, not just this one route
    module, is the shape of the fix).
+
+   **New finding, 24 September 2026 — a dev-convenience default living in product code.**
+   `services/api/config.py` defaults `POSTGRES_PORT` to **5433**, not PostgreSQL's 5432, and says
+   why in its own comment: `deploy/compose/dev.yaml` publishes there to avoid colliding with a
+   native Postgres on some developers' machines. **That is a fact about this repository's
+   development stack, encoded as the product's default.** Any deployment that does not happen to
+   share the workaround gets a Conduit dialling a port nothing is on, and the error names neither
+   the port nor the variable — it cost a misdiagnosis on 24 September 2026 (ADR-049's Stage 2 §3
+   entry has that record). **The rendered env file now sets all four PostgreSQL values explicitly,
+   which fixes the deployment; the default is the debt.** The fix here is to make the default 5432
+   and let the dev stack set 5433 explicitly, inverting which case pays for the workaround — a
+   one-line change with a test, deliberately not made in a harness round.
 
    **New finding, 24 September 2026 — `make ci` and `ci.yml` diverge on the three `glass-*` targets,
    and the reconciliation this document records as *built* did not cover them.** Found while ruling
