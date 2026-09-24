@@ -29,9 +29,10 @@ laptop from the documentation, started, and demonstrated (both acceptance scenar
    **narrowed** form and settled all four follow-on items the same day. The record stays
    **Accepted** on 24 September 2026, with standing rule 8 left unchanged and the four undockerised
    services recorded instead as a rule-8 violation by their creating phases, repaid once in
-   `Stage 2 §5`. **`Stage 2 §1` is built** — the `osprey.yaml` schema, `python -m harness.render`
-   and its four artefacts, drift detection and change preview — apart from the `cluster` renderer,
-   which is a loud stub. §2–§7 are not started.
+   `Stage 2 §5`. **`Stage 2 §1` and `Stage 2 §2` are built** — the `osprey.yaml` schema,
+   `python -m harness.render` and its four artefacts with drift detection and change preview, and
+   `python -m harness.preflight` with ten checks, Re-check, `--gate` and §3's offered-never-applied
+   reduced variant. The `cluster` renderer is a loud stub. §3–§7 are not started.
 2. **The documentation refresh** — moderate: the three drift gates (`domain-model-coverage-check`,
    `route-coverage-check`, `demo-guide-check`) exist and run; the content that empties their own
    allowlists does not exist yet.
@@ -2526,7 +2527,8 @@ find something already finished sitting in the queue.
    ---
 
    **Sub-stages `Stage 2 §1`–`Stage 2 §7` — ACCEPTED, 24 September 2026.** `Stage 2 §1` is **built**
-   apart from the `cluster` renderer (see its own entry); §2–§7 are not started. Design and
+   apart from the `cluster` renderer and **`Stage 2 §2` is built** (see their own entries); §3–§7
+   are not started. Design and
    adversarial review in `06_DECISIONS.md` **ADR-049**, status **Proposed**; each entry below is a
    summary of that record's own amended text, not a second copy of it, and each is Proposed for
    exactly as long as ADR-049 is. **The owner ruled on all seven of that record's open objections on
@@ -2596,14 +2598,26 @@ find something already finished sitting in the queue.
    because a `cluster` render that silently emitted compose would be the worse failure. Kubernetes
    manifest generation is not built and is not scheduled here.
 
-   **Spec gap raised, not decided (rule 11): where generated artefacts live.**
-   `05_DEPLOYMENT.md` names fixed paths (`deploy/compose/docker-compose.yaml` §2.4,
+   **`versions.lock` digests are a snapshot of this machine, and each entry says so.** They are
+   resolved from the **local Docker daemon**, so a lock file records what this machine happened to
+   have pulled rather than what a registry currently serves; every entry carries its own `source`
+   field (`local-docker-daemon`, or `unresolved`) because the two can differ line by line within a
+   single render, and a reader needs to know which is which. **Stage 2 §5's bundle resolves from the
+   registry manifest instead** and will write a different `source` when it does — that is the
+   authoritative path, and this one is the development convenience that does not pretend to be it.
+
+   **Spec gap raised — now decided, awaiting the owner's own wording (rule 11): where generated
+   artefacts live.**
+   `05_DEPLOYMENT.md` named fixed paths (`deploy/compose/docker-compose.yaml` §2.4,
    `deploy/versions.lock` §5/§7) which are right for a deployment and wrong for a repository that
    can render three profiles — two renders overwrite each other there silently, each
-   self-consistent, so no drift check fires. The renderer writes to `deploy/generated/<profile>/`
-   and the question is **Proposed** in `05_DEPLOYMENT.md` §2.1 for the owner to settle. That
-   directory is gitignored: this repository is not a deployment, and the committed `osprey.yaml`'s
-   own header says so.
+   self-consistent, so no drift check fires. **Settled: rendered output goes to
+   `deploy/generated/<profile>/`, and §2.1's two fixed paths are amended to that.** Recorded in
+   `05_DEPLOYMENT.md` §2.1 and **marked awaiting the owner's own confirmation in writing** — the
+   renderer already behaves this way, so what is unconfirmed is the document's amendment, not the
+   code. The directory is gitignored here, which is a separate point from where it sits: this
+   repository is not a deployment, and the committed `osprey.yaml`'s own header says so. A real
+   deployment's repository versions it.
 
    **Two smaller findings, recorded rather than fixed.** `generate_ts.py`'s `HEADER` names six
    source modules and has omitted `mapconfig.py` and `provider_profile.py` since before this
@@ -2629,6 +2643,69 @@ find something already finished sitting in the queue.
    cannot run before Launch. See this stage's own amended "New requirement" paragraph above. **Exit test:** every
    check has a red-then-green test whose planted failure takes the shape the check actually reads,
    and apply/launch refuses while any check is red.
+
+   **BUILT, 24 September 2026.** `harness/preflight/`, one module per check, a common
+   `CheckResult` (`check`, `status` of `pass`/`fail`/`skip`, `what_is_wrong`, `what_to_do`,
+   `rechecked_at`, plus printed `detail`), and `python -m harness.preflight` with `--only <check>`
+   as Re-check, `--gate` for Launch, `--seeding` and `--accept-reduced`. It reads
+   `deploy/generated/<profile>/` from Stage 2 §1 — the ports it checks are the ports the **rendered
+   compose file** declares, not ports anyone believes the profile implies. Ten checks: §2.1's six
+   (`memory`, `disk`, `gpu`, `ports`, `container-runtime`, `cluster-connectivity`) and the four the
+   23 September rehearsal produced (`interpreter`, `bind-address`, `basemap`, `duckdb-lock`).
+   35 tests; `make test` went 730 → 765 passing with the same three failures.
+
+   **Every failing check gives a remedy, enforced rather than encouraged.** `failed()` raises if
+   either `what_is_wrong` or `what_to_do` is empty — §2.1's "explains what is wrong and what to do
+   about it" is a constructor precondition, so a check cannot ship half of it.
+
+   **`skip` is a third status and never a lenient pass.** Recorded per the brief's own instruction:
+   **GPU driver version on macOS is skip-with-reason** — `nvidia-smi` does not exist and Metal
+   exposes no equivalent — as is cluster connectivity at `local-lite`, the DuckDB lock when seeding
+   was not requested, and the memory floor on a platform whose page counts cannot be read. Each
+   says in its own output that it did not run and is not evidence the thing it checks is correct.
+   `05_DEPLOYMENT.md` §2.1 now states the rule too.
+
+   **The reduced variant is offered and never applied.** Below the 16 GiB floor the run prints the
+   offer, names the component it drops (`opensearch`) and the fallback (PostgreSQL full-text),
+   states the trade-off in §3's own terms, and changes nothing. `--accept-reduced` is the only
+   thing that acts, and it **re-renders through Stage 2 §1's renderer** rather than editing
+   generated files. It leaves `osprey.yaml` alone: that is the operator's file, reviewed in a pull
+   request, and persisting the choice belongs to the Components screen.
+
+   **Red-then-green, demonstrated.** Six mutations, each turning its own tests red before the tree
+   returned green: ports never reporting a taken port (1), basemap accepting `file://` (3),
+   interpreter resolving the symlinked binary (1), the DuckDB lock never detected (1), the offer
+   made regardless of memory (1). Planted failures are real: a real socket bound on a port read out
+   of a real rendered compose file, a real `file://` URI, a real `/usr/bin/python3`, a real second
+   process holding the DuckDB file. The three seams — total RAM, free disk, and `getaddrinfo` for
+   the IPv6-only case — exist only where the machine cannot be put into the state, and each is
+   named at its own test.
+
+   **A seventh mutation got away, and closing it changed the code.** A planted silent-apply of the
+   reduced variant was caught by *nothing*: the test asserted `offer_for()` changed no files, but
+   that function has no access to the output directory and so structurally cannot change any. The
+   real risk was in the CLI, where the offer is printed beside the code that could act on it.
+   `main()` gained a context injection point and three CLI-level tests; the same mutation is now
+   caught. This is rule 15's own lesson arriving a second time: a planted violation that some other
+   property already forbids proves nothing about the property under test.
+
+   **Two bugs this round found in its own code before a test did**, both recorded because both were
+   the check being wrong rather than the environment: the interpreter check resolved
+   `.venv/bin/python` through its symlink into the base interpreter and so rejected the very venv it
+   exists to accept; and the first DuckDB lock test discarded its connection immediately
+   (`duckdb.connect(...)` unassigned is collected at once), so it planted no lock and the check was
+   right to pass. Both are now covered by the cases that would have caught them.
+
+   **What remains:** nothing in this sub-stage. The ADR-043 token-exchange check is deliberately
+   absent and the package docstring says so, with the owner's ruling and both reasons, so it is not
+   later added here by someone reading §2.1's list alone.
+
+   **Spec gap raised as Proposed (rule 11): what projects the staging volume.** §2.1 says "disk
+   against the projected staging volume" and nothing anywhere derives that projection. The check
+   compares against an assumed 20GiB default and labels it as an assumption in its own output
+   rather than presenting a fabricated requirement. Recorded in `05_DEPLOYMENT.md` §2.1 with a
+   proposal (a function of the declared sources and a retention window, both already collected) and
+   not decided.
 
    **Stage 2 §3 — Scripted golden-path deploy. ACCEPTED.** `python -m harness.apply`: fresh checkout →
    render (Stage 2 §1) → preflight (Stage 2 §2) → start stack → wait for health → seed if requested, with

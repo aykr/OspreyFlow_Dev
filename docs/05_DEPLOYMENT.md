@@ -72,6 +72,24 @@ availability, container runtime version, and for `cluster` connectivity to every
 failure explains what is wrong and what to do about it, with a **Re-check** button rather than a
 loop of edit-and-rerun. Preflight must pass before Launch is enabled.
 
+**A check that cannot run reports that it did not run — it never reports success.** Some of the
+list above is not answerable on every platform or in every profile: a GPU driver version cannot be
+read headlessly on macOS, and cluster connectivity has nothing to connect to at `local-lite`. Each
+such case is reported as *skipped, with the reason*, and a skipped check does not block Launch.
+What it must never do is report a pass, which would tell an operator their GPU driver is fine when
+nobody looked.
+
+**What projects the staging volume is not specified, and the check says so — Proposed, 24 September
+2026 (found building Preflight).** "Disk against the projected staging volume" names a comparison
+without naming what produces the projection: nothing in this document derives a staging figure from
+a deployment's own sources, formats, retention or expected load. The headless check therefore
+compares free space against an assumed default and labels it, in its own output, as an assumption
+rather than a derived requirement. **The proposal:** the projection is a function of the declared
+sources and a retention window, both of which the Ingest and Components screens already collect, and
+this section should say so and name the inputs. **Not decided here** — a wrong projection is worse
+than a labelled assumption, because staged Parquet is what every migration and rebuild replays from,
+and an operator who trusts a fabricated number discovers it is wrong at the point of recovery.
+
 **The generated artefacts are shown before anything runs.** The final screen is a diff, not a
 progress bar: `osprey.yaml` on the left, and the files that will be written on the right —
 compose or Kubernetes manifests, environment files, `versions.lock` with every image digest
@@ -94,15 +112,23 @@ that can render `local-lite`, `small` and `cluster` — which the harness must b
 profile has been chosen at all — two renders overwrite each other at those paths silently: no
 error, and no drift report either, because the second render is self-consistent with itself.
 
-**The proposal, for the owner to accept or replace.** Rendered output goes to
-`deploy/generated/<profile>/`, and a deployment then promotes exactly one profile's output to the
-fixed paths above, as an explicit step with its own confirmation. The renderer writes to
-`deploy/generated/<profile>/` accordingly; the promotion step is not built and is not assumed. If
-the answer is instead that the fixed paths are simply the active deployment's, and that a profile
-switch is expected to overwrite them, that is the smaller change and this paragraph is where to
-record it. **Not decided here** — which of the two a real deployment wants is the owner's call, not
-the renderer's. It is written into this document rather than settled in conversation because a gap
-in the specification is fixed in the specification.
+**Decided — awaiting the owner's own confirmation in writing.** Rendered output goes to
+`deploy/generated/<profile>/`, and the two fixed paths named above are amended to that: there is no
+single `deploy/compose/docker-compose.yaml` and no single `deploy/versions.lock`, because a harness
+that can render three profiles cannot have one of either without the second render destroying the
+first. Each profile's four artefacts sit under its own directory and are read from there by
+Preflight, by the scripted deploy and by the admin console alike.
+
+The directory is **not** version-controlled in this repository, which is a separate point from
+where it sits: this repository is not a deployment — the committed `osprey.yaml` describes itself as
+the demo and CI configuration and says a real deployment's own is generated — so committing output
+rendered from it would assert something untrue. A real deployment's own repository versions
+`deploy/generated/<profile>/` exactly as the paragraph above requires, and reviews it in a pull
+request along with `osprey.yaml` itself.
+
+*This amendment is recorded ahead of the owner's own wording and is marked awaiting confirmation
+until he gives it. The renderer already writes to these paths; what is unconfirmed is this
+document's own amendment, not the behaviour.*
 
 ### 2.2 The geospatial screen
 
