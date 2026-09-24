@@ -377,6 +377,8 @@ def main(argv: list[str] | None = None) -> int:
         postgres_password = generate_client_secret()
         postgres_user = "osprey"
         postgres_database = "ospreyflow"
+        minio_user = "ospreyflow"
+        minio_password = generate_client_secret()
         env_path = out_dir / "deployment.env"
         # Both minted here and written only into generated, gitignored output — 05_DEPLOYMENT.md
         # §2.5 ("never sees a secret… records where to look, never what it found") and §7
@@ -388,7 +390,8 @@ def main(argv: list[str] | None = None) -> int:
             + f"OSPREY_OIDC_CLIENT_SECRET={secret}\n"
             + f"OSPREY_KEYCLOAK_ADMIN_PASSWORD={admin_password}\n"
             + f"OSPREY_POSTGRES_PASSWORD={postgres_password}\n"
-            + f"OSPREY_MINIO_PASSWORD={generate_client_secret()}\n"
+            + f"OSPREY_MINIO_USER={minio_user}\n"
+            + f"OSPREY_MINIO_PASSWORD={minio_password}\n"
             # One value, two names: the compose file sets the server's own root password from
             # `OSPREY_ARCADEDB_PASSWORD`, and the Conduit's adapter reads `ARCADEDB_ROOT_PASSWORD`.
             # They were generated separately at first, and the Conduit died on a 403 "User/Password
@@ -418,7 +421,16 @@ def main(argv: list[str] | None = None) -> int:
             + f"POSTGRES_DB={postgres_database}\n"
             + f"OSPREY_POSTGRES_USER={postgres_user}\n"
             + f"OSPREY_POSTGRES_DB={postgres_database}\n"
-            + "MINIO_ENDPOINT=minio:9000\n",
+            # **The third instance of one value under two names**, after ArcadeDB and Postgres
+            # above. `MinIO` is configured from `OSPREY_MINIO_*` and `services/ingest/staging.py`
+            # reads `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`, falling back to `minioadmin`/`minioadmin`
+            # — so the seed reached the staging bucket with the wrong credentials and MinIO answered
+            # `ACCESS_DENIED during HeadBucket`, naming neither variable. Found running the seed.
+            # `tests/harness/test_apply_env.py` is the case that fails if a fourth pair appears
+            # and only one side of it is written.
+            + "MINIO_ENDPOINT=minio:9000\n"
+            + f"MINIO_ACCESS_KEY={minio_user}\n"
+            + f"MINIO_SECRET_KEY={minio_password}\n",
             encoding="utf-8",
         )
         result.record("render", f"{len(rendered.artefacts) + 1} artefact(s) → {out_dir}")
