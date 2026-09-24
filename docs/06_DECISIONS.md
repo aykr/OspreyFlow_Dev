@@ -5718,7 +5718,42 @@ not payload. Three specific holes:
 
 This is Stage 2 exit test #1 and the stage's already-stated criterion.
 
-#### Stage 2 §5 — Packaging (the `osprey bundle` shape; D1, narrowed)
+#### Stage 2 §5 — split into §5a and §5b, owner's decision, 24 September 2026
+
+**Why the split, in the owner's own reason: `Stage 2 §3` cannot start a stack whose images do not
+exist.** The golden-path deploy's exit test is "from a fresh clone, one command reaches a
+health-checked stack" — and the rendered compose file named `ghcr.io/ospreyflow/api:0.1.0` and two
+siblings that no registry publishes. Packaging sat after §4 in the original ordering, so the one
+thing §3 depends on would have been built two sub-stages after it.
+
+- **`Stage 2 §5a` — runs now, before `Stage 2 §3`.** The deployable-service enumeration; the
+  standing rule 8 repayment (a Dockerfile for whatever the enumeration finds deployable and
+  lacking one); a Dockerfile for `apps/workspace`; and local image builds, so `docker compose
+  build` produces every OspreyFlow-owned image with no registry involved.
+- **`Stage 2 §5b` — stays after `Stage 2 §4`.** The bundle itself, ADR-035 §C1's distribution-class
+  registry, and the ADR-034 §B7 / ADR-035 §C2 artefact scans. None of it is needed to start a
+  stack, and all of it needs the backup/restore work §4 produces.
+
+**Stage 2's three exit tests are unchanged** — the split reorders work, it does not re-scope the
+stage. Test #3 ("each planted violation fails the bundle") remains §5b's.
+
+#### Stage 2 §5a — the images the golden-path deploy needs
+
+**BUILT, 24 September 2026, and its enumeration corrected a decision recorded in this record three
+messages earlier.** `07_BUILD_PLAN.md`'s Stage 2 §5a entry has the full table, the build results and
+the two findings raised as Proposed in `05_DEPLOYMENT.md` §3. The correction, because it is this
+record's own: ruling 5 and amendment 20 state that `extract`, `resolve`, `compute` and `geocoder`
+are "a violation of rule 8 by the phases that created them". **They are not.** The enumeration —
+which the owner directed to run before any image was built, for exactly this purpose — finds all
+four are libraries or an empty placeholder with no process entrypoint of any kind; they ship inside
+the Conduit's image and never owed one of their own. Standing rule 8 says "each **service** gets its
+Dockerfile", and a package that only ever runs inside another service's process is not a service in
+that sense. **The one real rule 8 debt the enumeration found is `apps/workspace`** — the Glass, a
+deployable process with no image from Phase 4 until this sub-stage — and it is repaid here. The
+earlier wording is left in place above rather than edited away, because it was accepted and acted
+on, and this is what correcting it looks like.
+
+#### Stage 2 §5b — Packaging (the `osprey bundle` shape; D1, narrowed)
 
 Builds the images for **each deployable service** and the bundle tarball; `--images` for air-gapped
 install.
