@@ -2748,6 +2748,53 @@ find something already finished sitting in the queue.
    deploy"; this was read as §3 and flagged, and the owner confirmed §3 on 24 September 2026 — "your
    reading of §3 is correct and stands".)*
 
+   **Stage 2 §3 — the deploy is built; exit test #2 is NOT green, and four blockers are named.**
+   Third pass, 24 September 2026. The machinery exists and its own gate works; running it from a
+   fresh clone is what produced the findings below, none of which were visible from unit tests.
+
+   **Built.** `harness/apply.py` (six stages: render → preflight gate → build → up-and-wait →
+   seed → verify), `harness/realm.py` (the rendered realm import — the Conduit's client, an
+   unprivileged client, the four protocol mappers, `unmanagedAttributePolicy: ENABLED`, a
+   disposable verify subject and a disabled one), `harness/keycloak_admin.py` (the two
+   service-account grants a realm import cannot express), `harness/verify.py` (ADR-043's three
+   assertions, real — not stubbed), and Keycloak in the rendered compose with realm import,
+   `--features=token-exchange` and a health check. Client secret and Keycloak admin password are
+   minted at apply time into the generated, gitignored env file and never printed.
+
+   **§2.4's ordering guard refuses rather than works around.** Asked to seed into a running
+   Conduit, `apply` stops and says to stop it first. Silently stopping it would be taking a
+   data-affecting decision on the operator's behalf.
+
+   **Exit test #2: NOT green. The gate stopped it, correctly, at preflight.**
+
+   | Blocker | Detail |
+   | --- | --- |
+   | Port 8000 in use | An unrelated container on this machine. The Stage 2 §5a override exists (`OSPREY_API_PORT`) and was used; recorded because preflight found it before anything was built. |
+   | **Basemap never built** | `osprey.yaml`'s default provider points at a PMTiles file that has never been produced — the plan already records `build_local_basemap` as untested live. **A fresh clone cannot reach a health-checked stack while the deployment it renders declares a basemap nobody can build.** |
+   | **Two fabricated image tags** | See below. |
+   | Twelve-container memory | **Still unmeasured** — the stack never came up, so the 9.7 GiB question the owner asked is still open. Peak observed was 110 MiB, which is the *absence* of a stack, not a measurement of one. |
+
+   **My own defect, and the sharpest finding of the round: two of the eight third-party image
+   references written for Stage 2 §5a did not exist.** `minio/minio:RELEASE.2024-10-13T13-34-11Z`
+   and `ghcr.io/speaches-ai/speaches:0.6.2` were written from memory and never checked. A real
+   `docker compose up` aborted the entire pull with `manifest unknown`, taking five other images'
+   downloads with it. Every unit test passed throughout, because none of them asked whether the
+   references resolve. **This is rule 15's second worked example in a different costume: a check
+   that only ever runs against things it invented cannot discover that they are invented.** Fixed,
+   and `tests/harness/test_image_references.py` now resolves every third-party reference — its own
+   fallback and the weakness of that fallback are stated in the test rather than hidden.
+
+   **A second self-inflicted bug, found the same way:** `--profile` reached
+   `model_copy(update=...)`, which does not validate, so a bare string was assigned to an
+   enum-typed field and failed several lines later on `.value` with a message naming neither the
+   flag nor the profile. Fixed, with the test.
+
+   **Remaining before exit test #2 can be green:** a buildable basemap (or a deployment default
+   that does not require one), and then the twelve-container memory measurement. Both are named
+   here rather than worked around.
+
+   **Superseded — the previous pass's entry, kept because it was pushed and read.**
+
    **Stage 2 §3 — RESUMED 24 September 2026 under the owner's four decisions; the verify step is
    built and proven, the deploy script is not.** The round before this one stopped at the
    token-exchange finding. Resuming it found a second, larger defect in the same code path, so this

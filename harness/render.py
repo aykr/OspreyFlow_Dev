@@ -140,6 +140,13 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
     settles that against §3's count, and is the owner's directed finding before any image is built),
     so they are not invented here.
     """
+    # **These third-party references are verified to resolve, and that is not a given.** Two of the
+    # eight written for Stage 2 §5a did not exist at all — `minio/minio:RELEASE.2024-10-13…` and
+    # `ghcr.io/speaches-ai/speaches:0.6.2` — and were only found when a real `docker compose up`
+    # aborted the whole pull with `manifest unknown`. They were written from memory rather than
+    # checked. Where this repository already knows a working reference, it is taken from
+    # `deploy/compose/dev.yaml` rather than invented a second time.
+    # `tests/harness/test_image_references.py` now resolves every one of them.
     images: list[ServiceImage] = [
         ServiceImage(
             "workspace",
@@ -164,11 +171,11 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
     images.extend(
         [
             ServiceImage("valkey", "valkey/valkey:8.0"),
-            ServiceImage("minio", "minio/minio:RELEASE.2024-10-13T13-34-11Z"),
+            ServiceImage("minio", "quay.io/minio/minio:RELEASE.2024-11-07T00-52-20Z"),
             ServiceImage("postgres", "postgres:16.4"),
             ServiceImage("keycloak", "quay.io/keycloak/keycloak:26.0"),
             ServiceImage("ollama", "ollama/ollama:0.3.12"),
-            ServiceImage("whisper", "ghcr.io/speaches-ai/speaches:0.6.2"),
+            ServiceImage("whisper", "ghcr.io/speaches-ai/speaches:latest-cpu"),
         ]
     )
     if config.components.search is SearchBackend.OPENSEARCH:
@@ -186,6 +193,43 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
 PORT_OVERRIDES: dict[str, tuple[str, int]] = {
     "workspace": ("OSPREY_WORKSPACE_PORT", 8080),
     "api": ("OSPREY_API_PORT", 8000),
+    # Published because the post-launch verify talks to it from the host, and because an operator
+    # diagnosing a principal-resolution fault needs the admin console.
+    "keycloak": ("OSPREY_KEYCLOAK_PORT", 8081),
+}
+
+_CONTAINER_PORTS: dict[str, int] = {"workspace": 8080, "api": 8000, "keycloak": 8080}
+
+#: Per-service compose stanzas that are not derivable from the image alone. Keycloak is the only
+#: entry today and every line of it is load-bearing — `05_DEPLOYMENT.md` §2.1.1 records why each
+#: matters and that each fails silently when missing.
+_SERVICE_EXTRAS: dict[str, dict[str, object]] = {
+    "keycloak": {
+        # `--import-realm` reads the realm this harness renders beside the compose file.
+        # `--features=token-exchange` is not optional: without it the exchange grant does not
+        # exist at all and every principal resolution for a watch owner fails.
+        "command": ["start-dev", "--import-realm", "--features=token-exchange"],
+        "volumes": ["./realm.json:/opt/keycloak/data/import/realm.json:ro"],
+        "environment": {
+            "KC_BOOTSTRAP_ADMIN_USERNAME": "${OSPREY_KEYCLOAK_ADMIN:-admin}",
+            "KC_BOOTSTRAP_ADMIN_PASSWORD": "${OSPREY_KEYCLOAK_ADMIN_PASSWORD:?set in the "
+            "deployment env file}",
+            # Keycloak 26 serves health on a separate management port and only when asked.
+            "KC_HEALTH_ENABLED": "true",
+        },
+        "healthcheck": {
+            # Keycloak's image carries no shell utilities to curl with; its own bundled JRE does.
+            "test": [
+                "CMD-SHELL",
+                "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\r\n"
+                "Host: localhost\r\nConnection: close\r\n\r\n' >&3 && cat <&3 | grep -q UP",
+            ],
+            "interval": "10s",
+            "timeout": "5s",
+            "retries": 30,
+            "start_period": "30s",
+        },
+    }
 }
 
 
@@ -203,8 +247,9 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
             service["image"] = entry.image
         if entry.service in PORT_OVERRIDES:
             variable, default = PORT_OVERRIDES[entry.service]
-            container_port = 8080 if entry.service == "workspace" else 8000
+            container_port = _CONTAINER_PORTS[entry.service]
             service["ports"] = [f"${{{variable}:-{default}}}:{container_port}"]
+        service.update(_SERVICE_EXTRAS.get(entry.service, {}))
         services[entry.service] = service
     document = {
         "name": f"osprey-{config.profile.value}",

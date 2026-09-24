@@ -1,0 +1,343 @@
+"""`python -m harness.apply` — the scripted golden-path deploy.
+
+`06_DECISIONS.md` ADR-049's Stage 2 §3. `05_DEPLOYMENT.md` §2.3's headless equivalent of clicking
+Launch, and the thing Stage 2's exit test #2 measures: from a fresh clone, one command reaches a
+health-checked stack on `local-lite`.
+
+## The stages, in order, and why the order is the deliverable
+
+1. **Render** (Stage 2 §1) — `deploy/generated/<profile>/`, plus the identity-provider realm.
+2. **Preflight `--gate`** (Stage 2 §2) — exits non-zero while any check fails, **before** anything
+   is built or started. A deploy that builds images and then discovers the ports are taken has
+   wasted several minutes to tell you something it knew at the start.
+3. **Build** — `docker compose build` for the OspreyFlow-owned images (Stage 2 §5a gave them
+   `build:` contexts precisely so this needs no registry).
+4. **Up, and wait** — `docker compose up -d --wait`, then a per-service health wait that **names
+   the service that did not become healthy**. `--wait` on its own reports "container is unhealthy"
+   without saying which, and on a twelve-container stack that is the difference between a diagnosis
+   and a search.
+5. **Seed**, when asked, under §2.4's **ordering guard** — below.
+6. **Verify** — the three-sided token-exchange check ADR-043's amendment specifies. Part of what
+   "health-checked" means: a stack whose principal resolution does not work is not a stack anyone
+   can use.
+
+## §2.4's ordering guard, and what it actually guards against
+
+`DEMO_GUIDE.md` records the fault in its own words: "seeding needs the Conduit stopped (DuckDB takes
+an exclusive lock the Conduit's own `AnalyticsPort` also holds a handle to) — so the Conduit starts
+twice, not once, with seeding in between."
+
+So when seeding is requested this module **resets the database, seeds while the Conduit is stopped,
+and starts the Conduit afterwards** — and refuses outright if asked to seed into a running Conduit
+rather than quietly working around it. A deploy that silently stopped the Conduit to seed would be
+making a data-affecting decision on the operator's behalf.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from harness.keycloak_admin import grant_service_account_roles
+from harness.preflight import ALL_CHECKS, PreflightContext
+from harness.preflight.result import Status
+from harness.realm import (
+    generate_client_secret,
+    render_realm_json,
+)
+from harness.render import (
+    DEFAULT_CONFIG_PATH,
+    DEFAULT_OUT_ROOT,
+    REPO_ROOT,
+    load_config,
+    render,
+)
+from harness.render import write as write_artefacts
+from schemas.deployment import Profile
+
+#: How long any one service gets to become healthy. Generous because the Conduit applies the graph
+#: schema at startup and Keycloak imports a realm, and because a timeout that fires on a slow
+#: machine teaches an operator to raise it rather than to read it.
+DEFAULT_HEALTH_TIMEOUT_SECONDS = 300
+
+
+class ApplyFailed(RuntimeError):
+    """A stage failed. Carries the stage name so the caller reports *where*, not only *that*."""
+
+    def __init__(self, stage: str, detail: str) -> None:
+        self.stage = stage
+        self.detail = detail
+        super().__init__(f"{stage}: {detail}")
+
+
+class SeedOrderingRefused(ApplyFailed):
+    """§2.4's ordering guard, refusing rather than working around. See the module docstring."""
+
+
+@dataclass
+class ApplyResult:
+    profile: str
+    stages: list[tuple[str, str]] = field(default_factory=list)
+    started_at: float = field(default_factory=time.monotonic)
+
+    def record(self, stage: str, outcome: str) -> None:
+        self.stages.append((stage, outcome))
+
+    @property
+    def elapsed_seconds(self) -> float:
+        return time.monotonic() - self.started_at
+
+
+def _run(args: list[str], *, stage: str, cwd: Path | None = None, timeout: int = 1800) -> str:
+    result = subprocess.run(
+        args, capture_output=True, text=True, cwd=cwd, timeout=timeout, check=False
+    )
+    if result.returncode != 0:
+        raise ApplyFailed(stage, f"{' '.join(args)} exited {result.returncode}\n{result.stderr}")
+    return result.stdout
+
+
+def compose_services(compose_file: Path) -> list[str]:
+    out = _run(
+        ["docker", "compose", "-f", str(compose_file), "config", "--services"], stage="inspect"
+    )
+    return [line.strip() for line in out.splitlines() if line.strip()]
+
+
+def services_declaring_a_health_check(compose_file: Path) -> list[str]:
+    """Only services with a declared health check can be waited on. The batch loader has none by
+    design (`05_DEPLOYMENT.md` §3: a job that runs once and exits has no health to report), so
+    waiting on everything would wait forever on something that is working correctly."""
+    declared = []
+    for service in compose_services(compose_file):
+        inspected = _run(
+            ["docker", "compose", "-f", str(compose_file), "ps", "--format", "json", service],
+            stage="inspect",
+        )
+        for line in inspected.splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if row.get("Health"):
+                declared.append(service)
+                break
+    return declared
+
+
+def wait_for_health(
+    compose_file: Path, *, timeout_seconds: int = DEFAULT_HEALTH_TIMEOUT_SECONDS
+) -> dict[str, str]:
+    """Waits per service and **names the one that did not make it**.
+
+    `docker compose up --wait` already fails on an unhealthy container, but its message does not
+    say which — on a twelve-container stack that is a search rather than a diagnosis, which is why
+    this exists alongside it rather than trusting it.
+    """
+    deadline = time.monotonic() + timeout_seconds
+    final: dict[str, str] = {}
+    pending = set(services_declaring_a_health_check(compose_file))
+    while pending and time.monotonic() < deadline:
+        for service in sorted(pending):
+            rows = _run(
+                ["docker", "compose", "-f", str(compose_file), "ps", "--format", "json", service],
+                stage="health",
+            )
+            health = ""
+            for line in rows.splitlines():
+                if line.strip():
+                    health = json.loads(line).get("Health", "")
+            final[service] = health
+            if health == "healthy":
+                pending.discard(service)
+        if pending:
+            time.sleep(3)
+    if pending:
+        named = ", ".join(f"{s} ({final.get(s) or 'no health reported'})" for s in sorted(pending))
+        raise ApplyFailed(
+            "health",
+            f"after {timeout_seconds}s these service(s) were not healthy: {named}. "
+            f"`docker compose -f {compose_file} logs <service>` has the reason.",
+        )
+    return final
+
+
+def _conduit_is_running(compose_file: Path) -> bool:
+    rows = _run(
+        ["docker", "compose", "-f", str(compose_file), "ps", "--format", "json", "api"],
+        stage="seed",
+    )
+    return any(
+        json.loads(line).get("State") == "running" for line in rows.splitlines() if line.strip()
+    )
+
+
+def seed(compose_file: Path, datasets: list[str], *, reset: bool = True) -> None:
+    """§2.4's ordering guard, as behaviour rather than as a comment.
+
+    Refuses if the Conduit is running. The alternative — stopping it silently — would be taking a
+    data-affecting decision on the operator's behalf, and the whole point of the guard is that the
+    ordering is made visible rather than worked around.
+    """
+    if _conduit_is_running(compose_file):
+        raise SeedOrderingRefused(
+            "seed",
+            "the Conduit is running, and seeding needs it stopped — DuckDB takes an exclusive "
+            "lock its AnalyticsPort also holds. Stop it first (`docker compose -f "
+            f"{compose_file} stop api`), seed, then start it. Refusing rather than stopping it "
+            "for you: that is a data-affecting decision and it is yours to make.",
+        )
+    if reset:
+        _run(["docker", "compose", "-f", str(compose_file), "stop", "api"], stage="seed")
+    for dataset in datasets:
+        script = {"hmp": "scripts.seed_hmp_fixture", "fixture-corp": "scripts.seed_fixture_corp"}[
+            dataset
+        ]
+        _run([sys.executable, "-m", script], stage="seed", cwd=REPO_ROOT)
+
+
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="python -m harness.apply",
+        description="The scripted golden-path deploy — docs/05_DEPLOYMENT.md §2.3.",
+    )
+    parser.add_argument("--profile", default=None, help="Overrides osprey.yaml's own profile.")
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    parser.add_argument("--out-root", type=Path, default=DEFAULT_OUT_ROOT)
+    parser.add_argument("--seed", default="", help="Comma-separated: hmp,fixture-corp")
+    parser.add_argument(
+        "--health-timeout", type=int, default=DEFAULT_HEALTH_TIMEOUT_SECONDS, metavar="SECONDS"
+    )
+    parser.add_argument(
+        "--keycloak-url",
+        default="http://127.0.0.1:8081",
+        help="Where the rendered Keycloak is reachable, for the post-launch verify.",
+    )
+    parser.add_argument("--realm", default="osprey")
+    parser.add_argument(
+        "--skip-verify",
+        action="store_true",
+        help="Skip the post-launch token-exchange verify. Reported in the summary when used.",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv if argv is not None else sys.argv[1:])
+    config = load_config(args.config)
+    if args.profile:
+        # `model_copy(update=...)` does not validate, so a bare string would sail through and fail
+        # several lines later on `.value` with a message naming neither the flag nor the profile.
+        # Coercing through the enum makes an unknown profile fail here, by name.
+        config = config.model_copy(update={"profile": Profile(args.profile)})
+    out_dir = args.out_root / config.profile.value
+    result = ApplyResult(profile=config.profile.value)
+
+    try:
+        # 1. Render.
+        rendered = render(config, allow_unpinned=True)
+        write_artefacts(rendered, out_dir)
+        (out_dir / "realm.json").write_text(render_realm_json(config), encoding="utf-8")
+        secret = generate_client_secret()
+        admin_password = generate_client_secret()
+        env_path = out_dir / "deployment.env"
+        # Both minted here and written only into generated, gitignored output — 05_DEPLOYMENT.md
+        # §2.5 ("never sees a secret… records where to look, never what it found") and §7
+        # ("never in osprey.yaml, never in an image"). Neither is derived from anything in the
+        # repository, and neither is printed.
+        env_path.write_text(
+            env_path.read_text(encoding="utf-8")
+            + "\n# Generated at apply time, never version-controlled (05_DEPLOYMENT.md §2.5/§7).\n"
+            + f"OSPREY_OIDC_CLIENT_SECRET={secret}\n"
+            + f"OSPREY_KEYCLOAK_ADMIN_PASSWORD={admin_password}\n",
+            encoding="utf-8",
+        )
+        result.record("render", f"{len(rendered.artefacts) + 1} artefact(s) → {out_dir}")
+
+        # 2. Preflight, before anything is built or started.
+        context = PreflightContext(config=config, out_dir=out_dir)
+        failures = []
+        for module in ALL_CHECKS:
+            check = module.check(context)
+            if check.status is Status.FAIL:
+                failures.append(f"{check.check}: {check.what_is_wrong} — {check.what_to_do}")
+        if failures:
+            raise ApplyFailed("preflight", "\n  ".join(failures))
+        result.record("preflight", "all checks pass or skip")
+
+        compose_file = out_dir / "compose.yaml"
+
+        # 3. Build the owned images.
+        _run(["docker", "compose", "-f", str(compose_file), "build"], stage="build")
+        result.record("build", "owned images built from this checkout")
+
+        # 4. Up, then a per-service wait that names what did not make it.
+        _run(["docker", "compose", "-f", str(compose_file), "up", "-d", "--wait"], stage="up")
+        health = wait_for_health(compose_file, timeout_seconds=args.health_timeout)
+        result.record("up", f"{len(health)} service(s) healthy")
+
+        # 4b. The two service-account grants a realm import cannot express, because it would need
+        # client ids that do not exist until the import has run. Separate grants on purpose: the
+        # pre-check must not borrow the impersonation client's own authority.
+        grant_service_account_roles(
+            issuer=args.keycloak_url,
+            realm=args.realm,
+            admin_user="admin",
+            admin_password=admin_password,
+            client_secret=secret,
+        )
+        result.record("grants", "impersonation + view-users on the Conduit's service account")
+
+        # 5. Seed, under the ordering guard.
+        datasets = [d for d in args.seed.split(",") if d]
+        if datasets:
+            seed(compose_file, datasets)
+            _run(["docker", "compose", "-f", str(compose_file), "start", "api"], stage="seed")
+            wait_for_health(compose_file, timeout_seconds=args.health_timeout)
+            result.record("seed", f"{', '.join(datasets)} (Conduit stopped, then restarted)")
+
+        # 6. Verify — the three assertions, against the running deployment.
+        if args.skip_verify:
+            result.record("verify", "SKIPPED — --skip-verify was passed")
+        else:
+            import asyncio
+
+            from harness.verify import OPERATOR_FAILURE_MESSAGE, run_verify
+
+            issuer = args.keycloak_url
+            verified = asyncio.run(
+                run_verify(
+                    issuer=issuer,
+                    realm=args.realm,
+                    conduit_secret=secret,
+                    unprivileged_secret=secret,
+                )
+            )
+            bad = [v for v in verified if not v.ok]
+            if bad:
+                raise ApplyFailed(
+                    "verify",
+                    OPERATOR_FAILURE_MESSAGE
+                    + "\n  "
+                    + "\n  ".join(f"{v.assertion}: {v.detail}" for v in bad),
+                )
+            result.record("verify", f"{len(verified)}/3 assertions green")
+
+    except ApplyFailed as failure:
+        print(f"\napply: FAILED at stage '{failure.stage}'\n  {failure.detail}", file=sys.stderr)
+        for stage, outcome in result.stages:
+            print(f"  (completed) {stage}: {outcome}", file=sys.stderr)
+        return 1
+
+    print(f"apply: {result.profile} ready in {result.elapsed_seconds:.0f}s")
+    for stage, outcome in result.stages:
+        print(f"  {stage}: {outcome}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

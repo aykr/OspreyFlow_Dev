@@ -466,3 +466,23 @@ def test_every_published_port_is_overridable_with_the_spec_s_own_default(
     assert compose["services"]["api"]["ports"] == ["${OSPREY_API_PORT:-8000}:8000"]
     assert "OSPREY_WORKSPACE_PORT=8080" in env
     assert "OSPREY_API_PORT=8000" in env
+
+
+def test_the_apply_profile_flag_is_validated_rather_than_assigned_raw() -> None:
+    """`--profile` reached `model_copy(update=...)`, which does not validate, so a bare string was
+    assigned to a field typed as an enum and failed several lines later on `.value` — with a
+    message naming neither the flag nor the profile. Found running the exit test from a fresh
+    clone. An unknown profile must fail at the flag, by name."""
+    import harness.apply as apply_module
+
+    from schemas.deployment import Profile
+
+    assert Profile("local-lite") is Profile.LOCAL_LITE
+    with pytest.raises(ValueError, match="not-a-profile"):
+        Profile("not-a-profile")
+
+    source = Path(apply_module.__file__).read_text(encoding="utf-8")
+    assert "Profile(args.profile)" in source, (
+        "the profile flag must be coerced through the enum, or an invalid one fails late and "
+        "unhelpfully"
+    )
