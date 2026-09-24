@@ -21,9 +21,11 @@ minimum — 16GiB leaves the remaining 6GiB to cover macOS/Docker Desktop's own 
 Conduit, the Glass, and a browser tab actually rendering the Glass, which is tight rather than
 comfortable. Both numbers come from measuring this stack directly, not from a vendor
 specification (`07_BUILD_PLAN.md`'s Phase 8 "ArcadeDB stability" stage has the full measurement:
-ArcadeDB alone peaks at 5.2–6.9GiB under a real run of both acceptance scenarios, and the Docker
-Desktop VM's default allocation on a typical machine, 8GiB, is not enough headroom above that
-peak to run reliably — this was measured as repeated out-of-memory kills before the VM allocation
+ArcadeDB alone peaked at 7.75GiB in the 23 September 2026 demo rehearsal (`docs/demo/2026-09-24/
+RUNBOOK.md`), above an earlier measurement's 5.2–6.9GiB range — corrected here rather than left
+stale, since the 10GiB VM floor above already covers the higher figure with headroom. The Docker
+Desktop VM's default allocation on a typical machine, 8GiB, is not enough headroom above either
+figure to run reliably — this was measured as repeated out-of-memory kills before the VM allocation
 was raised).
 
 **The containers this demo actually needs: ArcadeDB, Postgres, Valkey, MinIO.** Plus the Conduit
@@ -54,21 +56,22 @@ column below as the same binding statement in prose that the registry will enfor
 
 | Demo case | Distribution | State | What it shows |
 | --- | --- | --- | --- |
-| **Scenario A, steps A1–A11** (HMP fixture) | `shipped` | **Built and exit-verified** | Timeline, map, cross-filtering, boundary and site-grid filters, the weekend and time-of-day findings, the site hotspot |
+| **Scenario A, steps A1–A11** (HMP fixture) | `shipped` | **Built and exit-verified** (automated CI — `glass-perf`/`glass-keyboard`/`glass-map-verify` and the acceptance-scenario test suite). **Live-walkthrough verification through a running Glass: see `docs/demo/2026-09-24/RUNBOOK.md`** for exactly which sub-steps have actually been driven through a browser and which have not | Timeline, map, cross-filtering, boundary and site-grid filters, the weekend and time-of-day findings, the site hotspot |
 | **The Ingest Studio**, Connect → Publish (CDR fixture) | `shipped` | **Built and exit-verified** | Onboarding a new source without touching the ontology: profiling, row-template mapping, dry-run verify, publish with versioning |
-| Scenario A, A12 | `shipped` | Not built — needs Phase 7's Clique Metric | — |
-| Scenario A, A13–A15 | `shipped` | Not built — needs Phase 8's assessment and export | — |
+| Scenario A, A12 (Clique Metric) | `shipped` | **Built** (Phase 7's Clique Metric — `POST /v1/investigations/{id}/compute/clique_metric`, `MetricsPanel`'s own "Clique Metric" option) — **not verified through the Glass**; see `docs/demo/2026-09-24/RUNBOOK.md` | — |
+| Scenario A, A13–A15 (assessment, export) | `shipped` | **Built** (Phase 8's judgements/gaps/assumptions routes and `JudgementsPanel`/`ExportPanel`) — **not verified through the Glass**; see `docs/demo/2026-09-24/RUNBOOK.md` | — |
 | Scenario B (comms and identity pivot) | `shipped` | Partly built; split across Phases 6a, 7 and 8 by ADR-022 | — |
 | **Extraction and entity resolution** | `shipped` | Built, **API only** | Demonstrable to engineers through the API; there are no screens until Phase 6a |
-| **Scenario C — "Fixture Corp"** (Enron-*shaped*, R24) | `shipped` | **Script written, fixture never built** — owning phase Phase 8 | See §6 |
+| **Scenario C — "Fixture Corp"** (Enron-*shaped*, R24, AMLSim-*shaped* generator) | `shipped` | **Built** (`scripts.seed_fixture_corp`) — its four ADR-035 §C5 properties (τ 0.99/0.95/0.80 resolution, Louvain community structure, the pathfinder's full hop range, an access-control-lengthened path) are **verified structurally** (`tests/scenarios/test_fixture_corp_shape.py`, seed-time output). **Interactive verification through the Glass — moving the resolution threshold live, `explain` on a merged cluster, the pathfinder, comparing path lengths — not completed**; see `docs/demo/2026-09-24/RUNBOOK.md`. Not the ~150-employee Enron-shaped corporation §6 and Scenario C (C1–C20) describe — see §6 | See §6 |
 | **The real Enron email corpus** | `internal`, **admitted only via the owner's own local exceptions list — see §6** | Owner-run demonstration only, on the owner's own device, never distributed to an attendee | — |
 | **VAST Challenge dataset** (generated fixture) | `internal` | Decided (ADR-026); fixture not yet built | See §7 |
 | **VAST Challenge dataset** (the published files themselves) | Not admitted, any class | ADR-026: "standing rule 3 is not amended" — never used, shaped or verbatim | See §7 |
 
-The honest summary: **Scenario A on the HMP fixture is the demo that exists**, and it is a good
-one. It exercises three of the five analytical capabilities against a live stack. It is also the
-only demo case that is both built and unambiguously `shipped` — Fixture Corp fills that second role
-once §6's fixture is built.
+The honest summary: **Scenario A on the HMP fixture is the demo actually driven through the Glass
+so far**, and it is a good one. It exercises three of the five analytical capabilities against a
+live stack. Fixture Corp is now also built and structurally proven, but nobody has yet walked it
+through a running Glass end to end — `docs/demo/2026-09-24/RUNBOOK.md` has the honest state of
+what has, and has not, actually been driven through a browser for either fixture.
 
 ---
 
@@ -81,8 +84,13 @@ The Conduit validates JWTs against a JWKS URL (`OIDC_JWKS_URL`, read with no def
 `default_claims`) the same way `scripts/seed_hmp_fixture.py` already wraps a test fixture — the
 correction already made three times for `revert_load`, the local-basemap build and the HMP seed.
 
+**Use the project venv's own interpreter, not a bare `python`** — the 23 September 2026 demo
+rehearsal (`docs/demo/2026-09-24/RUNBOOK.md`) found a bare `python -m scripts.mint_dev_token` picks
+up whatever interpreter is first on `PATH`, which on a machine with more than one Python install is
+not necessarily the one with this project's own dependencies (`pyjwt`, `cryptography`) installed:
+
 ```
-PYTHONPATH=.:packages python -m scripts.mint_dev_token --jwks-path /tmp/dev-jwks/jwks.json
+PYTHONPATH=.:packages .venv/bin/python3 -m scripts.mint_dev_token --jwks-path /tmp/dev-jwks/jwks.json
 ```
 
 Prints a signed token to stdout and writes the public JWKS to the given path. Re-running it at the
@@ -108,32 +116,56 @@ python3 -m http.server 8888 --directory /tmp/dev-jwks
 ## 3. Bringing up a demo environment
 
 Run from the repository root. Roughly fifteen minutes on a cold machine, most of it image pulls.
+**This sequence is scripted — `docs/demo/2026-09-24/demo_up.sh --reset` runs every step below in
+the order that actually works, and is the recommended path.** The manual sequence below is the
+reference the script encodes, kept for anyone who wants to run a step by hand or understand what
+the script is doing; both were proven against a real stack on 23–24 September 2026
+(`docs/demo/2026-09-24/RUNBOOK.md`).
+
+**The order below differs from an earlier version of this guide in two ways, both found by that
+rehearsal.** Creating the investigation needs the Conduit briefly running (it is an HTTP call);
+seeding needs the Conduit stopped (DuckDB takes an exclusive lock the Conduit's own `AnalyticsPort`
+also holds a handle to) — so the Conduit starts twice, not once, with seeding in between. And the
+Conduit is bound to `127.0.0.1` explicitly, with the Glass opened at `localhost:5173`, never
+`127.0.0.1:5173` — the rehearsal found the Vite dev server on this machine resolved `localhost` to
+`::1` (IPv6) only, so `127.0.0.1:5173` did not connect at all.
 
 ### 3.1 Start the backing stores
 
 ```
 make dev-up
+docker stop compose-ollama-1 compose-litellm-1 compose-speaches-1
 ```
 
-Brings up ArcadeDB, MinIO, Valkey, Postgres, Ollama, LiteLLM and speaches, and blocks until every
-health check passes. Published ports: ArcadeDB `2480`, MinIO `9000` and `9001`, Valkey `6379`,
-Postgres `5433` (mapped from the container's `5432`), Ollama `11434`, LiteLLM `4000`, speaches
-`8001`.
+`make dev-up` brings up ArcadeDB, MinIO, Valkey, Postgres, Ollama, LiteLLM and speaches, and blocks
+until every health check passes. Published ports: ArcadeDB `2480`, MinIO `9000` and `9001`, Valkey
+`6379`, Postgres `5433` (mapped from the container's `5432`), Ollama `11434`, LiteLLM `4000`,
+speaches `8001`. The second command stops the three model containers this demo does not need —
+§0 above has the full reasoning; skip it if you also want the extraction/resolution API demo.
 
 > **Postgres is on 5433 deliberately.** A native macOS Postgres on the host's `5432` once
 > intercepted connections meant for the container and cost a session to diagnose. Do not remap it
 > back.
 
-### 3.2 Start the Conduit
+**Resetting to a clean database.** Between demos, or the first time on a machine, drop and
+recreate the ArcadeDB database rather than trust whatever an earlier run left in it:
 
-`services/api` is **not** in the dev compose file, so it runs by hand:
+```
+curl -u root:playwithdata123 -X POST http://localhost:2480/api/v1/server -d '{"command":"drop database ospreyflow"}'
+curl -u root:playwithdata123 -X POST http://localhost:2480/api/v1/server -d '{"command":"create database ospreyflow"}'
+```
+
+### 3.2 Start the Conduit, briefly, to create an investigation
+
+`services/api` is **not** in the dev compose file, so it runs by hand — bound to `127.0.0.1`
+explicitly, not a bare `--port` (see this section's own opening note):
 
 ```
 PYTHONPATH=.:packages OIDC_JWKS_URL=http://localhost:8888/jwks.json \
-  uvicorn services.api.app:app --port 8000
+  .venv/bin/uvicorn services.api.app:app --host 127.0.0.1 --port 8000
 ```
 
-(the URL is whatever §2's `mint_dev_token`/`http.server` pair actually served — this is the
+(the JWKS URL is whatever §2's `mint_dev_token`/`http.server` pair actually served — this is the
 common local case, not a fixed value)
 
 `PYTHONPATH` must include both the repository root and `packages/` — neither a bare `python -m`
@@ -144,58 +176,84 @@ Other settings default sensibly for local use and are all read from the environm
 `POSTGRES_USER`/`POSTGRES_DB`, `ANALYTICS_DB_PATH` (default `data/analytics.duckdb`),
 `OSPREY_CONFIG_PATH` (default `osprey.yaml`).
 
-### 3.3 Create an investigation and note its id
+### 3.3 Create an investigation and note its id, then stop the Conduit
 
 ```
-POST /v1/investigations
+curl -X POST http://127.0.0.1:8000/v1/investigations -H "Authorization: Bearer <token>"
 ```
 
-with your bearer token. **Keep the id it returns** — the seeding step needs it. If you create the
-investigation from the Glass instead, the id is in the browser's
-`sessionStorage["ospreyflow.investigationId"]`.
+with your bearer token from §2. **Keep the id it returns** — the seeding step needs it, and the
+Glass reads it from a `?investigation=<id>` URL parameter (§3.6 below). Then stop this Conduit
+process (`Ctrl-C`, or `kill` its job) — §3.4's seed step needs the DuckDB file free.
 
-### 3.4 Seed the HMP fixture
+### 3.4 Seed the fixtures, with the Conduit stopped
 
 ```
-PYTHONPATH=.:packages python -m scripts.seed_hmp_fixture \
+PYTHONPATH=.:packages .venv/bin/python3 -m scripts.seed_hmp_fixture \
+  --investigation-scope <the id from 3.3>
+PYTHONPATH=.:packages .venv/bin/python3 -m scripts.seed_fixture_corp \
   --investigation-scope <the id from 3.3>
 ```
 
-`--investigation-scope` is required and deliberately not defaulted. Every automated HMP test seeds
-under its own constant scope, which is fine inside a test process; a live demo needs the events
-tagged with the investigation id the running Glass session is actually using, because
-`EventFilter.investigation_scope` is what every `/v1/analytics/*` route filters on. **Pass the
-wrong scope and you will seed data that no query in your session can see** — the graph will look
-populated and the timeline will be empty.
+`--investigation-scope` is required and deliberately not defaulted on both scripts. Every automated
+HMP/Fixture Corp test seeds under its own constant scope, which is fine inside a test process; a
+live demo needs the events and graph tagged with the investigation id the running Glass session is
+actually using, because `EventFilter.investigation_scope` is what every `/v1/analytics/*` route
+filters on. **Pass the wrong scope and you will seed data that no query in your session can see**
+— the graph will look populated and the timeline will be empty.
 
-Optional arguments, all with environment fallbacks: `--analytics-db-path` (default
-`data/analytics.duckdb`), `--principal-id` (default `hmp-seed-worker`), `--clearance` (default
-`OFFICIAL`), `--org-unit` (default `unit-1`).
+Optional arguments to `seed_hmp_fixture`, all with environment fallbacks: `--analytics-db-path`
+(default `data/analytics.duckdb`), `--principal-id` (default `hmp-seed-worker`), `--clearance`
+(default `OFFICIAL`), `--org-unit` (default `unit-1`). §6 has `seed_fixture_corp`'s own shape.
 
-The script writes to both stores a real Conduit reads from — `build_hmp_graph` against the same
-ArcadeDB, and `AnalyticsPort.load_events` against the same DuckDB file. It is not a bypass of
-either.
+Both scripts write to the same stores a real Conduit reads from — `build_hmp_graph`/the Fixture
+Corp graph builder against the same ArcadeDB, and `AnalyticsPort.load_events` against the same
+DuckDB file. Neither is a bypass of either store.
 
-### 3.5 Start the Glass
+### 3.5 Restart the Conduit
+
+Same command as §3.2 — the Conduit has no persistent state of its own beyond the stores it reads,
+so restarting it after seeding needs nothing special:
 
 ```
-VITE_API_BASE_URL=http://localhost:8000 \
+PYTHONPATH=.:packages OIDC_JWKS_URL=http://localhost:8888/jwks.json \
+  .venv/bin/uvicorn services.api.app:app --host 127.0.0.1 --port 8000
+```
+
+### 3.6 Start the Glass
+
+```
+VITE_API_BASE_URL=http://127.0.0.1:8000 \
 VITE_DEV_BEARER_TOKEN=<the token scripts/mint_dev_token.py printed in §2> \
   npm run dev --workspace apps/workspace
 ```
 
-Then open `http://localhost:5173`. Both variables have defaults — the API base URL falls back to
-`http://localhost:8000`, the token to an empty string — so in the common local case only the token
-strictly needs setting.
+Then open `http://localhost:5173/?investigation=<the id from 3.3>` — **`localhost`, never
+`127.0.0.1`** (this section's own opening note). The `?investigation=` parameter is read once on
+load and takes precedence over anything left in `sessionStorage` from an earlier session in the
+same browser tab (`02_GLASS_FRONTEND.md` §2.1's own proposal has the full reasoning) — this
+replaces an earlier version of this guide's manual `sessionStorage.setItem(...)` + reload step
+entirely. Opening the bare URL with no parameter still works exactly as before: the Glass creates
+its own investigation via `POST /v1/investigations` when neither the URL nor `sessionStorage` names
+one.
 
-### 3.6 Shut down
+**The Map view will show "Basemap not built" rather than a blank canvas** unless a local PMTiles
+build already exists at `osprey.yaml`'s configured path — building one needs `planetiler` and a
+network-reachable OSM extract, neither available in every environment this guide is followed in.
+This is the harness's own Geospatial screen's job (`05_DEPLOYMENT.md` §2.2, "Build local
+basemap") once the harness exists; today, run `scripts/build_local_basemap.py` by hand first if you
+need the map to render tiles. Every other view (Timeline, Graph, the hotspot panel) works without
+it — `02_GLASS_FRONTEND.md` §3.5's own proposal has the full reasoning for why this now fails
+loudly instead of silently.
+
+### 3.7 Shut down
 
 ```
 make dev-down
 ```
 
 Removes the containers **and their volumes** (`down -v`), so the next `make dev-up` starts from
-empty and the fixture needs reseeding. That is usually what you want between demos.
+empty and the fixtures need reseeding. That is usually what you want between demos.
 
 ---
 
@@ -263,13 +321,26 @@ five minutes. See §2.
 
 ---
 
-## 6. Scenario C — the Enron-shaped demo (not yet built) — `shipped`, R24, owning phase Phase 8
+## 6. Scenario C — the Enron-shaped demo — `shipped`, R24, owning phase Phase 8
 
-**The fixture does not exist.** The Scenario C script is a planning document; "Fixture Corp" — around
-150 fabricated employees, a five-level hierarchy, four departments, structural statistics modelled
-on published Enron corpus research — has never been built as a fixture. `06_DECISIONS.md` ADR-035
-gives it an owning phase (Phase 8) and its own distribution class (`shipped`) — it is the demo this
-platform can actually put in front of a customer, once built.
+**Built, and narrower than the Scenario C script's own planning-document description — corrected
+here rather than left stale, 23 September 2026.** The Scenario C script (C1–C20) describes "Fixture
+Corp" as around 150 fabricated employees, a five-level hierarchy and four departments, structural
+statistics modelled on published Enron corpus research. What `scripts.seed_fixture_corp` actually
+builds and `tests/scenarios/test_fixture_corp_shape.py` proves is `06_DECISIONS.md` ADR-035 §C5's
+own narrower property fixture, not that corporation: **five resolution `Person` pairs** (ten nodes,
+seventeen `SAME_AS` edges at descending scores, so entity resolution at τ 0.99/0.95/0.80 produces
+visibly different projections), **three community-ring fraud rings** (twenty-one nodes, sixty-three
+edges, for Louvain to actually find structure in), and **one path-spoke hub with eight spokes**
+(lengths 1–8, exercising the pathfinder's full supported range, including a `SECRET`-classified
+shortcut on the length-3 spoke for the access-control-lengthened-path property) —
+**AMLSim-*shaped*, not AMLSim-generated** (neither candidate generator ADR-035 §C5 originally named
+turned out to be pip-installable; `06_DECISIONS.md` ADR-035 §C5's own addendum has the full record).
+Whether the ~150-employee Enron-shaped corporation the Scenario C script describes is still to be
+built, and whether it replaces or sits beside this property fixture, is undecided — the property
+fixture satisfies ADR-035 §C5's own minimum bar, not Scenario C's full C1–C20 script. `06_DECISIONS.md`
+ADR-035 gives Fixture Corp an owning phase (Phase 8, Stage 4a) and its own distribution class
+(`shipped`) — it is the demo this platform can actually put in front of a customer.
 
 **The real Enron corpus is `internal`, and stays narrower than "usable for any demo audience."**
 `CLAUDE.md` rule 9 and standing rule 3 admit a real dataset only if it is explicitly named in the
@@ -281,17 +352,21 @@ people, most never charged with anything; that this exception exists at all does
 data-protection question in its own right (ADR-035 §C3 has the full GDPR/redaction/licence
 reasoning, which now also covers demonstration use, not only development).
 
-Fixture Corp gets you what makes Enron the canonical social-network case study — the hierarchy, the
-community structure, the communication asymmetries that betray it — with none of that. That it is
-Enron-*shaped* rather than Enron is a point to make in the demo, not a caveat to bury.
+Fixture Corp gets you what makes Enron the canonical social-network case study — community
+structure a real algorithm finds, and the identifier-resolution and path-length asymmetries that
+betray it — with none of the real corpus's own data-protection question. That it is Enron-*shaped*
+rather than Enron is a point to make in the demo, not a caveat to bury. It is not, today, the
+hierarchy/departments shape the Scenario C script's own C1–C20 narrative was written against — the
+property fixture and that narrative script are not yet the same thing, per the correction above.
 
-Building it depends on nothing in Phase 7, because fixtures are synthetic and in-repo by standing
-rule 3. It can start now, and if it does, Scenario C's analytics-dependent steps C9–C16 are runnable
-the day Phase 7 closes rather than starting then. Follow the discipline `tests/scenarios/fixtures/
-cdr.py` already sets: seeded, deterministic, in-repo, with its own shape-correctness test. See
-`06_DECISIONS.md` ADR-035 §C5 for the minimum set of things the built fixture must exercise (τ
-0.99/0.95/0.80 resolution, Louvain community structure, the pathfinder's full hop range, and an
-access-control-lengthened-path case).
+Built following the discipline `tests/scenarios/fixtures/cdr.py` already set: seeded,
+deterministic, in-repo, with its own shape-correctness test
+(`tests/scenarios/test_fixture_corp_shape.py`) proving `06_DECISIONS.md` ADR-035 §C5's own minimum
+set (τ 0.99/0.95/0.80 resolution, Louvain community structure, the pathfinder's full hop range, and
+an access-control-lengthened-path case) against real adapters, not only a docstring claim.
+Scenario C's own analytics-dependent steps (C9–C16, in the script's original numbering) are not
+proven runnable against this fixture — the script was written for the hierarchy/departments shape,
+and nobody has walked C1–C20 against what is actually built.
 
 ---
 
