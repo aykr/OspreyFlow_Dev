@@ -3369,6 +3369,51 @@ find something already finished sitting in the queue.
 
    ---
 
+   **The suite, after Stage 2 §4, 24 September 2026 — no regression, and one more data point for
+   the store-degradation mechanism.**
+
+   | Run | Result | Wall time |
+   | --- | --- | --- |
+   | `make test` (fast, no live infra) | **826 passed, 1 failed** | 1:32 |
+   | `make test-all` as one invocation, volumes dropped first | **100 failed, 196 passed** | 9:20 |
+   | Batch 1 (to `test_prefetch.py`), fresh volumes | **143 passed, 7 failed** | 6:24 |
+   | Batch 2 (the rest), fresh volumes | **144 passed, 3 failed** | 5:10 |
+
+   **287 passed across the two batches — the recorded baseline's pass count exactly.** The single
+   invocation is not a measurement: ArcadeDB was **OOM-killed** partway (`Exited (137)`, the
+   container gone from `docker compose ps` afterwards), and 599 `ConnectError` plus 200 `ReadTimeout`
+   are all downstream of that. This is the mechanism the Stage 2a addendum already closed — a long
+   sequential run against one accumulating database — arriving for the third time, and it is why
+   that addendum prescribes two batches. Read the single-invocation row as a reproduction of a known
+   condition, not as a result.
+
+   **Batch 1 is Floor B exactly**: the six model-backend members (four `[model_litellm]` conformance
+   cases, `test_golden_set_recall_has_not_regressed`,
+   `test_extract_returns_nonempty_persons_from_the_witness_statement`) plus
+   `test_hmp_graph.py::test_hmp_graph_side`, already on record as an ArcadeDB adapter error and
+   **not** a Floor B member.
+
+   **Batch 2's three failures were each chased to a cause, and none of them is this round's work:**
+
+   - `test_fixture_corp_shape.py`'s two both **pass in isolation on a fresh stack**. Accumulated
+     state within the batch, the same mechanism as above.
+   - `test_assessment_routes.py::test_save_judgement_route_creates_and_returns_it` fails
+     **identically at `d9e1c62`** — the commit this round started from — when both are run against
+     fresh volumes in the same fixed order: 1 failed, 11 passed, at both revisions. It passes when
+     run alone at either. Pre-existing order-sensitivity, recorded here rather than left as an
+     unexplained delta. It has no owning finding yet.
+
+   **Three CI gates were already red at `d9e1c62` and this round did not touch two of them:**
+   `make lint` (28 pre-existing `ruff` I001/F401 findings across `services/`, `scripts/`, `tests/`
+   and `packages/`, unchanged with the tree stashed — most likely a `ruff` version bump);
+   `route-coverage-check` (six routes registered in `services/api/app.py` and documented nowhere:
+   `GET /v1/exports`, the three `GET /v1/investigations/{id}/{assumptions,gaps,judgements}`,
+   `GET /v1/yardstick`, `POST /v1/analytics/sightings`); and `make typecheck`, which **was** red and
+   is now green — two errors in this stage's own earlier code, plus `harness/` joining the gate for
+   the first time and bringing seven more.
+
+   ---
+
    **Stage 2 §5 — split into §5a and §5b, owner's decision, 24 September 2026.** `Stage 2 §3`
    cannot start a stack whose images do not exist, and the rendered compose file named three
    `ghcr.io/ospreyflow/…` images no registry publishes. **`Stage 2 §5a` runs before `Stage 2 §3`**
