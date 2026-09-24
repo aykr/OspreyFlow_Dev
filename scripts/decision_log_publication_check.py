@@ -40,8 +40,28 @@ ALLOWLIST_PATH = REPO_ROOT / "tests" / "fixtures" / "decision_log_publication_al
 #: build was scoped, phased, released or published — the project's own management, not the
 #: product's behaviour. Every other accepted ADR is PRODUCT. A new ADR is classified the same way,
 #: not defaulted to either bucket — the rule travels with the ADR, not a number range.
+#:
+#: **This set is hand-maintained, and that is the one step writing a new PROCESS ADR requires.**
+#: Its failure mode on omission is the safe direction — the gate fires, naming the new record's own
+#: citations as violations — which is how `049` was caught the moment it was written (24 September
+#: 2026) rather than published misclassified. Recorded here so the next author reads that failure as
+#: "add my number" rather than as a defect in their own citations.
 PROCESS_ADR_NUMBERS: frozenset[str] = frozenset(
-    {"012", "019", "022", "026", "027", "031", "034", "042"}
+    {
+        "012",
+        "019",
+        "022",
+        "026",
+        "027",
+        "031",
+        "034",
+        "042",
+        # ADR-049 (the harness/packaging pipeline; Phase 8 stage 2's sub-stages 2b-2h) divides a
+        # phase into sub-stages, sets their exit tests and concerns release packaging — "a decision
+        # about how this build was scoped, phased, released or published," ADR-034 §B10's own rule,
+        # not the product's behaviour. Added 24 September 2026, the day the record was written.
+        "049",
+    }
 )
 
 _HEADING_PATTERN = re.compile(r"^## ADR-(\d{3})", re.MULTILINE)

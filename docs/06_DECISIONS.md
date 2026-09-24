@@ -3411,6 +3411,46 @@ removal.
 work owned by Trigger A (Phase 8's own close), and no artefact may be given to any
 third party until it exists.**
 
+**Addendum, 24 September 2026 — the `.dockerignore` this item names now exists; the packaging gate
+it serves still does not.** When this section was written there was no `.dockerignore` anywhere in
+the repository, so the mechanism C2 names by name had nothing behind it. There is one now, at the
+repository root, with `tests/test_dockerignore.py` proving it non-vacuously: two cases delete a
+single line each and assert the path it names stops being excluded — the "prove it can fail"
+discipline applied to the one trap a `.dockerignore` actually has, which is the inverse of a
+default-deny fallthrough. Nothing is excluded unless a line says so, so the risk is not a violation
+slipping through a gap; it is crediting a specific line for an exclusion some broader pattern was
+already making. It excludes the private build tree via `scripts/product_tree_link_check.py`'s own
+`PRIVATE_TREE_MARKERS`, imported rather than restated; `config/real_data_exceptions.yaml`; `data/`,
+`backups/` and `demo-data/`; and the tooling, test and development trees.
+
+**Two things this addendum deliberately does not claim.** First, **it fixes no live leak, because
+there is none** — checked directly, not assumed: the only two Dockerfiles in this repository
+(`services/api`, `services/ingest`) copy selective directories (`pyproject.toml`, `uv.lock`,
+`packages`, `services`), never `COPY . .`, so nothing under `docs/`, `.claude/` or `config/` reaches
+an image layer today. What the file does do today is keep the whole repository from being uploaded
+to the daemon as build context on every build; what it is *for* is the images that do not exist yet
+— the harness's own above all (`05_DEPLOYMENT.md` §2/§3's `ghcr.io/ospreyflow/harness:latest`),
+which by construction runs against a mounted `/workspace` and is the likeliest future candidate for
+a broad copy. A defence written before the image that needs it. Second, **it is not C2's gate.** C2
+requires an assertion *on the packaging step*, failing the build, that no internal demo's id, path
+or dataset filename appears in the artefact including inside image layers, with the two named tests
+(`test_reclassifying_an_internal_demo_to_shipped_without_removing_its_data_still_fails_the_gate`,
+`test_removing_the_exclusion_step_itself_fails_the_gate`). No packaging step exists to attach either
+to. `.dockerignore` is the precondition that makes such a gate enforceable, not a substitute for it,
+and C2's ownership above is unchanged. The harness/packaging stage's own packaging sub-stage
+(`07_BUILD_PLAN.md`) carries both, alongside a third exclusion no record had previously named:
+`config/real_data_exceptions.yaml`, gitignored and therefore exactly the file most likely to be
+present, uncommitted and unnoticed, on the one machine that builds an owner-run demonstration.
+
+**One hazard recorded where it will be hit, not left to be rediscovered.** Excluding `docs/`
+wholesale also excludes `docs/design/tokens.css`, and that file is product source rather than prose
+— thirteen real consumers, twelve TypeScript `import`s including `apps/workspace/src/main.tsx`, the
+Glass's own entry point, plus one `readFileSync` — so a build with the import unresolved fails
+outright. Any future image that builds the Glass from this context *before* the restructure moves
+that file into the product tree must handle it explicitly rather than relax the exclusion; after the
+move the conflict disappears on its own. The note is in the `.dockerignore` itself, at the line
+concerned.
+
 ### C3 — The Enron email corpus, narrower than requested
 
 **Research and reasoning, recorded in full because it is useful regardless of the disposition

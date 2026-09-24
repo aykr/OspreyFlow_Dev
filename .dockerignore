@@ -1,0 +1,84 @@
+# `.dockerignore` — the build context, not the running container.
+#
+# `docs/06_DECISIONS.md` ADR-035 §C2 names this file as the mechanism, in its own words: "if a
+# packaging step copies the repository root, `/demo-data/`'s own gitignore exclusion is irrelevant
+# to what a `docker build` context includes unless the `Dockerfile` also excludes it
+# (`.dockerignore`), the same 'check the build context, not just the running container' finding
+# already made for the private build tree." ADR-034 §B7 makes the same demand from the other side:
+# no private-tree file and no authorship identifier in a built artefact, "invisible at runtime,
+# fully recoverable from the tarball."
+#
+# **What this file is and is not, stated plainly so it is not over-credited.** Checked directly, 24
+# September 2026: the two Dockerfiles that exist today (`services/api`, `services/ingest`) copy
+# selective directories — `pyproject.toml`, `uv.lock`, `packages`, `services` — never `COPY . .`.
+# So there is **no live leak today**, and this file is not a fix for one. It does two things that
+# are still real: it keeps the whole repository from being uploaded to the daemon as build context
+# on every build (`.git`, `.venv`, `node_modules` and `data/` are sent today even though nothing
+# copies them), and it is the standing defence for the images that do not exist yet — the harness's
+# own image above all (`05_DEPLOYMENT.md` §2/§3's `ghcr.io/ospreyflow/harness:latest`), which by
+# construction runs against a mounted `/workspace` and is the most likely future candidate for a
+# broad copy. A defence written before the image that needs it, not after.
+#
+# **`.gitignore` does not do this job.** Docker does not read it. Every rule below that also appears
+# in `.gitignore` is deliberately repeated, not redundant — `config/real_data_exceptions.yaml` in
+# particular is gitignored *and* therefore exactly the file most likely to be present, uncommitted
+# and unnoticed, on the one machine that builds an owner-run demonstration bundle.
+#
+# Proven non-vacuous by `tests/test_dockerignore.py`, which removes a single line and asserts the
+# path it names stops being excluded — `CLAUDE.md` rule 15's second clause: a planted violation that
+# some other pattern would have caught anyway proves nothing about the pattern under test.
+
+# --- Version control, tooling caches, editor and OS noise --------------------
+.git
+.gitignore
+.github
+.DS_Store
+**/.DS_Store
+**/__pycache__
+**/*.pyc
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.venv
+node_modules
+**/node_modules
+
+# --- The private build tree ---------------------------------------------------
+# `scripts/product_tree_link_check.py`'s own `PRIVATE_TREE_MARKERS` is the authoritative list and
+# `tests/test_dockerignore.py` imports it rather than trusting this comment to stay in step: every
+# marker's real path in this repository must be excluded by something below. `docs/` covers most of
+# them; `CLAUDE.md` and `.claude/` sit at the root and need their own lines.
+docs
+CLAUDE.md
+.claude
+# ADR-034 §B8 hazard, recorded where the next person will hit it: `docs/design/tokens.css` is
+# product source (twelve TypeScript imports including `apps/workspace/src/main.tsx`), not prose, and
+# excluding `docs` wholesale therefore breaks any future image that builds the Glass from this
+# context before Trigger A moves that file into the product tree. After Trigger A the problem
+# disappears on its own. Any such image built in the interim must handle `tokens.css` explicitly
+# rather than quietly relaxing the line above.
+
+# --- Real data, demo data, and local operator state ---------------------------
+# `CLAUDE.md` rule 9 / `07_BUILD_PLAN.md` standing rule 3 / ADR-035 §C1 and §C3. The exceptions list
+# names real datasets and lives only on the owner's own device; the two data directories are where
+# anything it admits would actually sit.
+config/real_data_exceptions.yaml
+demo-data
+data
+backups
+
+# --- Tests, fixtures and development-only trees -------------------------------
+tests
+prototypes
+graphify-out
+.graphify
+.playwright-mcp
+.impeccable
+Claude outputs
+apps/workspace/dist
+apps/workspace/test-results
+apps/workspace/playwright-report
+apps/workspace/.env.local
+
+# --- Deployment and harness scaffolding not needed inside a service image ------
+deploy

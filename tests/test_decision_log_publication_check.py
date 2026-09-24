@@ -61,3 +61,54 @@ def test_a_process_adr_may_cite_another_process_adr_without_violation(tmp_path: 
     )
 
     assert find_violations(decisions_path=fixture) == []
+
+
+# --- ADR-049's own classification, both directions ---------------------------
+#
+# `PROCESS_ADR_NUMBERS` gaining `"049"` (24 September 2026) needs a proof that exercises *that
+# element*, not one the set's existing members would satisfy anyway — `CLAUDE.md` rule 15's second
+# clause, and the lesson `06_DECISIONS.md` ADR-034 §B12 records from `licence_check.mjs`: a planted
+# violation that any other branch already catches proves nothing about the branch under test. A
+# fixture citing ADR-034 from ADR-006 (the case above) passes identically with or without `"049"`
+# in the set. Both cases below fail if `"049"` is removed, and each fails for its own reason — one
+# for the false positive the omission causes, one for the false negative.
+
+
+def test_adr_049_is_process_so_its_own_process_citations_are_not_flagged(tmp_path: Path) -> None:
+    """The real shape the live decision log produces, not an approximation of it: ADR-049's own
+    section cites ADR-034 and ADR-042 by number, both PROCESS, and that is not a violation because
+    ADR-049 does not publish either. With `"049"` absent from `PROCESS_ADR_NUMBERS` this is exactly
+    the pair of false positives `make decision-log-publication-check` reported on 24 September
+    2026."""
+    fixture = tmp_path / "06_DECISIONS.md"
+    fixture.write_text(
+        "## ADR-049 — The harness / packaging pipeline\n\n"
+        "Cites ADR-034 §B7 for the artefact-hygiene assertions and ADR-042 for the alpha gate.\n\n"
+        "---\n\n"
+        "## ADR-034 — Publication and licence boundary\n\n"
+        "The private, process-only record ADR-049 legitimately depends on.\n\n"
+        "---\n\n"
+        "## ADR-042 — The alpha gate\n\n"
+        "Also private, also process.\n",
+        encoding="utf-8",
+    )
+
+    assert find_violations(decisions_path=fixture) == []
+
+
+def test_a_product_adr_citing_adr_049_is_flagged(tmp_path: Path) -> None:
+    """The converse, which the test above alone does not prove: `"049"` is actually *in* the set,
+    not merely absent from the violations because nothing looked. A PRODUCT record depending on
+    ADR-049 is a real publication-boundary violation — ADR-049 stays private, so a published ADR
+    resting on it dangles for every reader of the published artefact."""
+    fixture = tmp_path / "06_DECISIONS.md"
+    fixture.write_text(
+        "## ADR-006 — Entity resolution is a query-time projection, never a merge\n\n"
+        "Leans on ADR-049's own packaging assertions, which is the mistake this case plants.\n\n"
+        "---\n\n"
+        "## ADR-049 — The harness / packaging pipeline\n\n"
+        "The private, process-only record the section above should not depend on.\n",
+        encoding="utf-8",
+    )
+
+    assert find_violations(decisions_path=fixture) == [("006", "049")]
