@@ -313,7 +313,13 @@ def seed(compose_file: Path, datasets: list[str], investigation_id: str) -> None
             ],
             stage="seed",
         )
-        print(f"  seed[{dataset}]: {output.strip().splitlines()[-1] if output.strip() else 'done'}")
+        # **Every line, not the last one.** Each seed script reports its counts as it goes — the
+        # HMP fixture's 400 Person nodes and 10 yards are printed before the event totals — and
+        # taking only the final line discarded exactly the numbers an operator would check the
+        # seed against. A seed that reports "done" is not evidence that it seeded anything.
+        for line in output.splitlines():
+            if line.strip():
+                print(f"  seed[{dataset}]: {line.strip()}")
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
@@ -532,6 +538,16 @@ def main(argv: list[str] | None = None) -> int:
     print(f"apply: {result.profile} ready in {result.elapsed_seconds:.0f}s")
     for stage, outcome in result.stages:
         print(f"  {stage}: {outcome}")
+    # The two exposed surfaces, and nothing else — `05_DEPLOYMENT.md` §7 puts every store on an
+    # internal network. The investigation id is carried in the query string because the Glass reads
+    # it from there on first load; without it the workspace opens on an empty working set and the
+    # seeded data looks as though it never arrived.
+    workspace_port = os.environ.get("OSPREY_WORKSPACE_PORT", "8080")
+    glass_url = f"http://127.0.0.1:{workspace_port}/"
+    if investigation_id:
+        glass_url += f"?investigation={investigation_id}"
+    print(f"\n  the Glass:   {glass_url}")
+    print(f"  the Conduit: http://127.0.0.1:{args.api_port}/healthz")
     return 0
 
 
