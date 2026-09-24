@@ -89,3 +89,84 @@ python -m scripts.real_data_exceptions add "Enron email corpus" \
 3. The legal-advice requirement in `06_DECISIONS.md` ADR-035 §C3 is outstanding.
 
 The ingest path is not designed here — that is real, separately-scoped work, not tonight's.
+
+---
+
+## 24 September 2026 continuation — overnight round, Stage 3a exit criterion
+
+Owner cancelled the day's demonstration; dev stack and seeded data were free to use. This section
+follows the same discipline as the section above: only what was actually run and observed, against
+`docs/demo/2026-09-24/demo_up.sh --reset` from a fresh clone of the repository, not the checkout
+that made the fixes.
+
+### Product defects fixed, both with tests (see `07_BUILD_PLAN.md`'s own addendum for the full record)
+
+1. The Glass ignoring a seeded investigation — fixed with a `?investigation=<id>` URL parameter,
+   precedence over `sessionStorage`.
+2. The `file://` basemap source a browser cannot fetch — fixed with a new Conduit route serving it
+   over HTTP with Range support, and a "Basemap not built" message in place of a blank canvas when
+   the file is absent.
+
+### `demo_up.sh --reset`, from a fresh clone, against the real stack
+
+**Reached READY.** Full log kept in this session's own transcript, not duplicated here; the summary
+block it printed:
+
+```
+ Glass:          http://localhost:5173/?investigation=01M38XAJ4C7M1W8KTE285WJ2EG
+ Investigation:  01M38XAJ4C7M1W8KTE285WJ2EG
+```
+
+Seed output, unedited: `Seeded 400 Person nodes, 10 yards. Loaded 262 current-window events and 4
+prior-period events.` / `Seeded 10 resolution Person nodes and 17 real SAME_AS edges. Seeded 21
+community-ring nodes and 63 edges across 3 rings. Seeded the path-spoke hub 'corp-path-hub' with
+spokes of length [1..8], including a SECRET shortcut on the length-3 spoke.` — identical to
+tonight's earlier rehearsal, confirming the fixture generators are still deterministic.
+
+**One real operational finding, self-inflicted and disclosed rather than hidden:** the first
+attempt at this run collided with a `make test-all` run this same session had left going against
+the same ArcadeDB container — the seed step failed with `Error in execution in lock`, and the
+concurrent test run's own results (34 failures in `tests/conformance/graph_port/test_suite.py`
+alone, plus failures across `tests/ingest`, `tests/golden`, several `tests/scenarios/*`) were
+discarded as unmeasurable, not reported as regressions — exactly the contamination `CLAUDE.md` rule
+14 names, caused here by one session running two things at once rather than two separate agents.
+The orphaned JWKS `http.server` this left behind was killed, and the run was repeated with nothing
+else touching the stack; the second attempt is the one reported above and below.
+
+### Scenario A / Fixture Corp, through a real browser (Playwright), from the fresh-clone's own Glass
+
+| Step | Result | Evidence |
+| --- | --- | --- |
+| Load `?investigation=<seeded id>` | **PASS** — `sessionStorage["ospreyflow.investigationId"]` reads back the URL-supplied id; case banner shows the right id | `A0-glass-loaded-with-seeded-investigation.png` |
+| Density timeline renders real data | **PASS** — same shape as tonight's earlier rehearsal | `A0-glass-loaded-with-seeded-investigation.png` |
+| Map view, basemap absent | **PASS (the fix, not the basemap itself)** — "Basemap not built" with the route's own detail message, no blank canvas, no stack trace | `A2-map-basemap-not-built-message.png` |
+| Hotspot cells panel | **PASS** — 10 real bins render alongside the basemap-not-built message, unaffected by the map's own failure | `A2-map-basemap-not-built-message.png` |
+| Global search for a Fixture Corp entity (`corp-path-hub`) | **NOT REACHED** — typed into the search box, no dropdown observed within the time spent; not pursued further this round | `FixtureCorp-search-path-hub.png` |
+| A1 site image/control points/grid, A3–A15, Fixture Corp's own resolution-threshold/`explain`/pathfinder steps | **NOT REACHED** — browser automation time was spent proving the two fixes rather than the full walkthrough; `07_BUILD_PLAN.md`'s own addendum records this honestly as "not yet fully walked through a browser," not as demonstrated | — |
+
+**What this round proves and does not prove.** It proves both product defects are real, both fixes
+work against a live stack from a fresh clone, and the scripted bring-up reaches `READY` unattended.
+It does not prove the rest of Scenario A or Fixture Corp's own interactive properties work through
+the Glass — that remains open, named here and in `07_BUILD_PLAN.md` rather than assumed from the
+two fixes above.
+
+### `make test-all`, full suite before and after — one more real finding, reinforcing this guide's own §5
+
+`make test-all` (`tests/conformance/graph_port` onward, 293 collected items) could not be run in one
+pass tonight: ArcadeDB hit `java.lang.OutOfMemoryError: Java heap space` partway through and went
+`unhealthy`, three separate times, the third time even with `ollama`/`litellm`/`speaches` already
+stopped — this section's own §5 entry ("ArcadeDB is unhealthy... under a heavy sequential fixture
+build") already names the mechanism; tonight is a fresh, reproducible data point for an
+already-disclosed fragility, not a new one. Worked around, not fixed, by splitting the run at
+`tests/services/api/test_prefetch.py` (roughly where each attempt died) with an ArcadeDB restart
+and an orphaned-`conformance_*`-database sweep between the two halves — no code or Makefile change,
+a testing-methodology accommodation only. Result, both halves clean: **287 passed, 6 failed**
+(`tests/conformance/model_port` ×4, `tests/golden/test_golden_set.py`,
+`tests/scenarios/test_witness_statement_extraction.py` — exactly Floor B's own set, minus
+`test_phase6_extraction_and_resolution.py`, which `make test-all`'s own target does not include),
+plus `npm run test:integration` at 3/3. No new failure anywhere — the earlier, single-pass attempts'
+own extra failures (dozens of `F`s across `tests/conformance/graph_port`, `tests/ingest`, several
+`tests/scenarios/*`) were the OOM's own contamination, confirmed by the fact that every one of those
+suites passed clean once ArcadeDB was healthy again, and discarded rather than reported, per
+`CLAUDE.md` rule 14's own "a measurement taken under unknown contention is not a measurement of the
+thing it claims to measure."
