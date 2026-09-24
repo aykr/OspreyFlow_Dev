@@ -43,7 +43,19 @@ function sourceIdFor(provider: PublicMapProvider): string {
   return provider.id;
 }
 
-export function buildBundledDarkStyle(provider: PublicMapProvider): StyleSpecification {
+/** `provider.source` is a Conduit-relative path (e.g. `/v1/map/local-source/osm-local`) for a
+ * tier-1/2 provider backed by a local `file://` source — `services/api/mapconfig_loader.py`'s
+ * own `public_view()` rewrites it there, since a browser cannot fetch `file://` at all (Stage
+ * 3a's own rehearsal finding, 23 September 2026). Any other shape (an absolute `https://...` —
+ * no such case ships today, but the schema does not forbid it) passes through unchanged. */
+export function resolvePmtilesSourceUrl(source: string, apiBaseUrl: string): string {
+  return source.startsWith("/") ? `${apiBaseUrl}${source}` : source;
+}
+
+export function buildBundledDarkStyle(
+  provider: PublicMapProvider,
+  apiBaseUrl: string,
+): StyleSpecification {
   if (provider.kind !== "vector") {
     throw new Error(
       `buildBundledDarkStyle only supports a "vector" provider (planetiler PMTiles) — ` +
@@ -57,11 +69,12 @@ export function buildBundledDarkStyle(provider: PublicMapProvider): StyleSpecifi
     );
   }
   const source = sourceIdFor(provider);
+  const sourceUrl = resolvePmtilesSourceUrl(provider.source, apiBaseUrl);
   return {
     version: 8,
     name: "osprey-dark",
     sources: {
-      [source]: { type: "vector", url: `pmtiles://${provider.source}` },
+      [source]: { type: "vector", url: `pmtiles://${sourceUrl}` },
     },
     // Self-hosted, not a CDN — `05_DEPLOYMENT.md`'s air-gapped requirement
     // applies to map labels the same way it does to the UI's own fonts
@@ -187,7 +200,7 @@ export function resolveBundledStyle(
 ): StyleSpecification {
   switch (styleId) {
     case BUNDLED_DARK_STYLE_ID:
-      return buildBundledDarkStyle(provider);
+      return buildBundledDarkStyle(provider, apiBaseUrl);
     case BUNDLED_LIGHT_STYLE_ID:
       throw new Error(
         "the light MapLibre style is a stated follow-up, not yet built (see this module's " +

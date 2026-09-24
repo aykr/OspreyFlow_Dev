@@ -35,7 +35,7 @@ import type {
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Protocol as PMTilesProtocol } from "pmtiles";
 import Sigma from "sigma";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type {
   GeoBin,
@@ -44,7 +44,8 @@ import type {
 } from "../../../../packages/schemas/generated";
 import { BRASS_HEX, SEQ_HEX } from "../color/tokens";
 import type { WorkingSetGraph } from "../workingset/store";
-import { resolveBundledStyle } from "./style";
+import { BasemapUnavailableError, checkBasemapAvailable } from "./basemapAvailability";
+import { resolveBundledStyle, resolvePmtilesSourceUrl } from "./style";
 
 const GEO_BINS_SOURCE_ID = "ospreyflow-geo-bins";
 const GEO_BINS_LAYER_ID = "ospreyflow-geo-bins-heat";
@@ -224,6 +225,14 @@ export function MapView({
   // (typically a fresh inline closure every render).
   const onNodeClickRef = useRef(onNodeClick);
   onNodeClickRef.current = onNodeClick;
+  // Set by the mount effect below when `checkBasemapAvailable` 404s — Stage 3a's own rehearsal
+  // finding, 23 September 2026: a missing local PMTiles build used to leave this view a silent
+  // blank canvas rather than telling the operator what to do about it.
+  const [basemapUnavailable, setBasemapUnavailable] = useState<string | null>(null);
+  // Holds the real teardown for whichever mount actually ran — `mount()` below is async (the
+  // basemap preflight check awaits a fetch), so the cleanup a synchronous effect body would
+  // normally return can't yet reference the map/sigma instance it creates.
+  const cleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     ensurePmtilesProtocolRegistered();
@@ -231,119 +240,147 @@ export function MapView({
 
   useEffect(() => {
     if (!containerRef.current) return;
+    setBasemapUnavailable(null);
+    let cancelled = false;
 
-    const mapGraph = buildMapGraph(graph, nodeCoordinates);
-    const style = resolveBundledStyle(provider.style, provider, apiBaseUrl ?? "");
-    const sigma = new Sigma<MapNodeAttributes, MapEdgeAttributes>(
-      mapGraph,
-      containerRef.current,
-    );
-    sigma.on("clickNode", ({ node }) => onNodeClickRef.current?.(node));
+    async function mount(): Promise<void> {
+      if (provider.kind === "vector" && provider.source) {
+        try {
+          await checkBasemapAvailable(
+            resolvePmtilesSourceUrl(provider.source, apiBaseUrl ?? ""),
+            bearerToken,
+          );
+        } catch (err) {
+          if (err instanceof BasemapUnavailableError) {
+            if (!cancelled) setBasemapUnavailable(err.message);
+            return;
+          }
+          throw err;
+        }
+      }
+      if (cancelled || !containerRef.current) return;
 
-    // `attributionControl: false` is this checkpoint's mitigation for
-    // CVE-2026-85061 (docs/06_DECISIONS.md, ADR-014 amendment) — MapLibre's
-    // own control renders attribution HTML through the broken
-    // `DOM.sanitize()` path; this component renders the same text itself,
-    // below, as a plain (never `innerHTML`) node instead.
-    //
-    // `bindMaplibreLayer`'s own type declares its `sigma` parameter as the
-    // library's default-generic `Sigma` (`Sigma<Attributes, Attributes,
-    // Attributes>`), which TypeScript's invariant `Settings<N, E, G>` usage
-    // makes it reject our more specific `Sigma<MapNodeAttributes,
-    // MapEdgeAttributes>` for — a real generic-variance mismatch against a
-    // third-party type, not a real runtime concern: the library only ever
-    // reads `attrs.lat`/`attrs.lng` off nodes generically.
-    // `transformRequest` attaches the bearer token to any request MapLibre
-    // makes to this deployment's own API — currently only the site-image
-    // proxy route (`site/api.ts`'s `siteImageUrl`), since that is the one
-    // MapLibre-fetched resource this checkpoint puts behind auth. Inert
-    // for the PMTiles basemap (fetched through the `pmtiles://` protocol
-    // handler, never this callback) and for any future tier 3/4 provider
-    // URL that doesn't happen to start with this deployment's own
-    // `apiBaseUrl`.
-    const transformRequest =
-      apiBaseUrl && bearerToken
-        ? (url: string): RequestParameters | undefined =>
-            url.startsWith(apiBaseUrl)
-              ? { url, headers: { Authorization: `Bearer ${bearerToken}` } }
-              : undefined
-        : undefined;
+      const mapGraph = buildMapGraph(graph, nodeCoordinates);
+      const style = resolveBundledStyle(provider.style, provider, apiBaseUrl ?? "");
+      const sigma = new Sigma<MapNodeAttributes, MapEdgeAttributes>(
+        mapGraph,
+        containerRef.current,
+      );
+      sigma.on("clickNode", ({ node }) => onNodeClickRef.current?.(node));
 
-    const layer = bindMaplibreLayer(sigma as unknown as Sigma, {
-      mapOptions: { style, attributionControl: false, transformRequest },
-    });
-    mapRef.current = layer.map;
-    onMapReady?.(layer.map);
+      // `attributionControl: false` is this checkpoint's mitigation for
+      // CVE-2026-85061 (docs/06_DECISIONS.md, ADR-014 amendment) — MapLibre's
+      // own control renders attribution HTML through the broken
+      // `DOM.sanitize()` path; this component renders the same text itself,
+      // below, as a plain (never `innerHTML`) node instead.
+      //
+      // `bindMaplibreLayer`'s own type declares its `sigma` parameter as the
+      // library's default-generic `Sigma` (`Sigma<Attributes, Attributes,
+      // Attributes>`), which TypeScript's invariant `Settings<N, E, G>` usage
+      // makes it reject our more specific `Sigma<MapNodeAttributes,
+      // MapEdgeAttributes>` for — a real generic-variance mismatch against a
+      // third-party type, not a real runtime concern: the library only ever
+      // reads `attrs.lat`/`attrs.lng` off nodes generically.
+      // `transformRequest` attaches the bearer token to any request MapLibre
+      // makes to this deployment's own API — currently only the site-image
+      // proxy route (`site/api.ts`'s `siteImageUrl`), since that is the one
+      // MapLibre-fetched resource this checkpoint puts behind auth. Inert
+      // for the PMTiles basemap (fetched through the `pmtiles://` protocol
+      // handler, never this callback) and for any future tier 3/4 provider
+      // URL that doesn't happen to start with this deployment's own
+      // `apiBaseUrl`.
+      const transformRequest =
+        apiBaseUrl && bearerToken
+          ? (url: string): RequestParameters | undefined =>
+              url.startsWith(apiBaseUrl)
+                ? { url, headers: { Authorization: `Bearer ${bearerToken}` } }
+                : undefined
+          : undefined;
 
-    // `load` fires once the style and its own sources have finished
-    // loading — the documented point at which `addSource`/`addLayer` for
-    // anything not already declared in the style spec is safe.
-    layer.map.on("load", () => {
-      if (layer.map.getSource(GEO_BINS_SOURCE_ID)) return;
-      layer.map.addSource(GEO_BINS_SOURCE_ID, {
-        type: "geojson",
-        data: geoBinsFeatureCollection(geoBinsRef.current),
+      const layer = bindMaplibreLayer(sigma as unknown as Sigma, {
+        mapOptions: { style, attributionControl: false, transformRequest },
       });
-      layer.map.addLayer({
-        id: GEO_BINS_LAYER_ID,
-        type: "heatmap",
-        source: GEO_BINS_SOURCE_ID,
-        paint: {
-          "heatmap-weight": ["interpolate", ["linear"], ["get", "count"], 0, 0, 50, 1],
-          "heatmap-intensity": 1,
-          "heatmap-radius": 24,
-          "heatmap-opacity": 0.75,
-          "heatmap-color": [
-            "interpolate",
-            ["linear"],
-            ["heatmap-density"],
-            0,
-            "rgba(0,0,0,0)",
-            0.2,
-            SEQ_HEX[0],
-            0.4,
-            SEQ_HEX[1],
-            0.6,
-            SEQ_HEX[3],
-            0.8,
-            SEQ_HEX[4],
-            1,
-            SEQ_HEX[5],
-          ],
-        },
-      });
+      mapRef.current = layer.map;
+      onMapReady?.(layer.map);
 
-      if (!layer.map.getSource(SNAIL_TRAIL_SOURCE_ID)) {
-        layer.map.addSource(SNAIL_TRAIL_SOURCE_ID, {
+      // `load` fires once the style and its own sources have finished
+      // loading — the documented point at which `addSource`/`addLayer` for
+      // anything not already declared in the style spec is safe.
+      layer.map.on("load", () => {
+        if (layer.map.getSource(GEO_BINS_SOURCE_ID)) return;
+        layer.map.addSource(GEO_BINS_SOURCE_ID, {
           type: "geojson",
-          data: snailTrailFeatureCollection(snailTrailRef.current),
+          data: geoBinsFeatureCollection(geoBinsRef.current),
         });
         layer.map.addLayer({
-          id: SNAIL_TRAIL_LINE_LAYER_ID,
-          type: "line",
-          source: SNAIL_TRAIL_SOURCE_ID,
-          filter: ["==", ["geometry-type"], "LineString"],
-          paint: { "line-color": BRASS_HEX, "line-width": 2, "line-opacity": 0.85 },
-        });
-        layer.map.addLayer({
-          id: SNAIL_TRAIL_POINT_LAYER_ID,
-          type: "circle",
-          source: SNAIL_TRAIL_SOURCE_ID,
-          filter: ["==", ["geometry-type"], "Point"],
+          id: GEO_BINS_LAYER_ID,
+          type: "heatmap",
+          source: GEO_BINS_SOURCE_ID,
           paint: {
-            "circle-color": BRASS_HEX,
-            "circle-radius": 6,
-            "circle-stroke-color": "#ffffff",
-            "circle-stroke-width": 1.5,
+            "heatmap-weight": ["interpolate", ["linear"], ["get", "count"], 0, 0, 50, 1],
+            "heatmap-intensity": 1,
+            "heatmap-radius": 24,
+            "heatmap-opacity": 0.75,
+            "heatmap-color": [
+              "interpolate",
+              ["linear"],
+              ["heatmap-density"],
+              0,
+              "rgba(0,0,0,0)",
+              0.2,
+              SEQ_HEX[0],
+              0.4,
+              SEQ_HEX[1],
+              0.6,
+              SEQ_HEX[3],
+              0.8,
+              SEQ_HEX[4],
+              1,
+              SEQ_HEX[5],
+            ],
           },
         });
-      }
-    });
+
+        if (!layer.map.getSource(SNAIL_TRAIL_SOURCE_ID)) {
+          layer.map.addSource(SNAIL_TRAIL_SOURCE_ID, {
+            type: "geojson",
+            data: snailTrailFeatureCollection(snailTrailRef.current),
+          });
+          layer.map.addLayer({
+            id: SNAIL_TRAIL_LINE_LAYER_ID,
+            type: "line",
+            source: SNAIL_TRAIL_SOURCE_ID,
+            filter: ["==", ["geometry-type"], "LineString"],
+            paint: { "line-color": BRASS_HEX, "line-width": 2, "line-opacity": 0.85 },
+          });
+          layer.map.addLayer({
+            id: SNAIL_TRAIL_POINT_LAYER_ID,
+            type: "circle",
+            source: SNAIL_TRAIL_SOURCE_ID,
+            filter: ["==", ["geometry-type"], "Point"],
+            paint: {
+              "circle-color": BRASS_HEX,
+              "circle-radius": 6,
+              "circle-stroke-color": "#ffffff",
+              "circle-stroke-width": 1.5,
+            },
+          });
+        }
+      });
+
+      cleanupRef.current = () => {
+        mapRef.current = null;
+        layer.clean();
+        sigma.kill();
+      };
+    }
+
+    void mount();
 
     return () => {
-      mapRef.current = null;
-      layer.clean();
-      sigma.kill();
+      cancelled = true;
+      cleanupRef.current?.();
+      cleanupRef.current = null;
     };
   }, [graph, provider, nodeCoordinates, apiBaseUrl, bearerToken, onMapReady]);
 
@@ -361,23 +398,59 @@ export function MapView({
 
   return (
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
-      <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
       <div
+        ref={containerRef}
         style={{
-          position: "absolute",
-          bottom: 4,
-          right: 8,
-          fontSize: 11,
-          color: "var(--text-secondary)",
-          background: "rgba(0,0,0,0.4)",
-          padding: "2px 6px",
-          borderRadius: 2,
-          pointerEvents: "none",
+          width: "100%",
+          height: "100%",
+          display: basemapUnavailable ? "none" : undefined,
         }}
-      >
-        {provider.attribution}
-        {provider.licence_note ? ` — ${provider.licence_note}` : ""}
-      </div>
+      />
+      {/* Stage 3a's own rehearsal finding, 23 September 2026: a missing local PMTiles build
+          used to leave this view a silent blank canvas — this names the gap instead, the same
+          "tell the operator exactly what is missing" shape `services/api/config.py`'s
+          fail-fast-on-missing-`OIDC_JWKS_URL` already establishes. */}
+      {basemapUnavailable && (
+        <div
+          role="alert"
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            padding: 24,
+            textAlign: "center",
+            color: "var(--text-primary)",
+            background: "var(--surface-app)",
+          }}
+        >
+          <strong style={{ color: "var(--warning)" }}>Basemap not built</strong>
+          <span style={{ fontSize: "var(--fs-11)", color: "var(--text-secondary)" }}>
+            {basemapUnavailable}
+          </span>
+        </div>
+      )}
+      {!basemapUnavailable && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: 4,
+            right: 8,
+            fontSize: 11,
+            color: "var(--text-secondary)",
+            background: "rgba(0,0,0,0.4)",
+            padding: "2px 6px",
+            borderRadius: 2,
+            pointerEvents: "none",
+          }}
+        >
+          {provider.attribution}
+          {provider.licence_note ? ` — ${provider.licence_note}` : ""}
+        </div>
+      )}
       {/* `00_ARCHITECTURE.md` §1.2: "the map UI should show a
           hosted-provider indicator whenever a tier 3 layer is live" —
           `client_scope !== "open"` covers tier 3 and any proxied non-open

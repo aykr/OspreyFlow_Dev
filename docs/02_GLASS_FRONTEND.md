@@ -181,6 +181,37 @@ set of widgets:
 4. **The status bar never lies.** Counts of dimmed and handling-hidden items are always visible.
    An analyst must never be able to mistake a filtered picture for a complete one.
 
+### 2.1 Investigation selection on load — proposed, not settled spec
+
+**Found during Stage 3a's own rehearsal, 23 September 2026 — this document was silent on the
+question, checked directly, not assumed.** Before this proposal, the Glass created its own
+investigation via `POST /v1/investigations` on every load, unconditionally — an operator who had
+already created and seeded an investigation via the API (`DEMO_GUIDE.md` §3.3–3.4) saw an empty
+working set, because the Glass never looked at what already existed. The only way to point the
+Glass at a specific investigation was to open the browser console and set
+`sessionStorage["ospreyflow.investigationId"]` by hand before reloading.
+
+**The minimal fix, implemented, pending the owner's acceptance as spec:** on load, the Glass
+resolves an investigation id in this order —
+
+1. a `?investigation=<id>` query parameter on the page URL, if present;
+2. otherwise, `sessionStorage["ospreyflow.investigationId"]`, if a prior load in this browser tab
+   set one;
+3. otherwise, `POST /v1/investigations` creates a new one, exactly as before.
+
+Whichever id resolves is written back to `sessionStorage` immediately, so a reload of the plain
+URL (no query parameter) still finds the same investigation rather than falling through to
+create a second one. This closes the gap with the smallest change that removes the manual
+`sessionStorage` step — it does not validate the URL-supplied id against `GET
+/v1/investigations/{id}` before use (an invalid or unauthorised id surfaces however the first
+investigation-scoped request already reports that failure today, not as a special case here).
+
+**What is not decided by this proposal:** whether the Glass should instead show an
+investigation-picker screen, whether an invalid URL id should have its own dedicated error state,
+and whether the query parameter should survive into the URL the Glass itself sets during
+navigation (it does not today — this is load-time resolution only, not a routing scheme). Left
+for the owner to accept, amend or reject as real spec.
+
 ## 3. The five analytical capabilities
 
 ### 3.1 Network analysis
@@ -309,6 +340,32 @@ site with a superimposed grid, and half the finding is "these four yards, adjace
 wing." A platform that only does street-map geocoding cannot do prison, campus, port, airport or
 stadium analysis. Support an uploaded image with two or more control points and a drawn grid,
 and let a `Location` entity be a grid cell.
+
+**Which tier serves a tier-1/2 local PMTiles source over HTTP — proposed, not settled spec.**
+Found during Stage 3a's own rehearsal, 23 September 2026: neither this section's "Offline tiles"
+row above nor `05_DEPLOYMENT.md` §2.2 names which component actually puts a tier-1/2 local
+`source` on the wire to the browser (checked directly, not assumed silent) — `osprey.yaml`'s own
+`source: file:///data/tiles/osm-local.pmtiles` is an on-disk path, and a browser cannot fetch a
+`file://` URI at all, so the map view rendered blank the moment a real basemap build existed to
+try. The fix implemented pending the owner's acceptance: the Conduit serves it, at `GET
+/v1/map/local-source/{provider_id}` (`services/api/app.py`), the smallest correct option given
+`05_DEPLOYMENT.md` §2.4's own guard table — the Conduit is already the one exposed service
+serving `/v1/map/providers` and the tier-3/4 tile proxy, so this is a third sibling route, not a
+new exposed surface. `mapconfig_loader.public_view()` rewrites a `file://` source to this route
+rather than handing the Glass the raw path; the route answers a ranged `GET` (PMTiles' own access
+pattern — the client reads its own directory and tile blocks via byte ranges against the single
+file, never downloading it whole) and 404s with a named `detail` when the file has not been
+built. The Glass runs a preflight check against this route before mounting the map
+(`apps/workspace/src/map/basemapAvailability.ts`) and shows "Basemap not built" with the route's
+own detail message in place of a blank canvas when it 404s.
+
+**What is not decided by this proposal:** whether a `local-lite`/`small`/`cluster` deployment
+profile should instead serve the file from a dedicated static-file sidecar rather than the
+Conduit itself (a real question once this is more than a single-file demo case), and whether the
+same route should also serve a tier-2 OS OpenData PMTiles build once one exists (nothing about
+this fix is tier-1-specific — a tier-2 provider's own `source` is rewritten by the same `file://`
+check in `public_view()` — but no tier-2 provider ships today to exercise it against). Left for
+the owner to accept, amend or reject as real spec.
 
 ## 4. Design system binding
 

@@ -47,7 +47,7 @@ from fastapi import (
     status,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from services.extract.writer import (
@@ -2341,6 +2341,47 @@ async def get_map_tile_route(
     if provider.cache is not None:
         write_cached_tile(tile_bytes, storage=tile_cache_storage, object_key=cache_key)
     return Response(content=tile_bytes, media_type=image_content_type(tile_bytes))
+
+
+@app.get("/v1/map/local-source/{provider_id}")
+async def get_map_local_source_route(
+    provider_id: str,
+    principal: PrincipalDep,
+    map_config: MapConfigDep,
+) -> Response:
+    """Serves a tier-1/2 provider's local `file://` PMTiles source over HTTP —
+    Stage 3a's own rehearsal finding, 23 September 2026: a browser cannot fetch a `file://` URI
+    at all, so `mapconfig_loader.public_view()` now rewrites that source to this route rather
+    than handing the on-disk path straight to the Glass. `docs/02_GLASS_FRONTEND.md` and
+    `docs/05_DEPLOYMENT.md` do not name which tier serves tier-1/2 tiles over HTTP (checked
+    directly, not assumed silent) — this route is the smallest correct option, since the Conduit
+    is already the one exposed service (`05_DEPLOYMENT.md` §2.4's guard table) serving
+    `/v1/map/providers` and the tier-3/4 tile proxy right above; recorded as a proposal in
+    `02_GLASS_FRONTEND.md`, not settled spec.
+
+    `FileResponse` answers a byte-`Range` request itself (Starlette's own `accept-ranges: bytes`
+    handling) — required, not a nicety: the `pmtiles` JS protocol handler reads its own directory
+    and tile blocks via ranged fetches against this single file, never downloading it whole.
+
+    A missing file gets a 404 naming the gap rather than a stack trace or a silent empty
+    response — `apps/workspace/src/map/basemapAvailability.ts`'s own preflight check depends on
+    this exact status code and `detail` shape to render "basemap not built" instead of a blank
+    map (the rehearsal's other finding for this same defect)."""
+    provider = next((p for p in map_config.providers if p.id == provider_id), None)
+    if provider is None or provider.source is None or not provider.source.startswith("file://"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="unknown local source provider"
+        )
+    path = Path(provider.source.removeprefix("file://"))
+    if not path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"basemap not built — {path} does not exist yet; see "
+                "scripts/build_local_basemap.py"
+            ),
+        )
+    return FileResponse(path, media_type="application/vnd.pmtiles")
 
 
 # --- analytics -----------------------------------------------------------

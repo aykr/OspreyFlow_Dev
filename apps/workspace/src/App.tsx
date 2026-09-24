@@ -23,6 +23,10 @@ import { Dossier } from "./dossier/Dossier";
 import { ExportPanel } from "./export/ExportPanel";
 import { HistoryPanel } from "./history/HistoryPanel";
 import { Inspector } from "./inspector/Inspector";
+import {
+  INVESTIGATION_ID_SESSION_KEY,
+  initialInvestigationId,
+} from "./investigation/investigationId";
 import { computeCommunityHulls } from "./metrics/hulls";
 import { MetricsPanel } from "./metrics/MetricsPanel";
 import { QueryBuilderPanel } from "./patterns/QueryBuilderPanel";
@@ -82,15 +86,14 @@ const EMPTY_GEO_BINS: readonly GeoBin[] = [];
 // needed for A1/A2's fixed-site scale.
 const GEO_BIN_PRECISION = 8;
 
-function investigationIdFromSession(): string | null {
-  return sessionStorage.getItem("ospreyflow.investigationId");
-}
+// Precedence logic (URL param → sessionStorage → create new) lives in
+// `investigation/investigationId.ts`, not here — see that module's own docstring.
 
 export function App() {
   const workingSetRef = useRef(createWorkingSet());
   const glassCanvasRef = useRef<GlassCanvasHandle>(null);
   const [investigationId, setInvestigationId] = useState<string | null>(
-    investigationIdFromSession(),
+    initialInvestigationId(),
   );
   // Phase 7 Stage 3: the metrics panel's own "Show community hulls" toggle feeds this, `App.tsx`
   // (not `MetricsPanel` itself) turns it into hull geometry — `MetricsPanel` has no dependency on
@@ -167,14 +170,19 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (investigationId) return;
+    if (investigationId) {
+      // Persist a URL-param id too, so a reload without the param (or a bookmark of the plain
+      // URL) still finds the same investigation rather than falling through to create a new one.
+      sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, investigationId);
+      return;
+    }
     void fetch(`${API_BASE_URL}/v1/investigations`, {
       method: "POST",
       headers: { Authorization: `Bearer ${DEV_BEARER_TOKEN}` },
     })
       .then((r) => r.json())
       .then((investigation) => {
-        sessionStorage.setItem("ospreyflow.investigationId", investigation.id);
+        sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, investigation.id);
         setInvestigationId(investigation.id);
       });
   }, [investigationId]);
@@ -451,7 +459,7 @@ export function App() {
               apiBaseUrl={API_BASE_URL}
               bearerToken={DEV_BEARER_TOKEN}
               onOpenInvestigation={(newInvestigationId) => {
-                sessionStorage.setItem("ospreyflow.investigationId", newInvestigationId);
+                sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, newInvestigationId);
                 setInvestigationId(newInvestigationId);
                 setView("graph");
               }}

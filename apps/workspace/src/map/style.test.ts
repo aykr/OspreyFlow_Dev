@@ -19,23 +19,37 @@ function provider(overrides: Partial<PublicMapProvider> = {}): PublicMapProvider
     licence_id: "ODbL",
     licence_note: null,
     client_scope: "open",
-    source: "file:///data/tiles/osm-local.pmtiles",
+    // Realistic post-fix shape — `services/api/mapconfig_loader.py`'s `public_view()` rewrites a
+    // local `file://` source to this Conduit-relative route (Stage 3a's own rehearsal finding,
+    // 23 September 2026: a browser cannot fetch `file://` at all).
+    source: "/v1/map/local-source/osm-local",
     ...overrides,
   };
 }
 
 describe("buildBundledDarkStyle", () => {
-  it("builds a valid style-8 spec with a pmtiles:// source url", () => {
-    const style = buildBundledDarkStyle(provider());
+  it("builds a valid style-8 spec with a pmtiles:// source url, prefixed with apiBaseUrl", () => {
+    const style = buildBundledDarkStyle(provider(), "http://127.0.0.1:8000");
     expect(style.version).toBe(8);
     expect(style.sources["osm-local"]).toEqual({
       type: "vector",
-      url: "pmtiles://file:///data/tiles/osm-local.pmtiles",
+      url: "pmtiles://http://127.0.0.1:8000/v1/map/local-source/osm-local",
+    });
+  });
+
+  it("passes an absolute source url through unchanged", () => {
+    const style = buildBundledDarkStyle(
+      provider({ source: "https://example.test/osm-local.pmtiles" }),
+      "http://127.0.0.1:8000",
+    );
+    expect(style.sources["osm-local"]).toEqual({
+      type: "vector",
+      url: "pmtiles://https://example.test/osm-local.pmtiles",
     });
   });
 
   it("names a source-layer for every declared layer, matching the OpenMapTiles schema", () => {
-    const style = buildBundledDarkStyle(provider());
+    const style = buildBundledDarkStyle(provider(), "http://api");
     const sourceLayers = style.layers
       .map((l) => ("source-layer" in l ? l["source-layer"] : undefined))
       .filter((l): l is string => l !== undefined);
@@ -45,7 +59,7 @@ describe("buildBundledDarkStyle", () => {
   });
 
   it("references only design-token hex values, never a literal off-token colour", () => {
-    const style = buildBundledDarkStyle(provider());
+    const style = buildBundledDarkStyle(provider(), "http://api");
     const KNOWN_HEX = new Set(["#090d0e", "#101314", "#202425", "#66696a", "#e8eced"]);
     for (const layer of style.layers) {
       const paint = (layer as { paint?: Record<string, unknown> }).paint ?? {};
@@ -58,11 +72,15 @@ describe("buildBundledDarkStyle", () => {
   });
 
   it("rejects a non-vector provider", () => {
-    expect(() => buildBundledDarkStyle(provider({ kind: "raster" }))).toThrow(/vector/);
+    expect(() => buildBundledDarkStyle(provider({ kind: "raster" }), "http://api")).toThrow(
+      /vector/,
+    );
   });
 
   it("rejects a provider with no directly-fetchable source", () => {
-    expect(() => buildBundledDarkStyle(provider({ source: null }))).toThrow(/directly-fetchable/);
+    expect(() => buildBundledDarkStyle(provider({ source: null }), "http://api")).toThrow(
+      /directly-fetchable/,
+    );
   });
 });
 

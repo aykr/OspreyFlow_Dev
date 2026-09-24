@@ -29,7 +29,17 @@ def load_map_config(path: str | Path) -> MapConfig:
     return MapConfig.model_validate(raw["map"])
 
 
+#: Rewritten, not passed through raw — see `local_source_route`'s own docstring in
+#: `services/api/app.py` (Stage 3a rehearsal finding, 23 September 2026): a browser cannot
+#: fetch a `file://` URI at all (no network stack reaches it), so the Glass's PMTiles source
+#: must be an HTTP path the Conduit itself serves, never the on-disk path `osprey.yaml` records.
+_LOCAL_SOURCE_ROUTE_PREFIX = "/v1/map/local-source"
+
+
 def public_view(provider: MapProvider) -> PublicMapProvider:
+    source = provider.source if provider.proxy == "none" else None
+    if source is not None and source.startswith("file://"):
+        source = f"{_LOCAL_SOURCE_ROUTE_PREFIX}/{provider.id}"
     return PublicMapProvider(
         id=provider.id,
         label=provider.label,
@@ -39,5 +49,5 @@ def public_view(provider: MapProvider) -> PublicMapProvider:
         licence_id=provider.licence.id,
         licence_note=provider.licence.note,
         client_scope=provider.licence.client_scope,
-        source=provider.source if provider.proxy == "none" else None,
+        source=source,
     )

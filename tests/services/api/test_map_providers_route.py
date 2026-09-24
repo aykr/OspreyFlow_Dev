@@ -66,7 +66,9 @@ def test_never_discloses_a_credential_or_a_proxied_source(client: TestClient) ->
     assert all("credential" not in p for p in providers)
     local = next(p for p in providers if p["id"] == "osm-local")
     proxied = next(p for p in providers if p["id"] == "os-ngd")
-    assert local["source"] == "file:///data/tiles/gb-osm.pmtiles"
+    # Never the raw `file://` path — a browser cannot fetch it (Stage 3a's own rehearsal finding,
+    # 23 September 2026); rewritten to the Conduit's own local-source route instead.
+    assert local["source"] == "/v1/map/local-source/osm-local"
     assert proxied["source"] is None  # never the raw os-datahub:// source
     assert local["client_scope"] == "open"
     assert proxied["client_scope"] == "per-deployment"

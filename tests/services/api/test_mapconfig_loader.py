@@ -58,7 +58,10 @@ map:
     local, proxied = config.providers
 
     local_view = public_view(local)
-    assert local_view.source == "file:///data/tiles/gb-osm.pmtiles"
+    # Never the raw `file://` path — a browser cannot fetch it at all (Stage 3a's own rehearsal
+    # finding, 23 September 2026). Rewritten to the Conduit's own local-source route instead;
+    # `tests/services/api/test_map_local_source_route.py` proves that route serves the bytes.
+    assert local_view.source == "/v1/map/local-source/osm-local"
     assert local_view.client_scope == "open"
     assert not hasattr(local_view, "credential")
 

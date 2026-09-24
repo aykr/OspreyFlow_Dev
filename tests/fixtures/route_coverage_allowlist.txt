@@ -20,6 +20,7 @@ GET /v1/investigations/{investigation_id}/resolution/explain/{cluster_id}
 GET /v1/investigations/{investigation_id}/resolution/threshold
 GET /v1/investigations/{investigation_id}/sites/{site_id}
 GET /v1/investigations/{investigation_id}/sites/{site_id}/image
+GET /v1/map/local-source/{provider_id}
 GET /v1/map/providers
 GET /v1/map/tiles/{provider_id}/{z}/{x}/{y}
 GET /v1/monitors
