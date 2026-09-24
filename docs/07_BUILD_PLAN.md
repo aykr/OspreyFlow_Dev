@@ -2805,6 +2805,48 @@ find something already finished sitting in the queue.
    the 10 GiB VM alongside ArcadeDB's floor. That measurement needs the stack this sub-stage did not
    stand up.
 
+   **Floor B measured, and a store-degradation measurement that is worth more than the Floor B
+   number, 24 September 2026.** `make test-all` was run in the two batches this document's own
+   Stage 2a addendum prescribes. What it produced:
+
+   | Run | Stack state | Result | Wall time |
+   | --- | --- | --- | --- |
+   | Batch 1 | ArcadeDB accumulated across this session's runs, never dropped | **94 failed, 49 passed** | 24:51 |
+   | Batch 1, repeated | `make dev-down && make dev-up` — volumes removed, fresh databases | **7 failed, 136 passed** | **6:38** |
+   | Batch 2 | after `docker restart` of ArcadeDB only | 48 failed, 106 passed | 40:22 |
+
+   **The first two rows are the same batch, the same code and the same machine, minutes apart.**
+   The only difference is whether the graph store's databases had accumulated. 94 failures became
+   7, and 25 minutes became 6½. The failures in the contaminated run were `IndexException` on
+   `apply_schema`'s own index pass (`"Error on creating index on type 'mx_Person', properties
+   [id]"`), with the container reporting `healthy`, `OOMKilled=false` and zero restarts throughout
+   — this stage's own already-recorded fifth cause, observed-not-diagnosed, now with a clean
+   control alongside it for the first time.
+
+   **Floor B itself, from the fresh run, is intact:** all six members present by test id and no
+   others of their kind. The seventh failure in that run,
+   `tests/scenarios/test_hmp_graph.py::test_hmp_graph_side`, is an ArcadeDB adapter error rather
+   than a model-backend one, so it is **not** a Floor B member and is reported as an addition
+   requiring its own diagnosis.
+
+   **Batch 2's 48 failures are withdrawn as a measurement and must not be read as a regression.**
+   `docker inspect` showed ArcadeDB `unhealthy` *during* the run (not OOM-killed), so the run
+   measured a degrading store rather than the code under test — the same reasoning this document
+   already applies to the withdrawn "8 of the last 13" figure: a measurement taken while the
+   resource under test is degrading is not a measurement of the thing it claims to measure. A
+   container restart alone was evidently not equivalent to dropping the databases, which is itself
+   the useful part of the finding.
+
+   **Why this matters beyond the test suite.** `05_DEPLOYMENT.md` §8 already records that a running
+   instance needs periodic restarts at an unknown interval, and names
+   `test_arcadedb_memory_and_query_latency_under_sustained_ingest_cycles` as the test that would
+   characterise it. This round's two batch-1 runs are the sharpest evidence yet that the trigger is
+   **accumulated database state, not process uptime** — a restart did not recover batch 2, and
+   dropping the volumes did recover batch 1 completely. That distinction changes what the named
+   test should vary, and it changes the operational remedy from "restart periodically" to something
+   nobody has specified. Recorded here rather than folded into Stage 2a, which is closed against a
+   different question.
+
    **Stage 2 §4 — Backup and restore. ACCEPTED.** `python -m harness.backup` writes to
    `backups/<UTC-timestamp>-<profile>-<git-sha>/` with a `manifest.json` naming every file, its
    checksum and the schema versions, covering **`05_DEPLOYMENT.md` §4's full set**: staged Parquet,
