@@ -2734,6 +2734,61 @@ find something already finished sitting in the queue.
    deploy"; this was read as §3 and flagged, and the owner confirmed §3 on 24 September 2026 — "your
    reading of §3 is correct and stands".)*
 
+   **Stage 2 §3 — RESUMED 24 September 2026 under the owner's four decisions; the verify step is
+   built and proven, the deploy script is not.** The round before this one stopped at the
+   token-exchange finding. Resuming it found a second, larger defect in the same code path, so this
+   entry is again a findings entry rather than a delivery one — and both findings were only
+   findable by running the thing against a real identity provider.
+
+   **Step 0, the bounded fine-grained probe: NO.** Keycloak 26.0 cannot be configured to refuse
+   exchange for a *specific target subject*. Tried, with `admin-fine-grained-authz` enabled and
+   reported enabled by the server: `PUT /users/{id}/management/permissions` → **404**; enabling
+   authorization services on `realm-management` → accepted but its resource endpoints stay 404; the
+   realm-level `adminPermissionsEnabled` toggle → **400**. So the realm cannot refuse a target, the
+   Conduit's pre-check is the only refusal, and there is **no fourth verify assertion** — exactly as
+   ADR-043's amendment says.
+
+   **Built: the Conduit's revoked-principal pre-check.** `PrincipalResolver` reads the target's
+   `enabled` status through a **separate view-users grant** before any exchange; disabled raises
+   `PrincipalRevoked` (a subclass of the existing refusal, so ADR-044's revoked reason is available
+   without changing any current caller); unreachable still raises `PrincipalExchangeUnavailable`, so
+   ADR-044's unreachable path is untouched; unconfigured leaves it off entirely.
+
+   **Built: the three-sided verify, proven against a real Keycloak 26.0, not a fixture.** Five
+   cases in `tests/services/api/test_revoked_principal_precheck.py`, all green: an enabled subject
+   is exchanged and carries its own claims; an unprivileged client is refused by Keycloak; a
+   disabled subject is refused by the pre-check; **without the pre-check the realm issues a token
+   for that same disabled subject** (the rule-15 demonstration, and the finding itself); and an
+   unreachable IdP is unavailable rather than revoked.
+
+   **The second defect, and it is the bigger one: ADR-043's exchange had never worked against a real
+   Keycloak.** `resolve_for_owner_detailed` omitted `subject_token`, which RFC 8693 §2.1 makes
+   REQUIRED. A real Keycloak refuses the request outright — `access_denied`, "Client not allowed to
+   exchange" — and grants the identical request with the field present. Measured both ways. Nothing
+   caught it because the only thing that code had ever run against was the ephemeral fixture
+   ADR-043's own Cost section describes, and **that fixture accepted a request the real server
+   rejects**. ADR-043 warned its fixture could not prove a *realm* was correctly configured; the
+   warning was narrower than the problem, which was in the request this codebase sends. Fixed, and
+   now covered by a test that needs a real IdP by design.
+
+   **Two pieces of realm configuration the deploy's rendered import must carry**, both found only by
+   doing it: protocol mappers for `clearance`, `org_unit`, `receivable_handling_codes` and `roles`
+   (without them an exchanged token verifies as a token and then fails as a `Principal`), and the
+   realm's `unmanagedAttributePolicy` set to `ENABLED` — Keycloak 26 silently discards unmanaged
+   user attributes by default, so the attributes are accepted, stored nowhere, and absent from the
+   token with no error anywhere.
+
+   **Not built, and again deliberately not half-built:** `harness/apply.py` and its stages, the
+   rendered realm import, the apply-time client secret, seeding's ordering guard, exit test #2 from
+   a fresh clone, and `demo_up.sh`'s retirement. Two blocking defects in the exchange path were
+   found and fixed this round; building the deploy around a path that had never once worked would
+   have produced a golden path whose final step was the thing most likely to be wrong.
+
+   **Still not measured, and not to be read as passing:** wall time, peak Docker memory, and whether
+   twelve containers fit the 10 GiB VM alongside ArcadeDB's floor.
+
+   **Superseded — the previous round's own entry, kept below because it was pushed and read.**
+
    **Stage 2 §3 — STOPPED AND REPORTED, 24 September 2026, at the brief's own instruction.** Three
    product changes are built and tested; the deploy itself is not built, because measuring
    Keycloak's token exchange first — as the brief directed, rather than after — found that the
@@ -2804,6 +2859,13 @@ find something already finished sitting in the queue.
    **Not measured, and it should not be read as passing:** whether the twelve-container stack fits
    the 10 GiB VM alongside ArcadeDB's floor. That measurement needs the stack this sub-stage did not
    stand up.
+
+   **`make test-all` drops volumes before each batch, from 24 September 2026 (owner's decision).**
+   Every Floor B measurement taken before that change was taken against accumulated database state.
+   **The two-batch numbers of 24 September are superseded by the fresh-volume run: batch 1, 7 failed
+   / 136 passed.** The sustained-load characterisation test `05_DEPLOYMENT.md` §8 names is pulled
+   forward to run after Stage 2 §3, and **its variable is accumulated database state, not process
+   uptime** — the two batch-1 runs below are why.
 
    **Floor B measured, and a store-degradation measurement that is worth more than the Floor B
    number, 24 September 2026.** `make test-all` was run in the two batches this document's own

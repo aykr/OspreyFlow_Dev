@@ -4707,6 +4707,74 @@ alone.
 
 ---
 
+### Amendment, 24 September 2026 — containment moves into the Conduit. **Proposed.**
+
+**Status of this amendment: Proposed.** The owner decided its substance on 24 September 2026; the
+record is written here for confirmation. ADR-043 itself remains Accepted — candidate (b) is
+unchanged, and this amends where the containment lives, not which mechanism was chosen.
+
+**The finding, measured against a real Keycloak 26.0 rather than inferred.** This record's own
+operator verification asks an operator to "attempt an exchange the realm's own policy should refuse,
+and confirm it is refused". Four attempts were run against a real realm with token exchange enabled:
+
+| Attempt | Result |
+| --- | --- |
+| Privileged client → the disposable test subject | granted |
+| Privileged client → a different, in-scope subject | granted |
+| Privileged client → a **disabled** subject | **granted** |
+| Unprivileged client → a valid subject | refused — "Client not allowed to exchange" |
+
+**Keycloak scopes impersonation by requesting client, not by target subject.** There is no
+per-target policy. A bounded attempt to configure one through fine-grained admin permissions on
+26.0 failed: `PUT /users/{id}/management/permissions` returns 404 even with
+`admin-fine-grained-authz` enabled and reported enabled by the server, enabling authorization
+services on `realm-management` leaves its resource endpoints 404, and the realm-level
+`adminPermissionsEnabled` toggle is rejected with 400. **The realm cannot refuse exchange for a
+specific subject. The Conduit must.**
+
+**Security finding, recorded as one.** A disabled principal is still exchangeable at the realm. A
+disabled user is a principal an organisation has revoked, and Keycloak will mint a token for them
+on request from a client holding the grant. `06_DECISIONS.md` ADR-044 distinguishes an unreachable
+identity provider from a revoked principal on the premise that revocation is observable; **that
+premise is restated as "observable by the Conduit's own pre-check", not by the realm.**
+
+**The mitigation, built.** `PrincipalResolver` performs a view-users read of the target principal's
+`enabled` status **before** any exchange (`OIDC_ADMIN_USERS_URL`, a grant separate from the
+impersonation one on purpose — a pre-check sharing the authority that fails open would be asking
+the component that already said yes). A disabled principal raises `PrincipalRevoked`, a subclass of
+the existing refusal so every current caller behaves unchanged while ADR-044's revoked-principal
+reason becomes available to whatever marks the watch stopped. An unreachable IdP still raises
+`PrincipalExchangeUnavailable`: a transient outage must never mark a live analyst's watches revoked.
+Unconfigured leaves the pre-check off and the previous behaviour exactly.
+
+**Residual risk, accepted for V1 and named for revisit.** A **compromised Conduit client can
+impersonate any user in the realm.** The pre-check is in the Conduit, so an attacker holding the
+client's credentials simply does not perform it. This does not make the mitigation pointless — it
+closes the far likelier case of a correctly-running Conduit acting for a principal the organisation
+has revoked, which is the property this record's own "blast radius" paragraph already says the
+decision is actually about. It does mean the realm grant remains the blast radius, and **that is
+accepted for V1 and should be revisited** if Keycloak gains per-target scoping or the deployment
+moves to an IdP that has it.
+
+**A second defect, found the same way and worth recording separately, because it means this
+mechanism had never worked.** `resolve_for_owner_detailed` omitted `subject_token` from its exchange
+request. RFC 8693 §2.1 makes it REQUIRED, and a real Keycloak refuses the request outright with
+`access_denied` / "Client not allowed to exchange". The identical request with `subject_token`
+present is granted — measured both ways. Nothing caught it because the only thing this code had ever
+run against was the ephemeral HTTP fixture this record's own Cost section describes, and that
+fixture accepted a request the real server rejects. This record already warned that the fixture
+"does not and cannot prove a real deployed Keycloak realm is correctly configured"; the warning was
+narrower than the problem, which was in the request this codebase sends, not in the realm's
+configuration. Fixed, and now covered by a test that runs against a real IdP.
+
+**The verify step asserts three things, not two** (the owner's decision of 24 September 2026),
+replacing the two-sided wording in this record and in `07_BUILD_PLAN.md`'s harness entry: success
+for the disposable subject with claims matching and nothing broader; refusal of an unprivileged
+client by Keycloak; refusal of a disabled subject by the Conduit's pre-check. A fourth, realm-level
+refusal of a specific subject, is **not** available — see the bounded attempt above.
+
+---
+
 ## ADR-044 — Distinguishing an unreachable identity provider from a revoked principal: accepted, `WatchStatus` stays binary with a separate reason field
 
 **Status.** Accepted, 22 September 2026. Proposed the same day, reviewed rather than rubber-stamped
