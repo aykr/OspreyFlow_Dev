@@ -27,9 +27,20 @@ RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --uid 10001 osprey
 WORKDIR /app
-COPY --from=builder /app/.venv ./.venv
-COPY --from=builder /app/packages ./packages
-COPY --from=builder /app/services ./services
+
+# `--chown` is not cosmetic here. `COPY` preserves the source file's mode, so a single
+# restrictively-permissioned file anywhere in `packages/` or `services/` — one `0600` is enough —
+# lands in the image owned by root and unreadable by `osprey`, and the container dies on import
+# with a `PermissionError` naming a file nobody has touched. Found 24 September 2026 the first time
+# this image was ever actually run (ADR-049 Stage 2 §5a): `packages/adapters/graph_arcadedb/
+# naming.py` was `0600` on the builder's own machine. Git tracks it `100644`, so a fresh clone is
+# unaffected and this was never a repository defect — which is exactly why it went unnoticed, and
+# exactly why the image should not depend on every developer's umask. `services/api`'s image
+# happens to be immune only by accident: its DuckDB extension step runs `chown -R` for an unrelated
+# reason.
+COPY --from=builder --chown=osprey:osprey /app/.venv ./.venv
+COPY --from=builder --chown=osprey:osprey /app/packages ./packages
+COPY --from=builder --chown=osprey:osprey /app/services ./services
 
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONPATH="/app:/app/packages" \

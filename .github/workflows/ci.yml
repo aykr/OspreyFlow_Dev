@@ -182,6 +182,24 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
 
+  # apps/workspace's Dockerfile — Phase 4's own, unpaid from Phase 4 until
+  # Stage 2 §5a (docs/06_DECISIONS.md ADR-049). Recorded there as a rule 8
+  # repayment, not an exception: the rule keeps its full force, and a future
+  # service that skips its image is still in violation.
+  trivy-image-workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f apps/workspace/Dockerfile -t ospreyflow/workspace:ci .
+      - uses: aquasecurity/trivy-action@v0.24.0
+        with:
+          image-ref: ospreyflow/workspace:ci
+          scan-type: image
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
   # services/api's Dockerfile, Phase 3's own — same reasoning as
   # trivy-image-ingest above.
   trivy-image-api:

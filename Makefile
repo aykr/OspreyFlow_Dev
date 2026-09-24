@@ -1,4 +1,4 @@
-.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test dev-up dev-down test-all glass-perf glass-a11y glass-keyboard glass-map-verify
+.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test dev-up dev-down test-all glass-perf glass-a11y glass-keyboard glass-map-verify
 
 PY := .venv/bin/python
 PYTEST := .venv/bin/pytest
@@ -8,7 +8,7 @@ MYPY := .venv/bin/mypy
 # Phase 0 exit criterion (docs/07_BUILD_PLAN.md): CI green; a PR adding a GPL
 # dependency fails; a Pydantic model change not reflected in the generated
 # TypeScript fails the build. See the Phase 0 plan for what each target proves.
-ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check test-file-coverage-check conformance-guard
+ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check test-file-coverage-check conformance-guard
 
 lint:
 	$(RUFF) check .
@@ -90,6 +90,14 @@ trivy-image-ingest:
 trivy-image-api:
 	docker build -f services/api/Dockerfile -t ospreyflow/api:ci .
 	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/api:ci
+
+# apps/workspace's Dockerfile — Phase 4's own, paid at Stage 2 §5a as a
+# recorded rule 8 repayment rather than an exception (docs/06_DECISIONS.md
+# ADR-049). Same reasoning as the two above; the base is Alpine rather than
+# Debian, which changes nothing about the gate.
+trivy-image-workspace:
+	docker build -f apps/workspace/Dockerfile -t ospreyflow/workspace:ci .
+	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/workspace:ci
 
 schemas-check:
 	$(PY) scripts/schemas_check.py
