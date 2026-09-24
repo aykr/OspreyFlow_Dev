@@ -37,11 +37,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from harness.keycloak_admin import grant_service_account_roles
 from harness.preflight import ALL_CHECKS, PreflightContext
@@ -52,9 +54,9 @@ from harness.realm import (
     render_realm_json,
 )
 from harness.render import (
+    BUILD_CONTEXT_FROM_OUTPUT_DIR,
     DEFAULT_CONFIG_PATH,
     DEFAULT_OUT_ROOT,
-    REPO_ROOT,
     load_config,
     render,
 )
@@ -122,9 +124,7 @@ def _run(args: list[str], *, stage: str, cwd: Path | None = None, timeout: int =
 
 
 def compose_services(compose_file: Path) -> list[str]:
-    out = _run(
-        _compose(compose_file) + ["config", "--services"], stage="inspect"
-    )
+    out = _run(_compose(compose_file) + ["config", "--services"], stage="inspect")
     return [line.strip() for line in out.splitlines() if line.strip()]
 
 
@@ -195,12 +195,84 @@ def _conduit_is_running(compose_file: Path) -> bool:
     )
 
 
-def seed(compose_file: Path, datasets: list[str], *, reset: bool = True) -> None:
+def create_investigation(issuer: str, realm: str, secret: str, api_url: str) -> str:
+    """Creates the investigation the seed tags its data with, and returns its id.
+
+    **This is why the Conduit starts twice.** `DEMO_GUIDE.md` states the constraint in its own
+    words: creating an investigation is an HTTP call and needs the Conduit *running*; seeding needs
+    it *stopped*, because DuckDB takes an exclusive lock the Conduit's own `AnalyticsPort` holds a
+    handle to. So: up, create, stop, seed, up again.
+
+    The bearer token is obtained by exchanging for the realm's own verify subject — the same
+    mechanism the post-launch verify uses, rather than a second way of getting a token. That
+    subject carries the clearance and org_unit claims a `Principal` needs, because the rendered
+    realm gives it them for exactly this reason.
+    """
+    import json as _json
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    from harness.realm import CONDUIT_CLIENT_ID, VERIFY_SUBJECT
+
+    token_url = f"{issuer}/realms/{realm}/protocol/openid-connect/token"
+
+    def post(
+        url: str, data: dict[str, str], headers: dict[str, str] | None = None
+    ) -> dict[str, Any]:
+        request = urllib.request.Request(
+            url, data=urllib.parse.urlencode(data).encode(), headers=headers or {}, method="POST"
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            payload: dict[str, Any] = _json.loads(response.read().decode())
+            return payload
+
+    try:
+        own = post(
+            token_url,
+            {
+                "grant_type": "client_credentials",
+                "client_id": CONDUIT_CLIENT_ID,
+                "client_secret": secret,
+            },
+        )
+        exchanged = post(
+            token_url,
+            {
+                "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+                "client_id": CONDUIT_CLIENT_ID,
+                "client_secret": secret,
+                "subject_token": own["access_token"],
+                "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
+                "requested_subject": VERIFY_SUBJECT,
+                "requested_token_type": "urn:ietf:params:oauth:token-type:access_token",
+            },
+        )
+        request = urllib.request.Request(
+            f"{api_url}/v1/investigations",
+            headers={"Authorization": f"Bearer {exchanged['access_token']}"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return str(_json.loads(response.read().decode())["id"])
+    except (urllib.error.HTTPError, urllib.error.URLError, KeyError, OSError) as error:
+        detail = error.read().decode()[:300] if isinstance(error, urllib.error.HTTPError) else error
+        raise ApplyFailed("seed", f"could not create an investigation to seed into: {detail}")
+
+
+def seed(compose_file: Path, datasets: list[str], investigation_id: str) -> None:
     """§2.4's ordering guard, as behaviour rather than as a comment.
 
     Refuses if the Conduit is running. The alternative — stopping it silently — would be taking a
     data-affecting decision on the operator's behalf, and the whole point of the guard is that the
     ordering is made visible rather than worked around.
+
+    **The seed runs inside the deployment's own network, not on the host.** `05_DEPLOYMENT.md` §7
+    puts every store on an internal network with only the workspace and the Conduit exposed, so a
+    host-side seed would need those ports published — a real security regression to make a demo
+    convenient. Instead a one-shot container from the Conduit's own image runs the script, with
+    `scripts/` and `packages/` mounted read-only: the image deliberately does not contain `scripts/`
+    (a deployment does not ship its seeding tools), and mounting keeps it that way.
     """
     if _conduit_is_running(compose_file):
         raise SeedOrderingRefused(
@@ -210,13 +282,38 @@ def seed(compose_file: Path, datasets: list[str], *, reset: bool = True) -> None
             f"{compose_file} stop api`), seed, then start it. Refusing rather than stopping it "
             "for you: that is a data-affecting decision and it is yours to make.",
         )
-    if reset:
-        _run(_compose(compose_file) + ["stop", "api"], stage="seed")
+    root = compose_file.parent / BUILD_CONTEXT_FROM_OUTPUT_DIR
     for dataset in datasets:
         script = {"hmp": "scripts.seed_hmp_fixture", "fixture-corp": "scripts.seed_fixture_corp"}[
             dataset
         ]
-        _run([sys.executable, "-m", script], stage="seed", cwd=REPO_ROOT)
+        output = _run(
+            _compose(compose_file)
+            + [
+                "run",
+                "--rm",
+                "--no-deps",
+                "--entrypoint",
+                "python",
+                "-v",
+                f"{root.resolve()}/scripts:/app/scripts:ro",
+                # `scripts/seed_hmp_fixture.py` imports `tests.scenarios.fixtures.hmp_graph`
+                # directly rather than duplicating the fixture — deliberately, per its own
+                # docstring. So the seed needs the test tree as well, and the image does not carry
+                # it (`.dockerignore` excludes `tests/`). **This is why seeding is a checkout-only
+                # operation**: a distributed bundle has no fixtures to seed from, which is the
+                # correct behaviour and not a limitation to work around.
+                "-v",
+                f"{root.resolve()}/tests:/app/tests:ro",
+                "api",
+                "-m",
+                script,
+                "--investigation-scope",
+                investigation_id,
+            ],
+            stage="seed",
+        )
+        print(f"  seed[{dataset}]: {output.strip().splitlines()[-1] if output.strip() else 'done'}")
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
@@ -237,6 +334,11 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         help="Where the rendered Keycloak is reachable, for the post-launch verify.",
     )
     parser.add_argument("--realm", default="osprey")
+    parser.add_argument(
+        "--api-port",
+        default=os.environ.get("OSPREY_API_PORT", "8000"),
+        help="Where the Conduit is published on this host, for the seed's investigation call.",
+    )
     parser.add_argument(
         "--skip-verify",
         action="store_true",
@@ -349,11 +451,21 @@ def main(argv: list[str] | None = None) -> int:
 
         # 5. Seed, under the ordering guard.
         datasets = [d for d in args.seed.split(",") if d]
+        investigation_id = ""
         if datasets:
-            seed(compose_file, datasets)
+            # Up, create, stop, seed, up again — the ordering the DuckDB lock forces.
+            investigation_id = create_investigation(
+                args.keycloak_url, args.realm, secret, f"http://127.0.0.1:{args.api_port}"
+            )
+            _run(_compose(compose_file) + ["stop", "api"], stage="seed")
+            seed(compose_file, datasets, investigation_id)
             _run(_compose(compose_file) + ["start", "api"], stage="seed")
             wait_for_health(compose_file, timeout_seconds=args.health_timeout)
-            result.record("seed", f"{', '.join(datasets)} (Conduit stopped, then restarted)")
+            result.record(
+                "seed",
+                f"{', '.join(datasets)} into investigation {investigation_id} "
+                "(Conduit stopped for the seed, then restarted)",
+            )
 
         # 6. Verify — the three assertions, against the running deployment.
         if args.skip_verify:
