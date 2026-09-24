@@ -53,6 +53,23 @@ confirmed.
 | 039 | Alert inbox lifecycle | | **Accepted, two additions** — 21 Sep 2026 |
 | 040 | Pattern sharing and query-definition disclosure | | **Proposed** — 21 Sep 2026 |
 | 041 | Structural control for the fetch-then-check authorization bug class | | **Accepted, option (b)** — 21 Sep 2026, same day |
+| 042 | The alpha gate: testers receive a build only after Phase 8's full exit criterion is green | | **Accepted** — 22 Sep 2026 |
+| 043 | Principal resolution for a stored `owner_id`: OAuth2 Token Exchange (RFC 8693) | | **Accepted** — 22 Sep 2026 |
+| 044 | Distinguishing an unreachable identity provider from a revoked principal | | **Accepted** — 22 Sep 2026 |
+| 045 | Export withheld-item manifest and the recipient outside the boundary | | **Accepted, a deployment-level switch defaulting to disclosure** — 22 Sep 2026 |
+| 046 | Assessment evidence lifecycle | | **Accepted, option (a), one addition and an export requirement** — 22 Sep 2026 |
+| 047 | The Osprey export mark, and the durable record of what left the boundary | | **Accepted, both gaps** — 22 Sep 2026 |
+| 048 | The disclosure doctrine: what makes "something was withheld" safe, unsafe or required to be visible | | **Accepted** — 22 Sep 2026 |
+| 049 | The harness / packaging pipeline; Phase 8 stage 2's sub-stages 2b–2h | | **Proposed** — 24 Sep 2026 |
+
+**This table lagged again, and is caught here for the second time.** Records 042 through 048 were
+written on 22 September 2026 and never added above — the identical omission this section's own
+paragraph below already records for ADR-022 through ADR-029, recurring in the same document that
+names it. Added 24 September 2026, in the same change that added ADR-049, which is also how the
+lag was found: the new record was almost numbered ADR-044, because this table's own last row said
+041 and nothing but a `grep` of the file's own headings would have said otherwise. **The standing
+consequence, stated once:** the next record's number comes from the file's own last `## ADR-`
+heading, never from this table.
 
 Thirty-nine records (001–039) are accepted, including all seven overrides of the input documents.
 ADR-036 through ADR-039 were drafted Proposed and accepted in the same session, two (037, 038)
@@ -5350,3 +5367,485 @@ the last surface decided is the default for the next one.
 **Cross-references.** `06_DECISIONS.md` ADR-038's own `strict`/`notify` decision, ADR-045's own
 disclose-by-default decision, and ADR-046's own hidden-not-shown decision each carry a short
 addendum pointing back to this record, added alongside this one.
+
+---
+
+## ADR-049 — The harness / packaging pipeline: `osprey.yaml` as the single source, and Phase 8 stage 2's sub-stages 2b–2h
+
+**Status.** **Proposed**, 24 September 2026. Not accepted. Per this document's own status register:
+build against it only if a delay would block you, and expect rework. Nothing in this record is
+built — `harness/` still contains only its own `__init__.py`, and this session wrote no code under
+`apps/`, `services/`, `packages/`, `scripts/`, `harness/` or `deploy/`.
+
+**Why this record is ADR-049 and not ADR-044.** The design this record writes up arrived numbered
+ADR-044. `06_DECISIONS.md` already has an ADR-044 (*Distinguishing an unreachable identity provider
+from a revoked principal*, accepted 22 September 2026) and runs to ADR-048; the status register
+above stopped at 041 and would not have shown it. Corrected here, and the register's own lag closed
+in the same change — recorded rather than silently renumbered, because the near-miss is the second
+instance of the same failure this document has already had to record once.
+
+**Scope.** This record is documentation only. It amends no accepted decision. Where it disagrees
+with one, it says so under **Open objections** and stops there, per `CLAUDE.md`'s own standing
+instruction — in particular it does **not** implement the `decision_record` change to
+`scripts/real_data_exceptions.py` the design proposes (objection 3).
+
+**A gate this record turns red, disclosed rather than left to be discovered on the next `make ci`.**
+`make decision-log-publication-check` now reports two new violations — "ADR-049 cites ADR-034", "ADR-049
+cites ADR-042" — and it is correct to. **This record is PROCESS-classified** under ADR-034 §B10's own
+rule ("a decision about how this build was scoped, phased, released or published — the project's own
+management, not the product's behaviour"): it divides a phase into sub-stages, sets their exit tests,
+and concerns release packaging. `scripts/decision_log_publication_check.py`'s `PROCESS_ADR_NUMBERS`
+therefore needs `"049"` added to it — a one-line change, **not made here** because this round's own
+instruction is documentation writes only, with no changes under `scripts/`. It is **not** an allowlist
+case: the allowlist is for known debt that shrinks to zero, and a correctly-classified record is not
+debt. Until that line lands, `make ci` is red on this gate, by this record's own doing and with this
+record's own notice. **Two other gates were already red on a clean `HEAD` before this record existed,
+and are not this record's:** `make route-coverage-check` (six undocumented routes) and `make
+test-file-coverage-check` (`tests/scenarios/test_phase8_exit_criterion_end_to_end.py` wired into
+neither job) — verified by running both against a stashed tree.
+
+**A property of that gate worth naming once, since this is the first new ADR written since it
+shipped.** `PROCESS_ADR_NUMBERS` is a hand-maintained set inside the script. Every new PROCESS ADR
+must be added to it by hand, and the gate's failure mode on omission is the *safe* direction — it
+fires — which is why this was caught immediately rather than silently. Recorded so the next author of
+a PROCESS record expects the step rather than reads the failure as a defect in their own citations.
+
+### The three owner decisions this design rests on — awaiting owner confirmation
+
+None of the three has been stated by the owner in their own words. Until each is, it is the
+proposer's assumption, and every sub-stage below that depends on one says which.
+
+- **D1 — awaiting owner confirmation.** The packaged artefact is container images for each
+  OspreyFlow service **plus** a bundle tarball (manifests, the `osprey.yaml` schema, `LICENSE`/
+  `NOTICE`, documentation), built by a repository script of the `osprey bundle` shape, runnable in
+  CI and by the harness; `--images` for air-gapped install.
+- **D2 — awaiting owner confirmation.** The real-data exceptions list is a **panel on the Governance
+  screen**, not a seventh screen. This is the better reading of `05_DEPLOYMENT.md` §2.1, whose table
+  is explicitly "Six screens" — but `07_BUILD_PLAN.md`'s Phase 8 outcome bullet currently says the
+  opposite in as many words ("**A new screen, added 23 September 2026**: managing the real-data
+  exceptions list"). Confirming D2 means amending that bullet; leaving the two texts in
+  disagreement is not an option either way. See objection 4.
+- **D3 — awaiting owner confirmation.** Stage 2's exit is three named tests (below), and its entry
+  states in one sentence that this is not ADR-042's alpha gate. This **widens** the stage's existing
+  exit criterion, which today is one test: "a `backup` → `restore` cycle reproduces the graph from
+  staged Parquet." The golden-path deploy and the packaging assertions are described in that same
+  entry as "testable too" and "mechanical and testable", never as exit criteria. Widening an exit
+  criterion is the owner's call, not a drafting detail.
+
+### The principle, kept as proposed
+
+The harness is a headless engine first and a browser application over it second. Every screen has a
+CLI equivalent (`05_DEPLOYMENT.md` §2.3) because they share one implementation, not because two were
+written. §2.5's three constraints bind throughout: no state beyond the repository, never sees a
+secret, not a privileged long-lived process.
+
+**One place the design as submitted breaks its own principle, and one place it risks breaking it.**
+The ADR-043 preflight check requires the harness to *use* a confidential client's secret, not merely
+reference it (objection 2). And `python -m harness.bundle` would be a second module claiming the
+command shape `scripts/osprey_bundle.py` already occupies — "they share one implementation, not
+because two were written" applies to this design's own modules first (amendment 12).
+
+---
+
+### The sub-stages as amended
+
+Labelled `2b`–`2h` as instructed. **These labels are contested — see objection 1**: `2a` is already
+taken by a *sibling* stage (ArcadeDB stability), not a sub-stage of the harness pipeline, and
+`07_BUILD_PLAN.md` says so in its own words.
+
+#### 2b — `osprey.yaml` as the single source
+
+A Pydantic schema in `packages/schemas` for `osprey.yaml` covering profile, components, models,
+governance (including the real-data exceptions reference, D2), geospatial and cluster hosts. A
+generator (`harness/render.py`) that renders the deployment's real compose file for `local-lite` and
+`small`, and Kubernetes manifests for `cluster` (ADR-011: not a toggle; a different renderer). Drift
+detection and a change preview before writing (§2.1, §2.4). `deploy/compose/dev.yaml` is **not**
+replaced; it stays the test convenience its own header already says it is — confirmed against that
+header, no finding.
+
+**Amendment 1 — the renderer must emit four artefacts, not two.** `05_DEPLOYMENT.md` §2.1 names them
+exactly: "compose or Kubernetes manifests, environment files, `versions.lock` with every image digest
+pinned, and `RUNBOOK.md` written for *this* deployment with the real hostnames, ports and paths
+filled in." The design listed the first only. `versions.lock` is separately load-bearing: §5 makes
+rollback depend on it ("`deploy/versions.lock` records every digest that has been live, so there is
+always a known-good target") and §7 requires "digests pinned in `deploy/versions.lock`". Checked
+directly — no such file exists; `deploy/` holds `cluster/.gitkeep`, `compose/dev.yaml` and
+`compose/litellm_config.yaml`.
+
+**Amendment 2 — the two `RUNBOOK.md`s are different files and the design conflated them.** §2.1's is
+*generated per deployment* and is a 2b output. §6's `deploy/RUNBOOK.md` states the recovery time for
+each path and is written, not generated (2e). Phase 8's own outcome bullet names the first —
+"Generated Kubernetes manifests **and the per-deployment runbook**."
+
+**Amendment 3 — the schema must reuse `packages/schemas/mapconfig.py`, and must not invalidate the
+committed file.** The root `osprey.yaml` today contains a `map:` key and nothing else — no profile,
+components, models, governance or cluster hosts — and `services/api/mapconfig_loader.load_map_config`
+reads it as an unguarded `raw["map"]`, with `tests/test_demo_osprey_config_is_tier_1_only.py`
+asserting against it. A document-level schema that requires the other sections breaks both. The
+committed file's own header already states its status ("A real deployment's own `osprey.yaml` is
+generated by the harness (Phase 8)… this file is committed so the platform is demonstrable with zero
+configuration"), so 2b must decide explicitly what that file is under the new schema rather than
+discover it.
+
+**Exit test, amended.** Rendering a fixture `osprey.yaml` is byte-stable across runs; a hand edit to
+a generated file is reported as drift; the diff names every changed path — **for all four artefact
+kinds**, each with its own planted drift of the real generated shape (rule 15's second clause). The
+unamended test was vacuous in a specific, checkable way: byte-stability, drift detection and
+"names every changed path" are all green over a renderer that never emits `versions.lock` or the
+per-deployment `RUNBOOK.md` at all.
+
+**Amendment 4 — file-against-file is not §2.4's drift detection.** §2.4: "the harness compares **the
+running deployment** against `osprey.yaml` and shows any divergence." Comparing generated output
+against what is on disk is a different, easier check. Both are wanted; only the second was specified.
+The running-deployment comparison is the one §2.4 names and the one that catches `kubectl edit`.
+
+#### 2c — Preflight, headless
+
+`harness/preflight/`, one module per check, each returning `{status, what is wrong, what to do,
+re-checkable}`. `python -m harness.preflight` runs all or one.
+
+Checks as proposed: memory against the profile floor; disk against projected staging volume; GPU
+presence and driver; port availability per declared service; container runtime version; cluster
+connectivity to every declared host; and the four rehearsal-derived checks (the interpreter is the
+project venv; every service's bind address is consistent and printed; the basemap is built and served
+over HTTP, not `file://`; the DuckDB lock holder is not running when seeding is requested).
+
+**Amendment 5 — `05_DEPLOYMENT.md` §3's reduced variant is missing, and it is squarely install-path
+material.** "If Preflight finds less than 16 GB it offers a reduced variant that drops OpenSearch and
+falls back to PostgreSQL full-text, stating the trade-off on screen: search quality degrades and
+semantic search is unavailable… **It is offered, not applied silently.**" A memory check that only
+compares against the profile floor fails a 16 GB laptop — the exact clean-laptop case the milestone
+is defined by — instead of offering the path the spec already specifies. Its own exit test: a
+preflight run under a below-floor memory reading offers the reduced variant and does not apply it.
+
+**The ADR-043 token-exchange check is real, required, and in the wrong place — see objection 2.** The
+design quotes `07_BUILD_PLAN.md`'s stage entry accurately: that entry does specify the exact operator
+wording ("token exchange is not correctly configured on your identity provider; watches will appear
+stopped for every owner but the analyst who triggered them until this is fixed") and the two-sided
+shape (success for a disposable preflight-only subject, refusal for an out-of-scope one). What the
+design does not resolve is that running it *before* Launch requires the harness to hold and use a
+confidential client's secret, against §2.5, at a moment when no IdP is running.
+
+**Exit test, as proposed and accepted.** Every check has a red-then-green test whose planted failure
+takes the shape the check actually reads, and `launch` refuses while any check is red. (Note the
+CLI's own name: §2.3 calls this `osprey apply`, not `osprey launch`.)
+
+#### 2d — Scripted golden-path deploy
+
+`python -m harness.apply`: fresh checkout → render (2b) → preflight (2c) → start stack → wait for
+health → seed if requested. `docs/demo/2026-09-24/demo_up.sh` is retired into this once it exists;
+until then it stays.
+
+**Amendment 6 — "ordering enforcement" is `05_DEPLOYMENT.md` §2.4's term for something else, and
+reusing it here hides a missing guard.** §2.4's ordering enforcement is: "A profile switch with live
+data cannot skip backup and restore. The harness greys out Launch until a current backup exists, and
+states why." 2d's ordering concern — seeding precedes any lock-holding service, the database is reset
+first (stage 2a's cause five) — is real and belongs here, but it is not that guard, and a reader
+ticking off §2.4's five guards would score it as covered. Renamed here to **seed-ordering
+enforcement**; §2.4's guard is amendment 7's business.
+
+**Amendment 7 — two of §2.4's five guards appear nowhere in 2b–2h, and Phase 8's outcome bullet
+claims all five** ("Harness-driven orchestration (`05_DEPLOYMENT.md` §2.4): target confirmation,
+drift detection, change preview, enforced backup-before-switch, and downgrade capacity checks against
+the existing data volume"). Missing: **target confirmation** (the resolved Docker context, or the
+Kubernetes cluster, context and namespace, shown before every action and re-confirmed when it differs
+from the last one) and the **capacity check** (a downgrade's preflight run against the *existing data
+volume*, not the empty case, refusing if it will not fit). Also absent: the destroy path's own
+asymmetry (typing the environment's name; stating what is not recoverable from backup, the audit
+stream in particular). Target confirmation belongs in 2d, alongside the thing it guards; the capacity
+check and the backup-before-switch guard belong with 2e, which is where a backup exists to check for.
+
+**Amendment 8 — the component list is unstated, and one component the milestone-blocking preflight
+check depends on does not exist anywhere.** §3 names what a `local-lite` launch must produce: "the
+workspace, one Conduit, three workers, ArcadeDB, DuckDB in-process, Valkey, MinIO, OpenSearch
+single-node, PostgreSQL, Keycloak, Ollama, and a faster-whisper container. Twelve containers."
+`deploy/compose/dev.yaml` stands up four and names Keycloak only in a comment. 2c's ADR-043 check has
+nothing to exchange against until 2b renders a Keycloak service and 2d starts it.
+
+**Amendment 9 — §3's "The seeded demo credentials are displayed once and written nowhere" is a §2.5
+property with no named test.** It belongs on 2d's seed step.
+
+**Exit test, amended.** From a fresh clone, one command reaches a health-checked stack on
+`local-lite`. **The CI half must name its own stopping point** — which services must be healthy and
+which health checks must pass without Ollama — because "runs in CI as far as CI can without Ollama"
+cannot fail: any CI failure is attributable to "as far as CI can". This is Stage 2 exit test #2.
+
+#### 2e — Backup and restore
+
+`python -m harness.backup` writes to `backups/<UTC-timestamp>-<profile>-<git-sha>/` with a
+`manifest.json` naming every file, its checksum and the schema versions. `python -m harness.restore
+<dir>` rebuilds the graph store from Parquet into an empty store and restores PostgreSQL.
+`deploy/RUNBOOK.md` is created, stating the recovery time for each path (§6), measured on
+`local-lite`.
+
+**Amendment 10 — the backup set is short of §4's.** §4 step 1: "staged Parquet, **object store
+contents**, Postgres dump, ontology, handling scheme, and `osprey.yaml`." The design listed staged
+Parquet, a PostgreSQL dump and "the configuration". Object store contents (MinIO) is a distinct,
+named item, not configuration. §6 additionally makes audit data an explicit exception — "not
+rebuildable and… not deletable. Replicate it separately" — and 2e must state its disposition, because
+§2.4's destroy confirmation depends on that being true.
+
+**Amendment 11 — restore has no dry run, and §4 requires one.** "Restore opens with a dry run showing
+the row count and a projected duration, and **will not proceed until that estimate is acknowledged**.
+A national-scale replay is measured in days and must be planned, not discovered."
+
+**Exit test, amended — the unamended one passes while the restore has lost everything that matters.**
+"Node and edge multisets equal, a fixed query sample returns identical results" compares identity,
+not payload. Three specific holes:
+
+1. **Handling, provenance and assessment objects are first-class (ADR-010) and are what the adapter
+   filters on (`CLAUDE.md` rule 3).** A restore that drops every `handling` marking passes a multiset
+   comparison unchanged — and would silently widen access on the restored deployment.
+2. **`SAME_AS` edges are scored, and resolution is a query-time projection over those scores
+   (ADR-006).** A multiset of node/edge *pairs* that ignores edge properties passes while every
+   projection changes. `ADR-035` §C5 already requires Fixture Corp to exercise τ 0.99/0.95/0.80
+   producing visibly different projections; the restore test should compare those three projections,
+   not a single query sample.
+3. **The target store must be asserted empty.** §4 step 3 is "launch the new environment empty";
+   nothing in the stated test distinguishes a restore into an empty store from a no-op against the
+   source store.
+
+This is Stage 2 exit test #1 and the stage's already-stated criterion.
+
+#### 2f — Packaging (the `osprey bundle` shape; D1)
+
+Builds the service images and the bundle tarball; `--images` for air-gapped install.
+
+**Amendment 12 — wrap `scripts/osprey_bundle.py`, do not write a second one.** It already exists, is
+tested (`tests/test_osprey_bundle.py`, both directions), loads `osprey.yaml` through
+`services/api/mapconfig_loader.load_map_config`, and raises `NonRedistributableProviderError` naming
+every refused provider — `00_ARCHITECTURE.md` §1.2's "the bundle step refuses to package tiles or
+gazetteers whose profile says `redistributable: false`, and names them." Its own docstring already
+says: "The real `osprey bundle` command wraps `bundle_map_providers` below in Phase 8." Note also the
+invocation convention: every existing operational module runs as `python -m scripts.<name>`
+(`CLAUDE.md` Conventions); `python -m harness.<name>` is a second convention and should be adopted
+deliberately, with `harness/__init__.py`'s own existing docstring as the warrant, rather than by
+accident.
+
+**Amendment 13 — ADR-035 §C1's registry is an input 2f cannot start without, and nothing builds it.**
+Checked directly: `make demo-manifest` does not exist in `Makefile` or `package.json`; neither does
+the `shipped`/`internal` manifest schema, the fail-closed registry, or the Glass's "dataset not
+provisioned" state. `scripts/demo_guide_check.py`'s `DEMO_REGISTRY` is, in its own words, "a stand-in
+for ADR-035's own still-unbuilt fail-closed registry, not the real thing". ADR-035 §C1's two
+fail-closed tests are already named there and are 2f's first deliverable, not a dependency it may
+assume: `tests/demo_registry/test_fail_closed.py::test_a_manifest_with_no_distribution_field_is_
+excluded_from_a_shipped_build` and `test_an_unrecognised_distribution_value_is_treated_as_internal`.
+
+**Amendment 14 — §C2 names two required tests and the design's exit test covers one shape.** Both, per
+C2's own words ("both required"): `tests/packaging/test_internal_demo_exclusion.py::test_reclassifying_
+an_internal_demo_to_shipped_without_removing_its_data_still_fails_the_gate` **and**
+`test_removing_the_exclusion_step_itself_fails_the_gate`. The second is a mutation test on the gate
+itself; "each planted violation fails the bundle" does not imply it, which is exactly why C2 named it
+separately.
+
+**Amendment 15 — there is no `.dockerignore` in this repository, and without one every assertion in
+2f is unenforceable.** Checked directly: no `.dockerignore` anywhere; two Dockerfiles exist
+(`services/api/Dockerfile`, `services/ingest/Dockerfile`). ADR-035 §C2 already names the mechanism —
+"if a packaging step copies the repository root, `/demo-data/`'s own gitignore exclusion is irrelevant
+to what a `docker build` context includes unless the `Dockerfile` also excludes it (`.dockerignore`)".
+A test written against the tarball alone goes green while every image layer carries the private tree.
+
+**Amendment 16 — the private-tree exclusion must key off the existing marker list, never a path
+prefix, and its test must survive Trigger A.** ADR-034 §B2: "a file's physical location in the private
+working tree and its licence/publication status are independent facts about it, and this is the one
+file in the tree where they visibly disagree" — `06_DECISIONS.md` lives in `spec/` and never
+publishes. §B8: `docs/design/tokens.css` is product source despite sitting under `docs/`. So neither
+`docs/` nor `spec/` is the right predicate. `scripts/product_tree_link_check.py` already holds the
+authoritative marker list (`06_DECISIONS.md`, `07_BUILD_PLAN.md`, `CLAUDE.md`, `SESSION_HANDOVER.md`,
+`NEXT_STEPS_PHASE7.md`, `DESIGN_PROVENANCE.md`, `PRODUCT_DELIVERY.md`, `archive/`), with
+`route_coverage_check.py`'s `APACHE_DOC_PATHS` as its complement; 2f imports it rather than restating
+it, the same way `product_tree_link_check.py` imports `APACHE_DOC_PATHS` rather than redeclaring it.
+**The rule-15 trap this closes:** 2f is built *before* Trigger A, so a planted violation written
+against today's `docs/`-rooted paths passes, and then silently becomes a no-op the moment Trigger A
+renames the tree — a gate that could not find a violation if one existed. Trigger A's own exit
+criterion should re-run 2f's assertions for the same reason its existing criterion re-runs the
+install.
+
+**Amendment 17 — a new assertion nobody has named: `config/real_data_exceptions.yaml` must never
+enter an artefact.** It is gitignored, never committed, names real datasets admitted under standing
+rule 3 / `CLAUDE.md` rule 9 / ADR-035 §C3, and lives on the owner's own device — the same device an
+owner-run demonstration build would be produced on. A `docker build .` from the repository root
+includes gitignored files. ADR-034 §B7, ADR-035 §C2 and the submitted design all miss it. Its planted
+violation is the real file's own shape (a valid entry naming a dataset), not a placeholder string.
+
+**Amendment 18 — `--images` drops two properties §5 states.** "`osprey bundle --images` produces a
+**signed** tarball of every image **and weight file** for transfer to a disconnected environment,
+where the harness runs from the bundle rather than from a registry. **This path must be tested each
+release**, because it is the path that will be needed under time pressure." §7 repeats the signing
+requirement ("Images signed and verified at pull"). The design carried neither signing nor weight
+files.
+
+**Amendment 19 — `LICENSE`/`NOTICE` are 2f's own deliverable, not a red test waiting on Trigger A.**
+The design says this assertion "is expected red until that lands" while also making exit test #3 part
+of a three-green stage exit — a self-contradiction. And the dependency runs the other way in the
+plan's own text: ADR-034 §B7 is "**a blocking prerequisite of Phase 8's own harness/packaging work,
+not a follow-up to it**", and for the two files, "the holder name, the licence text itself, and the
+files' own presence are not year-dependent and are not deferred." Trigger A is stage 4 in Phase 8's
+ordering and explicitly *not* milestone-blocking; stage 2 is. So 2f creates `LICENSE` and `NOTICE`
+and builds the third `licence-check` leg the Trigger A entry already specifies — `LICENSE` present
+and byte-identical to the canonical Apache 2.0 text, `NOTICE` present and containing "The OspreyFlow
+Authors" — and Trigger A's own list records it as discharged early. **Only the copyright year stays
+Trigger B's**, exactly as ADR-034 §B6 and the Trigger A entry already say; nothing here touches that.
+
+**Amendment 20 — the harness's own image is nobody's deliverable, and most services have no
+Dockerfile.** §2/§3's bootstrap is `docker run … ghcr.io/ospreyflow/harness:latest`; nothing in
+2b–2h builds or publishes that image, and 2g cannot be exercised by its own documented bootstrap
+until something does. Separately, checked directly: `services/` has six directories (`api`,
+`compute`, `extract`, `geocoder`, `ingest`, `resolve`) plus `apps/workspace`, and only `services/api`
+and `services/ingest` carry a Dockerfile; `make ci` has `trivy-image-ingest` and `trivy-image-api`
+only. D1's "container images for each OspreyFlow service" therefore lands on standing rule 8 — "Each
+service gets its Dockerfile, and a `trivy image` CI scan, in the phase that creates it — never
+batched into Phase 8." See objection 5: this is owed debt from earlier phases, and 2f absorbing it
+silently is the thing rule 8 exists to prevent.
+
+`make licence-check` is extended per ADR-035 §C7 to data-file licences in the same pass, with its own
+red-then-green in the family `tests/licence_check/test_licence_check_mjs.test.mjs` already
+establishes.
+
+**Exit test.** Each planted violation fails the bundle, each violation taking the shape the gate
+actually receives at its own real call site. This is Stage 2 exit test #3.
+
+#### 2g — The six setup screens
+
+A browser application over 2b–2f, bootstrapped by one Docker command, becoming `/admin` after launch.
+Profile, Components and Models write `osprey.yaml` through the 2b schema. Governance writes
+access-control/handling configuration and hosts the real-data exceptions panel (D2). Geospatial wraps
+`build_local_basemap`, `register_tier4_provider` and the Verify step with progress shown. Preflight
+streams 2c's checks with per-check Re-check and gates Launch. Before Launch, the generated-artefacts
+diff is shown and confirmed.
+
+**The `decision_record` requirement is not folded in — see objection 3.** It is a change to an
+owner-decided mechanism and it contradicts 2f.
+
+**Amendment 21 — a new keyboard-driven surface needs its own action registry and spec file, in the
+same change.** `CLAUDE.md` rule 13, and the machinery that now enforces it:
+`apps/workspace/keyboard/actionRegistry.ts`'s `defineActionRegistry`/`ALL_REGISTRIES`, a per-surface
+`*.spec.ts` calling `assertAllCovered`, `check-registry-coverage.mjs`, and `registryCoverage.test.ts`.
+Six screens with Launch, destroy, Re-check and diff-confirm actions is a new surface, and the design
+names none of this. **The precise failure mode, because it is not the obvious one:**
+`registryCoverage.test.ts` proves that every *declared* registry has an `assertAllCovered` call
+somewhere — a surface that declares **no** registry is invisible to it. That is the same gap one
+level up that the registry itself was built to close, and it is exactly the shape rule 12 names.
+
+**Amendment 22 — every read path gets an access-control test, and `/admin` is a read path.**
+`CLAUDE.md` rule 4 / standing rule 2: "No exceptions for internal endpoints." `/admin` serves the
+governance configuration, the handling scheme, the real-data exceptions panel and the
+generated-artefacts diff — which carries real hostnames, ports, paths and credential *references*.
+2g must state which principal may open it and test that an unauthorised one cannot observe it or
+infer its existence. Separately, §2.5's third constraint has no named test: "During setup it needs
+the container socket; the admin console it becomes afterwards does not, and runs with the same
+non-root, read-only-root posture as every other component (§7)." The privilege drop at the
+setup→console transition is a testable invariant and nothing in the design tests it.
+
+**Amendment 23 — the round-trip exit test misses the two properties §2.1 says make these screens
+worth building as a UI at all.** "Every later screen filters its options to what is valid here" and
+"**Consequences are shown, not described** — choosing `cluster` renders the machine count, the
+components that appear, and the estimated memory footprint, updating as later screens change." Also
+absent: "a persistent summary rail showing what has been decided and what is outstanding". A
+round-trip through `osprey.yaml` is green with every option offered at every profile and no rail at
+all.
+
+**Exit, two parts, stated separately.** *Test:* every screen round-trips its answers through
+`osprey.yaml`; the rendered output matches 2b's fixture for the same answers; option filtering by
+profile is asserted; the new surface's action registry is declared and asserted covered; `/admin`
+has its access-control test. *Judgement:* a usability pass by someone other than the builder,
+recorded as the plan already words it — "Whether the six setup screens are actually usable by an
+operator who has never seen them is a judgement, not a test." Retained unchanged; no finding.
+
+#### 2h — Post-launch admin console operations
+
+Rolling upgrade and rollback to a previous digest (§5). **Not milestone-blocking — still Phase 8.**
+The design said "explicitly AFTER the milestone", which is right about the milestone and wrong about
+the phase: Phase 8's own outcome bullet claims "the backup, restore, **upgrade and verify** screens",
+and §5's `verify` is a capability nothing else in 2b–2h provides — "the port conformance suite against
+the **running** deployment rather than a test fixture". Worded here the way the plan words every other
+such stage. Note also that 2h's rollback consumes `versions.lock`, which is amendment 1's business in
+2b, not 2h's.
+
+---
+
+### Stage 2's exit (D3, awaiting owner confirmation)
+
+Tests #1, #2 and #3 green. **This is Stage 2's own completion, not ADR-042's alpha gate, which
+additionally requires both acceptance scenarios green on `local-lite`; no build goes to a tester on
+Stage 2 alone.**
+
+---
+
+### Open objections
+
+Unresolved. Each is a thing this record will not decide on the owner's behalf.
+
+1. **The `2b`–`2h` labels collide with the existing `2a`.** `07_BUILD_PLAN.md` says it in its own
+   words: `2a` is "a new, independent stage, not a Stage-4 sub-stage, labelled `2a` only for its
+   position in this list, between the harness/packaging and documentation-refresh stages it sits
+   alongside in build order." So `2a` is a *sibling* of stage 2, positioned *after* it — while
+   `2b`–`2h` are *sub-stages of* it. The sequence 2, 2a, 2b…2h then means two categorically different
+   things with one notation, and every future citation of "stage 2a" inherits the ambiguity. The
+   labels are used as instructed and a disambiguating sentence is added at each end in
+   `07_BUILD_PLAN.md`. The clean fixes are `2.1`–`2.7` for the sub-stages, or renaming the ArcadeDB
+   stage — both cost stable stage numbers, which that document holds stable deliberately. Owner's
+   call.
+
+2. **The ADR-043 preflight check cannot run before Launch without breaking `05_DEPLOYMENT.md` §2.5.**
+   §2.5: the harness "**never sees a secret**. Credentials are entered as references — an environment
+   variable name or a secret-manager path. The harness records where to look, never what it found." A
+   real RFC 8693 exchange requires the Conduit's confidential-client secret to be read and used. And
+   Preflight runs before Launch, when no Keycloak is running to exchange against — `local-lite`'s
+   Keycloak is one of the twelve containers Launch brings up. The check itself is not in doubt: it is
+   required by `07_BUILD_PLAN.md`'s stage entry, its two-sided shape and its exact operator wording
+   are already specified there, and ADR-043 is explicit that "no repository gate can" reach this. What
+   is undecided is **where it runs**. The shape that satisfies both texts is §5's `verify` — the
+   launched Conduit performs the two exchanges and Preflight's Re-check reads the result back — which
+   moves a check the build plan currently places in Preflight. That is an edit to the build plan's own
+   stage entry and is not made here.
+
+3. **The `decision_record` requirement is a change to an owner-decided mechanism, and it contradicts
+   2f. Recorded and stopped on, not implemented.** The design would require every real-data exceptions
+   entry to carry "a `decision_record` reference that must resolve to a committed `06_DECISIONS.md`
+   section", with `is_permitted()` failing closed without it. Three problems. (a) **It cannot be
+   satisfied in a deployed artefact.** `06_DECISIONS.md` is excluded from everything that ships by
+   ADR-034 §B2 and by 2f's own first assertion; a shipped Governance panel resolving a reference into
+   a file the same pipeline is required to exclude can only ever fail closed, disabling the mechanism
+   on every machine that is not this working tree. (b) **It invalidates every existing entry.**
+   `scripts/real_data_exceptions.py` exists and is built; `RealDataException` has six required fields
+   (`dataset`, `approved_uses`, `added_by`, `added_date`, `device`, `justification`) and an optional
+   `revisit`. A seventh required field makes every entry already in an owner's local
+   `config/real_data_exceptions.yaml` invalid. (c) **It is an owner decision, made directly.** ADR-035
+   §C3's amendment is recorded as "decided, 23 September 2026, by the owner directly, not inferred".
+   Per `CLAUDE.md`, an accepted record believed wrong gets said so and stopped on. If the owner wants
+   the requirement, the resolvable target is an ADR *number* checked against a list the product can
+   actually carry — not a section of a file the product must never contain.
+
+4. **D2 contradicts `07_BUILD_PLAN.md`'s Phase 8 outcome bullet as written.** That bullet says "**A
+   new screen**, added 23 September 2026: managing the real-data exceptions list". D2 makes it a panel
+   on Governance, which is the better reading of §2.1's "Six screens" table — but confirming D2 means
+   amending that bullet, and the amendment is not made here because D2 is not confirmed.
+
+5. **Standing rule 8 and D1's "images for each OspreyFlow service".** Six service directories and one
+   app; two Dockerfiles; two `trivy image` CI jobs. Rule 8: "Each service gets its Dockerfile, and a
+   `trivy image` CI scan, in the phase that creates it — **never batched into Phase 8**." Either the
+   missing Dockerfiles are owed debt from the phases that created those services, and should be
+   recorded as such rather than absorbed into 2f, or D1's scope is narrower than "each service". Not
+   resolvable without the owner saying which.
+
+6. **Whether the harness browser application is in scope for `02_GLASS_FRONTEND.md` §5's performance
+   budget and §6's accessibility floor.** §5 is measured "against a 50k-node / 250k-edge working set"
+   and is plainly written for the Glass; `CLAUDE.md` rule 10 makes it a CI gate. A setup wizard has no
+   working set. Left open rather than assumed either way — but the accessibility floor is a different
+   question from the performance budget and probably has a different answer.
+
+7. **D3 widens Stage 2's exit criterion from one test to three.** Recorded here as the substantive
+   change it is, not as drafting.
+
+**Cost.** Documentation only in this session. If accepted as amended, 2f grows two deliverables it
+did not have (ADR-035 §C1's registry; `LICENSE`/`NOTICE` and the third `licence-check` leg), 2b grows
+two artefact kinds, 2c grows the reduced-variant offer, 2d and 2e grow three of §2.4's guards between
+them, and 2g grows an action registry, a spec file and an access-control test. None of that is new
+work in the sense of unclaimed scope — every item is already claimed by `05_DEPLOYMENT.md`, by
+Phase 8's own outcome bullets, or by an accepted ADR; the amendments move it from claimed to
+sub-staged.
+
+**Revisit if.** The owner settles any of D1–D3, or any numbered objection — each is written so
+settling it is a targeted edit to this record and its `07_BUILD_PLAN.md` sub-stage entry, not a new
+ADR.

@@ -20,8 +20,13 @@ laptop from the documentation, started, and demonstrated (both acceptance scenar
 - `PathStaleError` and the server-side traversal budget (pulled forward from Stage 5). Built.
 
 **Remains before the milestone, numbered, with a word on size:**
-1. **The harness/packaging pipeline** — large, green-field: no packaging step, `backup`/`restore`,
-   scripted golden-path deploy, setup screens or Preflight exist anywhere in this repository yet.
+1. **The harness/packaging pipeline** — **designed (Proposed), not started.** Large, green-field:
+   no packaging step, `backup`/`restore`, scripted golden-path deploy, setup screens or Preflight
+   exist anywhere in this repository yet (`harness/` holds only its own `__init__.py`). The design
+   and its adversarial review are `06_DECISIONS.md` **ADR-049**, status **Proposed**, broken into
+   sub-stages **2b–2h** at this stage's own entry below — with three owner decisions (D1–D3) and
+   seven numbered objections still open, so "designed" means there is something to argue with, not
+   something to build against.
 2. **The documentation refresh** — moderate: the three drift gates (`domain-model-coverage-check`,
    `route-coverage-check`, `demo-guide-check`) exist and run; the content that empties their own
    allowlists does not exist yet.
@@ -43,7 +48,7 @@ laptop from the documentation, started, and demonstrated (both acceptance scenar
 classes, tester/alpha/beta material, and Trigger B's own downstream distribution questions. Not a
 build step, a stage, or a precondition of anything above; a different question, answered there.
 
-**Last updated:** 23 September 2026.
+**Last updated:** 24 September 2026.
 
 ---
 
@@ -2486,6 +2491,166 @@ find something already finished sitting in the queue.
    will appear stopped for every owner but the analyst who triggered them until this is fixed" —
    distinct wording from whatever `StatusBadge` shows an analyst later, so the two failure surfaces
    are never mistaken for the same fact by whoever reads either one first.
+
+   ---
+
+   **Sub-stages 2b–2h — PROPOSED, 24 September 2026, not started.** Design and adversarial review
+   in `06_DECISIONS.md` **ADR-049**, status **Proposed**; each entry below is a summary of that
+   record's own amended text, not a second copy of it, and each is Proposed for exactly as long as
+   ADR-049 is. Three owner decisions the design rests on (D1, the artefact shape; D2, the real-data
+   exceptions panel; D3, the three-test stage exit) are **awaiting owner confirmation** and are
+   marked as such at each sub-stage that depends on one.
+
+   **A notation warning, because this list already uses `2a` for something else.** `2a` below is a
+   *sibling* stage of this one — ArcadeDB stability, "a new, independent stage… labelled `2a` only
+   for its position in this list", in its own entry's words — while `2b`–`2h` are *sub-stages of
+   this stage*. The two notations mean different things and the labels do not say so. ADR-049's
+   own objection 1 has the alternatives (`2.1`–`2.7`, or renaming the ArcadeDB stage) and why
+   neither is taken unilaterally: this document holds stage numbers stable deliberately, because
+   every other document in this project cites a stage by its number.
+
+   **2b — `osprey.yaml` as the single source. PROPOSED.** A Pydantic schema in `packages/schemas`
+   for the whole `osprey.yaml` document (profile, components, models, governance, geospatial,
+   cluster hosts), reusing `packages/schemas/mapconfig.py`'s `MapConfig` for the `map:` section
+   rather than redefining it, and not invalidating the committed demo/CI `osprey.yaml` that
+   `services/api/mapconfig_loader.load_map_config` reads today as a bare `raw["map"]`. A generator
+   (`harness/render.py`) rendering **all four artefacts `05_DEPLOYMENT.md` §2.1 names** — compose
+   or Kubernetes manifests (ADR-011: a different renderer, not a toggle), environment files,
+   `versions.lock` with every image digest pinned, and the per-deployment `RUNBOOK.md` with real
+   hostnames, ports and paths — plus drift detection and a change preview. `deploy/compose/dev.yaml`
+   is not replaced. **Exit test:** rendering a fixture `osprey.yaml` is byte-stable across runs; a
+   hand edit to a generated file is reported as drift; the diff names every changed path — **for
+   each of the four artefact kinds**, each with its own planted drift of the real generated shape
+   (standing discipline: a planted violation takes the shape the code actually emits). The
+   unamended two-artefact version of this test was green over a renderer that never emitted
+   `versions.lock` or the per-deployment runbook at all. §2.4's *running-deployment* drift
+   comparison is a second, harder check and is named separately in ADR-049, not folded into this
+   one.
+
+   **2c — Preflight, headless. PROPOSED.** `harness/preflight/`, one module per check, each
+   returning `{status, what is wrong, what to do, re-checkable}`; `python -m harness.preflight`
+   runs all or one. Memory against the profile floor **and `05_DEPLOYMENT.md` §3's reduced-variant
+   offer below 16 GB** (drop OpenSearch, fall back to PostgreSQL full-text, state the trade-off —
+   "offered, not applied silently"); disk against projected staging volume; GPU presence and
+   driver; port availability per declared service; container runtime version; cluster connectivity
+   to every declared host; and the four rehearsal-derived checks (the interpreter is the project
+   venv; every service's bind address is consistent and printed; the basemap is built and served
+   over HTTP, not `file://`; the DuckDB lock holder is not running when seeding is requested). **The
+   ADR-043 two-sided token-exchange check this stage's own entry above requires is unresolved as to
+   *where* it runs** — running it pre-Launch needs the harness to hold and use a confidential
+   client's secret, against §2.5's "never sees a secret", at a moment when no Keycloak exists to
+   exchange against. ADR-049 objection 2 has the alternative (§5's `verify` shape, read back by
+   Re-check) and does not make the change. **Exit test:** every check has a red-then-green test
+   whose planted failure takes the shape the check actually reads, and apply/launch refuses while
+   any check is red.
+
+   **2d — Scripted golden-path deploy. PROPOSED.** `python -m harness.apply`: fresh checkout →
+   render (2b) → preflight (2c) → start stack → wait for health → seed if requested, with
+   **seed-ordering enforcement** (seeding precedes any lock-holding service; the database is reset
+   first — stage 2a's cause five). *Seed-ordering enforcement is not `05_DEPLOYMENT.md` §2.4's
+   "ordering enforcement", which is backup-before-profile-switch; the two share a name and nothing
+   else.* Also here: §2.4's **target confirmation** guard (the resolved Docker context, or the
+   Kubernetes cluster, context and namespace, shown before every action and re-confirmed when it
+   differs from the last), and §3's "seeded demo credentials are displayed once and written
+   nowhere". The rendered stack is §3's twelve containers, **including Keycloak**, without which
+   2c's token-exchange check has nothing to exchange against. `docs/demo/2026-09-24/demo_up.sh` is
+   retired into this once it exists; until then it stays. **Exit test:** from a fresh clone, one
+   command reaches a health-checked stack on `local-lite`; the CI half **names the services that
+   must be healthy and the health checks that must pass without Ollama**, rather than "as far as CI
+   can", which cannot fail. **Stage 2 exit test #2.**
+
+   **2e — Backup and restore. PROPOSED.** `python -m harness.backup` writes to
+   `backups/<UTC-timestamp>-<profile>-<git-sha>/` with a `manifest.json` naming every file, its
+   checksum and the schema versions, covering **`05_DEPLOYMENT.md` §4's full set**: staged Parquet,
+   **object store contents**, the PostgreSQL dump, ontology, handling scheme and `osprey.yaml` —
+   and stating audit data's own disposition (§6: not rebuildable, not deletable, replicated
+   separately). `python -m harness.restore <dir>` rebuilds the graph store from Parquet into an
+   **empty** store and restores PostgreSQL, **opening with §4's dry run — row count and projected
+   duration, not proceeding until acknowledged**. §2.4's backup-before-switch and downgrade
+   capacity guards attach here, where a backup exists to check for. `deploy/RUNBOOK.md` is created,
+   stating the recovery time for each path (§6), measured on `local-lite` — a different file from
+   2b's generated per-deployment runbook. **Exit test:** backup → restore reproduces the graph into
+   an asserted-empty store — node and edge multisets equal **including edge properties**, handling
+   markings, provenance and assessment objects compared as payloads rather than counted (ADR-010;
+   a restore that drops every handling marking passes a bare multiset comparison and silently
+   widens access), and the τ 0.99/0.95/0.80 resolution projections ADR-035 §C5 already requires
+   Fixture Corp to exercise returning identical results (ADR-006: `SAME_AS` edges are scored, and a
+   multiset of pairs that ignores the score passes while every projection changes). **Stage 2 exit
+   test #1**, and this stage's already-stated criterion above.
+
+   **2f — Packaging, the `osprey bundle` shape. PROPOSED; shape depends on D1 (awaiting owner
+   confirmation).** **Wraps `scripts/osprey_bundle.py`** — which exists, is tested, and whose own
+   docstring already says "The real `osprey bundle` command wraps `bundle_map_providers` below in
+   Phase 8" — rather than writing a second implementation of the same command. Builds the service
+   images and the bundle tarball; `--images` produces the **signed** archive of every image **and
+   weight file** §5 requires, a path §5 also requires to be tested each release. **First
+   deliverable, because 2f consumes it and it does not exist:** ADR-035 §C1's `shipped`/`internal`
+   manifest schema, its fail-closed registry and `make demo-manifest`, with C1's own two named
+   tests (`tests/demo_registry/test_fail_closed.py`); `scripts/demo_guide_check.py`'s
+   `DEMO_REGISTRY` is a stand-in for it by its own docstring, not the thing itself. Assertions,
+   each a test: no private-tree file in the artefact (ADR-034 §B7 #1) — **keyed off
+   `scripts/product_tree_link_check.py`'s existing marker list, never a `docs/`/`spec/` path
+   prefix**, since ADR-034 §B2 puts `06_DECISIONS.md` inside `spec/` and permanently unpublished
+   while §B8 makes `docs/design/tokens.css` product source, and since a prefix-keyed test goes
+   green now and becomes a silent no-op the moment Trigger A renames the tree; no B5 authorship
+   identifier, including build metadata (§B7 #2); no internal-class demo data in the tarball **or
+   any image layer** (ADR-035 §C2, which needs a `.dockerignore` — checked directly, none exists in
+   this repository — and both of C2's own named tests, including
+   `test_removing_the_exclusion_step_itself_fails_the_gate`); **`config/real_data_exceptions.yaml`
+   never enters an artefact**, a new assertion no record names today and the one most likely to be
+   present on the machine that builds a bundle; tiles/gazetteers with `redistributable: false`
+   refused and named (`00_ARCHITECTURE.md` §1.2). **`LICENSE` and `NOTICE` are created here, not
+   deferred** — ADR-034 §B7 is "a blocking prerequisite of Phase 8's own harness/packaging work,
+   not a follow-up to it", and this document's own Trigger A entry already states that "the holder
+   name, the licence text itself, and the files' own presence are not year-dependent and are not
+   deferred"; the third `licence-check` leg specified there (Apache 2.0 text byte-identical;
+   `NOTICE` naming "The OspreyFlow Authors") is built in the same pass, and Trigger A's list
+   records it as discharged early. Only the copyright *year* remains Trigger B's, unchanged.
+   `make licence-check` is extended per ADR-035 §C7 to data-file licences in the same pass, with
+   its own red-then-green. **The harness's own image** (`ghcr.io/ospreyflow/harness:latest`, §2/§3's
+   bootstrap) is built here; **standing rule 8's Dockerfile-and-`trivy image` debt** for the
+   services that have neither is ADR-049 objection 5, not silently absorbed here. **Exit test:**
+   each planted violation fails the bundle, each taking the shape the gate actually receives at its
+   own real call site. **Stage 2 exit test #3.**
+
+   **2g — The six setup screens. PROPOSED; D2 (the real-data exceptions panel) awaiting owner
+   confirmation.** A browser application over 2b–2f, bootstrapped by one Docker command, becoming
+   `/admin` after launch. Profile, Components and Models write `osprey.yaml` through the 2b schema.
+   Governance writes access-control/handling configuration and hosts the real-data exceptions panel
+   — **which, if D2 is confirmed, amends this phase's own outcome bullet above, currently "A new
+   screen"**. Geospatial wraps `build_local_basemap`, `register_tier4_provider` and the Verify step
+   with progress shown. Preflight streams 2c's checks with per-check Re-check and gates Launch.
+   Before Launch, the generated-artefacts diff is shown and confirmed. §2.1's persistent summary
+   rail and its "consequences are shown, not described" behaviour are in scope, not implied.
+   **The `decision_record` requirement proposed for the exceptions panel is not adopted** —
+   ADR-049 objection 3: it cannot resolve inside a deployed artefact, since `06_DECISIONS.md` is
+   what 2f's own first assertion excludes, and it would add a seventh required field to an
+   owner-decided mechanism (`scripts/real_data_exceptions.py`, ADR-035 §C3) that already has six.
+   **Exit, two parts.** *Test:* every screen round-trips its answers through `osprey.yaml`; the
+   rendered output matches 2b's fixture for the same answers; option filtering by profile is
+   asserted (§2.1: "Every later screen filters its options to what is valid here"); **this new
+   keyboard-driven surface declares its own `defineActionRegistry` registry and its own
+   `*.spec.ts` calling `assertAllCovered`** (rule 13 — note that `registryCoverage.test.ts` proves
+   only that *declared* registries are asserted, so a surface declaring none is invisible to it);
+   **`/admin` has its access-control test** (standing rule 2, no exceptions for internal endpoints),
+   and the §2.5 privilege drop from setup to console is asserted. *Judgement:* a usability pass by
+   someone other than whoever built the screens, exactly as this stage's own entry already words it.
+
+   **2h — Post-launch admin console operations. PROPOSED. Not milestone-blocking; still Phase 8.**
+   `05_DEPLOYMENT.md` §5's rolling upgrade and rollback to a previous digest, and §5's `verify` —
+   "the port conformance suite against the *running* deployment rather than a test fixture", a
+   capability nothing else in 2b–2h provides, and one this phase's own outcome bullet already
+   claims ("the backup, restore, upgrade and verify screens"). Listed here so the boundary is
+   visible: not needed to install, start and demonstrate, and not therefore outside the phase.
+   Rollback consumes 2b's `versions.lock`.
+
+   **Stage 2's exit (D3, awaiting owner confirmation): tests #1, #2 and #3 green.** *This is Stage
+   2's own completion, not ADR-042's alpha gate, which additionally requires both acceptance
+   scenarios green on `local-lite`; no build goes to a tester on Stage 2 alone.* Note that this
+   widens the stage's existing exit criterion, which today is test #1 alone — the other two are
+   described above as "testable too" and "mechanical and testable", never as exit criteria.
+
+   ---
 2a. **ArcadeDB stability — MILESTONE-BLOCKING, new stage, promoted 23 September 2026, closed
    23 September 2026** from "Legacy disclosures," where it sat with an inline "Owning phase:
    Phase 8" disposition never physically moved. No prior stage number (the numbering `4a`–`4h`,
