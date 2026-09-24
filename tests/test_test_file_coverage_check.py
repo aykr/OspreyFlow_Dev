@@ -124,9 +124,7 @@ class _FakeTestFile:
 
 
 def test_a_live_service_file_missing_from_the_live_job_list_is_caught_even_if_ignored() -> None:
-    fake = _FakeTestFile(
-        "tests/fake_live_service_test.py", "from valkey.asyncio import Valkey\n"
-    )
+    fake = _FakeTestFile("tests/fake_live_service_test.py", "from valkey.asyncio import Valkey\n")
     misclassified = find_misclassified(
         [fake],  # type: ignore[list-item]
         test_job_ignored={"tests/fake_live_service_test.py"},
@@ -138,9 +136,7 @@ def test_a_live_service_file_missing_from_the_live_job_list_is_caught_even_if_ig
 
 
 def test_a_live_service_file_missing_from_the_ignore_list_is_caught_even_if_covered() -> None:
-    fake = _FakeTestFile(
-        "tests/fake_live_service_test.py", "from valkey.asyncio import Valkey\n"
-    )
+    fake = _FakeTestFile("tests/fake_live_service_test.py", "from valkey.asyncio import Valkey\n")
     misclassified = find_misclassified(
         [fake],  # type: ignore[list-item]
         test_job_ignored=set(),
@@ -149,3 +145,40 @@ def test_a_live_service_file_missing_from_the_ignore_list_is_caught_even_if_cove
     assert misclassified == [
         "tests/fake_live_service_test.py: needs a live service but is not ignored by the `test` job"
     ]
+
+
+def test_classification_recognises_a_test_that_reaches_its_service_by_shelling_out() -> None:
+    """The class this gate was blind to until 24 September 2026.
+
+    `tests/harness/test_restore_exit_test.py` destroys a running deployment's volumes and restores
+    it. It is as live-service as anything in this repository — and it imports none of the markers
+    above, because it reaches every service through `docker compose`. The gate reported clean.
+
+    That is `CLAUDE.md` rule 12's shape: the invariant "a live-service test is wired into CI
+    deliberately" was exercised by a check whose every marker was a Python import, so it could not
+    have found this violation if one existed. The planted source below is the real shape — this
+    repository's own `OSPREY_TEST_*` opt-in convention, read from the environment and used to skip.
+    """
+    source = (
+        "import os\n"
+        "import pytest\n"
+        'COMPOSE = os.environ.get("OSPREY_TEST_COMPOSE_FILE")\n'
+        "requires = pytest.mark.skipif(not COMPOSE, reason='needs a real deployment')\n"
+    )
+    assert is_live_service_file(source) is True
+
+
+def test_a_test_that_merely_renders_a_compose_file_is_not_misclassified() -> None:
+    """The first attempt at the marker above matched the literal `"docker compose"` and flagged
+    `test_render.py` and `test_image_references.py`, neither of which needs a running service: one
+    renders a compose file, the other asks a registry about a tag.
+
+    A marker that fires on prose is a gate that trains people to ignore it, so this is the case
+    that keeps the narrowing honest.
+    """
+    source = (
+        '"""Renders a docker compose file and asserts its services. Needs no running service."""\n'
+        "import yaml\n"
+        "from harness.render import render_compose\n"
+    )
+    assert is_live_service_file(source) is False

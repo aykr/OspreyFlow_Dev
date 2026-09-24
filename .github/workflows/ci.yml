@@ -677,6 +677,8 @@ jobs:
           --ignore=tests/services/api/test_export_routes.py
           --ignore=tests/scenarios/test_fixture_corp_shape.py
           --ignore=tests/services/api/test_worker.py --ignore=tests/services/api/test_worker_replicas.py --ignore=tests/services/api/test_revoked_principal_precheck.py
+          --ignore=tests/harness/test_restore_exit_test.py
+          --ignore=tests/scenarios/test_phase8_exit_criterion_end_to_end.py
       # The Glass's fast, no-live-infra unit tests (`store.test.ts`,
       # `zoomBands.test.ts`) — `*.integration.test.ts` is excluded by
       # `vitest.config.ts` and runs in the `conformance` job instead.
@@ -703,3 +705,41 @@ jobs:
       - run: npm run test:perf --workspace apps/workspace
       - run: npm run test:a11y --workspace apps/workspace
       - run: npm run test:keyboard --workspace apps/workspace
+
+  # Phase 8's two deployment-level exit tests. Neither can run in any job above: they do not need a
+  # store, they need a **whole rendered deployment** — ten containers, images built from this
+  # checkout, a realm imported, both fixtures seeded — which is the thing they exist to test.
+  #
+  # `tests/scenarios/test_phase8_exit_criterion_end_to_end.py` had been reachable by no job at all
+  # since it was written; `test-file-coverage-check` had been red on it. The restore exit test was
+  # invisible to that gate entirely until 24 September 2026, because every marker the gate knew was
+  # a Python import and this test reaches its services by shelling out to `docker compose`.
+  #
+  # **This job has never been observed running here.** It was built and run locally, repeatedly and
+  # green; GitHub Actions cannot be executed from where it was written. Its first run in CI is the
+  # untested state `CLAUDE.md` rule 15 names, and it should be treated as such until a run is on
+  # record — in particular `--no-build` is NOT passed, so this is also the first CI-side build of
+  # every owned image in one job.
+  deployment-exit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - name: Render, build, launch and seed a local-lite deployment
+        run: |
+          PYTHONPATH=.:packages uv run python -m harness.apply \
+            --profile local-lite --seed hmp,fixture-corp
+      - name: Exit test #1 — backup, destroy, restore, deep comparison
+        env:
+          OSPREY_TEST_COMPOSE_FILE: deploy/generated/local-lite/compose.yaml
+        run: >-
+          PYTHONPATH=.:packages uv run pytest -p no:randomly
+          tests/harness/test_restore_exit_test.py
+          tests/scenarios/test_phase8_exit_criterion_end_to_end.py
+      - name: Tear down
+        if: always()
+        run: >-
+          docker compose --env-file deploy/generated/local-lite/deployment.env
+          -f deploy/generated/local-lite/compose.yaml down -v --remove-orphans

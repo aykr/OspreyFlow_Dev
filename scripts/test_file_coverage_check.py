@@ -242,8 +242,68 @@ def _has_from_env_call(source: str, names: frozenset[str]) -> bool:
     return False
 
 
+#: A live-service test that reaches its service through `docker compose`, not through a Python
+#: client — so it imports none of the markers above and this gate could not see it.
+#:
+#: **Found, not anticipated** (24 September 2026, ADR-049 Stage 2 §4).
+#: `tests/harness/test_restore_exit_test.py` takes a backup of a running deployment, **destroys its
+#: volumes** and restores it. It is as live-service as anything in this repository and it reaches
+#: every one of its services by shelling out, so nothing it imports gives it away. The gate reported
+#: clean. That is `CLAUDE.md` rule 12's shape exactly: an invariant — "a live-service test is wired
+#: into CI deliberately" — exercised by a check that could not have found this whole class of
+#: violation, because every marker it knew about was a Python import.
+#:
+#: Matched as a whole token so a docstring that merely mentions Docker does not qualify; the AST
+#: reasoning behind the import markers does not transfer, because these appear inside string
+#: literals passed to `subprocess` rather than in the import graph.
+#: `OSPREY_TEST_*` is this repository's own opt-in convention for "this test needs a real service"
+#: — `OSPREY_TEST_KEYCLOAK_URL` for `test_revoked_principal_precheck.py`,
+#: `OSPREY_TEST_COMPOSE_FILE` for `test_restore_exit_test.py`. The variable's presence *is* the
+#: declaration, which makes it a better marker than any import.
+#:
+#: A first attempt matched the literal `"docker compose"` instead and flagged `test_render.py` and
+#: `test_image_references.py`, neither of which needs a running service: the first only renders a
+#: compose file and the second asks a registry about a tag. A marker that fires on prose is a gate
+#: that trains people to ignore it.
+LIVE_SERVICE_ENV_PREFIX = "OSPREY_TEST_"
+
+
+def _reads_live_service_env(source: str) -> bool:
+    """True when the source *actually reads* an `OSPREY_TEST_*` variable from the environment.
+
+    **AST, not a substring**, for the same reason the import markers are AST-checked: this gate's
+    own test file contains the literal `OSPREY_TEST_COMPOSE_FILE` inside a planted-source fixture,
+    and a substring match flagged it as needing a live service. A gate that fails on the test
+    written to prove it works is not a subtle problem, but the class of it is — a marker that fires
+    on the mention of a thing rather than the use of it.
+
+    Matches `os.environ.get("OSPREY_TEST_…")`, `os.getenv(…)` and `os.environ["OSPREY_TEST_…"]`,
+    which is every shape this repository uses.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return False
+    for node in ast.walk(tree):
+        name: str | None = None
+        if isinstance(node, ast.Call) and node.args:
+            function = node.func
+            called = function.attr if isinstance(function, ast.Attribute) else None
+            if called in {"get", "getenv"} and isinstance(node.args[0], ast.Constant):
+                value = node.args[0].value
+                name = value if isinstance(value, str) else None
+        elif isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant):
+            value = node.slice.value
+            name = value if isinstance(value, str) else None
+        if name and name.startswith(LIVE_SERVICE_ENV_PREFIX):
+            return True
+    return False
+
+
 def is_live_service_file(source: str) -> bool:
     if _imported_names(source) & LIVE_SERVICE_MARKERS:
+        return True
+    if _reads_live_service_env(source):
         return True
     return _has_from_env_call(source, CALL_REQUIRED_MARKERS)
 
@@ -296,11 +356,19 @@ def _load(ci_yml_path: Path = CI_YML_PATH) -> tuple[set[str], dict[str, set[str]
     blocks = _job_blocks(ci_text)
     test_ignored, _ = job_tokens(blocks.get("test", ""))
     live_job_tokens: dict[str, set[str]] = {}
+    # **Hand-maintained, and that is a known cost.** A new live-service job is invisible to this
+    # gate until its name is added here, and the failure mode is the quiet one: the gate reports
+    # "not run by any live-service job" about a file that plainly is, and the obvious reading is
+    # that the CI wiring is wrong rather than that this list is short. Found adding
+    # `deployment-exit-tests` on 24 September 2026. Deriving the list from "every job that invokes
+    # pytest" was considered and rejected: the single-file gate jobs would qualify, and a
+    # live-service file listed in one of those would then be silently accepted as covered.
     for name in (
         "conformance",
         "conformance-model",
         "conformance-model-vision",
         "conformance-guard",
+        "deployment-exit-tests",
     ):
         _, positional = job_tokens(blocks.get(name, ""))
         live_job_tokens[name] = positional
