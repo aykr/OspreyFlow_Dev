@@ -161,6 +161,44 @@ def test_an_unknown_kid_triggers_a_jwks_refresh_and_then_succeeds(
     assert principal.id == "analyst-1"
 
 
+# --- audience verification (06_DECISIONS.md ADR-050 objection 1) -------------------------------
+
+
+def test_a_token_signed_for_a_different_client_is_refused_not_accepted(
+    keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey], jwks_url: str
+) -> None:
+    """ADR-050 objection 1: a public client (the Glass) makes it reachable from a browser for a
+    token minted for an unrelated application in the same realm to be accepted as a principal, if
+    the Conduit does not verify audience. `harness/render.py` now writes `OIDC_AUDIENCE` into every
+    rendered deployment's environment (`harness/preflight/oidc_audience.py` gates its presence) —
+    this is the Conduit-side half of that guarantee: once configured, a token whose `aud` names
+    something else is refused, not resolved to a `Principal` anyway.
+
+    Rule 15: removing the conditional in `PrincipalResolver.resolve` (hardcoding `verify_aud` to
+    `False`) makes this test fail — verified directly while writing it, then reverted.
+    """
+    private_key, _ = keypair
+    resolver = PrincipalResolver(_config(jwks_url, oidc_audience="osprey-conduit"))
+    token = sign_token(private_key, default_claims(aud="some-other-client"))
+
+    with pytest.raises(PrincipalResolutionError):
+        resolver.resolve(token)
+
+
+def test_a_token_signed_for_the_configured_audience_still_resolves(
+    keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey], jwks_url: str
+) -> None:
+    """The positive case beside the refusal above — a configured audience must not become a second
+    way to reject every real sign-in."""
+    private_key, _ = keypair
+    resolver = PrincipalResolver(_config(jwks_url, oidc_audience="osprey-conduit"))
+    token = sign_token(private_key, default_claims(aud="osprey-conduit"))
+
+    principal = resolver.resolve(token)
+
+    assert principal.id == "analyst-1"
+
+
 # --- resolve_for_owner / resolve_for_owner_detailed (06_DECISIONS.md ADR-043) -------------------
 
 

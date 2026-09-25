@@ -25,6 +25,9 @@ up. A future reader finding no token-exchange check here is looking at a decisio
 Environment checks, from §2.1's own list: `memory`, `disk`, `gpu`, `ports`, `container-runtime`,
 `cluster-connectivity`. Then the four the 23 September 2026 demo rehearsal produced, each of which
 cost real time before it was understood: `interpreter`, `bind-address`, `basemap`, `duckdb-lock`.
+Then `oidc-audience` (`06_DECISIONS.md` ADR-050 objection 1's resolution, 25 September 2026): a
+rendered deployment with no `OIDC_AUDIENCE` accepts a token the realm signs for any client, and a
+public client (the Glass) makes that reachable from a browser.
 
 Each is its own module, each returns the same `CheckResult`, and each is independently runnable —
 which is what makes Re-check a real operation rather than a full re-run with the output filtered.
@@ -41,6 +44,7 @@ from harness.preflight import (
     gpu,
     interpreter,
     memory,
+    oidc_audience,
     ports,
     runtime,
 )
@@ -61,6 +65,7 @@ ALL_CHECKS = (
     bind_address,
     basemap,
     duckdb_lock,
+    oidc_audience,
 )
 
 CHECKS_BY_NAME = {module.NAME: module for module in ALL_CHECKS}

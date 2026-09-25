@@ -30,6 +30,7 @@ from harness.preflight import (
     disk,
     duckdb_lock,
     memory,
+    oidc_audience,
     ports,
     runtime,
 )
@@ -38,6 +39,7 @@ from harness.preflight.__main__ import main, run
 from harness.preflight.context import PreflightContext
 from harness.preflight.reduced import accept, offer_for
 from harness.preflight.result import Status
+from harness.realm import CONDUIT_CLIENT_ID
 from harness.render import render, write
 
 from schemas.deployment import OspreyConfig, SearchBackend
@@ -667,3 +669,60 @@ def test_an_unresolvable_port_is_skipped_rather_than_guessed() -> None:
     check something arbitrary and report it as this deployment's."""
     compose = {"services": {"api": {"ports": ["${OSPREY_API_PORT}:8000"]}}}
     assert ports.declared_ports(compose, {}) == []
+
+
+# --- (k) oidc-audience — 06_DECISIONS.md ADR-050 objection 1's resolution ------------------------
+
+
+def test_a_real_render_writes_oidc_audience_and_the_check_passes(context: PreflightContext) -> None:
+    """The positive case first: a plain, unmodified render (`rendered_dir`'s own fixture) already
+    satisfies this check, because `harness/render.py`'s `_render_env` writes the variable
+    unconditionally. Nothing here should need a hand-edited fixture to pass."""
+    result = oidc_audience.check(context)
+    assert result.status is Status.PASS
+    assert f"OIDC_AUDIENCE={CONDUIT_CLIENT_ID}" in result.detail
+
+
+def test_a_missing_oidc_audience_fails_and_names_the_remedy(
+    context: PreflightContext, rendered_dir: Path
+) -> None:
+    """`CLAUDE.md` rule 15: the planted violation is the real shape a regression would take — a
+    rendered environment file with the line simply absent, not a hand-constructed stand-in."""
+    env_path = rendered_dir / "deployment.env"
+    lines = [
+        line
+        for line in env_path.read_text(encoding="utf-8").splitlines()
+        if not line.startswith("OIDC_AUDIENCE=")
+    ]
+    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    result = oidc_audience.check(context)
+    assert result.status is Status.FAIL
+    assert "OIDC_AUDIENCE is not set" in result.what_is_wrong
+    assert result.what_to_do
+
+
+def test_an_oidc_audience_naming_the_wrong_client_fails(
+    context: PreflightContext, rendered_dir: Path
+) -> None:
+    """Removing the audience mapper's own effect — a real Keycloak would then mint a token whose
+    `aud` never matches this value at all, and a token the realm signs for a different client is
+    the exact hole objection 1 names. This is the check-side half: the value itself must be the
+    Conduit's own client id, not merely present."""
+    env_path = rendered_dir / "deployment.env"
+    text = env_path.read_text(encoding="utf-8")
+    text = "\n".join(
+        line if not line.startswith("OIDC_AUDIENCE=") else "OIDC_AUDIENCE=some-other-client"
+        for line in text.splitlines()
+    )
+    env_path.write_text(text + "\n", encoding="utf-8")
+
+    result = oidc_audience.check(context)
+    assert result.status is Status.FAIL
+    assert "some-other-client" in result.what_is_wrong
+
+
+def test_the_check_fails_when_nothing_has_been_rendered_yet(config: OspreyConfig, tmp_path: Path) -> None:
+    context = PreflightContext(config=config, out_dir=tmp_path / "never-rendered")
+    result = oidc_audience.check(context)
+    assert result.status is Status.FAIL

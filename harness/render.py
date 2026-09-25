@@ -60,6 +60,7 @@ from harness.images import (
     docker_digest_resolver,
     unresolved_digest_resolver,
 )
+from harness.realm import CONDUIT_CLIENT_ID
 from schemas.deployment import OspreyConfig, Profile, SearchBackend
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -419,6 +420,12 @@ def _render_env(config: OspreyConfig) -> str:
         f"OSPREY_ONTOLOGY={config.governance.ontology}",
         f"OSPREY_REAL_DATA_EXCEPTIONS={config.governance.real_data_exceptions}",
         f"OSPREY_MODELS_LOCAL_ONLY={'true' if config.models.local_only else 'false'}",
+        # `06_DECISIONS.md` ADR-050 objection 1's resolution: every rendered deployment verifies
+        # audience, not only the two confidential clients this codebase controls. Not a secret —
+        # the Conduit's own client id, which `harness/realm.py`'s audience mapper on the Glass
+        # client already names — so it belongs in the deterministic render, not apply-time
+        # secret-writing. `harness/preflight/oidc_audience.py` fails Launch if this is ever missing.
+        f"OIDC_AUDIENCE={CONDUIT_CLIENT_ID}",
         "",
         "# Published host ports. Every one is overridable: Preflight found 8000 already held by an",
         "# unrelated container on a real machine, and a deployment that cannot move its own ports",
