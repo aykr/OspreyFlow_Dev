@@ -3264,7 +3264,10 @@ current or as a frozen historical record.** `07_BUILD_PLAN.md`'s Trigger A blast
 as the authoritative, live census rather than quote a fourth number due to go stale in turn — and,
 found in the same passage, a second real defect: it credited `scripts/doc_citations_check.py` with
 already running clean pre/post-move, but that script **does not exist**, checked directly. Both
-fixed together. Grepped the whole of `docs/` for `1,150`, `1,046`, `195`, `94`, `117`, `212`: every
+fixed together. **Update, 25 September 2026:** `scripts/doc_citations_check.py` now exists, built
+the same day under this exact name — this bullet is left otherwise unchanged as the record of what
+B13 found at the time, not rewritten to match the later state. Grepped the whole of `docs/` for
+`1,150`, `1,046`, `195`, `94`, `117`, `212`: every
 other hit is either (i) ADR-031's own original accepted text (`06_DECISIONS.md` lines in its own
 body) — left untouched, per this document's own standing instruction not to edit an accepted ADR's
 own words, or (ii) this document's own later addenda (§B2's correction paragraph, §B9's citation
@@ -5686,8 +5689,8 @@ CLI's own name: §2.3 calls this `osprey apply`, not `osprey launch`.)
 #### Stage 2 §3 — Scripted golden-path deploy
 
 `python -m harness.apply`: fresh checkout → render (Stage 2 §1) → preflight (Stage 2 §2) → start stack → wait for
-health → seed if requested. `docs/demo/2026-09-24/demo_up.sh` is retired into this once it exists;
-until then it stays.
+health → seed if requested. docs/demo/2026-09-24/demo_up.sh is retired into this once it exists;
+until then it stays (since removed — see `07_BUILD_PLAN.md`'s Stage 2 §3 entry).
 
 **Amendment 6 — "ordering enforcement" is `05_DEPLOYMENT.md` §2.4's term for something else, and
 reusing it here hides a missing guard.** §2.4's ordering enforcement is: "A profile switch with live

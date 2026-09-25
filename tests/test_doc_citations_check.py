@@ -1,4 +1,4 @@
-"""`scripts/citation_check.py`'s own red-then-green demonstration.
+"""`scripts/doc_citations_check.py`'s own red-then-green demonstration.
 
 `CLAUDE.md` rule 15: a gate's first green is not a result. This gate was written *because* it was
 already red — three citations to files that had never existed, found by accident in one afternoon
@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scripts.citation_check import citations_in, find_broken, load_allowlist
+from scripts.doc_citations_check import citations_in, find_broken, load_allowlist
 
 
 def _repo(tmp_path: Path, files: dict[str, str]) -> Path:
@@ -84,26 +84,55 @@ def test_prose_that_is_not_a_file_citation_is_left_alone(tmp_path: Path) -> None
     assert find_broken(root) == []
 
 
-def test_an_allowlisted_path_is_not_flagged(tmp_path: Path) -> None:
-    """`config/real_data_exceptions.yaml` is gitignored by design and every citation of it is a
-    citation of something correctly absent. Without an allowlist this gate could not be green on
-    this repository at all, which would make it a gate nobody runs."""
+def test_a_gitignored_path_is_not_flagged(tmp_path: Path) -> None:
+    """Red-then-green for the gitignore exemption, 25 September 2026. `config/
+    real_data_exceptions.yaml` is gitignored by design (`CLAUDE.md` rule 9 / ADR-035 §C3) and every
+    citation of it is a citation of something correctly absent from every clone — it must not need
+    an allowlist entry to pass."""
     root = _repo(
         tmp_path,
         {
+            ".gitignore": "/config/real_data_exceptions.yaml\n",
             "scripts/real_data_exceptions.py": (
                 '"""Reads `config/real_data_exceptions.yaml` when present."""\n'
-            ),
-            "tests/fixtures/citation_allowlist.txt": (
-                "# gitignored by design\nconfig/real_data_exceptions.yaml\n"
             ),
         },
     )
 
-    # `find_broken` reads the repository's own allowlist, not the miniature one, so this asserts
-    # the entry is really there rather than that the mechanism could work.
-    assert "config/real_data_exceptions.yaml" in load_allowlist()
     assert find_broken(root) == []
+
+
+def test_a_non_gitignored_non_existent_path_is_still_flagged(tmp_path: Path) -> None:
+    """Red. The exemption above is narrow to the paths `.gitignore` actually matches — a
+    `.gitignore` present must not become a way to silence an unrelated broken citation."""
+    root = _repo(
+        tmp_path,
+        {
+            ".gitignore": "/config/real_data_exceptions.yaml\n",
+            "scripts/real_data_exceptions.py": (
+                '"""See `scripts/nonexistent_helper.py` for the loader."""\n'
+            ),
+        },
+    )
+
+    broken = find_broken(root)
+
+    assert len(broken) == 1, broken
+    assert "scripts/nonexistent_helper.py" in broken[0]
+
+
+def test_an_allowlisted_path_is_not_flagged(tmp_path: Path) -> None:
+    """The allowlist mechanism itself, kept for a future citation to something deliberately absent
+    that `.gitignore` does not cover — empty on this repository today (every non-gitignored absence
+    found on 25 September 2026 was corrected in place instead)."""
+    allowlist_path = tmp_path / "citation_allowlist.txt"
+    allowlist_path.write_text(
+        "# retired, kept as the historical record of what was once there\n"
+        "scripts/retired_helper.py\n",
+        encoding="utf-8",
+    )
+
+    assert load_allowlist(allowlist_path) == {"scripts/retired_helper.py"}
 
 
 def test_the_extractor_reads_a_backticked_path_and_nothing_else() -> None:

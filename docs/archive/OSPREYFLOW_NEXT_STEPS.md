@@ -20,10 +20,10 @@ scoped only. Verified alongside it:
 - `tests/conformance/compute_port/` has its suite and guard, with `COMPUTE_PORT_ADAPTERS` still
   empty. `tests/conformance/registry.py`'s own docstring says Phase 7 populating it flips that
   guard red as the designed handover.
-- `packages/schemas/_pending_port_placeholders.py` still exists, and `ComputePort`'s five names are
+- packages/schemas/_pending_port_placeholders.py still exists, and `ComputePort`'s five names are
   the **only** things left in it. `tests/schemas/test_placeholder_lifecycle.py` deletes the module
-  once the last registry goes non-empty. Phase 7 is the phase that removes the last of Phase 0's
-  scaffolding.
+  once the last registry goes non-empty (since done — the module is removed). Phase 7 is the phase
+  that removes the last of Phase 0's scaffolding.
 - `apps/workspace/src/dossier/` is an empty directory. There is no document view.
 - No hotlist, alert or monitor code exists anywhere in `services/` or `packages/`.
 
@@ -296,7 +296,7 @@ project's own process calls for it.
 >
 > This first session is schemas and the conformance suite only — no adapter, per standing rule 1.
 >
-> `packages/schemas/_pending_port_placeholders.py` now holds only `ComputePort`'s five names:
+> packages/schemas/_pending_port_placeholders.py (since removed) now holds only `ComputePort`'s five names:
 > `CentralityRequest`, `CommunityRequest`, `CliqueMetricRequest`, `MotifRequest` and `MotifMatch`.
 > Design them for real against `00_ARCHITECTURE.md` §2.3 and Phase 7's bullet list — degree,
 > betweenness, eigenvector, clustering coefficient, Leiden, the Clique Metric — then delete the

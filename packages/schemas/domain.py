@@ -5,7 +5,7 @@ writes and reads. TypeScript types are generated from these
 (`generate_ts.py`); a drift between the two fails the build
 (`scripts/schemas_check.py`).
 
-Supersedes `packages/schemas/_phase0_placeholders.py` for everything
+Supersedes packages/schemas/_phase0_placeholders.py (since removed) for everything
 `GraphPort` references. `_pending_port_placeholders.py` (the same idea for
 `ComputePort`/`ModelPort`, ahead of their own real schemas) is gone for
 good as of Phase 7 Stage 2 — see `tests/schemas/test_placeholder_lifecycle.py`.

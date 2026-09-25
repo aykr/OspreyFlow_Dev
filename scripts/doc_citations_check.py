@@ -1,4 +1,4 @@
-"""`python -m scripts.citation_check` — every cited repository path names a file that exists.
+"""`python -m scripts.doc_citations_check` — every cited repository path names a file that exists.
 
 ## Why this gate exists
 
@@ -37,9 +37,18 @@ better gate and it is not buildable: "asserts this COPY has something to copy" i
 comparable to a test body. This gate closes the crude half — the file is not there at all — which
 is the half all three real instances fell into.
 
-**Allowlist.** `tests/fixtures/citation_allowlist.txt`, one path per line, for a citation that is
-deliberately to something absent — a file a record says was deleted, or a path named as an example
-of what *not* to do. Each entry needs a stated reason in a comment above it.
+**Gitignored paths pass without an allowlist entry.** A citation of a path matched by the
+repository's own `.gitignore` — `config/real_data_exceptions.yaml` is the real instance, per
+`CLAUDE.md` rule 9 / ADR-035 §C3 — is a reference to something correctly absent from every clone,
+the same way `tests/test_dockerignore.py` already treats `.dockerignore` matches as the ground
+truth for what a build context excludes. `pathspec`'s gitignore matcher is the standard stand-in,
+already a dependency (of `mypy`, which `make typecheck` requires) and already used that way there.
+
+**Allowlist.** `tests/fixtures/citation_allowlist.txt`, one path per line, for anything else that is
+deliberately absent and not covered by `.gitignore` — a file a record says was deleted, or a path
+named as an example of what *not* to do. Each entry needs a stated reason in a comment above it.
+Empty (and absent) on this repository today: every non-gitignored absence found on 25 September
+2026 was corrected in place rather than allowlisted.
 """
 
 from __future__ import annotations
@@ -48,8 +57,11 @@ import re
 import sys
 from pathlib import Path
 
+import pathspec
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ALLOWLIST_PATH = REPO_ROOT / "tests" / "fixtures" / "citation_allowlist.txt"
+GITIGNORE_PATH = REPO_ROOT / ".gitignore"
 
 #: Where citations live. Documents and the code comments that carry the "name the test" habit.
 SEARCH_ROOTS: tuple[str, ...] = ("docs", "apps", "services", "packages", "scripts", "harness")
@@ -72,7 +84,7 @@ CITATION = re.compile(
 #: Skipped wholesale. `graphify-out` is generated, `.venv`/`node_modules` are vendored, and a
 #: citation inside this gate's own docstring is a description of the problem, not an instance.
 SKIP_DIRECTORIES = frozenset({"node_modules", ".venv", "graphify-out", "dist", "__pycache__"})
-SKIP_FILES = frozenset({"scripts/citation_check.py", "tests/test_citation_check.py"})
+SKIP_FILES = frozenset({"scripts/doc_citations_check.py", "tests/test_doc_citations_check.py"})
 
 
 def load_allowlist(path: Path = ALLOWLIST_PATH) -> set[str]:
@@ -83,6 +95,15 @@ def load_allowlist(path: Path = ALLOWLIST_PATH) -> set[str]:
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.strip().startswith("#")
     }
+
+
+def load_gitignore_spec(root: Path = REPO_ROOT) -> pathspec.PathSpec:
+    gitignore_path = root / ".gitignore"
+    if not gitignore_path.exists():
+        return pathspec.PathSpec.from_lines("gitignore", [])
+    return pathspec.PathSpec.from_lines(
+        "gitignore", gitignore_path.read_text(encoding="utf-8").splitlines()
+    )
 
 
 def scanned_files(root: Path = REPO_ROOT) -> list[Path]:
@@ -110,6 +131,7 @@ def citations_in(text: str) -> list[str]:
 def find_broken(root: Path = REPO_ROOT) -> list[str]:
     """`"<citing file>:<line>: <cited path>"` for every citation naming a file that is not there."""
     allowlist = load_allowlist()
+    gitignore = load_gitignore_spec(root)
     broken = []
     for path in scanned_files(root):
         relative = str(path.relative_to(root))
@@ -117,7 +139,7 @@ def find_broken(root: Path = REPO_ROOT) -> list[str]:
             path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1
         ):
             for cited in citations_in(line):
-                if cited in allowlist or (root / cited).exists():
+                if cited in allowlist or (root / cited).exists() or gitignore.match_file(cited):
                     continue
                 broken.append(f"{relative}:{number}: cites '{cited}', which does not exist")
     return broken
@@ -127,8 +149,8 @@ def main() -> int:
     broken = find_broken()
     if broken:
         print(
-            f"citation-check: {len(broken)} citation(s) name a file that does not exist. A named "
-            "test that is not there reads as a guarantee and is worse than no name:",
+            f"doc-citations-check: {len(broken)} citation(s) name a file that does not exist. A "
+            "named test that is not there reads as a guarantee and is worse than no name:",
             file=sys.stderr,
         )
         for problem in broken:
@@ -139,7 +161,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    print(f"citation-check: {len(scanned_files())} file(s) scanned, every cited path exists.")
+    print(f"doc-citations-check: {len(scanned_files())} file(s) scanned, every cited path exists.")
     return 0
 
 

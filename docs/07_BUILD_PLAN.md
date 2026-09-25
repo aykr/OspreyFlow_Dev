@@ -2738,8 +2738,9 @@ find something already finished sitting in the queue.
    Kubernetes cluster, context and namespace, shown before every action and re-confirmed when it
    differs from the last), and §3's "seeded demo credentials are displayed once and written
    nowhere". The rendered stack is §3's twelve containers, **including Keycloak**, without which
-   Stage 2 §2's token-exchange check has nothing to exchange against. `docs/demo/2026-09-24/demo_up.sh` is
-   retired into this once it exists; until then it stays. **Exit test:** from a fresh clone, one
+   Stage 2 §2's token-exchange check has nothing to exchange against. docs/demo/2026-09-24/demo_up.sh is
+   retired into this once it exists; until then it stays (since removed — see the entry below).
+   **Exit test:** from a fresh clone, one
    command reaches a health-checked stack on `local-lite`, **with ADR-043's two-sided exchange green
    as its final step** — the owner's settlement of 24 September 2026, pulling the post-launch
    `verify` into this deploy so "reaches a health-checked stack" includes a verified token-exchange
@@ -3034,7 +3035,7 @@ find something already finished sitting in the queue.
    running Conduit. The verify itself is built and proven against a real Keycloak at unit level
    (`tests/services/api/test_revoked_principal_precheck.py`, five cases).
 
-   **`docs/demo/2026-09-24/demo_up.sh` is deleted** and its runbook points at `harness.apply`.
+   **docs/demo/2026-09-24/demo_up.sh is deleted** and its runbook points at `harness.apply`.
 
    **Superseded (previous pass) — 24 September 2026. History; see the COMPLETE entry above.**
 
@@ -3203,7 +3204,9 @@ find something already finished sitting in the queue.
    **Not built, and deliberately not half-built:** `harness/apply.py` and its five stages, the dev
    realm import rendering, the client secret generated at apply time, seeding's ordering guard, the
    post-launch verify, the fresh-clone exit test with wall time and peak memory, and the retirement
-   of `docs/demo/2026-09-24/demo_up.sh`. The verify step is the last stage of the deploy and part of
+   of docs/demo/2026-09-24/demo_up.sh (since removed; this "not built" list is this pass's own
+   record, not the current state — see the deletion entry above). The verify step is the last stage
+   of the deploy and part of
    what "health-checked" means for exit test #2; building the other four stages around a verify that
    cannot be honest would have produced a golden path whose final step was decorative.
 
@@ -3617,7 +3620,7 @@ find something already finished sitting in the queue.
    **Also a first deliverable, because this sub-stage consumes it and it does not exist:** ADR-035
    §C1's `shipped`/`internal`
    manifest schema, its fail-closed registry and `make demo-manifest`, with C1's own two named
-   tests (`tests/demo_registry/test_fail_closed.py`); `scripts/demo_guide_check.py`'s
+   tests (tests/demo_registry/test_fail_closed.py — not yet written); `scripts/demo_guide_check.py`'s
    `DEMO_REGISTRY` is a stand-in for it by its own docstring, not the thing itself. Assertions,
    each a test: no private-tree file in the artefact (ADR-034 §B7 #1) — **keyed off
    `scripts/product_tree_link_check.py`'s existing marker list, never a `docs/`/`spec/` path
@@ -4854,9 +4857,9 @@ find something already finished sitting in the queue.
      owning stage rather than glossed over. §0's ArcadeDB memory range corrected to the rehearsal's
      own 7.75GiB peak. §1's table and §6 corrected to what Fixture Corp actually is — see the
      disclosure immediately below, not repeated here.
-   - `docs/demo/2026-09-24/demo_up.sh` (the checker's own scripted bring-up, written before this
-     round) reviewed, `bash -n` clean, simplified to use the URL-parameter fix instead of a manual
-     `sessionStorage` console step.
+   - docs/demo/2026-09-24/demo_up.sh (since removed; the checker's own scripted bring-up, written
+     before this round) reviewed, `bash -n` clean, simplified to use the URL-parameter fix instead
+     of a manual `sessionStorage` console step.
 
    **Disclosure — Fixture Corp as built is the §C5 property fixture, not the Enron-shaped
    corporation `DEMO_GUIDE.md` §6 and the Scenario C script (C1–C20) describe. Proposed, not

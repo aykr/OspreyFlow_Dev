@@ -72,11 +72,14 @@ decision-log-publication-check:
 # 25 September 2026 after three citations to files that had never existed were found by accident
 # in one afternoon — a Dockerfile naming a test that was never written, and a keyboard registry
 # naming a coverage script that was never written, repeated into two documents. This gate was red
-# on 38 citations when it was first run, which is its red-then-green record; the remainder are
-# either corrected or in `tests/fixtures/citation_allowlist.txt` with a stated reason.
+# on 38 citations when it was first run, which is its red-then-green record; three were the
+# originals above, corrected on sight. Of the rest, a citation of a `.gitignore`-matched path
+# (`config/real_data_exceptions.yaml`) passes without an allowlist entry, and every other one was
+# corrected in place — the allowlist (`tests/fixtures/citation_allowlist.txt`) is empty and absent
+# on this repository today, not populated with the remainder.
 citation-check:
-	$(PY) scripts/citation_check.py
-	@echo "citation-check: see tests/test_citation_check.py for the red-then-green proof"
+	$(PY) scripts/doc_citations_check.py
+	@echo "citation-check: see tests/test_doc_citations_check.py for the red-then-green proof"
 
 # Found and fixed four test files running in no intended CI job — `test_pattern_store.py`,
 # `test_alerts.py`, `test_change_stream.py`, `test_assessment_routes.py` — before this gate
