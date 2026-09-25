@@ -170,3 +170,69 @@ def test_the_workspace_serves_with_no_conduit_reachable_at_all() -> None:
         )
     finally:
         subprocess.run(["docker", "rm", "-f", cid], capture_output=True, check=False)  # noqa: S603
+
+
+@requires_opt_in
+def test_the_proxied_liveness_route_answers_for_the_conduit_not_the_glass() -> None:
+    """`/healthz` must reach the Conduit, or it reports the opposite of the truth.
+
+    **Found by reading what `harness.apply` printed.** It prints a Conduit health URL on the
+    workspace's own port, and that URL returned the Glass's `index.html` with a 200 — because
+    `/healthz` is not under `/v1`, so it fell through to the single-page-application route. A
+    health check that answers 200 for a dead Conduit is worse than one that 404s: the 404 is
+    obviously wrong and the 200 is quietly wrong.
+
+    This runs the workspace image with **no Conduit on its network**, so a correct proxy must fail
+    to reach one — 502 or 504 — and an incorrect one serves HTML with a 200. Asserting the failure
+    rather than the success is what makes this test possible without standing up a whole
+    deployment, and it is the more useful direction anyway: the defect was a false *success*.
+    """
+    image = "osprey/workspace:bundle-test"
+    built = subprocess.run(  # noqa: S603
+        ["docker", "build", "-f", "apps/workspace/Dockerfile", "-t", image, "."],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert built.returncode == 0, f"the workspace image did not build:\n{built.stderr[-2000:]}"
+
+    container = subprocess.run(  # noqa: S603
+        ["docker", "run", "--rm", "-d", image], capture_output=True, text=True, check=False
+    )
+    assert container.returncode == 0, container.stderr
+    cid = container.stdout.strip()
+    try:
+        status = ""
+        for _ in range(30):
+            probe = subprocess.run(  # noqa: S603
+                [
+                    "docker",
+                    "exec",
+                    cid,
+                    "wget",
+                    "-q",
+                    "-S",
+                    "-O",
+                    "/dev/null",
+                    "http://127.0.0.1:8080/healthz",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            status = probe.stderr
+            if "HTTP/" in status:
+                break
+            time.sleep(1)
+
+        assert "HTTP/" in status, f"nginx never answered /healthz at all: {status[:300]}"
+        assert " 200 " not in status, (
+            "/healthz answered 200 with no Conduit on the network, so it is being served by the "
+            f"single-page-application fallback rather than proxied: {status[:300]}"
+        )
+        assert " 502 " in status or " 504 " in status, (
+            f"/healthz did not fail as a proxy failure, so it is not proxied: {status[:300]}"
+        )
+    finally:
+        subprocess.run(["docker", "rm", "-f", cid], capture_output=True, check=False)  # noqa: S603
