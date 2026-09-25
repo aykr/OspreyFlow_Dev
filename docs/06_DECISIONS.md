@@ -6495,9 +6495,9 @@ is closed as a side-effect. The realm renderer grows a third client, a second su
 at the redirect; 3 would have left the exit test unrunnable. Each is resolved above.
 
 **Revisit if:** `02_GLASS_FRONTEND.md` gains the chrome element of objection 9 (still open — this
-ruling does not address it), or the WebSocket ticket exchange of objection 8 (still open — raised,
-not resolved) is scoped in or out. Each is written so that settling it is a targeted edit to this
-record and its `07_BUILD_PLAN.md` stage entry, not a new ADR.
+ruling does not address it). Objection 8 (the WebSocket ticket exchange) is resolved by the
+addendum below — built, 25 September 2026. Each is written so that settling it is a targeted edit
+to this record and its `07_BUILD_PLAN.md` stage entry, not a new ADR.
 
 **Addendum, 25 September 2026 — built, this round, against the design above; `07_BUILD_PLAN.md`'s
 Stage 2c entry has the full built/remaining breakdown and the exit test's own result.** In one line
@@ -6511,10 +6511,21 @@ code-with-PKCE flow (`oidc-client-ts`, Apache-2.0), the sign-in screen, the iden
 only place it was decided), and the dev-token build-time fence; the delta WebSocket re-authenticates
 on every reconnect, keyed to the current token.
 
-**Objection 8 (the WebSocket ticket exchange) is deliberately not built this round** — raised, not
-resolved, and this addendum does not change that; it remains exactly the scope decision the
-objection's own text describes, and the access token still travels in the WebSocket URL query
-string as it did before.
+**Objection 8 (the WebSocket ticket exchange) — BUILT, 25 September 2026, the owner's own decision
+of that date to build it before the closing pass.** `POST /v1/ws-ticket` (authenticated the
+ordinary way) mints a random, single-use, 30-second value bound to the calling principal
+(`services/api/ws_ticket.py`), stored in Valkey rather than in process memory for the same
+statelessness reason the delta channel's own pub/sub already lives there. The stream opens with
+`?ticket=...`; a bearer token in that URL is now refused outright, not merely deprioritised —
+`_authenticate_websocket` reads a `ticket` query parameter, and there is no `token` fallback left
+to fall into. Redemption is `Valkey.GETDEL`, an atomic get-and-delete: single-use is a property of
+the operation, not a policy a second caller could race past. Named tests: a reused ticket refused
+(`test_a_reused_ticket_is_refused`, live Valkey), an unauthenticated mint refused
+(`test_an_unauthenticated_request_is_refused`), a bearer token in the stream URL refused
+(`test_a_bearer_token_in_the_url_is_refused_not_merely_deprioritised`, planted as the literal
+request shape Checkpoint 2's own client used to send), and removing the redemption check's own
+`None`-check verified red (a fallback principal in place of the refusal) before being restored
+green. `07_BUILD_PLAN.md`'s Stage 2c entry has the full built/remaining account.
 
 **One design point this ADR's own text left unsettled, decided during the build and recorded
 honestly rather than silently:** how the Glass, whose bundle carries no baked address for the
@@ -6537,3 +6548,9 @@ the Conduit's own client and not only the Glass's, an investigation-id-persisten
 auth when it should not have been, Keycloak's own default profile-completion wall on a fresh
 admin-API subject, and two access-control attributes (handling code, `org_unit`) the demo analyst
 needed and did not have. Each is fixed, each has a named test.
+
+**1. Docker cleanup: the maker may remove every OspreyFlow-owned image, container, volume and build cache (osprey-*, osprey/*:local, exit-test clones) and dangling images. It must not touch the airbyte container or its volumes.
+
+**2. iCloud: Leave the Icon files for now; they are gitignored.
+
+**3. The WebSocket ticket exchange (ADR-050 objection 8) is built in this round, before the closing pass.

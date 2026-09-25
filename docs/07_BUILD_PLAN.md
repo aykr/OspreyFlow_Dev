@@ -11,10 +11,11 @@ laptop from the documentation, started, and demonstrated (both acceptance scenar
 `local-lite` is one component of that, not the whole of it).
 
 **Complete, by stage:**
-- Stage 2c — Sign-in for the Glass (`06_DECISIONS.md` ADR-050). Built, 25 September 2026. Two
-  disclosed gaps remain and are not milestone-blocking on their own: the WebSocket ticket exchange
-  (objection 8, raised, not resolved) and full app-wide silent-reauthentication coverage beyond the
-  bootstrap calls — this stage's own entry below has both in full.
+- Stage 2c — Sign-in for the Glass (`06_DECISIONS.md` ADR-050). Built, 25 September 2026, including
+  the WebSocket ticket exchange (objection 8), built the round after per the owner's own decision
+  of that date. One disclosed gap remains and is not milestone-blocking on its own: full app-wide
+  silent-reauthentication coverage beyond the bootstrap calls — this stage's own entry below has
+  the full account.
 - Stage 4 (4-spec, 4a–4h) — the product-feature core. Built.
 - Stage 1 — principal resolution (OAuth2 Token Exchange, ADR-043). Built; delivered, not
   milestone-gated. **Its 22 September "built" was wrong until 24 September** — the exchange omitted
@@ -2392,6 +2393,50 @@ remaining ones are, and each says so at its own entry rather than by virtue of a
    the lint backlog, the statelessness diagnosis, the sweeper causes, the fake-double class — is
    checked against the milestone at its own entry, in "After the milestone," below, and moves
    there; none of it is exercised by either acceptance scenario.
+7. **Pulled forward from Stage 6, below: `tests/harness/test_apply_env.py` never tore down the
+   real deployment it started — fixed, 25 September 2026.** `_rendered_env`'s own docstring already
+   disclosed that `main()` runs "far enough to write the environment file, then stops" — it does
+   not stop; `--no-build` skips only the build stage, and every one of this file's nine tests drove
+   the real `harness.apply.main()` all the way into a real `docker compose up`, leaving it running.
+   **Found, not anticipated, and found twice the same session** (`CLAUDE.md` rule 14's own worked
+   example, reproduced by one test file rather than by two agents): a leftover `osprey-local-lite`
+   deployment from an earlier round's own manual verification, still running, its container names
+   and published ports colliding with this file's own next test — and, once that was cleared, the
+   entire remaining suite still finished in under a second across all nine tests, which is
+   mathematically impossible if any of them had reached a real `up` (measured directly: one real
+   deployment alone takes ~29s) — meaning every test had been silently short-circuiting at
+   Preflight's own port check the whole time, passing "vacuously" against whatever `main()`'s own
+   render stage had already written to disk before hitting that wall, never once proving what its
+   own name claims.
+
+   **Fixed with an autouse fixture** (`_teardown_local_lite_deployment`) that runs
+   `docker compose -p osprey-local-lite down -v --remove-orphans` after every test, pass or fail —
+   a fixture's own teardown runs regardless of the test's outcome, which is what makes "a planted
+   early failure still leaves no `osprey-*` container" true by construction rather than by
+   discipline. `test_the_deployment_this_file_starts_is_a_real_one_and_the_teardown_removes_it`
+   proves the mechanism directly: starts a real deployment, confirms containers exist, invokes the
+   identical teardown command, confirms they are gone. **A second, real bug found finishing that
+   proof, not a hypothetical one:** the first version of the port-release wait this fixture also
+   needed used `socket.connect_ex` ("does anything answer here"), which returns "free" for a port in
+   `TIME_WAIT` — nothing is listening — while Preflight's own check (deliberately, per its own
+   docstring) tries to *bind* without `SO_REUSEADDR`, which a `TIME_WAIT` port still refuses. The two
+   checks answer different questions, and the wrong one produced the exact same "port already in
+   use" failure this whole finding started from, on every test after the first, until
+   `_wait_for_ports_free` was corrected to bind rather than connect. All nine tests green afterward,
+   real deployments and real teardowns throughout, 9m31s total (up from the sub-second vacuous
+   pass this finding replaces — slower, and for the first time actually testing what it claims to).
+
+   **`make docker-clean` — added the same day, the owner's own ruling.** Removes every
+   OspreyFlow-owned container (`osprey-*`), image (`osprey/*:local`) and named volume (`osprey*`),
+   plus dangling images, the build cache and — the one non-name-scoped step, and still safe for the
+   reason its own Makefile comment gives — any Docker volume attached to no container at all
+   (`docker volume prune`, which by construction cannot remove a volume mounted into a running
+   container, so the always-running `airbyte-abctl-control-plane` and its own volume are never
+   touched regardless of name). Run once against this session's own accumulated state: 2.88GB
+   reclaimed across images and build cache, a further 2.80GB from orphaned anonymous volumes —
+   among them a 2.6GB ArcadeDB data volume with no name to match, left behind by an earlier exit
+   test's own container, the exact class of debris `docker volume prune`'s own inclusion here
+   exists to catch that a name filter alone would have missed.
 
 ### Delivered, not milestone-gated
 
@@ -3401,9 +3446,46 @@ find something already finished sitting in the queue.
    plus the default Keycloak port — is `apps/workspace/src/auth/oidcConfig.ts`'s own docstring and
    `06_DECISIONS.md` ADR-050's addendum, not repeated here.
 
+   **7. The WebSocket ticket exchange — BUILT, 25 September 2026, the round after Stage 2 §5b, per
+   the owner's own decision of that date.** `POST /v1/ws-ticket` (`services/api/app.py`,
+   `PrincipalDep`-gated like every other `/v1` route) mints a random, single-use, 30-second ticket
+   bound to the calling principal via `services/api/ws_ticket.py`'s `mint_ws_ticket`, stored in
+   Valkey rather than in process memory (statelessness: a ticket minted by one Conduit instance
+   must be redeemable by whichever instance the socket lands on). The delta stream now opens with
+   `?ticket=...`; `_authenticate_websocket` redeems it via `Valkey.GETDEL` — an atomic
+   get-and-delete, which is what makes single-use true under a concurrent redemption race rather
+   than merely intended by convention. **A bearer token in the URL is now refused outright, not
+   merely deprioritised** — the query parameter read is `ticket`, not `token`, and there is no
+   fallback path left to fall into.
+
+   Named tests, all real, none vacuous: `tests/services/api/test_ws_ticket.py` (live Valkey) proves
+   a minted ticket redeems to the same principal, a reused ticket is refused (`GETDEL`'s own
+   atomicity, not an application-level flag), an unknown ticket is refused, two mints for the same
+   principal produce independently-redeemable tickets, and the stored value carries the
+   principal's claims rather than anything resembling a bearer JWT.
+   `tests/services/api/test_ws_ticket_route.py` proves the mint route itself refuses an
+   unauthenticated caller (standing rule 2 / `CLAUDE.md` rule 4 — no exceptions for internal
+   endpoints) and binds the ticket to whichever principal authenticated the call.
+   `tests/services/api/test_websocket_auth.py` proves `_authenticate_websocket`'s own dispatch: a
+   valid ticket resolves a principal, an expired/reused one is refused, and — the literal planted
+   shape Checkpoint 2's own client used to send — a real signed JWT placed under the *old* `?token=`
+   name is refused outright, with `redeem_ws_ticket` never even called, because there is no `ticket`
+   parameter to redeem. **Rule 15's own red-then-green, run for real:** removing the `None`-check on
+   `redeem_ws_ticket`'s return value (a fallback principal in its place) turned
+   `test_an_expired_or_already_redeemed_ticket_is_refused` red before the fix was restored.
+   `docs/03_CONDUIT_MIDDLEWARE.md` §3.2 documents the route; `route-coverage-check` is green on it
+   (the gate's own pre-existing, unrelated drift on six other routes is recorded separately, below).
+
+   The Glass side (`apps/workspace/src/App.tsx`): the delta-stream effect now fetches a ticket from
+   `POST /v1/ws-ticket` (the same bearer-token header every other bootstrap call already sends)
+   before constructing the `WebSocket`, handling a 401 on the mint call the same way every other
+   bootstrap fetch in this file already does (`handleUnauthenticatedResponse`). A cancellation flag
+   guards the async gap between "ticket requested" and "socket opened" against a fast unmount/token
+   rotation. `npm test`'s full 252 and the live `test:integration` suite are unaffected —
+   `deltaClient.ts` itself is transport-agnostic and needed no change; only its caller's URL
+   construction did.
+
    **Disclosed, not built this round — read before relying on any of these:**
-   - **Objection 8 (the WebSocket ticket exchange) is unchanged.** The access token still travels
-     in the `?token=` query string. Raised, not resolved, exactly as ADR-050 left it.
    - **Silent re-authentication and 401 handling are wired at the bootstrap calls only**
      (`/v1/ontology`, `/v1/investigations`), not through every one of the dozen-plus `api.ts`
      modules `App.tsx` also calls. A token that expires while, say, only `HistoryPanel` is being
@@ -3866,13 +3948,49 @@ find something already finished sitting in the queue.
    `tests/packaging/test_internal_demo_exclusion.py`'s `check_license_and_notice` cases); and
    `make licence-check` extended to data-file licences per ADR-035 §C7
    (`find_data_licence_offenders`, `tests/licence_check/test_data_licence_offenders.py`, including
-   the CDLA-Sharing-1.0 case §C6 names). **Not built this round, and not silently absorbed into
-   it:** the service-enumeration/Dockerfile/`trivy image`/harness-image work this stage's own fuller
-   description above assigns to `§5b` was already discharged by `§5a`'s own split (workspace/api/
-   ingest images, standing-rule-8 repayment) — except `ghcr.io/ospreyflow/harness:latest`
-   (`§2`/`§3`'s own bootstrap image), which neither `§5a` nor this round built. That is a real,
-   named gap, not a rediscovery of one already closed: recorded here as remaining, owed to whichever
-   later pass first needs `harness/Dockerfile` to exist.
+   the CDLA-Sharing-1.0 case §C6 names). The service-enumeration/Dockerfile/`trivy image`/
+   harness-image work this stage's own fuller description above assigns to `§5b` was mostly already
+   discharged by `§5a`'s own split (workspace/api/ingest images, standing-rule-8 repayment) — except
+   `ghcr.io/ospreyflow/harness:latest` (`§2`/`§3`'s own bootstrap image), which neither `§5a` nor
+   this round's own first pass built. **That gap is now closed, in the round after, per the owner's
+   own decision of 25 September 2026 to pay it before the closing pass.**
+
+   **`harness/Dockerfile` — BUILT.** Minimal by file tree, not by dependency set — `uv sync`
+   installs this project's one full dependency set (the same shape `services/api`/`services/ingest`
+   already use, never a second hand-pruned manifest), and only three project-tree roots are copied
+   in: `harness/`, `packages/schemas/`, `scripts/`. **Checked directly, not assumed:** tracing every
+   module the six subcommands below actually import, recursively, touches exactly those three roots
+   and nothing under `services/` or any other `packages/*` subdirectory. A new `harness/__main__.py`
+   dispatches `python -m harness <subcommand>` to `render`, `preflight`, `apply`, `backup`,
+   `restore` (each its own `harness.<name>`) and `bundle` (`scripts.osprey_bundle` — the one
+   deliberate exception, ADR-049's own "wraps `scripts/osprey_bundle.py`... rather than a second
+   implementation"), proven by `tests/harness/test_harness_main.py` including the real bug its own
+   first run found: `harness.preflight` is a package whose `main()` lives in `__main__.py`, and a
+   naive `importlib.import_module("harness.preflight").main` raises `AttributeError` — caught by
+   `test_every_named_subcommand_resolves_to_a_module_carrying_main`, red-then-green verified.
+   The Docker CLI itself is copied from Docker's own official `docker:27-cli` image
+   (`docker.io`/`docker-compose-plugin` are not Debian trixie package names, found building this),
+   never installing a daemon this image never runs; the one privilege it needs — the host's docker
+   socket — is documented as declared at `docker run` time only, per `05_DEPLOYMENT.md` §2.5, never
+   baked in. `trivy image` green (`make trivy-image-harness`, wired into `ci.yml` the same way
+   `apps/workspace`'s own was at §5a).
+
+   **Exit test, run for real:** the image builds, and `docker run ... preflight --gate` from it
+   reaches the same result as the host CLI — `tests/harness/test_harness_image.py` (opt-in,
+   `OSPREY_TEST_HARNESS_IMAGE=1`), its own dedicated CI job. **One named, measured exception, not a
+   defect:** the `memory` check reads `os.sysconf("SC_PHYS_PAGES")`, and on a Docker-Desktop host
+   (macOS, Windows) that answers a genuinely different question run natively (this build machine's
+   own 36.0GiB) than run inside the image (the Docker Desktop VM's own smaller, allocated budget —
+   9.7GiB, measured on the same machine, same moment) — both readings are correct for what they
+   measure, and the VM's own figure is arguably the more relevant one, since it is what the
+   deployment's own containers are actually constrained by. Excluded from the comparison by name,
+   not silently dropped; every other one of the eleven checks — `disk`, `gpu`, `ports`,
+   `container-runtime`, `cluster-connectivity`, `interpreter`, `bind-address`, `basemap`,
+   `duckdb-lock`, `oidc-audience` — matched in outcome. A native Linux host has no VM layer and
+   would show no such discrepancy; this is Docker-Desktop-specific, not a general admission that
+   the check disagrees with itself. The harness image is also now archived by `--images`
+   (`scripts.osprey_bundle.HARNESS_IMAGE`, item 3's own "include it in the bundle's image set" —
+   `test_build_bundle_with_images_also_archives_the_harness_bootstrap_image`).
 
    **The bundle-time documentation site — BUILT, 25 September 2026, both halves of item 3's own
    "into both the tarball and the workspace image at `/docs`".** A site rendered from the
