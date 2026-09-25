@@ -2436,7 +2436,10 @@ remaining ones are, and each says so at its own entry rather than by virtue of a
    reclaimed across images and build cache, a further 2.80GB from orphaned anonymous volumes —
    among them a 2.6GB ArcadeDB data volume with no name to match, left behind by an earlier exit
    test's own container, the exact class of debris `docker volume prune`'s own inclusion here
-   exists to catch that a name filter alone would have missed.
+   exists to catch that a name filter alone would have missed. **Scope is the owner's own ruling,
+   25 September 2026:** every OspreyFlow-owned image, container, volume and build cache
+   (`osprey-*`, `osprey/*:local`, exit-test clones) and dangling images may be removed; the
+   airbyte container and its volumes may never be touched.
 
 ### Delivered, not milestone-gated
 

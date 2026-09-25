@@ -6548,9 +6548,3 @@ the Conduit's own client and not only the Glass's, an investigation-id-persisten
 auth when it should not have been, Keycloak's own default profile-completion wall on a fresh
 admin-API subject, and two access-control attributes (handling code, `org_unit`) the demo analyst
 needed and did not have. Each is fixed, each has a named test.
-
-**1. Docker cleanup: the maker may remove every OspreyFlow-owned image, container, volume and build cache (osprey-*, osprey/*:local, exit-test clones) and dangling images. It must not touch the airbyte container or its volumes.
-
-**2. iCloud: Leave the Icon files for now; they are gitignored.
-
-**3. The WebSocket ticket exchange (ADR-050 objection 8) is built in this round, before the closing pass.
