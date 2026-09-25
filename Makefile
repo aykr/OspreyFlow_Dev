@@ -8,7 +8,7 @@ MYPY := .venv/bin/mypy
 # Phase 0 exit criterion (docs/07_BUILD_PLAN.md): CI green; a PR adding a GPL
 # dependency fails; a Pydantic model change not reflected in the generated
 # TypeScript fails the build. See the Phase 0 plan for what each target proves.
-ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check test-file-coverage-check conformance-guard
+ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check test-file-coverage-check citation-check conformance-guard
 
 lint:
 	$(RUFF) check .
@@ -67,6 +67,16 @@ product-tree-link-check:
 decision-log-publication-check:
 	$(PY) scripts/decision_log_publication_check.py
 	@echo "decision-log-publication-check: see tests/test_decision_log_publication_check.py for the deterministic proof"
+
+# Every backticked repository path that names a file must name a file that is there. Added
+# 25 September 2026 after three citations to files that had never existed were found by accident
+# in one afternoon — a Dockerfile naming a test that was never written, and a keyboard registry
+# naming a coverage script that was never written, repeated into two documents. This gate was red
+# on 38 citations when it was first run, which is its red-then-green record; the remainder are
+# either corrected or in `tests/fixtures/citation_allowlist.txt` with a stated reason.
+citation-check:
+	$(PY) scripts/citation_check.py
+	@echo "citation-check: see tests/test_citation_check.py for the red-then-green proof"
 
 # Found and fixed four test files running in no intended CI job — `test_pattern_store.py`,
 # `test_alerts.py`, `test_change_stream.py`, `test_assessment_routes.py` — before this gate

@@ -2628,7 +2628,7 @@ find something already finished sitting in the queue.
 
    **Spec gap raised — now decided, awaiting the owner's own wording (rule 11): where generated
    artefacts live.**
-   `05_DEPLOYMENT.md` named fixed paths (`deploy/compose/docker-compose.yaml` §2.4,
+   `05_DEPLOYMENT.md` named fixed paths (`deploy/compose/dev.yaml` §2.4,
    `deploy/versions.lock` §5/§7) which are right for a deployment and wrong for a repository that
    can render three profiles — two renders overwrite each other there silently, each
    self-consistent, so no drift check fires. **Settled — owner's decision, 24 September 2026: rendered output goes to
@@ -5959,8 +5959,9 @@ disclosure that cannot yet name one of the three has not finished being written.
   name (`glass-a11y`, "the keyboard suite") is not evidence of what it checks — only reading what it
   actually inspects is.** `axe-core` inspects structure; it cannot and does not execute an
   interaction and observe whether anything happened, which is exactly the class of defect a
-  mouse-only handler is. For any gate this build adds next — `check-registry-coverage`-style static
-  checks included — the question to ask before trusting a green result is not "does a gate with the
+  mouse-only handler is. For any gate this build adds next — `registryCoverage.test.ts`-style
+  static checks included (this sentence named `check-registry-coverage`, a file that has never
+  existed; corrected 25 September 2026) — the question to ask before trusting a green result is not "does a gate with the
   relevant name exist and pass," but "what specific mechanism does this gate exercise, and what
   adjacent failure, however plausible-sounding under the same gate's name, would still pass it
   unnoticed." `apps/workspace/keyboard/registryCoverage.test.ts` (Phase 7 Stage 4, alongside this

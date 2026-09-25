@@ -395,7 +395,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # generalised by `job_type` rather than resolution-specific — closes
     # `services/api/supersede.py`'s own long-disclosed "no worker attached
     # yet" gap in the same stroke. Constructed and its handlers registered
-    # here so a standalone worker process (`services/api/run_worker.py`)
+    # here so a standalone worker process (`services/api/worker_main.py`)
     # has something real to import and drive in a loop; this app process
     # itself does not spin up that loop — running the worker is deployment
     # wiring (its own process/container), not additional Conduit logic.

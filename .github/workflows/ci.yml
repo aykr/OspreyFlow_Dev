@@ -138,6 +138,14 @@ jobs:
   # test_assessment_routes.py), each by accident, and two more (test_fixture_corp_shape.py,
   # test_worker.py) on this gate's own first real run. See
   # scripts/test_file_coverage_check.py's own docstring.
+  citation-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - run: uv run pytest tests/test_citation_check.py
+
   test-file-coverage-check:
     runs-on: ubuntu-latest
     steps:

@@ -33,7 +33,7 @@ replace it with a twelve-container deployment nobody asked for.
 ## Where the output goes, and the open question about it
 
 Rendered output is written under `deploy/generated/<profile>/`. `05_DEPLOYMENT.md` names
-`deploy/versions.lock` (§5, §7) and `deploy/compose/docker-compose.yaml` (§2.4) as single, fixed
+`deploy/versions.lock` (§5, §7) and `deploy/compose/dev.yaml` (§2.4) as single, fixed
 paths, which is right for a deployment — a deployment is one profile — but wrong for a repository
 that can render three. Rendering per-profile keeps two renders from overwriting each other; whether
 a real deployment's own artefacts then live at the §5/§7 paths is a genuine gap in the

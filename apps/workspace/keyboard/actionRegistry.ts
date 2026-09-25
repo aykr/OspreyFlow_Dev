@@ -22,12 +22,18 @@
  * `covered` by registry name closes that by construction: a call for the wrong registry can never
  * satisfy this one's assertion, regardless of what `playwright.config.ts` does with workers.
  *
- * **`defineActionRegistry` self-registers into `ALL_REGISTRIES`** so `check-registry-coverage.mjs`
- * (a plain Node script, not a Playwright test — see its own header) can enumerate every declared
- * registry by statically importing this module, and fail the build when one has no
- * `assertAllCovered` call reaching it anywhere under `apps/workspace/keyboard/*.spec.ts` — the gap
- * a purely runtime check cannot close, since nothing forces a *test* asserting a registry's own
- * coverage to exist merely because the registry itself does.
+ * **`defineActionRegistry` self-registers into `ALL_REGISTRIES`** so `registryCoverage.test.ts`
+ * (a Vitest test, not a Playwright spec — see its own header) can enumerate every declared
+ * registry by statically importing this module, and fail when one has no `assertAllCovered` call
+ * reaching it anywhere under `apps/workspace/keyboard/*.spec.ts` — the gap a purely runtime check
+ * cannot close, since nothing forces a *test* asserting a registry's own coverage to exist merely
+ * because the registry itself does.
+ *
+ * This paragraph named `check-registry-coverage.mjs`, "a plain Node script", until 25 September
+ * 2026. **No such file has ever existed** — the mechanism it describes is real and is the Vitest
+ * test above. Corrected rather than left, because a citation to a file that is not there reads as
+ * a guarantee and is the exact failure `CLAUDE.md` rule 12 names. It is the second such citation
+ * found the same day; `apps/workspace/Dockerfile` carried the other.
  */
 
 export interface ActionRegistry {

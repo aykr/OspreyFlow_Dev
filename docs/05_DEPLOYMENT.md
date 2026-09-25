@@ -111,7 +111,7 @@ generated artefact — regenerate instead.
 **Where the generated artefacts live — a gap in this section, found while building the renderer and
 settled by the owner the same day, 24 September 2026.** This document named two fixed paths for
 generated
-output, `deploy/compose/docker-compose.yaml` (§2.4) and `deploy/versions.lock` (§5, §7), and says
+output, `deploy/compose/dev.yaml` (§2.4) and `deploy/versions.lock` (§5, §7), and says
 nothing about how either coexists with the four artefacts listed above being renderable for more
 than one profile.
 
@@ -123,7 +123,7 @@ error, and no drift report either, because the second render is self-consistent 
 
 **Owner's decision, 24 September 2026.** Rendered output goes to
 `deploy/generated/<profile>/`, and the two fixed paths named above are amended to that: there is no
-single `deploy/compose/docker-compose.yaml` and no single `deploy/versions.lock`, because a harness
+single `deploy/compose/dev.yaml` and no single `deploy/versions.lock`, because a harness
 that can render three profiles cannot have one of either without the second render destroying the
 first. Each profile's four artefacts sit under its own directory and are read from there by
 Preflight, by the scripted deploy and by the admin console alike.

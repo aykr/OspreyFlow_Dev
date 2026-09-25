@@ -28,8 +28,12 @@ precisely so this is possible: `WorkingSetService.restore` runs the same
 `_project` every other read uses before anything reaches the store or the
 client, so a principal whose access has narrowed since — or a different,
 less-privileged principal on a shared investigation — never sees content
-visible only at record time. See `tests/services/api/test_history.py`'s
-narrower-clearance-restore case.
+visible only at record time. The narrower-clearance re-projection is
+`tests/services/api/working_set/test_service.py`'s job, which
+`tests/services/api/test_history_routes.py`'s own header also says.
+(Until 25 September 2026 this named a test_history.py under that
+directory — a file that has never existed. The case is real; the path was
+not, and `scripts/citation_check.py` now catches the class.)
 
 **Storage-scaling assumption, named rather than left implicit.** A full
 node/edge body snapshot per mutating action means a long-running,

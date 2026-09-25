@@ -6014,7 +6014,10 @@ closed. **Not built by this record** — this round amended documentation only.
 **Amendment 21 — a new keyboard-driven surface needs its own action registry and spec file, in the
 same change.** `CLAUDE.md` rule 13, and the machinery that now enforces it:
 `apps/workspace/keyboard/actionRegistry.ts`'s `defineActionRegistry`/`ALL_REGISTRIES`, a per-surface
-`*.spec.ts` calling `assertAllCovered`, `check-registry-coverage.mjs`, and `registryCoverage.test.ts`.
+`*.spec.ts` calling `assertAllCovered`, and `registryCoverage.test.ts`. (This sentence also named
+`check-registry-coverage.mjs` until 25 September 2026. **No such file has ever existed** — the
+static half it described is `registryCoverage.test.ts`, which does exist and does that job. The
+citation was carried here from `actionRegistry.ts`'s own docstring, which had it too.)
 Six screens with Launch, destroy, Re-check and diff-confirm actions is a new surface, and the design
 names none of this. **The precise failure mode, because it is not the obvious one:**
 `registryCoverage.test.ts` proves that every *declared* registry has an `assertAllCovered` call
@@ -6282,8 +6285,8 @@ Measured against the tree on 25 September 2026, not assumed:
   implement".
 - Keyboard coverage is no longer the hardcoded walkthrough `CLAUDE.md` rule 13 describes. There is a
   per-surface `defineActionRegistry` / `registerCovered` / `assertAllCovered` mechanism, plus
-  `check-registry-coverage.mjs`, which fails the build when a declared registry has no assertion
-  reaching it.
+  `registryCoverage.test.ts`, a Vitest case in the fast tier that fails when a declared registry
+  has no assertion reaching it.
 
 ### Decision
 
@@ -6352,7 +6355,7 @@ None of this exists today and all of it is rendering work, not Glass work:
   design's original wording for this was vacuous.
 - **Rule 13**: the sign-in screen is a **new keyboard-driven surface** and needs its own
   `defineActionRegistry` with `assertAllCovered`, not entries in `CANVAS_ACTIONS`.
-  `check-registry-coverage.mjs` fails the build otherwise.
+  `registryCoverage.test.ts` fails otherwise.
 - **The accessibility floor** (`02_GLASS_FRONTEND.md` §6) on the sign-in screen.
 - **Rule 15 on the dev-token fence**: plant `VITE_DEV_BEARER_TOKEN` in a production build and
   assert the build fails. The planted value must take the shape the real pipeline receives — an
