@@ -61,7 +61,7 @@ from harness.render import (
     render,
 )
 from harness.render import write as write_artefacts
-from schemas.deployment import Profile
+from schemas.deployment import OspreyConfig, Profile
 
 #: How long any one service gets to become healthy. Generous because the Conduit applies the graph
 #: schema at startup and Keycloak imports a realm, and because a timeout that fires on a slow
@@ -200,6 +200,24 @@ def _conduit_is_running(compose_file: Path) -> bool:
     return any(
         json.loads(line).get("State") == "running" for line in rows.splitlines() if line.strip()
     )
+
+
+def _workspace_url() -> str:
+    """The one surface a `local-lite` deployment publishes by default."""
+    return f"http://127.0.0.1:{os.environ.get('OSPREY_WORKSPACE_PORT', '8080')}"
+
+
+def _conduit_url(args: argparse.Namespace, config: OspreyConfig) -> str:
+    """Where the *host* can reach the Conduit.
+
+    Not the same question as where the Conduit listens. With `network.expose_conduit` off — the
+    default since 25 September 2026 — nothing on the host can reach port 8000 at all, and the only
+    route in is the workspace's own nginx proxying `/v1`. With it on, the direct port is preferred
+    because it takes the proxy out of whatever the operator is diagnosing.
+    """
+    if config.network.expose_conduit:
+        return f"http://127.0.0.1:{args.api_port}"
+    return _workspace_url()
 
 
 def create_investigation(issuer: str, realm: str, secret: str, api_url: str) -> str:
@@ -496,8 +514,13 @@ def main(argv: list[str] | None = None) -> int:
         investigation_id = ""
         if datasets:
             # Up, create, stop, seed, up again — the ordering the DuckDB lock forces.
+            # **Through the workspace, not the Conduit's own port.** Since the owner's decision
+            # of 25 September 2026 the Conduit is not published unless `osprey.yaml` asks
+            # (05_DEPLOYMENT.md §2.6 item 1), so the host has exactly one way in — the same
+            # same-origin proxy the Glass uses. Reaching for `--api-port` here would have made
+            # the seed work only on a deployment configured the way it no longer is by default.
             investigation_id = create_investigation(
-                args.keycloak_url, args.realm, secret, f"http://127.0.0.1:{args.api_port}"
+                args.keycloak_url, args.realm, secret, _conduit_url(args, config)
             )
             _run(_compose(compose_file) + ["stop", "api"], stage="seed")
             seed(compose_file, datasets, investigation_id)
@@ -549,12 +572,14 @@ def main(argv: list[str] | None = None) -> int:
     # internal network. The investigation id is carried in the query string because the Glass reads
     # it from there on first load; without it the workspace opens on an empty working set and the
     # seeded data looks as though it never arrived.
-    workspace_port = os.environ.get("OSPREY_WORKSPACE_PORT", "8080")
-    glass_url = f"http://127.0.0.1:{workspace_port}/"
+    glass_url = f"{_workspace_url()}/"
     if investigation_id:
         glass_url += f"?investigation={investigation_id}"
     print(f"\n  the Glass:   {glass_url}")
-    print(f"  the Conduit: http://127.0.0.1:{args.api_port}/healthz")
+    if config.network.expose_conduit:
+        print(f"  the Conduit: http://127.0.0.1:{args.api_port}/healthz")
+    else:
+        print(f"  the Conduit: {_conduit_url(args, config)}/healthz (through the workspace proxy)")
     return 0
 
 

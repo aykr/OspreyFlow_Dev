@@ -201,6 +201,29 @@ class ClusterConfig(BaseModel):
         return self
 
 
+class NetworkConfig(BaseModel):
+    """What this deployment publishes to its host.
+
+    `05_DEPLOYMENT.md` §7: "Every service on an internal network. Only the workspace and the
+    Conduit are exposed, behind a reverse proxy terminating TLS." Since the owner's decision of
+    25 September 2026 (§2.6 item 1) **the workspace's own image is that reverse proxy** — its nginx
+    proxies `/v1` and the delta WebSocket to the Conduit on the internal network — so the normal
+    deployment publishes one port, not two, and the Conduit is reachable without being exposed.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    expose_conduit: bool = Field(
+        default=False,
+        description=(
+            "Default: false. Publish the Conduit's own port on the host in addition to the "
+            "workspace's. Not needed to use the deployment — the workspace proxies /v1 — and "
+            "turning it on widens the exposed surface by a whole tier. For an operator debugging "
+            "the Conduit directly, or a second client that is not the Glass."
+        ),
+    )
+
+
 class OspreyConfig(BaseModel):
     """The whole of `osprey.yaml`.
 
@@ -216,6 +239,7 @@ class OspreyConfig(BaseModel):
     models: ModelsConfig = Field(default_factory=ModelsConfig)
     governance: GovernanceConfig = Field(default_factory=GovernanceConfig)
     cluster: ClusterConfig = Field(default_factory=ClusterConfig)
+    network: NetworkConfig = Field(default_factory=NetworkConfig)
     map: MapConfig | None = Field(default=None, description="Default: none declared")
 
     @model_validator(mode="after")
@@ -240,5 +264,6 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     GovernanceConfig,
     ClusterHost,
     ClusterConfig,
+    NetworkConfig,
     OspreyConfig,
 )

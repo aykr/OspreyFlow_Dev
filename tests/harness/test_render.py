@@ -458,14 +458,47 @@ def test_every_published_port_is_overridable_with_the_spec_s_own_default(
 ) -> None:
     """Preflight found 8000 held by an unrelated container on a real machine. A deployment that
     cannot move its own ports is one an operator has to fight — but the defaults stay the
-    specification's, so overriding nothing matches `05_DEPLOYMENT.md` §3 exactly."""
+    specification's, so overriding nothing matches `05_DEPLOYMENT.md` §3 exactly.
+
+    The Conduit's own port is covered by `test_the_conduit_is_not_published_by_default` below
+    rather than here: since 25 September 2026 it is not published unless asked for, so "every
+    published port" no longer includes it by default."""
     compose = yaml.safe_load(rendered.artefacts["compose.yaml"])
     env = rendered.artefacts["deployment.env"]
 
     assert compose["services"]["workspace"]["ports"] == ["${OSPREY_WORKSPACE_PORT:-8080}:8080"]
-    assert compose["services"]["api"]["ports"] == ["${OSPREY_API_PORT:-8000}:8000"]
     assert "OSPREY_WORKSPACE_PORT=8080" in env
     assert "OSPREY_API_PORT=8000" in env
+
+
+def test_the_conduit_is_not_published_by_default_and_is_when_asked_for() -> None:
+    """`05_DEPLOYMENT.md` §2.6 item 1, the owner's decision of 25 September 2026.
+
+    The workspace's own image proxies `/v1` and the delta WebSocket to the Conduit on the internal
+    network, so publishing the Conduit's port buys the Glass nothing and widens the exposed surface
+    by a whole tier. §7's "only the workspace and the Conduit are exposed" is now satisfied by one
+    published port, not two.
+
+    **Both directions asserted.** A test that only checked the default would pass against a
+    renderer that had simply stopped publishing the port at all, and `network.expose_conduit` would
+    then be a setting that does nothing — which is the shape `CLAUDE.md` rule 12 keeps naming.
+    """
+    from schemas.deployment import NetworkConfig
+
+    closed = yaml.safe_load(render(OspreyConfig(), allow_unpinned=True).artefacts["compose.yaml"])
+    assert "ports" not in closed["services"]["api"], (
+        "the Conduit is published by default — the Glass does not need it and §7 does not want it"
+    )
+    assert closed["services"]["workspace"]["ports"], "the workspace must still be reachable"
+
+    opened = yaml.safe_load(
+        render(
+            OspreyConfig(network=NetworkConfig(expose_conduit=True)), allow_unpinned=True
+        ).artefacts["compose.yaml"]
+    )
+    assert opened["services"]["api"]["ports"] == ["${OSPREY_API_PORT:-8000}:8000"], (
+        "network.expose_conduit: true did not publish the Conduit, so the option does nothing"
+    )
 
 
 def test_the_apply_profile_flag_is_validated_rather_than_assigned_raw() -> None:

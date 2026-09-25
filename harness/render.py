@@ -203,6 +203,8 @@ BUILD_CONTEXT_FROM_OUTPUT_DIR = "../../.."
 #: deployment that overrides nothing matches the documentation exactly.
 PORT_OVERRIDES: dict[str, tuple[str, int]] = {
     "workspace": ("OSPREY_WORKSPACE_PORT", 8080),
+    # Published only when `network.expose_conduit` is on — see `render_compose`. The entry stays
+    # here because the port number and its override variable are the same either way.
     "api": ("OSPREY_API_PORT", 8000),
     # Published because the post-launch verify talks to it from the host, and because an operator
     # diagnosing a principal-resolution fault needs the admin console.
@@ -368,7 +370,15 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
                 dependency: {"condition": "service_healthy"}
                 for dependency in ("keycloak", "arcadedb", "valkey", "postgres")
             }
-        if entry.service in PORT_OVERRIDES:
+        # **The Conduit is not published unless `osprey.yaml` asks for it** (05_DEPLOYMENT.md
+        # §2.6 item 1, owner's decision of 25 September 2026). The workspace's own nginx proxies
+        # `/v1` and the delta WebSocket to it on the internal network, so a published API port
+        # buys nothing for the Glass and widens the exposed surface by a tier. `network.
+        # expose_conduit: true` is for an operator debugging the Conduit directly.
+        publishes = entry.service in PORT_OVERRIDES and (
+            entry.service != "api" or config.network.expose_conduit
+        )
+        if publishes:
             variable, default = PORT_OVERRIDES[entry.service]
             container_port = _CONTAINER_PORTS[entry.service]
             service["ports"] = [f"${{{variable}:-{default}}}:{container_port}"]

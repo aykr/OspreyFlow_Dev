@@ -122,16 +122,20 @@ A restore can destroy more than it repairs, so it refuses readily:
    a traversal walks are both defined by the ontology; a graph restored under a different one does
    not mean what it meant, and nothing downstream would notice.
 
-## Known gap: secrets are not part of a restore
+## Secrets are not part of a restore, by decision
 
 Every credential is minted at apply time into the generated, gitignored environment file
 (§2.5, §7). A restored deployment is therefore a **new** deployment with **new** secrets, holding
-rows written under the old ones.
+rows written under the old ones. **You do not re-supply anything.**
 
-That works today only because nothing in the dump is encrypted with a deployment secret. §6 does not
-say what should happen, and the day something is encrypted at rest this becomes a silent data-loss
-path — the restore would succeed and the data would be unreadable. Recorded as a gap in §6 rather
-than settled here.
+§6.1 settles this (25 September 2026): a backup carries no secrets, a restore re-mints them, and
+**nothing in a backup may ever be encrypted with a deployment-scoped key** — a standing constraint
+in §7. Without that last clause the first two would be a silent data-loss path: the restore would
+report success and the data would be unreadable. A credential that must survive a restore is held
+by reference, never as ciphertext in a store.
+
+On `cluster`, secrets live outside the deployment in a manager the restored deployment is pointed
+at. That is Phase 8a's and does not apply here.
 
 ## If the restore fails
 

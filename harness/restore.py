@@ -35,14 +35,23 @@ measured on `local-lite` and recorded in `deploy/RUNBOOK.md` — because the num
 national scale is the order of magnitude, and a precise-looking estimate derived from a sample this
 small would be a worse lie than an obviously rough one. The projection says which it is.
 
-## What a restore does not bring back
+## What a restore does not bring back, and why that is now a rule rather than a gap
 
-**Secrets.** Every credential in a deployment is minted at apply time into the generated, gitignored
-environment file (`05_DEPLOYMENT.md` §2.5, §7). A restored deployment is a *new* deployment with
-*new* secrets, and the restored PostgreSQL dump contains rows written under the old ones. This
-happens to work today because nothing in the dump is encrypted with a deployment secret — but
-`05_DEPLOYMENT.md` §6 does not say what should happen, and the day something is, this becomes a
-silent data-loss path. Recorded as a gap in §6 rather than decided here.
+**Secrets, deliberately.** Every credential in a deployment is minted at apply time into the
+generated, gitignored environment file (`05_DEPLOYMENT.md` §2.5, §7). A restored deployment is a
+*new* deployment with *new* secrets, and the restored PostgreSQL dump contains rows written under
+the old ones.
+
+`05_DEPLOYMENT.md` §6.1 settles this (owner's decision, 25 September 2026): **a backup carries no
+secrets, a restore re-mints them, and nothing in a backup may ever be encrypted with a
+deployment-scoped key.** The last clause is what makes the first two safe, and it is a standing
+constraint in §7 rather than a property of this module — there is nothing here to re-supply, so
+there is nothing here to get wrong, but only for as long as no future feature encrypts something at
+rest with a key that dies with the deployment. A credential that must survive a restore is held by
+reference, never as ciphertext in a store.
+
+The `cluster` profile answers this differently — secrets held outside the deployment, in a manager
+the restored deployment is pointed at — and that is Phase 8a's, not this module's.
 """
 
 from __future__ import annotations

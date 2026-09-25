@@ -55,10 +55,39 @@ import { createWorkingSet } from "./workingset/store";
 // Dev-only: Phase 4's bullets do not include a login flow (OIDC/Keycloak's
 // own UI is server-side, Phase 3's territory) — a bearer token supplied
 // this way is a stand-in until a real sign-in screen exists, not a
-// production auth path.
+// production auth path. `06_DECISIONS.md` ADR-050 is the sign-in that
+// replaces it; until that is built and this is removed, a rendered
+// deployment must not carry it (05_DEPLOYMENT.md §2.6 item 2).
+//
+// **An empty base URL means same-origin, and that is what a rendered
+// deployment builds with** (05_DEPLOYMENT.md §2.6 item 1, owner's decision
+// of 25 September 2026). The workspace image's own nginx proxies /v1 to
+// the Conduit, so every request below is a relative path and the bundle
+// carries no address at all. `??` rather than `||` is load-bearing here:
+// an empty string is not nullish, so `VITE_API_BASE_URL=""` survives as
+// "" instead of falling back to the development default.
+//
+// `npm run dev` sets nothing and keeps the localhost default, because Vite
+// serves the Glass on 5173 with no proxy in front of it.
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 const DEV_BEARER_TOKEN = import.meta.env.VITE_DEV_BEARER_TOKEN ?? "";
+
+/** The origin to open the delta WebSocket against.
+ *
+ * `API_BASE_URL.replace(/^http/, "ws")` produces `""` when the base is
+ * empty, leaving a relative `"/v1/…"` for the `WebSocket` constructor.
+ * Modern browsers do resolve that against the document's base URL and
+ * rewrite http→ws, but that behaviour arrived in the HTML standard well
+ * after this API was widely deployed, and a silent failure here is a
+ * working set that simply stops updating. Deriving the origin explicitly
+ * costs one line and depends on nothing but `window.location`.
+ */
+function websocketOrigin(apiBaseUrl: string): string {
+  if (apiBaseUrl) return apiBaseUrl.replace(/^http/, "ws");
+  const { protocol, host } = window.location;
+  return `${protocol === "https:" ? "wss:" : "ws:"}//${host}`;
+}
 
 // A stable reference, not `new Map()` inline in JSX — used only as
 // `nodeCoordinates` state's initial value below (never recreated on every
@@ -215,7 +244,7 @@ export function App() {
       );
     });
 
-    const wsUrl = API_BASE_URL.replace(/^http/, "ws");
+    const wsUrl = websocketOrigin(API_BASE_URL);
     // A browser's native `WebSocket` cannot set an `Authorization` header
     // — `?token=` is the server's documented fallback for exactly this
     // (`services/api/app.py`'s `_authenticate_websocket`).

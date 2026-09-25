@@ -38,6 +38,20 @@ COPY docs/design/tokens.css ./docs/design/tokens.css
 COPY tsconfig.json ./
 COPY apps/workspace ./apps/workspace
 
+# **Same-origin, so the bundle carries no address** (05_DEPLOYMENT.md
+# §2.6 item 1, the owner's decision of 25 September 2026). Vite inlines
+# `import.meta.env.VITE_*` at build time, so whatever is set here is what
+# every deployment built from this image sends requests to, forever. An
+# empty string is the whole point: `App.tsx` then issues relative paths
+# and this image's own nginx (see nginx.conf) proxies /v1 to the Conduit.
+#
+# Set as an `ENV`, not an `ARG`: an `ARG` can be overridden at build time
+# with `--build-arg`, and the one thing this must not be is overridable
+# into an absolute URL. `tests/harness/test_workspace_bundle.py` asserts
+# the built bundle contains no absolute API URL and is shown red against a
+# planted one.
+ENV VITE_API_BASE_URL=""
+
 RUN npm run build --workspace apps/workspace
 
 FROM nginx:1.27-alpine

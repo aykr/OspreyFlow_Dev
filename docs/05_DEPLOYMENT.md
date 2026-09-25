@@ -259,54 +259,52 @@ button.
   socket; the admin console it becomes afterwards does not, and runs with the same non-root,
   read-only-root posture as every other component (§7).
 
-### 2.6 How the Glass reaches the Conduit, and how an analyst signs in — GAP, Proposed
+### 2.6 How the Glass reaches the Conduit, and how an analyst signs in
 
-**This specification does not say, and the build has reached the point where it must.** A gap in
-these documents is closed by editing them, never by an answer given somewhere that the next person
-to read this section will not see — so it is recorded here, unresolved and visible. **Status:
-Proposed. It needs an owner decision and an owning phase.**
+Two holes, found running the seeded golden path on 24 September 2026 (`07_BUILD_PLAN.md`'s Stage 2
+§3 entry has the measurement and the screenshot): a rendered `local-lite` deployment came up
+healthy, seeded both fixtures and passed its three-sided verify — and the Glass served by that same
+deployment could not talk to it at all. **Both are now decided, differently.**
 
-Found running the seeded golden path on 24 September 2026 (`07_BUILD_PLAN.md`'s Stage 2 §3 entry has
-the measurement and the screenshot). A rendered `local-lite` deployment comes up healthy, seeds both
-fixtures and passes its three-sided verify — and the Glass served by that same deployment cannot
-talk to it at all. Two distinct holes:
+#### 2.6.1 Reaching the Conduit — DECIDED, 25 September 2026: same-origin
 
-1. **The Conduit's address is baked into the Glass's bundle at image-build time.**
-   `apps/workspace/src/App.tsx` resolves it as
-   `import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000"`, which Vite substitutes during
-   `docker build`. A deployment that moves its published API port — which §2.1's own Preflight
-   actively encourages, and which this run had to do because an unrelated container held 8000 —
-   cannot tell the Glass. Neither can a deployment on any host that is not the browser's own
-   `localhost`.
-2. **There is no sign-in.** `DEV_BEARER_TOKEN` is `import.meta.env.VITE_DEV_BEARER_TOKEN ?? ""`, and
-   `App.tsx` says so plainly at line 55: Phase 4's bullets did not include a login flow, and the
-   token is "a stand-in until a real sign-in screen exists, not a production auth path." No phase
-   has owned it since. Every rendered deployment therefore serves a Glass that sends an empty
-   bearer token to a Conduit that correctly refuses it.
+**The workspace's own image proxies the Conduit.** Its nginx serves the Glass and forwards `/v1`
+and the delta WebSocket to `api:8000` on the internal network; the bundle is built with an empty
+base URL and issues relative paths only.
 
-The consequence is that §2.3's "everything has a headless equivalent" currently runs in reverse:
-the headless path works and the interactive one does not.
+What this replaces: `apps/workspace/src/App.tsx` resolved the address as
+`import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000"`, which Vite inlines during
+`docker build`. Every image therefore shipped `http://localhost:8000` baked into its JavaScript,
+invisible to every deployment made from it. A deployment that moved its published API port — which
+§2.1's own Preflight actively encourages, and which that run had to do because an unrelated
+container held 8000 — could not tell the Glass. Neither could a deployment on any host that was not
+the browser's own `localhost`.
 
-**Two candidate shapes for (1), for the decision to choose between:**
+Why same-origin rather than a runtime configuration document, which was the alternative considered:
+the bundle ends up holding **no address at all**, so it is portable across every deployment
+unchanged rather than correctly configured in each; there is no cross-origin request left, so no
+CORS policy to get wrong; and the Glass's boot stays synchronous, where fetching a `/config.json`
+before first render would have made it asynchronous and changed `App.tsx`'s top-level constants and
+the tests around them.
 
-- **Same-origin, with the workspace's nginx reverse-proxying `/v1` and the delta WebSocket to
-  `api:8000`.** The bundle is built with an empty base URL and uses relative paths, so the image
-  carries no address at all and is portable across deployments unchanged. It also removes CORS from
-  the picture entirely, and means §7's "only the workspace and the Conduit are exposed" could become
-  "only the workspace", narrowing the exposed surface. Against it: the Conduit stops being
-  separately addressable, which §3's own port table currently assumes.
-- **A runtime configuration document** — `/config.json`, written by the workspace container's
-  entrypoint from its environment and fetched by the Glass before it renders. Keeps the two
-  surfaces separate as §3 describes. Against it: it makes the Glass's boot asynchronous, which is a
-  real change to `App.tsx`'s top-level constants and to the tests around them.
+**The consequence for §3 and §7**: the Conduit no longer needs a published host port, and does not
+get one. `network.expose_conduit: true` in `osprey.yaml` publishes it, off by default. §7 states the
+posture; the enforcing tests are `test_the_conduit_is_not_published_by_default_and_is_when_asked_for`
+and `test_the_bundle_built_for_a_deployment_contains_no_absolute_api_url`, the second asserted
+against the built artefact rather than the source, because the source was never wrong.
 
-**(2) is the larger question and is not a deployment decision alone**: an OIDC authorization-code
-flow with PKCE against the realm §2.1.1 already renders is the obvious shape, but which claims the
-Glass reads, what it does when a token expires mid-investigation, and how it relates to ADR-043's
-Conduit-side exchange are domain and middleware questions. It needs its own ADR.
+#### 2.6.2 Signing in — ADR-050, and it blocks the milestone
 
-Neither is in Stage 2's scope as accepted, and neither should be filled in silently by whoever next
-touches the harness.
+**There is no sign-in.** `DEV_BEARER_TOKEN` is `import.meta.env.VITE_DEV_BEARER_TOKEN ?? ""`, and
+`App.tsx` has said so plainly since Phase 4: a login flow was not in that phase's bullets, and the
+token is "a stand-in until a real sign-in screen exists, not a production auth path." No phase has
+owned it since. Every rendered deployment therefore serves a Glass that sends an empty bearer token
+to a Conduit that correctly refuses it.
+
+**ADR-050** is where this is decided: OIDC authorization code with PKCE against the realm §2.1.1
+already renders, the Glass as a public client. It is **not** harness work and it is
+**milestone-blocking** — `07_BUILD_PLAN.md`'s sign-in stage, after Stage 2 §3, carries the exit
+test. Until it is built, the dev-token path is fenced so that no rendered deployment can carry it.
 
 ## 3. Standing it up on a laptop
 
@@ -441,6 +439,7 @@ The maintainability requirement, made concrete.
 | Staged Parquet | Continuous | Object store replication |
 | PostgreSQL | Hourly WAL, nightly full | `pg_basebackup` |
 | Graph store | Nightly | Engine-native snapshot |
+| Analytics database | Nightly | File copy from the data volume |
 | OpenSearch | Nightly | Snapshot repository to object store |
 | Configuration | On change | Version control |
 
@@ -452,34 +451,30 @@ A backup nobody has restored is a hypothesis.
 Audit data is the exception: it is not rebuildable and it is not deletable. Replicate it
 separately, with its own retention policy set by the deployment's legal basis.
 
-### 6.1 How secrets are re-supplied on a restore — GAP, Proposed
+### 6.1 How secrets are re-supplied on a restore — DECIDED, 25 September 2026
 
-**This section does not say, and it needs to.** Found building Stage 2 §4 and recorded here rather
-than settled in the code that found it.
+**A backup carries no secrets. A restore re-mints them. Nothing in a backup may ever be encrypted
+with a deployment-scoped key.** That last sentence is the load-bearing one and it is repeated as a
+standing constraint in §7, because it binds every future feature rather than only the restore path.
 
-Every credential in a deployment is minted at apply time into the generated, gitignored environment
-file (§2.5, §7 — "never in `osprey.yaml`, never in an image"). A restore therefore lands old data in
-a **new** deployment holding **new** secrets: the PostgreSQL dump contains rows written under the
-previous set, and nothing reconciles the two.
+The problem this settles, found building ADR-049's Stage 2 §4: every credential is minted at apply
+time into the generated, gitignored environment file (§2.5, §7 — "never in `osprey.yaml`, never in
+an image"), so a restore lands old data in a **new** deployment holding **new** secrets, and
+nothing reconciles the two. It worked, and only because nothing in the backed-up data was
+encrypted with a deployment secret. The moment anything were — a stored connector credential, an
+export ledger entry, an at-rest volume — a restore would begin to succeed while producing data
+nobody can read, which is the worst available failure mode because it reports success.
 
-Today this works, and only for a reason that will not last: nothing in the backed-up data is
-encrypted with a deployment secret. The moment anything is — an export ledger entry, a stored
-connector credential, an at-rest volume — a restore begins to succeed while producing data nobody
-can read, which is the worst available failure mode because it reports success.
+The decision forecloses that by constraint rather than by machinery: there is nothing to
+re-supply, so there is nothing to get wrong. What it costs is that this deployment may not encrypt
+anything at rest with a key of its own. A connector credential that must survive a restore is
+therefore held by reference — an environment variable name or a secret-manager path, which is what
+§2.5 already requires of the harness — and never as ciphertext in a store.
 
-Three shapes for the decision, none of them taken:
-
-- **The set carries no secrets and the restore re-mints them**, as it does now, with an explicit
-  statement that nothing in a backup may ever be encrypted with a deployment-scoped key. Simplest,
-  and it constrains everything downstream forever.
-- **Secrets are held outside the deployment** — a secret manager the restored deployment is pointed
-  at, which §2.5's "references, not values" already gestures at. Correct for `cluster`; heavy for a
-  laptop.
-- **The set carries a wrapped key**, unwrapped on restore with an operator-supplied passphrase. Puts
-  a secret in the backup, which §7 currently forbids without qualification.
-
-Until this is decided, `deploy/RUNBOOK.md` states the limitation and `harness/restore.py`'s own
-docstring records it, so it cannot be discovered during an incident.
+**For `cluster`, the answer is different and is Phase 8a's.** Holding secrets outside the
+deployment, in a secret manager the restored deployment is pointed at, is recorded as the cluster
+profile's approach. It does not apply to `local-lite` or `small`, where standing up a secret
+manager to restore a laptop would be machinery in place of a constraint.
 
 ### 6.2 What the current implementation does and does not satisfy
 
@@ -500,7 +495,17 @@ build stands against the table above, as of 24 September 2026 (ADR-049 Stage 2 �
 ## 7. Security posture
 
 - Every service on an internal network. Only the workspace and the Conduit are exposed, behind a
-  reverse proxy terminating TLS.
+  reverse proxy terminating TLS. **Since 25 September 2026 the workspace's own image *is* that
+  reverse proxy for the Conduit** (§2.6 item 1): its nginx proxies `/v1` and the delta WebSocket to
+  `api:8000` on the internal network, so a normal deployment publishes **one** port and the Conduit
+  is reachable without being exposed. `network.expose_conduit: true` in `osprey.yaml` publishes it
+  as well — off by default, for an operator debugging the Conduit directly or for a second client
+  that is not the Glass — and turning it on widens the exposed surface by a whole tier.
+- **Nothing in a backup may be encrypted with a deployment-scoped key** (§6.1, decided 25 September
+  2026). A backup carries no secrets and a restore re-mints them, so any value encrypted with a
+  key that dies with the deployment would restore as unreadable bytes — a restore that reports
+  success and returns nothing. This constrains every future feature that might want to encrypt
+  something at rest, which is why it is stated here rather than only in §6.
 - Default-deny egress. The model gateway is the only component with a documented exception, and
   the exception is off by default (`04_VAULT_BACKEND.md` §4).
 - Secrets from the environment or a secret manager, never in `osprey.yaml`, never in an image.
