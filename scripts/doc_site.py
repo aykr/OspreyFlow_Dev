@@ -1,0 +1,265 @@
+"""The bundle-time documentation site — `06_DECISIONS.md` ADR-049's Stage 2 §5b, its own
+Proposed sub-item, 25 September 2026: "A site rendered from the Apache-scoped `docs/` tree at
+bundle time... inclusion decided by the two existing gates already scoping that boundary... rather
+than a third notion of what publishes."
+
+**Inclusion, decided by data these two modules already own, not a hand-kept list — the design
+call this build made, recorded here rather than left implicit.** The file set rendered is exactly
+`scripts.route_coverage_check.APACHE_DOC_PATHS` — the same tuple `product_tree_link_check.py`
+itself imports rather than redeclaring, so this site can never drift from what that gate already
+treats as the Apache-scoped boundary. `decision_log_publication_check.PROCESS_ADR_NUMBERS` is
+imported and exercised by `assert_no_process_content` below for the same reason `product_tree_
+link_check.PRIVATE_TREE_MARKERS` is: as a **safety check on the render's own output**, not as a
+second, larger content set — this site renders no ADR content from `06_DECISIONS.md` at all (that
+file is not in `APACHE_DOC_PATHS` and never will be pre-Trigger-A), so `PROCESS_ADR_NUMBERS` is
+exercised defensively today, proven by its own test with a fabricated would-be-rendered ADR
+fragment, not because the real site currently calls it with real ADR content. If the site is ever
+extended to surface ADR-034 §B10's own "PRODUCT ADRs publish with the product tree" filtered
+decision log, this is the mechanism that filter would reuse rather than a new one being invented —
+recorded as the open interpretation this round settled, not the only one the brief's own wording
+could support; `07_BUILD_PLAN.md`'s Stage 2 §5b entry says so plainly rather than presenting this
+as the only possible reading.
+
+**Three landing pages**, per the build brief: `index.html` (Architecture — a short cold-reader
+orientation, then links into the rendered spec pack), `operator-guide.html` (`05_DEPLOYMENT.md`,
+both RUNBOOKs, and the generated Preflight reference), `analyst-guide.html` (a placeholder stating
+plainly that the analyst guide is not yet written, per `07_BUILD_PLAN.md` Stage 3c's own "Proposed,
+post-milestone" — the honest thing to say, rather than writing one).
+
+**The Preflight reference** is generated from `harness/preflight/*.py`'s own module docstrings and
+`NAME` constants, read via `ast.parse` rather than `import` — deliberately: this keeps the whole
+of `doc_site.py` free of any dependency beyond the Python standard library (no `pydantic`, no
+`yaml`), which is what lets the Docker build stage that runs this module (`apps/workspace/
+Dockerfile`'s own `docs` stage) use a bare `python:3.12-slim` with nothing installed into it.
+Changing a check module's own docstring changes the generated reference page — the exit test this
+site owes, proven in `tests/test_doc_site.py`.
+"""
+
+from __future__ import annotations
+
+import ast
+from pathlib import Path
+
+from scripts.decision_log_publication_check import PROCESS_ADR_NUMBERS
+from scripts.product_tree_link_check import PRIVATE_TREE_MARKERS
+from scripts.route_coverage_check import APACHE_DOC_PATHS
+from scripts.simple_markdown import render_markdown
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+PREFLIGHT_DIR = REPO_ROOT / "harness" / "preflight"
+
+_PAGE_SHELL = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{title} — OspreyFlow documentation</title>
+<style>
+body {{ font-family: -apple-system, sans-serif; max-width: 60rem; margin: 2rem auto;
+        padding: 0 1rem; color: #1a1a1a; line-height: 1.5; }}
+nav {{ margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #ccc; }}
+nav a {{ margin-right: 1rem; }}
+table {{ border-collapse: collapse; width: 100%; margin: 1rem 0; }}
+th, td {{ border: 1px solid #ccc; padding: 0.4rem 0.6rem; text-align: left; }}
+code {{ background: #f2f2f2; padding: 0.1rem 0.3rem; border-radius: 3px; }}
+pre code {{ display: block; padding: 0.8rem; overflow-x: auto; }}
+</style>
+</head>
+<body>
+<nav><a href="index.html">Architecture</a> <a href="operator-guide.html">Operator guide</a>
+<a href="analyst-guide.html">Analyst guide</a></nav>
+{body}
+</body>
+</html>
+"""
+
+
+def _page(title: str, body_html: str) -> str:
+    return _PAGE_SHELL.format(title=title, body=body_html)
+
+
+def _spec_pack_pages() -> dict[str, str]:
+    """`{html_filename: rendered_html}` for every Apache-scoped doc — the spec pack the
+    Architecture landing page links into."""
+    pages = {}
+    for doc_path in APACHE_DOC_PATHS:
+        html_name = doc_path.stem + ".html"
+        body = render_markdown(doc_path.read_text(encoding="utf-8"))
+        pages[html_name] = _page(doc_path.name, body)
+    return pages
+
+
+def _architecture_landing_page() -> str:
+    links = "".join(
+        f'<li><a href="{doc_path.stem}.html">{doc_path.name}</a></li>'
+        for doc_path in APACHE_DOC_PATHS
+    )
+    body = (
+        "<h1>OspreyFlow</h1>"
+        "<p>Open-source intelligence analysis and network discovery platform. This site is "
+        "generated from this deployment's own documentation at bundle time.</p>"
+        "<h2>Start here</h2><ul><li><a href=\"operator-guide.html\">Operator guide</a> — install, "
+        "deploy, back up and upgrade.</li><li><a href=\"analyst-guide.html\">Analyst guide</a> — "
+        "using the workspace day to day.</li></ul>"
+        f"<h2>The full specification</h2><ul>{links}</ul>"
+    )
+    return _page("Architecture", body)
+
+
+def _operator_guide_landing_page(
+    generated_runbook_present: bool, deploy_runbook_present: bool
+) -> str:
+    deployment_html = next(p.stem for p in APACHE_DOC_PATHS if p.name == "05_DEPLOYMENT.md")
+    links = [f'<li><a href="{deployment_html}.html">Deployment guide</a></li>']
+    if generated_runbook_present:
+        links.append('<li><a href="runbook-generated.html">This deployment\'s own RUNBOOK</a></li>')
+    if deploy_runbook_present:
+        links.append('<li><a href="runbook.html">Backup/restore RUNBOOK</a></li>')
+    links.append('<li><a href="preflight-reference.html">Preflight reference</a></li>')
+    body = "<h1>Operator guide</h1><ul>" + "".join(links) + "</ul>"
+    return _page("Operator guide", body)
+
+
+def _analyst_guide_placeholder_page() -> str:
+    demo_guide_html = next(p.stem for p in APACHE_DOC_PATHS if p.name == "DEMO_GUIDE.md")
+    body = (
+        "<h1>Analyst guide</h1>"
+        "<p>This guide is not yet written (07_BUILD_PLAN.md Stage 3c, proposed, post-milestone: "
+        "user-facing material for the analyst working the Glass day to day, not an existing "
+        "document's content gap).</p>"
+        f'<p>Until it exists, the walkthrough in <a href="{demo_guide_html}.html">the demo '
+        "guide</a> is the closest real, followable path.</p>"
+    )
+    return _page("Analyst guide", body)
+
+
+def _preflight_reference_page() -> str:
+    """Reads `harness/preflight/__init__.py`'s own `ALL_CHECKS` tuple, in source order, without
+    importing it — a plain `ast.parse` of the assignment's tuple-of-Name elements — then reads
+    each named module's own docstring and `NAME` constant the same way."""
+    init_source = (PREFLIGHT_DIR / "__init__.py").read_text(encoding="utf-8")
+    tree = ast.parse(init_source)
+    check_module_names: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "ALL_CHECKS" for t in node.targets
+        ):
+            if isinstance(node.value, ast.Tuple):
+                check_module_names = [
+                    elt.id for elt in node.value.elts if isinstance(elt, ast.Name)
+                ]
+
+    sections = []
+    for module_name in check_module_names:
+        module_path = PREFLIGHT_DIR / f"{module_name}.py"
+        if not module_path.is_file():
+            continue
+        module_tree = ast.parse(module_path.read_text(encoding="utf-8"))
+        docstring = ast.get_docstring(module_tree) or ""
+        check_name = module_name
+        for node in ast.walk(module_tree):
+            if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == "NAME" for t in node.targets
+            ):
+                if isinstance(node.value, ast.Constant):
+                    check_name = str(node.value.value)
+        sections.append(
+            f"<h2><code>{check_name}</code></h2>{render_markdown(docstring)}"
+        )
+
+    body = "<h1>Preflight reference</h1>" + "".join(sections)
+    return _page("Preflight reference", body)
+
+
+def assert_no_process_content(rendered_ids: list[str]) -> list[str]:
+    """The defensive safety check this module's own docstring names: if the site is ever extended
+    to render ADR-numbered content, every id passed here must not be in `PROCESS_ADR_NUMBERS`.
+    Returns violations; empty today because the real render never calls this with real ADR ids."""
+    return [rid for rid in rendered_ids if rid in PROCESS_ADR_NUMBERS]
+
+
+def assert_no_private_tree_names(rendered_filenames: list[str]) -> list[str]:
+    """The same file-identity check `scripts/packaging_gate.find_private_tree_files` applies to a
+    whole artefact, scoped here to just the site's own rendered filenames.
+
+    **Matched by stem, not by exact substring.** `PRIVATE_TREE_MARKERS` names source files
+    (`06_DECISIONS.md`), and this site renders `.html`, not `.md` — a bare substring check the way
+    `packaging_gate` uses for a real artefact's own untouched file list would never fire here,
+    since `"06_DECISIONS.md" not in "06_DECISIONS.html"`. Found writing this module's own test,
+    not assumed: `Path(name).stem` strips the rendered extension before comparing, so a marker's
+    own `.md` suffix does not have to match this site's differently-suffixed output."""
+    return [
+        name
+        for name in rendered_filenames
+        if any(
+            Path(marker).stem in Path(name).stem
+            for marker in PRIVATE_TREE_MARKERS
+            if marker != "archive/"
+        )
+        or "archive" in name
+    ]
+
+
+def render_doc_site(
+    output_dir: Path,
+    *,
+    generated_runbook_text: str | None = None,
+    deploy_runbook_text: str | None = None,
+) -> list[str]:
+    """Writes the whole site to `output_dir` and returns the list of files written, relative to
+    it — the site's own manifest, which `tests/test_doc_site.py` and the bundle's own exit test
+    both check against `assert_no_private_tree_names`/`assert_no_process_content`."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    pages: dict[str, str] = {}
+    pages.update(_spec_pack_pages())
+    pages["index.html"] = _architecture_landing_page()
+    pages["operator-guide.html"] = _operator_guide_landing_page(
+        generated_runbook_text is not None, deploy_runbook_text is not None
+    )
+    pages["analyst-guide.html"] = _analyst_guide_placeholder_page()
+    pages["preflight-reference.html"] = _preflight_reference_page()
+    if generated_runbook_text is not None:
+        pages["runbook-generated.html"] = _page(
+            "This deployment's own RUNBOOK", render_markdown(generated_runbook_text)
+        )
+    if deploy_runbook_text is not None:
+        pages["runbook.html"] = _page(
+            "Backup/restore RUNBOOK", render_markdown(deploy_runbook_text)
+        )
+
+    violations = assert_no_private_tree_names(list(pages))
+    if violations:
+        raise RuntimeError(f"doc_site: refusing to render private-tree file(s): {violations}")
+
+    for filename, html in pages.items():
+        (output_dir / filename).write_text(html, encoding="utf-8")
+    return sorted(pages)
+
+
+def main() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(prog="python -m scripts.doc_site")
+    parser.add_argument("--out", type=Path, required=True)
+    args = parser.parse_args()
+
+    generated_runbook_path = REPO_ROOT / "deploy" / "generated" / "local-lite" / "RUNBOOK.md"
+    deploy_runbook_path = REPO_ROOT / "deploy" / "RUNBOOK.md"
+    written = render_doc_site(
+        args.out,
+        generated_runbook_text=(
+            generated_runbook_path.read_text(encoding="utf-8")
+            if generated_runbook_path.is_file()
+            else None
+        ),
+        deploy_runbook_text=(
+            deploy_runbook_path.read_text(encoding="utf-8")
+            if deploy_runbook_path.is_file()
+            else None
+        ),
+    )
+    print(f"doc_site: wrote {len(written)} page(s) to {args.out}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
