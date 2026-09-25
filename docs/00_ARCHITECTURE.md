@@ -509,6 +509,41 @@ on the harness's Geospatial screen does the whole tier 1 path — download the e
 planetiler, load the gazetteer — with progress shown. Tiers 2 and 3 accept a prepared PMTiles file
 or a credential reference on the same screen. See `05_DEPLOYMENT.md` §2.2.
 
+### 1.4 The request path and analyst sign-in
+
+**The request path (first paragraph) is decided — the owner's decision of 25 September 2026, and
+it is built. Analyst sign-in (the rest) is Proposed** pending acceptance of its own decision
+record, and one sentence in it is contested by that record's review: whether the working set
+itself is preserved in session storage, or only the investigation and selection with the working
+set re-fetched. Session storage is small and a working set is not, so the choice is not
+cosmetic. Read the paragraph on expiry as the proposal, not as settled.
+
+The Glass is served by the workspace container's nginx, which also reverse-proxies the Conduit's
+API (/v1) and the delta WebSocket to the Conduit over the deployment's internal network. The
+browser therefore has one origin, the workspace's; the Glass bundle carries no Conduit address and
+is portable across deployments unchanged; and the Conduit's host port is published only when the
+deployment's configuration asks for it, for headless clients. Only the workspace and the identity
+provider are reachable from the browser.
+
+An analyst signs in with OpenID Connect authorization code flow with PKCE against the deployment's
+identity provider, with the Glass registered as a public client. Credentials are entered at the
+identity provider, never in the Glass. The Glass receives a signed access token carrying the
+principal's subject, clearance, organisational unit, roles and receivable handling codes, holds it
+in memory, and sends it as a bearer token on every request; nginx forwards it unchanged. The
+Conduit verifies the signature against the identity provider's published keys and resolves the
+principal from the claims. The Glass may display what the token asserts about the analyst; it never
+derives access from it. Access control is applied in the Conduit's query, as everywhere else in the
+system.
+
+When a token expires during an investigation the Glass preserves the working set, the open
+investigation and the current selection in session storage, re-authenticates, and restores them; it
+neither continues on a stale token nor discards the analyst's state. Signing out clears the Glass's
+memory and session storage and ends the identity-provider session.
+
+The analyst's token and the Conduit's owner-side token exchange are distinct mechanisms: the former
+is how an interactive caller is identified; the latter is how the Conduit evaluates a watch as its
+owner, and it is never used for the interactive caller.
+
 ## 2. The four ports
 
 These are the swap boundaries. Each is a Python `Protocol` in `packages/ports/`, each has a
