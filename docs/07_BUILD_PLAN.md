@@ -11,6 +11,10 @@ laptop from the documentation, started, and demonstrated (both acceptance scenar
 `local-lite` is one component of that, not the whole of it).
 
 **Complete, by stage:**
+- Stage 2c — Sign-in for the Glass (`06_DECISIONS.md` ADR-050). Built, 25 September 2026. Two
+  disclosed gaps remain and are not milestone-blocking on their own: the WebSocket ticket exchange
+  (objection 8, raised, not resolved) and full app-wide silent-reauthentication coverage beyond the
+  bootstrap calls — this stage's own entry below has both in full.
 - Stage 4 (4-spec, 4a–4h) — the product-feature core. Built.
 - Stage 1 — principal resolution (OAuth2 Token Exchange, ADR-043). Built; delivered, not
   milestone-gated. **Its 22 September "built" was wrong until 24 September** — the exchange omitted
@@ -3316,6 +3320,197 @@ find something already finished sitting in the queue.
    Plus six non-blocking findings, including that the design's own rule-4 test as worded would pass
    without a single line of ADR-050 existing, and that the refresh-token and working-set-preservation
    choices are both amended in the record rather than left as designed.
+
+   ---
+
+   **Stage 2c — Sign-in for the Glass. BUILT, 25 September 2026, against ADR-050's ruling above.**
+   Built and tested:
+
+   1. **Conduit audience verification.** `OIDC_AUDIENCE` is now written into every rendered
+      deployment's environment by `harness/render.py`'s `_render_env` (the Conduit's own client id,
+      a constant, not a secret — deterministic, needs no apply-time value), and
+      `harness/preflight/oidc_audience.py` fails Launch if it is ever absent or wrong, rather than
+      the Conduit falling back to accepting any token silently. `services/api/auth.py`'s own
+      `verify_aud` conditional was already correct once configured; nothing there needed to change.
+      `tests/services/api/test_auth.py::test_a_token_signed_for_a_different_client_is_refused_not_accepted`
+      is the new red-then-green case (verified directly: hardcoding `verify_aud` to `False` fails
+      it), `tests/harness/test_preflight.py`'s six new `oidc-audience` cases plant a real missing/
+      wrong value in a real rendered environment file, and `tests/harness/test_realm.py` proves the
+      realm's own audience mapper names the Conduit.
+   2. **The realm renderer.** `harness/realm.py` gains `GLASS_CLIENT_ID` (`osprey-glass`): public,
+      `standardFlowEnabled`, PKCE S256, an exact redirect URI and post-logout URI derived from the
+      new `network.public_origin` schema field (`packages/schemas/deployment.py`, default
+      `http://localhost:8080`, validated as a bare origin with no trailing slash) — no wildcards,
+      `tests/harness/test_realm.py::test_the_glass_clients_redirect_and_post_logout_uris_are_exact_not_wildcards`
+      is the planted-wildcard case. `--demo-analyst` (`harness/apply.py`) renders a disposable,
+      separate-from-`VERIFY_SUBJECT` analyst subject with no `credentials` block, mints a real
+      apply-time password, and `harness/keycloak_admin.py`'s new `set_demo_analyst_password` sets it
+      after import — printed once, in the same final summary block the workspace/Conduit URLs
+      already print from, never echoed elsewhere. Absent by default
+      (`tests/harness/test_apply_env.py`'s own presence/absence pair).
+   3. **The Glass.** `oidc-client-ts` (Apache-2.0, `make licence-check` green on both the Python and
+      Node sides) drives a real authorization-code-with-PKCE flow
+      (`apps/workspace/src/auth/{oidcConfig,userManager}.ts`): the access token lives in a
+      hand-written in-memory `Storage` (never `sessionStorage`, never a refresh token — this
+      deployment requests no `offline_access` scope, so none is ever issued), the transient PKCE
+      `stateStore` is left at the library's own `sessionStorage` default (consumed and discarded the
+      moment the redirect callback completes). `App.tsx`'s sign-in gate shows `SignInScreen`
+      whenever there is no token, issuing no `/v1` call until one exists
+      (`src/App.test.tsx`'s first case, red-then-green verified against the gate itself). A 401 on
+      the *first* authenticated bootstrap call is distinguished from a 401 *after* one has already
+      succeeded (`hasResolvedAPrincipalOnceRef`): the former shows the sign-in screen with a reason
+      and does not retry (`src/App.test.tsx`'s second case — the wrong-audience/refused path, also
+      red-then-green verified); the latter clears the token and issues a silent
+      `signinRedirect({prompt:"none"})` round against the identity provider's own session cookie.
+      The identity/clearance chrome (`02_GLASS_FRONTEND.md` §2, rule 5, objection 9 — **closed**)
+      is informational only; nothing branches on it. Sign-out calls `end_session_endpoint`. The
+      delta WebSocket's own `useEffect` now depends on the current token, so a token rotation tears
+      down and re-establishes the connection with the fresh one — "authenticates on connect and on
+      every reconnect."
+   4. **The dev-token fence.** `vite.config.ts` throws at `vite build` time if
+      `VITE_DEV_BEARER_TOKEN` is set and `command === "build"`
+      (`tests/harness/test_workspace_bundle.py::test_a_production_build_fails_with_the_dev_bearer_token_set`,
+      opt-in via `OSPREY_TEST_BUNDLE=1`, red-then-green verified: the planted violation is the
+      literal environment variable at a real `vite build`, not a source edit). `npm run dev` is
+      unaffected — `deploy/compose/dev.yaml` has no Keycloak, so this is still what `make dev-up`
+      exercises.
+   5. **Rule 13 — the sign-in screen's own keyboard-driven surface.**
+      `apps/workspace/keyboard/actionRegistry.ts` gains `SIGN_IN_ACTIONS` (`submit-sign-in`), proven
+      by `keyboard/sign-in.spec.ts` against the real `SignInScreen` wired to the real `signIn()` —
+      a real OIDC-discovery fetch and a real top-level navigation to the identity provider's
+      authorization endpoint, both intercepted at the transport, not a mocked callback.
+      `registryCoverage.test.ts` now asserts nine registries, not eight.
+   6. **The accessibility floor on the sign-in screen.** `apps/workspace/a11y/a11y.spec.ts` runs a
+      full `wcag2aa` axe scan (not only the colour-contrast subset the rest of that file checks)
+      against the real `SignInScreen` via the keyboard harness, both themes — green.
+
+   **One design point ADR-050's own text left unsettled, decided during the build and recorded in
+   its own addendum rather than only here:** how the Glass locates the identity provider for OIDC
+   discovery, since its bundle carries no baked Conduit address and the same problem applies. The
+   call — reach it directly at its own published origin, derived from the browser's own hostname
+   plus the default Keycloak port — is `apps/workspace/src/auth/oidcConfig.ts`'s own docstring and
+   `06_DECISIONS.md` ADR-050's addendum, not repeated here.
+
+   **Disclosed, not built this round — read before relying on any of these:**
+   - **Objection 8 (the WebSocket ticket exchange) is unchanged.** The access token still travels
+     in the `?token=` query string. Raised, not resolved, exactly as ADR-050 left it.
+   - **Silent re-authentication and 401 handling are wired at the bootstrap calls only**
+     (`/v1/ontology`, `/v1/investigations`), not through every one of the dozen-plus `api.ts`
+     modules `App.tsx` also calls. A token that expires while, say, only `HistoryPanel` is being
+     used will surface as that panel's own request failing, not as the ADR's described silent
+     recovery, until the next bootstrap-scoped call catches it.
+   - **Selection and view-state are not preserved to `sessionStorage` across a silent
+     re-authentication round** — only the investigation id (via the pre-existing
+     `investigation/investigationId.ts` mechanism) survives a reload. ADR-050's own "preserve the
+     selection and view state" sentence is not yet built; `restoreViewStateAfterReauth` in
+     `App.tsx` is a named seam for it, not the feature itself.
+   - **`crossFilterRef`'s own internal fetches keep the token they were constructed with.** Every
+     other consumer in `App.tsx` re-reads `bearerToken` as a live prop; this one, pre-existing,
+     "construct once" ref does not, so a token rotation is not reflected in its own subsequent
+     `.refresh()` calls until `investigationId` itself changes (which in practice, is never, within
+     one session).
+
+   **Two real defects the exit test itself found, neither reachable from the unit-level tests
+   above alone — recorded per rule 12/15, not smoothed over:**
+   1. **`postLogoutRedirectUris` is not a `ClientRepresentation` field.** The first `_glass_client`
+      wrote it as a top-level key, by analogy with `redirectUris`; a real Keycloak 26 import refused
+      the whole realm — `Unrecognized field "postLogoutRedirectUris"` — and *no* container became
+      healthy, including the Conduit's own. Keycloak stores it as the client attribute
+      `post.logout.redirect.uris`. Fixed, and `tests/harness/test_realm.py` now asserts the
+      attribute directly rather than the field that happened to round-trip through Python
+      untouched.
+   2. **An audience mapper on the Glass client alone is not enough.** `harness/apply.py`'s own seed
+      step failed with `token rejected: Token is missing the "aud" claim` — not from the Glass, but
+      from the Conduit's *own* client-credentials and token-exchange grants
+      (`create_investigation`, `grant_service_account_roles`, every ADR-043 exchange), which are
+      presented to the Conduit exactly like the Glass's tokens and were just as unconditionally
+      refused once `verify_aud` turned on for real. Fixed by moving the mapper to a plain custom-
+      string audience (`included.custom.audience`, not `included.client.audience`) attached to
+      *both* the Conduit's own client and the Glass's, plus a new
+      `test_the_conduits_own_client_also_carries_the_audience_mapper` case naming the regression
+      directly.
+
+   Both were found by running `python -m harness.apply --profile local-lite --seed
+   hmp,fixture-corp --demo-analyst` for real against a fresh render, exactly the exit test ADR-050
+   names — neither is a case any of the unit-level realm/preflight/auth tests above could have
+   caught on their own, since each needs a real Keycloak import or a real multi-client token flow.
+
+   **Three more, found by the Playwright walkthrough itself rather than by the apply run
+   completing green — `apply` reporting "3/3 assertions green" measures the three-sided
+   token-exchange verify, not whether an analyst can actually use the Glass, and each of these
+   would have shipped invisibly behind that green:**
+
+   3. **A `?investigation=` URL id was never reaching `sessionStorage` before the sign-in
+      redirect.** `App.tsx`'s investigation-persisting effect had been folded into the same
+      `if (!bearerToken) return` guard as the POST-a-new-investigation fallback below it — correct
+      for the fallback (a real network call), wrong for the persist (no network call at all, and
+      `docs/02_GLASS_FRONTEND.md` §2.1's own "written back immediately" is unconditional). On an
+      unauthenticated first load the guard fired before the id was ever written, so the browser
+      came back from Keycloak with no memory of it and silently created a second, empty
+      investigation instead of opening the seeded one. Split into its own unconditional branch.
+   4. **Keycloak's own `VERIFY_PROFILE` required action stopped the demo analyst's first
+      interactive sign-in** with an unexpected "Update Account Information" form demanding
+      email/first/last name — a fresh admin-API user has none of Keycloak's own default profile
+      fields, and Keycloak demands them before issuing a token regardless of anything this codebase
+      configures. Fixed by giving the rendered subject `email`/`emailVerified`/`firstName`/
+      `lastName` (`.invalid`, RFC 2606's reserved non-resolving TLD).
+   5. **The demo analyst could sign in and reach the Conduit and still see nothing — the seeded
+      investigation's own working set stayed at zero nodes, zero edges.** Two separate causes,
+      both access control doing exactly what rule 3 asks and neither reachable without seeing real
+      seeded content refused for a real reason:
+      - `scripts/seed_hmp_fixture.py`/`scripts/seed_fixture_corp.py` write every node with
+        `handling_code="P"`; the demo analyst's attributes (copied from the shared,
+        verify-scoped `_SUBJECT_ATTRIBUTES`) could only receive `"R"`. Every seeded node was
+        filtered before it ever reached the working set — the same "filter at the adapter, existence
+        undetectable" behaviour rule 3 requires, applied correctly to a subject nobody had actually
+        granted the seeded data's own code.
+      - `harness/apply.py`'s `create_investigation` creates the seeded investigation by exchanging
+        for `VERIFY_SUBJECT`, whose `org_unit` becomes the investigation's own `owning_unit`
+        (`services/api/investigations.py`'s `principal.org_unit == investigation.owning_unit`
+        boundary). Giving the demo analyst a *different* `org_unit` — the first, more "correctly
+        separate-looking" fix attempted — made the investigation itself invisible: a 403 on the
+        delta WebSocket handshake and a 404 on every investigation-scoped route, indistinguishable
+        from a broken deployment without reading that boundary's own reasoning.
+
+      Resolved by giving `DEMO_ANALYST_SUBJECT` its own attributes (objection 4's own reasoning,
+      applied for real rather than only in the identity dimension): `receivable_handling_codes:
+      ["P"]` so the seeded content is visible, `org_unit: ["verify"]` — unchanged from the shared
+      default, and deliberately not diversified — so the investigation the verify-scoped subject
+      created is still the one it can open, and `clearance: ["OFFICIAL"]` kept as-is so
+      `fixture_corp.py`'s own single `SECRET`-classified node stays correctly invisible: the access-
+      control floor demonstrating itself in the demo, not a gap in it.
+      `test_demo_analyst_can_receive_the_handling_code_the_seed_fixtures_actually_write` and
+      `test_demo_analyst_shares_the_verify_subjects_org_unit_so_the_seeded_investigation_is_visible`
+      name both regressions directly.
+
+   **Exit test — run for real against a fresh apply, five iterations to green, not asserted from
+   the code.** `OSPREY_WORKSPACE_PORT=8095 python -m harness.apply --profile local-lite --config
+   /tmp/exit-test-osprey.yaml --seed hmp,fixture-corp --demo-analyst` — a temporary config layering
+   `network.public_origin: http://localhost:8095` onto the committed `osprey.yaml`, because 8080/
+   8081 were held by stale, already-torn-down Docker port-forwards on this machine for much of this
+   session (Docker Desktop's own proxy, not this deployment — `OSPREY_WORKSPACE_PORT`/
+   `network.public_origin` moving together is the existing, documented shape for exactly this).
+   Sign-in as `osprey-demo-analyst` via the real Keycloak login form: **green.** The chrome showed
+   the real subject and `OFFICIAL` clearance; the seeded investigation's own hotspot panel
+   (`/v1/analytics/geobins`) and timeline (`/v1/analytics/histogram`) both rendered real seeded data
+   — screenshots in `docs/demo/2026-09-25/`. (The canvas's own "0 nodes" status is separate and
+   correct: the working-set graph is populated by explicit add/expand actions, not automatically
+   equal to everything the investigation can see — the exit test's own wording asks for the hotspot
+   panel and timeline, and both are real.)
+
+   **Both named mutations, run against the live deployment rather than a fresh redeploy each time
+   (the realm's own protocol mappers and the demo analyst's `enabled` flag are both live-editable
+   via the Keycloak admin API this harness already uses):**
+   - Audience mapper removed from the Glass client (`DELETE .../protocol-mappers/models/{id}`):
+     Keycloak's own login still succeeded — the credential is real and unaffected — and the Conduit
+     refused every subsequent call with 401 (`/v1/ontology`, `/v1/analytics/geobins`, `/v1/map/
+     providers`, a 403 on the delta WebSocket handshake), and the Glass showed "Your sign-in could
+     not be used to reach the workspace. Check with your administrator that this deployment's
+     identity provider is configured correctly." — not an error page, not an empty workspace.
+     Screenshot: `06-mutation-wrong-audience-refused.png`. Mapper restored, sign-in green again.
+   - Demo analyst disabled (`PUT` `enabled: false`): Keycloak's own login form refused outright —
+     "Account is disabled, contact your administrator." — before any token was ever issued.
+     Screenshot: `05-mutation-disabled-analyst-refused.png`. Re-enabled, sign-in green again.
 
    ---
 

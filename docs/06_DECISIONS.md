@@ -6498,3 +6498,42 @@ at the redirect; 3 would have left the exit test unrunnable. Each is resolved ab
 ruling does not address it), or the WebSocket ticket exchange of objection 8 (still open — raised,
 not resolved) is scoped in or out. Each is written so that settling it is a targeted edit to this
 record and its `07_BUILD_PLAN.md` stage entry, not a new ADR.
+
+**Addendum, 25 September 2026 — built, this round, against the design above; `07_BUILD_PLAN.md`'s
+Stage 2c entry has the full built/remaining breakdown and the exit test's own result.** In one line
+each: audience verification unconditional whenever `OIDC_AUDIENCE` is configured, and every rendered
+deployment now configures it (`harness/render.py`'s `_render_env`, gated at Launch by
+`harness/preflight/oidc_audience.py`); the realm renderer gains the Glass's public PKCE client with
+an audience mapper naming the Conduit, and `--demo-analyst` renders and passwords a disposable
+sign-in-capable subject, separate from the verify probe; the Glass gains a real OIDC authorization-
+code-with-PKCE flow (`oidc-client-ts`, Apache-2.0), the sign-in screen, the identity/clearance chrome
+(objection 9, **closed** — `02_GLASS_FRONTEND.md` §2 now names it, rather than this ADR being the
+only place it was decided), and the dev-token build-time fence; the delta WebSocket re-authenticates
+on every reconnect, keyed to the current token.
+
+**Objection 8 (the WebSocket ticket exchange) is deliberately not built this round** — raised, not
+resolved, and this addendum does not change that; it remains exactly the scope decision the
+objection's own text describes, and the access token still travels in the WebSocket URL query
+string as it did before.
+
+**One design point this ADR's own text left unsettled, decided during the build and recorded
+honestly rather than silently:** how the Glass, whose bundle carries no baked address for the
+Conduit, locates the identity provider for OIDC discovery. `00_ARCHITECTURE.md` §1.3 already
+states two separately reachable origins ("Only the workspace and the identity provider"), so the
+identity provider is reached **directly at its own published origin**, not proxied through the
+workspace's nginx — `apps/workspace/src/auth/oidcConfig.ts` derives it from the browser's own
+hostname plus `05_DEPLOYMENT.md` §3's default Keycloak port (8081), overridable at build time via
+`VITE_OIDC_ISSUER_ORIGIN` for a deployment that has moved it. Folding Keycloak's own login pages
+behind the same-origin proxy the Conduit uses was considered and rejected for this round: it would
+need `KC_HTTP_RELATIVE_PATH` set to match on the server side too, touching every existing internal
+Keycloak URL this codebase already has, for a benefit (one fewer published port) this round did not
+need.
+
+**The exit test — run for real, five iterations to green — is green, with both named mutations
+proven.** `07_BUILD_PLAN.md`'s Stage 2c entry has the full account, including five real defects the
+apply run and the Playwright walkthrough found that no unit-level test had a way to reach: a realm
+field Keycloak does not define (`postLogoutRedirectUris`), an audience mapper that needs to sit on
+the Conduit's own client and not only the Glass's, an investigation-id-persistence effect gated on
+auth when it should not have been, Keycloak's own default profile-completion wall on a fresh
+admin-API subject, and two access-control attributes (handling code, `org_unit`) the demo analyst
+needed and did not have. Each is fixed, each has a named test.
