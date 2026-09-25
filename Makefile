@@ -56,7 +56,8 @@ route-coverage-check:
 # `06_DECISIONS.md` ADR-034 §B8. Allowlist of current debt at
 # tests/fixtures/product_tree_link_allowlist.txt — see scripts/product_tree_link_check.py's own
 # docstring for why this is scoped to documentation-to-documentation references only, and how it
-# differs from the still-open doc_citations_check.py question.
+# differs from doc_citations_check.py, which asks whether a citation resolves rather than whether
+# an Apache-scoped file cites a private one.
 product-tree-link-check:
 	$(PY) scripts/product_tree_link_check.py
 	@echo "product-tree-link-check: see tests/test_product_tree_link_check.py for the deterministic proof"
