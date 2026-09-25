@@ -31,9 +31,16 @@ RUN npm ci
 # (docs/06_DECISIONS.md ADR-034 §B8). The repository's own `.dockerignore`
 # excludes `docs` and then re-includes exactly this one file by name, so
 # it is present in this build context; `tests/test_dockerignore.py` holds
-# that line in place, and `tests/harness/test_workspace_image.py` asserts
-# this COPY has something to copy. When the restructure moves tokens.css
-# into the product tree, this COPY and that negation go together.
+# that line in place. When the restructure moves tokens.css into the
+# product tree, this COPY and that negation go together.
+#
+# This comment also cited `tests/harness/test_workspace_image.py` as
+# asserting "this COPY has something to copy". **That file has never
+# existed** — corrected 25 September 2026, and corrected by deleting the
+# citation rather than by writing a test to match it: if the negation were
+# dropped, this build fails immediately and loudly, because `main.tsx`
+# imports the file. A citation to a test that does not exist is worse than
+# no citation, because it reads as a guarantee (CLAUDE.md rule 12).
 COPY docs/design/tokens.css ./docs/design/tokens.css
 COPY tsconfig.json ./
 COPY apps/workspace ./apps/workspace

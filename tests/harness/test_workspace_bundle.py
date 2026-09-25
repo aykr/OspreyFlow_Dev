@@ -31,6 +31,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -107,3 +108,65 @@ def test_the_same_check_fails_for_a_bundle_built_with_an_absolute_url() -> None:
         "a bundle built with an absolute Conduit address was not flagged, so the check above "
         "cannot detect the defect it exists for"
     )
+
+
+@requires_opt_in
+def test_the_workspace_serves_with_no_conduit_reachable_at_all() -> None:
+    """The Glass is static and must come up whether or not the Conduit is there.
+
+    **Found on the first golden path after the proxy was added.** A literal
+    `proxy_pass http://api:8000` makes nginx resolve `api` once while loading its configuration and
+    refuse to start if it cannot — `[emerg] host not found in upstream "api"`. The workspace starts
+    before the Conduit, so nginx exited, the container restarted, and `docker compose up --wait`
+    reported the workspace unhealthy and failed the whole deploy.
+
+    That is a start-order race, but the invariant underneath it is larger and is what this asserts:
+    a deployment whose Conduit is down or still starting must still serve the workspace. Once
+    ADR-050's sign-in exists, this is the difference between a user seeing a sign-in screen and
+    seeing nothing at all.
+
+    `CLAUDE.md` rule 12 — the test that fails if it regresses is this one, and it runs the **real
+    image on a network with no `api` on it**, because the failure was in nginx's start-up
+    behaviour and no assertion about the config file's text would have caught it. A check that
+    `proxy_pass` contains a `$` would pass against a config that was broken some other way.
+    """
+    image = "osprey/workspace:bundle-test"
+    built = subprocess.run(  # noqa: S603
+        ["docker", "build", "-f", "apps/workspace/Dockerfile", "-t", image, "."],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert built.returncode == 0, f"the workspace image did not build:\n{built.stderr[-2000:]}"
+
+    container = subprocess.run(  # noqa: S603
+        ["docker", "run", "--rm", "-d", "-P", image],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert container.returncode == 0, container.stderr
+    cid = container.stdout.strip()
+    try:
+        # No `api` exists on this container's network — that is the whole point. If nginx resolved
+        # its upstream at start-up, it is already dead and the exec below cannot run.
+        for _ in range(30):
+            probe = subprocess.run(  # noqa: S603
+                ["docker", "exec", cid, "wget", "-q", "-O", "-", "http://127.0.0.1:8080/"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if probe.returncode == 0:
+                break
+            time.sleep(1)
+        assert probe.returncode == 0, (
+            "the workspace does not serve its own index with no Conduit reachable: "
+            f"{(probe.stderr or probe.stdout)[:400]}"
+        )
+        assert "<div id=" in probe.stdout or "<script" in probe.stdout, (
+            f"served something that is not the Glass: {probe.stdout[:200]}"
+        )
+    finally:
+        subprocess.run(["docker", "rm", "-f", cid], capture_output=True, check=False)  # noqa: S603
