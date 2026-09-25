@@ -1,4 +1,4 @@
-.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test dev-up dev-down test-all glass-perf glass-a11y glass-keyboard glass-map-verify bundle
+.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test dev-up dev-down docker-clean test-all glass-perf glass-a11y glass-keyboard glass-map-verify bundle
 
 PY := .venv/bin/python
 PYTEST := .venv/bin/pytest
@@ -8,7 +8,7 @@ MYPY := .venv/bin/mypy
 # Phase 0 exit criterion (docs/07_BUILD_PLAN.md): CI green; a PR adding a GPL
 # dependency fails; a Pydantic model change not reflected in the generated
 # TypeScript fails the build. See the Phase 0 plan for what each target proves.
-ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check test-file-coverage-check citation-check conformance-guard bundle
+ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check test-file-coverage-check citation-check conformance-guard bundle
 
 lint:
 	$(RUFF) check .
@@ -136,6 +136,12 @@ trivy-image-workspace:
 	docker build -f apps/workspace/Dockerfile -t ospreyflow/workspace:ci .
 	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/workspace:ci
 
+# harness/Dockerfile — Stage 2 §5b's own bootstrap image (docs/05_DEPLOYMENT.md §2's "one Docker
+# command"), paid here as a rule-8 repayment the same way apps/workspace's was at Stage 2 §5a.
+trivy-image-harness:
+	docker build -f harness/Dockerfile -t ospreyflow/harness:ci .
+	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/harness:ci
+
 schemas-check:
 	$(PY) scripts/schemas_check.py
 
@@ -192,6 +198,34 @@ dev-up:
 
 dev-down:
 	docker compose -f deploy/compose/dev.yaml down -v
+
+# The owner's own ruling, 25 September 2026: removes every OspreyFlow-owned container (any name
+# containing "osprey-" — every `docker compose up` this repository's own renderer produces names
+# its project `osprey-<profile>`, so this catches a rendered deployment and every exit test's own
+# clone of one alike), every OspreyFlow-owned image (`osprey/*:local`, the three owned images'
+# local build tags), every named volume containing "osprey", plus dangling images and the build
+# cache. **Never the airbyte container or its volumes.** Neither is named or tagged `osprey*`, so
+# the name/tag filters above leave them alone unasked; the final `docker volume prune -f` is the
+# one step here that is not name-scoped (an exit-test deployment's own *anonymous* volumes — an
+# ArcadeDB data volume among them, found here at 2.6GB — carry a random ID, not "osprey", so no
+# name filter catches them), and it is still safe for the same reason `docker volume prune`
+# always is: it only removes a volume attached to **no** container, so an airbyte volume mounted
+# into airbyte's own always-running container is never a candidate regardless of its name.
+# Repeatable: run whenever a stale exit-test deployment or dev-up stack has left this host's
+# Docker Desktop VM disk short, the condition this session's own exit tests hit twice (`CLAUDE.md`
+# rule 14's own worked example, and the disk-exhaustion finding recorded in `07_BUILD_PLAN.md`'s
+# Stage 2 §5b entry).
+docker-clean:
+	@echo "docker-clean: before —"
+	@docker system df
+	-docker ps -aq --filter "name=osprey-" | xargs -r docker rm -f
+	-docker images --format '{{.Repository}}:{{.Tag}}' | grep -E '^osprey/.*:local$$' | xargs -r docker rmi -f
+	-docker volume ls -q --filter "name=osprey" | xargs -r docker volume rm
+	docker image prune -f
+	docker builder prune -f
+	docker volume prune -f
+	@echo "docker-clean: after —"
+	@docker system df
 
 # Everything `make test` skips because it needs a live store, run
 # together against whatever `make dev-up` brought up. `npm run

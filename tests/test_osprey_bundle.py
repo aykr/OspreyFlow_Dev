@@ -162,6 +162,35 @@ def test_build_bundle_with_images_archives_every_service(
     assert (tmp_path / "staging" / "images" / "api.tar").is_file()
 
 
+def test_build_bundle_with_images_also_archives_the_harness_bootstrap_image(
+    tmp_path: Path, bundle_config: OspreyConfig
+) -> None:
+    """Item 3 of Stage 2 §5b's own brief: "Include it in the bundle's image set." Not a compose
+    service (`harness.render.service_images` never names it), and not archived unless named here
+    explicitly — this is the test that fails if that naming is ever dropped."""
+    from scripts.osprey_bundle import HARNESS_IMAGE, build_bundle
+
+    saved: list[str] = []
+
+    def _recording_docker_save(image: str, out_path: Path) -> None:
+        saved.append(image)
+        out_path.write_bytes(b"not a real image archive, just a marker for the test")
+
+    manifest = build_bundle(
+        bundle_config,
+        tmp_path / "staging",
+        example_config_text="map:\n  default: osm-local\n",
+        include_images=True,
+        resolver=_fake_resolver,
+        docker_save=_recording_docker_save,
+        docker_build_docs_layer=_fake_docker_build_docs_layer,
+    )
+
+    assert "images/harness.tar" in manifest.image_archives
+    assert HARNESS_IMAGE in saved
+    assert (tmp_path / "staging" / "images" / "harness.tar").is_file()
+
+
 def test_build_bundle_with_images_layers_the_docs_site_onto_the_workspace_image_only(
     tmp_path: Path, bundle_config: OspreyConfig
 ) -> None:

@@ -53,6 +53,14 @@ from schemas.mapconfig import MapConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
+#: The harness's own bootstrap image (`harness/Dockerfile`, `05_DEPLOYMENT.md` §2's own
+#: `ghcr.io/ospreyflow/harness:latest`) — not a compose service, so `harness.render.service_images`
+#: never names it, and not archived unless named here explicitly. Item 3 of Stage 2 §5b's own
+#: brief: "Include it in the bundle's image set." Same precondition as every other owned image
+#: `--images` archives: already built and tagged locally before this command runs; this module
+#: does not build it.
+HARNESS_IMAGE = "osprey/harness:local"
+
 #: Filesystem debris this machine's own OS/sync tooling writes into any directory it touches
 #: — never bundle content, never written by anything above. Found in a real `--images` build, not
 #: assumed: `staging_dir.rglob("*")` picked up a stray `Icon\r` (macOS's custom-folder-icon marker,
@@ -224,6 +232,9 @@ def build_bundle(
             archive_relpath = f"images/{entry.service}.tar"
             docker_save(entry.image, staging_dir / archive_relpath)
             image_archives.append(archive_relpath)
+        harness_archive_relpath = "images/harness.tar"
+        docker_save(HARNESS_IMAGE, staging_dir / harness_archive_relpath)
+        image_archives.append(harness_archive_relpath)
 
     all_paths = sorted(
         str(p.relative_to(staging_dir)) for p in staging_dir.rglob("*") if _is_bundle_content(p)

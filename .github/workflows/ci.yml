@@ -208,6 +208,22 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
 
+  # harness/Dockerfile — Stage 2 §5b's own bootstrap image (docs/05_DEPLOYMENT.md §2's "one Docker
+  # command"), paid here as a rule-8 repayment the same way apps/workspace's was at Stage 2 §5a.
+  trivy-image-harness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f harness/Dockerfile -t ospreyflow/harness:ci .
+      - uses: aquasecurity/trivy-action@v0.24.0
+        with:
+          image-ref: ospreyflow/harness:ci
+          scan-type: image
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
   # services/api's Dockerfile, Phase 3's own — same reasoning as
   # trivy-image-ingest above.
   trivy-image-api:
@@ -688,6 +704,7 @@ jobs:
           --ignore=tests/harness/test_restore_exit_test.py
           --ignore=tests/harness/test_workspace_bundle.py
           --ignore=tests/harness/test_bundle_exit_test.py
+          --ignore=tests/harness/test_harness_image.py
           --ignore=tests/scenarios/test_phase8_exit_criterion_end_to_end.py
       # The Glass's fast, no-live-infra unit tests (`store.test.ts`,
       # `zoomBands.test.ts`) — `*.integration.test.ts` is excluded by
@@ -783,3 +800,23 @@ jobs:
         run: >-
           PYTHONPATH=.:packages uv run pytest -p no:randomly
           tests/harness/test_bundle_exit_test.py
+
+  # Stage 2 §5b's own harness bootstrap image (`harness/Dockerfile`) — the image builds, and
+  # `docker run ... preflight --gate` from it reaches the same result as the host CLI (one named,
+  # measured exception: `tests/harness/test_harness_image.py`'s own module docstring has the
+  # memory-check discrepancy this comparison excludes and why). A separate job from both above:
+  # it builds its own image and runs no compose stack at all, so it neither needs nor risks the
+  # port/project-name collisions the other two jobs' own comments already explain.
+  harness-image-exit-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - name: Build the harness image and compare its preflight to the host CLI's
+        env:
+          OSPREY_TEST_HARNESS_IMAGE: "1"
+        run: >-
+          PYTHONPATH=.:packages uv run pytest -p no:randomly
+          tests/harness/test_harness_image.py
