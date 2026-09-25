@@ -417,6 +417,7 @@ jobs:
       - run: >-
           uv run pytest tests/conformance/graph_port tests/ingest
           tests/services/api/test_valkey_store.py
+          tests/services/api/test_ws_ticket.py
           tests/services/api/test_statelessness.py
           tests/scenarios/test_phase3_working_set.py
           tests/services/api/test_sites_store.py
@@ -667,6 +668,7 @@ jobs:
           uv run pytest --ignore=tests/conformance/graph_port
           --ignore=tests/conformance/model_port --ignore=tests/golden --ignore=tests/ingest
           --ignore=tests/services/api/test_valkey_store.py
+          --ignore=tests/services/api/test_ws_ticket.py
           --ignore=tests/services/api/test_statelessness.py
           --ignore=tests/scenarios/test_phase3_working_set.py
           --ignore=tests/scenarios/test_witness_statement_extraction.py

@@ -60,7 +60,11 @@ import { Timeline } from "./timeline/Timeline";
 import { AlertInbox } from "./watches/AlertInbox";
 import { HotlistPanel } from "./watches/HotlistPanel";
 import { MonitorPanel } from "./watches/MonitorPanel";
-import { connectDeltaClient, type SocketLike } from "./workingset/deltaClient";
+import {
+  connectDeltaClient,
+  type DeltaClient,
+  type SocketLike,
+} from "./workingset/deltaClient";
 import { createWorkingSet } from "./workingset/store";
 
 // **An empty base URL means same-origin, and that is what a rendered
@@ -392,27 +396,48 @@ export function App() {
     });
 
     const wsUrl = websocketOrigin(API_BASE_URL);
-    // A browser's native `WebSocket` cannot set an `Authorization` header
-    // — `?token=` is the server's documented fallback for exactly this
-    // (`services/api/app.py`'s `_authenticate_websocket`).
+    // A browser's native `WebSocket` cannot set an `Authorization` header at all.
+    // `06_DECISIONS.md` ADR-050 objection 8, built: rather than a bearer token in this URL
+    // (Checkpoint 2's own fallback, and a real log-exposure gap — see `services/api/ws_ticket.py`'s
+    // own module docstring), this fetches a short-lived, single-use `?ticket=` from
+    // `POST /v1/ws-ticket` first, authenticated the ordinary way, and opens the socket with that
+    // instead. A bearer token in this URL is refused outright by `_authenticate_websocket`, not
+    // merely no longer preferred, so there is no fallback path left to fall back to.
     //
     // `bearerToken` in the dependency array below is `06_DECISIONS.md` ADR-050's own "the delta
     // WebSocket authenticates on connect and on every reconnect": a token rotation (the silent
     // `prompt=none` round `handleUnauthenticatedResponse` triggers) tears this effect down and
-    // re-establishes the connection with the fresh token, rather than an already-open socket
-    // continuing to carry the one it dialled with.
-    const client = connectDeltaClient(
-      () =>
-        new WebSocket(
-          `${wsUrl}/v1/investigations/${investigationId}/stream?token=${encodeURIComponent(bearerToken)}`,
-        ) as unknown as SocketLike,
-      { onDelta: (delta) => workingSet.store.getState().applyDelta(delta) },
-    );
+    // re-establishes the connection with a freshly minted ticket, rather than an already-open
+    // socket continuing to carry the one it dialled with.
+    let cancelled = false;
+    let client: DeltaClient | null = null;
+    void fetch(`${API_BASE_URL}/v1/ws-ticket`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${bearerToken}` },
+    })
+      .then((r) => {
+        if (r.status === 401) {
+          handleUnauthenticatedResponse();
+          return null;
+        }
+        return r.json();
+      })
+      .then((body: { ticket: string } | null) => {
+        if (!body || cancelled) return;
+        client = connectDeltaClient(
+          () =>
+            new WebSocket(
+              `${wsUrl}/v1/investigations/${investigationId}/stream?ticket=${encodeURIComponent(body.ticket)}`,
+            ) as unknown as SocketLike,
+          { onDelta: (delta) => workingSet.store.getState().applyDelta(delta) },
+        );
+      });
     return () => {
-      client.close();
+      cancelled = true;
+      client?.close();
       unsubscribe();
     };
-  }, [investigationId, bearerToken]);
+  }, [investigationId, bearerToken, handleUnauthenticatedResponse]);
 
   useEffect(() => {
     const crossFilter = crossFilterRef.current;

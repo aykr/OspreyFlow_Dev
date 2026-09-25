@@ -299,6 +299,7 @@ from .working_set.models import (
 )
 from .working_set.service import WorkingSetService
 from .working_set.store import ValkeyWorkingSetStore
+from .ws_ticket import WsTicketResponse, mint_ws_ticket, redeem_ws_ticket
 
 
 @asynccontextmanager
@@ -3311,35 +3312,52 @@ async def _evaluate_watches_best_effort(
 # --- the delta stream --------------------------------------------------------
 
 
+@app.post("/v1/ws-ticket", response_model=WsTicketResponse)
+async def issue_ws_ticket(principal: PrincipalDep, valkey: ValkeyDep) -> WsTicketResponse:
+    """`06_DECISIONS.md` ADR-050 objection 8. Authenticated the ordinary way — the same bearer
+    token every other `/v1` route already requires — this mints a short-lived, single-use ticket
+    bound to the calling principal and returns it; the caller opens the delta WebSocket with
+    `?ticket=<this>` instead of putting its own bearer token in that URL. See
+    `services.api.ws_ticket`'s own module docstring for why a ticket, why Valkey, and why 30
+    seconds."""
+    ticket = await mint_ws_ticket(valkey, principal)
+    return WsTicketResponse(ticket=ticket)
+
+
 async def _authenticate_websocket(websocket: WebSocket) -> Principal:
     """`WebSocket` connections carry no `Authorization` header dependency
     injection the way an HTTP route does — the bearer token is read from
     the same header manually, once, before `accept()`.
 
-    **A browser's native `WebSocket` cannot set that header at all** — a
-    real gap Checkpoint 2 hit the first time the Glass tried to open this
-    connection from an actual browser, not a pre-empted one. The `?token=`
-    query parameter is this phase's resolution: the same long-lived JWT a
-    browser client already holds and already sends as a Bearer header on
-    every ordinary HTTP call, so this does not mint or expose a new
-    credential — the marginal risk is a token appearing in this server's
-    own access/proxy logs, which a Bearer header avoids. A short-lived,
-    single-use "ticket" (minted by an authenticated HTTP call, exchanged
-    here instead of the JWT itself) closes that gap properly and is named
-    here as the production hardening this phase does not implement, not
-    left silent. The `Authorization` header is still tried first, for a
-    non-browser client (this phase's own `ws`-based integration test) that
-    *can* set it.
+    **A browser's native `WebSocket` cannot set that header at all.** Checkpoint 2's own fix —
+    the long-lived bearer JWT as a `?token=` query parameter — closed the connectivity gap and
+    opened a logging one: measured during ADR-050's own same-origin verification, the full access
+    token appeared in the workspace's nginx access log, and `05_DEPLOYMENT.md` §7's own
+    TLS-terminating reverse proxy logs it again. **ADR-050 objection 8, built:** `?ticket=`, a
+    short-lived, single-use opaque value minted by `POST /v1/ws-ticket` and redeemed here via
+    `services.api.ws_ticket.redeem_ws_ticket`'s atomic Valkey `GETDEL` — never the bearer token
+    itself, so a ticket appearing anywhere it should not (a proxy log, this is not expected to
+    happen, but the whole point of a ticket over a bearer token is that it stays true even if it
+    does) is worthless the moment it is used once, and worthless anyway 30 seconds later. **A
+    bearer token in the URL is refused outright, not merely no longer preferred** — the query
+    parameter `_authenticate_websocket` reads is `ticket`, not `token`, and nothing here falls
+    back to accepting the older shape. The `Authorization` header is still tried first, for a
+    non-browser client (this phase's own `ws`-based integration test) that *can* set it.
     """
     header = websocket.headers.get("authorization", "")
     if header.lower().startswith("bearer "):
         token = header[len("bearer ") :]
-    else:
-        token = websocket.query_params.get("token", "")
-        if not token:
-            raise PrincipalResolutionError("missing bearer token")
-    resolver: PrincipalResolver = websocket.app.state.principal_resolver
-    return resolver.resolve(token)
+        resolver: PrincipalResolver = websocket.app.state.principal_resolver
+        return resolver.resolve(token)
+
+    ticket = websocket.query_params.get("ticket", "")
+    if not ticket:
+        raise PrincipalResolutionError("missing bearer token or ws-ticket")
+    valkey: Valkey = websocket.app.state.valkey
+    principal = await redeem_ws_ticket(valkey, ticket)
+    if principal is None:
+        raise PrincipalResolutionError("ws-ticket is missing, expired, or already redeemed")
+    return principal
 
 
 async def _forward_notifications(

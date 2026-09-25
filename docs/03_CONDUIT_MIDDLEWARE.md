@@ -92,11 +92,19 @@ requires at node/edge level up to the investigation id itself.
 
 ```
 WS     /v1/investigations/{id}/stream          bidirectional delta channel
+POST   /v1/ws-ticket                           short-lived single-use ticket for the stream above
 POST   /v1/investigations/{id}/seed            seed from a search result or saved subgraph
 POST   /v1/investigations/{id}/expand          apply an expansion
 POST   /v1/investigations/{id}/expand/preview  cardinality only, no mutation
 DELETE /v1/investigations/{id}/nodes           remove from the working set (not from the Vault)
 ```
+
+**`/v1/ws-ticket`, ADR-050 objection 8.** A browser's native `WebSocket` cannot set an
+`Authorization` header, so the stream above is opened with `?ticket=<value>` rather than a bearer
+token in the URL. This route is the only way to obtain one: authenticated the ordinary way, it
+mints a random, single-use value — bound to the calling principal, redeemable exactly once, and
+expiring in 30 seconds — and returns it. A bearer token placed in the stream's own URL instead of a
+ticket is refused outright, not merely accepted as a fallback.
 
 The delta protocol, client-bound:
 
