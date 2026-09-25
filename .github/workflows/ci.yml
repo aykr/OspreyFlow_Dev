@@ -707,6 +707,7 @@ jobs:
           --ignore=tests/harness/test_workspace_bundle.py
           --ignore=tests/harness/test_bundle_exit_test.py
           --ignore=tests/harness/test_harness_image.py
+          --ignore=tests/harness/test_sustained_load.py
           --ignore=tests/scenarios/test_phase8_exit_criterion_end_to_end.py
       # The Glass's fast, no-live-infra unit tests (`store.test.ts`,
       # `zoomBands.test.ts`) — `*.integration.test.ts` is excluded by
@@ -802,6 +803,27 @@ jobs:
         run: >-
           PYTHONPATH=.:packages uv run pytest -p no:randomly
           tests/harness/test_bundle_exit_test.py
+
+  # `05_DEPLOYMENT.md` §8 / `07_BUILD_PLAN.md` Stage 2a addendum's own named-not-built test, built.
+  # A separate job for the same reason `bundle-install-exit-test` above is one: this renders the
+  # identical `osprey-local-lite` compose project name and host ports, so sharing a job with
+  # `deployment-exit-tests` would collide rather than exercise anything new. Six real seed-and-query
+  # cycles against one accumulating database — `tests/harness/test_sustained_load.py`'s own module
+  # docstring has the runtime budget (up to ~40 minutes) this job's own timeout is sized against.
+  # This test's own `finally` block tears down what it starts, so no further "Tear down" step here.
+  sustained-load-exit-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - name: Six seed-and-query cycles against one accumulating local-lite database
+        env:
+          OSPREY_TEST_SUSTAINED_LOAD: "1"
+        run: >-
+          PYTHONPATH=.:packages uv run pytest -p no:randomly
+          tests/harness/test_sustained_load.py
 
   # Stage 2 §5b's own harness bootstrap image (`harness/Dockerfile`) — the image builds, and
   # `docker run ... preflight --gate` from it reaches the same result as the host CLI (one named,
