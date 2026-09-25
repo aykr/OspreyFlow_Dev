@@ -111,6 +111,36 @@ def test_the_same_check_fails_for_a_bundle_built_with_an_absolute_url() -> None:
 
 
 @requires_opt_in
+def test_a_production_build_fails_with_the_dev_bearer_token_set() -> None:
+    """`06_DECISIONS.md` ADR-050: "the VITE_DEV_BEARER_TOKEN path survives only for `npm run dev`.
+    A production build with it set fails the build." The planted violation is the real shape (rule
+    15): the variable present at `vite build` — an environment variable, not a source edit — which
+    is exactly what a well-meaning `--build-arg` would reintroduce, the same class of mistake
+    `test_the_same_check_fails_for_a_bundle_built_with_an_absolute_url` above guards against for
+    the Conduit's own address.
+    """
+    completed = subprocess.run(  # noqa: S603
+        ["npm", "run", "build", "--workspace", "apps/workspace"],
+        cwd=REPO_ROOT,
+        env={**os.environ, "VITE_DEV_BEARER_TOKEN": "fake-dev-token"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode != 0, (
+        "a production build with VITE_DEV_BEARER_TOKEN set exited 0 — the fence in "
+        "apps/workspace/vite.config.ts did not fire"
+    )
+    assert "VITE_DEV_BEARER_TOKEN" in completed.stderr
+
+
+@requires_opt_in
+def test_a_production_build_succeeds_with_no_dev_bearer_token() -> None:
+    """Green beside the red above — the fence must not block an ordinary build."""
+    _build({"VITE_API_BASE_URL": ""})
+
+
+@requires_opt_in
 def test_the_workspace_serves_with_no_conduit_reachable_at_all() -> None:
     """The Glass is static and must come up whether or not the Conduit is there.
 
