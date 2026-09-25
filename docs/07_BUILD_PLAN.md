@@ -60,12 +60,15 @@ laptop from the documentation, started, and demonstrated (both acceptance scenar
   metric); Stage 6 (test-infrastructure/CI hygiene, itemised); export mark signing (item 7); the
   `_weigh_edge` quadratic-ingest-cost defect; "Legacy disclosures"'s own relocation into wherever
   each entry's stated disposition names (assigned to Stage 3).
+- **Proposed, not milestone-blocking:** the generated documentation site and its admin-console
+  `/docs` link (Stage 2 §5b/§7's own Proposed sub-items), and the post-milestone Analyst guide
+  (Stage 3c).
 
 **Outside the build entirely: `docs/PRODUCT_DELIVERY.md`** — the alpha gate, demo distribution
 classes, tester/alpha/beta material, and Trigger B's own downstream distribution questions. Not a
 build step, a stage, or a precondition of anything above; a different question, answered there.
 
-**Last updated:** 24 September 2026.
+**Last updated:** 25 September 2026.
 
 ---
 
@@ -3647,6 +3650,17 @@ find something already finished sitting in the queue.
    each planted violation fails the bundle, each taking the shape the gate actually receives at its
    own real call site. **Stage 2 exit test #3.**
 
+   **Proposed sub-item, 25 September 2026 — the generated documentation site.** A site rendered from
+   the Apache-scoped `docs/` tree at bundle time, with three landing pages, its own inclusion
+   decided by the two existing gates already scoping that boundary
+   (`scripts/product_tree_link_check.py`'s Apache-scoped set and `scripts/doc_citations_check.py`'s
+   resolution check) rather than a third notion of what publishes. Exit tests, each a planted
+   violation: no private-tree file is rendered onto the site — plant one, the build goes red; every
+   internal link on the site resolves — plant a broken one, the build goes red; the Preflight
+   reference page is generated from `harness/preflight/*`'s own check strings, not hand-copied —
+   change one of those strings, the generated page changes with it. **Not built. Not
+   milestone-blocking.**
+
    **Stage 2 §6 — The six setup screens. ACCEPTED; D2 confirmed 24 September 2026.** A browser
    application over Stage 2 §1–§5, bootstrapped by one Docker command, becoming `/admin` after
    launch. Profile, Components and Models write `osprey.yaml` through the Stage 2 §1 schema.
@@ -3695,6 +3709,10 @@ find something already finished sitting in the queue.
    `"stopped"` watch nobody can explain, and sees the same two results from the same code. `verify`
    is the right home for the mechanism either way, since it runs against the running deployment
    where the Conduit already holds the credentials and the harness never touches the secret.
+
+   **Proposed sub-item, 25 September 2026 — a `/docs` link from the admin console** to the generated
+   documentation site the Stage 2 §5b sub-item above proposes, alongside the backup, restore,
+   upgrade and verify screens this sub-stage already hosts. **Not built. Not milestone-blocking.**
 
    **Stage 2's exit (D3 — owner's decision, 24 September 2026): tests #1, #2 and #3 green.** *This is
    Stage 2's own completion, not ADR-042's alpha gate, which additionally requires both acceptance
@@ -4823,7 +4841,15 @@ find something already finished sitting in the queue.
    access filter it describes. The two parts' own exit criteria are independent by construction,
    which is exactly why splitting them was the right move rather than a formality.
 
-   **Addendum, 24 September 2026 — the 23 September rehearsal's six findings closed, two product
+   **3c — Proposed, 25 September 2026, post-milestone: the Analyst guide.** Neither 3a nor 3b: not
+   an install/deploy document (3a) and not a citation or link-integrity rewrite (3b), but
+   user-facing material for the analyst working the Glass day to day — a genuinely new document, not
+   an existing one's content gap. Explicitly **not** owed before the milestone; recorded here so it
+   is not silently forgotten the way an unscoped "later" item tends to be. **Exit, a test, and
+   deliberately not a command-runs-clean check like 3a's:** a non-author usability pass — someone
+   who did not write the guide follows it cold, against a running deployment, and completes the
+   tasks it claims to teach. A guide that only its own author has ever followed proves the author
+   remembers what they built, not that the guide teaches it.
    defects fixed with tests, disclosures below.** `docs/demo/2026-09-24/RUNBOOK.md` (23 September)
    found six ways `DEMO_GUIDE.md` failed when followed literally, behind two real product defects.
    Both fixed this round, each with a red-then-green test (rule 12/15 discipline):
