@@ -60,6 +60,7 @@ from harness.render import (
     DEFAULT_OUT_ROOT,
     load_config,
     render,
+    write_config_copy,
 )
 from harness.render import write as write_artefacts
 from schemas.deployment import OspreyConfig, Profile
@@ -411,6 +412,7 @@ def main(argv: list[str] | None = None) -> int:
         # 1. Render.
         rendered = render(config, allow_unpinned=True)
         write_artefacts(rendered, out_dir)
+        write_config_copy(args.config, out_dir)
         (out_dir / "realm.json").write_text(
             render_realm_json(config, demo_analyst=args.demo_analyst), encoding="utf-8"
         )

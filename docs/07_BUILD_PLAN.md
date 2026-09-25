@@ -26,24 +26,30 @@ laptop from the documentation, started, and demonstrated (both acceptance scenar
 - `PathStaleError` and the server-side traversal budget (pulled forward from Stage 5). Built.
 
 **Remains before the milestone, numbered, with a word on size:**
-1. **The harness/packaging pipeline** — **designed (Proposed), not started.** Large, green-field:
-   no packaging step, `backup`/`restore`, scripted golden-path deploy, setup screens or Preflight
-   exist anywhere in this repository yet (`harness/` holds only its own `__init__.py`). The design
-   and its adversarial review are `06_DECISIONS.md` **ADR-049**, status **Proposed**, broken into
-   sub-stages **`Stage 2 §1`–`Stage 2 §7`** at this stage's own entry below. The owner ruled on all
-   seven open objections and confirmed D1–D3 on 24 September 2026, then corrected D1 to its
-   **narrowed** form and settled all four follow-on items the same day. The record stays
-   **Accepted** on 24 September 2026, with standing rule 8 left unchanged and the four undockerised
-   services recorded instead as a rule-8 violation by their creating phases, repaid once in
-   `Stage 2 §5`. **`Stage 2 §1` and `Stage 2 §2` are built** — the `osprey.yaml` schema,
-   `python -m harness.render` and its four artefacts with drift detection and change preview, and
-   `python -m harness.preflight` with ten checks, Re-check, `--gate` and §3's offered-never-applied
-   reduced variant. **`Stage 2 §5a` is built too** — the deployable-service enumeration, the Glass's
-   image as a standing-rule-8 repayment, and local builds of all three owned images — pulled ahead
-   of §3 by the owner's split of §5, since §3 cannot start a stack whose images do not exist. The
-   `cluster` renderer is a loud stub. §3, §4, §5b, §6 and §7 are not started, and §3 now has two
-   recorded blockers of its own (no health endpoint on the Conduit; §3's "three workers" not
-   renderable).
+1. **The harness/packaging pipeline** — **`Stage 2 §1`–`§5b` built; `§6`–`§7` not started.** The
+   design and its adversarial review are `06_DECISIONS.md` **ADR-049**, status **Accepted**, broken
+   into sub-stages **`Stage 2 §1`–`Stage 2 §7`** at this stage's own entry below. The owner ruled on
+   all seven open objections and confirmed D1–D3 on 24 September 2026, then corrected D1 to its
+   **narrowed** form and settled all four follow-on items the same day, with standing rule 8 left
+   unchanged and the four undockerised services recorded instead as a rule-8 violation by their
+   creating phases, repaid once in `Stage 2 §5`. **`Stage 2 §1` and `Stage 2 §2` are built** — the
+   `osprey.yaml` schema, `python -m harness.render` and its four artefacts with drift detection and
+   change preview, and `python -m harness.preflight` with ten checks, Re-check, `--gate` and §3's
+   offered-never-applied reduced variant. **`Stage 2 §5a` is built too** — the deployable-service
+   enumeration, the Glass's image as a standing-rule-8 repayment, and local builds of all three
+   owned images. **`Stage 2 §3` and `§4` are built**, exit tests #2 and #1 green respectively
+   (each stage's own entry below has the detail). **`Stage 2 §5b` is now built too, 25 September
+   2026** — the real `osprey bundle` command, its seven packaging-hygiene assertions, the
+   bundle-time documentation site (both the tarball and the workspace image's own `/docs`), and
+   exit test #3, run for real: build with `--images`, unpack into a directory with no relationship
+   to this checkout, `docker load`, `harness.apply --no-build` — green, automated as
+   `tests/harness/test_bundle_exit_test.py` (opt-in, `OSPREY_TEST_BUNDLE=1`). **Stage 2's own D3
+   exit criterion — tests #1, #2 and #3 green — is therefore now fully satisfied**; this is Stage
+   2's own completion, not ADR-042's alpha gate, which additionally requires both acceptance
+   scenarios green on `local-lite`. The `cluster` renderer is a loud stub. `§6` and `§7` (the six
+   setup screens; post-launch admin console operations) are not started; `§3` still has its own two
+   recorded blockers as historical record even though the stage as a whole went green around them
+   (see that stage's own entry).
 2. **The documentation refresh** — moderate: the three drift gates (`domain-model-coverage-check`,
    `route-coverage-check`, `demo-guide-check`) exist and run; the content that empties their own
    allowlists does not exist yet.
@@ -64,9 +70,10 @@ laptop from the documentation, started, and demonstrated (both acceptance scenar
   metric); Stage 6 (test-infrastructure/CI hygiene, itemised); export mark signing (item 7); the
   `_weigh_edge` quadratic-ingest-cost defect; "Legacy disclosures"'s own relocation into wherever
   each entry's stated disposition names (assigned to Stage 3).
-- **Proposed, not milestone-blocking:** the generated documentation site and its admin-console
-  `/docs` link (Stage 2 §5b/§7's own Proposed sub-items), and the post-milestone Analyst guide
-  (Stage 3c).
+- **Proposed, not milestone-blocking:** an admin-console `/docs` link to the now-built
+  documentation site (Stage 2 §7's own Proposed sub-item — the site itself is built, `Stage 2
+  §5b`, 25 September 2026), and the post-milestone Analyst guide (Stage 3c, still only a
+  "not yet written" placeholder page on the site itself).
 
 **Outside the build entirely: `docs/PRODUCT_DELIVERY.md`** — the alpha gate, demo distribution
 classes, tester/alpha/beta material, and Trigger B's own downstream distribution questions. Not a
@@ -2556,7 +2563,10 @@ find something already finished sitting in the queue.
 
    ---
 
-   **Sub-stages `Stage 2 §1`–`Stage 2 §7` — ACCEPTED, 24 September 2026.** `Stage 2 §1` is **built**
+   **Sub-stages `Stage 2 §1`–`Stage 2 §7` — ACCEPTED, 24 September 2026.** *A same-day snapshot,
+   superseded by each sub-stage's own entry below as later work landed (`§3`, `§4` and `§5b` all
+   went from "not started" to built within days of this line) — kept as historical record, not
+   corrected in place.* `Stage 2 §1` is **built**
    apart from the `cluster` renderer, **`Stage 2 §2` is built**, and **`Stage 2 §5a` is built**
    (the owner split §5 on 24 September 2026 so the images exist before §3 needs them); §3, §4, §5b,
    §6 and §7 are not started. Design and
@@ -3845,16 +3855,128 @@ find something already finished sitting in the queue.
    each planted violation fails the bundle, each taking the shape the gate actually receives at its
    own real call site. **Stage 2 exit test #3.**
 
-   **Proposed sub-item, 25 September 2026 — the generated documentation site.** A site rendered from
-   the Apache-scoped `docs/` tree at bundle time, with three landing pages, its own inclusion
-   decided by the two existing gates already scoping that boundary
-   (`scripts/product_tree_link_check.py`'s Apache-scoped set and `scripts/doc_citations_check.py`'s
-   resolution check) rather than a third notion of what publishes. Exit tests, each a planted
-   violation: no private-tree file is rendered onto the site — plant one, the build goes red; every
-   internal link on the site resolves — plant a broken one, the build goes red; the Preflight
-   reference page is generated from `harness/preflight/*`'s own check strings, not hand-copied —
-   change one of those strings, the generated page changes with it. **Not built. Not
-   milestone-blocking.**
+   **BUILT, 25 September 2026 — the narrower scope a directed brief actually asked for, recorded
+   plainly against the fuller description immediately above it.** The brief covered: extending
+   `scripts/osprey_bundle.py` into the real `python -m scripts.osprey_bundle --profile local-lite
+   [--images]` command (`build_bundle`, `make_tarball`); the seven named assertions — ADR-035 §C1's
+   fail-closed registry (`scripts/demo_registry.py`, `make demo-manifest`, `tests/demo_registry/`);
+   ADR-034 §B7 #1/#2 and ADR-035 §C2 (`scripts/packaging_gate.py`, `tests/packaging/`, 20 cases
+   including the two ADR-named red-then-green proofs); the existing non-redistributable-tile
+   refusal (unchanged, reused); `LICENSE`/`NOTICE` (Apache 2.0 text, "The OspreyFlow Authors",
+   `tests/packaging/test_internal_demo_exclusion.py`'s `check_license_and_notice` cases); and
+   `make licence-check` extended to data-file licences per ADR-035 §C7
+   (`find_data_licence_offenders`, `tests/licence_check/test_data_licence_offenders.py`, including
+   the CDLA-Sharing-1.0 case §C6 names). **Not built this round, and not silently absorbed into
+   it:** the service-enumeration/Dockerfile/`trivy image`/harness-image work this stage's own fuller
+   description above assigns to `§5b` was already discharged by `§5a`'s own split (workspace/api/
+   ingest images, standing-rule-8 repayment) — except `ghcr.io/ospreyflow/harness:latest`
+   (`§2`/`§3`'s own bootstrap image), which neither `§5a` nor this round built. That is a real,
+   named gap, not a rediscovery of one already closed: recorded here as remaining, owed to whichever
+   later pass first needs `harness/Dockerfile` to exist.
+
+   **The bundle-time documentation site — BUILT, 25 September 2026, both halves of item 3's own
+   "into both the tarball and the workspace image at `/docs`".** A site rendered from the
+   Apache-scoped `docs/` tree (`scripts/doc_site.py`, `scripts/simple_markdown.py`), inclusion
+   decided by `scripts.route_coverage_check.APACHE_DOC_PATHS` — the same tuple
+   `product_tree_link_check.py` itself imports rather than redeclaring — never a hand-kept list.
+   Three landing pages (Architecture, Operator guide, Analyst guide placeholder stating plainly it
+   is not yet written) plus a Preflight reference page generated from `harness/preflight/*.py`'s own
+   docstrings and `NAME` constants via `ast.parse` (no import, so the render stage needs nothing
+   beyond the Python standard library). **Design call this round settled, recorded rather than left
+   implicit — not the only reading the brief's own wording could support:**
+   `decision_log_publication_check.PROCESS_ADR_NUMBERS` is imported and exercised by
+   `assert_no_process_content` as a **defensive safety check on the render's own output**, the same
+   role `product_tree_link_check.PRIVATE_TREE_MARKERS` already plays for
+   `assert_no_private_tree_names` — not as a second, larger content set. This site renders no
+   `06_DECISIONS.md` content at all today (that file is not in `APACHE_DOC_PATHS` and never will be
+   pre-Trigger-A), so `PROCESS_ADR_NUMBERS` is exercised only by its own fabricated-fragment test,
+   not by anything the real site currently calls it with. If the site is ever extended to surface
+   ADR-034 §B10's own filtered decision log, this is the mechanism that filter would reuse.
+   Three named exit tests, each a planted violation, all in `tests/test_doc_site.py` (10 cases):
+   no private-tree file is rendered (the real bug this test caught: `PRIVATE_TREE_MARKERS` names
+   `.md` files, the site renders `.html`, and a bare substring check never fired — fixed by
+   comparing `Path(...).stem`); every internal link resolves; changing a Preflight check's own
+   docstring changes the generated reference page. **Wired into the workspace image, not only the
+   tarball:** `scripts.osprey_bundle._docker_build_docs_layer` layers the same already-rendered,
+   already-checked `docs-site/` onto the real local `osprey/workspace:local` image when `--images`
+   is used, retagged in place so `compose.yaml`/`versions.lock` need no second, differently-named
+   image — proven against a real running container in the exit test below (`curl` against
+   `/docs/index.html` and `/docs/preflight-reference.html` through the deployed workspace's own
+   nginx, both 200), not only against the fabricated build context a unit test injects.
+
+   **Exit test #3 — run for real, 25 September 2026. GREEN.** Built the bundle with `--images`
+   (11 archives: the three owned images plus arcadedb/valkey/minio/postgres/keycloak/ollama/
+   whisper/opensearch); unpacked the tarball into a directory with no relationship to this checkout
+   at all (not `deploy/generated/`, not anywhere under it); `docker load`ed every archive, restoring
+   the exact tags `compose.yaml`/`versions.lock` already name; ran `python -m harness.apply
+   --no-build` pointed at nothing but the unpacked bundle's own `osprey.yaml.example` — reaching a
+   health-checked stack (6 services healthy, 33s) with the post-launch OIDC verify green (3/3
+   assertions) and the workspace, `/healthz` proxy and `/docs` all reachable and correct by direct
+   `curl`. **"If apply cannot run from the bundle alone, that is a finding to fix, not to note"
+   (the brief's own words) — it could not, the first time, and both findings were fixed, not
+   noted:**
+   1. `docker compose up --wait` failed outright: `IsADirectoryError: ... 'osprey.yaml'`. The
+      rendered `compose.yaml` mounted `../../../osprey.yaml` — `BUILD_CONTEXT_FROM_OUTPUT_DIR`,
+      the *build*-context constant, reused for the Conduit's *config* mount too, silently assuming
+      every deployment is rendered exactly three directories below wherever `osprey.yaml` lives.
+      True of this repository's own `deploy/generated/<profile>/`; false of an arbitrary
+      `--out-root`, which has no such tree at all — Docker silently creates an empty directory for
+      a bind-mount source that does not exist, and the Conduit's own `load_map_config` then tried
+      to read it as a file. **Fixed** (`harness/render.py`): the mount is now
+      `./osprey.yaml:/app/osprey.yaml:ro`, relative to the compose file alone, and a new
+      `write_config_copy` places the real config beside it — called from both CLI entry points
+      (`harness.render`'s own `main`, `harness.apply`), so the two can never drift on whether it
+      happens. Two named cases in `tests/harness/test_render.py`, red-then-green verified by
+      reverting the fix and watching both fail for exactly the reason claimed.
+   2. The built tarball itself carried three stray, 0-byte `Icon\r` files (macOS's own
+      custom-folder-icon marker) — this machine's filesystem tooling writes one into any directory
+      it touches, and an unfiltered `staging_dir.rglob("*")` staged them straight through into a
+      real, customer-facing artefact. **Fixed** (`scripts/osprey_bundle.py`): a
+      `_is_bundle_content` filter excludes known OS junk (`Icon\r`, `.DS_Store`) at every collection
+      site (`build_bundle`'s manifest, `make_tarball`'s own walk). Two named cases in
+      `tests/test_osprey_bundle.py`, red-then-green verified the same way.
+
+   Both fixes verified against the *real* second build and the *real* redeploy, not only against
+   the fixtures above — the rebuilt tarball's own member list carries no `Icon` entry, and the
+   redeployed stack reached the same green result reported above. Automated as
+   `tests/harness/test_bundle_exit_test.py` (opt-in, `OSPREY_TEST_BUNDLE=1` — needs Docker and
+   several minutes, so it is not part of the fast unit tier), run for real and green in 3m37s.
+   `make bundle`'s own echo has named this file since before it existed; it now names something
+   real (`CLAUDE.md` rule 12).
+
+   **Also found, recorded for completeness rather than as a defect of this round's own code:**
+   `harness.images.registry_digest_resolver` cannot resolve
+   `quay.io/minio/minio:RELEASE.2024-11-07T00-52-20Z` on this machine — quay.io returns `401
+   Unauthorized` to an anonymous `docker buildx imagetools inspect`, a registry-side quirk this
+   resolver's own documented contract ("returns `None` on any failure... rather than raising")
+   already handles correctly: `versions.lock` marks it `unresolved`, honestly, rather than
+   fabricating a digest. A real gap against `05_DEPLOYMENT.md` §2.1's "every image digest pinned",
+   left open rather than worked around, since the fix (an authenticated quay.io pull, or a
+   registry-mirror decision) is a real decision this round did not have the brief to make.
+
+   **Floor A/B, before and after, and Floor B's own environment finding.** `make test`'s own tier:
+   913 passed, 1 pre-existing failure (`test_route_coverage_check.py::
+   test_no_new_drift_beyond_the_allowlist`, six undocumented routes — `/v1/exports`,
+   `/v1/investigations/{id}/{assumptions,gaps,judgements}`, `/v1/yardstick`, `POST
+   /v1/analytics/sightings` — from other API surface work this round did not touch; recorded as
+   pre-existing debt, not fixed here, since documenting someone else's routes is a different
+   change). Floor B (`make test-all`'s own live-store tier) could not be completed to a trustworthy
+   number this round: three attempts, each contaminated by a different, real, and separately fixed
+   condition — a leftover `osprey-local-lite` deployment stack from earlier work, never torn down,
+   contending for memory with `deploy/compose/dev.yaml`'s own ArcadeDB (`CLAUDE.md` rule 14's own
+   worked example, reproduced almost exactly); this Docker Desktop VM's disk filling to 100% across
+   the session's accumulated image layers and build cache; and, with both of those cleared,
+   ArcadeDB's own `-Xmx6G` heap still exhausted under the full concurrent Floor B suite — a ceiling
+   `deploy/compose/dev.yaml`'s own comments already document and already attribute to this host's
+   VM memory budget, not to any one suite's code. None of Floor B's failing tests touch a file this
+   round changed (`harness/render.py`, `harness/images.py`, `harness/apply.py`,
+   `scripts/licence_check.py`, `scripts/osprey_bundle.py`, and the new `scripts/`/`tests/` files
+   listed above) — recorded as a known, pre-existing environment ceiling this round's own changes
+   did not worsen, not as a green Floor B result, because it is not one.
+
+   Harness-adjacent files changed (`harness/render.py`, `harness/images.py`, `harness/apply.py`)
+   are not `services/` or `adapters/` code, so no Floor B figure was re-measured for them beyond the
+   full run above; the exit test itself is the real measurement of the one behaviour that changed.
 
    **Stage 2 §6 — The six setup screens. ACCEPTED; D2 confirmed 24 September 2026.** A browser
    application over Stage 2 §1–§5, bootstrapped by one Docker command, becoming `/admin` after
@@ -3905,9 +4027,12 @@ find something already finished sitting in the queue.
    is the right home for the mechanism either way, since it runs against the running deployment
    where the Conduit already holds the credentials and the harness never touches the secret.
 
-   **Proposed sub-item, 25 September 2026 — a `/docs` link from the admin console** to the generated
-   documentation site the Stage 2 §5b sub-item above proposes, alongside the backup, restore,
-   upgrade and verify screens this sub-stage already hosts. **Not built. Not milestone-blocking.**
+   **Proposed sub-item, 25 September 2026 — a `/docs` link from the admin console** to the
+   documentation site `Stage 2 §5b` built the same day, alongside the backup, restore, upgrade and
+   verify screens this sub-stage already hosts. The site itself is reachable directly today
+   (the deployed workspace's own `/docs`, no admin console needed); this sub-item is only the
+   in-product link to it, which needs `§6`'s own admin console to exist first. **Not built. Not
+   milestone-blocking.**
 
    **Stage 2's exit (D3 — owner's decision, 24 September 2026): tests #1, #2 and #3 green.** *This is
    Stage 2's own completion, not ADR-042's alpha gate, which additionally requires both acceptance

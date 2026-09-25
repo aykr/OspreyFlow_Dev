@@ -38,6 +38,7 @@ from harness.render import (
     render,
     service_images,
     write,
+    write_config_copy,
 )
 
 from schemas.deployment import OspreyConfig, SearchBackend
@@ -669,3 +670,45 @@ def test_arcadedb_gets_an_explicit_heap_rather_than_jvm_ergonomics(rendered: Ren
     assert "OSPREY_ARCADEDB_HEAP=" in rendered.artefacts["deployment.env"], (
         "the heap is not tunable from the deployment's own environment file"
     )
+
+
+def test_the_conduits_config_mount_is_relative_to_the_compose_file_not_the_repository(
+    rendered: RenderResult,
+) -> None:
+    """`ADR-049` Stage 2 §5b's own real `--images` install-from-bundle exit test found this, not a
+    fabricated fixture: `docker compose up --wait` failed with `IsADirectoryError: ... 'osprey.
+    yaml'` because Docker silently creates an empty directory for a bind-mount source that does not
+    exist, and the old mount (`../../../osprey.yaml`, `BUILD_CONTEXT_FROM_OUTPUT_DIR` reused from
+    the *build* context) assumed every deployment is rendered exactly three directories below the
+    checkout that renders it — true of this repository's own `deploy/generated/<profile>/`, false
+    of a bundle recipient's own `--out-root`, which has no such tree at all.
+
+    The planted violation is the real shape: the mount source is the string a bundle-install
+    directory cannot satisfy, not a hand-picked example of "a relative path"."""
+    document = yaml.safe_load(rendered.artefacts["compose.yaml"])
+    volumes = document["services"]["api"]["volumes"]
+    config_mount = next(v for v in volumes if v.endswith(":/app/osprey.yaml:ro"))
+
+    assert config_mount == "./osprey.yaml:/app/osprey.yaml:ro", (
+        f"got {config_mount!r} — a mount source rooted outside the rendered output directory "
+        "cannot be satisfied by an install that has no repository checkout at all"
+    )
+
+
+def test_write_config_copy_places_a_readable_osprey_yaml_beside_the_rendered_compose_file(
+    tmp_path: Path,
+) -> None:
+    """The other half of the same fix: `_render_compose`'s `./osprey.yaml` mount only resolves if
+    something actually places a real `osprey.yaml` next to `compose.yaml`. Both CLI entry points
+    (`harness.render`'s own `main`, `harness.apply`) call this — proven here directly, not only by
+    inference from reading the source, since `CLAUDE.md` rule 12 asks for the test that would fail
+    if this step were ever dropped from one of the two."""
+    source = tmp_path / "source-dir" / "osprey.yaml"
+    source.parent.mkdir()
+    source.write_text(FIXTURE_CONFIG, encoding="utf-8")
+    out_dir = tmp_path / "an-arbitrary-install-directory" / "local-lite"
+
+    target = write_config_copy(source, out_dir)
+
+    assert target == out_dir / "osprey.yaml"
+    assert target.read_text(encoding="utf-8") == FIXTURE_CONFIG

@@ -3404,8 +3404,8 @@ also excludes it (`.dockerignore`), the same "check the build context, not just 
 container" finding already made for the private build tree.
 
 **The test, named prospectively (not built — no packaging step exists to test yet):**
-`tests/packaging/test_internal_demo_exclusion.py::test_reclassifying_an_internal_demo_to_shipped_
-without_removing_its_data_still_fails_the_gate` and a sibling,
+`tests/packaging/test_internal_demo_exclusion.py::test_reclassifying_an_internal_demo_as_shipped_
+fails_if_its_data_remains` and a sibling,
 `test_removing_the_exclusion_step_itself_fails_the_gate` — both required, per this session's own
 "name the test that would fail" discipline (rule 12): a gate that only ever proves the *current*
 correct state passes is not proof it would catch either the reclassification mistake or its own
@@ -3438,7 +3438,7 @@ which by construction runs against a mounted `/workspace` and is the likeliest f
 a broad copy. A defence written before the image that needs it. Second, **it is not C2's gate.** C2
 requires an assertion *on the packaging step*, failing the build, that no internal demo's id, path
 or dataset filename appears in the artefact including inside image layers, with the two named tests
-(`test_reclassifying_an_internal_demo_to_shipped_without_removing_its_data_still_fails_the_gate`,
+(`test_reclassifying_an_internal_demo_as_shipped_fails_if_its_data_remains`,
 `test_removing_the_exclusion_step_itself_fails_the_gate`). No packaging step exists to attach either
 to. `.dockerignore` is the precondition that makes such a gate enforceable, not a substitute for it,
 and C2's ownership above is unchanged. The harness/packaging stage's own packaging sub-stage
@@ -5863,7 +5863,7 @@ excluded_from_a_shipped_build` and `test_an_unrecognised_distribution_value_is_t
 
 **Amendment 14 — §C2 names two required tests and the design's exit test covers one shape.** Both, per
 C2's own words ("both required"): `tests/packaging/test_internal_demo_exclusion.py::test_reclassifying_
-an_internal_demo_to_shipped_without_removing_its_data_still_fails_the_gate` **and**
+an_internal_demo_as_shipped_fails_if_its_data_remains` **and**
 `test_removing_the_exclusion_step_itself_fails_the_gate`. The second is a mutation test on the gate
 itself; "each planted violation fails the bundle" does not imply it, which is exactly why C2 named it
 separately.

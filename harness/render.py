@@ -350,11 +350,22 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
         if entry.service == "api":
             # The Conduit reads `osprey.yaml` at startup for its map-provider registry, and the
             # image does not contain it — the Dockerfile copies `packages/` and `services/` only,
-            # deliberately, because a deployment's configuration is not part of its image. Mounted
-            # read-only from the repository root, which is where a deployment's own file lives.
-            # Relative to the **compose file**, like every other path in it.
+            # deliberately, because a deployment's configuration is not part of its image.
+            #
+            # **Mounted from beside the compose file itself, not "the repository root, three
+            # levels up".** That was this line's own reading until a real `--images`
+            # install-from-bundle exit test found it: `BUILD_CONTEXT_FROM_OUTPUT_DIR` encodes
+            # this *repository's own* convention — `deploy/generated/<profile>/` sits exactly
+            # three directories below the checkout that renders it — and reusing it here
+            # silently assumed every deployment is rendered from inside that same checkout, at
+            # that same depth. A bundle recipient's own `--out-root` has no such tree at all:
+            # `docker compose up` failed with `IsADirectoryError: ... 'osprey.yaml'` because
+            # Docker creates an empty directory for a bind-mount source that does not exist, and
+            # nothing upstream of it does. `harness.apply` now copies the real config beside the
+            # rendered `compose.yaml` (`out_dir / "osprey.yaml"`), so this mount needs nothing
+            # about where that config file originally lived.
             service["volumes"] = [
-                f"{BUILD_CONTEXT_FROM_OUTPUT_DIR}/osprey.yaml:/app/osprey.yaml:ro",
+                "./osprey.yaml:/app/osprey.yaml:ro",
                 # **The declared volumes were mounted by nothing.** `osprey-data` and
                 # `osprey-staging` were emitted under `volumes:` from the first render and no
                 # service ever used them, so the Conduit's analytics DuckDB lived in the container
@@ -682,6 +693,18 @@ def write(result: RenderResult, out_dir: Path) -> list[Path]:
     return written
 
 
+def write_config_copy(config_path: Path, out_dir: Path) -> Path:
+    """Copies the real `osprey.yaml` beside the rendered `compose.yaml` — not one of §2.1's four
+    rendered artefacts (it is source, not derived), but what `_render_compose`'s own
+    `./osprey.yaml:/app/osprey.yaml:ro` mount needs actually present at that relative path. Both
+    CLI entry points (`harness.render`'s own `main`, `harness.apply`) call this once, right after
+    `write`, so the two can never drift on whether it happens."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    target = out_dir / "osprey.yaml"
+    target.write_text(config_path.read_text(encoding="utf-8"), encoding="utf-8")
+    return target
+
+
 def _display(path: Path) -> str:
     """Repository-relative when it can be, absolute otherwise. `--out-root` may point anywhere —
     a temporary directory in a test, a mounted `/workspace` in the harness container — and a
@@ -749,6 +772,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     written = write(result, out_dir)
+    write_config_copy(args.config, out_dir)
     stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     print(f"render: {config.profile.value}, {len(written)} artefact(s), {stamp}")
     for path in written:

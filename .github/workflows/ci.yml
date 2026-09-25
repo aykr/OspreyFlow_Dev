@@ -144,7 +144,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
-      - run: uv run pytest tests/test_citation_check.py
+      - run: uv run pytest tests/test_doc_citations_check.py
 
   test-file-coverage-check:
     runs-on: ubuntu-latest
@@ -687,6 +687,7 @@ jobs:
           --ignore=tests/services/api/test_worker.py --ignore=tests/services/api/test_worker_replicas.py --ignore=tests/services/api/test_revoked_principal_precheck.py
           --ignore=tests/harness/test_restore_exit_test.py
           --ignore=tests/harness/test_workspace_bundle.py
+          --ignore=tests/harness/test_bundle_exit_test.py
           --ignore=tests/scenarios/test_phase8_exit_criterion_end_to_end.py
       # The Glass's fast, no-live-infra unit tests (`store.test.ts`,
       # `zoomBands.test.ts`) — `*.integration.test.ts` is excluded by
@@ -761,3 +762,24 @@ jobs:
         run: >-
           docker compose --env-file deploy/generated/local-lite/deployment.env
           -f deploy/generated/local-lite/compose.yaml down -v --remove-orphans
+
+  # ADR-049 Stage 2 §5b's own exit test #3 — "install from the bundle, not the clone." A separate
+  # job, not a further step above: both render the identical `osprey-local-lite` compose project
+  # name (`harness.render`'s own `name: f"osprey-{profile}"`) and publish the identical host ports,
+  # so running this after `deployment-exit-tests`' own already-up deployment in the same job would
+  # collide rather than exercise anything new. A fresh runner is simpler than sequencing a teardown
+  # between them correctly. This test's own `finally` block tears down what it starts, so no
+  # further "Tear down" step is needed here the way the job above needs one.
+  bundle-install-exit-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - name: Build the bundle with --images, install from it alone, and deploy
+        env:
+          OSPREY_TEST_DIST_BUNDLE: "1"
+        run: >-
+          PYTHONPATH=.:packages uv run pytest -p no:randomly
+          tests/harness/test_bundle_exit_test.py
