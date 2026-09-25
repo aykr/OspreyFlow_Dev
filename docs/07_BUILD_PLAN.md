@@ -3256,6 +3256,59 @@ find something already finished sitting in the queue.
    nobody has specified. Recorded here rather than folded into Stage 2a, which is closed against a
    different question.
 
+   ---
+
+   **Sign-in for the Glass — MILESTONE-BLOCKING. Proposed, 25 September 2026. ADR-050.**
+
+   **Not a harness sub-stage.** The owner's decision of 25 September 2026 places this after
+   Stage 2 §3 and outside Stage 2's numbering, because it is Glass and Conduit work that the
+   harness only has to render a realm for. It is **designed, reviewed and ruled on before it is
+   built**; ADR-050 carries the design and its open objections.
+
+   **Why it blocks the milestone.** Stage 2 §3's own Glass leg cannot pass without it, and that leg
+   is what makes a rendered deployment demonstrable rather than merely healthy. Measured on
+   24 September 2026: a deployment came up healthy, seeded both fixtures and passed its three-sided
+   verify, and the Glass it served could not talk to it. §2.6.1's same-origin proxy fixed half of
+   that on 25 September — every `/v1` call and the delta WebSocket now reach the Conduit through
+   the workspace's own origin, proven against the seeded deployment. The other half is that the
+   Glass has **no way for a person to authenticate**. `App.tsx` has said so since Phase 4: the
+   `VITE_DEV_BEARER_TOKEN` path is "a stand-in until a real sign-in screen exists, not a production
+   auth path", and no phase has owned the replacement.
+
+   **The dev token was used on a rendered deployment for the last time on 25 September 2026** to
+   prove the proxy end to end (`docs/demo/2026-09-25/`). Every request went to the workspace's own
+   origin and returned 200, the delta WebSocket upgraded through nginx (`101`), and the Conduit
+   resolved a real principal from the rendered realm. From here the dev-token path is fenced:
+   a production build with it set fails the build.
+
+   **Scope:** OIDC authorization code with PKCE against the deployment's realm, the Glass as a
+   public client; the principal's identity and clearance shown in the workspace chrome and used for
+   nothing (rule 3 — the adapter is still the only enforcement); re-authentication on expiry with
+   the investigation id and selection preserved; sign-out ending the Keycloak session. The realm
+   renderer gains a public client, a signing-in subject, redirect and post-logout URIs, and an
+   audience.
+
+   **Exit test:** `python -m harness.apply --profile local-lite --seed hmp,fixture-corp`, open the
+   printed URL, **sign in**, see the seeded investigation. No dev token anywhere in the path.
+
+   **Three blocking objections, each verified against the tree and each the owner's to settle.**
+   ADR-050 has them in full; in one line each:
+
+   1. **The Conduit verifies no audience.** `OIDC_AUDIENCE` is unset in every rendered deployment,
+      so `verify_aud` is `False` and any token the realm signs is accepted. A public client is what
+      makes that reachable from a browser, and `harness/realm.py` states that a production realm is
+      the operator's — that is, shared.
+   2. **The renderer cannot know the redirect URI.** The workspace's published port comes from an
+      environment variable read at `docker compose` time, and the realm is rendered before that.
+   3. **The exit test names a subject that cannot sign in.** `osprey-verify-probe` has attributes
+      and no credentials — it is an impersonation target, not a login.
+
+   Plus six non-blocking findings, including that the design's own rule-4 test as worded would pass
+   without a single line of ADR-050 existing, and that the refresh-token and working-set-preservation
+   choices are both amended in the record rather than left as designed.
+
+   ---
+
    **Stage 2 §4 — Backup and restore. ACCEPTED.** `python -m harness.backup` writes to
    `backups/<UTC-timestamp>-<profile>-<git-sha>/` with a `manifest.json` naming every file, its
    checksum and the schema versions, covering **`05_DEPLOYMENT.md` §4's full set**: staged Parquet,

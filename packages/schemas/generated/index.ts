@@ -112,4 +112,5 @@ export type { ModelsConfig } from "./ModelsConfig";
 export type { GovernanceConfig } from "./GovernanceConfig";
 export type { ClusterHost } from "./ClusterHost";
 export type { ClusterConfig } from "./ClusterConfig";
+export type { NetworkConfig } from "./NetworkConfig";
 export type { OspreyConfig } from "./OspreyConfig";

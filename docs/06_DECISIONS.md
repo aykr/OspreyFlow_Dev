@@ -61,6 +61,7 @@ confirmed.
 | 047 | The Osprey export mark, and the durable record of what left the boundary | | **Accepted, both gaps** — 22 Sep 2026 |
 | 048 | The disclosure doctrine: what makes "something was withheld" safe, unsafe or required to be visible | | **Accepted** — 22 Sep 2026 |
 | 049 | The harness / packaging pipeline; Phase 8's Stage 2 §1–§7 | | **Accepted** — 24 Sep 2026, after rulings on all seven objections, D1 narrowed, and the four follow-on items settled |
+| 050 | Sign-in for the Glass: OIDC authorization code with PKCE against the deployment's realm | | **Proposed** — 25 Sep 2026, milestone-blocking; seven open objections, three of them blocking |
 
 **This table lagged again, and is caught here for the second time.** Records 042 through 048 were
 written on 22 September 2026 and never added above — the identical omission this section's own
@@ -6248,3 +6249,214 @@ the amendments move it from claimed to sub-staged.
 `Stage 2 §5`'s enumeration settles which services are deployable, or the owner promotes this record
 to Accepted — each is written so settling it is a targeted edit to this record and its
 `07_BUILD_PLAN.md` stage entry, not a new ADR.
+
+---
+
+## ADR-050 — Sign-in for the Glass: OIDC authorization code with PKCE
+
+**Status: Proposed, 25 September 2026. Milestone-blocking.** The owner's decision of 25 September
+2026 makes sign-in a milestone-blocking item rather than harness work, to be designed, reviewed and
+ruled on before it is built. This record is the design as amended by the findings below; the
+"Open objections" section is what is **not** settled, and three of those are blocking.
+
+**Not built. No part of this record has been implemented.**
+
+### Context: what is actually there today
+
+Measured against the tree on 25 September 2026, not assumed:
+
+- `apps/workspace/src/App.tsx` reads `import.meta.env.VITE_DEV_BEARER_TOKEN ?? ""` and sends it as
+  a bearer on every call. Its own comment has said since Phase 4 that this is "a stand-in until a
+  real sign-in screen exists, not a production auth path". **No phase has owned the replacement.**
+- The rendered realm (`harness/realm.py`) contains exactly two clients, `osprey-conduit` and
+  `osprey-unprivileged`. **Both are confidential** (`publicClient: False`) and **both have
+  `standardFlowEnabled: False`** — there is no browser flow in the realm at all.
+- It contains two users, `osprey-verify-probe` (enabled) and `osprey-verify-revoked` (disabled).
+  **Neither has a `credentials` block.** They exist to be impersonated through token exchange.
+- The Conduit verifies a token with `jwt.decode(..., options={"verify_aud": self._config.
+  oidc_audience is not None})`, and the rendered deployment sets no `OIDC_AUDIENCE`, so
+  **audience verification is off**.
+- The delta WebSocket authenticates from a `?token=` query parameter, because a browser's native
+  `WebSocket` cannot set a header. `_authenticate_websocket`'s own docstring names the resulting
+  log exposure and names a ticket exchange as "the production hardening this phase does not
+  implement".
+- Keyboard coverage is no longer the hardcoded walkthrough `CLAUDE.md` rule 13 describes. There is a
+  per-surface `defineActionRegistry` / `registerCovered` / `assertAllCovered` mechanism, plus
+  `check-registry-coverage.mjs`, which fails the build when a declared registry has no assertion
+  reaching it.
+
+### Decision
+
+**Flow.** OIDC authorization code with PKCE (S256) against the deployment's own realm, the Glass
+registered as a **public** client — no secret in the browser. The redirect URI is the workspace's
+own origin, which since §2.6.1 is also the Conduit's origin, so one value covers both.
+
+**Tokens.** The access token is held in memory only. **No refresh token is stored anywhere** — see
+objection 5 for why the original "sessionStorage only if rotation is on" is rejected. Re-authentication
+uses a silent `prompt=none` authorization request against the Keycloak session cookie, which keeps
+the long-lived credential in the IdP's own cookie rather than in storage the page can read.
+
+**Claims.** The Glass reads `sub`, `clearance`, `org_unit`, `roles` and `receivable_handling_codes`
+— the four custom claims the realm already maps, plus `sub` — and displays the principal's identity
+and clearance in the workspace chrome. **It never derives access from them.** `CLAUDE.md` rule 3
+stands unchanged: the adapter-level filter is the only enforcement and the Glass's display is
+informational. A Glass that hid a control because `roles` lacked an entry would be enforcement in
+the wrong tier; a Glass that showed one it should not is not a leak, because the Conduit refuses.
+
+**Expiry.** A token expiring mid-investigation triggers re-authentication. The **investigation id
+and the selection** are preserved; the working set is **re-fetched**, not preserved — see objection
+6. No silent loss and no silent continuation on a stale token. The delta WebSocket re-authenticates
+on reconnect.
+
+**Relation to ADR-043, stated so the two are never conflated.** The Glass sends **the analyst's own
+token**. ADR-043's token exchange is for **watch owners only** — the Conduit acting as a principal
+who is not present — and is never used for the interactive caller. They are different mechanisms
+answering different questions, and the only thing they share is the realm. ADR-043's amendment
+(the Conduit's own view-users pre-check for a disabled subject) applies to the exchange path only;
+an interactive sign-in by a disabled user is refused by Keycloak's own login, which is a refusal the
+realm *does* enforce.
+
+**ADR-044's distinction carries to the Glass.** A failed re-authentication because the IdP is
+unreachable must not present as "your access was revoked". The Glass distinguishes *cannot reach
+the identity provider* from *the identity provider said no*, for the same reason ADR-044 does
+server-side: one is an outage and the other is a decision about a person, and telling an analyst
+the second when the first is true is a false and alarming statement.
+
+**Dev token.** The `VITE_DEV_BEARER_TOKEN` path survives **only** for `npm run dev`. A production
+build with it set fails the build.
+
+**Sign-out.** Clears memory and any session storage the Glass owns, then ends the Keycloak session
+via `end_session_endpoint` with `id_token_hint` and a registered `post_logout_redirect_uri`.
+
+### What the realm renderer must gain
+
+None of this exists today and all of it is rendering work, not Glass work:
+
+1. A third client — public, `standardFlowEnabled: true`, `attributes: {"pkce.code.challenge.method":
+   "S256"}`, with the four claim mappers the Conduit's client already has.
+2. `redirectUris` and `webOrigins` for the workspace's origin. **The renderer does not know that
+   origin today** — the published port comes from `OSPREY_WORKSPACE_PORT`, an environment override
+   read at `docker compose` time, not from `osprey.yaml`. See objection 2.
+3. `post_logout_redirect_uris` for sign-out.
+4. `OIDC_AUDIENCE` in the deployment's environment, and the client's own audience mapper. See
+   objection 1.
+5. A subject that can actually sign in. See objection 3.
+
+### Tests owed
+
+- **Rule 3, restated as a test rather than a promise**: the Glass displays `clearance` and never
+  branches on it. The test that fails if this is violated is a case asserting that a principal with
+  a *lower* clearance sees the same controls, and differs only in what the Conduit returns.
+- **The Glass's reaction to a 401**, which is the new behaviour: an unauthenticated load presents
+  the sign-in, not an error page and not an empty workspace. See objection 7 on why the
+  design's original wording for this was vacuous.
+- **Rule 13**: the sign-in screen is a **new keyboard-driven surface** and needs its own
+  `defineActionRegistry` with `assertAllCovered`, not entries in `CANVAS_ACTIONS`.
+  `check-registry-coverage.mjs` fails the build otherwise.
+- **The accessibility floor** (`02_GLASS_FRONTEND.md` §6) on the sign-in screen.
+- **Rule 15 on the dev-token fence**: plant `VITE_DEV_BEARER_TOKEN` in a production build and
+  assert the build fails. The planted value must take the shape the real pipeline receives — an
+  environment variable present at `vite build` — not a source edit.
+- **The golden path's Glass leg becomes**: apply, open the printed URL, sign in, see the seeded
+  investigation. It replaces the dev-token step used for the last time on 25 September 2026
+  (`docs/demo/2026-09-25/`).
+
+### Open objections
+
+**Blocking — the design cannot be built as written until these are settled.**
+
+**1 (blocking). The Conduit does not verify the audience, and a public client is what makes that
+reachable.** `OIDC_AUDIENCE` is unset in every rendered deployment, so `verify_aud` is `False` and
+the Conduit accepts **any token the realm signs**. Today that is survivable because the only
+clients are two confidential ones we control. A public client changes the reachable set: and
+`harness/realm.py` says in its own words that "a production realm is the operator's", so the
+expected production case is a **shared** realm. In one, a token minted for an unrelated application
+in the same realm is accepted by the Conduit as a principal — it has a `sub`, and if the operator's
+realm maps the four claims for its own reasons, it resolves to a `Principal` with a clearance. That
+is an access-control hole that ADR-050 would open, and the remedy is small: render `OIDC_AUDIENCE`,
+add an audience mapper to the Glass client, and make the resolver's `verify_aud` unconditional.
+**It should be fixed before sign-in ships, and arguably before that, on its own merits.**
+
+**2 (blocking). The renderer cannot know the redirect URI.** A public client's `redirectUris` must
+match the browser's origin exactly, and Keycloak refuses a mismatch — correctly, because a loose
+redirect URI is how authorization codes get stolen. The workspace's published port comes from
+`OSPREY_WORKSPACE_PORT`, an environment variable read by `docker compose`, and the realm is
+rendered before that is known. Three ways out, none chosen: move the published ports into
+`osprey.yaml` so the renderer knows them (cleanest, and it makes `05_DEPLOYMENT.md` §3's table a
+rendered artefact rather than prose); render a wildcard for `local-lite` only (Keycloak permits
+`http://localhost:*` patterns, and it is exactly the looseness that makes this dangerous
+elsewhere); or configure the client after import, the way `keycloak_admin.py` already grants the
+service-account roles a realm import cannot express. **The third is most consistent with what the
+harness already does and is the recommendation, but it is the owner's to take.**
+
+**3 (blocking). The exit test as designed cannot pass: the subject it names cannot sign in.** The
+design says "sign in as the disposable analyst subject the realm already renders".
+`osprey-verify-probe` has attributes and **no credentials** — it is not a login, it is an
+impersonation target. Giving it a password means writing a password into the rendered realm
+document, and `05_DEPLOYMENT.md` §2.5 and §7 are categorical that the harness "never sees a secret"
+and that secrets are "never in `osprey.yaml`, never in an image". A generated-at-apply-time password
+written into the gitignored environment file, as the client secret already is, is the shape that
+fits — but it is a **new** subject, not this one, because of objection 4.
+
+**Non-blocking, but each changes the design.**
+
+**4. Reusing the verify subject for interactive sign-in conflates two things ADR-043's amendment
+deliberately separated.** `osprey-verify-probe` exists to make the three-sided verify's assertion 1
+meaningful. If the same subject also becomes the demo analyst, then any change to its clearance or
+handling codes — a perfectly reasonable thing to want for a demonstration — silently changes what
+verify asserts. They should be two subjects with two purposes. The cost is one more rendered user.
+
+**5. "Refresh token in sessionStorage only if Keycloak's refresh rotation is on" is a condition the
+Glass cannot evaluate, and the wrong lever.** Whether rotation is on is a realm setting; the Glass
+would have to discover it, and a deployment against an operator's realm may not know. Worse, the
+conditional puts the decision in the wrong place — **we render the realm**, so rotation is ours to
+set, not to detect. And rotation reduces the value of a stolen refresh token without removing it;
+`sessionStorage` is readable by any script on the origin, which after §2.6.1 is the same origin
+that serves the API. The amended design above stores **no refresh token at all** and re-authenticates
+silently against the IdP session cookie instead. That is a real change to the design, made because
+I am confident of it; say so if you disagree.
+
+**6. Preserving the working set in `sessionStorage` risks a quota failure at the worst moment.**
+`sessionStorage` is about 5 MB and the working set is capped in the thousands of nodes with
+provenance, handling and assessment objects on each. A `QuotaExceededError` during a token expiry
+would lose the working set **and** throw, which is the "silent truncation" rule 2 forbids wearing a
+different hat. The amended design preserves the investigation id and the selection — both small and
+both sufficient to restore the view — and re-fetches the rest. If preserving the working set
+verbatim is wanted, it needs IndexedDB and a size policy, which is its own decision.
+
+**7. The rule-4 test as worded is vacuous, and it is not rule 4.** "An unauthenticated Glass request
+to any `/v1` route is refused" is the **Conduit's** behaviour and is already covered for every read
+path; a test written to that wording would pass without a single line of ADR-050 existing. The
+assertion that has content is the second half — *the Glass shows the sign-in* — which is a Glass
+test, not an access-control test. Rule 4's name on it invites someone to satisfy it by testing the
+Conduit and moving on. The tests-owed list above splits them.
+
+**8 (raised, not resolved). Sign-in is when the token in the WebSocket URL stops being a
+development concern.** Measured on 25 September 2026 during the same-origin verification: the full
+access token appears in the workspace's nginx access log, and §7 puts a TLS-terminating reverse
+proxy in front of that, which will log it again. `_authenticate_websocket` already names a
+short-lived single-use ticket as the fix and says this phase does not implement it. **ADR-050 is
+the phase where a real analyst's token starts travelling that path**, and the recommendation is to
+build the ticket exchange as part of it. It is listed as an objection rather than folded into the
+decision because it enlarges the scope meaningfully and that is the owner's call.
+
+**9 (spec gap, not an objection). `02_GLASS_FRONTEND.md` does not describe the workspace chrome
+element this design puts the principal's identity and clearance into.** Adding a Glass surface by
+ADR rather than by specification is the thing `CLAUDE.md` rule 11 exists to prevent. Either §2 of
+that document gains the element, or this design should not name it.
+
+### Consequences
+
+**If accepted as amended:** the dev-token path is fenced and then deleted, the milestone's Glass leg
+becomes demonstrable for the first time, and the audience hole in objection 1 is closed as a
+side-effect. The realm renderer grows a third client, a second subject and a post-import
+configuration step.
+
+**If the objections are not settled first:** objections 1–3 each independently prevent the exit
+test from passing. 1 would ship a deployment that accepts tokens it should not; 2 makes the flow
+fail at the redirect; 3 makes the exit test unrunnable.
+
+**Revisit if:** the owner rules on the three blocking objections, `02_GLASS_FRONTEND.md` gains the
+chrome element of objection 9, or the WebSocket ticket exchange of objection 8 is scoped in or out.
+Each is written so that settling it is a targeted edit to this record and its `07_BUILD_PLAN.md`
+stage entry, not a new ADR.
