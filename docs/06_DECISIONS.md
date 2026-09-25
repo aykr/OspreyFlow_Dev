@@ -6257,12 +6257,15 @@ to Accepted — each is written so settling it is a targeted edit to this record
 
 ## ADR-050 — Sign-in for the Glass: OIDC authorization code with PKCE
 
-**Status: Proposed, 25 September 2026. Milestone-blocking.** The owner's decision of 25 September
-2026 makes sign-in a milestone-blocking item rather than harness work, to be designed, reviewed and
-ruled on before it is built. This record is the design as amended by the findings below; the
-"Open objections" section is what is **not** settled, and three of those are blocking.
+**Status: Accepted, 25 September 2026, with five amendments. Milestone-blocking.** The owner's
+ruling of 25 September 2026: the three blocking objections below (1, 2, 3) are upheld and resolved
+as each one's own entry now records, and two amendments are accepted — the "no refresh token,
+re-fetch on expiry" design of objection 5, and the reworded rule-4 test of objection 7. Objections 8
+and 9 are not addressed by this ruling and remain open, tracked below; neither is one of the three
+blocking objections, so neither holds up acceptance.
 
-**Not built. No part of this record has been implemented.**
+**Not built. No part of this record has been implemented.** The ruling accepts the design; it does
+not build it. The sign-in stage entry in `07_BUILD_PLAN.md` is where that work is scoped.
 
 ### Context: what is actually there today
 
@@ -6306,10 +6309,12 @@ stands unchanged: the adapter-level filter is the only enforcement and the Glass
 informational. A Glass that hid a control because `roles` lacked an entry would be enforcement in
 the wrong tier; a Glass that showed one it should not is not a leak, because the Conduit refuses.
 
-**Expiry.** A token expiring mid-investigation triggers re-authentication. The **investigation id
-and the selection** are preserved; the working set is **re-fetched**, not preserved — see objection
-6. No silent loss and no silent continuation on a stale token. The delta WebSocket re-authenticates
-on reconnect.
+**Expiry — amended by the owner's ruling, 25 September 2026.** No refresh token is held in the
+browser; expiry is a fresh authorization-code round (the `prompt=none` silent request against the
+Keycloak session cookie, above). On expiry the Glass preserves only identifiers — the
+**investigation id, the selection and the view state** — and **re-fetches** the working set from
+the Conduit rather than preserving it; see objection 6. No silent loss and no silent continuation on
+a stale token. The delta WebSocket re-authenticates on reconnect.
 
 **Relation to ADR-043, stated so the two are never conflated.** The Glass sends **the analyst's own
 token**. ADR-043's token exchange is for **watch owners only** — the Conduit acting as a principal
@@ -6380,6 +6385,11 @@ is an access-control hole that ADR-050 would open, and the remedy is small: rend
 add an audience mapper to the Glass client, and make the resolver's `verify_aud` unconditional.
 **It should be fixed before sign-in ships, and arguably before that, on its own merits.**
 
+**Resolved, 25 September 2026 (owner's ruling).** The remedy above is accepted as written: the
+Conduit verifies audience in every rendered deployment — `OIDC_AUDIENCE` set to the Conduit's client
+id, an audience mapper on the Glass client, `verify_aud` on. A token the realm signs for another
+client is refused.
+
 **2 (blocking). The renderer cannot know the redirect URI.** A public client's `redirectUris` must
 match the browser's origin exactly, and Keycloak refuses a mismatch — correctly, because a loose
 redirect URI is how authorization codes get stolen. The workspace's published port comes from
@@ -6392,6 +6402,10 @@ elsewhere); or configure the client after import, the way `keycloak_admin.py` al
 service-account roles a realm import cannot express. **The third is most consistent with what the
 harness already does and is the recommendation, but it is the owner's to take.**
 
+**Resolved, 25 September 2026 (owner's ruling) — none of the three above; a fourth.** The realm is
+rendered at apply time from the resolved environment, not before it — `osprey.yaml` gains
+`network.public_origin`, and the redirect URI derives from it. No wildcard redirect URIs.
+
 **3 (blocking). The exit test as designed cannot pass: the subject it names cannot sign in.** The
 design says "sign in as the disposable analyst subject the realm already renders".
 `osprey-verify-probe` has attributes and **no credentials** — it is not a login, it is an
@@ -6400,6 +6414,11 @@ document, and `05_DEPLOYMENT.md` §2.5 and §7 are categorical that the harness 
 and that secrets are "never in `osprey.yaml`, never in an image". A generated-at-apply-time password
 written into the gitignored environment file, as the client secret already is, is the shape that
 fits — but it is a **new** subject, not this one, because of objection 4.
+
+**Resolved, 25 September 2026 (owner's ruling) — the shape above, as a named apply flag.** Apply
+gains `--demo-analyst`: a disposable analyst account with an apply-time password in the env file,
+absent by default. The exit test and the demo use it. This is the new subject objection 4 calls
+for, not `osprey-verify-probe` — objection 4 is resolved as the same side-effect.
 
 **Non-blocking, but each changes the design.**
 
@@ -6419,6 +6438,9 @@ that serves the API. The amended design above stores **no refresh token at all**
 silently against the IdP session cookie instead. That is a real change to the design, made because
 I am confident of it; say so if you disagree.
 
+**Accepted, 25 September 2026 (owner's ruling).** No refresh token is held in the browser; expiry is
+a fresh authorization-code round, as amended in the Decision's own Expiry paragraph above.
+
 **6. Preserving the working set in `sessionStorage` risks a quota failure at the worst moment.**
 `sessionStorage` is about 5 MB and the working set is capped in the thousands of nodes with
 provenance, handling and assessment objects on each. A `QuotaExceededError` during a token expiry
@@ -6427,12 +6449,22 @@ different hat. The amended design preserves the investigation id and the selecti
 both sufficient to restore the view — and re-fetches the rest. If preserving the working set
 verbatim is wanted, it needs IndexedDB and a size policy, which is its own decision.
 
+**Resolved, 25 September 2026 (owner's ruling).** The amended design stands, with view state added
+to what is preserved: investigation id, selection and view state, re-fetching the rest — see the
+Decision's own Expiry paragraph above, and `00_ARCHITECTURE.md` §1.3's amended expiry sentence,
+where the contested mark comes off.
+
 **7. The rule-4 test as worded is vacuous, and it is not rule 4.** "An unauthenticated Glass request
 to any `/v1` route is refused" is the **Conduit's** behaviour and is already covered for every read
 path; a test written to that wording would pass without a single line of ADR-050 existing. The
 assertion that has content is the second half — *the Glass shows the sign-in* — which is a Glass
 test, not an access-control test. Rule 4's name on it invites someone to satisfy it by testing the
 Conduit and moving on. The tests-owed list above splits them.
+
+**Resolved, 25 September 2026 (owner's ruling).** The rule-4 test is reworded as proposed here, so
+that it cannot pass without the sign-in code: the tests-owed list's second bullet (the Glass's
+reaction to a 401) is the access-control assertion with content, not the already-covered Conduit
+behaviour.
 
 **8 (raised, not resolved). Sign-in is when the token in the WebSocket URL stops being a
 development concern.** Measured on 25 September 2026 during the same-origin verification: the full
@@ -6450,16 +6482,16 @@ that document gains the element, or this design should not name it.
 
 ### Consequences
 
-**If accepted as amended:** the dev-token path is fenced and then deleted, the milestone's Glass leg
-becomes demonstrable for the first time, and the audience hole in objection 1 is closed as a
-side-effect. The realm renderer grows a third client, a second subject and a post-import
-configuration step.
+**Accepted as amended, 25 September 2026:** the dev-token path is fenced and then deleted, the
+milestone's Glass leg becomes demonstrable for the first time, and the audience hole in objection 1
+is closed as a side-effect. The realm renderer grows a third client, a second subject
+(`--demo-analyst`) and a post-import configuration step.
 
-**If the objections are not settled first:** objections 1–3 each independently prevent the exit
-test from passing. 1 would ship a deployment that accepts tokens it should not; 2 makes the flow
-fail at the redirect; 3 makes the exit test unrunnable.
+**Before this ruling, objections 1–3 each independently prevented the exit test from passing** —
+1 would have shipped a deployment that accepts tokens it should not; 2 would have failed the flow
+at the redirect; 3 would have left the exit test unrunnable. Each is resolved above.
 
-**Revisit if:** the owner rules on the three blocking objections, `02_GLASS_FRONTEND.md` gains the
-chrome element of objection 9, or the WebSocket ticket exchange of objection 8 is scoped in or out.
-Each is written so that settling it is a targeted edit to this record and its `07_BUILD_PLAN.md`
-stage entry, not a new ADR.
+**Revisit if:** `02_GLASS_FRONTEND.md` gains the chrome element of objection 9 (still open — this
+ruling does not address it), or the WebSocket ticket exchange of objection 8 (still open — raised,
+not resolved) is scoped in or out. Each is written so that settling it is a targeted edit to this
+record and its `07_BUILD_PLAN.md` stage entry, not a new ADR.

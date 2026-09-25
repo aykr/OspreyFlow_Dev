@@ -43,6 +43,10 @@ laptop from the documentation, started, and demonstrated (both acceptance scenar
 2. **The documentation refresh** — moderate: the three drift gates (`domain-model-coverage-check`,
    `route-coverage-check`, `demo-guide-check`) exist and run; the content that empties their own
    allowlists does not exist yet.
+3. **Sign-in for the Glass** — **accepted, with five amendments (`06_DECISIONS.md` ADR-050, owner's
+   ruling of 25 September 2026), not started.** Milestone-blocking. OIDC authorization code with
+   PKCE, replacing the `VITE_DEV_BEARER_TOKEN` stand-in; see stage `2c` at this stage's own entry
+   below for the three requirements and the exit test.
 
 **Remains after the milestone:**
 - **Structural** (real design work, not a known shape yet): Phase 8a (`cluster` profile,
@@ -4674,6 +4678,40 @@ find something already finished sitting in the queue.
    (this machine is macOS, with no `PR_SET_PDEATHSIG`-equivalent available to a child process) —
    that class of leak, the one CLAUDE.md rule 14's own worked example is about, remains a real,
    disclosed limitation of any in-process Python cleanup, not something this fix claims to solve.
+
+2c. **Sign-in for the Glass — MILESTONE-BLOCKING, new stage, ACCEPTED 25 September 2026 (owner's
+   ruling, `06_DECISIONS.md` ADR-050, with five amendments).** Not started. Labelled `2c`, next to
+   `2a`/`2b`, for the same reason those two are: a milestone-blocking finding that sits alongside the
+   harness/packaging stage in build order rather than a Stage-4 sub-stage. Replaces the
+   `VITE_DEV_BEARER_TOKEN` stand-in `apps/workspace/src/App.tsx` has carried since Phase 4 — "a
+   stand-in until a real sign-in screen exists, not a production auth path" by its own comment, with
+   no phase before this one owning the replacement — with OIDC authorization code plus PKCE (S256)
+   against the deployment's own realm, the Glass registered as a public client.
+
+   **Three requirements, owed to the realm renderer and the Conduit, in the order ADR-050 records
+   them:**
+
+   1. **Audience verification.** `OIDC_AUDIENCE` set to the Conduit's client id in every rendered
+      deployment, an audience mapper on the Glass client, and the Conduit's `verify_aud` made
+      unconditional. Closes the access-control hole a shared realm would otherwise open — a token
+      the realm signs for an unrelated client, resolved to a `Principal` anyway (ADR-050 objection
+      1, resolved).
+   2. **The redirect URI.** The realm is rendered at apply time from the resolved environment, not
+      before it; `osprey.yaml` gains `network.public_origin`, and the redirect URI derives from it.
+      No wildcard redirect URIs (ADR-050 objection 2, resolved).
+   3. **`--demo-analyst`.** `python -m harness.apply` gains a flag that mints a disposable analyst
+      account — a new subject, not `osprey-verify-probe` — with an apply-time password written to
+      the gitignored environment file, absent by default (ADR-050 objections 3 and 4, resolved).
+
+   **Exit test:** `apply --demo-analyst`, open the printed URL, sign in as the demo analyst, see the
+   seeded investigation. This becomes the golden path's own Glass leg, replacing the dev-token step
+   used for the last time on 25 September 2026 (`docs/demo/2026-09-25/`).
+
+   **Not addressed by this stage: ADR-050 objections 8 and 9, both still open.** The WebSocket
+   ticket exchange (8) and the `02_GLASS_FRONTEND.md` chrome-element spec gap (9) are neither of them
+   among the three blocking objections this stage resolves, and neither is scoped into this stage's
+   own work.
+
 3. **Documentation refresh — split in two, 23 September 2026, so "documentation refresh" is never
    read as proofreading.** The two parts were previously one undifferentiated stage; they are
    different work, with different owners of "done," and only one of them gates the milestone.

@@ -509,14 +509,11 @@ on the harness's Geospatial screen does the whole tier 1 path — download the e
 planetiler, load the gazetteer — with progress shown. Tiers 2 and 3 accept a prepared PMTiles file
 or a credential reference on the same screen. See `05_DEPLOYMENT.md` §2.2.
 
-### 1.4 The request path and analyst sign-in
+### 1.3 The request path and analyst sign-in
 
 **The request path (first paragraph) is decided — the owner's decision of 25 September 2026, and
-it is built. Analyst sign-in (the rest) is Proposed** pending acceptance of its own decision
-record, and one sentence in it is contested by that record's review: whether the working set
-itself is preserved in session storage, or only the investigation and selection with the working
-set re-fetched. Session storage is small and a working set is not, so the choice is not
-cosmetic. Read the paragraph on expiry as the proposal, not as settled.
+it is built. Analyst sign-in (the rest) is Accepted**, with five amendments, milestone-blocking —
+**but not yet built.**
 
 The Glass is served by the workspace container's nginx, which also reverse-proxies the Conduit's
 API (/v1) and the delta WebSocket to the Conduit over the deployment's internal network. The
@@ -535,9 +532,11 @@ principal from the claims. The Glass may display what the token asserts about th
 derives access from it. Access control is applied in the Conduit's query, as everywhere else in the
 system.
 
-When a token expires during an investigation the Glass preserves the working set, the open
-investigation and the current selection in session storage, re-authenticates, and restores them; it
-neither continues on a stale token nor discards the analyst's state. Signing out clears the Glass's
+When a token expires during an investigation the Glass preserves only the investigation id, the
+current selection and the view state in session storage — small identifiers, not the working set —
+re-authenticates with a fresh authorization-code round, and re-fetches the working set from the
+Conduit before restoring the view. No refresh token is held in the browser. It neither continues on
+a stale token nor discards the analyst's place in the investigation. Signing out clears the Glass's
 memory and session storage and ends the identity-provider session.
 
 The analyst's token and the Conduit's owner-side token exchange are distinct mechanisms: the former
