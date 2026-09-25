@@ -535,12 +535,22 @@ single-session measurement this finding sits alongside, not on top of — that s
 a fresh-install criterion; this finding is what happens *after* a fresh install, under continued
 real use, and neither stage's own measurement answers the other's question).
 
-**Named, not built: `test_arcadedb_memory_and_query_latency_under_sustained_ingest_cycles`** (or
-its eventual real name) — sustained load across many ingest cycles against one long-lived
-database, measuring memory and a representative query's own latency after each cycle, to find
-whether either plateaus or continues climbing without bound. That test does not exist; this is
-the first time this behaviour has been observed at all, in either direction — not fixed here, not
-scheduled here beyond being named, and deliberately not folded into `07_BUILD_PLAN.md`'s now
--closed ArcadeDB-stability stage, which answered a different question. Owning phase: **Phase 8**,
-a new, separate item — real, disclosed, sized for its own pass rather than left as the tail end of
-an investigation into something else.
+**Built, 25 September 2026 — `tests/harness/test_sustained_load.py::test_arcadedb_memory_and_
+query_latency_under_sustained_ingest_cycles`, pulled forward per `07_BUILD_PLAN.md` Stage 2a's own
+addendum, which has the full account: methodology, the six-cycle curve, a real defect found
+(`seed_fixture_corp.py` is not safe to re-seed against the same database — `GraphArcadeDBAdapter.
+upsert_nodes` is insert-only), and a platform-dependence finding about `ramOsUsed`/`ramOsTotal`
+being the Docker Desktop VM's own memory on macOS rather than this container's cgroup scope.**
+Six real cycles against the rendered `local-lite` deployment (not `dev.yaml`) found `docker
+stats`'s own container-scoped RSS growing far more slowly and non-monotonically (≈113MiB/cycle
+average across six cycles) than this section's own dev.yaml figures above (≈250-350MiB/cycle,
+climbing steadily) — not a contradiction of the finding above, which stands as measured against
+`dev.yaml`, but a real, disclosed difference in degree between the two deployment shapes and
+workloads that a reader comparing the two figures should not average together. Query-sample
+latency showed no growth trend across six cycles, though the fixed query sample this test runs
+(geobins, one Search Around, one pathfinder call, three resolution-threshold projections) is a much
+lighter workload than the closing-pass walkthrough this section's own figures above were measured
+against, so the two latency figures are not directly comparable either. Thresholds for what this
+test should assert are **Proposed, not decided** (`07_BUILD_PLAN.md` Stage 2a's addendum has the
+three proposals and the measured numbers beside each); the test today asserts only that all six
+cycles complete and every query in the sample returns 2xx, per this round's own brief.

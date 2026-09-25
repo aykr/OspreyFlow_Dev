@@ -5100,6 +5100,96 @@ find something already finished sitting in the queue.
    compose/dev.yaml` configuration, obsolete before it is ever exercised in the deployment it will
    actually gate. Left for the owner — marked **Proposed**.
 
+   **Built, 25 September 2026 — pulled forward per the checker's own queued brief, against the
+   rendered harness deployment rather than `dev.yaml` (resolving the "case against" above: this
+   measures the profile the harness stage already ships, not a configuration that stage might
+   still change).** `tests/harness/test_sustained_load.py::test_arcadedb_memory_and_query_
+   latency_under_sustained_ingest_cycles`, opt-in via `OSPREY_TEST_SUSTAINED_LOAD=1`, its own CI
+   job `sustained-load-exit-test`. `python -m harness.apply --profile local-lite --demo-analyst`,
+   then six cycles of: create a fresh investigation (the same client-credentials-then-exchange
+   `harness.apply.create_investigation` already uses, exchanged for the disposable demo-analyst
+   subject rather than `VERIFY_SUBJECT` — `harness/realm.py`'s own `receivable_handling_codes`
+   documents `VERIFY_SUBJECT` as unable to see either seed fixture at all), stop the Conduit, seed
+   HMP (every cycle) and Fixture Corp (cycle 1 only — see below), restart and wait for health, run
+   a fixed query sample (`/v1/analytics/geobins`, one Search Around expand, one `/v1/paths` call,
+   the τ 0.99/0.95/0.80 projections), record ArcadeDB container RSS (`docker stats`), ArcadeDB's own
+   `/api/v1/server` profiler reading, the query sample's wall time, and node/edge counts.
+
+   **A real, previously undiscovered defect, found running this for the first time, not designed
+   around in advance:** `scripts/seed_fixture_corp.py` is not safe to run twice against the same
+   database. Its three sub-fixtures write fixed, literal node ids (`corp-path-hub`,
+   `corp-res-identical-1`, ...) precisely so a demo can always reference the same entities, but
+   `GraphArcadeDBAdapter.upsert_nodes` (`packages/adapters/graph_arcadedb/adapter.py:128`) is a bare
+   `INSERT INTO {type} SET ...` — not a real upsert — and neither `GraphPort.upsert_nodes`'s own
+   contract nor its conformance suite states or checks idempotent re-insertion by id. A second seed
+   failed outright: `ArcadeDBError 503`, `DuplicatedKeyException` on `mx_Person[id]` for
+   `corp-res-distinct-2`. Worked around in this test by seeding Fixture Corp once, on cycle 1, and
+   reseeding only HMP's own accumulating incident events on cycles 2-6 — the correct shape anyway,
+   since HMP's structural entities are `on_match: reference` (idempotent) and its incident events
+   are the accumulation this test exists to characterise, while Fixture Corp is a static demo
+   baseline meant to be loaded once. **Left open, not fixed here** (this round's brief scoped this
+   item to building and running the test, not to product code): whether `upsert_nodes` should
+   become a real upsert, or whether every caller that might re-seed a literal id should instead be
+   expected to check-then-skip, is a real design question for whoever next needs to re-run a fixture
+   with stable ids against a non-fresh database.
+
+   **The six-cycle curve, `docker stats` RSS (container-scoped, MiB):** 6530.0 → 6465.5 → 6709.2 →
+   6941.7 → 6910.0 → 7095.3. Node/edge counts grew perfectly linearly (629 nodes and ~470-476 edges
+   per cycle, matching HMP's own fixed per-cycle write volume exactly) — confirming the database
+   really did accumulate across cycles rather than silently resetting. RSS growth is small,
+   non-monotonic (cycle 2 and cycle 5 both dipped below their predecessor) and totals +565.3MiB
+   across five cycle-to-cycle steps (≈113MiB/cycle average) — far short of the dev.yaml closing-pass
+   measurement's own steady ~250-350MiB-per-cycle climb (8.651 → 9.097 → 9.396GiB) cited above.
+   **Query sample wall time** (the fixed sample, not a closing-pass walkthrough — see the
+   methodological caveat below): 0.29s → 0.14s → 0.16s → 0.15s → 0.16s → 0.19s — flat, no growth
+   signal, all six values within noise of each other.
+
+   **A methodological finding about the ArcadeDB-reported figures, confirmed directly, that
+   qualifies how this round's own numbers — and possibly the dev.yaml figures cited above — should
+   be read.** ArcadeDB's own `/api/v1/server` profiler `ramOsUsed`/`ramOsTotal` fields, read for
+   comparison alongside `docker stats`, reported `ramOsTotal` = 10,416,386,048 bytes (9.701GiB) on
+   every one of the six cycles — checked directly against `docker info`'s own `MemTotal` on this
+   machine, which reports the identical 9.701GiB. **These fields are the Docker Desktop VM's own
+   host-level memory, not this container's cgroup-scoped allocation** — on macOS, where Docker
+   Desktop runs every container inside one shared Linux VM, the JVM's own OS-memory reading sees the
+   VM's total, not the cgroup limit `docker stats` reports. `ramOsUsed` stayed flat at
+   9823-9840MiB (a 17MiB spread) across all six cycles in this round's own run, which is consistent
+   with either "no growth" or "this reading cannot see this container's own growth at all on this
+   platform" — this round cannot distinguish the two, and neither can the dev.yaml figures cited
+   above without knowing whether that measurement was also taken on a Docker-Desktop-on-macOS VM (it
+   was — this same repository, this same class of workstation, per `07_BUILD_PLAN.md`'s own
+   "10GiB Docker Desktop VM allocation" wording at the point that measurement was taken). **Not
+   re-litigated here — a disclosed open question, not a claim that the earlier finding was wrong**:
+   a Linux CI runner has no such VM layer, so the same reading there would very likely be genuinely
+   container-scoped, and this platform-dependence is itself worth stating before either figure is
+   trusted as "ArcadeDB's own memory" without qualification. `docker stats`'s cgroup-level RSS,
+   above, is this round's own trustworthy, container-scoped figure regardless.
+   `ramHeapUsed`/`ramHeapMax` (4.10-5.33GiB used against a flat 6.00GiB ceiling, matching the
+   configured `-Xmx6G`) fluctuated without a growth trend, consistent with GC reclaiming — the same
+   non-monotonic heap behaviour the original cost-curve measurement above already found
+   ("`ramHeapUsed` at 5,000 nodes is *lower* than at 100 nodes").
+
+   **Not a milestone-level finding, checked against item 4's own criterion directly:** the curve is
+   not accelerating (RSS is flat-to-slightly-rising and non-monotonic; ArcadeDB's own memory
+   reading and query latency show no trend at all) and no figure projects past this machine's 9.70GiB
+   VM ceiling within six cycles — comfortably below it throughout (`docker stats` peaked at 7.10GiB
+   of 9.70GiB). This round therefore continues rather than stops at item 4.
+
+   **Thresholds — Proposed, not decided, with the measured numbers beside each proposal, per this
+   round's own brief:** the test asserts nothing today except that all six cycles complete and every
+   query in the sample returns 2xx.
+   - *RSS growth per cycle:* proposed ≤ 400MiB/cycle average across the six-cycle run (measured:
+     ≈113MiB/cycle average, non-monotonic — a threshold set well above the measured noise floor,
+     closer to the dev.yaml figure's own per-cycle climb, so the assertion is meaningful against a
+     real regression rather than tripping on ordinary variance).
+   - *Query sample wall time:* proposed cycle 6 ≤ 3× cycle 1 (measured: 0.19s / 0.29s ≈ 0.66×, i.e.
+     already well inside the proposed ceiling) — wide on purpose, because this sample's own absolute
+     magnitude (sub-second) means small scheduling jitter is a large relative swing; a tighter ratio
+     would risk flagging noise as regression on a fast, lightweight query sample.
+   - *VM-ceiling projection:* proposed — fail if any cycle's `docker stats` RSS exceeds 85% of the
+     configured Docker VM allocation (this machine: 8.25GiB of 9.70GiB; measured peak: 7.10GiB,
+     73%). The owner rules on all three; none is enforced yet.
+
 2b. **Orphaned `uvicorn` test servers — found and fixed, 23 September 2026.** No prior "rule-14
    stage" existed in this document to file this under, despite the instruction that requested it
    assuming one did; recorded here, next to 2a, as the closest existing kin (both are container/
