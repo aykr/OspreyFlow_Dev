@@ -1,4 +1,4 @@
-.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test dev-up dev-down test-all glass-perf glass-a11y glass-keyboard glass-map-verify
+.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test dev-up dev-down test-all glass-perf glass-a11y glass-keyboard glass-map-verify
 
 PY := .venv/bin/python
 PYTEST := .venv/bin/pytest
@@ -41,6 +41,12 @@ authorized-query-check:
 demo-guide-check:
 	$(PY) scripts/demo_guide_check.py
 	@echo "demo-guide-check: see tests/test_demo_guide_registry_check.py for the deterministic proof"
+
+# `06_DECISIONS.md` ADR-035 §C1's own fail-closed shipped/internal registry, now built
+# (scripts/demo_registry.py) — "what will ship is inspectable before shipping rather than after."
+demo-manifest:
+	$(PY) scripts/demo_registry.py
+	@echo "demo-manifest: see tests/demo_registry/test_fail_closed.py for the deterministic proof"
 
 # `07_BUILD_PLAN.md`'s Phase 8 documentation-refresh entry. Allowlists of current debt at
 # tests/fixtures/{domain_model_coverage,route_coverage}_allowlist.txt — see each script's own
