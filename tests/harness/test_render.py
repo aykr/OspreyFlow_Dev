@@ -93,6 +93,38 @@ def rendered(config: OspreyConfig) -> RenderResult:
     return render(config, resolver=_fake_resolver)
 
 
+def test_resolved_source_label_names_how_a_digest_was_actually_obtained(
+    config: OspreyConfig,
+) -> None:
+    """`06_DECISIONS.md` ADR-049 Stage 2 §5b: `scripts.osprey_bundle.build_bundle` resolves
+    digests from the registry, not the local daemon `render`'s own default targets — measured
+    directly, running the real bundle build, that the label written into `versions.lock` must
+    actually agree with which resolver produced the digest. A hardcoded `"local-docker-daemon"`
+    label here would mislabel a registry-resolved digest as a machine-local snapshot, exactly the
+    "one thing to verify against a registry, one lie about how it was checked" gap this test
+    exists to catch."""
+    result = render(config, resolver=_fake_resolver, resolved_source_label="registry")
+    lock = yaml.safe_load(result.artefacts["versions.lock"])
+
+    third_party_rows = [row for row in lock["images"] if row["source"] != "local-build"]
+    assert third_party_rows, "fixture renders no third-party image to check the label against"
+    for row in third_party_rows:
+        assert row["source"] == "registry", (
+            f"{row['service']}: expected the caller-supplied label 'registry', got "
+            f"{row['source']!r} — resolved_source_label is not being threaded through"
+        )
+
+
+def test_resolved_source_label_defaults_to_local_docker_daemon(config: OspreyConfig) -> None:
+    """The unchanged default for every existing caller (`harness.apply`) that does not pass the
+    parameter at all."""
+    result = render(config, resolver=_fake_resolver)
+    lock = yaml.safe_load(result.artefacts["versions.lock"])
+
+    third_party_rows = [row for row in lock["images"] if row["source"] != "local-build"]
+    assert all(row["source"] == "local-docker-daemon" for row in third_party_rows)
+
+
 # --- The four artefacts ------------------------------------------------------
 
 

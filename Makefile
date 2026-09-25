@@ -1,4 +1,4 @@
-.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test dev-up dev-down test-all glass-perf glass-a11y glass-keyboard glass-map-verify
+.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test dev-up dev-down test-all glass-perf glass-a11y glass-keyboard glass-map-verify bundle
 
 PY := .venv/bin/python
 PYTEST := .venv/bin/pytest
@@ -8,7 +8,7 @@ MYPY := .venv/bin/mypy
 # Phase 0 exit criterion (docs/07_BUILD_PLAN.md): CI green; a PR adding a GPL
 # dependency fails; a Pydantic model change not reflected in the generated
 # TypeScript fails the build. See the Phase 0 plan for what each target proves.
-ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check test-file-coverage-check citation-check conformance-guard
+ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check test-file-coverage-check citation-check conformance-guard bundle
 
 lint:
 	$(RUFF) check .
@@ -47,6 +47,18 @@ demo-guide-check:
 demo-manifest:
 	$(PY) scripts/demo_registry.py
 	@echo "demo-manifest: see tests/demo_registry/test_fail_closed.py for the deterministic proof"
+
+# `06_DECISIONS.md` ADR-049 Stage 2 §5b — the real `osprey bundle` command
+# (scripts/osprey_bundle.py). Manifest-only here (no --images): every packaging-time assertion
+# (ADR-034 §B7, ADR-035 §C2, LICENSE/NOTICE, the documentation site) still runs against this
+# bundle's own staged files, since none of those depend on whether images are archived.
+# `--images`'s own real archive-and-install path is the exit test, run for real rather than as a
+# fast CI-able target (tests/harness/test_bundle_exit_test.py, opt-in via OSPREY_TEST_DIST_BUNDLE=1 —
+# it needs Docker and takes minutes).
+bundle:
+	PYTHONPATH=packages $(PY) -m scripts.osprey_bundle --profile local-lite --out dist
+	@echo "bundle: see tests/test_osprey_bundle.py and tests/packaging/ for the deterministic proof,"
+	@echo "and tests/harness/test_bundle_exit_test.py for the --images/install-from-bundle exit test"
 
 # `07_BUILD_PLAN.md`'s Phase 8 documentation-refresh entry. Allowlists of current debt at
 # tests/fixtures/{domain_model_coverage,route_coverage}_allowlist.txt — see each script's own

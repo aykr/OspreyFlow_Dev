@@ -96,3 +96,43 @@ def unresolved_digest_resolver(image: ImageRef) -> str | None:
     """Resolves nothing. The explicit choice for `--allow-unpinned`, so that path is a named
     resolver rather than a branch that skips the real one."""
     return None
+
+
+def registry_digest_resolver(image: ImageRef) -> str | None:
+    """Asks the image's own registry for its manifest digest, rather than the local daemon.
+
+    `harness/render.py`'s own `_render_versions_lock` names exactly why the bundle needs this and
+    `docker_digest_resolver` above does not suffice for it: a bundle recipient's own daemon has
+    pulled nothing yet, so a `local-docker-daemon` digest is a snapshot of *this* machine's cache —
+    "which is a snapshot, not an authority" — where a registry-resolved one is independently
+    checkable by anyone who receives the bundle, against the same registry, forever.
+
+    `docker buildx imagetools inspect` queries the registry's own manifest API directly (no pull),
+    and needs no `docker login` for a public image — verified directly against `python:3.12-slim`
+    and `postgres:16-alpine` while this was written, on a machine with no registry credentials
+    configured at all. Returns `None` on any failure (no `buildx`, no network, a private image with
+    no credentials, an unknown tag) — the same "no digest available, the caller refuses" contract
+    `docker_digest_resolver` already holds itself to, never a guess.
+    """
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "buildx",
+                "imagetools",
+                "inspect",
+                image,
+                "--format",
+                "{{.Manifest.Digest}}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    digest = result.stdout.strip()
+    return digest if digest.startswith("sha256:") else None

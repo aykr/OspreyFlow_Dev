@@ -24,6 +24,16 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
+
+# `make licence-check` runs this file as a plain script (`$(PY) scripts/licence_check.py`, no
+# `-m`, no `PYTHONPATH`), which puts only `scripts/`'s own directory on `sys.path`, not the
+# repository root — the same problem `scripts/product_tree_link_check.py` already solved for
+# importing a sibling `scripts.*` module, and the identical fix, not a second one.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.demo_registry import REGISTRY, DemoManifest  # noqa: E402
 
 ALLOWED_MARKERS = (
     "mit",
@@ -66,6 +76,30 @@ def find_offenders(packages: list[dict[str, str]]) -> list[dict[str, str]]:
     return [p for p in packages if not is_allowed(p["License"])]
 
 
+def find_data_licence_offenders(
+    registry: tuple[DemoManifest, ...] = REGISTRY,
+) -> list[tuple[str, str]]:
+    """`06_DECISIONS.md` ADR-035 §C7: "Neither leg inspects a data file's own embedded or
+    accompanying licence... This is the fourth recorded instance of a gate verifying less than its
+    name implies." Extends `make licence-check` to the one class of licence neither `pip-licenses`
+    nor `license-checker` can see — a data file's own declared licence, checked against the
+    identical allowlist `is_allowed` already applies to package metadata, on the reasoning that a
+    licence family this codebase already accepts for code (Apache/MIT/BSD/etc.) is the same family
+    it should accept for data with no further review, and anything else — a share-alike obligation
+    like CDLA-Sharing-1.0 (§C6's own named case) above all — needs a human decision, not a silent
+    pass.
+
+    `None` (both real registry entries today — ADR-035 §C3/§C5) means no third-party data licence
+    is declared at all and there is nothing to check; this function returns `(demo_id, licence)`
+    only for an entry that declares one and it fails `is_allowed`.
+    """
+    return [
+        (manifest.id, manifest.data_licence)
+        for manifest in registry
+        if manifest.data_licence and not is_allowed(manifest.data_licence)
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -83,9 +117,21 @@ def main() -> int:
             f"{offender['License']!r} is not on the docs/00_ARCHITECTURE.md §7 allowlist",
             file=sys.stderr,
         )
-    if offenders:
+
+    data_offenders = find_data_licence_offenders()
+    for demo_id, licence in data_offenders:
+        print(
+            f"licence-check: demo {demo_id!r}'s own data licence {licence!r} is not on the "
+            "docs/00_ARCHITECTURE.md §7 allowlist (06_DECISIONS.md ADR-035 §C7)",
+            file=sys.stderr,
+        )
+
+    if offenders or data_offenders:
         return 1
-    print(f"licence-check: {len(packages)} packages, all allowed.")
+    print(
+        f"licence-check: {len(packages)} packages, all allowed "
+        f"({len(REGISTRY)} demo data licence(s) checked, all allowed or undeclared)."
+    )
     return 0
 
 

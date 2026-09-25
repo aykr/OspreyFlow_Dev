@@ -441,7 +441,11 @@ def _render_env(config: OspreyConfig) -> str:
 
 
 def _render_versions_lock(
-    images: Sequence[ServiceImage], resolver: DigestResolver, *, allow_unpinned: bool
+    images: Sequence[ServiceImage],
+    resolver: DigestResolver,
+    *,
+    allow_unpinned: bool,
+    resolved_source_label: str = "local-docker-daemon",
 ) -> str:
     entries = []
     unresolved = []
@@ -451,10 +455,12 @@ def _render_versions_lock(
         # `source` is recorded per entry, not once per file, because the two can differ within one
         # render: a machine that has pulled some of these images and not others produces a lock
         # file that is partly a real pin and partly a gap, and a reader needs to know which line is
-        # which. `local-docker-daemon` means "this is the digest this machine happened to have",
-        # which is a snapshot, not an authority — Stage 2 §5's bundle resolves from the registry
-        # manifest instead, and will write a different source here when it does.
-        source = "local-docker-daemon"
+        # which. `local-docker-daemon` (the default, `harness.apply`'s own usage) means "this is
+        # the digest this machine happened to have", a snapshot, not an authority —
+        # `resolved_source_label` is how `scripts.osprey_bundle.build_bundle` writes `"registry"`
+        # here instead, matching what `harness.images.registry_digest_resolver` actually resolved
+        # against, once the bundle's own Stage 2 §5b landed.
+        source = resolved_source_label
         if entry.owned:
             # `dockerfile` is resolved relative to `context`, which is the repository root, so it
             # stays a repo-root-relative path rather than becoming relative to the output dir too.
@@ -583,9 +589,18 @@ def render(
     *,
     resolver: DigestResolver | None = None,
     allow_unpinned: bool = False,
+    resolved_source_label: str = "local-docker-daemon",
 ) -> RenderResult:
     """Produces all four of §2.1's artefacts in memory. Pure apart from the digest resolver, which
-    is why byte-stability across runs is a property this can be tested for at all."""
+    is why byte-stability across runs is a property this can be tested for at all.
+
+    `resolved_source_label` names, in `versions.lock`, *how* a resolved digest was obtained — it
+    does not change what gets resolved, only how the lock file describes it. Left at its default
+    for every caller except `scripts.osprey_bundle.build_bundle`, which passes a resolver AND a
+    label that actually agree with each other (`harness.images.registry_digest_resolver` /
+    `"registry"`) rather than this function silently mislabelling a registry-resolved digest as a
+    local-daemon one.
+    """
     if config.profile is Profile.CLUSTER:
         raise ClusterRendererNotBuilt(
             "profile: cluster renders Kubernetes manifests through a separate renderer "
@@ -606,7 +621,12 @@ def render(
         artefacts={
             "compose.yaml": _render_compose(config, images),
             "deployment.env": _render_env(config),
-            "versions.lock": _render_versions_lock(images, resolver, allow_unpinned=allow_unpinned),
+            "versions.lock": _render_versions_lock(
+                images,
+                resolver,
+                allow_unpinned=allow_unpinned,
+                resolved_source_label=resolved_source_label,
+            ),
             "RUNBOOK.md": _render_runbook(config, images),
         },
     )
