@@ -1,5 +1,5 @@
 import type { Map as MapLibreMap } from "maplibre-gl";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   EdgeTypeDef,
@@ -10,6 +10,17 @@ import type {
   Sighting,
 } from "../../../packages/schemas/generated";
 import { fetchGeoBins, fetchSightings } from "./analytics/api";
+import {
+  clearRedirectCallbackParams,
+  completeSignInFromRedirect,
+  displayPrincipalFromUser,
+  getUserManager,
+  isSignInRedirectCallback,
+  signIn,
+  signOut,
+  type DisplayPrincipal,
+} from "./auth/userManager";
+import { SignInScreen } from "./auth/SignInScreen";
 import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
 import {
   buildEventFilter,
@@ -52,13 +63,6 @@ import { MonitorPanel } from "./watches/MonitorPanel";
 import { connectDeltaClient, type SocketLike } from "./workingset/deltaClient";
 import { createWorkingSet } from "./workingset/store";
 
-// Dev-only: Phase 4's bullets do not include a login flow (OIDC/Keycloak's
-// own UI is server-side, Phase 3's territory) — a bearer token supplied
-// this way is a stand-in until a real sign-in screen exists, not a
-// production auth path. `06_DECISIONS.md` ADR-050 is the sign-in that
-// replaces it; until that is built and this is removed, a rendered
-// deployment must not carry it (05_DEPLOYMENT.md §2.6 item 2).
-//
 // **An empty base URL means same-origin, and that is what a rendered
 // deployment builds with** (05_DEPLOYMENT.md §2.6 item 1, owner's decision
 // of 25 September 2026). The workspace image's own nginx proxies /v1 to
@@ -71,7 +75,16 @@ import { createWorkingSet } from "./workingset/store";
 // serves the Glass on 5173 with no proxy in front of it.
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
-const DEV_BEARER_TOKEN = import.meta.env.VITE_DEV_BEARER_TOKEN ?? "";
+
+// `06_DECISIONS.md` ADR-050: "the VITE_DEV_BEARER_TOKEN path survives only for `npm run dev`."
+// `import.meta.env.DEV` is Vite's own `command === "serve"` flag — `false` for every production
+// build, so this branch is dead code (and the variable read below moot) in anything
+// `vite.config.ts`'s own build-time fence would have let through. There is no Keycloak in
+// `deploy/compose/dev.yaml`'s lightweight dev stack (`scripts/mint_dev_token.py` mints against a
+// throwaway keypair instead), so this path — not the real OIDC flow below — is what `make dev-up`
+// and `npm run dev` actually exercise.
+const DEV_MODE_BEARER_TOKEN =
+  import.meta.env.DEV ? (import.meta.env.VITE_DEV_BEARER_TOKEN ?? "") : "";
 
 /** The origin to open the delta WebSocket against.
  *
@@ -121,6 +134,106 @@ const GEO_BIN_PRECISION = 8;
 export function App() {
   const workingSetRef = useRef(createWorkingSet());
   const glassCanvasRef = useRef<GlassCanvasHandle>(null);
+
+  // `06_DECISIONS.md` ADR-050 — sign-in. `bearerToken` is the one value every child component
+  // already took as a prop before this stage; only its *source* changes, from the dev-only
+  // constant to the real access token this state holds once the analyst has signed in.
+  const isDevBypass = Boolean(DEV_MODE_BEARER_TOKEN);
+  const [bearerToken, setBearerToken] = useState<string>(DEV_MODE_BEARER_TOKEN);
+  const [principal, setPrincipal] = useState<DisplayPrincipal | null>(null);
+  // `null` until the very first bootstrap effect below has run once — distinguishes "still
+  // checking whether this load is a redirect callback" from "checked, and there is no session",
+  // which is the difference between showing nothing for one frame and showing the sign-in screen
+  // prematurely.
+  const [authChecked, setAuthChecked] = useState(isDevBypass);
+  // `00_ARCHITECTURE.md` §1.3's own distinction, carried to the Glass: shown on the sign-in
+  // screen only when there is something to say — a refused token, a failed silent renewal, or a
+  // sign-in that could not complete. `null` on a plain first, unauthenticated load.
+  const [signInReason, setSignInReason] = useState<string | null>(null);
+  // Distinguishes "this token was just refused outright" (wrong audience, wrong claims — show the
+  // reason, do not retry) from "this token merely expired mid-session" (retry silently, preserving
+  // state) — both surface as a 401 on the same bootstrap call and are otherwise indistinguishable.
+  const hasResolvedAPrincipalOnceRef = useRef(isDevBypass);
+
+  useEffect(() => {
+    if (isDevBypass) return;
+    let cancelled = false;
+
+    async function bootstrap() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has("error")) {
+        const reason = params.get("error_description") ?? params.get("error") ?? "sign-in failed";
+        clearRedirectCallbackParams();
+        if (!cancelled) {
+          setSignInReason(
+            reason === "login_required"
+              ? "Your session has ended. Sign in again to continue — your place in the " +
+                  "investigation has been saved."
+              : `Your sign-in could not be completed: ${reason}.`,
+          );
+          setAuthChecked(true);
+        }
+        return;
+      }
+      if (isSignInRedirectCallback()) {
+        try {
+          const user = await completeSignInFromRedirect();
+          clearRedirectCallbackParams();
+          if (cancelled) return;
+          setBearerToken(user.access_token);
+          setPrincipal(displayPrincipalFromUser(user));
+          restoreViewStateAfterReauth();
+        } catch {
+          clearRedirectCallbackParams();
+          if (!cancelled) setSignInReason("Your sign-in could not be completed. Try again.");
+        }
+      }
+      if (!cancelled) setAuthChecked(true);
+    }
+
+    void bootstrap();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once, at mount, deliberately.
+  }, []);
+
+  /** ADR-050's Decision section: "the Glass preserves only the investigation id, the current
+   * selection and the view state… re-fetches the working set… before restoring the view." Called
+   * once a fresh token is obtained, whether from completing a redirect callback above or from the
+   * silent `prompt=none` round `reauthenticateAfterExpiry` below triggers. Restoring the
+   * investigation id here only re-primes what `initialInvestigationId()` already reads from
+   * `sessionStorage` on the *next* mount — this component does not remount on a same-page state
+   * change, so nothing further is needed for it. Selection/view-state restoration is left as a
+   * disclosed, not-yet-built gap: `07_BUILD_PLAN.md`'s Stage 2c entry records it honestly rather
+   * than claiming it silently.
+   */
+  function restoreViewStateAfterReauth(): void {
+    hasResolvedAPrincipalOnceRef.current = false;
+  }
+
+  /** A 401 on the very first authenticated call after sign-in means the token itself was refused
+   * (wrong audience, a claim the realm never mapped) — retrying it against the same identity-
+   * provider session would only fetch the identical bad token again. A 401 on any later call means
+   * the token merely expired during use, and ADR-050's own silent `prompt=none` round is the right
+   * response. The two need different reactions, and a bare 401 cannot tell them apart on its own —
+   * only "has this session ever produced a usable token" can. */
+  const handleUnauthenticatedResponse = useCallback((): void => {
+    if (isDevBypass) return;
+    if (!hasResolvedAPrincipalOnceRef.current) {
+      setBearerToken("");
+      setPrincipal(null);
+      setSignInReason(
+        "Your sign-in could not be used to reach the workspace. Check with your " +
+          "administrator that this deployment's identity provider is configured correctly.",
+      );
+      return;
+    }
+    setBearerToken("");
+    setPrincipal(null);
+    void getUserManager().signinRedirect({ prompt: "none" });
+  }, [isDevBypass]);
+
   const [investigationId, setInvestigationId] = useState<string | null>(
     initialInvestigationId(),
   );
@@ -161,16 +274,23 @@ export function App() {
   const [siteWizardOpen, setSiteWizardOpen] = useState(false);
   const [boundaryToolOpen, setBoundaryToolOpen] = useState(false);
   const [liveMap, setLiveMap] = useState<MapLibreMap | null>(null);
-  // Constructed once `investigationId` is known — `investigationScope` is
-  // frozen into the store at creation (`crossfilter/store.ts`), and
-  // `investigationId` only ever moves from `null` to a real id once per
-  // session, never changes again, so a lazy ref assignment during render
-  // (rather than an effect) is safe here.
+  // Constructed once `investigationId` **and** `bearerToken` are both known — `investigationScope`
+  // is frozen into the store at creation (`crossfilter/store.ts`), and `investigationId` only ever
+  // moves from `null` to a real id once per session, never changes again, so a lazy ref assignment
+  // during render (rather than an effect) is safe here. Gating on `bearerToken` too matters now
+  // that it can start empty (unauthenticated) and arrive later: `initialInvestigationId()` reads
+  // from the URL/sessionStorage independently of sign-in, so `investigationId` alone is not
+  // evidence that a real request should be made yet.
+  //
+  // **Known, disclosed limitation** (`07_BUILD_PLAN.md`'s Stage 2c entry): the token frozen in here
+  // at creation does not itself rotate if `bearerToken` later changes (a mid-session silent
+  // renewal) — every other consumer below re-reads `bearerToken` as a plain prop on each render,
+  // so only this one, already-existing "construct once" pattern carries the gap forward.
   const crossFilterRef = useRef<CrossFilterStore | null>(null);
-  if (investigationId && !crossFilterRef.current) {
+  if (investigationId && bearerToken && !crossFilterRef.current) {
     crossFilterRef.current = createCrossFilterStore(
       API_BASE_URL,
-      DEV_BEARER_TOKEN,
+      bearerToken,
       investigationId,
     );
   }
@@ -182,42 +302,69 @@ export function App() {
   const [geoBins, setGeoBins] = useState<readonly GeoBin[]>(EMPTY_GEO_BINS);
 
   useEffect(() => {
-    void fetchOntologyRegistry(API_BASE_URL, DEV_BEARER_TOKEN).then(
+    // `06_DECISIONS.md` ADR-050's tests-owed list: "an unauthenticated load presents the sign-in…
+    // and issues no /v1 call." `bearerToken` is `""` until sign-in completes (or the dev bypass
+    // supplies it), and every effect below that reaches `/v1` is gated on it for exactly that
+    // reason — this one first, since it is the earliest bootstrap call in the component.
+    if (!bearerToken) return;
+    void fetchOntologyRegistry(API_BASE_URL, bearerToken).then(
       (registry) => {
         setOntology(registry);
       },
     );
     void fetch(`${API_BASE_URL}/v1/ontology`, {
-      headers: { Authorization: `Bearer ${DEV_BEARER_TOKEN}` },
+      headers: { Authorization: `Bearer ${bearerToken}` },
     })
-      .then((r) => r.json())
-      .then((schema: OntologySchema) => {
+      .then((r) => {
+        if (r.status === 401) {
+          handleUnauthenticatedResponse();
+          return null;
+        }
+        hasResolvedAPrincipalOnceRef.current = true;
+        return r.json();
+      })
+      .then((schema: OntologySchema | null) => {
+        if (!schema) return;
         setEdgeTypes(schema.edge_types);
         setOntologySchema(schema);
       });
-    void fetchMapConfig(API_BASE_URL, DEV_BEARER_TOKEN).then(setMapConfig);
-  }, []);
+    void fetchMapConfig(API_BASE_URL, bearerToken).then(setMapConfig);
+  }, [bearerToken, handleUnauthenticatedResponse]);
 
   useEffect(() => {
+    // Persisting an already-resolved id makes no network call and must run regardless of auth
+    // state — found running the real exit test: gating this on `bearerToken` too (like the POST
+    // fallback below, which genuinely needs it) meant a `?investigation=` URL param was never
+    // written to `sessionStorage` before the sign-in redirect navigated away, so the round trip
+    // came back with no memory of it and silently created a second, empty investigation instead
+    // of opening the one the URL named. `docs/02_GLASS_FRONTEND.md` §2.1's own "written back to
+    // sessionStorage immediately" is unconditional for exactly this reason.
     if (investigationId) {
-      // Persist a URL-param id too, so a reload without the param (or a bookmark of the plain
-      // URL) still finds the same investigation rather than falling through to create a new one.
       sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, investigationId);
       return;
     }
+    if (!bearerToken) return;
     void fetch(`${API_BASE_URL}/v1/investigations`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${DEV_BEARER_TOKEN}` },
+      headers: { Authorization: `Bearer ${bearerToken}` },
     })
-      .then((r) => r.json())
+      .then((r) => {
+        if (r.status === 401) {
+          handleUnauthenticatedResponse();
+          return null;
+        }
+        hasResolvedAPrincipalOnceRef.current = true;
+        return r.json();
+      })
       .then((investigation) => {
+        if (!investigation) return;
         sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, investigation.id);
         setInvestigationId(investigation.id);
       });
-  }, [investigationId]);
+  }, [investigationId, bearerToken, handleUnauthenticatedResponse]);
 
   useEffect(() => {
-    if (!investigationId) return;
+    if (!investigationId || !bearerToken) return;
     const workingSet = workingSetRef.current;
     const unsubscribe = workingSet.store.subscribe((state) => {
       setCounts({
@@ -239,7 +386,7 @@ export function App() {
       // whenever membership changes. A no-op fast path when the working
       // set has no `Location` nodes yet (`resolveNodeCoordinates`'s own
       // early return).
-      void resolveNodeCoordinates(API_BASE_URL, DEV_BEARER_TOKEN, workingSet.graph).then(
+      void resolveNodeCoordinates(API_BASE_URL, bearerToken, workingSet.graph).then(
         setNodeCoordinates,
       );
     });
@@ -248,10 +395,16 @@ export function App() {
     // A browser's native `WebSocket` cannot set an `Authorization` header
     // — `?token=` is the server's documented fallback for exactly this
     // (`services/api/app.py`'s `_authenticate_websocket`).
+    //
+    // `bearerToken` in the dependency array below is `06_DECISIONS.md` ADR-050's own "the delta
+    // WebSocket authenticates on connect and on every reconnect": a token rotation (the silent
+    // `prompt=none` round `handleUnauthenticatedResponse` triggers) tears this effect down and
+    // re-establishes the connection with the fresh token, rather than an already-open socket
+    // continuing to carry the one it dialled with.
     const client = connectDeltaClient(
       () =>
         new WebSocket(
-          `${wsUrl}/v1/investigations/${investigationId}/stream?token=${encodeURIComponent(DEV_BEARER_TOKEN)}`,
+          `${wsUrl}/v1/investigations/${investigationId}/stream?token=${encodeURIComponent(bearerToken)}`,
         ) as unknown as SocketLike,
       { onDelta: (delta) => workingSet.store.getState().applyDelta(delta) },
     );
@@ -259,7 +412,7 @@ export function App() {
       client.close();
       unsubscribe();
     };
-  }, [investigationId]);
+  }, [investigationId, bearerToken]);
 
   useEffect(() => {
     const crossFilter = crossFilterRef.current;
@@ -284,7 +437,7 @@ export function App() {
     // literally.
     async function refresh(state: CrossFilterStoreState) {
       const filter = buildEventFilter(scope, state.window, state.selectedNodeIds);
-      const bins = await fetchGeoBins(API_BASE_URL, DEV_BEARER_TOKEN, {
+      const bins = await fetchGeoBins(API_BASE_URL, bearerToken, {
         filter,
         precision: GEO_BIN_PRECISION,
       });
@@ -300,7 +453,7 @@ export function App() {
       void refresh(state);
     });
     return () => unsubscribe();
-  }, [investigationId]);
+  }, [investigationId, bearerToken]);
 
   // B18's own snail trail — one entity's own ordered sightings over the
   // active brush window. "The device's sightings" (`08_ACCEPTANCE_
@@ -323,7 +476,7 @@ export function App() {
         setSightings([]);
         return;
       }
-      void fetchSightings(API_BASE_URL, DEV_BEARER_TOKEN, {
+      void fetchSightings(API_BASE_URL, bearerToken, {
         filter: buildEventFilter(scope, window, [entityId]),
       }).then((result) => {
         if (!cancelled) setSightings(result);
@@ -335,7 +488,7 @@ export function App() {
       cancelled = true;
       unsubscribe();
     };
-  }, [investigationId, selectedNode]);
+  }, [investigationId, selectedNode, bearerToken]);
 
   // The revealed prefix of `sightings` at the current playback position —
   // recomputed on every animation frame (`playbackFraction` changes), the
@@ -363,6 +516,13 @@ export function App() {
     [communities],
   );
 
+  // `06_DECISIONS.md` ADR-050's tests-owed list: "an unauthenticated load presents the sign-in,
+  // not an error page and not an empty workspace." Checked before the "not ready yet" branch below
+  // — an unauthenticated caller is never "still loading", it has a definite answer already.
+  if (!isDevBypass && authChecked && !bearerToken) {
+    return <SignInScreen reason={signInReason} onSignIn={() => void signIn()} />;
+  }
+
   if (!investigationId || !ontology || !crossFilterRef.current) {
     return (
       <div style={{ padding: "var(--sp-24)", color: "var(--text-secondary)" }}>
@@ -387,7 +547,7 @@ export function App() {
         <div style={{ flex: 1, maxWidth: 480 }}>
           <GlobalSearch
             apiBaseUrl={API_BASE_URL}
-            bearerToken={DEV_BEARER_TOKEN}
+            bearerToken={bearerToken}
             onSelect={(node) => {
               workingSetRef.current.store.getState().applyDelta({
                 seq: workingSetRef.current.store.getState().seq,
@@ -422,7 +582,7 @@ export function App() {
         {view === "graph" && (
           <ResolutionThresholdControl
             apiBaseUrl={API_BASE_URL}
-            bearerToken={DEV_BEARER_TOKEN}
+            bearerToken={bearerToken}
             investigationId={investigationId}
             store={workingSetRef.current.store}
             onChangeSummary={setToast}
@@ -452,12 +612,33 @@ export function App() {
           </Button>
         )}
         <Button onClick={() => setHistoryOpen(true)}>History</Button>
+        {!isDevBypass && principal && (
+          // `06_DECISIONS.md` ADR-050's Decision section: "displays the principal's identity and
+          // clearance in the workspace chrome. It never derives access from them." Purely
+          // informational — `docs/02_GLASS_FRONTEND.md` §2's own workspace-layout description now
+          // names this element (the spec gap ADR-050's own objection 9 raised, closed by that
+          // edit rather than left as an ADR-only decision).
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--sp-8)",
+              fontSize: 12,
+              color: "var(--text-secondary)",
+            }}
+          >
+            <span>
+              {principal.sub} · {principal.clearance}
+            </span>
+            <Button onClick={() => void signOut()}>Sign out</Button>
+          </div>
+        )}
       </header>
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         {view === "ingest" && (
           <IngestStudio
             apiBaseUrl={API_BASE_URL}
-            bearerToken={DEV_BEARER_TOKEN}
+            bearerToken={bearerToken}
             investigationId={investigationId}
           />
         )}
@@ -468,7 +649,7 @@ export function App() {
             nodeId={dossierNodeId}
             investigationId={investigationId}
             apiBaseUrl={API_BASE_URL}
-            bearerToken={DEV_BEARER_TOKEN}
+            bearerToken={bearerToken}
             onSelectNode={(nodeId) => {
               const graph = workingSetRef.current.graph;
               setSelectedNode(graph.hasNode(nodeId) ? graph.getNodeAttribute(nodeId, "data") : null);
@@ -482,11 +663,11 @@ export function App() {
           // "dossier", opts out of the investigation-scoped side panel/timeline/status bar below
           // rather than being squeezed into `view === "graph"`'s own 320px column.
           <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--sp-8)", overflowY: "auto", padding: "var(--sp-8)" }}>
-            <HotlistPanel apiBaseUrl={API_BASE_URL} bearerToken={DEV_BEARER_TOKEN} />
-            <MonitorPanel apiBaseUrl={API_BASE_URL} bearerToken={DEV_BEARER_TOKEN} />
+            <HotlistPanel apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} />
+            <MonitorPanel apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} />
             <AlertInbox
               apiBaseUrl={API_BASE_URL}
-              bearerToken={DEV_BEARER_TOKEN}
+              bearerToken={bearerToken}
               onOpenInvestigation={(newInvestigationId) => {
                 sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, newInvestigationId);
                 setInvestigationId(newInvestigationId);
@@ -506,7 +687,7 @@ export function App() {
               edgeTypes={edgeTypes}
               investigationId={investigationId}
               apiBaseUrl={API_BASE_URL}
-              bearerToken={DEV_BEARER_TOKEN}
+              bearerToken={bearerToken}
               dimmedNodeIds={dimming.dimmedNodeIds}
               communityHulls={communityHulls}
               onSelectionChange={(nodeIds) => {
@@ -549,7 +730,7 @@ export function App() {
                     geoBins={geoBins}
                     snailTrail={revealedSightings}
                     apiBaseUrl={API_BASE_URL}
-                    bearerToken={DEV_BEARER_TOKEN}
+                    bearerToken={bearerToken}
                     onMapReady={setLiveMap}
                     onNodeClick={(nodeId) => {
                       // A3's "select the hotspot cells" — clicking a
@@ -581,7 +762,7 @@ export function App() {
                   >
                     <HotspotHistogram
                       apiBaseUrl={API_BASE_URL}
-                      bearerToken={DEV_BEARER_TOKEN}
+                      bearerToken={bearerToken}
                       investigationScope={investigationId}
                       crossFilterStore={crossFilterStore}
                       getNodeIds={() => workingSetRef.current.graph.nodes()}
@@ -590,7 +771,7 @@ export function App() {
                   {siteWizardOpen && (
                     <SiteCalibrationWizard
                       apiBaseUrl={API_BASE_URL}
-                      bearerToken={DEV_BEARER_TOKEN}
+                      bearerToken={bearerToken}
                       investigationId={investigationId}
                       map={liveMap}
                       onClose={() => setSiteWizardOpen(false)}
@@ -624,7 +805,7 @@ export function App() {
             node={selectedNode}
             assessment={{
               apiBaseUrl: API_BASE_URL,
-              bearerToken: DEV_BEARER_TOKEN,
+              bearerToken: bearerToken,
               investigationId,
               workingSetGraph: workingSetRef.current.graph,
               onHighlightNodes: (nodeIds) => glassCanvasRef.current?.highlightNodes(nodeIds),
@@ -633,7 +814,7 @@ export function App() {
           {view === "graph" && (
             <MetricsPanel
               apiBaseUrl={API_BASE_URL}
-              bearerToken={DEV_BEARER_TOKEN}
+              bearerToken={bearerToken}
               investigationId={investigationId}
               graph={workingSetRef.current.graph}
               onFocusNode={(nodeId) => glassCanvasRef.current?.focusOnNode(nodeId)}
@@ -643,7 +824,7 @@ export function App() {
           {view === "graph" && ontologySchema && (
             <QueryBuilderPanel
               apiBaseUrl={API_BASE_URL}
-              bearerToken={DEV_BEARER_TOKEN}
+              bearerToken={bearerToken}
               schema={ontologySchema}
             />
           )}
@@ -687,7 +868,7 @@ export function App() {
         <div style={{ flex: 1, minHeight: 0 }}>
           <Timeline
             apiBaseUrl={API_BASE_URL}
-            bearerToken={DEV_BEARER_TOKEN}
+            bearerToken={bearerToken}
             investigationScope={investigationId}
             crossFilterStore={crossFilterStore}
             getNodeIds={() => workingSetRef.current.graph.nodes()}
@@ -710,7 +891,7 @@ export function App() {
         onClose={() => setHistoryOpen(false)}
         investigationId={investigationId}
         apiBaseUrl={API_BASE_URL}
-        bearerToken={DEV_BEARER_TOKEN}
+        bearerToken={bearerToken}
         onRestored={(snapshot) =>
           workingSetRef.current.store.getState().applyDelta(snapshot)
         }
@@ -719,7 +900,7 @@ export function App() {
         open={exportOpen}
         onClose={() => setExportOpen(false)}
         apiBaseUrl={API_BASE_URL}
-        bearerToken={DEV_BEARER_TOKEN}
+        bearerToken={bearerToken}
         investigationId={investigationId}
         graph={workingSetRef.current.graph}
         onExportChartImage={(mark) => {

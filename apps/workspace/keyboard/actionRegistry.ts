@@ -232,3 +232,17 @@ export const TIMELINE_PLAYBACK_ACTIONS = defineActionRegistry("TIMELINE_PLAYBACK
   "toggle-playback-advances-the-clock",
   "cross-case-overlay-loads-second-track",
 ] as const);
+
+/**
+ * The sign-in screen's own keyboard-reachable action — `06_DECISIONS.md` ADR-050, the eighth
+ * keyboard-driven surface (`keyboard/sign-in-harness.tsx`'s own docstring has the reasoning for a
+ * separate harness/spec pair, the same shape every registry above already establishes). One action,
+ * not the native button's own Tab-reachability (free, the browser's guarantee, the same exemption
+ * every other registry already draws): activating "Sign in" triggers a real `oidc-client-ts`
+ * `signinRedirect()` — a real OIDC discovery fetch followed by a real top-level navigation to the
+ * identity provider's authorization endpoint with the right `client_id`/`response_type`/PKCE
+ * challenge, not a mocked callback.
+ */
+export const SIGN_IN_ACTIONS = defineActionRegistry("SIGN_IN_ACTIONS", [
+  "submit-sign-in",
+] as const);

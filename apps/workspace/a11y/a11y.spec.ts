@@ -5,6 +5,21 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 for (const theme of ["dark", "light"] as const) {
+  // `06_DECISIONS.md` ADR-050's own tests-owed list: "The accessibility floor
+  // (`02_GLASS_FRONTEND.md` §6) on the sign-in screen." Against the real screen
+  // (`keyboard/sign-in-harness.tsx` renders the actual `SignInScreen`, wired to the real
+  // `signIn()` — nothing here needs the identity provider reachable, since axe scans the DOM
+  // before the button is ever pressed), not a static showcase fragment, per ADR-050's own wording.
+  test(`${theme} theme sign-in screen has no automated wcag2aa violations`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/keyboard/sign-in-harness.html");
+    if (theme === "light") {
+      await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+    }
+    const results = await new AxeBuilder({ page }).withTags(["wcag2aa"]).analyze();
+    expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+  });
+
   test(`${theme} theme has no automated colour-contrast violations`, async ({ page }) => {
     // Found while verifying Phase 7 Stage 5 (unrelated to it — this file was untouched): the
     // light-theme switch below flips `data-theme` on an already-painted page, and `.btn`'s own

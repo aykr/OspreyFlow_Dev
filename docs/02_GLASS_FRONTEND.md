@@ -180,6 +180,16 @@ set of widgets:
    filters everything. This is the Gotham pattern and it is the core interaction of the product.
 4. **The status bar never lies.** Counts of dimmed and handling-hidden items are always visible.
    An analyst must never be able to mistake a filtered picture for a complete one.
+5. **The signed-in principal's own identity is always visible, informationally only.** A small
+   element in the top-bar chrome, beside `History` — `<subject> · <clearance>` (e.g.
+   `analyst-1 · OFFICIAL`), with a `Sign out` control beside it. Added by `06_DECISIONS.md`
+   ADR-050, whose own objection 9 found this document silent on the element its design put here;
+   this is that gap closed, not a decision made only in the ADR. Rule 3 stands unchanged: the
+   Glass reads `sub` and `clearance` from the signed token and displays them, and derives nothing
+   from either — a principal with a lower clearance sees exactly the same controls, differing only
+   in what the Conduit itself returns. `Sign out` ends the session at the identity provider
+   (`end_session_endpoint`) and clears the Glass's own memory and session storage; it does not
+   itself alter what any control shows.
 
 ### 2.1 Investigation selection on load — proposed, not settled spec
 
