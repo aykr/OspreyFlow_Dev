@@ -3467,6 +3467,23 @@ find something already finished sitting in the queue.
 
    ---
 
+   **The suite after the same-origin proxy, 25 September 2026 — identical to the day before, test
+   id for test id.**
+
+   | Run | Result | Wall time |
+   | --- | --- | --- |
+   | `make test` | **827 passed, 1 failed** | 1:35 |
+   | Glass unit tests (`npm test`) | **249 passed, 39 files** | 1.2s |
+   | Batch 1, fresh volumes | **143 passed, 7 failed** | 6:42 |
+   | Batch 2, fresh volumes | **144 passed, 3 failed** | 4:58 |
+
+   287 passed across the two batches, and **every failing test id is one already on record**:
+   batch 1 is Floor B's six model-backend members plus `test_hmp_graph_side`; batch 2's three are
+   the two `test_fixture_corp_shape.py` cases that pass in isolation on a fresh stack and
+   `test_save_judgement_route_creates_and_returns_it`, which fails identically at `d9e1c62`. The
+   one `make test` failure is `route-coverage-check`'s six undocumented routes, also unchanged.
+   Nothing in this round moved the floor in either direction.
+
    **Stage 2 §5 — split into §5a and §5b, owner's decision, 24 September 2026.** `Stage 2 §3`
    cannot start a stack whose images do not exist, and the rendered compose file named three
    `ghcr.io/ospreyflow/…` images no registry publishes. **`Stage 2 §5a` runs before `Stage 2 §3`**
