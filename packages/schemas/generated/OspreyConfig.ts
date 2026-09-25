@@ -64,6 +64,10 @@ export type Hosts = ClusterHost[];
  * Default: false. Publish the Conduit's own port on the host in addition to the workspace's. Not needed to use the deployment — the workspace proxies /v1 — and turning it on widens the exposed surface by a whole tier. For an operator debugging the Conduit directly, or a second client that is not the Glass.
  */
 export type ExposeConduit = boolean;
+/**
+ * Default: http://localhost:8080 — the workspace's own default published port (`OSPREY_WORKSPACE_PORT`). The origin a browser uses to reach this deployment. `06_DECISIONS.md` ADR-050 objection 2's resolution: the identity-provider realm is rendered from this value at apply time and the Glass's public client is registered with an exact redirect URI and post-logout URI derived from it — no wildcards. Override this when `OSPREY_WORKSPACE_PORT` is overridden or the deployment is reached at a different host; the renderer does not infer either from the environment.
+ */
+export type PublicOrigin = string;
 export type Default = string;
 /**
  * @minItems 1
@@ -201,6 +205,7 @@ export interface ClusterHost {
  */
 export interface NetworkConfig {
   expose_conduit?: ExposeConduit;
+  public_origin?: PublicOrigin;
 }
 /**
  * `osprey.yaml`'s `map:` section.

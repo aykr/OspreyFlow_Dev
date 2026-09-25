@@ -45,11 +45,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from harness.keycloak_admin import grant_service_account_roles
+from harness.keycloak_admin import grant_service_account_roles, set_demo_analyst_password
 from harness.preflight import ALL_CHECKS, PreflightContext
 from harness.preflight.result import Status
 from harness.realm import (
     CONDUIT_CLIENT_ID,
+    DEMO_ANALYST_SUBJECT,
     generate_client_secret,
     render_realm_json,
 )
@@ -383,6 +384,15 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Skip the post-launch token-exchange verify. Reported in the summary when used.",
     )
+    parser.add_argument(
+        "--demo-analyst",
+        action="store_true",
+        help=(
+            "Render a disposable analyst subject that can sign in interactively, with an "
+            "apply-time password written into the deployment's own environment file and printed "
+            "once. Absent by default. 06_DECISIONS.md ADR-050 objection 3."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -401,11 +411,17 @@ def main(argv: list[str] | None = None) -> int:
         # 1. Render.
         rendered = render(config, allow_unpinned=True)
         write_artefacts(rendered, out_dir)
-        (out_dir / "realm.json").write_text(render_realm_json(config), encoding="utf-8")
+        (out_dir / "realm.json").write_text(
+            render_realm_json(config, demo_analyst=args.demo_analyst), encoding="utf-8"
+        )
         secret = generate_client_secret()
         admin_password = generate_client_secret()
         arcadedb_password = generate_client_secret()
         postgres_password = generate_client_secret()
+        # Only minted when asked for, like every other secret here — never derived from anything
+        # in the repository, never printed except in the one-time summary at the very end
+        # (06_DECISIONS.md ADR-050 objection 3's resolution).
+        demo_analyst_password = generate_client_secret() if args.demo_analyst else None
         postgres_user = "osprey"
         postgres_database = "ospreyflow"
         minio_user = "ospreyflow"
@@ -461,7 +477,12 @@ def main(argv: list[str] | None = None) -> int:
             # and only one side of it is written.
             + "MINIO_ENDPOINT=minio:9000\n"
             + f"MINIO_ACCESS_KEY={minio_user}\n"
-            + f"MINIO_SECRET_KEY={minio_password}\n",
+            + f"MINIO_SECRET_KEY={minio_password}\n"
+            + (
+                f"OSPREY_DEMO_ANALYST_PASSWORD={demo_analyst_password}\n"
+                if demo_analyst_password is not None
+                else ""
+            ),
             encoding="utf-8",
         )
         result.record("render", f"{len(rendered.artefacts) + 1} artefact(s) → {out_dir}")
@@ -508,6 +529,19 @@ def main(argv: list[str] | None = None) -> int:
             client_secret=secret,
         )
         result.record("grants", "impersonation + view-users on the Conduit's service account")
+
+        # 4c. The demo analyst's password — a realm import cannot carry it (harness/realm.py's own
+        # "Not in" paragraph), so it is set the same way the client secret is: after import, with
+        # the apply-time value this process just minted.
+        if demo_analyst_password is not None:
+            set_demo_analyst_password(
+                issuer=args.keycloak_url,
+                realm=args.realm,
+                admin_user="admin",
+                admin_password=admin_password,
+                password=demo_analyst_password,
+            )
+            result.record("demo-analyst", "password set on the disposable analyst subject")
 
         # 5. Seed, under the ordering guard.
         datasets = [d for d in args.seed.split(",") if d]
@@ -580,6 +614,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  the Conduit: http://127.0.0.1:{args.api_port}/healthz")
     else:
         print(f"  the Conduit: {_conduit_url(args, config)}/healthz (through the workspace proxy)")
+    # Printed once, here, and nowhere else — never echoed by a later command.
+    # `06_DECISIONS.md` ADR-050 objection 3's resolution.
+    if demo_analyst_password is not None:
+        print(f"\n  sign in as {DEMO_ANALYST_SUBJECT} with the password in {env_path}")
     return 0
 
 

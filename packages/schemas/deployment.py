@@ -34,6 +34,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from schemas.mapconfig import MapConfig
 
+#: `05_DEPLOYMENT.md` §3's own default published workspace port
+#: (`harness/render.py`'s `PORT_OVERRIDES["workspace"]`), restated here rather than imported —
+#: this schema has no dependency on the harness, and the harness depends on it, not the reverse.
+DEFAULT_PUBLIC_ORIGIN = "http://localhost:8080"
+
 
 class Profile(StrEnum):
     """`05_DEPLOYMENT.md` §1's three, not two — ADR-011. The gap between one laptop and ten
@@ -222,6 +227,32 @@ class NetworkConfig(BaseModel):
             "the Conduit directly, or a second client that is not the Glass."
         ),
     )
+    public_origin: str = Field(
+        default=DEFAULT_PUBLIC_ORIGIN,
+        description=(
+            "Default: http://localhost:8080 — the workspace's own default published port "
+            "(`OSPREY_WORKSPACE_PORT`). The origin a browser uses to reach this deployment. "
+            "`06_DECISIONS.md` ADR-050 objection 2's resolution: the identity-provider realm is "
+            "rendered from this value at apply time and the Glass's public client is registered "
+            "with an exact redirect URI and post-logout URI derived from it — no wildcards. "
+            "Override this when `OSPREY_WORKSPACE_PORT` is overridden or the deployment is reached "
+            "at a different host; the renderer does not infer either from the environment."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _public_origin_is_a_bare_origin(self) -> NetworkConfig:
+        if not (self.public_origin.startswith("http://") or self.public_origin.startswith("https://")):
+            raise ValueError(
+                f"network.public_origin {self.public_origin!r} must start with http:// or https:// "
+                "— it is an origin the realm renders an exact redirect URI from, not a path"
+            )
+        if self.public_origin.endswith("/"):
+            raise ValueError(
+                f"network.public_origin {self.public_origin!r} must not end with '/' — the redirect "
+                "URI is derived by appending a single trailing slash, exactly once"
+            )
+        return self
 
 
 class OspreyConfig(BaseModel):

@@ -90,3 +90,38 @@ def test_a_generated_secret_is_not_empty_and_is_not_a_placeholder(tmp_path: Path
         assert value not in {"minioadmin", "changeme", "password", "root"}, (
             f"{client_name} is a well-known default rather than a generated value"
         )
+
+
+def test_demo_analyst_password_is_absent_without_the_flag(tmp_path: Path) -> None:
+    """`06_DECISIONS.md` ADR-050 objection 3's resolution: "absent by default." A plain apply must
+    not mint a credential for a subject nobody asked to exist."""
+    env = _rendered_env(tmp_path)
+    assert "OSPREY_DEMO_ANALYST_PASSWORD" not in env
+
+
+def test_demo_analyst_password_is_written_and_realm_carries_the_subject_with_the_flag(
+    tmp_path: Path,
+) -> None:
+    """The render-time half of `--demo-analyst`, which needs no live Keycloak: a real generated
+    password lands in the environment file, and the realm document (also real, also written at
+    this stage) names the subject `harness/keycloak_admin.py`'s `set_demo_analyst_password` would
+    later set that password on."""
+    import json
+
+    from harness.apply import main
+    from harness.realm import DEMO_ANALYST_SUBJECT
+
+    main(["--profile", "local-lite", "--out-root", str(tmp_path), "--no-build", "--demo-analyst"])
+
+    env_path = tmp_path / "local-lite" / "deployment.env"
+    values: dict[str, str] = {}
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("#") or "=" not in line:
+            continue
+        name, _, value = line.partition("=")
+        values[name.strip()] = value.strip()
+    assert values.get("OSPREY_DEMO_ANALYST_PASSWORD"), "no demo-analyst password was written"
+
+    realm = json.loads((tmp_path / "local-lite" / "realm.json").read_text(encoding="utf-8"))
+    usernames = {u["username"] for u in realm["users"]}
+    assert DEMO_ANALYST_SUBJECT in usernames

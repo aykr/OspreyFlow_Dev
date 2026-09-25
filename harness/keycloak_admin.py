@@ -9,6 +9,11 @@ not exist until the import has run.
 principal's enabled status *before* exchanging for them — and it must read with an authority other
 than the one that mints the token. A single combined grant would leave the pre-check asking the
 component that has already said yes.
+
+`set_demo_analyst_password` (ADR-050 objection 3's resolution) is the same shape for a different
+secret: the demo-analyst subject's own apply-time password, set here rather than carried in the
+realm document for the same reason the client secret is — a realm import cannot carry a password
+that never touches the repository.
 """
 
 from __future__ import annotations
@@ -152,3 +157,57 @@ def grant_service_account_roles(
     )
     if status not in (204, 201, 200):
         raise RealmConfigurationFailed(f"could not grant {REQUIRED_ROLES}: {status}")
+
+
+def set_demo_analyst_password(
+    *, issuer: str, realm: str, admin_user: str, admin_password: str, password: str
+) -> None:
+    """`06_DECISIONS.md` ADR-050 objection 3's resolution — `harness/apply.py`'s `--demo-analyst`
+    flag calls this after the realm import, the same shape `grant_service_account_roles` above
+    already uses for the client secret: the realm document names the subject with no `credentials`
+    block (`harness/realm.py`'s own docstring has the reasoning), and the apply-time value travels
+    beside it, never inside it.
+
+    Only called when `--demo-analyst` renders the subject at all; a `RealmConfigurationFailed` here
+    means the demo/exit-test subject cannot sign in, which is exactly the failure ADR-050's own exit
+    test would otherwise discover the hard way — as a login that refuses the printed credentials.
+    """
+    status, token_response = _call(
+        f"{issuer}/realms/master/protocol/openid-connect/token",
+        data={
+            "client_id": "admin-cli",
+            "username": admin_user,
+            "password": admin_password,
+            "grant_type": "password",
+        },
+        form=True,
+    )
+    if status != 200:
+        raise RealmConfigurationFailed(
+            f"could not authenticate to Keycloak: {status} {token_response}"
+        )
+    token = token_response["access_token"]
+
+    from harness.realm import DEMO_ANALYST_SUBJECT
+
+    status, found = _call(
+        f"{issuer}/admin/realms/{realm}/users?username={DEMO_ANALYST_SUBJECT}&exact=true",
+        token=token,
+    )
+    if status != 200 or not found:
+        raise RealmConfigurationFailed(
+            f"{DEMO_ANALYST_SUBJECT!r} not found after realm import — was the realm rendered with "
+            "demo_analyst=True?"
+        )
+    user_id = found[0]["id"]
+    status, _ = _call(
+        f"{issuer}/admin/realms/{realm}/users/{user_id}/reset-password",
+        token=token,
+        data={"type": "password", "value": password, "temporary": False},
+        method="PUT",
+    )
+    if status not in (204, 200):
+        raise RealmConfigurationFailed(
+            f"could not set the demo analyst's password: {status} — the credentials `apply` "
+            "printed will not work"
+        )
