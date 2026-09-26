@@ -790,7 +790,7 @@ jobs:
       - name: Render, build, launch and seed a local-lite deployment
         run: |
           PYTHONPATH=.:packages uv run python -m harness.apply \
-            --profile local-lite --seed hmp,fixture-corp
+            --profile local-lite --build --seed hmp,fixture-corp
       - uses: actions/setup-node@v4
         with: { node-version: "22" }
       - run: npm ci

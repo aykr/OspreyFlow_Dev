@@ -327,6 +327,7 @@ def test_arcadedb_memory_and_query_latency_under_sustained_ingest_cycles() -> No
     # (`.gitignore`: `/deploy/generated/`), so this is real generated output, not a fixture.
     apply_main(
         [
+            "--build",
             "--profile",
             "local-lite",
             "--demo-analyst",

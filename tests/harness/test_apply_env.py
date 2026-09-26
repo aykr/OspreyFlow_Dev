@@ -135,7 +135,7 @@ def _rendered_env(tmp_path: Path) -> dict[str, str]:
     stages produce. What is under test is the *file*, and the file is written by the same code path
     a real apply uses rather than by a re-implementation of it here.
     """
-    main(["--profile", "local-lite", "--out-root", str(tmp_path), "--no-build"])
+    main(["--profile", "local-lite", "--out-root", str(tmp_path), "--build", "--no-build"])
     env_path = tmp_path / "local-lite" / "deployment.env"
     assert env_path.exists(), "apply did not get as far as writing the deployment environment file"
     values: dict[str, str] = {}
@@ -197,7 +197,17 @@ def test_demo_analyst_password_is_written_and_realm_carries_the_subject_with_the
     from harness.apply import main
     from harness.realm import DEMO_ANALYST_SUBJECT
 
-    main(["--profile", "local-lite", "--out-root", str(tmp_path), "--no-build", "--demo-analyst"])
+    main(
+        [
+            "--profile",
+            "local-lite",
+            "--out-root",
+            str(tmp_path),
+            "--build",
+            "--no-build",
+            "--demo-analyst",
+        ]
+    )
 
     env_path = tmp_path / "local-lite" / "deployment.env"
     values: dict[str, str] = {}

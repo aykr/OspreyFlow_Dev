@@ -121,8 +121,15 @@ def test_launch_from_the_six_screens_reaches_a_verified_local_lite_deployment(
         # 2. Components, Models, Governance — accept the defaults, through each screen's own real
         # save route (merge semantics: PUTting a section back unchanged still proves the round
         # trip, `07_BUILD_PLAN.md`'s own §6 exit table cites this shape for each screen already).
+        # Round 07: `components.source_path` is declared here too — this test represents a
+        # developer's own checkout, not a customer install with nothing to build from, and no
+        # screen renders this new field (it is a headless/CLI concept, `harness/apply.py`'s own
+        # `--build`), so it is set directly the same way a developer would hand-edit `osprey.yaml`.
         for section in ("components", "models", "governance"):
-            response = client.put("/api/config", json={section: config[section]})
+            payload = config[section]
+            if section == "components":
+                payload = {**payload, "source_path": str(REPO_ROOT)}
+            response = client.put("/api/config", json={section: payload})
             assert response.status_code == 200, response.text
 
         # 3. Geospatial — register a local provider at a path that does not exist, so `basemap`
@@ -172,8 +179,10 @@ def test_launch_from_the_six_screens_reaches_a_verified_local_lite_deployment(
         # 7. Launch — no injected `apply_command`: the real, unstubbed `python -m harness.apply`,
         # which itself runs Preflight again (`harness/apply.py`'s own stage 2), builds the three
         # owned images, brings up all twelve containers, waits for health, and runs the three-sided
-        # `harness.verify` as its own last stage before reporting success.
-        response = client.post("/api/launch/stream", json={})
+        # `harness.verify` as its own last stage before reporting success. `"build": True` is
+        # round 07's own developer-path opt-in (`components.source_path`'s default is pull mode,
+        # which this real checkout is not exercising here — the harness image itself is).
+        response = client.post("/api/launch/stream", json={"build": True})
         assert response.status_code == 200, response.text
         lines = [e["line"] for e in _events(response.text) if "line" in e]
         output = "\n".join(lines)

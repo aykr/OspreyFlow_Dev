@@ -81,7 +81,7 @@ def rendered_out_root(tmp_path_factory: pytest.TempPathFactory) -> Path:
     — the comparison is only meaningful against the identical rendered compose file."""
     out_root = tmp_path_factory.mktemp("harness-image-test")
     result = subprocess.run(
-        [sys.executable, "-m", "harness.render", "--out-root", str(out_root)],
+        [sys.executable, "-m", "harness.render", "--out-root", str(out_root), "--build"],
         cwd=REPO_ROOT,
         env={**os.environ, "PYTHONPATH": "packages"},
         capture_output=True,
@@ -291,4 +291,122 @@ def test_the_image_runs_read_only_and_non_root_without_crashing(built_image: str
         "harness.webapp could not even be imported under --read-only: "
         + import_check.stdout
         + import_check.stderr
+    )
+
+
+# --- Round 07: install without source (`osprey.yaml` gains `components.source_path`) ------------
+#
+# `harness/render.py`'s own `MissingDockerfileError` used to fire unconditionally for every owned
+# service, so this image — which carries no `services/` or `apps/workspace` source, by its own
+# module docstring's design — could never render `local-lite` at all: `05_DEPLOYMENT.md` §2/§3's
+# documented one-command bootstrap could not Launch, found running it for real in round 05. The
+# fix (round 07) is the pull path: `components.source_path` undeclared (the default) renders no
+# `build:` stanza and no local-Dockerfile check at all. This is the live proof, against the real
+# image, with only an empty workspace mounted — no source, matching a real customer's laptop.
+
+
+def test_the_image_renders_local_lite_pull_mode_with_only_an_empty_workspace_mounted(
+    built_image: str, tmp_path: Path
+) -> None:
+    """Not the twelve-container Launch — this sandbox's own Docker Desktop VM is below
+    `local-lite`'s memory floor (`test_containerized_preflight_reaches_the_same_result_as_the_
+    host_cli`'s own docstring has the measured figures) — but render, reach Preflight, and pass
+    `docker compose config`'s own static validation, which is real proof the rendered compose file
+    is well-formed and self-consistent, not merely that Python raised no exception."""
+    render_result = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            f"{tmp_path}:/workspace",
+            built_image,
+            "render",
+            "--config",
+            "/workspace/osprey.yaml",
+            "--out-root",
+            "/workspace/generated",
+            # Nothing is published under `OWNED_IMAGE_REGISTRY` by any real CI pipeline yet
+            # (`harness/render.py`'s own docstring on that constant, and `05_DEPLOYMENT.md` §3's
+            # matching disclosure) — the same flag a developer render with no Docker daemon
+            # already needs, not something this test invented to get past a real refusal.
+            "--allow-unpinned",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert render_result.returncode == 0, (
+        "pull-mode render failed with only an empty workspace mounted — no source, the real "
+        "customer-laptop shape: " + render_result.stdout + render_result.stderr
+    )
+    assert "no Dockerfile for owned service" not in (render_result.stdout + render_result.stderr)
+
+    compose_path = tmp_path / "generated" / "local-lite" / "compose.yaml"
+    assert compose_path.is_file(), render_result.stdout + render_result.stderr
+    compose_text = compose_path.read_text(encoding="utf-8")
+    for service in ("workspace", "api", "ingest"):
+        assert f"ghcr.io/ospreyflow/{service}" in compose_text, (
+            f"{service}: pull-mode reference missing from the rendered compose file"
+        )
+    assert "build:" not in compose_text, (
+        "pull mode must not render a build: stanza — this image has no source to build from"
+    )
+
+    # `docker compose config` — static YAML + variable-interpolation validation, no daemon
+    # interaction and no image pull. The four `${VAR:?...}` secrets below are minted by
+    # `harness.apply` at apply time (after render), never by `render` alone — this test calls
+    # only `render`, so they are supplied here as dummy values, the same way an operator's own
+    # apply-time env file would carry real ones by the time this validation matters for real.
+    config_check = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "--env-file",
+            str(tmp_path / "generated" / "local-lite" / "deployment.env"),
+            "-f",
+            str(compose_path),
+            "config",
+            "--quiet",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env={
+            **os.environ,
+            "OSPREY_ARCADEDB_PASSWORD": "x",
+            "OSPREY_KEYCLOAK_ADMIN_PASSWORD": "x",
+            "OSPREY_MINIO_PASSWORD": "x",
+            "OSPREY_POSTGRES_PASSWORD": "x",
+        },
+    )
+    assert config_check.returncode == 0, (
+        "the rendered pull-mode compose file does not validate: "
+        + config_check.stdout
+        + config_check.stderr
+    )
+
+    preflight_result = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            f"{tmp_path}:/workspace",
+            built_image,
+            "preflight",
+            "--config",
+            "/workspace/osprey.yaml",
+            "--out-root",
+            "/workspace/generated",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    statuses = _statuses(preflight_result.stdout + preflight_result.stderr)
+    assert statuses, (
+        "Preflight did not even run against the pull-mode render: "
+        + preflight_result.stdout
+        + preflight_result.stderr
     )

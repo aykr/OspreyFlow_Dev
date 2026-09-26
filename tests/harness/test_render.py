@@ -82,11 +82,22 @@ def _fake_resolver(image: ImageRef) -> str | None:
     return "sha256:" + f"{abs(hash(image)):064x}"[:64]
 
 
+#: Round 07: every existing test in this file predates the build/pull split and exercises the
+#: developer path — declaring `source_path` here, once, keeps every one of them testing exactly
+#: what it always did (`osprey/<service>:local`, `build:` stanzas, `local-build` lock entries)
+#: rather than silently becoming pull-mode tests. `test_pull_mode...` below is the one, new,
+#: explicit case for the other path, against this identical fixture.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
 @pytest.fixture
 def config(tmp_path: Path) -> OspreyConfig:
     path = tmp_path / "osprey.yaml"
     path.write_text(FIXTURE_CONFIG, encoding="utf-8")
-    return load_config(path)
+    loaded = load_config(path)
+    return loaded.model_copy(
+        update={"components": loaded.components.model_copy(update={"source_path": str(REPO_ROOT)})}
+    )
 
 
 @pytest.fixture
@@ -166,6 +177,47 @@ def test_versions_lock_names_every_image_in_the_compose_file_with_a_digest(
         else:
             assert row["digest"].startswith("sha256:"), f"{row['repository']} has no pinned digest"
             assert row["source"] == "local-docker-daemon"
+
+
+def test_pull_mode_renders_owned_images_with_no_build_stanza_and_a_locked_digest(
+    config: OspreyConfig,
+) -> None:
+    """Round 07 — `components.source_path` undeclared (the default; not this file's own `config`
+    fixture, which declares it) renders the operator path: no `build:` stanza for any service, and
+    `versions.lock` locks an owned image by digest exactly like a third-party one, refusing by
+    name (`UnpinnedImagesError`) if the digest cannot be resolved — never silently `local-build`
+    for a service nothing here actually built. Against the identical §1 fixture every other case
+    in this file renders, with only `source_path` removed."""
+    pull_config = config.model_copy(
+        update={"components": config.components.model_copy(update={"source_path": None})}
+    )
+    owned_services = {i.service for i in service_images(pull_config) if i.owned}
+    assert owned_services == {"workspace", "api", "ingest"}
+
+    with pytest.raises(UnpinnedImagesError) as excinfo:
+        render(pull_config, resolver=lambda _image: None)
+    assert set(excinfo.value.images) >= {
+        i.image for i in service_images(pull_config) if i.service in owned_services
+    }
+
+    result = render(pull_config, resolver=_fake_resolver)
+    compose = yaml.safe_load(result.artefacts["compose.yaml"])
+    for service in owned_services:
+        assert "build" not in compose["services"][service], (
+            f"{service}: pull mode must not emit a build: stanza"
+        )
+        assert compose["services"][service]["image"].startswith("ghcr.io/ospreyflow/"), (
+            compose["services"][service]["image"]
+        )
+
+    lock = yaml.safe_load(result.artefacts["versions.lock"])
+    owned_rows = [row for row in lock["images"] if row["service"] in owned_services]
+    assert len(owned_rows) == len(owned_services)
+    for row in owned_rows:
+        assert row["digest"].startswith("sha256:"), row
+        assert row["source"] != "local-build", (
+            f"{row['service']}: pull mode recorded local-build — nothing here was built"
+        )
 
 
 def test_the_runbook_carries_this_deployment_s_own_paths_not_a_template(
