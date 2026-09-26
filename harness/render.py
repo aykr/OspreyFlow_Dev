@@ -646,7 +646,16 @@ def render(
 def load_config(path: Path) -> OspreyConfig:
     """`yaml.safe_load` + `model_validate`, the same shape `services/api/mapconfig_loader.py` and
     `services/ingest/recipe_loader.py` already use. An empty file is an empty config, not a crash:
-    every section of `osprey.yaml` has a default."""
+    every section of `osprey.yaml` has a default. **A missing file is the same case, not a
+    different one** — found 26 September 2026, Stage 2 §6 part C: this function's own docstring
+    already claimed the empty-file case was handled, which read as covering "nothing configured
+    yet" in general, but `path.read_text()` on a file that does not exist at all raised
+    `FileNotFoundError` uncaught, all the way out of `python -m harness.render` and `python -m
+    harness.apply` both — the exact CLI a fresh clone's own first run reaches for.
+    `harness/webapp.py`'s own `_read_config` already drew this distinction correctly; this
+    function had not."""
+    if not path.exists():
+        return OspreyConfig()
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     return OspreyConfig.model_validate(raw)
 
@@ -698,10 +707,22 @@ def write_config_copy(config_path: Path, out_dir: Path) -> Path:
     rendered artefacts (it is source, not derived), but what `_render_compose`'s own
     `./osprey.yaml:/app/osprey.yaml:ro` mount needs actually present at that relative path. Both
     CLI entry points (`harness.render`'s own `main`, `harness.apply`) call this once, right after
-    `write`, so the two can never drift on whether it happens."""
+    `write`, so the two can never drift on whether it happens.
+
+    **A missing `config_path` writes the schema defaults' own serialised form, not a crash** —
+    found alongside `load_config`'s own identical gap: an operator (or the Preflight screen's own
+    `Generate`) who has accepted every default and never explicitly saved anything yet has no
+    `osprey.yaml` to copy, and that is a real, valid state (`load_config`'s own contract), not an
+    error."""
     out_dir.mkdir(parents=True, exist_ok=True)
     target = out_dir / "osprey.yaml"
-    target.write_text(config_path.read_text(encoding="utf-8"), encoding="utf-8")
+    if config_path.exists():
+        content = config_path.read_text(encoding="utf-8")
+    else:
+        content = yaml.safe_dump(
+            OspreyConfig().model_dump(mode="json", exclude_none=True), sort_keys=False
+        )
+    target.write_text(content, encoding="utf-8")
     return target
 
 

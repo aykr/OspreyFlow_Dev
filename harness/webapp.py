@@ -153,6 +153,7 @@ from harness.render import (
     MissingDockerfileError,
     UnpinnedImagesError,
     diff_for,
+    load_config,
     render,
     write,
     write_config_copy,
@@ -219,10 +220,11 @@ async def _launch_events(command: list[str], argv: list[str]) -> AsyncIterator[b
 
 
 def _read_config(config_path: Path) -> OspreyConfig:
-    if not config_path.exists():
-        return OspreyConfig()
-    raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-    return OspreyConfig.model_validate(raw)
+    """`harness.render.load_config`'s own contract exactly — a thin alias, not a second
+    implementation. (The two were independently written with the identical "missing file is
+    schema defaults" behaviour intended, and only one of them actually had it — see that
+    function's own docstring for the finding.)"""
+    return load_config(config_path)
 
 
 def _write_config(config_path: Path, config: OspreyConfig) -> None:

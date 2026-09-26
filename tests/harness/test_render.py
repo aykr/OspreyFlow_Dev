@@ -712,3 +712,30 @@ def test_write_config_copy_places_a_readable_osprey_yaml_beside_the_rendered_com
 
     assert target == out_dir / "osprey.yaml"
     assert target.read_text(encoding="utf-8") == FIXTURE_CONFIG
+
+
+def test_load_config_of_a_file_that_does_not_exist_is_schema_defaults_not_a_crash(
+    tmp_path: Path,
+) -> None:
+    """Found 26 September 2026, Stage 2 §6 part C, running the real CLI against a fresh clone with
+    no `osprey.yaml` written yet: `path.read_text()` raised `FileNotFoundError` uncaught, out of
+    both `python -m harness.render` and `python -m harness.apply`. This function's own docstring
+    already claimed "an empty file is an empty config, not a crash" — true, and narrower than a
+    reader would assume: a missing file is the same case, not a different one."""
+    missing = tmp_path / "does-not-exist" / "osprey.yaml"
+    assert not missing.exists()
+    assert load_config(missing) == OspreyConfig()
+
+
+def test_write_config_copy_of_a_missing_source_writes_the_schema_defaults(tmp_path: Path) -> None:
+    """The other half of the same finding: an operator (or the Preflight screen's own `Generate`)
+    who has accepted every default and never explicitly saved anything has no `osprey.yaml` to
+    copy — a real, valid state, not an error, and the copy `_render_compose`'s own mount needs
+    present must still be real, parseable YAML, not absent."""
+    source = tmp_path / "never-written" / "osprey.yaml"
+    out_dir = tmp_path / "generated" / "local-lite"
+
+    target = write_config_copy(source, out_dir)
+
+    assert target.is_file()
+    assert OspreyConfig.model_validate(yaml.safe_load(target.read_text())) == OspreyConfig()
