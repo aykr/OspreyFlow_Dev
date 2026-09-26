@@ -4467,6 +4467,80 @@ find something already finished sitting in the queue.
    containers. Owed to a follow-up round, its own opt-in env flag and CI job, matching
    `test_sustained_load.py`/`test_bundle_exit_test.py`'s own precedent.
 
+   **Part C, built 26 September 2026 — the accessibility floor, CI wiring, the §6 exit
+   reconciliation, and three real documentation bugs found re-verifying it, complete except
+   judgement.**
+
+   **Amendment 24 / ruling 6 — `apps/harness/a11y/a11y.spec.ts`, against the real `App` served by
+   a real `harness.webapp`, never a showcase page** (`apps/workspace/a11y/a11y.spec.ts`'s own
+   Stage 6 finding named exactly that gap for the Glass; not reproduced for this third surface).
+   Twelve cases (six real screens × two themes), reached the same keyboard-only way `keyboard/
+   setup-screens.spec.ts` already does. **Shown red-then-green for real, as the brief asked, and it
+   found a real gap in the precedent it was told to copy:** the first planted violation (an
+   unlabelled `<button>`) passed silently under `withTags(["wcag2aa"])` alone — axe-core's own rule
+   tags are not hierarchical, and `button-name` (like `image-alt` and others) is tagged `wcag2a`,
+   not `wcag2aa`. Fixed here to `withTags(["wcag2a", "wcag2aa"])`; **`apps/workspace/a11y/a11y.spec.
+   ts` carries the identical gap and was not touched** (a different surface, out of this round's
+   own scope) — disclosed rather than silently left for a future reader to rediscover. The
+   canvas-specific bullets of `02_GLASS_FRONTEND.md` §6 (Matrix-view alternative, ring-walk key
+   bindings) do not transfer, confirmed against `06_DECISIONS.md`'s own amendment 24 text, which
+   says so directly; "no focus trap" for these six screens is what `keyboard/setup-screens.spec.
+   ts`'s own eleven real Tab-walkthroughs already prove every time Tab reaches a screen's last
+   field without getting stuck, not re-tested a second way.
+
+   **Wired into both `make ci`'s target list and `.github/workflows/ci.yml`, in the same change**
+   — the `glass-perf`/`glass-a11y`/`glass-keyboard` divergence between the two is not reproduced
+   for a third surface, per the brief's own instruction and `06_DECISIONS.md`'s own settlement.
+   `harness-a11y` (`make`) runs as a second step of the renamed `harness-keyboard-a11y` job
+   (`ci.yml`) rather than a fourth job, since it shares that job's own live-`harness.webapp` setup
+   rather than duplicating it.
+
+   **The §6 exit, reconciled item by item against `06_DECISIONS.md`'s own "Exit, two parts, stated
+   separately" text — every item named with the test id that proves it, per the brief's own
+   instruction that an item without one is reported as NOT met:**
+
+   | Exit item | Test id(s) | Met? |
+   | --- | --- | --- |
+   | Every screen round-trips through `osprey.yaml` | `test_the_three_screens_round_trip_through_osprey_yaml_and_render_identically`; `test_the_governance_screen_round_trips_through_osprey_yaml` (this round — Governance's own config fields had no such case until now); `test_registering_a_provider_preserves_other_sections_already_written` (Geospatial); Preflight writes no section of its own | **Met** |
+   | Rendered output equals Stage 2 §1's fixture | `test_small_profile_matches_stage_2_section_1s_own_fixture_byte_for_byte` | **Met** |
+   | Option filtering by profile asserted | `tests/harness/test_webapp_profile_filtering.py` (9 cases); `test_an_invalid_component_for_the_profile_is_refused_with_a_named_field` | **Met** |
+   | The surface's action registry declared and covered | `apps/harness/keyboard/registryCoverage.test.ts` (vitest); `SETUP_SCREENS_ACTIONS`'s own `assertAllCovered` case in `setup-screens.spec.ts` (16 actions, 16 covered) | **Met** |
+   | `/admin` has its access-control test | `tests/harness/test_webapp_admin_access.py` (8 cases, role/audience); `tests/harness/test_webapp_mode.py` (6 cases, the setup/console boundary itself) | **Met** |
+   | `02_GLASS_FRONTEND.md` §6's floor asserted against the real screens | `apps/harness/a11y/a11y.spec.ts` (12 cases) | **Met** |
+   | *(Judgement)* a usability pass by someone other than the builder | — | **Not mine to record** — `REPORT-04.md` has the exact steps for the owner to walk |
+
+   **Three real documentation bugs found re-verifying `05_DEPLOYMENT.md` §2/§3 against the real
+   image, not by reading the two sections against each other or against the code:**
+   1. **The documented bootstrap command published on every interface** (`-p 7000:7000`), not
+      loopback-only (`-p 127.0.0.1:7000:7000`) — R2's own guarantee needs the *port* bound to
+      loopback on the host side; the application-layer refusal alone cannot fully substitute for
+      it (`harness/webapp_auth.py`'s own Docker-NAT finding, Proposed not decided, part A). Fixed
+      in both §2 and §3.
+   2. **The documented command passed no `--config`/`--out-root`, and `harness.webapp`'s own
+      default `--config` resolves inside the image (`/app/osprey.yaml`), not against whatever the
+      operator mounts at `/workspace`** — a bare `docker run` with no arguments after the image
+      name writes a config file the operator's own bind mount never sees, lost the moment `--rm`
+      removes the container. Confirmed both ways directly, running the real image: with
+      `--config /workspace/osprey.yaml --out-root /workspace/deploy/generated`, a real `PUT
+      /api/config` produces a real file on the host; without those flags, nothing appears there at
+      all. Fixed in both §2 and §3.
+   3. **§3 said the admin console is at the workspace's own port** (`http://localhost:8080/admin`)
+      **while §2 says the harness itself becomes `/admin`** — the two sections contradicted each
+      other, and only §2's own reading matches what amendment 22 built: `/admin` is served by
+      `harness.webapp`, on the harness's own port (`7000`), gated by the `console` mode this round
+      added — never a page the workspace serves. Fixed in §3.
+
+   **The docs site (Stage 2 §5b) gains the operator path through the six screens, by their real
+   names** (`scripts/doc_site.py`'s own `_operator_guide_landing_page`) — `Profile`, `Components`,
+   `Models`, `Governance`, `Geospatial`, `Preflight`, in the harness's own nav-bar order, plus the
+   same `/admin`-is-the-harness-itself correction above. `tests/test_doc_site.py`'s own existing
+   file-presence assertions are unaffected; no new test needed for prose content a human reads.
+
+   **README's own quick start:** no root `README.md` exists in this repository to re-verify — the
+   operator-facing quick start lives in `docs/05_DEPLOYMENT.md` §3 (fixed above) and the bundle-time
+   docs site's own operator guide (also fixed above); neither is a gap this round invented, and
+   naming the absence is the honest reconciliation rather than assuming a file that is not there.
+
    **Stage 2 §7 — Post-launch admin console operations. ACCEPTED. Not milestone-blocking; still Phase 8.**
    `05_DEPLOYMENT.md` §5's rolling upgrade and rollback to a previous digest, and §5's `verify` —
    "the port conformance suite against the *running* deployment rather than a test fixture", a

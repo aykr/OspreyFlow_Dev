@@ -28,12 +28,26 @@ The harness is a **browser application**, not a command-line tool. One bootstrap
 it; everything after that happens on screen.
 
 ```bash
-docker run --rm -p 7000:7000 \
+docker run --rm -p 127.0.0.1:7000:7000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$PWD:/workspace" \
-  ghcr.io/ospreyflow/harness:latest
-# → Setup harness ready at http://localhost:7000
+  ghcr.io/ospreyflow/harness:latest \
+  --config /workspace/osprey.yaml --out-root /workspace/deploy/generated
+# → INFO:     Uvicorn running on http://0.0.0.0:7000 (Press CTRL+C to quit)
 ```
+
+**Two corrections, both found running the real image, 26 September 2026, not by reading the
+code.** `-p 127.0.0.1:7000:7000`, not a bare `-p 7000:7000` — R2's own loopback-only guarantee
+needs the port itself bound to loopback on the host side; a bare `7000:7000` publishes to every
+interface, which the application-layer refusal in `harness/webapp.py` cannot fully make up for on
+its own (`harness/webapp_auth.py`'s own docstring has the Docker-NAT reason, Proposed not decided).
+And the trailing `--config`/`--out-root` are not optional flourishes: `harness.webapp`'s own
+default `--config` resolves relative to *where the harness package lives inside the image*
+(`/app/osprey.yaml`), not to whatever the operator happens to mount at `/workspace` — a bare
+`docker run` with no arguments after the image name writes and reads a config file the operator's
+own bind mount never sees, and it is lost the moment `--rm` removes the container. Confirmed both
+ways directly: with the flags, a `PUT /api/config` produces a real `$PWD/osprey.yaml` on the host;
+without them, nothing appears there at all.
 
 That is the only command in this document that has to be typed. It is unavoidable — something
 has to serve the page before anything is deployed — so it is kept to one line and does nothing
@@ -309,21 +323,28 @@ test. Until it is built, the dev-token path is fenced so that no rendered deploy
 ## 3. Standing it up on a laptop
 
 ```bash
-docker run --rm -p 7000:7000 \
+docker run --rm -p 127.0.0.1:7000:7000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$PWD:/workspace" \
-  ghcr.io/ospreyflow/harness:latest
+  ghcr.io/ospreyflow/harness:latest \
+  --config /workspace/osprey.yaml --out-root /workspace/deploy/generated
 ```
 
 Then open `http://localhost:7000` and work through the six screens. For a laptop: choose
 **local-lite** on Profile, accept the defaults on Components, Models and Governance, press
-**Build local basemap** on Geospatial, and let Preflight run. Review the generated files, click
-Launch, then **Seed demo data** on the screen that follows.
+**Register a local provider** (or **Build local basemap**, once §2.2's own pipeline reaches a
+machine with Java/planetiler — `harness/geospatial.py`'s own docstring has the current, disclosed
+limit: this button is not yet reachable from inside the harness image) on Geospatial, generate and
+confirm the artefacts, and let Preflight run. Click Launch, then **Seed demo data** on the screen
+that follows.
 
 Roughly fifteen minutes end to end, most of it pulling model weights and building tiles, with
-progress shown throughout. The workspace is then at `http://localhost:8080` and the admin console
-at `http://localhost:8080/admin`. The seeded demo credentials are displayed once and written
-nowhere.
+progress shown throughout. The workspace is then at `http://localhost:8080`. **The admin console
+stays at `http://localhost:7000/admin`** — the harness's own port, not the workspace's: §2's own
+"the harness does not go away, it becomes /admin" describes the same process switching mode, not a
+page the workspace serves (a pre-existing inconsistency in this document, corrected 26 September
+2026, found running the real image rather than by reading the two sections against each other).
+The seeded demo credentials are displayed once and written nowhere.
 
 What is running afterwards: the workspace, one Conduit, three workers, ArcadeDB, DuckDB
 in-process, Valkey, MinIO, OpenSearch single-node, PostgreSQL, Keycloak, Ollama, and a
