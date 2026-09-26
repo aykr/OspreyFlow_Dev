@@ -14,12 +14,15 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from test_file_coverage_check import (  # noqa: E402
     _load,
+    find_makefile_ci_drift,
     find_misclassified,
     find_orphaned,
     find_stale_entries,
     is_live_service_file,
+    job_tokens,
     list_test_files,
     load_allowlist,
+    makefile_test_ignored,
 )
 
 
@@ -37,6 +40,96 @@ def test_no_new_drift_beyond_the_allowlist() -> None:
         f"test file(s) reachable by no CI job and not in the allowlist: {new_orphans}"
     )
     assert misclassified == [], f"live-service test file(s) not correctly wired: {misclassified}"
+
+
+def test_makefile_test_target_agrees_with_ci_ymls_test_job() -> None:
+    """The real-tree proof of `find_makefile_ci_drift` — `Makefile`'s own `test` target's
+    `--ignore` list and `ci.yml`'s own `test` job's, compared directly. Red against this tree
+    before `Makefile` was fixed to add `test_ws_ticket.py`/`test_bundle_exit_test.py`/
+    `test_harness_image.py` (26 September 2026); green after."""
+    ci_ignored, _ = _load()
+    missing_from_makefile, missing_from_ci = find_makefile_ci_drift(
+        ci_ignored, makefile_test_ignored()
+    )
+    assert missing_from_makefile == [], (
+        f"`ci.yml` ignores these but `Makefile` does not: {missing_from_makefile}"
+    )
+    assert missing_from_ci == [], (
+        f"`Makefile` ignores these but `ci.yml` does not: {missing_from_ci}"
+    )
+
+
+def test_makefile_test_ignored_parses_a_backslash_continued_recipe_line() -> None:
+    """`make`'s own line-continuation shape, tolerated per this gate's own docstring — not
+    exercised by the real `Makefile` today (one physical line), so proven here against a fabricated
+    one instead."""
+    fake_makefile = (
+        ".PHONY: test\n"
+        "\n"
+        "test:\n"
+        "\t$(PYTEST) --ignore=tests/fake_one.py \\\n"
+        "\t\t--ignore=tests/fake_two.py\n"
+        "\tnpm test\n"
+        "\n"
+        "dev-up:\n"
+        "\tdocker compose up -d\n"
+    )
+    assert makefile_test_ignored(fake_makefile) == {"tests/fake_one.py", "tests/fake_two.py"}
+
+
+def test_makefile_test_ignored_is_not_fooled_by_a_comment_between_targets() -> None:
+    """The same class of bug `job_tokens`'s own comment-stripping fixes for `ci.yml` — a comment
+    line between `test:`'s own recipe and the next target header must not be scanned for
+    `tests/...` tokens as if it were part of `test:`'s own recipe."""
+    fake_makefile = (
+        "test:\n"
+        "\t$(PYTEST) --ignore=tests/fake_one.py\n"
+        "\n"
+        "# See tests/fake_two.py for the reason this target exists.\n"
+        "dev-up:\n"
+        "\tdocker compose up -d\n"
+    )
+    assert makefile_test_ignored(fake_makefile) == {"tests/fake_one.py"}
+
+
+def test_find_makefile_ci_drift_catches_a_file_ci_ignores_that_makefile_does_not() -> None:
+    missing_from_makefile, missing_from_ci = find_makefile_ci_drift(
+        {"tests/fake.py"}, set()
+    )
+    assert missing_from_makefile == ["tests/fake.py"]
+    assert missing_from_ci == []
+
+
+def test_find_makefile_ci_drift_catches_the_reverse() -> None:
+    missing_from_makefile, missing_from_ci = find_makefile_ci_drift(
+        set(), {"tests/fake.py"}
+    )
+    assert missing_from_makefile == []
+    assert missing_from_ci == ["tests/fake.py"]
+
+
+def test_a_comment_naming_a_test_file_between_two_ci_yml_jobs_is_not_attributed_to_the_first() -> (
+    None
+):
+    """The real bug found building `find_makefile_ci_drift`, not a hypothetical one: adding
+    `sustained-load-exit-test` between `bundle-install-exit-test` and `harness-image-exit-test` in
+    `ci.yml`, with a comment naming `tests/harness/test_sustained_load.py` in the gap between them,
+    made this gate report that file "covered" by `bundle-install-exit-test` — which never runs it.
+    `_job_blocks` attributes the comment to the *preceding* job's own block (there is nowhere else
+    to put it under a header-to-header split); `job_tokens` must not scan it for tokens regardless.
+    """
+    job_body = (
+        "\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - run: >-\n"
+        "          uv run pytest -p no:randomly\n"
+        "          tests/harness/test_bundle_exit_test.py\n"
+        "\n"
+        "  # A comment naming tests/harness/test_sustained_load.py, which this job never runs.\n"
+    )
+    _, positional = job_tokens(job_body)
+    assert positional == {"tests/harness/test_bundle_exit_test.py"}
 
 
 def test_no_stale_allowlist_entries() -> None:

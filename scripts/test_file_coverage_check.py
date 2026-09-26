@@ -44,10 +44,37 @@ gate cares about is "which `tests/...` tokens appear, ignored or not, in which j
 `--ignore` list and `make test-all`'s own explicit list had silently drifted to a strict subset of
 `ci.yml`'s equivalents, meaning a developer running either target locally would hit the identical
 failure mode this gate exists to catch, just outside CI. Fixed in the same change that added this
-gate (`Makefile`'s own `test`/`test-all` targets, now kept in sync by eye until this gate's own
-scope is widened to check the Makefile too — a disclosed gap, not solved here, since parsing
-`Makefile`'s own line-continuation shape is a second, different
-text format from `ci.yml`'s YAML).
+gate (`Makefile`'s own `test`/`test-all` targets), but the gate itself did not check the Makefile —
+kept in sync "by eye" from then on, a disclosed gap.
+
+**That gap reopened the identical failure a day later, found running `make test` for real rather
+than assumed fixed, 26 September 2026: `tests/services/api/test_ws_ticket.py` landed in `ci.yml`'s
+own live-service job correctly (both halves: ignored by `test`, covered by a live-service job) but
+was never added to `Makefile`'s own `test` target, so `make test` ran it against no live Valkey and
+failed — the same class of bug this gate already catches for `ci.yml` alone, invisible to it
+because it only ever read `ci.yml`.** `find_makefile_ci_drift` below closes it: `Makefile`'s own
+`test` target's `--ignore` list is parsed (backslash-continuation-tolerant) and compared against
+`ci.yml`'s, in both directions — a file `ci.yml` ignores that `Makefile` does not, or the reverse.
+First real run of this new half, before the fix, named three: `test_ws_ticket.py` (the one that
+actually failed) and two more that happened to skip cleanly without a live service rather than
+fail (`test_bundle_exit_test.py`, `test_harness_image.py`) — same drift, silent today only because
+each has its own `pytestmark` skip; the invariant this gate holds is "the two lists agree," not
+"nothing has failed yet."
+
+**A second, adjacent bug found verifying the fix, not merely applying it — `job_tokens` was
+scanning comment prose as if it were a real pytest argument.** `_job_blocks` attributes the
+`#`-comment lines between one job's own steps and the next job header to the *preceding* job's own
+block (there is nowhere else to put them), and `job_tokens` scanned that whole block, comments
+included, for `tests/...`-shaped tokens — so a comment merely *naming* a test file (this
+docstring's own kind of cross-reference) in the block between `bundle-install-exit-test` and the
+next job was read as if `bundle-install-exit-test` itself ran that file. Confirmed live: adding
+`sustained-load-exit-test` (25 September 2026) between `bundle-install-exit-test` and
+`harness-image-exit-test`, with a comment naming `tests/harness/test_sustained_load.py` in the gap,
+made this gate report that file "covered" by `bundle-install-exit-test` — which never runs it —
+while `sustained-load-exit-test`, the job that actually does, was never added to this file's own
+hand-maintained job-name tuple below and would otherwise have been caught missing. Fixed by
+stripping full-line comments before token-scanning (`_strip_comment_lines`); `sustained-load-exit-
+test` added to the hand-maintained tuple in the same change.
 """
 
 from __future__ import annotations
@@ -60,6 +87,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TESTS_DIR = REPO_ROOT / "tests"
 CI_YML_PATH = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+MAKEFILE_PATH = REPO_ROOT / "Makefile"
 ALLOWLIST_PATH = REPO_ROOT / "tests" / "fixtures" / "test_file_coverage_allowlist.txt"
 
 #: Derived directly from this repo's own real live-service test files — not guessed. A file that
@@ -140,12 +168,30 @@ def _job_blocks(ci_text: str) -> dict[str, str]:
     return blocks
 
 
+def _strip_comment_lines(text: str) -> str:
+    """Drops every line whose stripped content starts with `#` — a YAML comment line, never a real
+    `run:` step.
+
+    **Found live, not anticipated: `_job_blocks` attributes the comment lines between one job's
+    own steps and the next job header to the *preceding* job's block** (there is nowhere else to
+    attribute them under a header-to-header split), and without this, `job_tokens` below scanned
+    those comments for `tests/...`-shaped tokens the same as a real pytest argument — a comment
+    merely *naming* a test file (exactly the cross-reference style this repository's own docs and
+    code comments use throughout) was read as if the preceding job ran it. Confirmed reproducing
+    the real case this was found in: `tests/test_test_file_coverage_check.py`'s own test for it."""
+    return "\n".join(
+        line for line in text.splitlines() if not line.strip().startswith("#")
+    )
+
+
 def _pytest_run_lines(job_body: str) -> str:
     """The job body text from its first `pytest`/`uv run pytest` invocation onward — every
     `tests/...` token anywhere after that point in the job is treated as belonging to that
     invocation, which is correct for every job this gate reads today (one `run: pytest ...` step
     per job, `>-`-folded across several physical lines) and stated as this gate's own known
-    boundary otherwise."""
+    boundary otherwise. Comment lines are stripped first (`_strip_comment_lines`) so a trailing
+    comment naming a test file is never mistaken for part of this invocation."""
+    job_body = _strip_comment_lines(job_body)
     idx = job_body.find("pytest")
     return job_body[idx:] if idx != -1 else ""
 
@@ -370,11 +416,66 @@ def _load(ci_yml_path: Path = CI_YML_PATH) -> tuple[set[str], dict[str, set[str]
         "conformance-guard",
         "deployment-exit-tests",
         "bundle-install-exit-test",
+        "sustained-load-exit-test",
         "harness-image-exit-test",
     ):
         _, positional = job_tokens(blocks.get(name, ""))
         live_job_tokens[name] = positional
     return test_ignored, live_job_tokens
+
+
+_MAKEFILE_TARGET_HEADER = re.compile(r"^([a-zA-Z][\w-]*):.*$", re.MULTILINE)
+
+
+def _makefile_target_recipe(makefile_text: str, target: str) -> str:
+    """The recipe body (tab-indented lines) for `target:` in `Makefile`, with any trailing `\\`
+    line continuation joined onto the next physical line first — the same join `make` itself
+    performs before running a recipe line, and the reason this gate tolerates one even though
+    today's `test:` target happens to fit on one physical line already."""
+    matches = list(_MAKEFILE_TARGET_HEADER.finditer(makefile_text))
+    for i, m in enumerate(matches):
+        if m.group(1) != target:
+            continue
+        start = m.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(makefile_text)
+        # Comments between this target's own recipe and the next target header are attributed to
+        # this block the same way `ci.yml`'s job comments are (`_job_blocks`'s own docstring) —
+        # stripped here for the identical reason `_pytest_run_lines` strips them there.
+        body = _strip_comment_lines(makefile_text[start:end])
+        return re.sub(r"\\\n[ \t]*", " ", body)
+    return ""
+
+
+def makefile_test_ignored(makefile_text: str | None = None) -> set[str]:
+    """`Makefile`'s own `test:` target's `--ignore=` tokens — parsed independently of `ci.yml`'s
+    own `job_tokens` above: `make`'s recipe-line shape and `ci.yml`'s folded YAML `run:` blocks are
+    different enough formats that sharing one regex across both would be the coincidence, not the
+    correctness. Reuses `_PYTEST_TOKEN` for the token shape itself, which is genuinely shared."""
+    text = (
+        makefile_text if makefile_text is not None else MAKEFILE_PATH.read_text(encoding="utf-8")
+    )
+    recipe = _makefile_target_recipe(text, "test")
+    ignored: set[str] = set()
+    for is_ignore, token in _PYTEST_TOKEN.findall(recipe):
+        token = token.rstrip("/")
+        if is_ignore and token and token != "tests":
+            ignored.add(token)
+    return ignored
+
+
+def find_makefile_ci_drift(
+    ci_test_ignored: set[str], makefile_test_ignored: set[str]
+) -> tuple[list[str], list[str]]:
+    """`(missing_from_makefile, missing_from_ci)` — `ci.yml`'s own `test` job's `--ignore` list
+    compared directly against `Makefile`'s own `test` target's, in both directions. Exact-token
+    comparison, not `_covers`-aware: both lists name the same files at the same granularity today,
+    and a directory-vs-file mismatch between them would itself be worth surfacing rather than
+    silently reconciled by coverage logic built for a different question (does a job's own listing
+    cover a given test file, not do two listings agree)."""
+    return (
+        sorted(ci_test_ignored - makefile_test_ignored),
+        sorted(makefile_test_ignored - ci_test_ignored),
+    )
 
 
 def main() -> int:
@@ -387,6 +488,9 @@ def main() -> int:
     new_orphans = sorted(set(orphaned) - allowlist)
     misclassified = find_misclassified(test_files_abs, test_job_ignored, live_job_tokens)
     stale = find_stale_entries(test_files, test_job_ignored, live_job_tokens, allowlist)
+    missing_from_makefile, missing_from_ci = find_makefile_ci_drift(
+        test_job_ignored, makefile_test_ignored()
+    )
 
     ok = True
     if new_orphans:
@@ -409,6 +513,20 @@ def main() -> int:
         print(
             f"test-file-coverage-check: stale allowlist entr(ies) in "
             f"{ALLOWLIST_PATH.relative_to(REPO_ROOT)} — remove: {', '.join(stale)}",
+            file=sys.stderr,
+        )
+    if missing_from_makefile:
+        ok = False
+        print(
+            "test-file-coverage-check: `ci.yml`'s `test` job ignores these but `Makefile`'s "
+            f"`test` target does not: {', '.join(missing_from_makefile)}",
+            file=sys.stderr,
+        )
+    if missing_from_ci:
+        ok = False
+        print(
+            "test-file-coverage-check: `Makefile`'s `test` target ignores these but `ci.yml`'s "
+            f"`test` job does not: {', '.join(missing_from_ci)}",
             file=sys.stderr,
         )
     if ok:
