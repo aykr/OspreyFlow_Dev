@@ -15,6 +15,7 @@ resolver. Each of those three is called out at its own test rather than left for
 
 from __future__ import annotations
 
+import shutil
 import socket
 import subprocess
 import sys
@@ -81,7 +82,20 @@ def rendered_dir(config: OspreyConfig, tmp_path: Path) -> Path:
 
 @pytest.fixture
 def context(config: OspreyConfig, rendered_dir: Path) -> PreflightContext:
-    return PreflightContext(config=config, out_dir=rendered_dir)
+    """`memory_probe`/`disk_probe`/`host_memory_probe`/`host_disk_probe` default to fast,
+    deterministic, above-every-floor fakes here — round 10's own real defaults shell out to a real
+    `docker`, and a test with no reason to care about memory or disk specifically (the CLI/gate
+    mechanics tests below, e.g.) should not silently gain a real, slow, external dependency just by
+    using this fixture. Every memory/disk-specific test below overrides one or more explicitly, the
+    same seam this module's own docstring already names."""
+    return PreflightContext(
+        config=config,
+        out_dir=rendered_dir,
+        memory_probe=lambda: 32 * GIB,
+        disk_probe=lambda _path: (100 * GIB, 0, 100 * GIB),
+        host_memory_probe=lambda: 32 * GIB,
+        host_disk_probe=lambda _path: (100 * GIB, 0, 100 * GIB),
+    )
 
 
 # --- (a) memory ---------------------------------------------------------------
@@ -122,7 +136,11 @@ def test_memory_is_skipped_not_passed_when_it_cannot_be_read(context: PreflightC
 
 def test_disk_below_the_projection_fails(context: PreflightContext, tmp_path: Path) -> None:
     """Planted for real on the free-space side: a real path, a real `shutil.disk_usage` reading,
-    and a projection set above it."""
+    and a projection set above it. `disk_probe` is pointed at the real reader explicitly — round
+    10's own default probes the container runtime, not `tmp_path`, which is exactly the point of
+    that change, so a test of *this check's own logic* (the projection comparison, the message)
+    needs a probe that actually reads `tmp_path` for real, the same way `host_disk_probe` does."""
+    context.disk_probe = shutil.disk_usage
     context.config.components.storage.staging = str(tmp_path)
     context.projected_staging_bytes = 1000 * GIB
     result = disk.check(context)
@@ -133,6 +151,7 @@ def test_disk_below_the_projection_fails(context: PreflightContext, tmp_path: Pa
 
 
 def test_disk_above_the_projection_passes(context: PreflightContext, tmp_path: Path) -> None:
+    context.disk_probe = shutil.disk_usage
     context.config.components.storage.staging = str(tmp_path)
     context.projected_staging_bytes = 1
     assert disk.check(context).status is Status.PASS
@@ -143,11 +162,88 @@ def test_disk_measures_the_nearest_existing_parent_of_an_uncreated_staging_root(
 ) -> None:
     """A staging root that does not exist yet is normal at Preflight time and must not be reported
     as a disk fault."""
+    context.disk_probe = shutil.disk_usage
     context.config.components.storage.staging = str(tmp_path / "not" / "created" / "yet")
     context.projected_staging_bytes = 1
     result = disk.check(context)
     assert result.status is Status.PASS
     assert str(tmp_path) in " ".join(result.detail)
+
+
+# --- (b.1) round 10 — verdicts on the container runtime, never the host --------
+
+
+def test_memory_verdicts_on_the_daemon_even_when_the_host_would_fail(
+    context: PreflightContext,
+) -> None:
+    """The bug this round fixes, reproduced directly: before it, `memory_probe` read the host, and
+    a host with plenty of RAM masked a daemon that did not. Now the host figure cannot make the
+    check pass by itself — this asserts the inverse of the historical bug, not merely that the two
+    probes are both read."""
+    context.memory_probe = lambda: 32 * GIB
+    context.host_memory_probe = lambda: 1 * GIB  # would fail the floor on its own
+    result = memory.check(context)
+    assert result.status is Status.PASS
+    assert "1.0GiB" in " ".join(result.detail), "the host figure must still be reported, as context"
+
+
+def test_memory_verdicts_on_the_daemon_even_when_the_host_would_pass(
+    context: PreflightContext,
+) -> None:
+    """The exact false pass `05_DEPLOYMENT.md` §2.1 forbids, reproduced directly: a host with ample
+    RAM (this sandbox's own real 36GiB) must not make this check pass when the daemon it will
+    actually run containers inside cannot hold the profile (this sandbox's own real 9.7GiB)."""
+    context.memory_probe = lambda: int(9.7 * GIB)
+    context.host_memory_probe = lambda: 36 * GIB
+    result = memory.check(context)
+    assert result.status is Status.FAIL
+    assert "36.0GiB" in " ".join(result.detail), (
+        "the host figure must still be reported, as context"
+    )
+
+
+def test_memory_is_skipped_when_the_daemon_cannot_be_reached() -> None:
+    """`subprocess.CalledProcessError`/`FileNotFoundError`/`TimeoutExpired` — every real failure
+    shape `docker info` can produce — must skip, never pass, matching `05_DEPLOYMENT.md` §2.1's
+    "a check that cannot run reports that it did not run."""
+    for error in (
+        subprocess.CalledProcessError(1, ["docker", "info"]),
+        FileNotFoundError("no such file: docker"),
+        subprocess.TimeoutExpired(["docker", "info"], 10),
+    ):
+
+        def _raise() -> int:
+            raise error
+
+        ctx = PreflightContext(
+            config=OspreyConfig.model_validate(yaml.safe_load(FIXTURE_CONFIG)),
+            out_dir=Path("/unused"),
+            memory_probe=_raise,
+        )
+        result = memory.check(ctx)
+        assert result.status is Status.SKIP, f"{error!r} must skip, not silently pass"
+
+
+def test_disk_verdicts_on_the_daemon_even_when_the_host_would_pass(
+    context: PreflightContext,
+) -> None:
+    context.disk_probe = lambda _path: (100 * GIB, 99 * GIB, 1 * GIB)
+    context.host_disk_probe = lambda _path: (500 * GIB, 0, 500 * GIB)
+    context.projected_staging_bytes = 20 * GIB
+    result = disk.check(context)
+    assert result.status is Status.FAIL
+    assert "500.0GiB" in " ".join(result.detail), (
+        "the host figure must still be reported, as context"
+    )
+
+
+def test_disk_is_skipped_when_the_runtime_cannot_be_reached(context: PreflightContext) -> None:
+    def _raise(_path: Path) -> tuple[int, int, int]:
+        raise subprocess.CalledProcessError(1, ["docker", "run", "--rm", "alpine", "df"])
+
+    context.disk_probe = _raise
+    result = disk.check(context)
+    assert result.status is Status.SKIP
 
 
 # --- (c) GPU ------------------------------------------------------------------
