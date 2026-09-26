@@ -4209,11 +4209,20 @@ find something already finished sitting in the queue.
    loopback caller and, were the operator to publish more widely by mistake, a genuine LAN caller
    — as the identical bridge-gateway address. `loopback_only_middleware` cannot distinguish them at
    this layer; the port-binding, not the middleware, is what actually enforces R2's guarantee for a
-   published container. `harness/webapp_auth.py`'s own docstring has the full account. **Proposed,
-   not decided:** adopt `--network host` for the setup-mode container (the visible client address
-   would then be the true one, and the middleware would carry real, additional weight again), or
-   accept the port-binding alone as the enforcement and keep the middleware as real-but-redundant
-   defence for the non-Docker and future `--network host` paths. The owner rules on which.
+   published container. `harness/webapp_auth.py`'s own docstring has the full account.
+
+   **Decided, round 09 (owner ruling R3's delegation): the port-binding is the enforcement for a
+   published container; `--network host` is not adopted.** `-p 127.0.0.1:7000:7000` carries R2's
+   guarantee whenever the harness runs as the documented, published container — the one shape every
+   platform's own bootstrap command uses identically, which is itself the reason `--network host`
+   is rejected: it behaves differently across Docker Desktop platforms (macOS in particular, where
+   it does not do what it does on native Linux), and `05_DEPLOYMENT.md` §2's own bootstrap command
+   must stay one identical line everywhere. `loopback_only_middleware` stays exactly as built — a
+   real, working defence for the non-Docker path (`python -m harness` run directly on a host with
+   no container at all) and for a hypothetical future `--network host` deployment, redundant but
+   harmless for the documented, published-container case. Its own docstring already states this
+   plainly; nothing there needed correcting once the question was actually resolved rather than
+   left open.
 
    **Exit test met, for `local-lite` and `small`; `cluster` asserted as a stub, not skipped.**
    `tests/harness/test_webapp_screens.py`: each screen submits only its own top-level section

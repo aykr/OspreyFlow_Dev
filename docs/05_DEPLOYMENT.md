@@ -40,8 +40,11 @@ docker run --rm -p 127.0.0.1:7000:7000 \
 code.** `-p 127.0.0.1:7000:7000`, not a bare `-p 7000:7000` — R2's own loopback-only guarantee
 needs the port itself bound to loopback on the host side; a bare `7000:7000` publishes to every
 interface, which the application-layer refusal in `harness/webapp.py` cannot fully make up for on
-its own (`harness/webapp_auth.py`'s own docstring has the Docker-NAT reason, Proposed not decided).
-And the trailing `--config`/`--out-root` are not optional flourishes: `harness.webapp`'s own
+its own — **decided, round 09: the `-p 127.0.0.1:` port-binding above is R2's own enforcement for
+this documented command; `harness/webapp.py`'s own `loopback_only_middleware` is real defence only
+for the non-Docker path, redundant-but-harmless here** (`harness/webapp_auth.py`'s own docstring
+has the full Docker-NAT reasoning). And the trailing `--config`/`--out-root` are not optional
+flourishes: `harness.webapp`'s own
 default `--config` resolves relative to *where the harness package lives inside the image*
 (`/app/osprey.yaml`), not to whatever the operator happens to mount at `/workspace` — a bare
 `docker run` with no arguments after the image name writes and reads a config file the operator's

@@ -79,11 +79,14 @@ async def loopback_only_middleware(request: Request, call_next):  # type: ignore
     the port-binding is what actually does the work in that deployment shape. It remains real,
     working defence for every path that is not NATed this way: `python -m harness` run directly on
     a host with no Docker at all, or a future `--network host` deployment, where the visible
-    client address is the true one. **Which mechanism should carry R2's guarantee for the
-    published-container case — adopting `--network host`, or accepting that the port-binding alone
-    is the enforcement and this middleware is redundant-but-harmless there — is a real,
-    undecided question, not resolved by this round** (`07_BUILD_PLAN.md` Stage 2 §6 part A's own
-    entry has it as Proposed).
+    client address is the true one.
+
+    **Decided, round 09 (`07_BUILD_PLAN.md` Stage 2 §6 part A's own entry has the full account):
+    the port-binding is the enforcement for the documented, published-container case; `--network
+    host` is not adopted**, because it behaves differently across Docker Desktop platforms and
+    `05_DEPLOYMENT.md` §2's own bootstrap command must stay one identical line on every platform.
+    This middleware is kept exactly as built — real-but-redundant defence for that case, real and
+    load-bearing for the non-Docker and future `--network host` paths.
     """
     if not is_loopback(request.client.host if request.client else None):
         from starlette.responses import PlainTextResponse
