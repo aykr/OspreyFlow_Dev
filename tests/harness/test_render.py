@@ -34,6 +34,7 @@ from harness.render import (
     UnpinnedImagesError,
     diff_for,
     find_drift,
+    git_sha,
     load_config,
     render,
     service_images,
@@ -218,6 +219,35 @@ def test_pull_mode_renders_owned_images_with_no_build_stanza_and_a_locked_digest
         assert row["source"] != "local-build", (
             f"{row['service']}: pull mode recorded local-build — nothing here was built"
         )
+
+
+# --- git_sha / OSPREY_BUILT_FROM_SHA — round 11 -----------------------------------------------
+
+
+def test_git_sha_falls_back_to_the_baked_release_sha_when_there_is_no_git_repo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The real shape a pull-mode render inside the released harness image is in
+    (`harness/Dockerfile`'s own header: no `.git` at all). `tmp_path` is a real directory with no
+    repository either, so `git rev-parse` genuinely fails here rather than being mocked to fail."""
+    monkeypatch.setenv("OSPREY_BUILT_FROM_SHA", "deadbeefcafe")
+    assert git_sha(tmp_path) == "deadbeefcafe"
+
+
+def test_git_sha_prefers_a_real_checkout_over_the_baked_release_sha(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A developer's own tree always has a real `.git` — the baked value exists only for the one
+    case that has none, and must never override a real answer."""
+    monkeypatch.setenv("OSPREY_BUILT_FROM_SHA", "should-never-be-read")
+    assert git_sha(REPO_ROOT) not in {"should-never-be-read", "unknown"}
+
+
+def test_git_sha_is_unknown_with_neither_git_nor_the_baked_sha(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("OSPREY_BUILT_FROM_SHA", raising=False)
+    assert git_sha(tmp_path) == "unknown"
 
 
 def test_the_runbook_carries_this_deployment_s_own_paths_not_a_template(

@@ -14,12 +14,16 @@ doc_site`), the hand-maintained `deploy/RUNBOOK.md`, and — with `--images` —
 image `harness.render.service_images` says the rendered stack runs, each pinned by a
 **registry-resolved** digest (`harness.images.registry_digest_resolver`, not the local-daemon one
 `harness.render.render` defaults to — a bundle recipient's own daemon has pulled nothing yet, so
-only a registry-checkable digest means anything to them). **The three owned services are the one
-honest exception** (round 07): nothing publishes to `harness.render.OWNED_IMAGE_REGISTRY` yet, so
-their own `versions.lock` entry is `unresolved`, not a real pin — `--images` still ships them, as
+only a registry-checkable digest means anything to them). **The three owned services get the same
+registry pin as any third-party image, published, round 11:** `.github/workflows/release.yml`
+pushes all three to `harness.render.OWNED_IMAGE_REGISTRY` on a tagged release, tagged by exactly
+the commit `registry_digest_resolver` is asked to resolve, so a bundle built from a released
+commit locks a real digest for them the same way it always has for a third-party image. Built from
+an untagged commit, they still resolve to `unresolved`, correctly — no release has published that
+exact commit's images, so there is nothing to pin to. Either way `--images` ships them as
 `docker save` archives retagged to match the pull-mode reference the bundle's own rendered
 `compose.yaml` names, which is what actually lets `docker load` plus this bundle's own
-`osprey.yaml.example` deploy correctly; a real registry pin for them is separate, undone work.
+`osprey.yaml.example` deploy correctly.
 
 **Every artefact-hygiene assertion `scripts.packaging_gate` provides runs against the bundle's own
 staged file list before it is tarred** — ADR-034 §B7 (no private-tree file, no authorship

@@ -108,6 +108,22 @@ def unresolved_digest_resolver(image: ImageRef) -> str | None:
     return None
 
 
+def daemon_then_registry_digest_resolver(image: ImageRef) -> str | None:
+    """`render`'s own default resolver (round 11) — the local daemon first, the image's own
+    registry second.
+
+    **Why both, in this order.** `docker_digest_resolver` alone is right for a third-party image
+    (`postgres:16-alpine`…), which `05_DEPLOYMENT.md` §3's own golden path only ever pulls *after*
+    render has already written `versions.lock` — so on a bare customer laptop, before anything has
+    been pulled, it always returns `None` for every owned pull-mode image
+    (`ghcr.io/ospreyflow/<service>:<sha>`) even once the release pipeline has genuinely published
+    one, which is exactly the gap this round closes. The registry check costs nothing extra when
+    the daemon already has the answer (an airgapped bundle recipient who `docker load`ed the image,
+    or a developer machine mid-session), and is what finds a real published digest for anyone else.
+    """
+    return docker_digest_resolver(image) or registry_digest_resolver(image)
+
+
 def registry_digest_resolver(image: ImageRef) -> str | None:
     """Asks the image's own registry for its manifest digest, rather than the local daemon.
 

@@ -326,10 +326,12 @@ def test_the_image_renders_local_lite_pull_mode_with_only_an_empty_workspace_mou
             "/workspace/osprey.yaml",
             "--out-root",
             "/workspace/generated",
-            # Nothing is published under `OWNED_IMAGE_REGISTRY` by any real CI pipeline yet
-            # (`harness/render.py`'s own docstring on that constant, and `05_DEPLOYMENT.md` §3's
-            # matching disclosure) — the same flag a developer render with no Docker daemon
-            # already needs, not something this test invented to get past a real refusal.
+            # `.github/workflows/release.yml` (round 11) publishes under `OWNED_IMAGE_REGISTRY`
+            # on a tagged release, but this image was just built locally from whatever commit is
+            # currently checked out — no release has published *this* commit's digests, so
+            # `daemon_then_registry_digest_resolver` genuinely finds nothing here either. The same
+            # flag a developer render with no Docker daemon already needs, not something this test
+            # invented to get past a real refusal.
             "--allow-unpinned",
         ],
         capture_output=True,

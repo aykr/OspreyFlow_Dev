@@ -90,6 +90,17 @@ COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=dockercli /usr/local/libexec/docker/cli-plugins/docker-compose \
     /usr/local/libexec/docker/cli-plugins/docker-compose
 
+# **Round 11 — the exact commit the release pipeline built every owned image from.** This image
+# carries no `.git` (see the comment at the top of this file), so `harness.render.git_sha()` —
+# which decides the tag a pull-mode render's owned images resolve against
+# (`ghcr.io/ospreyflow/<service>:<sha>`) — read "unknown" here even on a real release, a tag that
+# could never match what `.github/workflows/release.yml` actually pushed the other three images
+# as. `--build-arg OSPREY_BUILT_FROM_SHA=<sha>` (that workflow's own step) bakes the same commit in
+# as an environment variable, which `git_sha()` reads only when `git rev-parse` itself cannot
+# answer — a developer's own checkout, with a real `.git`, is unaffected.
+ARG OSPREY_BUILT_FROM_SHA=""
+ENV OSPREY_BUILT_FROM_SHA=${OSPREY_BUILT_FROM_SHA}
+
 RUN useradd --create-home --uid 10001 osprey
 WORKDIR /app
 

@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import os
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -57,7 +58,7 @@ import yaml
 from harness.images import (
     DigestResolver,
     ServiceImage,
-    docker_digest_resolver,
+    daemon_then_registry_digest_resolver,
     unresolved_digest_resolver,
 )
 from harness.realm import CONDUIT_CLIENT_ID
@@ -108,7 +109,18 @@ class MissingDockerfileError(RuntimeError):
 def git_sha(repo_root: Path = REPO_ROOT) -> str:
     """The commit a local build was made from. `unknown` rather than a raise when git is absent or
     this is not a checkout: a lock file that says `unknown` is honest, and one that fails the whole
-    render because `git` is missing would make the renderer depend on a tool it does not need."""
+    render because `git` is missing would make the renderer depend on a tool it does not need.
+
+    **Falls back to `OSPREY_BUILT_FROM_SHA`, round 11.** A real checkout (a developer's own tree,
+    the build stage of `.github/workflows/release.yml`) always has `.git`, and `git rev-parse`
+    above answers correctly for it. `harness/Dockerfile`'s own header says the harness image itself
+    carries none — so a pull-mode render running *inside the released harness image* (this
+    function's default `repo_root=REPO_ROOT` case, `service_images`'s own pull-mode branch) used to
+    read `unknown` here even on a real release, computing an owned-image tag
+    (`ghcr.io/ospreyflow/<service>:unknown`) that could never match what the release pipeline
+    actually pushed. The release workflow bakes the exact commit it built every other image from
+    into the harness image as `OSPREY_BUILT_FROM_SHA` (`--build-arg`/`ENV`); this is read only when
+    `git` itself could not answer, so a real checkout's own `.git` still wins."""
     try:
         result = subprocess.run(
             ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
@@ -118,32 +130,54 @@ def git_sha(repo_root: Path = REPO_ROOT) -> str:
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
-        return "unknown"
-    sha = result.stdout.strip()
-    return sha if result.returncode == 0 and sha else "unknown"
+        result = None
+    sha = result.stdout.strip() if result is not None else ""
+    if result is not None and result.returncode == 0 and sha:
+        return sha
+    baked = os.environ.get("OSPREY_BUILT_FROM_SHA", "").strip()
+    return baked if baked else "unknown"
+
+
+#: `05_DEPLOYMENT.md` §3/§5/§7's own reference for where a customer checks for a published
+#: release once the digest resolvers above have failed to find one — named here so
+#: `UnpinnedImagesError`'s own message and those sections stay one string apart, not two to drift.
+RELEASES_URL = "https://github.com/ospreyflow/ospreyflow-dev/releases"
 
 
 class UnpinnedImagesError(RuntimeError):
     """Names every image whose digest could not be resolved, rather than writing a `versions.lock`
-    that claims a pin it does not have."""
+    that claims a pin it does not have.
+
+    **Round 11 — points at the release page, not just at `--allow-unpinned`.** Before this round
+    nothing published `ghcr.io/ospreyflow/<service>`, so an unresolved owned image meant "there is
+    nothing to find yet" and the only honest advice was the escape hatch. Now that
+    `.github/workflows/release.yml` publishes real digests on a tagged release,
+    `--allow-unpinned` is a developer flag (`05_DEPLOYMENT.md` §5/§7 say so explicitly) and the
+    real remedy for a customer is checking whether a release has actually been cut — this message
+    names both, rather than only the flag that silences the check."""
 
     def __init__(self, images: Sequence[str]) -> None:
         self.images = tuple(images)
         super().__init__(
             "refusing to write versions.lock without a digest for: "
             + ", ".join(images)
-            + " — pull them, or pass --allow-unpinned to mark them 'unresolved' explicitly"
+            + " — pull them yourself, check "
+            + RELEASES_URL
+            + " for a published release with a matching digest, or pass --allow-unpinned (a "
+            "developer flag, never the customer remedy) to mark them 'unresolved' explicitly"
         )
 
 
 #: Where an owned service's image is pulled from when `components.source_path` is not declared
 #: (the default, round 07) — extending `docs/05_DEPLOYMENT.md` §2's own bootstrap reference
 #: convention (`ghcr.io/ospreyflow/harness:latest`) to the three services the harness image
-#: cannot build without a mounted checkout. **Disclosed, not solved here:** nothing under this
-#: path is actually published by any CI pipeline yet — `tests/harness/test_render.py`'s own pull-
-#: mode test passes `--allow-unpinned` for exactly this reason, the same way a developer render
-#: with no Docker daemon does. A real customer install needs a real publish step; that is a
-#: separate, undecided piece of work, not invented here.
+#: cannot build without a mounted checkout. **Published, round 11:** `.github/workflows/
+#: release.yml` builds, scans and pushes all four owned images here on a version tag, tagged by
+#: the exact commit `git_sha()` above computes — `daemon_then_registry_digest_resolver` (this
+#: module's own default resolver) then finds a real digest for them with no local pull needed.
+#: `tests/harness/test_render.py`'s own pull-mode test still passes an explicit fake resolver
+#: rather than reaching the real registry, the same way every other test in that file avoids
+#: a live network call.
 OWNED_IMAGE_REGISTRY = "ghcr.io/ospreyflow"
 
 
@@ -644,7 +678,9 @@ def render(
             "(06_DECISIONS.md ADR-011) — not built in Stage 2 §1"
         )
     if resolver is None:
-        resolver = unresolved_digest_resolver if allow_unpinned else docker_digest_resolver
+        resolver = (
+            unresolved_digest_resolver if allow_unpinned else daemon_then_registry_digest_resolver
+        )
     images = service_images(config)
     source_path = config.components.source_path
     # Round 07: only checked when a source tree is actually declared. The pull path (the
