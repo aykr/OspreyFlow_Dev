@@ -4,6 +4,13 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
+// `wcag2a` and `wcag2aa`, both — axe-core's own rule tags are not hierarchical: a rule tagged
+// `wcag2a` (`button-name`, `image-alt`, ...) is not also returned by `wcag2aa` alone. Round 09:
+// found still missing here — `apps/harness/a11y/a11y.spec.ts`'s own docstring had already
+// disclosed this exact gap in this file without fixing it (a different surface, out of that
+// round's scope); fixed now, on every scan below.
+const WCAG_TAGS = ["wcag2a", "wcag2aa"];
+
 for (const theme of ["dark", "light"] as const) {
   // `06_DECISIONS.md` ADR-050's own tests-owed list: "The accessibility floor
   // (`02_GLASS_FRONTEND.md` §6) on the sign-in screen." Against the real screen
@@ -16,7 +23,23 @@ for (const theme of ["dark", "light"] as const) {
     if (theme === "light") {
       await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
     }
-    const results = await new AxeBuilder({ page }).withTags(["wcag2aa"]).analyze();
+    const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+  });
+
+  // Round 09: the one real screen this file scanned for a general violation sweep was sign-in —
+  // `keyboard/harness.html` (the real `GlassCanvas`, the same real screen `keyboard.spec.ts`
+  // drives every one of its own real interaction tests against, never a showcase) had no a11y
+  // coverage of its own at all. Scanned in its own initial, keyboard-focused state — the same
+  // state `keyboard.spec.ts`'s own first test establishes before ever pressing a key.
+  test(`${theme} theme canvas screen has no automated wcag2aa violations`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/keyboard/harness.html");
+    if (theme === "light") {
+      await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+    }
+    await page.getByRole("application", { name: "Network canvas" }).waitFor();
+    const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
     expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
   });
 
