@@ -11,6 +11,7 @@ export default [
       "packages/schemas/generated/**",
       ".venv/**",
       "apps/workspace/dist/**",
+      "apps/harness/dist/**",
       "prototypes/**",
     ],
   },
@@ -20,18 +21,19 @@ export default [
       globals: { process: "readonly", console: "readonly" },
     },
   },
-  // The Glass (`apps/workspace`) — Vite/React/TypeScript, per
-  // `docs/02_GLASS_FRONTEND.md` §1. Scoped to `apps/workspace` rather than
-  // added globally since no other TypeScript source exists yet. Covers
-  // `src/`, `test/` (the delta-client integration harness), `perf/` and
-  // `a11y/` (the CI-gate Playwright suites) — every `.ts`/`.tsx` file in
-  // the package, not just the shipped app.
+  // The Glass (`apps/workspace`) and the setup harness (`apps/harness`, `Stage 2 §6`) — both
+  // Vite/React/TypeScript, per `docs/02_GLASS_FRONTEND.md` §1 and `05_DEPLOYMENT.md` §2. One
+  // shared `files` glob rather than two near-identical blocks: both packages are the same
+  // toolchain by the same ruling (`DECISIONS.md` R1: "the same React/Vite/TypeScript toolchain
+  // and design tokens as apps/workspace"). Covers `src/`, `test/` (the delta-client integration
+  // harness), `perf/`, `a11y/` and `keyboard/` (the CI-gate Playwright/Vitest suites) — every
+  // `.ts`/`.tsx` file in either package, not just the shipped app.
   ...tseslint.configs.recommended.map((config) => ({
     ...config,
-    files: ["apps/workspace/**/*.{ts,tsx}"],
+    files: ["apps/workspace/**/*.{ts,tsx}", "apps/harness/**/*.{ts,tsx}"],
   })),
   {
-    files: ["apps/workspace/**/*.{ts,tsx}"],
+    files: ["apps/workspace/**/*.{ts,tsx}", "apps/harness/**/*.{ts,tsx}"],
     plugins: { "react-hooks": reactHooks },
     languageOptions: {
       parserOptions: { ecmaFeatures: { jsx: true } },

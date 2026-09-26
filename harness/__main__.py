@@ -11,9 +11,12 @@ bundle. `bundle` is the one exception to "its own `harness.<name>`" — it wraps
 `harness` package itself (`06_DECISIONS.md` ADR-049: "wraps `scripts/osprey_bundle.py`... rather
 than writing a second implementation").
 
-Once `Stage 2 §6` exists, `python -m harness` with no subcommand becomes the browser setup harness
-this package's own docstring names. Today, with no subcommand, it prints usage and exits 2 —
-nothing to serve exists yet, and a silent no-op would be a worse answer than a named refusal.
+**No subcommand is now the browser setup harness** (`Stage 2 §6` part A) — `05_DEPLOYMENT.md` §2's
+own bootstrap command (`docker run ... ghcr.io/ospreyflow/harness:latest`, no arguments) reaches
+`harness.webapp.main`, which serves the Profile/Components/Models screens' own API (and the built
+`apps/harness` frontend, once `dist/` exists) on loopback, per ruling R2. `-h`/`--help` still shows
+the subcommand list below, since those remain real, separate commands the browser app itself calls
+into rather than replaces.
 """
 
 from __future__ import annotations
@@ -43,21 +46,27 @@ _SUBCOMMANDS: dict[str, str] = {
 def _usage() -> str:
     names = ", ".join(sorted(_SUBCOMMANDS))
     return (
-        "usage: python -m harness <subcommand> [args...]\n"
+        "usage: python -m harness [<subcommand> [args...]]\n"
         f"subcommands: {names}\n"
-        "(the browser setup harness itself is Stage 2 §6, not yet built — "
-        "there is no subcommand-less mode yet)"
+        "(no subcommand: the browser setup harness, Stage 2 §6 — see harness.webapp)"
     )
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    if not argv:
-        print(_usage(), file=sys.stderr)
-        return 2
-    if argv[0] in ("-h", "--help"):
+    if argv and argv[0] in ("-h", "--help"):
         print(_usage())
         return 0
+    if not argv or argv[0].startswith("-"):
+        # No subcommand, or a flag meant for the webapp itself (`--host`/`--port`/`--config` —
+        # `harness.webapp._parse_args`'s own options) rather than a subcommand name, which is
+        # always a bare word. Found needing this: `apps/harness/keyboard/playwright.config.ts`'s
+        # own test server passes `--config` to point the webapp at a scratch file rather than this
+        # checkout's real `osprey.yaml` — the empty-argv-only version of this branch silently
+        # discarded that flag and always served the real file.
+        from harness.webapp import main as webapp_main
+
+        return webapp_main(argv)
 
     subcommand, rest = argv[0], argv[1:]
     module_name = _SUBCOMMANDS.get(subcommand)

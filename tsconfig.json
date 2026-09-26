@@ -13,5 +13,13 @@
     "resolveJsonModule": true,
     "isolatedModules": true
   },
-  "include": ["packages/schemas/generated/**/*.ts", "apps/workspace/src/**/*.ts", "apps/workspace/src/**/*.tsx"]
+  "include": [
+    "packages/schemas/generated/**/*.ts",
+    "apps/workspace/src/**/*.ts",
+    "apps/workspace/src/**/*.tsx",
+    "apps/harness/src/**/*.ts",
+    "apps/harness/src/**/*.tsx",
+    "apps/harness/keyboard/**/*.ts",
+    "apps/harness/keyboard/**/*.tsx"
+  ]
 }

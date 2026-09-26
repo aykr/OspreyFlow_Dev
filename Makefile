@@ -1,4 +1,4 @@
-.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test dev-up dev-down docker-clean test-all glass-perf glass-a11y glass-keyboard glass-map-verify bundle
+.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test dev-up dev-down docker-clean test-all glass-perf glass-a11y glass-keyboard glass-map-verify harness-keyboard bundle
 
 PY := .venv/bin/python
 PYTEST := .venv/bin/pytest
@@ -185,6 +185,7 @@ golden-set:
 test:
 	$(PYTEST) --ignore=tests/conformance/graph_port --ignore=tests/conformance/model_port --ignore=tests/golden --ignore=tests/ingest --ignore=tests/scenarios/test_hmp_graph.py --ignore=tests/scenarios/test_witness_statement_extraction.py --ignore=tests/services/api/test_sites_store.py --ignore=tests/services/api/test_tile_cache.py --ignore=tests/services/api/test_prefetch.py --ignore=tests/geocoder/test_match_live.py --ignore=tests/services/api/test_assessments.py --ignore=tests/services/api/test_assessment_routes.py --ignore=tests/services/api/test_export.py --ignore=tests/services/api/test_export_routes.py --ignore=tests/services/api/test_valkey_store.py --ignore=tests/services/api/test_ws_ticket.py --ignore=tests/services/api/test_statelessness.py --ignore=tests/scenarios/test_phase3_working_set.py --ignore=tests/services/api/test_change_stream.py --ignore=tests/services/api/test_alerts.py --ignore=tests/services/api/test_pattern_store.py --ignore=tests/services/api/test_hotlists.py --ignore=tests/services/api/test_monitors.py --ignore=tests/services/api/test_evaluation.py --ignore=tests/scenarios/test_phase6_extraction_and_resolution.py --ignore=tests/resolve/test_projection_access_control.py --ignore=tests/resolve/test_trigger.py --ignore=tests/scenarios/test_phase6a_glass_surfaces.py --ignore=tests/services/api/test_access.py --ignore=tests/services/api/test_dossier_access_control.py --ignore=tests/services/api/test_review.py --ignore=tests/services/api/test_review_store.py --ignore=tests/services/api/test_studio_recipes_store.py --ignore=tests/services/api/working_set/test_compute_access_control.py --ignore=tests/services/api/working_set/test_explain_cluster_access_control.py --ignore=tests/services/api/working_set/test_manual_resolution_access_control.py --ignore=tests/services/api/working_set/test_resolution_threshold_access_control.py --ignore=tests/scenarios/test_phase7_stage6c_watch_routes.py --ignore=tests/scenarios/test_fixture_corp_shape.py --ignore=tests/services/api/test_worker.py --ignore=tests/services/api/test_worker_replicas.py --ignore=tests/services/api/test_revoked_principal_precheck.py --ignore=tests/harness/test_restore_exit_test.py --ignore=tests/harness/test_workspace_bundle.py --ignore=tests/harness/test_sustained_load.py --ignore=tests/harness/test_bundle_exit_test.py --ignore=tests/harness/test_harness_image.py --ignore=tests/scenarios/test_phase8_exit_criterion_end_to_end.py
 	npm test --workspace apps/workspace
+	npm test --workspace apps/harness
 
 # Phase 3 (docs/07_BUILD_PLAN.md): "Add make dev-up bringing up ArcadeDB,
 # MinIO, Valkey and Postgres so the full suite runs locally. The
@@ -267,3 +268,12 @@ glass-keyboard:
 # theme only for now — see `map-verify/showcase.tsx`'s own docstring.
 glass-map-verify:
 	npm run test:map-verify --workspace apps/workspace
+
+# `06_DECISIONS.md` ADR-049 Stage 2 §6 amendment 21's own keyboard-driven surface
+# (`apps/harness/keyboard/setup-screens.spec.ts`) — the setup screens' own "Save" actions,
+# reached by keyboard only, against a real `harness.webapp` server this spec's own
+# `playwright.config.ts` starts. Not chained into `ci:` above, the same disclosed
+# `make ci`/`ci.yml` divergence `glass-perf`/`glass-a11y`/`glass-keyboard` already have
+# (07_BUILD_PLAN.md Stage 6) — it has its own `ci.yml` job instead.
+harness-keyboard:
+	npm run test:keyboard --workspace apps/harness

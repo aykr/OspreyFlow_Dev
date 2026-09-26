@@ -6,16 +6,19 @@
 # set (a single source of truth, not a second hand-pruned manifest to drift from it), and only the
 # source directories this image's own entrypoint actually reaches are copied in. Checked directly,
 # not assumed: tracing every module `harness.render`, `harness.apply`, `harness.backup`,
-# `harness.restore`, `harness.preflight.__main__` and `scripts.osprey_bundle` import, recursively,
-# touches exactly three project-tree roots — `harness`, `packages/schemas`, `scripts` — and nothing
-# under `services/` or any other `packages/*` subdirectory.
+# `harness.restore`, `harness.preflight.__main__`, `harness.webapp` (`Stage 2 §6` part A) and
+# `scripts.osprey_bundle` import, recursively, touches exactly three project-tree roots —
+# `harness`, `packages/schemas`, `scripts` — and nothing under `services/` or any other
+# `packages/*` subdirectory. `harness/webapp_auth.py`'s own module docstring has the reason
+# `services/api/auth.py`'s existing JWT verification is not reused: it lives outside this set.
 #
-# **Not a long-running server** (`docs/05_DEPLOYMENT.md` §2.5: "It does not run as a privileged
-# long-lived service. During setup it needs the container socket; the admin console it becomes
-# afterwards does not."). `harness/__main__.py`'s own subcommand dispatch (`render`, `preflight`,
-# `apply`, `backup`, `restore`, `bundle`) is what a real deployment or the setup harness invokes
-# today; `Stage 2 §6`'s own browser screens are the same image's future no-subcommand mode, not
-# built yet — `harness/__main__.py`'s own module docstring says so.
+# **Now also the browser setup harness's own server, `Stage 2 §6` part A — the "future no-
+# subcommand mode" this comment used to name as not built yet.** `harness/__main__.py`'s own
+# subcommand dispatch (`render`, `preflight`, `apply`, `backup`, `restore`, `bundle`) still runs a
+# single command and exits; no subcommand instead starts `harness.webapp`, a long-lived process
+# for the setup screens and, later, the post-launch admin console (`docs/05_DEPLOYMENT.md` §2.5).
+# The docker-socket privilege §2.5 describes is still runtime-scoped, not baked in here — see the
+# `ENTRYPOINT` comment below for what does and does not change between the two modes.
 FROM python:3.12-slim AS builder
 
 RUN pip install --no-cache-dir uv==0.5.14
@@ -35,6 +38,27 @@ COPY scripts ./scripts
 # archive has neither `docker-compose-v2` nor `docker-compose-plugin` under those names — the
 # official image is the one place both the client and the `compose` plugin are guaranteed to match.
 FROM docker:27-cli AS dockercli
+
+# `apps/harness`'s own build — `Stage 2 §6` part A, ruling R1: "the same React/Vite/TypeScript
+# toolchain and design tokens as apps/workspace", served by `harness.webapp` inside this image
+# (ruling R1's own "no second image"), not from a separate static-file image the way
+# `apps/workspace/Dockerfile` builds one. That is also why `apps/harness` is recorded as a
+# `Kind.LIBRARY` in `harness/service_inventory.py`, not `Kind.DEPLOYABLE` — its built output ships
+# inside this image rather than running as its own process.
+FROM node:22-slim AS frontend-builder
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY apps/harness/package.json apps/harness/package.json
+COPY apps/workspace/package.json apps/workspace/package.json
+RUN npm ci
+COPY apps/harness ./apps/harness
+# Only the two design-token sources this app's own CSS imports reach (`apps/harness/src/main.tsx`,
+# `apps/harness/keyboard/setup-harness.tsx`) — not the whole of `apps/workspace`, which this build
+# does not need and should not pull into this image's own build context.
+COPY docs/design ./docs/design
+COPY apps/workspace/src/design ./apps/workspace/src/design
+RUN npm run build --workspace apps/harness
 
 FROM python:3.12-slim
 
@@ -58,6 +82,10 @@ COPY --from=builder --chown=osprey:osprey /app/.venv ./.venv
 COPY --from=builder --chown=osprey:osprey /app/harness ./harness
 COPY --from=builder --chown=osprey:osprey /app/packages ./packages
 COPY --from=builder --chown=osprey:osprey /app/scripts ./scripts
+# `harness/webapp.py`'s own `FRONTEND_DIST` — `apps/harness/dist` relative to this image's own
+# `/app` root, the same path a bare checkout's `npx vite build` produces, so `create_app` needs no
+# image-specific branch to find it.
+COPY --from=frontend-builder --chown=osprey:osprey /app/apps/harness/dist ./apps/harness/dist
 
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONPATH="/app:/app/packages" \
@@ -82,7 +110,13 @@ USER osprey
 # `-v /var/run/docker.sock:/var/run/docker.sock` is not baked in here — it cannot be, a `Dockerfile`
 # has no way to declare a bind mount — so it is declared in the one place that is true: at
 # `docker run` time, in `05_DEPLOYMENT.md` §2's own worked example, and nowhere does this image
-# hold that socket, or any other elevated privilege, once the one command it was run for exits.
-# There is no `HEALTHCHECK` here for the same reason `services/ingest/Dockerfile` has none: a CLI
-# that runs one command and exits has no long-running health to report.
+# hold that socket, or any other elevated privilege, beyond what that run command grants.
+#
+# **No `HEALTHCHECK` here — correct for the subcommand modes, a disclosed gap for the no-
+# subcommand one.** Every subcommand (`render`, `preflight`, `apply`, `backup`, `restore`,
+# `bundle`) still runs once and exits, the same "no long-running health to report" shape
+# `services/ingest/Dockerfile` already has none for. No subcommand (`Stage 2 §6` part A) now runs
+# `harness.webapp` indefinitely instead, which does have a real liveness endpoint to check
+# (`GET /api/config`) — a `HEALTHCHECK` for that mode alone is real, undone work, left to whichever
+# part actually wires this image into a deployment's own health-checked stack.
 ENTRYPOINT ["python", "-m", "harness"]

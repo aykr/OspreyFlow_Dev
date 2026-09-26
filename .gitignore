@@ -37,6 +37,9 @@ apps/workspace/dist/
 apps/workspace/test-results/
 apps/workspace/playwright-report/
 apps/workspace/.env.local
+apps/harness/dist/
+apps/harness/test-results/
+apps/harness/playwright-report/
 .playwright-mcp/
 
 # macOS — no leading slash: matches at every directory level, not only the

@@ -138,6 +138,22 @@ INVENTORY: tuple[ServiceEntry, ...] = (
             "rule 8 debt this enumeration found."
         ),
     ),
+    ServiceEntry(
+        directory="apps/harness",
+        kind=Kind.LIBRARY,
+        entrypoint=None,
+        imported_by=("harness",),
+        created_in="Phase 8 (Stage 2 §6 part A)",
+        note=(
+            "The browser setup harness's own frontend — `vite build`, but with no Dockerfile of "
+            "its own: ruling R1 (DECISIONS.md) puts it inside the existing harness image "
+            "('no second image'), built by harness/Dockerfile's own `frontend-builder` stage and "
+            "served as static files by harness/webapp.py. The first apps/ directory this "
+            "enumeration has seen that is a real frontend app and still not deployable on its "
+            "own — discover()'s own apps/ branch now checks for a Dockerfile rather than "
+            "assuming every apps/ directory with a package.json is one."
+        ),
+    ),
 )
 
 #: Standing rule 8: "Each service gets its Dockerfile, and a `trivy image` CI scan, in the phase
@@ -180,9 +196,20 @@ def discover(repo_root: Path = REPO_ROOT) -> dict[str, Kind]:
     for entry in INVENTORY:
         directory = repo_root / entry.directory
         if entry.directory.startswith("apps/"):
-            # A front-end app's entrypoint is its build, not a Python module.
+            # A front-end app's entrypoint is its build, not a Python module — but a build alone
+            # does not make it deployable (`Kind.DEPLOYABLE`'s own definition: "runs as its own
+            # process; needs an image"). `apps/harness` is the first counter-example this
+            # enumeration has seen: it has a real `package.json` and a real build, and still ships
+            # inside another service's image rather than its own (`harness/Dockerfile`'s own
+            # `frontend-builder` stage) — checked here by the same fact that distinguishes them on
+            # disk, a `Dockerfile` of the directory's own.
             manifest = directory / "package.json"
-            found[entry.directory] = Kind.DEPLOYABLE if manifest.is_file() else Kind.PLACEHOLDER
+            if not manifest.is_file():
+                found[entry.directory] = Kind.PLACEHOLDER
+            elif (directory / "Dockerfile").is_file():
+                found[entry.directory] = Kind.DEPLOYABLE
+            else:
+                found[entry.directory] = Kind.LIBRARY
             continue
         files = _python_files(directory)
         if not files:
