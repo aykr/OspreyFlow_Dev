@@ -346,6 +346,24 @@ page the workspace serves (a pre-existing inconsistency in this document, correc
 2026, found running the real image rather than by reading the two sections against each other).
 The seeded demo credentials are displayed once and written nowhere.
 
+**Disclosed gap, found running the real image, 26 September 2026 — the bootstrap command above
+cannot complete Launch for `local-lite` or `small` on its own.** `harness/render.py`'s render step
+refuses by name (`MissingDockerfileError`) unless `services/api/Dockerfile`,
+`services/ingest/Dockerfile` and `apps/workspace/Dockerfile` are present at the image's own
+filesystem root — the same root `harness/Dockerfile`'s own header comment says is deliberately
+*not* where this image carries `services/` or `apps/workspace` source. Mounting `$PWD` at
+`/workspace`, as the command above does, does not put those files where the render step looks for
+them; nothing in this section's own worked example does. Confirmed directly: the render step
+succeeds only once the operator's full checkout (`packages/`, `services/`, `apps/workspace/`,
+`docs/design/`, `package.json`, `package-lock.json`, `tsconfig.json`, `pyproject.toml`, `uv.lock`)
+is also mounted at the image's own root, none of which this section names. **Proposed, not
+decided:** either the harness image gains a documented second mount for the operator's own
+checkout (with a stated, checked list of what that mount needs to contain), or `local-lite`'s own
+image references stop being *owned, built-from-source* tags for a laptop deploy and become
+pre-built, registry-pulled ones the way `cluster` already works — the same choice `render.py`'s
+own `service_images` already distinguishes for other profiles. Not decided here; this paragraph
+names the gap rather than picking one.
+
 What is running afterwards: the workspace, one Conduit, three workers, ArcadeDB, DuckDB
 in-process, Valkey, MinIO, OpenSearch single-node, PostgreSQL, Keycloak, Ollama, and a
 faster-whisper container. Twelve containers, roughly 11 GB of RAM at rest.

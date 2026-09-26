@@ -48,7 +48,16 @@ COPY scripts ./scripts
 # is nothing to talk to without a client on this side of it. **Found, not assumed:** Debian trixie's
 # archive has neither `docker-compose-v2` nor `docker-compose-plugin` under those names — the
 # official image is the one place both the client and the `compose` plugin are guaranteed to match.
-FROM docker:27-cli AS dockercli
+#
+# **Pinned to `docker:29-cli`, not `:27` or `:28` (round 05, 26 September 2026).** `trivy-image-
+# harness` was red against `:27-cli`: 22+53 HIGH/CRITICAL CVEs on the two files this stage actually
+# supplies (`usr/local/bin/docker`, `usr/local/libexec/docker/cli-plugins/docker-compose`). `:28-cli`
+# still carries several HIGH/CRITICAL Go-stdlib CVEs on the same two files. `:29-cli` (Docker
+# 29.8.1, Compose v5.5.1) scans at 0 vulnerabilities on both — confirmed directly with `trivy image`
+# against the standalone tag before this pin changed, then re-confirmed against this Dockerfile's
+# own rebuilt image. `docker-buildx` and the alpine base layer also carry findings on this tag, but
+# neither is copied into the final image below, so neither is this image's own exposure.
+FROM docker:29-cli AS dockercli
 
 # `apps/harness`'s own build — `Stage 2 §6` part A, ruling R1: "the same React/Vite/TypeScript
 # toolchain and design tokens as apps/workspace", served by `harness.webapp` inside this image
