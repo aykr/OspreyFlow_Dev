@@ -45,6 +45,7 @@ import type {
 import { BRASS_HEX, SEQ_HEX } from "../color/tokens";
 import type { WorkingSetGraph } from "../workingset/store";
 import { BasemapUnavailableError, checkBasemapAvailable } from "./basemapAvailability";
+import { registerAuthorisedPmtilesSource } from "./pmtilesAuth";
 import { resolveBundledStyle, resolvePmtilesSourceUrl } from "./style";
 
 const GEO_BINS_SOURCE_ID = "ospreyflow-geo-bins";
@@ -104,16 +105,21 @@ type MapNodeAttributes = {
 };
 type MapEdgeAttributes = Record<string, never>;
 
-let pmtilesProtocolRegistered = false;
+let pmtilesProtocol: PMTilesProtocol | null = null;
 
 /** Idempotent — `MapView` may mount more than once per page lifetime
  * (switching away from and back to the Map view), but MapLibre's global
- * protocol registry must only ever gain one `pmtiles` handler. */
-function ensurePmtilesProtocolRegistered(): void {
-  if (pmtilesProtocolRegistered) return;
+ * protocol registry must only ever gain one `pmtiles` handler.
+ *
+ * The instance is kept rather than discarded now: authorised sources are
+ * registered against it per provider (`pmtilesAuth.ts`), which is what
+ * puts the bearer token on the basemap's own tile reads. */
+function ensurePmtilesProtocolRegistered(): PMTilesProtocol {
+  if (pmtilesProtocol) return pmtilesProtocol;
   const protocol = new PMTilesProtocol();
   maplibregl.addProtocol("pmtiles", protocol.tile);
-  pmtilesProtocolRegistered = true;
+  pmtilesProtocol = protocol;
+  return protocol;
 }
 
 function buildMapGraph(
@@ -235,21 +241,25 @@ export function MapView({
   const cleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    ensurePmtilesProtocolRegistered();
-  }, []);
-
-  useEffect(() => {
     if (!containerRef.current) return;
     setBasemapUnavailable(null);
     let cancelled = false;
 
     async function mount(): Promise<void> {
       if (provider.kind === "vector" && provider.source) {
+        const sourceUrl = resolvePmtilesSourceUrl(provider.source, apiBaseUrl ?? "");
+        // Before the availability check, not after: the check can return early on a 404, and the
+        // registration has to be in place for *this* provider's URL by the time the style below
+        // asks MapLibre to open `pmtiles://<sourceUrl>`. Registering it here rather than in the
+        // mount-once effect above is deliberate — the URL and the token are both per-provider
+        // and per-session, and neither is known in an effect with an empty dependency list.
+        registerAuthorisedPmtilesSource(
+          ensurePmtilesProtocolRegistered(),
+          sourceUrl,
+          bearerToken,
+        );
         try {
-          await checkBasemapAvailable(
-            resolvePmtilesSourceUrl(provider.source, apiBaseUrl ?? ""),
-            bearerToken,
-          );
+          await checkBasemapAvailable(sourceUrl, bearerToken);
         } catch (err) {
           if (err instanceof BasemapUnavailableError) {
             if (!cancelled) setBasemapUnavailable(err.message);
