@@ -4237,6 +4237,100 @@ find something already finished sitting in the queue.
    a11y spec (ruling 6) — explicitly out of this round's brief. `/admin`'s real console content is
    also part B's: this round built and proved its access control against a placeholder route.
 
+   **Part B, items 1–2 built 26 September 2026 — the Governance screen (plus its real-data
+   exceptions panel) and the Geospatial screen.** Runtime budget was 3h ("if it will exceed 4h,
+   finish a self-consistent subset, push, and say what is left"); items 3–6 (Preflight, the
+   artefacts diff, Launch, the privilege drop, the full six-screen exit test) proved individually
+   comparable in size to all of part A combined and are **not attempted this round** — this is the
+   self-consistent subset the brief's own permission names, not a silent partial delivery.
+
+   **Item 1 — Governance.** The screen's own config fields (`identity_provider`, `handling_scheme`,
+   `ontology`, `real_data_exceptions` path) needed no new route: `GovernanceConfig` merges through
+   the existing `PUT /api/config` like any other section. Three new routes wrap
+   `scripts/real_data_exceptions.py` for the panel (`GET`/`POST /api/real-data-exceptions`,
+   `DELETE /api/real-data-exceptions/{dataset}`); `create_app` takes its own injectable
+   `real_data_exceptions_path`, defaulting to that module's own `CONFIG_PATH` (the owner's real,
+   gitignored file) — every test in this round's own suite injects a scratch path instead, and the
+   keyboard spec's own server (`playwright.config.ts`) now passes `--real-data-exceptions
+   <scratch>`, a new CLI flag, for the same reason (found live: without it, running the Playwright
+   suite would have read and written the real local file). Ruling 3's own `decision_record` field
+   (format-checked only, never resolved against `06_DECISIONS.md`) is built, red-then-green for the
+   absent and malformed cases at both the module level (`tests/test_real_data_exceptions.py`) and
+   the route (`tests/harness/test_webapp_governance_panel.py`), per rule 12. **Stated per the
+   brief's own instruction:** any existing local `config/real_data_exceptions.yaml` entry from
+   before 26 September 2026 is invalid until the owner adds `decision_record` by hand — this
+   module cannot see that gitignored file and does not try to migrate it; the panel surfaces that
+   invalidity as a 422 naming the field, proven directly
+   (`test_an_entry_predating_decision_record_is_surfaced_as_422_not_silently_dropped`), never as a
+   silently empty list.
+
+   **Item 2 — Geospatial.** Three real findings, none anticipated by the brief, each confirmed by
+   import rather than by reasoning about it:
+
+   1. **Only one of the three headless functions the brief names is reachable from inside the
+      harness image at all.** `harness/Dockerfile`'s traced dependency set is `harness`,
+      `packages/schemas`, `scripts` — not `services/` or `adapters/`. `scripts.build_local_basemap`
+      imports `services.ingest.*`/`adapters.graph_arcadedb.*` at its own top level;
+      `scripts.verify_map` imports `services.api.mapconfig_loader`/`services.api.
+      tier4_registration` at its own top level. A Python `import` executes a module's whole top
+      level, so *importing either module for any reason* — not only calling its real function —
+      raises `ModuleNotFoundError` inside the real image, confirmed directly
+      (`tests/harness/test_geospatial_packaging_boundary.py` runs each import in a fresh
+      subprocess and lists exactly which `services`/`adapters` modules load). Only
+      `register_local_provider` has no such dependency, so it was extracted to a new leaf module,
+      `scripts/geo_local_provider.py` — a pure refactor, `tests/test_build_local_basemap.py`'s own
+      suite (re-run, still green) is the proof nothing else changed. `harness/geospatial.py`
+      wraps it as `register_provider_step` (real); `build_basemap_step`/`verify_step` always raise
+      a typed `GeospatialError`, surfaced as a real 501 naming the reason, never silently stubbed.
+      **The brief anticipated a different, one-level-deeper failure** ("the sandbox has no Java/
+      planetiler... the real failure... surfaced verbatim") — real, but the actual first failure
+      is structural and precedes it; corrected here rather than answered only in this line, per
+      rule 11.
+   2. **`register_local_provider` itself had a live bug, found wiring its first real caller.**
+      Called against an `osprey.yaml` that exists but has no `map:` key yet — exactly the shape
+      `harness/webapp.py`'s own `_write_config` produces before any provider is registered, since
+      `OspreyConfig.map` defaults to `None` and `exclude_none=True` drops it — it raised
+      `KeyError('map')`. Fixing only that would have uncovered a second, worse bug: the function's
+      own write path was `{"map": ...}` alone, silently discarding every *other* top-level section
+      (`profile`, `governance`, ...) on the first non-map-only file it was ever called against.
+      Neither case had a test — every existing test called it only on a fresh file or one it had
+      already written itself. Fixed (read the whole document back, upsert only the `map` key,
+      write the whole document back) and shown red-then-green
+      (`test_register_local_provider_preserves_other_top_level_keys`, at both the function level
+      and the route
+      `test_registering_a_provider_preserves_other_sections_already_written`).
+   3. **No fixture PMTiles file exists anywhere in this tree**, confirmed
+      (`find . -iname "*.pmtiles"` returns nothing) — per the brief's own instruction ("if none
+      exists, say so and test what can be tested without inventing one"), the Geospatial screen's
+      own tests exercise `register_local_provider` against a path that does not exist on disk
+      (the function never opens it, only records it — a real, if inert, capability) rather than a
+      manufactured fixture file.
+
+   **Recorded as Proposed, not decided** (the same discipline part A's Docker-NAT finding
+   received): whether to vendor `services/`/`adapters/` into the harness image (cost: a much
+   larger image, tighter coupling of a tool meant to stand alone to Conduit/Vault internals) or add
+   new Conduit routes for `build_local_basemap`/`verify_map` and have the Geospatial screen call
+   those instead (out of this round's own scope: "do not touch services/ or adapters/"). Until
+   ruled, `build_local_basemap`/`verify_map` stay real, typed 501s.
+
+   **`05_DEPLOYMENT.md` §2.2 needed no correction** — its own "one button" text describes the
+   operator-facing experience, not which process serves it; the packaging-boundary finding above is
+   an internal implementation constraint this round found, not a misstatement of that section.
+
+   **A pre-existing, unrelated gate found red running this round's own closing gates — not fixed,
+   disclosed.** `make lint`'s own `ruff check .` (part of `make ci`) fails across 17 files this
+   round never touched (`packages/schemas/deployment.py`, `services/api/dossier.py`,
+   `services/api/prefetch.py`, `services/api/studio_profile.py`, `harness/realm.py`,
+   `scripts/mint_dev_token.py`, and eleven files under `tests/`) — confirmed pre-existing by `git
+   log`: every one of them was last modified at or before commit `c82688d`, itself several commits
+   before this overnight session's own first round began; none is a file any round this session has
+   touched. Not a standing Floor A/A′/B member (only `route_coverage_check`'s six routes are
+   catalogued) and not a one-file fix. `STANDING-QUEUE.md`'s own stop condition ("a gate you did not
+   touch is red and you cannot make it green within the brief's scope... EXCEPT a standing Floor
+   member") applies — this round's own work above is committed and reported regardless, per HOLD's
+   own instruction not to discard finished work, but the round stops here rather than continuing
+   silently past a red `make ci`.
+
    **Stage 2 §7 — Post-launch admin console operations. ACCEPTED. Not milestone-blocking; still Phase 8.**
    `05_DEPLOYMENT.md` §5's rolling upgrade and rollback to a previous digest, and §5's `verify` —
    "the port conformance suite against the *running* deployment rather than a test fixture", a
