@@ -20,6 +20,8 @@ from pathlib import Path
 import pytest
 import yaml
 from scripts.build_local_basemap import (
+    GEOFABRIK_REGIONS,
+    NotAnOsmExtractError,
     PlanetilerNotAvailableError,
     UnknownRegionError,
     download_extract,
@@ -27,6 +29,27 @@ from scripts.build_local_basemap import (
     run_planetiler,
 )
 from services.api.mapconfig_loader import load_map_config
+
+#: **The real first bytes of a real Geofabrik extract**, copied from the head of
+#: `europe/united-kingdom/england/rutland-latest.osm.pbf` on 26 September 2026: a 4-byte
+#: big-endian `BlobHeader` length (`0x0000000e`) then the protobuf carrying `OSMHeader`. Used
+#: instead of the `b"fake-pbf-bytes"` this file's own fixture returned until 26 September,
+#: which was a shape the real server never emits — `CLAUDE.md` rule 15's "a fixture standing in
+#: for an external dependency models that dependency's refusals, not only its grants".
+REAL_PBF_PREFIX = bytes.fromhex("0000000e0a094f534d48656164657218c20110b4011abc01789c")
+
+#: **And what that same server really returns for an extract path it no longer serves** — the
+#: head of the HTML home page Geofabrik 302s a retired sub-region path to, captured the same day
+#: from `europe/great-britain/england/rutland-latest.osm.pbf`. It arrives with a *200* after
+#: `httpx`'s own `follow_redirects=True`, which is precisely why `raise_for_status()` could not
+#: catch it and `_assert_is_osm_pbf` has to.
+REAL_GEOFABRIK_REDIRECT_HTML = (
+    b'<!DOCTYPE html>\n<html>\n  <head>\n<meta charset="UTF-8">\n'
+    b'<link rel="icon" href="https://www.geofabrik.de/favicon.ico" />\n'
+    b'<meta name="description" content="Download OpenStreetMap data for OpenStreetMap Data '
+    b'Extracts for self-hosting or data analysis.">\n'
+)
+
 
 # --- download_extract --------------------------------------------------------
 
@@ -43,13 +66,56 @@ def test_download_extract_fetches_the_regions_own_url_and_writes_the_bytes(tmp_p
 
     def fake_get(url: str) -> bytes:
         captured_urls.append(url)
-        return b"fake-pbf-bytes"
+        return REAL_PBF_PREFIX
 
     dest = tmp_path / "nested" / "great-britain.osm.pbf"
     download_extract("great-britain", dest, http_get=fake_get)
 
     assert captured_urls == ["https://download.geofabrik.de/europe/great-britain-latest.osm.pbf"]
-    assert dest.read_bytes() == b"fake-pbf-bytes"
+    assert dest.read_bytes() == REAL_PBF_PREFIX
+
+
+def test_download_extract_rejects_geofabriks_own_redirect_to_html_and_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    """The defect found building the basemap for real on 26 September 2026, planted in the shape
+    the real dependency actually produced: a retired extract path answering 200-with-HTML after a
+    followed redirect. Before `_assert_is_osm_pbf`, this wrote the HTML to disk under a
+    `.osm.pbf` name and returned it as a success, and planetiler failed minutes later with a parse
+    error naming neither the region nor the URL.
+
+    Asserting the file is *absent*, not merely that the call raised, is the load-bearing half: a
+    rejected download that still leaves a plausible-looking artefact behind is a trap for the next
+    stage, which takes the path on trust."""
+    dest = tmp_path / "rutland.osm.pbf"
+
+    with pytest.raises(NotAnOsmExtractError) as excinfo:
+        download_extract("rutland", dest, http_get=lambda url: REAL_GEOFABRIK_REDIRECT_HTML)
+
+    # The region and the URL both named, so the message is actionable without a second round trip.
+    assert "rutland" in str(excinfo.value)
+    assert "download.geofabrik.de" in str(excinfo.value)
+    assert not dest.exists(), "a rejected download must leave no file behind"
+
+
+def test_every_configured_region_url_is_one_geofabrik_still_serves_by_shape(
+    tmp_path: Path,
+) -> None:
+    """Not a network call — the offline half of the same finding. Geofabrik renamed
+    `great-britain` to `united-kingdom`; the top-level legacy alias still resolves, but no
+    *sub*-extract under `great-britain/` does. Any region whose URL reaches below the top level
+    must therefore use the current name, or it is a URL that answers 200-with-HTML and only fails
+    once a real build is attempted."""
+    for region, url in GEOFABRIK_REGIONS.items():
+        assert url.startswith("https://download.geofabrik.de/"), (region, url)
+        assert url.endswith("-latest.osm.pbf"), (region, url)
+        path = url.removeprefix("https://download.geofabrik.de/")
+        if path.count("/") > 1:
+            assert "great-britain/" not in path, (
+                f"{region}: a sub-extract under the retired 'great-britain/' prefix — Geofabrik "
+                f"answers that with a redirect to its home page, not a 404. Use "
+                f"'europe/united-kingdom/...'. Got: {url}"
+            )
 
 
 # --- run_planetiler -----------------------------------------------------------
@@ -65,6 +131,24 @@ def test_run_planetiler_refuses_to_silently_skip_a_missing_jar(tmp_path: Path) -
 
 
 def test_run_planetiler_invokes_java_with_the_expected_arguments(tmp_path: Path) -> None:
+    """**The expected argument list was wrong from Phase 5 until 26 September 2026, and this test
+    asserted the wrong one.** It only ever compared `run_planetiler`'s output against a list
+    written from the same assumption the function was written from — `scripts/
+    build_local_basemap.py`'s own docstring said so outright ("real planetiler CLI flags are
+    unverified here") — so it could never have found the fault, exactly `CLAUDE.md` rule 12's
+    shape. The first real run failed immediately:
+
+        java.lang.IllegalArgumentException: data/sources/lake_centerline.shp.zip does not exist.
+        Run with --download to fetch it
+
+    Both additions below are now checked against a real `planetiler --help`, not assumed:
+    `--download` (the OpenMapTiles profile's three auxiliary sources) and an explicit
+    `--download_dir` (whose default, `data/sources`, is relative to the working directory — from
+    a checkout, this repository's own `data/`).
+
+    This assertion is still argument-construction only, and still cannot prove the flags are
+    right; what proves that is a real build, and the one this round ran is recorded in
+    `docs/demo/2026-09-26/RUNBOOK.md`."""
     jar_path = tmp_path / "planetiler.jar"
     jar_path.write_bytes(b"")  # only existence is checked
     osm_path = tmp_path / "extract.osm.pbf"
@@ -81,9 +165,13 @@ def test_run_planetiler_invokes_java_with_the_expected_arguments(tmp_path: Path)
     assert captured == [
         [
             "java", "-jar", str(jar_path),
-            f"--osm-path={osm_path}", f"--output={output_path}", "--force",
+            f"--osm-path={osm_path}", f"--output={output_path}",
+            "--download", f"--download_dir={tmp_path / 'sources'}", "--force",
         ]
     ]
+    # The download directory is pinned *under the output directory*, never left to planetiler's
+    # own relative default — the half of this fix that a flag-name check alone would not catch.
+    assert f"--download_dir={tmp_path / 'sources'}" in captured[0]
 
 
 # --- register_local_provider ---------------------------------------------------
@@ -100,6 +188,38 @@ def test_register_local_provider_creates_a_fresh_config_when_none_exists(tmp_pat
     reloaded = load_map_config(config_path)
     assert reloaded.providers[0].id == "osm-local-gb"
     assert reloaded.providers[0].licence.client_scope == "open"
+
+
+def test_register_local_provider_credits_openmaptiles_as_well_as_openstreetmap(
+    tmp_path: Path,
+) -> None:
+    """`00_ARCHITECTURE.md` §1.2 principle 3 — "attribution and licence travel with the layer
+    [...] because the obligation does" — for the credit planetiler itself says these tiles carry.
+
+    Found 26 September 2026 by reading the real planetiler run's own closing output rather than
+    assuming ODbL was the whole story: the tiles this pipeline produces are a CC-BY work of the
+    OpenMapTiles profile as well as ODbL OpenStreetMap data, and planetiler prints "Maps made
+    with these vector tiles must display a visible credit: © OpenMapTiles © OpenStreetMap
+    contributors". Every provider registered before this fix declared only the OSM half.
+
+    Named here rather than left to `scripts/verify_map.py`'s own `check_attribution`, which
+    cannot catch this class of fault at all: that check asserts attribution is *present* and
+    survives `public_view()` unchanged, so a confidently wrong credit passes it. This is the test
+    that fails if the credit regresses."""
+    config_path = tmp_path / "osprey.yaml"
+    register_local_provider(
+        config_path, provider_id="osm-local-rutland", label="OpenStreetMap (rutland)",
+        pmtiles_path=tmp_path / "rutland.pmtiles",
+    )
+
+    attribution = load_map_config(config_path).providers[0].attribution
+    assert attribution is not None
+    assert "OpenMapTiles" in attribution, (
+        "the OpenMapTiles credit planetiler's own output requires is missing — a basemap built "
+        f"by scripts/build_local_basemap.py would ship an incomplete credit line. Got: "
+        f"{attribution!r}"
+    )
+    assert "OpenStreetMap contributors" in attribution, attribution
 
 
 def test_register_local_provider_replaces_an_entry_with_the_same_id(tmp_path: Path) -> None:

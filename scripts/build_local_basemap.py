@@ -66,7 +66,44 @@ from schemas.mapconfig import MapConfig
 #: Geofabrik's own directory structure is not perfectly regular across
 #: regions, so a computed URL is exactly the kind of "plausible but wrong"
 #: default `01_DOMAIN_MODEL.md` §7 warns against for CRS/date guessing.
+#:
+#: **`rutland` added 26 September 2026, and it is the entry a first run should use.** Stage 3a's
+#: own residual asked for a real basemap built on a real machine, and the three regions below it
+#: are all far too large for that to be a routine step: `great-britain` is ~1.9GB of PBF and tens
+#: of minutes of planetiler. Rutland is England's smallest county — 1.9MB of PBF — so the whole
+#: tier-1 pipeline (download, planetiler, gazetteer, register, verify) completes in minutes on a
+#: laptop while exercising every stage against genuinely real OSM data, not a fixture.
+#:
+#: **Its URL is under `europe/united-kingdom/`, not `europe/great-britain/`** — confirmed live, not
+#: assumed. Geofabrik has renamed that region: the top-level `great-britain-latest.osm.pbf` above
+#: still resolves as a legacy alias (checked directly, 26 September 2026 — 206, octet-stream), but
+#: the *sub*-extract path under `great-britain/` does not. It answers 302 to Geofabrik's own home
+#: page, which `httpx`'s `follow_redirects=True` would have followed to a 200 carrying HTML, so
+#: `download_extract` would have written an HTML error page to disk under a `.osm.pbf` name and
+#: handed it to planetiler. That is exactly the "plausible but wrong" failure this dict exists to
+#: prevent, and it is why the entry below is a checked URL rather than one composed from the
+#: region name.
+#:
+#: **`berkshire` is the one to build for the demo, and `rutland` is the one to build to prove the
+#: pipeline works.** They are not interchangeable, and choosing wrongly produces a failure that
+#: looks exactly like a broken basemap: the HMP fixture's ten yards sit at roughly 51.5°N,
+#: -0.6°E (`tests/scenarios/fixtures/hmp.py`), which is in Berkshire. Rutland is 130km north of
+#: them. A Rutland basemap is a perfectly good PMTiles file that the Glass loads, reads and draws
+#: nothing from, because the viewport — which `@sigma/layer-maplibre` centres on the graph's own
+#: coordinates, not on the basemap's — is over an area the extract does not cover. Found
+#: precisely that way on 26 September 2026: every other check passed (no "basemap not built"
+#: alert, real ranged reads answered 206, attribution rendered) and the canvas was still empty.
+#:
+#: **So the rule this dict now encodes: the extract must cover the data you are going to look
+#: at.** It is not "pick a small region"; it is "pick the smallest region that contains your
+#: fixture", and they only coincide by luck.
 GEOFABRIK_REGIONS: dict[str, str] = {
+    "berkshire": (
+        "https://download.geofabrik.de/europe/united-kingdom/england/berkshire-latest.osm.pbf"
+    ),
+    "rutland": (
+        "https://download.geofabrik.de/europe/united-kingdom/england/rutland-latest.osm.pbf"
+    ),
     "great-britain": "https://download.geofabrik.de/europe/great-britain-latest.osm.pbf",
     "california": "https://download.geofabrik.de/north-america/us/california-latest.osm.pbf",
     "texas": "https://download.geofabrik.de/north-america/us/texas-latest.osm.pbf",
@@ -84,6 +121,38 @@ class UnknownRegionError(ValueError):
 
 class PlanetilerNotAvailableError(RuntimeError):
     pass
+
+
+class NotAnOsmExtractError(RuntimeError):
+    """What came back down the wire was not an OSM PBF — see `_assert_is_osm_pbf`."""
+
+
+#: The first bytes of every OSM PBF: a 4-byte big-endian `BlobHeader` length, then a protobuf
+#: whose `type` field is the literal `OSMHeader`. Checking for that string in the first 64 bytes
+#: is the cheapest real discrimination between a PBF and anything else; it is not a full format
+#: parse and does not try to be.
+_OSM_PBF_MAGIC = b"OSMHeader"
+
+
+def _assert_is_osm_pbf(payload: bytes, *, region: str, url: str) -> None:
+    """**Added 26 September 2026, after this exact failure happened for real.** `_http_get` sets
+    `follow_redirects=True`, and Geofabrik answers an extract path it no longer serves with a 302
+    to its own home page rather than a 404 — so `raise_for_status()` sees a 200 and hands back a
+    page of HTML. Without this check `download_extract` wrote that HTML to disk under a
+    `.osm.pbf` name and returned it as a success, and the failure surfaced minutes later inside
+    planetiler as an unintelligible parse error naming neither the region nor the URL.
+
+    A wrong answer that arrives with a 200 is the case `CLAUDE.md` rule 15 names: the remote
+    dependency's own *refusal* did not look like a refusal, so nothing downstream could tell. The
+    check belongs here, where the region and the URL are both still in hand to name."""
+    if not payload.startswith(b"\x00\x00\x00") or _OSM_PBF_MAGIC not in payload[:64]:
+        raise NotAnOsmExtractError(
+            f"{url} did not return an OSM PBF for region {region!r} — got {len(payload)} bytes "
+            f"beginning {payload[:16]!r}. Geofabrik answers a path it no longer serves with a "
+            "redirect to its own home page, not a 404, so a 200 here does not mean the extract "
+            "exists; check the URL in GEOFABRIK_REGIONS against Geofabrik's own current directory "
+            "listing rather than assuming the region name still maps to the same path."
+        )
 
 
 def _http_get(url: str) -> bytes:
@@ -106,8 +175,13 @@ def download_extract(
             f"{region!r} is not a known Geofabrik region — add it to GEOFABRIK_REGIONS "
             f"rather than guess its download URL. Known regions: {sorted(GEOFABRIK_REGIONS)}"
         )
+    url = GEOFABRIK_REGIONS[region]
+    payload = http_get(url)
+    # Checked *before* the write, deliberately: a rejected download must leave no file behind at
+    # all, so a later stage cannot pick up a half-plausible artefact from a failed run.
+    _assert_is_osm_pbf(payload, region=region, url=url)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(http_get(GEOFABRIK_REGIONS[region]))
+    dest.write_bytes(payload)
     return dest
 
 
@@ -124,7 +198,27 @@ def run_planetiler(
     would; confirm its own licence (Apache-2.0, per planetiler's own
     repository, at the time a real jar is pinned) separately from
     `docs/00_ARCHITECTURE.md` §7's allowlist, which only governs installed
-    package dependencies."""
+    package dependencies.
+
+    **`--download` and `--download_dir` added 26 September 2026, running this against a real
+    planetiler for the first time.** This module's own docstring had already disclosed that
+    "real planetiler CLI flags are unverified here"; they were wrong, and only a real run could
+    say so. Two separate faults, both fatal to a first build:
+
+    1. The OpenMapTiles profile planetiler runs by default needs three auxiliary sources beyond
+       the OSM extract (lake centrelines, water polygons, Natural Earth). Without `--download` it
+       exits non-zero before reading a single node —
+       `java.lang.IllegalArgumentException: data/sources/lake_centerline.shp.zip does not exist.
+       Run with --download to fetch it` — so the previous flag list could never have produced
+       tiles on a machine that had not already fetched them by some other route.
+    2. `download_dir` defaults to the *relative* path `data/sources`, resolved against the
+       working directory. Run from a checkout, as `05_DEPLOYMENT.md` §2.2 has a reader do, that
+       is this repository's own `data/` — several hundred megabytes of third-party source data
+       deposited inside the tree. Pinned beside the output instead, which is where the rest of
+       this pipeline's artefacts already go.
+
+    `--osm-path`, `--output` and `--force` were right as they stood, confirmed against the same
+    real `--help` output; planetiler accepts either `-` or `_` in a flag name."""
     if not jar_path.is_file():
         raise PlanetilerNotAvailableError(
             f"planetiler jar not found at {jar_path} — download a release jar and pass its "
@@ -137,6 +231,8 @@ def run_planetiler(
             "java", "-jar", str(jar_path),
             f"--osm-path={osm_pbf_path}",
             f"--output={output_pmtiles_path}",
+            "--download",
+            f"--download_dir={output_pmtiles_path.parent / 'sources'}",
             "--force",
         ],
         check=True,

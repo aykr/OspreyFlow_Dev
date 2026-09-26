@@ -23,8 +23,33 @@ import yaml
 
 from schemas.mapconfig import ClientScope, MapConfig, MapProvider, MapSourceKind, ProviderLicence
 
+#: **Both credits, not just the OSM one** (26 September 2026, found building a real basemap for
+#: the first time — Stage 3a's own residual). planetiler prints its own licence terms at the end
+#: of every successful run, and they are not only OpenStreetMap's:
+#:
+#:     Generated vector tiles are produced work of OpenStreetMap data.
+#:     Such tiles are reusable under CC-BY license granted by OpenMapTiles team [...]
+#:     Maps made with these vector tiles must display a visible credit:
+#:     - © OpenMapTiles © OpenStreetMap contributors
+#:
+#: The underlying *data* is ODbL OpenStreetMap; the *tiles this pipeline produces from it* are
+#: additionally a CC-BY work of the OpenMapTiles schema and profile, which planetiler runs by
+#: default and `apps/workspace/src/map/style.ts` is written against. Until this was fixed, every
+#: provider this function registered declared only the OSM half, so a basemap built by
+#: `scripts/build_local_basemap.py` shipped a credit line that did not satisfy the licence the
+#: tiles actually came under — against `00_ARCHITECTURE.md` §1.2's own third principle,
+#: "attribution and licence travel with the layer, [...] because the obligation does".
+#:
+#: CC-BY-4.0 is on §7's allowlist, so nothing here needs an exception; the obligation is the
+#: visible credit, and this is the field that carries it onto the map, screenshots and exports.
+TIER1_PLANETILER_ATTRIBUTION = "© OpenMapTiles © OpenStreetMap contributors"
+
 
 def _default_licence() -> ProviderLicence:
+    """ODbL is the *data's* licence and stays the provider's declared licence id — the
+    redistributable/open judgement this drives is about the OpenStreetMap data, and CC-BY-4.0 (the
+    tiles' own additional licence) is allowlisted outright, so it changes neither field. What it
+    does change is the credit, which is `TIER1_PLANETILER_ATTRIBUTION` above."""
     return ProviderLicence(id="ODbL", redistributable=True, client_scope=ClientScope.OPEN)
 
 
@@ -67,7 +92,7 @@ def register_local_provider(
         kind=MapSourceKind.VECTOR,
         source=f"file://{pmtiles_path}",
         style="bundled:osprey-dark",
-        attribution="© OpenStreetMap contributors",
+        attribution=TIER1_PLANETILER_ATTRIBUTION,
         licence=_default_licence(),
     )
 
