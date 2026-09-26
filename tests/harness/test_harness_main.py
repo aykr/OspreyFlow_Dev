@@ -31,10 +31,41 @@ def test_every_named_subcommand_resolves_to_a_module_carrying_main() -> None:
         )
 
 
-def test_no_subcommand_refuses_rather_than_doing_nothing() -> None:
-    """Stage 2 §6 (the browser setup harness) does not exist yet — a silent no-op here would look
-    like a successful launch of a screen that was never built."""
-    assert main([]) == 2
+def test_no_subcommand_dispatches_to_the_browser_setup_harness() -> None:
+    """`Stage 2 §6` part A, built 26 September 2026: no subcommand is no longer a refusal — it is
+    `harness.webapp.main`, `05_DEPLOYMENT.md` §2's own bootstrap command's real target. Patches
+    the real entrypoint (the same shape `test_dispatches_to_the_right_module_with_the_remaining_
+    arguments` already uses for a named subcommand) rather than calling it directly, since the
+    real one blocks forever running a server."""
+    calls: list[list[str] | None] = []
+
+    def _fake_webapp_main(argv: list[str] | None) -> int:
+        calls.append(argv)
+        return 0
+
+    with patch("harness.webapp.main", _fake_webapp_main):
+        assert main([]) == 0
+    assert calls == [[]]
+
+
+def test_a_flag_like_first_argument_also_dispatches_to_the_webapp_not_an_unknown_subcommand() -> (
+    None
+):
+    """`--host`/`--port`/`--config` are `harness.webapp._parse_args`'s own options, not subcommand
+    names — every real subcommand is a bare word. Found needing this: the keyboard spec's own test
+    server passes `--config` to point the webapp at a scratch file, and the first version of this
+    dispatch (empty-argv-only) treated that as an unknown subcommand and refused it."""
+    calls: list[list[str] | None] = []
+
+    def _fake_webapp_main(argv: list[str] | None) -> int:
+        calls.append(argv)
+        return 0
+
+    with patch("harness.webapp.main", _fake_webapp_main):
+        result = main(["--host", "127.0.0.1", "--port", "7217"])
+
+    assert result == 0
+    assert calls == [["--host", "127.0.0.1", "--port", "7217"]]
 
 
 def test_an_unknown_subcommand_is_named_and_refused() -> None:
