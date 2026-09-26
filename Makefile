@@ -1,4 +1,4 @@
-.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test dev-up dev-down docker-clean test-all glass-perf glass-a11y glass-keyboard glass-map-verify harness-keyboard bundle
+.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test dev-up dev-down docker-clean test-all glass-perf glass-a11y glass-keyboard glass-map-verify harness-keyboard harness-a11y bundle
 
 PY := .venv/bin/python
 PYTEST := .venv/bin/pytest
@@ -8,7 +8,7 @@ MYPY := .venv/bin/mypy
 # Phase 0 exit criterion (docs/07_BUILD_PLAN.md): CI green; a PR adding a GPL
 # dependency fails; a Pydantic model change not reflected in the generated
 # TypeScript fails the build. See the Phase 0 plan for what each target proves.
-ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check test-file-coverage-check citation-check conformance-guard bundle
+ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check test-file-coverage-check citation-check conformance-guard harness-a11y bundle
 
 lint:
 	$(RUFF) check .
@@ -277,3 +277,15 @@ glass-map-verify:
 # (07_BUILD_PLAN.md Stage 6) — it has its own `ci.yml` job instead.
 harness-keyboard:
 	npm run test:keyboard --workspace apps/harness
+
+# `docs/02_GLASS_FRONTEND.md` §6 / amendment 24, ruling 6 — Stage 2 §6 part C
+# (`apps/harness/a11y/a11y.spec.ts`). Against the real `App` from `apps/harness/src` served by a
+# real `harness.webapp`, never a showcase page — `glass-a11y`'s own Stage 6 finding named exactly
+# that gap for the Glass, and this file's own docstring has the reason it is not reproduced here.
+# **In `ci:`'s own target list, unlike `glass-a11y`/`glass-keyboard`/`harness-keyboard`** — that
+# divergence between `make ci` and `ci.yml` is `07_BUILD_PLAN.md` Stage 6's own disclosed gap, not
+# repeated for a third surface (Stage 2 §6 part C's own brief). `ci.yml`'s own job runs this as a
+# second step of `harness-keyboard-a11y`, not a separate job — it drives the same real `App`
+# against the same real `harness.webapp` that job's own `harness-keyboard` step already starts.
+harness-a11y:
+	npm run test:a11y --workspace apps/harness

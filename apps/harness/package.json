@@ -7,13 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "test": "vitest run",
-    "test:keyboard": "playwright test --config keyboard/playwright.config.ts"
+    "test:keyboard": "playwright test --config keyboard/playwright.config.ts",
+    "test:a11y": "playwright test --config a11y/playwright.config.ts"
   },
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.63.0",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^22.10.2",

@@ -243,3 +243,31 @@ def test_a_second_screens_answer_does_not_erase_the_firsts(tmp_path: Path) -> No
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     assert config["profile"] == "small"
     assert config["models"]["hosted_fallback"] == "example-hosted"
+
+
+def test_the_governance_screen_round_trips_through_osprey_yaml(tmp_path: Path) -> None:
+    """`06_DECISIONS.md` ADR-049 Stage 2 §6's own exit test — "every screen round-trips its
+    answers through `osprey.yaml`" — named per screen, part A's own three had this proof
+    (`test_the_three_screens_round_trip_through_osprey_yaml_and_render_identically`); Governance's
+    own config fields (as opposed to the exceptions panel, `test_webapp_governance_panel.py`'s own
+    scope) had not, until this case. Geospatial's own equivalent is
+    `test_registering_a_provider_preserves_other_sections_already_written`
+    (`test_webapp_geospatial.py`); Preflight writes no section of its own, so it has none."""
+    config_path = tmp_path / "osprey.yaml"
+    client = _client(config_path)
+
+    answer = {
+        "identity_provider": "keycloak",
+        "handling_scheme": "us-criminal-intelligence",
+        "ontology": "default",
+        "real_data_exceptions": "config/real_data_exceptions.yaml",
+    }
+    response = client.put("/api/config", json={"governance": answer})
+    assert response.status_code == 200
+    assert response.json()["governance"] == answer
+
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    assert config["governance"] == answer
+
+    # Read back through the same route a fresh page load uses, not only the file on disk.
+    assert client.get("/api/config").json()["governance"] == answer

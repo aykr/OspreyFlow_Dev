@@ -747,8 +747,11 @@ jobs:
   # spec, against a real `harness.webapp` server (`apps/harness/keyboard/playwright.config.ts`'s
   # own `webServer` array starts it alongside Vite). A separate job from `glass-perf-a11y-keyboard`
   # above, not a fourth step in it: this is the only Playwright suite in this repository that also
-  # needs a live Python process, so it needs `astral-sh/setup-uv` too.
-  harness-keyboard:
+  # needs a live Python process, so it needs `astral-sh/setup-uv` too. `test:a11y` (Stage 2 §6 part
+  # C, amendment 24) joined as a second step 26 September 2026, same reason: it drives the same
+  # real `App` against the same real `harness.webapp`, so it shares this job's own setup rather
+  # than duplicating it in a second one.
+  harness-keyboard-a11y:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -760,6 +763,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
         working-directory: apps/harness
       - run: npm run test:keyboard --workspace apps/harness
+      - run: npm run test:a11y --workspace apps/harness
 
   # Phase 8's two deployment-level exit tests. Neither can run in any job above: they do not need a
   # store, they need a **whole rendered deployment** — ten containers, images built from this

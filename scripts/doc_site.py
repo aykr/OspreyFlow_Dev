@@ -105,6 +105,22 @@ def _architecture_landing_page() -> str:
     return _page("Architecture", body)
 
 
+#: `06_DECISIONS.md` ADR-049 Stage 2 §6's own six named screens, in the order the harness's own
+#: nav bar presents them (`apps/harness/src/store.ts`'s own `SCREEN_NAMES`) — kept as a literal
+#: tuple here rather than imported, the same "no dependency beyond the standard library" constraint
+#: `PREFLIGHT_DIR`'s own `ast.parse` reading already keeps for this module (importing
+#: `apps/harness/src/store.ts` at all would need a JS/TS toolchain this bundle-time render never
+#: has).
+_SETUP_SCREENS: tuple[str, ...] = (
+    "Profile",
+    "Components",
+    "Models",
+    "Governance",
+    "Geospatial",
+    "Preflight",
+)
+
+
 def _operator_guide_landing_page(
     generated_runbook_present: bool, deploy_runbook_present: bool
 ) -> str:
@@ -115,7 +131,19 @@ def _operator_guide_landing_page(
     if deploy_runbook_present:
         links.append('<li><a href="runbook.html">Backup/restore RUNBOOK</a></li>')
     links.append('<li><a href="preflight-reference.html">Preflight reference</a></li>')
-    body = "<h1>Operator guide</h1><ul>" + "".join(links) + "</ul>"
+    screen_items = "".join(f"<li>{name}</li>" for name in _SETUP_SCREENS)
+    body = (
+        "<h1>Operator guide</h1>"
+        "<h2>The setup harness's own path</h2>"
+        "<p>One bootstrap command (the deployment guide's own §2) opens a browser application, "
+        "not a wizard to read about — six screens, navigable in any order, a persistent summary "
+        "rail showing what is decided and what is outstanding:</p>"
+        f"<ol>{screen_items}</ol>"
+        "<p>Then Launch, from the confirmed generated artefacts — the harness itself becomes the "
+        "deployment's own <code>/admin</code> console afterwards, at the same port, not a page the "
+        "workspace serves.</p>"
+        "<ul>" + "".join(links) + "</ul>"
+    )
     return _page("Operator guide", body)
 
 
