@@ -13,6 +13,12 @@ const SCRATCH_CONFIG = join(tmpdir(), `osprey-keyboard-spec-${process.pid}.yaml`
 // touch that one from a test (`CLAUDE.md` rule 9 / ADR-035 §C3 / STANDING.md).
 const SCRATCH_RDE = join(tmpdir(), `real-data-exceptions-keyboard-spec-${process.pid}.yaml`);
 
+// A scratch `deploy/generated/` — the Preflight screen's own `Generate` really writes to disk,
+// and `--out-root`'s own default is this checkout's real `deploy/generated/` (gitignored, but
+// still real state a test run must not touch — the same reasoning as the two scratch paths
+// above).
+const SCRATCH_OUT_ROOT = join(tmpdir(), `osprey-generated-keyboard-spec-${process.pid}`);
+
 // Not port 7000, `05_DEPLOYMENT.md` §2's own real default — `vite.config.ts`'s own module
 // docstring has the reason: it collides with macOS's AirPlay Receiver on a real development
 // machine, which answered every proxied request with its own 403 while `reuseExistingServer`
@@ -38,7 +44,8 @@ export default defineConfig({
       // `python`, which this repo's own convention never assumes is the right interpreter.
       command:
         `uv run python -m harness --host 127.0.0.1 --port ${API_PORT} ` +
-        `--config ${SCRATCH_CONFIG} --real-data-exceptions ${SCRATCH_RDE}`,
+        `--config ${SCRATCH_CONFIG} --real-data-exceptions ${SCRATCH_RDE} ` +
+        `--out-root ${SCRATCH_OUT_ROOT}`,
       port: Number(API_PORT),
       reuseExistingServer: !process.env.CI,
       cwd: "../../..",

@@ -21,6 +21,7 @@ test("Tab reaches the Profile screen's own options and a real keyboard Enter sav
   await page.keyboard.press("Tab"); // Models nav button
   await page.keyboard.press("Tab"); // Governance nav button
   await page.keyboard.press("Tab"); // Geospatial nav button
+  await page.keyboard.press("Tab"); // Preflight nav button
   await page.keyboard.press("Tab"); // the radio group (one tab stop, lands on the checked radio)
   await expect(page.getByRole("radio", { name: /local-lite/ })).toBeFocused();
   await page.keyboard.press("ArrowDown"); // moves selection to "small" within the radio group
@@ -49,11 +50,12 @@ test("a keyboard-activated screen switch reaches Components and a real Enter sav
 
   // Activating "Components" leaves focus on that nav button itself (Enter on a button never
   // moves focus away from it) — the next Tabs reach the remaining nav buttons still in the DOM
-  // after it (Models, Governance, Geospatial), and only the one after those reaches the
-  // newly-rendered screen's own field.
+  // after it (Models, Governance, Geospatial, Preflight), and only the one after those reaches
+  // the newly-rendered screen's own field.
   await page.keyboard.press("Tab"); // Models nav button
   await page.keyboard.press("Tab"); // Governance nav button
   await page.keyboard.press("Tab"); // Geospatial nav button
+  await page.keyboard.press("Tab"); // Preflight nav button
   await page.keyboard.press("Tab"); // graph store select
   await expect(page.getByRole("combobox", { name: "Graph store" })).toBeFocused();
   await page.keyboard.press("Tab"); // analytics engine select
@@ -78,10 +80,12 @@ test("a keyboard-activated screen switch reaches Models and a real Enter saves i
   await page.keyboard.press("Enter");
   await page.getByRole("checkbox", { name: /Local only/ }).waitFor();
 
-  // Models is no longer the last nav button (Governance, Geospatial follow it in the DOM) — the
-  // same "Enter leaves focus on the activated button itself" finding as Components above.
+  // Models is no longer the last nav button (Governance, Geospatial, Preflight follow it in the
+  // DOM) — the same "Enter leaves focus on the activated button itself" finding as Components
+  // above.
   await page.keyboard.press("Tab"); // Governance nav button
   await page.keyboard.press("Tab"); // Geospatial nav button
+  await page.keyboard.press("Tab"); // Preflight nav button
   await page.keyboard.press("Tab"); // the "local only" checkbox
   await expect(page.getByRole("checkbox", { name: /Local only/ })).toBeFocused();
   await page.keyboard.press("Tab"); // Save models button (hosted-fallback fields hidden while local only)
@@ -102,11 +106,11 @@ test("Tab reaches the Governance screen and a real keyboard Enter saves it", asy
   await page.keyboard.press("Enter");
   await page.getByRole("textbox", { name: "Identity provider" }).waitFor();
 
-  // Governance is the 4th of 5 nav buttons — one sibling (Geospatial) follows it in the DOM, the
-  // same "Enter leaves focus on the activated button itself" finding `setup-screens.spec.ts`'s own
-  // Components case already established, one extra Tab further here since one more nav button
-  // follows.
+  // Governance is the 4th of 6 nav buttons — two siblings (Geospatial, Preflight) follow it in
+  // the DOM, the same "Enter leaves focus on the activated button itself" finding
+  // `setup-screens.spec.ts`'s own Components case already established.
   await page.keyboard.press("Tab"); // Geospatial nav button
+  await page.keyboard.press("Tab"); // Preflight nav button
   await page.keyboard.press("Tab"); // Identity provider input
   await expect(page.getByRole("textbox", { name: "Identity provider" })).toBeFocused();
   await page.keyboard.press("Tab"); // Handling scheme select
@@ -136,6 +140,7 @@ test("a real keyboard walkthrough adds a real-data exception through the Governa
   await page.getByRole("textbox", { name: "Dataset name" }).waitFor();
 
   await page.keyboard.press("Tab"); // Geospatial nav button
+  await page.keyboard.press("Tab"); // Preflight nav button
   await page.keyboard.press("Tab"); // Identity provider
   await page.keyboard.press("Tab"); // Handling scheme
   await page.keyboard.press("Tab"); // Ontology
@@ -232,8 +237,8 @@ test("a real keyboard walkthrough registers a local provider through the Geospat
   await page.keyboard.press("Enter");
   await page.getByRole("textbox", { name: "Provider id" }).waitFor();
 
-  // Geospatial is the last nav button — no nav sibling follows it, so the very next Tab (unlike
-  // Governance's case above) reaches this screen's own first field directly.
+  // Geospatial is the 5th of 6 nav buttons — one sibling (Preflight) follows it in the DOM.
+  await page.keyboard.press("Tab"); // Preflight nav button
   await page.keyboard.press("Tab");
   await expect(page.getByRole("textbox", { name: "Provider id" })).toBeFocused();
   await page.keyboard.type("osm-local-keyboard-spec");
@@ -266,6 +271,7 @@ test("Tab reaches Build local basemap and Verify, each a real keyboard-triggered
   await page.keyboard.press("Enter");
   await page.getByRole("button", { name: "Build local basemap" }).waitFor();
 
+  await page.keyboard.press("Tab"); // Preflight nav button
   await page.keyboard.press("Tab"); // Provider id
   await page.keyboard.press("Tab"); // Label
   await page.keyboard.press("Tab"); // PMTiles path
@@ -292,6 +298,103 @@ test("Tab reaches Build local basemap and Verify, each a real keyboard-triggered
   ]);
   expect(verifyResponse.status()).toBe(501);
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-verify-map");
+});
+
+test("a real keyboard walkthrough generates, downloads and confirms the artefacts", async ({
+  page,
+}) => {
+  await page.goto("/keyboard/setup-harness.html");
+  await page.getByRole("button", { name: "Preflight", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Generate" }).waitFor();
+
+  // Preflight is the last nav button — no nav sibling follows it, so the very next Tab reaches
+  // this screen's own first field directly.
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Generate" })).toBeFocused();
+
+  const [generateResponse] = await Promise.all([
+    page.waitForResponse(
+      (r) => r.url().includes("/api/artefacts/generate") && r.request().method() === "POST",
+    ),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(generateResponse.ok()).toBe(true);
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-generate-artefacts");
+  await page.getByRole("link", { name: "Download compose.yaml" }).waitFor();
+
+  await page.keyboard.press("Tab"); // Download compose.yaml link
+  await expect(page.getByRole("link", { name: "Download compose.yaml" })).toBeFocused();
+
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(download.suggestedFilename()).toBe("compose.yaml");
+  registerCovered("SETUP_SCREENS_ACTIONS", "download-artefact");
+
+  await page.keyboard.press("Tab"); // Download deployment.env link
+  await page.keyboard.press("Tab"); // Download versions.lock link
+  await page.keyboard.press("Tab"); // Download RUNBOOK.md link
+  await page.keyboard.press("Tab"); // Confirm artefacts button
+  await expect(page.getByRole("button", { name: "Confirm artefacts" })).toBeFocused();
+
+  const [confirmResponse] = await Promise.all([
+    page.waitForResponse(
+      (r) => r.url().includes("/api/artefacts/confirm") && r.request().method() === "POST",
+    ),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(confirmResponse.ok()).toBe(true);
+  await expect(page.getByRole("button", { name: "Artefacts confirmed" })).toBeVisible();
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-confirm-artefacts");
+});
+
+test("a real keyboard-triggered preflight run streams every check and enables Launch", async ({
+  page,
+}) => {
+  await page.goto("/keyboard/setup-harness.html");
+  await page.getByRole("button", { name: "Preflight", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Generate" }).waitFor();
+
+  // Launch starts disabled — the real attribute, before any check has run.
+  await expect(page.getByRole("button", { name: "Launch", exact: true })).toBeDisabled();
+
+  // A rendered deployment is what every check that reads deploy/generated/<profile>/ needs —
+  // Preflight's own real dependency (`RenderedOutputMissing` otherwise), not invented for this
+  // test.
+  await page.getByRole("button", { name: "Generate" }).focus();
+  await Promise.all([
+    page.waitForResponse(
+      (r) => r.url().includes("/api/artefacts/generate") && r.request().method() === "POST",
+    ),
+    page.keyboard.press("Enter"),
+  ]);
+
+  await page.getByRole("button", { name: "Run preflight" }).focus();
+  const [runResponse] = await Promise.all([
+    page.waitForResponse((r) => r.url().includes("/api/preflight/stream")),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(runResponse.ok()).toBe(true);
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-run-preflight");
+
+  // The stream's own last check — its result rendering is what proves every earlier one already
+  // arrived and was rendered, not only that the request completed.
+  await expect(page.getByText("oidc-audience — pass")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Launch", exact: true })).toBeEnabled();
+
+  await page.getByRole("button", { name: "Re-check memory" }).focus();
+  const [recheckResponse] = await Promise.all([
+    page.waitForResponse(
+      (r) => r.url().includes("/api/preflight/stream") && r.url().includes("only=memory"),
+    ),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(recheckResponse.ok()).toBe(true);
+  await expect(page.getByText("memory — pass")).toBeVisible();
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-recheck");
 });
 
 test("every registered setup-screen action has its own proving test case above", () => {

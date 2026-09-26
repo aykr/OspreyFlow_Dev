@@ -27,4 +27,9 @@ export const SETUP_SCREENS_ACTIONS = defineActionRegistry("SETUP_SCREENS_ACTIONS
   "submit-register-provider",
   "submit-build-basemap",
   "submit-verify-map",
+  "submit-generate-artefacts",
+  "download-artefact",
+  "submit-confirm-artefacts",
+  "submit-run-preflight",
+  "submit-recheck",
 ] as const);

@@ -3,10 +3,12 @@
 // capability the Python layer does not already expose. See that module's own docstring for the
 // full UI→headless map this round's report cites.
 import type {
+  ArtefactsResult,
   Consequences,
   MapConfig,
   NewRealDataException,
   OspreyConfig,
+  PreflightCheckResult,
   ProfileOptions,
   RealDataException,
 } from "./types";
@@ -115,4 +117,48 @@ export async function verifyMap(): Promise<void> {
   if (!response.ok) {
     throw new ApiError(response.status, await response.text());
   }
+}
+
+// `harness/preflight/__main__.py`'s own `run_streaming` — one `EventSource` per stream, since a
+// native browser `EventSource` is exactly "each check appears as it completes"
+// (`05_DEPLOYMENT.md` §2.1) with nothing invented on top. The caller closes the returned
+// `EventSource` itself if it needs to abandon a stream early; a normal run closes itself on the
+// server's own `complete` event.
+export function streamPreflight(
+  onResult: (result: PreflightCheckResult) => void,
+  onComplete: () => void,
+  options?: { only?: string; seeding?: boolean },
+): EventSource {
+  const params = new URLSearchParams();
+  if (options?.only) params.set("only", options.only);
+  if (options?.seeding) params.set("seeding", "true");
+  const query = params.toString();
+  const source = new EventSource(`/api/preflight/stream${query ? `?${query}` : ""}`);
+  source.onmessage = (event) => {
+    onResult(JSON.parse(event.data as string) as PreflightCheckResult);
+  };
+  source.addEventListener("complete", () => {
+    source.close();
+    onComplete();
+  });
+  return source;
+}
+
+export async function generateArtefacts(): Promise<ArtefactsResult> {
+  return asJson(await fetch("/api/artefacts/generate", { method: "POST" }));
+}
+
+export async function getArtefacts(): Promise<{
+  artefacts: Record<string, string>;
+  confirmed: boolean;
+}> {
+  return asJson(await fetch("/api/artefacts"));
+}
+
+export async function confirmArtefacts(): Promise<{ confirmed: boolean }> {
+  return asJson(await fetch("/api/artefacts/confirm", { method: "POST" }));
+}
+
+export function artefactDownloadUrl(name: string): string {
+  return `/api/artefacts/${encodeURIComponent(name)}`;
 }

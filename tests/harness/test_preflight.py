@@ -35,10 +35,10 @@ from harness.preflight import (
     runtime,
 )
 from harness.preflight import interpreter as interpreter_check
-from harness.preflight.__main__ import main, run
+from harness.preflight.__main__ import main, run, run_streaming
 from harness.preflight.context import PreflightContext
 from harness.preflight.reduced import accept, offer_for
-from harness.preflight.result import Status
+from harness.preflight.result import CheckResult, Status
 from harness.realm import CONDUIT_CLIENT_ID
 from harness.render import render, write
 
@@ -565,6 +565,30 @@ def test_only_runs_exactly_one_check(context: PreflightContext) -> None:
     thirty-second cluster probe would notice."""
     results = run(context, only="memory")
     assert [r.check for r in results] == ["memory"]
+
+
+def test_run_streaming_yields_the_first_result_before_calling_any_later_check(
+    context: PreflightContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`harness/webapp.py`'s own Preflight screen (Stage 2 §6 part B) depends on `run_streaming`
+    genuinely yielding as each check completes, not merely returning a generator that happens to
+    produce the same list `run()` already did — a caller consuming only the first item must not
+    have triggered any later check yet. Proven by patching `disk` (the second of eleven) to record
+    whether it was ever called, then taking exactly one item from the generator."""
+    disk_was_called = False
+    real_disk_check = disk.check
+
+    def _tracking_disk_check(ctx: PreflightContext) -> CheckResult:
+        nonlocal disk_was_called
+        disk_was_called = True
+        return real_disk_check(ctx)
+
+    monkeypatch.setattr(disk, "check", _tracking_disk_check)
+
+    first = next(run_streaming(context))
+
+    assert first.check == "memory"
+    assert disk_was_called is False
 
 
 def test_a_crashing_check_is_reported_as_that_check_failing(context: PreflightContext) -> None:

@@ -6,6 +6,7 @@ import { ComponentsScreen } from "./screens/ComponentsScreen";
 import { GeospatialScreen } from "./screens/GeospatialScreen";
 import { GovernanceScreen } from "./screens/GovernanceScreen";
 import { ModelsScreen } from "./screens/ModelsScreen";
+import { PreflightScreen } from "./screens/PreflightScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
 import { SCREEN_NAMES, type ScreenName, useDecidedScreens } from "./store";
 import { SummaryRail } from "./SummaryRail";
@@ -49,6 +50,7 @@ export function App() {
         {screen === "Models" && <ModelsScreen config={config} onSave={handleSave} />}
         {screen === "Governance" && <GovernanceScreen config={config} onSave={handleSave} />}
         {screen === "Geospatial" && <GeospatialScreen />}
+        {screen === "Preflight" && <PreflightScreen />}
       </main>
     </div>
   );

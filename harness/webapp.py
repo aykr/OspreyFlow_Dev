@@ -19,6 +19,11 @@ The map, current as of this round:
 | `POST /api/geospatial/register-provider` | `harness.geospatial.register_provider_step` (real) |
 | `POST /api/geospatial/build-basemap` | `harness.geospatial.build_basemap_step` — always 501 |
 | `POST /api/geospatial/verify` | `harness.geospatial.verify_step` — always 501 |
+| `GET /api/preflight/stream` | `harness.preflight.__main__.run_streaming` — real, live |
+| `POST /api/artefacts/generate` | `harness.render.render` + `diff_for` + `write` |
+| `GET /api/artefacts` | The last `generate`'s own result, held in `app.state` |
+| `GET /api/artefacts/{name}` | One artefact's own content, for download |
+| `POST /api/artefacts/confirm` | No CLI equivalent — an acknowledgement gate over state above |
 | `GET /admin` | A placeholder for `Stage 2 §6` part B's console, gated already |
 
 The Governance screen's own config fields (`identity_provider`, `handling_scheme`, `ontology`,
@@ -43,15 +48,39 @@ real, confirmed-by-import reason (both real functions pull in `services`/`adapte
 `harness/Dockerfile` does not copy into this image), recorded as **Proposed, not decided** in
 `07_BUILD_PLAN.md`'s Stage 2 §6 part-B entry rather than silently worked around.
 
-Preflight, Launch, Backup, Restore and Bundle are not exposed here — those screens are not this
-round's scope (queue brief: item 3 onward beyond Governance/Geospatial).
+**Preflight streams as Server-Sent Events, not a polled job.** Every check
+(`harness.preflight.ALL_CHECKS`) is already a plain, fast, synchronous function of a
+`PreflightContext` — there is no job to poll for, no cancellation, no work worth doing between
+polls, and `harness.preflight.__main__.run_streaming` (this round's own addition, alongside the
+existing `run`) already yields one `CheckResult` per check as it completes. `text/event-stream`
+turns that generator into the wire format with nothing invented in between; a browser's native
+`EventSource` (or a plain `fetch` reading the body, used here so `?only=`/`?seeding=` query
+parameters and a same-origin request need no second mechanism) is exactly "each check appears as
+it completes" (`05_DEPLOYMENT.md` §2.1), not a screen-only capability.
+
+**The artefacts diff, before anything runs.** `POST /api/artefacts/generate` calls
+`harness.render.render` (the real digest resolver by default — `--allow-unpinned`'s own webapp
+equivalent is not exposed, so a machine with no reachable Docker daemon gets the same
+`UnpinnedImagesError` the CLI would, not a silently permissive default), computes `diff_for`
+against whatever is already on disk **before** writing (§2.4's own "before it runs, as a diff
+against the current state"), then writes. `GET /api/artefacts`/`GET /api/artefacts/{name}` read
+back what the last `generate` produced, held in `app.state` — nothing here is a second copy of the
+rendered content, only a reference to it. `POST /api/artefacts/confirm` has no CLI equivalent and
+is not a §2.3 violation for lacking one: it invents no capability over the deployment, only an
+acknowledgement flag Launch (round 03d) will consult, the same kind of interactive-only state a
+"Save" button's own click already is.
+
+Launch, Backup and Restore are not exposed here — those screens are not this round's scope (queue
+brief: `queue/03c-screens-B-preflight-diff.md` covers items 3–4 only; Launch is `03d`).
 """
 
 from __future__ import annotations
 
 import argparse
 import copy
+import json
 import sys
+from collections.abc import Iterator
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -59,6 +88,7 @@ from typing import Any
 import yaml
 from fastapi import Body, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 from scripts.real_data_exceptions import (
@@ -77,7 +107,21 @@ from harness.geospatial import (
     register_provider_step,
     verify_step,
 )
-from harness.render import DEFAULT_CONFIG_PATH
+from harness.images import DigestResolver
+from harness.preflight import CHECKS_BY_NAME
+from harness.preflight.__main__ import run_streaming
+from harness.preflight.context import PreflightContext
+from harness.render import (
+    DEFAULT_CONFIG_PATH,
+    DEFAULT_OUT_ROOT,
+    ClusterRendererNotBuilt,
+    MissingDockerfileError,
+    UnpinnedImagesError,
+    diff_for,
+    render,
+    write,
+    write_config_copy,
+)
 from harness.screens import (
     Consequences,
     ProfileFootprint,
@@ -138,8 +182,12 @@ def create_app(
     *,
     config_path: Path = DEFAULT_CONFIG_PATH,
     real_data_exceptions_path: Path = REAL_DATA_EXCEPTIONS_PATH,
+    out_root: Path = DEFAULT_OUT_ROOT,
+    render_resolver: DigestResolver | None = None,
 ) -> FastAPI:
     app = FastAPI(title="OspreyFlow setup harness")
+    app.state.last_artefacts = None
+    app.state.artefacts_confirmed = False
 
     # Setup mode's own second layer of defence — R2, `webapp_auth.loopback_only_middleware`'s own
     # docstring has the full reasoning (the bootstrap command's `-p 127.0.0.1:...` is the first).
@@ -276,6 +324,89 @@ def create_app(
         except GeospatialError as exc:
             raise HTTPException(status_code=501, detail=str(exc)) from exc
 
+    def _out_dir() -> Path:
+        return out_root / _read_config(config_path).profile.value
+
+    def _preflight_events(context: PreflightContext, *, only: str | None) -> Iterator[bytes]:
+        for result in run_streaming(context, only=only):
+            payload = {
+                "check": result.check,
+                "status": result.status.value,
+                "what_is_wrong": result.what_is_wrong,
+                "what_to_do": result.what_to_do,
+                "rechecked_at": result.rechecked_at,
+                "detail": list(result.detail),
+            }
+            yield f"data: {json.dumps(payload)}\n\n".encode()
+        yield b"event: complete\ndata: {}\n\n"
+
+    @app.get("/api/preflight/stream")
+    def get_preflight_stream(only: str | None = None, seeding: bool = False) -> StreamingResponse:
+        # Validated here, before the stream starts, rather than left to raise mid-generator: once
+        # a `StreamingResponse` has sent its 200 and its first bytes, an exception inside it is a
+        # broken connection to the client, not a clean error — an unknown check name gets the same
+        # synchronous 422 every other route's own bad input already does.
+        if only is not None and only not in CHECKS_BY_NAME:
+            raise HTTPException(status_code=422, detail=f"unknown check {only!r}")
+        context = PreflightContext(
+            config=_read_config(config_path), out_dir=_out_dir(), seeding=seeding
+        )
+        return StreamingResponse(
+            _preflight_events(context, only=only), media_type="text/event-stream"
+        )
+
+    @app.post("/api/artefacts/generate")
+    def post_generate_artefacts() -> dict[str, Any]:
+        config = _read_config(config_path)
+        out_dir = _out_dir()
+        try:
+            result = render(config, resolver=render_resolver)
+        except ClusterRendererNotBuilt as exc:
+            raise HTTPException(status_code=501, detail=str(exc)) from exc
+        except MissingDockerfileError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except UnpinnedImagesError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        diffs = diff_for(result, out_dir)
+        write(result, out_dir)
+        write_config_copy(config_path, out_dir)
+        app.state.last_artefacts = result.artefacts
+        app.state.artefacts_confirmed = False
+        return {
+            "profile": result.profile.value,
+            "osprey_yaml": config_path.read_text(encoding="utf-8") if config_path.exists() else "",
+            "artefacts": result.artefacts,
+            "diffs": diffs,
+            "confirmed": False,
+        }
+
+    @app.get("/api/artefacts")
+    def get_artefacts() -> dict[str, Any]:
+        if app.state.last_artefacts is None:
+            raise HTTPException(
+                status_code=404, detail="Nothing generated yet — click Generate first."
+            )
+        return {"artefacts": app.state.last_artefacts, "confirmed": app.state.artefacts_confirmed}
+
+    @app.get("/api/artefacts/{name}")
+    def get_artefact_download(name: str) -> PlainTextResponse:
+        artefacts: dict[str, str] | None = app.state.last_artefacts
+        if artefacts is None or name not in artefacts:
+            raise HTTPException(status_code=404, detail=f"{name!r} not found — generate first.")
+        return PlainTextResponse(
+            artefacts[name],
+            headers={"Content-Disposition": f'attachment; filename="{name}"'},
+        )
+
+    @app.post("/api/artefacts/confirm")
+    def post_confirm_artefacts() -> dict[str, Any]:
+        if app.state.last_artefacts is None:
+            raise HTTPException(
+                status_code=422, detail="Nothing generated yet — click Generate first."
+            )
+        app.state.artefacts_confirmed = True
+        return {"confirmed": True}
+
     @app.get("/admin", dependencies=[Depends(require_admin_role)])
     def admin_placeholder() -> dict[str, str]:
         """`Stage 2 §6` part B builds the real console; this is the route amendment 22's own
@@ -318,6 +449,16 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
             "e.g.) that must never touch the real file — CLAUDE.md rule 9 / ADR-035 §C3."
         ),
     )
+    parser.add_argument(
+        "--out-root",
+        type=Path,
+        default=DEFAULT_OUT_ROOT,
+        help=(
+            "Where the Preflight/artefacts-diff screen's own `Generate` writes — default: "
+            "harness.render.DEFAULT_OUT_ROOT (deploy/generated/). Override only for a scratch/test "
+            "run that must not write into the real checkout's own generated output."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -325,7 +466,11 @@ def main(argv: list[str] | None = None) -> int:
     import uvicorn
 
     args = _parse_args(argv if argv is not None else sys.argv[1:])
-    app = create_app(config_path=args.config, real_data_exceptions_path=args.real_data_exceptions)
+    app = create_app(
+        config_path=args.config,
+        real_data_exceptions_path=args.real_data_exceptions,
+        out_root=args.out_root,
+    )
     uvicorn.run(app, host=args.host, port=args.port)
     return 0
 

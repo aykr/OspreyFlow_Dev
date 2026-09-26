@@ -4,14 +4,20 @@
 // at a decision that was never made.
 import { useCallback, useState } from "react";
 
-export const SCREEN_NAMES = ["Profile", "Components", "Models", "Governance", "Geospatial"] as const;
+export const SCREEN_NAMES = [
+  "Profile",
+  "Components",
+  "Models",
+  "Governance",
+  "Geospatial",
+  "Preflight",
+] as const;
 export type ScreenName = (typeof SCREEN_NAMES)[number];
 
-// Screens not yet built — always outstanding here, never rendered as a tab, shown in the rail only
-// so an operator sees the whole six-screen shape this surface will eventually be. Preflight is
-// `Stage 2 §6` part B's own item 3, not started this round (queue brief: "finish a self-consistent
-// subset" — Governance and Geospatial are the subset this round completed).
-export const FUTURE_SCREEN_NAMES = ["Preflight"] as const;
+// All six screens `05_DEPLOYMENT.md` §2.1 names are now built — nothing left to list here as
+// outstanding. Launch itself (round 03d) lives inside the Preflight screen rather than as a
+// seventh tab, the same way the artefacts diff does.
+export const FUTURE_SCREEN_NAMES: readonly ScreenName[] = [];
 
 export function useDecidedScreens() {
   const [decided, setDecided] = useState<Set<ScreenName>>(new Set());

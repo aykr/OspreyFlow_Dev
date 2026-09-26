@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 from harness.preflight import ALL_CHECKS, CHECKS_BY_NAME
@@ -29,28 +30,34 @@ _SYMBOL = {
 }
 
 
-def run(context: PreflightContext, *, only: str | None = None) -> list[CheckResult]:
-    """Runs every check, or one. Each check is called independently and a crash inside one is
-    reported as that check failing rather than taking the run down — an operator needs the other
-    nine results, and a traceback is not an explanation of what to do."""
+def run_streaming(context: PreflightContext, *, only: str | None = None) -> Iterator[CheckResult]:
+    """Runs every check, or one, yielding each result as it completes — `run()`'s own engine,
+    exposed as a generator so a caller that genuinely needs "as it completes" (`harness/webapp.py`'s
+    own Preflight screen, Stage 2 §6 part B) gets it from this module rather than reimplementing
+    the loop. Each check is called independently and a crash inside one is reported as that check
+    failing rather than taking the run down — an operator needs the other nine results, and a
+    traceback is not an explanation of what to do."""
     modules = ALL_CHECKS if only is None else (CHECKS_BY_NAME[only],)
-    results = []
     for module in modules:
         try:
-            results.append(module.check(context))
+            yield module.check(context)
         except Exception as error:  # noqa: BLE001 - a check crashing is a check failing
-            results.append(
-                CheckResult(
-                    check=module.NAME,
-                    status=Status.FAIL,
-                    what_is_wrong=f"the check itself raised {type(error).__name__}: {error}",
-                    what_to_do=(
-                        "This is a defect in the check, not necessarily in your environment. "
-                        "Report it; the other checks' results above are still valid."
-                    ),
-                )
+            yield CheckResult(
+                check=module.NAME,
+                status=Status.FAIL,
+                what_is_wrong=f"the check itself raised {type(error).__name__}: {error}",
+                what_to_do=(
+                    "This is a defect in the check, not necessarily in your environment. "
+                    "Report it; the other checks' results above are still valid."
+                ),
             )
-    return results
+
+
+def run(context: PreflightContext, *, only: str | None = None) -> list[CheckResult]:
+    """Runs every check, or one, and collects the results — `run_streaming()`'s own engine, kept as
+    a plain list for the CLI and every existing caller that wants "all of them, once done" rather
+    than "each one as it completes"."""
+    return list(run_streaming(context, only=only))
 
 
 def _print(result: CheckResult) -> None:

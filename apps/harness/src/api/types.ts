@@ -64,3 +64,25 @@ export interface NewRealDataException {
 // `harness/geospatial.py`'s `register_provider_step`'s own return shape — `MapConfig`, already
 // generated; re-exported here rather than duplicated.
 export type { MapConfig } from "../../../../packages/schemas/generated/MapConfig";
+
+// `harness/preflight/result.py`'s own `CheckResult` — a plain dataclass, not a Pydantic model,
+// hand-written for the same reason as `ProfileOptions`/`Consequences` above. `status` mirrors
+// `harness.preflight.result.Status`'s own four values exactly.
+export interface PreflightCheckResult {
+  check: string;
+  status: "pass" | "fail" | "skip" | "warn";
+  what_is_wrong: string;
+  what_to_do: string;
+  rechecked_at: string;
+  detail: string[];
+}
+
+// `harness/render.py`'s own `RenderResult`/`diff_for` — the shape `POST /api/artefacts/generate`
+// returns.
+export interface ArtefactsResult {
+  profile: string;
+  osprey_yaml: string;
+  artefacts: Record<string, string>;
+  diffs: Record<string, string>;
+  confirmed: boolean;
+}
