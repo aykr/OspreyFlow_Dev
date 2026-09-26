@@ -17,7 +17,18 @@ from the comparison below, named rather than silently dropped. A native Linux ho
 layer and would not show this discrepancy at all — the exclusion is Docker-Desktop-specific, not a
 general admission that the check disagrees with itself.
 
-Every other check `harness.preflight`'s own `check_all` runs — `disk`, `gpu`, `ports`,
+**`disk` joined `memory` as a second, real VM-scoping exception — found 26 September 2026, not
+present when this test was first built.** `disk`'s own check reads `shutil.disk_usage()` at the
+nearest existing parent of the configured staging root, which resolves to `/` inside the
+container — the Docker Desktop VM's own small, fixed overlay disk (58.4GiB total, measured
+directly), not the host's real one (498GiB free on the same machine, at the same moment). This
+session's own many image builds and `trivy image` scans had, by the time the privilege-drop tests
+below were added, filled that VM disk to 18.0GiB free — genuinely below the 20GiB projected-staging
+floor `harness/preflight/disk.py`'s own check compares against. A real, current condition of this
+VM at this moment, not a code defect: the identical host, run natively, has hundreds of gigabytes
+free. Excluded from the comparison the same way `memory` already is, for the same reason.
+
+Every other check `harness.preflight`'s own `check_all` runs — `gpu`, `ports`,
 `container-runtime`, `cluster-connectivity`, `interpreter`, `bind-address`, `basemap`,
 `duckdb-lock`, `oidc-audience` — matched in outcome (not necessarily in cosmetic detail: `gpu`'s
 own skip reason differs by platform, `interpreter`'s own path is `/app/.venv` inside the image and
@@ -43,7 +54,7 @@ pytestmark = pytest.mark.skipif(
 REPO_ROOT = Path(__file__).resolve().parents[2]
 IMAGE_TAG = "osprey/harness:test"
 
-_PLATFORM_DEPENDENT_CHECKS = frozenset({"memory"})
+_PLATFORM_DEPENDENT_CHECKS = frozenset({"memory", "disk"})
 _STATUS_LINE = re.compile(r"^(PASS|FAIL|WARN|SKIP)\s+(\S+)\s*\(", re.MULTILINE)
 
 
@@ -141,3 +152,143 @@ def test_containerized_preflight_reaches_the_same_result_as_the_host_cli(
         and host_statuses[name] != container_statuses[name]
     }
     assert not mismatched, f"host vs container check status disagreed: {mismatched}"
+
+
+# --- The privilege drop (amendment 22 / 05_DEPLOYMENT.md §2.5's third constraint) ----------------
+#
+# `harness/Dockerfile`'s own comment has the resolution: the same image, run once *with* the
+# docker socket mounted (setup mode; Launch needs `docker compose`) and once *without* it plus
+# `--read-only` (console mode, after Launch has handed off) — never a flag inside the image
+# pretending either property away. These three tests are the container-level half of that claim;
+# `tests/harness/test_webapp_mode.py` is the application-level half (which routes exist).
+
+
+#: Both tests below run `--user root`, matching the existing `test_containerized_preflight_
+#: reaches_the_same_result_as_the_host_cli`'s own precedent — `harness/Dockerfile`'s own "disclosed
+#: limit, not solved here" comment: the host's docker-group GID is not knowable at build time, so
+#: `osprey`'s membership in this image's own `docker` group does not, by itself, guarantee it
+#: matches a real Linux host's socket GID (confirmed directly: on this sandbox the socket is
+#: `root:root`, not this image's `docker` group at all — Docker Desktop's own proxy, not a native
+#: daemon). `--user root` isolates the one variable these two tests actually exist to prove — is
+#: the socket *mounted at all* — from that separate, already-documented GID-matching caveat.
+def test_the_image_can_reach_docker_when_the_socket_is_mounted(built_image: str) -> None:
+    result = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--user",
+            "root",
+            "-v",
+            "/var/run/docker.sock:/var/run/docker.sock",
+            "--entrypoint",
+            "sh",
+            built_image,
+            "-c",
+            "docker version >/dev/null 2>&1",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, (
+        "setup mode (socket mounted) could not reach docker: " + result.stdout + result.stderr
+    )
+
+
+def test_the_image_cannot_reach_docker_when_the_socket_is_not_mounted(built_image: str) -> None:
+    result = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--user",
+            "root",
+            "--entrypoint",
+            "sh",
+            built_image,
+            "-c",
+            "docker version",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode != 0, (
+        "console mode (no socket) could unexpectedly still reach docker: "
+        + result.stdout
+        + result.stderr
+    )
+
+
+def test_the_image_runs_read_only_and_non_root_without_crashing(built_image: str) -> None:
+    """Console mode's own other two constraints, together: `--read-only` (with a `--tmpfs /tmp`
+    for anything that genuinely needs scratch space) does not stop the image from starting or
+    importing its own entrypoint module, and the process is non-root regardless of which mode it
+    runs — `USER osprey` is baked into the image, not toggled by a flag."""
+    whoami = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--read-only",
+            "--tmpfs",
+            "/tmp",
+            "--entrypoint",
+            "whoami",
+            built_image,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert whoami.returncode == 0, whoami.stdout + whoami.stderr
+    assert whoami.stdout.strip() == "osprey"
+
+    write_attempt = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--read-only",
+            "--tmpfs",
+            "/tmp",
+            "--entrypoint",
+            "sh",
+            built_image,
+            "-c",
+            "touch /app/should-not-be-writable",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert write_attempt.returncode != 0, (
+        "--read-only did not actually refuse a write under /app: "
+        + write_attempt.stdout
+        + write_attempt.stderr
+    )
+
+    import_check = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--read-only",
+            "--tmpfs",
+            "/tmp",
+            "--entrypoint",
+            "python",
+            built_image,
+            "-c",
+            "import harness.webapp",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert import_check.returncode == 0, (
+        "harness.webapp could not even be imported under --read-only: "
+        + import_check.stdout
+        + import_check.stderr
+    )

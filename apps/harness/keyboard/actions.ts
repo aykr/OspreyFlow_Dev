@@ -32,4 +32,6 @@ export const SETUP_SCREENS_ACTIONS = defineActionRegistry("SETUP_SCREENS_ACTIONS
   "submit-confirm-artefacts",
   "submit-run-preflight",
   "submit-recheck",
+  "submit-confirm-target",
+  "submit-launch",
 ] as const);

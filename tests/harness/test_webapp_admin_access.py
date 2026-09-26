@@ -15,6 +15,12 @@ route answers 200, not 404). Restored, the same test passes. Not re-run as a per
 — that would be a second copy of the same route drifting from the real one — recorded as this
 file's own verification instead, the same shape `tests/test_test_file_coverage_check.py` and
 others in this session already use for a gate that cannot easily plant its own removal as code.
+
+**`mode="console"`, deliberately, in every case below** (Stage 2 §6 part B, amendment 22's own
+third constraint): `/admin` is reachable at all only in console mode — `test_webapp_mode.py` is
+where the mode boundary itself is proven (setup mode 404s `/admin` even carrying a perfectly valid
+admin token, before `require_admin_role` is ever consulted). This file's own scope stays the role
+gate that runs once mode has already admitted the request.
 """
 
 from __future__ import annotations
@@ -28,7 +34,7 @@ from harness.webapp import create_app
 
 
 def _client(tmp_path: Path) -> TestClient:
-    app = create_app(config_path=tmp_path / "osprey.yaml")
+    app = create_app(config_path=tmp_path / "osprey.yaml", mode="console")
     return TestClient(app, client=("127.0.0.1", 51000))
 
 

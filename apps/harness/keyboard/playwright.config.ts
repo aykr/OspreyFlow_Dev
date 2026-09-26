@@ -25,6 +25,17 @@ const SCRATCH_OUT_ROOT = join(tmpdir(), `osprey-generated-keyboard-spec-${proces
 // quietly never started this suite's own server at all. A scratch port for a scratch server.
 const API_PORT = "7217";
 
+// `--apply-command`'s own real seam (`harness/webapp.py`'s own docstring) — a real, if tiny,
+// subprocess standing in for `python -m harness.apply`, so a keyboard-driven Launch click proves
+// the plumbing (Launch is really wired to a real subprocess, streamed) without a real Docker
+// build. Double-quoted Python string literals only, on purpose: the whole JSON array is wrapped
+// in single quotes for the shell below, and a raw `'` inside it would break out of that.
+const FAKE_APPLY_COMMAND = JSON.stringify([
+  "python3",
+  "-c",
+  'print("apply: local-lite ready in 1s"); print("  the Glass:   http://127.0.0.1:8080/")',
+]);
+
 export default defineConfig({
   testDir: ".",
   testMatch: /.*\.spec\.ts$/,
@@ -45,7 +56,7 @@ export default defineConfig({
       command:
         `uv run python -m harness --host 127.0.0.1 --port ${API_PORT} ` +
         `--config ${SCRATCH_CONFIG} --real-data-exceptions ${SCRATCH_RDE} ` +
-        `--out-root ${SCRATCH_OUT_ROOT}`,
+        `--out-root ${SCRATCH_OUT_ROOT} --apply-command '${FAKE_APPLY_COMMAND}'`,
       port: Number(API_PORT),
       reuseExistingServer: !process.env.CI,
       cwd: "../../..",

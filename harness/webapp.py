@@ -24,7 +24,10 @@ The map, current as of this round:
 | `GET /api/artefacts` | The last `generate`'s own result, held in `app.state` |
 | `GET /api/artefacts/{name}` | One artefact's own content, for download |
 | `POST /api/artefacts/confirm` | No CLI equivalent — an acknowledgement gate over state above |
-| `GET /admin` | A placeholder for `Stage 2 §6` part B's console, gated already |
+| `GET /api/launch/target` | `docker context show` (injectable for tests) |
+| `POST /api/launch/target/confirm` | No CLI equivalent — §2.4's target-confirmation guard |
+| `POST /api/launch/stream` | `python -m harness.apply`, as a real subprocess, streamed |
+| `GET /admin` | The console-mode-only placeholder, gated by role and by mode |
 
 The Governance screen's own config fields (`identity_provider`, `handling_scheme`, `ontology`,
 `real_data_exceptions` path) need no new route — they are a `GovernanceConfig` section like any
@@ -70,23 +73,55 @@ is not a §2.3 violation for lacking one: it invents no capability over the depl
 acknowledgement flag Launch (round 03d) will consult, the same kind of interactive-only state a
 "Save" button's own click already is.
 
-Launch, Backup and Restore are not exposed here — those screens are not this round's scope (queue
-brief: `queue/03c-screens-B-preflight-diff.md` covers items 3–4 only; Launch is `03d`).
+**Launch calls `python -m harness.apply` as a real subprocess, streamed — the same code path as
+the CLI, no second one.** Not an in-process call: `harness.apply.main()` is a single monolithic
+function with no generator seam of its own (unlike `harness.preflight`, which this round's own
+`run_streaming` gave one), and building one would mean re-deriving its whole six-stage body rather
+than reusing it.
+A subprocess is the CLI, invoked exactly as an operator would invoke it, with its own real stdout
+streamed line-by-line as `text/event-stream` — "with progress shown" (the brief's own words) is that
+real process's own real output, not a second progress model invented on top. `POST`, not `GET` —
+Launch has real side effects (building images, starting twelve containers), and a native browser
+`EventSource` only issues `GET`, so the frontend reads this one via a plain `fetch` with a streamed
+body instead, the same tool the download links already needed no `EventSource` for.
+
+**§2.4's target-confirmation guard.** `GET /api/launch/target` reports `docker context show`
+(injectable for tests, the same seam `render_resolver` already established); `POST
+/api/launch/target/confirm` records it as confirmed. `POST /api/launch/stream` refuses (422) unless
+the artefacts are confirmed *and* the current Docker context matches the last confirmed one — a
+context that changed since the last confirmation (a different machine, a switched
+`docker context use`) must be re-confirmed, not silently launched against.
+
+**The privilege drop (amendment 22, §2.5's third constraint) is a `mode` this module now takes, not
+a flag toggled at runtime.** `mode="setup"` serves every route above and 404s `/admin`
+unconditionally, before `require_admin_role` even runs — stronger than that dependency's own
+existing "no `OIDC_JWKS_URL` configured yet" refusal, which was incidental to Launch not having run
+rather than a deliberate mode boundary. `mode="console"` serves only `/admin` and 404s every setup
+route. **Which container invocation runs which mode, and what changes at the Docker level between
+them, is not something this module can express or enforce — that is `harness/Dockerfile`'s own
+concern** (its own comment has the two-invocation resolution: the same image, the same non-root
+`osprey` user, run once *with* `-v /var/run/docker.sock:/var/run/docker.sock` for setup and once
+*without* it plus `--read-only` for console — never a flag inside the image pretending the socket
+or the writable root are gone when they are not).
+
+Backup and Restore are not exposed here — not this round's scope.
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 import copy
 import json
+import subprocess
 import sys
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from datetime import date
 from pathlib import Path
 from typing import Any
 
 import yaml
-from fastapi import Body, Depends, FastAPI, HTTPException
+from fastapi import Body, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -138,6 +173,50 @@ from schemas.deployment import OspreyConfig, Profile
 #: "everything it produces is a file in the repo" property `05_DEPLOYMENT.md` §2.5 already states.
 FRONTEND_DIST = Path(__file__).resolve().parents[1] / "apps" / "harness" / "dist"
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _current_docker_context() -> str:
+    result = subprocess.run(
+        ["docker", "context", "show"], capture_output=True, text=True, timeout=10, check=True
+    )
+    return result.stdout.strip()
+
+
+def _mode_gate_middleware(mode: str):  # type: ignore[no-untyped-def]
+    """Amendment 22 / §2.5's third constraint: `/admin` reachable in console mode only, every setup
+    route reachable in setup mode only. Checked by path, ahead of `require_admin_role`, so setup
+    mode's own refusal of `/admin` does not depend on that dependency's own "no identity provider
+    configured yet" side effect — a deliberate mode boundary, not an incidental one."""
+
+    async def middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
+        path = request.url.path
+        is_admin_path = path == "/admin" or path.startswith("/admin/")
+        if (mode == "console") != is_admin_path:
+            return PlainTextResponse("", status_code=404)
+        return await call_next(request)
+
+    return middleware
+
+
+async def _launch_events(command: list[str], argv: list[str]) -> AsyncIterator[bytes]:
+    """The real `python -m harness.apply` (or, in a test, whatever `apply_command` injects),
+    streamed one line of its own real stdout/stderr at a time — "with progress shown" is that
+    process's own real output, never a second progress model invented on top."""
+    process = await asyncio.create_subprocess_exec(
+        *command,
+        *argv,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        cwd=str(REPO_ROOT),
+    )
+    assert process.stdout is not None
+    async for raw_line in process.stdout:
+        line = raw_line.decode(errors="replace").rstrip("\n")
+        yield f"data: {json.dumps({'line': line})}\n\n".encode()
+    returncode = await process.wait()
+    yield f"event: complete\ndata: {json.dumps({'returncode': returncode})}\n\n".encode()
+
 
 def _read_config(config_path: Path) -> OspreyConfig:
     if not config_path.exists():
@@ -184,11 +263,21 @@ def create_app(
     real_data_exceptions_path: Path = REAL_DATA_EXCEPTIONS_PATH,
     out_root: Path = DEFAULT_OUT_ROOT,
     render_resolver: DigestResolver | None = None,
+    mode: str = "setup",
+    docker_context_resolver: Any = _current_docker_context,
+    apply_command: list[str] | None = None,
 ) -> FastAPI:
+    if mode not in ("setup", "console"):
+        raise ValueError(f"mode must be 'setup' or 'console', got {mode!r}")
     app = FastAPI(title="OspreyFlow setup harness")
     app.state.last_artefacts = None
     app.state.artefacts_confirmed = False
+    app.state.last_confirmed_docker_context = None
 
+    # Amendment 22 / §2.5's third constraint — checked ahead of everything else, including the
+    # loopback refusal below, since which routes exist at all is a coarser boundary than who may
+    # reach them.
+    app.middleware("http")(_mode_gate_middleware(mode))
     # Setup mode's own second layer of defence — R2, `webapp_auth.loopback_only_middleware`'s own
     # docstring has the full reasoning (the bootstrap command's `-p 127.0.0.1:...` is the first).
     app.middleware("http")(loopback_only_middleware)
@@ -407,6 +496,49 @@ def create_app(
         app.state.artefacts_confirmed = True
         return {"confirmed": True}
 
+    @app.get("/api/launch/target")
+    def get_launch_target() -> dict[str, Any]:
+        context = docker_context_resolver()
+        return {
+            "docker_context": context,
+            "confirmed": app.state.last_confirmed_docker_context == context,
+        }
+
+    @app.post("/api/launch/target/confirm")
+    def post_confirm_launch_target() -> dict[str, Any]:
+        context = docker_context_resolver()
+        app.state.last_confirmed_docker_context = context
+        return {"docker_context": context, "confirmed": True}
+
+    @app.post("/api/launch/stream")
+    def post_launch_stream(body: dict[str, Any] = Body(default={})) -> StreamingResponse:
+        if not app.state.artefacts_confirmed:
+            raise HTTPException(
+                status_code=422, detail="Confirm the generated artefacts before Launch."
+            )
+        context = docker_context_resolver()
+        if app.state.last_confirmed_docker_context != context:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Confirm the Docker target ({context!r}) before Launch.",
+            )
+        config = _read_config(config_path)
+        argv = [
+            "--config",
+            str(config_path),
+            "--out-root",
+            str(out_root),
+            "--profile",
+            config.profile.value,
+        ]
+        seed = str(body.get("seed", ""))
+        if seed:
+            argv += ["--seed", seed]
+        if bool(body.get("demo_analyst", False)):
+            argv.append("--demo-analyst")
+        command = apply_command or [sys.executable, "-u", "-m", "harness.apply"]
+        return StreamingResponse(_launch_events(command, argv), media_type="text/event-stream")
+
     @app.get("/admin", dependencies=[Depends(require_admin_role)])
     def admin_placeholder() -> dict[str, str]:
         """`Stage 2 §6` part B builds the real console; this is the route amendment 22's own
@@ -459,6 +591,28 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
             "run that must not write into the real checkout's own generated output."
         ),
     )
+    parser.add_argument(
+        "--mode",
+        choices=("setup", "console"),
+        default="setup",
+        help=(
+            "Amendment 22 / 05_DEPLOYMENT.md §2.5's third constraint: setup serves the six setup "
+            "screens and 404s /admin; console serves only /admin and 404s every setup route. "
+            "harness/Dockerfile's own comment has the two real container invocations this maps "
+            "to — the mode flag alone changes nothing about the docker socket or the read-only "
+            "root, both of which are `docker run`-time properties, not this process's own."
+        ),
+    )
+    parser.add_argument(
+        "--apply-command",
+        default=None,
+        help=(
+            "JSON-encoded argv list to run instead of the real `python -m harness.apply` for "
+            "Launch — the same injectable seam `create_app`'s own `apply_command` parameter "
+            "already is, exposed on the CLI so a scratch/test server (a keyboard spec, e.g.) "
+            "never triggers a real Docker build. Never set for a real deployment."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -466,10 +620,13 @@ def main(argv: list[str] | None = None) -> int:
     import uvicorn
 
     args = _parse_args(argv if argv is not None else sys.argv[1:])
+    apply_command = json.loads(args.apply_command) if args.apply_command else None
     app = create_app(
         config_path=args.config,
         real_data_exceptions_path=args.real_data_exceptions,
         out_root=args.out_root,
+        mode=args.mode,
+        apply_command=apply_command,
     )
     uvicorn.run(app, host=args.host, port=args.port)
     return 0

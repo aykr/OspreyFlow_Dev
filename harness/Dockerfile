@@ -19,6 +19,17 @@
 # for the setup screens and, later, the post-launch admin console (`docs/05_DEPLOYMENT.md` §2.5).
 # The docker-socket privilege §2.5 describes is still runtime-scoped, not baked in here — see the
 # `ENTRYPOINT` comment below for what does and does not change between the two modes.
+#
+# **The privilege drop (amendment 22, part B) is two container invocations of this one image, not
+# a flag inside it.** `harness.webapp.create_app`'s own `mode` parameter (`--mode setup|console`)
+# is an *application*-level boundary — which routes exist — and cannot express or enforce a
+# *container*-level property: whether `/var/run/docker.sock` is mounted, or whether the root
+# filesystem is writable, are both facts about the `docker run` invocation, not about the process
+# running inside it. So: the same image, the same non-root `osprey` user (already true for either
+# mode, below), run once *with* the socket mount for setup mode (Launch needs `docker compose`) and
+# once *without* it, plus `--read-only` (and a `--tmpfs /tmp` for Python's own bytecode cache), for
+# console mode after Launch has handed off. Never faked with an in-image flag pretending the socket
+# or the writable root are gone when the container was actually started with them.
 FROM python:3.12-slim AS builder
 
 RUN pip install --no-cache-dir uv==0.5.14
@@ -90,7 +101,13 @@ COPY --from=frontend-builder --chown=osprey:osprey /app/apps/harness/dist ./apps
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONPATH="/app:/app/packages" \
     PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
     HOME="/app"
+# `PYTHONDONTWRITEBYTECODE`: console mode's own `--read-only` (see the two-invocation comment
+# above) makes `/app` unwritable, and every module here is copied in as plain `.py` source, not
+# precompiled — without this, Python's first import of each one under a read-only root would
+# attempt (and fail) to cache its own `.pyc`. CPython tolerates that failure rather than crashing,
+# but there is no reason to let it try at all.
 
 # The docker socket mounted at run time (`-v /var/run/docker.sock:/var/run/docker.sock`, this
 # image's own one documented privilege — see `ENTRYPOINT` below) is commonly group-owned on a

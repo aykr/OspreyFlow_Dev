@@ -86,3 +86,9 @@ export interface ArtefactsResult {
   diffs: Record<string, string>;
   confirmed: boolean;
 }
+
+// `docker context show`'s own real output — `05_DEPLOYMENT.md` §2.4's target-confirmation guard.
+export interface LaunchTarget {
+  docker_context: string;
+  confirmed: boolean;
+}

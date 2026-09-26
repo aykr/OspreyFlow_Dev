@@ -5,6 +5,7 @@
 import type {
   ArtefactsResult,
   Consequences,
+  LaunchTarget,
   MapConfig,
   NewRealDataException,
   OspreyConfig,
@@ -161,4 +162,71 @@ export async function confirmArtefacts(): Promise<{ confirmed: boolean }> {
 
 export function artefactDownloadUrl(name: string): string {
   return `/api/artefacts/${encodeURIComponent(name)}`;
+}
+
+export async function getLaunchTarget(): Promise<LaunchTarget> {
+  return asJson(await fetch("/api/launch/target"));
+}
+
+export async function confirmLaunchTarget(): Promise<LaunchTarget> {
+  return asJson(await fetch("/api/launch/target/confirm", { method: "POST" }));
+}
+
+// `harness.apply`'s own real stdout, streamed. Not `EventSource` — Launch is `POST` (real side
+// effects: building images, starting twelve containers), and `EventSource` only issues `GET` — so
+// this reads the same `text/event-stream` wire format by hand from a plain `fetch`'s own streamed
+// body, the same tool the download links already needed no `EventSource` for.
+export function streamLaunch(
+  onLine: (line: string) => void,
+  onComplete: (returncode: number) => void,
+  onError: (message: string) => void,
+  body: { seed?: string; demo_analyst?: boolean } = {},
+): AbortController {
+  const controller = new AbortController();
+  (async () => {
+    let response: Response;
+    try {
+      response = await fetch("/api/launch/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } catch (exc) {
+      if (!controller.signal.aborted) onError(String(exc));
+      return;
+    }
+    if (!response.ok) {
+      onError(await response.text());
+      return;
+    }
+    const reader = response.body?.getReader();
+    if (!reader) {
+      onError("no response body");
+      return;
+    }
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() ?? "";
+      for (const part of parts) {
+        const dataLine = part.split("\n").find((l) => l.startsWith("data: "));
+        if (!dataLine) continue;
+        const payload = JSON.parse(dataLine.slice("data: ".length)) as {
+          line?: string;
+          returncode?: number;
+        };
+        if (part.startsWith("event: complete")) {
+          onComplete(payload.returncode ?? -1);
+        } else if (payload.line !== undefined) {
+          onLine(payload.line);
+        }
+      }
+    }
+  })();
+  return controller;
 }

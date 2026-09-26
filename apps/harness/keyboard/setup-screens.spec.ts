@@ -358,7 +358,8 @@ test("a real keyboard-triggered preflight run streams every check and enables La
   await page.keyboard.press("Enter");
   await page.getByRole("button", { name: "Generate" }).waitFor();
 
-  // Launch starts disabled — the real attribute, before any check has run.
+  // Launch starts disabled — the real attribute, before any check has run and before the
+  // artefacts are confirmed.
   await expect(page.getByRole("button", { name: "Launch", exact: true })).toBeDisabled();
 
   // A rendered deployment is what every check that reads deploy/generated/<profile>/ needs —
@@ -368,6 +369,14 @@ test("a real keyboard-triggered preflight run streams every check and enables La
   await Promise.all([
     page.waitForResponse(
       (r) => r.url().includes("/api/artefacts/generate") && r.request().method() === "POST",
+    ),
+    page.keyboard.press("Enter"),
+  ]);
+
+  await page.getByRole("button", { name: "Confirm artefacts" }).focus();
+  await Promise.all([
+    page.waitForResponse(
+      (r) => r.url().includes("/api/artefacts/confirm") && r.request().method() === "POST",
     ),
     page.keyboard.press("Enter"),
   ]);
@@ -383,7 +392,9 @@ test("a real keyboard-triggered preflight run streams every check and enables La
   // The stream's own last check — its result rendering is what proves every earlier one already
   // arrived and was rendered, not only that the request completed.
   await expect(page.getByText("oidc-audience — pass")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Launch", exact: true })).toBeEnabled();
+  // Still disabled — the artefacts are confirmed and every check passes or skips, but the Docker
+  // target is not yet confirmed.
+  await expect(page.getByRole("button", { name: "Launch", exact: true })).toBeDisabled();
 
   await page.getByRole("button", { name: "Re-check memory" }).focus();
   const [recheckResponse] = await Promise.all([
@@ -395,6 +406,32 @@ test("a real keyboard-triggered preflight run streams every check and enables La
   expect(recheckResponse.ok()).toBe(true);
   await expect(page.getByText("memory — pass")).toBeVisible();
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-recheck");
+
+  await page.getByRole("button", { name: "Confirm target" }).focus();
+  const [targetResponse] = await Promise.all([
+    page.waitForResponse(
+      (r) => r.url().includes("/api/launch/target/confirm") && r.request().method() === "POST",
+    ),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(targetResponse.ok()).toBe(true);
+  await expect(page.getByText("(confirmed)")).toBeVisible();
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-confirm-target");
+
+  await expect(page.getByRole("button", { name: "Launch", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Launch", exact: true }).focus();
+  const [launchResponse] = await Promise.all([
+    page.waitForResponse(
+      (r) => r.url().includes("/api/launch/stream") && r.request().method() === "POST",
+    ),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(launchResponse.ok()).toBe(true);
+  // The fake `--apply-command` this suite's own `playwright.config.ts` injects — a real
+  // subprocess, its own real stdout streamed and rendered, not a mocked response.
+  await expect(page.getByText("apply: local-lite ready in 1s")).toBeVisible();
+  await expect(page.getByText("Launch succeeded.")).toBeVisible();
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-launch");
 });
 
 test("every registered setup-screen action has its own proving test case above", () => {

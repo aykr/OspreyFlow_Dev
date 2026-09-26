@@ -4,11 +4,14 @@ import {
   ApiError,
   artefactDownloadUrl,
   confirmArtefacts,
+  confirmLaunchTarget,
   generateArtefacts,
   getArtefacts,
+  getLaunchTarget,
+  streamLaunch,
   streamPreflight,
 } from "../api/client";
-import type { ArtefactsResult, PreflightCheckResult } from "../api/types";
+import type { ArtefactsResult, LaunchTarget, PreflightCheckResult } from "../api/types";
 
 const ARTEFACT_NAMES = ["compose.yaml", "deployment.env", "versions.lock", "RUNBOOK.md"] as const;
 
@@ -103,6 +106,88 @@ function ArtefactsSection({
             {confirmed ? "Artefacts confirmed" : "Confirm artefacts"}
           </button>
         </>
+      )}
+    </section>
+  );
+}
+
+function LaunchSection({ enabled }: { enabled: boolean }) {
+  const [target, setTarget] = useState<LaunchTarget | null>(null);
+  const [lines, setLines] = useState<string[]>([]);
+  const [launching, setLaunching] = useState(false);
+  const [returncode, setReturncode] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    getLaunchTarget()
+      .then(setTarget)
+      .catch(() => {
+        // No docker context resolvable yet — a real, if unusual, first-load state.
+      });
+    return () => controllerRef.current?.abort();
+  }, []);
+
+  async function handleConfirmTarget() {
+    try {
+      setTarget(await confirmLaunchTarget());
+    } catch (exc) {
+      setError(exc instanceof ApiError ? exc.body : String(exc));
+    }
+  }
+
+  function handleLaunch() {
+    setLaunching(true);
+    setLines([]);
+    setReturncode(null);
+    setError(null);
+    controllerRef.current = streamLaunch(
+      (line) => setLines((previous) => [...previous, line]),
+      (code) => {
+        setReturncode(code);
+        setLaunching(false);
+      },
+      (message) => {
+        setError(message);
+        setLaunching(false);
+      },
+    );
+  }
+
+  const launchDisabled = !enabled || !target?.confirmed || launching;
+
+  return (
+    <section aria-labelledby="launch-heading">
+      <h3 id="launch-heading">Launch</h3>
+      {target && (
+        <p>
+          Docker target: <strong>{target.docker_context}</strong>
+          {target.confirmed ? " (confirmed)" : " (not yet confirmed)"}
+        </p>
+      )}
+      <button
+        type="button"
+        className="btn"
+        onClick={handleConfirmTarget}
+        disabled={target?.confirmed}
+      >
+        Confirm target
+      </button>
+
+      {error && <p role="alert">{error}</p>}
+      <button type="button" className="btn btn--primary" onClick={handleLaunch} disabled={launchDisabled}>
+        Launch
+      </button>
+
+      {lines.length > 0 && (
+        <pre role="log" aria-label="Launch output">
+          {lines.join("\n")}
+        </pre>
+      )}
+      {returncode !== null && (
+        <p role="status">
+          {returncode === 0 ? "Launch succeeded." : `Launch failed (exit ${returncode}).`}
+        </p>
       )}
     </section>
   );
@@ -219,9 +304,8 @@ export function PreflightScreen() {
           it.
         </p>
       )}
-      <button type="button" className="btn btn--primary" disabled={launchDisabled}>
-        Launch
-      </button>
+
+      <LaunchSection enabled={!launchDisabled && confirmed} />
     </section>
   );
 }
