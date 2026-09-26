@@ -5190,6 +5190,28 @@ find something already finished sitting in the queue.
      configured Docker VM allocation (this machine: 8.25GiB of 9.70GiB; measured peak: 7.10GiB,
      73%). The owner rules on all three; none is enforced yet.
 
+   **The Makefile/`ci.yml` test-wiring gap closed, 26 September 2026 — found running `make test`
+   at the end of the round above, per `STANDING.md`'s own verification-block requirement, not
+   assumed clean.** `scripts/test_file_coverage_check.py`'s own docstring had disclosed since 24
+   September that `Makefile`'s `test`/`test-all` targets were kept in sync with `ci.yml` "by eye"
+   because the gate itself only ever read `ci.yml`. That gap reopened the next day: the WS-ticket
+   exchange round (`3a92048`) added `tests/services/api/test_ws_ticket.py` to `ci.yml`'s own
+   live-service job correctly, but never to `Makefile`'s own `test` target's `--ignore` list, so
+   `make test` ran it against no live Valkey and failed — invisible to the gate because the gate
+   never read `Makefile`. Two more files (`test_bundle_exit_test.py`, `test_harness_image.py`)
+   had the identical drift, silent only because each skips cleanly on its own `pytestmark` rather
+   than failing. `scripts/test_file_coverage_check.py` now parses `Makefile`'s own `test` target
+   (backslash-continuation-tolerant) and fails when its `--ignore` list disagrees with `ci.yml`'s,
+   in either direction (`find_makefile_ci_drift`) — shown red against the real drift, then green
+   after fixing `Makefile`. A second, adjacent bug found verifying the fix: `job_tokens` was
+   scanning `#`-comment lines for `tests/...`-shaped tokens, so a comment merely *naming* a test
+   file (between two `ci.yml` jobs) could be misread as that file being run by the preceding job —
+   found concretely when adding `sustained-load-exit-test` masked its own job's absence from this
+   script's hand-maintained job-name tuple; fixed (`_strip_comment_lines`) and the job name added.
+   `make test` now shows exactly one failure — `tests/test_route_coverage_check.py::test_no_new_
+   drift_beyond_the_allowlist` (six undocumented routes, the standing Floor A member this document
+   already names above) — 937 passed, nothing else red.
+
 2b. **Orphaned `uvicorn` test servers — found and fixed, 23 September 2026.** No prior "rule-14
    stage" existed in this document to file this under, despite the instruction that requested it
    assuming one did; recorded here, next to 2a, as the closest existing kin (both are container/
