@@ -5491,6 +5491,58 @@ find something already finished sitting in the queue.
    among the three blocking objections this stage resolves, and neither is scoped into this stage's
    own work.
 
+2d. **`make lint` drift — found stopping the run 26 September 2026, closed the same day.** A
+   Stage 2 §6 part-B round's own closing gates found `ruff check .` red across 17 files, none
+   touched by any round of this session (confirmed by `git log`: each last modified at or before
+   commit `c82688d`, several commits before this session's own first round) — a genuine stop
+   condition (a gate not touched, red, not a catalogued Floor A/A′/B member), reported and held on
+   rather than silently waved through. **Why no round caught it sooner:** every round's own
+   verification block ran the named check *scripts* (`route_coverage_check`, `schemas_check`,
+   and so on) individually, green each time, but never `make lint` itself — the standing
+   verification block (`STANDING.md`) never named it, so a real, accumulating class of drift
+   (mostly line length and import order, in files no round had reason to open) went unreported for
+   however many rounds preceded this session, not only during it. Separately, `make ci` had never
+   been run in full during this session either — its own trivy/trivy-image targets and `bundle`
+   were reported only as "not run in full this round" rather than actually attempted. Fixed:
+   `ruff check --fix .` for the safe rules (unused imports, import order — 17 of 39 findings) and
+   by hand for the remaining 22 line-length violations (reflowing prose/wrapping call sites and
+   signatures, zero behavioural change to any file); one function name alone exceeds the 100-column
+   limit even wrapped (`test_demo_analyst_shares_the_verify_subjects_org_unit_so_the_seeded_
+   investigation_is_visible`) — a `# noqa: E501` was used there rather than renaming a test id,
+   since Floor A/B track by test id and this session was not the one that named this test.
+   `npm run lint` separately found 7 `no-undef` errors in `apps/workspace/compute-tier1/harness.mjs`
+   (pre-existing since that stage's own commit, `19c1b97`, itself long before `c82688d`) — a Node
+   script under `apps/workspace/` that `eslint.config.js`'s own `scripts/**/*.mjs` globals block
+   never covered, since it lives under `apps/workspace/` instead; widened, not worked around with a
+   per-file disable. One unused `eslint-disable-next-line` in `MapCanvas.tsx` (stale, the rule it
+   silenced no longer fires) removed the same way. `STANDING.md`'s own verification block now names
+   `make lint` explicitly, closing the class, not only the instance.
+
+   **`make ci` run in full for the first time this session, the same round — two more findings,
+   neither lint.** `make`'s own default stop-at-first-failure meant the single `make ci` invocation
+   itself only reached as far as `trivy-image-harness` (the 8th of 18 targets); every target from
+   `schemas-check` onward — `authorized-query-check`, `demo-guide-check`,
+   `domain-model-coverage-check`, `route-coverage-check`, `product-tree-link-check`,
+   `decision-log-publication-check`, `test-file-coverage-check`, `citation-check`,
+   `conformance-guard`, `bundle` — was instead confirmed by running each one individually this same
+   round, not by that one invocation reaching it. `trivy-image-harness` is red:
+   `usr/local/bin/docker` and `usr/local/libexec/docker/cli-plugins/docker-compose`, both installed
+   from `FROM docker:27-cli` (`harness/Dockerfile`, commit `5aa5a6f`, itself before this session's
+   first round), carry 22 and 53 HIGH/CRITICAL CVEs respectively — real, current findings against
+   an aged Go binary pin, not a scanner false positive. `trivy` (fs), `trivy-image-ingest`,
+   `trivy-image-api`, and `trivy-image-workspace` are all clean; `licence-check`, `schemas-check`,
+   `authorized-query-check`, `demo-guide-check`, `domain-model-coverage-check`,
+   `product-tree-link-check`, `decision-log-publication-check`, `test-file-coverage-check`,
+   `citation-check`, `conformance-guard` and `bundle` all green (`conformance-guard` needs a live
+   `ArcadeDB` — `make dev-up` brought one up for it, a real gap in `ci:`'s own target list, which
+   depends on nothing that provisions one). `route-coverage-check` is red — the standing Floor A
+   member, unchanged, no regression. Neither the Docker CVE pin nor the missing `dev-up`
+   dependency in `ci:` is **fixed here** — out of this round's own scope (a base-image version
+   bump needs its own verification that a newer `docker`/`docker compose` pin still behaves
+   identically to `harness/apply.py`'s own expectations, not a mechanical lint fix; wiring `ci:` to
+   depend on `dev-up`/`dev-down` is a real Makefile design decision of its own, not a drift fix)
+   and neither is silently left unreported either. Both owed to a future round.
+
 3. **Documentation refresh — split in two, 23 September 2026, so "documentation refresh" is never
    read as proofreading.** The two parts were previously one undifferentiated stage; they are
    different work, with different owners of "done," and only one of them gates the milestone.
