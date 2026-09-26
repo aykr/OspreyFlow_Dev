@@ -1,4 +1,4 @@
-.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test dev-up dev-down docker-clean test-all glass-perf glass-a11y glass-keyboard glass-map-verify harness-keyboard harness-a11y bundle
+.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test dev-up dev-down docker-clean test-all glass-perf glass-a11y glass-keyboard glass-map-verify glass-live harness-keyboard harness-a11y bundle
 
 PY := .venv/bin/python
 PYTEST := .venv/bin/pytest
@@ -268,6 +268,18 @@ glass-keyboard:
 # theme only for now — see `map-verify/showcase.tsx`'s own docstring.
 glass-map-verify:
 	npm run test:map-verify --workspace apps/workspace
+
+# **The live tier — the Glass against a stack somebody brought up by hand**
+# (`docs/DEMO_GUIDE.md` §3), never against a showcase page or a mocked API.
+# Deliberately NOT in `ci:` and never will be: it needs real containers, real
+# seeded fixtures and a real basemap build, which is the same reasoning
+# `tests/harness/test_six_screen_live_exit.py` and `test_sustained_load.py`
+# already use for their own opt-in gates. Skips itself with a named reason
+# unless `OSPREY_TEST_LIVE_GLASS=1`, so running it with no stack up is a skip,
+# not a failure. `apps/workspace/live/playwright.config.ts` has the full
+# account of why the other four Playwright projects here cannot cover this.
+glass-live:
+	npm run test:live --workspace apps/workspace
 
 # `06_DECISIONS.md` ADR-049 Stage 2 §6 amendment 21's own keyboard-driven surface
 # (`apps/harness/keyboard/setup-screens.spec.ts`) — the setup screens' own "Save" actions,

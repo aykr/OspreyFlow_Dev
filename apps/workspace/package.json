@@ -12,6 +12,7 @@
     "test:a11y": "playwright test --config a11y/playwright.config.ts",
     "test:keyboard": "playwright test --config keyboard/playwright.config.ts",
     "test:map-verify": "playwright test --config map-verify/playwright.config.ts",
+    "test:live": "playwright test --config live/playwright.config.ts",
     "test:export-capture": "playwright test --config export-capture/playwright.config.ts"
   },
   "dependencies": {
