@@ -9,8 +9,21 @@ about; the subprocess is what keeps this test honest about the real, cold-start 
 from __future__ import annotations
 
 import ast
+import os
 import subprocess
 import sys
+from pathlib import Path
+
+#: `pyproject.toml`'s own `[tool.pytest.ini_options] pythonpath = ["packages"]` puts this repo
+#: root and `packages/` on *this* process's `sys.path` — a pytest-internal mechanism, not the
+#: `PYTHONPATH` environment variable, so a spawned subprocess inherits neither by default. Found
+#: running `make test` for real (the Makefile's own bare `.venv/bin/pytest`, no `PYTHONPATH=`
+#: prefix): this test passed under a manual `PYTHONPATH=.:packages pytest ...` invocation and
+#: failed under the real one, exactly the "passes here, fails for real" gap this file's own
+#: docstring already warns about — so the subprocess's own environment is set explicitly here,
+#: never left to inherit whatever the parent happened to export.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_SUBPROCESS_ENV = {**os.environ, "PYTHONPATH": f"{_REPO_ROOT}:{_REPO_ROOT / 'packages'}"}
 
 
 def _services_or_adapters_modules_loaded_by(import_statement: str) -> list[str]:
@@ -23,6 +36,7 @@ def _services_or_adapters_modules_loaded_by(import_statement: str) -> list[str]:
         ],
         capture_output=True,
         text=True,
+        env=_SUBPROCESS_ENV,
         check=True,
     )
     modules = ast.literal_eval(result.stdout.strip())
