@@ -4317,6 +4317,15 @@ find something already finished sitting in the queue.
    operator-facing experience, not which process serves it; the packaging-boundary finding above is
    an internal implementation constraint this round found, not a misstatement of that section.
 
+   **`test_geospatial_packaging_boundary.py`'s own subprocess check passed under a manual
+   `PYTHONPATH=.:packages pytest ...` invocation and failed under `make test`'s own bare
+   `.venv/bin/pytest`** — `pyproject.toml`'s `pythonpath = ["packages"]` is a pytest-internal
+   `sys.path` mechanism, not the `PYTHONPATH` environment variable, so the test's own
+   `subprocess.run()` calls did not inherit it once the parent shell stopped exporting one. Found
+   running `make test` for real, exactly the "passes here, fails for real" gap `CLAUDE.md` rule 15
+   warns a fixture against; fixed by constructing the subprocess's own `env` explicitly rather than
+   inheriting it.
+
    **A pre-existing, unrelated gate found red running this round's own closing gates — not fixed,
    disclosed.** `make lint`'s own `ruff check .` (part of `make ci`) fails across 17 files this
    round never touched (`packages/schemas/deployment.py`, `services/api/dossier.py`,
