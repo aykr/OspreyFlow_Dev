@@ -140,6 +140,7 @@ POST   /v1/patterns/preview             cardinality estimate for a visual query
 POST   /v1/patterns/run                 execute; large results return a job id
 POST   /v1/analytics/histogram          cross-filter histogram set
 POST   /v1/analytics/geobins            server-side spatial binning
+POST   /v1/analytics/sightings          the "snail trail" — device/location sightings over time (Phase 8 Stage 4f, B18)
 POST   /v1/compute/{metric}             submit a metric job over a working set
 GET    /v1/jobs/{id}/events             SSE progress stream
 ```
@@ -150,14 +151,19 @@ GET    /v1/jobs/{id}/events             SSE progress stream
 POST   /v1/ingest/upload                multipart; returns a document id and a job id
 POST   /v1/ingest/connector/{name}/run  trigger a configured connector
 GET    /v1/handling-scheme              the active deployment's classification/handling-code vocabulary
+GET    /v1/yardstick                    the active deployment's probability yardstick (01_DOMAIN_MODEL.md §5)
 GET    /v1/documents/{id}               metadata, provenance, extraction results
 GET    /v1/documents/{id}/content       original bytes, access-checked, audited
 POST   /v1/documents/{id}/reextract     re-run with a different model version
 
 POST   /v1/investigations/{id}/judgements
+GET    /v1/investigations/{id}/judgements   list visible judgements — ADR-046's own hide-in-full rule applies
 POST   /v1/investigations/{id}/gaps
+GET    /v1/investigations/{id}/gaps         list
 POST   /v1/investigations/{id}/assumptions
+GET    /v1/investigations/{id}/assumptions  list
 POST   /v1/investigations/{id}/export    runs the handling gate; may return 409 with blockers
+GET    /v1/exports                       the compliance-facing export ledger (ADR-047's own Gap 2) — role-gated, not per-investigation
 ```
 
 ### 3.5 Resolution

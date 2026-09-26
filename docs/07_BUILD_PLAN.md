@@ -5752,6 +5752,20 @@ find something already finished sitting in the queue.
    it is Floor B-shaped (needs the same unreachable model backend) and nothing here is evidence it
    now passes.
 
+   **Addendum, round 09, 26 September 2026 — `test_route_coverage_check.py::test_no_new_drift_
+   beyond_the_allowlist` is closed, dropping out of Floor A.** The six routes this document's own
+   Stage 2 §6 entry named as the standing member (`GET /v1/exports`, `GET /v1/investigations/{id}/
+   assumptions`, `/gaps`, `/judgements`, `GET /v1/yardstick`, `POST /v1/analytics/sightings`) are
+   now documented in `docs/03_CONDUIT_MIDDLEWARE.md` §3.3/§3.4, real descriptions taken from each
+   route's own handler, not invented. `scripts/route_coverage_check.py` run directly: **79 routes,
+   50 allowlisted, no new drift** — the 50 are pre-existing, disclosed debt
+   (`tests/fixtures/route_coverage_allowlist.txt`), unaffected by this round and not what this
+   test id gates; only *new* drift beyond that list fails it, and the six named routes were the
+   only new drift there was. Floor A is now one member smaller: only `tests/test_test_file_
+   coverage_check.py::test_no_new_drift_beyond_the_allowlist` (unchanged, unaffected by this
+   round) and the conditional Floor A′ member (`test_phase8_exit_criterion_end_to_end`, present
+   only when `make test` runs without a preceding database drop) remain.
+
    **No test moved category and no new failure appeared, once the scope difference above is
    accounted for.** Floor A's two static-gate members are identical to the original baseline.
    Floor B's six directly-comparable members are identical (the fourth `model_port` file/test was
