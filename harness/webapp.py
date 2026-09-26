@@ -538,6 +538,12 @@ def create_app(
             argv += ["--seed", seed]
         if bool(body.get("demo_analyst", False)):
             argv.append("--demo-analyst")
+        if bool(body.get("build", False)):
+            # Round 07: never the default — a real customer install has no checkout to build
+            # from, which is the whole point of the pull path. A developer machine driving the
+            # six screens against its own checkout (`tests/harness/test_six_screen_live_exit.py`)
+            # opts in explicitly, the same way `--seed`/`--demo-analyst` already do.
+            argv.append("--build")
         command = apply_command or [sys.executable, "-u", "-m", "harness.apply"]
         return StreamingResponse(_launch_events(command, argv), media_type="text/event-stream")
 

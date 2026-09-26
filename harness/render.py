@@ -83,20 +83,25 @@ class ClusterRendererNotBuilt(RuntimeError):
 
 
 class MissingDockerfileError(RuntimeError):
-    """Names every OspreyFlow-owned service whose Dockerfile is not in the tree.
+    """Names every OspreyFlow-owned service whose Dockerfile is not at the declared
+    `components.source_path`.
 
-    A `build:` stanza pointing at a Dockerfile that does not exist renders a compose file that
-    fails at `docker compose build` with Docker's own error, several steps and one confusing
-    message later. Refusing here, by name, is the same "named refusal, not a silent partial" shape
+    Only raised when `source_path` is declared at all (round 07: pull mode, the default, never
+    looks for a local Dockerfile in the first place — nothing to be missing). A `build:` stanza
+    pointing at a Dockerfile that does not exist renders a compose file that fails at
+    `docker compose build` with Docker's own error, several steps and one confusing message later.
+    Refusing here, by name, is the same "named refusal, not a silent partial" shape
     `scripts/osprey_bundle.py` already uses for a non-redistributable provider.
     """
 
-    def __init__(self, services: Sequence[str]) -> None:
+    def __init__(self, services: Sequence[str], *, source_path: str) -> None:
         self.services = tuple(services)
+        self.source_path = source_path
         super().__init__(
-            "refusing to render: no Dockerfile for owned service(s) "
+            "refusing to render: components.source_path "
+            + repr(source_path)
+            + " declares a build from source, but it has no Dockerfile for owned service(s) "
             + ", ".join(services)
-            + " — every service rendered with a build: context must have one in the tree"
         )
 
 
@@ -131,6 +136,17 @@ class UnpinnedImagesError(RuntimeError):
         )
 
 
+#: Where an owned service's image is pulled from when `components.source_path` is not declared
+#: (the default, round 07) — extending `docs/05_DEPLOYMENT.md` §2's own bootstrap reference
+#: convention (`ghcr.io/ospreyflow/harness:latest`) to the three services the harness image
+#: cannot build without a mounted checkout. **Disclosed, not solved here:** nothing under this
+#: path is actually published by any CI pipeline yet — `tests/harness/test_render.py`'s own pull-
+#: mode test passes `--allow-unpinned` for exactly this reason, the same way a developer render
+#: with no Docker daemon does. A real customer install needs a real publish step; that is a
+#: separate, undecided piece of work, not invented here.
+OWNED_IMAGE_REGISTRY = "ghcr.io/ospreyflow"
+
+
 def service_images(config: OspreyConfig) -> list[ServiceImage]:
     """Every container the rendered stack runs, in a deterministic order.
 
@@ -140,7 +156,29 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
     of its own; the three workers have no images in this tree yet (Stage 2 §5's own enumeration
     settles that against §3's count, and is the owner's directed finding before any image is built),
     so they are not invented here.
+
+    **Round 07 — build vs pull is decided once, here, from `config.components.source_path`.** Not
+    declared (the default): each owned service's own `image` is a pull-mode registry reference
+    (`OWNED_IMAGE_REGISTRY`), and `build_context` is left `None` — `ServiceImage.building` is then
+    false, and `_render_compose` emits no `build:` stanza. Declared: the existing local-tag,
+    build-from-source shape, unchanged.
     """
+    source_path = config.components.source_path
+    building = source_path is not None
+    sha = git_sha(Path(source_path)) if source_path is not None else git_sha()
+
+    def _owned(service: str, dockerfile: str) -> ServiceImage:
+        if building:
+            return ServiceImage(
+                service,
+                f"osprey/{service}:local",
+                build_context=BUILD_CONTEXT_FROM_OUTPUT_DIR,
+                dockerfile=dockerfile,
+            )
+        return ServiceImage(
+            service, f"{OWNED_IMAGE_REGISTRY}/{service}:{sha}", dockerfile=dockerfile
+        )
+
     # **These third-party references are verified to resolve, and that is not a given.** Two of the
     # eight written for Stage 2 §5a did not exist at all — `minio/minio:RELEASE.2024-10-13…` and
     # `ghcr.io/speaches-ai/speaches:0.6.2` — and were only found when a real `docker compose up`
@@ -149,24 +187,9 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
     # `deploy/compose/dev.yaml` rather than invented a second time.
     # `tests/harness/test_image_references.py` now resolves every one of them.
     images: list[ServiceImage] = [
-        ServiceImage(
-            "workspace",
-            "osprey/workspace:local",
-            build_context=BUILD_CONTEXT_FROM_OUTPUT_DIR,
-            dockerfile="apps/workspace/Dockerfile",
-        ),
-        ServiceImage(
-            "api",
-            "osprey/api:local",
-            build_context=BUILD_CONTEXT_FROM_OUTPUT_DIR,
-            dockerfile="services/api/Dockerfile",
-        ),
-        ServiceImage(
-            "ingest",
-            "osprey/ingest:local",
-            build_context=BUILD_CONTEXT_FROM_OUTPUT_DIR,
-            dockerfile="services/ingest/Dockerfile",
-        ),
+        _owned("workspace", "apps/workspace/Dockerfile"),
+        _owned("api", "services/api/Dockerfile"),
+        _owned("ingest", "services/ingest/Dockerfile"),
     ]
     if config.components.graph_store.value == "arcadedb":
         images.append(ServiceImage("arcadedb", "arcadedata/arcadedb:24.11.1"))
@@ -328,19 +351,19 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
             # failed start — so a job behaving exactly as designed failed the whole deploy. It is
             # run on demand (`--profile batch`, or `compose run`), which is what a run-once job is.
             service["profiles"] = ["batch"]
-        if entry.owned:
-            # An owned image is built from this repository, not pulled. `image:` is still set, so
-            # the built image has a stable local tag that `versions.lock` can name and that a later
+        service["image"] = entry.image
+        if entry.building:
+            # This render builds from source rather than pulling — `image:` is still set, so the
+            # built image has a stable local tag that `versions.lock` can name and that a later
             # `docker compose up` resolves without rebuilding. `dockerfile` is relative to
             # `context`, which is the repository root, so it stays repo-root-relative.
             service["build"] = {"context": entry.build_context, "dockerfile": entry.dockerfile}
-            service["image"] = entry.image
+        if entry.owned:
             # Without this the deployment's own generated environment file is written and then
             # never reaches a container: the Conduit fail-fasts on a missing `OIDC_JWKS_URL` and
-            # restarts forever. Found running the golden path.
+            # restarts forever. Found running the golden path. Needed whether this owned service
+            # is built or pulled — an identity property, not a build-mode one.
             service["env_file"] = ["deployment.env"]
-        else:
-            service["image"] = entry.image
 
         # The Conduit reaches its IdP's JWKS endpoint and its three stores *during startup* and
         # fail-fasts if any is unreachable — deliberately, per `services/api/config.py`. So it must
@@ -462,7 +485,6 @@ def _render_versions_lock(
     unresolved = []
     sha = git_sha()
     for entry in images:
-        digest = None if entry.owned else resolver(entry.image)
         # `source` is recorded per entry, not once per file, because the two can differ within one
         # render: a machine that has pulled some of these images and not others produces a lock
         # file that is partly a real pin and partly a gap, and a reader needs to know which line is
@@ -472,14 +494,14 @@ def _render_versions_lock(
         # here instead, matching what `harness.images.registry_digest_resolver` actually resolved
         # against, once the bundle's own Stage 2 §5b landed.
         source = resolved_source_label
-        if entry.owned:
+        if entry.building:
             # `dockerfile` is resolved relative to `context`, which is the repository root, so it
             # stays a repo-root-relative path rather than becoming relative to the output dir too.
-            # An OspreyFlow-owned image is built from this checkout and pushed nowhere, so there is
-            # no registry digest to record and never will be until Stage 2 §5b publishes one. What
-            # identifies it is the commit it was built from. Recording `local-build` plus that SHA
-            # is the honest answer; recording whatever digest the local daemon happens to hold for
-            # a tag anyone can overwrite would look like a pin and be worth nothing.
+            # This render builds from this checkout and pushes nowhere, so there is no registry
+            # digest to record. What identifies it is the commit it was built from. Recording
+            # `local-build` plus that SHA is the honest answer; recording whatever digest the
+            # local daemon happens to hold for a tag anyone can overwrite would look like a pin
+            # and be worth nothing.
             entries.append(
                 {
                     "service": entry.service,
@@ -493,6 +515,10 @@ def _render_versions_lock(
                 }
             )
             continue
+        # Round 07: a pull-mode owned image is locked exactly like a third-party one — resolved
+        # by digest, refused by name (below) if it cannot be. `owned` no longer exempts it; only
+        # `building` does, above.
+        digest = resolver(entry.image)
         if digest is None:
             unresolved.append(entry.image)
             digest = "unresolved"
@@ -620,13 +646,18 @@ def render(
     if resolver is None:
         resolver = unresolved_digest_resolver if allow_unpinned else docker_digest_resolver
     images = service_images(config)
-    missing = [
-        entry.service
-        for entry in images
-        if entry.owned and not (REPO_ROOT / str(entry.dockerfile)).is_file()
-    ]
-    if missing:
-        raise MissingDockerfileError(missing)
+    source_path = config.components.source_path
+    # Round 07: only checked when a source tree is actually declared. The pull path (the
+    # default) never looks at the local filesystem for a Dockerfile at all — the whole point,
+    # since the harness image itself carries none.
+    if source_path is not None:
+        missing = [
+            entry.service
+            for entry in images
+            if entry.owned and not (Path(source_path) / str(entry.dockerfile)).is_file()
+        ]
+        if missing:
+            raise MissingDockerfileError(missing, source_path=source_path)
     return RenderResult(
         profile=config.profile,
         artefacts={
@@ -747,6 +778,15 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--out-root", type=Path, default=DEFAULT_OUT_ROOT)
     parser.add_argument(
+        "--build",
+        action="store_true",
+        help=(
+            "Build owned images from this checkout's own source rather than pulling them by "
+            "digest — round 07's developer/CI path. Equivalent to declaring "
+            "components.source_path in osprey.yaml, using this checkout's own root."
+        ),
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="Report drift against what is on disk and exit 1 if any; write nothing.",
@@ -767,6 +807,9 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv if argv is not None else sys.argv[1:])
     config = load_config(args.config)
+    if args.build:
+        components = config.components.model_copy(update={"source_path": str(REPO_ROOT)})
+        config = config.model_copy(update={"components": components})
     result = render(config, allow_unpinned=args.allow_unpinned)
     out_dir = args.out_root / config.profile.value
 

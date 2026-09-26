@@ -58,6 +58,7 @@ from harness.render import (
     BUILD_CONTEXT_FROM_OUTPUT_DIR,
     DEFAULT_CONFIG_PATH,
     DEFAULT_OUT_ROOT,
+    REPO_ROOT,
     load_config,
     render,
     write_config_copy,
@@ -355,6 +356,16 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         description="The scripted golden-path deploy — docs/05_DEPLOYMENT.md §2.3.",
     )
     parser.add_argument("--profile", default=None, help="Overrides osprey.yaml's own profile.")
+    parser.add_argument(
+        "--build",
+        action="store_true",
+        help=(
+            "Build owned images from this checkout's own source rather than pulling them by "
+            "digest — the developer/CI path (round 07). Equivalent to declaring "
+            "components.source_path in osprey.yaml, using this checkout's own root. Never set "
+            "for a real customer deployment, which has no checkout to build from."
+        ),
+    )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--out-root", type=Path, default=DEFAULT_OUT_ROOT)
     parser.add_argument("--seed", default="", help="Comma-separated: hmp,fixture-corp")
@@ -405,6 +416,9 @@ def main(argv: list[str] | None = None) -> int:
         # several lines later on `.value` with a message naming neither the flag nor the profile.
         # Coercing through the enum makes an unknown profile fail here, by name.
         config = config.model_copy(update={"profile": Profile(args.profile)})
+    if args.build:
+        components = config.components.model_copy(update={"source_path": str(REPO_ROOT)})
+        config = config.model_copy(update={"components": components})
     out_dir = args.out_root / config.profile.value
     result = ApplyResult(profile=config.profile.value)
 

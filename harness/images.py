@@ -52,19 +52,29 @@ class ServiceImage:
 
     service: str
     image: ImageRef
-    #: Repository-relative directory holding this service's Dockerfile. `None` for third-party
-    #: images, and the thing that makes "is this ours" a property of the data rather than a string
-    #: match on the image name.
-    build_context: str | None = None
-    #: Relative to `build_context`'s own parent — compose needs the Dockerfile path and the context
-    #: root separately, because the Python images build from the repository root (they COPY
-    #: `packages/` and `services/`) while their Dockerfile lives beside the service.
+    #: Set for every OspreyFlow-owned service (workspace, api, ingest) regardless of whether this
+    #: particular render builds it — `owned` (below) is an identity property, not a build-mode one.
+    #: `None` for a third-party image.
     dockerfile: str | None = None
+    #: Round 07: set only when this render actually builds the owned service from source
+    #: (`components.source_path` declared) — `None` in the default, pull-mode render, where
+    #: `image` is instead a registry reference and no `build:` stanza is emitted at all. Relative
+    #: to `build_context`'s own parent when set — compose needs the Dockerfile path and the
+    #: context root separately, because the Python images build from the repository root (they
+    #: COPY `packages/` and `services/`) while their Dockerfile lives beside the service.
+    build_context: str | None = None
     #: False for the components a reduced or smaller profile drops.
     always: bool = True
 
     @property
     def owned(self) -> bool:
+        """An OspreyFlow service, built or pulled — env_file, the config mount and the
+        `depends_on` ordering all follow this identity, not whether this render builds it."""
+        return self.dockerfile is not None
+
+    @property
+    def building(self) -> bool:
+        """This render builds this service from source rather than pulling it by digest."""
         return self.build_context is not None
 
 
