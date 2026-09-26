@@ -228,8 +228,7 @@ image deliberately does not carry). Admin-role-gated (`require_admin_role`, `osp
 one process that already has every module both actions need. `build-basemap` streams its own real
 progress the same way Launch does (`text/event-stream`, one `{"line": ...}` per step, `event:
 complete` last); `verify` is fast enough to answer as a plain JSON `{"passed": ..., "issues": [...]}`.
-Not yet called from any UI — `Stage 2 §7`'s own post-launch console has no screen built yet;
-`07_BUILD_PLAN.md`'s Stage 2 §6 part B entry has the full account.
+Not yet called from any UI — `Stage 2 §7`'s own post-launch console has no screen built yet.
 
 ## 4. The Working-Set Service
 
