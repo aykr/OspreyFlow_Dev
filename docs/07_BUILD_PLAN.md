@@ -4541,6 +4541,20 @@ find something already finished sitting in the queue.
    docs site's own operator guide (also fixed above); neither is a gap this round invented, and
    naming the absence is the honest reconciliation rather than assuming a file that is not there.
 
+   **A fourth real bug, found running the corrected §3 command for real rather than trusting the
+   correction on paper.** `harness.render.load_config` and `harness.render.write_config_copy` both
+   crashed with an uncaught `FileNotFoundError` the first time either was ever run against a fresh
+   clone with no `osprey.yaml` written yet — `python -m harness.render`, `python -m harness.apply`,
+   and the Preflight screen's own `Generate` all shared the same gap, and it had passed unnoticed
+   through every round this session for the same reason the Docker-socket GID caveat did: nothing
+   had tried the genuinely-nothing-saved-yet case for real before now. `load_config`'s own docstring
+   already claimed "an empty file is an empty config, not a crash" — true, and narrower than a
+   reader would assume: a missing file is the same case, not a different one.
+   `harness/webapp.py`'s own `_read_config` had already drawn this distinction correctly, and is now
+   a thin alias for the fixed `load_config` rather than a second, independently-written
+   implementation of the identical contract. Shown red-then-green with two new cases in
+   `tests/harness/test_render.py`.
+
    **Stage 2 §7 — Post-launch admin console operations. ACCEPTED. Not milestone-blocking; still Phase 8.**
    `05_DEPLOYMENT.md` §5's rolling upgrade and rollback to a previous digest, and §5's `verify` —
    "the port conformance suite against the *running* deployment rather than a test fixture", a
