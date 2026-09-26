@@ -4724,6 +4724,68 @@ find something already finished sitting in the queue.
    member — `make ci` is not fully green, and was not before this round either; both red/
    unprovisioned targets this round was asked to fix now are.
 
+   **Round 07, built 26 September 2026 — the documented bootstrap can Launch without the
+   operator's own source checkout.** Round 05's own real-image finding (above, this entry's own
+   Stage 2 §6 record) is fixed at the root, not documented around: `osprey.yaml` gains
+   `components.source_path` (`packages/schemas/deployment.py`) — undeclared, the **default**,
+   renders the **pull path** (each owned service's `image:` a registry reference,
+   `OWNED_IMAGE_REGISTRY = ghcr.io/ospreyflow`, pinned by the digest `versions.lock` records, no
+   `build:` stanza, no local-Dockerfile check at all); declared, to a checkout root containing the
+   three Dockerfiles, renders the **build path** unchanged from every prior round (`osprey/
+   <service>:local`, a `build:` stanza, `versions.lock`'s own `local-build` entry). `harness/images.
+   py`'s `ServiceImage` now separates the two properties the old code conflated: `owned` (identity
+   — env_file, the config mount, `depends_on`) and `building` (does *this* render build it — the
+   `build:` stanza, the digest-vs-`local-build` lock choice). `--build` on `harness.apply`/
+   `harness.render` is the CLI-level opt-in (`components.source_path` set to this checkout's own
+   root) for the developer/CI path — every existing caller of either CLI that actually needs a
+   real build (`ci.yml`'s `deployment-exit-tests`, `tests/harness/test_apply_env.py`, `test_
+   sustained_load.py`, `test_harness_image.py`'s own host-side render, `scripts/osprey_bundle.py`'s
+   `build_bundle`) now passes it explicitly, found by running each one for real after the default
+   flipped, not inferred.
+
+   **Proven against the real, rebuilt image, with only an empty workspace mounted — no source, the
+   real customer-laptop shape** (`tests/harness/test_harness_image.py`'s new case): render
+   succeeds, the rendered `compose.yaml` carries no `build:` stanza and pull-mode registry
+   references for all three owned services, and `docker compose config` validates it (the dummy
+   apply-time secrets it needs are supplied directly — those four are minted by `harness.apply`,
+   never by `render` alone, and this case calls only `render`). Not attempted: the real twelve-
+   container Launch through the container, per the brief's own instruction — this sandbox's Docker
+   Desktop VM is below `local-lite`'s memory floor (round 05's own measurement, unchanged).
+
+   **One render-level test proves the pull path against the §1 fixture itself**
+   (`tests/harness/test_render.py::test_pull_mode_renders_owned_images_with_no_build_stanza_and_a_
+   locked_digest`): no `build:` stanza for any owned service, `UnpinnedImagesError` by name when a
+   digest cannot be resolved (never a silent `local-build`), a real digest recorded when it can.
+   Every other case in that file now declares `source_path` explicitly in its own `config` fixture
+   — they predate the split and test the developer path, unchanged in substance, made explicit in
+   form.
+
+   **Item 3, found broken by actually running the existing exit test, not inferred — the bundle
+   now IS a genuine pull-mode artefact, matching a real customer install exactly.** The first
+   version of this round's own fix rendered `scripts/osprey_bundle.py`'s own bundle in the build
+   path (`source_path` forced to this checkout), on the reasoning that its images travel as
+   `docker save` archives, not a registry pull. Running `tests/harness/test_bundle_exit_test.py`
+   for real found that reasoning wrong: the *recipient's* own `harness.apply --config osprey.yaml.
+   example` re-renders from that file's own text, which never carried `source_path` at all (the
+   bundle stages a plain copy of whatever `--config` was, not the in-memory override) — so the
+   recipient re-rendered in **pull** mode while the archived images were tagged for the **build**
+   path, and `docker compose up` failed outright: `ghcr.io/ospreyflow/api:<sha>` was never
+   `docker load`ed, and `osprey/api:local` was never referenced by anything. **Fixed by rendering
+   the bundle in pull mode too** (the shape the recipient's own re-render actually produces) and
+   retagging each owned service's already-built local image to the pull-mode reference right
+   before `docker save` (`_docker_tag`, injectable the same way `docker_save`/
+   `docker_build_docs_layer` already are) — the archive `docker load` restores now lands under the
+   exact name both the bundle's own staged `compose.yaml` and the recipient's own re-render agree
+   on. Confirmed red then green against the real exit test, not only the fast unit tier (`tests/
+   test_osprey_bundle.py`'s own docs-layer test now asserts against `OWNED_IMAGE_REGISTRY`, not the
+   old local tag). `versions.lock`'s own owned-image digest is honestly `unresolved`, not a real
+   registry pin — nothing publishes to `OWNED_IMAGE_REGISTRY` yet, so a real digest is still
+   **Proposed**, not decided, the one piece of item 3 this round leaves undone.
+
+   **`05_DEPLOYMENT.md` §3's own round-05 disclosure is corrected in place**, per `CLAUDE.md` rule
+   11 — kept here as history rather than deleted, since it was true when written and the fix is
+   what makes it no longer true.
+
    **Stage 2 §7 — Post-launch admin console operations. ACCEPTED. Not milestone-blocking; still Phase 8.**
    `05_DEPLOYMENT.md` §5's rolling upgrade and rollback to a previous digest, and §5's `verify` —
    "the port conformance suite against the *running* deployment rather than a test fixture", a
