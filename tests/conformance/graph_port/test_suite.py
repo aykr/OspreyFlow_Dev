@@ -41,7 +41,13 @@ from schemas.domain import (
 )
 from tests.conformance.registry import GRAPH_PORT_ADAPTERS, GraphAdapterFactory
 
-pytestmark = pytest.mark.parametrize("factory", GRAPH_PORT_ADAPTERS, ids=str)
+pytestmark = [
+    pytest.mark.parametrize("factory", GRAPH_PORT_ADAPTERS, ids=str),
+    # The stale-database sweep (`conftest.py`) is requested here, not `autouse` there — this is
+    # the one module in this directory that actually opens ArcadeDB connections; `test_guard.py`
+    # does not, and must not be made to depend on a live store just by sharing this directory.
+    pytest.mark.usefixtures("_sweep_stale_conformance_databases"),
+]
 
 OFFICIAL = Principal(id="analyst-official", clearance="OFFICIAL", org_unit="unit-1")
 SENSITIVE = Principal(id="analyst-sensitive", clearance="OFFICIAL-SENSITIVE", org_unit="unit-1")
