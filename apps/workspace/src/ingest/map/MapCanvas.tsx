@@ -90,7 +90,6 @@ export function MapCanvas({
     };
     // Constructed once; the graph's own content is synced by the effect
     // below via `graphRef`, not by recreating the Sigma instance.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

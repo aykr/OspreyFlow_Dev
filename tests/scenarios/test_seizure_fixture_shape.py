@@ -12,10 +12,6 @@ step would call at load time.
 
 from __future__ import annotations
 
-from knowledge_adapters.imei import imei
-from knowledge_adapters.imsi import imsi
-from knowledge_adapters.msisdn import msisdn
-
 from tests.scenarios.fixtures.seizure_record import (
     HANDSET_IMEI_NORMALISED,
     SEIZURE_DATE,
@@ -24,6 +20,10 @@ from tests.scenarios.fixtures.seizure_record import (
     SIM_B_MSISDN_NORMALISED,
     generate_seizure_record,
 )
+
+from knowledge_adapters.imei import imei
+from knowledge_adapters.imsi import imsi
+from knowledge_adapters.msisdn import msisdn
 
 
 def test_handset_imei_normalises_to_the_expected_value() -> None:

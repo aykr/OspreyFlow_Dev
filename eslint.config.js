@@ -16,7 +16,11 @@ export default [
     ],
   },
   {
-    files: ["scripts/**/*.mjs"],
+    // `apps/workspace/compute-tier1/harness.mjs` (ADR-028's own "small Node script... headless")
+    // joined this block 26 September 2026 — a plain Node script like `scripts/**/*.mjs`, just
+    // under `apps/workspace/` rather than the repo root, and needing the same globals for the
+    // same reason.
+    files: ["scripts/**/*.mjs", "apps/workspace/compute-tier1/**/*.mjs"],
     languageOptions: {
       globals: { process: "readonly", console: "readonly" },
     },

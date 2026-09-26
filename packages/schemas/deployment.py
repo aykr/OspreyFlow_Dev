@@ -249,8 +249,8 @@ class NetworkConfig(BaseModel):
             )
         if self.public_origin.endswith("/"):
             raise ValueError(
-                f"network.public_origin {self.public_origin!r} must not end with '/' — the redirect "
-                "URI is derived by appending a single trailing slash, exactly once"
+                f"network.public_origin {self.public_origin!r} must not end with '/' — the "
+                "redirect URI is derived by appending a single trailing slash, exactly once"
             )
         return self
 

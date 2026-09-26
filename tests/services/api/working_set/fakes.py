@@ -42,7 +42,9 @@ _FAKE_VISIBLE_NODE = Node(
         sources=[SourceRef(document_id="d", locator="l", excerpt_hash="")],
         first_seen=datetime(2026, 1, 1, tzinfo=UTC),
     ),
-    handling=Handling(classification="OFFICIAL", handling_code="P", originator="u", owning_unit="u"),
+    handling=Handling(
+        classification="OFFICIAL", handling_code="P", originator="u", owning_unit="u"
+    ),
     audit=AuditStub(created_at=datetime(2026, 1, 1, tzinfo=UTC), created_by="fixture"),
 )
 

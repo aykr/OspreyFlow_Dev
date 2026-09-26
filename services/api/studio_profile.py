@@ -18,14 +18,13 @@ from __future__ import annotations
 import csv
 
 from pydantic import ValidationError
+from services.ingest.connectors.csv_connector import read_csv
+from services.ingest.profiler import profile_source
 
+from ontology.handling import HandlingScheme
 from schemas.domain import Handling, Principal
 from schemas.ingest import StudioRecipeDraft
 from schemas.profile import SourceProfile
-
-from ontology.handling import HandlingScheme
-from services.ingest.connectors.csv_connector import read_csv
-from services.ingest.profiler import profile_source
 
 #: `schemas.ingest.CONNECTOR_CATALOGUE`'s own `available` flag — only
 #: `generic-csv` has a backing reader today (`services/ingest/connectors/

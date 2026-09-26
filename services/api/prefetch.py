@@ -37,12 +37,12 @@ from pathlib import Path
 from typing import cast
 
 import duckdb
+from services.ingest.staging import ObjectStorageConfig
 
 from adapters.analytics_duckdb.schema import load_spatial_extension
 from ports.analytics import AnalyticsPort
 from schemas.domain import Principal
 from schemas.mapconfig import MapConfig, MapProvider
-from services.ingest.staging import ObjectStorageConfig
 
 from .mapconfig_loader import load_map_config
 from .tile_cache import (

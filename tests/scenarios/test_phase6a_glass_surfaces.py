@@ -68,7 +68,9 @@ from typing import Any
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
-
+from services.api.config import PostgresConfig
+from services.api.review import ExtractionCandidateStore
+from services.extract.candidates import ExtractionCandidate
 from tests.conftest import default_claims, sign_token
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
@@ -76,9 +78,6 @@ from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from conduit_common.identity import new_id
 from ontology.handling import load_uk_le_scheme
 from schemas.domain import Principal
-from services.api.config import PostgresConfig
-from services.api.review import ExtractionCandidateStore
-from services.extract.candidates import ExtractionCandidate
 
 MESSAGE_TEXT = "Dana Mercer met Alex Doe at the depot."
 NAME_A = "Dana Mercer"
@@ -129,7 +128,9 @@ def _locator(name: str) -> str:
     return f"char span {start}-{start + len(name)}"
 
 
-def _candidate(document_id: str, name: str, given_names: str, family_name: str) -> ExtractionCandidate:
+def _candidate(
+    document_id: str, name: str, given_names: str, family_name: str
+) -> ExtractionCandidate:
     return ExtractionCandidate(
         id=new_id(),
         document_id=document_id,

@@ -722,7 +722,9 @@ def test_an_oidc_audience_naming_the_wrong_client_fails(
     assert "some-other-client" in result.what_is_wrong
 
 
-def test_the_check_fails_when_nothing_has_been_rendered_yet(config: OspreyConfig, tmp_path: Path) -> None:
+def test_the_check_fails_when_nothing_has_been_rendered_yet(
+    config: OspreyConfig, tmp_path: Path
+) -> None:
     context = PreflightContext(config=config, out_dir=tmp_path / "never-rendered")
     result = oidc_audience.check(context)
     assert result.status is Status.FAIL

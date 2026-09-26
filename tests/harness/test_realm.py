@@ -9,7 +9,6 @@ are about what ADR-050 specifically requires of the new client and the new subje
 from __future__ import annotations
 
 import yaml
-
 from harness.realm import (
     CONDUIT_CLIENT_ID,
     DEMO_ANALYST_SUBJECT,
@@ -17,6 +16,7 @@ from harness.realm import (
     VERIFY_SUBJECT,
     render_realm,
 )
+
 from schemas.deployment import OspreyConfig
 
 FIXTURE_CONFIG = """
@@ -102,7 +102,9 @@ def test_the_conduits_own_client_also_carries_the_audience_mapper() -> None:
     realm = render_realm(_config())
     (conduit_client,) = [c for c in realm["clients"] if c["clientId"] == CONDUIT_CLIENT_ID]
     (audience_mapper,) = [
-        m for m in conduit_client["protocolMappers"] if m["protocolMapper"] == "oidc-audience-mapper"
+        m
+        for m in conduit_client["protocolMappers"]
+        if m["protocolMapper"] == "oidc-audience-mapper"
     ]
 
     assert audience_mapper["config"]["included.custom.audience"] == CONDUIT_CLIENT_ID
@@ -144,9 +146,7 @@ def test_demo_analyst_can_receive_the_handling_code_the_seed_fixtures_actually_w
     assert "P" in demo_analyst["attributes"]["receivable_handling_codes"]
 
 
-def test_demo_analyst_shares_the_verify_subjects_org_unit_so_the_seeded_investigation_is_visible() -> (
-    None
-):
+def test_demo_analyst_shares_the_verify_subjects_org_unit_so_the_seeded_investigation_is_visible() -> None:  # noqa: E501
     """Measured directly, running the real exit test end to end: `harness/apply.py`'s
     `create_investigation` creates the seeded investigation by exchanging for `VERIFY_SUBJECT`, so
     the investigation's own `owning_unit` is `VERIFY_SUBJECT`'s `org_unit` —

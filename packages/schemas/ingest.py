@@ -61,7 +61,10 @@ class ConnectorCatalogueEntry(BaseModel):
 #: §2's "Structured connector catalogue" table, group by group.
 _STRUCTURED_CATALOGUE: tuple[ConnectorCatalogueEntry, ...] = (
     ConnectorCatalogueEntry(
-        id="comms-cdr-ipdr", label="CDR and IPDR from carriers", group="Communications", structured=True
+        id="comms-cdr-ipdr",
+        label="CDR and IPDR from carriers",
+        group="Communications",
+        structured=True,
     ),
     ConnectorCatalogueEntry(
         id="comms-subscriber-toll",
@@ -83,7 +86,10 @@ _STRUCTURED_CATALOGUE: tuple[ConnectorCatalogueEntry, ...] = (
         id="mobile-case-uco", label="CASE/UCO interchange", group="Mobile device", structured=True
     ),
     ConnectorCatalogueEntry(
-        id="financial-card-transactions", label="Card transactions", group="Financial", structured=True
+        id="financial-card-transactions",
+        label="Card transactions",
+        group="Financial",
+        structured=True,
     ),
     ConnectorCatalogueEntry(
         id="financial-bank-statements", label="Bank statements", group="Financial", structured=True
@@ -91,14 +97,18 @@ _STRUCTURED_CATALOGUE: tuple[ConnectorCatalogueEntry, ...] = (
     ConnectorCatalogueEntry(
         id="financial-iso20022", label="ISO 20022 (camt, pain)", group="Financial", structured=True
     ),
-    ConnectorCatalogueEntry(id="financial-swift-mt", label="SWIFT MT", group="Financial", structured=True),
+    ConnectorCatalogueEntry(
+        id="financial-swift-mt", label="SWIFT MT", group="Financial", structured=True
+    ),
     ConnectorCatalogueEntry(
         id="financial-crypto-exchange",
         label="Crypto exchange export",
         group="Financial",
         structured=True,
     ),
-    ConnectorCatalogueEntry(id="vehicle-anpr", label="ANPR", group="Vehicle and movement", structured=True),
+    ConnectorCatalogueEntry(
+        id="vehicle-anpr", label="ANPR", group="Vehicle and movement", structured=True
+    ),
     ConnectorCatalogueEntry(
         id="vehicle-telematics", label="Telematics", group="Vehicle and movement", structured=True
     ),
@@ -115,7 +125,10 @@ _STRUCTURED_CATALOGUE: tuple[ConnectorCatalogueEntry, ...] = (
         structured=True,
     ),
     ConnectorCatalogueEntry(
-        id="records-case-management", label="Case management exports", group="Records", structured=True
+        id="records-case-management",
+        label="Case management exports",
+        group="Records",
+        structured=True,
     ),
     ConnectorCatalogueEntry(
         id="generic-csv",
@@ -128,7 +141,9 @@ _STRUCTURED_CATALOGUE: tuple[ConnectorCatalogueEntry, ...] = (
     ConnectorCatalogueEntry(id="generic-json", label="JSON", group="Generic", structured=True),
     ConnectorCatalogueEntry(id="generic-jsonl", label="JSONL", group="Generic", structured=True),
     ConnectorCatalogueEntry(id="generic-xml", label="XML", group="Generic", structured=True),
-    ConnectorCatalogueEntry(id="generic-parquet", label="Parquet", group="Generic", structured=True),
+    ConnectorCatalogueEntry(
+        id="generic-parquet", label="Parquet", group="Generic", structured=True
+    ),
     ConnectorCatalogueEntry(id="generic-excel", label="Excel", group="Generic", structured=True),
     ConnectorCatalogueEntry(
         id="generic-sql", label="SQL table or view", group="Generic", structured=True
@@ -138,7 +153,10 @@ _STRUCTURED_CATALOGUE: tuple[ConnectorCatalogueEntry, ...] = (
 #: §2's "Unstructured sources" table.
 _UNSTRUCTURED_CATALOGUE: tuple[ConnectorCatalogueEntry, ...] = (
     ConnectorCatalogueEntry(
-        id="doc-pdf-docx-rtf", label="PDF, DOCX, RTF, TXT, EML/MSG, HTML", group="Documents", structured=False
+        id="doc-pdf-docx-rtf",
+        label="PDF, DOCX, RTF, TXT, EML/MSG, HTML",
+        group="Documents",
+        structured=False,
     ),
     ConnectorCatalogueEntry(
         id="image-jpeg-png-tiff-heic",

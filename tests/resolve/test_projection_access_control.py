@@ -22,14 +22,19 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
+from services.resolve.projection import THRESHOLD_BALANCED, compute_clusters
+from tests.conformance.registry import GRAPH_PORT_ADAPTERS, GraphAdapterFactory
 
 from conduit_common.identity import new_edge_id, new_node_id, now_utc
-from ports.graph import GraphPort
-from schemas.domain import EdgeWrite, ExpandRequest, NodeWrite, Principal, Provenance, ProvenanceState, SourceRef
-
-from services.resolve.projection import THRESHOLD_BALANCED, compute_clusters
-
-from tests.conformance.registry import GRAPH_PORT_ADAPTERS, GraphAdapterFactory
+from schemas.domain import (
+    EdgeWrite,
+    ExpandRequest,
+    NodeWrite,
+    Principal,
+    Provenance,
+    ProvenanceState,
+    SourceRef,
+)
 
 pytestmark = pytest.mark.parametrize("factory", GRAPH_PORT_ADAPTERS, ids=str)
 

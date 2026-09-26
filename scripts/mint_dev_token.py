@@ -67,11 +67,9 @@ import sys
 import time
 from pathlib import Path
 
-import jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.algorithms import RSAAlgorithm
-
 from tests.conftest import DEFAULT_KID, default_claims, sign_token
 
 _BANNER = """\

@@ -30,10 +30,10 @@ with no `credentials` block, exactly like `VERIFY_SUBJECT`/`REVOKED_SUBJECT` bel
 subjects that exist: one enabled and disposable, one disabled. They are rendered for `local-lite`
 and `small` — profiles whose whole purpose is a machine you own — and a `cluster` realm is not
 rendered by this module at all. A production realm is the operator's, and these subjects have no
-place in it. The optional demo-analyst subject (below) is rendered for the same two profiles and for
-the same reason, and is a **separate** subject from `VERIFY_SUBJECT` — ADR-050's objection 4: reusing
-the verify subject for interactive sign-in would mean any change to its clearance or handling codes
-for a demonstration silently changes what the three-sided verify itself asserts.
+place in it. The optional demo-analyst subject (below) is rendered for the same two profiles and
+for the same reason, and is a **separate** subject from `VERIFY_SUBJECT` — ADR-050's objection 4:
+reusing the verify subject for interactive sign-in would mean any change to its clearance or
+handling codes for a demonstration silently changes what the three-sided verify itself asserts.
 """
 
 from __future__ import annotations
@@ -55,9 +55,10 @@ REVOKED_SUBJECT = "osprey-verify-revoked"
 
 #: `06_DECISIONS.md` ADR-050 — the Glass, registered as a **public** client (no secret in the
 #: browser): authorization code with PKCE, `standardFlowEnabled`, an exact redirect URI and
-#: post-logout URI derived from `osprey.yaml`'s `network.public_origin`, no wildcards (objection 2's
-#: resolution), and an audience mapper naming `CONDUIT_CLIENT_ID` so the Conduit's own unconditional-
-#: when-configured `verify_aud` refuses a token minted for anything else (objection 1's resolution).
+#: post-logout URI derived from `osprey.yaml`'s `network.public_origin`, no wildcards
+#: (objection 2's resolution), and an audience mapper naming `CONDUIT_CLIENT_ID` so the Conduit's
+#: own unconditional-when-configured `verify_aud` refuses a token minted for anything else
+#: (objection 1's resolution).
 GLASS_CLIENT_ID = "osprey-glass"
 
 #: `06_DECISIONS.md` ADR-050 objection 3/4's resolution — a disposable analyst subject that can
@@ -171,10 +172,11 @@ def _audience_mapper() -> dict[str, Any]:
     failed with `token rejected: Token is missing the "aud" claim`, because the Conduit's **own**
     client-credentials and token-exchange grants (used by the seed, and by
     `create_investigation`/`grant_service_account_roles`) carry no such mapper on the Conduit's own
-    client, and every one of those tokens is presented to the Conduit exactly like the Glass's. This
-    mapper is attached to *every* client whose tokens the Conduit must accept — the Conduit's own and
-    the Glass's — with a plain literal audience string, not a client-to-client reference, which needs
-    no self-reference special case for the Conduit's own client to name itself.
+    client, and every one of those tokens is presented to the Conduit exactly like the Glass's.
+    This mapper is attached to *every* client whose tokens the Conduit must accept — the
+    Conduit's own and the Glass's — with a plain literal audience string, not a client-to-client
+    reference, which needs no self-reference special case for the Conduit's own client to name
+    itself.
     """
     return {
         "name": "audience-conduit",
@@ -196,8 +198,9 @@ def _glass_client(config: OspreyConfig) -> dict[str, Any]:
     `05_DEPLOYMENT.md` §2.1.1's own client-secret note applies here too — this client has none to
     leak, being public, but the redirect URI is the equivalent surface for a public client.
 
-    **`post.logout.redirect.uris` is a client *attribute*, not the top-level `postLogoutRedirectUris`
-    field a hand-written realm document reaches for by analogy with `redirectUris`.** Measured
+    **`post.logout.redirect.uris` is a client *attribute*, not the top-level
+    `postLogoutRedirectUris` field a hand-written realm document reaches for by analogy with
+    `redirectUris`.** Measured
     directly, not assumed: a real Keycloak 26 realm import of the first version of this function
     refused the whole import — `Unrecognized field "postLogoutRedirectUris" (class
     org.keycloak.representations.idm.ClientRepresentation)` — and the Conduit's own confidential
@@ -264,8 +267,8 @@ def render_realm(
                 # measured directly, not assumed, running the real exit test end to end: a subject
                 # created without a mapped email/name is exactly what a fresh admin-API user looks
                 # like, and Keycloak's own new-user default demands them before issuing a token.
-                # `.invalid` is the RFC 2606-reserved TLD for exactly this — guaranteed never a real,
-                # deliverable domain.
+                # `.invalid` is the RFC 2606-reserved TLD for exactly this — guaranteed never a
+                # real, deliverable domain.
                 "email": "osprey-demo-analyst@ospreyflow.invalid",
                 "emailVerified": True,
                 "firstName": "Demo",

@@ -18,11 +18,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-
-from conduit_common.identity import new_node_id, now_utc
 from services.api.working_set.models import ClusterNotFoundError
 from services.api.working_set.service import WorkingSetService
 
+from conduit_common.identity import new_node_id, now_utc
 from ontology.handling import load_uk_le_scheme
 from schemas.domain import (
     AuditStub,
@@ -34,8 +33,8 @@ from schemas.domain import (
     ResolutionState,
     SourceRef,
 )
-
 from tests.conformance.registry import GRAPH_PORT_ADAPTERS, GraphAdapterFactory
+
 from .fakes import FakeWorkingSetStore
 
 pytestmark = pytest.mark.parametrize("factory", GRAPH_PORT_ADAPTERS, ids=str)

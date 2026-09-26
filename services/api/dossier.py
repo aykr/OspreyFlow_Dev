@@ -22,7 +22,6 @@ from __future__ import annotations
 import re
 
 from pydantic import BaseModel
-
 from services.api.access import narrow_to_visible
 from services.api.review import CandidateStatus, ExtractionCandidateStore
 

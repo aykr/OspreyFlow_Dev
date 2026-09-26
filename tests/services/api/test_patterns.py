@@ -58,7 +58,9 @@ class _FakeGraph:
         self.match_count_calls: list[int] = []
         self.match_calls: list[int] = []
 
-    async def match_count(self, pattern: PatternQuery, principal: Principal, *, ceiling: int) -> int:
+    async def match_count(
+        self, pattern: PatternQuery, principal: Principal, *, ceiling: int
+    ) -> int:
         self.match_count_calls.append(ceiling)
         return min(self._true_count, ceiling)
 
@@ -122,7 +124,9 @@ async def test_run_at_or_above_the_limit_never_returns_a_silently_capped_subgrap
     assert job_type == JOB_TYPE_PATTERN_MATCH
 
 
-async def test_pattern_match_job_raises_the_ceiling_rather_than_reusing_the_original_limit() -> None:
+async def test_pattern_match_job_raises_the_ceiling_rather_than_reusing_the_original_limit() -> (
+    None
+):
     graph = _FakeGraph(true_count=5_000)
     result = await run_pattern_match_job(
         {

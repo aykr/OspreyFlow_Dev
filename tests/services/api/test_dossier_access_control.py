@@ -15,16 +15,13 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-
-from conduit_common.identity import new_id, new_node_id, now_utc
 from services.api.config import PostgresConfig
 from services.api.dossier import get_document_view
 from services.api.review import CandidateStatus, ExtractionCandidateStore
 from services.extract.candidates import ExtractionCandidate
 
-from ontology.handling import load_uk_le_scheme
+from conduit_common.identity import new_id, new_node_id, now_utc
 from schemas.domain import NodeWrite, Principal, Provenance, ProvenanceState, SourceRef
-
 from tests.conformance.registry import GRAPH_PORT_ADAPTERS, GraphAdapterFactory
 
 pytestmark = pytest.mark.parametrize("factory", GRAPH_PORT_ADAPTERS, ids=str)
