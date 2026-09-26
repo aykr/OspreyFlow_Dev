@@ -1422,6 +1422,35 @@ async def test_upserting_the_same_pair_twice_retains_both_source_references(
         assert {s.locator for s in edge.provenance.sources} == {"p.1", "row 2"}
 
 
+async def test_upserting_the_same_node_id_twice_merges_into_one_node(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Round 01's own finding, reproduced directly: `upsert_nodes` was a bare `INSERT`, so a
+    second seed of a fixture with fixed ids (Fixture Corp's own `corp-res-distinct-2`, e.g.) failed
+    on a duplicate key rather than updating the existing node. A second write for the same `id`
+    must find and update it — never insert a second node under the same declared id, and never
+    silently drop what the first write already recorded: `01_DOMAIN_MODEL.md` §7's provenance
+    retention applies to nodes exactly as `test_upserting_the_same_pair_twice_retains_both_source_
+    references` above already proves it does for edges."""
+    async with factory.context() as adapter:
+        first_write = _node(
+            "Endpoint", classification="OFFICIAL", value_normalised="+441111111111"
+        )
+        await _write(adapter, [first_write], [])
+
+        second_write = first_write.model_copy(deep=True)
+        second_write.provenance.sources[0].locator = "row 2"
+        await _write(adapter, [second_write], [])
+
+        node = await adapter.get_node(first_write.id, CLEARED)
+        assert node is not None, "the second write did not update the same node id"
+        assert {s.locator for s in node.provenance.sources} == {
+            first_write.provenance.sources[0].locator,
+            "row 2",
+        }
+        assert node.audit.revision == 2
+
+
 async def test_edge_weight_is_derived_not_hardcoded_and_persists_its_components(
     factory: GraphAdapterFactory,
 ) -> None:

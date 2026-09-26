@@ -125,7 +125,39 @@ class GraphArcadeDBAdapter:
             raise OntologyError("no ontology schema has been applied — call apply_schema first")
         return self._schema
 
+    async def _find_existing_node(
+        self, node_id: NodeId, *, session_id: TxId
+    ) -> dict[str, Any] | None:
+        """Unfiltered by design — an internal lookup during a trusted write, the same as
+        `_node_type`'s and `supersede_node`'s own. A second `upsert_nodes` call for the same id
+        (a re-ingested load; the same fixture seeded twice, `tests/conformance/graph_port/
+        test_suite.py`'s own case for this) must find and update the existing node, never insert
+        a duplicate that collides on the same declared `id` property."""
+        node_lit = groovy_string_literal(node_id)
+        results = await self._client.gremlin(
+            f'g.V().has("id",{node_lit}).elementMap()', session_id=session_id
+        )
+        return results[0] if results else None
+
     async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: TxId) -> list[NodeId]:
+        """A real upsert, keyed on `write.id` — select-then-branch (`UPDATE ... WHERE id = :id`
+        vs `INSERT INTO`), the same shape `upsert_edges` below already uses, not ArcadeDB's own
+        `UPDATE ... UPSERT`: merging provenance and bumping `audit.revision` both need the
+        existing row's own values *before* the write, so a preceding lookup is unavoidable either
+        way, and branching on it explicitly reads the same as `upsert_edges`'s own `existing is
+        not None` shape rather than a second, differently-shaped mechanism.
+
+        **What merges, what does not — the same split `_merge_provenance`'s own docstring already
+        states for edges.** `provenance` merges (`01_DOMAIN_MODEL.md` §7: every source row
+        reference is retained; de-duplicated by `(document_id, locator)`), and `audit.revision`
+        increments rather than resetting. The write's own `properties`/`handling`/`resolution`
+        are the latest write's values, not deep-merged field by field — the same "latest write
+        wins" `upsert_edges` already applies to everything it does not name as cumulative, since
+        there is no way to resolve two *conflicting* values for one ontology property without
+        inventing a merge rule the ontology itself does not declare. Nothing is silently dropped
+        by this: the one thing `01_DOMAIN_MODEL.md` requires never to shrink — the provenance
+        list — never does.
+        """
         schema = self._require_schema()
         ids: list[NodeId] = []
         for write in nodes:
@@ -135,21 +167,46 @@ class GraphArcadeDBAdapter:
             validate_properties(entity_type, write.properties)
 
             node_id = write.id
-            audit = AuditStub(
-                created_at=write.created_at,
-                created_by=write.created_by,
-                load_id=write.load_id,
-                recipe_id=write.recipe_id,
-                recipe_version=write.recipe_version,
-            )
+            existing = await self._find_existing_node(node_id, session_id=tx)
+            if existing is not None:
+                existing_audit = AuditStub.model_validate(existing["audit"])
+                audit = existing_audit.model_copy(
+                    update={
+                        "revision": existing_audit.revision + 1,
+                        "load_id": write.load_id,
+                        "recipe_id": write.recipe_id,
+                        "recipe_version": write.recipe_version,
+                    }
+                )
+                merged_provenance = self._merge_provenance(
+                    existing.get("provenance"), write.provenance
+                )
+            else:
+                audit = AuditStub(
+                    created_at=write.created_at,
+                    created_by=write.created_by,
+                    load_id=write.load_id,
+                    recipe_id=write.recipe_id,
+                    recipe_version=write.recipe_version,
+                )
+                merged_provenance = write.provenance
+
+            merged_write = write.model_copy(update={"provenance": merged_provenance})
             props = node_write_to_properties(
-                write, node_id=node_id, audit=audit, entity_type=entity_type
+                merged_write, node_id=node_id, audit=audit, entity_type=entity_type
             )
             type_name = groovy_identifier(physical_type_name(write.type))
             set_clause = ", ".join(f"{key} = :{key}" for key in props)
-            await self._client.sql(
-                f"INSERT INTO {type_name} SET {set_clause}", params=props, session_id=tx
-            )
+            if existing is not None:
+                await self._client.sql(
+                    f"UPDATE {type_name} SET {set_clause} WHERE id = :id",
+                    params=props,
+                    session_id=tx,
+                )
+            else:
+                await self._client.sql(
+                    f"INSERT INTO {type_name} SET {set_clause}", params=props, session_id=tx
+                )
             ids.append(node_id)
         return ids
 
