@@ -4319,12 +4319,23 @@ find something already finished sitting in the queue.
       (the function never opens it, only records it — a real, if inert, capability) rather than a
       manufactured fixture file.
 
-   **Recorded as Proposed, not decided** (the same discipline part A's Docker-NAT finding
-   received): whether to vendor `services/`/`adapters/` into the harness image (cost: a much
-   larger image, tighter coupling of a tool meant to stand alone to Conduit/Vault internals) or add
-   new Conduit routes for `build_local_basemap`/`verify_map` and have the Geospatial screen call
-   those instead (out of this round's own scope: "do not touch services/ or adapters/"). Until
-   ruled, `build_local_basemap`/`verify_map` stay real, typed 501s.
+   **Decided, round 09 (owner ruling R3's delegation): add Conduit routes, never vendor `services/`
+   /`adapters/` into the harness image.** `POST /v1/admin/geospatial/build-basemap` (streamed, the
+   same shape Launch is) and `POST /v1/admin/geospatial/verify` now live in `services/api/app.py`,
+   admin-role-gated (`require_admin_role` — the identical `osprey-admin` role and audience check R2
+   already uses for this image's own `/admin`). Access control shown red first
+   (`tests/services/api/test_geospatial_admin_routes.py::test_require_admin_role_refuses_a_
+   principal_without_the_role`, plus a route-level 403 case for each of the two routes), then the
+   real route wiring proven with `build_local_basemap` itself replaced by a fake (no fixture
+   `planetiler.jar`/Geofabrik extract exists in this tree, unchanged from part B's own finding
+   above) — the same "prove the wiring, not the external pipeline" boundary `test_webapp_launch.py`
+   already draws for `harness.apply`. **Not built here, disclosed rather than invented:** this
+   image's own `GeospatialScreen.tsx` still does not call either route — `Stage 2 §7`'s own
+   post-launch console has no React shell yet (checked directly: `apps/harness/src` renders only
+   the six setup screens), and a `mode="console"` branch with nowhere to actually render it would
+   be dead code no test could exercise for real. `build_basemap_step`/`verify_step` are unchanged
+   and correctly still refuse from setup mode. Wiring the screen to these routes is real work owed
+   to whoever builds Stage 2 §7's own console shell.
 
    **`05_DEPLOYMENT.md` §2.2 needed no correction** — its own "one button" text describes the
    operator-facing experience, not which process serves it; the packaging-boundary finding above is

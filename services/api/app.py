@@ -47,9 +47,11 @@ from fastapi import (
     status,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
+from scripts.build_local_basemap import GEOFABRIK_REGIONS, BasemapBuildResult, build_local_basemap
+from scripts.verify_map import verify_map
 from services.extract.writer import (
     NodeNotFoundError,
     ProvenanceTransitionError,
@@ -659,6 +661,28 @@ def require_studio_role(role: StudioRole) -> Any:
         return principal
 
     return _dependency
+
+
+#: Round 09 — the two Geospatial-screen actions `harness/geospatial.py` cannot perform inside the
+#: harness image at all (its own docstring has the confirmed-by-import reason: `scripts.
+#: build_local_basemap`/`scripts.verify_map` pull in `services.ingest`/`adapters.graph_arcadedb`/
+#: `services.api`, none of which `harness/Dockerfile` copies in, and the former needs a live
+#: `GraphPort` transaction besides). Resolved as: these two routes, here, in the one process that
+#: already has all of it — never by vendoring `services`/`adapters` into the harness image. Same
+#: role name R2 already uses for the harness's own `/admin` ("the same audience check the Conduit
+#: uses" — the identical bearer token authenticates both surfaces); a different mechanism from
+#: `require_studio_role` above only because there is no `AdminRole` enum to parametrise — one
+#: fixed role, one name, matching `harness/webapp_auth.py`'s own `ADMIN_ROLE` constant exactly.
+ADMIN_ROLE = "osprey-admin"
+
+
+async def require_admin_role(principal: PrincipalDep) -> Principal:
+    if ADMIN_ROLE not in principal.roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"principal lacks required role: {ADMIN_ROLE}",
+        )
+    return principal
 
 
 async def get_authorized_investigation(
@@ -2417,6 +2441,161 @@ async def get_map_local_source_route(
             ),
         )
     return FileResponse(path, media_type="application/vnd.pmtiles")
+
+
+# --- geospatial admin actions (round 09) ----------------------------------
+#
+# `harness/geospatial.py`'s own docstring has the full account of why these live here rather
+# than in the harness image: `build_local_basemap` needs a live `GraphPort` transaction, and
+# both it and `verify_map` import `services`/`adapters` modules the harness image deliberately
+# does not carry. Admin-role-gated (`require_admin_role`, same role name and audience check R2's
+# own harness `/admin` already uses) — never reachable from the setup-mode Geospatial screen,
+# only from the post-Launch admin console, which authenticates against this same Conduit.
+
+
+class BuildBasemapRequest(BaseModel):
+    region: str
+    output_dir: str
+    planetiler_jar_path: str
+
+
+class BuildBasemapResult(BaseModel):
+    pmtiles_path: str
+    nodes_created: int
+    nodes_referenced: int
+    rejections: int
+
+
+@app.post("/v1/admin/geospatial/build-basemap")
+async def build_basemap_route(
+    body: BuildBasemapRequest,
+    principal: Annotated[Principal, Depends(require_admin_role)],
+    graph: GraphDep,
+    ontology: OntologyDep,
+    config: ConfigDep,
+    audit: AuditDep,
+) -> StreamingResponse:
+    """Streamed the same way Launch is (`harness/webapp.py`'s own `_launch_events`) — one line of
+    real progress at a time, `build_local_basemap`'s own `progress` callback bridged into an SSE
+    generator via a queue, since the work itself is an in-process async call here, never a
+    subprocess (the Conduit already holds the one live `GraphPort` connection this needs)."""
+    if body.region not in GEOFABRIK_REGIONS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"{body.region!r} is not a known Geofabrik region: {sorted(GEOFABRIK_REGIONS)}",
+        )
+
+    async def _events() -> AsyncIterator[bytes]:
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[str] = asyncio.Queue()
+
+        def _progress(line: str) -> None:
+            loop.call_soon_threadsafe(queue.put_nowait, line)
+
+        async def _run_build() -> tuple[BasemapBuildResult | None, BaseException | None]:
+            tx = await graph.begin_transaction()
+            try:
+                result = await build_local_basemap(
+                    region=body.region,
+                    output_dir=Path(body.output_dir),
+                    planetiler_jar_path=Path(body.planetiler_jar_path),
+                    osprey_config_path=Path(config.osprey_config_path),
+                    graph=graph,
+                    ontology=ontology,
+                    tx=tx,
+                    principal=principal,
+                    progress=_progress,
+                )
+            except BaseException as exc:  # noqa: BLE001 - reported to the caller, not swallowed
+                await graph.rollback_transaction(tx)
+                return None, exc
+            await graph.commit_transaction(tx)
+            return result, None
+
+        task = asyncio.ensure_future(_run_build())
+        while True:
+            get_line = asyncio.ensure_future(queue.get())
+            done, _pending = await asyncio.wait(
+                {task, get_line}, return_when=asyncio.FIRST_COMPLETED
+            )
+            if get_line in done:
+                yield f"data: {json.dumps({'line': get_line.result()})}\n\n".encode()
+                continue
+            get_line.cancel()
+            break
+        # Drain whatever progress arrived after the build task itself finished but before this
+        # loop's own last `queue.get()` was scheduled — a real race the `asyncio.wait` above
+        # cannot close on its own, found writing this route's own first test.
+        while not queue.empty():
+            yield f"data: {json.dumps({'line': queue.get_nowait()})}\n\n".encode()
+
+        result, error = task.result()
+        if error is not None:
+            await audit.record(
+                principal=principal,
+                action="geospatial_build_basemap",
+                resolved_query={"region": body.region},
+                result_cardinality=0,
+            )
+            yield (
+                f"event: complete\ndata: {json.dumps({'returncode': 1, 'error': str(error)})}\n\n"
+            ).encode()
+            return
+        assert result is not None
+        await audit.record(
+            principal=principal,
+            action="geospatial_build_basemap",
+            resolved_query={"region": body.region},
+            result_cardinality=1,
+        )
+        payload = BuildBasemapResult(
+            pmtiles_path=str(result.pmtiles_path),
+            nodes_created=result.gazetteer_report.nodes_created,
+            nodes_referenced=result.gazetteer_report.nodes_referenced,
+            rejections=len(result.gazetteer_report.rejections),
+        )
+        yield (
+            f"event: complete\ndata: "
+            f"{json.dumps({'returncode': 0, 'result': payload.model_dump()})}\n\n"
+        ).encode()
+
+    return StreamingResponse(_events(), media_type="text/event-stream")
+
+
+class VerifyMapIssue(BaseModel):
+    provider_id: str
+    check: str
+    detail: str
+
+
+class VerifyMapResult(BaseModel):
+    passed: bool
+    issues: list[VerifyMapIssue]
+
+
+@app.post("/v1/admin/geospatial/verify")
+async def verify_map_route(
+    principal: Annotated[Principal, Depends(require_admin_role)],
+    map_config: MapConfigDep,
+    audit: AuditDep,
+) -> VerifyMapResult:
+    """Fast — a handful of in-memory/attribution checks and, for a tier-4 provider only, one live
+    capability probe (`check_crs_and_zoom`) — no progress stream needed, unlike the basemap build
+    above."""
+    report = await verify_map(map_config)
+    await audit.record(
+        principal=principal,
+        action="geospatial_verify_map",
+        resolved_query={"provider_count": len(map_config.providers)},
+        result_cardinality=len(report.issues),
+    )
+    return VerifyMapResult(
+        passed=report.passed,
+        issues=[
+            VerifyMapIssue(provider_id=i.provider_id, check=i.check, detail=i.detail)
+            for i in report.issues
+        ],
+    )
 
 
 # --- analytics -----------------------------------------------------------

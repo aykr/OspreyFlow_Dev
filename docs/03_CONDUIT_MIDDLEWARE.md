@@ -214,6 +214,23 @@ screen's own concern (`09_INGEST_STUDIO.md` §7), not post-hoc inspection of an 
 message, and a pending candidate has no minted node and no `Handling` to check visibility against
 in the first place.
 
+### 3.7 Geospatial admin actions
+
+```
+POST   /v1/admin/geospatial/build-basemap   tier-1 pipeline: download, planetiler, gazetteer load — streamed
+POST   /v1/admin/geospatial/verify          attribution and, for a tier-4 provider, a live CRS/zoom probe
+```
+
+Round 09: the two Geospatial-screen actions `harness/geospatial.py`'s own docstring found
+structurally unreachable from inside the setup harness image (`build_local_basemap` needs a live
+`GraphPort` transaction; both it and `verify_map` import `services`/`adapters` modules the harness
+image deliberately does not carry). Admin-role-gated (`require_admin_role`, `osprey-admin`) — the
+one process that already has every module both actions need. `build-basemap` streams its own real
+progress the same way Launch does (`text/event-stream`, one `{"line": ...}` per step, `event:
+complete` last); `verify` is fast enough to answer as a plain JSON `{"passed": ..., "issues": [...]}`.
+Not yet called from any UI — `Stage 2 §7`'s own post-launch console has no screen built yet;
+`07_BUILD_PLAN.md`'s Stage 2 §6 part B entry has the full account.
+
 ## 4. The Working-Set Service
 
 The most important component in the Conduit.

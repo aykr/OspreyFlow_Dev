@@ -18,13 +18,26 @@ interpreter importing each of the three real modules, restricted to nothing beyo
 
 The queue brief anticipated one failure mode ("the sandbox has no Java/planetiler... the real
 failure ... surfaced verbatim") — a real one, but one level too deep: the actual first failure is
-structural, not the Java dependency `run_planetiler` would raise if it ever got that far. Recorded
-as **Proposed, not decided** in `07_BUILD_PLAN.md`'s Stage 2 §6 part-B entry, the same discipline
-the Docker-NAT loopback finding got in part A — not silently resolved by vendoring `services/` and
-`adapters/` into the harness image (a real cost: a much larger image, tighter coupling of what is
-supposed to be a standalone setup tool to Conduit/Vault internals) and not silently resolved by
-adding new Conduit routes either (out of this round's own scope: "do not touch services/ or
-adapters/ except the one scripts/real_data_exceptions.py change").
+structural, not the Java dependency `run_planetiler` would raise if it ever got that far.
+
+**Decided, round 09: add Conduit routes, never vendor `services`/`adapters` into this image.**
+`POST /v1/admin/geospatial/build-basemap` (streamed, the same shape Launch is) and `POST
+/v1/admin/geospatial/verify` now live in `services/api/app.py`, admin-role-gated
+(`require_admin_role`, the identical `osprey-admin` role and audience check R2 already uses for
+this image's own `/admin` — one bearer token authenticates both surfaces) — real, tested, callable
+today by anyone holding a valid admin token, in the one process that already has every module
+these two actions need.
+
+**Disclosed, not built here: this image's own Geospatial screen does not call them.** Stage 2 §7
+(the post-launch admin console) has no React shell yet — `apps/harness/src` renders the six setup
+screens and nothing else, confirmed directly (`find apps/harness/src -iname "*console*" -o -iname
+"*admin*"` returns nothing). A `mode="console"` branch inside `GeospatialScreen.tsx` with no
+console context anywhere to actually render it in would be dead code no test could genuinely
+exercise — the same "the check must run against the shape the real caller produces" discipline
+`CLAUDE.md` rule 15 already states. Wiring this screen to the two routes above is real work owed
+to whoever builds Stage 2 §7's own console shell, not silently dropped; `build_basemap_step`/
+`verify_step` below are unchanged, and correctly still refuse — the setup-mode Geospatial screen
+still cannot perform either action, which remains true regardless of what the Conduit can now do.
 """
 
 from __future__ import annotations
