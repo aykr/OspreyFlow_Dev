@@ -434,8 +434,26 @@ class MatchBuilder:
             steps.append(self._count_tail(sorted(n.var for n in self.pattern.nodes), ceiling))
             return "".join(steps)
 
-        select_args = groovy_args_literal(n.var for n in self.pattern.nodes)
-        steps.append(f".select({select_args})")
+        # **`project`, not `select`, for a single variable.** Gremlin's `select` is overloaded on
+        # arity in a way that changes the *shape* of what comes back, not just its size:
+        # `select('a','b')` yields a map keyed by variable name, while `select('a')` yields the
+        # bare projected value. `GraphArcadeDBAdapter.match` reads every record as the former —
+        # `for value in record.values()` — so a one-variable pattern handed it an element map and
+        # it iterated that map's own values, calling `node_from_element_map` on the string
+        # `"mx_Person"` and raising `TypeError: string indices must be integers`. A 500 from
+        # `POST /v1/patterns/run` for the simplest pattern the visual query builder can express:
+        # one entity type, no edges, which is exactly what a first-time user draws.
+        #
+        # Found 26 September 2026 driving the query builder against a real stack. Nothing caught
+        # it because every existing case for this path binds two or more variables, so the
+        # one-variable arity — the only one whose wire shape differs — had never been rendered
+        # and parsed end to end. `project` yields the keyed map for any arity, so the shape is
+        # uniform and `match`'s own loop is right as it stands.
+        node_vars = [n.var for n in self.pattern.nodes]
+        if len(node_vars) == 1:
+            steps.append(f".project({groovy_string_literal(node_vars[0])})")
+        else:
+            steps.append(f".select({groovy_args_literal(node_vars)})")
         steps.append(".by(elementMap())")
         steps.append(f".dedup().limit({self.pattern.limit})")
         return "".join(steps)

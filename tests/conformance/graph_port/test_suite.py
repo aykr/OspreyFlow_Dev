@@ -743,6 +743,52 @@ async def test_match_finds_the_declared_pattern(factory: GraphAdapterFactory) ->
         assert {a, b} <= found_ids
 
 
+async def test_match_finds_a_pattern_of_one_variable_with_no_edges(
+    factory: GraphAdapterFactory,
+) -> None:
+    """**The simplest pattern the visual query builder can express, and it returned a 500.**
+    One entity type, no edges — what a first-time user draws before adding anything to it.
+
+    Found 26 September 2026 driving the query builder against a real stack (round 12). Gremlin's
+    `select` changes the *shape* of its result with its arity: `select('a','b')` yields a map
+    keyed by variable, `select('a')` yields the bare projected value. `match` reads every record
+    as the keyed form, so a one-variable pattern made it iterate an element map's own values and
+    call `node_from_element_map` on the string `'mx_Person'` —
+    `TypeError: string indices must be integers`, surfacing as
+    `500 Internal Server Error` from `POST /v1/patterns/run`.
+
+    **Why nothing caught it**: every other case in this file, including
+    `test_match_single_chain_pattern_compiles_to_the_same_gremlin_as_before` immediately below,
+    binds two or more variables — so the single-variable arity, the only one whose wire shape
+    differs, had never once been rendered and parsed end to end. `CLAUDE.md` rule 12's shape
+    exactly, and rule 1's: the contract is what this suite says it is, and it did not say this.
+
+    Deliberately a real round trip through `adapter.match`, not a check of the compiled Gremlin:
+    the defect was entirely in how the *response* was read, so a compiled-string assertion would
+    have passed against the broken code."""
+    async with factory.context() as adapter:
+        (person, endpoint), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL"),
+                _node("Endpoint", classification="OFFICIAL"),
+            ],
+            [],
+        )
+
+        pattern = PatternQuery(nodes=[PatternNode(var="p", entity_type="Person")], edges=[])
+        subgraph = await adapter.match(pattern, CLEARED)
+
+        found_ids = {n.id for n in subgraph.nodes}
+        assert person in found_ids
+        # And the type filter still applies — a bare `project` that dropped the `hasLabel`
+        # would also "pass" an assertion that only checked the Person came back.
+        assert endpoint not in found_ids
+        # Fully hydrated nodes, not bare ids: the bug produced a `Node` from the wrong level of
+        # the response, so asserting the shape is what distinguishes a real fix from a coincidence.
+        assert all(n.type == "Person" for n in subgraph.nodes)
+
+
 def test_match_single_chain_pattern_compiles_to_the_same_gremlin_as_before(
     factory: GraphAdapterFactory,
 ) -> None:
