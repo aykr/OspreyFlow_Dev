@@ -19,6 +19,8 @@ test("Tab reaches the Profile screen's own options and a real keyboard Enter sav
   await expect(page.getByRole("button", { name: "Profile", exact: true })).toBeFocused();
   await page.keyboard.press("Tab"); // Components nav button
   await page.keyboard.press("Tab"); // Models nav button
+  await page.keyboard.press("Tab"); // Governance nav button
+  await page.keyboard.press("Tab"); // Geospatial nav button
   await page.keyboard.press("Tab"); // the radio group (one tab stop, lands on the checked radio)
   await expect(page.getByRole("radio", { name: /local-lite/ })).toBeFocused();
   await page.keyboard.press("ArrowDown"); // moves selection to "small" within the radio group
@@ -46,9 +48,12 @@ test("a keyboard-activated screen switch reaches Components and a real Enter sav
   await page.getByRole("combobox", { name: "Graph store" }).waitFor();
 
   // Activating "Components" leaves focus on that nav button itself (Enter on a button never
-  // moves focus away from it) — the next Tab reaches the last nav button ("Models"), still in
-  // the DOM after it, and only the one after that reaches the newly-rendered screen's own field.
+  // moves focus away from it) — the next Tabs reach the remaining nav buttons still in the DOM
+  // after it (Models, Governance, Geospatial), and only the one after those reaches the
+  // newly-rendered screen's own field.
   await page.keyboard.press("Tab"); // Models nav button
+  await page.keyboard.press("Tab"); // Governance nav button
+  await page.keyboard.press("Tab"); // Geospatial nav button
   await page.keyboard.press("Tab"); // graph store select
   await expect(page.getByRole("combobox", { name: "Graph store" })).toBeFocused();
   await page.keyboard.press("Tab"); // analytics engine select
@@ -73,6 +78,10 @@ test("a keyboard-activated screen switch reaches Models and a real Enter saves i
   await page.keyboard.press("Enter");
   await page.getByRole("checkbox", { name: /Local only/ }).waitFor();
 
+  // Models is no longer the last nav button (Governance, Geospatial follow it in the DOM) — the
+  // same "Enter leaves focus on the activated button itself" finding as Components above.
+  await page.keyboard.press("Tab"); // Governance nav button
+  await page.keyboard.press("Tab"); // Geospatial nav button
   await page.keyboard.press("Tab"); // the "local only" checkbox
   await expect(page.getByRole("checkbox", { name: /Local only/ })).toBeFocused();
   await page.keyboard.press("Tab"); // Save models button (hosted-fallback fields hidden while local only)
@@ -85,6 +94,204 @@ test("a keyboard-activated screen switch reaches Models and a real Enter saves i
   expect(response.ok()).toBe(true);
 
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-save-models");
+});
+
+test("Tab reaches the Governance screen and a real keyboard Enter saves it", async ({ page }) => {
+  await page.goto("/keyboard/setup-harness.html");
+  await page.getByRole("button", { name: "Governance", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("textbox", { name: "Identity provider" }).waitFor();
+
+  // Governance is the 4th of 5 nav buttons — one sibling (Geospatial) follows it in the DOM, the
+  // same "Enter leaves focus on the activated button itself" finding `setup-screens.spec.ts`'s own
+  // Components case already established, one extra Tab further here since one more nav button
+  // follows.
+  await page.keyboard.press("Tab"); // Geospatial nav button
+  await page.keyboard.press("Tab"); // Identity provider input
+  await expect(page.getByRole("textbox", { name: "Identity provider" })).toBeFocused();
+  await page.keyboard.press("Tab"); // Handling scheme select
+  await expect(page.getByRole("combobox", { name: "Handling scheme" })).toBeFocused();
+  await page.keyboard.press("Tab"); // Ontology input
+  await expect(page.getByRole("textbox", { name: "Ontology" })).toBeFocused();
+  await page.keyboard.press("Tab"); // Real-data exceptions file path input
+  await expect(page.getByRole("textbox", { name: "Real-data exceptions file path" })).toBeFocused();
+  await page.keyboard.press("Tab"); // Save governance button
+  await expect(page.getByRole("button", { name: "Save governance" })).toBeFocused();
+
+  const [response] = await Promise.all([
+    page.waitForResponse((r) => r.url().includes("/api/config") && r.request().method() === "PUT"),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(response.ok()).toBe(true);
+
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-save-governance");
+});
+
+test("a real keyboard walkthrough adds a real-data exception through the Governance panel", async ({
+  page,
+}) => {
+  await page.goto("/keyboard/setup-harness.html");
+  await page.getByRole("button", { name: "Governance", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("textbox", { name: "Dataset name" }).waitFor();
+
+  await page.keyboard.press("Tab"); // Geospatial nav button
+  await page.keyboard.press("Tab"); // Identity provider
+  await page.keyboard.press("Tab"); // Handling scheme
+  await page.keyboard.press("Tab"); // Ontology
+  await page.keyboard.press("Tab"); // Real-data exceptions file path
+  await page.keyboard.press("Tab"); // Save governance button
+  await page.keyboard.press("Tab"); // Dataset name input
+  await expect(page.getByRole("textbox", { name: "Dataset name" })).toBeFocused();
+  await page.keyboard.type("Keyboard Spec Corpus");
+
+  await page.keyboard.press("Tab"); // local_development checkbox
+  await expect(page.getByRole("checkbox", { name: "local_development" })).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("checkbox", { name: "local_development" })).toBeChecked();
+
+  await page.keyboard.press("Tab"); // scale_testing checkbox
+  await page.keyboard.press("Tab"); // owner_run_demonstration checkbox
+  await page.keyboard.press("Tab"); // Added by
+  await expect(page.getByRole("textbox", { name: "Added by" })).toBeFocused();
+  await page.keyboard.type("keyboard-spec");
+
+  await page.keyboard.press("Tab"); // Device
+  await page.keyboard.type("ci-runner");
+
+  await page.keyboard.press("Tab"); // Justification
+  await page.keyboard.type("proving the panel is keyboard reachable");
+
+  await page.keyboard.press("Tab"); // Decision record
+  await page.keyboard.type("ADR-035 §C3");
+
+  await page.keyboard.press("Tab"); // Add exception button
+  await expect(page.getByRole("button", { name: "Add exception" })).toBeFocused();
+
+  const [response] = await Promise.all([
+    page.waitForResponse(
+      (r) => r.url().includes("/api/real-data-exceptions") && r.request().method() === "POST",
+    ),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(response.ok()).toBe(true);
+  await expect(page.getByText("Keyboard Spec Corpus")).toBeVisible();
+
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-add-exception");
+});
+
+test("a real keyboard Enter removes a real-data exception through the Governance panel", async ({
+  page,
+  request,
+}) => {
+  // Seeded directly, not through the UI — this test's own scope is proving Remove is keyboard
+  // reachable and really calls DELETE, not re-proving Add (the previous test's own scope).
+  await request.post("/api/real-data-exceptions", {
+    data: {
+      dataset: "Seeded For Removal",
+      approved_uses: ["local_development"],
+      added_by: "seed",
+      device: "ci-runner",
+      justification: "seeded for the remove test",
+      decision_record: "ADR-035 §C3",
+    },
+  });
+
+  await page.goto("/keyboard/setup-harness.html");
+  await page.getByRole("button", { name: "Governance", exact: true }).focus();
+  await page.keyboard.press("Enter");
+
+  // Scoped to this test's own seeded row — the previous test's own "Keyboard Spec Corpus" entry
+  // is still present in the same scratch file (one server, one file, across the whole run), so an
+  // unscoped "Remove" would match more than one row.
+  const removeButton = page
+    .getByRole("listitem")
+    .filter({ hasText: "Seeded For Removal" })
+    .getByRole("button", { name: "Remove" });
+  await removeButton.waitFor();
+  await removeButton.focus();
+  await expect(removeButton).toBeFocused();
+
+  const [response] = await Promise.all([
+    page.waitForResponse(
+      (r) => r.url().includes("/api/real-data-exceptions/") && r.request().method() === "DELETE",
+    ),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(response.ok()).toBe(true);
+  await expect(page.getByText("Seeded For Removal")).toHaveCount(0);
+
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-remove-exception");
+});
+
+test("a real keyboard walkthrough registers a local provider through the Geospatial screen", async ({
+  page,
+}) => {
+  await page.goto("/keyboard/setup-harness.html");
+  await page.getByRole("button", { name: "Geospatial", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("textbox", { name: "Provider id" }).waitFor();
+
+  // Geospatial is the last nav button — no nav sibling follows it, so the very next Tab (unlike
+  // Governance's case above) reaches this screen's own first field directly.
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("textbox", { name: "Provider id" })).toBeFocused();
+  await page.keyboard.type("osm-local-keyboard-spec");
+
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("textbox", { name: "Label" })).toBeFocused();
+  await page.keyboard.type("Keyboard spec region");
+
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("textbox", { name: "PMTiles path" })).toBeFocused();
+  await page.keyboard.type("/tmp/keyboard-spec.pmtiles");
+
+  await page.keyboard.press("Tab"); // Register provider button
+  await expect(page.getByRole("button", { name: "Register provider" })).toBeFocused();
+
+  const [response] = await Promise.all([
+    page.waitForResponse((r) => r.url().includes("/api/geospatial/register-provider")),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(response.ok()).toBe(true);
+
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-register-provider");
+});
+
+test("Tab reaches Build local basemap and Verify, each a real keyboard-triggered call", async ({
+  page,
+}) => {
+  await page.goto("/keyboard/setup-harness.html");
+  await page.getByRole("button", { name: "Geospatial", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Build local basemap" }).waitFor();
+
+  await page.keyboard.press("Tab"); // Provider id
+  await page.keyboard.press("Tab"); // Label
+  await page.keyboard.press("Tab"); // PMTiles path
+  await page.keyboard.press("Tab"); // Register provider button
+  await page.keyboard.press("Tab"); // Build local basemap button
+  await expect(page.getByRole("button", { name: "Build local basemap" })).toBeFocused();
+
+  // Always a real 501 — `harness/geospatial.py`'s own docstring has the confirmed-by-import
+  // reason; this test proves the button is keyboard-reachable and really calls the route, not
+  // that the route succeeds (`test_webapp_geospatial.py` proves the 501 itself, at the route).
+  const [buildResponse] = await Promise.all([
+    page.waitForResponse((r) => r.url().includes("/api/geospatial/build-basemap")),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(buildResponse.status()).toBe(501);
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-build-basemap");
+
+  await page.keyboard.press("Tab"); // Verify button
+  await expect(page.getByRole("button", { name: "Verify" })).toBeFocused();
+
+  const [verifyResponse] = await Promise.all([
+    page.waitForResponse((r) => r.url().includes("/api/geospatial/verify")),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(verifyResponse.status()).toBe(501);
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-verify-map");
 });
 
 test("every registered setup-screen action has its own proving test case above", () => {

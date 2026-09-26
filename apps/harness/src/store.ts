@@ -4,13 +4,14 @@
 // at a decision that was never made.
 import { useCallback, useState } from "react";
 
-export const SCREEN_NAMES = ["Profile", "Components", "Models"] as const;
+export const SCREEN_NAMES = ["Profile", "Components", "Models", "Governance", "Geospatial"] as const;
 export type ScreenName = (typeof SCREEN_NAMES)[number];
 
-// Screens `Stage 2 §6` part A does not build — always outstanding here, never rendered as a tab,
-// shown in the rail only so an operator sees the whole six-screen shape this surface will
-// eventually be, not just the three this round built.
-export const FUTURE_SCREEN_NAMES = ["Governance", "Geospatial", "Preflight"] as const;
+// Screens not yet built — always outstanding here, never rendered as a tab, shown in the rail only
+// so an operator sees the whole six-screen shape this surface will eventually be. Preflight is
+// `Stage 2 §6` part B's own item 3, not started this round (queue brief: "finish a self-consistent
+// subset" — Governance and Geospatial are the subset this round completed).
+export const FUTURE_SCREEN_NAMES = ["Preflight"] as const;
 
 export function useDecidedScreens() {
   const [decided, setDecided] = useState<Set<ScreenName>>(new Set());

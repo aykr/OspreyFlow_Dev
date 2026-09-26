@@ -37,3 +37,30 @@ export interface Consequences {
   egress_exception: boolean;
   egress_detail: string | null;
 }
+
+// `scripts/real_data_exceptions.py`'s own `RealDataException` — a plain dataclass, not a Pydantic
+// model, so hand-written here for the same reason as the two interfaces above.
+export interface RealDataException {
+  dataset: string;
+  approved_uses: string[];
+  added_by: string;
+  added_date: string;
+  device: string;
+  justification: string;
+  decision_record: string;
+  revisit?: string;
+}
+
+export interface NewRealDataException {
+  dataset: string;
+  approved_uses: string[];
+  added_by: string;
+  device: string;
+  justification: string;
+  decision_record: string;
+  revisit?: string;
+}
+
+// `harness/geospatial.py`'s `register_provider_step`'s own return shape — `MapConfig`, already
+// generated; re-exported here rather than duplicated.
+export type { MapConfig } from "../../../../packages/schemas/generated/MapConfig";

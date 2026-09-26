@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { getConfig, putConfig } from "./api/client";
 import type { OspreyConfig } from "./api/types";
 import { ComponentsScreen } from "./screens/ComponentsScreen";
+import { GeospatialScreen } from "./screens/GeospatialScreen";
+import { GovernanceScreen } from "./screens/GovernanceScreen";
 import { ModelsScreen } from "./screens/ModelsScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
 import { SCREEN_NAMES, type ScreenName, useDecidedScreens } from "./store";
@@ -45,6 +47,8 @@ export function App() {
         {screen === "Profile" && <ProfileScreen config={config} onSave={handleSave} />}
         {screen === "Components" && <ComponentsScreen config={config} onSave={handleSave} />}
         {screen === "Models" && <ModelsScreen config={config} onSave={handleSave} />}
+        {screen === "Governance" && <GovernanceScreen config={config} onSave={handleSave} />}
+        {screen === "Geospatial" && <GeospatialScreen />}
       </main>
     </div>
   );

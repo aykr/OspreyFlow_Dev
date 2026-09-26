@@ -13,10 +13,38 @@ The map, current as of this round:
 | `PUT /api/config` | Hand-editing `osprey.yaml`, re-validated — `OspreyConfig.model_validate` |
 | `GET /api/profile-options/{profile}` | `harness.screens.profile_options` — a §1 table lookup |
 | `POST /api/consequences` | `harness.screens.consequences_for` — a pure computation |
+| `GET /api/real-data-exceptions` | `scripts.real_data_exceptions.load_exceptions` |
+| `POST /api/real-data-exceptions` | `scripts.real_data_exceptions.add_exception` (CLI's `add`) |
+| `DELETE /api/real-data-exceptions/{dataset}` | `scripts.real_data_exceptions.remove_exception` |
+| `POST /api/geospatial/register-provider` | `harness.geospatial.register_provider_step` (real) |
+| `POST /api/geospatial/build-basemap` | `harness.geospatial.build_basemap_step` — always 501 |
+| `POST /api/geospatial/verify` | `harness.geospatial.verify_step` — always 501 |
 | `GET /admin` | A placeholder for `Stage 2 §6` part B's console, gated already |
 
-Preflight, Apply, Backup, Restore and Bundle are not exposed here — those screens are not this
-round's scope (queue brief: "Not in this round: Governance, Geospatial, Preflight, Launch").
+The Governance screen's own config fields (`identity_provider`, `handling_scheme`, `ontology`,
+`real_data_exceptions` path) need no new route — they are a `GovernanceConfig` section like any
+other, written through the existing `PUT /api/config`. Only the exceptions panel over
+`scripts/real_data_exceptions.py` (ADR-049 Stage 2 §6, "hosts the real-data exceptions panel")
+needs its own routes, above.
+
+**This module never admits a real dataset itself.** The three routes above read and write
+`config/real_data_exceptions.yaml` at the path `scripts.real_data_exceptions.CONFIG_PATH` already
+uses — the owner's own local, gitignored file — the same fail-closed module `CLAUDE.md` rule 9 and
+`06_DECISIONS.md` ADR-035 §C3 already govern. `load_exceptions` raises (`KeyError` for an entry
+missing a required field, `ValueError` for one that fails a field's own format check) rather than
+silently dropping a malformed entry; `get_real_data_exceptions` surfaces that verbatim as a 422
+rather than swallowing it, per `CLAUDE.md` rule 2. **Any entry in an existing local
+`config/real_data_exceptions.yaml` that predates `decision_record` (added 26 September 2026,
+`06_DECISIONS.md` ADR-049 Stage 2 §6 ruling 3) is invalid until the owner adds it by hand — this
+module cannot see that gitignored file from here and must not try to migrate it.**
+
+`build-basemap` and `verify` always return 501 — `harness/geospatial.py`'s own docstring has the
+real, confirmed-by-import reason (both real functions pull in `services`/`adapters` modules
+`harness/Dockerfile` does not copy into this image), recorded as **Proposed, not decided** in
+`07_BUILD_PLAN.md`'s Stage 2 §6 part-B entry rather than silently worked around.
+
+Preflight, Launch, Backup, Restore and Bundle are not exposed here — those screens are not this
+round's scope (queue brief: item 3 onward beyond Governance/Geospatial).
 """
 
 from __future__ import annotations
@@ -24,6 +52,7 @@ from __future__ import annotations
 import argparse
 import copy
 import sys
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +61,22 @@ from fastapi import Body, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
+from scripts.real_data_exceptions import (
+    CONFIG_PATH as REAL_DATA_EXCEPTIONS_PATH,
+)
+from scripts.real_data_exceptions import (
+    RealDataException,
+    add_exception,
+    load_exceptions,
+    remove_exception,
+)
 
+from harness.geospatial import (
+    GeospatialError,
+    build_basemap_step,
+    register_provider_step,
+    verify_step,
+)
 from harness.render import DEFAULT_CONFIG_PATH
 from harness.screens import (
     Consequences,
@@ -90,7 +134,11 @@ def _consequences_json(consequences: Consequences) -> dict[str, Any]:
     }
 
 
-def create_app(*, config_path: Path = DEFAULT_CONFIG_PATH) -> FastAPI:
+def create_app(
+    *,
+    config_path: Path = DEFAULT_CONFIG_PATH,
+    real_data_exceptions_path: Path = REAL_DATA_EXCEPTIONS_PATH,
+) -> FastAPI:
     app = FastAPI(title="OspreyFlow setup harness")
 
     # Setup mode's own second layer of defence — R2, `webapp_auth.loopback_only_middleware`'s own
@@ -151,6 +199,83 @@ def create_app(*, config_path: Path = DEFAULT_CONFIG_PATH) -> FastAPI:
             raise HTTPException(status_code=422, detail=exc.errors()) from exc
         return _consequences_json(consequences_for(config))
 
+    @app.get("/api/real-data-exceptions")
+    def get_real_data_exceptions() -> dict[str, Any]:
+        try:
+            entries = load_exceptions(config_path=real_data_exceptions_path)
+        except (KeyError, ValueError) as exc:
+            # Never swallowed — `CLAUDE.md` rule 2 and this module's own docstring: an existing
+            # local entry missing `decision_record` (or malformed) is invalid, and the panel says
+            # so verbatim rather than showing an empty or partial list.
+            raise HTTPException(
+                status_code=422,
+                detail=f"config/real_data_exceptions.yaml: {exc}",
+            ) from exc
+        return {"exceptions": [e.to_dict() for e in entries]}
+
+    @app.post("/api/real-data-exceptions", status_code=201)
+    def post_real_data_exception(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        try:
+            entry = RealDataException(
+                dataset=str(body.get("dataset", "")),
+                approved_uses=tuple(body.get("approved_uses", ())),
+                added_by=str(body.get("added_by", "")),
+                added_date=date.today(),
+                device=str(body.get("device", "")),
+                justification=str(body.get("justification", "")),
+                decision_record=str(body.get("decision_record", "")),
+                revisit=str(body["revisit"]) if body.get("revisit") else None,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        try:
+            add_exception(entry, config_path=real_data_exceptions_path)
+        except ValueError as exc:  # duplicate dataset — scripts.real_data_exceptions's own message
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return entry.to_dict()
+
+    @app.delete("/api/real-data-exceptions/{dataset}")
+    def delete_real_data_exception(dataset: str) -> dict[str, str]:
+        if not remove_exception(dataset, config_path=real_data_exceptions_path):
+            raise HTTPException(
+                status_code=404, detail=f"{dataset!r} was not in the exceptions list."
+            )
+        return {"status": "removed", "dataset": dataset}
+
+    @app.post("/api/geospatial/register-provider")
+    def post_register_provider(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        try:
+            provider_id = str(body["provider_id"])
+            label = str(body["label"])
+            pmtiles_path = str(body["pmtiles_path"])
+        except KeyError as exc:
+            raise HTTPException(status_code=422, detail=f"missing field: {exc}") from exc
+        try:
+            config = register_provider_step(
+                config_path,
+                provider_id=provider_id,
+                label=label,
+                pmtiles_path=Path(pmtiles_path),
+                make_default=bool(body.get("make_default", True)),
+            )
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail=exc.errors()) from exc
+        return config.model_dump(mode="json", exclude_none=True)
+
+    @app.post("/api/geospatial/build-basemap")
+    def post_build_basemap(_body: dict[str, Any] = Body(default={})) -> None:
+        try:
+            build_basemap_step()
+        except GeospatialError as exc:
+            raise HTTPException(status_code=501, detail=str(exc)) from exc
+
+    @app.post("/api/geospatial/verify")
+    def post_verify_map(_body: dict[str, Any] = Body(default={})) -> None:
+        try:
+            verify_step()
+        except GeospatialError as exc:
+            raise HTTPException(status_code=501, detail=str(exc)) from exc
+
     @app.get("/admin", dependencies=[Depends(require_admin_role)])
     def admin_placeholder() -> dict[str, str]:
         """`Stage 2 §6` part B builds the real console; this is the route amendment 22's own
@@ -182,6 +307,17 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--port", type=int, default=7000, help="05_DEPLOYMENT.md §2's own default.")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    parser.add_argument(
+        "--real-data-exceptions",
+        type=Path,
+        default=REAL_DATA_EXCEPTIONS_PATH,
+        help=(
+            "Path to the local, gitignored real-data exceptions file the Governance screen's own "
+            "panel reads and writes — default: scripts.real_data_exceptions.CONFIG_PATH, the "
+            "owner's own device-local file. Override only for a scratch/test run (a keyboard spec, "
+            "e.g.) that must never touch the real file — CLAUDE.md rule 9 / ADR-035 §C3."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -189,7 +325,7 @@ def main(argv: list[str] | None = None) -> int:
     import uvicorn
 
     args = _parse_args(argv if argv is not None else sys.argv[1:])
-    app = create_app(config_path=args.config)
+    app = create_app(config_path=args.config, real_data_exceptions_path=args.real_data_exceptions)
     uvicorn.run(app, host=args.host, port=args.port)
     return 0
 

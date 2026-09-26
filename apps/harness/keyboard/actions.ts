@@ -10,12 +10,21 @@ import { defineActionRegistry } from "../../workspace/keyboard/actionRegistry";
 // helpers from one local module, rather than reaching into `apps/workspace` twice per file.
 export { assertAllCovered, registerCovered } from "../../workspace/keyboard/actionRegistry";
 
-// The three screens' own "Save" actions — each a real `PUT /api/config` call, the only actions on
-// this surface that mutate state or reach the network. Every native `<input>`/`<select>`/radio's
-// own Tab-reachability needs no case here, the same exemption every registry in the shared module
-// already establishes for a native control.
+// Every action on this surface that mutates state or reaches the network — each screen's own
+// "Save", the Governance screen's exceptions-panel add/remove, and the Geospatial screen's three
+// buttons (`build-basemap`/`verify` always refuse with a real 501, `harness/geospatial.py`'s own
+// docstring has the reason, but the *keyboard reachability* of the button that triggers the call
+// is proven the same way regardless of what the backend returns). Every native
+// `<input>`/`<select>`/radio's own Tab-reachability needs no case here, the same exemption every
+// registry in the shared module already establishes for a native control.
 export const SETUP_SCREENS_ACTIONS = defineActionRegistry("SETUP_SCREENS_ACTIONS", [
   "submit-save-profile",
   "submit-save-components",
   "submit-save-models",
+  "submit-save-governance",
+  "submit-add-exception",
+  "submit-remove-exception",
+  "submit-register-provider",
+  "submit-build-basemap",
+  "submit-verify-map",
 ] as const);
