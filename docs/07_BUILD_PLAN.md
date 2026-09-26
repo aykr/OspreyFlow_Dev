@@ -4135,6 +4135,108 @@ find something already finished sitting in the queue.
    divergence recorded at Stage 6 below is not reproduced for a third surface. *Judgement:* a usability pass by someone
    other than whoever built the screens, exactly as this stage's own entry already words it.
 
+   **Part A, built 26 September 2026 — the application skeleton and the Profile/Components/Models
+   screens.** Rulings R1 and R2 (`DECISIONS.md`) applied: `apps/harness` is a Vite/React/TypeScript
+   app, the same toolchain and design tokens as `apps/workspace`; its server side is
+   `harness/webapp.py`, a FastAPI app inside the existing `harness` image (no second image, no
+   second schema) — `python -m harness` with no subcommand now starts it (`harness/__main__.py`),
+   the mode its own docstring already named as owed. `harness/screens.py` is the one place §1's own
+   profile table (machines, memory floor, allowed components per profile) and the Models screen's
+   egress consequence live, in Python, so neither is duplicated in the browser.
+
+   **The UI→headless map, per §2.3's own rule** ("the UI never has a capability the headless path
+   lacks"):
+
+   | Route | Headless equivalent |
+   | --- | --- |
+   | `GET`/`PUT /api/config` | `harness.render.load_config` / hand-editing `osprey.yaml` |
+   | `GET /api/profile-options/{profile}` | `harness.screens.profile_options` — a §1 table lookup |
+   | `POST /api/consequences` | `harness.screens.consequences_for` — a pure computation |
+   | `GET /admin` | A placeholder for part B's own console, gated already |
+
+   No route invents a capability the CLI/schema does not already have; Preflight, Apply, Backup,
+   Restore and Bundle are not exposed — out of this round's own scope.
+
+   **Amendment 23 built, not deferred.** `invalid_components_for_profile` refuses an out-of-table
+   `graph_store`/`analytics_engine` for the profile in force, named field by field, both server-side
+   (`PUT /api/config`, tested directly) and in the Components screen's own option list (fetched from
+   `/api/profile-options`, never a second copy of the table). The summary rail
+   (`SummaryRail.tsx`) shows all six screens — the three this round built as decided/outstanding,
+   Governance/Geospatial/Preflight always outstanding, labelled "not built yet" rather than omitted,
+   so the six-screen shape is visible before parts B/C exist. Consequences (`ProfileScreen`,
+   `ModelsScreen`) recompute live against the draft answer, before `Save` is pressed, via
+   `POST /api/consequences` — not only after a screen commits.
+
+   **Amendment 21: `SETUP_SCREENS_ACTIONS`, declared in `apps/harness/keyboard/actions.ts`,
+   imports `defineActionRegistry` from `apps/workspace/keyboard/actionRegistry.ts` directly rather
+   than copying it (the brief's own instruction) or moving it — a second consumer of one already-
+   shared module. Its own `registryCoverage.test.ts` could not reuse `apps/workspace`'s exact
+   pattern unchanged: importing the shared module for the first time surfaced that
+   `ALL_REGISTRIES` is genuinely global (every one of `apps/workspace`'s own eight registries
+   self-registers at that module's own top level, so merely importing it to declare a ninth
+   populates all nine) — found live, not anticipated, and fixed by scoping this file's own
+   coverage check to registries *declared in this directory* rather than enumerating the shared
+   array wholesale. Shown red (the real coverage assertion removed, confirmed failing) then green,
+   both for this fix and for the registry-vs-spec gap itself.**
+
+   **Amendment 22 / R2 built.** `loopback_only_middleware` refuses any non-loopback client at the
+   application layer (the bootstrap command's own `-p 127.0.0.1:7000:7000` is the first layer);
+   `require_admin_role` decodes a real RSA-signed bearer token (`tests/conftest.py`'s own
+   `keypair`/`jwks_url` fixtures — the same real-JWKS-server shape `services/api/auth.py`'s own
+   tests use, not a mock) and checks audience and the `osprey-admin` role, returning **404 for
+   every failure** (missing header, bad signature, wrong audience, missing role) so `/admin`'s
+   existence cannot be inferred. **Not a reuse of `services/api/auth.py`** — a packaging
+   constraint, not a preference: `harness/Dockerfile`'s own traced dependency set is `harness`,
+   `packages/schemas` and `scripts` only, and `services/` is not copied into that image, so
+   importing from it would work on this checkout and break inside the real image. Shown red
+   (the dependency removed from the route) then green.
+
+   **A real, undecided architectural question found running the real built image, not by
+   reasoning about it — recorded as Proposed, not answered here.** The bootstrap command's own
+   default `--host` (originally `127.0.0.1`, matching R2's own wording literally) made
+   `05_DEPLOYMENT.md` §2's documented command serve nothing at all: Docker's bridge-mode port
+   publishing (`-p 127.0.0.1:7000:7000`) cannot deliver forwarded traffic to a process bound only
+   to loopback inside its own container network namespace — confirmed directly, a real `docker
+   build` and `docker run` of the exact documented command returned "Empty reply from server" for
+   every request. Fixed: the default is `0.0.0.0` (the container's own network namespace is
+   already isolated; the host-side restriction is the `-p 127.0.0.1:` binding, per R2's own second
+   clause). **Fixing that exposed the deeper question amendment 22 assumed away:** once traffic is
+   reachable at all, Docker's own NAT presents *every* forwarded connection — a genuine host-
+   loopback caller and, were the operator to publish more widely by mistake, a genuine LAN caller
+   — as the identical bridge-gateway address. `loopback_only_middleware` cannot distinguish them at
+   this layer; the port-binding, not the middleware, is what actually enforces R2's guarantee for a
+   published container. `harness/webapp_auth.py`'s own docstring has the full account. **Proposed,
+   not decided:** adopt `--network host` for the setup-mode container (the visible client address
+   would then be the true one, and the middleware would carry real, additional weight again), or
+   accept the port-binding alone as the enforcement and keep the middleware as real-but-redundant
+   defence for the non-Docker and future `--network host` paths. The owner rules on which.
+
+   **Exit test met, for `local-lite` and `small`; `cluster` asserted as a stub, not skipped.**
+   `tests/harness/test_webapp_screens.py`: each screen submits only its own top-level section
+   (merge semantics, proving "navigable in any order" and the round-trip in the same test); the
+   `small` case is compared byte-for-byte against `tests/harness/test_render.py::FIXTURE_CONFIG`'s
+   own rendered output, cited rather than duplicated; `cluster` reaches the real
+   `ClusterRendererNotBuilt` refusal (`06_DECISIONS.md` ADR-011), asserted with `pytest.raises`,
+   not `pytest.skip`. **One real property found building this test, not assumed:** switching
+   `profile` alone, leaving already-stored `components` at their schema default, is itself a
+   transiently invalid document under whole-document validation, and is correctly refused — a
+   profile switch that invalidates stored components must be submitted together with a components
+   update, which the Components screen's own profile-scoped option fetch already surfaces before
+   either submit.
+
+   **`05_DEPLOYMENT.md` §2 needed no correction** — every property this round built against it
+   (the bootstrap command, §2.3's headless-equivalence rule, §2.5's setup-vs-console posture) held
+   as written. One local-development-only finding, not a spec correction: this round's own test
+   tooling first chose port 7000 (§2's own real default) for a *test* server and found it collides
+   with macOS's AirPlay Receiver on a real development machine — `apps/harness/vite.config.ts`'s
+   own module docstring has the finding; the test suite now uses a scratch port, the real
+   application keeps 7000 unchanged.
+
+   **Owed to parts B/C, stated rather than assumed:** Governance (plus the real-data-exceptions
+   panel), Geospatial, Preflight, Launch, the generated-artefacts diff, and this surface's own
+   a11y spec (ruling 6) — explicitly out of this round's brief. `/admin`'s real console content is
+   also part B's: this round built and proved its access control against a placeholder route.
+
    **Stage 2 §7 — Post-launch admin console operations. ACCEPTED. Not milestone-blocking; still Phase 8.**
    `05_DEPLOYMENT.md` §5's rolling upgrade and rollback to a previous digest, and §5's `verify` —
    "the port conformance suite against the *running* deployment rather than a test fixture", a
