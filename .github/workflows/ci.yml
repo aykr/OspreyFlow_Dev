@@ -712,6 +712,7 @@ jobs:
           --ignore=tests/harness/test_bundle_exit_test.py
           --ignore=tests/harness/test_harness_image.py
           --ignore=tests/harness/test_sustained_load.py
+          --ignore=tests/harness/test_six_screen_live_exit.py
           --ignore=tests/scenarios/test_phase8_exit_criterion_end_to_end.py
       # The Glass's fast, no-live-infra unit tests (`store.test.ts`,
       # `zoomBands.test.ts`) — `*.integration.test.ts` is excluded by
@@ -853,6 +854,30 @@ jobs:
         run: >-
           PYTHONPATH=.:packages uv run pytest -p no:randomly
           tests/harness/test_sustained_load.py
+
+  # ADR-049 Stage 2 §6's own exit — the one item `REPORT-03d.md` left owed: Launch from the six
+  # real setup screens (not `harness.apply` in-process, unlike the job above) reaches a
+  # health-checked `local-lite` deployment that `harness.verify` passes three-sided. A separate
+  # job for the same reason `bundle-install-exit-test`/`sustained-load-exit-test` each are: the
+  # identical `osprey-local-lite` compose project name and host ports would collide with any of
+  # them sharing a job.
+  six-screen-live-exit-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - name: Drive the six setup screens by real HTTP route through to a verified Launch
+        env:
+          OSPREY_TEST_SIX_SCREEN_EXIT: "1"
+        run: >-
+          PYTHONPATH=.:packages uv run pytest -p no:randomly
+          tests/harness/test_six_screen_live_exit.py
+      - name: Tear down
+        if: always()
+        run: >-
+          docker compose -p osprey-local-lite down -v --remove-orphans
 
   # Stage 2 §5b's own harness bootstrap image (`harness/Dockerfile`) — the image builds, and
   # `docker run ... preflight --gate` from it reaches the same result as the host CLI (one named,
