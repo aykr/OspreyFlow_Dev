@@ -18,6 +18,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
 from scripts.build_local_basemap import (
     PlanetilerNotAvailableError,
     UnknownRegionError,
@@ -131,3 +132,29 @@ def test_register_local_provider_appends_alongside_an_existing_provider(tmp_path
     reloaded = load_map_config(config_path)
     assert {p.id for p in reloaded.providers} == {"osm-local-gb", "osm-local-ca"}
     assert reloaded.default == "osm-local-gb"  # the second call did not steal the default
+
+
+def test_register_local_provider_preserves_other_top_level_keys(tmp_path: Path) -> None:
+    """Regression test, 26 September 2026 — found wiring `harness/geospatial.py`'s own real
+    caller: a `config_path` that exists with content but no `map:` key yet (the exact shape
+    `harness/webapp.py`'s `_write_config` produces before any provider is registered, since
+    `OspreyConfig.map` defaults to `None` and is dropped by `exclude_none=True`) used to raise
+    `KeyError('map')`, and once that was naively fixed to tolerate a missing key, the function's
+    own write path (`{"map": ...}` only) silently discarded every *other* top-level section on
+    the very first non-map-only file it was ever called against. Neither case was exercised by
+    any test above — each one only ever calls this function on a fresh file or one this same
+    function had already written."""
+    config_path = tmp_path / "osprey.yaml"
+    config_path.write_text(
+        "profile: local-lite\ngovernance:\n  identity_provider: keycloak\n", encoding="utf-8"
+    )
+
+    register_local_provider(
+        config_path, provider_id="osm-local-gb", label="GB", pmtiles_path=tmp_path / "gb.pmtiles"
+    )
+
+    raw = yaml.safe_load(config_path.read_text())
+    assert raw["profile"] == "local-lite"
+    assert raw["governance"]["identity_provider"] == "keycloak"
+    reloaded = load_map_config(config_path)
+    assert reloaded.providers[0].id == "osm-local-gb"

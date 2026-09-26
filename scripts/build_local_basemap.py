@@ -4,21 +4,18 @@ harness's Geospatial screen downloads a Geofabrik extract, runs planetiler
 to produce PMTiles, and loads the OSM-derived gazetteer") and
 `docs/05_DEPLOYMENT.md` §2.2 ("Build local basemap").
 
-**No harness exists yet** (`harness/` is Phase 8 scope)
-and there is no `osprey` CLI (`CLAUDE.md`'s own Conventions,
-reconfirmed for Phase 5). This module is the real functionality the
-eventual `osprey geo build`/harness button wraps — a plain, importable,
-directly-runnable script now, the same correction already made for
+There is no `osprey` CLI (`CLAUDE.md`'s own Conventions). This module is the
+real functionality the eventual `osprey geo build` command wraps — a plain,
+importable, directly-runnable script, the same correction already made for
 `revert_load` in Phase 2. "With progress shown" here means a `progress`
 callback each stage calls (default: `print`), since there is no progress
 bar to draw it into yet.
 
 **What is genuinely exercised in CI versus what cannot be.** `load_gazetteer`
-and `register_local_provider` need no external resource and are fully
-tested (`tests/test_build_local_basemap.py`) against the synthetic OSM
-fixture the gazetteer connector's own tests already use. `download_extract`
-and `run_planetiler` need a real network call and a real Java process
-respectively — the standing rule that "CI never depends on a
+need no external resource and is fully tested (`tests/test_build_local_basemap.py`)
+against the synthetic OSM fixture the gazetteer connector's own tests already use.
+`download_extract` and `run_planetiler` need a real network call and a real Java
+process respectively — the standing rule that "CI never depends on a
 third party's availability" means neither can run in CI, so both are
 exercised only for their *argument-construction and error-handling* logic,
 with the actual network/subprocess call injected out — the same shape
@@ -28,6 +25,13 @@ network access to confirm them against the current release, and
 `00_ARCHITECTURE.md` §1.2 already asks that OS Data Hub specifics be
 "verified at implementation time rather than trusting this document"; the
 same caution applies to planetiler's flag names below.
+
+**`register_local_provider` moved to `scripts/geo_local_provider.py`** (26 September
+2026, Stage 2 §6 part B) — that module's own docstring has the reason
+(`harness/Dockerfile` doesn't copy `services/`/`adapters/` in, and this module's own
+top-level imports both, which would make `register_local_provider` unreachable from
+inside the harness image even though its own body needs neither). Re-imported here
+unchanged; this module's own behaviour and tests are untouched by the move.
 """
 
 from __future__ import annotations
@@ -42,7 +46,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
-import yaml
+from scripts.geo_local_provider import register_local_provider as register_local_provider
 from services.ingest.connectors.geo.osm import read_osm_places
 from services.ingest.engine import run_recipe
 from services.ingest.recipe_loader import load_recipe
@@ -54,7 +58,7 @@ from ontology.loader import load_default_ontology
 from ports.graph import GraphPort
 from schemas.domain import OntologySchema, Principal, TxId
 from schemas.ingest import LoadReport
-from schemas.mapconfig import ClientScope, MapConfig, MapProvider, MapSourceKind, ProviderLicence
+from schemas.mapconfig import MapConfig
 
 #: A deliberately small, named set — the harness's own choices
 #: ("Great Britain, a US state or region, or a custom bounding box",
@@ -165,56 +169,6 @@ async def load_gazetteer(
         source=str(osm_pbf_path),
     )
     return report
-
-
-def _default_licence() -> ProviderLicence:
-    return ProviderLicence(id="ODbL", redistributable=True, client_scope=ClientScope.OPEN)
-
-
-def register_local_provider(
-    config_path: Path,
-    *,
-    provider_id: str,
-    label: str,
-    pmtiles_path: Path,
-    make_default: bool = True,
-) -> MapConfig:
-    """Upserts one tier-1 provider entry into `osprey.yaml`'s `map:`
-    section — replaces an existing entry with the same id, otherwise
-    appends. Starts a fresh `MapConfig` if `config_path` does not exist
-    yet, rather than requiring a caller to have one already.
-
-    **Known limitation, not a silent one.** This round-trips through
-    `yaml.safe_dump`, which does not preserve comments or key ordering in
-    an existing file — fine for a script whose whole job is to *produce*
-    this section, wrong for hand-maintained prose elsewhere in the same
-    file. The harness (Phase 8) is the real, comment-preserving answer
-    (`05_DEPLOYMENT.md` §2.1: "the generated artefacts are shown before
-    anything runs" as a diff); this script predates it."""
-    provider = MapProvider(
-        id=provider_id,
-        label=label,
-        kind=MapSourceKind.VECTOR,
-        source=f"file://{pmtiles_path}",
-        style="bundled:osprey-dark",
-        attribution="© OpenStreetMap contributors",
-        licence=_default_licence(),
-    )
-
-    if config_path.exists():
-        raw = yaml.safe_load(config_path.read_text())
-        existing = MapConfig.model_validate(raw["map"])
-        providers = [p for p in existing.providers if p.id != provider_id] + [provider]
-        default = provider_id if make_default else existing.default
-    else:
-        providers = [provider]
-        default = provider_id
-
-    config = MapConfig(default=default, providers=providers)
-    config_path.write_text(
-        yaml.safe_dump({"map": config.model_dump(mode="json", exclude_none=True)}, sort_keys=False)
-    )
-    return config
 
 
 @dataclass(frozen=True)
