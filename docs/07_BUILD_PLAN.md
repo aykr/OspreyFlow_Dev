@@ -27,7 +27,8 @@ laptop from the documentation, started, and demonstrated (both acceptance scenar
 - `PathStaleError` and the server-side traversal budget (pulled forward from Stage 5). Built.
 
 **Remains before the milestone, numbered, with a word on size:**
-1. **The harness/packaging pipeline** — **`Stage 2 §1`–`§5b` built; `§6`–`§7` not started.** The
+1. **The harness/packaging pipeline** — **`Stage 2 §1`–`§6` built, `§6`'s own exit closed 26
+   September 2026; `§7` Accepted, not milestone-blocking (Phase 8).** The
    design and its adversarial review are `06_DECISIONS.md` **ADR-049**, status **Accepted**, broken
    into sub-stages **`Stage 2 §1`–`Stage 2 §7`** at this stage's own entry below. The owner ruled on
    all seven open objections and confirmed D1–D3 on 24 September 2026, then corrected D1 to its
@@ -47,10 +48,13 @@ laptop from the documentation, started, and demonstrated (both acceptance scenar
    `tests/harness/test_bundle_exit_test.py` (opt-in, `OSPREY_TEST_BUNDLE=1`). **Stage 2's own D3
    exit criterion — tests #1, #2 and #3 green — is therefore now fully satisfied**; this is Stage
    2's own completion, not ADR-042's alpha gate, which additionally requires both acceptance
-   scenarios green on `local-lite`. The `cluster` renderer is a loud stub. `§6` and `§7` (the six
-   setup screens; post-launch admin console operations) are not started; `§3` still has its own two
-   recorded blockers as historical record even though the stage as a whole went green around them
-   (see that stage's own entry).
+   scenarios green on `local-lite`. The `cluster` renderer is a loud stub. **`§6` (the six setup
+   screens) is built, parts A–C, with its own exit closed 26 September 2026** — including the one
+   item that exit table had left without a live proof, `tests/harness/test_six_screen_live_exit.py`
+   (round 06's own entry below has the detail). **`§7` (post-launch admin console operations) is
+   Accepted but not milestone-blocking**, left to Phase 8. `§3` still has its own two recorded
+   blockers as historical record even though the stage as a whole went green around them (see that
+   stage's own entry).
 2. **The documentation refresh** — moderate: the three drift gates (`domain-model-coverage-check`,
    `route-coverage-check`, `demo-guide-check`) exist and run; the content that empties their own
    allowlists does not exist yet.
@@ -4466,6 +4470,67 @@ find something already finished sitting in the queue.
    artefacts diff) is already proven individually and in combination short of the real twelve
    containers. Owed to a follow-up round, its own opt-in env flag and CI job, matching
    `test_sustained_load.py`/`test_bundle_exit_test.py`'s own precedent.
+
+   **Round 06, built and run for real 26 September 2026 — the item above, closed, not merely
+   attempted.** `tests/harness/test_six_screen_live_exit.py` (`OSPREY_TEST_SIX_SCREEN_EXIT=1`,
+   its own `six-screen-live-exit-test` job in `ci.yml`, the same separate-job reasoning
+   `bundle-install-exit-test`/`sustained-load-exit-test` already state for the identical
+   `osprey-local-lite` project name and host ports). Drives the six real HTTP routes — profile,
+   components/models/governance defaults, a Geospatial provider registered at a path that does not
+   exist, generate, confirm, Preflight over SSE, target-confirm, then `POST /api/launch/stream`
+   with **no injected `apply_command`** — through a `TestClient`, which runs the real ASGI route
+   and the real, unstubbed `python -m harness.apply` subprocess synchronously; not
+   `test_sustained_load.py`'s own `apply_main()` in-process call, and the real HTTP surface `06_
+   DECISIONS.md` asked for rather than a second in-process shortcut.
+
+   **Two real findings, both from actually running it, neither from reading the code first.**
+
+   1. **The brief's own anticipated stop condition — "REPORT-05 measured 9.7GiB against the
+      16GiB floor; if Preflight fails on memory or disk, skip Launch" — does not hold, and the
+      reason is a real, disclosed measurement-scope gap, not a change in the machine.**
+      `harness/preflight/memory.py`'s `context.memory_probe()` and `disk.py`'s free-space read
+      measure *whatever process runs the check* — round 05's own 9.7GiB/16.7GiB figures were read
+      **inside the harness Docker container**, where that process's own OS view is the Docker
+      Desktop VM's. This test's own Preflight runs `harness.webapp` as a bare host process (the
+      real, correct shape for driving the six screens — nothing here runs inside the harness
+      image), so the identical checks read this host's own 36GiB RAM and ~499GiB free disk and
+      **pass** — comfortably above `local-lite`'s 16GiB/20GiB floors. Preflight cannot see the
+      Docker daemon's own, separate resource ceiling (still measured directly at 9.7GiB/19.4GiB
+      free this round, unchanged) from outside a container — a real gap in what these two checks
+      can know, not a defect in this test.
+   2. **Given that, Launch was attempted for real rather than held back — and it worked.** Real
+      render, real `docker compose build` of the three owned images, real `up`, six services with
+      a declared health check all healthy, the real three-sided `harness.verify` at 3/3 green:
+      `apply: local-lite ready in 36s` end to end, well inside the 9.7GiB VM ceiling — consistent
+      with `05_DEPLOYMENT.md` §3's own already-recorded, provisional measurement ("a peak total of
+      3.6GiB" for eleven of twelve containers) being closer to the real number than the 16GiB
+      floor's own stated arithmetic, which that same section already calls "an assumed default,
+      not a derived figure." Six, not twelve, services reported `healthy`: correct, not partial —
+      `harness/apply.py`'s own `services_declaring_a_health_check` only waits on services with a
+      declared check, by design (the batch loader has none). Torn down clean (`docker compose ...
+      down -v --remove-orphans`; `docker ps`/volume list both empty after).
+
+   **One pre-existing-pattern bug in this test's own first draft, shown red then fixed with the
+   already-established fix, not a new one.** Built against `tmp_path` for `out_root` first;
+   `docker compose build` failed with `resolve : lstat .../apps: no such file or directory` — the
+   identical symptom `tests/harness/test_sustained_load.py`'s own comment already names and already
+   fixed the same way (`harness/render.py`'s `BUILD_CONTEXT_FROM_OUTPUT_DIR` assumes `--out-root`
+   sits at its own default depth beneath the repository). Fixed by using the real, gitignored
+   `deploy/generated/` the same way that file does, with `config_path` kept under `tmp_path` (no
+   such constraint applies to it, and it must never touch the repository's own committed
+   `osprey.yaml`).
+
+   **Wiring, both places `CLAUDE.md` rule 15 asks for:** `Makefile`'s `test:` target gained this
+   file in its own `--ignore` list (mirroring every other opt-in exit test already there);
+   `ci.yml`'s own `test` job gained the identical ignore (`test-file-coverage-check` catches
+   exactly this half going missing, and did, live, before the fix); and
+   `scripts/test_file_coverage_check.py`'s own hand-maintained live-service-job name tuple —
+   disclosed in that script's own docstring as a real, known cost ("invisible to this gate until
+   its name is added here") — gained `six-screen-live-exit-test`, found missing the same way.
+
+   **Stage 2 §6's exit: the round-trip/Launch row now cites this test id directly, not merely the
+   subprocess-plumbing tests above it.** The one item this stage's own exit table left without a
+   live proof is closed.
 
    **Part C, built 26 September 2026 — the accessibility floor, CI wiring, the §6 exit
    reconciliation, and three real documentation bugs found re-verifying it, complete except

@@ -418,6 +418,7 @@ def _load(ci_yml_path: Path = CI_YML_PATH) -> tuple[set[str], dict[str, set[str]
         "bundle-install-exit-test",
         "sustained-load-exit-test",
         "harness-image-exit-test",
+        "six-screen-live-exit-test",
     ):
         _, positional = job_tokens(blocks.get(name, ""))
         live_job_tokens[name] = positional
