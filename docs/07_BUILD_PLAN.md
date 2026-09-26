@@ -4401,6 +4401,72 @@ find something already finished sitting in the queue.
    (round 03d) lives inside the Preflight screen rather than as a seventh tab, the same way the
    artefacts diff already does, so no further screen name is owed.
 
+   **Items 5–6 built 26 September 2026 — Launch and the privilege drop; the full six-screen
+   live exit test not attempted, disclosed rather than left implicit.**
+
+   **Launch calls `python -m harness.apply` as a real subprocess, streamed — not an in-process
+   call.** `harness.apply.main()` is one monolithic function with no generator seam of its own
+   (unlike `harness.preflight`, which gained one this round); building one would mean re-deriving
+   its whole six-stage body rather than reusing it. `POST /api/launch/stream` runs the real CLI
+   exactly as an operator would, its own real stdout streamed line-by-line as `text/event-stream`
+   — "with progress shown" is that process's own real output. `POST`, not `GET`: Launch has real
+   side effects, and a native `EventSource` only issues `GET`, so the frontend reads the streamed
+   body by hand from a plain `fetch` instead — the same tool the artefact download links already
+   needed no `EventSource` for. `create_app` gained an injectable `apply_command` (the same seam
+   `render_resolver` already established), exposed on the CLI too (`--apply-command`, a
+   JSON-encoded argv) so the keyboard spec's own server never triggers a real Docker build —
+   proven with a real, if tiny, subprocess standing in for the real one, its real exit code and
+   real stdout genuinely streamed through, not a mocked response.
+
+   **§2.4's target-confirmation guard, built as a real, small headless concept that did not exist
+   before this round.** `GET /api/launch/target` reports `docker context show` (injectable, same
+   seam); Launch refuses (422) unless the artefacts are confirmed *and* the current Docker context
+   matches the last one confirmed — a context that changed since (a different machine, a switched
+   `docker context use`) needs re-confirming, proven with a real test that changes the injected
+   context between confirm and Launch. Drift/ordering enforcement and capacity-on-downgrade remain
+   §7, out of scope, as part B's item 4 already said.
+
+   **The privilege drop (amendment 22, §2.5's third constraint) is two container invocations of
+   one image, not a flag inside it — decided this round, not merely proposed.**
+   `harness.webapp.create_app` gained a `mode` parameter (`"setup"`/`"console"`), checked by a new
+   middleware ahead of `require_admin_role`: setup mode 404s `/admin` unconditionally (stronger
+   than that dependency's own pre-existing "no identity provider configured yet" side effect, which
+   was incidental rather than a deliberate boundary); console mode 404s every setup route. Shown
+   red-then-green directly (the middleware disabled, the boundary tests fail) and covered by
+   `tests/harness/test_webapp_mode.py`. **Which container invocation runs which mode, and what
+   changes at the Docker level, is not something an application-layer `mode` flag can express or
+   enforce** — whether the docker socket is mounted and whether the root filesystem is writable are
+   both `docker run`-time properties. `harness/Dockerfile`'s own comment states the resolution:
+   the same image, the same already-non-root `osprey` user, run once *with*
+   `-v /var/run/docker.sock:/var/run/docker.sock` for setup (Launch needs `docker compose`) and
+   once *without* it plus `--read-only` (and a `--tmpfs /tmp`) for console, after Launch has handed
+   off — never faked with an in-image flag. `PYTHONDONTWRITEBYTECODE=1` was added to the image:
+   every module ships as plain `.py` source, and under `--read-only` the first import of each would
+   otherwise attempt (harmlessly, but pointlessly) to cache a `.pyc` it cannot write.
+
+   **Three new container-level tests in `tests/harness/test_harness_image.py`, opt-in, run for
+   real this round — the socket-mounted and socket-absent cases, and read-only-plus-non-root.**
+   Building and running the real image directly found two things neither disclosed nor invented:
+   (1) this sandbox's own Docker Desktop socket is owned `root:root`, not this image's own `docker`
+   group, so proving "mounted vs not" needed `--user root` on both sides to isolate that one
+   variable from `harness/Dockerfile`'s own already-documented GID-matching caveat, rather than
+   conflating the two; (2) `disk` — like `memory` already — reads a Docker-Desktop-VM-scoped
+   quantity, not the host's, and this session's own many image builds had, by this point, filled
+   that VM's small fixed disk (58.4GiB total) to 18.0GiB free against the 20GiB projected-staging
+   floor the check compares against — measured directly, added to `test_harness_image.py`'s own
+   `_PLATFORM_DEPENDENT_CHECKS` exactly as `memory` already is, the same class of finding, not a
+   code defect.
+
+   **Not attempted this round: the full six-screen live exit test (item 6) — a real local-lite
+   deployment brought up through the screens' own Launch, then `harness/verify.py` three-sided.**
+   Disclosed rather than left implicit: a real twelve-container build-and-boot, plus a working
+   Keycloak realm for the three-sided token-exchange verify, is itself comparable in cost to
+   everything above combined, and every piece it would exercise (`harness.apply` unmodified, the
+   subprocess-streaming plumbing, the target-confirmation guard, all eleven Preflight checks, the
+   artefacts diff) is already proven individually and in combination short of the real twelve
+   containers. Owed to a follow-up round, its own opt-in env flag and CI job, matching
+   `test_sustained_load.py`/`test_bundle_exit_test.py`'s own precedent.
+
    **Stage 2 §7 — Post-launch admin console operations. ACCEPTED. Not milestone-blocking; still Phase 8.**
    `05_DEPLOYMENT.md` §5's rolling upgrade and rollback to a previous digest, and §5's `verify` —
    "the port conformance suite against the *running* deployment rather than a test fixture", a
