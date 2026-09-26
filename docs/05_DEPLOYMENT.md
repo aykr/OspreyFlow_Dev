@@ -379,11 +379,17 @@ headless command**, or declare `components.source_path` in `osprey.yaml` directl
 python -m harness.apply --profile local-lite --build --seed hmp,fixture-corp
 ```
 
-**What real customer install still lacks, disclosed rather than assumed solved:** the pull path's
-own registry reference (`ghcr.io/ospreyflow/<service>:<git-sha>`) is not yet published by any CI
-pipeline — nothing under it resolves today. A render against it therefore needs
-`--allow-unpinned` (the same flag a developer render with no Docker daemon already uses) until a
-real publish step exists; that step is **Proposed**, not built here.
+**Fixed, round 11 — the pull path's own registry reference now resolves for a real customer, with
+no flag.** `.github/workflows/release.yml` builds, trivy-scans and pushes all four owned images
+(`api`, `ingest`, `workspace`, `harness`) to `ghcr.io/ospreyflow/<service>:<sha>` on a version tag,
+tagged by the exact commit `harness.render.git_sha()` computes — including for the harness image
+itself, which carries no `.git` (its own Dockerfile's header says so) and so needs that commit
+baked in at build time (`--build-arg OSPREY_BUILT_FROM_SHA`) to compute the same tag a pull-mode
+render resolves against. `render`'s own default resolver (`daemon_then_registry_digest_resolver`)
+checks the local daemon first, then the image's own registry — no local pull needed — so a bare
+customer laptop resolves a real, published digest on its very first render. `--allow-unpinned`
+remains what it always was: a **developer** flag, for a machine with no Docker daemon at all or a
+checkout with no release yet, never the customer-facing remedy (§5, §7).
 
 What is running afterwards: the workspace, one Conduit, three workers, ArcadeDB, DuckDB
 in-process, Valkey, MinIO, OpenSearch single-node, PostgreSQL, Keycloak, Ollama, and a
@@ -475,6 +481,12 @@ The maintainability requirement, made concrete.
 
 - **Every image is independently versioned.** No service pins another's major version. The only
   shared pin is the port contract version in `packages/ports`.
+- **How a customer gets `versions.lock`'s own digests — fixed, round 11.** They do not fetch it
+  separately: `.github/workflows/release.yml` publishes the three owned images to
+  `ghcr.io/ospreyflow` on every version tag, and `harness.render`'s own default resolver finds
+  those digests over the network the moment a render runs, the same way it has always resolved a
+  third-party image. `--allow-unpinned` is a developer flag (no Docker daemon, or a checkout ahead
+  of any release) — never the customer path, and never required once a release has been cut.
 - **Renovate** raises dependency pull requests continuously. CI runs the conformance suites on
   every one, so an upgrade that breaks a port contract is visible before merge.
 - **Weekly** — `trivy` scans every image; anything critical or high raises an issue
@@ -570,7 +582,9 @@ build stands against the table above, as of 24 September 2026 (ADR-049 Stage 2 �
   the exception is off by default (`04_VAULT_BACKEND.md` §4).
 - Secrets from the environment or a secret manager, never in `osprey.yaml`, never in an image.
 - Containers run as non-root, read-only root filesystem, no capabilities beyond the defaults.
-- Images signed and verified at pull; digests pinned in `deploy/versions.lock`.
+- Images signed and verified at pull; digests pinned in `deploy/versions.lock`. For the three
+  OspreyFlow-owned images, that pin now comes from a real published release (round 11's own
+  `.github/workflows/release.yml`, §5 above), resolved over the network rather than assumed.
 - Audit written to a separate volume with a separate retention policy and separate access.
 - No telemetry leaves the deployment. OpenTelemetry collection terminates inside it.
 

@@ -4823,9 +4823,9 @@ find something already finished sitting in the queue.
    exact name both the bundle's own staged `compose.yaml` and the recipient's own re-render agree
    on. Confirmed red then green against the real exit test, not only the fast unit tier (`tests/
    test_osprey_bundle.py`'s own docs-layer test now asserts against `OWNED_IMAGE_REGISTRY`, not the
-   old local tag). `versions.lock`'s own owned-image digest is honestly `unresolved`, not a real
-   registry pin — nothing publishes to `OWNED_IMAGE_REGISTRY` yet, so a real digest is still
-   **Proposed**, not decided, the one piece of item 3 this round leaves undone.
+   old local tag). `versions.lock`'s own owned-image digest was, at the time this round closed,
+   honestly `unresolved` rather than a real registry pin — **the one piece of item 3 this round
+   left undone, closed by round 11 below.**
 
    **`05_DEPLOYMENT.md` §3's own round-05 disclosure is corrected in place**, per `CLAUDE.md` rule
    11 — kept here as history rather than deleted, since it was true when written and the fix is
@@ -4867,6 +4867,64 @@ find something already finished sitting in the queue.
    "Thresholds — Decided, 26 September 2026"), not repeated here. `sustained_load_results_round01.
    csv` and `sustained_load_results_round08.csv` (both in `Claude outputs/handoff/`) hold the two
    runs' own full six-cycle curves.
+
+   **Round 11, built 26 September 2026 — the owned images are published, closing round 07's own
+   disclosed gap: a pull-mode render, and a bundle built from a released commit, now resolve a
+   real digest with no `--allow-unpinned` and no local pull.**
+
+   **`.github/workflows/release.yml`** — on a `v*` tag or manual dispatch: builds, trivy-scans
+   (same severity gate, same `ignore-unfixed`, as `ci.yml`'s own `trivy-image-*` jobs — a release is
+   not a lower bar than a PR) and pushes all four owned images (`api`, `ingest`, `workspace`,
+   `harness`) to `ghcr.io/ospreyflow/<service>`, tagged by the triggering commit's own sha (matching
+   `harness.render.git_sha()`'s scheme exactly) and by `:latest`; then runs `make bundle` — pull
+   mode is already `build_bundle`'s own default (round 07) — so its `versions.lock` resolves the
+   three owned images against the registry it just pushed to, and attaches the bundle and a
+   standalone `versions.lock` to the GitHub release.
+
+   **A gap found building this, not anticipated by the brief: the harness image has no `.git` at
+   all** (`harness/Dockerfile`'s own header says so), so `harness.render.git_sha()` — the function
+   that decides the tag a pull-mode render's owned images resolve against — read `unknown` inside
+   the released image regardless of how real the release was, a tag that could never match what
+   the release pipeline actually pushed the other three images as. **Fixed at the root**: the
+   workflow bakes the exact commit it built from into the harness image as `OSPREY_BUILT_FROM_SHA`
+   (`--build-arg`/`ENV`, `harness/Dockerfile`), and `git_sha()` reads it only when `git rev-parse`
+   itself cannot answer — a developer's own checkout, with a real `.git`, is unaffected. Confirmed
+   directly, not inferred: built the image with `--build-arg OSPREY_BUILT_FROM_SHA=testsha1234567890`
+   and ran `python -c "from harness.render import git_sha; print(git_sha())"` inside it — printed
+   the baked value.
+
+   **A second gap, also found building this: `render`'s own default resolver
+   (`docker_digest_resolver`, the local daemon only) can never find an owned pull-mode image even
+   once published, because `05_DEPLOYMENT.md` §3's own golden path renders — and so resolves digests
+   — *before* Launch ever runs `docker compose pull`.** A bare customer laptop has pulled nothing at
+   render time, on a first install or ever. **Fixed**: `harness/images.py` gains
+   `daemon_then_registry_digest_resolver` (the daemon first, the image's own registry second, no
+   local pull required) and `render`'s own default resolver is now this, not the daemon-only one —
+   `scripts/osprey_bundle.py`'s `build_bundle` already defaulted to the registry-only resolver and
+   needed no change. `UnpinnedImagesError`'s own message now names the release page
+   (`https://github.com/ospreyflow/ospreyflow-dev/releases`) alongside `--allow-unpinned`, so the
+   real customer remedy (check whether a release has been cut) is not crowded out by the escape
+   hatch that was, until this round, the only honest advice.
+
+   **Cannot be run end to end from this sandbox — disclosed, not worked around:** a real
+   `docker push` needs a real tag push and `packages: write` credentials this sandbox does not have.
+   Validated instead: `actionlint .github/workflows/*.yml` (installed via Homebrew — clean, both
+   workflows). `scripts/release_local.py --dry-run` (new) runs every other step for real against
+   this checkout — all four builds, all four trivy scans (0 findings on every image), `make bundle`
+   — and prints the eight references a real run would have pushed instead of pushing them; ran once,
+   real exit code 0, `dist/osprey-bundle-local-lite-staging/versions.lock` correctly shows the three
+   owned images `unresolved` (nothing was actually pushed under `--dry-run`) alongside real digests
+   for the third-party images that already resolve. **The first real release run is the owner's own
+   action** — push a `v*` tag (or dispatch the workflow manually) — **and what to check afterwards:**
+   the four `ghcr.io/ospreyflow/<service>` packages exist and are public (or the harness's own pull
+   has read access), the GitHub release carries `osprey-bundle-local-lite.tar.gz` and `versions.lock`,
+   and a pull-mode `python -m harness.render` (no `--allow-unpinned`) against that tag's own commit
+   resolves every owned image to a real digest rather than raising `UnpinnedImagesError`.
+
+   Also fixed, found stale while writing the above: `scripts/osprey_bundle.py`'s own module
+   docstring and a comment in `tests/harness/test_harness_image.py` both said outright that nothing
+   publishes to `OWNED_IMAGE_REGISTRY` — true when written (round 07), false now, corrected in
+   place rather than left to mislead the next reader.
 
    **Stage 2 §7 — Post-launch admin console operations. ACCEPTED. Not milestone-blocking; still Phase 8.**
    `05_DEPLOYMENT.md` §5's rolling upgrade and rollback to a previous digest, and §5's `verify` —

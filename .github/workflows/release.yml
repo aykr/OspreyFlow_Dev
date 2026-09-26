@@ -1,0 +1,132 @@
+# The publish half of ADR-049 Stage 2 §5b/§7 — `harness/render.py`'s own `OWNED_IMAGE_REGISTRY`
+# (`ghcr.io/ospreyflow`) has been a real reference since round 07 and a published one nowhere,
+# which is why a pull-mode render needed `--allow-unpinned` even against a genuine release: nothing
+# under that path resolved. This workflow is what makes it resolve — building, scanning and
+# pushing the four owned images this repository ships (`api`, `ingest`, `workspace`, `harness`) on
+# a version tag, then running `make bundle` against the same tagged commit so its own
+# `versions.lock` locks each owned image to a real registry digest, not `unresolved`.
+#
+# **Same trivy gate as `ci.yml`'s own `trivy-image-*` jobs, deliberately, not a lighter one for a
+# release** — `docs/07_BUILD_PLAN.md`'s standing rule that a service's image scan lands with the
+# service applies here too: a release is not a lower bar than a PR, so a HIGH/CRITICAL finding
+# fails the release exactly as it would fail CI, with the same `ignore-unfixed: true` (base-OS
+# packages this service never touches, no upstream fix yet — noise, not a gate) and no ignore file.
+#
+# **What this workflow cannot prove from a CI runner, disclosed rather than assumed:** the push
+# itself (`docker push` reaching `ghcr.io` for real, with real, currently-valid credentials) is
+# only exercised by an actual run of this workflow, which needs a real tag push and this repository's
+# own `GITHUB_TOKEN` — `scripts/release_local.py` runs every other step (build, scan, `make bundle`)
+# locally with `--dry-run` in place of the four `docker push`/registry-attach calls below, printing
+# the references it would have pushed, so everything up to the push itself is exercised without
+# this sandbox ever needing `packages: write` credentials it does not have.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: >-
+          Version to release (e.g. v0.9.0). Only read for the bundle's own file naming and the
+          release notes title — image tags are always the triggering commit's real git sha
+          (`harness.render.git_sha`'s own scheme), matching what a pull-mode render resolves
+          against regardless of how this run was triggered.
+        required: true
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  OWNER: ospreyflow
+
+jobs:
+  build-scan-push:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - service: api
+            dockerfile: services/api/Dockerfile
+            build_args: ""
+          - service: ingest
+            dockerfile: services/ingest/Dockerfile
+            build_args: ""
+          - service: workspace
+            dockerfile: apps/workspace/Dockerfile
+            build_args: ""
+          - service: harness
+            dockerfile: harness/Dockerfile
+            # The fix `docs/07_BUILD_PLAN.md`'s round-11 entry names: this image carries no `.git`
+            # (`harness/Dockerfile`'s own header), so `harness.render.git_sha()` cannot answer for
+            # itself once released — baking the exact commit every other image in this matrix was
+            # built from is what makes a pull-mode render's owned-image tag match what got pushed.
+            build_args: "OSPREY_BUILT_FROM_SHA=${{ github.sha }}"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # `harness.render.git_sha()`'s own scheme (`harness/render.py`'s `service_images`): the tag a
+      # pull-mode render resolves against is the built commit's sha, not the release tag name — so
+      # that is the tag this job pushes under. `:latest` is pushed alongside for the one place a
+      # human reads it by name (`05_DEPLOYMENT.md` §2's own bootstrap command), never for anything
+      # a render resolves against.
+      - name: Build ${{ matrix.service }}
+        run: |
+          docker build \
+            -f ${{ matrix.dockerfile }} \
+            ${{ matrix.build_args && format('--build-arg {0}', matrix.build_args) || '' }} \
+            -t ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ matrix.service }}:${{ github.sha }} \
+            .
+
+      - uses: aquasecurity/trivy-action@v0.24.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ matrix.service }}:${{ github.sha }}
+          scan-type: image
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Tag :latest
+        run: |
+          docker tag \
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ matrix.service }}:${{ github.sha }} \
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ matrix.service }}:latest
+
+      - name: Push both tags
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ matrix.service }}:${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ matrix.service }}:latest
+
+  bundle-and-release:
+    needs: build-scan-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+
+      # Pull mode is `make bundle`'s own default render (round 07's own fix to
+      # `scripts/osprey_bundle.py`) — no flag needed here. The four owned images this job's own
+      # `needs:` just pushed are what its `versions.lock` now resolves against, for real, over the
+      # network — `registry_digest_resolver` (already `build_bundle`'s own default resolver), the
+      # same call `scripts/release_local.py --dry-run` exercises locally short of the push.
+      - run: make bundle
+
+      - name: Copy the standalone versions.lock beside the bundle
+        run: cp dist/osprey-bundle-local-lite-staging/versions.lock dist/versions.lock
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          files: |
+            dist/osprey-bundle-local-lite.tar.gz
+            dist/versions.lock
