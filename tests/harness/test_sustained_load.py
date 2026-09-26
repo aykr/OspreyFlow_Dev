@@ -34,15 +34,19 @@ demo-analyst subject, rendered here via `--demo-analyst`. **Not `VERIFY_SUBJECT`
 fixture at all (both write `handling_code="P"`) — the demo analyst's `["P"]` is the realm's own
 subject built to see this data.
 
-**Fixture Corp is seeded once, on cycle 1, not every cycle — found running this file for real,
-before this correction, not assumed in advance.** Its own three sub-fixtures write fixed literal
-node ids (`corp-path-hub`, `corp-res-identical-1`, ...) so a demo can always reference the same
-entities, but `GraphArcadeDBAdapter.upsert_nodes` is a bare `INSERT`, not a real upsert, and nothing
-in `GraphPort`'s own contract or its conformance suite promises otherwise. A second seed against the
-same database failed outright (`ArcadeDBError 503`, a duplicate-key exception on `mx_Person[id]`).
-HMP's own structural entities are `on_match: reference` (idempotent) and its incident events are
-meant to accumulate across seeds — the accumulation this test exists to characterise — so only HMP
-repeats; see the test function's own comment at the seed call for the full account.
+**Both fixtures reseed every cycle now (round 08) — `GraphArcadeDBAdapter.upsert_nodes` is a real
+upsert, not the bare `INSERT` that made this file's own first version seed Fixture Corp once, on
+cycle 1 only.** That workaround was itself the evidence for round 01's own finding: a second seed
+against the same database failed outright (`ArcadeDBError 503`, a duplicate-key exception on
+`mx_Person[id]`) because Fixture Corp's own three sub-fixtures write fixed literal node ids
+(`corp-path-hub`, `corp-res-identical-1`, ...) and nothing upserted them. Fixed at the adapter,
+proven by `tests/conformance/graph_port/test_suite.py::test_upserting_the_same_node_id_twice_
+merges_into_one_node` (round 08's own case, shown red against the unfixed adapter, green after).
+This file now seeds both fixtures every cycle — the shape it was always meant to have: HMP's own
+structural entities are `on_match: reference` (idempotent) and its incident events accumulate
+across seeds, which is this test's own subject; Fixture Corp's structural entities now upsert
+idempotently too, so re-seeding it changes nothing about what accumulates, only proves the upsert
+holds under repetition.
 
 **The fixed query sample, and why each member needs no fixture-specific node lookup.** Fixture
 Corp's own structural ids are literal, not generated (`tests/scenarios/fixtures/fixture_corp.py`):
@@ -61,13 +65,23 @@ Corp's own structural ids are literal, not generated (`tests/scenarios/fixtures/
   per `generate_resolution_persons`'s own docstring), then `PUT .../resolution/threshold` at each
   of Strict/Balanced/Broad in turn.
 
-**Characterisation, not assertion.** Per the brief this file was built against: it records the
-six-cycle curve and writes it to `sustained_load_results.csv` in the current working directory for
-the round's own report — it does not assert a memory or latency ceiling. Item 3's own thresholds
-are Proposed against the measured numbers, not decided, in `05_DEPLOYMENT.md` §8 and
-`07_BUILD_PLAN.md` Stage 2a; the owner rules on them. This test currently asserts only that all six
-cycles complete and every query in the sample returns 2xx — the same "asserts nothing that would
-fail today except the run completing" instruction the brief states explicitly.
+**Three real assertions now (round 08, owner ruling R3's delegation to the checker's own brief) —
+Decided in `05_DEPLOYMENT.md` §8 and `07_BUILD_PLAN.md` Stage 2a, 26 September 2026, not merely
+Proposed.** It still writes the full six-cycle curve to `sustained_load_results.csv` for the
+round's own report, but no longer asserts completion alone:
+
+1. **RSS growth ≤ 400 MiB/cycle, averaged over the run** — `(rss[-1] - rss[0]) / (CYCLES - 1)`.
+   Round 01's own closing-pass figures (8.651 → 9.097 → 9.396GiB across three *restarts*, not one
+   run's cycles) are a different measurement shape; this threshold is set against this file's own
+   first real six-cycle run, recorded beside the round-08 report's own numbers, not invented.
+2. **Query-sample wall time at cycle 6 ≤ 3× cycle 1** — `results[-1] / results[0]`, the same
+   query sample both times (module docstring above has the fixed five-call shape).
+3. **Cycle 6's own RSS below 85% of the Docker VM's configured memory** — read live via
+   `docker info --format '{{.MemTotal}}'`, never hard-coded: this sandbox's own figure has already
+   moved between rounds this session (round 05: 9.7GiB), so a literal number baked into this test
+   would silently stop meaning what it claims the next time it drifts. `CYCLES` is fixed at 6, so
+   "cycle 6" is this run's own last real measurement, not an extrapolation past data the run
+   does not have.
 """
 
 from __future__ import annotations
@@ -252,6 +266,20 @@ def _node_edge_counts(compose_file: Path) -> tuple[int, int]:
     return _sum(vertex_types), _sum(edge_types)
 
 
+def _docker_configured_memory_mib() -> float:
+    """Read live, never hard-coded — this sandbox's own Docker VM allocation has already changed
+    between rounds this session (round 05 measured 9.7GiB; `test_harness_image.py`'s own docstring
+    has the same figure, dated). `docker info --format` gives bytes directly, no text-scraping."""
+    result = subprocess.run(
+        ["docker", "info", "--format", "{{.MemTotal}}"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=True,
+    )
+    return int(result.stdout.strip()) / (1024 * 1024)
+
+
 def _run_query_sample(token: str, investigation_id: str) -> float:
     """The fixed query sample — module docstring has the full account of what each call is and
     why it needs no fixture-specific lookup. Returns the sample's own wall time."""
@@ -348,19 +376,11 @@ def test_arcadedb_memory_and_query_latency_under_sustained_ingest_cycles() -> No
         for cycle in range(1, CYCLES + 1):
             investigation_id = create_investigation(KEYCLOAK_URL, REALM, secret, API_URL)
 
-            # `fixture-corp` only on cycle 1 — real finding, not an assumption: `seed_fixture_
-            # corp.py`'s own three sub-fixtures use fixed literal node ids (`corp-path-hub`,
-            # `corp-res-identical-1`, ...) so a demo can always reference the same entities, and
-            # `GraphArcadeDBAdapter.upsert_nodes` (`packages/adapters/graph_arcadedb/adapter.py`)
-            # is a bare `INSERT`, not a real upsert — no docstring on `GraphPort.upsert_nodes`
-            # promises otherwise, and no conformance case exercises calling it twice with the same
-            # id. Measured directly running this test before this fix: cycle 2's fixture-corp
-            # reseed failed outright, `ArcadeDBError 503: "Found duplicate key in index"` on
-            # `mx_Person[id]` for `corp-res-distinct-2`. HMP's own structural entities are
-            # `on_match: reference` (idempotent by design) and its incident events are meant to
-            # accumulate across seeds — that accumulation is this test's own subject — so only HMP
-            # repeats.
-            datasets = ["hmp", "fixture-corp"] if cycle == 1 else ["hmp"]
+            # Both fixtures, every cycle (round 08) — `GraphArcadeDBAdapter.upsert_nodes` is now a
+            # real upsert (module docstring above has the full account), so Fixture Corp's own
+            # fixed literal ids (`corp-path-hub`, `corp-res-identical-1`, ...) update in place on
+            # a repeat seed rather than colliding on a duplicate key.
+            datasets = ["hmp", "fixture-corp"]
             _run(_compose(compose_file) + ["stop", "api"], stage="cycle-seed")
             harness_seed(compose_file, datasets, investigation_id)
             _run(_compose(compose_file) + ["start", "api"], stage="cycle-seed")
@@ -399,4 +419,29 @@ def test_arcadedb_memory_and_query_latency_under_sustained_ingest_cycles() -> No
     assert len(results) == CYCLES, (
         f"only {len(results)}/{CYCLES} cycles completed — see sustained_load_results.csv for "
         "whichever ones did"
+    )
+
+    rss = [row["arcadedb_rss_mib"] for row in results]
+    avg_growth_mib = (rss[-1] - rss[0]) / (CYCLES - 1)
+    assert avg_growth_mib <= 400.0, (
+        f"ArcadeDB RSS grew {avg_growth_mib:.1f} MiB/cycle on average (cycle 1: {rss[0]:.1f} "
+        f"MiB, cycle {CYCLES}: {rss[-1]:.1f} MiB), above the 400 MiB/cycle threshold "
+        "(05_DEPLOYMENT.md §8 / 07_BUILD_PLAN.md Stage 2a) — see sustained_load_results.csv for "
+        "the full six-cycle curve."
+    )
+
+    wall_seconds = [row["query_sample_wall_seconds"] for row in results]
+    slowdown = wall_seconds[-1] / wall_seconds[0]
+    assert slowdown <= 3.0, (
+        f"the query sample slowed {slowdown:.2f}x from cycle 1 ({wall_seconds[0]:.2f}s) to "
+        f"cycle {CYCLES} ({wall_seconds[-1]:.2f}s), above the 3x threshold — see "
+        "sustained_load_results.csv for the full six-cycle curve."
+    )
+
+    configured_mib = _docker_configured_memory_mib()
+    ceiling_mib = 0.85 * configured_mib
+    assert rss[-1] < ceiling_mib, (
+        f"cycle {CYCLES}'s own ArcadeDB RSS ({rss[-1]:.1f} MiB) is at or above 85% of this "
+        f"Docker VM's configured memory ({configured_mib:.1f} MiB, ceiling {ceiling_mib:.1f} "
+        "MiB) — read live via `docker info`, not hard-coded."
     )
