@@ -4340,6 +4340,67 @@ find something already finished sitting in the queue.
    own instruction not to discard finished work, but the round stops here rather than continuing
    silently past a red `make ci`.
 
+   **Items 3–4 built 26 September 2026 — the Preflight screen and the artefacts diff.** HOLD was
+   lifted by the checker inserting `queue/03b-lint-drift.md` (closed above) and splitting the
+   remainder of `queue/03-screens-B.md` into `03c` (these two items) and `03d` (Launch, the
+   privilege drop, the full exit test) — each of the four remaining items judged, in `REPORT-03.md`,
+   comparable in size to all of part A combined.
+
+   **Preflight streams as Server-Sent Events, not a polled job — decided and stated why, per the
+   brief's own instruction.** Every one of `harness.preflight.ALL_CHECKS`'s eleven checks is already
+   a plain, fast, synchronous function of a `PreflightContext`; there is no long-running job to poll
+   for, no cancellation semantics needed, nothing useful happening between polls. `harness.preflight.
+   __main__.run()` became a two-line wrapper around a new `run_streaming()` generator (the CLI's own
+   behaviour unchanged, confirmed by its own existing test suite re-run green) — `harness/webapp.py`
+   turns that generator directly into `text/event-stream`, so "each check appears as it completes"
+   (`05_DEPLOYMENT.md` §2.1) is the real engine's own real behaviour on the wire, not a screen-only
+   capability invented on top. A new `run_streaming` test (`tests/harness/test_preflight.py`) proves
+   the generator genuinely yields incrementally — patching the second check to record whether it was
+   called, then taking only the first item — shown red (an eagerly-list-building version fails it)
+   then green.
+
+   **Re-check and the three-way outcome, exactly as specified, with the real modules named by the
+   brief.** `basemap` warns (not fails) when a registered local provider's tiles are not built yet —
+   proven by really calling the Geospatial screen's own `register-provider` route with a
+   nonexistent path first, then streaming Preflight and reading the real `warn`. `gpu` skips on this
+   real macOS sandbox, proven never rendered as `pass`. An unrendered profile (`Generate` not yet
+   run) makes every check that reads `deploy/generated/<profile>/` fail with the real
+   `RenderedOutputMissing` message, not an invented one — Preflight's own real dependency on the
+   artefacts diff having run first, not a coupling this round invented. Launch's own disabled state
+   is asserted directly (`toBeDisabled()`/`toBeEnabled()` against the real DOM attribute, `CLAUDE.md`
+   rule 12's "assert the state, not the intent") both before any check has run and after a real,
+   all-checks-pass run — proven by the keyboard spec, not merely by reading the component's own
+   logic.
+
+   **The artefacts diff wraps `harness.render.render`/`diff_for`/`write` exactly as `python -m
+   harness.render` does — no second renderer, no `--allow-unpinned` shortcut by default.**
+   `POST /api/artefacts/generate` computes the diff against whatever is already on disk **before**
+   writing (§2.4's own "before it runs, as a diff against the current state"), confirmed by a real
+   test that changes `network.expose_conduit` and reads the real unified diff naming
+   `OSPREY_API_PORT`, not merely that *some* diff appeared. `create_app` gained an injectable
+   `render_resolver`, the same seam `tests/harness/test_render.py`'s own `_fake_resolver` already
+   uses, so this suite never needs a real Docker daemon to resolve real image digests — the real
+   default (`docker_digest_resolver`) still runs unmodified in production. Confirming resets on a
+   second `Generate`: a re-rendered artefact set has not itself been reviewed again, so a stale
+   confirmation must not silently carry over. `05_DEPLOYMENT.md` §2.4's other three guards (target
+   confirmation, drift/ordering enforcement, capacity on downgrade) are explicitly out of this
+   round's own scope, per the brief — not stubbed, not silently assumed built.
+
+   **Amendment 21 / rule 13**, the same discipline every prior round's own new actions received:
+   `submit-generate-artefacts`, `download-artefact` (a native `<a download>` link, `Enter` on it
+   observed via Playwright's own `page.waitForEvent("download")` — the same real-download mechanism
+   `apps/workspace`'s `ExportPanel.tsx` already established, not a second one invented here),
+   `submit-confirm-artefacts`, `submit-run-preflight` and `submit-recheck` each have a registry entry
+   and a real keyboard-spec case. Adding a sixth nav button (Preflight) shifted every earlier
+   screen's own Tab count by one — found running the suite for real (all eight pre-existing cases
+   still passed on paper, would have been silently wrong on the actual page): fixed in this round's
+   own commit alongside the new cases, not deferred, since this round's own change caused it.
+
+   **`06_DECISIONS.md` ADR-049 Stage 2 §6, all six named screens now exist.** `apps/harness/src/
+   store.ts`'s own `FUTURE_SCREEN_NAMES` is empty for the first time this stage — Launch itself
+   (round 03d) lives inside the Preflight screen rather than as a seventh tab, the same way the
+   artefacts diff already does, so no further screen name is owed.
+
    **Stage 2 §7 — Post-launch admin console operations. ACCEPTED. Not milestone-blocking; still Phase 8.**
    `05_DEPLOYMENT.md` §5's rolling upgrade and rollback to a previous digest, and §5's `verify` —
    "the port conformance suite against the *running* deployment rather than a test fixture", a
