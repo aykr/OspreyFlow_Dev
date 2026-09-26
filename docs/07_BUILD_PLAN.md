@@ -4555,6 +4555,110 @@ find something already finished sitting in the queue.
    implementation of the identical contract. Shown red-then-green with two new cases in
    `tests/harness/test_render.py`.
 
+   **Round 05, built 26 September 2026 — the two `make ci` targets found red or unprovisioned,
+   and one full `make ci` run recorded by target.** The brief that opened this round named its own
+   record-keeping location as "Stage 2a" — checked directly against this document's own standing
+   summary, Stage 2a is ArcadeDB stability, closed, and unrelated to either item below; recorded
+   here instead, alongside every other round this session, rather than under the brief's own
+   mislabel.
+
+   **Item 1 — `trivy-image-harness`.** `docker:27-cli` (both `usr/local/bin/docker` and
+   `usr/local/libexec/docker/cli-plugins/docker-compose`, the two files `harness/Dockerfile`
+   actually copies) carried 22+53 HIGH/CRITICAL CVEs; `docker:28-cli` still carried several
+   Go-stdlib CVEs on the same two files. `docker:29-cli` (Docker 29.8.1, Compose v5.5.1) scans at
+   **0** on both, confirmed against the standalone tag first and then against this Dockerfile's
+   own rebuilt image (`trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed`, exit
+   0). Pin bumped, with the reasoning recorded in the Dockerfile's own comment.
+
+   **Proven by running it, not by reading a changelog — with a real, disclosed scope limit.**
+   `harness/render.py`'s render step refuses by name (`MissingDockerfileError`) unless
+   `services/api/Dockerfile`, `services/ingest/Dockerfile` and `apps/workspace/Dockerfile` are
+   present at the image's own root, which `harness/Dockerfile` deliberately does not carry — so a
+   full local-lite Launch **through the container** needs the operator's whole checkout mounted
+   there too, undocumented by `05_DEPLOYMENT.md` §2/§3's own bootstrap command (now disclosed in
+   that document directly, next to the worked example it affects). Once that full checkout was
+   mounted, `harness.apply`'s own preflight gate correctly refused this actual sandbox: 9.7GiB of
+   configured memory against local-lite's 16GiB floor, 16.7GiB free disk against a 20GiB
+   projection — a real property of this environment's Docker Desktop VM, not a defect, and not
+   safe to force past (`CLAUDE.md` rule 14 names disk/memory exhaustion as its own stop condition).
+   The full twelve-container, ADR-043-verified golden path could not run end to end here for that
+   reason, honestly stated rather than inferred as passing.
+
+   **What was proven instead, and it is the part this pin actually touches:** a real compose
+   lifecycle — `up -d`, `ps --format json` (the exact call `wait_for_health`/`services_declaring_
+   a_health_check` parse), `down -v --remove-orphans` — run from inside the rebuilt image, through
+   its own bundled `docker`/`docker compose` v29 binaries, against the real Docker socket, using
+   `deploy/compose/dev.yaml`'s four already-built-image services (arcadedb, minio, valkey,
+   postgres — no owned build, so unaffected by the mount limit above). All four reported
+   `"Health":"healthy"` in the exact JSON shape `harness/apply.py` depends on; teardown left no
+   residual container or network. This is the newer CLI/compose plugin doing the actual thing the
+   pin bump could have broken, proven against the real socket rather than assumed from version
+   numbers.
+
+   **Item 2 — `conformance-guard`.** The brief's own premise — "needs a live ArcadeDB and nothing
+   in `ci:` provisions one" — was checked against the actual tree rather than taken as given, and
+   was right about the symptom, wrong about the cause. `-k test_guard` selects one guard test per
+   port; three of the four (`analytics_port`, `compute_port`, `model_port`) already ran infra-free.
+   Only `graph_port/test_guard.py`'s own two cases failed (`httpx.ConnectError`, no ArcadeDB
+   running) — not because either test touches `GraphPort`, but because `graph_port/conftest.py`'s
+   stale-database sweep fixture was `scope="session", autouse=True`, so it ran ahead of *every*
+   test collected in that directory, including the two that need no store at all.
+
+   **Fixed at the root rather than worked around at the Makefile/CI-job level** (the brief's own
+   two offered remedies — provision inside the target, or fail fast by name — both accepted the
+   coupling as real and built around it): the fixture lost `autouse`, and
+   `graph_port/test_suite.py` — the one module that actually opens ArcadeDB connections — now
+   requests it explicitly via `pytestmark = [..., pytest.mark.usefixtures(...)]`. This restores the
+   guard test's own intended invariant (a cheap, infra-free sanity check, uniform across all four
+   ports) rather than accepting that `graph_port`'s guard is special and building provisioning
+   around that acceptance. `ci.yml`'s own `conformance-guard` job already ran the identical bare
+   `pytest tests/conformance -k test_guard` with no provisioning step — so the two were already in
+   sync, and stay in sync, now that the underlying invariant is true for both.
+
+   **Shown red, then green, then re-proven the real suite still needs and still uses the fixture:**
+   before the fix, `make conformance-guard` on a machine with no ArcadeDB running: 6 passed, 2
+   errored (`graph_port`). After: 8 passed, 0 infra required.
+   `pytest tests/conformance/graph_port/test_suite.py` still errors identically with no ArcadeDB
+   running (the sweep fixture is still exercised there, only no longer leaking into the guard);
+   against a real, disposable ArcadeDB container (`docker run --rm -p 2480:2480 -e JAVA_OPTS=
+   "-Darcadedb.server.rootPassword=playwithdata123" arcadedata/arcadedb:24.11.1`), the full
+   `graph_port` suite passed 64/64, torn down clean afterward. No dedicated regression test was
+   added beyond this: the invariant itself is what `make ci`/`ci.yml`'s own bare, unprovisioned
+   `conformance-guard` job checks on every run — a real CI runner with no ArcadeDB reachable is
+   the environment the guard's own infra-free contract is checked against, the same way the trivy
+   gates above are themselves the check rather than needing a second test that re-asserts them.
+
+   **Item 3 — `make ci` in full, once, by target.** Run with `-k` (keep-going) rather than the
+   bare `ci:` recipe, since the latter stops at its first failing prerequisite and would have left
+   every target after the one known failure unrecorded — checked directly: a first, non-`-k` run
+   stopped at `route-coverage-check` and never reached `decision-log-publication-check` onward.
+   Full result, by name:
+
+   | Target | Result |
+   | --- | --- |
+   | `lint` (`ruff check .`, `eslint .`) | Green |
+   | `typecheck` (`mypy`, `tsc --noEmit`) | Green |
+   | `licence-check` | Green — 71 + 402 packages, all allowed |
+   | `trivy` | Green |
+   | `trivy-image-ingest` / `-api` / `-workspace` | Green (unchanged this round) |
+   | `trivy-image-harness` | **Green** — this round's own fix, item 1 above |
+   | `schemas-check` | Green — 113 generated types match |
+   | `authorized-query-check` | Green — 46 files, no offenders |
+   | `demo-guide-check` | Green — 7 registered demos, all documented |
+   | `domain-model-coverage-check` | Green — 38 classes, no new drift |
+   | `route-coverage-check` | **Red — the standing Floor A member**, `test_no_new_drift_beyond_the_allowlist`: `GET /v1/exports`, `GET /v1/investigations/{id}/assumptions`, `/gaps`, `/judgements`, `GET /v1/yardstick`, `POST /v1/analytics/sightings` — identical six routes already recorded as the standing baseline in `REPORT-04.md`'s own verification block; **no regression** |
+   | `product-tree-link-check` | Green — 78 known references, 0 new |
+   | `decision-log-publication-check` | Green — 1 known reference, 0 new |
+   | `test-file-coverage-check` | Green — 180 test files, no new drift |
+   | `citation-check` | Green |
+   | `conformance-guard` | **Green** — this round's own fix, item 2 above; 8/8, zero infra |
+   | `harness-a11y` | Green — 12/12 |
+   | `bundle` | Green — 25 files, `dist/osprey-bundle-local-lite.tar.gz` |
+
+   One failing target across the whole run, and it is the pre-existing, already-accepted Floor A
+   member — `make ci` is not fully green, and was not before this round either; both red/
+   unprovisioned targets this round was asked to fix now are.
+
    **Stage 2 §7 — Post-launch admin console operations. ACCEPTED. Not milestone-blocking; still Phase 8.**
    `05_DEPLOYMENT.md` §5's rolling upgrade and rollback to a previous digest, and §5's `verify` —
    "the port conformance suite against the *running* deployment rather than a test fixture", a
