@@ -107,6 +107,10 @@ def _fake_docker_build_docs_layer(_base_image: str, _docs_site_dir: Path, _tag: 
     pass
 
 
+def _fake_docker_tag(_local_tag: str, _pull_mode_tag: str) -> None:
+    pass
+
+
 @pytest.fixture
 def bundle_config() -> OspreyConfig:
     return load_config(REPO_ROOT / "osprey.yaml")
@@ -155,6 +159,7 @@ def test_build_bundle_with_images_archives_every_service(
         resolver=_fake_resolver,
         docker_save=_fake_docker_save,
         docker_build_docs_layer=_fake_docker_build_docs_layer,
+        docker_tag=_fake_docker_tag,
     )
 
     assert "images/api.tar" in manifest.image_archives
@@ -184,6 +189,7 @@ def test_build_bundle_with_images_also_archives_the_harness_bootstrap_image(
         resolver=_fake_resolver,
         docker_save=_recording_docker_save,
         docker_build_docs_layer=_fake_docker_build_docs_layer,
+        docker_tag=_fake_docker_tag,
     )
 
     assert "images/harness.tar" in manifest.image_archives
@@ -211,9 +217,18 @@ def test_build_bundle_with_images_layers_the_docs_site_onto_the_workspace_image_
         resolver=_fake_resolver,
         docker_save=_fake_docker_save,
         docker_build_docs_layer=_recording_docker_build_docs_layer,
+        docker_tag=_fake_docker_tag,
     )
 
-    assert calls == [("osprey/workspace:local", "osprey/workspace:local")]
+    # Round 07: `entry.image` for an owned service is now the pull-mode reference
+    # (`bundle_config` declares no `components.source_path`) — the tag `docker_tag` (faked here)
+    # would have retagged the local build to, not the local build tag itself.
+    from harness.render import OWNED_IMAGE_REGISTRY
+
+    assert len(calls) == 1
+    base_image, tag = calls[0]
+    assert base_image == tag
+    assert base_image.startswith(f"{OWNED_IMAGE_REGISTRY}/workspace:")
 
 
 def test_build_bundle_excludes_stray_os_marker_files_from_the_manifest(
@@ -320,6 +335,7 @@ def test_make_tarball_is_uncompressed_when_it_carries_image_archives(
         resolver=_fake_resolver,
         docker_save=_fake_docker_save,
         docker_build_docs_layer=_fake_docker_build_docs_layer,
+        docker_tag=_fake_docker_tag,
     )
 
     tarball_path = make_tarball(staging_dir, tmp_path / "bundle.tar")

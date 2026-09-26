@@ -14,7 +14,12 @@ doc_site`), the hand-maintained `deploy/RUNBOOK.md`, and — with `--images` —
 image `harness.render.service_images` says the rendered stack runs, each pinned by a
 **registry-resolved** digest (`harness.images.registry_digest_resolver`, not the local-daemon one
 `harness.render.render` defaults to — a bundle recipient's own daemon has pulled nothing yet, so
-only a registry-checkable digest means anything to them).
+only a registry-checkable digest means anything to them). **The three owned services are the one
+honest exception** (round 07): nothing publishes to `harness.render.OWNED_IMAGE_REGISTRY` yet, so
+their own `versions.lock` entry is `unresolved`, not a real pin — `--images` still ships them, as
+`docker save` archives retagged to match the pull-mode reference the bundle's own rendered
+`compose.yaml` names, which is what actually lets `docker load` plus this bundle's own
+`osprey.yaml.example` deploy correctly; a real registry pin for them is separate, undone work.
 
 **Every artefact-hygiene assertion `scripts.packaging_gate` provides runs against the bundle's own
 staged file list before it is tarred** — ADR-034 §B7 (no private-tree file, no authorship
@@ -112,6 +117,14 @@ class BundleManifest:
     image_archives: tuple[str, ...] = field(default_factory=tuple)
 
 
+def _docker_tag(local_tag: ImageRef, pull_mode_tag: ImageRef) -> None:
+    """Round 07: retags an owned service's already-built local image
+    (`osprey/<service>:local`, unchanged precondition) to the pull-mode reference the bundle's
+    own render just computed, so the archive `docker load` restores lands under the exact name
+    the rendered compose file names — never a real registry pull, never a network call."""
+    subprocess.run(["docker", "tag", local_tag, pull_mode_tag], check=True, timeout=60)
+
+
 def _docker_save(image: ImageRef, out_path: Path) -> None:
     """Archives a real, already-present local image. Does not pull — `build_bundle`'s own caller
     decides whether a missing image is an error or something to fetch first; silently pulling
@@ -174,6 +187,7 @@ def build_bundle(
     include_images: bool = False,
     docker_save: Callable[[ImageRef, Path], None] = _docker_save,
     docker_build_docs_layer: Callable[[ImageRef, Path, ImageRef], None] = _docker_build_docs_layer,
+    docker_tag: Callable[[ImageRef, ImageRef], None] = _docker_tag,
     resolver: Callable[[ImageRef], str | None] = registry_digest_resolver,
 ) -> BundleManifest:
     """Stages a whole bundle's own contents under `staging_dir` (not yet tarred — `make_tarball`
@@ -189,6 +203,15 @@ def build_bundle(
     if map_config is not None:
         bundle_map_providers(map_config)  # 00_ARCHITECTURE.md §1.2 — refuses by name, unchanged.
 
+    # Round 07: `config` (not a build-declaring copy of it) is what a recipient's own `harness.
+    # apply --config osprey.yaml.example` re-renders from — so this bundle's own `compose.yaml`/
+    # `versions.lock` must be the **pull-mode** render, the shape the recipient's own re-render
+    # produces, not the build-mode one this checkout could produce for itself. `--images` below
+    # builds the owned services from source exactly as before, then retags each one under the
+    # pull-mode reference `service_images` just computed, before saving — the archive `docker
+    # load` restores lands under the identical name the rendered compose file references, closing
+    # exactly the mismatch a real run of this test found: pull-mode `compose.yaml` naming
+    # `ghcr.io/ospreyflow/api:<sha>` while the archive still carried `osprey/api:local`.
     rendered = render(
         config,
         resolver=resolver,
@@ -227,6 +250,13 @@ def build_bundle(
         images_dir = staging_dir / "images"
         images_dir.mkdir()
         for entry in service_images(config):
+            if entry.owned:
+                # Built from this checkout under the developer/CI tag (`osprey_bundle.py`'s own
+                # precondition: "already built and tagged locally before this command runs" —
+                # unchanged this round), then retagged to the pull-mode reference `entry.image`
+                # actually is here, so the archive `docker load` restores matches what the
+                # bundle's own rendered compose file names, not a tag nothing local answers to.
+                docker_tag(f"osprey/{entry.service}:local", entry.image)
             if entry.service == "workspace":
                 docker_build_docs_layer(entry.image, staging_dir / "docs-site", entry.image)
             archive_relpath = f"images/{entry.service}.tar"
