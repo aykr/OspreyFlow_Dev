@@ -4786,6 +4786,43 @@ find something already finished sitting in the queue.
    11 — kept here as history rather than deleted, since it was true when written and the fix is
    what makes it no longer true.
 
+   **Round 08, built 26 September 2026 — two bugs from round 01, closed (owner ruling R3's
+   delegation).**
+
+   **Item 1 — `GraphArcadeDBAdapter.upsert_nodes` was a bare `INSERT`; it is now a real upsert
+   keyed on `write.id`.** Round 01's own finding, reproduced directly before fixing it: a second
+   seed of a fixture with fixed literal ids (Fixture Corp's own `corp-res-distinct-2`) failed
+   outright, `ArcadeDBError 503`, a duplicate-key exception. **Verified first, correcting this
+   round's own brief where it was wrong:** the brief asked "same for `upsert_edges` if it has the
+   same shape" — checked directly, `upsert_edges` was never the bug; it already selects the
+   existing edge for the same `(type, source, target)` and merges occurrences/interval/provenance,
+   built correctly in Phase 1. `upsert_nodes` alone was the bare insert.
+
+   **Select-then-branch (`UPDATE ... WHERE id = :id` vs `INSERT INTO`), the same shape
+   `upsert_edges` already uses — not ArcadeDB's own `UPDATE ... UPSERT`**, because merging
+   provenance and bumping `audit.revision` both need the existing row's own values before the
+   write, so a preceding lookup (`_find_existing_node`, the same `g.V().has("id",...).elementMap()`
+   pattern `supersede_node` already uses) is unavoidable either way. What merges: `provenance`
+   (`01_DOMAIN_MODEL.md` §7, de-duplicated by `(document_id, locator)`, reusing the same
+   `_merge_provenance` helper edges already share) and `audit.revision` (increments). What does
+   not: `properties`/`handling`/`resolution` take the latest write's own values — the same "latest
+   write wins" shape `upsert_edges` already applies to everything it does not name as cumulative;
+   there is no ontology-declared rule for resolving two conflicting values of one property.
+
+   Shown red then green: `tests/conformance/graph_port/test_suite.py::test_upserting_the_same_
+   node_id_twice_merges_into_one_node` reproduces round 01's own exact duplicate-key error against
+   the unfixed adapter, then passes against the fix — provenance retains both source references,
+   `audit.revision` reaches 2. The whole `GraphPort` conformance suite run against a live
+   ArcadeDB (`make dev-up`/`dev-down`): **65 passed** (the 64 pre-existing cases plus this one).
+
+   **Item 2 — the sustained-load test's own three thresholds, adopted and asserted for real** — the
+   full account, including both runs' own real numbers and the one real environment finding
+   (a reproducible-but-not-deterministic connection drop near this sandbox's own VM memory
+   ceiling), is recorded once, in this document's own Stage 2a addendum above (the entry beginning
+   "Thresholds — Decided, 26 September 2026"), not repeated here. `sustained_load_results_round01.
+   csv` and `sustained_load_results_round08.csv` (both in `Claude outputs/handoff/`) hold the two
+   runs' own full six-cycle curves.
+
    **Stage 2 §7 — Post-launch admin console operations. ACCEPTED. Not milestone-blocking; still Phase 8.**
    `05_DEPLOYMENT.md` §5's rolling upgrade and rollback to a previous digest, and §5's `verify` —
    "the port conformance suite against the *running* deployment rather than a test fixture", a
@@ -5826,20 +5863,40 @@ find something already finished sitting in the queue.
    VM ceiling within six cycles — comfortably below it throughout (`docker stats` peaked at 7.10GiB
    of 9.70GiB). This round therefore continues rather than stops at item 4.
 
-   **Thresholds — Proposed, not decided, with the measured numbers beside each proposal, per this
-   round's own brief:** the test asserts nothing today except that all six cycles complete and every
-   query in the sample returns 2xx.
-   - *RSS growth per cycle:* proposed ≤ 400MiB/cycle average across the six-cycle run (measured:
-     ≈113MiB/cycle average, non-monotonic — a threshold set well above the measured noise floor,
-     closer to the dev.yaml figure's own per-cycle climb, so the assertion is meaningful against a
-     real regression rather than tripping on ordinary variance).
-   - *Query sample wall time:* proposed cycle 6 ≤ 3× cycle 1 (measured: 0.19s / 0.29s ≈ 0.66×, i.e.
-     already well inside the proposed ceiling) — wide on purpose, because this sample's own absolute
-     magnitude (sub-second) means small scheduling jitter is a large relative swing; a tighter ratio
-     would risk flagging noise as regression on a fast, lightweight query sample.
-   - *VM-ceiling projection:* proposed — fail if any cycle's `docker stats` RSS exceeds 85% of the
-     configured Docker VM allocation (this machine: 8.25GiB of 9.70GiB; measured peak: 7.10GiB,
-     73%). The owner rules on all three; none is enforced yet.
+   **Thresholds — Decided, 26 September 2026 (round 08, owner ruling R3's delegation of
+   implementation-level gaps to the checker's own brief), adopted as the numbers below and now
+   real assertions, not proposals.** `test_arcadedb_memory_and_query_latency_under_sustained_
+   ingest_cycles` asserts all three today; `sustained_load_results_round08.csv` has the full
+   six-cycle curve beside `sustained_load_results_round01.csv`'s own (both in `Claude outputs/
+   handoff/`) — node/edge counts per cycle are identical between the two runs, since both write
+   the same fixed HMP volume per cycle; round 08 additionally reseeds Fixture Corp every cycle
+   (`GraphArcadeDBAdapter.upsert_nodes` is now a real upsert, this round's own item 1), which the
+   two curves' near-identical growth rate confirms changes nothing about what accumulates.
+   - **RSS growth per cycle ≤ 400MiB/cycle average across the six-cycle run.** Round 01 measured:
+     ≈113MiB/cycle (6530.0 → 7095.3MiB). Round 08, re-run with the adapter fix and both fixtures
+     reseeding: ≈124MiB/cycle (6555.6 → 7174.1MiB) — consistent with round 01, both comfortably
+     under the threshold, set well above the measured noise floor and closer to the dev.yaml
+     figure's own per-cycle climb so the assertion is meaningful against a real regression rather
+     than ordinary variance.
+   - **Query sample wall time at cycle 6 ≤ 3× cycle 1.** Round 01: 0.19s / 0.29s ≈ 0.66×. Round
+     08: 0.18s / 0.14s ≈ 1.29× — both well inside the ceiling. Wide on purpose: this sample's own
+     absolute magnitude (sub-second) means small scheduling jitter is a large relative swing, and a
+     tighter ratio would flag noise as regression on a fast, lightweight sample.
+   - **Cycle 6's own RSS below 85% of the Docker VM's configured memory, read live via `docker
+     info --format '{{.MemTotal}}'`, never hard-coded** — this sandbox's own figure has already
+     moved between rounds this session and a literal number would silently stop meaning what it
+     claims the next time it drifts. Round 01: 7095.3MiB of a 9.70GiB VM (73%, ceiling 8.25GiB).
+     Round 08: 7174.1MiB of the identical 9.70GiB VM (74%, ceiling 8.25GiB) — both comfortably
+     under. **A real, reproducible environment ceiling found running this twice, not assumed
+     first-try:** an initial round-08 run failed at cycle 6 with a dropped ArcadeDB connection
+     (`httpx.ReadError`) while `server_ram_os_used_mib` (the Docker Desktop VM's own OS-level
+     figure, not this container's cgroup scope — the platform-dependence finding above) sat at
+     essentially the VM's own full 9.7GiB from cycle 1 onward, for the whole twelve-container
+     stack, not ArcadeDB alone. A second, otherwise-identical run completed all six cycles clean.
+     Read as: this sandbox's own Docker Desktop VM runs the full stack close enough to its own
+     ceiling that a transient connection drop under load is a real, occasional risk here — not a
+     defect in the adapter fix or the assertions, and not (yet) reproducible enough to call
+     deterministic. Disclosed rather than smoothed over by only reporting the run that passed.
 
    **The Makefile/`ci.yml` test-wiring gap closed, 26 September 2026 — found running `make test`
    at the end of the round above, per `STANDING.md`'s own verification-block requirement, not

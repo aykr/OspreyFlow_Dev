@@ -601,7 +601,9 @@ workloads that a reader comparing the two figures should not average together. Q
 latency showed no growth trend across six cycles, though the fixed query sample this test runs
 (geobins, one Search Around, one pathfinder call, three resolution-threshold projections) is a much
 lighter workload than the closing-pass walkthrough this section's own figures above were measured
-against, so the two latency figures are not directly comparable either. Thresholds for what this
-test should assert are **Proposed, not decided** (`07_BUILD_PLAN.md` Stage 2a's addendum has the
-three proposals and the measured numbers beside each); the test today asserts only that all six
-cycles complete and every query in the sample returns 2xx, per this round's own brief.
+against, so the two latency figures are not directly comparable either. **Decided, 26 September
+2026 (round 08)** — RSS growth ≤400MiB/cycle average, query-sample wall time at cycle 6 ≤3× cycle
+1, cycle 6's own RSS below 85% of the Docker VM's own configured memory (read live via `docker
+info`, never hard-coded); `07_BUILD_PLAN.md` Stage 2a's addendum has the measured numbers from
+both this test's own runs (round 01 and round 08) beside each threshold. The test now asserts all
+three for real.
