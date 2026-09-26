@@ -2,16 +2,21 @@
 from the six screens produces a running `local-lite` deployment that `harness.verify` passes
 three-sided.
 
-**Opt-in via `OSPREY_TEST_SIX_SCREEN_EXIT=1`** — needs Docker, ~15 real minutes, the same reasoning
-`tests/harness/test_bundle_exit_test.py`/`test_sustained_load.py` already use for their own opt-in
-gates. **Expected to pass on CI's `ubuntu-latest` runner and the owner's own laptop** — not
-necessarily on every sandbox: `harness/preflight/memory.py`'s own `context.memory_probe()` and
-`disk.py`'s own free-space read measure *this process's own host OS*, not the Docker daemon's — a
-real, disclosed measurement-scope gap (out of this round's own scope to fix) that means Preflight
-can pass on a machine whose Docker Desktop VM is nonetheless too small for the real stack. Where
-that happens, this test reports the real failure at whichever stage it actually occurs — Preflight,
-or later, during Launch's own real `docker compose up`/health-wait — never a mocked substitute for
-either.
+**Opt-in via `OSPREY_TEST_SIX_SCREEN_EXIT=1`** — needs Docker, ~15 real minutes on a properly
+resourced daemon, the same reasoning `tests/harness/test_bundle_exit_test.py`/`test_sustained_load.
+py` already use for their own opt-in gates. **Two real, both-real branches, not one expected
+outcome** (round 10, closing the measurement-scope gap this file's own previous version disclosed
+and left open): `harness/preflight/memory.py`/`disk.py` now verdict on the container runtime's own
+daemon, not this process's own host OS (that module's own docstring has the full account of the
+false pass this fixes). On a daemon genuinely below `local-lite`'s floor — this sandbox, confirmed
+directly, unchanged since round 05/06 (9.7GiB/~17-20GiB against a 16GiB/20GiB floor) — Preflight
+now correctly refuses, and this test asserts that real refusal by check name, then stops *before*
+Launch: forcing past a real resource gate is exactly the class of shortcut `CLAUDE.md` rule 14
+names as a stop condition, not a workaround to script around. On a properly-resourced daemon
+(CI's own `ubuntu-latest` runner, the owner's own laptop) neither check fails, and the test
+proceeds all the way through Launch and the three-sided verify, as it always did. Whichever branch
+this test's own real Preflight run takes, it is real Preflight output — never a mocked substitute
+for either.
 
 **Drives the six real HTTP routes, not `harness.apply` in-process** (unlike
 `tests/harness/test_sustained_load.py`'s own `apply_main` call) — `POST /api/launch/stream` with no
@@ -157,20 +162,49 @@ def test_launch_from_the_six_screens_reaches_a_verified_local_lite_deployment(
         # every owned service, so `harness/render.py`'s own `MissingDockerfileError` — the real,
         # disclosed gap `docs/07_BUILD_PLAN.md`'s round 05 entry named for a *container-run*
         # harness image with no source mounted — does not apply to this in-process test at all).
+        #
+        # **Round 10 — `memory`/`disk` verdict on the container runtime's own daemon now, not this
+        # process's own host** (`harness/preflight/memory.py`'s own docstring has the full account
+        # of the false pass that fixed). This test drives `harness.webapp` as a bare host process,
+        # so it always did — and, until round 10, always would — read this host's own generous
+        # figures (36GiB/499GiB here) rather than the Docker Desktop VM's real, smaller allocation
+        # (9.7GiB/~17-20GiB) the twelve containers Launch starts actually run inside. On a machine
+        # whose daemon is genuinely below `local-lite`'s floor — this sandbox, confirmed directly,
+        # unchanged since round 05/06 — Preflight now correctly refuses, and this test's own job is
+        # to assert that real refusal by check name and stop *before* attempting Launch, not to
+        # force past a gate that is doing exactly what it is for. On a properly-resourced daemon
+        # (CI's own runner, the owner's own laptop) neither check fails, and the test proceeds to
+        # Launch below — both branches are real Preflight output, neither mocked.
         response = client.get("/api/preflight/stream")
         assert response.status_code == 200, response.text
         checks = {e["check"]: e for e in _events(response.text) if "check" in e}
         assert checks, "no checks reported at all"
         assert checks["basemap"]["status"] == "warn", checks["basemap"]
         failed = {name: c for name, c in checks.items() if c["status"] == "fail"}
-        if failed:
+        unexpected_failures = {
+            name: c for name, c in failed.items() if name not in {"memory", "disk"}
+        }
+        if unexpected_failures:
             pytest.fail(
-                "Preflight failed for real before Launch was attempted — reporting the real "
-                "check(s) and figures verbatim, not patching around them:\n"
+                "Preflight failed for real before Launch was attempted, on a check other than "
+                "the resource floors this sandbox is already known to sit below — reporting the "
+                "real check(s) and figures verbatim, not patching around them:\n"
                 + "\n".join(
-                    f"  {name}: {c.get('what_is_wrong', c)}" for name, c in failed.items()
+                    f"  {name}: {c.get('what_is_wrong', c)}"
+                    for name, c in unexpected_failures.items()
                 )
             )
+        if failed:
+            # The real refusal, asserted by check name — a pass, not a skip: this test's own job
+            # on an under-resourced machine *is* proving Preflight correctly refuses, not merely
+            # declining to find out. Never forced past — CLAUDE.md rule 14 names exactly this
+            # class of shortcut (docker/disk exhaustion) as a stop condition, not a workaround.
+            assert failed.keys() <= {"memory", "disk"}
+            for name, c in failed.items():
+                assert "GiB" in c.get("what_is_wrong", ""), (
+                    f"{name}: expected a real, measured figure in the refusal, got: {c}"
+                )
+            return
 
         # 6. Confirm the Docker target — the real, resolved context, never faked.
         response = client.post("/api/launch/target/confirm")

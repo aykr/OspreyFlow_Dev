@@ -89,6 +89,12 @@ availability, container runtime version, and for `cluster` connectivity to every
 failure explains what is wrong and what to do about it, with a **Re-check** button rather than a
 loop of edit-and-rerun. Preflight must pass before Launch is enabled.
 
+**Memory and disk verdict on the container runtime's own daemon, not the operator's shell —
+fixed, round 10.** The host running Preflight and the Docker Desktop VM every container actually
+runs inside can have very different resources (this document's own memory and disk figures below
+are what the daemon must provide); the operator's host figure is still shown alongside each result,
+as context, never as what either check passed or failed on.
+
 **A warning does not block Launch — owner's decision, 24 September 2026.** Not everything Preflight
 finds is a reason to refuse to start. A check reports a **warning** when it has found something
 real whose remedy is available *after* install, and Launch proceeds. The basemap is the case this

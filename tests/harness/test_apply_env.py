@@ -225,29 +225,67 @@ def test_demo_analyst_password_is_written_and_realm_carries_the_subject_with_the
 
 def test_the_deployment_this_file_starts_is_a_real_one_and_the_teardown_removes_it(
     tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """The mechanism `_teardown_local_lite_deployment` relies on, proven directly rather than
-    inferred from reading it: `_rendered_env` really does reach a running `osprey-local-lite`
-    deployment (not merely a rendered file), and the exact teardown command the fixture runs after
-    every test really does remove it. Calls that command itself, ahead of the fixture's own
-    identical call, so this test's assertion is about the command's effect, not about whether the
-    fixture happened to run — the fixture then runs again on top of an already-empty project,
-    which `docker compose down`'s own idempotence (proven separately, interactively, against this
-    machine) makes a no-op rather than a second failure.
+    inferred from reading it: on a runtime with room, `main()` really does reach a running
+    `osprey-local-lite` deployment (not merely a rendered file), and the exact teardown command the
+    fixture runs after every test really does remove it. Calls that command itself, ahead of the
+    fixture's own identical call, so this test's assertion is about the command's effect, not about
+    whether the fixture happened to run — the fixture then runs again on top of an already-empty
+    project, which `docker compose down`'s own idempotence (proven separately, interactively,
+    against this machine) makes a no-op rather than a second failure.
 
     **Verified manually, the "even on failure" half rule 15 asks for** (not re-asserted as a
     second, permanent test here, to avoid a second copy of this fixture's own logic drifting from
-    the first): a test in this file was made to raise straight after `_rendered_env` returned, the
-    suite was run, and `docker ps --filter label=com.docker.compose.project=osprey-local-lite`
+    the first): a test in this file was made to raise straight after reaching a running deployment,
+    the suite was run, and `docker ps --filter label=com.docker.compose.project=osprey-local-lite`
     was empty immediately afterward despite the test's own failure — pytest's own guarantee that a
     `yield`-based fixture's teardown runs whether the test it wraps passed or not, exercised
     against this real fixture rather than assumed of it.
+
+    **Two real branches, round 10** — the same split `tests/harness/test_six_screen_live_exit.py`
+    makes, for the identical reason: Preflight's `memory`/`disk` checks now verdict on the container
+    runtime's own daemon (`docs/07_BUILD_PLAN.md` Stage 2 §2's round-10 entry), and this sandbox's
+    daemon genuinely does not have `local-lite`'s floor free. `main()` calls `--build --no-build`
+    directly rather than through `_rendered_env` here, since this branch needs the real exit code
+    and stderr `_rendered_env`'s own contract discards. On a daemon below the floor, `main()`
+    correctly refuses at the `preflight` stage before `up` ever runs — asserted by name, not merely
+    by a nonzero exit code, so an unrelated preflight failure (a stale port, a leftover DuckDB lock)
+    still fails this test rather than being waved through as "expected". On a runtime with room
+    (CI's own runner) apply reaches `up` and the original assertion runs unchanged.
     """
-    _rendered_env(tmp_path)
+    exit_code = main(
+        ["--profile", "local-lite", "--out-root", str(tmp_path), "--build", "--no-build"]
+    )
     running = _local_lite_containers()
+
+    if exit_code != 0:
+        stderr = capsys.readouterr().err
+        stage_marker = "FAILED at stage 'preflight'"
+        assert stage_marker in stderr, (
+            "apply failed before reaching a running deployment for a reason other than preflight "
+            f"— not the resource-floor refusal this branch tolerates. stderr:\n{stderr}"
+        )
+        failing_names = {
+            line.strip().split(":", 1)[0]
+            for line in stderr.split(stage_marker, 1)[1].splitlines()
+            if line.strip() and ":" in line and not line.strip().startswith("(completed)")
+        }
+        assert failing_names, f"no failing check names were found in stderr:\n{stderr}"
+        assert failing_names <= {"memory", "disk"}, (
+            f"preflight refused on {failing_names - {'memory', 'disk'}}, not just memory/disk — "
+            "that is an unexpected failure, not the resource-floor refusal this branch tolerates"
+        )
+        assert running == [], (
+            "apply refused at preflight yet a container exists — the refusal did not actually "
+            "stop before `up`"
+        )
+        return
+
     assert running, (
-        "no osprey-local-lite container exists after _rendered_env — either `main()` no longer "
-        "reaches `up`, or this test's own detection is wrong; either way the teardown below "
+        "no osprey-local-lite container exists after a successful apply — either `main()` no "
+        "longer reaches `up`, or this test's own detection is wrong; either way the teardown below "
         "would prove nothing"
     )
 

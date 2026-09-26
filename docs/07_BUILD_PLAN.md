@@ -2745,6 +2745,22 @@ find something already finished sitting in the queue.
    23 September rehearsal produced (`interpreter`, `bind-address`, `basemap`, `duckdb-lock`).
    35 tests; `make test` went 730 → 765 passing with the same three failures.
 
+   **`memory`/`disk` fixed to verdict on the container runtime's own daemon, not the host process
+   running Preflight — round 10.** Both checks read `os.sysconf`/`shutil.disk_usage`, which measure
+   whatever process runs Preflight — on a Docker Desktop host that is the host's own physical
+   resources, not the smaller, separate allocation the Docker Desktop VM actually runs every
+   container inside. Measured directly on this sandbox: 36GiB host RAM against 9.7GiB the daemon
+   itself reports (`docker info --format '{{.MemTotal}}'`), and 494.6GiB host free disk against
+   16.6GiB free on the daemon's own filesystem (a one-shot `docker run --rm alpine df -k /`, since
+   named volumes are backed by the daemon's own data root, never the literal host path
+   `osprey.yaml` names). `memory` had been passing on a host whose daemon cannot hold the
+   twelve-container deployment it exists to gate — exactly the false pass §2.1 forbids. Both checks
+   now shell out to the daemon for the verdict and `skip` (never pass) when it cannot be reached;
+   the host's own figure is still read and shown in `detail`, as context only. Confirmed red on this
+   sandbox directly (`python -m harness.preflight --only memory`/`--only disk`, both FAIL), and
+   red-then-green in the test suite (`test_memory_verdicts_on_the_daemon_even_when_the_host_would_pass`
+   and its `disk` counterpart, in `tests/harness/test_preflight.py`).
+
    **Every failing check gives a remedy, enforced rather than encouraged.** `failed()` raises if
    either `what_is_wrong` or `what_to_do` is empty — §2.1's "explains what is wrong and what to do
    about it" is a constructor precondition, so a check cannot ship half of it.
@@ -4551,6 +4567,15 @@ find something already finished sitting in the queue.
    **Stage 2 §6's exit: the round-trip/Launch row now cites this test id directly, not merely the
    subprocess-plumbing tests above it.** The one item this stage's own exit table left without a
    live proof is closed.
+
+   **Round 10 — the live-exit test now has two real branches, since Preflight's `memory`/`disk`
+   checks verdict on the container runtime's own daemon (this stage's own §2 entry above has the
+   fix).** On a daemon below the `local-lite` floor — this sandbox, measured directly — the test
+   asserts the refusal by check name and message content, then stops before Launch: a genuine
+   `pytest` PASS, not a skip and not a forced-through Launch against a runtime that cannot hold it.
+   On a runtime with headroom (CI's own runner) it proceeds through Launch exactly as before. Any
+   OTHER check failing is still a hard `pytest.fail` — this only widens the test's tolerance for the
+   two checks this round's own fix changed the verdict source of, not for an unrelated regression.
 
    **Part C, built 26 September 2026 — the accessibility floor, CI wiring, the §6 exit
    reconciliation, and three real documentation bugs found re-verifying it, complete except
