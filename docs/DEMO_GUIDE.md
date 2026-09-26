@@ -58,20 +58,22 @@ column below as the same binding statement in prose that the registry will enfor
 | --- | --- | --- | --- |
 | **Scenario A, steps A1–A11** (HMP fixture) | `shipped` | **Built and exit-verified** (automated CI — `glass-perf`/`glass-keyboard`/`glass-map-verify` and the acceptance-scenario test suite). **Live-walkthrough verification through a running Glass: see `docs/demo/2026-09-24/RUNBOOK.md`** for exactly which sub-steps have actually been driven through a browser and which have not | Timeline, map, cross-filtering, boundary and site-grid filters, the weekend and time-of-day findings, the site hotspot |
 | **The Ingest Studio**, Connect → Publish (CDR fixture) | `shipped` | **Built and exit-verified** | Onboarding a new source without touching the ontology: profiling, row-template mapping, dry-run verify, publish with versioning |
-| Scenario A, A12 (Clique Metric) | `shipped` | **Built** (Phase 7's Clique Metric — `POST /v1/investigations/{id}/compute/clique_metric`, `MetricsPanel`'s own "Clique Metric" option) — **not verified through the Glass**; see `docs/demo/2026-09-24/RUNBOOK.md` | — |
-| Scenario A, A13–A15 (assessment, export) | `shipped` | **Built** (Phase 8's judgements/gaps/assumptions routes and `JudgementsPanel`/`ExportPanel`) — **not verified through the Glass**; see `docs/demo/2026-09-24/RUNBOOK.md` | — |
+| Scenario A, A12 (Clique Metric) | `shipped` | **Built and verified through the Glass**, 26 September 2026 — computed and ranked after a real keyboard-driven expansion (`apps/workspace/live/scenario-a-a12-a15.spec.ts`, `docs/demo/2026-09-26/RUNBOOK.md`) | Ranking the insular subgroup |
+| Scenario A, A13–A15 (assessment, export) | `shipped` | **Built; partly verified through the Glass**, 26 September 2026 — the assessment composer opens from the Inspector and the export drawer offers all three kinds, both asserted live. **Submitting a judgement end to end, and the S2-marked-item blocked-then-justified path, are still not walked through a browser** (`docs/demo/2026-09-26/RUNBOOK.md` §4) | — |
 | Scenario B (comms and identity pivot) | `shipped` | Partly built; split across Phases 6a, 7 and 8 by ADR-022 | — |
 | **Extraction and entity resolution** | `shipped` | Built, **API only** | Demonstrable to engineers through the API; there are no screens until Phase 6a |
-| **Scenario C — "Fixture Corp"** (Enron-*shaped*, R24, AMLSim-*shaped* generator) | `shipped` | **Built** (`scripts.seed_fixture_corp`) — its four ADR-035 §C5 properties (τ 0.99/0.95/0.80 resolution, Louvain community structure, the pathfinder's full hop range, an access-control-lengthened path) are **verified structurally** (`tests/scenarios/test_fixture_corp_shape.py`, seed-time output). **Interactive verification through the Glass — moving the resolution threshold live, `explain` on a merged cluster, the pathfinder, comparing path lengths — not completed**; see `docs/demo/2026-09-24/RUNBOOK.md`. Not the ~150-employee Enron-shaped corporation §6 and Scenario C (C1–C20) describe — see §6 | See §6 |
+| **Scenario C — "Fixture Corp"** (Enron-*shaped*, R24, AMLSim-*shaped* generator) | `shipped` | **Built** (`scripts.seed_fixture_corp`) — its four ADR-035 §C5 properties are **verified structurally** (`tests/scenarios/test_fixture_corp_shape.py`). Moving the resolution threshold live is now verified through the Glass. **`explain`, the pathfinder and path-length comparison are not, and currently cannot be: no Fixture Corp entity can be loaded into the working set** — 0 of its 65 Persons carry any of the identifiers search matches on, against 400 of 400 for HMP (measured 26 September 2026). See §6 and `docs/demo/2026-09-26/RUNBOOK.md` §4. Not the ~150-employee Enron-shaped corporation §6 and Scenario C (C1–C20) describe — see §6 | See §6 |
 | **The real Enron email corpus** | `internal`, **admitted only via the owner's own local exceptions list — see §6** | Owner-run demonstration only, on the owner's own device, never distributed to an attendee | — |
 | **VAST Challenge dataset** (generated fixture) | `internal` | Decided (ADR-026); fixture not yet built | See §7 |
 | **VAST Challenge dataset** (the published files themselves) | Not admitted, any class | ADR-026: "standing rule 3 is not amended" — never used, shaped or verbatim | See §7 |
 
-The honest summary: **Scenario A on the HMP fixture is the demo actually driven through the Glass
-so far**, and it is a good one. It exercises three of the five analytical capabilities against a
-live stack. Fixture Corp is now also built and structurally proven, but nobody has yet walked it
-through a running Glass end to end — `docs/demo/2026-09-24/RUNBOOK.md` has the honest state of
-what has, and has not, actually been driven through a browser for either fixture.
+The honest summary: **Scenario A on the HMP fixture is the demo actually driven through the
+Glass**, and it is a good one — as of 26 September 2026 that now includes A12's Clique Metric and
+the local PMTiles basemap rendering real tiles, both asserted by automated live specs rather than
+by eye. Fixture Corp is built and structurally proven, and its resolution threshold is
+demonstrable, but the rest of it cannot be shown in the Glass at all until it gains a searchable
+identifier or the query builder gains a way to load its results. `docs/demo/2026-09-26/RUNBOOK.md`
+has the honest state of what has, and has not, actually been driven through a browser.
 
 ---
 
@@ -238,15 +240,77 @@ its own investigation via `POST /v1/investigations` when neither the URL nor `se
 one.
 
 **The Map view will show "Basemap not built" rather than a blank canvas** unless a local PMTiles
-build already exists at `osprey.yaml`'s configured path — building one needs `planetiler` and a
-network-reachable OSM extract, neither available in every environment this guide is followed in.
-This is the harness's own Geospatial screen's job (`05_DEPLOYMENT.md` §2.2, "Build local
-basemap") once the harness exists; today, run `scripts/build_local_basemap.py` by hand first if you
-need the map to render tiles. Every other view (Timeline, Graph, the hotspot panel) works without
-it — `02_GLASS_FRONTEND.md` §3.5's own proposal has the full reasoning for why this now fails
-loudly instead of silently.
+build already exists at `osprey.yaml`'s configured path. Every other view (Timeline, Graph, the
+hotspot panel) works without it — `02_GLASS_FRONTEND.md` §3.5's own proposal has the full
+reasoning for why this now fails loudly instead of silently.
 
-### 3.7 Shut down
+**Building one, proven end to end on 26 September 2026** (`docs/demo/2026-09-26/RUNBOOK.md` has
+the timings and the full transcript). It needs a JDK and a planetiler jar, neither of which this
+repository ships:
+
+```
+brew install openjdk            # openjdk 27 on the machine this was proven on
+export PATH=/opt/homebrew/opt/openjdk/bin:$PATH
+curl -L -o planetiler.jar \
+  https://github.com/onthegomap/planetiler/releases/latest/download/planetiler.jar
+
+PYTHONPATH=.:packages .venv/bin/python3 -m scripts.build_local_basemap \
+  --region berkshire --output-dir <a directory outside this checkout> \
+  --planetiler-jar ./planetiler.jar --osprey-config <your osprey.yaml>
+PYTHONPATH=.:packages .venv/bin/python3 -m scripts.verify_map <your osprey.yaml>
+```
+
+**Use `--region berkshire`, not a smaller one, and not `great-britain`.** The extract has to
+cover the fixture you are going to look at: the HMP fixture's ten yards sit at roughly 51.5°N,
+-0.6°E, which is Berkshire. A Rutland build (England's smallest county, and the quickest way to
+prove the pipeline itself works) is a perfectly valid PMTiles file that the Glass opens, reads
+and draws nothing from, because the viewport is over an area it does not contain — and it fails
+*silently*, with no "Basemap not built" message, because the file is there and readable. This is
+the single easiest way to conclude the basemap is broken when it is not; `scripts/
+build_local_basemap.py`'s own `GEOFABRIK_REGIONS` note has the reasoning in full.
+`great-britain` works too and is ~1.9GB of download and a much longer planetiler run.
+
+Timings measured on an Apple Silicon laptop: Rutland (1.9MB extract) 6m13s end to end including
+planetiler's own first-run download of its three auxiliary sources; Berkshire (22MB extract)
+longer in proportion. The auxiliary sources are fetched once into `<output-dir>/sources` and
+reused.
+
+**Do not point `--osprey-config` at this repository's own committed `osprey.yaml` unless you mean
+to rewrite it.** `register_local_provider` round-trips the file through `yaml.safe_dump`, which
+preserves neither comments nor key order — the committed file's explanatory comments would be
+lost. Copy it somewhere first and point `OSPREY_CONFIG_PATH` at the copy when starting the
+Conduit (§3.2/§3.5), which is what the 26 September run did.
+
+Once built and registered, the Map view renders tiles from it and shows the provider's own
+credit, "© OpenMapTiles © OpenStreetMap contributors", in the bottom right. That is asserted
+end to end by `apps/workspace/live/basemap.spec.ts` — see §3.8.
+
+### 3.7 Checking the bring-up actually worked, without clicking through it
+
+Everything above is a sequence of commands whose success is judged by eye. `make glass-live`
+drives the same running stack from a browser and asserts what §4 and §6 say a presenter will
+see, so a bring-up can be confirmed before an audience is watching rather than during.
+
+```
+OSPREY_TEST_LIVE_GLASS=1 \
+OSPREY_LIVE_API_BASE_URL=http://127.0.0.1:8000 \
+OSPREY_LIVE_BEARER_TOKEN=<the token from §2> \
+OSPREY_LIVE_INVESTIGATION_ID=<the id from §3.3> \
+  make glass-live
+```
+
+It starts its own Vite server on 5173 and stops it again, so §3.6's own `npm run dev` must not
+already be running on that port. **5173 is not arbitrary**: the Conduit's `CORS_ALLOWED_ORIGINS`
+defaults to `http://localhost:5173`, and a Glass served from any other port has every request
+refused at the browser's CORS preflight — the app then sits on "Loading…" indefinitely with
+nothing in the Conduit's log naming CORS as the reason. Set `CORS_ALLOWED_ORIGINS` explicitly if
+you need a different port.
+
+Without `OSPREY_TEST_LIVE_GLASS=1` every spec skips with its reason printed, so running it with
+no stack up is a skip and not a failure. These specs are not in `make ci` and are not intended to
+be: they need real containers, real seeded fixtures and a real basemap build.
+
+### 3.8 Shut down
 
 ```
 make dev-down
@@ -287,9 +351,25 @@ whether a particular subgroup is unusually insular.
    human confirms them — nothing is promoted automatically, and no confidence threshold promotes on
    the analyst's behalf.
 
-**What to avoid promising.** The Clique Metric that ranks the insular subgroup is Phase 7. The
-assessment objects, export and handling gate are Phase 8. Entity resolution works but has no
-screens until Phase 6a, so it demonstrates through the API or not at all.
+7. **Rank the insular subgroup (A12).** Metrics panel → Primary metric → Clique Metric. Expand at
+   least one node first: the metric measures how tightly a node's neighbours interconnect, so on
+   an unexpanded single node it correctly ranks nothing.
+8. **Record a judgement, and export (A13–A15).** Inspector → Judgements → "Add judgement, gap or
+   assumption". Then Export ⚙. An export carrying an item the principal may not release is
+   refused with every reason named — never silently dropped — and an overridable refusal takes a
+   justification and an originator reference before it will resubmit.
+
+**Corrected 26 September 2026.** This section previously ended with "what to avoid promising: the
+Clique Metric [...] is Phase 7. The assessment objects, export and handling gate are Phase 8."
+Both phases are built, and §1's own table had already said so — §4 was left contradicting it.
+Steps 7 and 8 above are now walked by `apps/workspace/live/scenario-a-a12-a15.spec.ts` against a
+real stack (`docs/demo/2026-09-26/RUNBOOK.md`).
+
+**What to avoid promising.** Entity resolution's threshold control and `explain` work, but
+**Fixture Corp cannot be loaded into the working set at all** — see §6. Demonstrate resolution on
+the HMP fixture or through the API. A13–A15's composer and export drawer open and are proven to;
+submitting a judgement end to end and driving the S2 blocked-then-justified path have not been
+walked through a browser.
 
 ---
 
@@ -341,6 +421,27 @@ built, and whether it replaces or sits beside this property fixture, is undecide
 fixture satisfies ADR-035 §C5's own minimum bar, not Scenario C's full C1–C20 script. `06_DECISIONS.md`
 ADR-035 gives Fixture Corp an owning phase (Phase 8, Stage 4a) and its own distribution class
 (`shipped`) — it is the demo this platform can actually put in front of a customer.
+
+**Blocker found 26 September 2026: Fixture Corp cannot be shown in the Glass, beyond its
+resolution threshold.** The Glass's working set has exactly one entry point — the search box —
+and `services/api/search.py`'s own scope note states what that does: "exact identifier match
+against the graph, not full text". `search_nodes` matches only the identifier fields the ontology
+declares, which for `Person` are `nino`, `pnc_id` and `prison_number`. **None of Fixture Corp's
+65 Person nodes carries any of the three, and none of its 3 Organisations carries an `org_ref`**
+— measured directly against a real seeded store, against 400 of 400 for the HMP fixture, which is
+precisely why HMP can be demonstrated and this cannot.
+
+The visual query builder is not a second way in. It selects on entity type, finds them, and
+reports "N node(s) matched" — but `06_DECISIONS.md` ADR-032 decided deliberately that Run returns
+the set and its count rather than drawing anything, so it loads nothing into the working set.
+That is the specified behaviour, not a defect in it.
+
+So `explain` on a merged cluster, the pathfinder and path-length comparison — three of the four
+interactive checks Stage 3a's disclosure asks for — cannot be performed at all today. Closing
+this needs either a searchable identifier on the fixture (an ADR-035 §C5 fixture-shape change,
+which would want checking against §C5's empirically measured resolution scores) or a way to load
+a pattern result into the working set (which ADR-032 considered and decided against). Both are
+design decisions; neither has been taken. Do not promise these three in a demo.
 
 **The real Enron corpus is `internal`, and stays narrower than "usable for any demo audience."**
 `CLAUDE.md` rule 9 and standing rule 3 admit a real dataset only if it is explicitly named in the

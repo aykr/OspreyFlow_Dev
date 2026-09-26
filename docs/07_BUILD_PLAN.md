@@ -57,11 +57,26 @@ laptop from the documentation, started, and demonstrated (both acceptance scenar
    stage's own entry).
 2. **The documentation refresh** — moderate: the three drift gates (`domain-model-coverage-check`,
    `route-coverage-check`, `demo-guide-check`) exist and run; the content that empties their own
-   allowlists does not exist yet.
-3. **Sign-in for the Glass** — **accepted, with five amendments (`06_DECISIONS.md` ADR-050, owner's
-   ruling of 25 September 2026), not started.** Milestone-blocking. OIDC authorization code with
-   PKCE, replacing the `VITE_DEV_BEARER_TOKEN` stand-in; see stage `2c` at this stage's own entry
-   below for the three requirements and the exit test.
+   allowlists does not exist yet. **Stage 3a (installation/deployment documentation and
+   `DEMO_GUIDE.md`, every command run clean) is closed as of 26 September 2026** — every §2–§3
+   command re-run in order against a real stack, the local PMTiles basemap built for real and
+   proven to render, and A12 walked through a browser; four defects found doing it and fixed.
+   **One item inside it is blocked on an owner decision rather than closed**: three of Fixture
+   Corp's four interactive checks cannot be performed at all, because no Fixture Corp entity can
+   enter the Glass's working set. Stage 3a's own entry below has the table by test id, and
+   `Claude outputs/handoff/DECISION_NEEDED.md` asks the question.
+3. **Sign-in for the Glass — built, 25 September 2026; this line said "not started" until 26
+   September and was wrong**, contradicting this same summary's own "Complete, by stage" list four
+   paragraphs above. OIDC authorization code with PKCE replacing the `VITE_DEV_BEARER_TOKEN`
+   stand-in, with the WebSocket ticket exchange (ADR-050 objection 8) built the round after per the
+   owner's decision of that date. One disclosed gap remains and is **not** milestone-blocking on
+   its own: full app-wide silent-reauthentication coverage beyond the bootstrap calls. See stage
+   `2c` at this stage's own entry below.
+
+   Note that `DEMO_GUIDE.md` §2–§3 and every live spec still drive the Conduit with a
+   `mint_dev_token` bearer token, not the OIDC flow — the demo path documented there predates
+   stage 2c and has not been re-pointed at it. That is a documentation gap, not an unbuilt
+   feature, and it is why nothing in round 12 exercised the real sign-in.
 
 **Remains after the milestone:**
 - **Structural** (real design work, not a known shape yet): Phase 8a (`cluster` profile,
@@ -84,7 +99,7 @@ laptop from the documentation, started, and demonstrated (both acceptance scenar
 classes, tester/alpha/beta material, and Trigger B's own downstream distribution questions. Not a
 build step, a stage, or a precondition of anything above; a different question, answered there.
 
-**Last updated:** 25 September 2026.
+**Last updated:** 26 September 2026 (round 12 — Stage 3a).
 
 ---
 
@@ -6329,19 +6344,47 @@ find something already finished sitting in the queue.
    here, not settled: the property fixture satisfies ADR-035 §C5's own minimum bar for a `shipped`
    demo, but does not itself prove Scenario C's own script runs end to end.
 
-   **Disclosure — Stage 3a's own status after this round.** What now runs clean, checked directly:
-   every command in the rewritten `DEMO_GUIDE.md` §2–§3, run in order against a real stack; both
-   product defects behind the rehearsal's six findings, fixed with tests. What remains, named
-   rather than glossed: the actual local PMTiles basemap build (needs `planetiler` and a
-   network-reachable OSM extract — neither guaranteed in every environment this guide is followed
-   in, which is exactly why the Map view now fails with a named message instead of a blank one,
-   rather than this round attempting to build planetiler's network dependency away); Fixture
-   Corp's own interactive verification through the Glass (moving the resolution threshold live,
-   `explain` on a merged cluster, the pathfinder) — structurally proven, not yet fully walked
-   through a browser; and Scenario A's A12–A15 steps, built (Phase 7's Clique Metric, Phase 8's
-   judgements/gaps/assumptions/export) but likewise not yet fully walked through a browser. See
-   `docs/demo/2026-09-24/RUNBOOK.md`'s own 24 September continuation for exactly which steps were
-   and were not reached live.
+   **Stage 3a's status after round 12, 26 September 2026 — two of its three residuals closed, the
+   third blocked on a decision.** `docs/demo/2026-09-26/RUNBOOK.md` has the full transcript,
+   timings and corrections; by test id:
+
+   | Residual | State | Proof |
+   | --- | --- | --- |
+   | The local PMTiles basemap, actually built | **Closed** | Real Geofabrik → planetiler → PMTiles → `register_local_provider` → `verify_map`, twice (Rutland 6m13s cold, Berkshire 2m07s warm). The Glass draws its tiles: `apps/workspace/live/basemap.spec.ts` |
+   | Scenario A A12–A15 through a browser | **A12 closed; A13–A15 partly** | `live/scenario-a-a12-a15.spec.ts` — A12 computes and ranks after a real keyboard-driven expansion; the assessment composer and the export drawer open. Submitting a judgement end to end, and the S2 blocked-then-justified path, remain unwalked |
+   | Fixture Corp through a browser | **Blocked — not merely undone** | The threshold control is proven live (`live/fixture-corp.spec.ts`). `explain`, the pathfinder and path-length comparison are *impossible* today: no Fixture Corp entity can enter the working set at all |
+
+   **The blocker, stated precisely, because it is a decision and not a bug.** The working set has
+   one entry point, the search box, and search is exact identifier match (`services/api/
+   search.py`'s own scope note). 0 of Fixture Corp's 65 Person nodes carry any of `Person`'s three
+   declared identifiers and 0 of its 3 Organisations carry `org_ref` — measured against a real
+   seeded store, against 400 of 400 for the HMP fixture. The visual query builder finds them by
+   entity type but, per ADR-032, reports the matched set and its count rather than loading it.
+   Closing this needs either a searchable identifier on the fixture (an ADR-035 §C5 fixture-shape
+   change, wanting a check against §C5's own empirically measured resolution scores) or a way to
+   load a pattern result into the working set (which ADR-032 decided against once). Both are the
+   owner's call; `Claude outputs/handoff/DECISION_NEEDED.md` asks it.
+
+   **Four defects found by doing this rather than by reasoning about it**, each fixed with a
+   red-then-green test, each disclosed here rather than folded into "Stage 3a closed":
+   `run_planetiler`'s flag list had never been run and was wrong (`--download` missing; the
+   default `--download_dir` would write into this repository's own `data/`); `download_extract`
+   would have written Geofabrik's HTML home page to disk as a `.osm.pbf`, since a retired
+   sub-extract path answers 302-to-home and `follow_redirects` turns that into a 200; the Glass
+   could not fetch a local basemap from an authenticated Conduit at all, because MapLibre's
+   `pmtiles://` handler bypasses `transformRequest` and every tile read 401'd while the
+   availability preflight succeeded — a silent blank map; and `POST /v1/patterns/run` answered
+   500 for any single-variable pattern, because Gremlin's `select` changes result shape at arity
+   one and nothing had ever rendered that arity. A licence correction too: the tiles planetiler
+   produces are a CC-BY OpenMapTiles work as well as ODbL OSM data, and every provider registered
+   before this round declared only the OSM half.
+
+   **What none of this proves.** Nothing in round 12 ran against a rendered `local-lite`
+   deployment or a real OIDC flow. This machine's Docker daemon reports 9.70GiB against
+   `local-lite`'s 16GiB floor, unchanged since round 05, and there is no Keycloak in
+   `deploy/compose/dev.yaml`; the stack used was `DEMO_GUIDE.md` §3's host-process one, which is
+   what that guide documents and what Stage 3a is about. See `docs/demo/2026-09-24/RUNBOOK.md`'s
+   own 24 September continuation for the earlier round's live coverage.
 
 **Stage 4, in full — moved to "Before the milestone," above.** Every sub-stage (4-spec,
 4a–4h) and its own detailed record now sits there, not here, since none of it is optional
