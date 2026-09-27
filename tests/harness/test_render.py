@@ -794,15 +794,19 @@ def test_keycloaks_own_database_survives_a_restart(rendered: RenderResult) -> No
             f"{mount} names a volume the compose file never declares"
         )
 
-    # The realm import is a bind *inside* that directory; a volume over the parent would shadow
-    # it and the realm would never import. This is why the mount is at `.../data/h2`.
     imports = [m for m in keycloak.get("volumes", []) if "import/realm.json" in m]
     assert imports, "the realm import mount has gone"
-    for mount in covering:
-        assert mount.split(":")[1] != "/opt/keycloak/data", (
-            "a volume over /opt/keycloak/data shadows the realm.json bind mount inside it, so "
-            "the realm would never import"
-        )
+
+    # **The mount must be `/opt/keycloak/data` itself, not a subdirectory of it** — the opposite
+    # of this test's first version, which required the reverse on reasoning that turned out to be
+    # false in both directions. Measured: the nested `realm.json` bind is applied over the volume
+    # and imports fine, while a volume at `/opt/keycloak/data/h2` is created root-owned (an empty
+    # named volume inherits ownership only where the directory exists in the image, and `h2` does
+    # not) and Keycloak dies on `AccessDeniedException: .../keycloakdb.trace.db`.
+    assert any(m.split(":")[1] == "/opt/keycloak/data" for m in covering), (
+        "the persistent mount is below /opt/keycloak/data, so Docker creates it root-owned and "
+        f"Keycloak cannot write its database: {covering}"
+    )
 
 
 def test_the_conduit_is_pointed_at_a_persistent_recipe_repository(

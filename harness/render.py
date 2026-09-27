@@ -379,9 +379,17 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
             # building round 13cb's red/green, where the *baseline* over-the-wire test failed at
             # sign-in against a deployment that had passed 8/8 an hour earlier.
             #
-            # Mounted at `.../data/h2` rather than `.../data`, because the realm import above is a
-            # bind mount *inside* `data/` and a volume over the parent would shadow it.
-            "keycloak-data:/opt/keycloak/data/h2",
+            # **`/opt/keycloak/data`, and the first attempt at `/opt/keycloak/data/h2` was wrong
+            # for a reason worth keeping.** The reasoning then was that a volume over the parent
+            # would shadow the `realm.json` bind mounted inside it. Both halves of that were
+            # false, measured rather than argued: the more specific bind is applied *over* the
+            # volume (`Realm 'osprey' imported` in the container's own log), and mounting deeper
+            # broke Keycloak outright — an empty named volume inherits ownership from the image
+            # only where the directory *exists* in the image. `/opt/keycloak/data` does and is
+            # `keycloak`-owned; `/opt/keycloak/data/h2` does not, so Docker created it root-owned
+            # and the server died on `AccessDeniedException: .../keycloakdb.trace.db`. Floor A's
+            # `test_the_deployment_this_file_starts_is_a_real_one…` is what caught it.
+            "keycloak-data:/opt/keycloak/data",
         ],
         "environment": {
             "KC_BOOTSTRAP_ADMIN_USERNAME": "${OSPREY_KEYCLOAK_ADMIN:-admin}",
