@@ -33,8 +33,22 @@ end to end with no further documentation failure.
 
 **Clause 2 ("started") holds.**
 
-**Clause 3 ("both acceptance scenarios pass on `local-lite`") is the open question, and it is a
-definitional one rather than a defect.** Both readings are defensible and they disagree:
+**Clause 3 ("both acceptance scenarios pass on `local-lite`") — RULED, owner ruling R8,
+27 September 2026: NOT REACHED.** The question put to the owner was definitional rather than a
+defect report, and the ruling settles the definition:
+
+> **Owner ruling R8.** Clause 3 of V1 END TO END is **NOT REACHED — Reading B**. The milestone
+> requires **every row of both acceptance scenarios to be performable through the analyst's own
+> door on a rendered `local-lite` deployment.** Seeding the deployment with the remaining Scenario
+> A and B fixture data is **milestone-blocking** work; the checker will queue it. The
+> token-exchange tests that have never run are also to be made to run, on the checker's brief.
+
+**What R8 settles, and it is more than this one milestone.** The bar is the *analyst's own door*,
+not the closing-pass proof's current coverage: a row that only passes in process does not count
+towards clause 3. `08_ACCEPTANCE_SCENARIOS.md` §"Which test proves these" now records that the
+eleven uncovered rows are **milestone-blocking**, where before it called them "a product gap" of
+unstated weight. The two readings that were open are kept below, because the reasoning is what a
+future reader needs, not just the verdict:
 
 - *Reached*: `08_ACCEPTANCE_SCENARIOS.md` §"Which test proves these" (owner ruling R5) says
   `tests/scenarios/test_phase8_exit_over_the_wire.py` "is the test `07_BUILD_PLAN.md`'s milestone
@@ -47,10 +61,19 @@ definitional one rather than a defect.** Both readings are defensible and they d
   content, handle cohort, seizure record, device legs, sightings, seeded site or `Document`
   content.
 
-**The recommendation recorded with this pass is *not reached***, on the ground that declaring the
-milestone on a proof which skips eleven of its own rows is the same shape as the defects rounds
-13bf and 13c spent themselves finding: a green that is not watching the thing it claims. The
-decision is the owner's; the queue holds at 13c until it is taken.
+Round 13c recommended *not reached*, on the ground that declaring the milestone on a proof which
+skips eleven of its own rows is the same shape as the defects rounds 13bf and 13c spent themselves
+finding: a green that is not watching the thing it claims. **R8 adopted that reading.**
+
+**The blocking work, named.** Seed a rendered deployment with the rest of Scenario A's and B's
+fixture data — message content, the handle cohort, the seizure record, the device legs, the
+sightings, a site to grid, and `Document` content — so that A1, A6, B6, B7, B8, B13, B14 and
+B15–B18 can be walked through the analyst's own door, and A15's consult-originator block and A7's
+item-category half can be closed. The fixtures largely exist in-repo already
+(`tests/scenarios/fixtures/`); what is missing is the path that puts them into a *rendered*
+deployment. That is the same shape as the ingest-folder work owner ruling R6 ordered and rounds
+13bc/13bf built, and `scripts/seed_ingest_folder.py` is the precedent for how a synthetic fixture
+reaches a deployment without being duplicated. The checker queues this; it is not done here.
 
 **A finding from this pass that is independent of that question and may bear on it.** Floor B's
 only five skips are the whole of `tests/services/api/test_revoked_principal_precheck.py`, each
@@ -61,8 +84,14 @@ checked directly, its only two mentions are the test itself and
 They guard `PrincipalResolver`'s OAuth2 Token Exchange and revoked-principal precheck — the exact
 code path `CLAUDE.md` rule 15's own second worked example records as having been "built" for two
 days while never once having worked against a real identity provider. The tests written so that
-that could not recur do not execute. Recorded here rather than fixed, because a closing pass is
-not the place to add a Keycloak tier; it needs its own brief.
+that could not recur do not execute.
+
+**Owner ruling R8 orders these to be made to run**, on the checker's brief. They cannot simply be
+switched on: `_config` hardcodes `secret="probe-secret"` and realm `osprey`, so they need a
+purpose-configured IdP rather than a rendered deployment's own generated secret. Whoever takes it
+should treat rule 15's fixture lesson as the acceptance bar — the tier is only worth building if
+the IdP it runs against **refuses** what a real Keycloak refuses, which is precisely how ADR-043's
+defect survived its own fixture.
 
 The three clauses as round 13 found them, kept for history:
 

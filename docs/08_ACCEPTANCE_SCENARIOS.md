@@ -31,6 +31,25 @@ B14, B15–B18) cannot be performed by an analyst against a rendered deployment 
 product gap, not a shortfall of the test. **B1–B3 were closed on 27 September 2026 — see below;
 the remaining rows in that list are not.**
 
+**Owner ruling R8, 27 September 2026 — those remaining rows are milestone-blocking, and this
+section used to leave their weight unstated.** Round 13c put the question to the owner because
+this section could be read two ways: it nominates the over-the-wire test as the one
+`07_BUILD_PLAN.md`'s milestone line cites (and it is green), while also saying that test does not
+cover every row. R8 settles it:
+
+> Clause 3 of V1 END TO END is **NOT REACHED — Reading B**. The milestone requires **every row of
+> both acceptance scenarios to be performable through the analyst's own door on a rendered
+> `local-lite` deployment.** Seeding the deployment with the remaining Scenario A and B fixture
+> data is **milestone-blocking** work.
+
+**So "which test proves these" has a bar, not just a tier.** A row proven only at the developer
+tier (`test_phase8_exit_criterion_end_to_end.py`, in process against published stores) does **not**
+count towards clause 3, however green it is. The rows still outside the analyst's own door are
+**A1, A6, B6, B7, B8, B13, B14, B15–B18**, plus **A15's consult-originator block** and **A7's
+item-category half** — and the reason is uniformly that the rendered deployment's seed carries no
+message content, handle cohort, seizure record, device legs, sightings, seeded site or `Document`
+content. The fix is a seeding path into a rendered deployment, not a change to either test.
+
 **Built, 27 September 2026 (round 13bc) — the "no door" half is closed.** The ingest root is
 rendered, mounted read-only, listed by Connect, and walked end to end over the wire by
 `tests/scenarios/test_phase8_exit_over_the_wire.py`.
