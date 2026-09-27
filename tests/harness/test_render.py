@@ -28,6 +28,8 @@ import pytest
 import yaml
 from harness.images import ImageRef, ServiceImage
 from harness.render import (
+    _OLLAMA_HEALTHCHECK,
+    _OLLAMA_PULL_SCRIPT,
     INGEST_CONTAINER_PATH,
     ClusterRendererNotBuilt,
     MissingDockerfileError,
@@ -38,6 +40,7 @@ from harness.render import (
     git_sha,
     load_config,
     render,
+    render_litellm_config,
     service_images,
     write,
     write_config_copy,
@@ -754,6 +757,125 @@ def test_every_declared_volume_is_mounted_by_some_service(rendered: RenderResult
         f"declared but mounted by no service: {sorted(unmounted)} — a named volume that nothing "
         "mounts stores nothing, and the data an operator believes is persisted is not"
     )
+
+
+def test_the_rendered_model_pull_matches_the_developer_stacks() -> None:
+    """**The rendered deployment and `make dev-up` must pull the same weights — round 13cda.**
+
+    The renderer used to emit `ollama` as a bare image: no pull, no healthcheck, no volume. A
+    deployment therefore had an Ollama with nothing in it, while `04_VAULT_BACKEND.md` §4 says
+    local-lite runs "LLM + VLM, quantised". The pull script is now the developer stack's own,
+    carried verbatim.
+
+    Byte-identity is the assertion, not "both mention qwen": ADR-020 pins these weights by
+    manifest digest and the script *verifies* the digest at startup. Two copies that drifted
+    would mean a developer and a deployment silently running different models — and the
+    deployment's own would be the one nobody had looked at.
+    """
+    developer_stack = yaml.safe_load(
+        (Path(__file__).resolve().parents[2] / "deploy" / "compose" / "dev.yaml").read_text()
+    )["services"]["ollama"]
+
+    assert _OLLAMA_PULL_SCRIPT == developer_stack["command"][0], (
+        "the rendered model pull has drifted from deploy/compose/dev.yaml's — a developer and a "
+        "deployment would run different weights, and ADR-020's digest check would be verifying "
+        "two different things"
+    )
+    # **The healthcheck legitimately differs, and only this one thing does.** dev.yaml waits for
+    # all three models, which is right before running the whole suite. A *deployment* gating
+    # readiness on the vision model is wrong: measured, on a 673 KB/s link `moondream` had 16
+    # minutes left when chat and embed were already in, and `apply` failed at `up`. So the
+    # rendered healthcheck waits for what the Conduit serves with and the pull still fetches all
+    # three. Asserted as a subset rather than left unchecked, so a healthcheck that stopped
+    # waiting for the *chat* model — which extraction does need — still fails here.
+    rendered_check = " ".join(_OLLAMA_HEALTHCHECK)
+    for needed in ("qwen2.5:0.5b-instruct", "all-minilm:22m-l6-v2-fp16"):
+        assert needed in rendered_check, f"readiness no longer waits for {needed}"
+    assert "moondream" not in rendered_check, (
+        "readiness waits for the vision model again; a deployment then cannot start while a "
+        "model nothing in the demo path uses is still downloading"
+    )
+
+    # The pull is worthless without somewhere to keep it: without a volume the ~2.2GB is fetched
+    # again on every `up`.
+    for model in ("qwen2.5:0.5b-instruct", "all-minilm:22m-l6-v2-fp16", "moondream:1.8b-v2-q4_K_M"):
+        assert model in _OLLAMA_PULL_SCRIPT, f"{model} is no longer pulled"
+
+
+def test_the_rendered_deployment_keeps_its_models_between_restarts(
+    rendered: RenderResult,
+) -> None:
+    """A pull with no volume is a ~2.2GB download on every `up`."""
+    document = yaml.safe_load(rendered.artefacts["compose.yaml"])
+    ollama = document["services"]["ollama"]
+
+    mounts = [m for m in ollama.get("volumes", []) if ":" in m]
+    assert any(m.split(":")[1] == "/root/.ollama" for m in mounts), (
+        f"nothing persists Ollama's model store: {mounts}"
+    )
+    for mount in mounts:
+        assert mount.split(":")[0] in (document.get("volumes") or {})
+
+
+def test_the_conduit_can_actually_reach_a_model(rendered: RenderResult) -> None:
+    """**Round 13cda.** `04_VAULT_BACKEND.md` §4: "Conduit ──► LiteLLM proxy ──┬──► Ollama
+    (local-lite: LLM + VLM, quantised)". The renderer brought up `ollama` and never rendered the
+    proxy in front of it, and told the Conduit nothing about where a model lives.
+
+    `adapters/model_litellm/client.py`'s `LiteLLMConfig.from_env` defaults to `localhost:4000`,
+    which inside the Conduit's own container is the Conduit. So **every extraction returned a
+    bare 500 in every rendered deployment** — measured over the wire, `httpx.ConnectError: All
+    connection attempts failed` — and with it the whole of `09_INGEST_STUDIO.md` §4's review
+    queue, plus `08`'s A6 and B6.
+
+    Three things have to hold together and each fails differently, so each is asserted: the proxy
+    is rendered; the Conduit is pointed at it by name rather than at `localhost`; and the Conduit
+    waits for it, because an extraction issued while the proxy is still starting fails the same
+    way as one with no proxy at all.
+    """
+    document = yaml.safe_load(rendered.artefacts["compose.yaml"])
+
+    assert "litellm" in document["services"], (
+        "no model proxy is rendered, so the Conduit has nothing to extract with — "
+        f"services: {sorted(document['services'])}"
+    )
+
+    api_environment = document["services"]["api"].get("environment") or {}
+    host = api_environment.get("LITELLM_HOST")
+    assert host and host != "localhost", (
+        f"the Conduit's model host is {host!r}; inside its own container `localhost` is itself, "
+        "which is exactly how this failed silently before"
+    )
+    assert host in document["services"], f"{host!r} is not a service in this deployment"
+
+    assert "litellm" in (document["services"]["api"].get("depends_on") or {}), (
+        "the Conduit does not wait for the model proxy, so an early extraction fails the same "
+        "way as one with no proxy at all"
+    )
+
+
+def test_the_rendered_model_routing_names_this_deployments_own_services(
+    rendered: RenderResult, config: OspreyConfig
+) -> None:
+    """**The half that would fail late and quietly.** `deploy/compose/dev.yaml` calls its
+    transcription service `speaches`; the renderer calls it `whisper`. Copying the developer
+    stack's routing table verbatim would point transcription at a host that does not exist in a
+    rendered deployment, and nothing would notice until somebody transcribed something — long
+    after the deployment reported healthy.
+
+    So every backend this file routes to must be a service this same compose file defines.
+    """
+    document = yaml.safe_load(rendered.artefacts["compose.yaml"])
+    routing = yaml.safe_load(render_litellm_config(config))
+
+    assert routing["model_list"], "the model routing table is empty"
+    for entry in routing["model_list"]:
+        api_base = entry["litellm_params"]["api_base"]
+        hostname = api_base.split("//", 1)[1].split(":")[0].split("/")[0]
+        assert hostname in document["services"], (
+            f"{entry['model_name']} routes to {hostname!r}, which is not a service in this "
+            f"deployment — services: {sorted(document['services'])}"
+        )
 
 
 def test_keycloaks_database_is_not_persisted_while_apply_mints_a_new_admin_password(

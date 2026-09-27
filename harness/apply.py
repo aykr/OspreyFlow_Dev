@@ -61,6 +61,7 @@ from harness.render import (
     REPO_ROOT,
     load_config,
     render,
+    render_litellm_config,
     write_config_copy,
 )
 from harness.render import write as write_artefacts
@@ -438,6 +439,10 @@ def main(argv: list[str] | None = None) -> int:
         (out_dir / "realm.json").write_text(
             render_realm_json(config, demo_analyst=args.demo_analyst), encoding="utf-8"
         )
+        # Round 13cda — the LiteLLM proxy's routing table, written the same way and for the same
+        # reason as the realm above: a generated *service config*, mounted by the compose file,
+        # rather than one of `05_DEPLOYMENT.md` §2.1's four operator-facing artefacts.
+        (out_dir / "litellm.yaml").write_text(render_litellm_config(config), encoding="utf-8")
         secret = generate_client_secret()
         admin_password = generate_client_secret()
         arcadedb_password = generate_client_secret()

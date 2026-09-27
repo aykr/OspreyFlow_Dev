@@ -79,6 +79,57 @@ INGEST_CONTAINER_PATH = "/var/lib/osprey/ingest"
 #: and is not a repository, which is why Publish 500ed in every rendered deployment until now.
 RECIPE_REPO_DIRNAME = "recipes"
 
+#: **The model pull, ported verbatim from `deploy/compose/dev.yaml` — round 13cda.**
+#: ADR-020 pins these weights by manifest digest and this script verifies them at startup: a tag
+#: that moved upstream fails the container loudly rather than silently changing which model a
+#: deployment runs. Kept byte-identical to the developer stack's own copy so the two cannot drift
+#: into running different weights — `test_the_rendered_model_pull_matches_the_developer_stacks`
+#: compares them and is what fails if they do.
+#:
+#: Assembled from three pieces rather than written as one literal only because the `FATAL` line
+#: is 191 characters and must not be wrapped: wrapping it would change the script's bytes, and
+#: byte-identity with `dev.yaml` is the property the test above checks.
+_OLLAMA_PULL_SCRIPT = (
+    'set -e\n'
+    'ollama serve &\n'
+    'until ollama list >/dev/null 2>&1; do sleep 1; done\n'
+    'pull_and_verify() {\n'
+    '  model="$$1"; expected="$$2"\n'
+    '  ollama pull "$$model"\n'
+    '  actual="$$(ollama list | awk -v m="$$model" \'$$1 == m {print $$2}\')"\n'
+    '  if [ "$$actual" != "$$expected" ]; then\n'
+    '    echo "FATAL: $$model resolved to manifest $$actual, expected $$expected '
+    "(docs/06_DECISIONS.md ADR-020) \u2014 the tag moved upstream; update the ADR "
+    'deliberately, do not proceed silently." >&2\n'
+    '    exit 1\n'
+    '  fi\n'
+    '}\n'
+    'pull_and_verify qwen2.5:0.5b-instruct a8b0c5157701\n'
+    'pull_and_verify all-minilm:22m-l6-v2-fp16 1b226e2802db\n'
+    'pull_and_verify moondream:1.8b-v2-q4_K_M c865c80afc38\n'
+    'wait\n'
+)
+
+#: **Healthy once the two models the Conduit actually serves with are present — not all three.**
+#:
+#: `deploy/compose/dev.yaml` waits for all three, which is right for a developer stack about to
+#: run the whole test suite. It is wrong for a deployment, and measured: on a 673 KB/s link the
+#: vision model (`moondream`, 918MB) had 16 minutes left when the other two were already in, and
+#: `harness.apply` failed at `up` with ollama unhealthy. A deployment that cannot start because a
+#: model *nothing in the demo path uses* is still downloading is a worse failure than a
+#: `describe_image` that is briefly unavailable.
+#:
+#: `CONFORMANCE_MODEL` (chat) and `CONFORMANCE_EMBED_MODEL` (embed) are what
+#: `adapters/model_litellm` extracts and embeds with — checked, not assumed. `moondream` backs
+#: `describe_image` alone; the pull script still fetches and digest-verifies it, so it arrives
+#: shortly after the deployment reports ready, and that window is the disclosed cost of this
+#: choice.
+_OLLAMA_HEALTHCHECK = [
+    "CMD-SHELL",
+    "ollama list | grep -q qwen2.5:0.5b-instruct "
+    "&& ollama list | grep -q all-minilm:22m-l6-v2-fp16",
+]
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_PATH = REPO_ROOT / "osprey.yaml"
 DEFAULT_OUT_ROOT = REPO_ROOT / "deploy" / "generated"
@@ -119,6 +170,71 @@ class MissingDockerfileError(RuntimeError):
             + " declares a build from source, but it has no Dockerfile for owned service(s) "
             + ", ".join(services)
         )
+
+
+def render_litellm_config(config: OspreyConfig) -> str:
+    """The model routing table, written beside the compose file — round 13cda.
+
+    **Not one of `05_DEPLOYMENT.md` §2.1's four artefacts**, and deliberately so: like
+    `realm.json`, this is a *service's own config file* that happens to be generated, not one of
+    the four things §2.1 promises an operator. `harness/apply.py` writes both, from pure
+    functions here and in `harness/realm.py`, so `render`'s contract — and the byte-stability
+    test that rests on it — is unchanged.
+
+    `04_VAULT_BACKEND.md` §4: LiteLLM "presents one OpenAI-compatible endpoint" and changing a
+    model "is a YAML edit and a restart of one container". This is that YAML for a rendered
+    deployment; `deploy/compose/litellm_config.yaml` is the developer stack's own hand-written
+    copy and stays as it is.
+
+    **The backend hostnames are this deployment's own service names, and that is the part worth
+    checking.** The developer stack calls its transcription service `speaches`; the renderer
+    calls it `whisper`. Copying dev's file verbatim would route transcription at a host that does
+    not exist here, and it would fail only when someone transcribed something — long after the
+    deployment reported healthy.
+
+    ADR-020 pins the model weights themselves, verified at the `ollama` service's own startup.
+    This file only wires names to backends, so the pin stays in one place.
+    """
+    return yaml.safe_dump(
+        {
+            "model_list": [
+                {
+                    "model_name": "qwen2.5:0.5b-instruct",
+                    "litellm_params": {
+                        "model": "ollama_chat/qwen2.5:0.5b-instruct",
+                        "api_base": "http://ollama:11434",
+                    },
+                },
+                {
+                    # `ollama/`, not `ollama_chat/`: an embeddings call is not a chat completion
+                    # and LiteLLM routes the two prefixes to different Ollama endpoints.
+                    "model_name": "all-minilm:22m-l6-v2-fp16",
+                    "litellm_params": {
+                        "model": "ollama/all-minilm:22m-l6-v2-fp16",
+                        "api_base": "http://ollama:11434",
+                    },
+                },
+                {
+                    "model_name": "moondream:1.8b-v2-q4_K_M",
+                    "litellm_params": {
+                        "model": "ollama_chat/moondream:1.8b-v2-q4_K_M",
+                        "api_base": "http://ollama:11434",
+                    },
+                },
+                {
+                    "model_name": "Systran/faster-whisper-tiny.en",
+                    "litellm_params": {
+                        "model": "openai/Systran/faster-whisper-tiny.en",
+                        # `whisper`, this deployment's own name for it — see the docstring.
+                        "api_base": "http://whisper:8000/v1",
+                        "api_key": "not-needed",
+                    },
+                },
+            ],
+            "general_settings": {"master_key": "${OSPREY_LITELLM_KEY:-sk-ospreyflow-dev}"},
+        },
+        sort_keys=False,
+    )
 
 
 def git_sha(repo_root: Path = REPO_ROOT) -> str:
@@ -251,6 +367,13 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
             ServiceImage("postgres", "postgres:16.4"),
             ServiceImage("keycloak", "quay.io/keycloak/keycloak:26.0"),
             ServiceImage("ollama", "ollama/ollama:0.3.12"),
+            # **The model proxy the Conduit actually talks to — round 13cda.**
+            # `04_VAULT_BACKEND.md` §4: "Conduit ──► LiteLLM proxy ──┬──► Ollama (local-lite:
+            # LLM + VLM, quantised)". It was specified from the first architecture pass and
+            # never rendered: the deployment brought up `ollama` and the Conduit dialled
+            # `localhost:4000` inside its own container, so every extraction returned a bare 500
+            # (`httpx.ConnectError: All connection attempts failed`, measured over the wire).
+            ServiceImage("litellm", "ghcr.io/berriai/litellm:main-v1.55.8"),
             ServiceImage("whisper", "ghcr.io/speaches-ai/speaches:latest-cpu"),
         ]
     )
@@ -299,7 +422,7 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
             "POSTGRES_DB": "${OSPREY_POSTGRES_DB:-osprey}",
         },
         "healthcheck": {
-            "test": ["CMD-SHELL", "pg_isready -U ${OSPREY_POSTGRES_USER:-osprey}"],
+            "test": _OLLAMA_HEALTHCHECK,
             "interval": "10s",
             "timeout": "5s",
             "retries": 12,
@@ -361,6 +484,61 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
             "interval": "10s",
             "timeout": "3s",
             "retries": 10,
+        },
+    },
+    # **The model tier, made real — round 13cda.** This service was rendered as a bare
+    # `ollama/ollama` container: no model pull, no healthcheck, no volume. So a rendered
+    # deployment had an Ollama with nothing in it, and `04_VAULT_BACKEND.md` §4's "local-lite:
+    # LLM + VLM, quantised" was true of the image and of nothing else. Extraction failed before
+    # reaching it (no proxy at all — see `litellm` below), which is why the empty model store went
+    # unnoticed underneath that.
+    #
+    # The command, healthcheck and volume are `deploy/compose/dev.yaml`'s own, which have pulled
+    # and digest-verified these three models on every developer machine for weeks. ADR-020's
+    # manifest check travels with them: a moved upstream tag fails the container loudly rather
+    # than silently changing which weights a deployment runs.
+    "ollama": {
+        "entrypoint": ["/bin/sh", "-c"],
+        "command": [_OLLAMA_PULL_SCRIPT],
+        "volumes": ["ollama-models:/root/.ollama"],
+        "healthcheck": {
+            "test": _OLLAMA_HEALTHCHECK,
+            "interval": "5s",
+            "timeout": "5s",
+            "retries": 90,
+            # Round 13cd measured this on `dev.yaml`: 90 retries at 5s is 450 seconds against a
+            # ~2.2GB cold pull, which a slow link does not finish inside. A check failing during
+            # `start_period` does not count against `retries`, so the steady-state gate is
+            # unchanged.
+            "start_period": "600s",
+        },
+    },
+    # `04_VAULT_BACKEND.md` §4's own diagram: the Conduit reaches every model through this one
+    # OpenAI-compatible endpoint, never Ollama directly, so swapping a model is a config edit
+    # rather than a code change. `litellm.yaml` is rendered beside this compose file.
+    "litellm": {
+        "command": ["--config", "/app/config.yaml", "--port", "4000"],
+        "volumes": ["./litellm.yaml:/app/config.yaml:ro"],
+        "environment": {"LITELLM_MASTER_KEY": "${OSPREY_LITELLM_KEY:-sk-ospreyflow-dev}"},
+        # **`ollama` only, not `whisper`.** `deploy/compose/dev.yaml` waits on both, which is
+        # right for a developer stack that always runs transcription. Waiting on `whisper` here
+        # would make every extraction wait on a Whisper model pull it never uses, and would fail
+        # the whole deployment if that service were unhealthy for an unrelated reason.
+        "depends_on": {"ollama": {"condition": "service_healthy"}},
+        "healthcheck": {
+            "test": [
+                "CMD",
+                "python3",
+                "-c",
+                "import urllib.request; "
+                "urllib.request.urlopen('http://localhost:4000/health/liveliness')",
+            ],
+            "interval": "5s",
+            "timeout": "5s",
+            "retries": 20,
+            # The proxy starts fast, but `depends_on: ollama healthy` already absorbed the model
+            # pull, so this only covers its own boot.
+            "start_period": "30s",
         },
     },
     "keycloak": {
@@ -465,6 +643,14 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
             api_environment["OSPREY_RECIPE_REPO_ROOT"] = (
                 f"{config.components.storage.data}/{RECIPE_REPO_DIRNAME}"
             )
+            # **Round 13cda — the Conduit could not reach a model at all.**
+            # `adapters/model_litellm/client.py`'s `LiteLLMConfig.from_env` defaults to
+            # `localhost:4000`, which inside the Conduit's own container is the Conduit. Every
+            # extraction therefore returned a bare 500 in every rendered deployment, measured:
+            # `httpx.ConnectError: All connection attempts failed`. With no `litellm` service
+            # rendered either, `09_INGEST_STUDIO.md` §4's whole review queue was unreachable.
+            api_environment["LITELLM_HOST"] = "litellm"
+            api_environment["LITELLM_PORT"] = "4000"
             service["environment"] = api_environment
             # The Conduit reads `osprey.yaml` at startup for its map-provider registry, and the
             # image does not contain it — the Dockerfile copies `packages/` and `services/` only,
@@ -504,7 +690,7 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
             ]
             service["depends_on"] = {
                 dependency: {"condition": "service_healthy"}
-                for dependency in ("keycloak", "arcadedb", "valkey", "postgres")
+                for dependency in ("keycloak", "arcadedb", "valkey", "postgres", "litellm")
             }
         # **The Conduit is not published unless `osprey.yaml` asks for it** (05_DEPLOYMENT.md
         # §2.6 item 1, owner's decision of 25 September 2026). The workspace's own nginx proxies
@@ -528,6 +714,8 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
         "volumes": {
             "osprey-data": {"driver": "local"},
             "osprey-staging": {"driver": "local"},
+            # Round 13cda: without this the ~2.2GB model pull repeats on every `up`.
+            "ollama-models": {"driver": "local"},
         },
     }
     body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
