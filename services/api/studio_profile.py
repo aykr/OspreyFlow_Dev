@@ -24,7 +24,7 @@ from services.ingest.profiler import profile_source
 from ontology.handling import HandlingScheme
 from schemas.connectors import ConnectorProfile, load_connector_profiles
 from schemas.domain import Handling, Principal
-from schemas.ingest import CONNECTORS_DIR, StudioRecipeDraft
+from schemas.ingest import CONNECTORS_DIR, RecipeConnector, StudioRecipeDraft
 from schemas.profile import SourceProfile
 
 
@@ -62,6 +62,50 @@ class SourceHandlingIncompleteError(Exception):
     `handling_code`, `originator`, `owning_unit`). Profile cannot paper
     over this silently: the masking decision (§3) depends on a well-formed
     `Handling`, so an incomplete one is surfaced rather than guessed at."""
+
+
+def require_available_connector(draft: StudioRecipeDraft) -> ConnectorProfile:
+    """The draft's connector profile, or `ConnectorNotAvailableError` — the **single** gate.
+
+    Round 13bf: there were four of these, written out by hand in four modules
+    (`studio_profile`'s own `_AVAILABLE_CONNECTORS`, plus a literal `{"generic-csv"}` set inline
+    in `studio_map.row_template` and `studio_verify.verify_recipe`, plus the catalogue's own
+    `available` flag). Adding `cdr-generic-csv` to one of them left the others refusing it, which
+    is exactly how round 13bc found B1-B3 unwalkable through the analyst's own door.
+    """
+    if draft.connector_profile is None:
+        raise ConnectorNotAvailableError("<none>")
+    profile = _profiles().get(draft.connector_profile)
+    if profile is None or not profile.available:
+        raise ConnectorNotAvailableError(draft.connector_profile)
+    return profile
+
+
+def connector_for(draft: StudioRecipeDraft) -> RecipeConnector:
+    """The `RecipeConnector` a draft's own connector profile describes — round 13bf.
+
+    **This is the defect that kept B1-B3 unreachable even once the profile file existed.**
+    `studio_verify` and `studio_publish` both built
+    `RecipeConnector(profile=draft.connector_profile or "generic-csv")` — the id and *nothing
+    else*, so every connector-level setting silently fell back to the model's own defaults. A
+    recipe published through the Studio for a layout declaring `date_order: dmy` reached the
+    engine with `date_order=None`, and `08_ACCEPTANCE_SCENARIOS.md` B3's own `12/01/2026` would
+    have been read with no declared order at all — the layout's own declaration dropped on the
+    floor between the profile file and the run, with nothing anywhere reporting a problem.
+
+    Note what the `or "generic-csv"` fallback did in the same line: substituted a *different
+    layout's* settings for the one the analyst chose. That is how a carrier's `dmy` export gets
+    silently read as `mdy`. There is no default connector here; an absent one is refused by name.
+    """
+    profile = require_available_connector(draft)
+    return RecipeConnector(
+        profile=profile.id,
+        delimiter=profile.delimiter,
+        encoding=profile.encoding,
+        header_rows=profile.header_rows,
+        date_order=profile.date_order,
+        source_crs=profile.source_crs,
+    )
 
 
 def _read_rows(recipe: StudioRecipeDraft) -> list[dict[str, str]]:

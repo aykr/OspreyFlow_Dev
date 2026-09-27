@@ -26,7 +26,6 @@ from ports.graph import GraphPort
 from schemas.domain import OntologySchema, Principal
 from schemas.ingest import (
     Recipe,
-    RecipeConnector,
     RecipeDefaults,
     RejectionGroup,
     RejectionRecord,
@@ -37,7 +36,10 @@ from schemas.ingest import (
 )
 
 from .studio_map import resolve_source_handling
-from .studio_profile import ConnectorNotAvailableError, RecipeNotReadyForProfileError
+from .studio_profile import (
+    RecipeNotReadyForProfileError,
+    connector_for,
+)
 from .studio_profile import _read_rows as _read_recipe_rows
 
 __all__ = ["RowTemplateMissingError", "run_verify"]
@@ -82,8 +84,6 @@ async def run_verify(
         raise RecipeNotReadyForProfileError(draft.recipe_id)
     if draft.row_template is None:
         raise RowTemplateMissingError(draft.recipe_id)
-    if draft.connector_profile not in {"generic-csv"}:
-        raise ConnectorNotAvailableError(draft.connector_profile)
 
     source_handling = resolve_source_handling(draft)
     all_rows = _read_recipe_rows(draft)
@@ -94,7 +94,11 @@ async def run_verify(
         id=draft.recipe_id,
         version=draft.version,
         label=draft.label,
-        connector=RecipeConnector(profile=draft.connector_profile or "generic-csv"),
+        # Round 13bf: the profile's own settings, not just its id — `connector_for`'s own
+        # docstring has the defect this replaces. It also raises
+        # `ConnectorNotAvailableError` for an unavailable profile, which is the gate that
+        # used to be an inline `{"generic-csv"}` set a few lines above.
+        connector=connector_for(draft),
         # No publish-time staleness concept exists yet for a draft (Publish
         # is a later stage) — pinning to the live ontology's own version is
         # the same non-issue `studio_map.py`'s own recipe stub sidesteps,

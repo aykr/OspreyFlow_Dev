@@ -19,6 +19,7 @@ a durable ledger exists to hand it one (Phase 8's own territory, per
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 
 import yaml
@@ -30,7 +31,6 @@ from schemas.domain import OntologySchema, Principal
 from schemas.ingest import (
     LoadReport,
     Recipe,
-    RecipeConnector,
     RecipeDefaults,
     ScheduleConfig,
     StudioRecipeDraft,
@@ -38,6 +38,7 @@ from schemas.ingest import (
 )
 
 from .studio_profile import _read_rows as _read_recipe_rows
+from .studio_profile import connector_for
 
 __all__ = [
     "GitCommitError",
@@ -54,7 +55,21 @@ __all__ = [
 #: from this file (`services/api/studio_publish.py` -> `services/api` ->
 #: `services` -> repo root) — the same `.parents[2]` computation
 #: `services/api/app.py`'s own `_SITE_GRID_RECIPE_PATH` already uses.
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = Path(
+    os.environ.get("OSPREY_RECIPE_REPO_ROOT") or Path(__file__).resolve().parents[2]
+)
+"""Where published recipes are committed.
+
+**Round 13bf: the default above is correct on a developer's host and wrong inside a container.**
+`.parents[2]` is `/app` there — the image's own code directory, which is rebuilt on every deploy
+and is not a git repository. So §6's "the repository is the record" recorded nothing that
+survived a `docker compose up --build`, and nobody noticed because the only test of publishing
+supplies its own `repo_root` (`tests/ingest/test_studio_publish_pipeline.py`'s `git_repo`
+fixture) and so never exercised this default at all.
+
+`OSPREY_RECIPE_REPO_ROOT` is what the renderer sets, to a path under the already-persistent
+`osprey-data` volume. The fallback keeps in-process behaviour unchanged.
+"""
 
 
 class GitCommitError(Exception):
@@ -109,7 +124,9 @@ def build_recipe(
         id=draft.recipe_id,
         version=draft.version,
         label=draft.label,
-        connector=RecipeConnector(profile=draft.connector_profile or "generic-csv"),
+        # Round 13bf — the profile's own settings reach the published recipe, so a layout's
+        # `date_order` survives Publish. See `studio_profile.connector_for`.
+        connector=connector_for(draft),
         ontology_version=ontology_version,
         defaults=RecipeDefaults(
             handling=draft.handling, provenance={}, legal_basis=draft.legal_basis
@@ -145,6 +162,28 @@ async def _run_git(*args: str, cwd: Path) -> tuple[int, str]:
     return proc.returncode or 0, stdout.decode(errors="replace")
 
 
+async def _ensure_repository(repo_root: Path) -> None:
+    """Make `repo_root` a git repository if it is not one already — round 13bf.
+
+    A rendered deployment's recipe root is an empty directory on a fresh persistent volume, so
+    the first publish would otherwise fail `git add` with "not a git repository" and surface as
+    the same bare 500 this round came to fix. Initialising on first use keeps the operator's
+    install step at "start the deployment", which is what `05_DEPLOYMENT.md` promises.
+
+    The identity is set locally on this repository, never globally: the commits are the
+    platform's own record of what was published, not any person's, and `published_by` on the
+    registry row is where the accountable human is recorded (§6).
+    """
+    if (repo_root / ".git").exists():
+        return
+    repo_root.mkdir(parents=True, exist_ok=True)
+    code, output = await _run_git("init", "--initial-branch=main", cwd=repo_root)
+    if code != 0:
+        raise GitCommitError(f"git init in {str(repo_root)!r} failed: {output}")
+    await _run_git("config", "user.email", "osprey@localhost", cwd=repo_root)
+    await _run_git("config", "user.name", "OspreyFlow Ingest Studio", cwd=repo_root)
+
+
 async def write_and_commit_recipe(
     recipe: Recipe, *, repo_root: Path = _REPO_ROOT
 ) -> str:
@@ -165,6 +204,8 @@ async def write_and_commit_recipe(
     absolute_path = repo_root / relative_path
     absolute_path.parent.mkdir(parents=True, exist_ok=True)
     absolute_path.write_text(serialise_recipe(recipe))
+
+    await _ensure_repository(repo_root)
 
     code, output = await _run_git("add", relative_path, cwd=repo_root)
     if code != 0:

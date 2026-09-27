@@ -756,6 +756,42 @@ def test_every_declared_volume_is_mounted_by_some_service(rendered: RenderResult
     )
 
 
+def test_the_conduit_is_pointed_at_a_persistent_recipe_repository(
+    rendered: RenderResult, config: OspreyConfig
+) -> None:
+    """**Round 13bf.** `09_INGEST_STUDIO.md` §6: "Publishing writes the recipe to version control,
+    not only to the database. The studio is the editor; the repository is the record."
+
+    The Conduit's own default repository root is `.parents[2]` of its own source file — correct on
+    a developer's host, and inside the container `/app`, the image's code directory: not a git
+    repository, and rebuilt on every deploy. So the record was written where nothing could read it
+    back, if it could be written at all. Found walking Publish over the wire, where it surfaced as
+    a bare 500.
+
+    Rule 12, named: this is what fails if the variable is dropped. It asserts the path is *under*
+    a mounted root rather than merely set, because a repository root outside every volume would
+    satisfy "the variable is present" and still lose every published recipe on the next deploy —
+    which is the same shape as this file's own
+    `test_every_declared_volume_is_mounted_by_some_service`, and it is the same defect twice.
+    """
+    document = yaml.safe_load(rendered.artefacts["compose.yaml"])
+    api = document["services"]["api"]
+
+    root = api.get("environment", {}).get("OSPREY_RECIPE_REPO_ROOT")
+    assert root, (
+        "the Conduit is not told where to commit published recipes, so it falls back to /app "
+        "inside the image — not a repository, and discarded on every rebuild"
+    )
+
+    mount_targets = {
+        mount.split(":")[1] for mount in api.get("volumes", []) if mount.count(":") >= 1
+    }
+    assert any(root == target or root.startswith(f"{target}/") for target in mount_targets), (
+        f"the recipe repository {root!r} is not under any path the api service mounts "
+        f"({sorted(mount_targets)}), so every published recipe is lost on the next deploy"
+    )
+
+
 def test_arcadedb_gets_an_explicit_heap_rather_than_jvm_ergonomics(rendered: RenderResult) -> None:
     """The graph store's heap is a rendered value, not whatever the JVM infers from the container.
 

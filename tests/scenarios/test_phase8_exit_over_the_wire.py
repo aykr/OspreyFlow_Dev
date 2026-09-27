@@ -49,7 +49,7 @@ finding after the table.
 | A13, A14 | **yes** | Including the refusal: a judgement with no supporting reference is 422. |
 | A15 | **partly** | The artefact, the mark, the manifest and the ledger entry: yes. **The
   consult-originator block: no** — see the finding below. |
-| B1, B2, B3 | no | Ingest — but for a *different* reason since R6; see the finding below. |
+| B1, B2, B3 | **yes** | Round 13bf: walked Connect -> Run through the analyst's own door. |
 | B4 | **yes** (adapted) | Fixture Corp's resolution cohort, search-seeded, no edges between them. |
 | B5 | **yes** (adapted) | One hop out from a seeded node. |
 | B6, B7, B8 | no | Message content and the handle cohort are not seeded. |
@@ -144,6 +144,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+import yaml
 from tests.scenarios.fixtures.fixture_corp import _synthetic_nino
 from tests.scenarios.fixtures.hmp_population import (
     PRINCIPAL_SUBJECT_PRISON_NUMBER,
@@ -968,15 +969,10 @@ def test_the_ingest_folder_is_reachable_and_usable_through_the_studio(
     worth stating: `source_location` is read *inside the container*, so a path that merely looks
     plausible proves nothing — the profile call below is what proves the Conduit opened it.
 
-    **What it does not prove, and why B1-B3 are still not here.** Those rows assert
-    identifier normalisation, duplicate collapse and timestamp recovery, and every one of them
-    depends on the `cdr-generic-csv` connector profile's own configuration (`date_order: dmy`, a
-    declared timezone). `schemas.ingest.CONNECTOR_CATALOGUE` marks exactly one connector built
-    (`generic-csv`); the rest of `09_INGEST_STUDIO.md` §2's catalogue is declared and unbuilt, and
-    the Studio cannot offer what does not exist. Measured, not assumed: a draft naming
-    `cdr-generic-csv` is refused `connector_not_available`. So B1-B3 stay at the in-process tier
-    until carrier connector profiles are built, and that is a product gap recorded in
-    `07_BUILD_PLAN.md`, not a shortfall of this file.
+    **B1-B3 now have their own cases below** (round 13bf). They did not when this was written:
+    the connector their fixture needs (`cdr-generic-csv`, `date_order: dmy`) was declared in the
+    catalogue and refused by the Studio, so the rows stayed at the in-process tier. The paragraph
+    that used to be here said so, and the guard below is what noticed when it stopped being true.
     """
     listing = analyst.get("/v1/ingest/source-files")
     assert listing.status_code == 200, listing.text
@@ -988,25 +984,29 @@ def test_the_ingest_folder_is_reachable_and_usable_through_the_studio(
     chosen = files[0]
     assert chosen["source_location"].startswith(listing.json()["root"]), chosen
 
-    # The connector the acceptance fixture needs is not built, and the refusal is by name.
-    refused = analyst.post(
+    # **The connector the acceptance fixture needs, which this round made selectable.** This
+    # assertion used to run the other way: it required `cdr-generic-csv` to be refused
+    # `connector_not_available`, and failed loudly the moment that stopped being true so the
+    # coverage tables could not silently fall out of date. It did exactly that in round 13bf —
+    # the guard is why the tables moved in the same change rather than a follow-up — and it now
+    # holds the opposite invariant, that the connector an acceptance row depends on stays
+    # available. `09_INGEST_STUDIO.md` §2 derives that from `connectors/cdr-generic-csv.yaml`.
+    usable = analyst.post(
         "/v1/ingest/recipes",
         json={
-            "label": "over-the-wire probe — unbuilt connector",
+            "label": "over-the-wire probe — the CDR carrier layout",
             "connector_profile": "cdr-generic-csv",
             "source_location": chosen["source_location"],
             "handling": _FIXTURE_HANDLING,
             "legal_basis": "RIPA s22 acquisition — fixture",
         },
     )
-    if refused.status_code == 201:
-        profiled = analyst.get(f"/v1/ingest/recipes/{refused.json()['recipe_id']}/profile")
-        assert (
-            profiled.status_code == 422 and profiled.json()["error"] == "connector_not_available"
-        ), (
-            "`cdr-generic-csv` became available — B1-B3 may now be reachable over the wire, and "
-            "this file's own coverage table and 08's should be updated in the same change"
-        )
+    assert usable.status_code == 201, usable.text
+    profiled_cdr = analyst.get(f"/v1/ingest/recipes/{usable.json()['recipe_id']}/profile")
+    assert profiled_cdr.status_code == 200, (
+        "`cdr-generic-csv` is no longer usable over the wire, so B1-B3's own cases below cannot "
+        f"run: {profiled_cdr.text}"
+    )
 
     # The reachable chain, on the one built connector.
     draft = analyst.post(
@@ -1034,6 +1034,276 @@ def test_the_ingest_folder_is_reachable_and_usable_through_the_studio(
         "the Conduit could not profile the file the listing offered — the read-only mount is not "
         f"working, whatever the listing said: {profiled.text}"
     )
+
+
+# ---------------------------------------------------------------------------------------------
+# B1-B3, over the wire — round 13bf.
+#
+# These three rows were "in-process only" from round 13b until now, for a reason that was a real
+# product gap rather than a testing shortfall: the Studio would not accept the connector the CDR
+# fixture needs. Round 13bf made connector availability derive from `connectors/*.yaml`, made a
+# profile's own settings reach the published recipe, put `git` in the Conduit's image and gave the
+# recipe repository a persistent root — and only with all four does the chain an analyst actually
+# walks reach a load. See `REPORT-13bf.md`.
+# ---------------------------------------------------------------------------------------------
+
+CDR_FIXTURE_NAME = "carrier-a-cdr.csv"
+
+
+@pytest.fixture(scope="module")
+def cdr_load() -> dict:
+    """Walk Connect -> Profile -> Map -> Verify -> Publish -> Run once, and share the report.
+
+    Module-scoped because the walk is the expensive part and B1, B2 and B3 are three assertions
+    about one load, not three loads. Its own client is separate from the `analyst` fixture for the
+    reason that fixture's docstring gives: tokens expire, and this one is minted for this walk.
+    """
+    token = _sign_in_as_the_demo_analyst()
+    scope = os.environ.get("OSPREY_LIVE_INVESTIGATION_ID")
+    if not scope:
+        pytest.fail("OSPREY_LIVE_INVESTIGATION_ID is not set — see the `seeded_scope` fixture")
+
+    with httpx.Client(
+        base_url=WORKSPACE_ORIGIN, headers={"Authorization": f"Bearer {token}"}, timeout=180
+    ) as client:
+        listing = client.get("/v1/ingest/source-files")
+        assert listing.status_code == 200, listing.text
+        chosen = next(
+            (f for f in listing.json()["files"] if f["name"] == CDR_FIXTURE_NAME), None
+        )
+        assert chosen is not None, (
+            f"{CDR_FIXTURE_NAME} is not in the deployment's ingest root "
+            f"({listing.json()['root']}) — B1-B3 need it there; the harness places it"
+        )
+
+        draft = client.post(
+            "/v1/ingest/recipes",
+            json={
+                "label": "B1-B3 over the wire",
+                # **The connector this round made selectable.** Declared in the catalogue and
+                # refused by the Studio until now, which is exactly why these rows were stuck.
+                "connector_profile": "cdr-generic-csv",
+                "source_location": chosen["source_location"],
+                "handling": _FIXTURE_HANDLING,
+                "legal_basis": "RIPA s22 acquisition — fixture",
+            },
+        )
+        assert draft.status_code == 201, draft.text
+        recipe_id = draft.json()["recipe_id"]
+
+        profiled = client.get(f"/v1/ingest/recipes/{recipe_id}/profile")
+        assert profiled.status_code == 200, profiled.text
+
+        row_template = yaml.safe_load(
+            (Path(__file__).parent / "fixtures" / "cdr_recipe.yaml").read_text(encoding="utf-8")
+        )["row_template"]
+        mapped = client.put(
+            f"/v1/ingest/recipes/{recipe_id}/row-template",
+            json={"row_template": row_template, "unmapped_fields": []},
+        )
+        assert mapped.status_code == 200, mapped.text
+
+        verified = client.post(f"/v1/ingest/recipes/{recipe_id}/verify", json={})
+        assert verified.status_code == 200, verified.text
+
+        published = client.post(f"/v1/ingest/recipes/{recipe_id}/publish", json={})
+        assert published.status_code == 200, (
+            "Publish failed over the wire. Until round 13bf this was a bare 500: the image had no "
+            f"`git` binary for `studio_publish` to exec. {published.text}"
+        )
+
+        run = client.post(
+            f"/v1/investigations/{scope}/ingest/recipes/{recipe_id}/run", json={}
+        )
+        assert run.status_code == 200, run.text
+
+        # **Both reports, and they answer different questions.** Verify is the dry run and carries
+        # the `Node`/`Edge` it would produce, in full, whatever the graph already holds. The run
+        # report carries what storage actually did. B1-B3 are claims about the *transform* (one
+        # node per number, evidence retained, times converted), so they are asserted against
+        # Verify; the run is what proves the transform reached a real load rather than stopping
+        # at a preview, and it owns the storage-side half of B2.
+        #
+        # Deliberately not asserted from the run's own `created_node_ids`: that list holds only
+        # nodes *this* load created, so a second run of the same file — which §6 requires to be
+        # idempotent — returns an empty list and would make these tests pass once and then fail
+        # for the very behaviour the specification asks for. Found exactly that way.
+        report = run.json()
+
+        # **The stored edge, when this load is the one that created the endpoints.** Verify's
+        # preview carries neither the merged interval nor the merged provenance — measured, not
+        # assumed: its edge reports `occurrences: 9` with one source and the first row's interval,
+        # because merging is what storage does. So B2's "retained on the survivor" and B3's
+        # converted interval can only be read from the graph.
+        #
+        # `created_node_ids` is the only handle a test has on those nodes: ingest does not write
+        # to the search index (checked directly — `POST /v1/search` for the normalised number
+        # returns nothing after a successful load), and there is no route that reads a node by id.
+        # On a deployment that has already loaded this fixture the list is empty *by design* —
+        # §6 requires a re-run to be idempotent — so those two assertions are conditional, and
+        # say so rather than quietly not running.
+        stored: list[dict] = []
+        if report["created_node_ids"]:
+            expanded = client.post(
+                f"/v1/investigations/{scope}/expand",
+                json={"request": {"node_ids": report["created_node_ids"], "depth": 1}},
+            )
+            assert expanded.status_code == 200, expanded.text
+            delta = expanded.json()["delta"]
+            stored = delta.get("edges_added") or delta.get("edges") or []
+
+        return {"verify": verified.json(), "report": report, "stored_edges": stored}
+
+
+def test_b1_every_rendering_of_one_number_resolves_to_a_single_endpoint(cdr_load: dict) -> None:
+    """**B1**: "All four renderings of the shared number resolve to one `Endpoint`; `value_raw` is
+    retained on each."
+
+    The fixture writes the same A-party four ways — `01621926368`, `+44(0)1621926368`,
+    `441621926368` and `#31#01621926368` (the last a CLI-withheld prefix). The `msisdn` Knowledge
+    Adapter normalises all four to one E.164 value, and `match_on: value_normalised` is what makes
+    them one node rather than four.
+
+    Asserted as a count, not a lookup: "one Endpoint per real number" is the claim, and counting
+    is what catches the failure where a fifth node appears because one rendering normalised
+    differently. Two are expected — the A-party and the single B-party.
+    """
+    verify = cdr_load["verify"]
+    endpoints = [n for n in verify["nodes"] if n["type"] == "Endpoint"]
+
+    assert len(endpoints) == 2, (
+        f"ten rows carrying two distinct real numbers produced {len(endpoints)} Endpoints, not "
+        "2 — a rendering normalised to its own node instead of collapsing"
+    )
+    normalised = {n["properties"]["value_normalised"] for n in endpoints}
+    assert normalised == {"+441621926368", "+447911123456"}, normalised
+
+    a_party = next(n for n in endpoints if n["properties"]["value_normalised"] == "+441621926368")
+    assert a_party["properties"]["value_raw"], (
+        "the surviving Endpoint kept no `value_raw` — B1 requires the rendering actually seen to "
+        "be retained, not discarded once normalised"
+    )
+
+    # Eighteen row-ends resolved to those two nodes, however many of them already existed.
+    # Stated as the total rather than `created`/`referenced` separately: the split depends on
+    # what the deployment had already loaded, and asserting it would make this test pass once.
+    counts = verify["entities_by_type"]["Endpoint"]
+    assert counts["created"] + counts["referenced"] == 18, counts
+
+    # And the load really happened, rather than stopping at the preview above.
+    report = cdr_load["report"]
+    assert report["nodes_created"] + report["nodes_referenced"] == 18, report
+
+
+def test_b2_duplicate_rows_collapse_and_every_source_row_is_retained(cdr_load: dict) -> None:
+    """**B2**: "Duplicate rows collapse to single events; every source row reference is retained
+    on the survivor."
+
+    Both halves matter and they pull against each other — collapsing is easy if you discard
+    evidence, and retaining evidence is easy if you never collapse. The fixture's nine valid rows
+    are the same A-to-B pair, so they merge into one `COMMUNICATED_WITH`; the survivor must still
+    name all nine rows it came from.
+
+    `CLAUDE.md` rule 12's own worked example is this exact invariant: `upsert_edges` never merged
+    same-pair edges for a whole phase while the conformance suite passed, because no case wrote
+    the same pair twice. This case writes it nine times, over the wire.
+    """
+    verify = cdr_load["verify"]
+    report = cdr_load["report"]
+    previewed = [e for e in verify["edges"] if e["type"] == "COMMUNICATED_WITH"]
+
+    assert len(previewed) == 1, (
+        f"nine rows of one A-to-B pair produced {len(previewed)} edges rather than collapsing "
+        "to one"
+    )
+    assert previewed[0]["occurrences"] == 9, previewed[0]["occurrences"]
+
+    # **The storage-side half.** The above is the transform's own output; this is what the load
+    # actually wrote. Nine row-level edges merging to one stored edge is `CLAUDE.md` rule 12's own
+    # worked example — `upsert_edges` went a whole phase without merging same-pair edges while
+    # the conformance suite passed, because no case wrote the same pair twice. This one does.
+    assert len(set(report["touched_edge_ids"])) == 1, (
+        "the run touched more than one edge id, so the same pair was stored as separate edges: "
+        f"{sorted(set(report['touched_edge_ids']))}"
+    )
+    assert len(report["touched_edge_ids"]) == 9, report["touched_edge_ids"]
+
+    # **Every source row retained on the survivor** — the half that is easy to lose, and only
+    # readable from the stored edge. See the fixture for why this is conditional.
+    for survivor in cdr_load["stored_edges"]:
+        if survivor["type"] != "COMMUNICATED_WITH":
+            continue
+        sources = survivor["provenance"]["sources"]
+        assert len(sources) == 9, (
+            f"the surviving edge names {len(sources)} source rows, not 9 — collapsing discarded "
+            "evidence"
+        )
+        assert {s["locator"] for s in sources} == {f"row {i}" for i in range(9)}
+        break
+
+
+def test_b3_local_times_are_converted_and_an_unreadable_one_is_refused_by_name(
+    cdr_load: dict,
+) -> None:
+    """**B3**: "The local-time file is converted with its original offset recorded; a file with no
+    recoverable offset is rejected with a named error, not guessed."
+
+    Three things are proven here, and the first is the one this round unblocked.
+
+    **The layout's declared date order reached the engine.** Row 6 is `12/01/2026 10:00:00` — the
+    twelfth of January to a UK carrier, the first of December to an American one. Nothing in the
+    value says which. `connectors/cdr-generic-csv.yaml` declares `date_order: dmy`, and until this
+    round that declaration never reached the published recipe (`studio_publish` built its
+    connector from the profile's *id* alone). The assertion is the interval's upper bound: read as
+    `dmy` the row falls inside the fixture's window, read as `mdy` it lands in December and drags
+    `valid_to` with it. So a silent misreading moves a number this test checks, rather than
+    producing a plausible graph nobody questions.
+
+    **The offset was applied, not assumed.** Row 9 is `2026-03-30 11:00:00` with no offset, and
+    the recipe declares `tz=Europe/London`. The thirtieth of March 2026 is the day after British
+    Summer Time begins, so the correct conversion is `10:00Z` — one hour, not zero. A normaliser
+    that treated a naive local time as UTC would record `11:00Z` and pass any test whose fixture
+    avoided a DST boundary. This one does not avoid it.
+
+    **The unreadable row was refused by name.** Row 10's timestamp cannot be parsed at all. It
+    appears in the run report's own rejections, naming the adapter and the value — not dropped
+    silently, and not guessed at.
+    """
+    report = cdr_load["report"]
+
+    # The converted interval lives on the stored edge (see the fixture). When this load created
+    # the endpoints, assert it in full.
+    for survivor in cdr_load["stored_edges"]:
+        if survivor["type"] != "COMMUNICATED_WITH":
+            continue
+        interval = survivor["interval"]
+
+        # The DST boundary: 11:00 local on 30 March 2026 is 10:00Z, because BST is in force.
+        assert interval["valid_to"] == "2026-03-30T10:00:00Z", (
+            f"the last call converted to {interval['valid_to']!r}. Expected 10:00Z: the row "
+            "reads 11:00 local with no offset, and 30 March 2026 is inside British Summer Time. "
+            "11:00Z would mean the naive local time was taken as UTC and no offset applied"
+        )
+        assert interval["valid_from"] == "2026-01-10T10:00:00Z", interval
+
+        # `date_order: dmy` reached the engine: read as mdy, row 6 would be 1 December 2026 and
+        # would drag `valid_to` with it.
+        assert interval["valid_to"] < "2026-04-01T00:00:00Z", (
+            "a row dated 12/01/2026 landed after March, so it was read as the first of "
+            "December — the profile's `date_order: dmy` did not reach the published recipe"
+        )
+        break
+
+    # The unreadable row, refused by name rather than guessed — in the real run's own report,
+    # which is what an analyst is shown after a load.
+    rejections = report["rejections"]
+    assert len(rejections) == 1, rejections
+    only = rejections[0]
+    assert only["row_index"] == 9, only
+    assert "datetime" in only["reason"] and "not-a-real-timestamp" in only["reason"], (
+        f"the rejection does not name the adapter and the offending value: {only['reason']!r}"
+    )
+    assert report["rows_read"] == 10, report["rows_read"]
 
 
 def test_the_delta_stream_is_reachable_through_the_proxy(analyst: httpx.Client) -> None:

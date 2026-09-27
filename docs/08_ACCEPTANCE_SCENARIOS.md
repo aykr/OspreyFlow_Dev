@@ -28,16 +28,38 @@ supply a source file** — `POST /v1/ingest/recipes` takes a `source_location` t
 container must be able to read, nothing is mounted there, and the only upload route in the Conduit
 is the site image. So B1–B3 and every row that depends on data arriving that way (B6, B7, B8, B13,
 B14, B15–B18) cannot be performed by an analyst against a rendered deployment at all. That is a
-product gap, not a shortfall of the test.
+product gap, not a shortfall of the test. **B1–B3 were closed on 27 September 2026 — see below;
+the remaining rows in that list are not.**
 
 **Built, 27 September 2026 (round 13bc) — the "no door" half is closed.** The ingest root is
 rendered, mounted read-only, listed by Connect, and walked end to end over the wire by
-`tests/scenarios/test_phase8_exit_over_the_wire.py`. **B1–B3 are still in-process only, and the
-reason has changed**: not "no route to supply a file" but **connectors** — those rows depend on
-the `cdr-generic-csv` profile's own `date_order`/timezone configuration, and
-`schemas.ingest.CONNECTOR_CATALOGUE` marks exactly one connector built (`generic-csv`). Measured
-over the wire: a draft naming `cdr-generic-csv` is refused `connector_not_available`. Building
-carrier connector profiles is what would move these rows, and `07_BUILD_PLAN.md` records it.
+`tests/scenarios/test_phase8_exit_over_the_wire.py`.
+
+**Built, 27 September 2026 (round 13bf) — B1–B3 are now over the wire.** They are walked through
+the analyst's own door, Connect → Profile → Map → Verify → Publish → Run, and asserted by test id
+(`test_b1_…`, `test_b2_…`, `test_b3_…`). Four separate things had to be true and none of them was:
+
+1. **Connector availability is derived from `connectors/*.yaml`, not declared.** It had been
+   hard-coded in four unconnected places, so `cdr-generic-csv` was declared in the catalogue and
+   refused by the Studio — the reason recorded here until now.
+2. **A connector profile's own settings reach the published recipe.** `studio_publish` built its
+   `RecipeConnector` from the profile's *id* alone, so `date_order: dmy` never arrived and B3's
+   `12/01/2026` would have been read with no declared order. Every test passed throughout,
+   because they asserted on a hand-built connector the Studio never produces.
+3. **The Conduit's image carries `git`.** It never had, so Publish — "publishing writes the
+   recipe to version control" (`09_INGEST_STUDIO.md` §6) — returned a bare 500 in every rendered
+   deployment this project has built. The one test of publishing runs on the host and supplies
+   its own initialised repository, so it agreed with the code while the deployed article could
+   not publish at all.
+4. **The recipe repository has a persistent root.** It defaulted to `/app` inside the container:
+   the image's own code directory, rebuilt on every deploy.
+
+**What B3 asserts, and why those values.** Row 9 of the fixture is `2026-03-30 11:00:00` with no
+offset against a recipe declaring `tz=Europe/London`; 30 March 2026 is inside British Summer
+Time, so the correct conversion is `10:00Z` — a normaliser that read naive local time as UTC
+would record `11:00Z` and pass any fixture that avoided a DST boundary. Row 6 is `12/01/2026`,
+which read as `mdy` would land in December and move the stored interval's upper bound. Row 10 is
+unparseable and appears in the run report's rejections, named, rather than guessed at.
 
 **Ruled 27 September 2026 — owner ruling R6, restated the same day in fuller terms.** Ingest for
 a rendered deployment works **through the existing Ingest Studio**, not around it: the ingest

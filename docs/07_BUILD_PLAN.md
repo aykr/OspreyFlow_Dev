@@ -121,15 +121,36 @@ preflights, builds, starts twelve containers, grants, seeds and passes `harness.
      separation-of-duties control; it is a disposable subject provisioned only on request.
      `test_the_demo_analyst_holds_the_studio_roles_the_ingest_flow_needs` is the case that fails if
      it regresses, shown red against the previous value.
-  2. **B1–B3 are still not reachable over the wire, and the reason has changed.** It is no longer
-     "no door" — it is **connectors**. Those rows assert identifier normalisation, duplicate
-     collapse and timestamp recovery, each depending on the `cdr-generic-csv` profile's own
-     `date_order: dmy` and declared timezone. `schemas.ingest.CONNECTOR_CATALOGUE` marks exactly
-     one connector built (`generic-csv`); the rest of `09_INGEST_STUDIO.md` §2's catalogue is
-     declared and unbuilt, so the Studio cannot offer what the acceptance fixture needs. Measured
-     over the wire, not assumed: a draft naming `cdr-generic-csv` is refused
-     `connector_not_available`. **Building carrier connector profiles is real, unscoped work** and
-     is what would move B1–B3 (and B6–B8, B13–B18 with them) to the over-the-wire tier.
+  2. ~~**B1–B3 are still not reachable over the wire, and the reason has changed.**~~
+     **Closed 27 September 2026 (round 13bf).** The entry read: the reason was no longer "no door"
+     but **connectors** — B1–B3 depend on the `cdr-generic-csv` profile's own `date_order: dmy`,
+     `schemas.ingest.CONNECTOR_CATALOGUE` marked exactly one connector built, and a draft naming
+     `cdr-generic-csv` was refused `connector_not_available`.
+
+     Connector profiles are now files in `connectors/`, availability is **derived** from them
+     (`packages/schemas/connectors.py`), and B1–B3 are asserted by test id over the wire. Three
+     further defects had to be fixed to get there, and each had been invisible to a passing suite
+     — recorded because the *shape* is what generalises, not the individual bugs:
+
+     - **The same fact was hard-coded in four unconnected places.** Availability lived in the
+       catalogue, in `studio_profile`, and inline in both `studio_map` and `studio_verify`.
+       Adding a layout to one left the others refusing it.
+     - **A connector profile's settings never reached the published recipe.**
+       `RecipeConnector(profile=draft.connector_profile or "generic-csv")` carried the id and no
+       other field, so `date_order` silently defaulted and the `or` substituted a *different*
+       layout's settings. Every test passed, because they asserted on a hand-built connector the
+       Studio never produces — a test input more complete than the real producer, which is
+       `CLAUDE.md` rule 15's fixture lesson with the roles swapped.
+     - **The Conduit's image had no `git`, and its recipe repository no persistent root.**
+       Publishing execs `git` (§6) and the runtime stage installed nothing, so Publish returned a
+       bare 500 in every rendered deployment this project has ever built. The only test of
+       publishing runs on the host and `git init`s its own repository, supplying both things the
+       deployment lacked. The repository root also defaulted to `/app` — the image's code
+       directory, rebuilt on every deploy — in a *third* independent copy of that constant, in
+       `services/api/app.py`, which was the one the route actually used.
+
+     **Still open:** B6–B8 and B13–B18 do not move with them. Those need fixture data the
+     deployment's seed does not carry, which is a separate piece of unscoped work.
 
 - **`08_ACCEPTANCE_SCENARIOS.md`'s own "retraction propagates" assertion is not what the analyst
   sees.** The flag is written; the judgement then disappears from the Judgements tab rather than

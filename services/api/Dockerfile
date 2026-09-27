@@ -26,6 +26,13 @@ COPY services ./services
 # machine; every earlier attempt stopped at Preflight's memory floor, so nothing had exercised it.
 # `harness/Dockerfile` already carries `scripts/` for the same reason.
 COPY scripts ./scripts
+# **Round 13bf.** Connector profiles are data the Conduit reads at import
+# (`schemas.ingest.CONNECTOR_CATALOGUE`), not code, so nothing above pulls them in — and without
+# them a rendered deployment reports *every* connector unavailable, `generic-csv` included, which
+# is worse than the gap that mechanism was built to close. The same class
+# `tests/test_image_imports_are_carried.py` already catches for modules;
+# `tests/test_connectors_are_carried_into_the_image.py` is the case for this one.
+COPY connectors ./connectors
 
 FROM python:3.12-slim
 
@@ -35,12 +42,27 @@ FROM python:3.12-slim
 # on packages this service does not touch.
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
+# **`git`, because the Conduit shells out to it and the image did not have it.**
+# `09_INGEST_STUDIO.md` §6: "Publishing writes the recipe to version control, not only to the
+# database. The studio is the editor; the repository is the record." `services/api/studio_publish.
+# py` implements that with `asyncio.create_subprocess_exec("git", ...)`, so the binary is a
+# runtime dependency of the Conduit in exactly the way a Python package is — and it was absent
+# from every image this project has ever built. Publish returned a bare 500
+# (`FileNotFoundError` from the exec) in every rendered deployment, while
+# `tests/ingest/test_studio_publish_pipeline.py` passed throughout because it runs on the host,
+# where `git` exists and the test `git init`s its own repository. Round 13bf, found walking the
+# chain over the wire. `tests/test_connectors_are_carried_into_the_image.py` is what fails if it
+# is dropped again.
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN useradd --create-home --uid 10001 osprey
 WORKDIR /app
 COPY --from=builder /app/.venv ./.venv
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/services ./services
 COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/connectors ./connectors
 
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONPATH="/app:/app/packages" \

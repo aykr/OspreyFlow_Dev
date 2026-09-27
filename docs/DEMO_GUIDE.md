@@ -370,6 +370,21 @@ Map. The analyst never types a path — which is the point, and worth saying out
 demonstration, because "where is the data?" is the question every other tool answers with a file
 dialog onto the wrong machine.
 
+**Which connector to pick, and why it matters on screen.** The connector list is derived from the
+`connectors/` directory — one validated YAML file per carrier layout, the same pattern map
+providers follow (`09_INGEST_STUDIO.md` §2, ADR-016). For a CDR export pick **`cdr-generic-csv`**,
+not `generic-csv`: it declares `date_order: dmy`, so `12/01/2026` is read as the twelfth of
+January rather than the first of December. Both profiles will happily read the file; only one
+reads the dates the way a UK carrier wrote them, and the difference does not announce itself —
+the graph looks perfectly reasonable either way. That is the demonstrable point: **adding a new
+carrier layout is a file, not a release.**
+
+**The whole chain runs, Connect → Profile → Map → Verify → Publish → Run.** Verify is the one to
+linger on: it is a dry run that shows the graph it *would* make, plus a rejection report grouped
+by cause. The fixture deliberately contains a row whose timestamp cannot be parsed, and it is
+listed there by name — a demonstration that the system refuses what it cannot read rather than
+guessing is worth more than one where everything is clean.
+
 **What it does not do**: upload from the presenter's laptop through the browser. That is
 deliberately post-milestone (R6). If you need a file on the deployment host, put it there the way
 the block above does.

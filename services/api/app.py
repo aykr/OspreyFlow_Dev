@@ -250,6 +250,7 @@ from .studio_profile import (
     SourceUnreadableError,
     profile_recipe_source,
 )
+from .studio_publish import _REPO_ROOT as _PUBLISH_REPO_ROOT  # noqa: I001
 from .studio_publish import (
     GitCommitError,
     RecipeNotRunnableError,
@@ -2806,12 +2807,19 @@ _SITE_GRID_RECIPE_PATH = (
 )
 
 #: Publish's own git-repository root (§6: recipes commit to `recipes/<id>.
-#: yaml` at the repository root) — the same `.parents[2]` computation as
-#: `_SITE_GRID_RECIPE_PATH` above. An `app.state` value, not a bare module
+#: yaml` at the repository root). An `app.state` value, not a bare module
 #: constant `studio_publish.py` reaches for on its own, so a route test can
 #: point it at a throwaway git repo (`app.dependency_overrides
 #: [get_recipes_repo_root]`) instead of committing into this checkout.
-_RECIPES_REPO_ROOT = Path(__file__).resolve().parents[2]
+#:
+#: **Round 13bf: taken from `studio_publish`, not recomputed here.** This was its own
+#: `.parents[2]` — a third independent copy of one fact, beside `studio_publish._REPO_ROOT` and
+#: the renderer's `OSPREY_RECIPE_REPO_ROOT`, and the one the route actually used. Setting the
+#: environment variable moved the other two and left this one pointing at `/app`, so the first
+#: fix looked applied, returned 200, and still wrote the record into the image's own code
+#: directory where the next rebuild discards it. Exactly the defect this round exists to remove,
+#: found one layer further in than the grep that started it.
+_RECIPES_REPO_ROOT = _PUBLISH_REPO_ROOT
 
 
 class ControlPointsRequest(BaseModel):

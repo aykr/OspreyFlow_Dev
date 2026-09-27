@@ -73,6 +73,12 @@ from schemas.deployment import OspreyConfig, Profile, SearchBackend
 #: the two stop agreeing.
 INGEST_CONTAINER_PATH = "/var/lib/osprey/ingest"
 
+#: Where the Conduit commits published recipes (`09_INGEST_STUDIO.md` §6). Round 13bf: this sits
+#: *under* the data root deliberately, so it rides the already-persistent `osprey-data` volume
+#: rather than needing a mount of its own — the image's `/app` default is rebuilt on every deploy
+#: and is not a repository, which is why Publish 500ed in every rendered deployment until now.
+RECIPE_REPO_DIRNAME = "recipes"
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_PATH = REPO_ROOT / "osprey.yaml"
 DEFAULT_OUT_ROOT = REPO_ROOT / "deploy" / "generated"
@@ -420,6 +426,19 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
         # path: with no ordering it died on `httpx.ConnectError` reaching a Keycloak that was still
         # importing its realm, and then restarted forever.
         if entry.service == "api":
+            # **Round 13bf — the recipe repository, on the persistent volume.** Publishing writes
+            # the recipe to version control (`09_INGEST_STUDIO.md` §6); without this the Conduit
+            # falls back to `/app`, which is the image's own code directory, is not a git
+            # repository, and is rebuilt on every deploy. Set here rather than defaulted in the
+            # Conduit because only the renderer knows where this deployment's data root is.
+            existing_environment = service.get("environment")
+            api_environment: dict[str, object] = (
+                dict(existing_environment) if isinstance(existing_environment, dict) else {}
+            )
+            api_environment["OSPREY_RECIPE_REPO_ROOT"] = (
+                f"{config.components.storage.data}/{RECIPE_REPO_DIRNAME}"
+            )
+            service["environment"] = api_environment
             # The Conduit reads `osprey.yaml` at startup for its map-provider registry, and the
             # image does not contain it — the Dockerfile copies `packages/` and `services/` only,
             # deliberately, because a deployment's configuration is not part of its image.

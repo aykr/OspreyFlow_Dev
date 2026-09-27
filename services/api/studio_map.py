@@ -42,9 +42,9 @@ from schemas.ingest import (
 )
 
 from .studio_profile import (
-    ConnectorNotAvailableError,
     RecipeNotReadyForProfileError,
     SourceHandlingIncompleteError,
+    require_available_connector,
 )
 from .studio_profile import _read_rows as _read_recipe_rows
 
@@ -138,8 +138,8 @@ async def get_sample_row(
     of five column samples."""
     if not draft.ready_for_profile:
         raise RecipeNotReadyForProfileError(draft.recipe_id)
-    if draft.connector_profile not in {"generic-csv"}:
-        raise ConnectorNotAvailableError(draft.connector_profile)
+    # Round 13bf: the shared gate, not a fourth inline `{"generic-csv"}` literal.
+    require_available_connector(draft)
     source_handling = resolve_source_handling(draft)
     rows = _read_recipe_rows(draft)
     sampled = rows[:DEFAULT_SAMPLE_SIZE]
