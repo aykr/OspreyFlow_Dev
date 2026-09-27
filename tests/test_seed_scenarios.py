@@ -1,0 +1,177 @@
+"""The `scenarios` seed dataset writes what the acceptance rows need — round 13cb.
+
+Owner ruling R8 makes this load-bearing: every acceptance row must be performable through the
+analyst's own door on a rendered deployment, and this seeder is what puts the data there. If it
+writes the wrong shape, the over-the-wire rows fail four layers downstream with a message about a
+missing node, and nothing points back here.
+
+`build_everything()` is separated from the writing precisely so this can be asserted without a
+database. The writing itself is already covered — `upsert_nodes`/`upsert_edges` by the graph
+conformance suite, and the seed *plumbing* (Conduit stopped, one-shot container, `scripts/` and
+`tests/` mounted) by `tests/harness/`.
+"""
+
+from __future__ import annotations
+
+from collections import Counter
+
+from scripts.seed_scenarios import (
+    SCENARIOS_TOKEN,
+    SEIZURE_DATE,
+    SHARED_ENDPOINT_ID,
+    SHARED_ENDPOINT_VALUE,
+    build_everything,
+)
+
+
+def test_b4_b5_the_cohort_converges_on_the_shared_endpoint() -> None:
+    nodes, edges, landmarks = build_everything()
+    by_id = {n.id: n for n in nodes}
+
+    assert SHARED_ENDPOINT_ID in by_id, "the endpoint B4/B5 converge on was not seeded"
+    assert by_id[SHARED_ENDPOINT_ID].properties["value_normalised"] == SHARED_ENDPOINT_VALUE
+
+    people = list(landmarks["cohort_person_ids"])
+    assert len(people) == 4
+
+    uses = {(e.source, e.target) for e in edges if e.type == "USES"}
+    comms = {(e.source, e.target) for e in edges if e.type == "COMMUNICATED_WITH"}
+    for person in people:
+        own = [t for s, t in uses if s == person]
+        assert len(own) == 1, f"{person} should have exactly one personal endpoint, got {own}"
+        assert (own[0], SHARED_ENDPOINT_ID) in comms, (
+            f"{person}'s endpoint is not one hop from the shared endpoint, so B5 finds nothing"
+        )
+
+
+def test_b7_the_handle_cohort_shares_one_handle() -> None:
+    nodes, edges, landmarks = build_everything()
+    handle_id = str(landmarks["handle_id"])
+    by_id = {n.id: n for n in nodes}
+
+    assert by_id[handle_id].properties["endpoint_kind"] == "handle"
+    users = {e.source for e in edges if e.type == "USES" and e.target == handle_id}
+    assert users == set(landmarks["handle_cohort_person_ids"])
+
+
+def test_b8_seeds_no_same_as_edge() -> None:
+    """**The row this seeder deliberately does not seed**, and the reason is a decision record.
+
+    ADR-024: a link between identifier systems with no lexical resemblance "is a direct, asserted
+    write, not a probabilistic match". `08_ACCEPTANCE_SCENARIOS.md` B8 says the edge is "asserted
+    at score 1.0". So the `SAME_AS` is the *analyst's* act, made over the wire, and seeding one
+    here would pre-make the very thing B8 exists to watch an analyst do — a walkthrough that
+    passes by finding what the fixture already put there.
+    """
+    _, edges, _ = build_everything()
+    assert not [e for e in edges if e.type == "SAME_AS"], (
+        "the seeder wrote a SAME_AS; B8's edge must be asserted by the analyst over the wire"
+    )
+
+
+def test_b15_the_handset_carries_two_sims() -> None:
+    nodes, edges, landmarks = build_everything()
+    handset = str(landmarks["handset_id"])
+    sims = list(landmarks["sim_ids"])
+    by_id = {n.id: n for n in nodes}
+
+    assert by_id[handset].properties["endpoint_kind"] == "imei"
+    assert {by_id[s].properties["endpoint_kind"] for s in sims} == {"imsi"}
+
+    paired = {(e.source, e.target) for e in edges if e.type == "PAIRED_WITH"}
+    assert paired == {(sims[0], handset), (sims[1], handset)}, (
+        "B15's 'both SIMs link to one device' must be one traversal, not two shapes"
+    )
+
+
+def test_b16_b18_the_sightings_are_an_ordered_track_around_the_seizure_date() -> None:
+    """B17 brushes "to the seizure date" and B18 plots "an ordered track". Both need the events to
+    be *in* the window and *ordered*; a set of simultaneous points would satisfy neither."""
+    nodes, edges, landmarks = build_everything()
+    by_id = {n.id: n for n in nodes}
+
+    event_ids = list(landmarks["sighting_event_ids"])
+    assert len(event_ids) >= 3, "too few sightings to render as a track"
+
+    moments = [by_id[e].properties["occurred_at"] for e in event_ids]
+    assert moments == sorted(moments), "the sightings are not in time order, so B18 has no track"
+    assert len(set(moments)) == len(moments), "simultaneous sightings cannot animate under playback"
+
+    for moment in moments:
+        assert moment.startswith(SEIZURE_DATE.strftime("%Y-%m-%d")), (
+            f"sighting at {moment} is outside the seizure date, so B17's brush finds nothing"
+        )
+
+    # Each sighting places the seized handset somewhere — B17's "location events for the device".
+    present_at = {(e.source, e.target) for e in edges if e.type == "PRESENT_AT"}
+    handset = str(landmarks["handset_id"])
+    assert all(s == handset for s, _ in present_at), (
+        "the sightings are not attached to the seized handset, so pivoting on it finds no track"
+    )
+    assert all(by_id[t].type == "Location" for _, t in present_at)
+
+
+def test_every_location_carries_a_geometry_reference() -> None:
+    """Without `geometry_ref` nothing renders on the map, and B17/B18 are map rows."""
+    nodes, _, _ = build_everything()
+    for node in (n for n in nodes if n.type == "Location"):
+        assert node.properties.get("geometry_ref"), f"{node.id} has no geometry_ref"
+        assert node.properties.get("name"), f"{node.id} has no name"
+
+
+def test_seeding_twice_produces_identical_elements() -> None:
+    """A rendered deployment can be seeded more than once. With a pinned token the second seed
+    upserts the same ids rather than accumulating a second, parallel cohort — which would make
+    B5's "the one endpoint shared by all four" quietly false."""
+    first_nodes, first_edges, first_landmarks = build_everything()
+    second_nodes, _, second_landmarks = build_everything()
+
+    assert [n.id for n in first_nodes] == [n.id for n in second_nodes]
+    assert first_landmarks == second_landmarks
+    # Edge ids are minted fresh, but the pairs they connect must not move.
+    assert {(e.type, e.source, e.target) for e in first_edges} == {
+        (e.type, e.source, e.target) for e in build_everything()[1]
+    }
+
+
+def test_the_pinned_token_is_what_the_over_the_wire_test_will_look_for() -> None:
+    """The coupling, stated. The over-the-wire rows address seeded elements by these names; a
+    change here without a change there fails downstream with no pointer back."""
+    _, _, landmarks = build_everything()
+    assert SCENARIOS_TOKEN == "scenarios"
+    assert str(landmarks["handset_id"]).endswith(SCENARIOS_TOKEN + "-handset")
+    assert str(landmarks["handle_id"]).endswith(SCENARIOS_TOKEN + "-handle")
+
+
+def test_nothing_outside_the_reserved_drama_range_is_written() -> None:
+    """`CLAUDE.md` rule 9 at the seeder boundary — this is the module that writes into a real
+    deployment, so it is the right place to assert it rather than to assume the fixture did."""
+    nodes, _, _ = build_everything()
+    for node in (n for n in nodes if n.type == "Endpoint"):
+        kind = node.properties["endpoint_kind"]
+        value = node.properties["value_normalised"]
+        if kind == "msisdn":
+            assert value.startswith("+44770090"), f"{value} is not in the reserved drama range"
+        elif kind == "handle":
+            assert value.startswith("@")
+        else:
+            assert kind in {"imei", "imsi"}, kind
+            assert value.isdigit(), value
+
+
+def test_the_seed_counts_are_what_the_rows_need() -> None:
+    """A single assertion of the whole shape, so an accidental change is visible as a number
+    rather than only as a downstream failure."""
+    nodes, edges, _ = build_everything()
+    assert dict(Counter(n.type for n in nodes)) == {
+        "Endpoint": 9,
+        "Person": 8,
+        "Location": 4,
+        "Event": 4,
+    }
+    assert dict(Counter(e.type for e in edges)) == {
+        "USES": 8,
+        "COMMUNICATED_WITH": 4,
+        "PAIRED_WITH": 2,
+        "PRESENT_AT": 4,
+    }

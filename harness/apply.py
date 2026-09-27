@@ -312,9 +312,15 @@ def seed(compose_file: Path, datasets: list[str], investigation_id: str) -> None
         )
     root = compose_file.parent / BUILD_CONTEXT_FROM_OUTPUT_DIR
     for dataset in datasets:
-        script = {"hmp": "scripts.seed_hmp_fixture", "fixture-corp": "scripts.seed_fixture_corp"}[
-            dataset
-        ]
+        # Round 13cb: `scenarios` joins the other two under owner ruling R8 — every acceptance
+        # row must be performable through the analyst's own door, and eleven were not because the
+        # deployment was never seeded with what they need. A `KeyError` here is the right failure
+        # for an unknown dataset: it names the dataset, and `--seed` is an operator's own typing.
+        script = {
+            "hmp": "scripts.seed_hmp_fixture",
+            "fixture-corp": "scripts.seed_fixture_corp",
+            "scenarios": "scripts.seed_scenarios",
+        }[dataset]
         output = _run(
             _compose(compose_file)
             + [
@@ -368,7 +374,9 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--out-root", type=Path, default=DEFAULT_OUT_ROOT)
-    parser.add_argument("--seed", default="", help="Comma-separated: hmp,fixture-corp")
+    parser.add_argument(
+        "--seed", default="", help="Comma-separated: hmp,fixture-corp,scenarios"
+    )
     parser.add_argument(
         "--health-timeout", type=int, default=DEFAULT_HEALTH_TIMEOUT_SECONDS, metavar="SECONDS"
     )
