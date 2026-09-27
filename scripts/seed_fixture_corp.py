@@ -29,13 +29,13 @@ import asyncio
 import os
 import sys
 
-from services.resolve.resolver import resolve_entity_type
 from services.resolve.same_as_writer import write_same_as_edges
 from tests.scenarios.fixtures.fixture_corp import (
     build_path_spokes,
     generate_community_rings,
     generate_resolution_persons,
 )
+from tests.scenarios.fixtures.fixture_corp_resolution import resolve_fixture_corp_pairs
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
@@ -95,11 +95,13 @@ def _edge_write(edge: Edge, *, load_id: str) -> EdgeWrite:
 async def _seed_resolution_persons(graph: GraphPort, *, load_id: str) -> tuple[int, int]:
     pairs = generate_resolution_persons()
     person_nodes = [p.node_a for p in pairs] + [p.node_b for p in pairs]
-    ontology = load_default_ontology()
-    person_type = next(e for e in ontology.entity_types if e.name == "Person")
     scheme = load_uk_le_scheme()
 
-    candidates = resolve_entity_type(person_nodes, person_type)
+    # One resolution pass, shared with `test_fixture_corp_shape.py` — see
+    # `fixture_corp_resolution.py`'s own docstring. Assembling this call here a second time is
+    # exactly how the seed and the test could come to measure different populations without
+    # anything failing.
+    candidates = resolve_fixture_corp_pairs()
     nodes_by_id = {n.id: n for n in person_nodes}
 
     tx = await graph.begin_transaction()

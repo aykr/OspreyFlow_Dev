@@ -18,11 +18,15 @@ from services.resolve.projection import (
     THRESHOLD_STRICT,
     compute_clusters,
 )
-from services.resolve.resolver import resolve_entity_type
 from tests.scenarios.fixtures.fixture_corp import (
     build_path_spokes,
     generate_community_rings,
     generate_resolution_persons,
+)
+from tests.scenarios.fixtures.fixture_corp_resolution import (
+    ADR_035_C5_SCORES,
+    resolve_fixture_corp_pairs,
+    scores_by_pair_label,
 )
 
 from adapters.compute_rustworkx.testing import compute_rustworkx_adapter
@@ -117,14 +121,45 @@ def test_every_fixture_corp_entity_carries_the_identifier_search_matches_on() ->
         )
 
 
+def test_the_live_resolution_pass_reproduces_adr_035_c5s_recorded_scores() -> None:
+    """**ADR-035 §C5's recorded scores, checked rather than trusted** (round 12e).
+
+    §C5 records five numbers in prose, and prose cannot be checked — so for three rounds nothing
+    would have noticed them drifting. Round 12d then read the wrong field off the store (the
+    edge's `weight`, `01_DOMAIN_MODEL.md` §6.1's load-time strength formula, rather than
+    `properties["score"]`, which is what `services/resolve/projection.py` actually collapses on)
+    and concluded the fixture had diverged from the ADR. It had not: every score matches to the
+    sixth decimal, measured off a real seeded store.
+
+    This is the assertion that makes that checkable from now on, against the *same* pass the seed
+    runs (`fixture_corp_resolution.py`). It fails if the resolver, the ontology's comparisons, the
+    fixture's own names/dates, or the ADR's recorded figures move apart from each other."""
+    measured = scores_by_pair_label()
+
+    for label, recorded in ADR_035_C5_SCORES.items():
+        score = measured[label]
+        assert score is not None, (
+            f"{label} was not scored at all — §C5 records {recorded}, and a pair the resolver "
+            "never emits a candidate for cannot produce the projection §C5 describes"
+        )
+        assert round(score, 4) == round(recorded, 4), (
+            f"{label}: ADR-035 §C5 records {recorded}, the live pass produced {score}. "
+            "Note this is the match *score*, not the edge weight — they are different "
+            "quantities and only the score drives resolution."
+        )
+
+
 def test_fixture_corp_entity_resolution_projections_differ_by_threshold() -> None:
     """ADR-035 §C5, property 1: "entity resolution at τ 0.99, 0.95 and 0.80 producing visibly
     different projections." Runs the real, untrained `resolve_entity_type` against the fixture's
     four resolution pairs, then the real, pure `compute_clusters` at each of the three detents —
     the same τ Strict/Balanced/Broad the Glass itself offers (`01_DOMAIN_MODEL.md` §4)."""
     pairs = generate_resolution_persons()
+    # The same pass the seed runs — `fixture_corp_resolution.py` owns it, so the test and the
+    # demo cannot come to measure different populations (round 12e; STANDING.md's rule of
+    # 27 September).
+    candidates = resolve_fixture_corp_pairs()
     nodes = [p.node_a for p in pairs] + [p.node_b for p in pairs]
-    candidates = resolve_entity_type(nodes, PERSON_TYPE)
 
     score_by_label: dict[str, float | None] = {}
     for pair in pairs:
