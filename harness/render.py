@@ -494,6 +494,15 @@ def _render_env(config: OspreyConfig) -> str:
         # client already names — so it belongs in the deterministic render, not apply-time
         # secret-writing. `harness/preflight/oidc_audience.py` fails Launch if this is ever missing.
         f"OIDC_AUDIENCE={CONDUIT_CLIENT_ID}",
+        # **The deployment's own origin, and only that** (round 13b). Round 13's closing pass
+        # found a rendered deployment carrying no `CORS_ALLOWED_ORIGINS` at all, so the Conduit
+        # fell back to its own development default, `http://localhost:5173` — the origin a
+        # developer's Vite server uses. Harmless in practice, because the deployed Glass reaches
+        # the Conduit same-origin through the workspace's nginx proxy and CORS never applies to
+        # it, which is exactly why nothing had noticed; still not something a shipped artefact
+        # should carry. `network.public_origin` is the field ADR-050 objection 2 already added
+        # for the OIDC redirect: the origin a browser genuinely uses to reach this deployment.
+        f"CORS_ALLOWED_ORIGINS={config.network.public_origin}",
         "",
         "# Published host ports. Every one is overridable: Preflight found 8000 already held by an",
         "# unrelated container on a real machine, and a deployment that cannot move its own ports",

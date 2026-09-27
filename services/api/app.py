@@ -462,7 +462,19 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=list(
         o.strip()
-        for o in os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+        # **Empty by default, not `http://localhost:5173`** (round 13b). The old default meant a
+        # deployment that forgot to set this — which every rendered deployment did, until round
+        # 13b made `harness/render.py` write it — silently accepted cross-origin requests from a
+        # developer's Vite server. A Conduit that has not been told its origin should allow none,
+        # not guess one.
+        #
+        # There is deliberately no "is this a dev build" switch: round 13b's brief expected one
+        # ("the dev token fence already distinguishes builds"), and checking the tree found none
+        # — `mint_dev_token`'s own fence is file presence, not a runtime flag. So the dev path is
+        # explicit instead: `DEMO_GUIDE.md` §3.2/§3.5 now set `CORS_ALLOWED_ORIGINS` on the
+        # command that starts a Conduit for a Vite-served Glass. Explicit beats inferred here —
+        # a deployment inheriting a development default is precisely the fault being fixed.
+        for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
         if o.strip()
     ),
     allow_methods=["*"],

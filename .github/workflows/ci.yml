@@ -713,6 +713,7 @@ jobs:
           --ignore=tests/harness/test_harness_image.py
           --ignore=tests/harness/test_sustained_load.py
           --ignore=tests/harness/test_six_screen_live_exit.py
+          --ignore=tests/scenarios/test_phase8_exit_over_the_wire.py
           --ignore=tests/scenarios/test_phase8_exit_criterion_end_to_end.py
       # The Glass's fast, no-live-infra unit tests (`store.test.ts`,
       # `zoomBands.test.ts`) — `*.integration.test.ts` is excluded by
@@ -807,6 +808,51 @@ jobs:
           PYTHONPATH=.:packages uv run pytest -p no:randomly
           tests/harness/test_restore_exit_test.py
           tests/scenarios/test_phase8_exit_criterion_end_to_end.py
+      - name: Tear down
+        if: always()
+        run: >-
+          docker compose --env-file deploy/generated/local-lite/deployment.env
+          -f deploy/generated/local-lite/compose.yaml down -v --remove-orphans
+
+  # Owner ruling R5, 27 September 2026 — the closing-pass proof of "both acceptance scenarios pass
+  # on local-lite", taken **through the analyst's own door**: real Keycloak sign-in (authorization
+  # code with PKCE, as the `--demo-analyst` subject), every call through the workspace's nginx, no
+  # store port and no in-process app. `tests/scenarios/test_phase8_exit_over_the_wire.py`'s own
+  # module docstring has the row-by-row coverage and the two findings it exists to surface.
+  #
+  # **A separate job from `deployment-exit-tests` above, for the same reason every other exit test
+  # here has one** — the identical `osprey-local-lite` project name and host ports collide — and
+  # for one more: this deployment must be applied `--demo-analyst`, which the job above
+  # deliberately does not, since a headless exit test needs no sign-in-able subject and a
+  # deployment should not provision one it does not need.
+  #
+  # **Run once against a freshly seeded deployment**, never twice against the same one: two rows
+  # make assertions the platform deliberately does not let a caller take back (the test's own
+  # docstring says which, and why that is correct behaviour). A fresh runner is exactly that.
+  over-the-wire-exit-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - name: Render, build, launch and seed a local-lite deployment with a demo analyst
+        run: |
+          PYTHONPATH=.:packages uv run python -m harness.apply \
+            --profile local-lite --build --demo-analyst --seed hmp,fixture-corp \
+            | tee apply.log
+          # The seeded investigation id has no discoverable route (the Conduit has no "list
+          # investigations", by design), so it is taken from the URL `apply` prints — the same
+          # line an operator reads it off.
+          echo "OSPREY_LIVE_INVESTIGATION_ID=$(
+            grep -o 'investigation=[0-9A-Z]*' apply.log | head -1 | cut -d= -f2
+          )" >> "$GITHUB_ENV"
+      - name: Both acceptance scenarios, over the wire, as the signed-in demo analyst
+        env:
+          OSPREY_TEST_OVER_THE_WIRE: "1"
+        run: >-
+          PYTHONPATH=.:packages uv run pytest -p no:randomly
+          tests/scenarios/test_phase8_exit_over_the_wire.py
       - name: Tear down
         if: always()
         run: >-

@@ -7,6 +7,29 @@ scenario-specific code to pass, the platform has failed the test rather than pas
 Both run on synthetic fixtures generated from a seeded generator in `tests/scenarios/fixtures/`.
 No real data enters the repository.
 
+## Which test proves these, and at which tier — DECIDED by owner ruling R5, 27 September 2026
+
+There are two, and they are not interchangeable.
+
+| Tier | Test | What it is |
+| --- | --- | --- |
+| **The closing-pass proof** | `tests/scenarios/test_phase8_exit_over_the_wire.py` | The rendered `local-lite` deployment, **through the analyst's own door**: OIDC authorization code with PKCE against the deployment's real Keycloak as the `--demo-analyst` subject, every call through the workspace's nginx proxy, the delta stream through the ticket exchange. No store port, no in-process app. Opt-in (`OSPREY_TEST_OVER_THE_WIRE=1`), its own CI job (`over-the-wire-exit-test`), `make exit-over-the-wire`. **This is the test `07_BUILD_PLAN.md`'s milestone line cites.** |
+| **The fast developer tier** | `tests/scenarios/test_phase8_exit_criterion_end_to_end.py` | The more complete walkthrough — every row below, including the ingest-dependent ones — driven in process (`TestClient`) against `make dev-up`'s published stores. Fast, and what a developer runs while changing a route. |
+
+**Why R5 was needed.** The in-process test reaches ArcadeDB, Postgres and Valkey directly on
+published ports. A rendered deployment publishes only the workspace and Keycloak — correct for a
+deployment (`05_DEPLOYMENT.md` §7), and fatal for that test. Until R5 it was therefore the case
+that the single test the milestone rested on **had never been run against the thing the milestone
+is about**, which `07_BUILD_PLAN.md` records as round 13's finding.
+
+**The over-the-wire test does not cover every row, and its own module docstring has the row-by-row
+table.** The reason is one fact: a rendered deployment gives an analyst **no route by which to
+supply a source file** — `POST /v1/ingest/recipes` takes a `source_location` the Conduit's own
+container must be able to read, nothing is mounted there, and the only upload route in the Conduit
+is the site image. So B1–B3 and every row that depends on data arriving that way (B6, B7, B8, B13,
+B14, B15–B18) cannot be performed by an analyst against a rendered deployment at all. That is a
+product gap, recorded in `07_BUILD_PLAN.md`, not a shortfall of the test.
+
 ---
 
 ## Scenario A — Fixed-site geospatial and temporal analysis
@@ -98,6 +121,21 @@ After A15, retract one node that supports a judgement. The judgement is flagged 
 within the same session, and the export produced in A15 is marked as resting on retracted
 evidence. This closed loop is what makes the assessment objects worth storing rather than
 writing in a word processor.
+
+**This sentence is not what the analyst sees, and the discrepancy was found by running the
+scenario over the wire on 27 September 2026 — recorded here, not fixed here.** The flag *is*
+written (`flag_judgements_citing_superseded_node`, proven by `tests/services/api/
+test_assessments.py`, which calls it directly and re-reads the store). But retraction supersedes
+the node with a **new id**, the judgement's `supporting` still names the old one, and ADR-046's
+hide-in-full rule (`judgement_visible_to`, composed into `list_visible_judgements`, the function
+the Judgements tab's own route calls) removes every judgement with an unverifiable supporting
+citation. Measured through the deployed Conduit: before the retraction the judgement lists with
+`flagged_for_review: false`; after it, the list is empty. Two rules each correct alone compose
+into a third behaviour this document does not describe, and no test could see it because the only
+one that checked the flag bypassed the route. **Open, for decision**: resolve a superseded
+citation to its successor, exempt a flagged judgement from hide-in-full, or rewrite `supporting`
+on supersede. `tests/scenarios/test_phase8_exit_over_the_wire.py` asserts today's behaviour
+explicitly and fails the day it changes, so this sentence and that test are corrected together.
 
 ### The fixture's statistical shape is built and proved in Phase 2
 

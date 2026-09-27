@@ -25,19 +25,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from services.api.auth import (
-    PrincipalExchangeRefused,
-    PrincipalExchangeUnavailable,
-    PrincipalResolver,
-    PrincipalRevoked,
-)
-from services.api.config import ApiConfig, PostgresConfig, ValkeyConfig
-
 from harness.realm import (
     CONDUIT_CLIENT_ID,
     REVOKED_SUBJECT,
     UNPRIVILEGED_CLIENT_ID,
     VERIFY_SUBJECT,
+)
+from principal_auth import (
+    OidcResolverSettings,
+    PrincipalExchangeRefused,
+    PrincipalExchangeUnavailable,
+    PrincipalResolver,
+    PrincipalRevoked,
 )
 
 #: `07_BUILD_PLAN.md`'s harness entry, verbatim. Not paraphrased: it is worded to be distinguishable
@@ -58,28 +57,20 @@ class VerifyResult:
 def _resolver(
     *, issuer: str, realm: str, client_id: str, secret: str, with_precheck: bool
 ) -> PrincipalResolver:
+    # Nine real OIDC fields and nothing else. Until round 13b this had to build a whole
+    # `ApiConfig` — inventing a Postgres host, user and password, and a Valkey port, none of
+    # which the resolver ever reads — purely to satisfy a type that lived in `services/api`.
+    # `packages/principal_auth`'s own `OidcSettings` is the nine fields, so the fabrication is
+    # gone along with the import that forced it.
     return PrincipalResolver(
-        ApiConfig(
-            valkey=ValkeyConfig(host="localhost", port=6379, db=0),
-            postgres=PostgresConfig(
-                host="localhost", port=5432, user="x", password="x", database="x"
-            ),
+        OidcResolverSettings(
             oidc_jwks_url=f"{issuer}/realms/{realm}/protocol/openid-connect/certs",
-            oidc_audience=None,
-            oidc_issuer=None,
-            oidc_algorithms=("RS256",),
-            oidc_jwks_ttl_seconds=300.0,
             oidc_token_exchange_url=f"{issuer}/realms/{realm}/protocol/openid-connect/token",
             oidc_token_exchange_client_id=client_id,
             oidc_token_exchange_client_secret=secret,
             oidc_admin_users_url=(
                 f"{issuer}/admin/realms/{realm}/users" if with_precheck else None
             ),
-            supersede_job_degree_threshold=500,
-            osprey_config_path="osprey.yaml",
-            analytics_db_path=":memory:",
-            hotlist_alert_policy="strict",
-            export_manifest_policy="disclose",
         )
     )
 

@@ -38,6 +38,7 @@ this test asserts stays true.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -292,6 +293,80 @@ def test_the_image_runs_read_only_and_non_root_without_crashing(built_image: str
         + import_check.stdout
         + import_check.stderr
     )
+
+
+# --- Round 13b: `harness.verify` actually runs in this image ------------------------------------
+#
+# **The defect this closes.** `harness/verify.py` imported `services.api.auth` at module scope
+# while this image deliberately carries no `services/` (the Dockerfile's own header, citing
+# ADR-049). `harness/apply.py` imports `verify` lazily, so the image *started* fine and every
+# existing test above stayed green — the failure was reachable only on the customer path, inside
+# the container, at the last stage of a real Launch. `tests/test_image_imports_are_carried.py`
+# found it statically in round 13; round 13b inverted the dependency into
+# `packages/principal_auth`. This is the dynamic half of that proof: the static check reads the
+# Dockerfile, this one runs the function.
+#
+# **What this asserts, precisely.** `run_verify` executes to completion inside the real image and
+# returns its three named results. It does **not** assert those results pass — they cannot here,
+# because there is no Keycloak to reach: every one comes back `ok=False` with an
+# `PrincipalExchangeUnavailable` detail, which is the correct behaviour for an unreachable issuer
+# (`_refuse_if_revoked`'s own "unreachable is not revoked"). Verify's assertions *passing* is a
+# property of a real deployment, and `harness.apply`'s own verify stage is where that is measured
+# (3/3 against the round-13 clean install). Conflating the two would be the mistake CLAUDE.md
+# rule 15 names — a green that means something narrower than it reads.
+#
+# **Named, per rule 12: the test that fails if the invariant is violated is this one.** Shown red
+# by hand before it shipped: with `COPY packages/principal_auth ./packages/principal_auth` removed
+# from `harness/Dockerfile`'s builder stage — the exact shape of the pre-13b image — the same
+# command dies `ModuleNotFoundError: No module named 'principal_auth'` and this case fails on the
+# `returncode == 0` assertion. The red is not baked in as a second 900-second image build; it is
+# recorded in REPORT-13b.md with the command and the output.
+
+_RUN_VERIFY_IN_CONTAINER = """
+import asyncio, json
+from harness.verify import run_verify
+
+# An issuer that resolves to nothing reachable from inside this container. Deliberately not a
+# fixture that answers: the point is to drive every module-scope import and the whole call path,
+# not to model Keycloak's replies — that is `tests/harness/test_verify.py`'s job on the host.
+results = asyncio.run(run_verify(
+    issuer="http://127.0.0.1:1",
+    realm="ospreyflow",
+    conduit_secret="unused",
+    unprivileged_secret="unused",
+))
+print(json.dumps([{"assertion": r.assertion, "ok": r.ok, "detail": r.detail} for r in results]))
+"""
+
+
+def test_run_verify_executes_inside_the_image(built_image: str) -> None:
+    run = subprocess.run(
+        ["docker", "run", "--rm", "--entrypoint", "python", built_image, "-c"]
+        + [_RUN_VERIFY_IN_CONTAINER],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert run.returncode == 0, (
+        "harness.verify.run_verify could not run inside the harness image — this is the "
+        "customer-path failure `tests/test_image_imports_are_carried.py` predicts statically:\n"
+        + run.stdout
+        + run.stderr
+    )
+
+    results = json.loads(run.stdout.strip().splitlines()[-1])
+    # `run_verify` returns them sorted by assertion, which is also the order `harness/apply.py`
+    # prints them in.
+    assert [r["assertion"] for r in results] == [
+        "1-exchange-succeeds-for-the-verify-subject",
+        "2-unprivileged-client-refused-by-keycloak",
+        "3-disabled-subject-refused-by-the-conduit-precheck",
+    ], results
+    # Every one unreachable, not merely "not passing" — a result that came back for some other
+    # reason would mean this ran against something, which it must not have.
+    for result in results:
+        assert result["ok"] is False, result
+        assert "unreachable" in result["detail"] or "could not" in result["detail"], result
 
 
 # --- Round 07: install without source (`osprey.yaml` gains `components.source_path`) ------------

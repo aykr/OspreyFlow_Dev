@@ -164,11 +164,19 @@ explicitly, not a bare `--port` (see this section's own opening note):
 
 ```
 PYTHONPATH=.:packages OIDC_JWKS_URL=http://localhost:8888/jwks.json \
+  CORS_ALLOWED_ORIGINS=http://localhost:5173 \
   .venv/bin/uvicorn services.api.app:app --host 127.0.0.1 --port 8000
 ```
 
 (the JWKS URL is whatever §2's `mint_dev_token`/`http.server` pair actually served — this is the
 common local case, not a fixed value)
+
+**`CORS_ALLOWED_ORIGINS` is required now, and was not before 27 September 2026.** The Conduit
+used to default to `http://localhost:5173`, which meant a *rendered deployment* that set nothing
+inherited a development origin — round 13 found exactly that, and round 13b made the default
+empty and the render explicit. A Conduit serving a Vite-hosted Glass must therefore be told the
+Glass's origin; without it every request fails at the browser's preflight and the app sits on
+"Loading…" with nothing in the Conduit's log naming CORS (§3.7 has that story).
 
 `PYTHONPATH` must include both the repository root and `packages/` — neither a bare `python -m`
 nor `uvicorn` puts them on `sys.path`, which is why `services/api/Dockerfile` sets it explicitly.
@@ -219,6 +227,7 @@ so restarting it after seeding needs nothing special:
 
 ```
 PYTHONPATH=.:packages OIDC_JWKS_URL=http://localhost:8888/jwks.json \
+  CORS_ALLOWED_ORIGINS=http://localhost:5173 \
   .venv/bin/uvicorn services.api.app:app --host 127.0.0.1 --port 8000
 ```
 

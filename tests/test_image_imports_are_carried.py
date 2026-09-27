@@ -37,8 +37,22 @@ PYTHON_IMAGES: dict[str, Path] = {
     "harness": REPO_ROOT / "harness" / "Dockerfile",
 }
 
-#: The top-level packages a Dockerfile may need to copy, as they are imported.
-TOP_LEVEL_TREES = ("scripts", "services", "harness", "packages")
+#: Every top-level importable name this repository's own trees provide.
+#:
+#: `packages/` is itself not importable — each directory *under* it is a top-level name on
+#: `PYTHONPATH` (`schemas`, `ports`, `principal_auth`, …). Discovered rather than listed, so a
+#: package added tomorrow is covered without anyone remembering to add it here — which is the
+#: failure mode this whole module exists for.
+def _repo_top_level_names() -> tuple[str, ...]:
+    packages = sorted(
+        d.name
+        for d in (REPO_ROOT / "packages").iterdir()
+        if d.is_dir() and not d.name.startswith((".", "__"))
+    )
+    return ("scripts", "services", "harness", "packages", *packages)
+
+
+TOP_LEVEL_TREES = _repo_top_level_names()
 
 #: `from X.y import z` / `import X.y` at the start of a line — module scope, not inside a
 #: function. A deferred import inside a handler is a different (and also questionable) thing and
@@ -58,59 +72,63 @@ def _module_scope_imports(tree: Path) -> set[str]:
     return found
 
 
-def _copied_trees(dockerfile: Path) -> set[str]:
-    """What the Dockerfile actually puts in the image, from either stage.
+def _copied_paths(dockerfile: Path) -> set[str]:
+    """Which source trees the image carries, at sub-package granularity.
 
-    Matches `COPY packages ./packages` and `COPY --from=builder /app/scripts ./scripts` alike —
-    the source spelling is what matters, since that is the tree being carried. `packages/schemas`
-    counts as `packages`: a partial copy is a narrower question this check does not try to answer,
-    and answering it wrongly would make the check noisy rather than useful."""
+    **Only `COPY` lines that read from the build context count.** A `COPY --from=builder /app/x`
+    can carry nothing the builder stage did not itself bring in from the context, so counting it
+    as a source of `x` double-counts and — worse — launders a narrow copy into a broad one:
+    `harness/Dockerfile` narrows `packages/` to two sub-packages in its builder and then copies
+    `/app/packages` wholesale into the final stage, which made this function report bare
+    `packages` and, through `_carries` below, claim the image carried *everything*.
+
+    Found by planting a red and watching it pass (round 13b) — the check was wrong, not the code.
+    Both faults are the same mistake in different clothes: answering a narrower question with a
+    broader match."""
     copied: set[str] = set()
     for line in dockerfile.read_text(encoding="utf-8").splitlines():
         stripped = line.strip()
         if not stripped.upper().startswith("COPY "):
             continue
+        if "--from=" in stripped:
+            continue
         for token in stripped.split():
+            if token.startswith("--"):
+                continue
             cleaned = token.lstrip("./").removeprefix("app/")
             head = cleaned.split("/")[0]
             if head in TOP_LEVEL_TREES:
-                copied.add(head)
+                copied.add(cleaned.rstrip("/"))
     return copied
 
 
-#: **A second instance of the same class, found by this check and deliberately not fixed here.**
-#: `harness/verify.py` imports `services.api.auth` and `services.api.config` at module scope, and
-#: `harness/Dockerfile` does not carry `services/` — its own header says so in terms: the traced
-#: set is "`harness`, `packages/schemas`, `scripts` — and nothing under `services/`", because
-#: "`services/api/auth.py`'s existing JWT verification is not reused: it lives outside this set."
-#:
-#: It does not crash the image at startup, because `harness/apply.py` imports `verify` lazily
-#: inside its own last stage — but that stage is reached on the customer path (§2's bootstrap,
-#: Launch inside the container), so `run_verify` would raise `ModuleNotFoundError` there.
-#:
-#: Unfixed on purpose: carrying `services/` into the harness image reverses a recorded ADR-049
-#: decision about that image's own boundary, which is the owner's call, not a round-13 tidy-up.
-#: `strict=True` so the day it is fixed this test fails and demands the marker be removed —
-#: an xfail that silently keeps passing is the same "recorded and forgotten" failure this whole
-#: check exists to prevent.
-KNOWN_UNFIXED = {
-    "harness": "harness/verify.py imports services.api.* — ADR-049 excludes services/ from that "
-    "image on purpose; see REPORT-13.md and 07_BUILD_PLAN.md"
-}
+#: The trees that are importable in their own right, rather than as children of `packages/`.
+_NON_PACKAGE_TREES = ("scripts", "services", "harness")
+
+
+def _carries(copied: set[str], module: str) -> bool:
+    """Whether an image carrying `copied` can import top-level `module`.
+
+    `packages/` is not itself importable — its *children* are the top-level names on
+    `PYTHONPATH` — so `COPY packages` carries every package and `COPY packages/schemas` carries
+    only `schemas`. **A bare `packages` says nothing about `services`, `scripts` or `harness`**,
+    which is the fault this function shipped with for exactly one commit: every planted red
+    passed, because `"packages" in copied` was treated as carrying anything at all."""
+    if module in copied:
+        return True
+    if module in _NON_PACKAGE_TREES:
+        return False
+    return f"packages/{module}" in copied or "packages" in copied
 
 
 @pytest.mark.parametrize("image", sorted(PYTHON_IMAGES))
-def test_the_image_carries_every_tree_its_own_code_imports(
-    image: str, request: pytest.FixtureRequest
-) -> None:
-    if image in KNOWN_UNFIXED:
-        request.node.add_marker(pytest.mark.xfail(strict=True, reason=KNOWN_UNFIXED[image]))
+def test_the_image_carries_every_tree_its_own_code_imports(image: str) -> None:
     dockerfile = PYTHON_IMAGES[image]
     assert dockerfile.is_file(), dockerfile
 
     imported = _module_scope_imports(REPO_ROOT / image)
-    copied = _copied_trees(dockerfile)
-    missing = imported - copied
+    copied = _copied_paths(dockerfile)
+    missing = {m for m in imported if not _carries(copied, m)}
 
     assert not missing, (
         f"{image}'s own code imports {sorted(missing)} at module scope, and "

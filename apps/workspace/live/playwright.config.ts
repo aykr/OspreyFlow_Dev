@@ -29,11 +29,18 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   // **Port 5173, and it has to be 5173** — not an arbitrary free port like the other Playwright
-  // projects here use. The Conduit's own CORS allowlist is `CORS_ALLOWED_ORIGINS`, defaulting to
-  // `http://localhost:5173` (`services/api/app.py`), so a Glass served from any other port has
-  // every request refused at the browser's preflight: the Conduit answers `OPTIONS` with 400 and
-  // the app sits on "Loading…" forever, with nothing in its own logs that names CORS as the
-  // cause. Found exactly that way, running this spec on 5186 first.
+  // projects here use. The Conduit's own CORS allowlist is `CORS_ALLOWED_ORIGINS`, so a Glass
+  // served from an origin that is not in it has every request refused at the browser's
+  // preflight: the Conduit answers `OPTIONS` with 400 and the app sits on "Loading…" forever,
+  // with nothing in its own logs that names CORS as the cause. Found exactly that way, running
+  // this spec on 5186 first.
+  //
+  // **That allowlist no longer has a development default** (round 13b, 27 September 2026): it
+  // used to fall back to `http://localhost:5173`, which is how a rendered deployment came to ship
+  // a Vite origin in its own allowlist, and the fallback is now empty. So the Conduit this tier
+  // runs against must be started with `CORS_ALLOWED_ORIGINS=http://localhost:5173` — which is
+  // what `DEMO_GUIDE.md` §3.2/§3.5's own commands now do, and this tier exists to assert what a
+  // presenter following that guide sees.
   //
   // Using the demo's own port is the better answer regardless of the bug: `DEMO_GUIDE.md` §3.6
   // tells a presenter to open `localhost:5173`, and these specs exist to assert what that

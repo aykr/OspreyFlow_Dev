@@ -8,9 +8,17 @@
 # not assumed: tracing every module `harness.render`, `harness.apply`, `harness.backup`,
 # `harness.restore`, `harness.preflight.__main__`, `harness.webapp` (`Stage 2 §6` part A) and
 # `scripts.osprey_bundle` import, recursively, touches exactly three project-tree roots —
-# `harness`, `packages/schemas`, `scripts` — and nothing under `services/` or any other
-# `packages/*` subdirectory. `harness/webapp_auth.py`'s own module docstring has the reason
-# `services/api/auth.py`'s existing JWT verification is not reused: it lives outside this set.
+# `harness`, `packages/schemas`, `packages/principal_auth`, `scripts` — and nothing under
+# `services/`.
+#
+# **Corrected 27 September 2026 (round 13b).** This comment used to say "nothing under
+# `services/` or any other `packages/*` subdirectory", and the first half was the problem:
+# `harness/verify.py` imported `services.api.auth` at module scope, so the traced set was never
+# actually what this said. The image shipped a verify stage that would have raised
+# `ModuleNotFoundError` the moment it ran — found by `tests/test_image_imports_are_carried.py`,
+# which is now tight enough to check this claim per sub-package rather than take it on trust.
+# The fix inverted the dependency (`packages/principal_auth`) rather than vendoring `services/`
+# in, so the boundary this comment describes still holds — it is simply one package wider.
 #
 # **Now also the browser setup harness's own server, `Stage 2 §6` part A — the "future no-
 # subcommand mode" this comment used to name as not built yet.** `harness/__main__.py`'s own
@@ -40,6 +48,11 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY harness ./harness
 COPY packages/schemas ./packages/schemas
+# Round 13b: `harness/verify.py` resolves a principal against the deployment's own Keycloak, and
+# that machinery now lives here rather than in `services/api` — see `packages/principal_auth`'s
+# own docstring for why the dependency was inverted instead of vendoring `services/` in, which
+# would have reversed ADR-049's boundary for this image.
+COPY packages/principal_auth ./packages/principal_auth
 COPY scripts ./scripts
 
 # The Docker CLI itself, taken from Docker's own official `cli` image rather than Debian's package

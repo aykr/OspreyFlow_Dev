@@ -419,6 +419,11 @@ def _load(ci_yml_path: Path = CI_YML_PATH) -> tuple[set[str], dict[str, set[str]
         "sustained-load-exit-test",
         "harness-image-exit-test",
         "six-screen-live-exit-test",
+        # Ruling R5's own closing-pass job (27 September 2026). Added here in the same change
+        # that added the job, which is what this list's own cost above asks for — the gate
+        # reported "not run by any live-service job" about a file the job plainly runs, and
+        # the short list was the reason, exactly as predicted.
+        "over-the-wire-exit-test",
     ):
         _, positional = job_tokens(blocks.get(name, ""))
         live_job_tokens[name] = positional

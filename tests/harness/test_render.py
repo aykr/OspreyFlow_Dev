@@ -42,7 +42,7 @@ from harness.render import (
     write_config_copy,
 )
 
-from schemas.deployment import OspreyConfig, SearchBackend
+from schemas.deployment import DEFAULT_PUBLIC_ORIGIN, OspreyConfig, SearchBackend
 
 ARTEFACTS = ("compose.yaml", "deployment.env", "versions.lock", "RUNBOOK.md")
 
@@ -265,6 +265,38 @@ def test_the_runbook_carries_this_deployment_s_own_paths_not_a_template(
         "the generated runbook must point at §6's hand-written recovery-time runbook rather than "
         "appear to be it"
     )
+
+
+def test_the_rendered_env_names_the_public_origin_as_the_only_cors_origin(
+    rendered: RenderResult,
+) -> None:
+    """**A rendered deployment must not carry the Vite development origin** (round 13b).
+
+    Found by round 13's closing pass: the rendered `compose.yaml` set no `CORS_ALLOWED_ORIGINS`
+    at all, so a deployed Conduit fell back to `services/api/app.py`'s own default —
+    `http://localhost:5173`, the origin a developer's `npm run dev` serves the Glass from. The
+    deployed Glass never noticed, because it reaches the Conduit same-origin through the
+    workspace's nginx proxy and CORS does not apply to it; nothing else was looking.
+
+    The value is `network.public_origin`, the field ADR-050 objection 2 already added for the
+    OIDC redirect — the origin a browser genuinely uses to reach this deployment. Asserting it is
+    *the only* one, not merely present: a list that happens to contain the right origin beside
+    the wrong one is the same defect wearing a hat."""
+    env = rendered.artefacts["deployment.env"]
+
+    lines = [ln for ln in env.splitlines() if ln.startswith("CORS_ALLOWED_ORIGINS=")]
+    assert lines, (
+        "the rendered env sets no CORS_ALLOWED_ORIGINS, so the Conduit falls back to its own "
+        "development default — see this test's docstring"
+    )
+    assert len(lines) == 1, lines
+
+    value = lines[0].split("=", 1)[1]
+    assert value == DEFAULT_PUBLIC_ORIGIN, (
+        f"CORS_ALLOWED_ORIGINS is {value!r}; it must be exactly the deployment's own public "
+        f"origin ({DEFAULT_PUBLIC_ORIGIN!r}) and nothing else"
+    )
+    assert "5173" not in value, f"the Vite development origin is in a rendered deployment: {value}"
 
 
 def test_the_env_file_contains_no_secret_only_references(rendered: RenderResult) -> None:

@@ -34,15 +34,51 @@ preflights, builds, starts twelve containers, grants, seeds and passes `harness.
    a decision — run it inside the deployment's own network, rewrite it against the HTTP surface,
    or publish stores in a test profile — and that decision has not been taken.
 
-**A fourth finding, recorded rather than changed.** The rendered `compose.yaml` sets no
-`CORS_ALLOWED_ORIGINS`, so a deployed Conduit falls back to `services/api/app.py`'s development
-default, `http://localhost:5173`. The deployed Glass is unaffected — it reaches the Conduit
-same-origin through the workspace's nginx proxy — which is why nothing has noticed. A shipped
-deployment should not carry a Vite development origin in its cross-origin allowlist, and what it
-*should* carry has never been decided. A question for `05 §2.4`'s guard table.
+   **Ruled and built, round 13b, 27 September 2026 — owner ruling R5 chose the HTTP surface.**
+   `tests/scenarios/test_phase8_exit_over_the_wire.py` is the closing-pass proof and is what this
+   milestone line now cites: the rendered deployment through the analyst's own door — OIDC
+   authorization code with PKCE against real Keycloak as the `--demo-analyst` subject, every call
+   through the workspace's nginx, the delta stream through the ticket exchange, no store port and
+   no in-process app. Opt-in, its own CI job (`over-the-wire-exit-test`), `make
+   exit-over-the-wire`. `08_ACCEPTANCE_SCENARIOS.md`'s new "Which test proves these" section states
+   which test is which tier; the test's own docstring has the row-by-row coverage. **Measured
+   green, 4/4, against a freshly applied and seeded `local-lite` on 27 September 2026.** The clause
+   is not thereby closed — see the two findings that run produced, below.
+
+4. **A fourth finding, recorded rather than changed** — **now changed, round 13b.** The rendered
+   `compose.yaml` set no `CORS_ALLOWED_ORIGINS`, so a deployed Conduit fell back to
+   `services/api/app.py`'s development default, `http://localhost:5173`. `harness/render.py` now
+   emits `CORS_ALLOWED_ORIGINS={network.public_origin}` into `deployment.env`, and the Conduit's
+   own fallback is empty rather than a Vite origin — a development Glass names the origin
+   explicitly (`DEMO_GUIDE.md` §3.2/§3.5 now do). Red first:
+   `test_the_rendered_env_names_the_public_origin_as_the_only_cors_origin`. The brief's own
+   premise that an existing "is this a dev build" switch could be reused was checked and is
+   wrong — `mint_dev_token`'s fence is file presence, not a runtime flag — so the dev path is
+   explicit instead.
+
+**Two findings the over-the-wire run produced, and neither is a defect in the test.**
+
+- **A rendered deployment gives an analyst no route by which to supply a source file.**
+  `POST /v1/ingest/recipes` takes a `source_location` the *Conduit's own container* must be able
+  to read; the rendered `compose.yaml` mounts nothing into that container but `osprey.yaml` and
+  its data volume; the only `UploadFile` route in the whole Conduit is the site image. So B1's
+  "ingest both CDR files and both device extractions" — and B2, B3, B6, B7, B8, B13, B14, B15–B18
+  with it — cannot be performed by an analyst against a rendered deployment at all. Those rows
+  stay proven at the in-process tier only. This is real, unscoped product work (an upload route,
+  or a documented ingest mount), not a test gap.
+- **`08_ACCEPTANCE_SCENARIOS.md`'s own "retraction propagates" assertion is not what the analyst
+  sees.** The flag is written; the judgement then disappears from the Judgements tab rather than
+  appearing flagged, because retraction supersedes the node with a new id and ADR-046's
+  hide-in-full rule removes any judgement with an unverifiable supporting citation. Measured
+  through the deployed Conduit. Nothing caught it because the only test of the flag called the
+  flagging function directly and re-read the store, never the route — `CLAUDE.md` rule 12's exact
+  shape. 08 now records it; the over-the-wire test asserts today's behaviour and fails the day it
+  is fixed. Open for decision.
 
 **What *is* now true**, and was not before this pass: the install works end to end from a clean
-clone on a properly-resourced machine, and its own three-sided `harness.verify` passes.
+clone on a properly-resourced machine, its own three-sided `harness.verify` passes, and both
+acceptance scenarios have now been exercised against that install over HTTP as a signed-in
+analyst, to the coverage the test's own docstring states.
 
 **Complete, by stage:**
 - Stage 2c — Sign-in for the Glass (`06_DECISIONS.md` ADR-050). Built, 25 September 2026, including
@@ -93,6 +129,22 @@ this table exists to stop.
    13) went unseen for four rounds. The test is not wrong; the *reading* of its green was.
    `tests/test_image_imports_are_carried.py` is the static check added so the class cannot hide
    behind an under-resourced machine again.
+3. **That static check immediately found a second instance, and round 13b closed it.**
+   `harness/verify.py` imported `services.api.auth` at module scope while `harness/Dockerfile`
+   deliberately carries no `services/` (its own header, citing ADR-049), so the harness image
+   shipped a verify stage that would have raised `ModuleNotFoundError` on the customer path —
+   reachable only inside the container, at the last stage of a real Launch, because
+   `harness/apply.py` imports `verify` lazily. **Fixed by inverting the dependency, not by
+   vendoring `services/` in**, which would have reversed ADR-049's boundary: the resolver, its
+   settings `Protocol`, its claim constants and its four exceptions moved to
+   `packages/principal_auth`, and `services/api/auth.py` is now a re-export shim keeping
+   `bearer_scheme` (a FastAPI construct, deliberately not moved so the package stays free of the
+   web framework). Nothing about the Conduit's behaviour moved with it: `app.py` and all four test
+   modules that import from there needed no edit, and 17 passed / 5 skipped with no caller changes.
+   The `xfail(strict=True)` marker is removed and the static check is fully green. The **dynamic**
+   half is new: `tests/harness/test_harness_image.py::test_run_verify_executes_inside_the_image`
+   runs `run_verify` inside the real image, shown red first against the pre-13b Dockerfile shape
+   (`ModuleNotFoundError: No module named 'principal_auth'`).
 
 **Remains before the milestone, numbered, with a word on size:**
 1. **The harness/packaging pipeline** — **`Stage 2 §1`–`§6` built, `§6`'s own exit closed 26
