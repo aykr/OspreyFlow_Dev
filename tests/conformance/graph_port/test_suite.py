@@ -1169,19 +1169,59 @@ async def test_search_nodes_matches_an_identifier_declared_on_any_entity_type(
         (person_id,), _ = await _write(
             adapter, [_node("Person", classification="OFFICIAL", nino="AB123456C")], []
         )
-        (endpoint_id,), _ = await _write(
-            adapter,
-            [_node("Endpoint", classification="OFFICIAL", e164="+441621926368")],
-            [],
-        )
-
         person_hits = await adapter.search_nodes("AB123456C", CLEARED)
         assert [n.id for n in person_hits] == [person_id]
 
-        endpoint_hits = await adapter.search_nodes("+441621926368", CLEARED)
-        assert [n.id for n in endpoint_hits] == [endpoint_id]
-
         assert await adapter.search_nodes("no-such-value", CLEARED) == []
+
+
+async def test_search_nodes_finds_an_endpoint_in_the_shape_the_engine_actually_writes(
+    factory: GraphAdapterFactory,
+) -> None:
+    """**The case this suite was missing, and the reason it mattered — round 13cd.**
+
+    The test above used to assert this too, with an `Endpoint` written as
+    `_node("Endpoint", e164="+441621926368")`. **Nothing in this repository has ever written an
+    `e164` property.** The ingest engine, every seeder and every fixture write `value_raw`,
+    `value_normalised` and `endpoint_kind`; `01_DOMAIN_MODEL.md`'s `identifiers: [e164, handle,
+    email, imsi]` names identifier *kinds*, not property names, and `endpoint_kind`'s own enum
+    disagrees with it (`msisdn` where that list says `e164`).
+
+    So the suite proved `search_nodes` worked by handing it a node shape the system never
+    creates, and the real consequence went unnoticed until it was measured over the wire
+    (REPORT-13bf): after a Studio load that demonstrably created the `Endpoint`,
+    `POST /v1/search` for its number returned **0 hits**, twice, twenty minutes apart. An analyst
+    could ingest a number and then be unable to look at it.
+
+    This case writes the shape the engine emits and is what fails if the fix regresses.
+    `CLAUDE.md` rule 15, inverted: there the planted violation was too convenient, here the
+    fixture was.
+    """
+    async with factory.context() as adapter:
+        (endpoint_id,), _ = await _write(
+            adapter,
+            [
+                _node(
+                    "Endpoint",
+                    classification="OFFICIAL",
+                    value_raw="01621926368",
+                    value_normalised="+441621926368",
+                    endpoint_kind="msisdn",
+                )
+            ],
+            [],
+        )
+
+        hits = await adapter.search_nodes("+441621926368", CLEARED)
+        assert [n.id for n in hits] == [endpoint_id], (
+            "an Endpoint written the way the ingest engine writes one is not findable by its own "
+            "normalised value — the analyst can load a number and then not find it"
+        )
+
+        # The raw rendering is deliberately *not* searchable: `01_DOMAIN_MODEL.md` §7 makes
+        # `value_normalised` the canonical form, and matching `value_raw` as well would make the
+        # same number findable under renderings that the normaliser exists to collapse.
+        assert await adapter.search_nodes("01621926368", CLEARED) == []
 
 
 async def test_unauthorised_search_matches_a_graph_where_the_node_never_existed(

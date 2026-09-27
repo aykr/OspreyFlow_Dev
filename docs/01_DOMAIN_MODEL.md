@@ -669,6 +669,33 @@ ingest path. A phone number arriving as `01621926368`, `+44(0)1621926368`, `4416
 `#31#01621926368` must resolve to one `Endpoint`. Get this wrong and the graph silently
 fragments; no amount of analytics recovers it.
 
+**Where the canonical value is stored, and what `identifiers:` means — clarified 27 September 2026
+(round 13cd), after an ambiguity in this document cost an analyst the ability to find what they
+had just ingested.**
+
+For `Person`, `Device`, `Location` and `Organisation`, an `identifiers:` entry is a **property
+name**: a `Person` carries `nino`, a `Device` carries `imei`, and search matches them directly.
+
+For `Endpoint` it is not. `identifiers: [e164, handle, email, imsi]` names the **kinds** of
+addressable thing an `Endpoint` can be; the canonical value always lives in the single
+`value_normalised` property (`indexed: true, required: true`) and the kind in `endpoint_kind`.
+The two lists deliberately do not match — `endpoint_kind`'s enum says `msisdn` where
+`identifiers` says `e164`, and carries `iban` and `card`, which that list does not. **Nothing
+writes an `e164` property, and nothing should:** duplicating the value into a kind-specific
+property would be two statements of one fact, and the collapse this section exists to guarantee
+("must resolve to one `Endpoint`") depends on there being exactly one canonical field.
+
+**What went wrong before this was written down.** `GraphPort.search_nodes` read `identifiers:` as
+property names for every type, so it looked for an `e164` property that no ingest, seeder or
+fixture has ever written. Every ingested `Endpoint` was therefore invisible to search: measured
+over the wire, `POST /v1/search` for a number a load had demonstrably just created returned **0
+hits**. The graph conformance suite did not catch it because its own case constructed an
+`Endpoint` *with* an `e164` property — a shape the engine never emits. Search now matches
+declared identifiers **and** every property the ontology marks `indexed: true`, which is the
+ontology's own statement of "a field you look things up by";
+`test_search_nodes_finds_an_endpoint_in_the_shape_the_engine_actually_writes` is the case that
+fails if it regresses.
+
 Normalisers required at ingest, each a pure function with a golden test file:
 
 | Adapter | Input variance | Canonical form |

@@ -475,9 +475,40 @@ class GraphArcadeDBAdapter:
         self, query: str, principal: Principal, *, limit: int = 20
     ) -> list[Node]:
         schema = self._require_schema()
-        identifier_fields = tuple(
-            sorted({field for entity in schema.entity_types for field in entity.identifiers})
-        )
+        # **Declared identifiers, plus every property the ontology marks `indexed: true`** —
+        # round 13cd, and the second half is the fix.
+        #
+        # `identifiers:` is a list of *property names* for `Person` (`nino`), `Device` (`imei`),
+        # `Location` (`postcode`) and `Organisation` (`org_ref`), and searching them works. For
+        # `Endpoint` it is not: `01_DOMAIN_MODEL.md` declares `identifiers: [e164, handle, email,
+        # imsi]`, which are identifier **kinds**, while the value always lives in
+        # `value_normalised` and the kind in `endpoint_kind`. The two lists do not even agree —
+        # `endpoint_kind`'s enum says `msisdn` where `identifiers` says `e164`.
+        #
+        # **Nothing in this repository has ever written an `e164` property**, checked directly, so
+        # every ingested or seeded `Endpoint` was invisible to search: an analyst could load a
+        # number and then not find it. Measured over the wire in REPORT-13bf — `POST /v1/search`
+        # for `+441621926368` returned 0 hits after a load that demonstrably created it.
+        #
+        # `indexed: true` is the ontology's own statement that a property is one you look things
+        # up by, which is exactly what an index is for, so it is the right second source rather
+        # than a special case naming `Endpoint`. A new type gets searchable identifiers by
+        # declaring them, with no change here.
+        #
+        # **A stated consequence, not an accident:** `Location.name` is also `indexed: true`, so
+        # an exact search for a location's name now returns it. That is a legitimate hit rather
+        # than a leak — the access filter below applies unchanged, and `suggest_locations` remains
+        # the separate prefix-search route.
+        searchable_fields = {
+            field for entity in schema.entity_types for field in entity.identifiers
+        }
+        searchable_fields |= {
+            prop.name
+            for entity in schema.entity_types
+            for prop in entity.properties
+            if prop.indexed
+        }
+        identifier_fields = tuple(sorted(searchable_fields))
         if not identifier_fields:
             return []
         builder = SearchNodesBuilder(identifier_fields, query, limit=limit)

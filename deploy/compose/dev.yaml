@@ -239,6 +239,17 @@ services:
       interval: 5s
       timeout: 5s
       retries: 90  # the 397MB + 45MB + 1.8GB pull, on a cold volume, is the slow part
+      # **`start_period`, round 13cd.** `retries: 90` at 5s is 450 seconds, and the cold pull
+      # above is ~2.2GB: on a slow link it does not finish inside that, `--wait` reports ollama
+      # unhealthy, and `make dev-up` fails for a reason that is neither a defect nor anything the
+      # operator can act on. Seen twice in round 13bd. A failing check inside `start_period` does
+      # not count against `retries`, so this gives the first pull room **without weakening the
+      # steady-state check at all** — an ollama that is still unhealthy afterwards fails exactly
+      # as before, which is why this is not a lowered gate.
+      #
+      # `speaches` below has the same shape (its own model pull, `retries: 60`) and has not been
+      # observed failing this way; it is left alone rather than changed speculatively.
+      start_period: 600s
 
   # LiteLLM proxy in front of `ollama` above — `docs/00_ARCHITECTURE.md`
   # §2.4: the Conduit (and `adapters/model_litellm`'s conformance suite)

@@ -1070,6 +1070,17 @@ def test_the_ingest_folder_is_reachable_and_usable_through_the_studio(
 
 CDR_FIXTURE_NAME = "carrier-a-cdr.csv"
 
+#: B1's shared number in the canonical form `01_DOMAIN_MODEL.md` §7 requires the `msisdn` adapter
+#: to produce. What an analyst types into the search box after loading the fixture.
+B1_NORMALISED_NUMBER = "+441621926368"
+
+
+def _the_communicated_with_edge(cdr_load: dict) -> dict:
+    """The single stored `COMMUNICATED_WITH` the nine valid rows collapse onto."""
+    edges = [e for e in cdr_load["stored_edges"] if e["type"] == "COMMUNICATED_WITH"]
+    assert len(edges) == 1, f"expected one stored edge for the pair, found {len(edges)}"
+    return edges[0]
+
 
 @pytest.fixture(scope="module")
 def cdr_load() -> dict:
@@ -1154,29 +1165,94 @@ def cdr_load() -> dict:
         # for the very behaviour the specification asks for. Found exactly that way.
         report = run.json()
 
-        # **The stored edge, when this load is the one that created the endpoints.** Verify's
-        # preview carries neither the merged interval nor the merged provenance — measured, not
-        # assumed: its edge reports `occurrences: 9` with one source and the first row's interval,
-        # because merging is what storage does. So B2's "retained on the survivor" and B3's
-        # converted interval can only be read from the graph.
+        # **The stored edge, reached the way an analyst reaches it: by searching for the number.**
+        # Verify's preview carries neither the merged interval nor the merged provenance —
+        # measured, not assumed: its edge reports `occurrences: 9` with one source and the first
+        # row's interval, because merging is what storage does. So B2's "retained on the
+        # survivor" and B3's converted interval can only be read from the graph.
         #
-        # `created_node_ids` is the only handle a test has on those nodes: ingest does not write
-        # to the search index (checked directly — `POST /v1/search` for the normalised number
-        # returns nothing after a successful load), and there is no route that reads a node by id.
-        # On a deployment that has already loaded this fixture the list is empty *by design* —
-        # §6 requires a re-run to be idempotent — so those two assertions are conditional, and
-        # say so rather than quietly not running.
-        stored: list[dict] = []
-        if report["created_node_ids"]:
-            expanded = client.post(
-                f"/v1/investigations/{scope}/expand",
-                json={"request": {"node_ids": report["created_node_ids"], "depth": 1}},
-            )
-            assert expanded.status_code == 200, expanded.text
-            delta = expanded.json()["delta"]
-            stored = delta.get("edges_added") or delta.get("edges") or []
+        # **Round 13cd made this unconditional, and that is the point.** It used to lean on the
+        # run report's `created_node_ids`, which is empty by design on an idempotent re-run (§6),
+        # so those two assertions silently did not execute on a deployment that had already loaded
+        # this fixture. The reason it leaned on that list was the defect 13cd fixed: `POST
+        # /v1/search` could not find an ingested `Endpoint` at all, because `search_nodes` matched
+        # the declared identifier *kinds* (`e164`) rather than the `value_normalised` the engine
+        # actually writes. With search working there is a stable handle on every run.
+        found = client.post("/v1/search", json={"query": B1_NORMALISED_NUMBER, "limit": 5})
+        assert found.status_code == 200, found.text
+        hits = found.json()["nodes"]
+        assert hits, (
+            f"the analyst cannot find {B1_NORMALISED_NUMBER} after a load that created it — "
+            "this is REPORT-13bf's search gap, fixed in round 13cd; an ingest an analyst cannot "
+            "then look at is not an ingest they can use"
+        )
+        endpoint_id = hits[0]["id"]
 
-        return {"verify": verified.json(), "report": report, "stored_edges": stored}
+        expanded = client.post(
+            f"/v1/investigations/{scope}/expand",
+            json={"request": {"node_ids": [endpoint_id], "depth": 1}},
+        )
+        assert expanded.status_code == 200, expanded.text
+        delta = expanded.json()["delta"]
+        stored = delta.get("edges_added") or delta.get("edges") or []
+
+        return {
+            "verify": verified.json(),
+            "report": report,
+            "stored_edges": stored,
+            "endpoint_id": endpoint_id,
+        }
+
+
+def test_what_an_analyst_ingests_an_analyst_can_find_and_open(
+    cdr_load: dict, analyst: httpx.Client, seeded_scope: str
+) -> None:
+    """**The gap REPORT-13bf recorded, closed — round 13cd.**
+
+    After a Studio load that demonstrably created the `Endpoint`, `POST /v1/search` for its
+    number returned **0 hits**, twice, twenty minutes apart. Search is the analyst's only way into
+    a working set for something they have just loaded, so until this worked the end-to-end story
+    was "ingest it, then be unable to look at it".
+
+    **The cause was not indexing and not access.** `GraphPort.search_nodes` matched every entity
+    type's declared `identifiers`, treating them as property names — correct for `Person.nino`
+    and `Device.imei`, wrong for `Endpoint`, whose `identifiers: [e164, handle, email, imsi]`
+    names identifier *kinds* while the value lives in `value_normalised`. **No ingest, seeder or
+    fixture has ever written an `e164` property**, so search compared against a field nothing
+    writes. `01_DOMAIN_MODEL.md` §7 now says which reading is authoritative, and search matches
+    `indexed: true` properties as well.
+
+    This case walks what an analyst actually does: search the number, then put the hit in the
+    working set. Both halves matter — a search that returns a node the working set then refuses
+    would be the same dead end one step later.
+    """
+    assert cdr_load["report"]["rows_read"] == 10
+
+    found = analyst.post("/v1/search", json={"query": B1_NORMALISED_NUMBER, "limit": 5})
+    assert found.status_code == 200, found.text
+    nodes = found.json()["nodes"]
+    assert nodes, (
+        f"searching {B1_NORMALISED_NUMBER} after loading it returns nothing — the analyst cannot "
+        "reach what they just ingested"
+    )
+
+    endpoint = next((n for n in nodes if n["type"] == "Endpoint"), None)
+    assert endpoint is not None, [n["type"] for n in nodes]
+    assert endpoint["properties"]["value_normalised"] == B1_NORMALISED_NUMBER
+    assert endpoint["properties"]["endpoint_kind"] == "msisdn"
+
+    # **The raw rendering stays unsearchable, deliberately.** §7's whole purpose is that
+    # `01621926368` and `+44(0)1621926368` collapse onto one canonical value; making the raw
+    # forms searchable would reintroduce the fragmentation by the back door.
+    raw = analyst.post("/v1/search", json={"query": "01621926368", "limit": 5})
+    assert raw.json()["nodes"] == []
+
+    seeded = analyst.post(
+        f"/v1/investigations/{seeded_scope}/seed", json={"nodes": [endpoint], "edges": []}
+    )
+    assert seeded.status_code == 200, (
+        f"the working set refused a node the analyst's own search returned: {seeded.text}"
+    )
 
 
 def test_b1_every_rendering_of_one_number_resolves_to_a_single_endpoint(cdr_load: dict) -> None:
@@ -1253,17 +1329,15 @@ def test_b2_duplicate_rows_collapse_and_every_source_row_is_retained(cdr_load: d
     assert len(report["touched_edge_ids"]) == 9, report["touched_edge_ids"]
 
     # **Every source row retained on the survivor** — the half that is easy to lose, and only
-    # readable from the stored edge. See the fixture for why this is conditional.
-    for survivor in cdr_load["stored_edges"]:
-        if survivor["type"] != "COMMUNICATED_WITH":
-            continue
-        sources = survivor["provenance"]["sources"]
-        assert len(sources) == 9, (
-            f"the surviving edge names {len(sources)} source rows, not 9 — collapsing discarded "
-            "evidence"
-        )
-        assert {s["locator"] for s in sources} == {f"row {i}" for i in range(9)}
-        break
+    # readable from the stored edge. Unconditional since round 13cd: the analyst's own search
+    # gives a handle on the endpoint on every run, not only on the run that created it.
+    survivor = _the_communicated_with_edge(cdr_load)
+    sources = survivor["provenance"]["sources"]
+    assert len(sources) == 9, (
+        f"the surviving edge names {len(sources)} source rows, not 9 — collapsing discarded "
+        "evidence"
+    )
+    assert {s["locator"] for s in sources} == {f"row {i}" for i in range(9)}
 
 
 def test_b3_local_times_are_converted_and_an_unreadable_one_is_refused_by_name(
@@ -1295,28 +1369,24 @@ def test_b3_local_times_are_converted_and_an_unreadable_one_is_refused_by_name(
     """
     report = cdr_load["report"]
 
-    # The converted interval lives on the stored edge (see the fixture). When this load created
-    # the endpoints, assert it in full.
-    for survivor in cdr_load["stored_edges"]:
-        if survivor["type"] != "COMMUNICATED_WITH":
-            continue
-        interval = survivor["interval"]
+    # The converted interval lives on the stored edge, reached by the analyst's own search —
+    # unconditional since round 13cd.
+    interval = _the_communicated_with_edge(cdr_load)["interval"]
 
-        # The DST boundary: 11:00 local on 30 March 2026 is 10:00Z, because BST is in force.
-        assert interval["valid_to"] == "2026-03-30T10:00:00Z", (
-            f"the last call converted to {interval['valid_to']!r}. Expected 10:00Z: the row "
-            "reads 11:00 local with no offset, and 30 March 2026 is inside British Summer Time. "
-            "11:00Z would mean the naive local time was taken as UTC and no offset applied"
-        )
-        assert interval["valid_from"] == "2026-01-10T10:00:00Z", interval
+    # The DST boundary: 11:00 local on 30 March 2026 is 10:00Z, because BST is in force.
+    assert interval["valid_to"] == "2026-03-30T10:00:00Z", (
+        f"the last call converted to {interval['valid_to']!r}. Expected 10:00Z: the row "
+        "reads 11:00 local with no offset, and 30 March 2026 is inside British Summer Time. "
+        "11:00Z would mean the naive local time was taken as UTC and no offset applied"
+    )
+    assert interval["valid_from"] == "2026-01-10T10:00:00Z", interval
 
-        # `date_order: dmy` reached the engine: read as mdy, row 6 would be 1 December 2026 and
-        # would drag `valid_to` with it.
-        assert interval["valid_to"] < "2026-04-01T00:00:00Z", (
-            "a row dated 12/01/2026 landed after March, so it was read as the first of "
-            "December — the profile's `date_order: dmy` did not reach the published recipe"
-        )
-        break
+    # `date_order: dmy` reached the engine: read as mdy, row 6 would be 1 December 2026 and
+    # would drag `valid_to` with it.
+    assert interval["valid_to"] < "2026-04-01T00:00:00Z", (
+        "a row dated 12/01/2026 landed after March, so it was read as the first of "
+        "December — the profile's `date_order: dmy` did not reach the published recipe"
+    )
 
     # The unreadable row, refused by name rather than guessed — in the real run's own report,
     # which is what an analyst is shown after a load.

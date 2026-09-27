@@ -397,6 +397,19 @@ reads the dates the way a UK carrier wrote them, and the difference does not ann
 the graph looks perfectly reasonable either way. That is the demonstrable point: **adding a new
 carrier layout is a file, not a release.**
 
+**After the run, search the number — this is the step that makes it a demonstration rather than a
+report.** Put `+441621926368` into the search box and the `Endpoint` the load just created comes
+back; add it to the working set and expand, and the calls are there. Saying out loud that the
+analyst typed the *canonical* form, while the file contained four different renderings of it
+(`01621926368`, `+44(0)1621926368`, `441621926368`, `#31#01621926368`), is the point of
+`01_DOMAIN_MODEL.md` §7 made visible in one action.
+
+Worth knowing if you are asked: until 27 September 2026 that search returned nothing. Search
+matched each entity type's declared `identifiers` as property names — right for `Person.nino`,
+wrong for `Endpoint`, whose identifier value lives in `value_normalised`. An analyst could ingest
+a number and then not find it (round 13cd; `01_DOMAIN_MODEL.md` §7 now states which reading is
+authoritative).
+
 **The whole chain runs, Connect → Profile → Map → Verify → Publish → Run.** Verify is the one to
 linger on: it is a dry run that shows the graph it *would* make, plus a rejection report grouped
 by cause. The fixture deliberately contains a row whose timestamp cannot be parsed, and it is
