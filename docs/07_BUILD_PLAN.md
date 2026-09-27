@@ -6366,8 +6366,43 @@ find something already finished sitting in the queue.
    were re-measured either side of the change with the identical harness and are **bit-for-bit
    identical**; that addendum carries the table.
 
-   **Two of the four interactive checks are still unproven, for a different reason — recorded, not
-   glossed.** `explain` on a merged cluster and the pathfinder are gated on a *two-node* selection
+   **Round 12d: the keyboard gap is closed, the pathfinder is proven, and `explain` turned out to
+   be blocked by the fixture rather than by the keyboard.**
+
+   - **Closed**: `Ctrl`/`Cmd`+`Shift`+Arrow walks every node in the working set, adjacency or not
+     (`GlassCanvas.tsx`; `02_GLASS_FRONTEND.md` §6's key list). Until it existed, `Explain
+     cluster` and `Find paths to` — both gated on `selected.size === 2` — had no keyboard route to
+     their own precondition for two nodes sharing no edge, which is exactly the case two entities
+     found by identifier present. Proven by `keyboard.spec.ts`'s "Ctrl+Shift+Arrow reaches a node
+     arrow-walk cannot" over a deliberately disconnected fixture node (`harness.tsx`'s `n5`), and
+     registered as `ctrl-shift-arrow-walks-every-node` so the coverage gate holds it.
+   - **Proven live, keyboard only**: the pathfinder between two ring members
+     (`live/fixture-corp.spec.ts`), asserting the reported hop count, not merely that something
+     came back.
+   - **Blocked, and it is a fixture question, not a UI one**: `explain` on a merged cluster needs
+     two working-set nodes sharing a `resolution.cluster_id`. Moving the threshold to Broad over a
+     working set holding both halves of the `identical` pair reports `merged: 0, split: 0,
+     affected: 0` — measured against the real route. The cause is in the store: that pair's seeded
+     `SAME_AS` edge carries **weight 0.747**, below Broad's 0.80. **Every seeded weight disagrees
+     with ADR-035 §C5's recorded scores, and the ordering is inverted** — the "never merges"
+     negative control (`corp-res-distinct`) sits at 0.661, above `close_given_name`'s 0.649; at
+     Broad only the non-Latin pair (0.802) merges at all. So §C5's property 1, "entity resolution
+     at τ 0.99/0.95/0.80 producing visibly different projections", holds for the in-process test
+     (which resolves an isolated ten-node population) and **not for the seeded fixture a live
+     session reads**. Recorded rather than worked around; it is the owner's call, and
+     `Claude outputs/handoff/DECISION_NEEDED.md` asks it.
+
+   **A gate gap found while doing this**: `tsconfig.json` included `apps/workspace/src/**` but not
+   the Glass's own spec trees, so a spec could reference a helper that did not exist and `make
+   typecheck` stayed green — found exactly that way, as a run-time `ReferenceError` against a real
+   stack. `apps/workspace/live/**` is now included (and immediately caught a second such error).
+   `keyboard/`, `perf/` and `a11y/` are still outside it, because adding them surfaces four
+   pre-existing type errors (`query-builder-harness.tsx`'s `"thing"` PoleClass,
+   `registryCoverage.test.ts`'s possibly-undefined argument, two undeclared `window.__PERF__`
+   accesses). Their own item, not silenced.
+
+   **Two of the four interactive checks were unproven after 12b, for a different reason —
+   recorded, not glossed.** `explain` on a merged cluster and the pathfinder are gated on a *two-node* selection
    (`GlassCanvas.tsx`: `selected.size === 2`; and, for explain, two working-set nodes sharing a
    `resolution.cluster_id`). Both nodes now load by nino, but building the selection needs a
    mouse: arrow-walk follows `graph.neighbors` and these two nodes share no edge, while

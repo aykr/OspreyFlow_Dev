@@ -29,20 +29,41 @@ test.beforeEach(liveOnly);
 
 /** Deterministic, from `tests/scenarios/fixtures/fixture_corp.py`'s own `_synthetic_nino`.
  * `QQ` is a prefix HMRC never issues, so these cannot collide with a real person's NINO. */
-const NINO_IDENTICAL_PAIR_A = "QQ118439C"; // corp-res-identical-1 — merges with -2 at every detent
+const PAIR_A = { nino: "QQ118439C", id: "corp-res-identical-1" };
+const RING_A = { nino: "QQ789396A", id: "corp-ring0-member0" };
+const RING_B = { nino: "QQ435286A", id: "corp-ring0-member1" };
 
+/** Loads a second entity and leaves BOTH selected, by keyboard only.
+ *
+ * Round 12d's own reason for existing. `Explain cluster` and `Find paths to` are gated on
+ * `selected.size === 2`, and two entities found by identifier share no edge, so arrow-walk (which
+ * follows `graph.neighbors`) could never pair them and Ctrl/Cmd+Arrow cycles only within the
+ * selection. `Ctrl`/`Cmd`+`Shift`+Arrow walks the working set itself; focusing the canvas already
+ * selects the first node, so one walk plus one Space is the whole sequence. */
 /** Seeds the working set by typing an identifier into the search box, exactly as
- * `DEMO_GUIDE.md` §6 now tells a presenter to. */
-async function seedFromSearch(page: Page, identifier: string): Promise<void> {
+ * `DEMO_GUIDE.md` §6 tells a presenter to.
+ *
+ * **Clears the box first and waits for the option naming `expectedId`.** A second search issued
+ * straight after a first would otherwise be matched against the combobox's still-current option
+ * list — `GlobalSearch` keeps `results` until its next response lands — so a generic
+ * `/^Person: corp-/` matcher happily clicked the *previous* result again and the working set
+ * stayed at one node. Found exactly that way, building this round's two-node selection. */
+async function seedFromSearch(
+  page: Page,
+  identifier: string,
+  expectedId: string,
+): Promise<void> {
   const search = page
     .getByRole("combobox", { name: "Search entities, identifiers, documents" })
     .first();
+  await search.fill("");
   await search.fill(identifier);
-  const option = page.getByRole("option", { name: /^Person: corp-/ }).first();
+  const option = page.getByRole("option", { name: `Person: ${expectedId}` });
   await expect(
     option,
-    `no search result for ${identifier} — before R4 this returned nothing for every Fixture ` +
-      "Corp entity, because the fixture carried no identifier search could match",
+    `no search result for ${identifier} (${expectedId}) — before owner ruling R4 this returned ` +
+      "nothing for every Fixture Corp entity, because the fixture carried no identifier search " +
+      "could match",
   ).toBeVisible();
   await option.click();
 }
@@ -50,6 +71,40 @@ async function seedFromSearch(page: Page, identifier: string): Promise<void> {
 async function nodeCount(page: Page): Promise<number> {
   const text = (await page.getByRole("status").first().textContent()) ?? "";
   return Number(/(\d+)\s*nodes/.exec(text)?.[1] ?? 0);
+}
+
+async function selectBothByKeyboard(
+  page: Page,
+  second: { nino: string; id: string },
+): Promise<void> {
+  await seedFromSearch(page, second.nino, second.id);
+  await expect.poll(() => nodeCount(page), { timeout: 30_000 }).toBe(2);
+  await pairByKeyboard(page);
+}
+
+/** Builds a two-node selection over whatever two nodes are already in the working set. */
+async function pairByKeyboard(page: Page): Promise<void> {
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  const menu = page.locator(".radial-menu__list[role='menu']");
+
+  // Focusing the canvas already establishes a ring containing one node, so the sequence is:
+  // walk to the other, Space to add it. The real Glass exposes no `window.__KEYBOARD__` (that is
+  // the keyboard harness's own hook), so success is detected by the thing it exists to enable —
+  // the two-node-only menu item appearing. Two attempts, because `graph.nodes()` order decides
+  // which node focus starts on and a single step could land back where it began.
+  await canvas.focus();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await page.keyboard.press("Control+Shift+ArrowRight");
+    await page.keyboard.press(" ");
+    await page.keyboard.press("\\");
+    await expect(menu).toBeVisible();
+    if (await menu.getByRole("menuitem", { name: /Find paths to/ }).count()) return;
+    await page.keyboard.press("Escape");
+  }
+  throw new Error(
+    "could not build a two-node selection by keyboard — Ctrl+Shift+Arrow should walk the " +
+      "working set regardless of adjacency (GlassCanvas.tsx, round 12d)",
+  );
 }
 
 async function addPersonVariable(page: Page): Promise<void> {
@@ -118,7 +173,7 @@ test("a Fixture Corp entity is reachable from the search box by its nino", async
   await page.goto(await freshWorkspaceUrl(request));
   expect(await nodeCount(page)).toBe(0);
 
-  await seedFromSearch(page, NINO_IDENTICAL_PAIR_A);
+  await seedFromSearch(page, PAIR_A.nino, PAIR_A.id);
 
   await expect
     .poll(() => nodeCount(page), {
@@ -129,22 +184,52 @@ test("a Fixture Corp entity is reachable from the search box by its nino", async
     .toBeGreaterThan(0);
 });
 
-// **`explain` on a merged cluster and the pathfinder are NOT in this file, and the reason is a
-// second finding rather than a shortage of effort.** Both radial-menu items are conditional on a
-// *two-node* selection (`GlassCanvas.tsx`: `selected.size === 2` gates "Find paths to {other}";
-// "Explain cluster" needs two working-set nodes sharing a `resolution.cluster_id`). R4 has made
-// both nodes reachable — `corp-res-identical-1`/`-2` load by nino and the test above proves it —
-// but building the selection itself defeated this round:
+// **`explain` on a merged cluster is still not here, and round 12d found out why — it is not a
+// keyboard problem, and not a test problem.**
 //
-//   - By keyboard there is no path at all. Arrow-walk moves along `graph.neighbors`, and these
-//     two nodes have no edge between them in the working set; Ctrl/Cmd+Arrow cycles within the
-//     *existing* selection, so it cannot reach an unselected node. Space toggles only the focused
-//     node. So a keyboard user cannot build a two-node selection over disconnected nodes —
-//     worth weighing against `CLAUDE.md` rule 13, since "Find paths to" and "Explain cluster" are
-//     canvas actions reachable only with a mouse.
-//   - By mouse it needs either ctrl/cmd-click on two specific rendered nodes (whose canvas
-//     coordinates a spec does not know) or the lasso, which did not drive cleanly here in the
-//     time available.
+// The keyboard half is solved: `Ctrl`/`Cmd`+`Shift`+Arrow walks the working set, so a two-node
+// selection over two non-adjacent nodes is reachable without a mouse, and the pathfinder test
+// below proves it end to end. "Explain cluster" needs one thing more — two working-set nodes
+// sharing a `resolution.cluster_id` — and that state cannot be produced from this fixture at all:
 //
-// Recorded in `docs/07_BUILD_PLAN.md` and `REPORT-12b.md` rather than papered over with a test
-// that asserts something weaker while appearing to cover these two steps.
+//   - Moving the resolution threshold over a working set holding both halves of the `identical`
+//     pair reports `merged: 0, split: 0, affected: 0` at Broad, the loosest detent. Measured
+//     against the real route, not inferred.
+//   - The reason is in the store: the seeded `SAME_AS` edge between `corp-res-identical-1` and
+//     `-2` carries **weight 0.747**, below even Broad's 0.80. ADR-035 §C5 records that pair at
+//     **0.999991**. Every seeded weight disagrees with §C5's recorded score, and the ordering is
+//     inverted — the "never merges" negative control sits at 0.661, *above* `close_given_name`'s
+//     0.649. At Broad only the non-Latin pair (0.802) merges at all.
+//
+// §C5's property 1 — "entity resolution at τ 0.99/0.95/0.80 producing visibly different
+// projections" — therefore holds for the in-process test
+// (`test_fixture_corp_entity_resolution_projections_differ_by_threshold`, which resolves an
+// isolated ten-node population) and not for the seeded fixture a live session actually reads.
+// That is a fixture/ADR question, not something a spec should paper over, and it is recorded in
+// `07_BUILD_PLAN.md` and this round's DECISION_NEEDED.md rather than asserted around here.
+
+test("the pathfinder finds a path between two ring members, and reports its length", async ({
+  page,
+  request,
+}) => {
+  // ADR-035 §C5 properties 3 and 4, and `DEMO_GUIDE.md` §6's "the pathfinder, comparing path
+  // lengths". Two members of the same fraud ring: every ring member is `ASSOCIATE_OF` every
+  // other, so a direct path exists and its length is knowable in advance — which is what makes
+  // the assertion below a real check rather than "something came back".
+  await page.goto(await freshWorkspaceUrl(request));
+  await seedFromSearch(page, RING_A.nino, RING_A.id);
+  await selectBothByKeyboard(page, RING_B);
+
+  const menu = page.locator(".radial-menu__list[role='menu']");
+  const findPaths = menu.getByRole("menuitem", { name: /Find paths to/ });
+  await expect(findPaths).toBeVisible();
+  await findPaths.click();
+
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).not.toContainText(/no path/i);
+  // Two members of one fully-interconnected ring are one hop apart. Asserting the reported
+  // length rather than merely "a path exists" is the "comparing path lengths" half of the step:
+  // a pathfinder that returned some path of any length would satisfy the weaker assertion.
+  await expect(dialog).toContainText(/\b1\b/);
+});

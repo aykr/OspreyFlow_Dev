@@ -17,6 +17,19 @@
     "packages/schemas/generated/**/*.ts",
     "apps/workspace/src/**/*.ts",
     "apps/workspace/src/**/*.tsx",
+    // Round 12d: the Glass's spec trees were outside `tsc --noEmit` entirely, so a spec could
+    // reference a helper that did not exist and `make typecheck` stayed green — found exactly
+    // that way, when a deleted helper surfaced only as a `ReferenceError` at run time against a
+    // real stack. `apps/harness/keyboard` was already included; the Glass's own equivalents were
+    // not, which is an asymmetry rather than a deliberate exemption.
+    //
+    // **Only `live/` is added here, and the rest is a disclosed gap, not an oversight.** Adding
+    // `keyboard/`, `perf/` and `a11y/` as well surfaces four *pre-existing* type errors
+    // (`query-builder-harness.tsx`'s `"thing"` PoleClass, `registryCoverage.test.ts`'s
+    // possibly-undefined argument, and two `window.__PERF__` accesses with no declaration).
+    // None is this round's to fix, and silencing them to widen the include would be worse than
+    // saying so: they are recorded in `07_BUILD_PLAN.md` as their own item.
+    "apps/workspace/live/**/*.ts",
     "apps/harness/src/**/*.ts",
     "apps/harness/src/**/*.tsx",
     "apps/harness/keyboard/**/*.ts",

@@ -446,13 +446,19 @@ addendum has the table.
 | `corp-path-hub` | `QQ418550B` | The eight-spoke hub, for the pathfinder |
 | `corp-ring0-org` | `FIXTURE-67BD0781` | A fraud ring's shell organisation |
 
-**Still not demonstrable, and the reason is a second finding.** `explain` on a merged cluster and
-the pathfinder both need a *two-node* selection (`GlassCanvas.tsx` gates them on
-`selected.size === 2`, and on two working-set nodes sharing a `resolution.cluster_id`). Both
-nodes now load, but building that selection needs a mouse: by keyboard, arrow-walk follows
-`graph.neighbors` and these two nodes have no edge between them, while Ctrl/Cmd+Arrow only cycles
-within the existing selection. So a keyboard user cannot pair two disconnected nodes at all. Use
-the lasso or ctrl/cmd-click if demonstrating these; treat the keyboard path as unavailable.
+**The pathfinder, by keyboard** (round 12d closed the gap that made this mouse-only). Search one
+ring member, search another, then from the canvas: `Ctrl`/`Cmd`+`Shift`+`ArrowRight` to walk to
+the second node, `Space` to add it to the selection, `\` to open the menu, and "Find paths to"
+is there. Two members of one ring are one hop apart. Asserted end to end by
+`apps/workspace/live/fixture-corp.spec.ts`.
+
+**`explain` on a merged cluster is still not demonstrable, and the reason is not the keyboard.**
+It needs two working-set nodes sharing a `resolution.cluster_id`, and this fixture cannot produce
+that state: the seeded `SAME_AS` edge between the `identical` pair carries weight **0.747**, below
+even Broad's 0.80, so moving the threshold across all three detents reports `merged: 0`. Every
+seeded weight disagrees with ADR-035 §C5's recorded scores and the ordering is inverted — the
+"never merges" control sits above `close_given_name`. Do not promise this step; see
+`07_BUILD_PLAN.md`'s Stage 3a entry.
 
 **The original blocker, kept for the record:** The Glass's working set has exactly one entry point — the search box —
 and `services/api/search.py`'s own scope note states what that does: "exact identifier match
