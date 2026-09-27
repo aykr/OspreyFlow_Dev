@@ -18,6 +18,14 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY packages ./packages
 COPY services ./services
+# **`scripts/` is not optional for this image.** `services/api/app.py` imports
+# `scripts.build_local_basemap` and `scripts.verify_map` at module top level — the geospatial
+# admin routes added in round 09 — so without this the Conduit cannot import at all and the
+# container crash-loops on `ModuleNotFoundError: No module named 'scripts'`. Found by round 13's
+# clean install, the first time a rendered `local-lite` deployment actually reached `up` on this
+# machine; every earlier attempt stopped at Preflight's memory floor, so nothing had exercised it.
+# `harness/Dockerfile` already carries `scripts/` for the same reason.
+COPY scripts ./scripts
 
 FROM python:3.12-slim
 
@@ -32,6 +40,7 @@ WORKDIR /app
 COPY --from=builder /app/.venv ./.venv
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/services ./services
+COPY --from=builder /app/scripts ./scripts
 
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONPATH="/app:/app/packages" \
