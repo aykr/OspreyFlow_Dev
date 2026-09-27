@@ -373,11 +373,31 @@ BUILD_PLAN.md`'s own Stage 2 §6 entry keeps the previous round's disclosure as 
 deleting it now that it is no longer true.
 
 **The developer path, for this repository, CI, and the exit tests below: `--build` on either
-headless command**, or declare `components.source_path` in `osprey.yaml` directly:
+headless command**, or declare `components.source_path` in `osprey.yaml` directly.
+
+**From a fresh clone, in full — corrected 27 September 2026 (round 13), after running exactly
+what this section used to say and watching it fail.** The three lines before the `apply` command
+were missing entirely: this document jumped from "clone it" to "run it" with no environment step,
+and the command as written raised `ModuleNotFoundError: No module named 'schemas'` because
+nothing puts the repository root and `packages/` on `sys.path`.
 
 ```bash
-python -m harness.apply --profile local-lite --build --seed hmp,fixture-corp
+git clone https://github.com/ospreyflow/ospreyflow-dev.git && cd ospreyflow-dev
+uv sync                       # creates .venv from uv.lock; ~30s warm, a few minutes cold
+export PYTHONPATH=.:packages  # the repo root AND packages/ — neither is installed on the path
+
+.venv/bin/python -m harness.apply --profile local-lite --build --seed hmp,fixture-corp
 ```
+
+`PYTHONPATH` is the same requirement `DEMO_GUIDE.md` §3.2 already spells out for the Conduit
+("neither a bare `python -m` nor `uvicorn` puts them on `sys.path`, which is why
+`services/api/Dockerfile` sets it explicitly") — it applies here too, and saying it only there
+was the gap.
+
+**Add `--demo-analyst` if you intend to sign in.** The command above provisions no user, so the
+Glass has nobody to authenticate as; the flag creates a disposable analyst subject and writes its
+password beside the rendered artefacts, which is what "the seeded demo credentials are displayed
+once" above refers to. Omitting it is right for a headless exit test and wrong for a demo.
 
 **Fixed, round 11 — the pull path's own registry reference now resolves for a real customer, with
 no flag.** `.github/workflows/release.yml` builds, trivy-scans and pushes all four owned images

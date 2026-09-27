@@ -10,6 +10,33 @@ none, because it is what gets read.**
 laptop from the documentation, started, and demonstrated (both acceptance scenarios passing on
 `local-lite` is one component of that, not the whole of it).
 
+**V1 END TO END is NOT reached as of 27 September 2026, and round 13's closing pass is what
+established that.** It came closer than any previous attempt — a fresh clone now renders,
+preflights, builds, starts twelve containers, grants, seeds and passes `harness.verify` 3/3 in
+**87 seconds** — but three of the milestone's own clauses do not hold:
+
+1. **"From the documentation" did not work.** Followed exactly, `05 §3` failed twice: it named no
+   environment step at all (no venv, no `uv sync`), and its own command raised
+   `ModuleNotFoundError: No module named 'schemas'` because nothing put the repo root and
+   `packages/` on `sys.path`. Both are now corrected in `05 §3`, but they were found by doing it,
+   not by reading — which is the point of the clause.
+2. **"Started" required a code fix.** The Conduit could not start in *any* rendered deployment:
+   `services/api/app.py` imports `scripts.build_local_basemap` and `scripts.verify_map` at module
+   scope, and `services/api/Dockerfile` did not carry `scripts/`. The container crash-looped on
+   `ModuleNotFoundError` from round 09 until this pass. Fixed here, one line, with
+   `tests/test_image_imports_are_carried.py` covering the class.
+3. **"Both acceptance scenarios pass on `local-lite`" is not proven and cannot be, as things
+   stand.** `tests/scenarios/test_phase8_exit_criterion_end_to_end.py` drives the app in-process
+   against stores reached directly (`make dev-up`'s published ports). The rendered `local-lite`
+   deployment publishes **only** the workspace (8080) and Keycloak (8081) — every store is
+   internal, which is correct for a deployment and fatal for this test. So the single test the
+   milestone rests on has never run against the thing the milestone is about. Closing this needs
+   a decision — run it inside the deployment's own network, rewrite it against the HTTP surface,
+   or publish stores in a test profile — and that decision has not been taken.
+
+**What *is* now true**, and was not before this pass: the install works end to end from a clean
+clone on a properly-resourced machine, and its own three-sided `harness.verify` passes.
+
 **Complete, by stage:**
 - Stage 2c — Sign-in for the Glass (`06_DECISIONS.md` ADR-050). Built, 25 September 2026, including
   the WebSocket ticket exchange (objection 8), built the round after per the owner's own decision
@@ -25,6 +52,40 @@ laptop from the documentation, started, and demonstrated (both acceptance scenar
   cause five reduced to the same mechanism, the criterion re-pointed to a clean install.
 - `Makefile`/`ci.yml` reconciliation (pulled forward from Stage 6). Built.
 - `PathStaleError` and the server-side traversal budget (pulled forward from Stage 5). Built.
+
+**Audit of this summary's own claims, 27 September 2026 (round 13's closing pass).** Every
+"Complete, by stage" line above, with the named proof that was **run in this pass** — not a proof
+that exists somewhere, a result obtained today. Scope stated plainly: this audits the standing
+summary's own claims and the milestone line, not every "built" in the 6,000 lines below it;
+auditing those is a larger job than one closing pass and pretending otherwise would be the thing
+this table exists to stop.
+
+| Claim | Proof run this pass | Result |
+| --- | --- | --- |
+| Stage 2c — Sign-in for the Glass | `make test`'s own auth suite (`tests/services/api/test_auth.py`, `test_ws_ticket.py`) | **passed**, inside 1067 |
+| Stage 4 (4-spec, 4a–4h) — product-feature core | `make test` 1067 passed; `make glass-live` 9 passed | **passed** |
+| Stage 1 — principal resolution (ADR-043) | `make test`'s own exchange tests | **passed**, inside 1067 |
+| Stage 2a — ArcadeDB stability | *Not re-proven as "closed" this pass.* Round 12e hit the recorded accumulation failure (`IndexException` on `apply_schema`) and cleared it only by `dev-down`/`dev-up` — see that round's §6 | **stands, with the caveat below** |
+| `Makefile`/`ci.yml` reconciliation | `make -k ci` in full, per target | **see round 13's report** |
+| `PathStaleError` + traversal budget | `make test` | **passed**, inside 1067 |
+| Stage 2 §1–§6 (harness/packaging) | The clean install itself: `render` → `preflight` → `build` → `up` → `grants` → `seed` → `verify`, **3/3 assertions green**, from a fresh clone | **passed** |
+| Stage 3a — installation/deployment docs + DEMO_GUIDE | `make demo-guide-check`, `make citation-check`, `make glass-live` (9), and the clean install | **passed**, with the corrections round 13 had to make first |
+
+**Two claims this audit downgrades, because the proof does not say what the claim says.**
+
+1. **Stage 2a's "closed" is narrower than it reads.** Its own criterion was re-pointed to a clean
+   install, and a clean install now works — but round 12e reproduced the accumulation failure on a
+   *developer* machine mid-session, and the recorded remedy is still a full `dev-down`/`dev-up`.
+   "Closed" is true of the deployed path and not of a long developer session; that distinction is
+   now here rather than implied.
+2. **`tests/harness/test_six_screen_live_exit.py`'s green never meant what it appeared to.** By
+   design it has two real branches, and on a daemon below `local-lite`'s memory floor it asserts
+   Preflight's refusal and stops *before* Launch. This machine was below that floor from round 05
+   until round 13, so **every green that test produced took the refusal branch** and never once
+   reached `docker compose up`. That is why the Conduit's `ModuleNotFoundError` (round 09 to round
+   13) went unseen for four rounds. The test is not wrong; the *reading* of its green was.
+   `tests/test_image_imports_are_carried.py` is the static check added so the class cannot hide
+   behind an under-resourced machine again.
 
 **Remains before the milestone, numbered, with a word on size:**
 1. **The harness/packaging pipeline** — **`Stage 2 §1`–`§6` built, `§6`'s own exit closed 26
