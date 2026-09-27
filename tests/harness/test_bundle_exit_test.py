@@ -4,10 +4,10 @@
 citation to a test that does not exist is worse than no citation, because it reads as a
 guarantee"). This is that file, built after the citation, not before it.
 
-**Opt-in via `OSPREY_TEST_DIST_BUNDLE=1`** — it needs Docker, builds and archives every image the
-rendered stack runs (several gigabytes), and brings up the real `local-lite` stack, which takes
-minutes rather than seconds. Not part of the fast unit tier; a real, slow, `make ci`-adjacent
-proof, the same reasoning `tests/harness/test_restore_exit_test.py` and
+**Opt-in via `OSPREY_TEST_DIST_BUNDLE=1`** — it needs Docker, builds and archives every owned
+image the rendered stack runs (several gigabytes), and brings up the real `local-lite` stack,
+which takes minutes rather than seconds. Not part of the fast unit tier; a real, slow,
+`make ci`-adjacent proof, the same reasoning `tests/harness/test_restore_exit_test.py` and
 `tests/harness/test_workspace_bundle.py` already use for their own opt-in gates.
 
 **What this proves, and why "for real" matters.** Builds the bundle with `--images`, unpacks the
@@ -55,7 +55,35 @@ def _run(args: list[str], *, timeout: int) -> subprocess.CompletedProcess[str]:
     )
 
 
+#: Every owned image `--images` archives, with the Dockerfile that builds it — `harness/render.py`'s
+#: own `service_images` for the three services, plus `scripts/osprey_bundle.py`'s `HARNESS_IMAGE`,
+#: which is not a compose service and so appears in no render.
+_OWNED_IMAGES: tuple[tuple[str, str], ...] = (
+    ("osprey/api:local", "services/api/Dockerfile"),
+    ("osprey/ingest:local", "services/ingest/Dockerfile"),
+    ("osprey/workspace:local", "apps/workspace/Dockerfile"),
+    ("osprey/harness:local", "harness/Dockerfile"),
+)
+
+
+def _build_the_owned_images() -> None:
+    """**Built here, because nothing else builds all four** — found running this test from a fresh
+    clone on 27 September 2026, following `05_DEPLOYMENT.md` §3 exactly. `harness.apply --build`
+    builds the services a running `local-lite` actually starts, which excludes `ingest` (a
+    `batch`-profile service) and the harness image (not a compose service at all). So two of the
+    four had never been built, and `scripts/osprey_bundle.py`'s own stated precondition —
+    "already built and tagged locally before this command runs" — was unmet with nothing enforcing
+    it: the failure was a bare `CalledProcessError` naming a `docker tag` invocation. That command
+    now raises `MissingLocalImageError` naming the image and the build command; this test stops
+    depending on the precondition at all. Docker's layer cache makes the repeat cost small.
+    """
+    for tag, dockerfile in _OWNED_IMAGES:
+        built = _run(["docker", "build", "-f", dockerfile, "-t", tag, "."], timeout=1800)
+        assert built.returncode == 0, f"could not build {tag}: {built.stdout + built.stderr}"
+
+
 def test_the_real_bundle_installs_and_deploys_from_itself_alone(tmp_path: Path) -> None:
+    _build_the_owned_images()
     dist_dir = tmp_path / "dist"
     build = _run(
         [

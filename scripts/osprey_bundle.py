@@ -97,8 +97,7 @@ class NonRedistributableProviderError(RuntimeError):
     def __init__(self, refused_provider_ids: list[str]) -> None:
         self.refused_provider_ids = tuple(refused_provider_ids)
         super().__init__(
-            "refusing to bundle non-redistributable provider(s): "
-            + ", ".join(refused_provider_ids)
+            "refusing to bundle non-redistributable provider(s): " + ", ".join(refused_provider_ids)
         )
 
 
@@ -121,12 +120,44 @@ class BundleManifest:
     image_archives: tuple[str, ...] = field(default_factory=tuple)
 
 
+class MissingLocalImageError(RuntimeError):
+    """An owned image `--images` needs was never built locally. See `_docker_tag` for why this is
+    its own named error rather than a `CalledProcessError`."""
+
+
 def _docker_tag(local_tag: ImageRef, pull_mode_tag: ImageRef) -> None:
     """Round 07: retags an owned service's already-built local image
     (`osprey/<service>:local`, unchanged precondition) to the pull-mode reference the bundle's
     own render just computed, so the archive `docker load` restores lands under the exact name
-    the rendered compose file names — never a real registry pull, never a network call."""
-    subprocess.run(["docker", "tag", local_tag, pull_mode_tag], check=True, timeout=60)
+    the rendered compose file names — never a real registry pull, never a network call.
+
+    **The precondition is now enforced by name** (round 13b, 27 September 2026). Running the
+    bundle exit test from a fresh clone, exactly as `05_DEPLOYMENT.md` §3 documents the install,
+    failed with `subprocess.CalledProcessError: Command '['docker', 'tag', 'osprey/ingest:local',
+    'ghcr.io/ospreyflow/ingest:<sha>']' returned non-zero exit status 1` — a traceback naming a
+    `docker tag` invocation and nothing about what an operator should do. The cause: `harness.
+    apply --build` builds the services a `local-lite` deployment actually starts, which does not
+    include `ingest` (a `batch`-profile service) or the harness image, so two of the four owned
+    images this command archives had never been built. The precondition was stated in three
+    comments in this module and enforced nowhere.
+    """
+    completed = subprocess.run(
+        ["docker", "tag", local_tag, pull_mode_tag],
+        check=False,
+        timeout=60,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        raise MissingLocalImageError(
+            f"{local_tag} is not built locally, so it cannot be archived into the bundle. "
+            f"`--images` archives every owned image from this checkout's own local tags, and "
+            f"`harness.apply --build` does not build the ones a running `local-lite` never "
+            f"starts. Build it first — for a service: `docker build -f services/"
+            f"{local_tag.split('/')[-1].split(':')[0]}/Dockerfile -t {local_tag} .`; for the "
+            f"harness image: `docker build -f harness/Dockerfile -t {HARNESS_IMAGE} .`. "
+            f"(docker said: {completed.stderr.strip()})"
+        )
 
 
 def _docker_save(image: ImageRef, out_path: Path) -> None:
@@ -134,9 +165,7 @@ def _docker_save(image: ImageRef, out_path: Path) -> None:
     decides whether a missing image is an error or something to fetch first; silently pulling
     inside a save step would hide a multi-gigabyte network operation behind what looks like a
     filesystem write."""
-    subprocess.run(
-        ["docker", "save", "-o", str(out_path), image], check=True, timeout=1200
-    )
+    subprocess.run(["docker", "save", "-o", str(out_path), image], check=True, timeout=1200)
 
 
 def _docker_build_docs_layer(base_image: ImageRef, docs_site_dir: Path, tag: ImageRef) -> None:
@@ -273,9 +302,7 @@ def build_bundle(
     all_paths = sorted(
         str(p.relative_to(staging_dir)) for p in staging_dir.rglob("*") if _is_bundle_content(p)
     )
-    findings = packaging_gate.check_artefact(
-        all_paths, text_blobs=_text_blobs(staging_dir)
-    )
+    findings = packaging_gate.check_artefact(all_paths, text_blobs=_text_blobs(staging_dir))
     if findings:
         raise RuntimeError(f"osprey bundle: refusing to package this artefact: {findings}")
 

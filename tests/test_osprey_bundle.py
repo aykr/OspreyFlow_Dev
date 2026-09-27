@@ -343,3 +343,28 @@ def test_make_tarball_is_uncompressed_when_it_carries_image_archives(
     with open(tarball_path, "rb") as f:
         magic = f.read(2)
     assert magic != b"\x1f\x8b", "the tarball is gzip-compressed despite carrying image archives"
+
+
+def test_a_missing_local_image_is_refused_by_name_not_by_a_bare_docker_tag_traceback() -> None:
+    """**Round 13b's own red-then-green for `_docker_tag`'s enforced precondition.** Before it,
+    `--images` against a checkout where an owned image had never been built died with
+    `subprocess.CalledProcessError: Command '['docker', 'tag', 'osprey/ingest:local', ...]'
+    returned non-zero exit status 1` — a traceback naming a `docker` invocation and nothing an
+    operator could act on. Found for real running `tests/harness/test_bundle_exit_test.py` from a
+    fresh clone: `harness.apply --build` builds the services a running `local-lite` starts, which
+    excludes `ingest` and the harness image, so the precondition three comments in that module
+    state was unmet with nothing enforcing it.
+
+    The planted violation is the real shape, per `CLAUDE.md` rule 15: a tag that genuinely does
+    not exist in the local daemon, passed to the real `_docker_tag`, so it is the real `docker
+    tag` that refuses — not a stub standing in for it.
+    """
+    import pytest
+    from scripts.osprey_bundle import MissingLocalImageError, _docker_tag
+
+    absent = "osprey/no-such-service:definitely-not-built-13b"
+    with pytest.raises(MissingLocalImageError) as refused:
+        _docker_tag(absent, "ghcr.io/ospreyflow/no-such-service:test")
+    message = str(refused.value)
+    assert absent in message, message
+    assert "docker build" in message, "the refusal must name the command that fixes it"
