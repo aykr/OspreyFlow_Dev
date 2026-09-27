@@ -514,9 +514,9 @@ decision log, because the two obstacles are both *this section's* concerns:
    such type, so this needs an ontology addition and an `ontology_version` bump — which every
    recipe, `apply_schema` call, conformance fixture and generated TypeScript type moves with.
 
-`06_DECISIONS.md` ADR-046's addendum holds the decision. Until it is taken, a suppression takes
-effect through `POST /v1/nodes/{node_id}/retract` as it always has, and a mark is a proposal
-sitting beside it.
+**Until that decision is taken**, a suppression takes effect through
+`POST /v1/nodes/{node_id}/retract` as it always has, and a mark is a proposal sitting beside it —
+nothing in this section is wired to anything yet.
 
 ## 9. What the studio deliberately does not do
 
