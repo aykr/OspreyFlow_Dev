@@ -193,6 +193,25 @@ finding: Keycloak **does** issue a token for a disabled subject when asked by a 
 impersonation, so the refusal has to be the Conduit's. A fixture IdP written to suit the test
 would have agreed with whatever the code did.
 
+**Open defect, 27 September 2026 — a stopped-and-started deployment loses the demo analyst's
+password.** `--demo-analyst` sets that password *after* the realm import, through the admin API,
+and Keycloak's database is not on a persistent volume, so `docker compose down` discards it. On
+the next `up` the realm and the subject come back from the import but the credential does not: the
+sign-in page appears and refuses the operator's own password, with nothing naming the cause. Found
+when a deployment that had passed the over-the-wire exit test 8/8 an hour earlier failed at
+sign-in after a restart.
+
+**Persisting Keycloak's database is not the fix by itself, and was tried.** Keycloak creates its
+bootstrap admin only on a first start against an empty database; start it again on the same volume
+and `KC_BOOTSTRAP_ADMIN_PASSWORD` is ignored — measured, the new password returns 401 and the old
+one still works. Because `harness.apply` mints a fresh admin password on every apply, a persistent
+volume makes *any re-apply* fail at the grants step. Closing this needs apply to either reuse an
+existing deployment's admin credential or reset the volume deliberately — a change to what `apply`
+means for an existing deployment, and so a decision rather than a patch.
+`tests/harness/test_render.py`'s
+`test_keycloaks_database_is_not_persisted_while_apply_mints_a_new_admin_password` records that the
+two are coupled. **Until then: re-apply rather than restart**, or re-run `--demo-analyst`.
+
 **Client secrets are generated at deployment time, never carried in the repository** (§2.5): the
 realm names the client, the deployment's own environment file carries the secret, and nothing
 version-controlled contains either.

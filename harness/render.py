@@ -370,26 +370,31 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
         "command": ["start-dev", "--import-realm", "--features=token-exchange"],
         "volumes": [
             "./realm.json:/opt/keycloak/data/import/realm.json:ro",
-            # **Keycloak's own database, on a volume — round 13cb.** Without this it lives in the
-            # container layer and dies with `docker compose down`. The realm and its users come
-            # back from the import above, but the `--demo-analyst` password does **not**: `apply`
-            # sets it afterwards through the admin API, and nothing re-runs that on a restart. So
-            # a stopped-and-started deployment presented its login form and refused the operator's
-            # own credentials, with no error naming the cause — found doing exactly that while
-            # building round 13cb's red/green, where the *baseline* over-the-wire test failed at
-            # sign-in against a deployment that had passed 8/8 an hour earlier.
+            # **Keycloak's database is deliberately NOT persisted, and both halves of that
+            # cost this project a round each — round 13cb added a volume here, round 13cd took
+            # it away again after measuring what it broke.**
             #
-            # **`/opt/keycloak/data`, and the first attempt at `/opt/keycloak/data/h2` was wrong
-            # for a reason worth keeping.** The reasoning then was that a volume over the parent
-            # would shadow the `realm.json` bind mounted inside it. Both halves of that were
-            # false, measured rather than argued: the more specific bind is applied *over* the
-            # volume (`Realm 'osprey' imported` in the container's own log), and mounting deeper
-            # broke Keycloak outright — an empty named volume inherits ownership from the image
-            # only where the directory *exists* in the image. `/opt/keycloak/data` does and is
-            # `keycloak`-owned; `/opt/keycloak/data/h2` does not, so Docker created it root-owned
-            # and the server died on `AccessDeniedException: .../keycloakdb.trace.db`. Floor A's
-            # `test_the_deployment_this_file_starts_is_a_real_one…` is what caught it.
-            "keycloak-data:/opt/keycloak/data",
+            # What persisting it fixes: a stopped-and-started deployment currently loses the
+            # `--demo-analyst` password. The realm and its users come back from the import above,
+            # but that password is set *after* the import through the admin API and nothing
+            # re-runs it, so the operator is shown a login form that refuses their own
+            # credentials with nothing naming the cause. That is a real defect and it is still
+            # open.
+            #
+            # Why a volume is not the fix as things stand, measured directly: Keycloak creates
+            # its bootstrap admin **only on a first start against an empty database**. Start it a
+            # second time on the same volume and `KC_BOOTSTRAP_ADMIN_PASSWORD` is ignored — the
+            # old password still works and the new one returns 401. `harness/apply.py` mints a
+            # fresh admin password on every apply, so with the volume in place *any* re-apply
+            # onto a host where the volume survived `docker compose down` fails at the grants
+            # step with `could not authenticate to Keycloak: 401 invalid_grant`. Floor A caught
+            # it: `test_both_names_of_a_split_credential_carry_the_same_value`.
+            #
+            # Closing this properly is a decision, not a line: either apply reuses an existing
+            # deployment's admin credential instead of minting one, or it removes the volume
+            # deliberately when it re-applies. Both change what `apply` means for an existing
+            # deployment, so it needs its own brief rather than being smuggled in here.
+            # `05_DEPLOYMENT.md` §2.1.1 records the open defect for an operator.
         ],
         "environment": {
             "KC_BOOTSTRAP_ADMIN_USERNAME": "${OSPREY_KEYCLOAK_ADMIN:-admin}",
@@ -523,9 +528,6 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
         "volumes": {
             "osprey-data": {"driver": "local"},
             "osprey-staging": {"driver": "local"},
-            # See the keycloak service's own volume comment: the demo analyst's password is set
-            # after the realm import and is lost with the container otherwise.
-            "keycloak-data": {"driver": "local"},
         },
     }
     body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)

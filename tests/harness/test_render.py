@@ -756,22 +756,26 @@ def test_every_declared_volume_is_mounted_by_some_service(rendered: RenderResult
     )
 
 
-def test_keycloaks_own_database_survives_a_restart(rendered: RenderResult) -> None:
-    """**Round 13cb.** Keycloak's only mount was the read-only realm import, so its database lived
-    in the container layer and died with `docker compose down`.
+def test_keycloaks_database_is_not_persisted_while_apply_mints_a_new_admin_password(
+    rendered: RenderResult,
+) -> None:
+    """**The constraint that replaced round 13cb's keycloak volume — round 13cd.**
 
-    The realm and its users come back from that import; the `--demo-analyst` **password** does
-    not, because `harness/apply.py` sets it afterwards through the admin API and nothing re-runs
-    that on a restart. The symptom is a deployment that presents its login form and then refuses
-    the operator's own credentials, with nothing naming the cause.
+    13cb added `keycloak-data:/opt/keycloak/data` so a stopped-and-started deployment would keep
+    the `--demo-analyst` password. It broke re-apply, and Floor A caught it
+    (`test_both_names_of_a_split_credential_carry_the_same_value`, failing with
+    `could not authenticate to Keycloak: 401 invalid_grant`).
 
-    **Found, not anticipated.** Round 13cb brought an earlier deployment back up to use as a
-    red baseline and the *existing* over-the-wire suite failed at sign-in — a deployment that had
-    passed 8/8 an hour before. Owner ruling R8's bar is that the product can be demonstrated on a
-    rendered deployment; one that cannot be stopped and started does not clear it.
+    Measured directly, not reasoned about: Keycloak creates its bootstrap admin **only on a first
+    start against an empty database**. Second start on the same volume with a different
+    `KC_BOOTSTRAP_ADMIN_PASSWORD` — auth with the new password 401, auth with the *old* one 200.
+    `harness/apply.py` mints a fresh admin password every apply, so any re-apply onto a surviving
+    volume fails.
 
-    Asserted as "some volume covers the data directory", not as a literal path, so moving the
-    mount is allowed and *removing* it is not.
+    This asserts the constraint rather than the absence of a feature: **while apply mints a new
+    admin password, Keycloak's data directory must not be on a persistent volume.** Whoever
+    closes the demo-analyst-password defect has to change one side or the other, and this test is
+    what tells them the two are coupled — which is the thing 13cb did not know.
     """
     document = yaml.safe_load(rendered.artefacts["compose.yaml"])
     keycloak = document["services"]["keycloak"]
@@ -779,33 +783,19 @@ def test_keycloaks_own_database_survives_a_restart(rendered: RenderResult) -> No
     named_mounts = [
         mount
         for mount in keycloak.get("volumes", [])
-        if ":" in mount and not mount.startswith(".") and not mount.startswith("/")
+        if ":" in mount and not mount.startswith((".", "/"))
     ]
-    covering = [m for m in named_mounts if m.split(":")[1].startswith("/opt/keycloak/data")]
-    assert covering, (
-        "nothing persists Keycloak's data directory, so its database dies with the container and "
-        "the demo analyst's password — set after the realm import — is lost on every restart. "
-        f"keycloak volumes: {keycloak.get('volumes')}"
+    persisting = [m for m in named_mounts if m.split(":")[1].startswith("/opt/keycloak/data")]
+    assert not persisting, (
+        f"{persisting} persists Keycloak's database while harness/apply.py still mints a fresh "
+        "admin password on every apply. Keycloak only honours KC_BOOTSTRAP_ADMIN_PASSWORD "
+        "against an empty database, so the second apply onto this volume fails with 401. Change "
+        "apply to reuse or reset the credential first — see this test's docstring."
     )
 
-    declared = set(document.get("volumes") or {})
-    for mount in covering:
-        assert mount.split(":")[0] in declared, (
-            f"{mount} names a volume the compose file never declares"
-        )
-
-    imports = [m for m in keycloak.get("volumes", []) if "import/realm.json" in m]
-    assert imports, "the realm import mount has gone"
-
-    # **The mount must be `/opt/keycloak/data` itself, not a subdirectory of it** — the opposite
-    # of this test's first version, which required the reverse on reasoning that turned out to be
-    # false in both directions. Measured: the nested `realm.json` bind is applied over the volume
-    # and imports fine, while a volume at `/opt/keycloak/data/h2` is created root-owned (an empty
-    # named volume inherits ownership only where the directory exists in the image, and `h2` does
-    # not) and Keycloak dies on `AccessDeniedException: .../keycloakdb.trace.db`.
-    assert any(m.split(":")[1] == "/opt/keycloak/data" for m in covering), (
-        "the persistent mount is below /opt/keycloak/data, so Docker creates it root-owned and "
-        f"Keycloak cannot write its database: {covering}"
+    # The realm import itself is not a persistent volume and must stay.
+    assert any("import/realm.json" in m for m in keycloak.get("volumes", [])), (
+        "the realm import mount has gone — the deployment would start with no osprey realm"
     )
 
 
