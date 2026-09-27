@@ -34,6 +34,13 @@ preflights, builds, starts twelve containers, grants, seeds and passes `harness.
    a decision — run it inside the deployment's own network, rewrite it against the HTTP surface,
    or publish stores in a test profile — and that decision has not been taken.
 
+**A fourth finding, recorded rather than changed.** The rendered `compose.yaml` sets no
+`CORS_ALLOWED_ORIGINS`, so a deployed Conduit falls back to `services/api/app.py`'s development
+default, `http://localhost:5173`. The deployed Glass is unaffected — it reaches the Conduit
+same-origin through the workspace's nginx proxy — which is why nothing has noticed. A shipped
+deployment should not carry a Vite development origin in its cross-origin allowlist, and what it
+*should* carry has never been decided. A question for `05 §2.4`'s guard table.
+
 **What *is* now true**, and was not before this pass: the install works end to end from a clean
 clone on a properly-resourced machine, and its own three-sided `harness.verify` passes.
 
