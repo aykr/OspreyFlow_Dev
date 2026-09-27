@@ -28,12 +28,54 @@ def test_the_catalogue_names_every_group_from_the_spec() -> None:
     }
 
 
-def test_only_generic_csv_is_available_today() -> None:
-    """§2 lists the whole catalogue as real; only the generic CSV connector
-    has a backing reader (`services/ingest/connectors/csv_connector.py`) —
-    every other row is shown, not hidden, but marked unavailable."""
-    available_ids = {entry.id for entry in CONNECTOR_CATALOGUE if entry.available}
-    assert available_ids == {"generic-csv"}
+def test_availability_is_derived_from_the_profile_files_not_declared(tmp_path) -> None:
+    """**Round 13bf replaced the instance assertion with the mechanism one.** This test used to
+    read `assert available_ids == {"generic-csv"}` — true at the time, and a tripwire the moment
+    a second connector was built, which is exactly what happened. Pinning the *rule* instead means
+    it stays correct as layouts are added, and still fails if availability ever goes back to being
+    a literal.
+
+    The rule (`09_INGEST_STUDIO.md` §2): a connector is available iff a `connectors/<id>.yaml`
+    profile exists naming a reader this codebase implements. Nothing declares it.
+    """
+    from schemas.connectors import ConnectorProfile
+    from schemas.ingest import connector_catalogue
+
+    (tmp_path / "generic-csv.yaml").write_text(
+        ConnectorProfile(
+            id="generic-csv", label="CSV", group="Generic", reader="csv"
+        ).model_dump_json(),
+        encoding="utf-8",
+    )
+    # A profile naming a reader that does not exist: parsed, listed, and **unavailable** — the
+    # catalogue shows the gap rather than hiding the row.
+    (tmp_path / "comms-cdr-ipdr.yaml").write_text(
+        ConnectorProfile(
+            id="comms-cdr-ipdr", label="CDR", group="Communications", reader="not-implemented"
+        ).model_dump_json(),
+        encoding="utf-8",
+    )
+
+    catalogue = connector_catalogue(tmp_path)
+    by_id = {entry.id: entry for entry in catalogue}
+    assert by_id["generic-csv"].available is True
+    assert by_id["comms-cdr-ipdr"].available is False, (
+        "a profile naming an unimplemented reader was reported available, so the Studio would "
+        "offer a connector nothing can read"
+    )
+    assert by_id["generic-tsv"].available is False, (
+        "a declared entry with no profile file was reported available"
+    )
+    assert "generic-tsv" in by_id, "an entry with no profile vanished — the gap must stay visible"
+
+
+def test_the_shipped_profiles_make_the_cdr_layout_available() -> None:
+    """The instance, asserted separately from the rule above. `08_ACCEPTANCE_SCENARIOS.md` B1-B3
+    need `cdr-generic-csv`, and before round 13bf it was declared in §2's own catalogue and
+    refused by the Studio — the gap REPORT-13bc measured."""
+    by_id = {entry.id: entry for entry in CONNECTOR_CATALOGUE}
+    assert by_id["cdr-generic-csv"].available is True
+    assert by_id["generic-csv"].available is True
 
 
 def test_catalogue_ids_are_unique() -> None:

@@ -1,0 +1,28 @@
+# A carrier call-detail-record export in the generic CSV layout —
+# `08_ACCEPTANCE_SCENARIOS.md` Scenario B's own source, and the layout
+# `tests/scenarios/fixtures/cdr_recipe.yaml` has described since Phase 2.
+#
+# **This file is the whole of round 13bf's instance half**, and the point of the mechanism: adding
+# a carrier layout is a file, not a release (§2). Before it, B1-B3 could be walked in-process with
+# this exact connector block and were unreachable through the analyst's own door, because the
+# Studio refused every id but `generic-csv`.
+#
+# `date_order: dmy` is not decoration. B3 turns on it: the fixture carries `12/01/2026 10:00:00`,
+# which is 12 January read as `dmy` and 1 December read as `mdy`. `01_DOMAIN_MODEL.md` §7 / ADR-017
+# refuse to guess, so a layout that knows its own convention declares it once, here.
+#
+# **The source timezone is deliberately not here.** It rides on the binding's own
+# `datetime(tz=...)` transform, where the recipe already puts it, and
+# `packages/knowledge_adapters/datetime_adapter.py` refuses a value with neither an offset nor a
+# configured `tz` by name — B3's "rejected with a named error, not guessed", already satisfied
+# where it lives. A second place to declare a timezone would recreate the two-truths problem
+# `packages/schemas/connectors.py` exists to remove.
+id: cdr-generic-csv
+label: CDR — generic CSV export
+group: Communications
+structured: true
+reader: csv
+delimiter: ","
+encoding: utf-8
+header_rows: 1
+date_order: dmy

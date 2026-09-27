@@ -12,13 +12,17 @@ without re-deriving what belongs to it.
 
 from __future__ import annotations
 
+import os
 from datetime import datetime
 from enum import StrEnum
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from schemas.domain import Edge, EdgeId, Handling, Node, NodeId, PrincipalId, Provenance
+
+from .connectors import load_connector_profiles
 
 # --- Studio roles (09_INGEST_STUDIO.md §8) -------------------------------
 
@@ -45,11 +49,19 @@ class ConnectorCatalogueEntry(BaseModel):
     """One row of §2's structured/unstructured connector tables, reproduced
     verbatim rather than derived, so the Connect screen's catalogue always
     matches the doc exactly. `id` is a `RecipeConnector.profile` value once
-    a recipe is drafted against this entry. `available` is `False` for
-    every row that has no backing reader yet — only `generic-csv` does
-    today (`services/ingest/connectors/csv_connector.py`); the entry still
-    appears; the catalogue is never trimmed down to only what works, since
-    the whole point of showing it is that the gap is visible, not hidden."""
+    a recipe is drafted against this entry.
+
+    **`available` is derived, not declared** (round 13bf). It is `True` iff a
+    `connectors/<id>.yaml` profile exists naming a reader this codebase implements —
+    `packages/schemas/connectors.py` owns that, and `09_INGEST_STUDIO.md` §2's own "a validated
+    YAML file in `connectors/`, so adding a new carrier's CDR layout is a file rather than a
+    release" is the sentence it finally makes true. Before that it was a literal here *and* a
+    second, unconnected literal in `services/api/studio_profile.py`: two hand-maintained truths
+    about one fact, which is how the CDR layout came to be declared in this table and refused by
+    the Studio.
+
+    The entry still appears when unavailable; the catalogue is never trimmed down to only what
+    works, since the whole point of showing it is that the gap is visible, not hidden."""
 
     id: str
     label: str
@@ -135,7 +147,6 @@ _STRUCTURED_CATALOGUE: tuple[ConnectorCatalogueEntry, ...] = (
         label="CSV",
         group="Generic",
         structured=True,
-        available=True,
     ),
     ConnectorCatalogueEntry(id="generic-tsv", label="TSV", group="Generic", structured=True),
     ConnectorCatalogueEntry(id="generic-json", label="JSON", group="Generic", structured=True),
@@ -175,9 +186,49 @@ _UNSTRUCTURED_CATALOGUE: tuple[ConnectorCatalogueEntry, ...] = (
     ),
 )
 
-CONNECTOR_CATALOGUE: tuple[ConnectorCatalogueEntry, ...] = (
+#: Where connector profiles live, relative to the repository root — `09_INGEST_STUDIO.md` §2's
+#: own `connectors/`. Overridable so a deployment can ship its own layouts without a rebuild,
+#: which is the other half of "a file rather than a release".
+CONNECTORS_DIR = Path(os.environ.get("OSPREY_CONNECTORS_DIR", "connectors"))
+
+_DECLARED_CATALOGUE: tuple[ConnectorCatalogueEntry, ...] = (
     _STRUCTURED_CATALOGUE + _UNSTRUCTURED_CATALOGUE
 )
+
+
+def connector_catalogue(directory: Path | None = None) -> tuple[ConnectorCatalogueEntry, ...]:
+    """§2's catalogue with `available` filled in from the profile files actually present.
+
+    A declared entry with no profile file is reported unavailable — visible, and honest about the
+    gap. A profile file with no declared entry is **added**, because a deployment that drops in
+    its own carrier layout must be able to select it; its label and group come from the file.
+    """
+    profiles = load_connector_profiles(directory if directory is not None else CONNECTORS_DIR)
+    entries = [
+        entry.model_copy(
+            update={"available": entry.id in profiles and profiles[entry.id].available}
+        )
+        for entry in _DECLARED_CATALOGUE
+    ]
+    declared_ids = {entry.id for entry in _DECLARED_CATALOGUE}
+    for profile in profiles.values():
+        if profile.id in declared_ids:
+            continue
+        entries.append(
+            ConnectorCatalogueEntry(
+                id=profile.id,
+                label=profile.label,
+                group=profile.group,
+                structured=profile.structured,
+                available=profile.available,
+            )
+        )
+    return tuple(entries)
+
+
+#: Evaluated at import, so a profile file added while the Conduit is running needs a restart to
+#: appear — the same contract the ontology and the handling scheme already have.
+CONNECTOR_CATALOGUE: tuple[ConnectorCatalogueEntry, ...] = connector_catalogue()
 
 
 class StudioRecipeStatus(StrEnum):

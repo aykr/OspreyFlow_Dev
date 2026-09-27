@@ -1,0 +1,18 @@
+# The fallback that always works — `09_INGEST_STUDIO.md` §2's "Generic" group.
+#
+# This file exists so that `generic-csv` resolves through the *same* mechanism as every other
+# connector rather than being a hard-coded special case beside it. Before round 13bf its
+# availability was a boolean literal in two unconnected Python files; now a connector is available
+# because a profile file exists naming an implemented reader, and this is that file.
+#
+# No `date_order`: a generic CSV makes no claim about its own date convention, and
+# `01_DOMAIN_MODEL.md` §7 forbids guessing one. A recipe over a generic CSV whose dates are
+# ambiguous declares the order itself, per field or per recipe.
+id: generic-csv
+label: CSV
+group: Generic
+structured: true
+reader: csv
+delimiter: ","
+encoding: utf-8
+header_rows: 1
