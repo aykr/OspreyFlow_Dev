@@ -151,7 +151,7 @@ conformance-guard:
 
 # GraphPort's real conformance suite (Phase 1) and the recipe-engine
 # end-to-end test (Phase 2) — both need a live ArcadeDB.
-# `docker run --rm -p 2480:2480 -e JAVA_OPTS="-Darcadedb.server.rootPassword=playwithdata123" arcadedata/arcadedb:24.11.1`
+# `docker run --rm -p 2480:2480 -e JAVA_OPTS="-Darcadedb.server.rootPassword=playwithdata123" arcadedata/arcadedb:25.5.1`
 conformance:
 	$(PYTEST) tests/conformance/graph_port tests/ingest
 
@@ -236,8 +236,42 @@ docker-clean:
 # 07_BUILD_PLAN.md Stage 2a). Measured the same day: the identical batch against an accumulated
 # ArcadeDB produced 94 failed / 49 passed in 24:51, and against fresh volumes 7 failed / 136 passed
 # in 6:38. Every Floor B figure taken before this change was measured against accumulated state.
+# **`-v` became `rm -fsv arcadedb` on 27 September 2026 (round 13bb), and the reset it exists for
+# is unchanged — proved, not assumed.** `down -v` removes *every* volume this compose project
+# owns. Checked directly: the only two **named** volumes in `dev.yaml` are `ollama-models` and
+# `speaches-models` — the model caches — and ArcadeDB declares none at all, so its databases live
+# in **anonymous** volumes the image itself declares (`/home/arcadedb/databases`, `config`, `log`).
+# `-v` therefore reset ArcadeDB (correct, and what the measurement above is about) and, as a pure
+# side effect, deleted ~1.5GB of pinned models that `ollama`'s own entrypoint then had to re-pull
+# before it could report healthy. On 27 September that re-pull outran its healthcheck budget and
+# `up --wait` aborted the whole target — "dependency failed to start: container compose-ollama-1
+# is unhealthy" — before a single test ran. A test target that downloads 1.5GB over the network
+# to start is not one that produces a trustworthy figure in one pass.
+#
+# `rm -fsv arcadedb` stops and removes that one container *with its anonymous volumes*, which is
+# exactly the reset, and `down` then clears the rest while leaving named volumes alone. Measured
+# both halves: a probe database created beforehand is gone afterwards (`list databases` → `[]`),
+# and both model volumes survive.
+# **The ArcadeDB reset is `rm -fsv arcadedb`, not `down -v`, from 27 September 2026 (round 13bb)
+# — and the reset it exists for is unchanged, proved rather than assumed.** `down -v` removes
+# *every* volume this compose project owns. Checked directly: the only two **named** volumes in
+# `dev.yaml` are `ollama-models` and `speaches-models` — the model caches — and ArcadeDB declares
+# none at all, so its databases live in **anonymous** volumes the image itself declares
+# (`/home/arcadedb/databases`, `config`, `log`). `-v` therefore reset ArcadeDB (correct, and what
+# the measurement above is about) and, as a pure side effect, deleted ~1.5GB of pinned models that
+# `ollama`'s own entrypoint then had to re-pull before it could report healthy. On 27 September
+# that re-pull outran its healthcheck budget and `up --wait` aborted the whole target — "dependency
+# failed to start: container compose-ollama-1 is unhealthy" — before a single test ran. A test
+# target that downloads 1.5GB over the network to start is not one that produces a trustworthy
+# figure in one pass.
+#
+# `rm -fsv arcadedb` stops and removes that one container *with its anonymous volumes*, which is
+# exactly the reset, and `down` then clears the rest while leaving named volumes alone. Measured
+# both halves: a probe database created beforehand is gone afterwards (`list databases` -> `[]`),
+# and both model volumes survive.
 test-all:
-	docker compose -f deploy/compose/dev.yaml down -v
+	docker compose -f deploy/compose/dev.yaml rm -fsv arcadedb
+	docker compose -f deploy/compose/dev.yaml down
 	docker compose -f deploy/compose/dev.yaml up -d --wait
 	$(PYTEST) tests/conformance/graph_port tests/conformance/model_port tests/golden tests/scenarios/test_witness_statement_extraction.py tests/ingest tests/scenarios/test_phase3_working_set.py tests/scenarios/test_hmp_graph.py tests/services/api/test_valkey_store.py tests/services/api/test_statelessness.py tests/services/api/test_sites_store.py tests/services/api/test_tile_cache.py tests/services/api/test_prefetch.py tests/geocoder/test_match_live.py tests/services/api/test_assessments.py tests/services/api/test_assessment_routes.py tests/services/api/test_export.py tests/services/api/test_export_routes.py tests/services/api/test_change_stream.py tests/services/api/test_alerts.py tests/services/api/test_pattern_store.py tests/services/api/test_hotlists.py tests/services/api/test_monitors.py tests/services/api/test_evaluation.py tests/resolve/test_projection_access_control.py tests/resolve/test_trigger.py tests/scenarios/test_phase6a_glass_surfaces.py tests/services/api/test_access.py tests/services/api/test_dossier_access_control.py tests/services/api/test_review.py tests/services/api/test_review_store.py tests/services/api/test_studio_recipes_store.py tests/services/api/working_set/test_compute_access_control.py tests/services/api/working_set/test_explain_cluster_access_control.py tests/services/api/working_set/test_manual_resolution_access_control.py tests/services/api/working_set/test_resolution_threshold_access_control.py tests/scenarios/test_phase7_stage6c_watch_routes.py tests/scenarios/test_fixture_corp_shape.py tests/services/api/test_worker.py tests/services/api/test_worker_replicas.py tests/services/api/test_revoked_principal_precheck.py
 	npm run test:integration --workspace apps/workspace

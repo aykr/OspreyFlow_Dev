@@ -55,6 +55,42 @@ _STALE_DATABASE_PREFIX = "conformance_"
 _STALENESS_WINDOW_SECONDS = 60 * 60
 
 
+#: Every database this *process* created and has not yet dropped. Not a count of what is on the
+#: server: a global count cannot tell this session's databases from a concurrent session's, and
+#: would make the assertion below either wrong under concurrency or useless without it.
+#:
+#: **Round 13bb, 27 September 2026.** The teardown below has always been per test, in a `finally`,
+#: and a full `make test-all` measured directly never held more than one at a time — so the
+#: accumulation `07_BUILD_PLAN.md` Stage 2a suspected was not what exhausted the server (a 6GB
+#: heap was; `harness/profiles.py` has that log). This set exists anyway, because "the fixture
+#: drops what it created" was an invariant stated in a docstring and exercised by nothing —
+#: `CLAUDE.md` rule 12's shape exactly, and the thing that would have made the accumulation
+#: hypothesis checkable in round 13 rather than plausible.
+_LIVE_CONFORMANCE_DATABASES: set[str] = set()
+
+
+class LeakedConformanceDatabasesError(AssertionError):
+    """Names every database the fixture created and did not drop — never a bare count, since the
+    name carries its own creation time and so says which test run orphaned it."""
+
+    def __init__(self, names: set[str]) -> None:
+        self.names = frozenset(names)
+        super().__init__(
+            "the conformance fixture created database(s) it never dropped: "
+            + ", ".join(sorted(names))
+            + ". Each one stays resident in ArcadeDB's heap for the rest of the session and "
+            "survives it on disk; `sweep_stale_conformance_databases` is the recovery, not a "
+            "licence to leak."
+        )
+
+
+def assert_no_leaked_conformance_databases() -> None:
+    """Called once at session end (`tests/conftest.py`'s `pytest_sessionfinish`). A no-op for a
+    session that never used the fixture, which is every run of `make test`."""
+    if _LIVE_CONFORMANCE_DATABASES:
+        raise LeakedConformanceDatabasesError(_LIVE_CONFORMANCE_DATABASES)
+
+
 @asynccontextmanager
 async def arcadedb_adapter(
     ontology: OntologySchema, handling_scheme: HandlingScheme
@@ -63,11 +99,15 @@ async def arcadedb_adapter(
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database))
     try:
         await client.create_database_if_absent()
+        _LIVE_CONFORMANCE_DATABASES.add(database)
         adapter = GraphArcadeDBAdapter(client, handling_scheme)
         await adapter.apply_schema(ontology)
         yield adapter
     finally:
         await client.drop_database()
+        # Only after the drop actually returned. A `drop_database` that raised leaves the name in
+        # the set, which is the case worth reporting — not one to swallow by discarding first.
+        _LIVE_CONFORMANCE_DATABASES.discard(database)
         await client.aclose()
 
 

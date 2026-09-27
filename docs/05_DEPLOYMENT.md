@@ -620,6 +620,36 @@ those runs passed** — this is not a bug that fails loudly; it is a live store 
 reclaims memory across workloads nor holds its own query performance steady as data accumulates.
 In any real deployment, data always accumulates — an investigation is added to, not replaced.
 
+**Cause found, and largely fixed, 27 September 2026 (round 13bb) — this section is narrowed, not
+withdrawn.** The mechanism behind "never gave any of it back" is now named: ArcadeDB **24.11.1**
+retained memory per *database lifecycle*, independent of workload. Isolated to its smallest form,
+five bare `create` → `apply_schema` → `drop` cycles — writing no data, running no query — took the
+server from **141.7 MiB to 8.2 GiB**, and dropping the database returned none of it. Raising the
+JVM heap was measured **not** to help (the live set simply grew with it), and neither did bounding
+`arcadedb.dbPageCacheSize`.
+
+**Fixed upstream in ArcadeDB 25.5.1**, now the pinned version. The identical reproduction
+plateaus at ~1.5 GiB and stays flat (1.499 GiB at five cycles, 1.516 GiB at twenty), and the
+six-cycle sustained-load curve improves accordingly, measured on the same host with the same
+workload:
+
+| | round 08 (24.11.1, `-Xmx6G`) | round 13bb (25.5.1, `-Xmx8G`) |
+| --- | --- | --- |
+| ArcadeDB RSS, cycle 1 → 6 | 6555.6 → 7174.1 MiB | **2165.8 → 2470.9 MiB** |
+| growth per cycle | 123.7 MiB | **61.0 MiB** |
+| heap used at cycle 6 | 5201.9 / 6144 MiB | **976.5 / 8192 MiB** |
+| query latency, cycle 6 ÷ cycle 1 | 1.29× | **1.12×** |
+
+`Claude outputs/handoff/sustained_load_results_round13bb.csv` has the full curve beside round 08's.
+
+**What this does not settle, and why the section stays.** Growth per cycle is halved and
+flattening (cycles 5→6 added 7.2 MiB), not zero — so a long-running instance still accumulates,
+and **the safe restart interval is still not known**. What has changed is that the accumulation
+no longer has an unbounded component that exhausts the heap outright, and the degradation this
+section was first written from (117s → 151s → 203s on an identical workload) had that component
+in it. Re-measuring the original three-run sequence against 25.5.1 is the work that would let this
+section be closed rather than narrowed; it has not been done.
+
 **The operational consequence, stated plainly:** a running instance should be expected to need
 periodic restarts to recover memory, and **the safe interval between them is not yet known** —
 nobody has measured how far this degradation goes, whether it plateaus at some working-set size

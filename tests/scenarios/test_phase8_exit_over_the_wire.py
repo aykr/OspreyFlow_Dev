@@ -643,10 +643,17 @@ def test_scenario_a_over_the_wire(analyst: httpx.Client, seeded_scope: str) -> N
     # the retraction the judgement lists with `flagged_for_review: false`; after it, the list is
     # empty; the node is back under a new id in `inferred`.
     #
-    # This asserts what is true today, deliberately, and says so. The day it is fixed — by
-    # resolving a superseded citation to its successor, or by exempting a flagged judgement from
-    # hide-in-full, or by rewriting `supporting` on supersede — this assertion fails and demands
-    # that 08's own sentence and this test be brought back into agreement in the same change.
+    # This asserts what is true today, deliberately, and says so. **Owner ruling R7 (27 September
+    # 2026, recorded TENTATIVE in `06_DECISIONS.md` ADR-046's addendum pending the owner's own
+    # usability walkthrough) settles which way it goes**: a judgement citing a marked or
+    # superseded node stays visible to its author, flagged for review, with the citation resolved
+    # to the successor for display — hide-in-full is for citations the principal is not permitted
+    # to verify, not for ones the system itself superseded. R7 also makes retraction two steps
+    # (mark in the Glass; effect it with a retraction record ingested through the Studio), which
+    # depends on ruling R6 and so cannot land before it. None of that is built, so this step still
+    # pins current behaviour — and fails the day it changes, which is the point: the fix cannot
+    # land without `08_ACCEPTANCE_SCENARIOS.md`'s own sentence and this assertion being brought
+    # into agreement in the same change.
     before = analyst.get(f"/v1/investigations/{investigation}/judgements")
     assert before.status_code == 200, before.text
     listed_before = [j for j in before.json()["judgements"] if j["id"] in judgements]

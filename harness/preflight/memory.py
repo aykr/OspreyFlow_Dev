@@ -27,16 +27,15 @@ import subprocess
 
 from harness.preflight.context import PreflightContext
 from harness.preflight.result import CheckResult, failed, passed, skipped
+from harness.profiles import LOCAL_LITE_FLOOR_BYTES, PROFILE_FLOORS
 
 NAME = "memory"
 
-#: `05_DEPLOYMENT.md` §1 ("One laptop, 16 GB") and §3 ("If Preflight finds less than 16 GB").
-LOCAL_LITE_FLOOR_BYTES = 16 * 1024**3
-PROFILE_FLOORS = {
-    "local-lite": LOCAL_LITE_FLOOR_BYTES,
-    "small": 16 * 1024**3,
-    "cluster": 16 * 1024**3,
-}
+# The floor itself moved to `harness/profiles.py` (round 13bb) — ArcadeDB's own JVM heap is
+# derived from the same number, and the two had drifted apart badly enough to OOM the server;
+# that module's docstring has the log. Imported above rather than redefined, which also keeps
+# every existing `from harness.preflight.memory import LOCAL_LITE_FLOOR_BYTES` working unchanged.
+__all__ = ["LOCAL_LITE_FLOOR_BYTES", "NAME", "PROFILE_FLOORS", "check"]
 
 
 def _gib(value: int) -> str:

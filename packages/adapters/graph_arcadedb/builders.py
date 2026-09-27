@@ -9,6 +9,7 @@ added later, with no change to the callers in `adapter.py`.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from schemas.domain import ExpandRequest, PathRequest, PatternEdge, PatternQuery, Principal
 
@@ -30,9 +31,7 @@ class GetNodeBuilder:
     include_superseded: bool = False
 
     def render_gremlin(self, access: AccessFilter, principal: Principal) -> str:
-        has_access = access.gremlin_has_step(
-            principal, include_superseded=self.include_superseded
-        )
+        has_access = access.gremlin_has_step(principal, include_superseded=self.include_superseded)
         node_lit = groovy_string_literal(self.node_id)
         return f'g.V().has("id",{node_lit}).{has_access}.elementMap()'
 
@@ -72,13 +71,10 @@ class SearchNodesBuilder:
         has_access = access.gremlin_has_step(principal)
         value_lit = groovy_string_literal(self.query)
         clauses = ",".join(
-            f'__.has({groovy_string_literal(field)},{value_lit})'
+            f"__.has({groovy_string_literal(field)},{value_lit})"
             for field in self.identifier_fields
         )
-        return (
-            f"g.V().or({clauses}).{has_access}"
-            f".dedup().limit({self.limit}).elementMap()"
-        )
+        return f"g.V().or({clauses}).{has_access}.dedup().limit({self.limit}).elementMap()"
 
 
 @dataclass(frozen=True)
@@ -134,6 +130,14 @@ class SuggestLocationsBuilder:
         )
 
 
+def _local_date_time(moment: datetime) -> str:
+    """A Groovy `java.time.LocalDateTime` literal for an aware datetime, normalised to UTC and
+    rendered naive — see `_temporal_filter` for why the millis forms cannot be used on ArcadeDB
+    25.5.1."""
+    utc_naive = moment.astimezone(UTC).replace(tzinfo=None)
+    return f'java.time.LocalDateTime.parse("{utc_naive.isoformat(timespec="milliseconds")}")'
+
+
 @dataclass(frozen=True)
 class ExpandBuilder:
     request: ExpandRequest
@@ -163,14 +167,27 @@ class ExpandBuilder:
         window = self.request.temporal_window
         if window is None:
             return ""
-        # A `gte`/`lte` predicate against a DATETIME property needs an
-        # actual `Date` to compare correctly, not a String — see
-        # `serialization.py`'s note on `valid_from`/`valid_to`.
-        start_millis = int(window.valid_from.timestamp() * 1000)
-        clause = f'.has("valid_from",gte(new Date({start_millis}L)))'
+        # **`LocalDateTime`, not `new Date(millis)` — changed with the ArcadeDB 25.5.1 pin
+        # (round 13bb, 27 September 2026), and it is a silent-wrong-answer change, not a syntax
+        # one.** On 24.11.1 a `gte`/`lte` predicate against a DATETIME property needed an actual
+        # `Date` built from epoch millis. On 25.5.1 every millis-based form still *parses and
+        # runs* and simply matches nothing: measured against the adapter's own stored shape, with
+        # one edge genuinely inside the window, `gte(new Date(ms))` -> 0, `gte(<long>)` -> 0,
+        # `between(lo,hi)` -> 0, `Instant.ofEpochMilli` -> 0, no filter at all -> 1, and
+        # `LocalDateTime.parse(...)` -> 1. A temporal expansion would have returned an empty
+        # neighbourhood rather than an error.
+        #
+        # `test_expand_temporal_window_filters_edges_by_valid_from` is the case that caught it and
+        # is the case that fails if this regresses — the only red in the whole suite under the new
+        # pin, which is the entire argument for the conformance suite existing.
+        #
+        # The stored value reads back UTC-naive (`SELECT valid_from` -> `2026-09-27 14:11:03`
+        # for an edge written at 14:11 UTC), so the bound is rendered UTC-naive too; milliseconds
+        # are kept because the stored value carries them even though the default display truncates
+        # to seconds, and a truncated bound would misjudge an edge inside the same second.
+        clause = f'.has("valid_from",gte({_local_date_time(window.valid_from)}))'
         if window.valid_to is not None:
-            end_millis = int(window.valid_to.timestamp() * 1000)
-            clause += f'.has("valid_from",lte(new Date({end_millis}L)))'
+            clause += f'.has("valid_from",lte({_local_date_time(window.valid_to)}))'
         return clause
 
     def _repeat_clause(self, access: AccessFilter, principal: Principal) -> str:
@@ -538,7 +555,9 @@ class MatchBuilder:
 
         steps = ["g.V()"]
         if primary.entity_type:
-            steps.append(f".hasLabel({groovy_string_literal(physical_type_name(primary.entity_type))})")
+            steps.append(
+                f".hasLabel({groovy_string_literal(physical_type_name(primary.entity_type))})"
+            )
         if primary.node_id:
             steps.append(f'.has("id",{groovy_string_literal(primary.node_id)})')
         steps.append(f".{has_access}")
@@ -552,7 +571,9 @@ class MatchBuilder:
             steps.append(".inV()")
             steps.append(f".{has_access}")
             if to_node and to_node.entity_type:
-                steps.append(f".hasLabel({groovy_string_literal(physical_type_name(to_node.entity_type))})")
+                steps.append(
+                    f".hasLabel({groovy_string_literal(physical_type_name(to_node.entity_type))})"
+                )
             steps.append(f".as({groovy_string_literal(edge.to_var)})")
 
         for root in secondary_roots:

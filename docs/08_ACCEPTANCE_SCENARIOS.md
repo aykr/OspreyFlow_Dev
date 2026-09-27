@@ -28,7 +28,18 @@ supply a source file** — `POST /v1/ingest/recipes` takes a `source_location` t
 container must be able to read, nothing is mounted there, and the only upload route in the Conduit
 is the site image. So B1–B3 and every row that depends on data arriving that way (B6, B7, B8, B13,
 B14, B15–B18) cannot be performed by an analyst against a rendered deployment at all. That is a
-product gap, recorded in `07_BUILD_PLAN.md`, not a shortfall of the test.
+product gap, not a shortfall of the test.
+
+**Ruled 27 September 2026 — owner ruling R6, restated the same day in fuller terms.** Ingest for
+a rendered deployment works **through the existing Ingest Studio**, not around it: the ingest
+folder is a configurable storage root in `osprey.yaml` (`components.storage.ingest`) alongside
+data, staging and backups, set on the Components screen and shown in the summary rail; the
+renderer bind-mounts it read-only into the Conduit for every profile; and the Studio's Connect
+stage lists that folder's files so an analyst picks one and maps it on the existing Map canvas to
+the POLE model. A browser upload route is explicitly post-milestone, as are Map's two already
+recorded gaps. `07_BUILD_PLAN.md` carries the ruling verbatim and the five pieces that have to
+land together. Until they do, the rows above stay proven at the in-process tier only, and this
+section's table stays as it reads.
 
 ---
 
@@ -132,10 +143,27 @@ the Judgements tab's own route calls) removes every judgement with an unverifiab
 citation. Measured through the deployed Conduit: before the retraction the judgement lists with
 `flagged_for_review: false`; after it, the list is empty. Two rules each correct alone compose
 into a third behaviour this document does not describe, and no test could see it because the only
-one that checked the flag bypassed the route. **Open, for decision**: resolve a superseded
-citation to its successor, exempt a flagged judgement from hide-in-full, or rewrite `supporting`
-on supersede. `tests/scenarios/test_phase8_exit_over_the_wire.py` asserts today's behaviour
-explicitly and fails the day it changes, so this sentence and that test are corrected together.
+one that checked the flag bypassed the route.
+
+**Ruled 27 September 2026 — owner ruling R7, and recorded as TENTATIVE at the owner's own
+instruction, to be revisited after their usability walkthrough.** `06_DECISIONS.md` ADR-046's
+addendum carries it in full. Two parts:
+
+- **Retraction becomes two steps.** In the Glass an analyst *marks* a node for suppression —
+  immediate, reversible, shown as a marker on the node and in the inspector. The suppression only
+  *takes effect* when its evidence arrives through the Ingest Studio: a retraction record ingested
+  and mapped to the node like any other source, so no suppression is ever an unevidenced click.
+  This depends on ruling R6 (ingest for a rendered deployment works through the Studio) and cannot
+  land before it.
+- **A judgement citing a marked or suppressed node stays visible to its author, flagged for
+  review, with the citation resolved to the successor for display.** ADR-046's hide-in-full rule
+  applies to citations the principal is not *permitted* to verify, not to citations the system
+  itself superseded.
+
+So the sentence above is right and the implementation is not yet.
+`tests/scenarios/test_phase8_exit_over_the_wire.py` asserts today's behaviour explicitly and
+fails the day it changes — deliberately, so the fix cannot land without this document's own
+sentence and that assertion being brought into agreement in the same change.
 
 ### The fixture's statistical shape is built and proved in Phase 2
 

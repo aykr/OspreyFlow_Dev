@@ -221,3 +221,33 @@ def default_claims(**overrides: object) -> dict[str, object]:
     }
     base.update(overrides)
     return base
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """**The conformance fixture must not leave a database behind, and now something checks.**
+
+    Round 13bb, 27 September 2026. `packages/adapters/graph_arcadedb/testing.py`'s per-test
+    teardown has always dropped the database it created, in a `finally` — and that invariant was
+    stated in a docstring and exercised by nothing, which is why round 13 could only *suspect*
+    that a full `make test-all` accumulated `conformance_*` databases and exhausted the server.
+    Measured, it does not: the count never exceeded one at a time, and the real cause was a 6GB
+    JVM heap (`harness/profiles.py` has the server's own log). The hypothesis was reasonable and
+    unfalsifiable; this makes it falsifiable either way, for a few lines.
+
+    A no-op for any session that never used the fixture, which is every run of `make test` — it
+    asserts against the names *this process* created, never a count of what is on the server, so
+    it is correct under concurrency and needs no ArcadeDB connection to decide.
+    """
+    from adapters.graph_arcadedb.testing import (
+        LeakedConformanceDatabasesError,
+        assert_no_leaked_conformance_databases,
+    )
+
+    try:
+        assert_no_leaked_conformance_databases()
+    except LeakedConformanceDatabasesError as leaked:
+        # Reported *and* failed: a session that leaks is not a green run, and
+        # `pytest_sessionfinish` is past the point where a raise would be attributed to any one
+        # test — so it is printed and the exit status is set, rather than thrown into the void.
+        print(f"\nERROR: {leaked}")
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED

@@ -278,7 +278,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       arcadedb:
-        image: arcadedata/arcadedb:24.11.1
+        image: arcadedata/arcadedb:25.5.1
         ports:
           - 2480:2480
         env:
@@ -498,7 +498,7 @@ jobs:
     # simulation blind.
     services:
       arcadedb:
-        image: arcadedata/arcadedb:24.11.1
+        image: arcadedata/arcadedb:25.5.1
         ports:
           - 2480:2480
         env:

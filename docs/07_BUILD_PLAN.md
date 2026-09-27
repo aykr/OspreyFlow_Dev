@@ -64,8 +64,43 @@ preflights, builds, starts twelve containers, grants, seeds and passes `harness.
   its data volume; the only `UploadFile` route in the whole Conduit is the site image. So B1's
   "ingest both CDR files and both device extractions" — and B2, B3, B6, B7, B8, B13, B14, B15–B18
   with it — cannot be performed by an analyst against a rendered deployment at all. Those rows
-  stay proven at the in-process tier only. This is real, unscoped product work (an upload route,
-  or a documented ingest mount), not a test gap.
+  stay proven at the in-process tier only.
+
+  **Ruled, 27 September 2026 — owner ruling R6, restated the same day in fuller terms; the
+  restatement is what stands.** An earlier form of this ruling described a bare drop folder, and
+  recording that would have been wrong in substance: the ruling is that **ingest for a rendered
+  deployment works through the existing Ingest Studio**, not around it. Verbatim:
+
+  > ingest for a rendered deployment works through the existing Ingest Studio. The ingest folder
+  > is a configurable storage root in `osprey.yaml` (`components.storage.ingest`) alongside data,
+  > staging and backups, set on the Components screen and shown in the summary rail; the renderer
+  > bind-mounts it read-only into the Conduit for every profile; the studio's Connect stage lists
+  > the files in that folder so an analyst selects one and maps it on the existing Map canvas to
+  > the POLE model. Documented in `05 §3` and `DEMO_GUIDE.md`. Map's two recorded gaps (keyboard
+  > binding, proposed templates) remain post-milestone; an upload route through the browser is
+  > also post-milestone.
+
+  **Not built in round 13bb** — that round's brief is ArcadeDB's heap, and building this inside it
+  would be exactly the silent scope widening this plan keeps catching. It needs its own brief, and
+  the pieces have to land together or the folder is undiscoverable and the Studio cannot reach it:
+
+  1. **`components.storage.ingest`** — a fourth root on `StorageRoots`
+     (`packages/schemas/deployment.py`), whose own docstring currently reads "the storage roots for
+     data, staging and backups" and will need the fourth naming too. A schema change, so the
+     generated TypeScript moves with it (`make schemas-check` is the gate that says so).
+  2. **The rendered read-only bind mount, for every profile.** `tests/harness/test_render.py` is
+     where the case that fails if it is dropped belongs — in the same change, not a follow-up.
+     Today the rendered `api` service mounts only `osprey.yaml` and its data volume, which is the
+     finding above.
+  3. **The Components screen and the summary rail** (`apps/harness`), since a root nobody can set
+     is a root nobody uses.
+  4. **The Connect stage listing the folder's files**, which is the half that makes this the
+     Studio's own path rather than a drop folder with a manual `source_location` typed in.
+  5. **`05 §3` and `DEMO_GUIDE.md`.**
+
+  Explicitly **post-milestone**, by the same ruling: a browser upload route, and Map's two already
+  recorded gaps (keyboard binding, proposed templates).
+
 - **`08_ACCEPTANCE_SCENARIOS.md`'s own "retraction propagates" assertion is not what the analyst
   sees.** The flag is written; the judgement then disappears from the Judgements tab rather than
   appearing flagged, because retraction supersedes the node with a new id and ADR-046's
@@ -93,6 +128,10 @@ analyst, to the coverage the test's own docstring states.
   the correction at its own entry.
 - Stage 2a — ArcadeDB stability. Closed; the 10GiB VM floor resolved causes one through four,
   cause five reduced to the same mechanism, the criterion re-pointed to a clean install.
+  **Cause five is now named and fixed at its root (round 13bb, 27 September 2026): it was a
+  per-database-lifecycle memory leak in ArcadeDB 24.11.1, fixed upstream in 25.5.1, and the pin
+  has moved.** See the Stage 2a entry below for the reproduction, the two levers that were
+  measured *not* to work, and the one regression the bump cost.
 - `Makefile`/`ci.yml` reconciliation (pulled forward from Stage 6). Built.
 - `PathStaleError` and the server-side traversal budget (pulled forward from Stage 5). Built.
 
@@ -108,7 +147,7 @@ this table exists to stop.
 | Stage 2c — Sign-in for the Glass | `make test`'s own auth suite (`tests/services/api/test_auth.py`, `test_ws_ticket.py`) | **passed**, inside 1067 |
 | Stage 4 (4-spec, 4a–4h) — product-feature core | `make test` 1067 passed; `make glass-live` 9 passed | **passed** |
 | Stage 1 — principal resolution (ADR-043) | `make test`'s own exchange tests | **passed**, inside 1067 |
-| Stage 2a — ArcadeDB stability | *Not re-proven as "closed" this pass.* Round 12e hit the recorded accumulation failure (`IndexException` on `apply_schema`) and cleared it only by `dev-down`/`dev-up` — see that round's §6 | **stands, with the caveat below** |
+| Stage 2a — ArcadeDB stability | **Re-proven and root-caused, round 13bb (27 Sep).** The recorded `IndexException` was a *symptom*: ArcadeDB 24.11.1 retained memory per database lifecycle (five bare create/apply_schema/drop cycles: 141.7MiB → 8.2GiB, drop returns none of it) until the heap was exhausted. Fixed upstream in **25.5.1** — the identical reproduction plateaus at ~1.5GiB. `make test-all` now completes in one pass: **301 passed, 5 skipped, 0 failed in 4:29** | **closed, on a named cause** |
 | `Makefile`/`ci.yml` reconciliation | `make -k ci` in full, per target | **see round 13's report** |
 | `PathStaleError` + traversal budget | `make test` | **passed**, inside 1067 |
 | Stage 2 §1–§6 (harness/packaging) | The clean install itself: `render` → `preflight` → `build` → `up` → `grants` → `seed` → `verify`, **3/3 assertions green**, from a fresh clone | **passed** |
@@ -1907,6 +1946,59 @@ repeated in full here, so this summary stays a map, not a second copy:**
    for the re-pointed exit criterion and the measurement that met it) — a demo that fails more
    often than it completes is not a background nuisance under an install-and-demo milestone, and
    this stage's own work found that a clean install-and-demo run does not fail.
+
+   **Root-caused and fixed at source, round 13bb, 27 September 2026 — and the recorded cause was
+   the symptom, not the cause.** For two rounds this stage named the failure as an `IndexException`
+   on `apply_schema`'s index pass, observed alongside a container at 7.22 GiB "reporting healthy".
+   Reading **ArcadeDB's own log** rather than the client's error, for the first time, found the
+   line twelve seconds upstream of it:
+
+   ```
+   ArcadeDB Server started in 'development' mode (CPUs=12 MAXRAM=6.00GB)
+   java.lang.OutOfMemoryError: Java heap space
+   Dumping heap to java_pid1.hprof ... [3064364881 bytes in 1.375 secs]
+   SEVER [PostCommandHandler] Error on creating index on type 'mx_COMMUNICATED_WITH', properties [owning_unit]
+   ```
+
+   **What accumulates, isolated to its smallest form.** Not `conformance_*` databases on disk —
+   the fixture drops those correctly, which round 13bb proved by instrumenting it (and which
+   `tests/conftest.py`'s `pytest_sessionfinish` now asserts, red-first). It is **server memory per
+   database lifecycle**: five bare `create` → `apply_schema` → `drop` cycles, writing no data and
+   running no query, took ArcadeDB 24.11.1 from **141.7 MiB to 8.2 GiB**, and dropping the
+   database returned none of it. The whole `graph_port` suite (66 such cycles) ended at 6.2 GiB
+   with `list databases` returning `[]`.
+
+   **Two levers were tried and measured not to work**, recorded because they are the obvious ones
+   to reach for next time: raising the heap (`-Xmx6G` OOM'd at 50% of the suite, `-Xmx8G` at 53% —
+   the live set simply grew with the heap, 3.06 GB → 4.48 GB), and bounding
+   `arcadedb.dbPageCacheSize` to 512 MiB (no effect: still 7.4 GiB over 20 cycles).
+
+   **Fixed upstream in ArcadeDB 25.5.1**, which is the class fix and why the pin moved in
+   `deploy/compose/dev.yaml`, `harness/render.py` and both `ci.yml` jobs. The identical
+   reproduction on 25.5.1 plateaus and stays flat: 1.499 GiB at 5 cycles, 1.516 GiB at 20 — 17 MiB
+   of drift where 24.11.1 climbed without a ceiling. The `graph_port` suite also runs ~4× faster
+   (57s against 3:44).
+
+   **The bump cost exactly one regression, and it was a silent wrong answer rather than an
+   error.** `expand` with a `temporal_window` returned an empty neighbourhood: on 25.5.1 every
+   epoch-millis predicate form against a DATETIME property still parses, still runs, and matches
+   nothing (`gte(new Date(ms))` → 0, `gte(<long>)` → 0, `between(lo,hi)` → 0,
+   `Instant.ofEpochMilli` → 0, no filter → 1, `LocalDateTime.parse(...)` → 1). `builders.py`'s
+   `_temporal_filter` now emits a UTC-naive `LocalDateTime` literal.
+   `test_expand_temporal_window_filters_edges_by_valid_from` was **the only red in 306 tests** and
+   is the case that fails if this regresses — the conformance-suite-before-adapters rule paying
+   for itself exactly as intended.
+
+   **Also fixed, and a separate fault:** `make test-all`'s own `down -v` deleted the `ollama-models`
+   and `speaches-models` **named** volumes (ArcadeDB declares none — its databases live in the
+   image's own **anonymous** volumes), forcing a ~1.5 GB model re-pull that outran ollama's
+   healthcheck and aborted the target before a single test ran. Now `rm -fsv arcadedb` + `down`,
+   which resets ArcadeDB exactly as before (measured: a probe database is gone afterwards) and
+   leaves the caches alone.
+
+   **`make test-all` now completes in one pass on this host: 301 passed, 5 skipped, 0 failed in
+   4:29**, plus the vitest integration half (1 file, 3 tests). That is the first trustworthy
+   Floor B since round 08.
 
 Everything else previously filed under this document's own retired "After the milestone" heading
 (the smaller already-scoped code fixes, test-infrastructure/CI hygiene apart from the ArcadeDB-

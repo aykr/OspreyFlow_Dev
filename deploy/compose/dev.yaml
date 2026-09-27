@@ -19,7 +19,7 @@
 # defaults to 5433 to match, so no env configuration is still needed.
 services:
   arcadedb:
-    image: arcadedata/arcadedb:24.11.1
+    image: arcadedata/arcadedb:25.5.1
     ports:
       - "2480:2480"
     environment:
@@ -93,7 +93,46 @@ services:
       # session A's still-running database mid-test) — fixed by encoding a creation timestamp
       # into the database name and only sweeping past a staleness window; `testing.py`'s own
       # docstring has the full reasoning and the measurements the window is set from.
-      ARCADEDB_OPTS_MEMORY: "-Xms1G -Xmx6G"
+      #
+      # **Round 13bb, 27 September 2026 — 6G was not enough and was not derived from anything
+      # current.** A full `make test-all` on this host OOM'd the server outright at 50%:
+      #
+      #     ArcadeDB Server started in 'development' mode (CPUs=12 MAXRAM=6.00GB)
+      #     java.lang.OutOfMemoryError: Java heap space
+      #     Dumping heap to java_pid1.hprof ... [3064364881 bytes in 1.375 secs]
+      #     Exception in thread "ArcadeDB TransactionManager ospreyflow" java.lang.OutOfMemoryError
+      #     SEVER Error on creating index on type 'mx_COMMUNICATED_WITH', properties [owning_unit]
+      #
+      # `07_BUILD_PLAN.md` Stage 2a had recorded that last line as the failure for two rounds. It
+      # is the symptom; the cause is the line above it, and nobody had read the server's own log.
+      # Note the two databases named in the OOM: a `conformance_*` one and the long-lived
+      # `ospreyflow` one, both resident in the same heap — `test_hmp_graph.py` seeds ~400 Person
+      # nodes and ~1,700 edges into the latter immediately before the failing tests.
+      #
+      # **Raising the heap was measured NOT to be the fix** — recorded here because the next
+      # person to see an ArcadeDB OOM will reach for it first. At `-Xmx6G` the full suite OOM'd at
+      # 50%; at `-Xmx8G`, at 53%; bounding `arcadedb.dbPageCacheSize` to 512MiB changed nothing.
+      # The cause was per-database-lifecycle retention in ArcadeDB **24.11.1**: five bare
+      # create -> apply_schema -> drop cycles, writing no data, took the server from 141.7MiB to
+      # 8.2GiB and a drop returned none of it. **Fixed upstream in 25.5.1**, which is why the pin
+      # above moved: the identical reproduction plateaus at ~1.5GiB and stays there (1.499GiB at 5
+      # cycles, 1.516GiB at 20). The pin is the fix; this heap value is right on its own merits.
+      #
+      # **This value is now derived, in `harness/profiles.py`, from the profile's own 16GB memory
+      # floor** (`05_DEPLOYMENT.md` §1/§3), at a stated fraction — so it moves if the floor does,
+      # which a literal cannot. The literal below is kept in step by
+      # `tests/harness/test_dev_compose_arcadedb_heap.py`, which fails if these two paths drift
+      # again; drifting apart is exactly what happened last time (the renderer never picked up
+      # this file's own Phase 5 raise, and a rendered deployment was left worse-configured than
+      # the dev stack it replaces).
+      #
+      # `-XX:+ExitOnOutOfMemoryError` is the other half of the finding, and it is not tuning:
+      # measured directly after the OOM above, `docker inspect` still reported this container
+      # `healthy` and `GET /api/v1/ready` still answered 204, with both databases' transaction
+      # and flush threads dead. The readiness endpoint survives a heap OOM, so the healthcheck
+      # cannot see one — which is how "7.22 GiB with the container reporting healthy" got written
+      # down as a puzzle rather than as a dead JVM. Exiting makes it visible.
+      ARCADEDB_OPTS_MEMORY: "-Xms1G -Xmx8G -XX:+ExitOnOutOfMemoryError"
     healthcheck:
       test: ["CMD", "curl", "-sf", "-u", "root:playwithdata123", "http://localhost:2480/api/v1/ready"]
       interval: 5s

@@ -5,7 +5,7 @@ generated artefacts, and §7 repeats it as a security property: "Images signed a
 digests pinned in `deploy/versions.lock`."
 
 **Checked directly before this module was written: this repository pins no image digests anywhere.**
-`deploy/compose/dev.yaml` carries tags (`arcadedata/arcadedb:24.11.1`), not digests, and nothing
+`deploy/compose/dev.yaml` carries tags (`arcadedata/arcadedb:25.5.1`), not digests, and nothing
 else names an image at all. So a renderer that emitted a `versions.lock` full of digests today would
 have had to invent them, and an invented `sha256:` is worse than an absent one — it looks verified.
 

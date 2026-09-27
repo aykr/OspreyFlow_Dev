@@ -61,6 +61,7 @@ from harness.images import (
     daemon_then_registry_digest_resolver,
     unresolved_digest_resolver,
 )
+from harness.profiles import arcadedb_java_memory_opts
 from harness.realm import CONDUIT_CLIENT_ID
 from schemas.deployment import OspreyConfig, Profile, SearchBackend
 
@@ -226,7 +227,7 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
         _owned("ingest", "services/ingest/Dockerfile"),
     ]
     if config.components.graph_store.value == "arcadedb":
-        images.append(ServiceImage("arcadedb", "arcadedata/arcadedb:24.11.1"))
+        images.append(ServiceImage("arcadedb", "arcadedata/arcadedb:25.5.1"))
     else:
         images.append(ServiceImage("janusgraph", "janusgraph/janusgraph:1.0.0"))
     images.extend(
@@ -320,7 +321,13 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
             # over, so a rendered deployment was strictly worse-configured than the dev stack it
             # replaces, on a value this repository had already paid to learn. Overridable, like
             # every other tunable in the generated env file.
-            "ARCADEDB_OPTS_MEMORY": "${OSPREY_ARCADEDB_HEAP:--Xms1G -Xmx6G}",
+            # Round 13bb: the value itself now comes from `harness/profiles.py`, derived from
+            # the profile's own memory floor, because this literal and `deploy/compose/dev.yaml`'s
+            # had drifted apart and both were a 10GiB-VM-era 6G that a full `make test-all`
+            # OOM'd — that module's docstring has the server's own log line.
+            "ARCADEDB_OPTS_MEMORY": (
+                "${OSPREY_ARCADEDB_HEAP:-" + arcadedb_java_memory_opts() + "}"
+            ),
         },
         "healthcheck": {
             # `curl`, not `/dev/tcp`: the latter is a bash builtin and `CMD-SHELL` runs `/bin/sh`,
@@ -478,7 +485,7 @@ def _render_env(config: OspreyConfig) -> str:
         f"OSPREY_BACKUP_ROOT={config.components.storage.backups}",
         # See the `arcadedb` stanza in `_SERVICE_EXTRAS` for why this is explicit rather than left
         # to the JVM's own container ergonomics.
-        "OSPREY_ARCADEDB_HEAP=-Xms1G -Xmx6G",
+        f"OSPREY_ARCADEDB_HEAP={arcadedb_java_memory_opts(config.profile.value)}",
         # The analytics DuckDB file, placed *inside* the mounted data root rather than left on
         # `services/api/config.py`'s relative `data/analytics.duckdb` default — which resolves to
         # the container's own working directory, i.e. nowhere that survives the container.

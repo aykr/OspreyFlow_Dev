@@ -5246,6 +5246,64 @@ silently removing its own support misrepresents the assertion's warrant, which t
 worse than either full suppression or full disclosure of the gap. See ADR-048 for the reasoning
 that also produced ADR-038's identical shape for a different reason and ADR-045's opposite answer.
 
+**Addendum, 27 September 2026 — owner ruling R7. TENTATIVE: the owner has recorded this as
+subject to revisiting after their own usability walkthrough, and it is written down here in that
+state deliberately rather than held back until it firms up, because a ruling that lives only in a
+conversation is lost by the next session (`CLAUDE.md` rule 11).**
+
+**What produced it.** Running Scenario A against a rendered deployment through the analyst's own
+door for the first time (`tests/scenarios/test_phase8_exit_over_the_wire.py`, owner ruling R5)
+found a composition neither rule showed on its own:
+
+- `01_DOMAIN_MODEL.md` §5 and `08_ACCEPTANCE_SCENARIOS.md`'s own additional assertion both say a
+  judgement whose supporting node is retracted "is flagged for review". The flag **is** written —
+  `flag_judgements_citing_superseded_node`, proven by `tests/services/api/test_assessments.py`.
+- This record's hide-in-full rule then removes that judgement from the Judgements tab entirely,
+  because a retraction supersedes the node with a **new id** and the citation's old id no longer
+  resolves, which `judgement_visible_to` reads as an unverifiable citation.
+
+Measured through the deployed Conduit: before the retraction the judgement lists with
+`flagged_for_review: false`; after it, the list is empty. The analyst is never shown the flag this
+platform's own specification promises, and no test could see it because the only test of the flag
+called the flagging function directly and re-read the store, never the route — `CLAUDE.md` rule
+12's shape exactly.
+
+**The ruling (owner, R7, 27 September 2026, tentative), verbatim:**
+
+> retraction becomes two steps. In the Glass an analyst marks a node for suppression — immediate,
+> reversible, shown as a marker on the node and in the inspector. The suppression takes effect
+> only when its evidence is supplied through the Ingest Studio: a retraction record ingested and
+> mapped to the node like any other source, so every suppression is evidence-backed and
+> auditable. A judgement citing a marked or suppressed node remains visible to its author, flagged
+> for review, with the citation resolved to the successor for display; ADR-046's hide-in-full
+> applies to citations the principal is not permitted to verify, not to citations the system
+> itself superseded.
+
+**Two separable parts, and only the second one narrows this record.**
+
+1. **Retraction becomes two steps — a new design, not a clarification.** Marking is a reversible
+   Glass-side state with its own marker on the node and in the inspector; *effecting* the
+   suppression requires a retraction record ingested and mapped through the Ingest Studio, exactly
+   like any other source. The point is that a suppression is never an unevidenced click: it has a
+   document behind it and an audit trail through the same path all other evidence takes. **This
+   depends on owner ruling R6** (ingest for a rendered deployment works through the Studio), so
+   the two rulings are coupled and R6 has to land first — a retraction record cannot be ingested
+   through a Studio that has no way to reach a file.
+2. **Hide-in-full is narrowed, not reversed.** Full suppression remains correct for a citation the
+   viewer's access does not cover — the case this record analysed and decided — and does not apply
+   to a citation the system's own non-mutation discipline replaced. The two were never
+   distinguished because `_unverifiable_citations` asks only whether the id resolves for this
+   principal, and both cases answer "no" for reasons that have nothing in common. A marked or
+   superseded citation resolves to its successor for display; an unreadable one still hides the
+   judgement in full.
+
+**The test that fails if this is violated**, per rule 12, and it exists today asserting the
+**current** behaviour deliberately: `test_scenario_a_over_the_wire`'s own retraction step. It pins
+what the analyst sees now and says in place that the day this is implemented it must change in the
+same commit as `08_ACCEPTANCE_SCENARIOS.md`'s sentence. Implementing R7 is not this record's own
+change — it is queued work, and this addendum is the decision it will cite, in whatever form it
+holds after the owner's walkthrough.
+
 ---
 
 ## ADR-047 — The Osprey export mark, and the durable record of what left the boundary: accepted, both gaps
