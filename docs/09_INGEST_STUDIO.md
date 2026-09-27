@@ -493,6 +493,31 @@ clearance/handling gate (§5, `CLAUDE.md` rule 3) — a source approver role doe
 visibility into any material; it only permits the publish/schedule/approve action once the
 recipe's own dry run has already passed under the author's clearance.
 
+### 8.1 A retraction record — owner ruling R7, TENTATIVE, and not built
+
+**R7 (27 September 2026, tentative — the owner is revisiting it after a usability walkthrough)
+makes retraction two steps**: an analyst marks a node for suppression in the Glass
+(`02_GLASS_FRONTEND.md` §9.5, built), and the suppression takes effect only when its evidence
+arrives here — "a retraction record ingested and mapped to the node like any other source, so
+every suppression is evidence-backed and auditable".
+
+**This half is not built**, and it is worth saying why in this document rather than only in the
+decision log, because the two obstacles are both *this section's* concerns:
+
+1. **A recipe cannot currently change an existing record.** `services/ingest/engine.py` calls
+   `upsert_nodes`, `upsert_edges` and `find_node` and nothing else — checked, not assumed. A
+   publish that applies a suppression would be the first time ingest mutates what is already
+   stored. §9 below does not forbid it, but its own "joining at ingest bakes a decision into
+   storage" reasoning is close enough that this needs deciding rather than assuming.
+2. **There is no retraction entity type.** R7 describes "an Event of a retraction type carrying
+   the target node's identifier and the reason", and `packages/ontology/default.yaml` declares no
+   such type, so this needs an ontology addition and an `ontology_version` bump — which every
+   recipe, `apply_schema` call, conformance fixture and generated TypeScript type moves with.
+
+`06_DECISIONS.md` ADR-046's addendum holds the decision. Until it is taken, a suppression takes
+effect through `POST /v1/nodes/{node_id}/retract` as it always has, and a mark is a proposal
+sitting beside it.
+
 ## 9. What the studio deliberately does not do
 
 - **No scripting.** Covered in §4, and worth restating because it is the request that will come

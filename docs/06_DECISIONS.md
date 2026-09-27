@@ -5297,8 +5297,36 @@ called the flagging function directly and re-read the store, never the route —
    superseded citation resolves to its successor for display; an unreadable one still hides the
    judgement in full.
 
-**The test that fails if this is violated**, per rule 12, and it exists today asserting the
-**current** behaviour deliberately: `test_scenario_a_over_the_wire`'s own retraction step. It pins
+**Built, 27 September 2026 (round 13bd) — parts 2 and 3; part 1 is not built.**
+
+| R7's part | State |
+| --- | --- |
+| Hide-in-full narrowed; a superseded citation resolves forward | **Built**, proven in-process and over the wire |
+| Mark a node for suppression — reversible, markered, keyboard-reachable | **Built** (`02_GLASS_FRONTEND.md` §9.5) |
+| The suppression takes effect when its evidence arrives through the Studio | **Not built** — see below |
+
+**Why the third part is not built, and what it would take.** It is not effort: it is two real
+decisions this record should make before anyone writes the code.
+
+1. **The recipe engine cannot supersede anything.** Checked directly: `services/ingest/engine.py`
+   calls `upsert_nodes`, `upsert_edges` and `find_node`, and nothing else. Making a publish apply
+   a suppression gives *ingest* the power to mutate existing records for the first time.
+   `09_INGEST_STUDIO.md` §9 does not forbid it, but its own framing is adjacent — "joining at
+   ingest bakes a decision into storage and is the same mistake ADR-006 rejects" — and the
+   silence is a gap rather than permission.
+2. **A retraction record needs a type to be.** R7 describes "an Event of a retraction type
+   carrying the target node's identifier and the reason". No such entity type exists in
+   `packages/ontology/default.yaml`, so this needs an ontology addition and therefore an
+   `ontology_version` bump, which every recipe, `apply_schema` call, conformance fixture and
+   generated TypeScript type moves with.
+
+Both are decisions, not tasks, and this ruling is **tentative** — the owner is revisiting it after
+a usability walkthrough, and the ingest half is the part such a walkthrough is most likely to
+revise. Recorded here so that whoever builds it starts from the decision rather than rediscovering
+the two obstacles.
+
+**The test that fails if this is violated**, per rule 12: `test_scenario_a_over_the_wire`'s own
+retraction step, which now asserts R7's behaviour rather than pinning the old one. It pins
 what the analyst sees now and says in place that the day this is implemented it must change in the
 same commit as `08_ACCEPTANCE_SCENARIOS.md`'s sentence. Implementing R7 is not this record's own
 change — it is queued work, and this addendum is the decision it will cite, in whatever form it

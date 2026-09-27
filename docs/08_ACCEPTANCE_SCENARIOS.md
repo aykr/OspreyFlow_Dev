@@ -169,10 +169,24 @@ addendum carries it in full. Two parts:
   applies to citations the principal is not *permitted* to verify, not to citations the system
   itself superseded.
 
-So the sentence above is right and the implementation is not yet.
-`tests/scenarios/test_phase8_exit_over_the_wire.py` asserts today's behaviour explicitly and
-fails the day it changes — deliberately, so the fix cannot land without this document's own
-sentence and that assertion being brought into agreement in the same change.
+**The visibility half is now built (round 13bd, 27 September 2026), so this document's own
+sentence is true again**: a judgement whose supporting node is retracted stays visible to its
+author, flagged for review, with the citation resolved to the successor for display — and the
+citation itself is never rewritten, because the judgement asserted something about the evidence
+as it stood. `tests/scenarios/test_phase8_exit_over_the_wire.py` asserts exactly that through a
+real deployment, and `tests/services/api/test_assessments.py` in-process.
+
+**The export half is built too, and it was not merely unimplemented — it was unimplementable.**
+"The export produced in A15 is marked as resting on retracted evidence" had no implementation
+anywhere, and could not have had one: `evaluate_export_selection` treated a superseded item the
+same way it treated an access-denied one, so naming a retracted item blocked the export outright
+and left no artefact to mark. Narrowed the same way, and `ExportMark.rests_on_retracted_evidence`
+now carries it.
+
+**Still not built: the two-step retraction R7 also describes** — marking a node is built
+(`02_GLASS_FRONTEND.md` §9.5) but the suppression still takes effect through the existing
+`/v1/nodes/{id}/retract` route rather than through an ingested retraction record.
+`06_DECISIONS.md` ADR-046's addendum records the two decisions that blocks on.
 
 ### The fixture's statistical shape is built and proved in Phase 2
 

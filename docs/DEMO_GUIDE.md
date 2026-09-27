@@ -435,6 +435,24 @@ the HMP fixture or through the API. A13–A15's composer and export drawer open 
 submitting a judgement end to end and driving the S2 blocked-then-justified path have not been
 walked through a browser.
 
+### 4.1 Marking a node for suppression — new, and worth showing
+
+**Owner ruling R7, 27 September 2026 — TENTATIVE**, so treat this as a preview rather than a
+settled feature when describing it to an audience.
+
+Open the radial menu on any node (`\` from the keyboard, or right-click) and choose **Mark for
+suppression**. The node carries a marker afterwards; the menu item flips to **Remove suppression
+mark**, and taking it off leaves nothing behind.
+
+What to say while doing it, because it is the point of the design: **marking suppresses nothing.**
+The record stays in every view, its revision does not move, and nothing is hidden from anyone. R7
+makes retraction two steps precisely so that no record is ever suppressed on the strength of a
+click — the suppression itself is meant to arrive as evidence through the Ingest Studio.
+
+**What not to promise:** that second step is **not built**. A suppression today still takes effect
+through the existing retract route, not through an ingested retraction record.
+`06_DECISIONS.md` ADR-046's addendum records the two decisions it waits on.
+
 ---
 
 ## 5. Troubleshooting
