@@ -299,6 +299,14 @@ OSPREY_LIVE_INVESTIGATION_ID=<the id from §3.3> \
   make glass-live
 ```
 
+**Each spec creates its own investigation** and asserts its working set starts empty, so a run
+never inherits state from an earlier one. That is not tidiness: the working set is server-side and
+the Glass loads it on open, and round 12's A12 case reported green for exactly that reason while
+its own expansion contributed nothing (`docs/07_BUILD_PLAN.md`'s Stage 3a entry has the full
+account). A consequence worth knowing when demonstrating by hand: **reusing one investigation
+across several attempts accumulates nodes and edges**, so if the canvas looks fuller than you
+expect, open a fresh `?investigation=` rather than wondering what expanded.
+
 It starts its own Vite server on 5173 and stops it again, so §3.6's own `npm run dev` must not
 already be running on that port. **5173 is not arbitrary**: the Conduit's `CORS_ALLOWED_ORIGINS`
 defaults to `http://localhost:5173`, and a Glass served from any other port has every request

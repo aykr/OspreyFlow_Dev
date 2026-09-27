@@ -6377,13 +6377,36 @@ find something already finished sitting in the queue.
    rendered nodes whose canvas coordinates a spec does not know) did not come together inside
    round 12b's budget.
 
-   **A12 regressed to red in round 12b and the cause is not established.** It passed in round 12
-   against an investigation seeded HMP-then-Fixture-Corp; against one seeded Fixture-Corp-then-HMP
-   it fails at "expansion brought in no edges", with the searched node confirmed present and
-   carrying degree 18 in the store. Reverting round 12b's own edit to the expansion helper did not
-   change the result, so the edit is not the cause. Stopped there per STANDING-QUEUE's
-   two-consecutive-failures rule rather than guessed at a third time; `REPORT-12b.md` has
-   everything checked.
+   **A12's regression: root-caused in round 12c, and it was never a seed-order bug. The round-12
+   green was an artefact.** Both hypotheses 12c's brief offered were refuted by measurement — the
+   route sequence was run end to end under *both* seed orders and produced byte-for-byte identical
+   results, so seed order is irrelevant. Two real causes, both now fixed:
+
+   1. **The live tier had no test isolation, and a pass could be inherited.** The working set is
+      server-side, keyed by investigation, and the Glass loads it on open — measured directly: a
+      bare load against an investigation another process had expanded in showed "19 nodes 18
+      edges" before the spec touched anything. Every live spec shared one investigation across
+      tests *and across runs*. Round 12 ran the tier repeatedly against one long-lived
+      investigation until earlier attempts had populated it, at which point A12's `edgeCount > 0`
+      was satisfied without its own expansion contributing anything; 12b used a fresh
+      investigation and the same assertion correctly failed. This is `CLAUDE.md` rule 15's "a
+      gate's first green is not a result" in its worse form — a *later* green that looks like
+      confirmation. Fixed: `live.ts`'s `freshInvestigation` creates one per test through the real
+      route, and each test asserts its working set starts empty. Shown red by removing the
+      isolation: "the working set was not empty at the start".
+   2. **A12 was expanding by an edge type its node does not have.** Measured: of the HMP
+      fixture's 400 Persons exactly 16 carry `ASSOCIATE_OF` (8 each) — that tight cluster *is*
+      the "insular subgroup" A12 ranks — and `HMP-0001`, which 12b used, is not one of them
+      (`MENTIONED_IN` 12, `PRESENT_AT` 5, `FAMILY_OF` 1, `ASSOCIATE_OF` 0). The spec now walks
+      `HMP-0003`, a member. Shown red by pointing it back at `HMP-0001`.
+
+   **The radial menu's cardinality preview is wired to `/expand/preview` (round 12c).** It was
+   hardcoded to `count: 0` for every entry, so the menu read `ASSOCIATE_OF (0)` on a node with
+   eight associates and `USES (0)` on one with none — identical text for "nothing there" and
+   "eight there", which is what sent 12b chasing an expansion that could never have worked, and
+   which `08_ACCEPTANCE_SCENARIOS.md` A1 explicitly asks not to happen ("expansion previews its
+   cardinality before running"). An unanswered preview now renders `…`, never `0`, and never
+   blocks the expansion behind it. Shown red by restoring the hardcoded zero.
 
    **A gap found while driving that expansion, unrelated to the above.** The radial menu renders
    `count: 0` for *every* edge type — `GlassCanvas.tsx`'s own comment says the real cardinality is
