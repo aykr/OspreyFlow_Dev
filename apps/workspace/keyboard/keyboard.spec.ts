@@ -498,6 +498,70 @@ test("the radial list reaches View messages on an Endpoint node", async ({ page 
   registerCovered("CANVAS_ACTIONS", "menu-item-view-messages");
 });
 
+test("the radial list reaches Mark for suppression, and the mark toggles", async ({ page }) => {
+  // **Owner ruling R7 (TENTATIVE, 27 September 2026) — step one of two-step retraction, proven
+  // reachable by keyboard.** `CLAUDE.md` rule 13: a canvas action is not reachable-by-keyboard
+  // until this file has a case proving it end to end, and its own author owns adding that case in
+  // the same change rather than as a follow-up.
+  //
+  // Both directions are asserted, because "reversible" is R7's own word for it and a mark that
+  // cannot be taken off is a different feature from the one that was ruled.
+  const calls: { method: string; body: unknown }[] = [];
+  await page.route("**/v1/nodes/*/suppression-mark", async (route) => {
+    calls.push({
+      method: route.request().method(),
+      body: route.request().postDataJSON?.() ?? null,
+    });
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        node_id: "n4",
+        investigation_id: "inv-1",
+        marked_by: "analyst-1",
+        marked_at: "2026-09-27T00:00:00Z",
+        reason: "Marked from the canvas",
+      }),
+    });
+  });
+
+  await page.goto("/keyboard/harness.html");
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  await page.keyboard.press("\\");
+  const menu = page.locator(".radial-menu__list[role='menu']");
+  await expect(menu).toBeVisible();
+
+  // Offered on every node, so it is always the last item — reached with `End` rather than by
+  // counting Tabs, which would otherwise need changing whenever the fixture gains an edge type.
+  const item = page.getByRole("menuitem", { name: "Mark for suppression" });
+  await expect(item).toBeVisible();
+  await item.focus();
+  await page.keyboard.press("Enter");
+
+  await expect.poll(() => calls.length).toBe(1);
+  expect(calls[0].method).toBe("POST");
+  expect(calls[0].body).toMatchObject({ reason: "Marked from the canvas" });
+
+  // Reversible: the same item now offers to take the mark off, and uses DELETE.
+  // Re-focusing the canvas first: RadialMenu moves focus onto itself when it opens and does not
+  // hand it back on select, so a bare second backslash would land nowhere.
+  await canvas.focus();
+  await page.keyboard.press("\\");
+  await expect(menu).toBeVisible();
+  const remove = page.getByRole("menuitem", { name: "Remove suppression mark" });
+  await expect(
+    remove,
+    "the item did not flip after marking, so an analyst has no keyboard route back",
+  ).toBeVisible();
+  await remove.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => calls.length).toBe(2);
+  expect(calls[1].method).toBe("DELETE");
+
+  registerCovered("CANVAS_ACTIONS", "menu-item-mark-for-suppression");
+});
+
 // Phase 7 Stage 5 (the pathfinder) — `06_DECISIONS.md` ADR-033. `POST /v1/paths` is intercepted,
 // the same "real network call, mocked at the transport" shape every test above already uses; the
 // mocked `Path[]` bodies reference only ids already in this file's own fixture (`n0`..`n3`,

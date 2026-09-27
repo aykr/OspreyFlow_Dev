@@ -266,6 +266,7 @@ from .studio_recipes import (
 )
 from .studio_verify import RowTemplateMissingError, run_verify
 from .supersede import JOB_TYPE_SUPERSEDE_NODE, run_supersede_node_job
+from .suppression import NodeNotVisibleError, SuppressionMark, SuppressionMarkStore
 from .tile_cache import (
     cache_key_for,
     read_cached_tile,
@@ -327,6 +328,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     monitors_store = await MonitorStore.connect(config.postgres.dsn)
     alerts_store = await AlertStore.connect(config.postgres.dsn)
     judgements_store = await JudgementStore.connect(config.postgres.dsn)
+    suppression_marks = await SuppressionMarkStore.connect(config.postgres.dsn)
     gaps_store = await IntelligenceGapStore.connect(config.postgres.dsn)
     assumptions_store = await AssumptionStore.connect(config.postgres.dsn)
     export_ledger = await ExportLedgerStore.connect(config.postgres.dsn)
@@ -374,6 +376,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.monitors_store = monitors_store
     app.state.alerts_store = alerts_store
     app.state.judgements_store = judgements_store
+    app.state.suppression_marks = suppression_marks
     app.state.gaps_store = gaps_store
     app.state.assumptions_store = assumptions_store
     app.state.export_ledger = export_ledger
@@ -636,6 +639,13 @@ HotlistsStoreDep = Annotated[HotlistStore, Depends(get_hotlists_store)]
 MonitorsStoreDep = Annotated[MonitorStore, Depends(get_monitors_store)]
 AlertsStoreDep = Annotated[AlertStore, Depends(get_alerts_store)]
 JudgementsStoreDep = Annotated[JudgementStore, Depends(get_judgements_store)]
+
+
+def get_suppression_marks(request: Request) -> SuppressionMarkStore:
+    return request.app.state.suppression_marks  # type: ignore[no-any-return]
+
+
+SuppressionMarksDep = Annotated[SuppressionMarkStore, Depends(get_suppression_marks)]
 GapsStoreDep = Annotated[IntelligenceGapStore, Depends(get_gaps_store)]
 AssumptionsStoreDep = Annotated[AssumptionStore, Depends(get_assumptions_store)]
 ExportLedgerDep = Annotated[ExportLedgerStore, Depends(get_export_ledger)]
@@ -1743,6 +1753,70 @@ async def confirm_node_route(
         result_cardinality=1,
     )
     return NodeIdResponse(node_id=new_node_id)
+
+
+class SuppressionMarkInput(BaseModel):
+    investigation_id: str
+    #: Why this node is proposed for suppression. Required and non-empty: an unexplained
+    #: mark is a puzzle for whoever finds it, and step two has to cite something.
+    reason: str
+
+
+@app.post("/v1/nodes/{node_id}/suppression-mark")
+async def mark_node_for_suppression(
+    node_id: str,
+    body: SuppressionMarkInput,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    audit: AuditDep,
+    marks: SuppressionMarksDep,
+) -> SuppressionMark:
+    """**Step one of two — owner ruling R7 (TENTATIVE, 27 September 2026).** An analyst proposes
+    a suppression; nothing is suppressed yet. The node keeps its place in every read, its
+    revision does not move, and the mark is reversible — `services/api/suppression.py`'s own
+    docstring has why a mark is deliberately not a graph write.
+
+    The suppression itself takes effect only when its evidence arrives through the Ingest Studio
+    (R7's step two), so that no record is ever suppressed on the strength of a click alone.
+
+    Access control is inside the store, checked against this principal before anything is
+    written (`CLAUDE.md` rule 2), and a node this principal cannot see is refused identically to
+    one that does not exist."""
+    mark = await marks.mark(node_id, body.investigation_id, principal, graph, reason=body.reason)
+    await audit.record(
+        principal=principal,
+        action="mark_node_for_suppression",
+        investigation_id=body.investigation_id,
+        resolved_query={"node_id": node_id},
+        result_cardinality=1,
+    )
+    return mark
+
+
+@app.delete("/v1/nodes/{node_id}/suppression-mark")
+async def unmark_node_for_suppression(
+    node_id: str,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    audit: AuditDep,
+    marks: SuppressionMarksDep,
+) -> dict[str, bool]:
+    """R7's own word is "reversible"."""
+    removed = await marks.unmark(node_id, principal, graph)
+    await audit.record(
+        principal=principal,
+        action="unmark_node_for_suppression",
+        resolved_query={"node_id": node_id},
+        result_cardinality=1 if removed else 0,
+    )
+    return {"removed": removed}
+
+
+@app.exception_handler(NodeNotVisibleError)
+async def _node_not_visible_handler(request: Request, exc: NodeNotVisibleError) -> JSONResponse:
+    """404, not 403 — a principal who cannot see a node must not learn that it exists, the same
+    existence-leak collapse `get_authorized_investigation` already makes."""
+    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "node_not_found"})
 
 
 @app.post("/v1/nodes/{node_id}/retract")

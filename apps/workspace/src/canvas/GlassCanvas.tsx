@@ -238,6 +238,13 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     const [previewCounts, setPreviewCounts] = useState<
       Record<string, number | null>
     >({});
+    // **Owner ruling R7 (TENTATIVE, 27 September 2026) — step one of two.** Node id -> the reason
+    // it is marked for suppression. A mark suppresses nothing; it is a visible proposal, and the
+    // suppression only takes effect once its evidence arrives through the Ingest Studio.
+    // `02_GLASS_FRONTEND.md` §9.5.
+    const [suppressionMarks, setSuppressionMarks] = useState<
+      Record<string, string>
+    >({});
     const [inspectedEdge, setInspectedEdge] = useState<{
       edgeId: string;
       x: number;
@@ -761,6 +768,54 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // handling for it. `node_a`/`node_b` are sent flat, not wrapped in `{request: ...}` the way
     // `/expand`'s own `ExpandBody` is — `ManualAssertionRequest` (`services/api/resolution.py`) is
     // the whole body, checked directly rather than assumed from `expandNode`'s own different shape.
+    async function toggleSuppressionMark(nodeId: string): Promise<void> {
+      // A write, like `manualAssertion` — so a failure is surfaced rather than swallowed. An
+      // analyst who believes they have flagged a record for suppression, and has not, is exactly
+      // the dangerous silence that function's own comment describes.
+      const marked = Boolean(suppressionMarks[nodeId]);
+      const reason = marked ? "" : "Marked from the canvas";
+      try {
+        const response = await fetch(
+          `${apiBaseUrl}/v1/nodes/${nodeId}/suppression-mark`,
+          marked
+            ? {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${bearerToken}` },
+              }
+            : {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${bearerToken}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  investigation_id: investigationId,
+                  reason,
+                }),
+              },
+        );
+        if (!response.ok) {
+          throw new Error(
+            `${marked ? "Removing the" : "Adding the"} suppression mark failed (${response.status}). Not recorded — try again.`,
+          );
+        }
+      } catch (err) {
+        const anchor = radialMenu ?? { x: 0, y: 0 };
+        setActionError({
+          x: anchor.x,
+          y: anchor.y,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        return;
+      }
+      setSuppressionMarks((current) => {
+        const next = { ...current };
+        if (marked) delete next[nodeId];
+        else next[nodeId] = reason;
+        return next;
+      });
+    }
+
     async function manualAssertion(
       nodeA: string,
       nodeB: string,
@@ -1112,6 +1167,20 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           onSelect: () => void onViewMessages(nodeId),
         });
       }
+
+      // **Owner ruling R7 (TENTATIVE, 27 September 2026) — step one of two.** Offered on every
+      // node, not gated on a pair or a type: any record can be proposed for suppression.
+      // Marking suppresses nothing — `02_GLASS_FRONTEND.md` §9.5 and
+      // `services/api/suppression.py` both say why the mark is deliberately not a graph write —
+      // and the item toggles, because R7's own word is "reversible".
+      items.push({
+        id: "mark-for-suppression",
+        label: suppressionMarks[nodeId]
+          ? "Remove suppression mark"
+          : "Mark for suppression",
+        count: 0,
+        onSelect: () => void toggleSuppressionMark(nodeId),
+      });
 
       return items;
     }

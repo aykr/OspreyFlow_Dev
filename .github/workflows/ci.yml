@@ -449,6 +449,7 @@ jobs:
           tests/services/api/working_set/test_resolution_threshold_access_control.py
           tests/scenarios/test_phase7_stage6c_watch_routes.py
           tests/services/api/test_assessments.py
+          tests/services/api/test_suppression.py
           tests/services/api/test_assessment_routes.py
           tests/services/api/test_export.py
           tests/services/api/test_export_routes.py
@@ -702,6 +703,7 @@ jobs:
           --ignore=tests/services/api/working_set/test_resolution_threshold_access_control.py
           --ignore=tests/scenarios/test_phase7_stage6c_watch_routes.py
           --ignore=tests/services/api/test_assessments.py
+          --ignore=tests/services/api/test_suppression.py
           --ignore=tests/services/api/test_assessment_routes.py
           --ignore=tests/services/api/test_export.py
           --ignore=tests/services/api/test_export_routes.py

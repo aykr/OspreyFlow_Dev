@@ -109,6 +109,11 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   "menu-item-manual-split",
   "menu-item-explain-cluster",
   "menu-item-view-messages",
+  // Owner ruling R7 (TENTATIVE, 27 September 2026) — step one of two-step retraction. Offered on
+  // every node, so it is the *last* item in the list on any node and the keyboard walkthrough
+  // reaches it by `End` rather than by counting Tabs, which would otherwise have to change every
+  // time an edge type is added to the fixture.
+  "menu-item-mark-for-suppression",
   "overlay-dismiss-cluster-explain",
   // The pathfinder — the keyboard-walkthrough's own entry drew
   // the line this follows: a further canvas radial-menu item extends this registry rather than

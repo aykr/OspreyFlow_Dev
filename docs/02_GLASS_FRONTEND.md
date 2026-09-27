@@ -605,6 +605,35 @@ status-chip radius §8 already specifies), and a corresponding marker on the fla
 currently on the canvas — the same list-row-plus-canvas-marker pairing the resolution-conflict
 pattern (Phase 6a) already establishes for "something here needs a human's attention."
 
+### 9.5 Marking a node for suppression — owner ruling R7, 27 September 2026, TENTATIVE
+
+**The owner is revisiting this after their own usability walkthrough**, and it is written down in
+that state rather than held back, because a ruling that lives only in a conversation is lost by
+the next session (`CLAUDE.md` rule 11). `06_DECISIONS.md` ADR-046's addendum carries the full
+ruling.
+
+Retraction becomes two steps. An analyst **marks** a node for suppression from the canvas — the
+radial menu's own `Mark for suppression` item — and that is immediate and reversible. Nothing is
+suppressed by the mark: the node keeps its place in every read, its revision does not move, and
+un-marking leaves nothing behind. The suppression itself takes effect only when its **evidence**
+arrives through the Ingest Studio (step two), so that no record is ever suppressed on the strength
+of a click alone.
+
+```
+POST /v1/nodes/{node_id}/suppression-mark
+DELETE /v1/nodes/{node_id}/suppression-mark
+```
+
+- **A marker on the node and in the inspector**, the same list-row-plus-canvas-marker pairing §9.4
+  already establishes for "something here needs a human's attention" — a marked node is *flagged*,
+  never hidden.
+- **Reversible**, which is why a mark is deliberately not a graph write: the graph is append-only
+  (`01_DOMAIN_MODEL.md` §2.4), so marking and un-marking there would mint a revision for every
+  change of mind and `superseded_by` would stop meaning "this was corrected".
+- **You may mark what you can see** — the same principal rule retraction already uses, checked
+  before anything is written. A node the principal cannot see is refused identically to one that
+  does not exist.
+
 ## 10. Export
 
 The workspace layout (§2) already sketches an `Export ⚙` control in the top bar; this section gives
