@@ -10,10 +10,61 @@ none, because it is what gets read.**
 laptop from the documentation, started, and demonstrated (both acceptance scenarios passing on
 `local-lite` is one component of that, not the whole of it).
 
-**V1 END TO END is NOT reached as of 27 September 2026, and round 13's closing pass is what
-established that.** It came closer than any previous attempt — a fresh clone now renders,
-preflights, builds, starts twelve containers, grants, seeds and passes `harness.verify` 3/3 in
-**87 seconds** — but three of the milestone's own clauses do not hold:
+**V1 END TO END is NOT reached as of 27 September 2026. Round 13c re-ran the closing pass in
+full against the fixed tree and closed two of the three clauses; the third is now a single,
+precisely-bounded question that needs an owner ruling** (`Claude outputs/handoff/
+DECISION_NEEDED.md`). What round 13c measured, all on one machine, in one pass:
+
+| Step | Result |
+| --- | --- |
+| Environment (`docker info`) | 19.50 GiB memory, 91.2 GiB free — both above the floor |
+| Clean install, fresh clone, 05 §3 as written | **exit 0 in 495 s**, `harness.verify` 3/3, **no documentation defect found** |
+| `make exit-over-the-wire` against that install | **8 passed** — the closing-pass proof, B1–B3 included for the first time |
+| `tests/scenarios/test_phase8_exit_criterion_end_to_end.py` | **2 passed** — both scenarios, every row, developer tier |
+| `make -k ci` | **20/20 targets green**, 7 m 13 s |
+| `make test-all` (Floor B) | **309 passed, 5 skipped, 0 failed** — run twice on a clean host, 4 m 37 s and 4 m 32 s, agreeing exactly |
+
+**Clause 1 ("installed … from the documentation") now holds**, for the first time. Round 13 found
+two defects here; round 13c found a third *before* installing — `DEMO_GUIDE.md` §3.7a told an
+operator to copy source files from `tests/scenarios/fixtures/files/`, **a directory that has never
+existed**, because the CDR fixture is generated rather than stored. Fixed with
+`scripts/seed_ingest_folder.py` and `tests/test_seed_ingest_folder.py`; the install then ran clean
+end to end with no further documentation failure.
+
+**Clause 2 ("started") holds.**
+
+**Clause 3 ("both acceptance scenarios pass on `local-lite`") is the open question, and it is a
+definitional one rather than a defect.** Both readings are defensible and they disagree:
+
+- *Reached*: `08_ACCEPTANCE_SCENARIOS.md` §"Which test proves these" (owner ruling R5) says
+  `tests/scenarios/test_phase8_exit_over_the_wire.py` "is the test `07_BUILD_PLAN.md`'s milestone
+  line cites", and it is green, 8/8, against a deployment installed from the documentation.
+- *Not reached*: that same section says the test "does not cover every row" and names the
+  uncovered ones — **A1, A6, B6, B7, B8, B13, B14, B15–B18, plus A15's consult-originator block
+  and A7's item-category half** — as "a product gap, not a shortfall of the test", explicitly not
+  closed. Eleven rows of the two scenarios the milestone is *defined by* cannot be performed by an
+  analyst against a rendered `local-lite` at all, because the deployment's seed carries no message
+  content, handle cohort, seizure record, device legs, sightings, seeded site or `Document`
+  content.
+
+**The recommendation recorded with this pass is *not reached***, on the ground that declaring the
+milestone on a proof which skips eleven of its own rows is the same shape as the defects rounds
+13bf and 13c spent themselves finding: a green that is not watching the thing it claims. The
+decision is the owner's; the queue holds at 13c until it is taken.
+
+**A finding from this pass that is independent of that question and may bear on it.** Floor B's
+only five skips are the whole of `tests/services/api/test_revoked_principal_precheck.py`, each
+"`OSPREY_TEST_KEYCLOAK_URL` is not set — this test needs a real IdP by design". **Nothing anywhere
+in the repository sets that variable** — not `ci.yml`, not the `Makefile`, not any profile;
+checked directly, its only two mentions are the test itself and
+`scripts/test_file_coverage_check.py`. Those five tests therefore **have never run, in any tier**.
+They guard `PrincipalResolver`'s OAuth2 Token Exchange and revoked-principal precheck — the exact
+code path `CLAUDE.md` rule 15's own second worked example records as having been "built" for two
+days while never once having worked against a real identity provider. The tests written so that
+that could not recur do not execute. Recorded here rather than fixed, because a closing pass is
+not the place to add a Keycloak tier; it needs its own brief.
+
+The three clauses as round 13 found them, kept for history:
 
 1. **"From the documentation" did not work.** Followed exactly, `05 §3` failed twice: it named no
    environment step at all (no venv, no `uv sync`), and its own command raised
