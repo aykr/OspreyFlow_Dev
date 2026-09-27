@@ -3,8 +3,21 @@ import { useEffect, useRef } from "react";
 export interface RadialMenuItem {
   id: string;
   label: string;
-  count: number;
+  /** How many nodes this entry would bring in, from `/expand/preview` —
+   * `08_ACCEPTANCE_SCENARIOS.md` A1's "expansion previews its cardinality
+   * before running". **`null` means "not answered yet", and renders as `…`,
+   * never as `0`**: before round 12c every entry was hardcoded to 0, so the
+   * menu used identical text for "nothing there" and "eight there", which is
+   * worse than showing no figure at all. An action whose count is unknown
+   * stays selectable — a missing preview is a reason to say so, not a reason
+   * to block the expansion behind it. */
+  count: number | null;
   onSelect: () => void;
+}
+
+/** `…` while a preview is in flight or could not be fetched. */
+function countLabel(count: number | null): string {
+  return count === null ? "…" : String(count);
 }
 
 export interface RadialMenuProps {
@@ -35,20 +48,30 @@ export function RadialMenu({ x, y, items, onClose, layout }: RadialMenuProps) {
 
   if (layout === "list") {
     return (
-      <ul className="radial-menu__list" role="menu" ref={ref} style={{ position: "fixed", left: x, top: y }}>
+      <ul
+        className="radial-menu__list"
+        role="menu"
+        ref={ref}
+        style={{ position: "fixed", left: x, top: y }}
+      >
         {items.map((item) => (
           <li key={item.id} role="none">
             <button
               role="menuitem"
               type="button"
               className="radial-menu__item"
-              style={{ background: "none", border: "none", width: "100%", textAlign: "left" }}
+              style={{
+                background: "none",
+                border: "none",
+                width: "100%",
+                textAlign: "left",
+              }}
               onClick={() => {
                 item.onSelect();
                 onClose();
               }}
             >
-              {item.label} ({item.count})
+              {item.label} ({countLabel(item.count)})
             </button>
           </li>
         ))}
@@ -61,7 +84,14 @@ export function RadialMenu({ x, y, items, onClose, layout }: RadialMenuProps) {
       className="radial-menu"
       role="menu"
       ref={ref}
-      style={{ position: "fixed", left: x, top: y, listStyle: "none", margin: 0, padding: 0 }}
+      style={{
+        position: "fixed",
+        left: x,
+        top: y,
+        listStyle: "none",
+        margin: 0,
+        padding: 0,
+      }}
     >
       {items.map((item, i) => {
         const angle = (i / items.length) * 2 * Math.PI - Math.PI / 2;
@@ -71,7 +101,10 @@ export function RadialMenu({ x, y, items, onClose, layout }: RadialMenuProps) {
           <li
             key={item.id}
             role="none"
-            style={{ position: "absolute", transform: `translate(${itemX}px, ${itemY}px)` }}
+            style={{
+              position: "absolute",
+              transform: `translate(${itemX}px, ${itemY}px)`,
+            }}
           >
             <button
               role="menuitem"
@@ -82,7 +115,7 @@ export function RadialMenu({ x, y, items, onClose, layout }: RadialMenuProps) {
                 onClose();
               }}
             >
-              {item.label} ({item.count})
+              {item.label} ({countLabel(item.count)})
             </button>
           </li>
         );

@@ -27,9 +27,20 @@ import type { StoreApi } from "zustand/vanilla";
 import { useStore } from "zustand/react";
 import { EdgeLineProgram, createNodeCompoundProgram } from "sigma/rendering";
 import Sigma from "sigma";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 
-import type { Edge, EdgeTypeDef, Node, Path as GraphPath } from "../../../../packages/schemas/generated";
+import type {
+  Edge,
+  EdgeTypeDef,
+  Node,
+  Path as GraphPath,
+} from "../../../../packages/schemas/generated";
 import type { ExportMark } from "../export/api";
 import { captureChartImage } from "../export/chartExport";
 import { pointInPolygon } from "../map/geometry";
@@ -46,7 +57,10 @@ import {
   computeNodeFrameAttributes,
   computeNodeGraphAttributes,
 } from "./nodeAttributes";
-import { RadialMenu, type RadialMenuItem } from "../design/primitives/RadialMenu";
+import {
+  RadialMenu,
+  type RadialMenuItem,
+} from "../design/primitives/RadialMenu";
 import { EdgeInspectionOverlay } from "./EdgeInspectionOverlay";
 import { ClusterExplainOverlay } from "./ClusterExplainOverlay";
 import { CommunityHullOverlay } from "./CommunityHullOverlay";
@@ -55,7 +69,10 @@ import { PathfinderErrorOverlay } from "./PathfinderErrorOverlay";
 import { ActionErrorOverlay } from "./ActionErrorOverlay";
 import type { ClusterExplanation } from "../workingset/models";
 
-const NODE_PROGRAM = createNodeCompoundProgram<WorkingSetNodeAttributes, WorkingSetEdgeAttributes>([
+const NODE_PROGRAM = createNodeCompoundProgram<
+  WorkingSetNodeAttributes,
+  WorkingSetEdgeAttributes
+>([
   createNodeImageProgram<WorkingSetNodeAttributes, WorkingSetEdgeAttributes>({
     keepWithinCircle: false,
     drawingMode: "background",
@@ -68,7 +85,11 @@ const NODE_PROGRAM = createNodeCompoundProgram<WorkingSetNodeAttributes, Working
       // more prominent one. Independent attribute channel: a clustered node can be selected too.
       {
         color: { attribute: "clusterBorderColor" },
-        size: { attribute: "clusterBorderSize", defaultValue: 0, mode: "pixels" },
+        size: {
+          attribute: "clusterBorderSize",
+          defaultValue: 0,
+          mode: "pixels",
+        },
       },
       {
         color: { attribute: "borderColor" },
@@ -82,8 +103,9 @@ function seededScatter(nodeId: string): { x: number; y: number } {
   // A cheap, deterministic hash — the same id always lands at the same
   // point, so a reconnect/resnapshot doesn't jump every node around.
   let hash = 0;
-  for (let i = 0; i < nodeId.length; i++) hash = (hash * 31 + nodeId.charCodeAt(i)) | 0;
-  const angle = ((hash >>> 0) % 3600) / 3600 * 2 * Math.PI;
+  for (let i = 0; i < nodeId.length; i++)
+    hash = (hash * 31 + nodeId.charCodeAt(i)) | 0;
+  const angle = (((hash >>> 0) % 3600) / 3600) * 2 * Math.PI;
   const radius = 50 + (((hash >>> 8) >>> 0) % 400);
   return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
 }
@@ -171,801 +193,1050 @@ interface PendingRadialMenu {
 // prop, not a hypothetical this time either).
 const EMPTY_DIMMED_SET: ReadonlySet<string> = new Set();
 
-export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(function GlassCanvas(
-  {
-    graph,
-    store,
-    ontology,
-    edgeTypes,
-    investigationId,
-    apiBaseUrl,
-    bearerToken,
-    dimmedNodeIds = EMPTY_DIMMED_SET,
-    onSelectionChange,
-    onFocusChange,
-    onViewMessages,
-    communityHulls,
-  }: GlassCanvasProps,
-  ref,
-) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const sigmaRef = useRef<Sigma<WorkingSetNodeAttributes, WorkingSetEdgeAttributes> | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [hovered, setHovered] = useState<string | null>(null);
-  const [focused, setFocused] = useState<string | null>(null);
-  useEffect(() => {
-    onFocusChange?.(focused);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focused]);
-  const [radialMenu, setRadialMenu] = useState<PendingRadialMenu | null>(null);
-  const [inspectedEdge, setInspectedEdge] = useState<{ edgeId: string; x: number; y: number } | null>(
-    null,
-  );
-  const [clusterExplain, setClusterExplain] = useState<
-    { x: number; y: number; explanation: ClusterExplanation } | null
-  >(null);
-  // Phase 7 Stage 5 (the pathfinder) — `x`/`y` anchor the overlay to the radial menu's own
-  // position, the same shape `clusterExplain` above already uses. `activeIndex` is which of the
-  // (up to `k`) found paths is currently drawn on-path; cycling it never re-fetches.
-  const [pathResult, setPathResult] = useState<
-    { x: number; y: number; paths: GraphPath[]; activeIndex: number } | null
-  >(null);
-  // A failed `/v1/paths` call — distinguishable from `pathResult`'s own "No path found" (a
-  // completed search, zero results) rather than folded into it, since the two are different
-  // findings for the analyst (`findPaths`'s own doc comment below has the full reasoning).
-  const [pathError, setPathError] = useState<{ x: number; y: number; message: string } | null>(
-    null,
-  );
-  // A failed `expandNode`/`manualAssertion`/`explainCluster` call — `ActionErrorOverlay`'s own
-  // doc comment has the full reasoning for why these three share one generic overlay rather than
-  // `pathError`'s own distinct-outcomes shape.
-  const [actionError, setActionError] = useState<{ x: number; y: number; message: string } | null>(
-    null,
-  );
-  // Read by `refreshNodeVisualState` (called from many unrelated call sites — hover, selection,
-  // dimming) without threading a new parameter through every one of them; written only by the
-  // effect below, keyed on `pathResult` itself. A ref, not state, because nothing here needs a
-  // re-render when it changes on its own — the effect that writes it already re-renders via
-  // `pathResult`.
-  const pathNodeIdsRef = useRef<Set<string>>(new Set());
-  const [lassoActive, setLassoActive] = useState(false);
-  const [lassoPoints, setLassoPoints] = useState<{ x: number; y: number }[]>([]);
-  const lastReproject = useStore(store, (s) => s.lastReproject);
-
-  const refreshNodeVisualState = (nodeId: string) => {
-    if (!graph.hasNode(nodeId)) return;
-    const node = graph.getNodeAttribute(nodeId, "data");
-    const visual = ontology.visualFor(node.type);
-    if (!visual) return;
-    const onPath = pathNodeIdsRef.current.has(nodeId);
-    // `02_GLASS_FRONTEND.md` §3.1: "everything else dims to 32%" — a found path in effect adds a
-    // second, independent reason a node can be dimmed, ORed with the existing cross-filter
-    // dimming rather than replacing it.
-    const pathActive = pathNodeIdsRef.current.size > 0;
-    const attrs = computeNodeGraphAttributes(node, visual, {
-      dimmed: dimmedNodeIds.has(nodeId) || (pathActive && !onPath),
-      filteredOut: false,
-      hovered: hovered === nodeId,
-      selected: selected.has(nodeId),
-      onPath,
-    });
-    graph.mergeNodeAttributes(nodeId, attrs);
-  };
-
-  // Re-derives which nodes/edges are "on path" whenever the found path or the analyst's choice of
-  // which of the `k` results to look at changes, and refreshes every node/edge's own visual state
-  // accordingly — dimming is a whole-graph property of "a path is active," not a per-node toggle,
-  // so this sweeps the graph the same way `refreshClusterVisualState` does for its own trigger.
-  useEffect(() => {
-    const activePath = pathResult ? pathResult.paths[pathResult.activeIndex] : undefined;
-    pathNodeIdsRef.current = new Set(activePath?.nodes.map((n) => n.id) ?? []);
-    const pathEdgeIds = new Set(activePath?.edges.map((e) => e.id) ?? []);
-    graph.forEachNode((nodeId) => refreshNodeVisualState(nodeId));
-    graph.forEachEdge((edgeId) => {
-      graph.mergeEdgeAttributes(edgeId, { onPath: pathEdgeIds.has(edgeId) });
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathResult, graph]);
-
-  // Phase 6a Stage 2 (B9): "the number and the picture have to agree" — every node sharing a
-  // `resolution.cluster_id` with at least one other is co-located at the cluster's own anchor
-  // (`compute_clusters`' union-find convention: the cluster id *is* one of its own member ids, the
-  // numerically-smallest one) and gets the second, dedicated cluster-ring attributes. A node no
-  // longer (or never) merged gets its own deterministic `seededScatter` home position back —
-  // recomputed on demand rather than stored, so an un-merge (raising τ back up) has a real
-  // position to return to instead of staying wherever a previous merge last placed it.
-  const refreshClusterVisualState = () => {
-    const membersByCluster = new Map<string, string[]>();
-    graph.forEachNode((nodeId, attrs) => {
-      const clusterId = attrs.data.resolution?.cluster_id ?? nodeId;
-      const members = membersByCluster.get(clusterId);
-      if (members) members.push(nodeId);
-      else membersByCluster.set(clusterId, [nodeId]);
-    });
-    for (const [clusterId, members] of membersByCluster) {
-      const clusterAttrs = computeClusterGraphAttributes(members.length);
-      for (const nodeId of members) {
-        graph.mergeNodeAttributes(nodeId, clusterAttrs);
-        if (nodeId === clusterId) continue;
-        const anchorX = members.length > 1 ? graph.getNodeAttribute(clusterId, "x") : undefined;
-        const anchorY = members.length > 1 ? graph.getNodeAttribute(clusterId, "y") : undefined;
-        if (anchorX !== undefined && anchorY !== undefined) {
-          graph.mergeNodeAttributes(nodeId, { x: anchorX, y: anchorY });
-        } else {
-          const home = seededScatter(nodeId);
-          graph.mergeNodeAttributes(nodeId, { x: home.x, y: home.y });
-        }
-      }
-    }
-  };
-
-  // Assign an initial position and the graph-level (rarely-changing)
-  // visual attributes exactly once, when a node is added to the working
-  // set — never inside the per-frame reducer.
-  useEffect(() => {
-    const onNodeAdded = ({ key }: { key: string }) => {
-      if (graph.getNodeAttribute(key, "x") === undefined) {
-        const { x, y } = seededScatter(key);
-        graph.mergeNodeAttributes(key, { x, y });
-      }
-      refreshNodeVisualState(key);
-    };
-    graph.on("nodeAdded", onNodeAdded);
-    // Nodes already present (e.g. the initial snapshot arrived before
-    // this effect ran) still need their first pass.
-    graph.forEachNode((key) => onNodeAdded({ key }));
-    return () => {
-      graph.removeListener("nodeAdded", onNodeAdded);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graph]);
-
-  // Cluster-collapse rendering: runs once every node has its initial `seededScatter` position
-  // (this effect is declared, and therefore runs, after the one above), and again only when a
-  // `reproject` delta actually lands — `lastReproject` is `WorkingSetStoreState`'s own narrower
-  // signal for exactly that, so an unrelated `add`/`update` delta doesn't trigger a working-set-wide
-  // sweep for nothing.
-  useEffect(() => {
-    refreshClusterVisualState();
-    sigmaRef.current?.scheduleRefresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graph, lastReproject]);
-
-  // Re-derive graph-level visual attributes only for the node(s) whose
-  // hover/selection actually changed — not the whole working set.
-  useEffect(() => {
-    graph.forEachNode((key) => {
-      const wasSelected = selected.has(key);
-      const isHovered = hovered === key;
-      if (wasSelected || isHovered || graph.getNodeAttribute(key, "borderSize")) {
-        refreshNodeVisualState(key);
-      }
-    });
-    sigmaRef.current?.scheduleRefresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, hovered]);
-
-  // A cross-filter update can dim or un-dim *any* node in the working set,
-  // not just ones already selected/hovered/bordered — unlike the effect
-  // above, this one has to sweep every node rather than skip most of them.
-  useEffect(() => {
-    graph.forEachNode((key) => refreshNodeVisualState(key));
-    sigmaRef.current?.scheduleRefresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dimmedNodeIds]);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    // `Sigma`'s own constructor calls `refresh()` synchronously — which,
-    // for a graph that already has nodes at mount time (a history
-    // restore, a branch, or this checkpoint's own perf-fixture harness —
-    // not the ordinary empty-investigation-then-stream-fills-it path this
-    // bug's absence from earlier manual testing traces to), invokes
-    // `nodeReducer` *during construction*, before `const sigma = new
-    // Sigma(...)` has finished assigning. Referencing `sigma` directly
-    // inside the reducer is therefore a real TDZ crash, not a hypothetical
-    // one: `let currentSigma`, assigned right after construction, gives
-    // the reducer a binding that exists (as `undefined`) through that
-    // first synchronous pass instead.
-    // eslint-disable-next-line prefer-const -- must exist (as `undefined`) before `new Sigma(...)` runs; a `const` at the single later assignment would reintroduce the TDZ bug above.
-    let currentSigma: Sigma<WorkingSetNodeAttributes, WorkingSetEdgeAttributes> | undefined;
-    const sigma = new Sigma<WorkingSetNodeAttributes, WorkingSetEdgeAttributes>(graph, containerRef.current, {
-      defaultNodeType: "glass-node",
-      nodeProgramClasses: { "glass-node": NODE_PROGRAM },
-      defaultEdgeType: "glass-edge",
-      edgeProgramClasses: { "glass-edge": EdgeLineProgram },
-      // Sigma's own `addNode`/`updateNode`: "this function must return a
-      // total object and won't be merged" with the raw graph attributes —
-      // a reducer's return *replaces* them entirely for every downstream
-      // consumer, including `@sigma/node-image`/`@sigma/node-border`'s own
-      // `data[imageAttribute]`/`data["borderColor"]` reads. So `...data`
-      // (the raw attributes, shallow-copied by Sigma before calling this)
-      // must be spread through first — only the frame-computed fields
-      // actually need to *override* anything. Discovered by an empty
-      // canvas: omitting this leaves every custom-program attribute
-      // `undefined`, silently, not by reasoning about the library's
-      // source ahead of time.
-      nodeReducer: (nodeId, data) => {
-        const ratio = currentSigma?.getCamera().ratio ?? 1;
-        const frame = computeNodeFrameAttributes(data.data, { cameraRatio: ratio, degree: graph.degree(nodeId) });
-        return { ...data, ...frame, x: data.x ?? 0, y: data.y ?? 0, type: "glass-node" };
-      },
-      edgeReducer: (_edgeId, data) => {
-        const ratio = currentSigma?.getCamera().ratio ?? 1;
-        const attrs = computeEdgeAttributes(data.data, {
-          cameraRatio: ratio,
-          strengthFilterFloor: 0,
-          onPath: data.onPath ?? false,
-        });
-        return { ...data, ...attrs, type: "glass-edge" };
-      },
-      hideEdgesOnMove: true, // §1.1: "buys the frame budget at 250,000 edges"
-      renderLabels: true,
-      labelRenderedSizeThreshold: 0,
-      enableEdgeEvents: true, // needed for edge inspection (hover/click)
-    });
-    currentSigma = sigma;
-    sigmaRef.current = sigma;
-
-    sigma.on("clickNode", ({ node, event }) => {
-      const multi = event.original instanceof MouseEvent && (event.original.metaKey || event.original.ctrlKey);
-      setSelected((prev) => {
-        const next = multi ? new Set(prev) : new Set<string>();
-        if (next.has(node) && multi) next.delete(node);
-        else next.add(node);
-        onSelectionChange?.(Array.from(next));
-        return next;
-      });
-      setFocused(node);
-      setInspectedEdge(null);
-    });
-    sigma.on("clickStage", () => {
-      setSelected(new Set());
-      onSelectionChange?.([]);
-    });
-    sigma.on("enterNode", ({ node }) => setHovered(node));
-    sigma.on("leaveNode", () => setHovered(null));
-    sigma.on("rightClickNode", ({ node, event }) => {
-      event.preventSigmaDefault();
-      const original = event.original as MouseEvent;
-      setFocused(node);
-      setRadialMenu({ x: original.clientX, y: original.clientY, nodeId: node, layout: "radial" });
-    });
-    sigma.on("clickEdge", ({ edge, event }) => {
-      const original = event.original as MouseEvent;
-      setInspectedEdge({ edgeId: edge, x: original.clientX, y: original.clientY });
-    });
-    sigma.on("enterEdge", ({ edge, event }) => {
-      const original = event.original as MouseEvent;
-      setInspectedEdge({ edgeId: edge, x: original.clientX, y: original.clientY });
-    });
-
-    return () => {
-      sigma.kill();
-      sigmaRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graph]);
-
-  useImperativeHandle(
+export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
+  function GlassCanvas(
+    {
+      graph,
+      store,
+      ontology,
+      edgeTypes,
+      investigationId,
+      apiBaseUrl,
+      bearerToken,
+      dimmedNodeIds = EMPTY_DIMMED_SET,
+      onSelectionChange,
+      onFocusChange,
+      onViewMessages,
+      communityHulls,
+    }: GlassCanvasProps,
     ref,
-    () => ({
-      focusOnNode: (nodeId: string) => {
-        if (!graph.hasNode(nodeId)) return;
-        setSelected(new Set([nodeId]));
-        onSelectionChange?.([nodeId]);
-        setFocused(nodeId);
-        const sigma = sigmaRef.current;
-        if (!sigma) return;
-        const x = graph.getNodeAttribute(nodeId, "x") ?? 0;
-        const y = graph.getNodeAttribute(nodeId, "y") ?? 0;
-        // Pan only — the current zoom ratio is left untouched (`camera.animate` merges the given
-        // keys, per Sigma's own `CameraState` semantics), so "centre" means exactly that and
-        // nothing else, the simplest deterministic behaviour to both implement and assert against
-        // in `keyboard/metrics-panel.spec.ts`.
-        sigma.getCamera().animate({ x, y }, { duration: 200 });
-      },
-      highlightNodes: (nodeIds: readonly string[]) => {
-        const present = nodeIds.filter((id) => graph.hasNode(id));
-        setSelected(new Set(present));
-        onSelectionChange?.(present);
-      },
-      exportImage: (mark: ExportMark) => {
-        const sigma = sigmaRef.current;
-        if (!sigma) {
-          return Promise.reject(new Error("exportImage: no Sigma instance mounted"));
+  ) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const sigmaRef = useRef<Sigma<
+      WorkingSetNodeAttributes,
+      WorkingSetEdgeAttributes
+    > | null>(null);
+    const [selected, setSelected] = useState<Set<string>>(new Set());
+    const [hovered, setHovered] = useState<string | null>(null);
+    const [focused, setFocused] = useState<string | null>(null);
+    useEffect(() => {
+      onFocusChange?.(focused);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [focused]);
+    const [radialMenu, setRadialMenu] = useState<PendingRadialMenu | null>(
+      null,
+    );
+    // **The radial menu's real cardinality, per edge type** — `08_ACCEPTANCE_SCENARIOS.md` A1:
+    // "expansion previews its cardinality before running: the analyst is never surprised by ten
+    // thousand nodes". Until round 12c this was hardcoded to 0 for every entry, so the menu read
+    // `ASSOCIATE_OF (0)` on a node with eight associates and `USES (0)` on one with none — the
+    // same text for "nothing there" and "eight there", which is worse than showing nothing at all,
+    // and it cost round 12b real time chasing an expansion that could never have worked.
+    // Keyed by edge type, for the node the menu is currently open on; `null` means "not answered
+    // yet", which renders as `…` rather than as a confident zero.
+    const [previewCounts, setPreviewCounts] = useState<
+      Record<string, number | null>
+    >({});
+    const [inspectedEdge, setInspectedEdge] = useState<{
+      edgeId: string;
+      x: number;
+      y: number;
+    } | null>(null);
+    const [clusterExplain, setClusterExplain] = useState<{
+      x: number;
+      y: number;
+      explanation: ClusterExplanation;
+    } | null>(null);
+    // Phase 7 Stage 5 (the pathfinder) — `x`/`y` anchor the overlay to the radial menu's own
+    // position, the same shape `clusterExplain` above already uses. `activeIndex` is which of the
+    // (up to `k`) found paths is currently drawn on-path; cycling it never re-fetches.
+    const [pathResult, setPathResult] = useState<{
+      x: number;
+      y: number;
+      paths: GraphPath[];
+      activeIndex: number;
+    } | null>(null);
+    // A failed `/v1/paths` call — distinguishable from `pathResult`'s own "No path found" (a
+    // completed search, zero results) rather than folded into it, since the two are different
+    // findings for the analyst (`findPaths`'s own doc comment below has the full reasoning).
+    const [pathError, setPathError] = useState<{
+      x: number;
+      y: number;
+      message: string;
+    } | null>(null);
+    // A failed `expandNode`/`manualAssertion`/`explainCluster` call — `ActionErrorOverlay`'s own
+    // doc comment has the full reasoning for why these three share one generic overlay rather than
+    // `pathError`'s own distinct-outcomes shape.
+    const [actionError, setActionError] = useState<{
+      x: number;
+      y: number;
+      message: string;
+    } | null>(null);
+    // Read by `refreshNodeVisualState` (called from many unrelated call sites — hover, selection,
+    // dimming) without threading a new parameter through every one of them; written only by the
+    // effect below, keyed on `pathResult` itself. A ref, not state, because nothing here needs a
+    // re-render when it changes on its own — the effect that writes it already re-renders via
+    // `pathResult`.
+    const pathNodeIdsRef = useRef<Set<string>>(new Set());
+    const [lassoActive, setLassoActive] = useState(false);
+    const [lassoPoints, setLassoPoints] = useState<{ x: number; y: number }[]>(
+      [],
+    );
+    const lastReproject = useStore(store, (s) => s.lastReproject);
+
+    const refreshNodeVisualState = (nodeId: string) => {
+      if (!graph.hasNode(nodeId)) return;
+      const node = graph.getNodeAttribute(nodeId, "data");
+      const visual = ontology.visualFor(node.type);
+      if (!visual) return;
+      const onPath = pathNodeIdsRef.current.has(nodeId);
+      // `02_GLASS_FRONTEND.md` §3.1: "everything else dims to 32%" — a found path in effect adds a
+      // second, independent reason a node can be dimmed, ORed with the existing cross-filter
+      // dimming rather than replacing it.
+      const pathActive = pathNodeIdsRef.current.size > 0;
+      const attrs = computeNodeGraphAttributes(node, visual, {
+        dimmed: dimmedNodeIds.has(nodeId) || (pathActive && !onPath),
+        filteredOut: false,
+        hovered: hovered === nodeId,
+        selected: selected.has(nodeId),
+        onPath,
+      });
+      graph.mergeNodeAttributes(nodeId, attrs);
+    };
+
+    // Re-derives which nodes/edges are "on path" whenever the found path or the analyst's choice of
+    // which of the `k` results to look at changes, and refreshes every node/edge's own visual state
+    // accordingly — dimming is a whole-graph property of "a path is active," not a per-node toggle,
+    // so this sweeps the graph the same way `refreshClusterVisualState` does for its own trigger.
+    useEffect(() => {
+      const activePath = pathResult
+        ? pathResult.paths[pathResult.activeIndex]
+        : undefined;
+      pathNodeIdsRef.current = new Set(
+        activePath?.nodes.map((n) => n.id) ?? [],
+      );
+      const pathEdgeIds = new Set(activePath?.edges.map((e) => e.id) ?? []);
+      graph.forEachNode((nodeId) => refreshNodeVisualState(nodeId));
+      graph.forEachEdge((edgeId) => {
+        graph.mergeEdgeAttributes(edgeId, { onPath: pathEdgeIds.has(edgeId) });
+      });
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pathResult, graph]);
+
+    // Phase 6a Stage 2 (B9): "the number and the picture have to agree" — every node sharing a
+    // `resolution.cluster_id` with at least one other is co-located at the cluster's own anchor
+    // (`compute_clusters`' union-find convention: the cluster id *is* one of its own member ids, the
+    // numerically-smallest one) and gets the second, dedicated cluster-ring attributes. A node no
+    // longer (or never) merged gets its own deterministic `seededScatter` home position back —
+    // recomputed on demand rather than stored, so an un-merge (raising τ back up) has a real
+    // position to return to instead of staying wherever a previous merge last placed it.
+    const refreshClusterVisualState = () => {
+      const membersByCluster = new Map<string, string[]>();
+      graph.forEachNode((nodeId, attrs) => {
+        const clusterId = attrs.data.resolution?.cluster_id ?? nodeId;
+        const members = membersByCluster.get(clusterId);
+        if (members) members.push(nodeId);
+        else membersByCluster.set(clusterId, [nodeId]);
+      });
+      for (const [clusterId, members] of membersByCluster) {
+        const clusterAttrs = computeClusterGraphAttributes(members.length);
+        for (const nodeId of members) {
+          graph.mergeNodeAttributes(nodeId, clusterAttrs);
+          if (nodeId === clusterId) continue;
+          const anchorX =
+            members.length > 1
+              ? graph.getNodeAttribute(clusterId, "x")
+              : undefined;
+          const anchorY =
+            members.length > 1
+              ? graph.getNodeAttribute(clusterId, "y")
+              : undefined;
+          if (anchorX !== undefined && anchorY !== undefined) {
+            graph.mergeNodeAttributes(nodeId, { x: anchorX, y: anchorY });
+          } else {
+            const home = seededScatter(nodeId);
+            graph.mergeNodeAttributes(nodeId, { x: home.x, y: home.y });
+          }
         }
-        return captureChartImage(sigma, mark);
-      },
-    }),
-    [graph, onSelectionChange],
-  );
-
-  // Keyboard: accessibility floor (`docs/02_GLASS_FRONTEND.md` §6) — every
-  // canvas action reachable without a mouse.
-  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    // `RadialMenu` is rendered as this container's own child, so a keydown on
-    // one of its `<button role="menuitem">` items bubbles up to this same
-    // handler (React's synthetic events follow real DOM bubbling). Found
-    // while wiring B11's own keyboard test: without this guard, Tab inside
-    // an open menu was *also* being caught by the ring-cycling branch below,
-    // which calls `preventDefault()` and fights the browser's native
-    // button-to-button focus movement the menu's own real `<button>`
-    // elements otherwise get for free. `Escape` still closes the menu
-    // regardless — that is `RadialMenu`'s own `document`-level listener, not
-    // this handler, so it needs no exemption here.
-    //
-    // Phase 6a Stage 4: `inspectedEdge`/`clusterExplain` get the same exemption, found the same
-    // way — without it, this container's own Tab/arrow branches below fight a keyboard-only
-    // analyst trying to reach either overlay's own close button, the identical bug class
-    // `radialMenu` was already exempted from. `Escape` needs no branch here: `Popover` (the base
-    // both overlays render through) now closes itself on Escape via its own `document`-level
-    // listener, the same self-contained shape `RadialMenu` already had — found necessary, not
-    // just tidier, because this container's own handler only runs while the container itself has
-    // focus, and both overlays are opened from a radial-menu item whose own unmount drops focus to
-    // `<body>`, past this div entirely.
-    if (radialMenu) return;
-    // `pathResult` (Phase 7 Stage 5) gets the identical exemption `inspectedEdge`/`clusterExplain`
-    // already have, for the identical reason — `PathfinderOverlay` renders through the same
-    // `Popover`, opened from the same radial-menu-item shape.
-    if (inspectedEdge || clusterExplain || pathResult || pathError || actionError) return;
-    // Tab/Shift+Tab are deliberately never intercepted here — `02_GLASS_FRONTEND.md` §6's own
-    // Tab-cycling wording was corrected after being found while wiring a second
-    // keyboard-driven surface beside this canvas (a disclosed gap has the
-    // full incident): a container that calls `preventDefault()` on every Tab keydown once it
-    // holds focus traps a keyboard user inside it for the container's own lifetime, with no way
-    // to reach a sibling panel at all. Tab now behaves exactly like every other control on the
-    // page — establishing the first ring happens on this container's own `onFocus` below, not on
-    // a keypress after arriving; cycling an already-built ring (needed for a lasso-selected set
-    // of non-adjacent nodes arrow-walk cannot reach) moves to `Ctrl`/`Cmd`+`ArrowRight`/`Left`,
-    // the key Tab's release frees up for it.
-    if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && (e.ctrlKey || e.metaKey) && selected.size > 0) {
-      e.preventDefault();
-      const ring = Array.from(selected);
-      const currentIndex = focused ? ring.indexOf(focused) : -1;
-      const nextIndex = e.key === "ArrowLeft"
-        ? (currentIndex - 1 + ring.length) % ring.length
-        : (currentIndex + 1) % ring.length;
-      setFocused(ring[nextIndex] ?? null);
-    } else if ((e.key === "ArrowRight" || e.key === "ArrowDown") && focused) {
-      const neighbours = graph.neighbors(focused);
-      if (neighbours.length > 0) setFocused(neighbours[0] ?? null);
-    } else if ((e.key === "ArrowLeft" || e.key === "ArrowUp") && focused) {
-      const neighbours = graph.neighbors(focused);
-      if (neighbours.length > 0) setFocused(neighbours[neighbours.length - 1] ?? null);
-    } else if (e.key === " " && focused) {
-      // `02_GLASS_FRONTEND.md` §6 names Tab/Arrow/Enter/`\` and is silent on
-      // building a multi-node selection by keyboard at all — Space toggling
-      // the focused node's own ring membership is this build's own
-      // resolution of that silence (proposed, not spec-mandated), mirroring
-      // `clickNode`'s own ctrl/cmd-click toggle below exactly. B11 (manual
-      // link/split) is the first feature that needs a keyboard-built
-      // two-node selection; nothing before it did.
-      e.preventDefault();
-      setSelected((prev) => {
-        const next = new Set(prev);
-        if (next.has(focused)) next.delete(focused);
-        else next.add(focused);
-        onSelectionChange?.(Array.from(next));
-        return next;
-      });
-    } else if (e.key === "Enter" && focused) {
-      // No menu is open here to anchor on — the same container-corner-plus-offset fallback the
-      // `\` handler below uses to open one, since a failed expand needs somewhere to render.
-      const rect = containerRef.current?.getBoundingClientRect();
-      void expandNode(focused, null, (rect?.left ?? 0) + 40, (rect?.top ?? 0) + 40);
-    } else if (e.key === "\\" && focused) {
-      e.preventDefault();
-      const rect = containerRef.current?.getBoundingClientRect();
-      setRadialMenu({
-        x: (rect?.left ?? 0) + 40,
-        y: (rect?.top ?? 0) + 40,
-        nodeId: focused,
-        layout: "list",
-      });
-    }
-  };
-
-  async function expandNode(
-    nodeId: string,
-    edgeType: string | null,
-    x: number,
-    y: number,
-  ): Promise<void> {
-    let response: Response;
-    try {
-      response = await fetch(`${apiBaseUrl}/v1/investigations/${investigationId}/expand`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          request: {
-            node_ids: [nodeId],
-            depth: 1,
-            edge_types: edgeType ? [edgeType] : null,
-          },
-        }),
-      });
-      if (!response.ok) {
-        // `limit_exceeded` (409, the working-set cap) included — no silent drop is allowed; the
-        // typed error surface itself, not a silent drop; the response body's own `options` (the
-        // three the cap offers) are not yet rendered here — flagged, not solved, by this fix.
-        throw new Error(`Expand failed (${response.status}). Try again.`);
       }
-    } catch (err) {
-      setActionError({ x, y, message: err instanceof Error ? err.message : String(err) });
-      return;
-    }
-    const outcome = await response.json();
-    store.getState().applyDelta(outcome.delta);
-  }
+    };
 
-  // `08_ACCEPTANCE_SCENARIOS.md` B11: "a SAME_AS with
-  // score 1.0, provenance asserted, attributed to the analyst" — attribution needs no plumbing
-  // here beyond the same `bearerToken` `expandNode` already sends, since `link_resolution_route`/
-  // `split_resolution_route` (`services/api/app.py`) resolve the writing principal from that same
-  // bearer token's own `PrincipalDep`, never a service identity. Both routes return the same
-  // `DeltaReproject` shape `set_resolution_threshold` already does, so `applyDelta` needs no new
-  // handling for it. `node_a`/`node_b` are sent flat, not wrapped in `{request: ...}` the way
-  // `/expand`'s own `ExpandBody` is — `ManualAssertionRequest` (`services/api/resolution.py`) is
-  // the whole body, checked directly rather than assumed from `expandNode`'s own different shape.
-  async function manualAssertion(
-    nodeA: string,
-    nodeB: string,
-    kind: "link" | "split",
-    x: number,
-    y: number,
-  ): Promise<void> {
-    // Fixed first, ahead of expandNode/explainCluster below (CLAUDE.md's own session priority):
-    // this is a write, not a read. A silently-dropped expand/explain misleads an analyst about
-    // what the data shows; a silently-dropped manualAssertion leaves them believing a link (or
-    // split) is recorded in the case when it is not — the more dangerous silence of the three.
-    let response: Response;
-    try {
-      response = await fetch(
-        `${apiBaseUrl}/v1/investigations/${investigationId}/resolution/${kind}`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ node_a: nodeA, node_b: nodeB }),
+    // Assign an initial position and the graph-level (rarely-changing)
+    // visual attributes exactly once, when a node is added to the working
+    // set — never inside the per-frame reducer.
+    useEffect(() => {
+      const onNodeAdded = ({ key }: { key: string }) => {
+        if (graph.getNodeAttribute(key, "x") === undefined) {
+          const { x, y } = seededScatter(key);
+          graph.mergeNodeAttributes(key, { x, y });
+        }
+        refreshNodeVisualState(key);
+      };
+      graph.on("nodeAdded", onNodeAdded);
+      // Nodes already present (e.g. the initial snapshot arrived before
+      // this effect ran) still need their first pass.
+      graph.forEachNode((key) => onNodeAdded({ key }));
+      return () => {
+        graph.removeListener("nodeAdded", onNodeAdded);
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [graph]);
+
+    // Cluster-collapse rendering: runs once every node has its initial `seededScatter` position
+    // (this effect is declared, and therefore runs, after the one above), and again only when a
+    // `reproject` delta actually lands — `lastReproject` is `WorkingSetStoreState`'s own narrower
+    // signal for exactly that, so an unrelated `add`/`update` delta doesn't trigger a working-set-wide
+    // sweep for nothing.
+    useEffect(() => {
+      refreshClusterVisualState();
+      sigmaRef.current?.scheduleRefresh();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [graph, lastReproject]);
+
+    // Re-derive graph-level visual attributes only for the node(s) whose
+    // hover/selection actually changed — not the whole working set.
+    useEffect(() => {
+      graph.forEachNode((key) => {
+        const wasSelected = selected.has(key);
+        const isHovered = hovered === key;
+        if (
+          wasSelected ||
+          isHovered ||
+          graph.getNodeAttribute(key, "borderSize")
+        ) {
+          refreshNodeVisualState(key);
+        }
+      });
+      sigmaRef.current?.scheduleRefresh();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selected, hovered]);
+
+    // A cross-filter update can dim or un-dim *any* node in the working set,
+    // not just ones already selected/hovered/bordered — unlike the effect
+    // above, this one has to sweep every node rather than skip most of them.
+    useEffect(() => {
+      graph.forEachNode((key) => refreshNodeVisualState(key));
+      sigmaRef.current?.scheduleRefresh();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dimmedNodeIds]);
+
+    useEffect(() => {
+      if (!containerRef.current) return;
+      // `Sigma`'s own constructor calls `refresh()` synchronously — which,
+      // for a graph that already has nodes at mount time (a history
+      // restore, a branch, or this checkpoint's own perf-fixture harness —
+      // not the ordinary empty-investigation-then-stream-fills-it path this
+      // bug's absence from earlier manual testing traces to), invokes
+      // `nodeReducer` *during construction*, before `const sigma = new
+      // Sigma(...)` has finished assigning. Referencing `sigma` directly
+      // inside the reducer is therefore a real TDZ crash, not a hypothetical
+      // one: `let currentSigma`, assigned right after construction, gives
+      // the reducer a binding that exists (as `undefined`) through that
+      // first synchronous pass instead.
+      // eslint-disable-next-line prefer-const -- must exist (as `undefined`) before `new Sigma(...)` runs; a `const` at the single later assignment would reintroduce the TDZ bug above.
+      let currentSigma:
+        Sigma<WorkingSetNodeAttributes, WorkingSetEdgeAttributes> | undefined;
+      const sigma = new Sigma<
+        WorkingSetNodeAttributes,
+        WorkingSetEdgeAttributes
+      >(graph, containerRef.current, {
+        defaultNodeType: "glass-node",
+        nodeProgramClasses: { "glass-node": NODE_PROGRAM },
+        defaultEdgeType: "glass-edge",
+        edgeProgramClasses: { "glass-edge": EdgeLineProgram },
+        // Sigma's own `addNode`/`updateNode`: "this function must return a
+        // total object and won't be merged" with the raw graph attributes —
+        // a reducer's return *replaces* them entirely for every downstream
+        // consumer, including `@sigma/node-image`/`@sigma/node-border`'s own
+        // `data[imageAttribute]`/`data["borderColor"]` reads. So `...data`
+        // (the raw attributes, shallow-copied by Sigma before calling this)
+        // must be spread through first — only the frame-computed fields
+        // actually need to *override* anything. Discovered by an empty
+        // canvas: omitting this leaves every custom-program attribute
+        // `undefined`, silently, not by reasoning about the library's
+        // source ahead of time.
+        nodeReducer: (nodeId, data) => {
+          const ratio = currentSigma?.getCamera().ratio ?? 1;
+          const frame = computeNodeFrameAttributes(data.data, {
+            cameraRatio: ratio,
+            degree: graph.degree(nodeId),
+          });
+          return {
+            ...data,
+            ...frame,
+            x: data.x ?? 0,
+            y: data.y ?? 0,
+            type: "glass-node",
+          };
         },
-      );
-      if (!response.ok) {
-        const verb = kind === "link" ? "Link" : "Split";
-        throw new Error(`${verb} failed (${response.status}). Not recorded — try again.`);
-      }
-    } catch (err) {
-      setActionError({ x, y, message: err instanceof Error ? err.message : String(err) });
-      return;
-    }
-    const delta = await response.json();
-    store.getState().applyDelta(delta);
-  }
-
-  // `08_ACCEPTANCE_SCENARIOS.md` B10: "per-comparison match
-  // weights, not just the total." A `GET`, unlike `expandNode`/`manualAssertion` — `explain_cluster`
-  // is a pure read of the working set's own last-computed clustering, nothing to attribute to this
-  // principal beyond the bearer token every other read here already sends.
-  async function explainCluster(clusterId: string, x: number, y: number): Promise<void> {
-    let response: Response;
-    try {
-      response = await fetch(
-        `${apiBaseUrl}/v1/investigations/${investigationId}/resolution/explain/${clusterId}`,
-        { headers: { Authorization: `Bearer ${bearerToken}` } },
-      );
-      if (!response.ok) {
-        // A stale cluster id 404s (`ClusterNotFoundError`, access control's own indistinguishable-
-        // from-never-existed shape) — worth saying plainly rather than leaving the analyst to
-        // wonder why nothing happened, the same reasoning `PathfinderOverlay`'s own "No path
-        // found" already gives for a different, but equally silent-by-default, empty outcome.
-        throw new Error(`Explain cluster failed (${response.status}). Try again.`);
-      }
-    } catch (err) {
-      setActionError({ x, y, message: err instanceof Error ? err.message : String(err) });
-      return;
-    }
-    const explanation: ClusterExplanation = await response.json();
-    setClusterExplain({ x, y, explanation });
-  }
-
-  // Phase 7 Stage 5 (the pathfinder) — `06_DECISIONS.md` ADR-033. `POST /v1/paths` is a bare,
-  // non-investigation-scoped query (the same reasoning `/v1/search` already has: it searches the
-  // whole access-filtered corpus, not this investigation's own working set), so the result must be
-  // seeded into this working set before it can be drawn on-path at all — reusing the existing
-  // `/seed` endpoint exactly, not a new working-set-service method. Only nodes/edges not already
-  // present are sent; `/seed` itself is idempotent-by-id on the store side regardless.
-  async function findPaths(nodeA: string, nodeB: string, x: number, y: number): Promise<void> {
-    let response: Response;
-    try {
-      response = await fetch(`${apiBaseUrl}/v1/paths`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ source: nodeA, target: nodeB, max_hops: 6, k: 5 }),
+        edgeReducer: (_edgeId, data) => {
+          const ratio = currentSigma?.getCamera().ratio ?? 1;
+          const attrs = computeEdgeAttributes(data.data, {
+            cameraRatio: ratio,
+            strengthFilterFloor: 0,
+            onPath: data.onPath ?? false,
+          });
+          return { ...data, ...attrs, type: "glass-edge" };
+        },
+        hideEdgesOnMove: true, // §1.1: "buys the frame budget at 250,000 edges"
+        renderLabels: true,
+        labelRenderedSizeThreshold: 0,
+        enableEdgeEvents: true, // needed for edge inspection (hover/click)
       });
-      if (!response.ok) {
-        throw new Error(`Path search failed (${response.status}). Try again.`);
-      }
-    } catch (err) {
-      // Not "No path found" (`pathResult`'s own zero-length case, a completed search) — the
-      // search did not complete at all, and folding the two together would tell the analyst
-      // something the system does not actually know (`06_DECISIONS.md` ADR-033's own "FIRST"
-      // reasoning: this searches the whole access-filtered corpus, a real claim worth getting
-      // right). Matches `patterns/api.ts`'s own `throw` shape, not `if (!response.ok) return;`.
-      setPathError({ x, y, message: err instanceof Error ? err.message : String(err) });
-      return;
-    }
-    const found: GraphPath[] = await response.json();
+      currentSigma = sigma;
+      sigmaRef.current = sigma;
 
-    if (found.length > 0) {
-      const nodesById = new Map<string, Node>();
-      const edgesById = new Map<string, Edge>();
-      for (const path of found) {
-        for (const n of path.nodes) nodesById.set(n.id, n);
-        for (const e of path.edges) edgesById.set(e.id, e);
+      sigma.on("clickNode", ({ node, event }) => {
+        const multi =
+          event.original instanceof MouseEvent &&
+          (event.original.metaKey || event.original.ctrlKey);
+        setSelected((prev) => {
+          const next = multi ? new Set(prev) : new Set<string>();
+          if (next.has(node) && multi) next.delete(node);
+          else next.add(node);
+          onSelectionChange?.(Array.from(next));
+          return next;
+        });
+        setFocused(node);
+        setInspectedEdge(null);
+      });
+      sigma.on("clickStage", () => {
+        setSelected(new Set());
+        onSelectionChange?.([]);
+      });
+      sigma.on("enterNode", ({ node }) => setHovered(node));
+      sigma.on("leaveNode", () => setHovered(null));
+      sigma.on("rightClickNode", ({ node, event }) => {
+        event.preventSigmaDefault();
+        const original = event.original as MouseEvent;
+        setFocused(node);
+        setRadialMenu({
+          x: original.clientX,
+          y: original.clientY,
+          nodeId: node,
+          layout: "radial",
+        });
+      });
+      sigma.on("clickEdge", ({ edge, event }) => {
+        const original = event.original as MouseEvent;
+        setInspectedEdge({
+          edgeId: edge,
+          x: original.clientX,
+          y: original.clientY,
+        });
+      });
+      sigma.on("enterEdge", ({ edge, event }) => {
+        const original = event.original as MouseEvent;
+        setInspectedEdge({
+          edgeId: edge,
+          x: original.clientX,
+          y: original.clientY,
+        });
+      });
+
+      return () => {
+        sigma.kill();
+        sigmaRef.current = null;
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [graph]);
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        focusOnNode: (nodeId: string) => {
+          if (!graph.hasNode(nodeId)) return;
+          setSelected(new Set([nodeId]));
+          onSelectionChange?.([nodeId]);
+          setFocused(nodeId);
+          const sigma = sigmaRef.current;
+          if (!sigma) return;
+          const x = graph.getNodeAttribute(nodeId, "x") ?? 0;
+          const y = graph.getNodeAttribute(nodeId, "y") ?? 0;
+          // Pan only — the current zoom ratio is left untouched (`camera.animate` merges the given
+          // keys, per Sigma's own `CameraState` semantics), so "centre" means exactly that and
+          // nothing else, the simplest deterministic behaviour to both implement and assert against
+          // in `keyboard/metrics-panel.spec.ts`.
+          sigma.getCamera().animate({ x, y }, { duration: 200 });
+        },
+        highlightNodes: (nodeIds: readonly string[]) => {
+          const present = nodeIds.filter((id) => graph.hasNode(id));
+          setSelected(new Set(present));
+          onSelectionChange?.(present);
+        },
+        exportImage: (mark: ExportMark) => {
+          const sigma = sigmaRef.current;
+          if (!sigma) {
+            return Promise.reject(
+              new Error("exportImage: no Sigma instance mounted"),
+            );
+          }
+          return captureChartImage(sigma, mark);
+        },
+      }),
+      [graph, onSelectionChange],
+    );
+
+    // Keyboard: accessibility floor (`docs/02_GLASS_FRONTEND.md` §6) — every
+    // canvas action reachable without a mouse.
+    const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+      // `RadialMenu` is rendered as this container's own child, so a keydown on
+      // one of its `<button role="menuitem">` items bubbles up to this same
+      // handler (React's synthetic events follow real DOM bubbling). Found
+      // while wiring B11's own keyboard test: without this guard, Tab inside
+      // an open menu was *also* being caught by the ring-cycling branch below,
+      // which calls `preventDefault()` and fights the browser's native
+      // button-to-button focus movement the menu's own real `<button>`
+      // elements otherwise get for free. `Escape` still closes the menu
+      // regardless — that is `RadialMenu`'s own `document`-level listener, not
+      // this handler, so it needs no exemption here.
+      //
+      // Phase 6a Stage 4: `inspectedEdge`/`clusterExplain` get the same exemption, found the same
+      // way — without it, this container's own Tab/arrow branches below fight a keyboard-only
+      // analyst trying to reach either overlay's own close button, the identical bug class
+      // `radialMenu` was already exempted from. `Escape` needs no branch here: `Popover` (the base
+      // both overlays render through) now closes itself on Escape via its own `document`-level
+      // listener, the same self-contained shape `RadialMenu` already had — found necessary, not
+      // just tidier, because this container's own handler only runs while the container itself has
+      // focus, and both overlays are opened from a radial-menu item whose own unmount drops focus to
+      // `<body>`, past this div entirely.
+      if (radialMenu) return;
+      // `pathResult` (Phase 7 Stage 5) gets the identical exemption `inspectedEdge`/`clusterExplain`
+      // already have, for the identical reason — `PathfinderOverlay` renders through the same
+      // `Popover`, opened from the same radial-menu-item shape.
+      if (
+        inspectedEdge ||
+        clusterExplain ||
+        pathResult ||
+        pathError ||
+        actionError
+      )
+        return;
+      // Tab/Shift+Tab are deliberately never intercepted here — `02_GLASS_FRONTEND.md` §6's own
+      // Tab-cycling wording was corrected after being found while wiring a second
+      // keyboard-driven surface beside this canvas (a disclosed gap has the
+      // full incident): a container that calls `preventDefault()` on every Tab keydown once it
+      // holds focus traps a keyboard user inside it for the container's own lifetime, with no way
+      // to reach a sibling panel at all. Tab now behaves exactly like every other control on the
+      // page — establishing the first ring happens on this container's own `onFocus` below, not on
+      // a keypress after arriving; cycling an already-built ring (needed for a lasso-selected set
+      // of non-adjacent nodes arrow-walk cannot reach) moves to `Ctrl`/`Cmd`+`ArrowRight`/`Left`,
+      // the key Tab's release frees up for it.
+      if (
+        (e.key === "ArrowRight" || e.key === "ArrowLeft") &&
+        (e.ctrlKey || e.metaKey) &&
+        selected.size > 0
+      ) {
+        e.preventDefault();
+        const ring = Array.from(selected);
+        const currentIndex = focused ? ring.indexOf(focused) : -1;
+        const nextIndex =
+          e.key === "ArrowLeft"
+            ? (currentIndex - 1 + ring.length) % ring.length
+            : (currentIndex + 1) % ring.length;
+        setFocused(ring[nextIndex] ?? null);
+      } else if ((e.key === "ArrowRight" || e.key === "ArrowDown") && focused) {
+        const neighbours = graph.neighbors(focused);
+        if (neighbours.length > 0) setFocused(neighbours[0] ?? null);
+      } else if ((e.key === "ArrowLeft" || e.key === "ArrowUp") && focused) {
+        const neighbours = graph.neighbors(focused);
+        if (neighbours.length > 0)
+          setFocused(neighbours[neighbours.length - 1] ?? null);
+      } else if (e.key === " " && focused) {
+        // `02_GLASS_FRONTEND.md` §6 names Tab/Arrow/Enter/`\` and is silent on
+        // building a multi-node selection by keyboard at all — Space toggling
+        // the focused node's own ring membership is this build's own
+        // resolution of that silence (proposed, not spec-mandated), mirroring
+        // `clickNode`'s own ctrl/cmd-click toggle below exactly. B11 (manual
+        // link/split) is the first feature that needs a keyboard-built
+        // two-node selection; nothing before it did.
+        e.preventDefault();
+        setSelected((prev) => {
+          const next = new Set(prev);
+          if (next.has(focused)) next.delete(focused);
+          else next.add(focused);
+          onSelectionChange?.(Array.from(next));
+          return next;
+        });
+      } else if (e.key === "Enter" && focused) {
+        // No menu is open here to anchor on — the same container-corner-plus-offset fallback the
+        // `\` handler below uses to open one, since a failed expand needs somewhere to render.
+        const rect = containerRef.current?.getBoundingClientRect();
+        void expandNode(
+          focused,
+          null,
+          (rect?.left ?? 0) + 40,
+          (rect?.top ?? 0) + 40,
+        );
+      } else if (e.key === "\\" && focused) {
+        e.preventDefault();
+        const rect = containerRef.current?.getBoundingClientRect();
+        setRadialMenu({
+          x: (rect?.left ?? 0) + 40,
+          y: (rect?.top ?? 0) + 40,
+          nodeId: focused,
+          layout: "list",
+        });
       }
-      const newNodes = [...nodesById.values()].filter((n) => !graph.hasNode(n.id));
-      const newEdges = [...edgesById.values()].filter((e) => !graph.hasEdge(e.id));
-      if (newNodes.length > 0 || newEdges.length > 0) {
-        const seedResponse = await fetch(
-          `${apiBaseUrl}/v1/investigations/${investigationId}/seed`,
+    };
+
+    async function expandNode(
+      nodeId: string,
+      edgeType: string | null,
+      x: number,
+      y: number,
+    ): Promise<void> {
+      let response: Response;
+      try {
+        response = await fetch(
+          `${apiBaseUrl}/v1/investigations/${investigationId}/expand`,
           {
             method: "POST",
-            headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ nodes: newNodes, edges: newEdges }),
+            headers: {
+              Authorization: `Bearer ${bearerToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              request: {
+                node_ids: [nodeId],
+                depth: 1,
+                edge_types: edgeType ? [edgeType] : null,
+              },
+            }),
           },
         );
-        if (seedResponse.ok) {
-          const outcome = await seedResponse.json();
-          store.getState().applyDelta(outcome.delta);
+        if (!response.ok) {
+          // `limit_exceeded` (409, the working-set cap) included — no silent drop is allowed; the
+          // typed error surface itself, not a silent drop; the response body's own `options` (the
+          // three the cap offers) are not yet rendered here — flagged, not solved, by this fix.
+          throw new Error(`Expand failed (${response.status}). Try again.`);
+        }
+      } catch (err) {
+        setActionError({
+          x,
+          y,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        return;
+      }
+      const outcome = await response.json();
+      store.getState().applyDelta(outcome.delta);
+    }
+
+    // `08_ACCEPTANCE_SCENARIOS.md` B11: "a SAME_AS with
+    // score 1.0, provenance asserted, attributed to the analyst" — attribution needs no plumbing
+    // here beyond the same `bearerToken` `expandNode` already sends, since `link_resolution_route`/
+    // `split_resolution_route` (`services/api/app.py`) resolve the writing principal from that same
+    // bearer token's own `PrincipalDep`, never a service identity. Both routes return the same
+    // `DeltaReproject` shape `set_resolution_threshold` already does, so `applyDelta` needs no new
+    // handling for it. `node_a`/`node_b` are sent flat, not wrapped in `{request: ...}` the way
+    // `/expand`'s own `ExpandBody` is — `ManualAssertionRequest` (`services/api/resolution.py`) is
+    // the whole body, checked directly rather than assumed from `expandNode`'s own different shape.
+    async function manualAssertion(
+      nodeA: string,
+      nodeB: string,
+      kind: "link" | "split",
+      x: number,
+      y: number,
+    ): Promise<void> {
+      // Fixed first, ahead of expandNode/explainCluster below (CLAUDE.md's own session priority):
+      // this is a write, not a read. A silently-dropped expand/explain misleads an analyst about
+      // what the data shows; a silently-dropped manualAssertion leaves them believing a link (or
+      // split) is recorded in the case when it is not — the more dangerous silence of the three.
+      let response: Response;
+      try {
+        response = await fetch(
+          `${apiBaseUrl}/v1/investigations/${investigationId}/resolution/${kind}`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${bearerToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ node_a: nodeA, node_b: nodeB }),
+          },
+        );
+        if (!response.ok) {
+          const verb = kind === "link" ? "Link" : "Split";
+          throw new Error(
+            `${verb} failed (${response.status}). Not recorded — try again.`,
+          );
+        }
+      } catch (err) {
+        setActionError({
+          x,
+          y,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        return;
+      }
+      const delta = await response.json();
+      store.getState().applyDelta(delta);
+    }
+
+    // `08_ACCEPTANCE_SCENARIOS.md` B10: "per-comparison match
+    // weights, not just the total." A `GET`, unlike `expandNode`/`manualAssertion` — `explain_cluster`
+    // is a pure read of the working set's own last-computed clustering, nothing to attribute to this
+    // principal beyond the bearer token every other read here already sends.
+    async function explainCluster(
+      clusterId: string,
+      x: number,
+      y: number,
+    ): Promise<void> {
+      let response: Response;
+      try {
+        response = await fetch(
+          `${apiBaseUrl}/v1/investigations/${investigationId}/resolution/explain/${clusterId}`,
+          { headers: { Authorization: `Bearer ${bearerToken}` } },
+        );
+        if (!response.ok) {
+          // A stale cluster id 404s (`ClusterNotFoundError`, access control's own indistinguishable-
+          // from-never-existed shape) — worth saying plainly rather than leaving the analyst to
+          // wonder why nothing happened, the same reasoning `PathfinderOverlay`'s own "No path
+          // found" already gives for a different, but equally silent-by-default, empty outcome.
+          throw new Error(
+            `Explain cluster failed (${response.status}). Try again.`,
+          );
+        }
+      } catch (err) {
+        setActionError({
+          x,
+          y,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        return;
+      }
+      const explanation: ClusterExplanation = await response.json();
+      setClusterExplain({ x, y, explanation });
+    }
+
+    // Phase 7 Stage 5 (the pathfinder) — `06_DECISIONS.md` ADR-033. `POST /v1/paths` is a bare,
+    // non-investigation-scoped query (the same reasoning `/v1/search` already has: it searches the
+    // whole access-filtered corpus, not this investigation's own working set), so the result must be
+    // seeded into this working set before it can be drawn on-path at all — reusing the existing
+    // `/seed` endpoint exactly, not a new working-set-service method. Only nodes/edges not already
+    // present are sent; `/seed` itself is idempotent-by-id on the store side regardless.
+    async function findPaths(
+      nodeA: string,
+      nodeB: string,
+      x: number,
+      y: number,
+    ): Promise<void> {
+      let response: Response;
+      try {
+        response = await fetch(`${apiBaseUrl}/v1/paths`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${bearerToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            source: nodeA,
+            target: nodeB,
+            max_hops: 6,
+            k: 5,
+          }),
+        });
+        if (!response.ok) {
+          throw new Error(
+            `Path search failed (${response.status}). Try again.`,
+          );
+        }
+      } catch (err) {
+        // Not "No path found" (`pathResult`'s own zero-length case, a completed search) — the
+        // search did not complete at all, and folding the two together would tell the analyst
+        // something the system does not actually know (`06_DECISIONS.md` ADR-033's own "FIRST"
+        // reasoning: this searches the whole access-filtered corpus, a real claim worth getting
+        // right). Matches `patterns/api.ts`'s own `throw` shape, not `if (!response.ok) return;`.
+        setPathError({
+          x,
+          y,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        return;
+      }
+      const found: GraphPath[] = await response.json();
+
+      if (found.length > 0) {
+        const nodesById = new Map<string, Node>();
+        const edgesById = new Map<string, Edge>();
+        for (const path of found) {
+          for (const n of path.nodes) nodesById.set(n.id, n);
+          for (const e of path.edges) edgesById.set(e.id, e);
+        }
+        const newNodes = [...nodesById.values()].filter(
+          (n) => !graph.hasNode(n.id),
+        );
+        const newEdges = [...edgesById.values()].filter(
+          (e) => !graph.hasEdge(e.id),
+        );
+        if (newNodes.length > 0 || newEdges.length > 0) {
+          const seedResponse = await fetch(
+            `${apiBaseUrl}/v1/investigations/${investigationId}/seed`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${bearerToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ nodes: newNodes, edges: newEdges }),
+            },
+          );
+          if (seedResponse.ok) {
+            const outcome = await seedResponse.json();
+            store.getState().applyDelta(outcome.delta);
+          }
         }
       }
+
+      setPathResult({ x, y, paths: found, activeIndex: 0 });
     }
 
-    setPathResult({ x, y, paths: found, activeIndex: 0 });
-  }
-
-  function cyclePathfinderResult(direction: 1 | -1): void {
-    setPathResult((prev) => {
-      if (!prev || prev.paths.length <= 1) return prev;
-      const nextIndex = (prev.activeIndex + direction + prev.paths.length) % prev.paths.length;
-      return { ...prev, activeIndex: nextIndex };
-    });
-  }
-
-  function dismissPathfinderResult(): void {
-    setPathResult(null);
-  }
-
-  function dismissPathError(): void {
-    setPathError(null);
-  }
-
-  function dismissActionError(): void {
-    setActionError(null);
-  }
-
-  function radialMenuItems(nodeId: string): RadialMenuItem[] {
-    if (!graph.hasNode(nodeId)) return [];
-    const node = graph.getNodeAttribute(nodeId, "data");
-    const valid = edgeTypes.filter(
-      (et) => et.from.includes(node.type) || et.to.includes(node.type),
-    );
-    const items = valid.map((et) => ({
-      id: et.name,
-      label: et.name,
-      count: 0, // populated by expand/preview in a follow-up pass, not blocking the action itself
-      onSelect: () => {
-        const anchor = radialMenu ?? { x: 0, y: 0 };
-        void expandNode(nodeId, et.name, anchor.x, anchor.y);
-      },
-    }));
-
-    // B11: only offered on a *pair* — `selected` (the ring, closed over from this component's own
-    // state) is what tells the menu a second node exists, since the menu is always opened on one
-    // `nodeId` (a right-click or `\`), never on a pair directly.
-    if (selected.size === 2 && selected.has(nodeId)) {
-      const other = Array.from(selected).find((id) => id !== nodeId);
-      if (other) {
-        items.push(
-          {
-            id: "manual-link",
-            label: `Link to ${other}`,
-            count: 0,
-            onSelect: () => {
-              const anchor = radialMenu ?? { x: 0, y: 0 };
-              void manualAssertion(nodeId, other, "link", anchor.x, anchor.y);
-            },
-          },
-          {
-            id: "manual-split",
-            label: `Split from ${other}`,
-            count: 0,
-            onSelect: () => {
-              const anchor = radialMenu ?? { x: 0, y: 0 };
-              void manualAssertion(nodeId, other, "split", anchor.x, anchor.y);
-            },
-          },
-          {
-            // Phase 7 Stage 5 — the same pair-selection shape B11 above already established,
-            // reused rather than a new selection mechanism invented for it.
-            id: "find-paths",
-            label: `Find paths to ${other}`,
-            count: 0,
-            onSelect: () => {
-              const anchor = radialMenu ?? { x: 0, y: 0 };
-              void findPaths(nodeId, other, anchor.x, anchor.y);
-            },
-          },
-        );
-      }
-    }
-
-    // B10: single-node trigger, unlike B11's pair requirement — `explain` takes one `cluster_id`,
-    // not two node ids. Only offered when the cluster actually has more than one current member
-    // (the same `resolution.cluster_id` accessor `refreshClusterVisualState` already uses) —
-    // a singleton's own "cluster" is itself, nothing to explain about how it got there.
-    const clusterId = node.resolution?.cluster_id;
-    if (clusterId) {
-      let clusterSize = 0;
-      graph.forEachNode((otherId, attrs) => {
-        if ((attrs.data.resolution?.cluster_id ?? otherId) === clusterId) clusterSize += 1;
+    function cyclePathfinderResult(direction: 1 | -1): void {
+      setPathResult((prev) => {
+        if (!prev || prev.paths.length <= 1) return prev;
+        const nextIndex =
+          (prev.activeIndex + direction + prev.paths.length) %
+          prev.paths.length;
+        return { ...prev, activeIndex: nextIndex };
       });
-      if (clusterSize > 1) {
+    }
+
+    function dismissPathfinderResult(): void {
+      setPathResult(null);
+    }
+
+    function dismissPathError(): void {
+      setPathError(null);
+    }
+
+    function dismissActionError(): void {
+      setActionError(null);
+    }
+
+    // Fetches the real per-edge-type cardinality for whichever node the radial menu just opened
+    // on. One `/expand/preview` call per edge type valid for that node's type — the route is
+    // explicitly non-mutating (`working_set/service.py`: "never calls `_add`"), so this is safe to
+    // fire on every open.
+    //
+    // Counts are cleared first, so reopening the menu on a different node never shows the previous
+    // node's numbers while the new ones are in flight. A failed or superseded call leaves its entry
+    // `null` — the menu shows `…` and the action stays available, since a preview that cannot be
+    // fetched is a reason to say so, not a reason to block the expansion behind it.
+    useEffect(() => {
+      if (!radialMenu || !apiBaseUrl || !bearerToken) return;
+      const nodeId = radialMenu.nodeId;
+      if (!graph.hasNode(nodeId)) return;
+      const node = graph.getNodeAttribute(nodeId, "data");
+      const valid = edgeTypes.filter(
+        (et) => et.from.includes(node.type) || et.to.includes(node.type),
+      );
+
+      let cancelled = false;
+      setPreviewCounts({});
+
+      void Promise.all(
+        valid.map(async (et) => {
+          try {
+            const response = await fetch(
+              `${apiBaseUrl}/v1/investigations/${investigationId}/expand/preview`,
+              {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${bearerToken}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  request: {
+                    node_ids: [nodeId],
+                    depth: 1,
+                    edge_types: [et.name],
+                  },
+                }),
+              },
+            );
+            if (!response.ok) return;
+            const preview = (await response.json()) as {
+              candidate_node_count: number;
+            };
+            if (cancelled) return;
+            // `candidate_node_count` is the working set's size *after* this expansion, so the
+            // figure the analyst wants — how many this click would add — is the difference.
+            const wouldAdd = Math.max(
+              0,
+              preview.candidate_node_count - graph.order,
+            );
+            setPreviewCounts((prev) => ({ ...prev, [et.name]: wouldAdd }));
+          } catch {
+            // Left `null`; the menu shows `…`. Deliberately not surfaced as an action error —
+            // a preview is an aid, and failing to get one must not block the expansion itself.
+          }
+        }),
+      );
+
+      return () => {
+        cancelled = true;
+      };
+    }, [
+      radialMenu,
+      apiBaseUrl,
+      bearerToken,
+      investigationId,
+      graph,
+      edgeTypes,
+    ]);
+
+    function radialMenuItems(nodeId: string): RadialMenuItem[] {
+      if (!graph.hasNode(nodeId)) return [];
+      const node = graph.getNodeAttribute(nodeId, "data");
+      const valid = edgeTypes.filter(
+        (et) => et.from.includes(node.type) || et.to.includes(node.type),
+      );
+      const items = valid.map((et) => ({
+        id: et.name,
+        label: et.name,
+        // The real figure from `/expand/preview`, fetched by the effect below when this menu
+        // opened. `null` (still in flight, or the preview failed) renders as `…`, never as `0`:
+        // a confident zero on a node with eight associates is the exact fault this replaced.
+        count: previewCounts[et.name] ?? null,
+        onSelect: () => {
+          const anchor = radialMenu ?? { x: 0, y: 0 };
+          void expandNode(nodeId, et.name, anchor.x, anchor.y);
+        },
+      }));
+
+      // B11: only offered on a *pair* — `selected` (the ring, closed over from this component's own
+      // state) is what tells the menu a second node exists, since the menu is always opened on one
+      // `nodeId` (a right-click or `\`), never on a pair directly.
+      if (selected.size === 2 && selected.has(nodeId)) {
+        const other = Array.from(selected).find((id) => id !== nodeId);
+        if (other) {
+          items.push(
+            {
+              id: "manual-link",
+              label: `Link to ${other}`,
+              count: 0,
+              onSelect: () => {
+                const anchor = radialMenu ?? { x: 0, y: 0 };
+                void manualAssertion(nodeId, other, "link", anchor.x, anchor.y);
+              },
+            },
+            {
+              id: "manual-split",
+              label: `Split from ${other}`,
+              count: 0,
+              onSelect: () => {
+                const anchor = radialMenu ?? { x: 0, y: 0 };
+                void manualAssertion(
+                  nodeId,
+                  other,
+                  "split",
+                  anchor.x,
+                  anchor.y,
+                );
+              },
+            },
+            {
+              // Phase 7 Stage 5 — the same pair-selection shape B11 above already established,
+              // reused rather than a new selection mechanism invented for it.
+              id: "find-paths",
+              label: `Find paths to ${other}`,
+              count: 0,
+              onSelect: () => {
+                const anchor = radialMenu ?? { x: 0, y: 0 };
+                void findPaths(nodeId, other, anchor.x, anchor.y);
+              },
+            },
+          );
+        }
+      }
+
+      // B10: single-node trigger, unlike B11's pair requirement — `explain` takes one `cluster_id`,
+      // not two node ids. Only offered when the cluster actually has more than one current member
+      // (the same `resolution.cluster_id` accessor `refreshClusterVisualState` already uses) —
+      // a singleton's own "cluster" is itself, nothing to explain about how it got there.
+      const clusterId = node.resolution?.cluster_id;
+      if (clusterId) {
+        let clusterSize = 0;
+        graph.forEachNode((otherId, attrs) => {
+          if ((attrs.data.resolution?.cluster_id ?? otherId) === clusterId)
+            clusterSize += 1;
+        });
+        if (clusterSize > 1) {
+          items.push({
+            id: "explain-cluster",
+            label: "Explain cluster",
+            count: 0,
+            onSelect: () => {
+              const anchor = radialMenu ?? { x: 0, y: 0 };
+              void explainCluster(clusterId, anchor.x, anchor.y);
+            },
+          });
+        }
+      }
+
+      // B6: single-node trigger, `Endpoint`-type only — `08_ACCEPTANCE_SCENARIOS.md`'s own wording
+      // ("the shared endpoint's messages") is specific about the node type, not generalised to every
+      // node here. Owns no Dossier state itself; `App.tsx` does, the same split `onSelectionChange`
+      // already establishes.
+      if (node.type === "Endpoint" && onViewMessages) {
         items.push({
-          id: "explain-cluster",
-          label: "Explain cluster",
+          id: "view-messages",
+          label: "View messages",
           count: 0,
-          onSelect: () => {
-            const anchor = radialMenu ?? { x: 0, y: 0 };
-            void explainCluster(clusterId, anchor.x, anchor.y);
-          },
+          onSelect: () => void onViewMessages(nodeId),
         });
       }
+
+      return items;
     }
 
-    // B6: single-node trigger, `Endpoint`-type only — `08_ACCEPTANCE_SCENARIOS.md`'s own wording
-    // ("the shared endpoint's messages") is specific about the node type, not generalised to every
-    // node here. Owns no Dossier state itself; `App.tsx` does, the same split `onSelectionChange`
-    // already establishes.
-    if (node.type === "Endpoint" && onViewMessages) {
-      items.push({
-        id: "view-messages",
-        label: "View messages",
-        count: 0,
-        onSelect: () => void onViewMessages(nodeId),
-      });
-    }
-
-    return items;
-  }
-
-  return (
-    <div
-      ref={containerRef}
-      role="application"
-      aria-label="Network canvas"
-      tabIndex={0}
-      onKeyDown={onKeyDown}
-      onFocus={(e) => {
-        // The keyboard-only entry point, moved off Tab's own keydown (see `onKeyDown`'s own
-        // comment on why) — reaching this container by any means (Tab, a click, `.focus()`)
-        // with no ring yet establishes a one-node ring immediately, so every subsequent
-        // documented behaviour (arrows, Enter, `\`) has something to act on without needing an
-        // extra keypress first. `e.target === e.currentTarget` matters: React's own `onFocus`
-        // bubbles (via `focusin`), so without this guard, focus landing on a *descendant* — the
-        // lasso toggle button, a radial-menu item — would also fire this and re-establish a ring
-        // an analyst may have deliberately built past a single node already.
-        if (e.target !== e.currentTarget || selected.size > 0) return;
-        const first = graph.nodes()[0];
-        if (!first) return;
-        setSelected(new Set([first]));
-        setFocused(first);
-        onSelectionChange?.([first]);
-      }}
-      style={{ width: "100%", height: "100%", position: "relative", outline: "none" }}
-      onPointerDown={(e) => {
-        if (!lassoActive) return;
-        setLassoPoints([{ x: e.clientX, y: e.clientY }]);
-      }}
-      onPointerMove={(e) => {
-        if (!lassoActive || lassoPoints.length === 0) return;
-        setLassoPoints((prev) => [...prev, { x: e.clientX, y: e.clientY }]);
-      }}
-      onPointerUp={() => {
-        if (!lassoActive || lassoPoints.length < 3) {
+    return (
+      <div
+        ref={containerRef}
+        role="application"
+        aria-label="Network canvas"
+        tabIndex={0}
+        onKeyDown={onKeyDown}
+        onFocus={(e) => {
+          // The keyboard-only entry point, moved off Tab's own keydown (see `onKeyDown`'s own
+          // comment on why) — reaching this container by any means (Tab, a click, `.focus()`)
+          // with no ring yet establishes a one-node ring immediately, so every subsequent
+          // documented behaviour (arrows, Enter, `\`) has something to act on without needing an
+          // extra keypress first. `e.target === e.currentTarget` matters: React's own `onFocus`
+          // bubbles (via `focusin`), so without this guard, focus landing on a *descendant* — the
+          // lasso toggle button, a radial-menu item — would also fire this and re-establish a ring
+          // an analyst may have deliberately built past a single node already.
+          if (e.target !== e.currentTarget || selected.size > 0) return;
+          const first = graph.nodes()[0];
+          if (!first) return;
+          setSelected(new Set([first]));
+          setFocused(first);
+          onSelectionChange?.([first]);
+        }}
+        style={{
+          width: "100%",
+          height: "100%",
+          position: "relative",
+          outline: "none",
+        }}
+        onPointerDown={(e) => {
+          if (!lassoActive) return;
+          setLassoPoints([{ x: e.clientX, y: e.clientY }]);
+        }}
+        onPointerMove={(e) => {
+          if (!lassoActive || lassoPoints.length === 0) return;
+          setLassoPoints((prev) => [...prev, { x: e.clientX, y: e.clientY }]);
+        }}
+        onPointerUp={() => {
+          if (!lassoActive || lassoPoints.length < 3) {
+            setLassoPoints([]);
+            return;
+          }
+          const sigma = sigmaRef.current;
+          if (!sigma) return;
+          const containerRect = containerRef.current!.getBoundingClientRect();
+          const polygon = lassoPoints.map((p) => ({
+            x: p.x - containerRect.left,
+            y: p.y - containerRect.top,
+          }));
+          const inside = new Set<string>();
+          graph.forEachNode((nodeId, attrs) => {
+            const viewport = sigma.graphToViewport({
+              x: attrs.x ?? 0,
+              y: attrs.y ?? 0,
+            });
+            if (pointInPolygon(viewport, polygon)) inside.add(nodeId);
+          });
+          setSelected(inside);
+          onSelectionChange?.(Array.from(inside));
           setLassoPoints([]);
-          return;
-        }
-        const sigma = sigmaRef.current;
-        if (!sigma) return;
-        const containerRect = containerRef.current!.getBoundingClientRect();
-        const polygon = lassoPoints.map((p) => ({ x: p.x - containerRect.left, y: p.y - containerRect.top }));
-        const inside = new Set<string>();
-        graph.forEachNode((nodeId, attrs) => {
-          const viewport = sigma.graphToViewport({ x: attrs.x ?? 0, y: attrs.y ?? 0 });
-          if (pointInPolygon(viewport, polygon)) inside.add(nodeId);
-        });
-        setSelected(inside);
-        onSelectionChange?.(Array.from(inside));
-        setLassoPoints([]);
-      }}
-    >
-      <button
-        type="button"
-        className="icon-btn"
-        aria-pressed={lassoActive}
-        title="Lasso select"
-        style={{ position: "absolute", top: 8, left: 8, zIndex: 10 }}
-        onClick={() => setLassoActive((v) => !v)}
+        }}
       >
-        ⬚
-      </button>
-      {lassoActive && lassoPoints.length > 1 && (
-        <svg style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 9 }}>
-          <polyline
-            points={lassoPoints.map((p) => `${p.x},${p.y}`).join(" ")}
-            fill="rgba(192,138,52,0.15)"
-            stroke="var(--brass)"
-            strokeWidth={1.5}
-            strokeDasharray="4 2"
+        <button
+          type="button"
+          className="icon-btn"
+          aria-pressed={lassoActive}
+          title="Lasso select"
+          style={{ position: "absolute", top: 8, left: 8, zIndex: 10 }}
+          onClick={() => setLassoActive((v) => !v)}
+        >
+          ⬚
+        </button>
+        {lassoActive && lassoPoints.length > 1 && (
+          <svg
+            style={{
+              position: "absolute",
+              inset: 0,
+              pointerEvents: "none",
+              zIndex: 9,
+            }}
+          >
+            <polyline
+              points={lassoPoints.map((p) => `${p.x},${p.y}`).join(" ")}
+              fill="rgba(192,138,52,0.15)"
+              stroke="var(--brass)"
+              strokeWidth={1.5}
+              strokeDasharray="4 2"
+            />
+          </svg>
+        )}
+        {radialMenu && (
+          <RadialMenu
+            x={radialMenu.x}
+            y={radialMenu.y}
+            layout={radialMenu.layout}
+            items={radialMenuItems(radialMenu.nodeId)}
+            onClose={() => setRadialMenu(null)}
           />
-        </svg>
-      )}
-      {radialMenu && (
-        <RadialMenu
-          x={radialMenu.x}
-          y={radialMenu.y}
-          layout={radialMenu.layout}
-          items={radialMenuItems(radialMenu.nodeId)}
-          onClose={() => setRadialMenu(null)}
-        />
-      )}
-      {inspectedEdge && graph.hasEdge(inspectedEdge.edgeId) && (
-        <EdgeInspectionOverlay
-          x={inspectedEdge.x}
-          y={inspectedEdge.y}
-          edge={graph.getEdgeAttribute(inspectedEdge.edgeId, "data")}
-          onClose={() => setInspectedEdge(null)}
-        />
-      )}
-      {clusterExplain && (
-        <ClusterExplainOverlay
-          x={clusterExplain.x}
-          y={clusterExplain.y}
-          explanation={clusterExplain.explanation}
-          graph={graph}
-          onClose={() => setClusterExplain(null)}
-        />
-      )}
-      {communityHulls && communityHulls.size > 0 && (
-        <CommunityHullOverlay sigmaRef={sigmaRef} hulls={communityHulls} />
-      )}
-      {pathResult && (
-        <PathfinderOverlay
-          x={pathResult.x}
-          y={pathResult.y}
-          paths={pathResult.paths}
-          activeIndex={pathResult.activeIndex}
-          onCycle={cyclePathfinderResult}
-          onClose={dismissPathfinderResult}
-        />
-      )}
-      {pathError && (
-        <PathfinderErrorOverlay
-          x={pathError.x}
-          y={pathError.y}
-          message={pathError.message}
-          onClose={dismissPathError}
-        />
-      )}
-      {actionError && (
-        <ActionErrorOverlay
-          x={actionError.x}
-          y={actionError.y}
-          message={actionError.message}
-          onClose={dismissActionError}
-        />
-      )}
-    </div>
-  );
-});
-
+        )}
+        {inspectedEdge && graph.hasEdge(inspectedEdge.edgeId) && (
+          <EdgeInspectionOverlay
+            x={inspectedEdge.x}
+            y={inspectedEdge.y}
+            edge={graph.getEdgeAttribute(inspectedEdge.edgeId, "data")}
+            onClose={() => setInspectedEdge(null)}
+          />
+        )}
+        {clusterExplain && (
+          <ClusterExplainOverlay
+            x={clusterExplain.x}
+            y={clusterExplain.y}
+            explanation={clusterExplain.explanation}
+            graph={graph}
+            onClose={() => setClusterExplain(null)}
+          />
+        )}
+        {communityHulls && communityHulls.size > 0 && (
+          <CommunityHullOverlay sigmaRef={sigmaRef} hulls={communityHulls} />
+        )}
+        {pathResult && (
+          <PathfinderOverlay
+            x={pathResult.x}
+            y={pathResult.y}
+            paths={pathResult.paths}
+            activeIndex={pathResult.activeIndex}
+            onCycle={cyclePathfinderResult}
+            onClose={dismissPathfinderResult}
+          />
+        )}
+        {pathError && (
+          <PathfinderErrorOverlay
+            x={pathError.x}
+            y={pathError.y}
+            message={pathError.message}
+            onClose={dismissPathError}
+          />
+        )}
+        {actionError && (
+          <ActionErrorOverlay
+            x={actionError.x}
+            y={actionError.y}
+            message={actionError.message}
+            onClose={dismissActionError}
+          />
+        )}
+      </div>
+    );
+  },
+);
