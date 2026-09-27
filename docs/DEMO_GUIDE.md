@@ -349,6 +349,21 @@ mkdir -p /tmp/osprey-ingest && cp <your source files> /tmp/osprey-ingest/
 OSPREY_INGEST_ROOT=/tmp/osprey-ingest
 ```
 
+**Your dev token needs the Studio roles, and by default it has none of them.** Listing the folder
+needs `source_author`, publishing needs `source_approver`, and running a recipe needs `loader`
+(`09_INGEST_STUDIO.md` §8). `mint_dev_token` defaults to a plain analyst, which is right for every
+other part of this guide and wrong for this one — the folder simply 403s, with
+`principal lacks required studio role: source_author`. Mint one that can:
+
+```
+PYTHONPATH=.:packages .venv/bin/python3 -m scripts.mint_dev_token \
+  --jwks-path /tmp/dev-jwks/jwks.json \
+  --roles analyst,source_author,source_approver,loader
+```
+
+A rendered deployment's own `--demo-analyst` subject already holds all four (`harness/realm.py`),
+so this step is only for the hand-run stack.
+
 Then, in the Glass: **Ingest → Connect → "Choose from the ingest folder…"**, pick the file,
 answer the three gate questions (handling, legal basis, connector), and continue to Profile →
 Map. The analyst never types a path — which is the point, and worth saying out loud during a
