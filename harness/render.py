@@ -422,7 +422,7 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
             "POSTGRES_DB": "${OSPREY_POSTGRES_DB:-osprey}",
         },
         "healthcheck": {
-            "test": _OLLAMA_HEALTHCHECK,
+            "test": ["CMD-SHELL", "pg_isready -U ${OSPREY_POSTGRES_USER:-osprey}"],
             "interval": "10s",
             "timeout": "5s",
             "retries": 12,

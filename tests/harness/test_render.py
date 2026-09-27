@@ -759,6 +759,61 @@ def test_every_declared_volume_is_mounted_by_some_service(rendered: RenderResult
     )
 
 
+def test_no_service_probes_itself_with_another_services_command(
+    rendered: RenderResult,
+) -> None:
+    """**A healthcheck must be runnable in the container it is attached to — round 13cda.**
+
+    Found the worst possible way: while adding the model tier I replaced a `"test": [...]` block
+    positionally and hit **postgres**, so the rendered deployment probed PostgreSQL by running
+    `ollama list`. Postgres itself was perfectly healthy; its healthcheck reported
+    `/bin/sh: 1: ollama: not found` for two minutes and `apply` failed at `up` with
+    "dependency postgres failed to start". **Fifty-three render tests passed throughout**, because
+    every one of them asserted something about the service it cared about and nothing asserted
+    that a healthcheck belongs to its own container.
+
+    The invariant, stated generally so it is not a special case about ollama: **no service's
+    healthcheck may invoke another service's name as its command.** A service probing itself by
+    its own name is normal (`ollama list` inside `ollama`); a service probing itself by a
+    *different* service's name is always a mistake, because that binary is not in this image.
+
+    It is also the second positional-replace mistake I made in this round alone — the other
+    stripped a path from a Makefile target — so the general lesson is about the edit, and this
+    test is the part that makes the next one visible immediately.
+    """
+    document = yaml.safe_load(rendered.artefacts["compose.yaml"])
+    service_names = set(document["services"])
+
+    for name, service in document["services"].items():
+        healthcheck = service.get("healthcheck")
+        if not healthcheck:
+            continue
+        command = " ".join(str(part) for part in healthcheck["test"])
+        others = {
+            other
+            for other in service_names
+            if other != name and _invokes_as_a_command(command, other)
+        }
+        assert not others, (
+            f"{name}'s healthcheck invokes {sorted(others)} — a binary that is not in {name}'s "
+            f"own image, so the check can only ever fail: {command[:120]}"
+        )
+
+
+def _invokes_as_a_command(command: str, name: str) -> bool:
+    """True when `name` appears as a bare word that would be executed.
+
+    Deliberately not a substring test: `http://ollama:11434` inside a URL is a service *talking*
+    to another service, which is correct and common. What is never correct is another service's
+    name in command position.
+    """
+    import re
+
+    return bool(re.search(rf"(?:^|[;&|]\s*|\s)\b{re.escape(name)}\b(?=\s|$)", command)) and (
+        f"//{name}" not in command
+    )
+
+
 def test_the_rendered_model_pull_matches_the_developer_stacks() -> None:
     """**The rendered deployment and `make dev-up` must pull the same weights — round 13cda.**
 
