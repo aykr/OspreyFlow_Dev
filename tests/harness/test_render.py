@@ -31,6 +31,7 @@ from harness.render import (
     _OLLAMA_HEALTHCHECK,
     _OLLAMA_PULL_SCRIPT,
     INGEST_CONTAINER_PATH,
+    LITELLM_KEY,  # noqa: F401
     ClusterRendererNotBuilt,
     MissingDockerfileError,
     RenderResult,
@@ -756,6 +757,43 @@ def test_every_declared_volume_is_mounted_by_some_service(rendered: RenderResult
     assert not unmounted, (
         f"declared but mounted by no service: {sorted(unmounted)} — a named volume that nothing "
         "mounts stores nothing, and the data an operator believes is persisted is not"
+    )
+
+
+def test_the_model_proxy_and_the_conduit_agree_on_one_key(
+    rendered: RenderResult, config: OspreyConfig
+) -> None:
+    """**Three places must carry the same key or the Conduit 401s against its own proxy.**
+
+    Round 13cda, found by measurement: the first version wrote
+    `${OSPREY_LITELLM_KEY:-sk-ospreyflow-dev}` into all three. Compose expands that in a *service
+    environment*; it does **not** expand it inside a config file it merely mounts. So litellm's
+    own `master_key` became that literal `${...}` string — read back from inside the container to
+    be sure — while the Conduit sent the default, and extraction failed with
+    `401 Unauthorized for url http://litellm:4000/chat/completions`.
+
+    The check is that the three *agree*, not that they equal any particular value, so changing
+    the credential stays a one-line edit.
+
+    It also asserts no `${` survives into the rendered config: a substitution that reaches a file
+    nothing expands is silent, and this is the shape it takes.
+    """
+    document = yaml.safe_load(rendered.artefacts["compose.yaml"])
+    routing_text = render_litellm_config(config)
+    routing = yaml.safe_load(routing_text)
+
+    proxy_key = document["services"]["litellm"]["environment"]["LITELLM_MASTER_KEY"]
+    file_key = routing["general_settings"]["master_key"]
+    conduit_key = document["services"]["api"]["environment"]["LITELLM_API_KEY"]
+
+    assert proxy_key == file_key == conduit_key, (
+        "the model proxy's key, its config file's key and the Conduit's key disagree, so every "
+        f"extraction 401s: proxy={proxy_key!r} file={file_key!r} conduit={conduit_key!r}"
+    )
+
+    assert "${" not in routing_text, (
+        "a compose-style substitution reached the rendered config file, which nothing expands — "
+        f"it would be used as a literal string: {routing_text}"
     )
 
 

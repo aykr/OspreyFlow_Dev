@@ -130,6 +130,24 @@ _OLLAMA_HEALTHCHECK = [
     "&& ollama list | grep -q all-minilm:22m-l6-v2-fp16",
 ]
 
+#: **One statement of the model proxy's key — round 13cda.**
+#:
+#: Three places have to agree or the Conduit gets a 401 from its own proxy: the `litellm`
+#: service's `LITELLM_MASTER_KEY`, the `master_key` inside the rendered `litellm.yaml`, and the
+#: Conduit's `LITELLM_API_KEY` (`adapters/model_litellm/client.py`'s `LiteLLMConfig.from_env`).
+#:
+#: A first attempt wrote `${OSPREY_LITELLM_KEY:-sk-ospreyflow-dev}` into all three. Compose
+#: expands that in a *service environment*; it does not expand it inside a config file it merely
+#: mounts, so litellm's own key became the eleven-character string `${OSPREY_LITELLM...}` while
+#: the Conduit sent the default — measured, `401 Unauthorized for url
+#: http://litellm:4000/chat/completions`, and confirmed by reading the file inside the container.
+#:
+#: The value is a fixed dev-tier credential, the same posture as `dev.yaml`'s: the proxy publishes
+#: no port and is reachable only on the deployment's internal network (`05_DEPLOYMENT.md` §7), so
+#: this is not a secret an operator supplies. `test_the_model_proxy_and_the_conduit_agree_on_one
+#: _key` is what fails if the three drift apart again.
+LITELLM_KEY = "sk-ospreyflow-dev"
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_PATH = REPO_ROOT / "osprey.yaml"
 DEFAULT_OUT_ROOT = REPO_ROOT / "deploy" / "generated"
@@ -231,7 +249,7 @@ def render_litellm_config(config: OspreyConfig) -> str:
                     },
                 },
             ],
-            "general_settings": {"master_key": "${OSPREY_LITELLM_KEY:-sk-ospreyflow-dev}"},
+            "general_settings": {"master_key": LITELLM_KEY},
         },
         sort_keys=False,
     )
@@ -519,7 +537,7 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
     "litellm": {
         "command": ["--config", "/app/config.yaml", "--port", "4000"],
         "volumes": ["./litellm.yaml:/app/config.yaml:ro"],
-        "environment": {"LITELLM_MASTER_KEY": "${OSPREY_LITELLM_KEY:-sk-ospreyflow-dev}"},
+        "environment": {"LITELLM_MASTER_KEY": LITELLM_KEY},
         # **`ollama` only, not `whisper`.** `deploy/compose/dev.yaml` waits on both, which is
         # right for a developer stack that always runs transcription. Waiting on `whisper` here
         # would make every extraction wait on a Whisper model pull it never uses, and would fail
@@ -651,6 +669,7 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
             # rendered either, `09_INGEST_STUDIO.md` §4's whole review queue was unreachable.
             api_environment["LITELLM_HOST"] = "litellm"
             api_environment["LITELLM_PORT"] = "4000"
+            api_environment["LITELLM_API_KEY"] = LITELLM_KEY
             service["environment"] = api_environment
             # The Conduit reads `osprey.yaml` at startup for its map-provider registry, and the
             # image does not contain it — the Dockerfile copies `packages/` and `services/` only,
