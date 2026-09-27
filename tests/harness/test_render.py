@@ -28,6 +28,7 @@ import pytest
 import yaml
 from harness.images import ImageRef, ServiceImage
 from harness.render import (
+    INGEST_CONTAINER_PATH,
     ClusterRendererNotBuilt,
     MissingDockerfileError,
     RenderResult,
@@ -853,3 +854,54 @@ def test_write_config_copy_of_a_missing_source_writes_the_schema_defaults(tmp_pa
 
     assert target.is_file()
     assert OspreyConfig.model_validate(yaml.safe_load(target.read_text())) == OspreyConfig()
+
+
+# --- Owner ruling R6, 27 September 2026: the ingest root ------------------------------------------
+#
+# Round 13b's over-the-wire exit test found that a rendered deployment gives an analyst no route
+# by which to supply a source file: `POST /v1/ingest/recipes` takes a `source_location` the
+# Conduit's own container must be able to read, and nothing was mounted there. Eight acceptance
+# rows were unreachable through the analyst's own door in consequence. These are the cases that
+# fail if that regresses.
+
+
+def test_the_ingest_root_is_mounted_read_only_into_the_conduit_for_every_rendered_profile() -> None:
+    """**Read-only is the assertion, not an implementation detail.** The Conduit never writes to
+    this root — an operator, or whatever moves evidence onto the host, owns its contents — and a
+    writable mount would let a compromised Conduit modify the evidence it is reading. `:ro` is the
+    only thing standing there, so it is asserted by name rather than inferred from "a volume
+    exists".
+
+    **"Every profile" means every profile this renderer emits compose for.** `cluster` is a
+    different renderer (ADR-011, `ClusterRendererNotBuilt`) and is deliberately not asserted here
+    rather than silently skipped — when that renderer is built, its own equivalent case is part of
+    building it.
+    """
+    from schemas.deployment import ComponentsConfig, Profile, StorageRoots
+
+    for profile in (Profile.LOCAL_LITE, Profile.SMALL):
+        config = OspreyConfig(profile=profile)
+        compose = yaml.safe_load(render(config, allow_unpinned=True).artefacts["compose.yaml"])
+        api = compose["services"]["api"]
+        assert f"{config.components.storage.ingest}:{INGEST_CONTAINER_PATH}:ro" in api["volumes"], (
+            f"{profile.value}: the ingest root is not mounted read-only into the Conduit — "
+            f"{api.get('volumes')}"
+        )
+
+    # A moved root moves the mount's host side and nothing else: the container path is fixed, which
+    # is what lets the Conduit and this renderer agree on it without a second setting.
+    moved = OspreyConfig(
+        components=ComponentsConfig(storage=StorageRoots(ingest="/mnt/evidence/incoming"))
+    )
+    api = yaml.safe_load(render(moved, allow_unpinned=True).artefacts["compose.yaml"])["services"][
+        "api"
+    ]
+    assert f"/mnt/evidence/incoming:{INGEST_CONTAINER_PATH}:ro" in api["volumes"], api["volumes"]
+
+
+def test_the_conduit_is_told_where_the_ingest_root_is_mounted() -> None:
+    """The container path is fixed, but the Conduit still has to be told it: the source-file route
+    enumerates exactly this directory and refuses anything outside it, and a path hard-coded in
+    two places is how those two drift apart."""
+    env = render(OspreyConfig(), allow_unpinned=True).artefacts["deployment.env"]
+    assert f"OSPREY_INGEST_ROOT={INGEST_CONTAINER_PATH}" in env, env

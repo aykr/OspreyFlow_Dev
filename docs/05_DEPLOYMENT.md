@@ -394,6 +394,25 @@ export PYTHONPATH=.:packages  # the repo root AND packages/ — neither is insta
 `services/api/Dockerfile` sets it explicitly") — it applies here too, and saying it only there
 was the gap.
 
+**Where source files go — the ingest folder.** A rendered deployment bind-mounts
+`components.storage.ingest` (default `/var/lib/osprey/ingest`) **read-only** into the Conduit, for
+every profile. That folder is what the Ingest Studio's Connect stage lists, so an analyst picks a
+file from it rather than typing a path — and in a rendered deployment there is no path they could
+usefully type, because `source_location` is read inside the Conduit's own container. Put source
+files there, as the operator, before asking an analyst to ingest anything:
+
+```bash
+sudo mkdir -p /var/lib/osprey/ingest
+sudo cp carrier-a-cdr.csv device-extract.xml /var/lib/osprey/ingest/
+```
+
+The Conduit never writes to it. Set a different location on the harness's Components screen
+(`§2.1`), or in `osprey.yaml` directly; Preflight reports the folder's state and free space, and
+the generated `RUNBOOK.md` names it. An analyst without the `source_author` Studio role cannot
+list it at all. Owner ruling R6, 27 September 2026; `09_INGEST_STUDIO.md` §2 has the route and
+what it refuses. **A browser upload route is deliberately post-milestone** — as are Map's two
+recorded gaps.
+
 **Add `--demo-analyst` if you intend to sign in.** The command above provisions no user, so the
 Glass has nobody to authenticate as; the flag creates a disposable analyst subject and writes its
 password beside the rendered artefacts, which is what "the seeded demo credentials are displayed

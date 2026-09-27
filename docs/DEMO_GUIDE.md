@@ -327,6 +327,38 @@ Without `OSPREY_TEST_LIVE_GLASS=1` every spec skips with its reason printed, so 
 no stack up is a skip and not a failure. These specs are not in `make ci` and are not intended to
 be: they need real containers, real seeded fixtures and a real basemap build.
 
+### 3.7a The ingest folder, and showing the Studio with a real file
+
+**Owner ruling R6, 27 September 2026.** The Ingest Studio's Connect stage lists whatever is in the
+deployment's ingest folder, so a demonstration that includes ingest needs a file in it *before*
+the Studio is opened — an empty folder is a correct and very dull screen.
+
+For a **rendered deployment** the folder is `components.storage.ingest` (default
+`/var/lib/osprey/ingest`), mounted read-only into the Conduit:
+
+```
+sudo cp tests/scenarios/fixtures/files/*.csv /var/lib/osprey/ingest/
+```
+
+For the **hand-run stack** in §3.2, the Conduit reads its own host filesystem, so point it
+somewhere writable and tell it where:
+
+```
+mkdir -p /tmp/osprey-ingest && cp <your source files> /tmp/osprey-ingest/
+# then add to the uvicorn command in §3.2:
+OSPREY_INGEST_ROOT=/tmp/osprey-ingest
+```
+
+Then, in the Glass: **Ingest → Connect → "Choose from the ingest folder…"**, pick the file,
+answer the three gate questions (handling, legal basis, connector), and continue to Profile →
+Map. The analyst never types a path — which is the point, and worth saying out loud during a
+demonstration, because "where is the data?" is the question every other tool answers with a file
+dialog onto the wrong machine.
+
+**What it does not do**: upload from the presenter's laptop through the browser. That is
+deliberately post-milestone (R6). If you need a file on the deployment host, put it there the way
+the block above does.
+
 ### 3.8 Shut down
 
 ```

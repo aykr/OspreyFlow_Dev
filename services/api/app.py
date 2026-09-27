@@ -197,6 +197,7 @@ from .history import (
     InvestigationHistoryStore,
 )
 from .hotlists import HotlistNotFoundError, HotlistStore
+from .ingest_sources import IngestSourceListing, list_source_files
 from .investigations import Investigation, InvestigationNotFoundError, InvestigationStore
 from .jobs import JobQueue
 from .mapconfig_loader import load_map_config, public_view
@@ -2942,6 +2943,34 @@ async def get_yardstick_route(principal: PrincipalDep, yardstick: YardstickDep) 
     from the loaded yardstick file, not hardcoded"). Same treatment as `GET /v1/handling-scheme`:
     schema/config metadata, not a disclosure of any record's own content."""
     return yardstick
+
+
+@app.get("/v1/ingest/source-files")
+async def list_ingest_source_files(
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))],
+    audit: AuditDep,
+) -> IngestSourceListing:
+    """**Owner ruling R6, 27 September 2026** — what the Studio's Connect stage offers an analyst
+    to pick from. Round 13b's over-the-wire exit test found a rendered deployment gave an analyst
+    no route by which to supply a source file at all; this is that route, and
+    `services/api/ingest_sources.py`'s own docstring has the refusals it enforces and why each is
+    there.
+
+    **`SOURCE_AUTHOR`, the same role that already gates `POST /v1/ingest/recipes`** — listing the
+    files you are about to point a draft at is that same action one step earlier, and a principal
+    who cannot create the draft has no use for the list. Checked as a route dependency, never
+    filtered afterwards (`CLAUDE.md` rule 2).
+
+    Audited like every other read: the cardinality is the number of files offered, which is also
+    the only thing about the mount's contents this route ever records."""
+    listing = list_source_files()
+    await audit.record(
+        principal=principal,
+        action="list_ingest_source_files",
+        resolved_query={"root": listing.root},
+        result_cardinality=len(listing.files),
+    )
+    return listing
 
 
 @app.post("/v1/ingest/recipes", status_code=status.HTTP_201_CREATED)

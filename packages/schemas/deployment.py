@@ -85,7 +85,8 @@ class SearchBackend(StrEnum):
 
 class StorageRoots(BaseModel):
     """`05_DEPLOYMENT.md` §2.1's Components screen: "the storage roots for data, staging and
-    backups". Paths on the deployment host, not in this repository."""
+    backups", plus `ingest` (owner ruling R6, 27 September 2026). Paths on the deployment host,
+    not in this repository."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -95,6 +96,22 @@ class StorageRoots(BaseModel):
     )
     backups: str = Field(
         default="/var/lib/osprey/backups", description="Default: /var/lib/osprey/backups"
+    )
+    #: **Owner ruling R6, 27 September 2026 — the fourth root, and the one an analyst touches.**
+    #: Round 13b's over-the-wire exit test found that a rendered deployment gives an analyst no
+    #: route by which to supply a source file at all: `POST /v1/ingest/recipes` takes a
+    #: `source_location` the *Conduit's own container* must be able to read, and nothing was
+    #: mounted there. Eight acceptance rows (B1-B3, B6-B8, B13-B18) were unreachable through the
+    #: analyst's own door in consequence — not because the test declined to try them, but because
+    #: there was nothing to try.
+    #:
+    #: R6's answer is deliberately **not** a bare drop folder: this root is bind-mounted
+    #: **read-only** into the Conduit for every profile, and the Ingest Studio's own Connect stage
+    #: lists what is in it, so the analyst picks a file and continues to Profile -> Map on the
+    #: existing canvas. The Conduit never writes here — an operator, or whatever moves evidence
+    #: onto the host, owns the contents. A browser upload route is explicitly post-milestone.
+    ingest: str = Field(
+        default="/var/lib/osprey/ingest", description="Default: /var/lib/osprey/ingest"
     )
 
 

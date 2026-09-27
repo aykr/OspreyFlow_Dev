@@ -46,6 +46,35 @@ async function parseOrThrow<T>(response: Response, action: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+/** Owner ruling R6, 27 September 2026 — one entry in the deployment's ingest root. The analyst
+ * picks one of these instead of typing a path, which is the whole point: in a rendered
+ * deployment there is no path they could have typed that the Conduit can read. */
+export interface IngestSourceFile {
+  name: string;
+  source_location: string;
+  size_bytes: number;
+  modified_at: number;
+}
+
+export interface IngestSourceListing {
+  root: string;
+  files: IngestSourceFile[];
+}
+
+/** `GET /v1/ingest/source-files` (`09_INGEST_STUDIO.md` §2, "the ingest root"). Needs
+ * `StudioRole.SOURCE_AUTHOR`; a principal without it gets 403 and this throws, which Connect
+ * renders as "you cannot browse the ingest folder" rather than as an empty folder — an empty
+ * list and a refusal mean very different things to an analyst. */
+export async function fetchIngestSourceFiles(
+  apiBaseUrl: string,
+  bearerToken: string,
+): Promise<IngestSourceListing> {
+  const response = await fetch(`${apiBaseUrl}/v1/ingest/source-files`, {
+    headers: authHeaders(bearerToken),
+  });
+  return parseOrThrow(response, "GET /v1/ingest/source-files");
+}
+
 export async function fetchConnectorCatalogue(
   apiBaseUrl: string,
   bearerToken: string,

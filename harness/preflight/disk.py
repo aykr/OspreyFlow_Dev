@@ -68,12 +68,36 @@ def check(context: PreflightContext) -> CheckResult:
     except OSError as error:
         host_note = f"host free space could not be read ({error})"
 
+    # **The ingest root is reported, not gated** (owner ruling R6, 27 September 2026). Unlike
+    # `osprey-data`/`osprey-staging`, which are named volumes living inside the daemon's own data
+    # root (this module's docstring has that finding), the ingest root is a real **bind mount** of
+    # a real host path — so its free space is a genuinely different number, and an operator who
+    # drops twenty gigabytes of evidence into a full filesystem should be able to see that here.
+    #
+    # It is deliberately **not** a floor: nothing in `docs/` projects how much evidence a
+    # deployment will be given, and inventing a threshold would be the "arithmetic promoted to a
+    # requirement" this check's sibling (`memory.py`) explicitly warns against. A missing
+    # directory is likewise reported rather than failed — Docker creates a bind-mount source that
+    # does not exist, so at Preflight time its absence is normal, and the useful signal is that
+    # an analyst would open the Studio to an empty list.
+    ingest = Path(context.config.components.storage.ingest)
+    try:
+        _i_total, _i_used, ingest_free = context.host_disk_probe(_nearest_existing(ingest))
+        ingest_note = (
+            f"ingest root (read-only into the Conduit): {ingest} — "
+            f"{'exists' if ingest.exists() else 'does not exist yet; Docker will create it empty'}"
+            f", {_gib(ingest_free)} free on its filesystem"
+        )
+    except OSError as error:
+        ingest_note = f"ingest root: {ingest} — free space could not be read ({error})"
+
     detail = (
         f"staging root: {staging}",
         "free space measured at: the container runtime's own filesystem",
         f"free: {_gib(free)}",
         f"projected staging volume: {_gib(required)} (an assumed default, not a derived figure)",
         host_note,
+        ingest_note,
     )
     if free >= required:
         return passed(NAME, detail=detail)

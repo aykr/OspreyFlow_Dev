@@ -60,6 +60,44 @@ it is, and what the legal basis for processing it is. None is optional, and none
 later — a source loaded without a handling marking cannot be safely exported, and a source
 loaded without a legal basis cannot be defended.
 
+### Where the data is, for a rendered deployment — the ingest root
+
+**Owner ruling R6, 27 September 2026.** "Where the data is" was, until this ruling, a path the
+analyst had to already know and type, and in a rendered deployment there was no path that worked:
+`POST /v1/ingest/recipes` takes a `source_location` the *Conduit's own container* must be able to
+read, and nothing was mounted there. `07_BUILD_PLAN.md` has the finding — it made eight acceptance
+rows (B1–B3, B6–B8, B13–B18) unperformable through the analyst's own door, not because they were
+hard but because there was no door.
+
+The deployment therefore has a fourth storage root, `components.storage.ingest`
+(`05_DEPLOYMENT.md` §2.1's Components screen, beside data, staging and backups), **bind-mounted
+read-only into the Conduit for every profile**. Connect's "where the data is" is then a
+*selection*, not a typed path:
+
+```
+GET /v1/ingest/source-files
+```
+
+- **Authorisation:** `StudioRole.SOURCE_AUTHOR` — the same role that gates creating the draft the
+  file will be attached to. Listing what you are about to point a draft at is that action one step
+  earlier, so a principal who cannot create the draft has no use for the list.
+- **Returns:** the files directly in the root — name, `source_location` (the container path), size
+  and modified time, most recent first.
+- **Refuses:** anything outside the root (each entry is resolved *before* being compared against
+  the resolved root, so a symlink pointing out of the mount is refused rather than offered),
+  subdirectories, and dotfiles. A missing root is an empty list, not an error — Docker creates a
+  bind-mount source that does not exist, so "the operator has not staged anything yet" is a normal
+  state.
+
+The analyst picks one and continues to Profile → Map on the existing canvas;
+`ConnectDraftInput.source_location` is the chosen file's container path, so nothing about the rest
+of the Studio changes. The Conduit **never writes** to this root — whatever puts evidence on the
+host owns its contents, which is why the mount is read-only.
+
+**A browser upload route is explicitly post-milestone** (R6), as are Map's two recorded gaps
+(keyboard binding, proposed templates). This ruling closes the "no door at all" case, not the
+"upload from your laptop" one.
+
 ## 3. Stage 2 — Profile
 
 Automatic, and the studio does not let you map until it has run. For a structured source it

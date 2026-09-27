@@ -30,7 +30,7 @@ export function App() {
 
   return (
     <div className="harness-app">
-      <SummaryRail decided={decided} />
+      <SummaryRail decided={decided} ingestRoot={config.components?.storage?.ingest} />
       <main>
         <nav aria-label="Setup screens">
           {SCREEN_NAMES.map((name) => (

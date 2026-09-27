@@ -26,9 +26,11 @@ import {
   createDraft,
   fetchConnectorCatalogue,
   fetchHandlingScheme,
+  fetchIngestSourceFiles,
   listDrafts,
   updateDraft,
   type HandlingScheme,
+  type IngestSourceListing,
 } from "./api";
 
 export interface ConnectScreenProps {
@@ -117,6 +119,12 @@ export function ConnectScreen({
   const [scheme, setScheme] = useState<HandlingScheme | null>(null);
   const [drafts, setDrafts] = useState<StudioRecipeDraft[]>([]);
   const [activeRecipeId, setActiveRecipeId] = useState<string | null>(null);
+  // Owner ruling R6, 27 September 2026 — the deployment's ingest root, listed so the analyst
+  // picks a file rather than typing a path. `null` means "not loaded yet"; a load failure is kept
+  // separately because an empty folder and a refused listing must not look the same to an analyst
+  // (`09_INGEST_STUDIO.md` §2, "the ingest root").
+  const [sourceFiles, setSourceFiles] = useState<IngestSourceListing | null>(null);
+  const [sourceFilesError, setSourceFilesError] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
@@ -140,6 +148,34 @@ export function ConnectScreen({
       .catch((err: unknown) => {
         if (cancelled) return;
         setLoadError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, bearerToken]);
+
+  // The ingest root, loaded separately from the three above on purpose: a deployment whose
+  // operator has staged nothing, or an analyst without `source_author`, must still get a working
+  // Connect screen. Folding this into the `Promise.all` would make a 403 here blank the whole
+  // stage, which is the failure mode this screen already avoids for the catalogue.
+  useEffect(() => {
+    let cancelled = false;
+    void fetchIngestSourceFiles(apiBaseUrl, bearerToken)
+      .then((listing) => {
+        if (cancelled) return;
+        setSourceFiles(listing);
+        setSourceFilesError(null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setSourceFiles(null);
+        setSourceFilesError(
+          err instanceof ForbiddenError
+            ? "You do not hold the source-author role, so the ingest folder cannot be browsed."
+            : err instanceof Error
+              ? err.message
+              : String(err),
+        );
       });
     return () => {
       cancelled = true;
@@ -320,15 +356,61 @@ export function ConnectScreen({
             </Select>
           </fieldset>
 
-          <label style={{ display: "block", marginBottom: "var(--sp-16)" }}>
-            Where is the data? <span aria-hidden="true">*</span>
+          <fieldset style={{ border: "none", padding: 0, marginBottom: "var(--sp-16)" }}>
+            <legend>
+              Where is the data? <span aria-hidden="true">*</span>
+            </legend>
+
+            {/* Owner ruling R6, 27 September 2026 — the deployment's ingest root. The `Select`
+                comes first because in a rendered deployment it is the only thing that works: the
+                Conduit reads `source_location` inside its own container, so a path an analyst
+                types from their own machine names nothing it can open. The free-text field stays
+                for the cases the folder cannot cover (an `s3://` URL, a developer's local path),
+                which is why this is a picker *beside* the field rather than a replacement. */}
+            {sourceFiles && sourceFiles.files.length > 0 ? (
+              <Select
+                aria-label="Choose a file from the ingest folder"
+                value=""
+                onChange={(e) => {
+                  const chosen = sourceFiles.files.find(
+                    (f) => f.source_location === e.target.value,
+                  );
+                  if (chosen) setForm({ ...form, sourceLocation: chosen.source_location });
+                }}
+                style={{ display: "block", width: "100%", marginBottom: "var(--sp-8)" }}
+              >
+                <option value="">Choose from the ingest folder…</option>
+                {sourceFiles.files.map((file) => (
+                  <option key={file.source_location} value={file.source_location}>
+                    {file.name} ({Math.max(1, Math.round(file.size_bytes / 1024))} KB)
+                  </option>
+                ))}
+              </Select>
+            ) : null}
+
+            {/* An empty folder and a refused listing are different facts and are said
+                differently — an analyst who sees "nothing here" when the real answer is "you may
+                not look" will go and ask the wrong person. */}
+            {sourceFiles && sourceFiles.files.length === 0 ? (
+              <p style={{ margin: "0 0 var(--sp-8)", color: "var(--fg-muted)" }}>
+                The ingest folder (<code>{sourceFiles.root}</code>) is empty. An operator places
+                source files there; see the deployment guide.
+              </p>
+            ) : null}
+            {sourceFilesError ? (
+              <p role="status" style={{ margin: "0 0 var(--sp-8)", color: "var(--fg-muted)" }}>
+                {sourceFilesError}
+              </p>
+            ) : null}
+
             <Input
+              aria-label="Where is the data?"
               value={form.sourceLocation}
               onChange={(e) => setForm({ ...form, sourceLocation: e.target.value })}
               placeholder="s3://ingest/carrier-a/2026-09.csv"
               style={{ display: "block", width: "100%" }}
             />
-          </label>
+          </fieldset>
 
           <fieldset style={{ border: "none", padding: 0, marginBottom: "var(--sp-16)" }}>
             <legend>

@@ -1,6 +1,15 @@
 import { FUTURE_SCREEN_NAMES, SCREEN_NAMES, type ScreenName } from "./store";
 
-export function SummaryRail({ decided }: { decided: Set<ScreenName> }) {
+export function SummaryRail({
+  decided,
+  ingestRoot,
+}: {
+  decided: Set<ScreenName>;
+  /** Owner ruling R6, 27 September 2026 — shown here because it is the one configured path an
+   * *operator* has to act on after Launch: analysts can only ingest what is placed in it, so a
+   * rail that never names it leaves the folder undiscoverable. */
+  ingestRoot?: string;
+}) {
   return (
     <nav aria-label="Setup progress" className="summary-rail">
       <ul>
@@ -20,6 +29,11 @@ export function SummaryRail({ decided }: { decided: Set<ScreenName> }) {
           </li>
         ))}
       </ul>
+      {ingestRoot ? (
+        <p className="summary-rail__status">
+          Ingest folder: <code>{ingestRoot}</code>
+        </p>
+      ) : null}
     </nav>
   );
 }

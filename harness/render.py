@@ -65,6 +65,14 @@ from harness.profiles import arcadedb_java_memory_opts
 from harness.realm import CONDUIT_CLIENT_ID
 from schemas.deployment import OspreyConfig, Profile, SearchBackend
 
+#: **Where the ingest root is mounted inside the Conduit — fixed, not configurable** (owner ruling
+#: R6, 27 September 2026). The *host* side is `components.storage.ingest` and an operator moves it
+#: freely; the container side is a constant so that the Conduit's own source-file route and this
+#: renderer cannot drift apart. `OSPREY_INGEST_ROOT` carries it into the container rather than the
+#: Conduit hard-coding a second copy — `tests/harness/test_render.py` has the case that fails if
+#: the two stop agreeing.
+INGEST_CONTAINER_PATH = "/var/lib/osprey/ingest"
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_PATH = REPO_ROOT / "osprey.yaml"
 DEFAULT_OUT_ROOT = REPO_ROOT / "deploy" / "generated"
@@ -441,6 +449,12 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
                 # `test_every_declared_volume_is_mounted_by_some_service` is the case that fails
                 # if it recurs.
                 f"osprey-data:{config.components.storage.data}",
+                # **Owner ruling R6 — read-only, and read-only is the point.** The Conduit reads
+                # evidence here and never writes it: whatever puts files on the host owns the
+                # contents, and a writable mount would let a compromised Conduit alter the source
+                # material it is reading from. Rendered for every profile, so an analyst always
+                # has a door; `05_DEPLOYMENT.md` §3 and `DEMO_GUIDE.md` name the folder.
+                f"{config.components.storage.ingest}:{INGEST_CONTAINER_PATH}:ro",
             ]
             service["depends_on"] = {
                 dependency: {"condition": "service_healthy"}
@@ -483,6 +497,10 @@ def _render_env(config: OspreyConfig) -> str:
         f"OSPREY_DATA_ROOT={config.components.storage.data}",
         f"OSPREY_STAGING_ROOT={config.components.storage.staging}",
         f"OSPREY_BACKUP_ROOT={config.components.storage.backups}",
+        # The *container* path, not `components.storage.ingest`'s host path — the Conduit only
+        # ever sees the mount. See `INGEST_CONTAINER_PATH` for why this is carried rather than
+        # hard-coded on the other side.
+        f"OSPREY_INGEST_ROOT={INGEST_CONTAINER_PATH}",
         # See the `arcadedb` stanza in `_SERVICE_EXTRAS` for why this is explicit rather than left
         # to the JVM's own container ergonomics.
         f"OSPREY_ARCADEDB_HEAP={arcadedb_java_memory_opts(config.profile.value)}",
@@ -631,6 +649,7 @@ Search backend: `{config.components.search.value}`{
 | Data | `{config.components.storage.data}` |
 | Staging | `{config.components.storage.staging}` |
 | Backups | `{config.components.storage.backups}` |
+| Ingest (read-only into the Conduit) | `{config.components.storage.ingest}` |
 
 ## Ports
 

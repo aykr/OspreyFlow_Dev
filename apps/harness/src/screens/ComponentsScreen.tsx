@@ -17,6 +17,12 @@ export function ComponentsScreen({
   const [analyticsEngine, setAnalyticsEngine] = useState<AnalyticsEngine>(
     config.components?.analytics_engine ?? "duckdb",
   );
+  // Owner ruling R6, 27 September 2026 — the fourth storage root, and the only one an analyst
+  // ever touches. The other three (data, staging, backups) are not editable here either; this
+  // screen gains the one the ruling names rather than growing editors nobody asked for.
+  const [ingestRoot, setIngestRoot] = useState<string>(
+    config.components?.storage?.ingest ?? "/var/lib/osprey/ingest",
+  );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -52,6 +58,7 @@ export function ComponentsScreen({
           ...config.components,
           graph_store: graphStore,
           analytics_engine: analyticsEngine,
+          storage: { ...config.components?.storage, ingest: ingestRoot },
         },
       });
     } catch (exc) {
@@ -96,6 +103,20 @@ export function ComponentsScreen({
           </option>
         ))}
       </select>
+
+      <label htmlFor="ingest-root">Ingest folder</label>
+      <input
+        id="ingest-root"
+        className="input"
+        value={ingestRoot}
+        onChange={(event) => setIngestRoot(event.target.value)}
+        aria-describedby="ingest-root-help"
+      />
+      <p id="ingest-root-help" className="help">
+        Where an operator places source files for analysts to ingest. Mounted read-only into the
+        Conduit, and listed by the Ingest Studio&rsquo;s Connect stage so an analyst picks a file
+        rather than typing a path. OspreyFlow never writes here.
+      </p>
 
       {error && <p role="alert">{error}</p>}
       <button type="button" className="btn btn--primary" onClick={handleSave} disabled={saving}>
