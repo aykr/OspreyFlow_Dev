@@ -406,6 +406,14 @@ sudo mkdir -p /var/lib/osprey/ingest
 sudo cp carrier-a-cdr.csv device-extract.xml /var/lib/osprey/ingest/
 ```
 
+For the synthetic demo source files this repository ships, there is a module rather than a copy —
+they are generated, so there is nothing to copy from a checkout (round 13c):
+
+```bash
+PYTHONPATH=.:packages .venv/bin/python -m scripts.seed_ingest_folder \
+  --osprey-config deploy/generated/local-lite/osprey.yaml
+```
+
 The Conduit never writes to it. Set a different location on the harness's Components screen
 (`§2.1`), or in `osprey.yaml` directly; Preflight reports the folder's state and free space, and
 the generated `RUNBOOK.md` names it. An analyst without the `source_author` Studio role cannot

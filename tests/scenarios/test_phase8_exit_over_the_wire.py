@@ -1073,7 +1073,10 @@ def cdr_load() -> dict:
         )
         assert chosen is not None, (
             f"{CDR_FIXTURE_NAME} is not in the deployment's ingest root "
-            f"({listing.json()['root']}) — B1-B3 need it there; the harness places it"
+            f"({listing.json()['root']}) — B1-B3 need it there. Put it there with "
+            "`python -m scripts.seed_ingest_folder --osprey-config <the deployment's osprey.yaml>`."
+            " (Round 13c: this message used to say 'the harness places it', which was untrue —"
+            " nothing placed it, and the file had been put there by hand the round before.)"
         )
 
         draft = client.post(

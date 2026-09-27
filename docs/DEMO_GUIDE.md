@@ -337,7 +337,25 @@ For a **rendered deployment** the folder is `components.storage.ingest` (default
 `/var/lib/osprey/ingest`), mounted read-only into the Conduit:
 
 ```
-sudo cp tests/scenarios/fixtures/files/*.csv /var/lib/osprey/ingest/
+sudo mkdir -p /var/lib/osprey/ingest
+PYTHONPATH=.:packages .venv/bin/python -m scripts.seed_ingest_folder \
+  --ingest-root /var/lib/osprey/ingest
+```
+
+**Corrected 27 September 2026 (round 13c).** This block used to say
+`sudo cp tests/scenarios/fixtures/files/*.csv …`. **That directory has never existed** — the CDR
+fixture is generated (`tests/scenarios/fixtures/cdr.py`), not stored — so the documented step
+copied nothing and left Connect listing an empty folder. Found installing from a fresh clone and
+following this guide as written rather than from memory; `tests/test_seed_ingest_folder.py` is
+what fails if the procedure stops working, and one of its cases asserts that directory stays
+absent so the guide cannot quietly become correct by accident.
+
+For a deployment whose ingest root is somewhere else, point the script at the rendered config and
+it will read the root itself:
+
+```
+PYTHONPATH=.:packages .venv/bin/python -m scripts.seed_ingest_folder \
+  --osprey-config deploy/generated/local-lite/osprey.yaml
 ```
 
 For the **hand-run stack** in §3.2, the Conduit reads its own host filesystem, so point it
