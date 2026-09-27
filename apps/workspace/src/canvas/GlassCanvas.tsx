@@ -61,6 +61,7 @@ import {
   RadialMenu,
   type RadialMenuItem,
 } from "../design/primitives/RadialMenu";
+import { edgeTypesOfferedFor } from "./edgeTypeMenu";
 import { EdgeInspectionOverlay } from "./EdgeInspectionOverlay";
 import { ClusterExplainOverlay } from "./ClusterExplainOverlay";
 import { CommunityHullOverlay } from "./CommunityHullOverlay";
@@ -956,9 +957,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       const nodeId = radialMenu.nodeId;
       if (!graph.hasNode(nodeId)) return;
       const node = graph.getNodeAttribute(nodeId, "data");
-      const valid = edgeTypes.filter(
-        (et) => et.from.includes(node.type) || et.to.includes(node.type),
-      );
+      const valid = edgeTypesOfferedFor(edgeTypes, node.type);
 
       let cancelled = false;
       setPreviewCounts({});
@@ -1017,10 +1016,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     function radialMenuItems(nodeId: string): RadialMenuItem[] {
       if (!graph.hasNode(nodeId)) return [];
       const node = graph.getNodeAttribute(nodeId, "data");
-      const valid = edgeTypes.filter(
-        (et) => et.from.includes(node.type) || et.to.includes(node.type),
-      );
-      const items = valid.map((et) => ({
+      const valid = edgeTypesOfferedFor(edgeTypes, node.type);
+      const items = valid.map((et: EdgeTypeDef) => ({
         id: et.name,
         label: et.name,
         // The real figure from `/expand/preview`, fetched by the effect below when this menu
