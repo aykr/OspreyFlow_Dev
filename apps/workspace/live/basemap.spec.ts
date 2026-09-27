@@ -23,11 +23,14 @@
 // (1) and (2) can both pass with nothing drawn; (3) is what makes this a render proof.
 import { expect, test } from "@playwright/test";
 
-import { apiBaseUrl, liveOnly, workspaceUrl } from "./live";
+import { apiBaseUrl, freshWorkspaceUrl, liveOnly } from "./live";
 
 test.beforeEach(liveOnly);
 
-test("the Map view draws tiles served from the real local PMTiles build", async ({ page }) => {
+test("the Map view draws tiles served from the real local PMTiles build", async ({
+  page,
+  request,
+}) => {
   const rangedTileReads: { url: string; status: number }[] = [];
   // The distinct byte ranges asked for, which is the signal that separates "the basemap was
   // opened" from "the basemap was drawn". The pmtiles protocol always reads the header and the
@@ -37,9 +40,9 @@ test("the Map view draws tiles served from the real local PMTiles build", async 
   // Berkshire, and a Rutland build is a valid file with nothing under the viewport) produces a
   // handful of ranges and stops, while a covering one produces many.
   const distinctRanges = new Set<string>();
-  page.on("request", (request) => {
-    if (request.url().includes("/v1/map/local-source/")) {
-      const range = request.headers()["range"];
+  page.on("request", (tileRequest) => {
+    if (tileRequest.url().includes("/v1/map/local-source/")) {
+      const range = tileRequest.headers()["range"];
       if (range) distinctRanges.add(range);
     }
   });
@@ -49,7 +52,7 @@ test("the Map view draws tiles served from the real local PMTiles build", async 
     }
   });
 
-  await page.goto(workspaceUrl());
+  await page.goto(await freshWorkspaceUrl(request));
   await page.getByRole("button", { name: "Map" }).click();
 
   // 1. The named failure state is absent. Asserted by its own role and text, not by a screenshot,
@@ -61,7 +64,9 @@ test("the Map view draws tiles served from the real local PMTiles build", async 
   // The provider's own credit, which `00_ARCHITECTURE.md` §1.2 principle 3 requires travel with
   // the layer. Both halves: the tiles are a CC-BY OpenMapTiles work as well as ODbL OSM data —
   // planetiler's own closing output says so, and until round 12 only the OSM half was declared.
-  await expect(page.getByText(/© OpenMapTiles © OpenStreetMap contributors/)).toBeVisible();
+  await expect(
+    page.getByText(/© OpenMapTiles © OpenStreetMap contributors/),
+  ).toBeVisible();
 
   // 2. Real ranged reads reached the real route. The pmtiles protocol never downloads the file
   //    whole — it reads its header, then its directory, then individual tile blocks — so several
@@ -74,7 +79,9 @@ test("the Map view draws tiles served from the real local PMTiles build", async 
       timeout: 30_000,
     })
     .toBeGreaterThan(1);
-  expect(rangedTileReads.every((r) => r.status === 200 || r.status === 206)).toBe(true);
+  expect(
+    rangedTileReads.every((r) => r.status === 200 || r.status === 206),
+  ).toBe(true);
 
   // 3. The canvas has map drawn on it. A mounted-but-blank MapLibre canvas is a single flat
   //    colour; a rendered basemap is not. Sampling a grid of points off the canvas bitmap is the

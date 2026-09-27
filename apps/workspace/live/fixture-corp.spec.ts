@@ -23,7 +23,7 @@
 // `family_name`/`given_names`/`date_of_birth` only.
 import { expect, type Page, test } from "@playwright/test";
 
-import { liveOnly, workspaceUrl } from "./live";
+import { freshWorkspaceUrl, liveOnly } from "./live";
 
 test.beforeEach(liveOnly);
 
@@ -53,7 +53,9 @@ async function nodeCount(page: Page): Promise<number> {
 }
 
 async function addPersonVariable(page: Page): Promise<void> {
-  await page.getByRole("combobox", { name: "Entity type" }).selectOption("Person");
+  await page
+    .getByRole("combobox", { name: "Entity type" })
+    .selectOption("Person");
   await page.getByRole("button", { name: "Add variable" }).click();
   await expect(
     page.getByRole("list", { name: "Pattern nodes" }).getByRole("listitem"),
@@ -62,12 +64,13 @@ async function addPersonVariable(page: Page): Promise<void> {
 
 test("the query builder finds Fixture Corp entities and reports how many matched", async ({
   page,
+  request,
 }) => {
   // ADR-032's own assertion for this control, in its words: "the intersection set is returned,
   // with the estimated count shown before running". Also the user-visible face of round 12's
   // `select`-vs-`project` fix — this exact pattern (one variable, no edges) answered
   // `500 Internal Server Error` before it, so "reports a count" was previously unreachable too.
-  await page.goto(workspaceUrl());
+  await page.goto(await freshWorkspaceUrl(request));
   await addPersonVariable(page);
   await page.getByRole("button", { name: "Run", exact: true }).click();
 
@@ -76,6 +79,7 @@ test("the query builder finds Fixture Corp entities and reports how many matched
 
 test("moving the resolution threshold live reports what merged and what split", async ({
   page,
+  request,
 }) => {
   // ADR-035 §C5's first property, and the one item of the four the disclosure names that needs
   // no working set: the control reads and writes the investigation's own threshold, and the
@@ -83,7 +87,7 @@ test("moving the resolution threshold live reports what merged and what split", 
   //
   // The control commits one of three named constants — Strict 0.99, Balanced 0.95, Broad 0.80 —
   // never an interpolated value, and reports the delta each move produced.
-  await page.goto(workspaceUrl());
+  await page.goto(await freshWorkspaceUrl(request));
 
   const slider = page.getByRole("slider", { name: "Resolution threshold" });
   await expect(slider).toBeVisible();
@@ -96,7 +100,9 @@ test("moving the resolution threshold live reports what merged and what split", 
   // property of the fixture and of the threshold moved from, so pinning it here would make this
   // fail for a fixture change rather than for a regression in the control.
   await expect(
-    page.getByText(/Resolution threshold: .* — \d+ merged, \d+ split, \d+ affected/),
+    page.getByText(
+      /Resolution threshold: .* — \d+ merged, \d+ split, \d+ affected/,
+    ),
   ).toBeVisible();
 
   // And the control names the detent it committed rather than a raw number — the "never an
@@ -104,16 +110,20 @@ test("moving the resolution threshold live reports what merged and what split", 
   await expect(page.getByText(/^(Strict|Balanced|Broad)$/)).toBeVisible();
 });
 
-test("a Fixture Corp entity is reachable from the search box by its nino", async ({ page }) => {
+test("a Fixture Corp entity is reachable from the search box by its nino", async ({
+  page,
+  request,
+}) => {
   // The check that was impossible before R4, and the one the other two below depend on.
-  await page.goto(workspaceUrl());
+  await page.goto(await freshWorkspaceUrl(request));
   expect(await nodeCount(page)).toBe(0);
 
   await seedFromSearch(page, NINO_IDENTICAL_PAIR_A);
 
   await expect
     .poll(() => nodeCount(page), {
-      message: "searching a Fixture Corp nino loaded nothing into the working set",
+      message:
+        "searching a Fixture Corp nino loaded nothing into the working set",
       timeout: 30_000,
     })
     .toBeGreaterThan(0);
