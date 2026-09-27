@@ -43,9 +43,13 @@ export interface Judgement {
   probability_band: ProbabilityBand;
   supporting?: Supporting;
   contradicting?: Contradicting;
+  resolved_citations?: ResolvedCitations;
   author: PrincipalId;
   created_at: CreatedAt;
   flagged_for_review?: FlaggedForReview;
   flag_reason?: FlagReason;
   [k: string]: unknown;
+}
+export interface ResolvedCitations {
+  [k: string]: string;
 }

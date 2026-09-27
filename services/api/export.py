@@ -144,15 +144,35 @@ async def evaluate_export_selection(
         if item.kind == "node":
             node = await graph.get_node(item.id, principal)
             if node is None:
-                blocked.append(
-                    BlockedItem(
-                        id=item.id,
-                        kind=item.kind,
-                        label=item.label or item.id,
-                        reason="access_denied",
-                    )
+                # **Superseded is not access-denied** — owner ruling R7 (TENTATIVE, 27 September
+                # 2026), the same narrowing `judgement_visible_to` needed and for the same reason.
+                # An item the *system* replaced since the analyst selected it (a retraction, a
+                # correction) is still exportable and the artefact is marked as resting on
+                # retracted evidence; an item the principal may not *see* is refused, unchanged.
+                #
+                # Found building `08_ACCEPTANCE_SCENARIOS.md`'s own post-A15 assertion — "the
+                # export produced in A15 is marked as resting on retracted evidence" — which was
+                # implemented nowhere and, as the code stood, **could not be**: naming a retracted
+                # item blocked the export outright, so there was no artefact left to mark. The
+                # handling evaluated below is the *successor's*, re-fetched live, so nothing is
+                # exported on the strength of a stale marking.
+                superseded = await graph.get_node(item.id, principal, include_superseded=True)
+                successor = (
+                    await graph.get_node(superseded.audit.superseded_by, principal)
+                    if superseded is not None and superseded.audit.superseded_by is not None
+                    else None
                 )
-                continue
+                if successor is None:
+                    blocked.append(
+                        BlockedItem(
+                            id=item.id,
+                            kind=item.kind,
+                            label=item.label or item.id,
+                            reason="access_denied",
+                        )
+                    )
+                    continue
+                node = successor
             effective_handling = node.handling
         else:
             # Edge: no `get_edge` to re-fetch against — evaluate the client's own submission
@@ -224,6 +244,21 @@ class ExportMark(BaseModel):
     exported_at: datetime
     resolution_threshold: float
     handling_level: str
+    #: **`08_ACCEPTANCE_SCENARIOS.md`'s own additional assertion after A15, built 27 September 2026
+    #: (round 13bd, owner ruling R7 — TENTATIVE).** "The export produced in A15 is marked as
+    #: resting on retracted evidence." That sentence had been in the specification since the
+    #: scenario was written and was implemented **nowhere** — checked, not assumed: no occurrence
+    #: of "retracted" existed anywhere in this module.
+    #:
+    #: It belongs on the *mark* rather than the manifest because ADR-047 Gap 1 decided the mark
+    #: carries what a **recipient** must act on, and "one of the things this rests on has since
+    #: been retracted" is exactly that: the artefact has left the boundary, no principal will
+    #: ever re-check it (ADR-045's own finding), so the only warning a reader will ever get is
+    #: the one printed on it.
+    #:
+    #: `False` for the overwhelmingly common case. Computed server-side from the items' own
+    #: current graph state, never accepted from a caller.
+    rests_on_retracted_evidence: bool = False
 
 
 def compute_handling_level(handlings: list[Handling], scheme: HandlingScheme) -> str:
@@ -471,6 +506,21 @@ async def submit_export(
         resolution_threshold=request.resolution_threshold,
         handling_level=handling_level,
     )
+
+    # **Does anything in this artefact rest on evidence that has since been superseded?**
+    # `08_ACCEPTANCE_SCENARIOS.md`'s own post-A15 assertion. An item whose id no longer resolves
+    # live but does resolve as a superseded revision has been retracted or corrected since the
+    # analyst selected it — `include_superseded=True` lifts only that exclusion, so this cannot
+    # see anything `principal` could not already see.
+    rests_on_retracted = False
+    for item in request.items:
+        if await graph.get_node(item.id, principal) is not None:
+            continue
+        superseded = await graph.get_node(item.id, principal, include_superseded=True)
+        if superseded is not None and superseded.audit.superseded_by is not None:
+            rests_on_retracted = True
+            break
+    mark = mark.model_copy(update={"rests_on_retracted_evidence": rests_on_retracted})
 
     # The withheld count is never accepted from the client — `withheld_count_for` computes it
     # server-side, against `principal`'s own current access over the investigation's real,

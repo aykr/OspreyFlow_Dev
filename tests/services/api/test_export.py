@@ -32,6 +32,7 @@ from services.api.export import (
 )
 from services.api.investigations import InvestigationStore
 from services.api.working_set.service import WorkingSetService
+from services.extract.writer import retract_node
 
 from adapters.graph_arcadedb.testing import arcadedb_adapter
 from conduit_common.identity import new_id
@@ -706,3 +707,72 @@ async def test_export_is_refused_when_an_item_becomes_inaccessible_between_selec
         assert excinfo.value.access_denied[0].id == node_id
         assert excinfo.value.access_denied[0].label == "Endpoint fixture"
         assert excinfo.value.access_denied[0].reason == "access_denied"
+
+
+async def test_an_export_resting_on_retracted_evidence_is_marked_as_such(
+    judgement_store, ledger
+) -> None:
+    """**`08_ACCEPTANCE_SCENARIOS.md`'s own additional assertion after A15, which was implemented
+    nowhere until round 13bd** (27 September 2026; owner ruling R7, TENTATIVE): "the export
+    produced in A15 is marked as resting on retracted evidence." Checked before building it — the
+    word "retracted" did not appear anywhere in `services/api/export.py`.
+
+    **Distinct from the reclassification case above, and deliberately so.** There, the supersede
+    makes the item *invisible* to the exporting principal and the export is refused outright. Here
+    the successor is still perfectly visible — a retraction flips provenance to `inferred`, it
+    does not change handling — so the export proceeds, and the only thing standing between a
+    recipient and a silently stale artefact is this mark. Once an artefact has left the boundary
+    no principal re-checks anything ever again (`06_DECISIONS.md` ADR-045's own finding), which is
+    why this rides on the mark rather than the manifest.
+    """
+    ontology = load_default_ontology()
+    scheme = load_uk_le_scheme()
+    async with arcadedb_adapter(ontology, scheme) as graph:
+        working_set = _working_set(graph, scheme)
+        tx = await graph.begin_transaction()
+        (node_id,) = await graph.upsert_nodes([_node_write(owning_unit=ANALYST.org_unit)], tx)
+        await graph.commit_transaction(tx)
+        handling = (await graph.get_node(node_id, ANALYST)).handling
+        item = ExportItem(id=node_id, kind="node", handling=handling, label="Endpoint fixture")
+
+        clean = await submit_export(
+            investigation_id="inv-1",
+            request=_base_request([item]),
+            principal=ANALYST,
+            graph=graph,
+            scheme=scheme,
+            judgements=judgement_store,
+            working_set=working_set,
+            ledger=ledger,
+            manifest_policy="disclose",
+        )
+        assert clean.mark.rests_on_retracted_evidence is False, (
+            "an export of live evidence was marked as resting on retracted evidence — the flag "
+            "would then mean nothing on the artefacts that genuinely do"
+        )
+
+        # Retracted: superseded, same handling, successor still visible to this analyst.
+        tx = await graph.begin_transaction()
+        successor_id = await retract_node(graph, node_id, ANALYST, tx=tx)
+        await graph.commit_transaction(tx)
+        assert successor_id != node_id
+        assert await graph.get_node(successor_id, ANALYST) is not None, (
+            "the successor is not visible, so this test would be measuring the access-denied "
+            "case the reclassification test above already covers, not the retraction case"
+        )
+
+        marked = await submit_export(
+            investigation_id="inv-1",
+            request=_base_request([item]),
+            principal=ANALYST,
+            graph=graph,
+            scheme=scheme,
+            judgements=judgement_store,
+            working_set=working_set,
+            ledger=ledger,
+            manifest_policy="disclose",
+        )
+        assert marked.mark.rests_on_retracted_evidence is True, (
+            "the artefact rests on evidence retracted since it was selected and says nothing "
+            "about it — a recipient has no way to find that out, ever"
+        )

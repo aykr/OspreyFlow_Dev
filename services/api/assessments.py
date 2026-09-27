@@ -450,14 +450,71 @@ async def _all_visible(graph: GraphPort, principal: Principal, ref_ids: list[str
     return not await _unverifiable_citations(graph, principal, ref_ids)
 
 
+async def resolve_superseded_citation(
+    graph: GraphPort, principal: Principal, ref_id: str
+) -> str | None:
+    """The successor of a citation the *system* superseded, or `None` if there isn't one.
+
+    **Owner ruling R7, 27 September 2026 — TENTATIVE** (`06_DECISIONS.md` ADR-046's addendum has
+    it in that state, pending the owner's own usability walkthrough).
+
+    This follows the pointer `GraphPort.supersede_edge`'s own contract already told callers to
+    follow — "it is expected to follow the `superseded_by` pointer, not be silently rewritten" —
+    which nothing had ever done. `include_superseded=True` lifts only the superseded exclusion:
+    classification and `handling_code` still apply underneath, so this cannot surface a revision
+    to a principal who could not have seen the record in the first place.
+
+    Returns `None` for an id that does not resolve even with the exclusion lifted, which is the
+    genuinely-unverifiable case ADR-046's hide-in-full rule is *for*."""
+    superseded = await graph.get_node(ref_id, principal, include_superseded=True)
+    if superseded is None:
+        return None
+    return superseded.audit.superseded_by
+
+
+async def citation_display_map(
+    graph: GraphPort, principal: Principal, ref_ids: list[str]
+) -> dict[str, str]:
+    """`{old id: successor id}` for every citation this principal can only reach as a superseded
+    revision. Empty for a judgement whose citations are all current, which is almost all of them —
+    so the common path costs one `get_node` per citation exactly as before."""
+    resolved: dict[str, str] = {}
+    for ref_id in ref_ids:
+        if await graph.get_node(ref_id, principal) is not None:
+            continue
+        successor = await resolve_superseded_citation(graph, principal, ref_id)
+        if successor is not None:
+            resolved[ref_id] = successor
+    return resolved
+
+
 async def judgement_visible_to(
     judgement: Judgement, principal: Principal, graph: GraphPort
 ) -> bool:
     """`06_DECISIONS.md` ADR-046: "A judgement is hidden from a viewer, in full, when that
     viewer's access does not cover at least one of its own `supporting` references." Only
     `supporting` gates visibility — an unreadable `contradicting` reference never hides the
-    judgement (the companion behaviour `_flag_unreadable_contradicting_lazily` records instead)."""
-    return await _all_visible(graph, principal, judgement.supporting)
+    judgement (the companion behaviour `_flag_unreadable_contradicting_lazily` records instead).
+
+    **Narrowed by owner ruling R7 (TENTATIVE, 27 September 2026): hide-in-full is about
+    *permission*, not about supersession.** Found by running Scenario A against a rendered
+    deployment through the analyst's own door — retracting a node supersedes it with a *new* id,
+    the judgement's `supporting` still names the old one, and this function then read that as an
+    unverifiable citation and hid the judgement entirely. The analyst was never shown the review
+    flag `01_DOMAIN_MODEL.md` §5 promises; the judgement simply vanished. Two rules each correct
+    alone composing into a third nobody specified.
+
+    So a citation the *system* superseded still counts as visible — it resolves forward, and
+    `list_visible_judgements` supplies the successor for display. A citation the principal is not
+    *permitted* to verify still hides the judgement in full, unchanged, which is the case ADR-046
+    actually analysed and decided."""
+    for ref_id in judgement.supporting:
+        if await graph.get_node(ref_id, principal) is not None:
+            continue
+        if await resolve_superseded_citation(graph, principal, ref_id) is not None:
+            continue
+        return False
+    return True
 
 
 async def _flag_unreadable_contradicting_lazily(
@@ -487,7 +544,14 @@ async def list_visible_judgements(
         if not await judgement_visible_to(judgement, principal, graph):
             continue
         await _flag_unreadable_contradicting_lazily(judgement, principal, graph, store)
-        visible.append(judgement)
+        # R7 (tentative): the citation itself is never rewritten — `supporting` keeps naming the
+        # revision the analyst actually cited, because the judgement asserted something about the
+        # evidence *as it stood*. What the tab renders instead is this map, computed at read time
+        # and stored nowhere.
+        resolved = await citation_display_map(graph, principal, judgement.supporting)
+        visible.append(
+            judgement.model_copy(update={"resolved_citations": resolved}) if resolved else judgement
+        )
     return visible
 
 

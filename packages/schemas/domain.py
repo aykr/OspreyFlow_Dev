@@ -580,6 +580,17 @@ class Judgement(BaseModel):
     probability_band: str
     supporting: list[str] = Field(default_factory=list)
     contradicting: list[str] = Field(default_factory=list)
+    #: **Owner ruling R7, 27 September 2026 — TENTATIVE** (the owner is revisiting it after their
+    #: own usability walkthrough; `06_DECISIONS.md` ADR-046's addendum carries it in that state).
+    #: Old citation id -> the id it was superseded by, filled at read time, never stored.
+    #:
+    #: A citation is **never rewritten** — `01_DOMAIN_MODEL.md` §2.4 and `GraphPort.supersede_edge`
+    #: both say why: "it is expected to follow the `superseded_by` pointer, not be silently
+    #: rewritten", because the judgement asserted something about the evidence *as it stood*.
+    #: So `supporting` keeps naming the revision the analyst actually cited, and this map is what
+    #: the Judgements tab renders instead — the citation resolved forward, for display only.
+    #: Empty for every judgement whose citations are all current, which is almost all of them.
+    resolved_citations: dict[str, str] = Field(default_factory=dict)
     author: PrincipalId
     created_at: datetime
     #: Set when a cited node/edge is superseded (content change) or when a `contradicting`

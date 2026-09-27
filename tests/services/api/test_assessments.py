@@ -219,9 +219,7 @@ async def test_list_never_returns_another_units_judgement(judgement_store) -> No
         await judgement_store.save(j, AUTHOR, graph)
         listed = await judgement_store.list_for_investigation(investigation_id, VIEWER_OTHER_UNIT)
         assert listed == []
-        same_unit = await judgement_store.list_for_investigation(
-            investigation_id, VIEWER_SAME_UNIT
-        )
+        same_unit = await judgement_store.list_for_investigation(investigation_id, VIEWER_SAME_UNIT)
         assert any(row.id == j.id for row in same_unit)
 
 
@@ -428,3 +426,113 @@ async def test_retracting_a_node_no_judgement_cites_flags_nothing(judgement_stor
 
         flagged_ids = await flag_judgements_citing_superseded_node(judgement_store, node_id)
         assert flagged_ids == []
+
+
+async def test_a_judgement_citing_a_superseded_node_stays_visible_flagged_and_resolved_forward(
+    judgement_store,
+) -> None:
+    """**Owner ruling R7, 27 September 2026 — TENTATIVE** (the owner is revisiting it after their
+    own usability walkthrough; `06_DECISIONS.md` ADR-046's addendum carries it in that state).
+
+    **The composition this fixes, found by running Scenario A through a rendered deployment's own
+    front door.** `01_DOMAIN_MODEL.md` §5 and `08_ACCEPTANCE_SCENARIOS.md` both promise that a
+    judgement whose supporting node is retracted "is flagged for review". The flag *was* being
+    written — `flag_judgements_citing_superseded_node`, which
+    `test_flagging_judgements_citing_a_superseded_node...` already proved against the store. But
+    retraction supersedes the node with a **new id**, and `judgement_visible_to` then read the old
+    citation as unverifiable and hid the judgement in full. The analyst was never shown the flag;
+    the judgement vanished. Two rules each correct alone, composing into a third nobody specified.
+
+    Nothing could see it because the only test of the flag called the flagging function directly
+    and re-read the **store**, never the function the Judgements tab's route actually calls —
+    `CLAUDE.md` rule 12's shape exactly, which is why this test goes through
+    `list_visible_judgements`.
+
+    R7 narrows ADR-046's hide-in-full to citations the principal may not *verify*, leaving a
+    system-superseded citation to resolve forward. The three things asserted below are the whole
+    of it: still visible, flagged, and the citation **unchanged** with its successor supplied
+    beside it.
+    """
+    ontology = load_default_ontology()
+    scheme = load_uk_le_scheme()
+    async with arcadedb_adapter(ontology, scheme) as graph:
+        tx = await graph.begin_transaction()
+        (node_id,) = await graph.upsert_nodes([_node_write(owning_unit=AUTHOR.org_unit)], tx)
+        await graph.commit_transaction(tx)
+
+        investigation_id = new_id()
+        j = new_judgement(
+            investigation_id=investigation_id,
+            statement="The subject organised the relay.",
+            probability_band="likely",
+            supporting=[node_id],
+            author=AUTHOR.id,
+        )
+        await judgement_store.save(j, AUTHOR, graph)
+
+        tx = await graph.begin_transaction()
+        successor = await retract_node(graph, node_id, AUTHOR, tx=tx)
+        await graph.commit_transaction(tx)
+        assert successor != node_id, "retraction must supersede with a new id"
+        await flag_judgements_citing_superseded_node(judgement_store, node_id)
+
+        visible = await list_visible_judgements(judgement_store, investigation_id, AUTHOR, graph)
+        mine = [row for row in visible if row.id == j.id]
+        assert mine, (
+            "the judgement vanished from its own author's tab instead of being flagged — "
+            "hide-in-full is about permission, not about supersession (R7)"
+        )
+        (rendered,) = mine
+        assert rendered.flagged_for_review is True, (
+            "visible but unflagged: §5 promises the analyst a review flag and this is where they "
+            "would see it"
+        )
+        assert rendered.supporting == [node_id], (
+            "the citation was rewritten — a judgement asserted something about the evidence as it "
+            "stood, so `supporting` must keep naming the revision actually cited"
+        )
+        assert rendered.resolved_citations == {node_id: successor}, (
+            f"the superseded citation did not resolve forward: {rendered.resolved_citations}"
+        )
+
+
+async def test_a_citation_the_principal_may_not_verify_still_hides_the_judgement_in_full(
+    judgement_store,
+) -> None:
+    """**R7 narrows ADR-046; it does not repeal it.** The case that record actually analysed and
+    decided — a real node the viewer's own access does not cover — must still hide the judgement
+    in full, or the narrowing has quietly become a hole. Named per rule 12: this is the test that
+    fails if `resolve_superseded_citation` is ever allowed to answer for an access-denied
+    citation rather than only a superseded one.
+    """
+    ontology = load_default_ontology()
+    scheme = load_uk_le_scheme()
+    async with arcadedb_adapter(ontology, scheme) as graph:
+        tx = await graph.begin_transaction()
+        # `SECRET` + a foreign unit, the same shape ADR-046's own named test uses: visibility is
+        # gated by **classification**, not by `owning_unit` alone. Written down because the first
+        # version of this test used only a foreign `owning_unit`, and correctly failed — the node
+        # stayed visible, which is the product behaving properly and the test assuming otherwise.
+        (node_id,) = await graph.upsert_nodes(
+            [_node_write(owning_unit="unit-9", classification="SECRET")], tx
+        )
+        await graph.commit_transaction(tx)
+
+        investigation_id = new_id()
+        j = new_judgement(
+            investigation_id=investigation_id,
+            statement="Hidden from the viewer.",
+            probability_band="likely",
+            supporting=[node_id],
+            author=AUTHOR.id,
+        )
+        # Saved by someone cleared to cite it — `save` validates citations against the *saving*
+        # principal, so an OFFICIAL author could not have made this judgement at all.
+        await judgement_store.save(
+            j, Principal(id=AUTHOR.id, clearance="SECRET", org_unit=AUTHOR.org_unit), graph
+        )
+
+        assert await judgement_visible_to(j, VIEWER_SAME_UNIT, graph) is False, (
+            "a citation the viewer may not verify no longer hides the judgement — R7's narrowing "
+            "has become a hole in ADR-046 rather than a refinement of it"
+        )

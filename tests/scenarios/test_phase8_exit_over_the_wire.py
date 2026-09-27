@@ -667,17 +667,18 @@ def test_scenario_a_over_the_wire(analyst: httpx.Client, seeded_scope: str) -> N
     # the retraction the judgement lists with `flagged_for_review: false`; after it, the list is
     # empty; the node is back under a new id in `inferred`.
     #
-    # This asserts what is true today, deliberately, and says so. **Owner ruling R7 (27 September
-    # 2026, recorded TENTATIVE in `06_DECISIONS.md` ADR-046's addendum pending the owner's own
-    # usability walkthrough) settles which way it goes**: a judgement citing a marked or
-    # superseded node stays visible to its author, flagged for review, with the citation resolved
-    # to the successor for display — hide-in-full is for citations the principal is not permitted
-    # to verify, not for ones the system itself superseded. R7 also makes retraction two steps
-    # (mark in the Glass; effect it with a retraction record ingested through the Studio), which
-    # depends on ruling R6 and so cannot land before it. None of that is built, so this step still
-    # pins current behaviour — and fails the day it changes, which is the point: the fix cannot
-    # land without `08_ACCEPTANCE_SCENARIOS.md`'s own sentence and this assertion being brought
-    # into agreement in the same change.
+    # **Owner ruling R7 (27 September 2026, TENTATIVE — the owner is revisiting it after their
+    # own usability walkthrough; `06_DECISIONS.md` ADR-046's addendum carries it in that state).**
+    # This step used to pin the *opposite* behaviour, deliberately, so that the fix could not land
+    # silently: retracting a supporting node made the judgement **disappear** from the Judgements
+    # tab, because supersession gives the node a new id and ADR-046's hide-in-full rule read the
+    # old citation as unverifiable. The analyst was never shown the review flag
+    # `01_DOMAIN_MODEL.md` §5 promises.
+    #
+    # R7 narrows hide-in-full to what it was actually decided for — citations the principal is not
+    # *permitted* to verify — and leaves a system-superseded citation resolving forward. So the
+    # assertion below is the flipped one, and `08_ACCEPTANCE_SCENARIOS.md`'s own sentence was
+    # corrected in the same change, which is exactly what the old comment demanded.
     before = analyst.get(f"/v1/investigations/{investigation}/judgements")
     assert before.status_code == 200, before.text
     listed_before = [j for j in before.json()["judgements"] if j["id"] in judgements]
@@ -689,19 +690,34 @@ def test_scenario_a_over_the_wire(analyst: httpx.Client, seeded_scope: str) -> N
     try:
         retracted = analyst.post(f"/v1/nodes/{to_retract['id']}/retract")
         assert retracted.status_code == 200, retracted.text
-        assert retracted.json()["node_id"] != to_retract["id"], (
-            "retraction did not supersede the node with a new id, which is the premise of the "
-            "finding this step records"
+        successor = retracted.json()["node_id"]
+        assert successor != to_retract["id"], (
+            "retraction did not supersede the node with a new id, which is the premise of "
+            "everything below"
         )
+
         reviewed = analyst.get(f"/v1/investigations/{investigation}/judgements")
         assert reviewed.status_code == 200, reviewed.text
         still_listed = [j for j in reviewed.json()["judgements"] if j["id"] in judgements]
-        assert not still_listed, (
-            "a judgement resting on a retracted node is now visible to the analyst. If it is "
-            "visible *and flagged*, the composition of ADR-046 and 01_DOMAIN_MODEL.md §5 has been "
-            "fixed — update 08_ACCEPTANCE_SCENARIOS.md's own retraction assertion and this step "
-            "together rather than loosening either one"
+        assert len(still_listed) == 4, (
+            "a judgement resting on a retracted node vanished from its own author's Judgements "
+            "tab instead of being flagged for review. That is the composition R7 corrects: "
+            f"hide-in-full is about permission, not about supersession. {reviewed.text[:400]}"
         )
+        assert all(j["flagged_for_review"] for j in still_listed), (
+            "the judgements are visible but not flagged — `01_DOMAIN_MODEL.md` §5 promises the "
+            f"analyst a review flag, and this is where they would see it: {still_listed}"
+        )
+        # The citation itself is never rewritten; the successor arrives beside it, for display.
+        for judgement in still_listed:
+            assert to_retract["id"] in judgement["supporting"], (
+                "the citation was rewritten — a judgement asserted something about the evidence "
+                "as it stood, and `supporting` must keep naming the revision actually cited"
+            )
+            assert judgement["resolved_citations"].get(to_retract["id"]) == successor, (
+                "the superseded citation did not resolve forward, so the tab has nothing to "
+                f"render in its place: {judgement['resolved_citations']}"
+            )
     finally:
         _restore_asserted(analyst, PRINCIPAL_SUBJECT_PRISON_NUMBER)
 
