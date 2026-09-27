@@ -6352,18 +6352,44 @@ find something already finished sitting in the queue.
    | --- | --- | --- |
    | The local PMTiles basemap, actually built | **Closed** | Real Geofabrik → planetiler → PMTiles → `register_local_provider` → `verify_map`, twice (Rutland 6m13s cold, Berkshire 2m07s warm). The Glass draws its tiles: `apps/workspace/live/basemap.spec.ts` |
    | Scenario A A12–A15 through a browser | **A12 closed; A13–A15 partly** | `live/scenario-a-a12-a15.spec.ts` — A12 computes and ranks after a real keyboard-driven expansion; the assessment composer and the export drawer open. Submitting a judgement end to end, and the S2 blocked-then-justified path, remain unwalked |
-   | Fixture Corp through a browser | **Blocked — not merely undone** | The threshold control is proven live (`live/fixture-corp.spec.ts`). `explain`, the pathfinder and path-length comparison are *impossible* today: no Fixture Corp entity can enter the working set at all |
+   | Fixture Corp through a browser | **Entry unblocked 26 Sep (R4); two of four checks still unproven** | Every entity now carries a searchable identifier, and `live/fixture-corp.spec.ts`'s own "reachable from the search box by its nino" proves a Fixture Corp node loads. The threshold control is proven live. `explain` and the pathfinder remain unproven — see the note below |
 
-   **The blocker, stated precisely, because it is a decision and not a bug.** The working set has
+   **The entry blocker, and how R4 closed it (round 12b, 26 September 2026).** The working set has
    one entry point, the search box, and search is exact identifier match (`services/api/
-   search.py`'s own scope note). 0 of Fixture Corp's 65 Person nodes carry any of `Person`'s three
-   declared identifiers and 0 of its 3 Organisations carry `org_ref` — measured against a real
-   seeded store, against 400 of 400 for the HMP fixture. The visual query builder finds them by
-   entity type but, per ADR-032, reports the matched set and its count rather than loading it.
-   Closing this needs either a searchable identifier on the fixture (an ADR-035 §C5 fixture-shape
-   change, wanting a check against §C5's own empirically measured resolution scores) or a way to
-   load a pattern result into the working set (which ADR-032 decided against once). Both are the
-   owner's call; `Claude outputs/handoff/DECISION_NEEDED.md` asks it.
+   search.py`'s own scope note). 0 of Fixture Corp's 65 Person nodes carried any of `Person`'s
+   three declared identifiers and 0 of its 3 Organisations carried `org_ref` — measured against a
+   real seeded store, against 400 of 400 for the HMP fixture. The visual query builder finds them
+   by entity type but, per ADR-032, reports the matched set and its count rather than loading it.
+   **Owner ruling R4 chose to give the fixture identifiers rather than reopen ADR-032**: a
+   synthetic `nino` per Person and an `org_ref` per Organisation, deterministic from the node id,
+   `QQ`-prefixed so no value can collide with a real NINO. ADR-035 §C5's five resolution scores
+   were re-measured either side of the change with the identical harness and are **bit-for-bit
+   identical**; that addendum carries the table.
+
+   **Two of the four interactive checks are still unproven, for a different reason — recorded, not
+   glossed.** `explain` on a merged cluster and the pathfinder are gated on a *two-node* selection
+   (`GlassCanvas.tsx`: `selected.size === 2`; and, for explain, two working-set nodes sharing a
+   `resolution.cluster_id`). Both nodes now load by nino, but building the selection needs a
+   mouse: arrow-walk follows `graph.neighbors` and these two nodes share no edge, while
+   Ctrl/Cmd+Arrow cycles only within the existing selection. **A keyboard user cannot pair two
+   disconnected nodes at all**, which is worth weighing against `CLAUDE.md` rule 13 — these are
+   canvas actions with no keyboard route. Driving them by mouse (lasso, or ctrl/cmd-click on two
+   rendered nodes whose canvas coordinates a spec does not know) did not come together inside
+   round 12b's budget.
+
+   **A12 regressed to red in round 12b and the cause is not established.** It passed in round 12
+   against an investigation seeded HMP-then-Fixture-Corp; against one seeded Fixture-Corp-then-HMP
+   it fails at "expansion brought in no edges", with the searched node confirmed present and
+   carrying degree 18 in the store. Reverting round 12b's own edit to the expansion helper did not
+   change the result, so the edit is not the cause. Stopped there per STANDING-QUEUE's
+   two-consecutive-failures rule rather than guessed at a third time; `REPORT-12b.md` has
+   everything checked.
+
+   **A gap found while driving that expansion, unrelated to the above.** The radial menu renders
+   `count: 0` for *every* edge type — `GlassCanvas.tsx`'s own comment says the real cardinality is
+   "populated by expand/preview in a follow-up pass". `08_ACCEPTANCE_SCENARIOS.md` A1 asks that
+   "expansion previews its cardinality before running"; today it does not. Not fixed in 12b, being
+   outside its brief.
 
    **Four defects found by doing this rather than by reasoning about it**, each fixed with a
    red-then-green test, each disclosed here rather than folded into "Stage 3a closed":

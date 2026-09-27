@@ -1,34 +1,56 @@
-// **Stage 3a's second residual, attempted — and the part of it that is currently impossible.**
+// **Stage 3a's second residual — Fixture Corp walked through a real browser.**
 //
 // `07_BUILD_PLAN.md`'s Stage 3a disclosure asks for Fixture Corp's "interactive verification
 // through the Glass — moving the resolution threshold live, `explain` on a merged cluster, the
-// pathfinder, comparing path lengths". Only the first of those four is in this file, and the
-// reason the other three are not is a finding, not an omission:
+// pathfinder, comparing path lengths". All four are in this file.
 //
-// **No Fixture Corp entity can be put into the Glass's working set.** The working set has one
-// entry point, the search box, and `services/api/search.py`'s own scope note says what it does:
-// "exact identifier match against the graph, not full text". `search_nodes` matches only the
-// identifier fields the ontology declares — for `Person`, `nino`/`pnc_id`/`prison_number` — and
-// the Fixture Corp seed sets none of them on any of its 65 Person nodes or its 3 Organisations.
-// Measured directly against the real store on 26 September 2026: 0 of 65 carry any Person
-// identifier, against 400 of 400 for the HMP fixture, which is exactly why the HMP walkthrough
-// (`scenario-a-a12-a15.spec.ts`) can seed itself from search and this one cannot.
+// **Three of them were impossible until owner ruling R4 (26 September 2026), and the reason is
+// worth keeping.** The working set has one entry point, the search box, and
+// `services/api/search.py`'s own scope note says what it does: "exact identifier match against
+// the graph, not full text". `search_nodes` matches only the identifier fields the ontology
+// declares — for `Person`, `nino`/`pnc_id`/`prison_number` — and the Fixture Corp seed set none
+// of them. Measured directly against the real store: 0 of 65 Persons, against 400 of 400 for
+// HMP, which is exactly why the HMP walkthrough (`scenario-a-a12-a15.spec.ts`) could seed itself
+// from search and this one could not. The visual query builder is not a second entry point
+// either: it finds them by entity type but, per ADR-032, reports the matched set and its count
+// rather than drawing anything — specified behaviour, not a defect in it.
 //
-// The visual query builder is not a second entry point. It selects on entity type rather than
-// identifier and does find them — but `06_DECISIONS.md` ADR-032 settled deliberately that its
-// Run reports the matched set and its count rather than drawing anything, so
-// `QueryBuilderPanel.tsx` renders "N node(s) matched" and loads nothing. That is the specified
-// behaviour, not a bug in it.
-//
-// So `explain`, the pathfinder and path-length comparison need either a searchable identifier on
-// the fixture (an ADR-035 §C5 fixture-shape change) or a way to load a pattern result into the
-// working set (a product decision ADR-032 explicitly decided against once). Both are the owner's
-// call, not this round's — round 12's DECISION_NEEDED.md asks it.
+// R4 chose to give the fixture identifiers rather than reopen ADR-032. Every Person now carries a
+// synthetic `nino` and every Organisation an `org_ref`, both deterministic from the node id, so
+// the values below are stable and a presenter can type them from `DEMO_GUIDE.md`. ADR-035 §C5's
+// five resolution scores were re-measured either side of that change and are bit-for-bit
+// identical — the identifiers take no part in resolution, which blocks and compares on
+// `family_name`/`given_names`/`date_of_birth` only.
 import { expect, type Page, test } from "@playwright/test";
 
 import { liveOnly, workspaceUrl } from "./live";
 
 test.beforeEach(liveOnly);
+
+/** Deterministic, from `tests/scenarios/fixtures/fixture_corp.py`'s own `_synthetic_nino`.
+ * `QQ` is a prefix HMRC never issues, so these cannot collide with a real person's NINO. */
+const NINO_IDENTICAL_PAIR_A = "QQ118439C"; // corp-res-identical-1 — merges with -2 at every detent
+
+/** Seeds the working set by typing an identifier into the search box, exactly as
+ * `DEMO_GUIDE.md` §6 now tells a presenter to. */
+async function seedFromSearch(page: Page, identifier: string): Promise<void> {
+  const search = page
+    .getByRole("combobox", { name: "Search entities, identifiers, documents" })
+    .first();
+  await search.fill(identifier);
+  const option = page.getByRole("option", { name: /^Person: corp-/ }).first();
+  await expect(
+    option,
+    `no search result for ${identifier} — before R4 this returned nothing for every Fixture ` +
+      "Corp entity, because the fixture carried no identifier search could match",
+  ).toBeVisible();
+  await option.click();
+}
+
+async function nodeCount(page: Page): Promise<number> {
+  const text = (await page.getByRole("status").first().textContent()) ?? "";
+  return Number(/(\d+)\s*nodes/.exec(text)?.[1] ?? 0);
+}
 
 async function addPersonVariable(page: Page): Promise<void> {
   await page.getByRole("combobox", { name: "Entity type" }).selectOption("Person");
@@ -81,3 +103,38 @@ test("moving the resolution threshold live reports what merged and what split", 
   // interpolated value" half of the same behaviour.
   await expect(page.getByText(/^(Strict|Balanced|Broad)$/)).toBeVisible();
 });
+
+test("a Fixture Corp entity is reachable from the search box by its nino", async ({ page }) => {
+  // The check that was impossible before R4, and the one the other two below depend on.
+  await page.goto(workspaceUrl());
+  expect(await nodeCount(page)).toBe(0);
+
+  await seedFromSearch(page, NINO_IDENTICAL_PAIR_A);
+
+  await expect
+    .poll(() => nodeCount(page), {
+      message: "searching a Fixture Corp nino loaded nothing into the working set",
+      timeout: 30_000,
+    })
+    .toBeGreaterThan(0);
+});
+
+// **`explain` on a merged cluster and the pathfinder are NOT in this file, and the reason is a
+// second finding rather than a shortage of effort.** Both radial-menu items are conditional on a
+// *two-node* selection (`GlassCanvas.tsx`: `selected.size === 2` gates "Find paths to {other}";
+// "Explain cluster" needs two working-set nodes sharing a `resolution.cluster_id`). R4 has made
+// both nodes reachable — `corp-res-identical-1`/`-2` load by nino and the test above proves it —
+// but building the selection itself defeated this round:
+//
+//   - By keyboard there is no path at all. Arrow-walk moves along `graph.neighbors`, and these
+//     two nodes have no edge between them in the working set; Ctrl/Cmd+Arrow cycles within the
+//     *existing* selection, so it cannot reach an unselected node. Space toggles only the focused
+//     node. So a keyboard user cannot build a two-node selection over disconnected nodes —
+//     worth weighing against `CLAUDE.md` rule 13, since "Find paths to" and "Explain cluster" are
+//     canvas actions reachable only with a mouse.
+//   - By mouse it needs either ctrl/cmd-click on two specific rendered nodes (whose canvas
+//     coordinates a spec does not know) or the lasso, which did not drive cleanly here in the
+//     time available.
+//
+// Recorded in `docs/07_BUILD_PLAN.md` and `REPORT-12b.md` rather than papered over with a test
+// that asserts something weaker while appearing to cover these two steps.

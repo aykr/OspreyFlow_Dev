@@ -41,6 +41,7 @@ introduced by construction" discipline `hmp.py` already follows:
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -95,11 +96,45 @@ class ResolutionPair:
     merges_from_tau: float | None
 
 
+#: **Why these exist at all** (owner ruling R4, 26 September 2026). Round 12 found that Fixture
+#: Corp could not be demonstrated in the Glass at all: the working set's only entry point is the
+#: search box, `search_nodes` matches only the identifier fields the ontology declares, and this
+#: fixture set none of them — 0 of its 65 Persons, against 400 of 400 for the HMP fixture. Three
+#: of the four interactive checks ADR-035 §C5 asks for were therefore impossible rather than
+#: merely undone. R4 chose to give the fixture identifiers rather than reopen ADR-032.
+#:
+#: **`QQ` is the point of the prefix, not decoration.** HMRC never issues a National Insurance
+#: number beginning with Q, so no value this function can produce is capable of colliding with a
+#: real person's NINO — the fixture stays synthetic by construction, not by convention, which is
+#: what `CLAUDE.md` rule 9 is about. The same reasoning gives `org_ref` its `FIXTURE-` prefix.
+#:
+#: Derived from the node id with SHA-256 rather than `hash()`, which is salted per process and
+#: would hand a different value to every run: these have to be stable so a presenter can type one
+#: from `DEMO_GUIDE.md` and a live spec can assert on it.
+def _synthetic_nino(node_id: str) -> str:
+    digest = hashlib.sha256(node_id.encode("utf-8")).hexdigest()
+    digits = f"{int(digest[:12], 16) % 1_000_000:06d}"
+    suffix = "ABCD"[int(digest[12], 16) % 4]
+    return f"QQ{digits}{suffix}"
+
+
+def _synthetic_org_ref(node_id: str) -> str:
+    digest = hashlib.sha256(node_id.encode("utf-8")).hexdigest()
+    return f"FIXTURE-{digest[:8].upper()}"
+
+
 def _person(node_id: str, family_name: str, given_names: str, date_of_birth: str) -> Node:
     return Node(
         id=node_id,
         type="Person",
         properties={
+            # An identifier, so it is what the search box can find this node by. It takes no part
+            # in resolution: `Person`'s own `resolution` block blocks on
+            # `soundex(family_name)`/`year(date_of_birth)` and compares
+            # `jaro_winkler(family_name)`/`levenshtein(given_names)`/`exact(date_of_birth)`, and
+            # names none of the identifiers. Measured rather than assumed — see this module's own
+            # `generate_resolution_persons` docstring for the re-measurement R4 required.
+            "nino": _synthetic_nino(node_id),
             "family_name": family_name,
             "given_names": given_names,
             "date_of_birth": date_of_birth,
@@ -192,7 +227,7 @@ def _org(node_id: str, name: str) -> Node:
     return Node(
         id=node_id,
         type="Organisation",
-        properties={"name": name},
+        properties={"org_ref": _synthetic_org_ref(node_id), "name": name},
         provenance=_provenance(f"org:{node_id}"),
         handling=_HANDLING,
         audit=_audit(),
@@ -262,6 +297,7 @@ def _node_write(
         id=node_id,
         type="Person",
         properties={
+            "nino": _synthetic_nino(node_id),
             "family_name": family_name,
             "given_names": given_names,
             "date_of_birth": "1970-01-01",

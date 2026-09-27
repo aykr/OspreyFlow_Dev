@@ -59,7 +59,24 @@ async function expandFromTheSelectedNode(page: Page): Promise<void> {
   // SCREAMING_SNAKE_CASE in this menu, which is how they are distinguished from the action
   // entries — matched as a *prefix*, since each entry also carries its own count after the name
   // (`keyboard.spec.ts` matches these the same way, `/^ASSOCIATE_OF/`).
-  const expandItem = menu.getByRole("menuitem").filter({ hasText: /^[A-Z][A-Z_]{2,}/ }).first();
+  //
+  // **`ASSOCIATE_OF` by name, not "the first edge type".** Every edge type the ontology allows
+  // for this node's type is listed whether or not the node has any, so the first entry is
+  // `USES`, which an HMP `Person` has none of — expanding it brings in nothing and the failure
+  // surfaces further down as "no neighbourhood to rank", which reads like a defect in the metric
+  // rather than a wrong click.
+  //
+  // Filtering on the displayed count does not help and was tried: `GlassCanvas.tsx` renders
+  // `count: 0` for *every* entry, with its own comment saying the real cardinality is
+  // "populated by expand/preview in a follow-up pass". So the menu shows `USES (0)`,
+  // `ASSOCIATE_OF (0)` and so on regardless of what is actually there — worth knowing, because
+  // `08_ACCEPTANCE_SCENARIOS.md` A1 asks that "expansion previews its cardinality before
+  // running" and this menu does not yet. Recorded in `REPORT-12b.md`; not fixed here, being
+  // outside this round's brief.
+  //
+  // Naming the edge type is also the more faithful assertion: A12 is about how tightly a
+  // subject's *associates* interconnect, so `ASSOCIATE_OF` is the expansion the step means.
+  const expandItem = menu.getByRole("menuitem").filter({ hasText: /^ASSOCIATE_OF/ }).first();
   await expect(
     expandItem,
     "the radial menu offered no edge type to expand by — the seeded node has no associations " +

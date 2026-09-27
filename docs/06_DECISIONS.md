@@ -3579,6 +3579,58 @@ this record's own governing constraints are unaffected; only the named candidate
 actually available. `07_BUILD_PLAN.md`'s own Stage 4a entry has the full build record and its four
 proven properties.
 
+**Addendum, 26 September 2026 — Fixture Corp's entities now carry a searchable identifier, and
+§C5's five resolution scores were re-measured either side of the change. Recorded under owner
+ruling R4 of that date, which authorises this edit.**
+
+The finding that prompted it: Fixture Corp could not be demonstrated in the Glass at all. The
+working set has one entry point, the search box; `services/api/search.py`'s own scope note states
+it is "exact identifier match against the graph, not full text"; `search_nodes` matches only the
+identifier fields this ontology declares; and this fixture set none of them. Measured directly
+against a real seeded store: **0 of its 65 `Person` nodes carried any of `nino`/`pnc_id`/
+`prison_number`, and 0 of its 3 `Organisation` nodes carried `org_ref`** — against 400 of 400 for
+the HMP fixture, which is why that one has always been demonstrable and this one never was. Three
+of the four interactive checks this section asks for (`explain` on a merged cluster, the
+pathfinder, comparing path lengths) were therefore impossible rather than merely undone. The
+visual query builder is not a second entry point: it finds them by entity type but, per ADR-032,
+deliberately reports the matched set and its count rather than drawing anything.
+
+R4 chose to give the fixture identifiers rather than reopen ADR-032. Every `Person` now carries a
+synthetic `nino` and every `Organisation` an `org_ref`, both derived deterministically from the
+node id with SHA-256 (not `hash()`, which is salted per process) so a presenter can type a value
+from `DEMO_GUIDE.md` and a live spec can assert on it. **`QQ` is load-bearing, not decorative**:
+HMRC never issues a National Insurance number beginning with Q, so no value the generator can
+produce is capable of colliding with a real person's — the fixture stays synthetic *by
+construction*, which is what standing rule 3 and `CLAUDE.md` rule 9 are about, rather than by
+anyone remembering to keep it so. `org_ref` takes a `FIXTURE-` prefix for the same reason.
+
+**The re-measurement, which R4 required rather than assumed.** The five scores were measured with
+the identical harness immediately before and immediately after the change — the same
+`resolve_entity_type(nodes, PERSON_TYPE)` call `test_fixture_corp_entity_resolution_projections_
+differ_by_threshold` uses, not a reimplementation — so that a difference in method could not be
+mistaken for a movement in the fixture:
+
+| Pair | Recorded (when built) | Measured 26 Sep, before | Measured 26 Sep, after |
+| --- | --- | --- | --- |
+| `identical` | 0.999991 | 0.9999906877922944 | 0.9999906877922944 |
+| `close_given_name` | 0.981285 | 0.9812853391529271 | 0.9812853391529271 |
+| `close_surname_and_given` | 0.867624 | 0.8676242801350367 | 0.8676242801350367 |
+| `shared_surname_different_person` | 0.0001 | 9.999999999999999e-05 | 9.999999999999999e-05 |
+| `identical_non_latin_script` | 0.999991 | 0.9999906877922944 | 0.9999906877922944 |
+
+**Bit-for-bit identical, not merely equal to the fourth decimal** R4's stop condition named — and
+the before-column also reproduces the originally recorded values exactly, so the harness itself is
+sound. This is the expected result rather than a lucky one: `Person`'s own `resolution` block
+blocks on `soundex(family_name)`/`year(date_of_birth)` and compares
+`jaro_winkler(family_name)`/`levenshtein(given_names)`/`exact(date_of_birth)`, naming none of the
+identifiers. The point of measuring was that "should not affect it" and "does not affect it" are
+different claims, and only one of them had evidence.
+
+`tests/scenarios/test_fixture_corp_shape.py`'s own
+`test_every_fixture_corp_entity_carries_the_identifier_search_matches_on` is the test that fails
+if this regresses — shown red first against the pre-R4 fixture, and separately against a
+non-deterministic generator, since either fault alone would break the demo.
+
 ### C6 — IBM AML-Data, conditional
 
 If ever used as data rather than AMLSim as a generator: CDLA-Sharing-1.0 carries a share-alike

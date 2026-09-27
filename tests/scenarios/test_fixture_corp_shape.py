@@ -67,6 +67,56 @@ def _same_as_edge(source: str, target: str, score: float) -> Edge:
     )
 
 
+def test_every_fixture_corp_entity_carries_the_identifier_search_matches_on() -> None:
+    """**Owner ruling R4, 26 September 2026.** Round 12 found Fixture Corp could not be
+    demonstrated in the Glass at all: the working set's one entry point is the search box,
+    `search_nodes` matches only the identifier fields the ontology declares, and this fixture set
+    none of them — 0 of its 65 Persons, against 400 of 400 for HMP. Three of ADR-035 §C5's four
+    interactive checks were impossible rather than merely undone.
+
+    This is the test that fails if that regresses. Asserted over *every* node the fixture builds,
+    not a sample: one Person without a `nino` is one the presenter cannot reach, and the failure
+    would show up as "the demo doesn't work" long after the change that caused it.
+
+    The values must also be **deterministic** — a presenter types one from `DEMO_GUIDE.md` and
+    `apps/workspace/live/fixture-corp.spec.ts` asserts on it, so a per-process value (a salted
+    `hash()`, a random id) would break both while every other test still passed."""
+    pairs = generate_resolution_persons()
+    rings = generate_community_rings()
+
+    persons = [p.node_a for p in pairs] + [p.node_b for p in pairs]
+    persons += [n for n in rings.nodes if n.type == "Person"]
+    organisations = [n for n in rings.nodes if n.type == "Organisation"]
+
+    assert persons and organisations, "fixture built no Persons or no Organisations"
+
+    for node in persons:
+        nino = node.properties.get("nino")
+        assert isinstance(nino, str) and nino, f"{node.id} carries no nino — unsearchable"
+        # `QQ` is a prefix HMRC never issues, so no value here can collide with a real person's
+        # NINO. This is the assertion that keeps the fixture synthetic *by construction*
+        # (`CLAUDE.md` rule 9), not by anyone remembering to keep it so.
+        assert nino.startswith("QQ"), (node.id, nino)
+        assert len(nino) == 9, (node.id, nino)
+
+    for node in organisations:
+        org_ref = node.properties.get("org_ref")
+        assert isinstance(org_ref, str) and org_ref, f"{node.id} carries no org_ref"
+        assert org_ref.startswith("FIXTURE-"), (node.id, org_ref)
+
+    # Unique, so a search for one names one node rather than silently returning several.
+    ninos = [n.properties["nino"] for n in persons]
+    assert len(set(ninos)) == len(ninos), "two Persons share a nino"
+
+    # Deterministic: a second call to the generators produces the same values.
+    again = [p.node_a for p in generate_resolution_persons()]
+    for before, after in zip(persons[: len(again)], again, strict=False):
+        assert before.properties["nino"] == after.properties["nino"], (
+            f"{before.id}'s nino changed between two calls in the same process — it must be "
+            "derived from the node id, never generated per call"
+        )
+
+
 def test_fixture_corp_entity_resolution_projections_differ_by_threshold() -> None:
     """ADR-035 §C5, property 1: "entity resolution at τ 0.99, 0.95 and 0.80 producing visibly
     different projections." Runs the real, untrained `resolve_entity_type` against the fixture's

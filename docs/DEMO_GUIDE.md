@@ -422,8 +422,31 @@ fixture satisfies ADR-035 §C5's own minimum bar, not Scenario C's full C1–C20
 ADR-035 gives Fixture Corp an owning phase (Phase 8, Stage 4a) and its own distribution class
 (`shipped`) — it is the demo this platform can actually put in front of a customer.
 
-**Blocker found 26 September 2026: Fixture Corp cannot be shown in the Glass, beyond its
-resolution threshold.** The Glass's working set has exactly one entry point — the search box —
+**Resolved 26 September 2026 by owner ruling R4 — Fixture Corp entities now carry a searchable
+identifier.** Every `Person` has a synthetic `nino` and every `Organisation` an `org_ref`, both
+deterministic from the node id, so the search box reaches them like any HMP entity. `QQ` is a
+prefix HMRC never issues, so no value can collide with a real person's NINO. ADR-035 §C5's five
+resolution scores were re-measured either side of the change and are bit-for-bit identical; that
+addendum has the table.
+
+**What to type.** These are stable across reseeds:
+
+| Entity | Search for | What it is |
+| --- | --- | --- |
+| `corp-res-identical-1` | `QQ118439C` | One half of the pair that merges at every detent |
+| `corp-res-identical-2` | `QQ843781D` | The other half — load both to explain the merge |
+| `corp-path-hub` | `QQ418550B` | The eight-spoke hub, for the pathfinder |
+| `corp-ring0-org` | `FIXTURE-67BD0781` | A fraud ring's shell organisation |
+
+**Still not demonstrable, and the reason is a second finding.** `explain` on a merged cluster and
+the pathfinder both need a *two-node* selection (`GlassCanvas.tsx` gates them on
+`selected.size === 2`, and on two working-set nodes sharing a `resolution.cluster_id`). Both
+nodes now load, but building that selection needs a mouse: by keyboard, arrow-walk follows
+`graph.neighbors` and these two nodes have no edge between them, while Ctrl/Cmd+Arrow only cycles
+within the existing selection. So a keyboard user cannot pair two disconnected nodes at all. Use
+the lasso or ctrl/cmd-click if demonstrating these; treat the keyboard path as unavailable.
+
+**The original blocker, kept for the record:** The Glass's working set has exactly one entry point — the search box —
 and `services/api/search.py`'s own scope note states what that does: "exact identifier match
 against the graph, not full text". `search_nodes` matches only the identifier fields the ontology
 declares, which for `Person` are `nino`, `pnc_id` and `prison_number`. **None of Fixture Corp's
