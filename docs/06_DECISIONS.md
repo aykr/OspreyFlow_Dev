@@ -4755,6 +4755,19 @@ not and cannot prove a real deployed Keycloak realm is correctly configured — 
 verification above is what closes that remaining gap, and it is a permanent operational step, not
 one this build ever retires.
 
+**Proven against a real IdP from 27 September 2026 (round 13cc, owner ruling R8): `make idp-test`.**
+`tests/services/api/test_revoked_principal_precheck.py`'s five cases now run in CI
+(`token-exchange-idp-test`) and in `make test-all`, against a real Keycloak 26.0 carrying **this
+repository's own realm** — rendered by `harness/realm.py` and configured by
+`harness/keycloak_admin.py`, the same two modules `harness.apply` uses, rather than a realm built
+to suit the test. Until that round those five had **never executed in any tier**, because nothing
+set `OSPREY_TEST_KEYCLOAK_URL`; the caveat above about a fixture not proving a real realm was
+therefore doubly true, since the only thing standing behind this path was the ephemeral fixture and
+the tests written to go beyond it never ran. The amendment's own central finding was re-measured on
+that run and still holds: `test_without_the_precheck_the_realm_issues_a_token_for_the_disabled_
+subject` passes, so Keycloak does mint for a disabled subject and the Conduit's pre-check is what
+refuses.
+
 **Revisit if.** A future deployment's own IdP does not support RFC 8693 (older or non-standard
 identity providers exist) — at which point candidate (a)'s own reasoning (a vendor-specific
 admin-API route) becomes a real per-deployment fallback to weigh against building a second,

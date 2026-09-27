@@ -1,4 +1,4 @@
-.PHONY: ci lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test dev-up dev-down docker-clean test-all glass-perf glass-a11y glass-keyboard glass-map-verify glass-live exit-over-the-wire harness-keyboard harness-a11y bundle
+.PHONY: ci idp-test lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test dev-up dev-down docker-clean test-all glass-perf glass-a11y glass-keyboard glass-map-verify glass-live exit-over-the-wire harness-keyboard harness-a11y bundle
 
 PY := .venv/bin/python
 PYTEST := .venv/bin/pytest
@@ -269,11 +269,44 @@ docker-clean:
 # exactly the reset, and `down` then clears the rest while leaving named volumes alone. Measured
 # both halves: a probe database created beforehand is gone afterwards (`list databases` -> `[]`),
 # and both model volumes survive.
-test-all:
+# **The five token-exchange tests, against a real Keycloak — round 13cc.**
+#
+# Owner ruling R8: "the token-exchange tests that have never run are also to be made to run."
+# `tests/services/api/test_revoked_principal_precheck.py` guards `PrincipalResolver`'s OAuth2
+# Token Exchange and the revoked-principal precheck, and had **never executed in any tier**,
+# because nothing set `OSPREY_TEST_KEYCLOAK_URL` and the realm lived in a `/tmp` script that was
+# never in the tree. That is the code path `CLAUDE.md` rule 15's second worked example records as
+# having shipped broken against a real IdP.
+#
+# **The realm is this repository's own** (`harness/realm.py` + `harness/keycloak_admin.py`, the
+# same two modules `harness.apply` uses), not one built to suit the test — a fixture IdP would
+# reintroduce exactly the "more permissive than the real dependency" defect ADR-043 shipped with.
+#
+# Port 8082, so this never collides with a rendered deployment's own Keycloak on 8081.
+idp-test:
+	@rm -rf .idp-test && mkdir -p .idp-test
+	PYTHONPATH=.:packages $(PY) -m scripts.idp_test_realm --write-realm .idp-test/realm.json
+	-docker rm -f osprey-idp-test >/dev/null 2>&1
+	docker run -d --name osprey-idp-test -p 8082:8080 \
+	  -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
+	  -e KC_HEALTH_ENABLED=true \
+	  -v "$$PWD/.idp-test/realm.json:/opt/keycloak/data/import/realm.json:ro" \
+	  quay.io/keycloak/keycloak:26.0 start-dev --import-realm --features=token-exchange
+	PYTHONPATH=.:packages $(PY) -m scripts.idp_test_realm --configure --issuer http://localhost:8082
+	OSPREY_TEST_KEYCLOAK_URL=http://localhost:8082 \
+	  $(PYTEST) -v tests/services/api/test_revoked_principal_precheck.py; \
+	  status=$$?; docker rm -f osprey-idp-test >/dev/null 2>&1; rm -rf .idp-test; exit $$status
+
+# **`idp-test` first, round 13cc.** Floor B used to report "5 skipped" forever: the five
+# token-exchange tests were in the list below but `OSPREY_TEST_KEYCLOAK_URL` was never set, so
+# they skipped in the only tier that collected them. They now run for real, against a Keycloak
+# carrying this repository's own realm, and are no longer listed below — listing them here as
+# well would only re-skip them and put the "5 skipped" back.
+test-all: idp-test
 	docker compose -f deploy/compose/dev.yaml rm -fsv arcadedb
 	docker compose -f deploy/compose/dev.yaml down
 	docker compose -f deploy/compose/dev.yaml up -d --wait
-	$(PYTEST) tests/conformance/graph_port tests/conformance/model_port tests/golden tests/scenarios/test_witness_statement_extraction.py tests/ingest tests/scenarios/test_phase3_working_set.py tests/scenarios/test_hmp_graph.py tests/services/api/test_valkey_store.py tests/services/api/test_statelessness.py tests/services/api/test_sites_store.py tests/services/api/test_tile_cache.py tests/services/api/test_prefetch.py tests/geocoder/test_match_live.py tests/services/api/test_assessments.py tests/services/api/test_suppression.py tests/services/api/test_assessment_routes.py tests/services/api/test_export.py tests/services/api/test_export_routes.py tests/services/api/test_change_stream.py tests/services/api/test_alerts.py tests/services/api/test_pattern_store.py tests/services/api/test_hotlists.py tests/services/api/test_monitors.py tests/services/api/test_evaluation.py tests/resolve/test_projection_access_control.py tests/resolve/test_trigger.py tests/scenarios/test_phase6a_glass_surfaces.py tests/services/api/test_access.py tests/services/api/test_dossier_access_control.py tests/services/api/test_review.py tests/services/api/test_review_store.py tests/services/api/test_studio_recipes_store.py tests/services/api/working_set/test_compute_access_control.py tests/services/api/working_set/test_explain_cluster_access_control.py tests/services/api/working_set/test_manual_resolution_access_control.py tests/services/api/working_set/test_resolution_threshold_access_control.py tests/scenarios/test_phase7_stage6c_watch_routes.py tests/scenarios/test_fixture_corp_shape.py tests/services/api/test_worker.py tests/services/api/test_worker_replicas.py tests/services/api/test_revoked_principal_precheck.py
+	$(PYTEST) tests/conformance/graph_port tests/conformance/model_port tests/golden tests/scenarios/test_witness_statement_extraction.py tests/ingest tests/scenarios/test_phase3_working_set.py tests/scenarios/test_hmp_graph.py tests/services/api/test_valkey_store.py tests/services/api/test_statelessness.py tests/services/api/test_sites_store.py tests/services/api/test_tile_cache.py tests/services/api/test_prefetch.py tests/geocoder/test_match_live.py tests/services/api/test_assessments.py tests/services/api/test_suppression.py tests/services/api/test_assessment_routes.py tests/services/api/test_export.py tests/services/api/test_export_routes.py tests/services/api/test_change_stream.py tests/services/api/test_alerts.py tests/services/api/test_pattern_store.py tests/services/api/test_hotlists.py tests/services/api/test_monitors.py tests/services/api/test_evaluation.py tests/resolve/test_projection_access_control.py tests/resolve/test_trigger.py tests/scenarios/test_phase6a_glass_surfaces.py tests/services/api/test_access.py tests/services/api/test_dossier_access_control.py tests/services/api/test_review.py tests/services/api/test_review_store.py tests/services/api/test_studio_recipes_store.py tests/services/api/working_set/test_compute_access_control.py tests/services/api/working_set/test_explain_cluster_access_control.py tests/services/api/working_set/test_manual_resolution_access_control.py tests/services/api/working_set/test_resolution_threshold_access_control.py tests/scenarios/test_phase7_stage6c_watch_routes.py tests/scenarios/test_fixture_corp_shape.py tests/services/api/test_worker.py tests/services/api/test_worker_replicas.py
 	npm run test:integration --workspace apps/workspace
 
 # `docs/02_GLASS_FRONTEND.md` §5's performance budget, as a CI gate

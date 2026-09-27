@@ -909,6 +909,26 @@ jobs:
   # job for the same reason `bundle-install-exit-test`/`sustained-load-exit-test` each are: the
   # identical `osprey-local-lite` compose project name and host ports would collide with any of
   # them sharing a job.
+  # **The five token-exchange tests, against a real Keycloak — round 13cc, owner ruling R8.**
+  #
+  # These had never run in any tier: nothing set OSPREY_TEST_KEYCLOAK_URL and the realm lived in a
+  # /tmp script that was never in the tree. They guard PrincipalResolver's OAuth2 Token Exchange
+  # and the revoked-principal precheck — the code path CLAUDE.md rule 15's second worked example
+  # records as having shipped broken against a real IdP, because its only fixture was more
+  # permissive than the real server. Tests that never execute are not evidence.
+  #
+  # The realm is this repository's own (harness/realm.py + harness/keycloak_admin.py), not one
+  # built to suit the test.
+  token-exchange-idp-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - name: The five token-exchange tests against a real Keycloak
+        run: make idp-test PY="uv run python" PYTEST="uv run pytest"
+
   six-screen-live-exit-test:
     runs-on: ubuntu-latest
     timeout-minutes: 40

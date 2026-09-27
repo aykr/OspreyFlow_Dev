@@ -12,10 +12,21 @@ Keycloak actually does rather than what it is documented to do — the first ver
 specified as "the realm refuses an out-of-scope subject", which measurement showed the realm never
 does. A mocked IdP would have let that specification survive.
 
-Set-up (`OSPREY_TEST_KEYCLOAK_URL` must point at a realm built like `/tmp/kcsetup.py` does): a
-confidential client holding **both** the impersonation and view-users grants, an enabled
-`preflight-probe` subject, a disabled `revoked-subject`, and an unprivileged client holding
-neither.
+**Set-up, round 13cc: `make idp-test`.** Until then these five tests had **never run, in any
+tier** — nothing in the repository set `OSPREY_TEST_KEYCLOAK_URL`, and the realm they needed lived
+in a `/tmp/kcsetup.py` that was never in the tree. Owner ruling R8 ordered them made to run.
+
+The realm is no longer a scratch script: it is **this repository's own deployment realm**,
+rendered by `harness/realm.py` and configured by `harness/keycloak_admin.py` — the same two
+modules a real `harness.apply` uses. That is deliberate and is the whole point of rule 15's second
+worked example: a fixture IdP built to suit the test would once again be more permissive than the
+real thing. Every name below is imported from that generator rather than restated here, so a realm
+change cannot leave these tests asserting against a realm nobody deploys.
+
+What the rendered realm provides: `osprey-conduit`, a confidential client whose service account
+holds **both** the impersonation and view-users grants (applied after import, since a realm import
+cannot express a `realm-management` role mapping); `osprey-unprivileged`, holding neither; an
+enabled `osprey-verify-probe`; and a **disabled** `osprey-verify-revoked`.
 """
 
 from __future__ import annotations
@@ -23,6 +34,12 @@ from __future__ import annotations
 import os
 
 import pytest
+from harness.realm import (
+    CONDUIT_CLIENT_ID,
+    REVOKED_SUBJECT,
+    UNPRIVILEGED_CLIENT_ID,
+    VERIFY_SUBJECT,
+)
 from services.api.auth import (
     PrincipalExchangeRefused,
     PrincipalExchangeUnavailable,
@@ -35,6 +52,16 @@ pytestmark = pytest.mark.asyncio
 
 KC = os.environ.get("OSPREY_TEST_KEYCLOAK_URL")
 REALM = "osprey"
+
+#: **Imported, never restated.** The previous version hardcoded `preflight-probe`,
+#: `revoked-subject` and `other-secret` — names from a scratch script that was never in the tree
+#: and that no deployment has ever created. A test asserting against subjects the product does not
+#: provision is the fixture-more-convenient-than-reality failure in `CLAUDE.md` rule 15.
+#:
+#: Both clients carry the *same* secret: `grant_service_account_roles` sets one apply-time value on
+#: both, so the unprivileged client is unprivileged by its **grants**, not by its credentials —
+#: which is the distinction assertion 2 exists to prove.
+PROBE_SECRET = os.environ.get("OSPREY_TEST_KEYCLOAK_SECRET", "probe-secret")
 
 requires_keycloak = pytest.mark.skipif(
     not KC, reason="OSPREY_TEST_KEYCLOAK_URL is not set — this test needs a real IdP by design"
@@ -70,10 +97,10 @@ async def test_an_enabled_subject_is_exchanged_and_carries_that_subjects_own_cla
     """Verify assertion 1. The success side has to work, or the other two prove nothing: a
     resolver that refused everything would satisfy both refusal assertions."""
     resolver = PrincipalResolver(
-        _config(client_id="osprey-conduit", secret="probe-secret", with_precheck=True)
+        _config(client_id=CONDUIT_CLIENT_ID, secret=PROBE_SECRET, with_precheck=True)
     )
     try:
-        principal = await resolver.resolve_for_owner_detailed("preflight-probe")
+        principal = await resolver.resolve_for_owner_detailed(VERIFY_SUBJECT)
     finally:
         await resolver.aclose()
 
@@ -86,11 +113,11 @@ async def test_an_unprivileged_client_is_refused_by_keycloak() -> None:
     """Verify assertion 2 — the one refusal the realm *does* enforce, measured. It refuses by
     requesting client, which is the containment that actually exists."""
     resolver = PrincipalResolver(
-        _config(client_id="osprey-unprivileged", secret="other-secret", with_precheck=False)
+        _config(client_id=UNPRIVILEGED_CLIENT_ID, secret=PROBE_SECRET, with_precheck=False)
     )
     try:
         with pytest.raises(PrincipalExchangeRefused) as raised:
-            await resolver.resolve_for_owner_detailed("preflight-probe")
+            await resolver.resolve_for_owner_detailed(VERIFY_SUBJECT)
     finally:
         await resolver.aclose()
 
@@ -103,11 +130,11 @@ async def test_a_disabled_subject_is_refused_by_the_conduits_own_precheck() -> N
     generic refusal, so ADR-044's revoked-principal reason is available to whatever marks the
     watch stopped."""
     resolver = PrincipalResolver(
-        _config(client_id="osprey-conduit", secret="probe-secret", with_precheck=True)
+        _config(client_id=CONDUIT_CLIENT_ID, secret=PROBE_SECRET, with_precheck=True)
     )
     try:
         with pytest.raises(PrincipalRevoked) as raised:
-            await resolver.resolve_for_owner_detailed("revoked-subject")
+            await resolver.resolve_for_owner_detailed(REVOKED_SUBJECT)
     finally:
         await resolver.aclose()
 
@@ -125,10 +152,10 @@ async def test_without_the_precheck_the_realm_issues_a_token_for_the_disabled_su
     docstring rather than a measurement.
     """
     resolver = PrincipalResolver(
-        _config(client_id="osprey-conduit", secret="probe-secret", with_precheck=False)
+        _config(client_id=CONDUIT_CLIENT_ID, secret=PROBE_SECRET, with_precheck=False)
     )
     try:
-        principal = await resolver.resolve_for_owner_detailed("revoked-subject")
+        principal = await resolver.resolve_for_owner_detailed(REVOKED_SUBJECT)
     finally:
         await resolver.aclose()
 
@@ -142,7 +169,7 @@ async def test_without_the_precheck_the_realm_issues_a_token_for_the_disabled_su
 async def test_an_unreachable_idp_is_unavailable_not_revoked() -> None:
     """ADR-044's unreachable path, unchanged. A transient outage must never mark a live analyst's
     watches as revoked — the two are different facts and the pre-check must not collapse them."""
-    config = _config(client_id="osprey-conduit", secret="probe-secret", with_precheck=True)
+    config = _config(client_id=CONDUIT_CLIENT_ID, secret=PROBE_SECRET, with_precheck=True)
     resolver = PrincipalResolver(
         __import__("dataclasses").replace(
             config, oidc_admin_users_url="http://127.0.0.1:9/admin/realms/osprey/users"
@@ -150,6 +177,6 @@ async def test_an_unreachable_idp_is_unavailable_not_revoked() -> None:
     )
     try:
         with pytest.raises(PrincipalExchangeUnavailable):
-            await resolver.resolve_for_owner_detailed("preflight-probe")
+            await resolver.resolve_for_owner_detailed(VERIFY_SUBJECT)
     finally:
         await resolver.aclose()

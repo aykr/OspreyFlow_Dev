@@ -183,6 +183,16 @@ is still enabled before exchanging for them, and it must do so with an authority
 that would mint the token. A pre-check sharing the impersonation grant would be asking the
 component that has already said yes, which is no check at all.
 
+**That pre-check is proven against a real identity provider, not a fixture: `make idp-test`**
+(round 13cc, owner ruling R8). It starts a real Keycloak 26.0 carrying the realm
+`harness/realm.py` renders, applies the grants through `harness/keycloak_admin.py` exactly as
+`harness.apply` does, and runs `tests/services/api/test_revoked_principal_precheck.py`'s five
+cases; CI runs the same target as `token-exchange-idp-test`, and `make test-all` depends on it.
+The distinction matters here more than elsewhere, because the realm's own behaviour is the
+finding: Keycloak **does** issue a token for a disabled subject when asked by a client holding
+impersonation, so the refusal has to be the Conduit's. A fixture IdP written to suit the test
+would have agreed with whatever the code did.
+
 **Client secrets are generated at deployment time, never carried in the repository** (§2.5): the
 realm names the client, the deployment's own environment file carries the secret, and nothing
 version-controlled contains either.
