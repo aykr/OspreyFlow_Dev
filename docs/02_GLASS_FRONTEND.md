@@ -491,7 +491,16 @@ Not negotiable and cheaper to build in than to retrofit.
   only, never the ring itself; `Enter` expands; `\` opens the radial menu as a list; `Space`
   toggles the focused node's own membership in the selection ring (`07_BUILD_PLAN.md` Phase 6a
   Stage 1: added for manual link/split, the first action needing a keyboard-built multi-node
-  selection at all).
+  selection at all). **`Ctrl`/`Cmd`+`Shift`+`ArrowRight`/`Left` walks every node in the working
+  set, adjacency or not** — added 27 September 2026 (round 12d) after a real gap was found
+  against this very bullet: `Explain cluster` and `Find paths to` are both gated on a *two-node*
+  selection, and until this binding existed no keyboard route built one for two nodes that share
+  no edge. Plain arrow-walk follows edges so it cannot leave a component; `Ctrl`/`Cmd`+Arrow
+  cycles only within the existing ring; `Space` toggles only what is focused. Two entities found
+  by identifier — how an analyst reaches them — are exactly that case, so both actions were
+  mouse-only in practice while the keyboard registry recorded them as covered. Proven by
+  `apps/workspace/keyboard/keyboard.spec.ts`'s own "Ctrl+Shift+Arrow reaches a node arrow-walk
+  cannot" case, over a deliberately disconnected fixture node.
 - The canvas exposes an accessible alternative view — the Matrix view is not a novelty, it is
   the screen-reader-navigable rendering of the same data.
 - Focus is a 2px brass outline at 2px offset, everywhere, never suppressed.

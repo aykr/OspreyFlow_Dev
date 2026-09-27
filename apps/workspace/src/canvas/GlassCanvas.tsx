@@ -622,7 +622,35 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // a keypress after arriving; cycling an already-built ring (needed for a lasso-selected set
       // of non-adjacent nodes arrow-walk cannot reach) moves to `Ctrl`/`Cmd`+`ArrowRight`/`Left`,
       // the key Tab's release frees up for it.
+      // **Walking every node in the working set, adjacency or not** — round 12d, closing a real
+      // `CLAUDE.md` rule 13 gap found in 12b: `Explain cluster` and `Find paths to` are both
+      // gated on a *two-node* selection, and until this branch existed there was no keyboard
+      // route to one for two nodes that share no edge. Arrow-walk follows `graph.neighbors`, so
+      // it cannot leave a node's own component; `Ctrl`/`Cmd`+Arrow below cycles *within* the
+      // selection, so it cannot reach a node that is not already in it; Space toggles only
+      // whatever is focused. Two entities found by identifier — exactly how an analyst reaches
+      // Fixture Corp's resolution pair — are typically not adjacent, so both actions were
+      // mouse-only in practice while appearing to be covered.
+      //
+      // `Shift` on top of the existing `Ctrl`/`Cmd`+Arrow, so the two ring-walks read as one
+      // family: without Shift, cycle the selection; with it, cycle everything. The order is
+      // `graph.nodes()`' own, which is insertion order and therefore stable within a session —
+      // enough for "walk to the other one", which is all this is for.
       if (
+        (e.key === "ArrowRight" || e.key === "ArrowLeft") &&
+        (e.ctrlKey || e.metaKey) &&
+        e.shiftKey
+      ) {
+        e.preventDefault();
+        const all = graph.nodes();
+        if (all.length === 0) return;
+        const currentIndex = focused ? all.indexOf(focused) : -1;
+        const nextIndex =
+          e.key === "ArrowLeft"
+            ? (currentIndex - 1 + all.length) % all.length
+            : (currentIndex + 1) % all.length;
+        setFocused(all[nextIndex] ?? null);
+      } else if (
         (e.key === "ArrowRight" || e.key === "ArrowLeft") &&
         (e.ctrlKey || e.metaKey) &&
         selected.size > 0

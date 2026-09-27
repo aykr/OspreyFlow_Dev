@@ -92,6 +92,13 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   "focus-establishes-ring",
   "tab-leaves-the-canvas",
   "ctrl-arrow-cycles-ring",
+  // Round 12d: `Ctrl`/`Cmd`+`Shift`+Arrow walks *every* node in the working set, adjacency or
+  // not. Distinct from `ctrl-arrow-cycles-ring` (which cycles the selection) and from
+  // `arrow-walk-forward`/`backward` (which follow edges): without it there was no keyboard route
+  // to a two-node selection over two non-adjacent nodes, so `menu-item-explain-cluster` and
+  // `menu-item-find-paths` — both gated on `selected.size === 2` — were mouse-only in practice
+  // while this registry recorded them as covered. `CLAUDE.md` rule 13.
+  "ctrl-shift-arrow-walks-every-node",
   "arrow-walk-forward",
   "arrow-walk-backward",
   "space-toggle-ring-membership",

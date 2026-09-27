@@ -37,8 +37,21 @@ const RADIUS = 96;
 export function RadialMenu({ x, y, items, onClose, layout }: RadialMenuProps) {
   const ref = useRef<HTMLUListElement>(null);
 
+  // **Focus the first item once, on open — not on every render.** These were one effect keyed on
+  // `[onClose]` until round 12d. `onClose` is an inline arrow at the call site, so its identity
+  // changes on every parent render, so the effect re-ran and moved focus back to the first item
+  // each time. Nothing exercised that while the menu was open, because nothing used to re-render
+  // it once opened — until `/expand/preview` started filling the cardinalities in (round 12c),
+  // at which point a keyboard user arrow-ing down the list was silently thrown back to the top
+  // mid-navigation, and two existing keyboard cases went red.
+  //
+  // The empty dependency array is the point: "on mount" is the real intent, and expressing it as
+  // `[onClose]` only ever worked because the menu never re-rendered.
   useEffect(() => {
     ref.current?.querySelector<HTMLElement>("[role='menuitem']")?.focus();
+  }, []);
+
+  useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };

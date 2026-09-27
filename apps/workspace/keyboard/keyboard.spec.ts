@@ -99,6 +99,66 @@ test("arrow keys walk from the focused node to a real neighbour", async ({ page 
   registerCovered("CANVAS_ACTIONS", "arrow-walk-forward");
 });
 
+test("Ctrl+Shift+Arrow reaches a node arrow-walk cannot, and Space pairs the two", async ({
+  page,
+}) => {
+  // **The `CLAUDE.md` rule 13 gap round 12b found, and its closure.** `Explain cluster` and
+  // `Find paths to` are both gated on `selected.size === 2`. Until round 12d there was no
+  // keyboard route to a two-node selection over two *non-adjacent* nodes: arrow-walk follows
+  // `graph.neighbors`, Ctrl/Cmd+Arrow cycles within the selection, and Space toggles only what is
+  // focused. Two entities found by identifier — how an analyst reaches Fixture Corp's resolution
+  // pair — are exactly that case, so both actions were mouse-only in practice while this registry
+  // recorded them as covered.
+  //
+  // `n5` is the fixture's own disconnected node (`harness.tsx`), which is what makes the first
+  // half of this test a real negative rather than a formality.
+  await page.goto("/keyboard/harness.html");
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus(); // establishes n0
+
+  // 1. Arrow-walk genuinely cannot get there. Generously more presses than the graph has nodes,
+  //    so this fails if a future change ever *does* make arrow-walk leave the component.
+  for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowRight");
+  expect(
+    await page.evaluate(() => window.__KEYBOARD__?.focused),
+    "arrow-walk reached the disconnected node — it follows edges, so it should not be able to",
+  ).not.toBe("n5");
+
+  // 2. One pass, no re-focusing: the canvas's own `onFocus` re-establishes the ring, so calling
+  //    `focus()` again mid-test would silently discard the selection being built — found exactly
+  //    that way. Focus once, select here, walk, select there.
+  await canvas.focus();
+  expect(await page.evaluate(() => window.__KEYBOARD__?.focused)).toBe("n0");
+  // No Space here: focusing the canvas *already* establishes a ring containing n0 (the
+  // `focus-establishes-ring` case above asserts exactly that), so a Space at this point would
+  // toggle it back *out* — which is what the first version of this test did, leaving a
+  // one-element selection and a confusing failure. n0 is already selected; walk and add n5.
+  let reached = false;
+  for (let i = 0; i < 12 && !reached; i++) {
+    await page.keyboard.press("Control+Shift+ArrowRight");
+    reached = (await page.evaluate(() => window.__KEYBOARD__?.focused)) === "n5";
+  }
+  expect(
+    reached,
+    "Ctrl+Shift+Arrow never reached the disconnected node, so the working-set walk is not working",
+  ).toBe(true);
+  await page.keyboard.press(" ");
+
+  // 3. A two-node selection over two nodes that share no edge — the thing that had no keyboard
+  //    route at all before this branch existed.
+  const selection = await page.evaluate(() => window.__KEYBOARD__?.selection);
+  expect(new Set(selection)).toEqual(new Set(["n0", "n5"]));
+
+  // 4. Which is the whole point: the two-node-only menu items are now keyboard-reachable for a
+  //    pair that shares no edge.
+  await page.keyboard.press("\\");
+  const menu = page.locator(".radial-menu__list[role='menu']");
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: /Find paths to/ })).toBeVisible();
+
+  registerCovered("CANVAS_ACTIONS", "ctrl-shift-arrow-walks-every-node");
+});
+
 test("backslash opens the radial menu as a keyboard-navigable list", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });

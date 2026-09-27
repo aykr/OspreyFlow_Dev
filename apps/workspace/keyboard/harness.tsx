@@ -104,6 +104,15 @@ const nodes = [
   node("n2", { resolution: { cluster_id: "n2" } }),
   node("n3", { resolution: { cluster_id: "n2" } }),
   node("n4", { type: "Endpoint", properties: { value_normalised: "n4" } }),
+  // **`n5` is deliberately disconnected — it has no edge to anything, ever.** Round 12d: every
+  // other node here is on one chain, so arrow-walk (which follows `graph.neighbors`) can reach
+  // all of them, and a walkthrough over this fixture could not tell whether the canvas had a
+  // keyboard route to a *non-adjacent* node or merely to an adjacent one. It did not — which is
+  // why `Explain cluster` and `Find paths to`, both gated on a two-node selection, were
+  // mouse-only in practice for the case that actually matters: two entities found by identifier,
+  // which is how an analyst reaches them and which leaves them unconnected until something is
+  // expanded. `n5` is the fixture datum that makes that reachable-or-not question answerable.
+  node("n5"),
 ];
 const edges = [
   edge("e0", "n0", "n1"),
