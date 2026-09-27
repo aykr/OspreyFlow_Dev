@@ -841,7 +841,7 @@ jobs:
       - name: Render, build, launch and seed a local-lite deployment with a demo analyst
         run: |
           PYTHONPATH=.:packages uv run python -m harness.apply \
-            --profile local-lite --build --demo-analyst --seed hmp,fixture-corp \
+            --profile local-lite --build --demo-analyst --seed hmp,fixture-corp,scenarios \
             | tee apply.log
           # The seeded investigation id has no discoverable route (the Conduit has no "list
           # investigations", by design), so it is taken from the URL `apply` prints — the same

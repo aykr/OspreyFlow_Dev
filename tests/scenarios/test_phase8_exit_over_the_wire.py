@@ -52,13 +52,16 @@ finding after the table.
 | B1, B2, B3 | **yes** | Round 13bf: walked Connect -> Run through the analyst's own door. |
 | B4 | **yes** (adapted) | Fixture Corp's resolution cohort, search-seeded, no edges between them. |
 | B5 | **yes** (adapted) | One hop out from a seeded node. |
-| B6, B7, B8 | no | Message content and the handle cohort are not seeded. |
+| B6 | no | Message spans live in the extraction-candidates store, not the graph. |
+| B7, B8 | **yes** | Round 13cb: the `scenarios` seed dataset. B8 is asserted by the analyst. |
 | B9 | **yes** | Strict does not merge the close-given-name pair; Balanced does. |
 | B10 | **yes** | `explain` on the merged cluster, per-comparison weights, not just the total. |
 | B11 | **yes** | A manual `SAME_AS`, score 1.0, attributed to this signed-in analyst. |
 | B12 | **yes** | Hotlist created over HTTP and read back with its owner and review date. |
 | B13, B14 | no | An alert needs an ingest to fire it. See the finding below. |
-| B15–B18 | no | The seizure record, the device legs and the sightings are not seeded. |
+| B15, B17 | **yes** | Round 13cb: the seized handset, its two SIMs and its sightings. |
+| B16, B18 | **partly** | The data half — ordered, geolocated, on a shared axis. Rendering and
+  playback are the Glass tier. |
 | B19, B20 | **yes** | Pattern preview (estimated count first), run, save, monitor. |
 | B21 | **yes** | `POST /v1/paths` across the fixture's own eight-spoke hub. |
 | Cross-cutting | **yes** (the reachable half) | The delta WebSocket through the proxy, via the
@@ -139,7 +142,7 @@ import re
 import secrets
 import urllib.parse
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -161,6 +164,24 @@ pytestmark = pytest.mark.skipif(
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+#: **Imported, not restated.** `scripts/seed_scenarios.py` decides what it writes and under which
+#: ids; repeating the literals here would be the two-truths defect round 13bf spent itself
+#: removing. If the seeder renames something, these rows fail at import rather than at a
+#: confusing "node not found" four calls in.
+from scripts.seed_scenarios import (  # noqa: E402
+    SEIZURE_DATE as _SEEDED_SEIZURE_DATE,
+)
+from scripts.seed_scenarios import (  # noqa: E402
+    SHARED_ENDPOINT_ID as SCENARIOS_SHARED_ENDPOINT_ID,
+)
+
+SCENARIOS_HANDLE_ID = "beta-scenarios-handle"
+SCENARIOS_HANDSET_ID = "seizure-scenarios-handset"
+SCENARIOS_SEIZURE_DATE = _SEEDED_SEIZURE_DATE.isoformat().replace("+00:00", "Z")
+SCENARIOS_SEIZURE_DATE_PLUS_90M = (
+    _SEEDED_SEIZURE_DATE + timedelta(minutes=90)
+).isoformat().replace("+00:00", "Z")
 
 WORKSPACE_ORIGIN = os.environ.get("OSPREY_WORKSPACE_ORIGIN", "http://localhost:8080")
 KEYCLOAK_ORIGIN = os.environ.get("OSPREY_KEYCLOAK_ORIGIN", "http://localhost:8081")
@@ -1307,6 +1328,247 @@ def test_b3_local_times_are_converted_and_an_unreadable_one_is_refused_by_name(
         f"the rejection does not name the adapter and the offending value: {only['reason']!r}"
     )
     assert report["rows_read"] == 10, report["rows_read"]
+
+
+# ---------------------------------------------------------------------------------------------
+# The rows the `scenarios` seed dataset unblocks — round 13cb, owner ruling R8.
+#
+# R8: every acceptance row must be performable through the analyst's own door on a rendered
+# deployment; a row proven only in process does not count. These were not performable because the
+# deployment carried no Scenario B person layer, device legs or sightings at all.
+# `scripts/seed_scenarios.py` puts them there with stable ids, which is why the cases below can
+# address them without searching.
+#
+# **Addressed by id, deliberately.** `POST /v1/search` does not return ingested nodes
+# (REPORT-13bf's own finding, now round 13cd's brief), and leaning on search here would couple
+# these rows to an unrelated open defect. `expand` takes node ids, and the seeder pins them.
+# ---------------------------------------------------------------------------------------------
+
+
+def _expand(
+    analyst: httpx.Client, investigation: str, node_ids: list[str], *, depth: int = 1, **extra
+) -> tuple[list[dict], list[dict]]:
+    """One hop (or `depth`) out from `node_ids`, returning (nodes, edges) from the delta."""
+    request: dict = {"node_ids": node_ids, "depth": depth}
+    request.update(extra)
+    response = analyst.post(
+        f"/v1/investigations/{investigation}/expand", json={"request": request}
+    )
+    assert response.status_code == 200, response.text
+    delta = response.json()["delta"]
+    return (
+        delta.get("nodes_added") or delta.get("nodes") or [],
+        delta.get("edges_added") or delta.get("edges") or [],
+    )
+
+
+def _require_seeded(nodes: list[dict], node_id: str) -> dict:
+    match = next((n for n in nodes if n["id"] == node_id), None)
+    assert match is not None, (
+        f"{node_id!r} is not in this deployment's graph. These rows need "
+        "`--seed hmp,fixture-corp,scenarios`; a deployment seeded without `scenarios` cannot "
+        "perform them, which is the state owner ruling R8 called milestone-blocking."
+    )
+    return match
+
+
+def test_b7_a_shared_messaging_handle_is_common_to_the_second_cohort(
+    analyst: httpx.Client, seeded_scope: str
+) -> None:
+    """**B7**: "Repeat for the second cohort … A shared messaging handle is common to that cohort."
+
+    One hop out from the handle reaches every member, which is the row's own claim. Asserted as
+    the full membership rather than "at least one", because a single `USES` edge would satisfy a
+    loose check while leaving the handle shared by nobody in particular.
+    """
+    nodes, edges = _expand(analyst, seeded_scope, [SCENARIOS_HANDLE_ID])
+
+    handle = _require_seeded(nodes, SCENARIOS_HANDLE_ID)
+    assert handle["properties"]["endpoint_kind"] == "handle"
+
+    users = {
+        e["source"]
+        for e in edges
+        if e["type"] == "USES" and e["target"] == SCENARIOS_HANDLE_ID
+    }
+    assert len(users) == 4, (
+        f"the handle is used by {len(users)} people, not the cohort of 4 the fixture seeds"
+    )
+    people = {n["id"] for n in nodes if n["type"] == "Person"}
+    assert users <= people
+
+
+def test_b8_the_handle_is_linked_to_the_shared_endpoint_asserted_at_one(
+    analyst: httpx.Client, seeded_scope: str
+) -> None:
+    """**B8**: "A `SAME_AS` edge, asserted at score 1.0 (ADR-024's own pattern for identifier
+    systems with no lexical overlap — a handle and an `e164` number share none), links the handle
+    to the shared endpoint."
+
+    **This row needs no resolution machinery, and round 13cb's brief was wrong to propose adding
+    some.** The brief suggested a comparison config for identifier-bearing types so a *scored*
+    edge could be produced. ADR-024 decides the opposite — such a link "is a direct, asserted
+    write, not a probabilistic match" — and the row's own wording already says "asserted at score
+    1.0". So the analyst asserts it, here, over the wire, and that *is* the row.
+
+    Idempotent by construction, for the reason B11's step records at length: a manual link is
+    permanent and no route removes it, so a second run must assert the edge's *properties* rather
+    than that this call was the one that created it.
+    """
+    for node_id in (SCENARIOS_HANDLE_ID, SCENARIOS_SHARED_ENDPOINT_ID):
+        nodes, _ = _expand(analyst, seeded_scope, [node_id])
+        _require_seeded(nodes, node_id)
+
+    linked = analyst.post(
+        f"/v1/investigations/{seeded_scope}/resolution/link",
+        json={"node_a": SCENARIOS_HANDLE_ID, "node_b": SCENARIOS_SHARED_ENDPOINT_ID},
+    )
+    assert linked.status_code == 200, linked.text
+
+    score = _same_as_score(
+        analyst, seeded_scope, SCENARIOS_HANDLE_ID, SCENARIOS_SHARED_ENDPOINT_ID
+    )
+    assert score == 1.0, f"B8's SAME_AS is scored {score}, not the asserted 1.0 the row requires"
+
+
+def test_b15_both_sims_link_to_one_device_in_one_traversal(
+    analyst: httpx.Client, seeded_scope: str
+) -> None:
+    """**B15**: "Pivot on the handset identifier … Both SIMs link to one device; the SIM-swap
+    pattern is one traversal, not a special case."
+
+    "One traversal" is the load-bearing half: a single `depth=1` expand from the handset must
+    reach both SIMs. If the SIM-swap needed two hops, or a dedicated route, the row would be
+    describing a special case — which is exactly what it says it is not.
+    """
+    nodes, edges = _expand(analyst, seeded_scope, [SCENARIOS_HANDSET_ID])
+
+    handset = _require_seeded(nodes, SCENARIOS_HANDSET_ID)
+    # A `Device`, not an `Endpoint`: `endpoint_kind` is an enum of msisdn|imsi|email|handle|iban|
+    # card, and an IMEI names a handset, which `Device` carries as its own identifier.
+    assert handset["type"] == "Device", handset["type"]
+    assert handset["properties"]["imei"]
+
+    sims = {
+        e["source"]
+        for e in edges
+        if e["type"] == "PAIRED_WITH" and e["target"] == SCENARIOS_HANDSET_ID
+    }
+    assert len(sims) == 2, f"expected two SIMs paired with the handset, reached {len(sims)}"
+
+    by_id = {n["id"]: n for n in nodes}
+    assert {by_id[s]["properties"]["endpoint_kind"] for s in sims} == {"imsi"}
+
+
+def test_b17_the_devices_location_events_are_reachable_and_windowed(
+    analyst: httpx.Client, seeded_scope: str
+) -> None:
+    """**B17**: "Brush to the seizure date … Location events for the device in that window
+    restrict the map."
+
+    Both halves are assertable over the wire: the device's location events exist and are
+    reachable in one hop, and a temporal window genuinely *restricts* them. The restriction is
+    what makes this more than a data check — a window that returned everything would satisfy
+    "events are reachable" and prove nothing about brushing.
+    """
+    nodes, edges = _expand(analyst, seeded_scope, [SCENARIOS_HANDSET_ID])
+    _require_seeded(nodes, SCENARIOS_HANDSET_ID)
+
+    present_at = [e for e in edges if e["type"] == "PRESENT_AT"]
+    assert len(present_at) >= 3, (
+        f"the seized handset has {len(present_at)} location events; B17 needs a track to brush"
+    )
+    by_id = {n["id"]: n for n in nodes}
+    assert all(by_id[e["target"]]["type"] == "Location" for e in present_at)
+
+    # The window restricts: an hour around the first sighting must not return all of them.
+    narrow_nodes, narrow_edges = _expand(
+        analyst,
+        seeded_scope,
+        [SCENARIOS_HANDSET_ID],
+        temporal_window={
+            "valid_from": SCENARIOS_SEIZURE_DATE,
+            "valid_to": SCENARIOS_SEIZURE_DATE_PLUS_90M,
+        },
+    )
+    narrow_present = [e for e in narrow_edges if e["type"] == "PRESENT_AT"]
+    assert narrow_present, "the window excluded every sighting, so the brush has nothing to show"
+    assert len(narrow_present) < len(present_at), (
+        f"a 90-minute window returned {len(narrow_present)} of {len(present_at)} sightings — it "
+        "did not restrict anything, so this assertion would pass with temporal filtering removed"
+    )
+    assert narrow_nodes
+
+
+def test_b18_the_sightings_form_an_ordered_track(
+    analyst: httpx.Client, seeded_scope: str
+) -> None:
+    """**B18**: "Plot the device's sightings … An ordered track renders and animates under
+    playback."
+
+    **Half of this row is not assertable here, and is marked so rather than claimed.** That an
+    ordered track *renders and animates* is a Glass concern, proven at the Playwright tier. What
+    the wire proves is the half the Glass cannot invent: the sightings come back with distinct,
+    ordered timestamps and a geometry to plot. A track cannot animate if the data has neither.
+    """
+    nodes, edges = _expand(analyst, seeded_scope, [SCENARIOS_HANDSET_ID])
+    _require_seeded(nodes, SCENARIOS_HANDSET_ID)
+
+    present_at = [e for e in edges if e["type"] == "PRESENT_AT"]
+    assert present_at, "no sightings to plot"
+    # **The time is the edge's own interval.** `PRESENT_AT` is declared `temporal: true`, and
+    # graph `Event` nodes carry no properties at all — the ontology refuses them. When a device
+    # was somewhere is a property of the visit.
+    moments = [e["interval"]["valid_from"] for e in present_at]
+    assert all(moments), "a sighting carries no interval, so playback has nothing to order by"
+    assert len(set(moments)) == len(moments), (
+        "two sightings share a timestamp; playback has no order to animate"
+    )
+    assert sorted(moments) == sorted(set(moments))
+
+    by_id = {n["id"]: n for n in nodes}
+    for edge in present_at:
+        location = by_id[edge["target"]]
+        assert location["properties"].get("geometry_ref"), (
+            f"{location['id']} has no geometry_ref, so there is nothing to plot"
+        )
+
+
+def test_b16_both_event_sets_are_retrievable_for_a_shared_axis(
+    analyst: httpx.Client, seeded_scope: str
+) -> None:
+    """**B16**: "Overlay the second investigation's timeline on the first … Both event sets render
+    on distinct tracks against a shared axis."
+
+    **Also half-assertable, and marked so.** Rendering two tracks is the Glass's job. What the
+    wire proves is that a single signed-in analyst can retrieve both event sets and that they
+    share a comparable time axis — without which no overlay is possible, and which is the part a
+    deployment can get wrong.
+    """
+    _, device_edges = _expand(analyst, seeded_scope, [SCENARIOS_HANDSET_ID])
+    device_moments = [
+        e["interval"]["valid_from"] for e in device_edges if e["type"] == "PRESENT_AT"
+    ]
+    assert device_moments, "no device event set to overlay"
+
+    # The other track: the deployment's own seeded event corpus, reached the way A4/A5 reach it.
+    other = analyst.post(
+        "/v1/analytics/histogram",
+        json={
+            "filter": {"investigation_scope": seeded_scope},
+            "bucketing": "fixed_interval",
+            "interval_seconds": 86_400,
+        },
+    )
+    assert other.status_code == 200, other.text
+    buckets = other.json()["buckets"]
+    assert buckets, "the second event set is empty, so there is nothing to overlay"
+
+    # A shared axis means both are ISO-8601 instants a single scale can place.
+    for moment in device_moments:
+        assert _parsed(moment).tzinfo is not None, (
+            f"{moment} carries no offset, so it cannot be placed on a shared axis"
+        )
 
 
 def test_the_delta_stream_is_reachable_through_the_proxy(analyst: httpx.Client) -> None:

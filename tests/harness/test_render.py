@@ -756,6 +756,55 @@ def test_every_declared_volume_is_mounted_by_some_service(rendered: RenderResult
     )
 
 
+def test_keycloaks_own_database_survives_a_restart(rendered: RenderResult) -> None:
+    """**Round 13cb.** Keycloak's only mount was the read-only realm import, so its database lived
+    in the container layer and died with `docker compose down`.
+
+    The realm and its users come back from that import; the `--demo-analyst` **password** does
+    not, because `harness/apply.py` sets it afterwards through the admin API and nothing re-runs
+    that on a restart. The symptom is a deployment that presents its login form and then refuses
+    the operator's own credentials, with nothing naming the cause.
+
+    **Found, not anticipated.** Round 13cb brought an earlier deployment back up to use as a
+    red baseline and the *existing* over-the-wire suite failed at sign-in — a deployment that had
+    passed 8/8 an hour before. Owner ruling R8's bar is that the product can be demonstrated on a
+    rendered deployment; one that cannot be stopped and started does not clear it.
+
+    Asserted as "some volume covers the data directory", not as a literal path, so moving the
+    mount is allowed and *removing* it is not.
+    """
+    document = yaml.safe_load(rendered.artefacts["compose.yaml"])
+    keycloak = document["services"]["keycloak"]
+
+    named_mounts = [
+        mount
+        for mount in keycloak.get("volumes", [])
+        if ":" in mount and not mount.startswith(".") and not mount.startswith("/")
+    ]
+    covering = [m for m in named_mounts if m.split(":")[1].startswith("/opt/keycloak/data")]
+    assert covering, (
+        "nothing persists Keycloak's data directory, so its database dies with the container and "
+        "the demo analyst's password — set after the realm import — is lost on every restart. "
+        f"keycloak volumes: {keycloak.get('volumes')}"
+    )
+
+    declared = set(document.get("volumes") or {})
+    for mount in covering:
+        assert mount.split(":")[0] in declared, (
+            f"{mount} names a volume the compose file never declares"
+        )
+
+    # The realm import is a bind *inside* that directory; a volume over the parent would shadow
+    # it and the realm would never import. This is why the mount is at `.../data/h2`.
+    imports = [m for m in keycloak.get("volumes", []) if "import/realm.json" in m]
+    assert imports, "the realm import mount has gone"
+    for mount in covering:
+        assert mount.split(":")[1] != "/opt/keycloak/data", (
+            "a volume over /opt/keycloak/data shadows the realm.json bind mount inside it, so "
+            "the realm would never import"
+        )
+
+
 def test_the_conduit_is_pointed_at_a_persistent_recipe_repository(
     rendered: RenderResult, config: OspreyConfig
 ) -> None:

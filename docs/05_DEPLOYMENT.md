@@ -386,13 +386,28 @@ git clone https://github.com/ospreyflow/ospreyflow-dev.git && cd ospreyflow-dev
 uv sync                       # creates .venv from uv.lock; ~30s warm, a few minutes cold
 export PYTHONPATH=.:packages  # the repo root AND packages/ — neither is installed on the path
 
-.venv/bin/python -m harness.apply --profile local-lite --build --seed hmp,fixture-corp
+.venv/bin/python -m harness.apply --profile local-lite --build --seed hmp,fixture-corp,scenarios
 ```
 
 `PYTHONPATH` is the same requirement `DEMO_GUIDE.md` §3.2 already spells out for the Conduit
 ("neither a bare `python -m` nor `uvicorn` puts them on `sys.path`, which is why
 `services/api/Dockerfile` sets it explicitly") — it applies here too, and saying it only there
 was the gap.
+
+**The three seed datasets, and what each is for.** `--seed` takes a comma-separated list:
+
+| Dataset | What it seeds | Which acceptance rows need it |
+| --- | --- | --- |
+| `hmp` | The incident/event corpus and its yards | Scenario A's analytics rows (A2–A5, A8–A12) |
+| `fixture-corp` | Resolution cohorts, community rings, the path-spoke hub | B4, B5, B9–B11, B21 |
+| `scenarios` | Scenario B's person layer, the shared handle, the seized handset and its SIMs, and the device's sightings | B7, B8, B15, B16–B18 |
+
+`scenarios` was added on 27 September 2026 under **owner ruling R8**, which set the bar that every
+acceptance row must be performable through the analyst's own door on a rendered deployment — a row
+proven only in process does not count. Before it, those rows had no data to walk against on a real
+deployment at all. Seeding is a checkout-only operation for all three (the images deliberately do
+not carry `tests/`), and re-seeding `scenarios` is idempotent: it pins its own ids, so a second
+seed upserts the same elements rather than building a second, parallel cohort.
 
 **Where source files go — the ingest folder.** A rendered deployment bind-mounts
 `components.storage.ingest` (default `/var/lib/osprey/ingest`) **read-only** into the Conduit, for

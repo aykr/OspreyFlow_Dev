@@ -18,6 +18,11 @@ from tests.scenarios.fixtures.scenario_cohorts import (
     generate_device_legs,
     generate_handle_cohort,
 )
+from tests.scenarios.fixtures.seizure_record import (
+    HANDSET_IMEI_NORMALISED,
+    SIM_A_IMSI_NORMALISED,
+    SIM_B_IMSI_NORMALISED,
+)
 
 SHARED = "shared-endpoint-under-test"
 
@@ -88,15 +93,27 @@ def test_b8_the_handle_and_a_number_share_no_lexical_space() -> None:
 def test_b15_two_sims_reach_one_handset_in_one_traversal() -> None:
     """B15: "Both SIMs link to one device; the SIM-swap pattern is one traversal, not a special
     case." Asserted as both SIMs pointing at the *same* handset id."""
-    legs = generate_device_legs(msisdn="+447700900123")
+    legs = generate_device_legs()
 
     assert len(legs.sim_ids) == 2
     paired = {(e.source, e.target) for e in legs.edges if e.type == "PAIRED_WITH"}
     assert paired == {(legs.sim_ids[0], legs.handset_id), (legs.sim_ids[1], legs.handset_id)}
 
-    kinds = {n.id: n.properties["endpoint_kind"] for n in legs.nodes}
-    assert kinds[legs.handset_id] == "imei"
-    assert all(kinds[s] == "imsi" for s in legs.sim_ids)
+    by_id = {n.id: n for n in legs.nodes}
+    # **The handset is a `Device`, not an `Endpoint`** — `endpoint_kind` is an enum of
+    # msisdn|imsi|email|handle|iban|card, and an IMEI names a handset, which `Device` carries as
+    # its own identifier. A first attempt wrote it as an Endpoint and the ontology refused it;
+    # this asserts the model the ontology actually declares.
+    assert by_id[legs.handset_id].type == "Device"
+    assert by_id[legs.handset_id].properties["imei"] == HANDSET_IMEI_NORMALISED
+    assert all(by_id[s].properties["endpoint_kind"] == "imsi" for s in legs.sim_ids)
+
+    # The identifiers are the seizure record's own, so B13's ingest and B15's pivot land on the
+    # same handset rather than on two that merely look alike.
+    assert {by_id[s].properties["value_normalised"] for s in legs.sim_ids} == {
+        SIM_A_IMSI_NORMALISED,
+        SIM_B_IMSI_NORMALISED,
+    }
 
 
 def test_ids_are_minted_per_call_so_reruns_do_not_collide() -> None:
@@ -151,9 +168,9 @@ def test_a_pinned_token_produces_the_same_fixture_in_a_different_process() -> No
         "from tests.scenarios.fixtures.scenario_cohorts import (\n"
         "    generate_cohort, generate_device_legs)\n"
         "c = generate_cohort(shared_endpoint_id='s', prefix='alpha', run_token='scenarios')\n"
-        "d = generate_device_legs(msisdn='+447700900123', run_token='scenarios')\n"
+        "d = generate_device_legs(run_token='scenarios')\n"
         "print([n.properties['value_normalised'] for n in c.nodes if n.type == 'Endpoint'])\n"
-        "print([n.properties['value_normalised'] for n in d.nodes])\n"
+        "print([n.properties.get('value_normalised') or n.properties['imei'] for n in d.nodes])\n"
     )
     runs = [
         subprocess.run(

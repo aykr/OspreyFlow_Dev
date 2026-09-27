@@ -52,8 +52,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import sys
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 from tests.scenarios.fixtures.scenario_cohorts import (
     Cohort,
@@ -62,10 +63,11 @@ from tests.scenarios.fixtures.scenario_cohorts import (
     generate_device_legs,
     generate_handle_cohort,
 )
+from tests.scenarios.fixtures.seizure_record import SEIZURE_DATE as _SEIZURE_DAY
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
-from conduit_common.identity import new_edge_id, new_id, now_utc
+from conduit_common.identity import new_edge_id, now_utc
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from ports.graph import GraphPort
@@ -74,6 +76,7 @@ from schemas.domain import (
     Edge,
     EdgeWrite,
     Handling,
+    Interval,
     Node,
     NodeWrite,
     Provenance,
@@ -91,9 +94,11 @@ SCENARIOS_TOKEN = "scenarios"
 SHARED_ENDPOINT_ID = "scenarios-shared-endpoint"
 SHARED_ENDPOINT_VALUE = "+447700900500"
 
-#: B17's brush window centres here, and B13's seizure record is dated the same day, so "brush to
-#: the seizure date" lands on the sightings rather than on an empty stretch of axis.
-SEIZURE_DATE = datetime(2026, 3, 14, 12, 0, tzinfo=UTC)
+#: **The seizure fixture's own date, not one invented here.** B17 brushes "to the seizure date",
+#: so the sightings must sit on the day `seizure_record.py` says the device was seized — a
+#: different date would put the track outside the window an analyst actually brushes to. Noon,
+#: because that fixture's date carries no time of day and a track needs somewhere to start.
+SEIZURE_DATE = _SEIZURE_DAY.replace(hour=12)
 
 #: B18's track. Four points, ordered, far enough apart to render as a trail rather than a dot.
 _SIGHTING_POINTS = [
@@ -158,6 +163,7 @@ def _edge_write(edge: Edge, *, load_id: str) -> EdgeWrite:
         source=edge.source,
         target=edge.target,
         properties=edge.properties,
+        interval=edge.interval,
         provenance=edge.provenance,
         handling=edge.handling,
         created_by=_CREATED_BY,
@@ -183,16 +189,19 @@ def build_shared_endpoint() -> Node:
 
 
 def build_sightings(legs: DeviceLegs) -> tuple[list[Node], list[Edge]]:
-    """**B16, B17, B18.** Location `Event`s for the seized handset, ordered in time.
+    """**B16, B17, B18.** The seized handset's locations, ordered in time.
 
-    B18 wants "an ordered track [that] renders and animates under playback", B17 wants "location
-    events for the device in that window", and B16 wants a second event set to overlay. One
-    ordered sequence of `PRESENT_AT` events satisfies all three, and is the smallest thing that
-    does — four points an hour apart around the seizure date, each with its own `Location`.
+    **The time lives on the edge, not on an `Event` node — the ontology said so, twice.** A first
+    attempt minted `Event` nodes carrying `occurred_at`/`label`/`event_type`; `Event` declares no
+    properties at all in `packages/ontology/default.yaml`, and `validate_properties` refused them
+    by name. `PRESENT_AT` is declared `temporal: true` and `Device -> Location`, which is the same
+    statement made where it belongs: *when* a device was somewhere is a property of the visit, not
+    of a free-floating event object. So each sighting is one `PRESENT_AT` edge with its own
+    `interval`, and the `Location` it points at.
 
-    The `Location` carries `geometry_ref` and `name`, the two properties
-    `packages/ontology/default.yaml` declares for it; `Event` declares none, so its shape is the
-    ordinary one this repository already writes (`occurred_at`, a label).
+    That is also what B17 needs to be a real test rather than a data check: a temporal window
+    filters on the edge's interval, so "brush to the seizure date" restricts these edges. Four
+    points an hour apart give a window something to include and something to exclude.
     """
     nodes: list[Node] = []
     edges: list[Edge] = []
@@ -200,31 +209,13 @@ def build_sightings(legs: DeviceLegs) -> tuple[list[Node], list[Edge]]:
     for index, (name, latitude, longitude) in enumerate(_SIGHTING_POINTS):
         moment = SEIZURE_DATE + timedelta(hours=index)
         location_id = f"scenarios-location-{index}"
-        event_id = f"scenarios-sighting-{index}"
 
         nodes.append(
             Node(
                 id=location_id,
                 type="Location",
-                properties={
-                    "name": name,
-                    "geometry_ref": f"POINT({longitude} {latitude})",
-                },
+                properties={"name": name, "geometry_ref": f"POINT({longitude} {latitude})"},
                 provenance=_provenance(f"scenarios:location:{index}"),
-                handling=_handling(),
-                audit=_audit(),
-            )
-        )
-        nodes.append(
-            Node(
-                id=event_id,
-                type="Event",
-                properties={
-                    "label": f"Device sighting — {name}",
-                    "occurred_at": moment.isoformat(),
-                    "event_type": "sighting",
-                },
-                provenance=_provenance(f"scenarios:sighting:{index}"),
                 handling=_handling(),
                 audit=_audit(),
             )
@@ -235,7 +226,7 @@ def build_sightings(legs: DeviceLegs) -> tuple[list[Node], list[Edge]]:
                 type="PRESENT_AT",
                 source=legs.handset_id,
                 target=location_id,
-                properties={"occurred_at": moment.isoformat(), "sequence": index},
+                interval=Interval(valid_from=moment, valid_to=moment),
                 provenance=_provenance(f"scenarios:present-at:{index}"),
                 handling=_handling(),
                 audit=_audit(),
@@ -267,9 +258,7 @@ def build_everything() -> tuple[list[Node], list[Edge], dict[str, object]]:
         shared_endpoint_id=SHARED_ENDPOINT_ID, prefix="alpha", run_token=SCENARIOS_TOKEN
     )
     handles: Cohort = generate_handle_cohort(prefix="beta", run_token=SCENARIOS_TOKEN)
-    legs: DeviceLegs = generate_device_legs(
-        msisdn=SHARED_ENDPOINT_VALUE, run_token=SCENARIOS_TOKEN
-    )
+    legs: DeviceLegs = generate_device_legs(run_token=SCENARIOS_TOKEN)
     sighting_nodes, sighting_edges = build_sightings(legs)
 
     nodes = [shared, *cohort.nodes, *handles.nodes, *legs.nodes, *sighting_nodes]
@@ -283,26 +272,30 @@ def build_everything() -> tuple[list[Node], list[Edge], dict[str, object]]:
         "handle_id": handles.shared_id,
         "handset_id": legs.handset_id,
         "sim_ids": legs.sim_ids,
-        "sighting_event_ids": [n.id for n in sighting_nodes if n.type == "Event"],
+        "sighting_location_ids": [n.id for n in sighting_nodes if n.type == "Location"],
     }
     return nodes, edges, landmarks
 
 
 async def _run(args: argparse.Namespace) -> int:
-    load_id = new_id()
-    nodes, edges, landmarks = build_everything()
-
-    config = ArcadeDBConfig.from_env()
     ontology = load_default_ontology()
     scheme = load_uk_le_scheme()
-    async with ArcadeDBClient(config) as client:
-        graph = GraphArcadeDBAdapter(
-            client,
-            ontology=ontology,
-            handling_scheme=scheme,
-            investigation_scope=args.investigation_scope,
-        )
-        node_count, edge_count = await _write(graph, nodes, edges, load_id=load_id)
+
+    # The same setup the other two seeders use, and for the same reasons: the database name comes
+    # from the deployment's own environment, the database is created if this is a first seed, and
+    # the schema is applied before any write so the types exist.
+    database = os.environ.get("ARCADEDB_DATABASE", "ospreyflow")
+    client = ArcadeDBClient(ArcadeDBConfig.from_env(database))
+    await client.create_database_if_absent()
+    graph = GraphArcadeDBAdapter(client, scheme)
+    await graph.apply_schema(ontology)
+
+    # A readable load id rather than a fresh ULID, matching `fixture-corp`'s own shape: this is
+    # the join key into the load ledger, and "which seed put this here" is the question it gets
+    # asked. It is stable across re-seeds for the same reason the element ids are.
+    load_id = f"scenarios:{args.investigation_scope}"
+    nodes, edges, landmarks = build_everything()
+    node_count, edge_count = await _write(graph, nodes, edges, load_id=load_id)
 
     print(
         f"  seed[scenarios]: Seeded {node_count} nodes and {edge_count} edges for Scenario A/B "
@@ -316,7 +309,7 @@ async def _run(args: argparse.Namespace) -> int:
     print(
         f"  seed[scenarios]: B15 handset {landmarks['handset_id']} with "
         f"{len(landmarks['sim_ids'])} SIMs; B16-B18 "
-        f"{len(landmarks['sighting_event_ids'])} sightings around {SEIZURE_DATE:%Y-%m-%d}."
+        f"{len(landmarks['sighting_location_ids'])} sightings around {SEIZURE_DATE:%Y-%m-%d}."
     )
     print(
         "  seed[scenarios]: B8 seeds no SAME_AS — ADR-024 makes it the analyst's own asserted "

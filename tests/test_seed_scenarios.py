@@ -75,7 +75,7 @@ def test_b15_the_handset_carries_two_sims() -> None:
     sims = list(landmarks["sim_ids"])
     by_id = {n.id: n for n in nodes}
 
-    assert by_id[handset].properties["endpoint_kind"] == "imei"
+    assert by_id[handset].type == "Device", "the handset is a Device; imei is not an endpoint_kind"
     assert {by_id[s].properties["endpoint_kind"] for s in sims} == {"imsi"}
 
     paired = {(e.source, e.target) for e in edges if e.type == "PAIRED_WITH"}
@@ -85,30 +85,36 @@ def test_b15_the_handset_carries_two_sims() -> None:
 
 
 def test_b16_b18_the_sightings_are_an_ordered_track_around_the_seizure_date() -> None:
-    """B17 brushes "to the seizure date" and B18 plots "an ordered track". Both need the events to
-    be *in* the window and *ordered*; a set of simultaneous points would satisfy neither."""
+    """B17 brushes "to the seizure date" and B18 plots "an ordered track".
+
+    **The time is on the `PRESENT_AT` edge's interval, not on an `Event` node.** `Event` declares
+    no properties in the ontology and `validate_properties` refuses undeclared ones — a first
+    attempt minted `Event` nodes with `occurred_at` and was rejected by name. `PRESENT_AT` is
+    declared `temporal: true`, which is where "when the device was here" belongs.
+    """
     nodes, edges, landmarks = build_everything()
     by_id = {n.id: n for n in nodes}
 
-    event_ids = list(landmarks["sighting_event_ids"])
-    assert len(event_ids) >= 3, "too few sightings to render as a track"
+    sightings = [e for e in edges if e.type == "PRESENT_AT"]
+    assert len(sightings) >= 3, "too few sightings to render as a track"
 
-    moments = [by_id[e].properties["occurred_at"] for e in event_ids]
+    moments = [e.interval.valid_from for e in sightings]
+    assert all(m is not None for m in moments), (
+        "a sighting carries no time, so it cannot be brushed"
+    )
     assert moments == sorted(moments), "the sightings are not in time order, so B18 has no track"
     assert len(set(moments)) == len(moments), "simultaneous sightings cannot animate under playback"
 
     for moment in moments:
-        assert moment.startswith(SEIZURE_DATE.strftime("%Y-%m-%d")), (
-            f"sighting at {moment} is outside the seizure date, so B17's brush finds nothing"
+        assert moment.date() == SEIZURE_DATE.date(), (
+            f"sighting at {moment} is not on the seizure date, so B17's brush finds nothing"
         )
 
-    # Each sighting places the seized handset somewhere — B17's "location events for the device".
-    present_at = {(e.source, e.target) for e in edges if e.type == "PRESENT_AT"}
     handset = str(landmarks["handset_id"])
-    assert all(s == handset for s, _ in present_at), (
+    assert all(e.source == handset for e in sightings), (
         "the sightings are not attached to the seized handset, so pivoting on it finds no track"
     )
-    assert all(by_id[t].type == "Location" for _, t in present_at)
+    assert all(by_id[e.target].type == "Location" for e in sightings)
 
 
 def test_every_location_carries_a_geometry_reference() -> None:
@@ -164,10 +170,10 @@ def test_the_seed_counts_are_what_the_rows_need() -> None:
     rather than only as a downstream failure."""
     nodes, edges, _ = build_everything()
     assert dict(Counter(n.type for n in nodes)) == {
-        "Endpoint": 9,
+        "Endpoint": 8,
+        "Device": 1,
         "Person": 8,
         "Location": 4,
-        "Event": 4,
     }
     assert dict(Counter(e.type for e in edges)) == {
         "USES": 8,

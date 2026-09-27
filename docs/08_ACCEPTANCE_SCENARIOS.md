@@ -44,11 +44,35 @@ cover every row. R8 settles it:
 
 **So "which test proves these" has a bar, not just a tier.** A row proven only at the developer
 tier (`test_phase8_exit_criterion_end_to_end.py`, in process against published stores) does **not**
-count towards clause 3, however green it is. The rows still outside the analyst's own door are
-**A1, A6, B6, B7, B8, B13, B14, B15–B18**, plus **A15's consult-originator block** and **A7's
-item-category half** — and the reason is uniformly that the rendered deployment's seed carries no
-message content, handle cohort, seizure record, device legs, sightings, seeded site or `Document`
-content. The fix is a seeding path into a rendered deployment, not a change to either test.
+count towards clause 3, however green it is.
+
+**Built, 27 September 2026 (round 13cb) — six rows now clear that bar.** A third seed dataset,
+`scenarios` (`scripts/seed_scenarios.py`, `--seed hmp,fixture-corp,scenarios`), puts Scenario B's
+person layer, the shared messaging handle, the seized handset with its two SIMs and the device's
+sightings into a rendered deployment.
+
+| Row | Status after 13cb | Proven by |
+| --- | --- | --- |
+| B7 | **over the wire** | `test_b7_a_shared_messaging_handle_is_common_to_the_second_cohort` |
+| B8 | **over the wire** | `test_b8_the_handle_is_linked_to_the_shared_endpoint_asserted_at_one` |
+| B15 | **over the wire** | `test_b15_both_sims_link_to_one_device_in_one_traversal` |
+| B17 | **over the wire** | `test_b17_the_devices_location_events_are_reachable_and_windowed` |
+| B16, B18 | **data half only** | `test_b16_…`, `test_b18_…`; rendering and playback stay the Glass tier |
+| A1, A6, B6 | still not | Need content the graph does not hold — below |
+| B13, B14 | still not | An alert needs an ingest to fire it |
+| A7 (item-category), A15 (consult-originator block) | still not | Recorded gaps, not seeding |
+
+Each of the six was **shown red first** against a deployment seeded `hmp,fixture-corp` only, then
+green against **the same deployment** after seeding `scenarios` — one variable, not two
+deployments.
+
+**Why A6 and B6 did not move, precisely rather than "not seeded".** Both are document-view rows,
+and a document's *spans* come from the extraction-candidates store — `GET /v1/investigations/{id}/
+dossier/documents/{id}` reads `ExtractionCandidates`, not the graph. The `scenarios` seeder writes
+to the graph. Those rows need a seeding path into that second store, which is different work and
+is not pretended to be done here. A1 needs a placed site grid; B13/B14 need an ingest to fire an
+alert, and `09_INGEST_STUDIO.md`'s own rule is that a row worded "ingest …" is performed through
+the Studio rather than seeded around it.
 
 **Built, 27 September 2026 (round 13bc) — the "no door" half is closed.** The ingest root is
 rendered, mounted read-only, listed by Connect, and walked end to end over the wire by

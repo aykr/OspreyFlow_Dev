@@ -45,6 +45,12 @@ import zlib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from tests.scenarios.fixtures.seizure_record import (
+    HANDSET_IMEI_NORMALISED,
+    SIM_A_IMSI_NORMALISED,
+    SIM_B_IMSI_NORMALISED,
+)
+
 from conduit_common.identity import new_edge_id, new_id
 from schemas.domain import (
     AuditStub,
@@ -238,12 +244,21 @@ class DeviceLegs:
     sim_ids: list[str] = field(default_factory=list)
 
 
-def generate_device_legs(*, msisdn: str, run_token: str | None = None) -> DeviceLegs:
-    """**B15.** One handset (`imei`) with two SIM `Endpoint`s (`imsi`) `PAIRED_WITH` it — the
-    SIM-swap shape, where "both SIMs link to one device" is *one traversal*, not a special case.
+def generate_device_legs(*, run_token: str | None = None) -> DeviceLegs:
+    """**B15.** One handset with two SIM `Endpoint`s `PAIRED_WITH` it — the SIM-swap shape, where
+    "both SIMs link to one device" is *one traversal*, not a special case.
 
-    `msisdn` ties the first SIM to the number the seizure record names, so B13's alert and B15's
-    pivot land on the same device rather than on two unrelated fixtures that happen to coexist.
+    **The handset is a `Device`, not an `Endpoint`, and the identifiers come from
+    `seizure_record.py` rather than being invented here.** Both corrections came from the
+    ontology refusing a first attempt: `endpoint_kind` is an enum of
+    `msisdn|imsi|email|handle|iban|card` and `imei` is not among them, because an IMEI names a
+    handset and `Device` carries it as its own identifier. `PAIRED_WITH` is declared
+    `Endpoint -> Device`, which is the same statement made in the edge model.
+
+    Reusing `seizure_record.py`'s constants matters beyond tidiness: B13 ingests that record and
+    B15 pivots on the device it names. If this module minted its own IMEI, the ingest and the
+    pivot would land on two different handsets that both look right, and B15 would pass against a
+    device no seizure record ever mentioned.
 
     ADR-024 is why these are `PAIRED_WITH` writes rather than resolution output: an E.164 number
     and a 3GPP subscriber identity "name the same SIM by a carrier/HLR record's own say-so, with
@@ -255,9 +270,16 @@ def generate_device_legs(*, msisdn: str, run_token: str | None = None) -> Device
     sim_b_id = f"seizure-{run}-sim-b"
 
     nodes = [
-        _endpoint(handset_id, f"35{_stable_digest(run) % 10**13:013d}", "imei"),
-        _endpoint(sim_a_id, f"2340710{_stable_digest(run) % 10**8:08d}", "imsi"),
-        _endpoint(sim_b_id, f"2340711{_stable_digest(run + 'b') % 10**8:08d}", "imsi"),
+        Node(
+            id=handset_id,
+            type="Device",
+            properties={"imei": HANDSET_IMEI_NORMALISED},
+            provenance=_provenance("seizure-record:handset"),
+            handling=_handling(),
+            audit=_audit(),
+        ),
+        _endpoint(sim_a_id, SIM_A_IMSI_NORMALISED, "imsi"),
+        _endpoint(sim_b_id, SIM_B_IMSI_NORMALISED, "imsi"),
     ]
     edges = [
         _edge("PAIRED_WITH", sim_a_id, handset_id),

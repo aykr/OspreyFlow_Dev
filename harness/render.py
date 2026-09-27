@@ -368,7 +368,21 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
         # `--features=token-exchange` is not optional: without it the exchange grant does not
         # exist at all and every principal resolution for a watch owner fails.
         "command": ["start-dev", "--import-realm", "--features=token-exchange"],
-        "volumes": ["./realm.json:/opt/keycloak/data/import/realm.json:ro"],
+        "volumes": [
+            "./realm.json:/opt/keycloak/data/import/realm.json:ro",
+            # **Keycloak's own database, on a volume — round 13cb.** Without this it lives in the
+            # container layer and dies with `docker compose down`. The realm and its users come
+            # back from the import above, but the `--demo-analyst` password does **not**: `apply`
+            # sets it afterwards through the admin API, and nothing re-runs that on a restart. So
+            # a stopped-and-started deployment presented its login form and refused the operator's
+            # own credentials, with no error naming the cause — found doing exactly that while
+            # building round 13cb's red/green, where the *baseline* over-the-wire test failed at
+            # sign-in against a deployment that had passed 8/8 an hour earlier.
+            #
+            # Mounted at `.../data/h2` rather than `.../data`, because the realm import above is a
+            # bind mount *inside* `data/` and a volume over the parent would shadow it.
+            "keycloak-data:/opt/keycloak/data/h2",
+        ],
         "environment": {
             "KC_BOOTSTRAP_ADMIN_USERNAME": "${OSPREY_KEYCLOAK_ADMIN:-admin}",
             "KC_BOOTSTRAP_ADMIN_PASSWORD": "${OSPREY_KEYCLOAK_ADMIN_PASSWORD:?set in the "
@@ -501,6 +515,9 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
         "volumes": {
             "osprey-data": {"driver": "local"},
             "osprey-staging": {"driver": "local"},
+            # See the keycloak service's own volume comment: the demo analyst's password is set
+            # after the realm import and is lost with the container otherwise.
+            "keycloak-data": {"driver": "local"},
         },
     }
     body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
