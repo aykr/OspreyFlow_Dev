@@ -6379,20 +6379,54 @@ find something already finished sitting in the queue.
    - **Proven live, keyboard only**: the pathfinder between two ring members
      (`live/fixture-corp.spec.ts`), asserting the reported hop count, not merely that something
      came back.
-   - **Blocked, and it is a fixture question, not a UI one**: `explain` on a merged cluster needs
-     two working-set nodes sharing a `resolution.cluster_id`. Moving the threshold to Broad over a
-     working set holding both halves of the `identical` pair reports `merged: 0, split: 0,
-     affected: 0` — measured against the real route. The cause is in the store: that pair's seeded
-     `SAME_AS` edge carries **weight 0.747**, below Broad's 0.80. **Every seeded weight disagrees
-     with ADR-035 §C5's recorded scores, and the ordering is inverted** — the "never merges"
-     negative control (`corp-res-distinct`) sits at 0.661, above `close_given_name`'s 0.649; at
-     Broad only the non-Latin pair (0.802) merges at all. So §C5's property 1, "entity resolution
-     at τ 0.99/0.95/0.80 producing visibly different projections", holds for the in-process test
-     (which resolves an isolated ten-node population) and **not for the seeded fixture a live
-     session reads**. Recorded rather than worked around; it is the owner's call, and
-     `Claude outputs/handoff/DECISION_NEEDED.md` asks it.
+   - **Closed, 27 September 2026 (round 12e) — and round 12d's reading of it was wrong.**
+     `explain` on a merged cluster is now proven live, keyboard-only
+     (`apps/workspace/live/fixture-corp.spec.ts`). **Stage 3a's four Fixture Corp checks are all
+     proven.**
 
-   **A gate gap found while doing this**: `tsconfig.json` included `apps/workspace/src/**` but not
+     Round 12d reported that the fixture's resolution scores had diverged from ADR-035 §C5 and
+     that §C5's property 1 was false of the demo. **That was a category error and is withdrawn.**
+     It tabulated each `SAME_AS` edge's `weight` — `01_DOMAIN_MODEL.md` §6.1's load-time strength
+     formula (`compute_weight`: a logistic of occurrences, recency and mutual information, carried
+     by every edge) — and compared it to §C5's match *score*. `services/resolve/projection.py`
+     collapses components on `properties["score"]`, which is what `same_as_writer.py` writes from
+     `candidate.score`; `weight` plays no part in resolution at all. Measured off a real seeded
+     store, both columns side by side:
+
+     | Pair | §C5 records | Stored `score` | Stored `weight` |
+     | --- | --- | --- | --- |
+     | `identical` | 0.999991 | **0.999991** | 0.747269 |
+     | `close_given_name` | 0.981285 | **0.981285** | 0.648743 |
+     | `close_surname_and_given` | 0.867624 | **0.867624** | 0.680162 |
+     | `shared_surname_different_person` | 0.0001 | **0.000100** | 0.661103 |
+     | `identical_non_latin_script` | 0.999991 | **0.999991** | 0.801634 |
+
+     Every score matches §C5 exactly. The "inverted ordering" 12d reported is simply what the
+     weight formula produces and says nothing about resolution.
+
+     The `merged: 0` 12d also reported was correct and equally uninformative: it applied the
+     threshold to a working set of two search-seeded nodes and **no edges**, and the projection
+     collapses over the working set's own `SAME_AS` edges. REPORT-12c had already established
+     that a search-seeded node carries no edges until expanded. With the edges expanded in, the
+     detents produce real deltas.
+
+     **The one real defect underneath all of it**: the radial menu could not offer `SAME_AS` at
+     all. The ontology declares it `from: ["*"], to: ["*"]`, and the menu filtered on
+     `et.from.includes(node.type)` — `["*"].includes("Person")` is `false` — so **every wildcard
+     edge type was invisible on every node type**, and an analyst could not pull resolution edges
+     into the working set by any means. Fixed in `apps/workspace/src/canvas/edgeTypeMenu.ts`,
+     with `edgeTypeMenu.test.ts` shown red against the pre-12e filter using the ontology's own
+     real `SAME_AS` shape.
+
+     **And the structural fix rule 15 asks for**: the seed and the §C5 test each assembled their
+     own `resolve_entity_type` call over their own flattening of the same fixture — same answer,
+     but nothing keeping them so. `tests/scenarios/fixtures/fixture_corp_resolution.py` now owns
+     the single pass both use, and carries `ADR_035_C5_SCORES` as a checked constant, so the
+     ADR's recorded figures have a test behind them
+     (`test_the_live_resolution_pass_reproduces_adr_035_c5s_recorded_scores`, shown red both by
+     drifting a recorded figure and by resolving a different population).
+
+   **A gate gap found while doing this**:   **A gate gap found while doing this**: `tsconfig.json` included `apps/workspace/src/**` but not
    the Glass's own spec trees, so a spec could reference a helper that did not exist and `make
    typecheck` stayed green — found exactly that way, as a run-time `ReferenceError` against a real
    stack. `apps/workspace/live/**` is now included (and immediately caught a second such error).

@@ -452,13 +452,19 @@ the second node, `Space` to add it to the selection, `\` to open the menu, and "
 is there. Two members of one ring are one hop apart. Asserted end to end by
 `apps/workspace/live/fixture-corp.spec.ts`.
 
-**`explain` on a merged cluster is still not demonstrable, and the reason is not the keyboard.**
-It needs two working-set nodes sharing a `resolution.cluster_id`, and this fixture cannot produce
-that state: the seeded `SAME_AS` edge between the `identical` pair carries weight **0.747**, below
-even Broad's 0.80, so moving the threshold across all three detents reports `merged: 0`. Every
-seeded weight disagrees with ADR-035 §C5's recorded scores and the ordering is inverted — the
-"never merges" control sits above `close_given_name`. Do not promise this step; see
-`07_BUILD_PLAN.md`'s Stage 3a entry.
+**`explain` on a merged cluster, by keyboard** — demonstrable as of 27 September 2026, and the
+order matters. Search `QQ118439C`, then `QQ843781D`, so both halves of the identical pair are in
+the working set. From the canvas, `\` and pick **SAME_AS** to pull the resolution edge in — the
+projection collapses over the working set's own edges, and a searched node arrives with none.
+Then move the resolution slider (press `Home` for Strict; a fresh session already sits at
+Balanced, so moving *to* Balanced changes nothing and computes nothing). Now `\` again and
+"Explain cluster" is there, showing every gamma level, the model version, and whether the pair
+meets τ.
+
+**Round 12d claimed this fixture's resolution scores had diverged from ADR-035 §C5. That was
+wrong and is withdrawn** — it read each edge's `weight` (a load-time strength figure every edge
+carries) instead of `properties.score`, which is the match probability resolution actually uses.
+All five scores match §C5 exactly; `07_BUILD_PLAN.md`'s Stage 3a entry has both columns.
 
 **The original blocker, kept for the record:** The Glass's working set has exactly one entry point — the search box —
 and `services/api/search.py`'s own scope note states what that does: "exact identifier match

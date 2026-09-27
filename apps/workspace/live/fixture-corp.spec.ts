@@ -56,16 +56,36 @@ async function seedFromSearch(
   const search = page
     .getByRole("combobox", { name: "Search entities, identifiers, documents" })
     .first();
-  await search.fill("");
-  await search.fill(identifier);
   const option = page.getByRole("option", { name: `Person: ${expectedId}` });
-  await expect(
-    option,
-    `no search result for ${identifier} (${expectedId}) — before owner ruling R4 this returned ` +
-      "nothing for every Fixture Corp entity, because the fixture carried no identifier search " +
-      "could match",
-  ).toBeVisible();
-  await option.click();
+
+  // **Retried, deliberately, and bounded.** `GlobalSearch` fires its query on each change and
+  // keeps the previous `results` until the next response lands, so a second search issued
+  // straight after a first is racing that response: the option list can still be the previous
+  // one, or briefly empty. Re-typing is what a person does when nothing appears, and three
+  // attempts is enough to tell a race from an absent record — if the identifier genuinely is not
+  // there, all three fail and the message below is the right one.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await search.fill("");
+    await search.pressSequentially(identifier, { delay: 15 });
+    try {
+      await option.waitFor({ state: "visible", timeout: 5_000 });
+      await option.click();
+      return;
+    } catch {
+      // fall through and retype
+    }
+  }
+  throw new Error(
+    `no search result for ${identifier} (${expectedId}) after three attempts. The identifier ` +
+      "resolves through POST /v1/search — if it does here too, this is the Glass, not the data; " +
+      "before owner ruling R4 it returned nothing for every Fixture Corp entity, because the " +
+      "fixture carried no identifier search could match.",
+  );
+}
+
+async function edgeCountOf(page: Page): Promise<number> {
+  const text = (await page.getByRole("status").first().textContent()) ?? "";
+  return Number(/(\d+)\s*edges/.exec(text)?.[1] ?? 0);
 }
 
 async function nodeCount(page: Page): Promise<number> {
@@ -184,29 +204,94 @@ test("a Fixture Corp entity is reachable from the search box by its nino", async
     .toBeGreaterThan(0);
 });
 
-// **`explain` on a merged cluster is still not here, and round 12d found out why — it is not a
-// keyboard problem, and not a test problem.**
-//
-// The keyboard half is solved: `Ctrl`/`Cmd`+`Shift`+Arrow walks the working set, so a two-node
-// selection over two non-adjacent nodes is reachable without a mouse, and the pathfinder test
-// below proves it end to end. "Explain cluster" needs one thing more — two working-set nodes
-// sharing a `resolution.cluster_id` — and that state cannot be produced from this fixture at all:
-//
-//   - Moving the resolution threshold over a working set holding both halves of the `identical`
-//     pair reports `merged: 0, split: 0, affected: 0` at Broad, the loosest detent. Measured
-//     against the real route, not inferred.
-//   - The reason is in the store: the seeded `SAME_AS` edge between `corp-res-identical-1` and
-//     `-2` carries **weight 0.747**, below even Broad's 0.80. ADR-035 §C5 records that pair at
-//     **0.999991**. Every seeded weight disagrees with §C5's recorded score, and the ordering is
-//     inverted — the "never merges" negative control sits at 0.661, *above* `close_given_name`'s
-//     0.649. At Broad only the non-Latin pair (0.802) merges at all.
-//
-// §C5's property 1 — "entity resolution at τ 0.99/0.95/0.80 producing visibly different
-// projections" — therefore holds for the in-process test
-// (`test_fixture_corp_entity_resolution_projections_differ_by_threshold`, which resolves an
-// isolated ten-node population) and not for the seeded fixture a live session actually reads.
-// That is a fixture/ADR question, not something a spec should paper over, and it is recorded in
-// `07_BUILD_PLAN.md` and this round's DECISION_NEEDED.md rather than asserted around here.
+const PAIR_B = { nino: "QQ843781D", id: "corp-res-identical-2" };
+
+test("explain on a merged cluster names the pair's real resolution score", async ({
+  page,
+  request,
+}) => {
+  // **Stage 3a's last Fixture Corp check.** ADR-035 §C5 property 1's other half, and
+  // `DEMO_GUIDE.md` §6's "`explain` on a merged cluster".
+  //
+  // **The sequence is the finding, and it took four rounds to get right.** "Explain cluster"
+  // appears when the focused node carries a `resolution.cluster_id` shared by another working-set
+  // node. That needs three things in order, and round 12d had none of them:
+  //   1. both halves of the pair in the working set — searchable only since owner ruling R4;
+  //   2. the `SAME_AS` edge between them *expanded in*, because `projection.py` collapses
+  //      components over the working set's own edges and a search-seeded node carries no edges
+  //      (REPORT-12c). Expanding it was impossible until round 12e fixed the radial menu's
+  //      wildcard filter — `SAME_AS` is declared `from: ["*"]` and was silently absent;
+  //   3. only then, a threshold commit, which is what computes the projection.
+  //
+  // Round 12d read the resulting `merged: 0` as the fixture being wrong and compared the edges'
+  // `weight` (§6.1's load-time strength) against §C5's match `score`. Round 12e measured both:
+  // every stored `score` matches §C5 exactly. The fixture was never at fault.
+  await page.goto(await freshWorkspaceUrl(request));
+  await seedFromSearch(page, PAIR_A.nino, PAIR_A.id);
+  await seedFromSearch(page, PAIR_B.nino, PAIR_B.id);
+  await expect.poll(() => nodeCount(page), { timeout: 30_000 }).toBe(2);
+
+  // Expand SAME_AS from the canvas, by keyboard — the step that was unreachable until 12e.
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  await page.keyboard.press("\\");
+  const menu = page.locator(".radial-menu__list[role='menu']");
+  await expect(menu).toBeVisible();
+  const sameAs = menu.getByRole("menuitem", { name: /^SAME_AS/ });
+  await expect(
+    sameAs,
+    "the radial menu offers no SAME_AS entry — it is declared from:[\"*\"] to:[\"*\"], so a " +
+      "filter that does not read the wildcard drops it (see canvas/edgeTypeMenu.ts)",
+  ).toBeVisible();
+  await sameAs.click();
+  await expect
+    .poll(() => edgeCountOf(page), { timeout: 30_000 })
+    .toBeGreaterThan(0);
+
+  // Commit a detent, which computes the projection over those edges and pushes the resulting
+  // `resolution.cluster_id`s down in its delta.
+  //
+  // **`Home` (Strict, 0.99), not `End` (Broad, 0.80)** — and the reason is worth keeping: a
+  // fresh investigation already sits at Balanced, so committing Broad from it changes nothing,
+  // returns `merged: 0, split: 0, affected: 0`, and emits no delta at all. The nodes then still
+  // carry no `cluster_id` and the menu item never appears, which looks exactly like the
+  // projection being broken. Measured that way against the route before changing this.
+  // The identical pair scores 0.999991, so it is merged at Strict as at every other detent.
+  const slider = page.getByRole("slider", { name: "Resolution threshold" });
+  await slider.focus();
+  await slider.press("Home");
+  await expect(
+    page.getByText(/Resolution threshold: .* — \d+ merged, \d+ split, \d+ affected/),
+  ).toBeVisible();
+
+  // Now the item is there, on a single focused node — `explain` takes one cluster id, not a pair.
+  await canvas.focus();
+  await page.keyboard.press("\\");
+  const explain = menu.getByRole("menuitem", { name: /Explain cluster/ });
+  await expect(explain).toBeVisible();
+  await explain.click();
+
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  // The per-comparison evidence `01_DOMAIN_MODEL.md` §4 calls the "full comparison vector" —
+  // every gamma level, not a bare verdict.
+  await expect(dialog).toContainText(/gamma_family_name/);
+  await expect(dialog).toContainText(/gamma_given_names/);
+  await expect(dialog).toContainText(/gamma_date_of_birth/);
+  // The model version that produced the score, which `same_as_writer.py` records alongside it so
+  // an explanation is attributable rather than a floating number.
+  await expect(dialog).toContainText(/splink-/);
+  // And the verdict for this pair at the committed detent.
+  await expect(dialog).toContainText(/Meets τ/);
+  await expect(dialog.getByRole("row").filter({ hasText: "SAME_AS" }).first()).toContainText(
+    "Yes",
+  );
+  // **Not asserting the score's digits.** §C5 records 0.999991 and the panel renders it as
+  // `1.00`; pinning either would test the formatter rather than the explanation. That the score
+  // is §C5's is established where it can be established exactly — round 12e read all five
+  // stored `properties.score` values off the seeded store and every one matched to the sixth
+  // decimal (`07_BUILD_PLAN.md`'s Stage 3a table).
+});
 
 test("the pathfinder finds a path between two ring members, and reports its length", async ({
   page,
