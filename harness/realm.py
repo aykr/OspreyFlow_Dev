@@ -127,11 +127,25 @@ _SUBJECT_ATTRIBUTES = {
 #: principal that is to see that investigation must share it. Handling codes gate *content* within
 #: an investigation the principal can already open; `org_unit` gates whether the investigation
 #: exists for them at all, and the two are not interchangeable.
+#: **The three Studio roles joined `analyst` on 27 September 2026 (owner ruling R6).** Without
+#: them this subject could not perform the flow that ruling describes at all: `GET
+#: /v1/ingest/source-files` needs `source_author`, publish needs `source_approver`, and running a
+#: recipe needs `loader`, so a demonstration of "the analyst picks a file from the ingest folder
+#: and maps it" 403'd at the first step. Found building R6's own over-the-wire coverage, not by
+#: reading — the route was built, and the deployment's only sign-in-able subject could not call it.
+#:
+#: **One subject holding author *and* approver is deliberate here and permitted by the spec.**
+#: `09_INGEST_STUDIO.md` §8 states it directly — "a principal may hold more than one role; nothing
+#: here implies exclusivity" — and no route anywhere enforces that an approver is not the author;
+#: the gate is the role, not the identity. In a real deployment those are normally two people, and
+#: an operator provisions them that way through their own IdP. This is a **disposable demo
+#: subject, created only when `--demo-analyst` is passed**, whose entire purpose is that one person
+#: can walk the whole product in front of an audience.
 _DEMO_ANALYST_ATTRIBUTES = {
     "clearance": ["OFFICIAL"],
     "org_unit": ["verify"],
     "receivable_handling_codes": ["P"],
-    "roles": ["analyst"],
+    "roles": ["analyst", "source_author", "source_approver", "loader"],
 }
 
 

@@ -30,6 +30,15 @@ is the site image. So B1–B3 and every row that depends on data arriving that w
 B14, B15–B18) cannot be performed by an analyst against a rendered deployment at all. That is a
 product gap, not a shortfall of the test.
 
+**Built, 27 September 2026 (round 13bc) — the "no door" half is closed.** The ingest root is
+rendered, mounted read-only, listed by Connect, and walked end to end over the wire by
+`tests/scenarios/test_phase8_exit_over_the_wire.py`. **B1–B3 are still in-process only, and the
+reason has changed**: not "no route to supply a file" but **connectors** — those rows depend on
+the `cdr-generic-csv` profile's own `date_order`/timezone configuration, and
+`schemas.ingest.CONNECTOR_CATALOGUE` marks exactly one connector built (`generic-csv`). Measured
+over the wire: a draft naming `cdr-generic-csv` is refused `connector_not_available`. Building
+carrier connector profiles is what would move these rows, and `07_BUILD_PLAN.md` records it.
+
 **Ruled 27 September 2026 — owner ruling R6, restated the same day in fuller terms.** Ingest for
 a rendered deployment works **through the existing Ingest Studio**, not around it: the ingest
 folder is a configurable storage root in `osprey.yaml` (`components.storage.ingest`) alongside

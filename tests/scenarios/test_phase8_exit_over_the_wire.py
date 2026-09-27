@@ -49,7 +49,7 @@ finding after the table.
 | A13, A14 | **yes** | Including the refusal: a judgement with no supporting reference is 422. |
 | A15 | **partly** | The artefact, the mark, the manifest and the ledger entry: yes. **The
   consult-originator block: no** — see the finding below. |
-| B1, B2, B3 | no | Ingest. See the finding below — this is the structural one. |
+| B1, B2, B3 | no | Ingest — but for a *different* reason since R6; see the finding below. |
 | B4 | **yes** (adapted) | Fixture Corp's resolution cohort, search-seeded, no edges between them. |
 | B5 | **yes** (adapted) | One hop out from a seeded node. |
 | B6, B7, B8 | no | Message content and the handle cohort are not seeded. |
@@ -63,18 +63,34 @@ finding after the table.
 | B21 | **yes** | `POST /v1/paths` across the fixture's own eight-spoke hub. |
 | Cross-cutting | **yes** (the reachable half) | The delta WebSocket through the proxy, via the
   ticket exchange. The audit assertions read Postgres directly and stay in the in-process tier. |
+| R6's own flow | **yes** | The ingest root listed, a file selected, a draft made from it, and
+  the Conduit proving it can open it — see the case named after the table. |
 
-**The finding this file exists to surface, and it is structural, not a matter of effort.** Every
-"no" above that mentions ingest is the same one fact: **a rendered deployment gives an analyst no
-route by which to supply a source file.** `POST /v1/ingest/recipes` takes a `source_location` — a
+**The finding this file exists to surface — and it is now half closed.** Every "no" above that
+mentions ingest used to be one fact: **a rendered deployment gave an analyst no route by which to
+supply a source file.** `POST /v1/ingest/recipes` takes a `source_location` — a
 path the *Conduit's own container* must be able to read — and the rendered `compose.yaml` mounts
 nothing into that container but `osprey.yaml` and its data volume. The only `UploadFile` route in
 the whole Conduit is the site image. So B1's "ingest both CDR files and both device extractions",
 and every row that depends on data arriving that way (B2, B3, B6, B7, B8, B13, B14, B15–B18),
-cannot be performed by an analyst against a rendered deployment at all — not because this test
-does not attempt them, but because there is nothing to attempt. That is a real gap in the product,
-recorded in `07_BUILD_PLAN.md` rather than worked around here; a test that mounted a volume to get
-round it would be proving something no analyst can do.
+could not be performed by an analyst against a rendered deployment at all — not because this test
+declined to attempt them, but because there was nothing to attempt.
+
+**Owner ruling R6 (27 September 2026) closed the "no door" half**, and this file walks it:
+`components.storage.ingest` is bind-mounted read-only into the Conduit for every profile, the
+Studio's Connect stage lists it, and the case named in the table above proves the whole chain
+against a real deployment — including the part that actually matters, that the Conduit can *open*
+the path the listing handed back.
+
+**What still keeps B1-B3 in-process is now a different and much narrower gap: connectors.** Those
+rows assert identifier normalisation, duplicate collapse and timestamp recovery, and each depends
+on the `cdr-generic-csv` connector profile's own configuration (`date_order: dmy`, a declared
+timezone). `schemas.ingest.CONNECTOR_CATALOGUE` marks exactly **one** connector built —
+`generic-csv` — and the rest of `09_INGEST_STUDIO.md` §2's catalogue is declared and unbuilt.
+Measured over the wire, not assumed: a draft naming `cdr-generic-csv` is refused
+`connector_not_available`. Building carrier connector profiles is real, unscoped work recorded in
+`07_BUILD_PLAN.md`; until then these rows stay at the in-process tier, where the recipe engine is
+driven directly with a hand-written recipe.
 
 **And the one A15 clause that is not reachable, named rather than quietly dropped.** A15's
 "items marked consult-originator block the export by name" is evaluated against each item's
@@ -157,6 +173,14 @@ DEMO_ANALYST_SUBJECT = "osprey-demo-analyst"
 
 #: `services/resolve/projection.py`'s own detents — restated here for the same reason, since the
 #: Glass's own slider sends these numbers and nothing else.
+#: Matches what both seed fixtures write, and what the demo analyst can receive.
+_FIXTURE_HANDLING = {
+    "classification": "OFFICIAL",
+    "handling_code": "P",
+    "originator": "verify",
+    "owning_unit": "verify",
+}
+
 THRESHOLD_STRICT = 0.99
 THRESHOLD_BALANCED = 0.95
 
@@ -911,6 +935,89 @@ def test_scenario_b_over_the_wire(analyst: httpx.Client) -> None:
     assert found, "the pathfinder found no path across the fixture's own eight-spoke hub"
     assert found[0]["nodes"], "a path came back with no hydrated nodes (ADR-033)"
     assert found[0]["length"] <= found[-1]["length"], "k-shortest paths are not ordered"
+
+
+def test_the_ingest_folder_is_reachable_and_usable_through_the_studio(
+    analyst: httpx.Client,
+) -> None:
+    """**Owner ruling R6, 27 September 2026 — the door this file found was missing.** Round 13b
+    recorded that a rendered deployment gave an analyst no route by which to supply a source file
+    at all, which is why B1-B3 and six other rows are "in-process only" in the table above. R6's
+    answer is the ingest root, listed by the Studio's Connect stage, and this is that chain walked
+    over the wire: list -> select -> draft -> profile the real file.
+
+    **What this proves, exactly.** The renderer's read-only bind mount is live, the Conduit can
+    read through it, the analyst's own token carries the Studio role the listing needs, and the
+    path the listing hands back is one the Conduit will actually open. That last part is the one
+    worth stating: `source_location` is read *inside the container*, so a path that merely looks
+    plausible proves nothing — the profile call below is what proves the Conduit opened it.
+
+    **What it does not prove, and why B1-B3 are still not here.** Those rows assert
+    identifier normalisation, duplicate collapse and timestamp recovery, and every one of them
+    depends on the `cdr-generic-csv` connector profile's own configuration (`date_order: dmy`, a
+    declared timezone). `schemas.ingest.CONNECTOR_CATALOGUE` marks exactly one connector built
+    (`generic-csv`); the rest of `09_INGEST_STUDIO.md` §2's catalogue is declared and unbuilt, and
+    the Studio cannot offer what does not exist. Measured, not assumed: a draft naming
+    `cdr-generic-csv` is refused `connector_not_available`. So B1-B3 stay at the in-process tier
+    until carrier connector profiles are built, and that is a product gap recorded in
+    `07_BUILD_PLAN.md`, not a shortfall of this file.
+    """
+    listing = analyst.get("/v1/ingest/source-files")
+    assert listing.status_code == 200, listing.text
+    files = listing.json()["files"]
+    assert files, (
+        f"the ingest root {listing.json()['root']!r} is empty, so there is nothing for an analyst "
+        "to select — place a source file in the deployment's own `components.storage.ingest`"
+    )
+    chosen = files[0]
+    assert chosen["source_location"].startswith(listing.json()["root"]), chosen
+
+    # The connector the acceptance fixture needs is not built, and the refusal is by name.
+    refused = analyst.post(
+        "/v1/ingest/recipes",
+        json={
+            "label": "over-the-wire probe — unbuilt connector",
+            "connector_profile": "cdr-generic-csv",
+            "source_location": chosen["source_location"],
+            "handling": _FIXTURE_HANDLING,
+            "legal_basis": "RIPA s22 acquisition — fixture",
+        },
+    )
+    if refused.status_code == 201:
+        profiled = analyst.get(f"/v1/ingest/recipes/{refused.json()['recipe_id']}/profile")
+        assert (
+            profiled.status_code == 422 and profiled.json()["error"] == "connector_not_available"
+        ), (
+            "`cdr-generic-csv` became available — B1-B3 may now be reachable over the wire, and "
+            "this file's own coverage table and 08's should be updated in the same change"
+        )
+
+    # The reachable chain, on the one built connector.
+    draft = analyst.post(
+        "/v1/ingest/recipes",
+        json={
+            "label": "over-the-wire — ingest folder selection",
+            "connector_profile": "generic-csv",
+            "source_location": chosen["source_location"],
+            "handling": _FIXTURE_HANDLING,
+            "legal_basis": "RIPA s22 acquisition — fixture",
+        },
+    )
+    assert draft.status_code == 201, draft.text
+    assert draft.json()["source_location"] == chosen["source_location"]
+    assert draft.json()["ready_for_profile"] is True, (
+        "Connect's three gate questions were answered and the draft is still not ready to "
+        f"profile: {draft.text}"
+    )
+
+    # **The Conduit actually opened the file.** A `source_location` the container cannot read
+    # fails here, so this is what separates "the listing returned a plausible string" from "the
+    # mount works".
+    profiled = analyst.get(f"/v1/ingest/recipes/{draft.json()['recipe_id']}/profile")
+    assert profiled.status_code == 200, (
+        "the Conduit could not profile the file the listing offered — the read-only mount is not "
+        f"working, whatever the listing said: {profiled.text}"
+    )
 
 
 def test_the_delta_stream_is_reachable_through_the_proxy(analyst: httpx.Client) -> None:

@@ -101,6 +101,36 @@ preflights, builds, starts twelve containers, grants, seeds and passes `harness.
   Explicitly **post-milestone**, by the same ruling: a browser upload route, and Map's two already
   recorded gaps (keyboard binding, proposed templates).
 
+  **Built, round 13bc, 27 September 2026 — and proven over the wire.** All five pieces landed:
+  `components.storage.ingest` (the schemas-check gate caught the TypeScript drift, as designed),
+  the read-only mount for every rendered profile with `OSPREY_INGEST_ROOT` carrying the container
+  path, `GET /v1/ingest/source-files` (gated on `SOURCE_AUTHOR`, refusing symlinks out of the root
+  — shown red by comparing unresolved paths, where the symlink *is* listed), the Connect-stage
+  listing, the Components screen and summary rail, and `05 §3`/`DEMO_GUIDE.md`/`09 §2`.
+  `test_the_ingest_folder_is_reachable_and_usable_through_the_studio` walks list → select → draft →
+  profile against a real deployment and asserts the part that matters: the Conduit can *open* the
+  path the listing handed back.
+
+  **Two findings from building it, both fixed or recorded:**
+
+  1. **The `--demo-analyst` subject held `roles: ["analyst"]` only**, so R6's own flow 403'd at its
+     first step — the route existed and the deployment's only sign-in-able subject could not call
+     it. It now holds `source_author`/`source_approver`/`loader` as well.
+     `09_INGEST_STUDIO.md` §8 permits one principal to hold several ("nothing here implies
+     exclusivity") and no route enforces that an approver is not the author, so this defeats no
+     separation-of-duties control; it is a disposable subject provisioned only on request.
+     `test_the_demo_analyst_holds_the_studio_roles_the_ingest_flow_needs` is the case that fails if
+     it regresses, shown red against the previous value.
+  2. **B1–B3 are still not reachable over the wire, and the reason has changed.** It is no longer
+     "no door" — it is **connectors**. Those rows assert identifier normalisation, duplicate
+     collapse and timestamp recovery, each depending on the `cdr-generic-csv` profile's own
+     `date_order: dmy` and declared timezone. `schemas.ingest.CONNECTOR_CATALOGUE` marks exactly
+     one connector built (`generic-csv`); the rest of `09_INGEST_STUDIO.md` §2's catalogue is
+     declared and unbuilt, so the Studio cannot offer what the acceptance fixture needs. Measured
+     over the wire, not assumed: a draft naming `cdr-generic-csv` is refused
+     `connector_not_available`. **Building carrier connector profiles is real, unscoped work** and
+     is what would move B1–B3 (and B6–B8, B13–B18 with them) to the over-the-wire tier.
+
 - **`08_ACCEPTANCE_SCENARIOS.md`'s own "retraction propagates" assertion is not what the analyst
   sees.** The flag is written; the judgement then disappears from the Judgements tab rather than
   appearing flagged, because retraction supersedes the node with a new id and ADR-046's

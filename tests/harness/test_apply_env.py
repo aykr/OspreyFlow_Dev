@@ -300,3 +300,34 @@ def test_the_deployment_this_file_starts_is_a_real_one_and_the_teardown_removes_
     assert _local_lite_containers() == [], (
         "containers survived the teardown command the autouse fixture relies on"
     )
+
+
+def test_the_demo_analyst_holds_the_studio_roles_the_ingest_flow_needs() -> None:
+    """**Owner ruling R6, 27 September 2026 — the flow has to be performable by the subject the
+    deployment actually provisions.** R6 describes an analyst picking a file from the ingest folder
+    and mapping it; every step of that is gated by a Studio role
+    (`GET /v1/ingest/source-files` -> `source_author`, publish -> `source_approver`, run ->
+    `loader`), and the demo analyst held only `analyst`. The route existed and the deployment's
+    only sign-in-able subject could not call it — found building R6's own over-the-wire coverage,
+    not by reading.
+
+    `09_INGEST_STUDIO.md` §8 permits one principal to hold several ("nothing here implies
+    exclusivity"), and no route enforces that an approver is not the author, so this is not a
+    separation-of-duties control being defeated. It is a disposable demo subject, provisioned only
+    when `--demo-analyst` is passed.
+    """
+    from harness.realm import DEMO_ANALYST_SUBJECT, render_realm
+
+    from schemas.deployment import OspreyConfig
+
+    realm = render_realm(OspreyConfig(), demo_analyst=True)
+    demo = next(u for u in realm["users"] if u["username"] == DEMO_ANALYST_SUBJECT)
+    assert set(demo["attributes"]["roles"]) >= {
+        "source_author",
+        "source_approver",
+        "loader",
+    }, (
+        "the demo analyst cannot walk the Ingest Studio, so R6's own flow 403s at its first step: "
+        f"{demo['attributes']['roles']}"
+    )
+    assert "analyst" in demo["attributes"]["roles"], "it is still an analyst first"
