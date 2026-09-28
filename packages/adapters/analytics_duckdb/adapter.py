@@ -27,6 +27,8 @@ from schemas.analytics import (
     EventRecord,
     GeoBin,
     GeoBinRequest,
+    GeocodedEvent,
+    GeocodeRequest,
     GeometryKind,
     GeometryRecord,
     Histogram,
@@ -249,6 +251,96 @@ class AnalyticsDuckDBAdapter:
             Sighting(occurred_at=occurred_at.replace(tzinfo=UTC), lat=lat, lon=lon)
             for occurred_at, lat, lon in rows
         ]
+
+    # --- containment (owner rulings R9 (c) and R10, round 13cf) -----------------
+
+    async def geocode_events(
+        self, req: GeocodeRequest, principal: Principal
+    ) -> list[GeocodedEvent]:
+        prop = _safe_field_name(req.property)
+        resolved_version = (
+            req.version if req.version is not None else self._current_partition_version()
+        )
+        if resolved_version is None:
+            return []
+        event_pred = self._predicate(req.filter, principal)
+        geometry_access = self._access.predicate(principal)
+        refs = sorted(req.cells)
+        ref_placeholders = ",".join("?" for _ in refs)
+        # Covering, not `ST_Contains`: a point on an edge two cells share is inside the site, so it
+        # must land somewhere, and `MIN` over the covering refs makes "somewhere" deterministic.
+        rows = self._con.execute(
+            "WITH ev AS ("
+            "  SELECT event_id, edge_id, edge_type, source_id, target_id, occurred_at, lat, lon, "
+            "         handling_classification, handling_code, owning_unit, originator, "
+            f"         json_extract_string(properties, '$.{prop}') AS previous "
+            f"  FROM events WHERE ({event_pred.where}) AND lat IS NOT NULL AND lon IS NOT NULL"
+            "), cell AS ("
+            "  SELECT geometry_ref, geometry FROM geometries "
+            f"  WHERE kind = ? AND version = ? AND geometry_ref IN ({ref_placeholders}) "
+            f"  AND ({geometry_access.where})"
+            "), hit AS ("
+            "  SELECT ev.event_id, MIN(cell.geometry_ref) AS geometry_ref FROM ev JOIN cell "
+            "  ON ST_Covers(cell.geometry, ST_Point(ev.lon, ev.lat)) GROUP BY ev.event_id"
+            ") "
+            "SELECT ev.event_id, ev.edge_id, ev.edge_type, ev.source_id, ev.target_id, "
+            "       ev.occurred_at, hit.geometry_ref, ev.previous, ev.handling_classification, "
+            "       ev.handling_code, ev.owning_unit, ev.originator "
+            "FROM ev LEFT JOIN hit USING (event_id) ORDER BY ev.event_id",
+            [
+                *event_pred.params,
+                GeometryKind.POLYGON.value,
+                resolved_version,
+                *refs,
+                *geometry_access.params,
+            ],
+        ).fetchall()
+
+        values = set(req.cells.values())
+        geocoded: list[GeocodedEvent] = []
+        to_set: list[list[object]] = []
+        to_clear: list[list[object]] = []
+        for row in rows:
+            event_id, edge_id, edge_type, source_id, target_id, occurred_at, ref, previous = row[:8]
+            if ref is None:
+                # Not covered. Only a value this call owns is cleared: an event geocoded into some
+                # *other* site's cell keeps that claim.
+                if previous in values:
+                    to_clear.append([event_id, req.filter.investigation_scope])
+                continue
+            value = req.cells[ref]
+            if previous != value:
+                to_set.append([json.dumps({prop: value}), event_id, req.filter.investigation_scope])
+            geocoded.append(
+                GeocodedEvent(
+                    event_id=event_id,
+                    edge_id=edge_id,
+                    edge_type=edge_type,
+                    source_id=source_id,
+                    target_id=target_id,
+                    occurred_at=cast(datetime, occurred_at).replace(tzinfo=UTC),
+                    geometry_ref=ref,
+                    value=value,
+                    previous_value=previous,
+                    handling=Handling(
+                        classification=row[8], handling_code=row[9], owning_unit=row[10],
+                        originator=row[11],
+                    ),
+                )
+            )
+        if to_set:
+            self._con.executemany(
+                "UPDATE events SET properties = json_merge_patch(COALESCE(properties, '{}'), ?) "
+                "WHERE event_id = ? AND investigation_scope = ?",
+                to_set,
+            )
+        if to_clear:
+            self._con.executemany(
+                "UPDATE events SET properties = json_merge_patch(properties, "
+                f"'{{\"{prop}\": null}}') WHERE event_id = ? AND investigation_scope = ?",
+                to_clear,
+            )
+        return geocoded
 
     # --- baseline ------------------------------------------------------------
 

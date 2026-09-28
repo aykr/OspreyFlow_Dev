@@ -45,6 +45,8 @@ export type { GeoBinRequest } from "./GeoBinRequest";
 export type { GeoBin } from "./GeoBin";
 export type { SightingRequest } from "./SightingRequest";
 export type { Sighting } from "./Sighting";
+export type { GeocodeRequest } from "./GeocodeRequest";
+export type { GeocodedEvent } from "./GeocodedEvent";
 export type { BaselineRequest } from "./BaselineRequest";
 export type { BaselineResult } from "./BaselineResult";
 export type { CrossFilterDimension } from "./CrossFilterDimension";

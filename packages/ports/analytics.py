@@ -20,6 +20,8 @@ from schemas.analytics import (
     EventRecord,
     GeoBin,
     GeoBinRequest,
+    GeocodedEvent,
+    GeocodeRequest,
     GeometryRecord,
     Histogram,
     HistogramRequest,
@@ -33,13 +35,22 @@ class AnalyticsPort(Protocol):
     async def histogram(self, req: HistogramRequest, principal: Principal) -> Histogram: ...
     async def geo_bins(self, req: GeoBinRequest, principal: Principal) -> list[GeoBin]: ...
 
-    async def list_sightings(
-        self, req: SightingRequest, principal: Principal
-    ) -> list[Sighting]:
+    async def list_sightings(self, req: SightingRequest, principal: Principal) -> list[Sighting]:
         """Phase 8 Stage 4f's own addition, found missing while building B18's snail trail —
         a disclosed gap. Ordered by `occurred_at` ascending; a row with
         no `lat`/`lon` is excluded, the same `lat IS NOT NULL AND lon IS NOT NULL` filter
         `geo_bins` already applies."""
+        ...
+
+    async def geocode_events(
+        self, req: GeocodeRequest, principal: Principal
+    ) -> list[GeocodedEvent]:
+        """**A1's "incidents geocode into cells" — owner rulings R9 (c) and R10, round 13cf.**
+        The one containment method: which of `req.cells`' polygons covers each admitted event's
+        point, recorded on the event as `properties[req.property]` and returned.
+        `GeocodeRequest`'s docstring has the full contract: covering rather than strict, ties to
+        the smallest ref, stale values cleared, and access applied to events and polygons alike.
+        Ordered by `event_id`."""
         ...
 
     async def cross_filter(

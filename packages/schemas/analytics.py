@@ -21,7 +21,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from schemas.domain import EdgeId, Handling, Interval, NodeId
 
@@ -116,6 +116,12 @@ class GeometryRecord(BaseModel):
     shapes are mutually exclusive, enforced below, rather than a `POLYGON`
     row carrying a meaningless centroid or a `POINT` row carrying an unused
     WKB column."""
+
+    #: **`geometry_wkb` is base64 on the wire — round 13cf.** Pydantic's default JSON encoding for
+    #: `bytes` is UTF-8, which raises on real WKB (`invalid utf-8 sequence`), so no `POLYGON` row
+    #: could ever cross HTTP. None had: nothing returned one until site cells became
+    #: polygons (owner ruling R9), when `POST /v1/analytics/geometries` for a cell would 500.
+    model_config = ConfigDict(ser_json_bytes="base64", val_json_bytes="base64")
 
     geometry_ref: str
     version: int = Field(ge=1)
@@ -261,6 +267,50 @@ class Sighting(BaseModel):
     lon: float = Field(ge=-180, le=180)
 
 
+class GeocodeRequest(BaseModel):
+    """**A1's "incidents geocode into cells" — owner rulings R9 and R10, round 13cf.**
+
+    Which of `cells`' polygons covers each event's own point, for the events `filter` admits. The
+    answer is *recorded*, not only returned: each event covered by a polygon gets
+    `properties[property] = cells[geometry_ref]`. That is R10's event half; the graph edge half
+    is the caller's, since this port does not write the graph. An event whose `property` holds one
+    of `cells`' values and is no longer covered has it removed, so a redraw that moves an incident
+    out of a cell does not leave a stale claim. Events with no point are never touched.
+
+    Covering, not strict containment: a point on the edge two cells share is covered by both, and
+    the lexicographically smallest `geometry_ref` wins, so the answer is deterministic rather than
+    arbitrary. Only `POLYGON` rows at the resolved partition `version` are used.
+
+    Access, as for every read here: an event the principal cannot see is neither geocoded nor
+    returned, and a polygon they cannot see covers nothing. An event above the drawing analyst's
+    clearance therefore stays ungeocoded until a cleared analyst redraws. That is stated in 08's
+    A1 note rather than hidden."""
+
+    filter: EventFilter
+    cells: dict[str, str] = Field(min_length=1)
+    property: str = "site_cell"
+    version: int | None = Field(default=None, ge=1)
+
+
+class GeocodedEvent(BaseModel):
+    """One event the request covered, with what its `property` held before this call.
+    `previous_value == value` means the call changed nothing for that event, which is how a caller
+    keeps a redraw idempotent."""
+
+    event_id: str
+    edge_id: EdgeId
+    edge_type: str
+    source_id: NodeId
+    target_id: NodeId
+    occurred_at: datetime
+    geometry_ref: str
+    value: str
+    previous_value: str | None = None
+    #: The event's own handling. Anything a caller derives from this answer (R10's edge from the
+    #: incident's subject to the cell) is at least as restricted as the incident it came from.
+    handling: Handling
+
+
 class BaselineRequest(BaseModel):
     """Compares a comparison window against a baseline window over the
     same filter and bucketing. The HMP finding — four cells at ~52% of
@@ -317,6 +367,8 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     GeoBin,
     SightingRequest,
     Sighting,
+    GeocodeRequest,
+    GeocodedEvent,
     BaselineRequest,
     BaselineResult,
     CrossFilterDimension,

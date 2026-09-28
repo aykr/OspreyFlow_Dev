@@ -29,6 +29,7 @@ from schemas.analytics import (
     EventFilter,
     EventRecord,
     GeoBinRequest,
+    GeocodeRequest,
     GeometryKind,
     GeometryRecord,
     HistogramBucketing,
@@ -1064,3 +1065,131 @@ async def test_unauthorised_histogram_after_load_events_matches_a_corpus_without
 
     assert before == after
     assert after_cleared.total == 2  # proves the filter is real, not a no-op
+
+
+# --- containment: A1's "incidents geocode into cells" (owner rulings R9 (c) and R10, 13cf) -----
+
+#: Two cells splitting `_SQUARE_WKT` down the meridian -0.1; the shared edge is lon -0.1.
+_WEST_WKT = "POLYGON((-0.2 51.4, -0.2 51.6, -0.1 51.6, -0.1 51.4, -0.2 51.4))"
+_EAST_WKT = "POLYGON((-0.1 51.4, -0.1 51.6, 0.0 51.6, 0.0 51.4, -0.1 51.4))"
+_CELLS = {"cell-a-west": "node-west", "cell-b-east": "node-east"}
+_T0 = datetime(2026, 1, 1, 12, tzinfo=UTC)
+
+
+def _cells(classification: str = "OFFICIAL") -> list[GeometryRecord]:
+    return [
+        _boundary(geometry_ref="cell-a-west", wkt=_WEST_WKT, classification=classification),
+        _boundary(geometry_ref="cell-b-east", wkt=_EAST_WKT),
+    ]
+
+
+async def _count_in(adapter: object, value: str, principal: Principal) -> int:
+    req = HistogramRequest(
+        filter=_filter(value_filters={"site_cell": [value]}),
+        bucketing=HistogramBucketing.FIXED_INTERVAL,
+        interval_seconds=3600,
+    )
+    return (await adapter.histogram(req, principal)).total  # type: ignore[attr-defined]
+
+
+async def test_geocode_records_the_covering_cell_on_each_event_with_a_point(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """The row's own claim, made observable: each incident with a point inside a cell is
+    returned with that cell and carries it afterwards. One outside every cell and one with no
+    point at all are neither returned nor changed."""
+    west = _event(occurred_at=_T0, lat=51.5, lon=-0.15)
+    east = _event(occurred_at=_T0, lat=51.5, lon=-0.05)
+    outside = _event(occurred_at=_T0, lat=52.5, lon=-0.15)
+    pointless = _event(occurred_at=_T0)
+    async with factory.context([west, east, outside, pointless]) as adapter:
+        await adapter.load_geometries(_cells())
+        result = await adapter.geocode_events(
+            GeocodeRequest(filter=_filter(), cells=_CELLS), CLEARED
+        )
+        assert {(g.event_id, g.geometry_ref, g.value) for g in result} == {
+            (west.event_id, "cell-a-west", "node-west"),
+            (east.event_id, "cell-b-east", "node-east"),
+        }
+        assert [g.event_id for g in result] == sorted(g.event_id for g in result)
+        assert all(g.previous_value is None for g in result)
+        assert await _count_in(adapter, "node-west", CLEARED) == 1
+        assert await _count_in(adapter, "node-east", CLEARED) == 1
+
+
+async def test_geocode_a_point_on_a_shared_edge_lands_in_exactly_one_cell(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """Covering, not strict containment, so an incident on a cell boundary is still inside the
+    site; the smallest ref wins, so which cell it lands in is deterministic."""
+    on_edge = _event(occurred_at=_T0, lat=51.5, lon=-0.1)
+    async with factory.context([on_edge]) as adapter:
+        await adapter.load_geometries(_cells())
+        result = await adapter.geocode_events(
+            GeocodeRequest(filter=_filter(), cells=_CELLS), CLEARED
+        )
+        assert [(g.event_id, g.geometry_ref) for g in result] == [
+            (on_edge.event_id, "cell-a-west")
+        ]
+
+
+async def test_geocode_twice_changes_nothing_the_second_time(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """What keeps a redraw idempotent: the second call reports each event's value unchanged,
+    which is how the grid route knows to write no second edge."""
+    west = _event(occurred_at=_T0, lat=51.5, lon=-0.15)
+    async with factory.context([west]) as adapter:
+        await adapter.load_geometries(_cells())
+        request = GeocodeRequest(filter=_filter(), cells=_CELLS)
+        await adapter.geocode_events(request, CLEARED)
+        (again,) = await adapter.geocode_events(request, CLEARED)
+        assert again.previous_value == again.value == "node-west"
+        assert await _count_in(adapter, "node-west", CLEARED) == 1
+
+
+async def test_geocode_clears_its_own_stale_value_and_leaves_other_sites_alone(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """An incident this set of cells no longer covers loses the cell it held; an incident
+    geocoded into some other site's cell keeps that claim, because this call does not own it."""
+    stale = _event(occurred_at=_T0, lat=52.5, lon=-0.15, properties={"site_cell": "node-west"})
+    other = _event(occurred_at=_T0, lat=52.5, lon=-0.15, properties={"site_cell": "node-other"})
+    async with factory.context([stale, other]) as adapter:
+        await adapter.load_geometries(_cells())
+        assert await adapter.geocode_events(
+            GeocodeRequest(filter=_filter(), cells=_CELLS), CLEARED
+        ) == []
+        assert await _count_in(adapter, "node-west", CLEARED) == 0
+        assert await _count_in(adapter, "node-other", CLEARED) == 1
+
+
+async def test_geocode_neither_touches_nor_reveals_what_the_principal_cannot_see(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """Access control for this read path, as for every other. A SECRET incident inside a cell is
+    not returned to an OFFICIAL caller and is **not geocoded** by that caller's draw, so a cleared
+    analyst afterwards finds it ungeocoded rather than finding a trace of the OFFICIAL call. And a
+    SECRET cell covers nothing for an OFFICIAL caller."""
+    visible = _event(occurred_at=_T0, lat=51.5, lon=-0.05)
+    hidden = _event(occurred_at=_T0, lat=51.5, lon=-0.05, classification="SECRET")
+    in_secret_cell = _event(occurred_at=_T0, lat=51.5, lon=-0.15)
+    async with factory.context([visible, hidden, in_secret_cell]) as adapter:
+        await adapter.load_geometries(_cells(classification="SECRET"))
+        result = await adapter.geocode_events(
+            GeocodeRequest(filter=_filter(), cells=_CELLS), OFFICIAL
+        )
+        assert [g.event_id for g in result] == [visible.event_id]
+        assert await _count_in(adapter, "node-east", CLEARED) == 1
+        assert await _count_in(adapter, "node-west", CLEARED) == 0
+
+
+async def test_geocode_uses_only_polygon_rows(factory: AnalyticsAdapterFactory) -> None:
+    """A point row named in `cells` has no extent, so it covers nothing, even an event sitting
+    exactly on it. This is what a pre-R9 cell's point row would do if a caller passed it."""
+    on_point = _event(occurred_at=_T0, lat=51.5072, lon=-0.1276)
+    async with factory.context([on_point]) as adapter:
+        await adapter.load_geometries([_geometry(geometry_ref="point-cell")])
+        assert await adapter.geocode_events(
+            GeocodeRequest(filter=_filter(), cells={"point-cell": "node-p"}), CLEARED
+        ) == []
