@@ -10,8 +10,21 @@ none, because it is what gets read.**
 laptop from the documentation, started, and demonstrated (both acceptance scenarios passing on
 `local-lite` is one component of that, not the whole of it).
 
-**Closing pass 13ch, fourth run, 28 September 2026 — clause 3 is met on every row; the
-milestone line awaits one owner ruling on a red exit test that is not an acceptance row.**
+**V1 END TO END is REACHED — 28 September 2026, closing pass 13ch (fourth run), under owner
+ruling R11.** All three clauses hold on one machine in one pass: installed on a clean laptop from
+the documentation, started, and both acceptance scenarios performable through the analyst's own
+door on a rendered `local-lite` deployment (owner rulings R8, R9).
+
+> **Owner ruling R11, 28 September 2026.** Option A — run `tests/harness/test_harness_image.py`
+> once in isolation, with 8080 and 8081 confirmed bindable first and not straight after another
+> deployment's teardown. If it passes, declare V1 END TO END reached, and record it in 07's
+> milestone line. The test's ordering sensitivity is a bug: fix it in the next round by waiting
+> for the ports, not by excluding `ports` from the parity comparison.
+
+**The isolated run, 19:57 UTC.** Both ports were confirmed bindable first (a plain bind without
+`SO_REUSEADDR`, the same as the preflight's own, and no socket in any state on either port), over
+an hour after the last teardown. `test_harness_image.py` passed **7 of 7**, including
+`test_containerized_preflight_reaches_the_same_result_as_the_host_cli`.
 
 **Every row of Scenario A and Scenario B is performable over the wire on a fresh-clone
 `local-lite` install**, the bar owner rulings R8 and R9 set:
@@ -21,18 +34,13 @@ milestone line awaits one owner ruling on a red exit test that is not an accepta
   PMTiles build exists on this machine.
 - `08_ACCEPTANCE_SCENARIOS.md`'s row-by-row table carries each row's test ids.
 
-**Why the line is not declared here.** One exit test was red twice:
-`tests/harness/test_harness_image.py::test_containerized_preflight_reaches_the_same_result_as_the_host_cli`,
-failing with `{'ports': ('FAIL', 'PASS')}`. The standing token rule makes a gate red in two
-attempts a `DECISION_NEEDED`, never a third attempt. The cause is identified in code, not
-guessed:
-- The host half of the comparison binds 8080/8081 **without** `SO_REUSEADDR`, deliberately
-  (`harness/preflight/ports.py::_is_bindable`).
-- It ran seconds after `test_bundle_exit_test.py` tore down a deployment that had published those
-  ports, so they were plausibly still in `TIME_WAIT`. A manual host preflight a few minutes later
-  passes, and 13ce saw the same mismatch clear on a delayed attempt.
-- CI runs the two tests on separate runners, so they never run back to back there.
-- It is not an acceptance row. The owner's ruling is in `Claude outputs/handoff/DECISION_NEEDED.md`.
+**The ports-parity case failed twice before the ruling, and the cause is recorded.** In the main
+sequence it ran within minutes of `test_bundle_exit_test.py` tearing down a deployment on
+8080/8081. The host half of the comparison binds those ports without `SO_REUSEADDR`, by design
+(`harness/preflight/ports.py::_is_bindable`), so ports still in `TIME_WAIT` read as taken. The
+container half binds in its own network namespace and always reads free. **Bounded, owned by the
+next round (R11):** make the test wait for the ports it compares rather than inherit the preceding
+test's `TIME_WAIT`. Do not exclude `ports` from the comparison.
 
 | Step | 13ch result |
 | --- | --- |
@@ -41,16 +49,20 @@ guessed:
 | `make exit-over-the-wire` | **27 passed** |
 | `test_workspace_bundle.py` / `test_restore_exit_test.py` against the install | **7 / 9 passed** |
 | `test_six_screen_live_exit.py` / `test_bundle_exit_test.py` | **2 / 1 passed** |
-| `test_harness_image.py` | **6 passed, 1 failed, twice** — the ports parity case above |
+| `test_harness_image.py` | **6 passed, 1 failed, twice** in sequence (ports parity, above); **7 passed** in the isolated run R11 ordered |
 | `test_sustained_load.py` | **1 passed**, 4 m 28 s — the first measurement since 13ce could not take one |
 | `test_phase8_exit_criterion_end_to_end.py` (developer tier) | **2 passed** |
 | `make glass-live` (developer stack, Studio-role token, ingest root) | **13 passed, 1 failed** (`basemap.spec.ts`, host precondition) |
 | `make -k ci` | **20/20 targets ran and passed**, 2 m 21 s |
 | `make test-all` (Floor B) | **326 passed, 0 skipped, 0 failed**; all five token-exchange tests PASSED |
 
-Independent of the milestone and still open: GitHub Actions has never completed a run on this
-repository (round 13cg). `release.yml`'s `ci-status-gate` now refuses every release until it does.
-That is the owner's account setting to check.
+**Remains after the milestone, from this pass** (in addition to the list further down):
+- the harness-image test's ordering sensitivity (R11, next round);
+- GitHub Actions has never completed a run on this repository (round 13cg), and `release.yml`'s
+  `ci-status-gate` refuses every release until it does — the owner's account setting to check;
+- the `_locate` span-anchoring decision `08_ACCEPTANCE_SCENARIOS.md`'s B6 note carries;
+- the local basemap on this host (a JDK + planetiler build), so that `basemap.spec.ts` can run
+  here.
 
 **Superseded (kept as history) —** **V1 END TO END is NOT reached as of 28 September 2026 — closing pass 13ce, third run, against
 the seeded tree.** Clauses 1 and 2 hold again, on a fresh clone of `origin/main` (`930b902`).
