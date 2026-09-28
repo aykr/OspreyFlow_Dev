@@ -11,6 +11,12 @@ same `make bundle` — against this repository's own real Dockerfiles, real triv
 `make bundle` command — with `--dry-run` standing in for the four `docker push` calls, printing
 the exact references it would have pushed instead of reaching the registry. **The only step this
 script cannot exercise is the push itself** — said here, not left implicit.
+
+**Round 13cg: nor does it run `ci-status-gate`**, the job that now runs before `build-scan-push`
+and refuses the release unless `ci.yml` reported green for the commit being tagged
+(`scripts/ci_status_check.py`). That check is about GitHub's own recorded state for a commit, not
+about whether this checkout's build commands work — the two questions this script answers — so
+mirroring it here would need the same GitHub API call this script otherwise has no reason to make.
 """
 
 from __future__ import annotations

@@ -43,7 +43,31 @@ env:
   OWNER: ospreyflow
 
 jobs:
+  # **Round 13cg — refuses to release unless `ci.yml` itself reported green for the commit being
+  # tagged.** Found this round: `ci.yml` has never once completed a run on this repository at all
+  # (`gh api repos/{owner}/{repo}/actions/runs` reports `total_count: 0` against hundreds of
+  # pushes to `main` since 13 September) — `07_BUILD_PLAN.md`'s round 13cg finding has the
+  # investigation and what it does and does not rule out. A release gate is the one place this
+  # repository can make that silence load-bearing rather than merely visible: nothing downstream
+  # of this job can build or push an image until `scripts/ci_status_check.py` sees a green check
+  # run for `github.sha`, and on the repository's current state (zero runs, ever) this job fails
+  # every release until that changes — which is the correct behaviour, not a bug in the gate.
+  ci-status-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - name: Refuse to release unless main's own CI is green for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: PYTHONPATH=.:packages uv run python -m scripts.ci_status_check --ref ${{ github.sha }}
+
   build-scan-push:
+    needs: ci-status-gate
     runs-on: ubuntu-latest
     strategy:
       matrix:

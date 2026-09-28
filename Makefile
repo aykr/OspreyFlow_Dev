@@ -1,4 +1,4 @@
-.PHONY: ci idp-test lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test dev-up dev-down docker-clean test-all glass-perf glass-a11y glass-keyboard glass-map-verify glass-live exit-over-the-wire harness-keyboard harness-a11y bundle
+.PHONY: ci idp-test ci-status lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test dev-up dev-down docker-clean test-all glass-perf glass-a11y glass-keyboard glass-map-verify glass-live exit-over-the-wire harness-keyboard harness-a11y bundle
 
 PY := .venv/bin/python
 PYTEST := .venv/bin/pytest
@@ -383,3 +383,17 @@ harness-keyboard:
 # against the same real `harness.webapp` that job's own `harness-keyboard` step already starts.
 harness-a11y:
 	npm run test:a11y --workspace apps/harness
+
+# **`make ci-status` — round 13cg, after finding `ci.yml` has never once completed a run on this
+# repository** (`scripts/ci_status_check.py`'s own docstring has the investigation; round 13ce's
+# "silent since 22 September" undersold it — `gh api repos/{owner}/{repo}/actions/runs` reports
+# `total_count: 0`, always, against hundreds of pushes to `main`). Not in `ci:`'s own list: it
+# needs network access and a token with Actions-read scope, and checking "is CI green" from inside
+# the very CI run that just started cannot answer anything. `release.yml`'s own `ci-status-gate`
+# job runs this against the tagged commit with `GITHUB_TOKEN`, which every job in that workflow
+# already gets; this target is the same check for a developer or the checker to run by hand,
+# against `GH_TOKEN`/`GITHUB_TOKEN` or a `gh`-authenticated token, most usefully right after a push
+# — which is exactly the moment `07_BUILD_PLAN.md` this round's own finding says nobody was
+# checking.
+ci-status:
+	PYTHONPATH=.:packages $(PY) -m scripts.ci_status_check
