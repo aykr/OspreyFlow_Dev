@@ -27,9 +27,15 @@ import yaml
 from scripts.seed_ingest_folder import (
     CDR_FIXTURE_NAME,
     DEFAULT_INGEST_ROOT,
+    SEIZURE_FIXTURE_NAME,
     ingest_root_from_config,
     write_cdr_fixture,
+    write_seizure_fixture,
 )
+
+from knowledge_adapters import REGISTRY
+from tests.scenarios.fixtures.scenario_cohorts import generate_device_legs
+from tests.scenarios.fixtures.seizure_record import SEIZURE_CSV_COLUMNS
 
 
 def test_seeding_an_empty_folder_produces_a_readable_csv(tmp_path: Path) -> None:
@@ -133,3 +139,59 @@ def test_it_creates_the_folder_when_it_is_not_there(tmp_path: Path, subdirectory
     target = tmp_path / subdirectory
     assert not target.exists()
     assert write_cdr_fixture(target).exists()
+
+
+def test_the_seizure_record_is_written_for_b13(tmp_path: Path) -> None:
+    """**B13 ingests this file**, so it has to be in the ingest root before an analyst opens the
+    Studio — round 13cdb. Same reasoning as the CDR fixture above: the row is worded "ingest …",
+    `09_INGEST_STUDIO.md` makes that a Studio walk rather than a seed, and a Studio walk needs a
+    file."""
+    written = write_seizure_fixture(tmp_path)
+
+    assert written.name == SEIZURE_FIXTURE_NAME == "seizure-record.csv"
+    rows = list(csv.DictReader(written.read_text(encoding="utf-8").splitlines()))
+    assert rows, "the seizure record has no rows, so there is nothing to ingest"
+    assert set(rows[0]) == set(SEIZURE_CSV_COLUMNS)
+
+
+def test_the_seizure_record_carries_the_same_handset_the_graph_fixture_seeds(
+    tmp_path: Path,
+) -> None:
+    """**The coupling B13 and B15 both depend on.**
+
+    B13 ingests this record and expects an alert on the matched identifier; B15 pivots on the
+    handset already in the graph. Those are only the same device if this file's IMEI and
+    `scenario_cohorts.generate_device_legs`' IMEI come from the same place. They do — both read
+    `seizure_record.py` — and this asserts it, because two fixtures minting their own identifiers
+    would each look right while B13 alerted on a handset B15 never pivots on.
+    """
+    rows = list(
+        csv.DictReader(write_seizure_fixture(tmp_path).read_text(encoding="utf-8").splitlines())
+    )
+    legs = generate_device_legs()
+    seeded_imei = next(n for n in legs.nodes if n.type == "Device").properties["imei"]
+
+    # The file carries the **raw** rendering and the graph the normalised one — that gap is the
+    # point of the ingest. So the comparison runs the raw value through the product's own `imei`
+    # adapter rather than approximating it: a digit-prefix heuristic here would pass for two
+    # handsets that merely start alike, which is the failure this test exists to prevent.
+    normalised = REGISTRY["imei"](rows[0]["handset_imei"])
+    assert normalised == seeded_imei, (
+        f"the seizure record's handset {rows[0]['handset_imei']!r} normalises to {normalised!r}, "
+        f"but the graph fixture seeds {seeded_imei!r} — B13 would alert on a device B15 never "
+        "pivots on, and both fixtures would look correct"
+    )
+
+
+def test_the_raw_identifiers_are_not_pre_normalised(tmp_path: Path) -> None:
+    """**If the file carried normalised values the ingest would prove nothing.** B13's alert has
+    to match *after* the `imei` Knowledge Adapter has done its work; a file written in canonical
+    form would pass while the adapter did nothing at all."""
+    rows = list(
+        csv.DictReader(write_seizure_fixture(tmp_path).read_text(encoding="utf-8").splitlines())
+    )
+    assert any(not c.isdigit() for c in rows[0]["handset_imei"]), (
+        f"{rows[0]['handset_imei']!r} is already canonical — the normaliser has nothing to do "
+        "and B13 would pass without it"
+    )
+    assert any(not c.isdigit() for c in rows[0]["imsi"]), rows[0]["imsi"]

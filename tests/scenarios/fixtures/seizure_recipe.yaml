@@ -1,0 +1,67 @@
+# Hand-written recipe for the synthetic seizure record — `08_ACCEPTANCE_SCENARIOS.md` B13,
+# following the shape in `09_INGEST_STUDIO.md` §6. Round 13cdb.
+#
+# B13 is worded "**ingest** the later seizure record", so it is performed through the Studio
+# rather than seeded into the graph, and the alert it asks for is fired by a real load.
+id: seizure-fixture
+version: 1
+label: "Fixture — seizure record (exhibit schedule)"
+connector:
+  profile: seizure-record-csv
+  delimiter: ","
+  encoding: utf-8
+  header_rows: 1
+  # No `date_order`: this layout's dates are ISO-8601 with an offset, so there is nothing
+  # ambiguous to resolve. See the connector profile's own comment.
+ontology_version: 9
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-1, owning_unit: unit-1}
+
+# `01_DOMAIN_MODEL.md` §7 rule 2: canonicalise through the Knowledge Adapter before hashing, never
+# the raw source string. The handset repeats on every row of an exhibit schedule, so without the
+# IMSI in the key a two-SIM record would deduplicate to one row and the second SIM would vanish.
+deduplicate:
+  key:
+    - {field: handset_imei, transform: imei}
+    - {field: imsi, transform: imsi}
+    - {field: paired_from, transform: datetime}
+
+row_template:
+  entities:
+    # The handset. `on_match: reference` matters here more than anywhere else in these fixtures:
+    # the deployment's own `scenarios` seed already carries this Device, and B15 pivots on it. A
+    # recipe that created a second one would give B13 an alert on a handset B15 never sees.
+    - ref: handset
+      pole_class: object
+      type: Device
+      match_on: imei
+      on_match: reference
+      properties:
+        imei: {field: handset_imei, transform: imei}
+    - ref: sim
+      pole_class: object
+      type: Endpoint
+      match_on: value_normalised
+      on_match: reference
+      properties:
+        value_raw: {field: imsi}
+        value_normalised: {field: imsi, transform: imsi}
+        endpoint_kind: {literal: imsi}
+  edges:
+    # The pairing window the record describes. `PAIRED_WITH` is declared `Endpoint -> Device` and
+    # `temporal: true` in `packages/ontology/default.yaml`, so the window belongs on the edge.
+    - type: PAIRED_WITH
+      from: sim
+      to: handset
+      temporal: {at: {field: paired_from, transform: datetime}}
+
+unmapped_fields:
+  # The MSISDN read off the active SIM. Not loaded by this recipe: it belongs to the SIM, and
+  # modelling it would need a second Endpoint and a SAME_AS that ADR-024 makes an *asserted*
+  # write rather than an ingest's to make. Declared here rather than silently dropped, which is
+  # what `09_INGEST_STUDIO.md` §5's unmapped-field report exists for.
+  - {field: msisdn, action: ignore, note: "Active SIM's MSISDN; see ADR-024 on identifier links"}
+  - {field: paired_to, action: ignore, note: "Pairing end; the edge carries its start"}
+  - {field: seizure_date, action: ignore, note: "Exhibit date; not an element property"}

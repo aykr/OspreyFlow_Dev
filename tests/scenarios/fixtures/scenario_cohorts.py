@@ -244,7 +244,9 @@ class DeviceLegs:
     sim_ids: list[str] = field(default_factory=list)
 
 
-def generate_device_legs(*, run_token: str | None = None) -> DeviceLegs:
+def generate_device_legs(
+    *, run_token: str | None = None, include_swapped_sim: bool = True
+) -> DeviceLegs:
     """**B15.** One handset with two SIM `Endpoint`s `PAIRED_WITH` it — the SIM-swap shape, where
     "both SIMs link to one device" is *one traversal*, not a special case.
 
@@ -263,6 +265,14 @@ def generate_device_legs(*, run_token: str | None = None) -> DeviceLegs:
     ADR-024 is why these are `PAIRED_WITH` writes rather than resolution output: an E.164 number
     and a 3GPP subscriber identity "name the same SIM by a carrier/HLR record's own say-so, with
     no lexical resemblance a comparison function could ever" use.
+
+    **`include_swapped_sim=False` leaves the second SIM out, and that is what a *seeder* wants.**
+    `08_ACCEPTANCE_SCENARIOS.md` B13 ingests "the **later** seizure record"; the swap is what that
+    record reveals. Round 13cb seeded both SIMs, which quietly made B13 impossible: the ingest had
+    nothing left to create, so no change entry was produced, so the hotlist never fired — found by
+    B13 failing with an empty alert list against a correct-looking graph. The seeded state is
+    therefore the *earlier* one — a handset with the SIM that was in it before the swap — and the
+    ingest supplies the rest.
     """
     run = run_token or new_id()[-8:]
     handset_id = f"seizure-{run}-handset"
@@ -279,16 +289,16 @@ def generate_device_legs(*, run_token: str | None = None) -> DeviceLegs:
             audit=_audit(),
         ),
         _endpoint(sim_a_id, SIM_A_IMSI_NORMALISED, "imsi"),
-        _endpoint(sim_b_id, SIM_B_IMSI_NORMALISED, "imsi"),
     ]
-    edges = [
-        _edge("PAIRED_WITH", sim_a_id, handset_id),
-        _edge("PAIRED_WITH", sim_b_id, handset_id),
-    ]
+    edges = [_edge("PAIRED_WITH", sim_a_id, handset_id)]
+    sim_ids = [sim_a_id]
 
-    return DeviceLegs(
-        nodes=nodes, edges=edges, handset_id=handset_id, sim_ids=[sim_a_id, sim_b_id]
-    )
+    if include_swapped_sim:
+        nodes.append(_endpoint(sim_b_id, SIM_B_IMSI_NORMALISED, "imsi"))
+        edges.append(_edge("PAIRED_WITH", sim_b_id, handset_id))
+        sim_ids.append(sim_b_id)
+
+    return DeviceLegs(nodes=nodes, edges=edges, handset_id=handset_id, sim_ids=sim_ids)
 
 
 __all__ = [

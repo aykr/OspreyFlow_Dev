@@ -1,0 +1,26 @@
+# A seizure record — the exhibit schedule a device examiner produces when a handset and the SIMs
+# recovered with it are booked in. One row per SIM, the handset repeated on each.
+#
+# `09_INGEST_STUDIO.md` §2: "Connectors are **profiles**, following the same pattern as map
+# providers (ADR-016): a validated YAML file in `connectors/`, so adding a new carrier's CDR
+# layout is a file rather than a release." Round 13bf made that true; this is the second layout
+# added under it, and it needed no Python at all.
+#
+# `08_ACCEPTANCE_SCENARIOS.md` B13 is worded "**ingest** the later seizure record", and
+# `09_INGEST_STUDIO.md`'s own rule is that a row worded that way is performed through the Studio
+# rather than seeded around it. That is why this file exists rather than a second seeder: the
+# alert B13 asks for has to be fired *by a load*, and a load needs a connector.
+#
+# **No `date_order`, deliberately.** The CDR layout beside this one declares `dmy` because a
+# carrier's export writes `12/01/2026` and nothing in the value says which way round it is. A
+# seizure record is machine-produced from an exhibit system and carries ISO-8601 instants with
+# their offset, so there is no ambiguity to resolve and no default to get wrong. Declaring one
+# here would be stating a fact about this layout that is not true of it.
+id: seizure-record-csv
+label: Seizure record (CSV exhibit schedule)
+group: Mobile device
+structured: true
+reader: csv
+delimiter: ","
+encoding: utf-8
+header_rows: 1

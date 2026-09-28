@@ -58,8 +58,8 @@ finding after the table.
 | B10 | **yes** | `explain` on the merged cluster, per-comparison weights, not just the total. |
 | B11 | **yes** | A manual `SAME_AS`, score 1.0, attributed to this signed-in analyst. |
 | B12 | **yes** | Hotlist created over HTTP and read back with its owner and review date. |
-| B13, B14 | no | An alert needs an ingest to fire it. See the finding below. |
-| B15, B17 | **yes** | Round 13cb: the seized handset, its two SIMs and its sightings. |
+| B13, B14 | **yes** | Round 13cdb: hotlist, then the seizure record ingested through the Studio. |
+| B15, B17 | **yes** | The handset and its sightings are seeded; B15's second SIM arrives with B13's ingest. |
 | B16, B18 | **partly** | The data half — ordered, geolocated, on a shared axis. Rendering and
   playback are the Glass tier. |
 | B19, B20 | **yes** | Pattern preview (estimated count first), run, save, monitor. |
@@ -177,6 +177,15 @@ from scripts.seed_scenarios import (  # noqa: E402
 )
 
 SCENARIOS_HANDLE_ID = "beta-scenarios-handle"
+
+#: The SIM still in the handset at seizure — the identifier B13's hotlist watches. Imported from
+#: the fixture that generates both the seeded graph node and the ingested file, so the hotlist,
+#: the ingest and the pivot cannot come to mean three different SIMs.
+from tests.scenarios.fixtures.seizure_record import (  # noqa: E402
+    SIM_B_IMSI_NORMALISED as SIM_B_IMSI,
+)
+
+SIM_B_IMSI_NORMALISED = SIM_B_IMSI
 SCENARIOS_HANDSET_ID = "seizure-scenarios-handset"
 SCENARIOS_SEIZURE_DATE = _SEEDED_SEIZURE_DATE.isoformat().replace("+00:00", "Z")
 SCENARIOS_SEIZURE_DATE_PLUS_90M = (
@@ -1502,7 +1511,7 @@ def test_b8_the_handle_is_linked_to_the_shared_endpoint_asserted_at_one(
 
 
 def test_b15_both_sims_link_to_one_device_in_one_traversal(
-    analyst: httpx.Client, seeded_scope: str
+    seizure_alert: dict, analyst: httpx.Client, seeded_scope: str
 ) -> None:
     """**B15**: "Pivot on the handset identifier … Both SIMs link to one device; the SIM-swap
     pattern is one traversal, not a special case."
@@ -1510,6 +1519,11 @@ def test_b15_both_sims_link_to_one_device_in_one_traversal(
     "One traversal" is the load-bearing half: a single `depth=1` expand from the handset must
     reach both SIMs. If the SIM-swap needed two hops, or a dedicated route, the row would be
     describing a special case — which is exactly what it says it is not.
+
+    **Depends on `seizure_alert`, and that dependency is the scenario's own.** The deployment
+    seeds the handset with the SIM it held *before* the swap; the second SIM arrives with B13's
+    ingest of the later seizure record, which is how an analyst learns of the swap at all.
+    Round 13cb seeded both and made B13 impossible — see that fixture's own docstring.
     """
     nodes, edges = _expand(analyst, seeded_scope, [SCENARIOS_HANDSET_ID])
 
@@ -1639,6 +1653,229 @@ def test_b16_both_event_sets_are_retrievable_for_a_shared_axis(
         assert _parsed(moment).tzinfo is not None, (
             f"{moment} carries no offset, so it cannot be placed on a shared axis"
         )
+
+
+# ---------------------------------------------------------------------------------------------
+# B13 and B14 — an ingest fires an alert, and the alert opens into an investigation.
+#
+# `09_INGEST_STUDIO.md`'s rule: a row worded "ingest …" is performed through the Studio, not
+# seeded around. So the seizure record is a real file in the ingest root, read by a real connector
+# profile (`connectors/seizure-record-csv.yaml`), walked through Connect -> Run. Round 13cdb.
+# ---------------------------------------------------------------------------------------------
+
+SEIZURE_FIXTURE_NAME = "seizure-record.csv"
+
+
+@pytest.fixture(scope="module")
+def seizure_alert() -> dict:
+    """Create the hotlist, then ingest the seizure record, and return both with the alert.
+
+    **The order is the finding.** A hotlist watches *incoming* data; it does not retro-fire
+    against what is already in the graph. A first version ingested once with nothing watching,
+    created the hotlist, then ingested again — and no alert fired, because §6's idempotent re-run
+    created nothing the second time and so produced no change entry to evaluate. The red baseline
+    is therefore the hotlist existing with nothing yet ingested, which is the real condition and
+    needs no planted fault.
+
+    That failure also exposed a **defect in round 13cb's own seeder**: it seeded both SIMs, so the
+    ingest had nothing to create. `08_ACCEPTANCE_SCENARIOS.md` B13 ingests "the **later** seizure
+    record" and the SIM swap is what that record reveals, so the deployment now seeds the earlier
+    state — handset plus the SIM it held before the swap — and this ingest supplies the rest.
+
+    The hotlist is on the **SIM's IMSI**, not the handset's IMEI, and that is a correction to this
+    round's brief. `services/api/evaluation.py` matches against
+    `node.properties["value_normalised"]` — an `Endpoint` property. The handset is a `Device`
+    carrying `imei`, so a hotlist on it could never fire.
+    """
+    token = _sign_in_as_the_demo_analyst()
+    scope = os.environ.get("OSPREY_LIVE_INVESTIGATION_ID")
+    if not scope:
+        pytest.fail("OSPREY_LIVE_INVESTIGATION_ID is not set — see the `seeded_scope` fixture")
+
+    with httpx.Client(
+        base_url=WORKSPACE_ORIGIN, headers={"Authorization": f"Bearer {token}"}, timeout=180
+    ) as client:
+
+        def alerts_for(hotlist_id: str) -> list[dict]:
+            """**`rule_id` is `hotlist:<id>`, not the bare id** — `services/api/evaluation.py`
+            writes `rule_id=f"hotlist:{hotlist.id}"`, namespacing it so a hotlist and a saved
+            pattern cannot collide on a rule identifier. Filtering on the bare id found nothing
+            while the alert was sitting there correctly formed, which cost this round an hour and
+            two applies before I read the producer instead of assuming the shape."""
+            listed = client.get("/v1/alerts")
+            assert listed.status_code == 200, listed.text
+            return [a for a in listed.json()["alerts"] if a["rule_id"] == f"hotlist:{hotlist_id}"]
+
+        # **The precondition, asserted rather than left to fail obscurely.** B13 is a "new data
+        # arrives" row: a hotlist watches *incoming* data and does not retro-fire against what is
+        # already in the graph, so this row can only be walked on a deployment where the seizure
+        # record has not already been ingested. `make exit-over-the-wire` runs against a fresh
+        # install, which is that state. Stated here because the alternative — discovering it three
+        # assertions later as an empty list — cost this round two applies.
+        already = client.post("/v1/search", json={"query": SIM_B_IMSI, "limit": 5})
+        assert already.status_code == 200, already.text
+        assert not already.json()["nodes"], (
+            f"{SIM_B_IMSI} is already in this deployment's graph, so ingesting the seizure record "
+            "creates nothing and no hotlist can fire on it. B13 needs a deployment where this "
+            "record has not been ingested — apply a fresh one, or re-seed. (If it is there "
+            "because the `scenarios` seeder put it there, that is the round-13cb defect this "
+            "fixture's own docstring describes.)"
+        )
+
+        # 1. Something is watching, before anything arrives.
+        created = client.post(
+            "/v1/hotlists",
+            json={"identifier": SIM_B_IMSI, "review_date": "2026-12-31"},
+        )
+        assert created.status_code == 201, created.text
+        hotlist = created.json()
+        alerts_before = alerts_for(hotlist["id"])
+
+        # 2. The ingest, through the Studio, as an analyst.
+        listing = client.get("/v1/ingest/source-files")
+        assert listing.status_code == 200, listing.text
+        chosen = next(
+            (f for f in listing.json()["files"] if f["name"] == SEIZURE_FIXTURE_NAME), None
+        )
+        assert chosen is not None, (
+            f"{SEIZURE_FIXTURE_NAME} is not in the deployment's ingest root "
+            f"({listing.json()['root']}). Put it there with "
+            "`python -m scripts.seed_ingest_folder --osprey-config <the deployment's config>`."
+        )
+
+        draft = client.post(
+            "/v1/ingest/recipes",
+            json={
+                "label": "B13 — seizure record",
+                "connector_profile": "seizure-record-csv",
+                "source_location": chosen["source_location"],
+                "handling": _FIXTURE_HANDLING,
+                "legal_basis": "PACE s19 seizure — exhibit schedule",
+            },
+        )
+        assert draft.status_code == 201, draft.text
+        recipe_id = draft.json()["recipe_id"]
+
+        assert client.get(f"/v1/ingest/recipes/{recipe_id}/profile").status_code == 200
+        row_template = yaml.safe_load(
+            (Path(__file__).parent / "fixtures" / "seizure_recipe.yaml").read_text("utf-8")
+        )["row_template"]
+        mapped = client.put(
+            f"/v1/ingest/recipes/{recipe_id}/row-template",
+            json={"row_template": row_template, "unmapped_fields": []},
+        )
+        assert mapped.status_code == 200, mapped.text
+        assert client.post(f"/v1/ingest/recipes/{recipe_id}/verify", json={}).status_code == 200
+        assert client.post(f"/v1/ingest/recipes/{recipe_id}/publish", json={}).status_code == 200
+
+        run = client.post(f"/v1/investigations/{scope}/ingest/recipes/{recipe_id}/run", json={})
+        assert run.status_code == 200, run.text
+
+        return {
+            "scope": scope,
+            "hotlist": hotlist,
+            "alerts_before_the_ingest": alerts_before,
+            "run": run.json(),
+            "alerts": alerts_for(hotlist["id"]),
+        }
+
+
+def test_b13_an_ingest_fires_an_alert_naming_the_identifier_document_and_rule(
+    seizure_alert: dict, analyst: httpx.Client, seeded_scope: str
+) -> None:
+    """**B13**: "Ingest the later seizure record … An alert fires naming the matched identifier,
+    the triggering document and the rule."
+
+    **"Naming" is by reference, not by copy, and that is the design rather than a shortfall.**
+    `06_DECISIONS.md` ADR-038/039: an alert "stores references to evidence, never copies", and
+    access to those referents is re-checked against the reading principal at read time. So the
+    rule is `rule_id`, and the identifier and the document are read *through* `referent_node_ids`
+    — which is what this asserts, rather than asserting a denormalised copy the model
+    deliberately does not keep.
+    """
+    alerts = seizure_alert["alerts"]
+    assert alerts, (
+        "the ingest fired no alert against a hotlist on an identifier it loads — B13's whole "
+        f"claim. Run report: {seizure_alert['run_after_hotlist']}"
+    )
+    alert = alerts[0]
+
+    # The rule — namespaced, so a hotlist and a saved pattern cannot collide on an identifier.
+    assert alert["rule_id"] == f"hotlist:{seizure_alert['hotlist']['id']}"
+    assert alert["evidence_available"] is True, (
+        "the alert's evidence is not readable by the analyst it fired for"
+    )
+    assert alert["referent_node_ids"], "the alert names no referent, so it names no evidence"
+
+    # The matched identifier, read through the referent.
+    nodes, _ = _expand(analyst, seeded_scope, alert["referent_node_ids"])
+    referents = {n["id"]: n for n in nodes if n["id"] in set(alert["referent_node_ids"])}
+    assert referents, "the alert's referents are not reachable"
+    matched = [
+        n for n in referents.values() if n["properties"].get("value_normalised") == SIM_B_IMSI
+    ]
+    assert matched, (
+        f"no referent carries the hotlisted identifier {SIM_B_IMSI}: "
+        f"{[n['properties'] for n in referents.values()]}"
+    )
+
+    # The triggering document, read through that referent's own provenance.
+    sources = matched[0]["provenance"]["sources"]
+    assert any(SEIZURE_FIXTURE_NAME in str(s["document_id"]) for s in sources), (
+        f"the matched entity does not name the seizure record as its source: {sources}"
+    )
+
+
+def test_b13_a_hotlist_alone_fires_nothing_until_the_ingest_arrives(
+    seizure_alert: dict,
+) -> None:
+    """**The red baseline, and it is the real condition rather than a planted one.**
+
+    The hotlist existed before the seizure record was ingested and had no alerts. Without this,
+    B13's assertion could be satisfied by an alert that was already in the store, or by one fired
+    by something other than this load — and the row's whole claim is that *the ingest* fires it.
+
+    It also pins the behaviour that made the first version of this fixture fail: a hotlist watches
+    incoming data and does not retro-fire against what is already in the graph.
+    """
+    assert seizure_alert["alerts_before_the_ingest"] == [], (
+        "the hotlist already had alerts before anything was ingested, so B13's alert cannot be "
+        "attributed to the ingest"
+    )
+    assert seizure_alert["run"]["rows_read"] == 2, seizure_alert["run"]
+    assert seizure_alert["run"]["nodes_created"] >= 1, (
+        "the ingest created nothing, so it had no new data to alert on — this is the shape round "
+        "13cb's seeder caused by seeding the SIM that B13 is supposed to bring"
+    )
+
+
+def test_b14_an_alert_opens_into_an_investigation_linked_to_the_original(
+    seizure_alert: dict, analyst: httpx.Client
+) -> None:
+    """**B14**: "Open the alert into a pre-populated investigation … The new working set contains
+    the alert's entities and a link to the originating investigation."
+
+    Both halves, because either alone is easy: a branch with no entities is a link to nothing, and
+    entities in an unlinked investigation lose the provenance of why an analyst is looking at
+    them. The link is `Investigation.branched_from`, the same mechanism `branch_investigation`
+    uses — not new infrastructure.
+    """
+    alert = seizure_alert["alerts"][0]
+
+    jumped = analyst.post(f"/v1/alerts/{alert['id']}/jump")
+    assert jumped.status_code == 201, jumped.text
+    result = jumped.json()
+
+    assert result["seeded_count"] >= 1, (
+        f"the new investigation was seeded with nothing: {result}"
+    )
+    assert result["unreadable_count"] == 0, (
+        f"{result['unreadable_count']} of the alert's referents were unreadable at jump time"
+    )
+    assert result["investigation"]["branched_from"] == seizure_alert["scope"], (
+        "the new investigation is not linked back to the one the alert fired in: "
+        f"{result['investigation'].get('branched_from')!r} != {seizure_alert['scope']!r}"
+    )
 
 
 def test_the_delta_stream_is_reachable_through_the_proxy(analyst: httpx.Client) -> None:

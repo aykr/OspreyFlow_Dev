@@ -397,6 +397,17 @@ reads the dates the way a UK carrier wrote them, and the difference does not ann
 the graph looks perfectly reasonable either way. That is the demonstrable point: **adding a new
 carrier layout is a file, not a release.**
 
+**Then the alert, which is the moment the demo turns from "we loaded data" into "the system told
+me something".** Put the SIM's IMSI on a hotlist (`234150123456782` — the SIM still in the handset
+at seizure), then ingest `seizure-record.csv` from the same ingest folder with the
+`seizure-record-csv` connector. The load fires an alert naming the rule and the entity, and
+**Open into investigation** branches a new working set pre-populated with the alert's entities and
+linked back to where it fired.
+
+Order matters and is worth saying out loud: create the hotlist *before* the ingest. A hotlist
+watches incoming data; it does not retro-fire against what is already in the graph. Doing it the
+other way round produces no alert and looks like a defect.
+
 **After the run, search the number — this is the step that makes it a demonstration rather than a
 report.** Put `+441621926368` into the search box and the `Endpoint` the load just created comes
 back; add it to the working set and expand, and the calls are there. Saying out loud that the

@@ -58,13 +58,39 @@ sightings into a rendered deployment.
 | B15 | **over the wire** | `test_b15_both_sims_link_to_one_device_in_one_traversal` |
 | B17 | **over the wire** | `test_b17_the_devices_location_events_are_reachable_and_windowed` |
 | B16, B18 | **data half only** | `test_b16_…`, `test_b18_…`; rendering and playback stay the Glass tier |
-| A1, A6, B6 | still not | Need content the graph does not hold — below |
-| B13, B14 | still not | An alert needs an ingest to fire it |
+| A1, A6, B6 | still not | A6/B6 need extraction (round 13cda removed the blocker; see there). A1 needs a placed site grid |
+| B13, B14 | **over the wire** | `test_b13_an_ingest_fires_an_alert_naming_the_identifier_document_and_rule`, `test_b14_an_alert_opens_into_an_investigation_linked_to_the_original` |
 | A7 (item-category), A15 (consult-originator block) | still not | Recorded gaps, not seeding |
 
 Each of the six was **shown red first** against a deployment seeded `hmp,fixture-corp` only, then
 green against **the same deployment** after seeding `scenarios` — one variable, not two
 deployments.
+
+**Built, 28 September 2026 (round 13cdb) — B13 and B14.** The seizure record is a real file in
+the deployment's ingest root, read by `connectors/seizure-record-csv.yaml`, walked Connect →
+Profile → Map → Verify → Publish → Run as the demo analyst. `09_INGEST_STUDIO.md`'s rule that a
+row worded "ingest …" is performed through the Studio rather than seeded around is honoured: no
+candidate, node or edge for this row is seeded.
+
+**Two corrections came out of building it, and both were defects in what this repository already
+had.**
+
+1. **The hotlist must be on the SIM's IMSI, not the handset's IMEI.** `services/api/evaluation.py`
+   matches a hotlist against `node.properties["value_normalised"]` — an `Endpoint` property. The
+   handset is a `Device` carrying `imei`, so a hotlist on it can never fire. B13's own wording
+   ("the matched identifier") does not say which, and this is now recorded so the next reader does
+   not lose an hour to it.
+2. **Round 13cb's `scenarios` seeder seeded the SIM that B13 is supposed to ingest**, leaving the
+   ingest nothing to create, producing no change entry, and firing no alert against a graph that
+   looked entirely correct. The seeder now holds the *earlier* state — the handset with the SIM it
+   held before the swap — and B13's ingest reveals the swap, which is what "the **later** seizure
+   record" means. **B15 therefore depends on B13's ingest for its second SIM**, which is the
+   scenario's own order rather than a test artefact.
+
+**B13 is inherently a "new data arrives" row.** A hotlist watches incoming data and does not
+retro-fire against what is already in the graph, so the row can only be walked on a deployment
+where this record has not been ingested. The fixture asserts that precondition by name rather than
+failing three assertions later on an empty list.
 
 **A6 and B6 — the blocker is removed, the rows are not yet walked (round 13cda, 28 September
 2026).** Both are document-view rows, and a document's *spans* come from the extraction-candidates

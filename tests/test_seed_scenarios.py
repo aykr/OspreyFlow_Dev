@@ -69,19 +69,28 @@ def test_b8_seeds_no_same_as_edge() -> None:
     )
 
 
-def test_b15_the_handset_carries_two_sims() -> None:
+def test_b15_the_seeder_holds_the_pre_swap_state_only() -> None:
+    """**One SIM, not two — corrected in round 13cdb.**
+
+    13cb seeded both, which made B13 impossible: `08_ACCEPTANCE_SCENARIOS.md` B13 ingests "the
+    **later** seizure record", and the swap is what that record reveals. With both SIMs already in
+    the graph the ingest created nothing, produced no change entry, and the hotlist never fired —
+    found by B13 failing against a graph that looked entirely correct.
+    """
     nodes, edges, landmarks = build_everything()
     handset = str(landmarks["handset_id"])
     sims = list(landmarks["sim_ids"])
     by_id = {n.id: n for n in nodes}
 
     assert by_id[handset].type == "Device", "the handset is a Device; imei is not an endpoint_kind"
-    assert {by_id[s].properties["endpoint_kind"] for s in sims} == {"imsi"}
+    assert len(sims) == 1, (
+        f"the seeder holds the pre-swap state and must seed one SIM, not {len(sims)} — seeding "
+        "the swapped SIM leaves B13's ingest with nothing to create and no alert fires"
+    )
+    assert by_id[sims[0]].properties["endpoint_kind"] == "imsi"
 
     paired = {(e.source, e.target) for e in edges if e.type == "PAIRED_WITH"}
-    assert paired == {(sims[0], handset), (sims[1], handset)}, (
-        "B15's 'both SIMs link to one device' must be one traversal, not two shapes"
-    )
+    assert paired == {(sims[0], handset)}
 
 
 def test_b16_b18_the_sightings_are_an_ordered_track_around_the_seizure_date() -> None:
@@ -170,7 +179,7 @@ def test_the_seed_counts_are_what_the_rows_need() -> None:
     rather than only as a downstream failure."""
     nodes, edges, _ = build_everything()
     assert dict(Counter(n.type for n in nodes)) == {
-        "Endpoint": 8,
+        "Endpoint": 7,
         "Device": 1,
         "Person": 8,
         "Location": 4,
@@ -178,6 +187,6 @@ def test_the_seed_counts_are_what_the_rows_need() -> None:
     assert dict(Counter(e.type for e in edges)) == {
         "USES": 8,
         "COMMUNICATED_WITH": 4,
-        "PAIRED_WITH": 2,
+        "PAIRED_WITH": 1,
         "PRESENT_AT": 4,
     }

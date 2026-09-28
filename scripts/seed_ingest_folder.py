@@ -43,11 +43,16 @@ from pathlib import Path
 
 import yaml
 from tests.scenarios.fixtures.cdr import generate_cdr_rows
+from tests.scenarios.fixtures.seizure_record import SEIZURE_CSV_COLUMNS, generate_seizure_rows
 
 #: The name `08_ACCEPTANCE_SCENARIOS.md`'s B1-B3 and the over-the-wire test both expect. Changing
 #: it breaks `test_b1_…`/`test_b2_…`/`test_b3_…`, which look the file up by name — that coupling
 #: is deliberate and is what makes this module's output load-bearing rather than decorative.
 CDR_FIXTURE_NAME = "carrier-a-cdr.csv"
+
+#: The exhibit schedule B13 ingests to fire a hotlist alert — round 13cdb. Named here for the same
+#: reason the CDR file is: the over-the-wire cases select it from the Studio's own listing by name.
+SEIZURE_FIXTURE_NAME = "seizure-record.csv"
 
 #: The default in `packages/schemas/deployment.py` and `05_DEPLOYMENT.md` §3.
 DEFAULT_INGEST_ROOT = "/var/lib/osprey/ingest"
@@ -68,6 +73,32 @@ def write_cdr_fixture(ingest_root: Path) -> Path:
     destination = ingest_root / CDR_FIXTURE_NAME
     with destination.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+    return destination
+
+
+def write_seizure_fixture(ingest_root: Path) -> Path:
+    """Write the seizure record `08_ACCEPTANCE_SCENARIOS.md` B13 ingests — round 13cdb.
+
+    B13 is worded "**ingest** the later seizure record", so it is performed through the Studio
+    rather than seeded into the graph (`09_INGEST_STUDIO.md`'s own rule), and that needs the
+    record to exist as a file a connector reads. `connectors/seizure-record-csv.yaml` is the
+    layout; these are its rows.
+
+    The identifiers come from `seizure_record.py`, the same module `scenario_cohorts.py` takes
+    the seeded handset's IMEI from, so the ingest and the device already in the graph are the
+    same handset. Minting them separately would give B13 an alert on a device B15 never pivots
+    on — two fixtures that both look right.
+    """
+    rows = generate_seizure_rows()
+    if not rows:
+        raise ValueError("the seizure-record generator produced no rows")
+
+    ingest_root.mkdir(parents=True, exist_ok=True)
+    destination = ingest_root / SEIZURE_FIXTURE_NAME
+    with destination.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(SEIZURE_CSV_COLUMNS))
         writer.writeheader()
         writer.writerows(rows)
     return destination
@@ -107,7 +138,7 @@ def _run(args: argparse.Namespace) -> int:
         ingest_root = args.ingest_root or Path(DEFAULT_INGEST_ROOT)
 
     try:
-        written = write_cdr_fixture(ingest_root)
+        written = [write_cdr_fixture(ingest_root), write_seizure_fixture(ingest_root)]
     except PermissionError:
         # The documented default lives under /var, which an ordinary user cannot create. Say so
         # by name rather than letting a traceback stand in for an instruction.
@@ -118,10 +149,12 @@ def _run(args: argparse.Namespace) -> int:
         )
         return 1
 
-    print(f"wrote {written} ({written.stat().st_size} bytes)")
+    for path in written:
+        print(f"wrote {path} ({path.stat().st_size} bytes)")
     print(
-        "The Ingest Studio's Connect stage will now list it. Map it with the `cdr-generic-csv` "
-        "connector — it declares `date_order: dmy`, which this file's own dates need."
+        "The Ingest Studio's Connect stage will now list them. Map the CDR with the "
+        "`cdr-generic-csv` connector — it declares `date_order: dmy`, which that file's own dates "
+        "need — and the seizure record with `seizure-record-csv`."
     )
     return 0
 

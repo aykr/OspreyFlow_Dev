@@ -93,3 +93,56 @@ def generate_seizure_record(seed: int = 7) -> dict[str, object]:
         ],
         "seizure_date": SEIZURE_DATE,
     }
+
+
+#: The column order a seizure record arrives in — round 13cdb. One row per SIM recovered with the
+#: handset, which is how a real exhibit schedule reads: the device is the subject, each SIM a line
+#: against it.
+SEIZURE_CSV_COLUMNS = (
+    "handset_imei",
+    "imsi",
+    "msisdn",
+    "paired_from",
+    "paired_to",
+    "seizure_date",
+)
+
+
+def generate_seizure_rows(seed: int = 7) -> list[dict[str, str]]:
+    """The same record `generate_seizure_record` returns, in the shape a connector reads.
+
+    **Why this lives here rather than in the seeder or the test.** `08_ACCEPTANCE_SCENARIOS.md`
+    B13 is worded "*ingest* the later seizure record", and `09_INGEST_STUDIO.md`'s rule is that a
+    row worded that way is performed through the Studio rather than seeded around. So the record
+    has to exist as a *file a connector can read*, and the rows must come from the same generator
+    the graph fixtures use — otherwise B13's ingest and B15's pivot land on two handsets that
+    both look right, which is exactly the trap round 13cb caught in `scenario_cohorts.py`.
+
+    Values are **raw**, not normalised: `HANDSET_IMEI_RAW` is `49-015420/3237518`, with the
+    separators a real exhibit schedule carries. Writing the normalised form would make the
+    `imei` Knowledge Adapter's work invisible, and B13's whole point is that the identifier
+    matches a hotlist *after* normalisation.
+
+    Dates are ISO-8601 with an offset, so `datetime`'s own "a missing offset is an error, not a
+    guess" rule is satisfied by the data rather than by a connector-level default.
+    """
+    record = generate_seizure_record(seed)
+    seizure_date = record["seizure_date"]
+    assert isinstance(seizure_date, datetime)
+
+    rows: list[dict[str, str]] = []
+    for sim in record["sims"]:  # type: ignore[union-attr]
+        paired_to = sim["paired_to"]
+        rows.append(
+            {
+                "handset_imei": str(record["handset_imei_raw"]),
+                "imsi": str(sim["imsi_raw"]),
+                # The SIM that was out of the handset at seizure has no MSISDN read off it; an
+                # empty cell is the honest representation and the binding must tolerate it.
+                "msisdn": str(sim["msisdn_raw"] or ""),
+                "paired_from": sim["paired_from"].isoformat(),
+                "paired_to": paired_to.isoformat() if paired_to else "",
+                "seizure_date": seizure_date.isoformat(),
+            }
+        )
+    return rows

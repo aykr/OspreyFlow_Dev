@@ -187,3 +187,17 @@ def test_a_pinned_token_produces_the_same_fixture_in_a_different_process() -> No
         f"test can never agree on what was written:\n{runs[0]}vs\n{runs[1]}"
     )
     assert runs[0].strip(), "the subprocess produced no output — the check would be vacuous"
+
+
+def test_the_pre_swap_state_omits_the_swapped_sim() -> None:
+    """**What a seeder asks for — round 13cdb.** `08_ACCEPTANCE_SCENARIOS.md` B13 ingests the
+    later seizure record and the swap is what it reveals, so a deployment seeded with both SIMs
+    leaves that ingest nothing to create and the hotlist never fires."""
+    both = generate_device_legs(run_token="fixed")
+    earlier = generate_device_legs(run_token="fixed", include_swapped_sim=False)
+
+    assert len(both.sim_ids) == 2
+    assert len(earlier.sim_ids) == 1
+    assert earlier.sim_ids[0] == both.sim_ids[0], "the SIM that is kept must be the earlier one"
+    assert earlier.handset_id == both.handset_id
+    assert [e for e in earlier.edges if e.type == "PAIRED_WITH"], "the handset lost its only SIM"

@@ -15,7 +15,7 @@ simply not there. A row proven only in process no longer counts towards clause 3
 |        | from one shared `Endpoint` |
 | B7 | A second cohort sharing one messaging-handle `Endpoint` |
 | B8 | *Nothing.* The `SAME_AS` is the analyst's own asserted link — see below |
-| B15 | A handset (`imei`) with two SIMs (`imsi`) `PAIRED_WITH` it |
+| B15 | A handset (`imei`) with the SIM it held *before* the swap; B13's ingest brings the other |
 | B16, B17, B18 | Location `Event`s for that handset, ordered in time, so a track
 |               | exists to brush and plot |
 
@@ -258,7 +258,12 @@ def build_everything() -> tuple[list[Node], list[Edge], dict[str, object]]:
         shared_endpoint_id=SHARED_ENDPOINT_ID, prefix="alpha", run_token=SCENARIOS_TOKEN
     )
     handles: Cohort = generate_handle_cohort(prefix="beta", run_token=SCENARIOS_TOKEN)
-    legs: DeviceLegs = generate_device_legs(run_token=SCENARIOS_TOKEN)
+    # **The earlier state only — see `generate_device_legs`' own docstring.** B13 ingests the
+    # later seizure record, and that ingest is what must create the swapped SIM; seeding it here
+    # left the ingest with nothing to do and the hotlist never fired.
+    legs: DeviceLegs = generate_device_legs(
+        run_token=SCENARIOS_TOKEN, include_swapped_sim=False
+    )
     sighting_nodes, sighting_edges = build_sightings(legs)
 
     nodes = [shared, *cohort.nodes, *handles.nodes, *legs.nodes, *sighting_nodes]
