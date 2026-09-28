@@ -1,4 +1,4 @@
-# Recipe for Census TIGER-Line — `docs/07_BUILD_PLAN.md` Phase 5
+# Recipe for Census TIGER-Line — `process/07_BUILD_PLAN.md` Phase 5
 # Checkpoint 3c. `tiger_geoid` is already a Location identifier (used as
 # a plausible id value by the CRS-reprojection fixtures, never actually
 # produced by a TIGER-Line-shaped connector until now).
@@ -6,7 +6,7 @@
 # Real TIGER-Line road-segment records carry address *ranges* along the
 # segment (`LFROMHN`/`LTOHN`/`RFROMHN`/`RTOHN`), not a point — a genuine
 # format difference from every other gazetteer here, per
-# `docs/07_BUILD_PLAN.md`'s own stated caveat. This recipe maps a
+# `process/07_BUILD_PLAN.md`'s own stated caveat. This recipe maps a
 # pre-computed representative point (`MID_LON`/`MID_LAT`) rather than
 # performing real range-to-point interpolation, which is a Phase-6/
 # extraction-time computation, not this connector's job — flagged, not

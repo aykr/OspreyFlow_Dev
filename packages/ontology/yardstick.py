@@ -1,4 +1,4 @@
-"""Probability-yardstick loader — `docs/01_DOMAIN_MODEL.md` §5, `06_DECISIONS.md` ADR-046's own
+"""Probability-yardstick loader — `spec/01_DOMAIN_MODEL.md` §5, `06_DECISIONS.md` ADR-046's own
 Stage 4b scope. "Probability bands come from a configured yardstick file, not from the codebase"
 (§5) — the exact `load_handling_scheme` shape (`packages/ontology/handling.py`), applied to a
 different YAML directory. Swapping `phia.yaml` for a different organisation's own scale, or

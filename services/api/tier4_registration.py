@@ -1,4 +1,4 @@
-"""Tier-4 WMTS capabilities parsing and CRS gate — `docs/00_ARCHITECTURE.md`
+"""Tier-4 WMTS capabilities parsing and CRS gate — `spec/00_ARCHITECTURE.md`
 §1.2 ("Capabilities documents are parsed at registration") and §1.2.2 (the
 CRS refusal: "`osprey map add` reads it and refuses a service that offers
 neither WGS84 nor Web Mercator rather than registering something that

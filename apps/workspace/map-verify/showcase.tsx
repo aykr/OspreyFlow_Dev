@@ -1,4 +1,4 @@
-// Map contrast-floor showcase — `docs/00_ARCHITECTURE.md` §1.2.1's
+// Map contrast-floor showcase — `spec/00_ARCHITECTURE.md` §1.2.1's
 // Verify: "renders a fixture graph over it and compares against a stored
 // reference for contrast floor compliance." Not a live MapLibre/Sigma
 // instance (the tier-1 PMTiles file doesn't exist yet, an already-
@@ -15,7 +15,7 @@
 // named as a gap rather than silently skipped.
 import { createRoot } from "react-dom/client";
 
-import "../../../docs/design/tokens.css";
+import "../src/design/tokens.css";
 import {
   CHANNEL_HEX,
   SURFACE_APP_DARK_HEX,

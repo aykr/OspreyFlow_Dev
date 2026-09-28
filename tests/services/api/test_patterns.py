@@ -1,5 +1,5 @@
 """The visual query builder's own preview and sync/job routing decisions —
-`docs/02_GLASS_FRONTEND.md` §3.3, `docs/08_ACCEPTANCE_SCENARIOS.md` B19, `docs/06_DECISIONS.md`
+`spec/02_GLASS_FRONTEND.md` §3.3, `spec/08_ACCEPTANCE_SCENARIOS.md` B19, `spec/06_DECISIONS.md`
 ADR-030. Exercised against a minimal fake `GraphPort`, the same shape `test_supersede.py` uses for
 `submit_supersede_node`'s own sync/job decision: the thing under test is `preview_pattern`/
 `run_pattern`'s own logic, not `GraphPort.match`/`match_count` themselves (those are proven

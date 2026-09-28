@@ -1,5 +1,5 @@
 // Fetches `GET /v1/map/providers` (`services/api/app.py`) — the basemap
-// registry the layer control reads (`docs/02_GLASS_FRONTEND.md` §3.5),
+// registry the layer control reads (`spec/02_GLASS_FRONTEND.md` §3.5),
 // mirroring `ontology/schema.ts`'s `fetchOntologyRegistry` pattern
 // exactly: one fetch per session, no client-side duplication of what
 // `osprey.yaml` already declares.

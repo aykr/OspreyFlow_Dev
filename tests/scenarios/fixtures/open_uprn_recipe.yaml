@@ -1,4 +1,4 @@
-# Recipe for Open UPRN — `docs/07_BUILD_PLAN.md` Phase 5 Checkpoint 3c.
+# Recipe for Open UPRN — `process/07_BUILD_PLAN.md` Phase 5 Checkpoint 3c.
 # `uprn` is already a Location identifier (Phase 5's own HMP/site-grid
 # work never needed it directly, but it was reserved from the start).
 # Open UPRN's real distribution ships both BNG and WGS84 columns; this

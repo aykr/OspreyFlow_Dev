@@ -1,4 +1,4 @@
-// Pure math for the shared playback clock — `docs/02_GLASS_FRONTEND.md` §3.4
+// Pure math for the shared playback clock — `spec/02_GLASS_FRONTEND.md` §3.4
 // ("Playback — animate the brush forward at 0.5x to 8x"), extracted out of
 // `usePlayback.ts` the same "pure-function-first" way `timeline/math.ts`
 // already extracts `windowFromZoomPercent` out of `Timeline.tsx`: testable

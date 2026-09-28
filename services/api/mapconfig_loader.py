@@ -3,7 +3,7 @@ recipe_loader.py`'s `yaml.safe_load` + `model_validate` shape exactly
 (`schemas/mapconfig.py`'s own module docstring).
 
 `public_view()` is the sanitised projection the Conduit serves to the
-Glass (`GET /v1/map/providers`, `docs/02_GLASS_FRONTEND.md` §3.5's "layer
+Glass (`GET /v1/map/providers`, `spec/02_GLASS_FRONTEND.md` §3.5's "layer
 control listing every provider declared in `osprey.yaml`"). Not
 principal-scoped and not audited — the same category `get_ontology_route`
 already established for deployment-wide schema metadata

@@ -1,4 +1,4 @@
-"""A minimal job queue — `docs/03_CONDUIT_MIDDLEWARE.md` §2: "Queue is
+"""A minimal job queue — `spec/03_CONDUIT_MIDDLEWARE.md` §2: "Queue is
 Valkey Streams in `local-lite`... Job state, progress and failure are
 first-class: every job is addressable, has a progress stream, and reports
 partial results where partial results are meaningful." `GET /v1/jobs/{id}/

@@ -1,4 +1,4 @@
-"""Publish (`docs/09_INGEST_STUDIO.md` §6) end to end, against a live
+"""Publish (`spec/09_INGEST_STUDIO.md` §6) end to end, against a live
 Postgres (`StudioRecipeStore`) and a live ArcadeDB (`GraphPort`) — the two
 things `tests/services/api/test_studio_publish_routes.py` deliberately
 fakes away. Two things proven here that a route-level test with fakes

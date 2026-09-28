@@ -1,4 +1,4 @@
-# Recipe for Code-Point Open — `docs/07_BUILD_PLAN.md` Phase 5
+# Recipe for Code-Point Open — `process/07_BUILD_PLAN.md` Phase 5
 # Checkpoint 3c. A postcode-centroid gazetteer, British National Grid
 # (EPSG:27700) like `geo_bng_recipe.yaml`. `postcode` here is the new
 # *gazetteer* identifier (Checkpoint 3c's own ontology bump, v9) —

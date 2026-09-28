@@ -1,4 +1,4 @@
-"""Statelessness — `docs/03_CONDUIT_MIDDLEWARE.md` §1: "Any Conduit
+"""Statelessness — `spec/03_CONDUIT_MIDDLEWARE.md` §1: "Any Conduit
 instance can serve any request for any session; kill one mid-investigation
 and the analyst notices nothing." This phase's exit
 criterion asks this to be proven, not assumed.

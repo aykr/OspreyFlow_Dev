@@ -1,4 +1,4 @@
-// Stage 5 of the Ingest Studio — `docs/09_INGEST_STUDIO.md` §6. The recipe
+// Stage 5 of the Ingest Studio — `spec/09_INGEST_STUDIO.md` §6. The recipe
 // is written, versioned and optionally scheduled. Every action here is
 // role-gated server-side (§8): publishing and scheduling need
 // `source_approver`, reopening a published recipe for a further edit needs

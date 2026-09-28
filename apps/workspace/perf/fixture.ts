@@ -1,4 +1,4 @@
-// The 50k-node/250k-edge performance fixture — `docs/02_GLASS_FRONTEND.md`
+// The 50k-node/250k-edge performance fixture — `spec/02_GLASS_FRONTEND.md`
 // §5's performance budget table names this exact shape as the measurement
 // baseline. Synthetic and in-repo, standing rule 9: a seeded
 // pseudo-random generator, no real intelligence data.

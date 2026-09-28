@@ -1,4 +1,4 @@
-"""Investigation metadata — `docs/03_CONDUIT_MIDDLEWARE.md` §3.1.
+"""Investigation metadata — `spec/03_CONDUIT_MIDDLEWARE.md` §3.1.
 
 Neither the graph itself (the Vault's job) nor ephemeral working-set state
 (Valkey's job, `working_set/store.py`) — an investigation record is small,

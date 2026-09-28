@@ -1,6 +1,6 @@
 """`AnalyticsPort` conformance suite —
-`docs/04_VAULT_BACKEND.md` §6, `docs/00_ARCHITECTURE.md` §2.2,
-`docs/01_DOMAIN_MODEL.md` §9.
+`spec/04_VAULT_BACKEND.md` §6, `spec/00_ARCHITECTURE.md` §2.2,
+`spec/01_DOMAIN_MODEL.md` §9.
 
 Parametrised over `ANALYTICS_PORT_ADAPTERS` in `tests/conformance/registry.py`
 — each entry's `context(events)` seeds a fresh store from this test's own

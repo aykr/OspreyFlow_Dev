@@ -7,7 +7,7 @@
 # `versions.lock` locks each owned image to a real registry digest, not `unresolved`.
 #
 # **Same trivy gate as `ci.yml`'s own `trivy-image-*` jobs, deliberately, not a lighter one for a
-# release** — `docs/07_BUILD_PLAN.md`'s standing rule that a service's image scan lands with the
+# release** — `process/07_BUILD_PLAN.md`'s standing rule that a service's image scan lands with the
 # service applies here too: a release is not a lower bar than a PR, so a HIGH/CRITICAL finding
 # fails the release exactly as it would fail CI, with the same `ignore-unfixed: true` (base-OS
 # packages this service never touches, no upstream fix yet — noise, not a gate) and no ignore file.
@@ -83,7 +83,7 @@ jobs:
             build_args: ""
           - service: harness
             dockerfile: harness/Dockerfile
-            # The fix `docs/07_BUILD_PLAN.md`'s round-11 entry names: this image carries no `.git`
+            # The fix `process/07_BUILD_PLAN.md`'s round-11 entry names: this image carries no `.git`
             # (`harness/Dockerfile`'s own header), so `harness.render.git_sha()` cannot answer for
             # itself once released — baking the exact commit every other image in this matrix was
             # built from is what makes a pull-mode render's owned-image tag match what got pushed.

@@ -1,4 +1,4 @@
-"""Profile (`docs/09_INGEST_STUDIO.md` §2/§3) — bridges a Connect-stage
+"""Profile (`spec/09_INGEST_STUDIO.md` §2/§3) — bridges a Connect-stage
 `StudioRecipeDraft` to `services/ingest/profiler.py`'s headless
 `profile_source`.
 

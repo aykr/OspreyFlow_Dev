@@ -2,7 +2,7 @@
 live-Postgres correctness, mirroring `test_sites_store.py`'s own
 discipline: the JSON-encoded `content` round trip and the existence-leak
 behaviour deserve a direct proof rather than only exercise through
-route-level fakes. `docs/09_INGEST_STUDIO.md` §2, §6."""
+route-level fakes. `spec/09_INGEST_STUDIO.md` §2, §6."""
 
 from __future__ import annotations
 

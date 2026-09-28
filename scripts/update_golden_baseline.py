@@ -1,4 +1,4 @@
-"""Regenerate `tests/golden/baseline.json` — `docs/03_CONDUIT_MIDDLEWARE.md` §5.2's "the golden
+"""Regenerate `tests/golden/baseline.json` — `spec/03_CONDUIT_MIDDLEWARE.md` §5.2's "the golden
 set... reports precision and recall per entity type against the previous version".
 
 Run this deliberately, after a prompt or model change, and commit the result with a message

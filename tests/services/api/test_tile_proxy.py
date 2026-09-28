@@ -1,4 +1,4 @@
-"""`services/api/tile_proxy.py` — `docs/00_ARCHITECTURE.md` §1.2's tile
+"""`services/api/tile_proxy.py` — `spec/00_ARCHITECTURE.md` §1.2's tile
 proxy — a disclosed known-gaps
 closure's WMTS KVP fix for the `MapProvider.endpoint` conflict Checkpoint
 3b/3c left open."""

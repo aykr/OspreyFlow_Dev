@@ -1,4 +1,4 @@
-"""`services/geocoder/match.py` — `docs/01_DOMAIN_MODEL.md` §4's
+"""`services/geocoder/match.py` — `spec/01_DOMAIN_MODEL.md` §4's
 entity-resolution design mirrored for gazetteer matching,
 `GraphPort` is faked (only
 `upsert_edges` is ever called) — the same "prove only the wiring, fake the

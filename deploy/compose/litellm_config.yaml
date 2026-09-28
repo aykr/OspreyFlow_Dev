@@ -1,7 +1,7 @@
 # LiteLLM proxy config for `make dev-up`'s `litellm` service — routes the
 # logical model names `adapters.model_litellm.CONFORMANCE_MODEL`/
 # `CONFORMANCE_EMBED_MODEL` call to the Ollama backend this same compose
-# file brings up. `docs/06_DECISIONS.md` ADR-020 is what pins the actual
+# file brings up. `spec/06_DECISIONS.md` ADR-020 is what pins the actual
 # model weights (by digest, verified at the `ollama` service's own
 # startup); this file only wires names to a backend, so the pin lives in
 # exactly one place rather than being duplicated here.

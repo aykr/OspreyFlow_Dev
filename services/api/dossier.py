@@ -1,4 +1,4 @@
-"""Dossier document assembly — `docs/08_ACCEPTANCE_SCENARIOS.md` B6: "Message content renders
+"""Dossier document assembly — `spec/08_ACCEPTANCE_SCENARIOS.md` B6: "Message content renders
 with the entity spans highlighted in place."
 
 **Accepted candidates only, deliberately.** `09_INGEST_STUDIO.md` §7's own review queue (pending

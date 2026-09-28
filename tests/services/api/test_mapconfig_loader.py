@@ -1,4 +1,4 @@
-"""`services/api/mapconfig_loader.py` — `docs/00_ARCHITECTURE.md` §1.2."""
+"""`services/api/mapconfig_loader.py` — `spec/00_ARCHITECTURE.md` §1.2."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Map (`docs/09_INGEST_STUDIO.md` §4) — the row-template editor's own
+"""Map (`spec/09_INGEST_STUDIO.md` §4) — the row-template editor's own
 backend surface, over the same `StudioRecipeDraft`/`RowTemplate` schemas
 Connect and Profile already use.
 

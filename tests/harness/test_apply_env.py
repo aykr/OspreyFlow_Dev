@@ -246,9 +246,10 @@ def test_the_deployment_this_file_starts_is_a_real_one_and_the_teardown_removes_
 
     **Two real branches, round 10** — the same split `tests/harness/test_six_screen_live_exit.py`
     makes, for the identical reason: Preflight's `memory`/`disk` checks now verdict on the container
-    runtime's own daemon (`docs/07_BUILD_PLAN.md` Stage 2 §2's round-10 entry), and this sandbox's
-    daemon genuinely does not have `local-lite`'s floor free. `main()` calls `--build --no-build`
-    directly rather than through `_rendered_env` here, since this branch needs the real exit code
+    runtime's own daemon (`process/07_BUILD_PLAN.md` Stage 2 §2's round-10 entry), and this
+    sandbox's daemon genuinely does not have `local-lite`'s floor free. `main()` calls
+    `--build --no-build` directly rather than through `_rendered_env` here, since this branch
+    needs the real exit code
     and stderr `_rendered_env`'s own contract discards. On a daemon below the floor, `main()`
     correctly refuses at the `preflight` stage before `up` ever runs — asserted by name, not merely
     by a nonzero exit code, so an unrelated preflight failure (a stale port, a leftover DuckDB lock)

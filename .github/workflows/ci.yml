@@ -46,14 +46,14 @@ jobs:
       - run: uv run python scripts/licence_check.py
       - run: npm run licence-check
       # Deterministic proof that a GPL dependency fails the build
-      # (Phase 0 exit criterion, docs/07_BUILD_PLAN.md) — see
+      # (Phase 0 exit criterion, process/07_BUILD_PLAN.md) — see
       # tests/licence_check/test_gpl_rejection.py.
       - run: uv run pytest tests/licence_check
       # Same proof for the Node half's own isAllowed predicate — had no test at all until
       # 06_DECISIONS.md ADR-034 §B10's own gate audit found it.
       - run: node --test tests/licence_check/*.test.mjs
 
-  # `docs/06_DECISIONS.md` ADR-041 (accepted, option (b)): mechanical control for the
+  # `spec/06_DECISIONS.md` ADR-041 (accepted, option (b)): mechanical control for the
   # fetch-then-check authorization bug class found three times over (review.py, the fakes that
   # never exercised the query, pattern_store.py — and, checked directly while scoping the ADR,
   # three more live instances: sites.py, investigations.py, studio_recipes.py, all fixed the same
@@ -72,7 +72,7 @@ jobs:
 
   # `07_BUILD_PLAN.md`'s Phase 8 documentation-refresh entry: a small, real stand-in for
   # ADR-035's own still-unbuilt fail-closed demo registry, so a demo added with no matching
-  # docs/DEMO_GUIDE.md update fails here rather than being found at publication. See
+  # DEMO_GUIDE.md update fails here rather than being found at publication. See
   # scripts/demo_guide_check.py's own docstring.
   demo-guide-check:
     runs-on: ubuntu-latest
@@ -98,7 +98,7 @@ jobs:
       - run: uv run python scripts/domain_model_coverage_check.py
       - run: uv run pytest tests/test_domain_model_coverage_check.py
 
-  # Same shape, for `docs/03_CONDUIT_MIDDLEWARE.md`'s own route table — allowlist at
+  # Same shape, for `spec/03_CONDUIT_MIDDLEWARE.md`'s own route table — allowlist at
   # tests/fixtures/route_coverage_allowlist.txt. See scripts/route_coverage_check.py's own
   # docstring, including why paths are normalised before comparing.
   route-coverage-check:
@@ -174,7 +174,7 @@ jobs:
           exit-code: "1"
           skip-dirs: node_modules,.venv
 
-  # Standing rule (docs/07_BUILD_PLAN.md): each service's Dockerfile and its
+  # Standing rule (process/07_BUILD_PLAN.md): each service's Dockerfile and its
   # `trivy image` scan land in the phase that creates the service, not
   # batched into Phase 8. `services/ingest` is Phase 2's.
   # `ignore-unfixed`: unlike the fs scan above, an image scan turns up
@@ -195,7 +195,7 @@ jobs:
           exit-code: "1"
 
   # apps/workspace's Dockerfile — Phase 4's own, unpaid from Phase 4 until
-  # Stage 2 §5a (docs/06_DECISIONS.md ADR-049). Recorded there as a rule 8
+  # Stage 2 §5a (spec/06_DECISIONS.md ADR-049). Recorded there as a rule 8
   # repayment, not an exception: the rule keeps its full force, and a future
   # service that skips its image is still in violation.
   trivy-image-workspace:
@@ -212,7 +212,7 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
 
-  # harness/Dockerfile — Stage 2 §5b's own bootstrap image (docs/05_DEPLOYMENT.md §2's "one Docker
+  # harness/Dockerfile — Stage 2 §5b's own bootstrap image (spec/05_DEPLOYMENT.md §2's "one Docker
   # command"), paid here as a rule-8 repayment the same way apps/workspace's was at Stage 2 §5a.
   trivy-image-harness:
     runs-on: ubuntu-latest
@@ -264,7 +264,7 @@ jobs:
       - run: uv sync
       - run: uv run pytest tests/conformance -k test_guard
 
-  # GraphPort's conformance suite (Phase 1, docs/07_BUILD_PLAN.md) runs
+  # GraphPort's conformance suite (Phase 1, process/07_BUILD_PLAN.md) runs
   # against a live ArcadeDB — the graph store local-lite actually ships —
   # not a fake. One container, matching local-lite's own shape.
   # tests/ingest's recipe-engine end-to-end test needs the same live
@@ -464,7 +464,7 @@ jobs:
       - run: npm run test:integration --workspace apps/workspace
 
   # `ModelPort`'s conformance suite (Phase 6 Stage 1) — needs a live LiteLLM
-  # proxy in front of Ollama, pinned per docs/06_DECISIONS.md ADR-020. A
+  # proxy in front of Ollama, pinned per spec/06_DECISIONS.md ADR-020. A
   # separate job from `conformance` above: that job's four stores are
   # already the ones `deploy/compose/dev.yaml` brings up together, but
   # Ollama/LiteLLM need a model pull and a mounted config file neither of
@@ -553,7 +553,7 @@ jobs:
             actual="$(docker exec ollama ollama list | awk -v m="$model" '$1 == m {print $2}')"
             if [ "$actual" != "$expected" ]; then
               echo "$model resolved to manifest $actual, expected $expected" >&2
-              echo "(docs/06_DECISIONS.md ADR-020) — the tag moved upstream; do not proceed silently." >&2
+              echo "(spec/06_DECISIONS.md ADR-020) — the tag moved upstream; do not proceed silently." >&2
               exit 1
             fi
           }
@@ -575,7 +575,7 @@ jobs:
           expected="0d3d19a32d3338f10357c0889762bd8d64bbdeba"
           if ! docker exec speaches test -d "/home/ubuntu/.cache/huggingface/hub/models--Systran--faster-whisper-tiny.en/snapshots/$expected"; then
             echo "Systran/faster-whisper-tiny.en did not resolve to commit $expected" >&2
-            echo "(docs/06_DECISIONS.md ADR-020) — the model moved upstream; do not proceed silently." >&2
+            echo "(spec/06_DECISIONS.md ADR-020) — the model moved upstream; do not proceed silently." >&2
             exit 1
           fi
       - name: Start LiteLLM
@@ -599,7 +599,7 @@ jobs:
           tests/golden
           tests/scenarios/test_phase6_extraction_and_resolution.py
 
-  # `describe_image()`'s own conformance case (`docs/06_DECISIONS.md` ADR-020's Stage 2 addendum)
+  # `describe_image()`'s own conformance case (`spec/06_DECISIONS.md` ADR-020's Stage 2 addendum)
   # — merge-to-main only, not every PR: a vision-language model is materially heavier (1.8GB) than
   # any of the three models `conformance-model` above pulls, the same `02_GLASS_FRONTEND.md` §5
   # precedent that keeps the full performance-budget run off every commit. Otherwise an exact
@@ -626,7 +626,7 @@ jobs:
           expected="c865c80afc38"
           if [ "$actual" != "$expected" ]; then
             echo "moondream:1.8b-v2-q4_K_M resolved to manifest $actual, expected $expected" >&2
-            echo "(docs/06_DECISIONS.md ADR-020) — the tag moved upstream; do not proceed silently." >&2
+            echo "(spec/06_DECISIONS.md ADR-020) — the tag moved upstream; do not proceed silently." >&2
             exit 1
           fi
       - name: Start LiteLLM
@@ -725,7 +725,7 @@ jobs:
       # (`registryCoverage.test.ts`, the same shape the Glass's own already covers above).
       - run: npm test --workspace apps/harness
 
-  # `docs/07_BUILD_PLAN.md` Phase 4's exit criterion, the parts "not
+  # `process/07_BUILD_PLAN.md` Phase 4's exit criterion, the parts "not
   # asserted in prose": the §5 performance budget, the §6 contrast floor,
   # and "keyboard navigation reaches every canvas action" — all three as
   # CI gates. Needs a real (if software-rendered — no GPU on a hosted

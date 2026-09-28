@@ -1,4 +1,4 @@
-"""HTTP route wiring for Map (`docs/09_INGEST_STUDIO.md` §4) —
+"""HTTP route wiring for Map (`spec/09_INGEST_STUDIO.md` §4) —
 `/v1/ingest/transforms`, `PUT .../row-template`,
 `GET .../map/sample-rows/{row_index}`, `POST .../map/handling-preview`.
 Mirrors `test_studio_recipe_routes.py`'s own discipline: a fake store, no

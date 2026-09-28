@@ -1,4 +1,4 @@
-// The timeline — `docs/02_GLASS_FRONTEND.md` §3.4,
+// The timeline — `spec/02_GLASS_FRONTEND.md` §3.4,
 // `08_ACCEPTANCE_SCENARIOS.md` A4/A5/A11/B16/B18. Density strip (bucketed
 // event counts) with a drag-to-select brush, plus a cyclical weekday×hour
 // mode — the two temporal modes the A1-A11 acceptance scenario

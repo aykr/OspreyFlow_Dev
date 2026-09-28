@@ -1,7 +1,7 @@
-# OspreyFlow deployment configuration — `docs/00_ARCHITECTURE.md` §1.2.
+# OspreyFlow deployment configuration — `spec/00_ARCHITECTURE.md` §1.2.
 #
 # This is the demo/CI configuration: tier 1 only, enforced by
-# `docs/07_BUILD_PLAN.md`'s standing rule 3 ("the demo and CI run on tier 1
+# `process/07_BUILD_PLAN.md`'s standing rule 3 ("the demo and CI run on tier 1
 # providers only") and proved by
 # `tests/test_demo_osprey_config_is_tier_1_only.py`'s rejection of any
 # non-`open` provider here. Full licence-enforcement breadth (`osprey
@@ -18,7 +18,7 @@ map:
       label: "OpenStreetMap"
       kind: vector
       # Built by `scripts/build_local_basemap.py` (extract -> planetiler ->
-      # PMTiles) — `docs/07_BUILD_PLAN.md` Phase 5, "one-button local
+      # PMTiles) — `process/07_BUILD_PLAN.md` Phase 5, "one-button local
       # basemap build". That script is real and tested end to end for the
       # gazetteer-load and provider-registration stages
       # (`tests/test_build_local_basemap.py`); the download and planetiler

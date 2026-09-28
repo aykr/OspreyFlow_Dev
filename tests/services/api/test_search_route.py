@@ -1,4 +1,4 @@
-"""`POST /v1/search` route wiring — `docs/03_CONDUIT_MIDDLEWARE.md` §3.3,
+"""`POST /v1/search` route wiring — `spec/03_CONDUIT_MIDDLEWARE.md` §3.3,
 v1 scope (`services/api/search.py`'s module docstring: graph-only, exact
 identifier match, document/index federation deferred to when OpenSearch is
 wired). `GraphPort.search_nodes`'s own access-filtering and existence-leak

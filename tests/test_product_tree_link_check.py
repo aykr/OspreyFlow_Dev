@@ -47,7 +47,7 @@ def test_the_checker_actually_flags_a_private_tree_citation(tmp_path: Path) -> N
     )
     dirty_doc = tmp_path / "dirty.md"
     dirty_doc.write_text(
-        "# A document with a real violation\n\nSee `06_DECISIONS.md` ADR-034 for the full "
+        "# A document with a real violation\n\nSee `process/07_BUILD_PLAN.md` for the full "
         "reasoning.\n",
         encoding="utf-8",
     )
@@ -60,7 +60,7 @@ def test_the_checker_actually_flags_a_private_tree_citation(tmp_path: Path) -> N
     (path, lineno, marker) = dirty_violations[0]
     assert path == str(dirty_doc)
     assert lineno == 3
-    assert marker == "06_DECISIONS.md"
+    assert marker == "process/"
 
 
 def test_apache_doc_paths_is_the_same_set_route_coverage_check_uses() -> None:

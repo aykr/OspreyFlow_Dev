@@ -1,4 +1,4 @@
-// a11y contrast showcase — `docs/02_GLASS_FRONTEND.md` §6: "Contrast floor
+// a11y contrast showcase — `spec/02_GLASS_FRONTEND.md` §6: "Contrast floor
 // met in both themes; verify with automated checks in CI, not by eye."
 // Renders a representative sample of the twenty primitives (`docs/
 // 02_GLASS_FRONTEND.md` §8) with real text content, so `a11y.spec.ts` has
@@ -9,7 +9,7 @@
 // tokens Panel/Toast already exercise here).
 import { createRoot } from "react-dom/client";
 
-import "../../../docs/design/tokens.css";
+import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { SEQ_HEX } from "../src/color/tokens";
 import { Button } from "../src/design/primitives/Button";

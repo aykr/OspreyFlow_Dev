@@ -1,9 +1,9 @@
 """The in-deployment geocoder — matches an extraction-produced
 place-mention `Location` against the gazetteer's canonical `Location`,
-writing a scored `SAME_AS` edge. Mirrors `docs/01_DOMAIN_MODEL.md` §4's
+writing a scored `SAME_AS` edge. Mirrors `spec/01_DOMAIN_MODEL.md` §4's
 entity-resolution design exactly: never a merge, a scored edge an analyst
 can later confirm (flip to `asserted`) or reject (write a `NOT_SAME_AS`).
-`docs/00_ARCHITECTURE.md`'s "Geospatial reference data as entities"
+`spec/00_ARCHITECTURE.md`'s "Geospatial reference data as entities"
 section: "A gazetteer match is `inferred`, like any other derived link...
 a resolution decision with a confidence, not a fact. It follows the same
 provenance rules as a model extraction and is confirmable by an analyst."

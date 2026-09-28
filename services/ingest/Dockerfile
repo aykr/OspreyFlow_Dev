@@ -1,5 +1,5 @@
-# services/ingest — docs/07_BUILD_PLAN.md Phase 2. First Dockerfile in the
-# build: the standing rule (docs/07_BUILD_PLAN.md, "Standing rules for the
+# services/ingest — process/07_BUILD_PLAN.md Phase 2. First Dockerfile in the
+# build: the standing rule (process/07_BUILD_PLAN.md, "Standing rules for the
 # whole build") is that each service gets its own image, and a `trivy
 # image` CI scan, in the phase that creates it — not batched into Phase 8.
 #

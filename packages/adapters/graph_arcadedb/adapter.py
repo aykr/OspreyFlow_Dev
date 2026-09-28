@@ -13,7 +13,7 @@ here, on the write path, not left for a caller to have got right.
 `Subgraph.filtered_count` is left at its default here. Computing it
 accurately needs a full-vs-filtered comparison at the point the Working-Set
 Service holds both the requested expansion and the access-filtered result
-(`docs/03_CONDUIT_MIDDLEWARE.md`, Phase 3's expansion budget/cardinality
+(`spec/03_CONDUIT_MIDDLEWARE.md`, Phase 3's expansion budget/cardinality
 preview) — attempting it here, one `GraphPort.expand` call at a time, risks
 adding a second, less-audited channel for exactly the kind of leak this
 adapter exists to prevent. Flagged rather than guessed at.
@@ -85,7 +85,7 @@ from .weight import WeightConfig, compute_weight
 
 
 class GraphArcadeDBAdapter:
-    """`docs/00_ARCHITECTURE.md` §2.1. `dialects` is `{"gremlin"}` in Phase 1
+    """`spec/00_ARCHITECTURE.md` §2.1. `dialects` is `{"gremlin"}` in Phase 1
     (ADR-003's amendment) — a second dialect adds a `render_<dialect>` to
     each builder in `builders.py`, not a change here."""
 

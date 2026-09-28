@@ -1,4 +1,4 @@
-// The cross-filter store — `docs/02_GLASS_FRONTEND.md` §2 rule 3
+// The cross-filter store — `spec/02_GLASS_FRONTEND.md` §2 rule 3
 // ("Everything cross-filters... A brush on the timeline dims the graph") and
 // rule 2 ("Filters dim, they do not remove"), `08_ACCEPTANCE_SCENARIOS.md` A3.
 //
@@ -41,7 +41,7 @@ export interface CrossFilterStoreState {
    * ever removed, only dimmed, and dimming only exists once a filter is
    * actually set. */
   dimmedNodeIds: ReadonlySet<string>;
-  /** For `StatusBar`'s `dimmedCount` prop (`docs/02_GLASS_FRONTEND.md`
+  /** For `StatusBar`'s `dimmedCount` prop (`spec/02_GLASS_FRONTEND.md`
    * §2 rule 4 — "the status bar never lies"). */
   dimmedCount: number;
   setWindow: (window: TimeWindow | null) => void;

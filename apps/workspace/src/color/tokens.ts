@@ -1,6 +1,6 @@
-// A JS-readable mirror of the handful of `docs/design/tokens.css` values
+// A JS-readable mirror of the handful of `spec/design/tokens.css` values
 // that must be computed *before* paint (baked into a generated node SVG,
-// `nodeVisual.ts`) rather than left to the CSS cascade. `docs/design/
+// `nodeVisual.ts`) rather than left to the CSS cascade. `spec/design/
 // tokens.css` remains the single authoritative source — `tokens.test.ts`
 // parses that file directly and asserts these stay in sync, so drift
 // fails a test rather than surviving as a silently-stale copy (the exact
@@ -53,7 +53,7 @@ export const SEQ_HEX: readonly [string, string, string, string, string, string] 
 
 /** `--surface-panel` is `--n2` — the dimming/filtered-out mix target. Dark
  * only for now: Checkpoint 2 ships the dark theme as the working default
- * (`docs/design/tokens.css`'s own framing); light-theme SVG regeneration
+ * (`spec/design/tokens.css`'s own framing); light-theme SVG regeneration
  * is a named follow-up alongside the light-theme contrast CI check. */
 export const SURFACE_PANEL_DARK_HEX = "#161a1b";
 

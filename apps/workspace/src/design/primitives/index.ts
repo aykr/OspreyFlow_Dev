@@ -1,4 +1,4 @@
-// The twenty primitives — `docs/02_GLASS_FRONTEND.md` §8.
+// The twenty primitives — `spec/02_GLASS_FRONTEND.md` §8.
 export { Button } from "./Button";
 export { IconButton } from "./IconButton";
 export { Input } from "./Input";

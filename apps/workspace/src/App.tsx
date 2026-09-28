@@ -352,7 +352,7 @@ export function App() {
     // fallback below, which genuinely needs it) meant a `?investigation=` URL param was never
     // written to `sessionStorage` before the sign-in redirect navigated away, so the round trip
     // came back with no memory of it and silently created a second, empty investigation instead
-    // of opening the one the URL named. `docs/02_GLASS_FRONTEND.md` §2.1's own "written back to
+    // of opening the one the URL named. `spec/02_GLASS_FRONTEND.md` §2.1's own "written back to
     // sessionStorage immediately" is unconditional for exactly this reason.
     if (investigationId) {
       sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, investigationId);
@@ -677,7 +677,7 @@ export function App() {
         {!isDevBypass && principal && (
           // `06_DECISIONS.md` ADR-050's Decision section: "displays the principal's identity and
           // clearance in the workspace chrome. It never derives access from them." Purely
-          // informational — `docs/02_GLASS_FRONTEND.md` §2's own workspace-layout description now
+          // informational — `spec/02_GLASS_FRONTEND.md` §2's own workspace-layout description now
           // names this element (the spec gap ADR-050's own objection 9 raised, closed by that
           // edit rather than left as an ADR-only decision).
           <div

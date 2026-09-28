@@ -1,4 +1,4 @@
-"""The real domain model — `docs/01_DOMAIN_MODEL.md`.
+"""The real domain model — `spec/01_DOMAIN_MODEL.md`.
 
 Source of truth for `GraphPort`'s DTOs and the node/edge shape every adapter
 writes and reads. TypeScript types are generated from these
@@ -54,7 +54,7 @@ class PoleClass(StrEnum):
 
 
 # The nine categorical data channels the design system defines
-# (`docs/design/tokens.css`), checked for protanopia/deuteranopia
+# (`spec/design/tokens.css`), checked for protanopia/deuteranopia
 # separation. Closed set: the ontology loader rejects an unknown channel
 # name or a channel assigned to more than one entity type.
 DATA_CHANNELS: tuple[str, ...] = (

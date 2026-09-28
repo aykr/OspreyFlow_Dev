@@ -1,4 +1,4 @@
-"""`services/resolve/resolver.py` — `docs/01_DOMAIN_MODEL.md` §4, `docs/06_DECISIONS.md` ADR-021.
+"""`services/resolve/resolver.py` — `spec/01_DOMAIN_MODEL.md` §4, `spec/06_DECISIONS.md` ADR-021.
 
 No live infra: Splink on DuckDB is entirely in-process, so this runs the real library against the
 real ontology's `Person.resolution` config (`packages/ontology/default.yaml`) — the same

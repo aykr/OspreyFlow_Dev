@@ -6,7 +6,7 @@
 // page at directly.
 import { createRoot } from "react-dom/client";
 
-import "../../../docs/design/tokens.css";
+import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { GlassCanvas } from "../src/canvas/GlassCanvas";
 import { OntologyRegistry } from "../src/ontology/schema";

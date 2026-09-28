@@ -1,4 +1,4 @@
-"""The `studio_recipes` registry — `docs/09_INGEST_STUDIO.md` §6's "recipe
+"""The `studio_recipes` registry — `spec/09_INGEST_STUDIO.md` §6's "recipe
 registry, and how 'flags the affected recipes' actually happens" section.
 
 Connect (Phase 5a) is the first stage to need this table: a draft spans

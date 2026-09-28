@@ -1,7 +1,7 @@
 """Bilinear georeferencing across a 4-control-point quadrilateral —
-`docs/00_ARCHITECTURE.md` §1.2's "Geospatial reference data as entities"
+`spec/00_ARCHITECTURE.md` §1.2's "Geospatial reference data as entities"
 ("Site plans... GeoTIFF/image + control points... Site grid cells as
-`Location`"), `docs/02_GLASS_FRONTEND.md` §3.5, `08_ACCEPTANCE_SCENARIOS.md`
+`Location`"), `spec/02_GLASS_FRONTEND.md` §3.5, `08_ACCEPTANCE_SCENARIOS.md`
 A1 ("place four control points, draw a 10x10 grid").
 
 Deliberately bilinear, not a general homography/projective transform: the

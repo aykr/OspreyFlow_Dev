@@ -202,8 +202,8 @@ def main(argv: list[str] | None = None) -> int:
     if not status.is_green:
         print(
             "ci-status: refusing. A red or never-run CI has proven nothing about this commit — "
-            "see docs/07_BUILD_PLAN.md's round 13cg finding for what a `never_run` state here has "
-            "already once meant on this repository."
+            "see process/07_BUILD_PLAN.md's round 13cg finding for what a `never_run` state here "
+            "has already once meant on this repository."
         )
         return 1
     return 0

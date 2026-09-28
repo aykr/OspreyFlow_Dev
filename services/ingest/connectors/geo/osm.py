@@ -1,6 +1,6 @@
-"""The OSM-derived gazetteer connector — `docs/00_ARCHITECTURE.md` §1.2's
+"""The OSM-derived gazetteer connector — `spec/00_ARCHITECTURE.md` §1.2's
 tier-1 gazetteer row ("OSM extract, place and address features: Place
-names, roads, POIs, coarse addresses") and `docs/03_CONDUIT_MIDDLEWARE.md`
+names, roads, POIs, coarse addresses") and `spec/03_CONDUIT_MIDDLEWARE.md`
 §5.1's `services/ingest/connectors/geo/`.
 
 Every connector yields the same `Iterable[Mapping[str, str]]` row shape

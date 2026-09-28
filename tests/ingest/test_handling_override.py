@@ -1,4 +1,4 @@
-"""Per-element `handling`/`provenance` overrides — `docs/09_INGEST_STUDIO.md`
+"""Per-element `handling`/`provenance` overrides — `spec/09_INGEST_STUDIO.md`
 §4: "The per-element override this paragraph promises is not yet a field...
 building it is this stage's own scope." Pure-function coverage only
 (`services/ingest/engine.py`'s `_merge_override`/`preview_handling_and_provenance`

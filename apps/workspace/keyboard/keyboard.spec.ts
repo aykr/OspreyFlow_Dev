@@ -1,4 +1,4 @@
-// A scripted, keyboard-only walkthrough — `docs/02_GLASS_FRONTEND.md` §6's
+// A scripted, keyboard-only walkthrough — `spec/02_GLASS_FRONTEND.md` §6's
 // accessibility floor and this phase's exit
 // criterion, "Keyboard navigation reaches every canvas action", taken
 // literally: this test never calls `page.mouse` or `.click()`. It proves

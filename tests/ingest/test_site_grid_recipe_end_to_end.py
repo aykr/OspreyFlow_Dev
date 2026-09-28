@@ -4,7 +4,7 @@ partition — the same shape `test_osm_gazetteer_recipe_end_to_end.py` proves
 for the OSM connector, and the same stated gap that test's docstring
 records (the recipe engine does not write a `GeometryRecord` itself yet).
 
-`docs/00_ARCHITECTURE.md` §1.2's site-plan row, `08_ACCEPTANCE_SCENARIOS.md`
+`spec/00_ARCHITECTURE.md` §1.2's site-plan row, `08_ACCEPTANCE_SCENARIOS.md`
 A1.
 """
 

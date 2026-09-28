@@ -1,6 +1,6 @@
 """`osprey bundle` — ADR-049's Stage 2 §5b: "Wraps `scripts/osprey_bundle.py`... rather than
 writing a second implementation of the same command." `bundle_map_providers` below is the original,
-narrower mechanism this module started as (`docs/00_ARCHITECTURE.md` §1.2's own "the bundle step
+narrower mechanism this module started as (`spec/00_ARCHITECTURE.md` §1.2's own "the bundle step
 refuses to package tiles or gazetteers whose profile says `redistributable: false`, and names
 them") — kept unchanged and reused, not superseded, by `build_bundle` below, which is the real
 `python -m scripts.osprey_bundle --profile <profile> [--images]` command Stage 2 §5b's own brief

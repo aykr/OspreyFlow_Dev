@@ -13,9 +13,9 @@ export interface HistoryPanelProps {
   onRestored: (snapshot: WorkingSetDelta) => void;
 }
 
-/** `docs/03_CONDUIT_MIDDLEWARE.md` §3.1's two routes, the client half —
+/** `spec/03_CONDUIT_MIDDLEWARE.md` §3.1's two routes, the client half —
  * "the history panel is a list of named steps, not a stack of arrows"
- * (`docs/02_GLASS_FRONTEND.md` §3.1). Restore applies through the same
+ * (`spec/02_GLASS_FRONTEND.md` §3.1). Restore applies through the same
  * `applyDelta` path a live snapshot does — there is no separate
  * client-side reconciliation for it. */
 export function HistoryPanel({

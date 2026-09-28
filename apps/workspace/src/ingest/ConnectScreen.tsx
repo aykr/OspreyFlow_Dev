@@ -1,4 +1,4 @@
-// Stage 1 of the Ingest Studio — `docs/09_INGEST_STUDIO.md` §2. A real
+// Stage 1 of the Ingest Studio — `spec/09_INGEST_STUDIO.md` §2. A real
 // top-level screen (`App.tsx`'s `view` state gains an `"ingest"` member),
 // not a modal wizard: unlike `SiteCalibrationWizard`, a draft here spans
 // sessions and sometimes people (§6), so it has to be revisitable the same

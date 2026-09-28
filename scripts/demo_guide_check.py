@@ -1,4 +1,4 @@
-"""A drift gate for `docs/DEMO_GUIDE.md` §1's own "What you can demo today" table —
+"""A drift gate for `DEMO_GUIDE.md` §1's own "What you can demo today" table —
 `06_DECISIONS.md` ADR-035, part of the documentation-refresh work.
 
 **`DEMO_REGISTRY` below is a stand-in, not the real thing, and says so rather than pretending
@@ -26,7 +26,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEMO_GUIDE_PATH = REPO_ROOT / "docs" / "DEMO_GUIDE.md"
+DEMO_GUIDE_PATH = REPO_ROOT / "DEMO_GUIDE.md"
 
 #: (name substring as it appears in the guide, distribution class). Sourced from `DEMO_GUIDE.md`
 #: §1's own table at the time this module was written — update both together when either changes.

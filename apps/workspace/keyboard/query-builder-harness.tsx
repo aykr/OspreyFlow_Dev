@@ -10,7 +10,7 @@
 // transport, not the component" shape `metrics-panel.spec.ts` already uses.
 import { createRoot } from "react-dom/client";
 
-import "../../../docs/design/tokens.css";
+import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { QueryBuilderPanel } from "../src/patterns/QueryBuilderPanel";
 import type { OntologySchema } from "../../../packages/schemas/generated";

@@ -410,7 +410,7 @@ this table exists to stop.
 | Stage 2c — Sign-in for the Glass | `make test`'s own auth suite (`tests/services/api/test_auth.py`, `test_ws_ticket.py`) | **passed**, inside 1067 |
 | Stage 4 (4-spec, 4a–4h) — product-feature core | `make test` 1067 passed; `make glass-live` 9 passed | **passed** |
 | Stage 1 — principal resolution (ADR-043) | `make test`'s own exchange tests | **passed**, inside 1067 |
-| Stage 2a — ArcadeDB stability | **Re-proven and root-caused, round 13bb (27 Sep).** The recorded `IndexException` was a *symptom*: ArcadeDB 24.11.1 retained memory per database lifecycle (five bare create/apply_schema/drop cycles: 141.7MiB → 8.2GiB, drop returns none of it) until the heap was exhausted. Fixed upstream in **25.5.1** — the identical reproduction plateaus at ~1.5GiB. `make test-all` now completes in one pass: **301 passed, 5 skipped, 0 failed in 4:29**. Round 13e re-measured `05_DEPLOYMENT.md` §8's own separate closure question (a fixture load run three-plus times, one never-reset database) with the sustained-load harness as fallback: RSS still climbs (+74.6 MiB/cycle average, not a plateau), wall time flat — **§8 stays open**, with a first restart-interval estimate (~135–193 cycles of that workload to the test's own 85%-VM ceiling) now recorded there. Two upstream issue drafts (`docs/upstream/arcadedb-database-lifecycle-leak.md`) are ready for the owner to file. | **closed, on a named cause** |
+| Stage 2a — ArcadeDB stability | **Re-proven and root-caused, round 13bb (27 Sep).** The recorded `IndexException` was a *symptom*: ArcadeDB 24.11.1 retained memory per database lifecycle (five bare create/apply_schema/drop cycles: 141.7MiB → 8.2GiB, drop returns none of it) until the heap was exhausted. Fixed upstream in **25.5.1** — the identical reproduction plateaus at ~1.5GiB. `make test-all` now completes in one pass: **301 passed, 5 skipped, 0 failed in 4:29**. Round 13e re-measured `05_DEPLOYMENT.md` §8's own separate closure question (a fixture load run three-plus times, one never-reset database) with the sustained-load harness as fallback: RSS still climbs (+74.6 MiB/cycle average, not a plateau), wall time flat — **§8 stays open**, with a first restart-interval estimate (~135–193 cycles of that workload to the test's own 85%-VM ceiling) now recorded there. Two upstream issue drafts (`process/upstream/arcadedb-database-lifecycle-leak.md`) are ready for the owner to file. | **closed, on a named cause** |
 | `Makefile`/`ci.yml` reconciliation | `make -k ci` in full, per target | **see round 13's report** |
 | `PathStaleError` + traversal budget | `make test` | **passed**, inside 1067 |
 | Stage 2 §1–§6 (harness/packaging) | The clean install itself: `render` → `preflight` → `build` → `up` → `grants` → `seed` → `verify`, **3/3 assertions green**, from a fresh clone | **passed** |
@@ -517,7 +517,7 @@ this table exists to stop.
   §5b`, 25 September 2026), and the post-milestone Analyst guide (Stage 3c, still only a
   "not yet written" placeholder page on the site itself).
 
-**Outside the build entirely: `docs/PRODUCT_DELIVERY.md`** — the alpha gate, demo distribution
+**Outside the build entirely: `process/PRODUCT_DELIVERY.md`** — the alpha gate, demo distribution
 classes, tester/alpha/beta material, and Trigger B's own downstream distribution questions. Not a
 build step, a stage, or a precondition of anything above; a different question, answered there.
 
@@ -892,7 +892,7 @@ above follows — so Publish's own scoping reads this instead of reconstructing 
   promises both a CDR *and* a financial fixture mapped from scratch by someone who hasn't seen
   the ontology, plus (§6, ADR-018) a second studio review once real data can be loaded through
   it. Only the CDR fixture (`tests/scenarios/fixtures/cdr.py`) exists; no financial fixture, and
-  no second review, have happened. The first review (`docs/archive/SESSION_HANDOVER.md`, 15
+  no second review, have happened. The first review (`process/archive/SESSION_HANDOVER.md`, 15
   September 2026) covered the prototype against the CDR fixture only, before Verify or Publish
   existed.
 - **Publish commits from the running Conduit process's own local checkout, not a shared
@@ -2168,7 +2168,7 @@ for the full reasoning. Stage numbers are kept stable (every other document in t
 a stage by its own number — `4a` through `4h`, `5`, `6` — not by its position in this list), so a
 stage appearing "out of numerical order" below is the reordering working as intended, not a
 mistake. What genuinely stays out of this list: anything about testers, alpha or beta testing —
-`docs/PRODUCT_DELIVERY.md` owns that and continues to.
+`process/PRODUCT_DELIVERY.md` owns that and continues to.
 
 ### Phase 8's stage list, in build order
 
@@ -2201,7 +2201,7 @@ repeated in full here, so this summary stays a map, not a second copy:**
    explicit owner instruction, after all phases, stages, and alpha and beta testing are
    complete."* Not itself milestone-blocking — V1 END TO END is reachable, and this document's own
    exit criterion for it satisfiable, without Trigger B ever firing; alpha/beta testing itself is
-   `docs/PRODUCT_DELIVERY.md`'s own territory, named here only because ADR-034's own condition text
+   `process/PRODUCT_DELIVERY.md`'s own territory, named here only because ADR-034's own condition text
    names it and this document does not get to edit an accepted ADR's own words to remove the
    mention.
 6. **ArcadeDB stability — closed, 23 September 2026** (previously filed in "Legacy disclosures,"
@@ -2269,7 +2269,7 @@ stability item just promoted, export mark signing) remains listed below, in the 
 place, each stage's own entry stating plainly whether it is milestone-blocking — none of the
 remaining ones are, and each says so at its own entry rather than by virtue of a section heading.
 **What stays out of this list entirely: anything about testers, alpha or beta testing** —
-`docs/PRODUCT_DELIVERY.md` owns that, unchanged.
+`process/PRODUCT_DELIVERY.md` owns that, unchanged.
 
 4. **Assessment, export, the remaining Scenario B steps** — the product-feature core, following
    established patterns (evidence linking, export pipelines, handling gates) this build already has
@@ -2313,7 +2313,7 @@ remaining ones are, and each says so at its own entry rather than by virtue of a
      September 2026.** `06_DECISIONS.md` ADR-035 §C5 has owned Fixture Corp to Phase 8 with no
      stage since that record was written — "R24 has been the only backlog item with no owning
      phase," in its own words, and the single longest-unscheduled item in this project. It is also
-     the demo the analyst review (`docs/PRODUCT_DELIVERY.md`) runs against — it cannot be left to
+     the demo the analyst review (`process/PRODUCT_DELIVERY.md`) runs against — it cannot be left to
      4g's own closing pass, where a regression would be the first thing that finds it broken with
      nothing left in the stage to fix it against.
 
@@ -3046,7 +3046,7 @@ find something already finished sitting in the queue.
    it, including build-time version metadata) are mechanical and testable, the same
    containment-check shape already proven against `scripts/mint_dev_token.py` — properties of this
    pipeline producing an artefact at all, stated that way in ADR-034 itself
-   (`06_DECISIONS.md`), not as a condition on who ever receives one; `docs/PRODUCT_DELIVERY.md`
+   (`06_DECISIONS.md`), not as a condition on who ever receives one; `process/PRODUCT_DELIVERY.md`
    has the distribution-readiness framing (who receives an artefact and when) that used to sit
    here instead. A scripted golden-path deploy (clean checkout → harness or its CLI equivalent → a
    running, health-checked stack) is testable too. **Whether the six setup screens are actually
@@ -3313,7 +3313,7 @@ find something already finished sitting in the queue.
    Kubernetes cluster, context and namespace, shown before every action and re-confirmed when it
    differs from the last), and §3's "seeded demo credentials are displayed once and written
    nowhere". The rendered stack is §3's twelve containers, **including Keycloak**, without which
-   Stage 2 §2's token-exchange check has nothing to exchange against. docs/demo/2026-09-24/demo_up.sh is
+   Stage 2 §2's token-exchange check has nothing to exchange against. process/demo/2026-09-24/demo_up.sh is
    retired into this once it exists; until then it stays (since removed — see the entry below).
    **Exit test:** from a fresh clone, one
    command reaches a health-checked stack on `local-lite`, **with ADR-043's two-sided exchange green
@@ -3456,7 +3456,7 @@ find something already finished sitting in the queue.
      `…/stream?token=` and is refused.
 
    The page loads and sits on "Loading…" indefinitely:
-   `docs/demo/2026-09-24/stage2-3-rendered-glass-cannot-reach-the-conduit.png`. The earlier
+   `process/demo/2026-09-24/stage2-3-rendered-glass-cannot-reach-the-conduit.png`. The earlier
    `A0-glass-loaded-with-seeded-investigation.png` in that same folder is not a counter-example — it
    was taken against `npm run dev` with a hand-supplied token, which is the stand-in the comment
    above describes.
@@ -3610,7 +3610,7 @@ find something already finished sitting in the queue.
    running Conduit. The verify itself is built and proven against a real Keycloak at unit level
    (`tests/services/api/test_revoked_principal_precheck.py`, five cases).
 
-   **docs/demo/2026-09-24/demo_up.sh is deleted** and its runbook points at `harness.apply`.
+   **process/demo/2026-09-24/demo_up.sh is deleted** and its runbook points at `harness.apply`.
 
    **Superseded (previous pass) — 24 September 2026. History; see the COMPLETE entry above.**
 
@@ -3779,7 +3779,7 @@ find something already finished sitting in the queue.
    **Not built, and deliberately not half-built:** `harness/apply.py` and its five stages, the dev
    realm import rendering, the client secret generated at apply time, seeding's ordering guard, the
    post-launch verify, the fresh-clone exit test with wall time and peak memory, and the retirement
-   of docs/demo/2026-09-24/demo_up.sh (since removed; this "not built" list is this pass's own
+   of process/demo/2026-09-24/demo_up.sh (since removed; this "not built" list is this pass's own
    record, not the current state — see the deletion entry above). The verify step is the last stage
    of the deploy and part of
    what "health-checked" means for exit test #2; building the other four stages around a verify that
@@ -3858,7 +3858,7 @@ find something already finished sitting in the queue.
    auth path", and no phase has owned the replacement.
 
    **The dev token was used on a rendered deployment for the last time on 25 September 2026** to
-   prove the proxy end to end (`docs/demo/2026-09-25/`). Every request went to the workspace's own
+   prove the proxy end to end (`process/demo/2026-09-25/`). Every request went to the workspace's own
    origin and returned 200, the delta WebSocket upgraded through nginx (`101`), and the Conduit
    resolved a real principal from the rendered realm. From here the dev-token path is fenced:
    a production build with it set fails the build.
@@ -3986,7 +3986,7 @@ find something already finished sitting in the queue.
    parameter to redeem. **Rule 15's own red-then-green, run for real:** removing the `None`-check on
    `redeem_ws_ticket`'s return value (a fallback principal in its place) turned
    `test_an_expired_or_already_redeemed_ticket_is_refused` red before the fix was restored.
-   `docs/03_CONDUIT_MIDDLEWARE.md` §3.2 documents the route; `route-coverage-check` is green on it
+   `spec/03_CONDUIT_MIDDLEWARE.md` §3.2 documents the route; `route-coverage-check` is green on it
    (the gate's own pre-existing, unrelated drift on six other routes is recorded separately, below).
 
    The Glass side (`apps/workspace/src/App.tsx`): the delta-stream effect now fetches a ticket from
@@ -4049,7 +4049,7 @@ find something already finished sitting in the queue.
       redirect.** `App.tsx`'s investigation-persisting effect had been folded into the same
       `if (!bearerToken) return` guard as the POST-a-new-investigation fallback below it — correct
       for the fallback (a real network call), wrong for the persist (no network call at all, and
-      `docs/02_GLASS_FRONTEND.md` §2.1's own "written back immediately" is unconditional). On an
+      `spec/02_GLASS_FRONTEND.md` §2.1's own "written back immediately" is unconditional). On an
       unauthenticated first load the guard fired before the id was ever written, so the browser
       came back from Keycloak with no memory of it and silently created a second, empty
       investigation instead of opening the seeded one. Split into its own unconditional branch.
@@ -4098,7 +4098,7 @@ find something already finished sitting in the queue.
    Sign-in as `osprey-demo-analyst` via the real Keycloak login form: **green.** The chrome showed
    the real subject and `OFFICIAL` clearance; the seeded investigation's own hotspot panel
    (`/v1/analytics/geobins`) and timeline (`/v1/analytics/histogram`) both rendered real seeded data
-   — screenshots in `docs/demo/2026-09-25/`. (The canvas's own "0 nodes" status is separate and
+   — screenshots in `process/demo/2026-09-25/`. (The canvas's own "0 nodes" status is separate and
    correct: the working-set graph is populated by explicit add/expand actions, not automatically
    equal to everything the investigation can see — the exit test's own wording asks for the hotspot
    panel and timeline, and both are real.)
@@ -4428,7 +4428,7 @@ find something already finished sitting in the queue.
    each a test: no private-tree file in the artefact (ADR-034 §B7 #1) — **keyed off
    `scripts/product_tree_link_check.py`'s existing marker list, never a `docs/`/`spec/` path
    prefix**, since ADR-034 §B2 puts `06_DECISIONS.md` inside `spec/` and permanently unpublished
-   while §B8 makes `docs/design/tokens.css` product source, and since a prefix-keyed test goes
+   while §B8 makes `spec/design/tokens.css` product source, and since a prefix-keyed test goes
    green now and becomes a silent no-op the moment Trigger A renames the tree; no B5 authorship
    identifier, including build metadata (§B7 #2); no internal-class demo data in the tarball **or
    any image layer** (ADR-035 §C2, which needs a `.dockerignore` — checked directly, none exists in
@@ -5137,7 +5137,7 @@ find something already finished sitting in the queue.
    file-presence assertions are unaffected; no new test needed for prose content a human reads.
 
    **README's own quick start:** no root `README.md` exists in this repository to re-verify — the
-   operator-facing quick start lives in `docs/05_DEPLOYMENT.md` §3 (fixed above) and the bundle-time
+   operator-facing quick start lives in `spec/05_DEPLOYMENT.md` §3 (fixed above) and the bundle-time
    docs site's own operator guide (also fixed above); neither is a gap this round invented, and
    naming the absence is the honest reconciliation rather than assuming a file that is not there.
 
@@ -6033,7 +6033,7 @@ find something already finished sitting in the queue.
    service, not assumed from `make dev-up`'s own default list. No decision on the memory floor
    (option E, above) made here; this establishes the number that decision would turn on.**
 
-   `make dev-up` brings up seven containers by default (`docs/DEMO_GUIDE.md` §3.1): ArcadeDB,
+   `make dev-up` brings up seven containers by default (`DEMO_GUIDE.md` §3.1): ArcadeDB,
    MinIO, Valkey, Postgres, Ollama, LiteLLM, speaches. Checked directly against
    `08_ACCEPTANCE_SCENARIOS.md`'s own A1-A15/B1-B21 text and `services/api`'s own route
    dependencies, not assumed from what the compose file happens to start:
@@ -6047,7 +6047,7 @@ find something already finished sitting in the queue.
    | LiteLLM | **No** — see Ollama below; kept running has negligible cost regardless | 37-41MiB idle, unchanged across the whole run (never called) |
    | Ollama | **No — checked directly, not assumed** (below) | 622.8MiB with one model loaded (`qwen2.5:0.5b-instruct`, `extract()`'s own model); 2.849GiB with all three pinned models loaded (`+all-minilm:22m-l6-v2-fp16` embed, `+moondream:1.8b-v2-q4_K_M` vision) |
    | speaches | **No** — zero references anywhere in `services/api` or `08_ACCEPTANCE_SCENARIOS.md`; not checked further | Not measured — not part of the required set |
-   | The Conduit (`uvicorn`, a host process, not a container — `docs/DEMO_GUIDE.md` §3.2) | **Yes** | 243.0MiB RSS, measured directly (real process launched, minted token, real startup) |
+   | The Conduit (`uvicorn`, a host process, not a container — `DEMO_GUIDE.md` §3.2) | **Yes** | 243.0MiB RSS, measured directly (real process launched, minted token, real startup) |
    | The Glass (`vite` dev server, also a host process — no packaged build exists yet) | **Yes** | 244.3MiB RSS after one real page load (91.5MiB before any request) |
 
    **Ollama, answered directly: neither scenario requires extraction against a live model.**
@@ -6169,7 +6169,7 @@ find something already finished sitting in the queue.
    it already was — observed, not diagnosed — and now, with causes one through four's own memory
    pressure genuinely resolved, is the sole remaining blocker to a literal five-for-five pass.
    **The stage is therefore not marked met.** The memory-floor decision (Option E) stands and is
-   recorded as correct on its own terms — a demo genuinely needs the machine `docs/DEMO_GUIDE.md`
+   recorded as correct on its own terms — a demo genuinely needs the machine `DEMO_GUIDE.md`
    §0 now states, and that machine genuinely stops the OOM this stage was originally opened
    to track — but this stage's own exit criterion, five consecutive clean runs, is a broader
    promise than "no OOM," and root-causing the fifth cause is real, undone work, not a formality
@@ -6340,7 +6340,7 @@ find something already finished sitting in the queue.
    beyond_the_allowlist` is closed, dropping out of Floor A.** The six routes this document's own
    Stage 2 §6 entry named as the standing member (`GET /v1/exports`, `GET /v1/investigations/{id}/
    assumptions`, `/gaps`, `/judgements`, `GET /v1/yardstick`, `POST /v1/analytics/sightings`) are
-   now documented in `docs/03_CONDUIT_MIDDLEWARE.md` §3.3/§3.4, real descriptions taken from each
+   now documented in `spec/03_CONDUIT_MIDDLEWARE.md` §3.3/§3.4, real descriptions taken from each
    route's own handler, not invented. `scripts/route_coverage_check.py` run directly: **79 routes,
    50 allowlisted, no new drift** — the 50 are pre-existing, disclosed debt
    (`tests/fixtures/route_coverage_allowlist.txt`), unaffected by this round and not what this
@@ -6594,7 +6594,7 @@ find something already finished sitting in the queue.
 
    **Exit test:** `apply --demo-analyst`, open the printed URL, sign in as the demo analyst, see the
    seeded investigation. This becomes the golden path's own Glass leg, replacing the dev-token step
-   used for the last time on 25 September 2026 (`docs/demo/2026-09-25/`).
+   used for the last time on 25 September 2026 (`process/demo/2026-09-25/`).
 
    **Not addressed by this stage: ADR-050 objections 8 and 9, both still open.** The WebSocket
    ticket exchange (8) and the `02_GLASS_FRONTEND.md` chrome-element spec gap (9) are neither of them
@@ -6770,7 +6770,7 @@ find something already finished sitting in the queue.
    who did not write the guide follows it cold, against a running deployment, and completes the
    tasks it claims to teach. A guide that only its own author has ever followed proves the author
    remembers what they built, not that the guide teaches it.
-   defects fixed with tests, disclosures below.** `docs/demo/2026-09-24/RUNBOOK.md` (23 September)
+   defects fixed with tests, disclosures below.** `process/demo/2026-09-24/RUNBOOK.md` (23 September)
    found six ways `DEMO_GUIDE.md` failed when followed literally, behind two real product defects.
    Both fixed this round, each with a red-then-green test (rule 12/15 discipline):
 
@@ -6803,7 +6803,7 @@ find something already finished sitting in the queue.
      owning stage rather than glossed over. §0's ArcadeDB memory range corrected to the rehearsal's
      own 7.75GiB peak. §1's table and §6 corrected to what Fixture Corp actually is — see the
      disclosure immediately below, not repeated here.
-   - docs/demo/2026-09-24/demo_up.sh (since removed; the checker's own scripted bring-up, written
+   - process/demo/2026-09-24/demo_up.sh (since removed; the checker's own scripted bring-up, written
      before this round) reviewed, `bash -n` clean, simplified to use the URL-parameter fix instead
      of a manual `sessionStorage` console step.
 
@@ -6820,7 +6820,7 @@ find something already finished sitting in the queue.
    demo, but does not itself prove Scenario C's own script runs end to end.
 
    **Stage 3a's status after round 12, 26 September 2026 — two of its three residuals closed, the
-   third blocked on a decision.** `docs/demo/2026-09-26/RUNBOOK.md` has the full transcript,
+   third blocked on a decision.** `process/demo/2026-09-26/RUNBOOK.md` has the full transcript,
    timings and corrections; by test id:
 
    | Residual | State | Proof |
@@ -6976,7 +6976,7 @@ find something already finished sitting in the queue.
    deployment or a real OIDC flow. This machine's Docker daemon reports 9.70GiB against
    `local-lite`'s 16GiB floor, unchanged since round 05, and there is no Keycloak in
    `deploy/compose/dev.yaml`; the stack used was `DEMO_GUIDE.md` §3's host-process one, which is
-   what that guide documents and what Stage 3a is about. See `docs/demo/2026-09-24/RUNBOOK.md`'s
+   what that guide documents and what Stage 3a is about. See `process/demo/2026-09-24/RUNBOOK.md`'s
    own 24 September continuation for the earlier round's live coverage.
 
 **Stage 4, in full — moved to "Before the milestone," above.** Every sub-stage (4-spec,
@@ -7179,21 +7179,21 @@ product documentation — named there, checked against this repository's own cur
 paths rather than the post-move `spec/` paths ADR-034 itself uses, since the refresh happens before
 the move:
 
-- `docs/00_ARCHITECTURE.md`
-- `docs/01_DOMAIN_MODEL.md`
-- `docs/02_GLASS_FRONTEND.md`
-- `docs/03_CONDUIT_MIDDLEWARE.md`
-- `docs/04_VAULT_BACKEND.md`
-- `docs/05_DEPLOYMENT.md`
-- `docs/08_ACCEPTANCE_SCENARIOS.md`
-- `docs/09_INGEST_STUDIO.md`
-- `docs/design/` (including `tokens.css`)
-- `docs/README.md` — ADR-031's own already-disclosed gap: this is "an internal docs-index page,"
+- `spec/00_ARCHITECTURE.md`
+- `spec/01_DOMAIN_MODEL.md`
+- `spec/02_GLASS_FRONTEND.md`
+- `spec/03_CONDUIT_MIDDLEWARE.md`
+- `spec/04_VAULT_BACKEND.md`
+- `spec/05_DEPLOYMENT.md`
+- `spec/08_ACCEPTANCE_SCENARIOS.md`
+- `spec/09_INGEST_STUDIO.md`
+- `spec/design/` (including `tokens.css`)
+- `README.md` — ADR-031's own already-disclosed gap: this is "an internal docs-index page,"
   not yet the root `README.md` ADR-031/034 both describe; refreshing it now still applies, since
   it is the file Trigger A moves and renames, not a different one built later.
-- `docs/DEMO_GUIDE.md`
+- `DEMO_GUIDE.md`
 
-`docs/06_DECISIONS.md`, `docs/07_BUILD_PLAN.md` itself, and `docs/PRODUCT_DELIVERY.md` (new, 22
+`spec/06_DECISIONS.md`, `process/07_BUILD_PLAN.md` itself, and `process/PRODUCT_DELIVERY.md` (new, 22
 September 2026, the same "excluded and private" class the other two already are — ADR-034 §B2)
 are excluded and out of this step's scope.
 
@@ -7201,7 +7201,7 @@ are excluded and out of this step's scope.
 on a clean checkout and produced the result the guide claims.** Any command that did not is listed
 in this entry, at the time this step is actually executed, with what happened instead — the same
 "checked against the repository rather than transcribed from the specification" discipline
-`docs/DEMO_GUIDE.md`'s own opening paragraph already states for itself, extended to every guide in
+`DEMO_GUIDE.md`'s own opening paragraph already states for itself, extended to every guide in
 the list above, not only that one. Not executed against a clean checkout in this pass — the scope
 below is what makes that run purposeful rather than a blind re-read, per this entry's own next
 paragraph, but running it is this close step's own work, not this entry's.
@@ -7210,35 +7210,35 @@ paragraph, but running it is this close step's own work, not this entry's.
 areas rather than assumed from dates — the actual scope this refresh has to close, not a re-read of
 material already current.**
 
-- **Pattern persistence — stale.** `docs/02_GLASS_FRONTEND.md` §3.3 still reads "Patterns are
+- **Pattern persistence — stale.** `spec/02_GLASS_FRONTEND.md` §3.3 still reads "Patterns are
   saveable, shareable and versioned is this bullet's own unbuilt promise — Stage 4 built
   compose/preview/run only." False since `06_DECISIONS.md` ADR-036's own text ("Part 3 of this
   session built that persistence... save/load/list/version, no sharing"): save/load/list/version
-  are built; only "shareable" (ADR-040, Proposed) remains unbuilt. `docs/03_CONDUIT_MIDDLEWARE.md`
+  are built; only "shareable" (ADR-040, Proposed) remains unbuilt. `spec/03_CONDUIT_MIDDLEWARE.md`
   §3.3's own route table lists `POST /v1/patterns/preview`/`run` but not `POST /v1/patterns/save`,
   `GET /v1/patterns`, or `GET /v1/patterns/{id}` — checked directly against `services/api/app.py`'s
   own routes, all three exist and are missing from the table.
-- **The pathfinder — checked, current, no drift found.** `docs/02_GLASS_FRONTEND.md` (the Pathfinder
-  row, §3), `docs/03_CONDUIT_MIDDLEWARE.md` (`POST /v1/paths` in §3.3) and `docs/01_DOMAIN_MODEL.md`
+- **The pathfinder — checked, current, no drift found.** `spec/02_GLASS_FRONTEND.md` (the Pathfinder
+  row, §3), `spec/03_CONDUIT_MIDDLEWARE.md` (`POST /v1/paths` in §3.3) and `spec/01_DOMAIN_MODEL.md`
   (§8.1's own "k-shortest paths" row) all already describe it correctly.
 - **Hotlists, monitors, the alert inbox — the largest gap found, an entirely missing section,
-  not a stale sentence.** `docs/03_CONDUIT_MIDDLEWARE.md` has no route listing anywhere for
+  not a stale sentence.** `spec/03_CONDUIT_MIDDLEWARE.md` has no route listing anywhere for
   `POST`/`GET /v1/hotlists`, `POST`/`GET /v1/monitors`, or `GET /v1/alerts`/`GET /v1/alerts/{id}`/
   `POST /v1/alerts/{id}/jump` — a real, shipped route surface (Phase 7 Stage 6c, both backend and
   now Glass) this doc's own job (§3's route inventory) does not mention at all. `docs/
   01_DOMAIN_MODEL.md` has no entity write-up for `Hotlist`/`Monitor`/`Alert` (`WatchStatus`, the
   `full`/`notify_stub` split, referent redaction) the way every other `schemas.domain` object gets
-  one. `docs/02_GLASS_FRONTEND.md` §3.3's own hotlist/monitor paragraphs describe the intended
+  one. `spec/02_GLASS_FRONTEND.md` §3.3's own hotlist/monitor paragraphs describe the intended
   behaviour correctly but predate `status` (active/stopped, ADR-036) and mention no distribution
   between `strict` and `notify` disclosure.
 - **Disclosure policy switch (`strict`/`notify`, ADR-038) — undocumented anywhere in the
   Apache-scoped spec, checked directly across all eight numbered docs.** Exists only in
   `07_BUILD_PLAN.md` (private) and the code (`services/api/alerts.py`). An analyst-facing behaviour
   — what a hotlist owner sees when a match falls outside their own access — with no public spec
-  sentence anywhere; belongs most naturally in `docs/02_GLASS_FRONTEND.md` §3.3 alongside the
+  sentence anywhere; belongs most naturally in `spec/02_GLASS_FRONTEND.md` §3.3 alongside the
   hotlist paragraph it qualifies.
 - **Demo distribution classes — not a documentation gap, a dependency, disclosed rather than
-  forced.** `docs/DEMO_GUIDE.md` §1 already carries every currently-known demo with its own
+  forced.** `DEMO_GUIDE.md` §1 already carries every currently-known demo with its own
   distribution class, and already states precisely why it's prose rather than a mechanism: "Until
   that registry exists, treat the column below as the same binding statement in prose that the
   registry will enforce mechanically." ADR-035's own fail-closed registry is this same phase's own
@@ -7372,24 +7372,24 @@ substitute for the public guide stating *that* it exists, and a gap recorded onl
 from the reader who only ever sees the latter, not recorded at all.
 
 - **`06_DECISIONS.md` ADR-038's `strict`/`notify` disclosure-policy switch appears nowhere in the
-  Apache-scoped spec** — not `docs/02_GLASS_FRONTEND.md`, not `docs/01_DOMAIN_MODEL.md`, and, most
-  consequentially, not `docs/05_DEPLOYMENT.md` either. This is a **deployment-time setting governing
+  Apache-scoped spec** — not `spec/02_GLASS_FRONTEND.md`, not `spec/01_DOMAIN_MODEL.md`, and, most
+  consequentially, not `spec/05_DEPLOYMENT.md` either. This is a **deployment-time setting governing
   whether an analyst learns of a hotlist match outside their own clearance at all** — the difference
   between an alert that names nothing (`notify`) and one that is suppressed entirely (`strict`) —
   and, checked directly against `05_DEPLOYMENT.md`'s own full text, **no deployer reading this
   repository's own published operational documentation can currently discover that this switch
-  exists, let alone which mode a given deployment runs in.** Belongs in `docs/05_DEPLOYMENT.md` as a
-  named deployment setting, and in `docs/02_GLASS_FRONTEND.md` §3.3 alongside the hotlist paragraph
+  exists, let alone which mode a given deployment runs in.** Belongs in `spec/05_DEPLOYMENT.md` as a
+  named deployment setting, and in `spec/02_GLASS_FRONTEND.md` §3.3 alongside the hotlist paragraph
   it qualifies — the refresh step's own work, not fixed here.
 - **Saved-pattern monitors do not fire on a match created by corpus-wide entity resolution alone —
   only on ingest and manual assertion — and the Apache-scoped spec says nothing of the kind.**
   `06_DECISIONS.md` ADR-037's own amendment and this document's own Stage 1 entry above both record
   the deferral in full, but both live only on the private side of the boundary. **Two identities
   resolving into one — exactly the case an investigator most wants a monitor watching for — is the
-  case this limitation applies to**, and `docs/02_GLASS_FRONTEND.md` §3.3's own monitor paragraph
+  case this limitation applies to**, and `spec/02_GLASS_FRONTEND.md` §3.3's own monitor paragraph
   ("Matches raise alerts with the same shape as hotlist alerts") states no such exception; a reader
   of the published guide alone has no way to learn a saved-pattern monitor can silently fail to
-  catch the one match it most exists for. Belongs in `docs/02_GLASS_FRONTEND.md` §3.3 alongside the
+  catch the one match it most exists for. Belongs in `spec/02_GLASS_FRONTEND.md` §3.3 alongside the
   monitor paragraph it qualifies, stated as what the product does today, not as the reasoning behind
   it (that reasoning stays in ADR-037, where it belongs) — the refresh step's own work, not fixed
   here.
@@ -7413,17 +7413,17 @@ both runs matter.
 **This same close step is Trigger A under `06_DECISIONS.md` ADR-034** (21 September 2026, supersedes
 ADR-031 — read ADR-031 for the physical `spec`/`process` layout, ADR-034 for the licence boundary,
 the publication trigger, and everything downstream of it). Trigger A fires here and moves files; it
-does **not** fire Trigger B (publication) — `docs/PRODUCT_DELIVERY.md` has what triggers that and
+does **not** fire Trigger B (publication) — `process/PRODUCT_DELIVERY.md` has what triggers that and
 when, not this document, since it is a distribution decision rather than a build step. Six
 deliverables are owed at this close step, per ADR-034, beyond the restructure itself:
 
 - **B3/B4 — record, do not build:** the destination account (`github.com/ospreyflow`, a personal
   account today) and the reserved-but-unclaimed `github.com/ospreyflow/ospreyflow` name stay exactly
-  as ADR-034 records them; further detail (`docs/PRODUCT_DELIVERY.md`) is a distribution question,
+  as ADR-034 records them; further detail (`process/PRODUCT_DELIVERY.md`) is a distribution question,
   not this close step's.
 - **B5 — authorship record.** A dated authorship record, created in the private build tree at this
   close step (ADR-034's own B6 deliverable, cross-referenced from B5) — without it, a later
-  neutral-identity squash (`docs/PRODUCT_DELIVERY.md` has when that happens and why) removes the
+  neutral-identity squash (`process/PRODUCT_DELIVERY.md` has when that happens and why) removes the
   evidence of who wrote the build along with the name.
 - **B7 — the packaging pipeline's own artefact-hygiene properties, a blocking prerequisite of Phase
   8's own harness/packaging work, not a follow-up to it.** The harness this phase's own outcome
@@ -7431,7 +7431,7 @@ deliverables are owed at this close step, per ADR-034, beyond the restructure it
   private-tree file in any artefact it produces; no B5 identifier in one, including in build-time
   version metadata) — properties of producing an artefact at all, restated here and against Stage
   2's own exit criterion, above, in exactly those terms (`06_DECISIONS.md` ADR-034 §B7 itself now
-  states them the same way). `docs/PRODUCT_DELIVERY.md` has the separate question of who receives
+  states them the same way). `process/PRODUCT_DELIVERY.md` has the separate question of who receives
   an artefact and when.
 - **`scripts/doc_citations_check.py` gains the ADR-citation scope ADR-034's own B2 finding names** —
   flagging any product-tree docstring's own `06_DECISIONS.md` ADR-number citation, since that file
@@ -7500,7 +7500,7 @@ Two different kinds of thing inside that scope, with two different real risks:
   *checker* it credited with covering it is unbuilt, not merely unrun.
 - **A real, functional, compile-time dependency the six deliverables above do not name —
   generalised, 23 September 2026, into `06_DECISIONS.md` ADR-034's own new B8 deliverable, not
-  left as a single instance.** Thirteen real source files depend on `docs/design/tokens.css`
+  left as a single instance.** Thirteen real source files depend on `spec/design/tokens.css`
   directly (twelve TypeScript `import`s, including `apps/workspace/src/main.tsx` itself, the
   Glass's own real entry point, plus one `readFileSync` in `apps/workspace/src/color/
   tokens.test.ts`) — checked, not assumed, to be the *only* file under `docs/` with this shape of
@@ -7618,7 +7618,7 @@ finding rather than rediscovering the gap.
   B4, B5, B7) is graph-leg search or "Search Around" expansion, already real; none needs full-text
   document/embedding search. **Corollary, not fixed here:** the three spec passages above overclaim
   current functionality and should be corrected to state the index leg is unbuilt, the same
-  discipline `docs/DEMO_GUIDE.md`'s own "documents only what is built and verified today" already
+  discipline `DEMO_GUIDE.md`'s own "documents only what is built and verified today" already
   applies to itself — left for whoever next touches those sections, not done as part of this
   disposition sweep.
 - **Betweenness's Brandes-sampling fallback for large working sets.** The exact `rustworkx.
@@ -7812,7 +7812,7 @@ disclosure that cannot yet name one of the three has not finished being written.
   longer each time (117s → 151s → 203s, a 74% slowdown by the third repetition). Every one of
   those runs passed — this degrades quietly, not with a failure. **Full reasoning and the
   operational consequence are recorded where an operator will actually read them:**
-  `docs/05_DEPLOYMENT.md` §8, new — a running instance should be expected to need periodic
+  `spec/05_DEPLOYMENT.md` §8, new — a running instance should be expected to need periodic
   restarts to recover memory, and the safe interval is not yet known, since nobody has measured
   whether the degradation plateaus or continues without bound. **Named test, not built:**
   `test_arcadedb_memory_and_query_latency_under_sustained_ingest_cycles` — sustained load across
@@ -8317,7 +8317,7 @@ that an ADR, not a gaps entry. See ADR-023, resolved before Phase 7 rather than 
   form — B21 is therefore now part of what must be green to reach the milestone, exactly like
   every other row in either scenario already is. This adds to, not merely records, what Stage 4g's
   own closing pass and this phase's own exit criterion must prove; accepting B21 was not free. The
-  further consequence for who receives a build and when (`docs/PRODUCT_DELIVERY.md`, "The alpha
+  further consequence for who receives a build and when (`process/PRODUCT_DELIVERY.md`, "The alpha
   gate") is a distribution fact downstream of this one, not restated here.
 
 - **Two items this session found while re-establishing a clean baseline** (`docker compose down -v`

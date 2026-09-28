@@ -6,7 +6,7 @@ document (`scripts/route_coverage_check.py`'s own `APACHE_DOC_PATHS` — the sam
 from there rather than redeclared, so the two gates cannot silently diverge on what "product tree"
 means) cite, link to, or reference by path a file destined for the private build tree (`spec/`'s
 own non-Apache-scoped members — `06_DECISIONS.md`, `07_BUILD_PLAN.md` — and everything destined
-for `process/`, plus `CLAUDE.md` and `docs/PRODUCT_DELIVERY.md`). It does **not** scan
+for `process/`, plus `CLAUDE.md` and `process/PRODUCT_DELIVERY.md`). It does **not** scan
 `packages/`/`services/`/`apps/` source comments for the same pattern — those same files' own ADR
 numbers are cited from source docstrings throughout this codebase (392 source files carry 1,150
 such citations), and every one of those is a legitimate, currently-resolving
@@ -23,7 +23,7 @@ filesystem, the same question for every citing file regardless of where it itsel
 asks "does an Apache-scoped file cite a non-Apache-scoped one" — the answer depends on *which side*
 the citing file is on. A `06_DECISIONS.md` docstring citing `07_BUILD_PLAN.md` must keep resolving
 (`doc_citations_check.py` must pass it) precisely because both stay inside the private `spec/`
-tree together; the identical citation, from `docs/README.md` (Apache-scoped, becomes the published
+tree together; the identical citation, from `README.md` (Apache-scoped, becomes the published
 root `README.md`), must not exist at all (this gate must fail it) precisely because one side of it
 never publishes. The two checks have opposite verdicts on structurally identical citations,
 depending only on the citing file's own destination — they cannot be merged into one mechanical
@@ -57,15 +57,20 @@ from scripts.route_coverage_check import APACHE_DOC_PATHS  # noqa: E402
 #: path, since these are cited inconsistently (bare name, backtick-quoted, with or without a
 #: leading `docs/`) across the existing corpus — checked directly against real examples found
 #: while building this gate, not assumed to follow one citation style.
+#: **Round 14a (Trigger A).** `docs/` dissolved into `spec/` (product, not private — `06_
+#: DECISIONS.md` moved here and is no longer a marker: the ADR log is Apache-scoped spec
+#: material, citable like any other numbered file) and `process/` (everything this list used to
+#: name individually — `07_BUILD_PLAN.md`, `SESSION_HANDOVER.md`, `NEXT_STEPS_PHASE7.md`,
+#: `DESIGN_PROVENANCE.md`, `PRODUCT_DELIVERY.md`, `archive/`, `demo/`, `upstream/` — now share one
+#: directory prefix, so one marker replaces eight). `CLAUDE.md`, `.claude/` and `.graphifyignore`
+#: are build-process too (owner instruction, 28 Sep: "segregation of the core product files...
+#: from the claude based build instructions") and join the list for the same reason they already
+#: sit in `.dockerignore`'s own private-tree block.
 PRIVATE_TREE_MARKERS: tuple[str, ...] = (
-    "06_DECISIONS.md",
-    "07_BUILD_PLAN.md",
-    "SESSION_HANDOVER.md",
-    "NEXT_STEPS_PHASE7.md",
-    "DESIGN_PROVENANCE.md",
-    "PRODUCT_DELIVERY.md",
+    "process/",
     "CLAUDE.md",
-    "archive/",
+    ".claude/",
+    ".graphifyignore",
 )
 
 _MARKER_PATTERN = re.compile(

@@ -112,8 +112,8 @@ description: Start a build phase from the specification
 
 Start Phase $ARGUMENTS of the OspreyFlow build.
 
-1. Read the Phase $ARGUMENTS section of `docs/07_BUILD_PLAN.md`, and every spec document it
-   references. Read `docs/06_DECISIONS.md` for any ADR that governs this phase.
+1. Read the Phase $ARGUMENTS section of `process/07_BUILD_PLAN.md`, and every spec document it
+   references. Read `spec/06_DECISIONS.md` for any ADR that governs this phase.
 2. Check what already exists in the repository against that phase's scope. Do not rebuild
    what is there; do not assume anything is finished because a file exists.
 3. Propose a plan covering every bullet in the phase scope, ending at the phase's exit
@@ -246,7 +246,7 @@ anything. Plan mode makes Claude read and propose rather than start writing file
 you want at the top of a phase — the plan is where a misreading of the spec is cheap to catch.
 
 Run the kickoff prompt from `PROMPTS.md`. Review the plan against the phase's exit criteria in
-`docs/07_BUILD_PLAN.md`. Approve, then let it build.
+`process/07_BUILD_PLAN.md`. Approve, then let it build.
 
 ## Step 5 — Clear between phases
 
@@ -261,7 +261,7 @@ exit criteria are written as tests for exactly this reason.
 
 ## Session hygiene that matters for this project specifically
 
-**Conformance suites before adapters.** Standing rule 1 in `docs/07_BUILD_PLAN.md`. If Claude
+**Conformance suites before adapters.** Standing rule 1 in `process/07_BUILD_PLAN.md`. If Claude
 Code proposes writing an adapter first, stop it — an adapter written first defines the contract
 by accident, and the whole swap-boundary claim rests on the suite being independent of it.
 

@@ -1,6 +1,6 @@
 """Thin async HTTP client over the LiteLLM proxy's OpenAI-compatible `/chat/completions` route.
 
-`docs/00_ARCHITECTURE.md` §2.4: the Conduit talks to one OpenAI-compatible base URL; LiteLLM
+`spec/00_ARCHITECTURE.md` §2.4: the Conduit talks to one OpenAI-compatible base URL; LiteLLM
 resolves the `model` name to whatever backend `deploy/compose/dev.yaml`'s `litellm` service is
 configured with (Ollama locally, vLLM on the cluster profile) — this client never talks to Ollama
 directly, so swapping the backend is a proxy config change, not a code change (ADR-005's "model

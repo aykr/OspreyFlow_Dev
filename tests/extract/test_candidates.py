@@ -1,4 +1,4 @@
-"""`services/extract/candidates.py` — `docs/09_INGEST_STUDIO.md` §4/§7. No `ModelPort` call here:
+"""`services/extract/candidates.py` — `spec/09_INGEST_STUDIO.md` §4/§7. No `ModelPort` call here:
 these tests build `ExtractionResult`s directly, the same "test the pure transform, not the model"
 split `tests/resolve/test_resolver.py` uses for Splink.
 """

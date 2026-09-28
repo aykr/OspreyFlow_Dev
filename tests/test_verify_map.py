@@ -1,4 +1,4 @@
-"""`scripts/verify_map.py` — `docs/00_ARCHITECTURE.md` §1.2.1's Verify
+"""`scripts/verify_map.py` — `spec/00_ARCHITECTURE.md` §1.2.1's Verify
 check. The one
 network-dependent stage (`check_crs_and_zoom`'s tier-4 capabilities fetch)
 is injected out, the same discipline `test_build_local_basemap.py`

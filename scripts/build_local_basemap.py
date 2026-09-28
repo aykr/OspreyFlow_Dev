@@ -1,8 +1,8 @@
-"""The tier-1 "one-button local basemap build" — `docs/00_ARCHITECTURE.md`
+"""The tier-1 "one-button local basemap build" — `spec/00_ARCHITECTURE.md`
 §1.2 ("Tier 1 is the shipped default and it is complete. One button on the
 harness's Geospatial screen downloads a Geofabrik extract, runs planetiler
 to produce PMTiles, and loads the OSM-derived gazetteer") and
-`docs/05_DEPLOYMENT.md` §2.2 ("Build local basemap").
+`spec/05_DEPLOYMENT.md` §2.2 ("Build local basemap").
 
 There is no `osprey` CLI (`CLAUDE.md`'s own Conventions). This module is the
 real functionality the eventual `osprey geo build` command wraps — a plain,
@@ -197,7 +197,7 @@ def run_planetiler(
     never appears in the licence-check gate the way a package dependency
     would; confirm its own licence (Apache-2.0, per planetiler's own
     repository, at the time a real jar is pinned) separately from
-    `docs/00_ARCHITECTURE.md` §7's allowlist, which only governs installed
+    `spec/00_ARCHITECTURE.md` §7's allowlist, which only governs installed
     package dependencies.
 
     **`--download` and `--download_dir` added 26 September 2026, running this against a real

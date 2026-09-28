@@ -7,7 +7,7 @@
 // own docstring already establishes for a `fetch`.
 import { createRoot } from "react-dom/client";
 
-import "../../../docs/design/tokens.css";
+import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { SignInScreen } from "../src/auth/SignInScreen";
 import { signIn } from "../src/auth/userManager";

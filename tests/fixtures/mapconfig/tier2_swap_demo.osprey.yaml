@@ -1,4 +1,4 @@
-# Tier-1 -> tier-2 swap demonstration fixture — `docs/07_BUILD_PLAN.md`
+# Tier-1 -> tier-2 swap demonstration fixture — `process/07_BUILD_PLAN.md`
 # Phase 5 Checkpoint 3a's exit demonstration ("swap the default provider to
 # tier 2... confirm nothing analytically changes"). Deliberately NOT the
 # committed root `osprey.yaml`: standing rule 9 pins the demo/CI config to

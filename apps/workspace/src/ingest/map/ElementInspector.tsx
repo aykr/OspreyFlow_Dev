@@ -1,4 +1,4 @@
-// The per-element settings panel — `docs/09_INGEST_STUDIO.md` §4: POLE-first
+// The per-element settings panel — `spec/09_INGEST_STUDIO.md` §4: POLE-first
 // type narrowing, match/on-match, per-property bindings, conditions, and a
 // per-element handling/provenance override with a live preview.
 import { useState } from "react";

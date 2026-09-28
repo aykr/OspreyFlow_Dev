@@ -102,7 +102,7 @@ The ingest path is not designed here — that is real, separately-scoped work, n
 
 Owner cancelled the day's demonstration; dev stack and seeded data were free to use. This section
 follows the same discipline as the section above: only what was actually run and observed, against
-`docs/demo/2026-09-24/demo_up.sh --reset` from a fresh clone of the repository, not the checkout
+`process/demo/2026-09-24/demo_up.sh --reset` from a fresh clone of the repository, not the checkout
 that made the fixes.
 
 ### Product defects fixed, both with tests (see `07_BUILD_PLAN.md`'s own addendum for the full record)

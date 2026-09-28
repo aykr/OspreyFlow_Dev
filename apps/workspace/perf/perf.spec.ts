@@ -1,4 +1,4 @@
-// The performance budget — `docs/02_GLASS_FRONTEND.md` §5 — as a CI gate,
+// The performance budget — `spec/02_GLASS_FRONTEND.md` §5 — as a CI gate,
 // against the 50k-node/250k-edge fixture (`fixture.ts`), per this
 // checkpoint's own decision: GitHub Actions' hosted runners have no GPU, so
 // Chromium here falls back to software WebGL (SwiftShader) — dramatically

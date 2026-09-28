@@ -10,7 +10,7 @@
 // distinct colours), not an empty canvas that would pass the same assertions a blank one would.
 import { createRoot } from "react-dom/client";
 
-import "../../../docs/design/tokens.css";
+import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
 import type { ExportMark } from "../src/export/api";

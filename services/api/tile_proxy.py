@@ -1,4 +1,4 @@
-"""Proxies a tile request to a tier-3/tier-4 provider — `docs/00_ARCHITECTURE.md`
+"""Proxies a tile request to a tier-3/tier-4 provider — `spec/00_ARCHITECTURE.md`
 §1.2's "The tile proxy": credential secrecy (a `credential: env:VAR`
 reference resolved here, never sent to the browser), egress policy (this
 is the one named, auditable exception to default-deny egress), caching/
@@ -16,7 +16,7 @@ network call happening only against a local loopback stand-in server.
 closed, in Phase 5's known-gaps closure.** `endpoint` is always a bare service base URL — the
 same shape `services/api/tier4_registration.py`'s `register_tier4_provider`
 and `scripts/verify_map.py`'s CRS check already used, and the one
-`docs/00_ARCHITECTURE.md`'s own worked `wmts-corporate` example writes.
+`spec/00_ARCHITECTURE.md`'s own worked `wmts-corporate` example writes.
 For `service: wmts`, `build_upstream_url` now builds a real WMTS KVP
 `GetTile` request from that bare endpoint plus `provider.layer` and the
 three fields `register_tier4_provider` discovers alongside it

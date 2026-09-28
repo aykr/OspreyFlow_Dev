@@ -1,5 +1,5 @@
 """`WorkingSetService.manual_link`/`manual_split`/`explain_cluster` —
-`docs/03_CONDUIT_MIDDLEWARE.md` §3.5, `docs/01_DOMAIN_MODEL.md` §4. Same no-Valkey/no-ArcadeDB
+`spec/03_CONDUIT_MIDDLEWARE.md` §3.5, `spec/01_DOMAIN_MODEL.md` §4. Same no-Valkey/no-ArcadeDB
 discipline as `test_resolution_threshold.py`: `FakeWorkingSetStore`/`FakeGraphPort` exercise the
 service's own logic, not a real adapter.
 """

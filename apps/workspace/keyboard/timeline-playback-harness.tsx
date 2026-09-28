@@ -23,7 +23,7 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import "../../../docs/design/tokens.css";
+import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { createCrossFilterStore } from "../src/crossfilter/store";
 import { Timeline } from "../src/timeline/Timeline";

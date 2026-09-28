@@ -1,4 +1,4 @@
-"""`scripts/osprey_bundle.py` — `docs/00_ARCHITECTURE.md` §1.2's "the
+"""`scripts/osprey_bundle.py` — `spec/00_ARCHITECTURE.md` §1.2's "the
 bundle step refuses to package tiles or gazetteers whose profile says
 `redistributable: false`, and names them". Proves the refusal against a fixture config that
 deliberately violates it — the same "prove the gate with a fixture that
@@ -288,7 +288,7 @@ def test_build_bundle_refuses_a_bundle_containing_a_private_tree_file(
 
     staging_dir = tmp_path / "staging"
     staging_dir.mkdir()
-    (staging_dir / "06_DECISIONS.md").write_text("leaked", encoding="utf-8")
+    (staging_dir / "CLAUDE.md").write_text("leaked", encoding="utf-8")
 
     with pytest.raises(RuntimeError, match="refusing to package"):
         build_bundle(

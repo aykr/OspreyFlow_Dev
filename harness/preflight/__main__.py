@@ -76,7 +76,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="python -m harness.preflight",
         description=(
-            "Environment checks before Launch (docs/05_DEPLOYMENT.md §2.1). Reads the rendered "
+            "Environment checks before Launch (spec/05_DEPLOYMENT.md §2.1). Reads the rendered "
             "deployment under deploy/generated/<profile>/."
         ),
     )

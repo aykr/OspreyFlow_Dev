@@ -1,6 +1,6 @@
 """Wire and internal shapes for the Working-Set Service —
-`docs/03_CONDUIT_MIDDLEWARE.md` §3.2 (the delta protocol) and §4 (caps,
-storage, projection), `docs/00_ARCHITECTURE.md` §4.
+`spec/03_CONDUIT_MIDDLEWARE.md` §3.2 (the delta protocol) and §4 (caps,
+storage, projection), `spec/00_ARCHITECTURE.md` §4.
 
 The five delta ops below (`add`/`update`/`remove`/`reproject`/`notice`) are
 `03_CONDUIT_MIDDLEWARE.md` §3.2's own illustrative examples, given real

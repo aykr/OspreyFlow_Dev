@@ -1,4 +1,4 @@
-"""The shipped `providers/` profiles — `docs/00_ARCHITECTURE.md` §1.2's
+"""The shipped `providers/` profiles — `spec/00_ARCHITECTURE.md` §1.2's
 "Profiles to ship in `providers/`, each with a Verify fixture", scoped to
 one UK and one US profile.
 

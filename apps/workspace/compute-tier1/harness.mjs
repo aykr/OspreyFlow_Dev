@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// `ComputePort` Tier 1 — `docs/00_ARCHITECTURE.md` §2.3, `docs/06_DECISIONS.md` ADR-028's own
+// `ComputePort` Tier 1 — `spec/00_ARCHITECTURE.md` §2.3, `spec/06_DECISIONS.md` ADR-028's own
 // decision: exercised as a plain Node script, never a browser or a `Worker`. The correctness
 // claim `tests/conformance/compute_port/test_suite.py` exists to prove is algorithmic —
 // graphology's numbers agree with `rustworkx`'s on the same input — not a threading claim; a real

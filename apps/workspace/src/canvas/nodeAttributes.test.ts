@@ -44,7 +44,7 @@ describe("computeNodeGraphAttributes", () => {
       baseState({ selected: true }),
     );
     // Colour (entity type) is untouched by interaction state — only the
-    // border ring changes (docs/design/tokens.css: hue is entity type
+    // border ring changes (spec/design/tokens.css: hue is entity type
     // only, never a state or metric).
     expect(selected.color).toBe(asserted.color);
     expect(selected.borderColor).not.toBe(asserted.borderColor);

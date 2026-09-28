@@ -1,5 +1,5 @@
-# services/api — the Conduit's API process, docs/07_BUILD_PLAN.md Phase 3.
-# Standing rule (docs/07_BUILD_PLAN.md, "Standing rules for the whole
+# services/api — the Conduit's API process, process/07_BUILD_PLAN.md Phase 3.
+# Standing rule (process/07_BUILD_PLAN.md, "Standing rules for the whole
 # build"): each service gets its own image, and a `trivy image` CI scan,
 # in the phase that creates it — not batched into Phase 8.
 #

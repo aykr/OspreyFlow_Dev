@@ -8,17 +8,15 @@ call this build made, recorded here rather than left implicit.** The file set re
 `scripts.route_coverage_check.APACHE_DOC_PATHS` — the same tuple `product_tree_link_check.py`
 itself imports rather than redeclaring, so this site can never drift from what that gate already
 treats as the Apache-scoped boundary. `decision_log_publication_check.PROCESS_ADR_NUMBERS` is
-imported and exercised by `assert_no_process_content` below for the same reason `product_tree_
-link_check.PRIVATE_TREE_MARKERS` is: as a **safety check on the render's own output**, not as a
-second, larger content set — this site renders no ADR content from `06_DECISIONS.md` at all (that
-file is not in `APACHE_DOC_PATHS` and never will be pre-Trigger-A), so `PROCESS_ADR_NUMBERS` is
-exercised defensively today, proven by its own test with a fabricated would-be-rendered ADR
-fragment, not because the real site currently calls it with real ADR content. If the site is ever
-extended to surface ADR-034 §B10's own "PRODUCT ADRs publish with the product tree" filtered
-decision log, this is the mechanism that filter would reuse rather than a new one being invented —
-recorded as the open interpretation this round settled, not the only one the brief's own wording
-could support; `07_BUILD_PLAN.md`'s Stage 2 §5b entry says so plainly rather than presenting this
-as the only possible reading.
+imported and exercised by `assert_no_process_content` below as a **safety check on the render's
+own output**, not as a second, larger content set — this site renders no ADR content from `06_
+DECISIONS.md` at all (that file moved to `spec/` at Trigger A, round 14a, but stayed out of
+`APACHE_DOC_PATHS` deliberately — `route_coverage_check.py`'s own note has why), so
+`PROCESS_ADR_NUMBERS` is exercised defensively today, proven by its own test with a fabricated
+would-be-rendered ADR fragment, not because the real site currently calls it with real ADR
+content. `assert_no_private_tree_names` below checks the render's *output filenames* against
+`process/`'s own real file stems, computed directly rather than restated, so Trigger A's own
+marker simplification needed no change there.
 
 **Three landing pages**, per the build brief: `index.html` (Architecture — a short cold-reader
 orientation, then links into the rendered spec pack), `operator-guide.html` (`05_DEPLOYMENT.md`,
@@ -41,12 +39,12 @@ import ast
 from pathlib import Path
 
 from scripts.decision_log_publication_check import PROCESS_ADR_NUMBERS
-from scripts.product_tree_link_check import PRIVATE_TREE_MARKERS
 from scripts.route_coverage_check import APACHE_DOC_PATHS
 from scripts.simple_markdown import render_markdown
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PREFLIGHT_DIR = REPO_ROOT / "harness" / "preflight"
+PROCESS_DIR = REPO_ROOT / "process"
 
 _PAGE_SHELL = """<!doctype html>
 <html lang="en">
@@ -205,25 +203,46 @@ def assert_no_process_content(rendered_ids: list[str]) -> list[str]:
     return [rid for rid in rendered_ids if rid in PROCESS_ADR_NUMBERS]
 
 
+def _private_tree_file_stems() -> frozenset[str]:
+    """**Round 14a (Trigger A):** `PRIVATE_TREE_MARKERS` became `process/` as a directory prefix
+    plus three root markers (`CLAUDE.md`, `.claude/`, `.graphifyignore`) — right for the link
+    check it was built for (a citation carries path context), wrong for this function's own bare
+    *rendered filename* check (`"07_BUILD_PLAN.html"` carries no `process/` prefix to match at
+    all). Rather than hand-maintain a second, parallel list of individual private filenames that
+    would silently drift from the real `process/` tree, this derives the stems directly from what
+    is actually there — every real markdown file `process/` currently holds, plus `CLAUDE.md`'s
+    own stem for the root stub's sake.
+
+    **Deliberately `process/*.md` (top-level only), not `process/**/*.md`.** A recursive glob
+    walks into `process/archive/`, `process/demo/`, `process/prototypes/`, and `process/upstream/`
+    — folders that hold their own incidental `README.md`/`SESSION_HANDOVER.md`/`CLAUDE.md` files,
+    never rendered or referenced by this module, whose stems are not unique across the repository
+    and collide by pure coincidence with real, legitimately-rendered pages (`process/archive/
+    README.md`'s stem colliding with the product's own root `README.md` is the case this module's
+    own tests found). The files this check actually needs to catch — a numbered or named doc that
+    used to live at `docs/`'s top level and could plausibly be reintroduced to `APACHE_DOC_PATHS`
+    by mistake — all sit directly under `process/`, so the top-level glob is not a narrowing that
+    loses coverage; it is the fix for the collision.
+    """
+    stems = {p.stem for p in PROCESS_DIR.glob("*.md")}
+    stems.add("CLAUDE")
+    return frozenset(stems)
+
+
 def assert_no_private_tree_names(rendered_filenames: list[str]) -> list[str]:
     """The same file-identity check `scripts/packaging_gate.find_private_tree_files` applies to a
     whole artefact, scoped here to just the site's own rendered filenames.
 
-    **Matched by stem, not by exact substring.** `PRIVATE_TREE_MARKERS` names source files
-    (`06_DECISIONS.md`), and this site renders `.html`, not `.md` — a bare substring check the way
-    `packaging_gate` uses for a real artefact's own untouched file list would never fire here,
-    since `"06_DECISIONS.md" not in "06_DECISIONS.html"`. Found writing this module's own test,
-    not assumed: `Path(name).stem` strips the rendered extension before comparing, so a marker's
-    own `.md` suffix does not have to match this site's differently-suffixed output."""
+    **Matched by stem, not by exact substring.** This site renders `.html`, not `.md` — a bare
+    substring check the way `packaging_gate` uses for a real artefact's own untouched file list
+    would never fire here, since `"07_BUILD_PLAN.md" not in "07_BUILD_PLAN.html"`. Found writing
+    this module's own test, not assumed: `Path(name).stem` strips the rendered extension before
+    comparing, so a marker's own `.md` suffix does not have to match this site's
+    differently-suffixed output."""
     return [
         name
         for name in rendered_filenames
-        if any(
-            Path(marker).stem in Path(name).stem
-            for marker in PRIVATE_TREE_MARKERS
-            if marker != "archive/"
-        )
-        or "archive" in name
+        if Path(name).stem in _private_tree_file_stems() or "archive" in name
     ]
 
 

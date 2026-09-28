@@ -25,7 +25,7 @@ export interface RadialMenuProps {
   y: number;
   items: RadialMenuItem[];
   onClose: () => void;
-  /** `docs/02_GLASS_FRONTEND.md` §6 accessibility floor: "`\` opens the
+  /** `spec/02_GLASS_FRONTEND.md` §6 accessibility floor: "`\` opens the
    * radial menu as a list" — the same menu, a different arrangement, not
    * a different feature. Mouse-invoked (right-click) defaults to the
    * radial layout; keyboard-invoked (`\`) defaults to the list. */

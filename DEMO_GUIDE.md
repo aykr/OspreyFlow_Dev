@@ -21,7 +21,7 @@ minimum — 16GiB leaves the remaining 6GiB to cover macOS/Docker Desktop's own 
 Conduit, the Glass, and a browser tab actually rendering the Glass, which is tight rather than
 comfortable. Both numbers come from measuring this stack directly, not from a vendor
 specification (`07_BUILD_PLAN.md`'s Phase 8 "ArcadeDB stability" stage has the full measurement:
-ArcadeDB alone peaked at 7.75GiB in the 23 September 2026 demo rehearsal (`docs/demo/2026-09-24/
+ArcadeDB alone peaked at 7.75GiB in the 23 September 2026 demo rehearsal (an internal rehearsal record from
 RUNBOOK.md`), above an earlier measurement's 5.2–6.9GiB range — corrected here rather than left
 stale, since the 10GiB VM floor above already covers the higher figure with headroom. The Docker
 Desktop VM's default allocation on a typical machine, 8GiB, is not enough headroom above either
@@ -56,13 +56,13 @@ column below as the same binding statement in prose that the registry will enfor
 
 | Demo case | Distribution | State | What it shows |
 | --- | --- | --- | --- |
-| **Scenario A, steps A1–A11** (HMP fixture) | `shipped` | **Built and exit-verified** (automated CI — `glass-perf`/`glass-keyboard`/`glass-map-verify` and the acceptance-scenario test suite). **Live-walkthrough verification through a running Glass: see `docs/demo/2026-09-24/RUNBOOK.md`** for exactly which sub-steps have actually been driven through a browser and which have not | Timeline, map, cross-filtering, boundary and site-grid filters, the weekend and time-of-day findings, the site hotspot |
+| **Scenario A, steps A1–A11** (HMP fixture) | `shipped` | **Built and exit-verified** (automated CI — `glass-perf`/`glass-keyboard`/`glass-map-verify` and the acceptance-scenario test suite). **Live-walkthrough verification through a running Glass: recorded in an internal rehearsal log** for exactly which sub-steps have actually been driven through a browser and which have not | Timeline, map, cross-filtering, boundary and site-grid filters, the weekend and time-of-day findings, the site hotspot |
 | **The Ingest Studio**, Connect → Publish (CDR fixture) | `shipped` | **Built and exit-verified** | Onboarding a new source without touching the ontology: profiling, row-template mapping, dry-run verify, publish with versioning |
-| Scenario A, A12 (Clique Metric) | `shipped` | **Built and verified through the Glass**, 26 September 2026 — computed and ranked after a real keyboard-driven expansion (`apps/workspace/live/scenario-a-a12-a15.spec.ts`, `docs/demo/2026-09-26/RUNBOOK.md`) | Ranking the insular subgroup |
-| Scenario A, A13–A15 (assessment, export) | `shipped` | **Built; partly verified through the Glass**, 26 September 2026 — the assessment composer opens from the Inspector and the export drawer offers all three kinds, both asserted live. **Submitting a judgement end to end, and the S2-marked-item blocked-then-justified path, are still not walked through a browser** (`docs/demo/2026-09-26/RUNBOOK.md` §4) | — |
+| Scenario A, A12 (Clique Metric) | `shipped` | **Built and verified through the Glass**, 26 September 2026 — computed and ranked after a real keyboard-driven expansion (`apps/workspace/live/scenario-a-a12-a15.spec.ts`, and an internal rehearsal log) | Ranking the insular subgroup |
+| Scenario A, A13–A15 (assessment, export) | `shipped` | **Built; partly verified through the Glass**, 26 September 2026 — the assessment composer opens from the Inspector and the export drawer offers all three kinds, both asserted live. **Submitting a judgement end to end, and the S2-marked-item blocked-then-justified path, are still not walked through a browser** (recorded in an internal rehearsal log, §4) | — |
 | Scenario B (comms and identity pivot) | `shipped` | Partly built; split across Phases 6a, 7 and 8 by ADR-022 | — |
 | **Extraction and entity resolution** | `shipped` | Built, **API only** | Demonstrable to engineers through the API; there are no screens until Phase 6a |
-| **Scenario C — "Fixture Corp"** (Enron-*shaped*, R24, AMLSim-*shaped* generator) | `shipped` | **Built** (`scripts.seed_fixture_corp`) — its four ADR-035 §C5 properties are **verified structurally** (`tests/scenarios/test_fixture_corp_shape.py`). Moving the resolution threshold live is now verified through the Glass. **`explain`, the pathfinder and path-length comparison are not, and currently cannot be: no Fixture Corp entity can be loaded into the working set** — 0 of its 65 Persons carry any of the identifiers search matches on, against 400 of 400 for HMP (measured 26 September 2026). See §6 and `docs/demo/2026-09-26/RUNBOOK.md` §4. Not the ~150-employee Enron-shaped corporation §6 and Scenario C (C1–C20) describe — see §6 | See §6 |
+| **Scenario C — "Fixture Corp"** (Enron-*shaped*, R24, AMLSim-*shaped* generator) | `shipped` | **Built** (`scripts.seed_fixture_corp`) — its four ADR-035 §C5 properties are **verified structurally** (`tests/scenarios/test_fixture_corp_shape.py`). Moving the resolution threshold live is now verified through the Glass. **`explain`, the pathfinder and path-length comparison are not, and currently cannot be: no Fixture Corp entity can be loaded into the working set** — 0 of its 65 Persons carry any of the identifiers search matches on, against 400 of 400 for HMP (measured 26 September 2026). See §6 and the internal rehearsal log, §4. Not the ~150-employee Enron-shaped corporation §6 and Scenario C (C1–C20) describe — see §6 | See §6 |
 | **The real Enron email corpus** | `internal`, **admitted only via the owner's own local exceptions list — see §6** | Owner-run demonstration only, on the owner's own device, never distributed to an attendee | — |
 | **VAST Challenge dataset** (generated fixture) | `internal` | Decided (ADR-026); fixture not yet built | See §7 |
 | **VAST Challenge dataset** (the published files themselves) | Not admitted, any class | ADR-026: "standing rule 3 is not amended" — never used, shaped or verbatim | See §7 |
@@ -72,7 +72,7 @@ Glass**, and it is a good one — as of 26 September 2026 that now includes A12'
 the local PMTiles basemap rendering real tiles, both asserted by automated live specs rather than
 by eye. Fixture Corp is built and structurally proven, and its resolution threshold is
 demonstrable, but the rest of it cannot be shown in the Glass at all until it gains a searchable
-identifier or the query builder gains a way to load its results. `docs/demo/2026-09-26/RUNBOOK.md`
+identifier or the query builder gains a way to load its results. an internal rehearsal log
 has the honest state of what has, and has not, actually been driven through a browser.
 
 ---
@@ -87,7 +87,7 @@ The Conduit validates JWTs against a JWKS URL (`OIDC_JWKS_URL`, read with no def
 correction already made three times for `revert_load`, the local-basemap build and the HMP seed.
 
 **Use the project venv's own interpreter, not a bare `python`** — the 23 September 2026 demo
-rehearsal (`docs/demo/2026-09-24/RUNBOOK.md`) found a bare `python -m scripts.mint_dev_token` picks
+rehearsal (an internal record) found a bare `python -m scripts.mint_dev_token` picks
 up whatever interpreter is first on `PATH`, which on a machine with more than one Python install is
 not necessarily the one with this project's own dependencies (`pyjwt`, `cryptography`) installed:
 
@@ -118,11 +118,11 @@ python3 -m http.server 8888 --directory /tmp/dev-jwks
 ## 3. Bringing up a demo environment
 
 Run from the repository root. Roughly fifteen minutes on a cold machine, most of it image pulls.
-**This sequence is scripted — `docs/demo/2026-09-24/demo_up.sh --reset` runs every step below in
+**This sequence is scripted — an internal `demo_up.sh --reset` script runs every step below in
 the order that actually works, and is the recommended path.** The manual sequence below is the
 reference the script encodes, kept for anyone who wants to run a step by hand or understand what
 the script is doing; both were proven against a real stack on 23–24 September 2026
-(`docs/demo/2026-09-24/RUNBOOK.md`).
+(an internal rehearsal log).
 
 **The order below differs from an earlier version of this guide in two ways, both found by that
 rehearsal.** Creating the investigation needs the Conduit briefly running (it is an HTTP call);
@@ -253,7 +253,7 @@ build already exists at `osprey.yaml`'s configured path. Every other view (Timel
 hotspot panel) works without it — `02_GLASS_FRONTEND.md` §3.5's own proposal has the full
 reasoning for why this now fails loudly instead of silently.
 
-**Building one, proven end to end on 26 September 2026** (`docs/demo/2026-09-26/RUNBOOK.md` has
+**Building one, proven end to end on 26 September 2026** (an internal rehearsal log has
 the timings and the full transcript). It needs a JDK and a planetiler jar, neither of which this
 repository ships:
 
@@ -319,7 +319,7 @@ name rather than passing on an empty track.
 **Each spec creates its own investigation** and asserts its working set starts empty, so a run
 never inherits state from an earlier one. That is not tidiness: the working set is server-side and
 the Glass loads it on open, and round 12's A12 case reported green for exactly that reason while
-its own expansion contributed nothing (`docs/07_BUILD_PLAN.md`'s Stage 3a entry has the full
+its own expansion contributed nothing (the internal build plan's own Stage 3a entry has the full
 account). A consequence worth knowing when demonstrating by hand: **reusing one investigation
 across several attempts accumulates nodes and edges**, so if the canvas looks fuller than you
 expect, open a fresh `?investigation=` rather than wondering what expanded.
@@ -510,7 +510,7 @@ whether a particular subgroup is unusually insular.
 Clique Metric [...] is Phase 7. The assessment objects, export and handling gate are Phase 8."
 Both phases are built, and §1's own table had already said so — §4 was left contradicting it.
 Steps 7 and 8 above are now walked by `apps/workspace/live/scenario-a-a12-a15.spec.ts` against a
-real stack (`docs/demo/2026-09-26/RUNBOOK.md`).
+real stack (an internal rehearsal log).
 
 **What to avoid promising.** Entity resolution's threshold control and `explain` work, but
 **Fixture Corp cannot be loaded into the working set at all** — see §6. Demonstrate resolution on

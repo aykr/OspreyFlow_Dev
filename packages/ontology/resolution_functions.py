@@ -1,5 +1,5 @@
 """Closed function registry for the ontology's `resolution: {blocking, comparisons}` block —
-`01_DOMAIN_MODEL.md` §4, `docs/06_DECISIONS.md` ADR-021. A fixed, enumerated vocabulary mapping
+`01_DOMAIN_MODEL.md` §4, `spec/06_DECISIONS.md` ADR-021. A fixed, enumerated vocabulary mapping
 function names (`soundex`, `year`, `jaro_winkler`, `levenshtein`, `exact`) to Splink blocking-rule
 SQL and comparison-library constructors — the same shape as the Knowledge Adapters
 (`01_DOMAIN_MODEL.md` §7) rather than a parser for an open expression language. ADR-018 refuses

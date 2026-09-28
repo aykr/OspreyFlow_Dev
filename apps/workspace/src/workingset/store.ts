@@ -1,4 +1,4 @@
-// The graphology working-set store — `docs/02_GLASS_FRONTEND.md` §2's "one
+// The graphology working-set store — `spec/02_GLASS_FRONTEND.md` §2's "one
 // working set, many views" and §1.1's "zoom never changes what exists,
 // only what is drawn".
 //
@@ -181,7 +181,7 @@ function applyDeltaToGraph(graph: WorkingSetGraph, delta: WorkingSetDelta): void
  * `WorkingSetService.sync`/`restore`); a later `DeltaNotice` on a live
  * connection reports items withheld *by that one push*, on top of
  * whatever was already known hidden, so it accumulates rather than
- * replaces. `docs/03_CONDUIT_MIDDLEWARE.md` §3.2 does not state this
+ * replaces. `spec/03_CONDUIT_MIDDLEWARE.md` §3.2 does not state this
  * client-side accumulation rule explicitly — named here as this client's
  * own resolution of that silence, not asserted as spec.
  */

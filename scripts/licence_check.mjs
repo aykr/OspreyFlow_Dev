@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * `make licence-check` (Node half) — enforces the allowlist in
- * `docs/00_ARCHITECTURE.md` §7 against `license-checker`'s report.
+ * `spec/00_ARCHITECTURE.md` §7 against `license-checker`'s report.
  *
  * Known gap, accepted and flagged rather than fixed here (Phase 0 plan §2.D,
  * same reasoning as the Python-side script): linkage mode for LGPL-3.0 is not
@@ -70,7 +70,7 @@ function main() {
   for (const offender of offenders) {
     console.error(
       `licence-check: ${offender.key} — '${offender.licenses}' is not on the ` +
-        "docs/00_ARCHITECTURE.md §7 allowlist",
+        "spec/00_ARCHITECTURE.md §7 allowlist",
     );
   }
   if (offenders.length > 0) {

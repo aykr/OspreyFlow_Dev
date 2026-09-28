@@ -1,5 +1,5 @@
 """`GET`/`PUT /v1/investigations/{investigation_id}/resolution/threshold`, `POST .../link`,
-`POST .../split`, `GET .../explain/{cluster_id}` route wiring — `docs/03_CONDUIT_MIDDLEWARE.md`
+`POST .../split`, `GET .../explain/{cluster_id}` route wiring — `spec/03_CONDUIT_MIDDLEWARE.md`
 §3.5. `WorkingSetService`'s own logic is proven in `tests/services/api/working_set/
 test_resolution_threshold.py`/`test_manual_resolution.py`; this file only proves each route calls
 it with the right arguments, publishes the delta where one exists, and audits — the same split

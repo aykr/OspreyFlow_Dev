@@ -19,12 +19,12 @@ docstring already discloses it is actually nested under `/v1/investigations/{inv
 still does not normalise to a match — nesting is a real shape difference, not a placeholder-naming
 one, so it correctly lands in the allowlist alongside the rest of the debt.
 
-**Checks every Apache-scoped document, not only `docs/03_CONDUIT_MIDDLEWARE.md`'s table — the
+**Checks every Apache-scoped document, not only `spec/03_CONDUIT_MIDDLEWARE.md`'s table — the
 gate's own original ELSEWHERE bug, found by the same triage that fixed the domain-model gate.**
 `03_CONDUIT_MIDDLEWARE.md`'s own table is the natural home and, checked directly, the *only*
 Apache-scoped document that documents a route in this shape — `09_INGEST_STUDIO.md` in particular
 was expected to cover the Ingest Studio's own routes and, checked directly
-(`grep -c "/v1/" docs/09_INGEST_STUDIO.md` → 0), does not mention a single one, even inline. That
+(`grep -c "/v1/" spec/09_INGEST_STUDIO.md` → 0), does not mention a single one, even inline. That
 finding did not shrink today's allowlist — every route this gate flags is `GAP`, not `ELSEWHERE`,
 since none is documented in a second file today — but the search itself is real, across every
 Apache-scoped doc, not hardcoded to one file, so a route documented elsewhere in the future is
@@ -57,8 +57,16 @@ ALLOWLIST_PATH = REPO_ROOT / "tests" / "fixtures" / "route_coverage_allowlist.tx
 
 #: The Apache-scoped document list, current (pre-Trigger-A) paths — the
 #: same set `scripts/domain_model_coverage_check.py`'s own `APACHE_DOC_PATHS` uses.
+#: **Round 14a (Trigger A):** `docs/` dissolved into `spec/` and the repository root — a physical
+#: move only. `06_DECISIONS.md` moved to `spec/` too (it is product spec, not build-process,
+#: `07_BUILD_PLAN.md` is the one numbered file that went the other way) but is **not** added to
+#: this set here: hundreds of its own historical entries cite `CLAUDE.md` and process-tree paths
+#: by rule number as part of the ADR record's own narrative, and rephrasing or allowlisting each
+#: one is `process/07_BUILD_PLAN.md`'s own Stage 3b scoped work, not this restructure's. Bringing
+#: `06_DECISIONS.md` into the scanned set is that later round's decision to make, not a side
+#: effect of moving files.
 APACHE_DOC_PATHS: tuple[Path, ...] = tuple(
-    REPO_ROOT / "docs" / name
+    REPO_ROOT / "spec" / name
     for name in (
         "00_ARCHITECTURE.md",
         "01_DOMAIN_MODEL.md",
@@ -68,15 +76,13 @@ APACHE_DOC_PATHS: tuple[Path, ...] = tuple(
         "05_DEPLOYMENT.md",
         "08_ACCEPTANCE_SCENARIOS.md",
         "09_INGEST_STUDIO.md",
-        "DEMO_GUIDE.md",
-        "README.md",
     )
-)
+) + (REPO_ROOT / "DEMO_GUIDE.md", REPO_ROOT / "README.md")
 
 #: `03_CONDUIT_MIDDLEWARE.md`'s own route table is the primary reference cited in messages below —
 #: kept as a named constant since it is still, in practice, the only document this gate ever finds
 #: a route in.
-DOC_PATH = REPO_ROOT / "docs" / "03_CONDUIT_MIDDLEWARE.md"
+DOC_PATH = REPO_ROOT / "spec" / "03_CONDUIT_MIDDLEWARE.md"
 
 # Run standalone via `python scripts/route_coverage_check.py` (as `make route-coverage-check`
 # does), not only under pytest's own `pythonpath = ["packages"]` — both the repo root (for

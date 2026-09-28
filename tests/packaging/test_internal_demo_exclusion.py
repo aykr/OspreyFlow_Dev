@@ -99,13 +99,13 @@ def test_the_real_registry_produces_no_violations_for_a_clean_artefact() -> None
 
 def test_a_private_tree_file_in_the_artefact_fails_the_gate() -> None:
     violations = packaging_gate.find_private_tree_files(
-        ["docs/06_DECISIONS.md", "docs/00_ARCHITECTURE.md", ".claude/CLAUDE.md"]
+        ["process/07_BUILD_PLAN.md", "spec/00_ARCHITECTURE.md", ".claude/CLAUDE.md"]
     )
-    assert set(violations) == {"docs/06_DECISIONS.md", ".claude/CLAUDE.md"}
+    assert set(violations) == {"process/07_BUILD_PLAN.md", ".claude/CLAUDE.md"}
 
 
 def test_no_private_tree_file_in_a_clean_artefact_passes() -> None:
-    clean = ["docs/00_ARCHITECTURE.md", "packages/schemas/domain.py", "README.md"]
+    clean = ["spec/00_ARCHITECTURE.md", "packages/schemas/domain.py", "README.md"]
     assert packaging_gate.find_private_tree_files(clean) == []
 
 
@@ -157,7 +157,7 @@ def test_docker_save_layer_paths_reads_the_union_across_every_layer_not_only_the
 
     layer1_dir = tmp_path / "layer1"
     layer1_dir.mkdir()
-    (layer1_dir / "secret.txt").write_text("docs/06_DECISIONS.md was here")
+    (layer1_dir / "secret.txt").write_text("process/07_BUILD_PLAN.md was here")
     layer1_tar = tmp_path / "layer1.tar"
     with tarfile.open(layer1_tar, "w") as tar:
         tar.add(layer1_dir / "secret.txt", arcname="secret.txt")
@@ -186,13 +186,13 @@ def test_docker_save_layer_paths_reads_the_union_across_every_layer_not_only_the
 
 def test_check_artefact_aggregates_every_finding_and_is_empty_when_clean() -> None:
     dirty = packaging_gate.check_artefact(
-        ["docs/06_DECISIONS.md", "demo-data/x/data.csv"],
+        ["process/07_BUILD_PLAN.md", "demo-data/x/data.csv"],
         text_blobs={"label": "Ayan Kar <ayan.kar@solirius.com>"},
     )
     assert set(dirty) == {"private_tree_files", "internal_demo_data", "authorship_identifiers"}
 
     clean = packaging_gate.check_artefact(
-        ["docs/00_ARCHITECTURE.md", "tests/scenarios/fixtures/hmp.py"],
+        ["spec/00_ARCHITECTURE.md", "tests/scenarios/fixtures/hmp.py"],
         text_blobs={"label": "OspreyFlow"},
     )
     assert clean == {}

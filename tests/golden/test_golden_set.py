@@ -1,4 +1,4 @@
-"""The golden-set CI gate — `docs/03_CONDUIT_MIDDLEWARE.md` §5.2:
+"""The golden-set CI gate — `spec/03_CONDUIT_MIDDLEWARE.md` §5.2:
 "A change that degrades recall on any type fails the build unless
 explicitly accepted with a recorded reason."
 

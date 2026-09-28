@@ -1,5 +1,5 @@
-"""Handling scheme loader and evaluator — `docs/01_DOMAIN_MODEL.md` §2.2,
-`docs/06_DECISIONS.md` ADR-017 (both `uk-le.yaml` and
+"""Handling scheme loader and evaluator — `spec/01_DOMAIN_MODEL.md` §2.2,
+`spec/06_DECISIONS.md` ADR-017 (both `uk-le.yaml` and
 `us-criminal-intelligence.yaml` ship)."""
 
 from __future__ import annotations

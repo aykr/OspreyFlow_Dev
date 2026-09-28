@@ -10,7 +10,7 @@ export interface HistogramProps {
   onSelect: (key: string) => void;
 }
 
-/** The cross-filter histogram pattern (`docs/02_GLASS_FRONTEND.md` §2's
+/** The cross-filter histogram pattern (`spec/02_GLASS_FRONTEND.md` §2's
  * "A histogram bar click filters everything") — Phase 5 wires the actual
  * cross-filter; this checkpoint ships the interactive primitive itself. */
 export function Histogram({ buckets, selectedKey, onSelect }: HistogramProps) {

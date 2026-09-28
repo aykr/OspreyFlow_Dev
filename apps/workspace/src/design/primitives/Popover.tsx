@@ -18,7 +18,7 @@ export interface PopoverProps {
 
 /** A positioned overlay anchored at a page coordinate — the base every
  * DOM-anchored overlay in the Glass builds on (edge inspection, hover
- * cards): `docs/02_GLASS_FRONTEND.md` §1.1: "Labels, hover cards and
+ * cards): `spec/02_GLASS_FRONTEND.md` §1.1: "Labels, hover cards and
  * context menus are DOM overlays positioned from Sigma's camera... The
  * rich parts stay in HTML where they are easy." */
 export function Popover({ x, y, onClose, children }: PopoverProps) {

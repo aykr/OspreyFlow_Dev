@@ -434,7 +434,7 @@ async def _seed_handle_cohort(
 async def _seed_and_resolve_b9_b10_person_pair(
     graph: GraphArcadeDBAdapter, *, scheme
 ) -> tuple[str, str, str, float]:
-    """B9/B10's own real `Person` pair — closing the fixture gap `docs/08_ACCEPTANCE_SCENARIOS.md`
+    """B9/B10's own real `Person` pair — closing the fixture gap `spec/08_ACCEPTANCE_SCENARIOS.md`
     B8's own disposition surfaced: B9's threshold move and B10's `explain` need a genuinely
     close-but-not-exact `Person` pair, scoring between Balanced (0.95) and Strict (0.99) — excluded
     at Strict, included at Balanced — which neither cohort in this scenario's own fixture provides
@@ -707,7 +707,7 @@ def test_phase8_exit_criterion_end_to_end(
             # B8/B11: Endpoint carries no resolution config (this module's own docstring, point
             # 2) — the handle-to-endpoint link is a deterministic, asserted SAME_AS at score 1.0
             # (ADR-024's own pattern), exactly B11's own shape — the corrected B8 disposition
-            # (`docs/08_ACCEPTANCE_SCENARIOS.md`) says this is what the edge actually is, not a
+            # (`spec/08_ACCEPTANCE_SCENARIOS.md`) says this is what the edge actually is, not a
             # stand-in for something else.
 
             # B9/B10: the real Person pair — see this file's own helper docstring for why neither
@@ -804,7 +804,7 @@ def test_phase8_exit_criterion_end_to_end(
 
         # === B8/B11: a deterministic, asserted SAME_AS at score 1.0 (ADR-024's own pattern for
         # === identifier systems with no lexical overlap) — B11's own literal shape, and, per the
-        # === corrected B8 disposition (`docs/08_ACCEPTANCE_SCENARIOS.md`), what B8's own edge
+        # === corrected B8 disposition (`spec/08_ACCEPTANCE_SCENARIOS.md`), what B8's own edge
         # === actually is, not a stand-in for a Splink score it was never going to have.
         # === `manual_link` requires both nodes already be members of this investigation's own
         # === working set.

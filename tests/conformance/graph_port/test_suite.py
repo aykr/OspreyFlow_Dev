@@ -1,5 +1,5 @@
 """`GraphPort` conformance suite —
-`docs/04_VAULT_BACKEND.md` §6, `docs/00_ARCHITECTURE.md` §2.1 and §5.
+`spec/04_VAULT_BACKEND.md` §6, `spec/00_ARCHITECTURE.md` §2.1 and §5.
 
 Parametrised over `GRAPH_PORT_ADAPTERS` in `tests/conformance/registry.py` —
 each entry opens a fresh, uniquely-named ArcadeDB database per test. A

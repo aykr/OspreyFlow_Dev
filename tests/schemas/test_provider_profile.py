@@ -1,4 +1,4 @@
-"""Provider profiles — `docs/00_ARCHITECTURE.md` §1.2's "Provider
+"""Provider profiles — `spec/00_ARCHITECTURE.md` §1.2's "Provider
 profiles" subsection."""
 
 from __future__ import annotations

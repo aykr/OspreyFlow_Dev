@@ -21,12 +21,12 @@ __pycache__/
 # something to commit.
 /data/
 
-# Internal-only demo datasets (docs/06_DECISIONS.md ADR-035, C1) — never committed, provisioned to
+# Internal-only demo datasets (spec/06_DECISIONS.md ADR-035, C1) — never committed, provisioned to
 # OSPREYFLOW_INTERNAL_DEMO_DATA_DIR at runtime, referenced by filename from a demo's own manifest.
 /demo-data/
 
-# The real-data exceptions list (CLAUDE.md rule 9, docs/07_BUILD_PLAN.md standing rule 3,
-# docs/06_DECISIONS.md ADR-035 §C3) — never committed, so a clone never records which real
+# The real-data exceptions list (CLAUDE.md rule 9, process/07_BUILD_PLAN.md standing rule 3,
+# spec/06_DECISIONS.md ADR-035 §C3) — never committed, so a clone never records which real
 # datasets, if any, anyone has ever admitted locally. scripts/real_data_exceptions.py's own
 # docstring has the mechanism; config/real_data_exceptions.example.yaml has the schema.
 /config/real_data_exceptions.yaml

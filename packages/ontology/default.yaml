@@ -1,4 +1,4 @@
-# The default ontology — docs/01_DOMAIN_MODEL.md §1.
+# The default ontology — spec/01_DOMAIN_MODEL.md §1.
 #
 # `SAME_AS` and `NOT_SAME_AS` are not listed here: the loader always injects
 # both as system edge types (ADR-006), regardless of what a deployment's

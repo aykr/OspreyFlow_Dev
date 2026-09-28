@@ -1,7 +1,7 @@
 """`services/api/pattern_store.py`'s `PatternStore` — direct, live-Postgres correctness, the
 same "own its access-control proof rather than only through route-level fakes" discipline
 `test_sites_store.py` already established for `SiteStore`. `06_DECISIONS.md` ADR-032/036/040,
-`docs/02_GLASS_FRONTEND.md` §3.3.
+`spec/02_GLASS_FRONTEND.md` §3.3.
 """
 
 from __future__ import annotations

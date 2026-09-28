@@ -101,7 +101,7 @@ function manifestHtml(manifest: ExportManifest): string {
 
 /** Pure: assembles a self-contained HTML document — every style inline, no external asset, no
  * network request the recipient's own browser would need to make to render it correctly. Styled
- * against `docs/design/tokens.css`'s own light-theme ramp (`[data-theme="light"]`), the theme
+ * against `spec/design/tokens.css`'s own light-theme ramp (`[data-theme="light"]`), the theme
  * that file itself names for print/report use, values copied verbatim rather than linked, since a
  * standalone document cannot depend on this repo's own stylesheet still existing at read time. */
 export function buildReportArtefact(input: ReportArtefactInput): string {

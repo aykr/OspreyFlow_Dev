@@ -1,4 +1,4 @@
-// Semantic zoom — `docs/02_GLASS_FRONTEND.md` §1.1, `docs/06_DECISIONS.md`
+// Semantic zoom — `spec/02_GLASS_FRONTEND.md` §1.1, `spec/06_DECISIONS.md`
 // ADR-002's own acceptance condition.
 //
 // **This module must never import `workingset/store.ts`.** That is not a

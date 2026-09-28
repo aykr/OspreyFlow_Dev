@@ -1,4 +1,4 @@
-"""`GraphPort` over ArcadeDB — `docs/04_VAULT_BACKEND.md` §1, `docs/06_DECISIONS.md` ADR-003.
+"""`GraphPort` over ArcadeDB — `spec/04_VAULT_BACKEND.md` §1, `spec/06_DECISIONS.md` ADR-003.
 
 `local-lite`'s graph store: one ArcadeDB container, reached over its HTTP
 API. Traversal reads are Gremlin, constructed by `builders.py` from bounded

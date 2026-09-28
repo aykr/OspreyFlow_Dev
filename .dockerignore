@@ -1,6 +1,6 @@
 # `.dockerignore` — the build context, not the running container.
 #
-# `docs/06_DECISIONS.md` ADR-035 §C2 names this file as the mechanism, in its own words: "if a
+# `spec/06_DECISIONS.md` ADR-035 §C2 names this file as the mechanism, in its own words: "if a
 # packaging step copies the repository root, `/demo-data/`'s own gitignore exclusion is irrelevant
 # to what a `docker build` context includes unless the `Dockerfile` also excludes it
 # (`.dockerignore`), the same 'check the build context, not just the running container' finding
@@ -46,31 +46,27 @@ node_modules
 # --- The private build tree ---------------------------------------------------
 # `scripts/product_tree_link_check.py`'s own `PRIVATE_TREE_MARKERS` is the authoritative list and
 # `tests/test_dockerignore.py` imports it rather than trusting this comment to stay in step: every
-# marker's real path in this repository must be excluded by something below. `docs/` covers most of
-# them; `CLAUDE.md` and `.claude/` sit at the root and need their own lines.
-docs
+# marker's real path in this repository must be excluded by something below.
+#
+# **Round 14a (Trigger A): `docs/` dissolved into `spec/` (product) and `process/` (build-process,
+# private).** `spec/` is not excluded — it is the product's own specification, and
+# `spec/design/tokens.css` moved out of it into `apps/workspace/src/design/tokens.css` at the same
+# time (ADR-034 §B8's own "when the restructure moves tokens.css into the product tree, this COPY
+# and that negation go together" — done here), so the re-include exception that line predicted is
+# gone rather than left matching nothing. `CLAUDE.md` at the root is now a one-line stub; the real
+# file and everything else build-process (`.claude/`, `.graphifyignore`) are listed by name.
+process
 CLAUDE.md
 .claude
+.graphifyignore
 
-# ADR-034 §B8: `docs/design/tokens.css` is product source, not prose — thirteen real consumers,
-# twelve TypeScript `import`s including `apps/workspace/src/main.tsx`, the Glass's own entry point,
-# plus one `readFileSync`. A build with that import unresolved fails outright, so excluding `docs`
-# wholesale would break any image that builds the Glass from this context. Re-included by name, as
-# the single deliberate exception to the line above, per the owner's instruction of 24 September
-# 2026. Everything else under `docs/` — including `docs/design/OspreyFlow_Brand_Foundations.html`,
-# which nothing code-links — stays excluded, and `tests/test_dockerignore.py` asserts both halves.
-#
-# **This exception is temporary by design.** ADR-034 §B8 decides that `tokens.css` moves with the
-# product tree at Trigger A (a real candidate location: `apps/workspace/src/design/tokens.css`). Once
-# it does, this line has nothing to re-include and should be deleted along with the `docs/` path it
-# rescues — not left behind as a pattern matching nothing.
-#
-# **On the semantics, checked rather than assumed.** Git itself would not honour this: "it is not
-# possible to re-include a file if a parent directory of that file is excluded." Docker's own
-# matcher does honour `!` exceptions, and `pathspec`'s gitignore matcher — what the test uses —
-# agrees with Docker here rather than with git. Verified directly against `pathspec` before this
-# line was added; a real `docker build` is the final authority if the two ever diverge.
-!docs/design/tokens.css
+# --- A large brand asset no image build reads, excluded for size, not privacy -----------------
+# `spec/` is product spec and not excluded wholesale (unlike `process/` above): nothing there is
+# private. This one file is different only because it is large and nothing code-links it —
+# `tokens.css`, the file that did need reaching, moved out of `spec/design/` and into the product
+# tree entirely at the same time (round 14a), so nothing under `spec/design/` needs to reach a
+# build context any more.
+spec/design/OspreyFlow_Brand_Foundations.html
 
 # --- Real data, demo data, and local operator state ---------------------------
 # `CLAUDE.md` rule 9 / `07_BUILD_PLAN.md` standing rule 3 / ADR-035 §C1 and §C3. The exceptions list
@@ -83,7 +79,6 @@ backups
 
 # --- Tests, fixtures and development-only trees -------------------------------
 tests
-prototypes
 graphify-out
 .graphify
 .playwright-mcp

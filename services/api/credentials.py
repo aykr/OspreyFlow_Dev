@@ -1,4 +1,4 @@
-"""Resolves a `MapProvider.credential` reference — `docs/00_ARCHITECTURE.md`
+"""Resolves a `MapProvider.credential` reference — `spec/00_ARCHITECTURE.md`
 §1.2: "a reference, never a value" — server-side, at the one place this
 repo ever reads an actual credential value. `services/api/mapconfig_loader.
 py`'s `public_view()` never exposes `credential`; this module is the other

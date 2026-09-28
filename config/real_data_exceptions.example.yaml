@@ -1,6 +1,6 @@
 # Schema for config/real_data_exceptions.yaml (gitignored, never committed).
 # See scripts/real_data_exceptions.py's own docstring for the full mechanism, and
-# docs/06_DECISIONS.md ADR-035 §C3 for the decision this exists to implement.
+# spec/06_DECISIONS.md ADR-035 §C3 for the decision this exists to implement.
 #
 # Managed with `python -m scripts.real_data_exceptions add/remove/list` — do not
 # hand-edit the real file; the CLI validates every field.

@@ -1,4 +1,4 @@
-// The row-template canvas — `docs/09_INGEST_STUDIO.md` §4: "The studio
+// The row-template canvas — `spec/09_INGEST_STUDIO.md` §4: "The studio
 // renders it with the same Sigma canvas used everywhere else, so the
 // template looks like the thing it will produce." A small, dedicated
 // graphology+Sigma instance, not `../../canvas/GlassCanvas.tsx` — that one

@@ -16,15 +16,12 @@ import {
   TEXT_SECONDARY_DARK_HEX,
 } from "./tokens";
 
-// Parses `docs/design/tokens.css` directly — this is the enforcement half
-// of `tokens.ts`'s "kept in sync by hand, cross-checked here" contract.
+// Parses `tokens.css` directly — this is the enforcement half of
+// `tokens.ts`'s "kept in sync by hand, cross-checked here" contract.
 // If someone edits a channel hue in the authoritative CSS file without
 // updating this module, this test fails instead of the drift sitting
 // unnoticed until a node renders the wrong colour.
-const TOKENS_CSS_PATH = new URL(
-  "../../../../docs/design/tokens.css",
-  import.meta.url,
-).pathname;
+const TOKENS_CSS_PATH = new URL("../design/tokens.css", import.meta.url).pathname;
 
 function readTokensCss(): string {
   return readFileSync(TOKENS_CSS_PATH, "utf8");
@@ -37,7 +34,7 @@ function cssVar(css: string, name: string): string {
   return hex.toLowerCase();
 }
 
-describe("CHANNEL_HEX matches docs/design/tokens.css (dark theme)", () => {
+describe("CHANNEL_HEX matches spec/design/tokens.css (dark theme)", () => {
   const css = readTokensCss();
 
   it.each(Object.entries(CHANNEL_HEX))("channel %s", (channel, hex) => {

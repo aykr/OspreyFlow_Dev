@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ospreyflow/ontology.schema.json",
   "title": "OspreyFlow ontology",
-  "description": "docs/01_DOMAIN_MODEL.md §1 — the YAML shape a deployment's ontology.yaml must validate against before the loader applies the nine-channel and pole_class rules that JSON Schema alone cannot express.",
+  "description": "spec/01_DOMAIN_MODEL.md §1 — the YAML shape a deployment's ontology.yaml must validate against before the loader applies the nine-channel and pole_class rules that JSON Schema alone cannot express.",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "entity_types", "edge_types"],

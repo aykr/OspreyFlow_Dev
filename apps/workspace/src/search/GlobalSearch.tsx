@@ -9,7 +9,7 @@ export interface GlobalSearchProps {
   onSelect: (node: Node) => void;
 }
 
-/** `docs/02_GLASS_FRONTEND.md`'s workspace layout: "⌘K — Search entities,
+/** `spec/02_GLASS_FRONTEND.md`'s workspace layout: "⌘K — Search entities,
  * identifiers, documents". `services/api/search.py`'s v1 scope note
  * applies here too: exact identifier match against the graph, not full
  * text — the search box finds and centres an entity already in the

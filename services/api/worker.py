@@ -1,4 +1,4 @@
-"""The first job-queue worker this system has — `docs/06_DECISIONS.md` ADR-025: a single,
+"""The first job-queue worker this system has — `spec/06_DECISIONS.md` ADR-025: a single,
 generic dispatcher by `job_type`, not resolution-specific, closing `services/api/supersede.py`'s
 own long-disclosed gap in the same stroke — its own module docstring already named the eventual
 worker as one of `supersede_node`'s two intended callers, written ahead of it the same way

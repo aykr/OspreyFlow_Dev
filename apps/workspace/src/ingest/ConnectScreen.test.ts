@@ -9,7 +9,7 @@ import { draftToForm, formToInput, groupCatalogue } from "./ConnectScreen";
 // infrastructure, not reuse of an existing pattern. What's tested here
 // instead is the screen's pure logic: form <-> API-shape conversion and
 // catalogue grouping. The screen itself is verified live in the browser
-// (`docs/09_INGEST_STUDIO.md` §2's three gate questions, checked by hand).
+// (`spec/09_INGEST_STUDIO.md` §2's three gate questions, checked by hand).
 
 function draft(overrides: Partial<StudioRecipeDraft> = {}): StudioRecipeDraft {
   return {

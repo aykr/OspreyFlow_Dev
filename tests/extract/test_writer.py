@@ -1,4 +1,4 @@
-"""`services/extract/writer.py` — `docs/01_DOMAIN_MODEL.md` §2.1, `docs/09_INGEST_STUDIO.md` §7."""
+"""`services/extract/writer.py` — `spec/01_DOMAIN_MODEL.md` §2.1, `spec/09_INGEST_STUDIO.md` §7."""
 
 from __future__ import annotations
 

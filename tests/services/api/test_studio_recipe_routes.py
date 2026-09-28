@@ -1,4 +1,4 @@
-"""HTTP route wiring for `/v1/ingest/*` — `docs/09_INGEST_STUDIO.md` §2
+"""HTTP route wiring for `/v1/ingest/*` — `spec/09_INGEST_STUDIO.md` §2
 (Connect) and §8 (studio roles). Mirrors `test_sites_routes.py`'s own
 discipline: dependency overrides and a fake store, never a live Postgres —
 `StudioRecipeStore`'s own correctness is proven in

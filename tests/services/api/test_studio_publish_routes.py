@@ -1,4 +1,4 @@
-"""HTTP route wiring for Publish (`docs/09_INGEST_STUDIO.md` §6) —
+"""HTTP route wiring for Publish (`spec/09_INGEST_STUDIO.md` §6) —
 `POST .../publish`, `PATCH .../schedule`, `POST .../versions`,
 `POST /v1/investigations/{id}/ingest/recipes/{id}/run`. Mirrors
 `test_studio_verify_routes.py`'s own discipline: fakes for the store/

@@ -1,4 +1,4 @@
-"""Schema and migration runner — `docs/04_VAULT_BACKEND.md` §1.4.
+"""Schema and migration runner — `spec/04_VAULT_BACKEND.md` §1.4.
 
 Every DDL statement is idempotent (`IF NOT EXISTS`), so applying the same
 ontology twice is a no-op rather than an error — the shape a migration

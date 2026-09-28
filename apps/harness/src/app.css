@@ -1,5 +1,5 @@
 /* `05_DEPLOYMENT.md` §2.1's own layout: a persistent summary rail beside the current screen.
-   Every colour here is a `var(--token)` from `docs/design/tokens.css` (`CLAUDE.md`: no colour
+   Every colour here is a `var(--token)` from `spec/design/tokens.css` (`CLAUDE.md`: no colour
    outside these tokens). */
 
 body {

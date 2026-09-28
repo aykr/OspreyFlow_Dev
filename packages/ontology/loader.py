@@ -1,4 +1,4 @@
-"""The ontology loader — `docs/01_DOMAIN_MODEL.md` §1.
+"""The ontology loader — `spec/01_DOMAIN_MODEL.md` §1.
 
 Validates a deployment's ontology YAML against the JSON Schema in
 `schema/ontology.schema.json`, then enforces the business rules a schema

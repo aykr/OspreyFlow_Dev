@@ -1,4 +1,4 @@
-// The Ingest Studio's own stage navigation — `docs/09_INGEST_STUDIO.md` §1:
+// The Ingest Studio's own stage navigation — `spec/09_INGEST_STUDIO.md` §1:
 // "The five stages are navigable in any order once a source is connected."
 // All five stages exist now; Profile/Map/Verify/Publish tabs only ever
 // activate once the active draft's own gates say so — the same gates each

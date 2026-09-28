@@ -1,5 +1,5 @@
 """Width/height extraction from an uploaded site image's raw bytes —
-`docs/00_ARCHITECTURE.md` §1.2's site-plan case, `08_ACCEPTANCE_SCENARIOS.md`
+`spec/00_ARCHITECTURE.md` §1.2's site-plan case, `08_ACCEPTANCE_SCENARIOS.md`
 A1. A hand-rolled PNG/JPEG header reader rather than a full image library:
 the only thing this feature needs from the file is its pixel dimensions,
 never decoding or re-encoding, and this build already established the same

@@ -2,7 +2,7 @@
 `01_DOMAIN_MODEL.md` §4: "Blocking rules and comparisons come from the ontology's `resolution`
 block per entity type, so adding an entity type does not require touching the resolution
 service." The closed function registry (`packages/ontology/resolution_functions.py`,
-`docs/06_DECISIONS.md` ADR-021) is what makes that literally true — this module never inspects an
+`spec/06_DECISIONS.md` ADR-021) is what makes that literally true — this module never inspects an
 entity type's *name*, only its `resolution.blocking`/`comparisons` lists, already validated at
 ontology-load time.
 

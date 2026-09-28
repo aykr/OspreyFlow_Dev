@@ -12,7 +12,7 @@ export default [
       ".venv/**",
       "apps/workspace/dist/**",
       "apps/harness/dist/**",
-      "prototypes/**",
+      "process/prototypes/**",
     ],
   },
   {
@@ -26,7 +26,7 @@ export default [
     },
   },
   // The Glass (`apps/workspace`) and the setup harness (`apps/harness`, `Stage 2 §6`) — both
-  // Vite/React/TypeScript, per `docs/02_GLASS_FRONTEND.md` §1 and `05_DEPLOYMENT.md` §2. One
+  // Vite/React/TypeScript, per `spec/02_GLASS_FRONTEND.md` §1 and `05_DEPLOYMENT.md` §2. One
   // shared `files` glob rather than two near-identical blocks: both packages are the same
   // toolchain by the same ruling (`DECISIONS.md` R1: "the same React/Vite/TypeScript toolchain
   // and design tokens as apps/workspace"). Covers `src/`, `test/` (the delta-client integration

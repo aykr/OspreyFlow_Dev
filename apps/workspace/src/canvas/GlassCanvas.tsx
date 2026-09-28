@@ -1,4 +1,4 @@
-// The Sigma-bound canvas — `docs/02_GLASS_FRONTEND.md` §1/§1.1,
+// The Sigma-bound canvas — `spec/02_GLASS_FRONTEND.md` §1/§1.1,
 // This checkpoint's own plan: "Sigma renderer with the
 // full node state vocabulary... Canvas interaction: pan, zoom, select,
 // lasso, radial context menu, expand... Semantic zoom."
@@ -120,12 +120,12 @@ export interface GlassCanvasProps {
   apiBaseUrl: string;
   bearerToken: string;
   /** Node ids the active cross-filter excludes (`crossfilter/store.ts`) —
-   * dimmed, never removed, per `docs/02_GLASS_FRONTEND.md` §2 rule 2.
+   * dimmed, never removed, per `spec/02_GLASS_FRONTEND.md` §2 rule 2.
    * Defaults to an empty set so this prop stays optional for any caller
    * that hasn't wired cross-filtering (e.g. an existing test harness). */
   dimmedNodeIds?: ReadonlySet<string>;
   onSelectionChange?: (nodeIds: string[]) => void;
-  /** The keyboard-focused node id (`docs/02_GLASS_FRONTEND.md` §6: "Tab
+  /** The keyboard-focused node id (`spec/02_GLASS_FRONTEND.md` §6: "Tab
    * moves between nodes... arrow keys walk edges"), or `null` when
    * nothing has been keyboard-focused yet. Exposed so a caller can, e.g.,
    * highlight the focused node in a legend — and it is what
@@ -585,7 +585,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       [graph, onSelectionChange],
     );
 
-    // Keyboard: accessibility floor (`docs/02_GLASS_FRONTEND.md` §6) — every
+    // Keyboard: accessibility floor (`spec/02_GLASS_FRONTEND.md` §6) — every
     // canvas action reachable without a mouse.
     const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
       // `RadialMenu` is rendered as this container's own child, so a keydown on

@@ -1,4 +1,4 @@
-"""`ComputePort` — `docs/00_ARCHITECTURE.md` §2.3, `docs/01_DOMAIN_MODEL.md` §10.
+"""`ComputePort` — `spec/00_ARCHITECTURE.md` §2.3, `spec/01_DOMAIN_MODEL.md` §10.
 
 Graph algorithms: centrality, community detection, the Clique Metric, shortest
 path at scale. Separate from `GraphPort`: different scaling profile (batch,

@@ -1,5 +1,5 @@
 """`WorkingSetService.get_resolution_threshold`/`set_resolution_threshold` —
-`docs/03_CONDUIT_MIDDLEWARE.md` §3.5/§4, `docs/01_DOMAIN_MODEL.md` §4. Same no-Valkey/no-ArcadeDB
+`spec/03_CONDUIT_MIDDLEWARE.md` §3.5/§4, `spec/01_DOMAIN_MODEL.md` §4. Same no-Valkey/no-ArcadeDB
 discipline as `test_service.py`: `FakeWorkingSetStore`/`FakeGraphPort` exercise the service's own
 logic, not a real adapter.
 """

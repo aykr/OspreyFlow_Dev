@@ -1,6 +1,6 @@
-"""`ComputePort` over `graphology` — `docs/00_ARCHITECTURE.md` §2.3, Tier 1 (≤ 20k nodes, browser).
+"""`ComputePort` over `graphology` — `spec/00_ARCHITECTURE.md` §2.3, Tier 1 (≤ 20k nodes, browser).
 
-`docs/06_DECISIONS.md` ADR-028's own decision: this suite exercises Tier 1 as a plain Node
+`spec/06_DECISIONS.md` ADR-028's own decision: this suite exercises Tier 1 as a plain Node
 script, never a browser or a `Worker` — the correctness claim owed here is algorithmic
 (`apps/workspace/compute-tier1/harness.mjs`'s numbers agree with `rustworkx`'s on the same input),
 not a threading one. Every method shells out to that script: writes `{"method", "request"}` as

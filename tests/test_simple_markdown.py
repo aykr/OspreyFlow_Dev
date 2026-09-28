@@ -86,7 +86,7 @@ def test_renders_the_real_architecture_doc_without_crashing() -> None:
     """The integration check: every real construct `00_ARCHITECTURE.md` actually uses (headers,
     tables, fenced code, bold, inline code) survives a real document, not only the hand-written
     fixtures above."""
-    text = (REPO_ROOT / "docs" / "00_ARCHITECTURE.md").read_text(encoding="utf-8")
+    text = (REPO_ROOT / "spec" / "00_ARCHITECTURE.md").read_text(encoding="utf-8")
 
     html = render_markdown(text)
 

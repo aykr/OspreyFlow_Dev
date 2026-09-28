@@ -5,7 +5,7 @@ PYTEST := .venv/bin/pytest
 RUFF := .venv/bin/ruff
 MYPY := .venv/bin/mypy
 
-# Phase 0 exit criterion (docs/07_BUILD_PLAN.md): CI green; a PR adding a GPL
+# Phase 0 exit criterion (process/07_BUILD_PLAN.md): CI green; a PR adding a GPL
 # dependency fails; a Pydantic model change not reflected in the generated
 # TypeScript fails the build. See the Phase 0 plan for what each target proves.
 ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check test-file-coverage-check citation-check conformance-guard harness-a11y bundle
@@ -112,7 +112,7 @@ trivy:
 	trivy fs --exit-code 1 --severity HIGH,CRITICAL --include-dev-deps --skip-dirs node_modules,.venv .
 
 # `trivy image` per service, added in the phase that gives it a Dockerfile
-# (docs/07_BUILD_PLAN.md, "Standing rules for the whole build") — not
+# (process/07_BUILD_PLAN.md, "Standing rules for the whole build") — not
 # batched into Phase 8. `--ignore-unfixed`: unlike the fs scan above, an
 # image scan turns up base-OS packages this service never touches (login,
 # mount, ncurses) with no upstream fix yet; failing CI on those forever is
@@ -129,14 +129,14 @@ trivy-image-api:
 	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/api:ci
 
 # apps/workspace's Dockerfile — Phase 4's own, paid at Stage 2 §5a as a
-# recorded rule 8 repayment rather than an exception (docs/06_DECISIONS.md
+# recorded rule 8 repayment rather than an exception (spec/06_DECISIONS.md
 # ADR-049). Same reasoning as the two above; the base is Alpine rather than
 # Debian, which changes nothing about the gate.
 trivy-image-workspace:
 	docker build -f apps/workspace/Dockerfile -t ospreyflow/workspace:ci .
 	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/workspace:ci
 
-# harness/Dockerfile — Stage 2 §5b's own bootstrap image (docs/05_DEPLOYMENT.md §2's "one Docker
+# harness/Dockerfile — Stage 2 §5b's own bootstrap image (spec/05_DEPLOYMENT.md §2's "one Docker
 # command"), paid here as a rule-8 repayment the same way apps/workspace's was at Stage 2 §5a.
 trivy-image-harness:
 	docker build -f harness/Dockerfile -t ospreyflow/harness:ci .
@@ -157,7 +157,7 @@ conformance:
 
 # ModelPort's real conformance suite (Phase 6 Stage 1) — needs a live LiteLLM
 # proxy in front of Ollama, both brought up by `make dev-up` (`deploy/compose/
-# dev.yaml`'s `ollama`/`litellm` services, pinned per docs/06_DECISIONS.md
+# dev.yaml`'s `ollama`/`litellm` services, pinned per spec/06_DECISIONS.md
 # ADR-020). Excludes `test_suite_vision.py` deliberately — see
 # `conformance-model-vision` below.
 conformance-model:
@@ -165,13 +165,13 @@ conformance-model:
 
 # `describe_image()`'s own conformance case, run separately from the target
 # above on a slower cadence (nightly / merge-to-main, not every PR) —
-# `docs/06_DECISIONS.md` ADR-020's Stage 2 addendum: a vision-language model
+# `spec/06_DECISIONS.md` ADR-020's Stage 2 addendum: a vision-language model
 # is materially heavier (1.8GB) than any of the other three pinned models.
 conformance-model-vision:
 	$(PYTEST) tests/conformance/model_port/test_suite_vision.py
 
 # The golden set's precision/recall CI gate (Phase 6 Stage 3,
-# docs/03_CONDUIT_MIDDLEWARE.md §5.2, standing rule 5) — needs the same live
+# spec/03_CONDUIT_MIDDLEWARE.md §5.2, standing rule 5) — needs the same live
 # LiteLLM/Ollama as `conformance-model`. Twelve runs per case
 # (`tests/golden/harness.py`'s own docstring has the measured reasoning), so
 # this is slower per-case than the conformance suite's own single-shot checks.
@@ -187,7 +187,7 @@ test:
 	npm test --workspace apps/workspace
 	npm test --workspace apps/harness
 
-# Phase 3 (docs/07_BUILD_PLAN.md): "Add make dev-up bringing up ArcadeDB,
+# Phase 3 (process/07_BUILD_PLAN.md): "Add make dev-up bringing up ArcadeDB,
 # MinIO, Valkey and Postgres so the full suite runs locally. The
 # currently-skipped tests should be runnable on demand, not only in CI."
 # `deploy/compose/dev.yaml`'s own header explains why this is a dev
@@ -309,26 +309,26 @@ test-all: idp-test
 	$(PYTEST) tests/conformance/graph_port tests/conformance/model_port tests/golden tests/scenarios/test_witness_statement_extraction.py tests/ingest tests/scenarios/test_phase3_working_set.py tests/scenarios/test_hmp_graph.py tests/services/api/test_valkey_store.py tests/services/api/test_statelessness.py tests/services/api/test_sites_store.py tests/services/api/test_tile_cache.py tests/services/api/test_prefetch.py tests/geocoder/test_match_live.py tests/services/api/test_assessments.py tests/services/api/test_suppression.py tests/services/api/test_assessment_routes.py tests/services/api/test_export.py tests/services/api/test_export_routes.py tests/services/api/test_change_stream.py tests/services/api/test_alerts.py tests/services/api/test_pattern_store.py tests/services/api/test_hotlists.py tests/services/api/test_monitors.py tests/services/api/test_evaluation.py tests/resolve/test_projection_access_control.py tests/resolve/test_trigger.py tests/scenarios/test_phase6a_glass_surfaces.py tests/services/api/test_access.py tests/services/api/test_dossier_access_control.py tests/services/api/test_review.py tests/services/api/test_review_store.py tests/services/api/test_studio_recipes_store.py tests/services/api/working_set/test_compute_access_control.py tests/services/api/working_set/test_explain_cluster_access_control.py tests/services/api/working_set/test_manual_resolution_access_control.py tests/services/api/working_set/test_resolution_threshold_access_control.py tests/scenarios/test_phase7_stage6c_watch_routes.py tests/scenarios/test_fixture_corp_shape.py tests/services/api/test_worker.py tests/services/api/test_worker_replicas.py
 	npm run test:integration --workspace apps/workspace
 
-# `docs/02_GLASS_FRONTEND.md` §5's performance budget, as a CI gate
+# `spec/02_GLASS_FRONTEND.md` §5's performance budget, as a CI gate
 # (`apps/workspace/perf/perf.spec.ts`'s own docstring: a software-WebGL
 # regression proxy, not the literal hardware numbers). Needs a Chromium
 # binary: `npx playwright install chromium --with-deps` once per machine.
 glass-perf:
 	npm run test:perf --workspace apps/workspace
 
-# `docs/02_GLASS_FRONTEND.md` §6's contrast floor, as a CI gate, both
+# `spec/02_GLASS_FRONTEND.md` §6's contrast floor, as a CI gate, both
 # themes (`apps/workspace/a11y/a11y.spec.ts`).
 glass-a11y:
 	npm run test:a11y --workspace apps/workspace
 
-# `docs/07_BUILD_PLAN.md` Phase 4's "keyboard navigation reaches every
+# `process/07_BUILD_PLAN.md` Phase 4's "keyboard navigation reaches every
 # canvas action" exit clause, as a CI gate, not an assertion in prose
 # (`apps/workspace/keyboard/keyboard.spec.ts`) — a scripted walkthrough
 # that never calls `page.mouse`/`.click()`.
 glass-keyboard:
 	npm run test:keyboard --workspace apps/workspace
 
-# `docs/00_ARCHITECTURE.md` §1.2.1's Verify contrast-floor check — a
+# `spec/00_ARCHITECTURE.md` §1.2.1's Verify contrast-floor check — a
 # rendered-pixel/reference-image comparison of a fixture graph over the
 # basemap's own chrome colours (`apps/workspace/map-verify/contrast.spec.ts`),
 # genuinely different from `glass-a11y`'s axe-core DOM-rule check. Dark
@@ -337,7 +337,7 @@ glass-map-verify:
 	npm run test:map-verify --workspace apps/workspace
 
 # **The live tier — the Glass against a stack somebody brought up by hand**
-# (`docs/DEMO_GUIDE.md` §3), never against a showcase page or a mocked API.
+# (`DEMO_GUIDE.md` §3), never against a showcase page or a mocked API.
 # Deliberately NOT in `ci:` and never will be: it needs real containers, real
 # seeded fixtures and a real basemap build, which is the same reasoning
 # `tests/harness/test_six_screen_live_exit.py` and `test_sustained_load.py`
@@ -372,7 +372,7 @@ exit-over-the-wire:
 harness-keyboard:
 	npm run test:keyboard --workspace apps/harness
 
-# `docs/02_GLASS_FRONTEND.md` §6 / amendment 24, ruling 6 — Stage 2 §6 part C
+# `spec/02_GLASS_FRONTEND.md` §6 / amendment 24, ruling 6 — Stage 2 §6 part C
 # (`apps/harness/a11y/a11y.spec.ts`). Against the real `App` from `apps/harness/src` served by a
 # real `harness.webapp`, never a showcase page — `glass-a11y`'s own Stage 6 finding named exactly
 # that gap for the Glass, and this file's own docstring has the reason it is not reproduced here.

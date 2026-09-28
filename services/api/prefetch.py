@@ -1,18 +1,18 @@
-"""Scheduled area-of-operations tile pre-warm — `docs/00_ARCHITECTURE.md`
-§1.2's tile proxy, `docs/05_DEPLOYMENT.md` §2.2's "Prefetch area of
+"""Scheduled area-of-operations tile pre-warm — `spec/00_ARCHITECTURE.md`
+§1.2's tile proxy, `spec/05_DEPLOYMENT.md` §2.2's "Prefetch area of
 operations" (tier 3's own harness offer: "a drawn or uploaded boundary"),
 a disclosed known-gaps entry. Distinct from `services/api/tile_cache.py`'s
 read-through cache: that module caches a tile the first time it is
 requested; this module warms a named area's tiles *before* anyone asks,
 so routine work over that area makes zero live upstream requests
-(`docs/00_ARCHITECTURE.md` §1.2: "a prefetched area makes no live requests
+(`spec/00_ARCHITECTURE.md` §1.2: "a prefetched area makes no live requests
 during routine work" — the whole reason tier 3's harness offers this at
 all, since a live tile request to a hosted API discloses where an analyst
 is looking).
 
 Each `PrefetchCache.prefetch_areas` entry is a `geometry_ref` into
 `AnalyticsPort`'s polygon-capable geometry store (Phase 5's known-gaps closure) — matching
-`docs/05_DEPLOYMENT.md` §2.2's "drawn or uploaded boundary" language,
+`spec/05_DEPLOYMENT.md` §2.2's "drawn or uploaded boundary" language,
 which is a real (possibly non-rectangular) shape, not a bare bounding-box
 string a deployer types by hand.
 

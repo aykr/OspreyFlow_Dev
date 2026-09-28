@@ -10,7 +10,7 @@ worth having ready for the moments a build goes sideways.
 Press **Shift+Tab** to enter plan mode first. This prompt should produce a plan, not files.
 
 > This repository contains a complete architecture specification in `docs/`. Read `CLAUDE.md`,
-> then `docs/README.md`, `docs/00_ARCHITECTURE.md` and `docs/07_BUILD_PLAN.md`.
+> then `README.md`, `spec/00_ARCHITECTURE.md` and `process/07_BUILD_PLAN.md`.
 >
 > Do not write any code yet. I want three things:
 >
@@ -44,8 +44,8 @@ description: Start a build phase from the specification
 
 Start Phase $ARGUMENTS of the OspreyFlow build.
 
-1. Read the Phase $ARGUMENTS section of `docs/07_BUILD_PLAN.md`, and every spec document it
-   references. Read `docs/06_DECISIONS.md` for any ADR that governs this phase.
+1. Read the Phase $ARGUMENTS section of `process/07_BUILD_PLAN.md`, and every spec document it
+   references. Read `spec/06_DECISIONS.md` for any ADR that governs this phase.
 2. Check what already exists in the repository against that phase's scope. Do not rebuild
    what is there; do not assume anything is finished because a file exists.
 3. Propose a plan covering every bullet in the phase scope, ending at the phase's exit
@@ -83,7 +83,7 @@ Run it in plan mode. Approve the plan, then let it build.
 
 **When Claude Code proposes something the spec forbids.**
 
-> Check `docs/06_DECISIONS.md` before proceeding. If an ADR covers this, follow it. If you think
+> Check `spec/06_DECISIONS.md` before proceeding. If an ADR covers this, follow it. If you think
 > the ADR is wrong, make the argument and stop — do not implement an alternative and explain
 > afterwards.
 

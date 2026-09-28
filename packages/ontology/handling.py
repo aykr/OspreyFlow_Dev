@@ -1,4 +1,4 @@
-"""Handling scheme loader and evaluator — `docs/01_DOMAIN_MODEL.md` §2.2.
+"""Handling scheme loader and evaluator — `spec/01_DOMAIN_MODEL.md` §2.2.
 
 The enforcement logic reads the booleans a scheme declares (`dissemination`,
 `direct_action`, `consult_originator`), never the code letters, so swapping

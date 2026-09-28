@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-// `docs/02_GLASS_FRONTEND.md` §5/§6's CI gates (perf regression proxy +
+// `spec/02_GLASS_FRONTEND.md` §5/§6's CI gates (perf regression proxy +
 // automated contrast check) — a separate Playwright project from the
 // vitest unit suites, since these need a real (if software-rendered)
 // browser. `webServer` starts Vite itself, so `npm run test:perf` needs

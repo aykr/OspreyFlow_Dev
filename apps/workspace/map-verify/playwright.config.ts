@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-// `docs/00_ARCHITECTURE.md` §1.2.1's contrast-floor Verify check — a
+// `spec/00_ARCHITECTURE.md` §1.2.1's contrast-floor Verify check — a
 // separate Playwright project from `a11y/`'s (a different port, so both
 // can run without colliding), mirroring `a11y/playwright.config.ts`'s own
 // shape exactly.

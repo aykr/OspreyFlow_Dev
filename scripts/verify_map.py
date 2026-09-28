@@ -1,4 +1,4 @@
-"""`osprey verify map` — `docs/00_ARCHITECTURE.md` §1.2.1's "Verify runs
+"""`osprey verify map` — `spec/00_ARCHITECTURE.md` §1.2.1's "Verify runs
 after any provider change: it fetches a sample tile at three zoom levels,
 asserts the CRS and the zoom range the platform expects, renders a fixture
 graph over it and compares against a stored reference for contrast floor

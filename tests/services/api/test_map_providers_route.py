@@ -1,4 +1,4 @@
-"""`GET /v1/map/providers` route wiring — `docs/02_GLASS_FRONTEND.md` §3.5's
+"""`GET /v1/map/providers` route wiring — `spec/02_GLASS_FRONTEND.md` §3.5's
 layer control, served from `osprey.yaml`'s loaded registry rather than
 duplicated client-side. Same style as `test_ontology_route.py`: fakes
 behind `app.dependency_overrides`, proving only the wiring — the sanitised

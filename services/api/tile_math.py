@@ -1,4 +1,4 @@
-"""Slippy-map tile math — `docs/05_DEPLOYMENT.md` §2.2's "Prefetch area of
+"""Slippy-map tile math — `spec/05_DEPLOYMENT.md` §2.2's "Prefetch area of
 operations", a disclosed known-gaps closure. Nothing
 in this repo converts a lon/lat bounding box to a `{z}/{x}/{y}` tile range before this;
 kept pure and dependency-free (no `mercantile`) since the formula is small

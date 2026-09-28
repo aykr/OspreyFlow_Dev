@@ -1,4 +1,4 @@
-"""`services/api/credentials.py` — `docs/00_ARCHITECTURE.md` §1.2's "a
+"""`services/api/credentials.py` — `spec/00_ARCHITECTURE.md` §1.2's "a
 reference, never a value".
 """
 

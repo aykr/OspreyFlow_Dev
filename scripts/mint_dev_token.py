@@ -1,5 +1,5 @@
 """Mints a bearer token and a JWKS fixture for a local, non-pytest Conduit —
-the concrete mechanism that makes `docs/DEMO_GUIDE.md` §3 (bringing up a demo
+the concrete mechanism that makes `DEMO_GUIDE.md` §3 (bringing up a demo
 environment) runnable by someone who is not running the test suite.
 
 **DEV-ONLY. Never present in any deployment image, by construction, not by

@@ -1,4 +1,4 @@
-// The drawn-boundary spatial filter — `docs/02_GLASS_FRONTEND.md` §3.5's
+// The drawn-boundary spatial filter — `spec/02_GLASS_FRONTEND.md` §3.5's
 // "a drawn or selected boundary is a spatial filter like any other",
 // Only the *drawn* half:
 // rendering a real Boundary-Line-derived boundary as a selectable overlay

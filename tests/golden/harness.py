@@ -1,4 +1,4 @@
-"""The golden-set evaluation harness — `docs/03_CONDUIT_MIDDLEWARE.md` §5.2:
+"""The golden-set evaluation harness — `spec/03_CONDUIT_MIDDLEWARE.md` §5.2:
 "Every model-facing prompt is versioned and evaluated. A prompt change
 runs the golden set and reports the delta on the pull request." Phase 6 Stage 3.
 
@@ -28,7 +28,7 @@ a disclosed gap rather than silently assumed to be the same thing.
 
 **Why every case runs `N_RUNS` times, not once.** Stage 1's witness-statement smoke test and
 Stage 2's own repeated-run checks both found genuine run-to-run recall variance from the pinned
-small model — not test flakiness, real sampling variance (`docs/06_DECISIONS.md` ADR-020).
+small model — not test flakiness, real sampling variance (`spec/06_DECISIONS.md` ADR-020).
 A golden-set number that means anything for gating a build has to be measured the same way: each
 case's extraction runs `N_RUNS` times and every reported precision/recall is a mean across runs,
 not a single sample that could land on either side of a real regression by chance. `N_RUNS = 12`
@@ -60,7 +60,7 @@ the model's actual behaviour. The remaining low-recall runs in that same trial (
 with no forename, e.g. `'MERCER'` alone) are genuine partial-extraction misses, not matcher bugs
 — normalising those away would mean substring/partial matching, which is fuzzy in exactly the
 sense this harness deliberately avoids, so they are left as real recorded misses. Full
-before/after numbers in `docs/06_DECISIONS.md` ADR-020's Stage 3 addendum. Matching is greedy
+before/after numbers in `spec/06_DECISIONS.md` ADR-020's Stage 3 addendum. Matching is greedy
 one-to-one per run: each expected item claims at most one extracted item and vice versa, so
 duplicates cannot inflate either precision or recall.
 """

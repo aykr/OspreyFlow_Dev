@@ -1,4 +1,4 @@
-"""`ComputePort` domain types — `docs/00_ARCHITECTURE.md` §2.3, `docs/01_DOMAIN_MODEL.md` §10.
+"""`ComputePort` domain types — `spec/00_ARCHITECTURE.md` §2.3, `spec/01_DOMAIN_MODEL.md` §10.
 
 Real types replacing `_pending_port_placeholders`'s stand-ins — Phase 7 Stage 2, ahead of any
 adapter (the conformance suite, and the schemas it needs, come before the

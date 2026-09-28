@@ -1,4 +1,4 @@
-"""Verify (`docs/09_INGEST_STUDIO.md` §5) — the dry run over a saved
+"""Verify (`spec/09_INGEST_STUDIO.md` §5) — the dry run over a saved
 `RowTemplate`, bridging a `StudioRecipeDraft` to `services/ingest/engine.py`'s
 `dry_run_recipe`.
 

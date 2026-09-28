@@ -1,4 +1,4 @@
-// One property's `FieldBinding` — `docs/09_INGEST_STUDIO.md` §4: field vs.
+// One property's `FieldBinding` — `spec/09_INGEST_STUDIO.md` §4: field vs.
 // `fields` (multi-column, arity from the transform catalogue) vs. `literal`
 // vs. `map`, never a free expression.
 import type { DragEvent } from "react";

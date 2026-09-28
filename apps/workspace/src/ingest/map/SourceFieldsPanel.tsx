@@ -1,4 +1,4 @@
-// The left panel — `docs/09_INGEST_STUDIO.md` §4: profiled source fields,
+// The left panel — `spec/09_INGEST_STUDIO.md` §4: profiled source fields,
 // the row scrubber ("the template is always shown bound to a real row, and
 // the analyst can page through"), and the unmapped-fields list ("Unmapped
 // fields are shown, always").

@@ -5,7 +5,7 @@ deployment and which describes *that* deployment — its services, images and po
 hand-written, checked in, and about **recovery**: it is the same document across every profile
 because the procedure is, and only its measured times are `local-lite`'s.
 
-`docs/05_DEPLOYMENT.md` §6 requires this file and requires it to state the recovery time for each
+`spec/05_DEPLOYMENT.md` §6 requires this file and requires it to state the recovery time for each
 path. Every number below was measured on `local-lite` on 24 September 2026 against the seeded
 HMP + Fixture Corp fixture — 1,978 records, a 4.0 MB backup set — on a MacBook with a 9.9 GiB Docker
 VM. They are what this machine did, not a service level.

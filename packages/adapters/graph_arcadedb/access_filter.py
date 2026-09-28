@@ -1,5 +1,5 @@
 """Access control, injected into the traversal — never applied after
-retrieval (`docs/00_ARCHITECTURE.md` §5).
+retrieval (`spec/00_ARCHITECTURE.md` §5).
 
 Two axes gate a read (`01_DOMAIN_MODEL.md` §2.2 — the field-by-field
 table). `action_code` and `sanitisation_code` never gate a read at all: the

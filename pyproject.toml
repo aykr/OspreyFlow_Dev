@@ -32,7 +32,7 @@ dependencies = [
     "defusedxml>=0.7.1",
     # Pinned exactly, not >=: 4.x/5.x add a hard, non-optional dependency on
     # `igraph`, which is GPL-licensed and fails `make licence-check` —
-    # `docs/06_DECISIONS.md` ADR-021 has the full finding. 3.9.9 depends on
+    # `spec/06_DECISIONS.md` ADR-021 has the full finding. 3.9.9 depends on
     # `phonetics` (MIT) instead. Re-check `igraph` is still absent from
     # `requires_dist` on PyPI before ever bumping this pin.
     "splink==3.9.9",
@@ -44,7 +44,7 @@ dependencies = [
     # `leidenalg`, pulls in GPL-licensed `igraph` — the same package ADR-021 already
     # rejected for Splink). BSD-3; the bare install has zero required dependencies
     # (numpy/scipy/matplotlib are opt-in `extras` this build does not need) — confirmed via
-    # `Requires-Dist` before adding, not assumed light. `docs/06_DECISIONS.md` ADR-029 has
+    # `Requires-Dist` before adding, not assumed light. `spec/06_DECISIONS.md` ADR-029 has
     # the full finding; `04_VAULT_BACKEND.md` already named NetworkX as a conformance
     # reference implementation before this pin made it a real one.
     "networkx>=3.4",
@@ -88,7 +88,7 @@ ignore_missing_imports = true
 module = "msgpack.*"
 ignore_missing_imports = true
 
-# `splink==3.9.9` (docs/06_DECISIONS.md ADR-021) and its own transitive `phonetics`/`pandas`
+# `splink==3.9.9` (spec/06_DECISIONS.md ADR-021) and its own transitive `phonetics`/`pandas`
 # dependencies ship no type stubs or py.typed marker.
 [[tool.mypy.overrides]]
 module = "splink.*"

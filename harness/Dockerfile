@@ -1,4 +1,4 @@
-# harness/Dockerfile — the harness's own bootstrap image, `docs/05_DEPLOYMENT.md` §2's own worked
+# harness/Dockerfile — the harness's own bootstrap image, `spec/05_DEPLOYMENT.md` §2's own worked
 # example: "One bootstrap command starts it... `ghcr.io/ospreyflow/harness:latest`."
 #
 # **Minimal by file tree, not by dependency set** — the same shape `services/api/Dockerfile` and
@@ -24,7 +24,7 @@
 # subcommand mode" this comment used to name as not built yet.** `harness/__main__.py`'s own
 # subcommand dispatch (`render`, `preflight`, `apply`, `backup`, `restore`, `bundle`) still runs a
 # single command and exits; no subcommand instead starts `harness.webapp`, a long-lived process
-# for the setup screens and, later, the post-launch admin console (`docs/05_DEPLOYMENT.md` §2.5).
+# for the setup screens and, later, the post-launch admin console (`spec/05_DEPLOYMENT.md` §2.5).
 # The docker-socket privilege §2.5 describes is still runtime-scoped, not baked in here — see the
 # `ENTRYPOINT` comment below for what does and does not change between the two modes.
 #
@@ -86,10 +86,11 @@ COPY apps/harness/package.json apps/harness/package.json
 COPY apps/workspace/package.json apps/workspace/package.json
 RUN npm ci
 COPY apps/harness ./apps/harness
-# Only the two design-token sources this app's own CSS imports reach (`apps/harness/src/main.tsx`,
+# Only the one design-token source this app's own CSS imports reach (`apps/harness/src/main.tsx`,
 # `apps/harness/keyboard/setup-harness.tsx`) — not the whole of `apps/workspace`, which this build
-# does not need and should not pull into this image's own build context.
-COPY docs/design ./docs/design
+# does not need and should not pull into this image's own build context. Round 14a (Trigger A)
+# moved `tokens.css` from `docs/design/` (now `spec/design/`) into `apps/workspace/src/design/`,
+# so the separate `COPY docs/design` this used to need is gone — this one line now covers it.
 COPY apps/workspace/src/design ./apps/workspace/src/design
 RUN npm run build --workspace apps/harness
 
@@ -156,7 +157,7 @@ RUN groupadd docker && usermod -aG docker osprey
 
 USER osprey
 
-# **The one privilege this image needs, and only while running** (`docs/05_DEPLOYMENT.md` §2.5).
+# **The one privilege this image needs, and only while running** (`spec/05_DEPLOYMENT.md` §2.5).
 # `-v /var/run/docker.sock:/var/run/docker.sock` is not baked in here — it cannot be, a `Dockerfile`
 # has no way to declare a bind mount — so it is declared in the one place that is true: at
 # `docker run` time, in `05_DEPLOYMENT.md` §2's own worked example, and nowhere does this image

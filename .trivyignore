@@ -1,7 +1,7 @@
 # CVE-2026-85061 — MapLibre GL JS: XSS Sanitizer Bypass in DOM.sanitize()
 # via Live NamedNodeMap Removal Skip. Fixed upstream in maplibre-gl 6.4.1.
 #
-# `@sigma/layer-maplibre` (ADR-014, docs/06_DECISIONS.md — the binding that
+# `@sigma/layer-maplibre` (ADR-014, spec/06_DECISIONS.md — the binding that
 # camera-syncs MapLibre with our Sigma v3 canvas) pins its peer dependency
 # to `maplibre-gl: ^4.5.0` and has no release compatible with a patched
 # 6.x line; its own 4.0.0-alpha line needs Sigma v4-alpha, which we do not

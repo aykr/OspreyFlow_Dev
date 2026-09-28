@@ -55,7 +55,7 @@ COMPOSE_PROJECT = "osprey-local-lite"
 #: A path that will never exist, on purpose — `harness/preflight/basemap.py`'s own docstring: "the
 #: tiles do not exist — a warning, not a blocker." Registering it is how this test exercises that
 #: exact branch without needing a real PMTiles fixture (none exists in this tree — the same
-#: disclosed limit `docs/05_DEPLOYMENT.md` §3 already names for the Geospatial screen).
+#: disclosed limit `spec/05_DEPLOYMENT.md` §3 already names for the Geospatial screen).
 NONEXISTENT_PMTILES_PATH = "/tmp/does-not-exist/no-such-basemap.pmtiles"
 
 
@@ -160,7 +160,7 @@ def test_launch_from_the_six_screens_reaches_a_verified_local_lite_deployment(
         # 5. Preflight — real ALL_CHECKS, over SSE. The basemap warning must not block; nothing
         # else may fail here (this rendered, freshly-generated tree has a real Dockerfile for
         # every owned service, so `harness/render.py`'s own `MissingDockerfileError` — the real,
-        # disclosed gap `docs/07_BUILD_PLAN.md`'s round 05 entry named for a *container-run*
+        # disclosed gap `process/07_BUILD_PLAN.md`'s round 05 entry named for a *container-run*
         # harness image with no source mounted — does not apply to this in-process test at all).
         #
         # **Round 10 — `memory`/`disk` verdict on the container runtime's own daemon now, not this

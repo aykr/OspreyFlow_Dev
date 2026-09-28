@@ -10,7 +10,7 @@ export interface RangeSliderProps {
 /** Two overlapping native range inputs — keyboard-operable per-handle
  * (Tab moves focus between the two), simpler and more accessible than a
  * from-scratch pointer-drag implementation for the same two-handle
- * result. Used by the strength/degree filters (`docs/02_GLASS_FRONTEND.md`
+ * result. Used by the strength/degree filters (`spec/02_GLASS_FRONTEND.md`
  * §2's workspace layout). */
 export function RangeSlider({ low, high, min, max, onChange, ...aria }: RangeSliderProps) {
   const percent = (v: number) => ((v - min) / (max - min)) * 100;

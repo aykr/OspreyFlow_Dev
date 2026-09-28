@@ -1,5 +1,5 @@
-/* The twenty primitives — `docs/02_GLASS_FRONTEND.md` §8. Built once, here.
-   Every colour is a `var(--token)` from `docs/design/tokens.css` — no
+/* The twenty primitives — `spec/02_GLASS_FRONTEND.md` §8. Built once, here.
+   Every colour is a `var(--token)` from `spec/design/tokens.css` — no
    colour is introduced that isn't already a token (CLAUDE.md). */
 
 .btn {

@@ -1,8 +1,8 @@
-"""The audit stream — `docs/03_CONDUIT_MIDDLEWARE.md` §6: "Every read,
+"""The audit stream — `spec/03_CONDUIT_MIDDLEWARE.md` §6: "Every read,
 expansion, path query, pattern run, document view and export records
 principal, timestamp, the resolved query, result cardinality, and — where
 the action crosses a handling boundary — the justification the analyst
-supplied." And `docs/00_ARCHITECTURE.md` §5: "an unaudited read in this
+supplied." And `spec/00_ARCHITECTURE.md` §5: "an unaudited read in this
 domain is worse than a refused one."
 
 **Fail closed, deliberately the one place in the platform that does**

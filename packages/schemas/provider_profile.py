@@ -1,5 +1,5 @@
-"""Provider profiles — `docs/00_ARCHITECTURE.md` §1.2's "Provider profiles"
-subsection, ADR-016 (`docs/06_DECISIONS.md`). A profile is a validated YAML
+"""Provider profiles — `spec/00_ARCHITECTURE.md` §1.2's "Provider profiles"
+subsection, ADR-016 (`spec/06_DECISIONS.md`). A profile is a validated YAML
 file in `providers/`, not code: it declares the endpoint shape, style
 mapping, attribution, licence terms and auth pattern for a provider beyond
 the four shipped tiers. `schemas.mapconfig.MapProvider.profile` references

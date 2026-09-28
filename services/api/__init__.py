@@ -1,4 +1,4 @@
-"""The Conduit's API process — `docs/03_CONDUIT_MIDDLEWARE.md`.
+"""The Conduit's API process — `spec/03_CONDUIT_MIDDLEWARE.md`.
 
 Stateless FastAPI: session and working-set state live in Valkey, durable
 state in the Vault, never in this process — kill one instance mid-session

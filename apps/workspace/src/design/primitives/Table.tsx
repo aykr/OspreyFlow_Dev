@@ -11,7 +11,7 @@ export interface TableProps<Row> {
   getRowId: (row: Row) => string;
 }
 
-/** Headless per `docs/02_GLASS_FRONTEND.md` §1's "TanStack Table
+/** Headless per `spec/02_GLASS_FRONTEND.md` §1's "TanStack Table
  * (headless)... styling stays ours" — virtualisation for a 50k-row source
  * table is a real requirement at scale but out of this checkpoint's
  * critical path (the canvas, not a table, carries the 50k-node budget);

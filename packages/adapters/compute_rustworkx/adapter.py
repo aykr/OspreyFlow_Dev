@@ -1,4 +1,4 @@
-"""`ComputePort` over `rustworkx` — `docs/00_ARCHITECTURE.md` §2.3, Tier 2 (≤ 2M nodes).
+"""`ComputePort` over `rustworkx` — `spec/00_ARCHITECTURE.md` §2.3, Tier 2 (≤ 2M nodes).
 
 Stateless from the adapter's own point of view — no store connection, no schema, exactly like
 `adapters/model_litellm`'s own "stateless" shape (`tests/conformance/registry.py`'s

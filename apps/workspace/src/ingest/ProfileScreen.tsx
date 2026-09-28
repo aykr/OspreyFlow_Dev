@@ -1,4 +1,4 @@
-// Stage 2 of the Ingest Studio — `docs/09_INGEST_STUDIO.md` §3. Automatic:
+// Stage 2 of the Ingest Studio — `spec/09_INGEST_STUDIO.md` §3. Automatic:
 // this screen only ever renders what `GET /v1/ingest/recipes/{id}/profile`
 // (`services/api/app.py`) already computed — `services/ingest/profiler.py`
 // (Phase 2) does the type inference, pattern recognition and anomaly

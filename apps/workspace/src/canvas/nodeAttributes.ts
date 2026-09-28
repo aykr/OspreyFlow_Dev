@@ -1,5 +1,5 @@
 // Turns a domain `Node`/`Edge` plus its current interaction/filter/zoom
-// context into Sigma-ready display attributes — `docs/02_GLASS_FRONTEND.md`
+// context into Sigma-ready display attributes — `spec/02_GLASS_FRONTEND.md`
 // §4's node-state vocabulary and §1.1's semantic zoom, wired together for
 // real.
 //
@@ -67,7 +67,7 @@ export function nodeLabel(node: Node): string {
 /** Called from `Sigma`'s `nodeReducer`, every node, every frame the
  * camera moves — kept to simple lookups and arithmetic, no image
  * generation or colour maths here. Nodes are never `hidden` by zoom
- * (`docs/02_GLASS_FRONTEND.md` §1.1: "Zoom never changes what exists,
+ * (`spec/02_GLASS_FRONTEND.md` §1.1: "Zoom never changes what exists,
  * only what is drawn" — even Overview draws every node, just small). */
 export function computeNodeFrameAttributes(node: Node, context: NodeZoomContext): NodeFrameAttributes {
   const band = zoomBandForRatio(context.cameraRatio);

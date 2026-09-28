@@ -1,4 +1,4 @@
-"""Ontology loader — `docs/01_DOMAIN_MODEL.md` §1, `docs/06_DECISIONS.md` ADR-006.
+"""Ontology loader — `spec/01_DOMAIN_MODEL.md` §1, `spec/06_DECISIONS.md` ADR-006.
 
 Written before `packages/ontology/loader.py` existed, per the Phase 1 plan's
 test-first ordering.

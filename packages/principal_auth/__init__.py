@@ -84,7 +84,7 @@ class OidcResolverSettings:
 
 # --- preserved from services/api/auth.py ---
 #
-# """OIDC `Principal` resolution — `docs/03_CONDUIT_MIDDLEWARE.md` §6:
+# """OIDC `Principal` resolution — `spec/03_CONDUIT_MIDDLEWARE.md` §6:
 # "OIDC via Keycloak (Apache-2.0). The session token resolves to a
 # `Principal` carrying identity, unit, roles, clearance, and the handling
 # codes the principal may receive."

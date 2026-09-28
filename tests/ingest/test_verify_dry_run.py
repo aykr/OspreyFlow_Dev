@@ -1,4 +1,4 @@
-"""Verify's dry run (`docs/09_INGEST_STUDIO.md` §5) —
+"""Verify's dry run (`spec/09_INGEST_STUDIO.md` §5) —
 `services/ingest/engine.py`'s `dry_run_recipe`, against a live ArcadeDB the
 same way `test_recipe_engine_end_to_end.py` exercises `run_recipe`.
 

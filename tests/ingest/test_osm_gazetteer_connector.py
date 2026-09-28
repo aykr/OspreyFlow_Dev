@@ -1,4 +1,4 @@
-"""The OSM-derived gazetteer connector — `docs/00_ARCHITECTURE.md` §1.2,
+"""The OSM-derived gazetteer connector — `spec/00_ARCHITECTURE.md` §1.2,
 `pbf_wire.py`'s own varint/zigzag
 round-trip is exercised implicitly by every test here (the synthetic
 fixture is encoded with it, the connector decodes with it) rather than in

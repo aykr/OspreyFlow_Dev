@@ -1,4 +1,4 @@
-// The shared playback clock — `docs/02_GLASS_FRONTEND.md` §3.4. One hook, one clock: the map's own snail
+// The shared playback clock — `spec/02_GLASS_FRONTEND.md` §3.4. One hook, one clock: the map's own snail
 // trail (B18) and, in future, any other surface that animates content over
 // a brush window read the same `fraction`, so two surfaces can never drift
 // out of sync with each other the way two independent timers would.

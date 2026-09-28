@@ -3,7 +3,7 @@ export interface ToastProps {
   kind?: "info" | "error" | "warning" | "success";
 }
 
-/** `docs/02_GLASS_FRONTEND.md` §3.2's `notice` op reaches the analyst
+/** `spec/02_GLASS_FRONTEND.md` §3.2's `notice` op reaches the analyst
  * through here — "N item(s) withheld by handling policy" is a toast, not
  * a silent state change (the status-bar
  * requirement: the analyst must never mistake a filtered picture for a

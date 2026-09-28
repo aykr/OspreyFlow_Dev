@@ -16,7 +16,7 @@
 // focus/selection callbacks.
 import { createRoot } from "react-dom/client";
 
-import "../../../docs/design/tokens.css";
+import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { AlertInbox } from "../src/watches/AlertInbox";
 import { HotlistPanel } from "../src/watches/HotlistPanel";

@@ -72,7 +72,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOMAIN_MODULE_PATH = REPO_ROOT / "packages" / "schemas" / "domain.py"
-DOC_PATH = REPO_ROOT / "docs" / "01_DOMAIN_MODEL.md"
+DOC_PATH = REPO_ROOT / "spec" / "01_DOMAIN_MODEL.md"
 ALLOWLIST_PATH = REPO_ROOT / "tests" / "fixtures" / "domain_model_coverage_allowlist.txt"
 
 #: `<X>Write` classes confirmed, by reading their own docstrings, to be the pre-persistence

@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 
-import "../../../docs/design/tokens.css";
+import "../../../apps/workspace/src/design/tokens.css";
 import "../../workspace/src/design/primitives.css";
 import "./app.css";
 import { App } from "./App";

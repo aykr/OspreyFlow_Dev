@@ -20,7 +20,7 @@ export interface InspectorProps {
   };
 }
 
-/** `docs/02_GLASS_FRONTEND.md` §2's workspace layout: "▸ Properties ▸
+/** `spec/02_GLASS_FRONTEND.md` §2's workspace layout: "▸ Properties ▸
  * Provenance ▸ Relationships ▸ Judgements ▸ Source document" — Relationships
  * is out of this checkpoint's scope; Properties, Provenance, Source document
  * and (Phase 8 Stage 4c) Judgements are what this Inspector now covers.

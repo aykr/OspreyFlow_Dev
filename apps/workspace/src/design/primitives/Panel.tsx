@@ -6,7 +6,7 @@ export interface PanelProps {
   className?: string;
 }
 
-/** Docked, always: hairline border, no shadow — `docs/02_GLASS_FRONTEND.md`
+/** Docked, always: hairline border, no shadow — `spec/02_GLASS_FRONTEND.md`
  * §8: "Docked panels get a hairline and no shadow; overlays get a shadow
  * and no hairline. Never both." Use `Drawer`/`Popover` for overlays. */
 export function Panel({ title, children, className }: PanelProps) {

@@ -1,4 +1,4 @@
-"""The real domain model — `docs/01_DOMAIN_MODEL.md` §2-4."""
+"""The real domain model — `spec/01_DOMAIN_MODEL.md` §2-4."""
 
 from __future__ import annotations
 

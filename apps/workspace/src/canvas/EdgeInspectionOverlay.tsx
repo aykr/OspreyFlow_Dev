@@ -8,7 +8,7 @@ export interface EdgeInspectionOverlayProps {
   onClose: () => void;
 }
 
-/** `docs/02_GLASS_FRONTEND.md` §1.1: "Hovering or selecting an edge opens
+/** `spec/02_GLASS_FRONTEND.md` §1.1: "Hovering or selecting an edge opens
  * a DOM overlay anchored to Sigma's camera showing the edge's type,
  * occurrence count, interval, provenance and contributing source
  * records" — the one place per-edge decoration is genuinely easier in

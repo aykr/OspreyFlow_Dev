@@ -1,5 +1,5 @@
 """Delta fan-out between a mutating REST call and any open WebSocket on
-the same investigation — `docs/03_CONDUIT_MIDDLEWARE.md` §3.2's "bidirectional
+the same investigation — `spec/03_CONDUIT_MIDDLEWARE.md` §3.2's "bidirectional
 delta channel" needs a way for a mutation landed by *one* Conduit instance
 to reach a client whose WebSocket happens to be held open by *another*
 instance (`03_CONDUIT_MIDDLEWARE.md` §1: statelessness means any instance

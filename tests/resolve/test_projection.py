@@ -1,4 +1,4 @@
-"""The τ threshold projection — `docs/01_DOMAIN_MODEL.md` §4."""
+"""The τ threshold projection — `spec/01_DOMAIN_MODEL.md` §4."""
 
 from __future__ import annotations
 

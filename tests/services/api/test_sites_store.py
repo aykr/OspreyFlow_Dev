@@ -2,7 +2,7 @@
 correctness (the JSON-encoded `control_points` round trip and the
 existence-leak discipline in particular deserve their own proof, rather
 than only being exercised indirectly through route-level fakes the way
-`InvestigationStore` is in `test_app.py`). `docs/00_ARCHITECTURE.md` §1.2,
+`InvestigationStore` is in `test_app.py`). `spec/00_ARCHITECTURE.md` §1.2,
 `08_ACCEPTANCE_SCENARIOS.md` A1.
 """
 

@@ -1,9 +1,9 @@
-// The site geospatial UI — `docs/02_GLASS_FRONTEND.md` §3.5 ("Support an
+// The site geospatial UI — `spec/02_GLASS_FRONTEND.md` §3.5 ("Support an
 // uploaded image with two or more control points and a drawn grid, and let
 // a `Location` entity be a grid cell"), `08_ACCEPTANCE_SCENARIOS.md` A1.
 //
 // **A per-investigation analyst artifact, not a `MapProvider` registry
-// entry.** `docs/00_ARCHITECTURE.md` §1.2's `kind: image` provider
+// entry.** `spec/00_ARCHITECTURE.md` §1.2's `kind: image` provider
 // (`osprey.yaml`'s `site-4471` example) is a *different*, ops-provisioned
 // case: a pre-georeferenced GeoTIFF a deployment drops into config ahead
 // of time. This wizard is what *produces* a georeferencing from a plain

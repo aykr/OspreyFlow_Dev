@@ -1,4 +1,4 @@
-"""Named-step history — `docs/03_CONDUIT_MIDDLEWARE.md` §3.1's two routes,
+"""Named-step history — `spec/03_CONDUIT_MIDDLEWARE.md` §3.1's two routes,
 pulled forward as the "named-step history with
 restore" capability (the generic mechanism only — the rest of §3.1's "Network
 analysis" table, Search Around/Pathfinder/Branch-to-new-tab, stays out of

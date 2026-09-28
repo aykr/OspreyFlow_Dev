@@ -12,7 +12,7 @@ from scripts.licence_check import find_data_licence_offenders
 
 def test_a_share_alike_data_licence_is_flagged() -> None:
     """The real, named case ADR-035 §C6 raises: CDLA-Sharing-1.0 carries a share-alike obligation
-    on published modifications and is not on the docs/00_ARCHITECTURE.md §7 allowlist."""
+    on published modifications and is not on the spec/00_ARCHITECTURE.md §7 allowlist."""
     fixture_registry = (
         DemoManifest(
             id="ibm-aml-data",

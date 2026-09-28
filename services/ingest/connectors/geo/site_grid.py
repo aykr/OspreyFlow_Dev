@@ -1,4 +1,4 @@
-"""The site-grid connector — `docs/00_ARCHITECTURE.md` §1.2's "Geospatial
+"""The site-grid connector — `spec/00_ARCHITECTURE.md` §1.2's "Geospatial
 reference data as entities" table ("Site plans... GeoTIFF/image + control
 points... Site grid cells as `Location`... The HMP case"),
 `08_ACCEPTANCE_SCENARIOS.md` A1.

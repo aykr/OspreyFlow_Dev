@@ -1,4 +1,4 @@
-"""Saved-pattern persistence — `docs/02_GLASS_FRONTEND.md` §3.3's "saveable ... and versioned"
+"""Saved-pattern persistence — `spec/02_GLASS_FRONTEND.md` §3.3's "saveable ... and versioned"
 promise for `PatternQuery`, closed for save/load/list/version by `06_DECISIONS.md` ADR-032/036/
 040 (Phase 7 Stage 4's own unfinished business, not Stage 6's).
 

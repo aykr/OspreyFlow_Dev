@@ -1,4 +1,4 @@
-"""Dialect-agnostic query builders — `docs/06_DECISIONS.md` ADR-003 amendment.
+"""Dialect-agnostic query builders — `spec/06_DECISIONS.md` ADR-003 amendment.
 
 Each builder describes intent (expand, path, match, neighbourhood stats) and
 renders it for one dialect. Only `render_gremlin` exists in Phase 1

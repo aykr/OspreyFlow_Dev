@@ -1,4 +1,4 @@
-# Recipe for OS Open Names — `docs/07_BUILD_PLAN.md` Phase 5 Checkpoint 3c.
+# Recipe for OS Open Names — `process/07_BUILD_PLAN.md` Phase 5 Checkpoint 3c.
 # Reuses the generic CSV connector (`services/ingest/connectors/
 # csv_connector.py`) directly — no bespoke connector module, since OS Open
 # Names' real distribution format is plain CSV. Coordinates are British

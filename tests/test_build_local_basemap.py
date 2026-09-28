@@ -1,5 +1,5 @@
 """`scripts/build_local_basemap.py`'s stages that need no live store —
-`docs/00_ARCHITECTURE.md` §1.2's tier-1 "one-button" pipeline.
+`spec/00_ARCHITECTURE.md` §1.2's tier-1 "one-button" pipeline.
 The full orchestration against a live
 `GraphPort` is `tests/ingest/test_build_local_basemap_end_to_end.py`,
 kept separate so this file stays inside `make test`'s no-live-store
@@ -148,7 +148,7 @@ def test_run_planetiler_invokes_java_with_the_expected_arguments(tmp_path: Path)
 
     This assertion is still argument-construction only, and still cannot prove the flags are
     right; what proves that is a real build, and the one this round ran is recorded in
-    `docs/demo/2026-09-26/RUNBOOK.md`."""
+    `process/demo/2026-09-26/RUNBOOK.md`."""
     jar_path = tmp_path / "planetiler.jar"
     jar_path.write_bytes(b"")  # only existence is checked
     osm_path = tmp_path / "extract.osm.pbf"

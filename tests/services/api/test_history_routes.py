@@ -1,5 +1,5 @@
 """Route wiring for the named-step history endpoints —
-`docs/03_CONDUIT_MIDDLEWARE.md` §3.1, pulled forward as the "named-step
+`spec/03_CONDUIT_MIDDLEWARE.md` §3.1, pulled forward as the "named-step
 history with restore" capability.
 
 Same style as `test_app.py`: fakes behind `app.dependency_overrides`, never

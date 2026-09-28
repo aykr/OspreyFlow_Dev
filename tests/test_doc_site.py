@@ -49,8 +49,11 @@ def test_the_analyst_guide_is_a_placeholder_not_a_written_guide(site: Path) -> N
 
 
 def test_a_private_tree_filename_in_the_render_output_fails_the_build() -> None:
-    violations = doc_site.assert_no_private_tree_names(["06_DECISIONS.html", "index.html"])
-    assert violations == ["06_DECISIONS.html"]
+    """`07_BUILD_PLAN.md`, not `06_DECISIONS.md` — round 14a (Trigger A) moved the ADR log to
+    `spec/` (product), so it is the one numbered file no longer private; `07_BUILD_PLAN.md` moved
+    to `process/` and is now the example."""
+    violations = doc_site.assert_no_private_tree_names(["07_BUILD_PLAN.html", "index.html"])
+    assert violations == ["07_BUILD_PLAN.html"]
 
 
 def test_render_doc_site_itself_refuses_if_a_private_page_were_ever_added(
@@ -60,7 +63,7 @@ def test_render_doc_site_itself_refuses_if_a_private_page_were_ever_added(
     (wrongly) extended to include a private-tree file, proving `render_doc_site` itself checks its
     own output rather than only exposing a checker function nothing calls."""
 
-    poisoned = (*APACHE_DOC_PATHS, REPO_ROOT / "docs" / "06_DECISIONS.md")
+    poisoned = (*APACHE_DOC_PATHS, REPO_ROOT / "process" / "07_BUILD_PLAN.md")
     monkeypatch.setattr(doc_site, "APACHE_DOC_PATHS", poisoned)
 
     with pytest.raises(RuntimeError, match="private-tree"):
@@ -70,9 +73,9 @@ def test_render_doc_site_itself_refuses_if_a_private_page_were_ever_added(
 def test_a_process_classified_id_is_flagged_by_the_defensive_check() -> None:
     """The safety mechanism named in this module's own docstring: if the site is ever extended to
     render ADR content by number, a PROCESS-classified id must never pass. Real ADR content is not
-    rendered today (06_DECISIONS.md is not in APACHE_DOC_PATHS at all) — this proves the mechanism
-    itself works against a fabricated id list, honestly disclosed as not yet wired to a real
-    caller."""
+    rendered today (`06_DECISIONS.md` moved to `spec/` at Trigger A, round 14a, but was
+    deliberately kept out of `APACHE_DOC_PATHS`) — this proves the mechanism itself works against a
+    fabricated id list, honestly disclosed as not yet wired to a real caller."""
     from scripts.decision_log_publication_check import PROCESS_ADR_NUMBERS
 
     a_process_adr = next(iter(PROCESS_ADR_NUMBERS))

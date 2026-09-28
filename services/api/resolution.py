@@ -1,6 +1,6 @@
 """`GET`/`PUT .../resolution/threshold`, `POST .../resolution/link`, `POST .../resolution/split`,
-`GET .../resolution/explain/{cluster_id}` — `docs/03_CONDUIT_MIDDLEWARE.md` §3.5,
-`docs/01_DOMAIN_MODEL.md` §4.
+`GET .../resolution/explain/{cluster_id}` — `spec/03_CONDUIT_MIDDLEWARE.md` §3.5,
+`spec/01_DOMAIN_MODEL.md` §4.
 
 Nested under `/v1/investigations/{investigation_id}/...`, not the bare `/v1/resolution/...` §3.5's
 own illustrative listing shows — the same departure `services/api/working_set/models.py`'s own

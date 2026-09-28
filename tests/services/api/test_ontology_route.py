@@ -1,4 +1,4 @@
-"""`GET /v1/ontology` route wiring — `docs/02_GLASS_FRONTEND.md` §4's
+"""`GET /v1/ontology` route wiring — `spec/02_GLASS_FRONTEND.md` §4's
 channel/shape mapping, served from the loaded ontology rather than
 duplicated client-side. Same style as `test_search_route.py`: fakes behind
 `app.dependency_overrides`, proving only the wiring — `ontology/loader.py`'s

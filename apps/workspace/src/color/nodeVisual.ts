@@ -1,16 +1,16 @@
 // Node shape + fill + provenance-stroke, baked into one generated SVG data
 // URI per distinct (shape, fill, stroke) combination — `docs/
 // 02_GLASS_FRONTEND.md` §4 ("Hue is entity type; shape is entity type
-// too") and `docs/design/tokens.css`'s provenance-stroke contract
+// too") and `spec/design/tokens.css`'s provenance-stroke contract
 // (asserted solid, inferred dashed 4 2, unresolved dotted).
 //
 // **Why a generated SVG image rather than a custom WebGL shader.**
-// `docs/06_DECISIONS.md` ADR-002 anticipated "one parameterised program,
+// `spec/06_DECISIONS.md` ADR-002 anticipated "one parameterised program,
 // not nine" for the small, closed shape vocabulary — the intent holds,
 // only the mechanism differs from a literal fragment shader. `sigma`'s own
 // shipped programs are circle-only (`NodeCircleProgram`); the
 // architecture's own named plugin, `@sigma/node-image`
-// (`docs/02_GLASS_FRONTEND.md` §1's plugin list), renders an arbitrary
+// (`spec/02_GLASS_FRONTEND.md` §1's plugin list), renders an arbitrary
 // image per node and is the officially supported extension point for
 // exactly this. A custom multi-shape *and* dashed-stroke WebGL program
 // would need real arc-length parametrisation per shape to dash correctly
@@ -18,7 +18,7 @@
 // genuinely higher-risk than generating a small, cacheable set of SVGs
 // (native `stroke-dasharray`, exact) and letting `@sigma/node-image`'s own
 // texture atlas do the WebGL part. Interaction-state rings (hover/
-// selected/on-path — always solid, `docs/design/tokens.css`) are a
+// selected/on-path — always solid, `spec/design/tokens.css`) are a
 // *separate*, live `@sigma/node-border` layer instead of baked into this
 // image, since those change every frame and a cached image must not.
 //
@@ -49,7 +49,7 @@ export interface NodeVisualSpec {
 const VIEWBOX = 32;
 const CENTER = VIEWBOX / 2;
 
-/** Same on-canvas stroke width regardless of style, per `docs/design/
+/** Same on-canvas stroke width regardless of style, per `spec/design/
  * tokens.css`'s provenance rows: asserted "1px", inferred/unresolved
  * "1.5px" — both close enough to read as one visual weight class next to
  * the 2px selection/on-path rings `@sigma/node-border` draws separately. */

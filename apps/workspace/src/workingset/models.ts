@@ -1,5 +1,5 @@
 // Hand-written mirror of `services/api/working_set/models.py`'s wire
-// contract (`docs/03_CONDUIT_MIDDLEWARE.md` §3.2) and `services/api/
+// contract (`spec/03_CONDUIT_MIDDLEWARE.md` §3.2) and `services/api/
 // history.py`'s `HistoryStepSummary`. Not part of the generated-TypeScript
 // drift gate (`make schemas-check`) — that gate covers `packages/schemas/*`
 // only, which is domain data, not the Conduit's own control-plane envelope

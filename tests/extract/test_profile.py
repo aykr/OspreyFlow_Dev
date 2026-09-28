@@ -1,4 +1,4 @@
-"""`services/extract/profile.py` — `docs/09_INGEST_STUDIO.md` §4. Runs against the real default
+"""`services/extract/profile.py` — `spec/09_INGEST_STUDIO.md` §4. Runs against the real default
 ontology (`packages/ontology/default.yaml`), the same discipline `tests/resolve/test_resolver.py`
 already established for a schema-generation module with no live infra needed.
 """

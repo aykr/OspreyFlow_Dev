@@ -74,7 +74,7 @@ def test_prose_that_is_not_a_file_citation_is_left_alone(tmp_path: Path) -> None
     root = _repo(
         tmp_path,
         {
-            "docs/00_ARCHITECTURE.md": (
+            "spec/00_ARCHITECTURE.md": (
                 "Adapters live in `packages/adapters/<name>`. The pack is in `docs/`.\n"
                 "Ports are `Protocol` classes in `packages/ports`.\n"
             )

@@ -1,4 +1,4 @@
-# Recipe for USGS GNIS — `docs/07_BUILD_PLAN.md` Phase 5 Checkpoint 3c.
+# Recipe for USGS GNIS — `process/07_BUILD_PLAN.md` Phase 5 Checkpoint 3c.
 # `gnis_feature_id` is already a Location identifier (used by
 # `tests/scenarios/fixtures/geo_texas_central_recipe.yaml`/
 # `geo_california_iii_recipe.yaml` as a plausible id value, never actually

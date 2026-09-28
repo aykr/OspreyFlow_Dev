@@ -1,6 +1,6 @@
 // `06_DECISIONS.md` ADR-050 — OIDC authorization code with PKCE against the deployment's own
 // realm. This module is the one undecided design point ADR-050's own text leaves to the build
-// (`docs/07_BUILD_PLAN.md`'s Stage 2c entry records the call): how the Glass, whose bundle carries
+// (`process/07_BUILD_PLAN.md`'s Stage 2c entry records the call): how the Glass, whose bundle carries
 // no baked address for the *Conduit* (`00_ARCHITECTURE.md` §2.6.1), locates the *identity
 // provider* — a second, deliberately separate origin `00_ARCHITECTURE.md` §1.3 already names:
 // "Only the workspace and the identity provider are reachable from the browser."

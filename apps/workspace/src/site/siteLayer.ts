@@ -1,6 +1,6 @@
 // Renders a calibrated site's image + grid directly on the `maplibregl.Map`
 // `MapView.tsx` exposes via `onMapReady` — a per-investigation analyst
-// layer, not a `MapProvider` registry entry (`docs/00_ARCHITECTURE.md`
+// layer, not a `MapProvider` registry entry (`spec/00_ARCHITECTURE.md`
 // §1.2's `kind: image` is the different, ops-provisioned case; see
 // `SiteCalibrationWizard.tsx`'s own docstring for the full distinction).
 //

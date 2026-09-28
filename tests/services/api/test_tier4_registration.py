@@ -1,4 +1,4 @@
-"""`services/api/tier4_registration.py` — `docs/00_ARCHITECTURE.md` §1.2's
+"""`services/api/tier4_registration.py` — `spec/00_ARCHITECTURE.md` §1.2's
 "Capabilities documents are parsed at registration" and §1.2.2's CRS
 refusal. Against synthetic,
 in-repo capabilities documents (rule 9) — no real USGS/OS Data Hub

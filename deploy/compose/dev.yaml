@@ -1,9 +1,9 @@
-# `make dev-up` — docs/07_BUILD_PLAN.md Phase 3: "Add make dev-up bringing
+# `make dev-up` — process/07_BUILD_PLAN.md Phase 3: "Add make dev-up bringing
 # up ArcadeDB, MinIO, Valkey and Postgres so the full suite runs locally.
 # The 49 [and now more] currently-skipped tests should be runnable on
 # demand, not only in CI."
 #
-# This is a dev convenience, not the harness (docs/05_DEPLOYMENT.md §2):
+# This is a dev convenience, not the harness (spec/05_DEPLOYMENT.md §2):
 # the harness is a browser application that generates a deployment's real
 # compose file from `osprey.yaml` and stands up the full local-lite stack
 # (twelve containers, including Keycloak, OpenSearch, Ollama...) — it does
@@ -183,8 +183,8 @@ services:
       timeout: 5s
       retries: 20
 
-  # ModelPort's backend (docs/07_BUILD_PLAN.md Phase 6 Stage 1) — the model
-  # itself is pinned by digest, not by tag (docs/06_DECISIONS.md ADR-020):
+  # ModelPort's backend (process/07_BUILD_PLAN.md Phase 6 Stage 1) — the model
+  # itself is pinned by digest, not by tag (spec/06_DECISIONS.md ADR-020):
   # an Ollama tag can move upstream and silently reintroduce the
   # nondeterminism the pin exists to rule out. The base image is pinned by
   # digest directly, the same way `litellm` below is; the model weights
@@ -222,7 +222,7 @@ services:
           ollama pull "$$model"
           actual="$$(ollama list | awk -v m="$$model" '$$1 == m {print $$2}')"
           if [ "$$actual" != "$$expected" ]; then
-            echo "FATAL: $$model resolved to manifest $$actual, expected $$expected (docs/06_DECISIONS.md ADR-020) — the tag moved upstream; update the ADR deliberately, do not proceed silently." >&2
+            echo "FATAL: $$model resolved to manifest $$actual, expected $$expected (spec/06_DECISIONS.md ADR-020) — the tag moved upstream; update the ADR deliberately, do not proceed silently." >&2
             exit 1
           fi
         }
@@ -251,7 +251,7 @@ services:
       # observed failing this way; it is left alone rather than changed speculatively.
       start_period: 600s
 
-  # LiteLLM proxy in front of `ollama` above — `docs/00_ARCHITECTURE.md`
+  # LiteLLM proxy in front of `ollama` above — `spec/00_ARCHITECTURE.md`
   # §2.4: the Conduit (and `adapters/model_litellm`'s conformance suite)
   # talk to this one OpenAI-compatible base URL, never to Ollama directly,
   # so swapping the backend model/engine is a config change to
@@ -316,7 +316,7 @@ services:
         curl -sf -X POST "http://localhost:8000/v1/models/Systran/faster-whisper-tiny.en" >/dev/null
         expected="0d3d19a32d3338f10357c0889762bd8d64bbdeba"
         if [ ! -d "/home/ubuntu/.cache/huggingface/hub/models--Systran--faster-whisper-tiny.en/snapshots/$$expected" ]; then
-          echo "FATAL: Systran/faster-whisper-tiny.en did not resolve to commit $$expected (docs/06_DECISIONS.md ADR-020) — the model moved upstream; update the ADR deliberately, do not proceed silently." >&2
+          echo "FATAL: Systran/faster-whisper-tiny.en did not resolve to commit $$expected (spec/06_DECISIONS.md ADR-020) — the model moved upstream; update the ADR deliberately, do not proceed silently." >&2
           exit 1
         fi
         wait

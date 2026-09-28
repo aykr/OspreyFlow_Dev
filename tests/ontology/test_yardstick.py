@@ -1,4 +1,4 @@
-"""Probability-yardstick loader — `docs/01_DOMAIN_MODEL.md` §5, Phase 8 Stage 4b."""
+"""Probability-yardstick loader — `spec/01_DOMAIN_MODEL.md` §5, Phase 8 Stage 4b."""
 
 from __future__ import annotations
 

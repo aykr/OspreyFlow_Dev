@@ -8,7 +8,7 @@ import { type APIRequestContext, test } from "@playwright/test";
 export const liveOnly = () =>
   test.skip(
     process.env.OSPREY_TEST_LIVE_GLASS !== "1",
-    "needs a hand-brought-up demo stack (docs/DEMO_GUIDE.md §3) — opt in with " +
+    "needs a hand-brought-up demo stack (DEMO_GUIDE.md §3) — opt in with " +
       "OSPREY_TEST_LIVE_GLASS=1 and set OSPREY_LIVE_API_BASE_URL, OSPREY_LIVE_BEARER_TOKEN " +
       "and OSPREY_LIVE_INVESTIGATION_ID.",
   );
@@ -20,7 +20,7 @@ export function required(name: string): string {
   if (!value) {
     throw new Error(
       `${name} is not set. The live tier has no defaults: it must be pointed at the stack the ` +
-        `operator actually brought up, never guess one. See docs/DEMO_GUIDE.md §3.`,
+        `operator actually brought up, never guess one. See DEMO_GUIDE.md §3.`,
     );
   }
   return value;

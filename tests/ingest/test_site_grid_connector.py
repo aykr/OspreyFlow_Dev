@@ -1,4 +1,4 @@
-"""The site-grid connector — `docs/00_ARCHITECTURE.md` §1.2's "Geospatial
+"""The site-grid connector — `spec/00_ARCHITECTURE.md` §1.2's "Geospatial
 reference data as entities" table, `08_ACCEPTANCE_SCENARIOS.md` A1.
 `packages/geo/bilinear.py`'s own maths is exercised exhaustively in
 `tests/geo/test_bilinear.py`; this only checks the row shape this connector

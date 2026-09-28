@@ -14,7 +14,7 @@ declare global {
 
 // Proves `captureChartImage` (`src/export/chartExport.ts`) against a real, WebGL-rendered `Sigma`
 // instance — `apps/workspace/export-capture/harness.tsx`'s own module docstring has the full
-// "why this needs a real browser, not vitest" reasoning. A15 (`docs/08_ACCEPTANCE_SCENARIOS.md`)
+// "why this needs a real browser, not vitest" reasoning. A15 (`spec/08_ACCEPTANCE_SCENARIOS.md`)
 // now asserts the export "produces a real artefact of the requested shape... carrying the mark" —
 // this is the one part of that assertion, for the chart shape, that no vitest test in this
 // repository can reach, so it is proven here instead of left unproven.

@@ -1,4 +1,4 @@
-"""`AnalyticsPort` — `docs/00_ARCHITECTURE.md` §2.2, `docs/01_DOMAIN_MODEL.md` §9.
+"""`AnalyticsPort` — `spec/00_ARCHITECTURE.md` §2.2, `spec/01_DOMAIN_MODEL.md` §9.
 
 Columnar aggregation over event-shaped data: temporal histograms, geospatial
 binning, baseline statistics, cross-filter counts. This is SQL, not

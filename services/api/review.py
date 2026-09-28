@@ -1,4 +1,4 @@
-"""The review queue — `docs/09_INGEST_STUDIO.md` §7: "Extraction produces candidates, not graph.
+"""The review queue — `spec/09_INGEST_STUDIO.md` §7: "Extraction produces candidates, not graph.
 The review queue is where a human turns one into the other." `extraction_candidates` is a
 Postgres-backed registry, the same instance and bootstrap-on-connect pattern
 `services/api/studio_recipes.py`'s `studio_recipes` table already establishes — a candidate spans

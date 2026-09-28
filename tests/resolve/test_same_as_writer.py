@@ -1,4 +1,4 @@
-"""`services/resolve/same_as_writer.py` — `docs/01_DOMAIN_MODEL.md` §4."""
+"""`services/resolve/same_as_writer.py` — `spec/01_DOMAIN_MODEL.md` §4."""
 
 from __future__ import annotations
 

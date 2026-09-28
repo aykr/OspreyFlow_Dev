@@ -1,5 +1,5 @@
-"""Site image storage — `docs/00_ARCHITECTURE.md` §1.2's site-plan case,
-`docs/02_GLASS_FRONTEND.md` §3.5, `08_ACCEPTANCE_SCENARIOS.md` A1.
+"""Site image storage — `spec/00_ARCHITECTURE.md` §1.2's site-plan case,
+`spec/02_GLASS_FRONTEND.md` §3.5, `08_ACCEPTANCE_SCENARIOS.md` A1.
 
 Reuses `services/ingest/staging.py`'s `ObjectStorageConfig`/`filesystem`
 directly rather than a second, near-identical dataclass — that class was

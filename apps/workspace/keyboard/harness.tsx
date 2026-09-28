@@ -1,4 +1,4 @@
-// Keyboard-only walkthrough harness — `docs/02_GLASS_FRONTEND.md` §6's
+// Keyboard-only walkthrough harness — `spec/02_GLASS_FRONTEND.md` §6's
 // accessibility floor ("Every canvas action reachable by keyboard"),
 // This phase's exit criterion ("Keyboard navigation
 // reaches every canvas action"). A small, real graph (not the 50k perf
@@ -9,7 +9,7 @@
 // intercepts via `page.route` rather than this harness faking it.
 import { createRoot } from "react-dom/client";
 
-import "../../../docs/design/tokens.css";
+import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { GlassCanvas } from "../src/canvas/GlassCanvas";
 import { OntologyRegistry } from "../src/ontology/schema";

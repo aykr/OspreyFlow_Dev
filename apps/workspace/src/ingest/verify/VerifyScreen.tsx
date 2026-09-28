@@ -1,4 +1,4 @@
-// Stage 4 of the Ingest Studio — `docs/09_INGEST_STUDIO.md` §5. A dry run:
+// Stage 4 of the Ingest Studio — `spec/09_INGEST_STUDIO.md` §5. A dry run:
 // no persistent write happens anywhere, but an `on_match: reference` lookup
 // against the *existing* graph is real, going through the ordinary
 // `GraphPort.find_node` under this principal's own clearance

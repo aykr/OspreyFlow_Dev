@@ -1,7 +1,7 @@
 """`services/api/review.py`'s `ExtractionCandidateStore` — direct, live-Postgres correctness,
 mirroring `test_studio_recipes_store.py`'s own discipline: the JSON round trip and the
 existence-leak behaviour deserve a direct proof rather than only exercise through route-level
-fakes. `docs/09_INGEST_STUDIO.md` §7.
+fakes. `spec/09_INGEST_STUDIO.md` §7.
 """
 
 from __future__ import annotations

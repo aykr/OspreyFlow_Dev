@@ -1,6 +1,6 @@
 # apps/workspace — the Glass, built by Vite and served as static files.
 #
-# Standing rule (docs/07_BUILD_PLAN.md, "Standing rules for the whole
+# Standing rule (process/07_BUILD_PLAN.md, "Standing rules for the whole
 # build"): each service gets its own image, and a `trivy image` CI scan,
 # in the phase that creates it — not batched into Phase 8. This one was
 # batched into Phase 8, and that is a recorded rule 8 repayment rather
@@ -26,22 +26,10 @@ COPY package.json package-lock.json ./
 COPY apps/workspace/package.json ./apps/workspace/
 RUN npm ci
 
-# docs/design/tokens.css is product source, not prose: apps/workspace/src/
-# main.tsx imports it directly and the build fails outright without it
-# (docs/06_DECISIONS.md ADR-034 §B8). The repository's own `.dockerignore`
-# excludes `docs` and then re-includes exactly this one file by name, so
-# it is present in this build context; `tests/test_dockerignore.py` holds
-# that line in place. When the restructure moves tokens.css into the
-# product tree, this COPY and that negation go together.
-#
-# This comment also cited `tests/harness/test_workspace_image.py` as
-# asserting "this COPY has something to copy". **That file has never
-# existed** — corrected 25 September 2026, and corrected by deleting the
-# citation rather than by writing a test to match it: if the negation were
-# dropped, this build fails immediately and loudly, because `main.tsx`
-# imports the file. A citation to a test that does not exist is worse than
-# no citation, because it reads as a guarantee (CLAUDE.md rule 12).
-COPY docs/design/tokens.css ./docs/design/tokens.css
+# `tokens.css` moved into the product tree at Trigger A (round 14a, ADR-034 §B8) —
+# `apps/workspace/src/design/tokens.css`, inside the `COPY apps/workspace` line below. No
+# separate COPY or `.dockerignore` negation is needed any more; both existed only because the
+# file used to live under the private `docs/` tree this image otherwise excludes wholesale.
 COPY tsconfig.json ./
 COPY apps/workspace ./apps/workspace
 
@@ -71,7 +59,7 @@ RUN apk upgrade --no-cache
 
 # A single-page application: every unknown path is the app's own route,
 # not a 404, or a deep link into an investigation breaks on refresh.
-# docs/05_DEPLOYMENT.md §7 requires a non-root, read-only-root posture, so
+# spec/05_DEPLOYMENT.md §7 requires a non-root, read-only-root posture, so
 # nginx runs unprivileged on 8080 rather than root on 80.
 COPY apps/workspace/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/apps/workspace/dist /usr/share/nginx/html

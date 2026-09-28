@@ -1,4 +1,4 @@
-"""`POST /v1/paths` route wiring — `docs/03_CONDUIT_MIDDLEWARE.md` §3.3, `docs/06_DECISIONS.md`
+"""`POST /v1/paths` route wiring — `spec/03_CONDUIT_MIDDLEWARE.md` §3.3, `spec/06_DECISIONS.md`
 ADR-033. `GraphPort.paths`'s own access-filtering, existence-leak and hydration behaviour is
 proven by the conformance suite (`tests/conformance/graph_port/test_suite.py`); this file only
 proves the route calls it with the right arguments, passes the result straight through with no

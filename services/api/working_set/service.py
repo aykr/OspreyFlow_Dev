@@ -1,4 +1,4 @@
-"""The Working-Set Service's orchestration — `docs/03_CONDUIT_MIDDLEWARE.md`
+"""The Working-Set Service's orchestration — `spec/03_CONDUIT_MIDDLEWARE.md`
 §4, "the most important component in the Conduit". Owns four things
 nothing else in the platform can safely do on its own: the cap check that
 never truncates, `filtered_count`'s derivation (`01_DOMAIN_MODEL.md` §8.2),

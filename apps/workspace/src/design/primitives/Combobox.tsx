@@ -23,7 +23,7 @@ export interface ComboboxProps {
 }
 
 /** Combines a text input (free typing) with a filtered listbox — used for
- * global search (`docs/02_GLASS_FRONTEND.md`'s workspace layout's search
+ * global search (`spec/02_GLASS_FRONTEND.md`'s workspace layout's search
  * box) and any other "type to narrow, then pick" control.
  *
  * **Keyboard selection, added when the query-builder's own `pin-node-from-search` keyboard action

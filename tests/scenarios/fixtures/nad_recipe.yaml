@@ -1,4 +1,4 @@
-# Recipe for the National Address Database (NAD) — `docs/07_BUILD_PLAN.md`
+# Recipe for the National Address Database (NAD) — `process/07_BUILD_PLAN.md`
 # Phase 5 Checkpoint 3c. `nad_address_id` is a new gazetteer identifier
 # (this checkpoint's ontology bump, v9). Coverage is voluntary and
 # state-contributed, so it is uneven — a real deployment's own NAD load

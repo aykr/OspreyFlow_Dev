@@ -11,7 +11,7 @@ is where "missing" actually manifests as an empty string rather than a raised ex
 "absence is the safe default, never inferred as permission" shape `scripts/real_data_exceptions.py`
 already holds itself to for a different registry.
 
-**What is actually shipped today, checked directly against `docs/DEMO_GUIDE.md` §1's own table and
+**What is actually shipped today, checked directly against `DEMO_GUIDE.md` §1's own table and
 `scripts/seed_hmp_fixture.py`/`scripts/seed_fixture_corp.py`'s own imports — not assumed from ADR
 prose:** exactly two demo datasets exist in this repository, both synthetic, both generated, both
 carrying no third-party licence (`06_DECISIONS.md` ADR-035 §C5's own "Generated output is owned
@@ -81,7 +81,7 @@ class DemoManifest:
         )
 
 
-#: Sourced from `docs/DEMO_GUIDE.md` §1's own table and verified against the real seed scripts'
+#: Sourced from `DEMO_GUIDE.md` §1's own table and verified against the real seed scripts'
 #: own imports at the time this module was written — update both together when either changes.
 REGISTRY: tuple[DemoManifest, ...] = (
     DemoManifest(

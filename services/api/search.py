@@ -1,5 +1,5 @@
-"""`POST /v1/search` — `docs/02_GLASS_FRONTEND.md`'s workspace layout search
-box, `docs/03_CONDUIT_MIDDLEWARE.md` §3.3.
+"""`POST /v1/search` — `spec/02_GLASS_FRONTEND.md`'s workspace layout search
+box, `spec/03_CONDUIT_MIDDLEWARE.md` §3.3.
 
 **v1, graph-only.** §3.3 specifies `POST /v1/search` as "federated search
 across graph, documents, index" — the index leg is OpenSearch, which is not

@@ -1,5 +1,5 @@
 """`AnalyticsDuckDBAdapter` — full `AnalyticsPort` over DuckDB (`local-lite`
-profile, `docs/04_VAULT_BACKEND.md` §2).
+profile, `spec/04_VAULT_BACKEND.md` §2).
 
 Every method compiles an `EventFilter` plus the access predicate
 (`access_filter.py`) into one `WHERE` clause before it aggregates — never

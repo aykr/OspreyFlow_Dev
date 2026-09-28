@@ -16,7 +16,7 @@ builds. Its job is done: the repository exists and Phases 0 through 6 are closed
 | --- | --- |
 | `HANDOFF.md` | "How to get from this specification to a repository that builds" — a first-run procedure, complete since Phase 0 |
 | `CLAUDE.md` | A proposed repository-root memory file. The live one at the repository root has since diverged substantially — it carries twelve standing rules (the original ten, plus two lifted from `SESSION_HANDOVER.md` on 19 September so they survive that handover being superseded) and the graphify section this copy never had. Two files of the same name saying different things is the confusion this archive exists to prevent |
-| `PROMPTS.md` | The original kickoff prompt and the `/phase` command pattern. Current session prompts live in `docs/NEXT_STEPS_PHASE7.md` |
+| `PROMPTS.md` | The original kickoff prompt and the `/phase` command pattern. Current session prompts live in `process/NEXT_STEPS_PHASE7.md` |
 
 The `/phase` command idea in `PROMPTS.md` is still sound and is not superseded by anything; if it
 is still in use, that is a reason to lift it into a live document rather than to keep reading it
@@ -47,7 +47,7 @@ should leave behind.
 
 Found in a git-ignored `Claude outputs/` folder at the repository root (`.gitignore:31`), not
 tracked and never staged — the same class of confusion this archive exists to prevent, just
-outside `docs/` rather than inside it. Identical to `docs/NEXT_STEPS_PHASE7.md` in every section
+outside `docs/` rather than inside it. Identical to `process/NEXT_STEPS_PHASE7.md` in every section
 except §5 and one housekeeping-prompt note: this copy still describes the handover/provenance
 consolidation as an open problem, where the live `docs/` copy marks it resolved 19 September 2026
 (see this file's own `SESSION_HANDOVER.md` entry above). Checked before moving, the same way the
@@ -61,7 +61,7 @@ Also from the git-ignored `Claude outputs/` folder, also untracked. The backgrou
 the product's own pre-launch name ("MantisNexus," with sub-marks "Mantis" and "Nexus") — the
 research concluded and the rename happened; nothing in the live specification pack depends on this
 document. Checked the same way: no citation of this filename anywhere in the repository. The one
-live trace of the old name that checking this *did* turn up is `docs/DESIGN_PROVENANCE.md`'s own
+live trace of the old name that checking this *did* turn up is `process/DESIGN_PROVENANCE.md`'s own
 title line, "MantisNexus — design provenance" — not this file's citation, a separate, live rename
 artefact, corrected directly in that document (title only) rather than recorded here. That same
 document's §1 table also names `MantisNexus_Brand_Foundations.html` as one of the six original

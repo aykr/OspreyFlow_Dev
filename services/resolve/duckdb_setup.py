@@ -1,4 +1,4 @@
-"""DuckDB connection setup for Splink (`docs/06_DECISIONS.md` ADR-021) — registers the `soundex`
+"""DuckDB connection setup for Splink (`spec/06_DECISIONS.md` ADR-021) — registers the `soundex`
 scalar UDF DuckDB itself lacks. Confirmed directly, not assumed: `SELECT soundex('MERCER')`
 against a bare DuckDB connection raises `Catalog Error: Scalar Function with name soundex does not
 exist!`. `phonetics` (MIT) is already a transitive dependency of `splink==3.9.9` itself, so this
@@ -35,7 +35,7 @@ def _soundex(value: str | None) -> str | None:
     `muller` would, not as `mller`, which a same-surname pair spelled with and without the umlaut
     would otherwise fail to share. Anything left that still isn't `a`-`z` (a hyphen, an apostrophe,
     a space, a digit) is stripped outright: `phonetics.soundex` has no notion of any of them, and
-    `docs/01_DOMAIN_MODEL.md` already treats `soundex(family_name)` as an approximate blocking key,
+    `spec/01_DOMAIN_MODEL.md` already treats `soundex(family_name)` as an approximate blocking key,
     not an identity comparison — Splink's own comparison step, not this key, is what re-checks a
     pair blocked together. `None` if nothing letter-shaped survives (an empty value, or one that
     is entirely punctuation/digits) — the same "no blocking key" result `not value` already

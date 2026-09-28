@@ -15,7 +15,7 @@ import { defineConfig } from "@playwright/test";
 //
 // **Opt-in, and skipped by default** (`OSPREY_TEST_LIVE_GLASS=1`), the same gate
 // `tests/harness/test_six_screen_live_exit.py` and `test_sustained_load.py` already use: these
-// need a stack somebody brought up by hand (`docs/DEMO_GUIDE.md` §3) and cannot run in CI.
+// need a stack somebody brought up by hand (`DEMO_GUIDE.md` §3) and cannot run in CI.
 // The three environment variables below are that stack's own coordinates and have no defaults —
 // a spec here that silently ran against the wrong Conduit would be worse than one that did not
 // run, so `live.ts` fails loudly when any is missing.

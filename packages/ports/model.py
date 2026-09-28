@@ -1,4 +1,4 @@
-"""`ModelPort` — `docs/00_ARCHITECTURE.md` §2.4.
+"""`ModelPort` — `spec/00_ARCHITECTURE.md` §2.4.
 
 Language, speech and vision inference. One OpenAI-compatible base URL, one
 config file, behind a LiteLLM proxy.

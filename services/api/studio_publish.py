@@ -1,4 +1,4 @@
-"""Publish (`docs/09_INGEST_STUDIO.md` §6) — turns a verified
+"""Publish (`spec/09_INGEST_STUDIO.md` §6) — turns a verified
 `StudioRecipeDraft` into a `Recipe` YAML file committed to version control,
 and runs a published recipe as a real load.
 
@@ -50,7 +50,7 @@ __all__ = [
     "write_and_commit_recipe",
 ]
 
-#: `git_path` (`docs/09_INGEST_STUDIO.md` §6's example: `recipes/<id>.yaml`)
+#: `git_path` (`spec/09_INGEST_STUDIO.md` §6's example: `recipes/<id>.yaml`)
 #: is always relative to the repository root, which is three parents up
 #: from this file (`services/api/studio_publish.py` -> `services/api` ->
 #: `services` -> repo root) — the same `.parents[2]` computation
@@ -107,7 +107,7 @@ def build_recipe(
     schedule_cron: str | None,
     schedule_watch: str | None,
 ) -> Recipe:
-    """The full, publishable `Recipe` (`docs/09_INGEST_STUDIO.md` §6's own
+    """The full, publishable `Recipe` (`spec/09_INGEST_STUDIO.md` §6's own
     YAML shape) a verified draft resolves to. Requires `row_template` —
     the caller (the publish route) only reaches here once
     `StudioRecipeStore.publish` has already confirmed `verified_at` is

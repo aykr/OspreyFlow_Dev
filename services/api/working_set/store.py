@@ -1,4 +1,4 @@
-"""Working-set storage — `docs/03_CONDUIT_MIDDLEWARE.md` §4: "One Valkey
+"""Working-set storage — `spec/03_CONDUIT_MIDDLEWARE.md` §4: "One Valkey
 hash per investigation holding the node and edge set in a compact binary
 encoding, plus a capped stream of deltas for reconnect. TTL of 24 hours on
 idle."
@@ -116,7 +116,7 @@ def _threshold_key(investigation_id: str) -> str:
 
 
 class ValkeyWorkingSetStore:
-    """`docs/03_CONDUIT_MIDDLEWARE.md` §4/§7 — the `ws:{investigation_id}`
+    """`spec/03_CONDUIT_MIDDLEWARE.md` §4/§7 — the `ws:{investigation_id}`
     layer. Nodes and edges live in a hash, msgpack-encoded per
     `Node`/`Edge`'s own JSON-mode shape (`model_dump(mode="json")`,
     `model_validate`) — binary, but still the exact model, not a bespoke

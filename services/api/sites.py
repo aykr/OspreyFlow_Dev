@@ -1,13 +1,13 @@
-"""Site geospatial calibration metadata — `docs/00_ARCHITECTURE.md` §1.2
+"""Site geospatial calibration metadata — `spec/00_ARCHITECTURE.md` §1.2
 "Geospatial reference data as entities" (site plans row),
-`docs/02_GLASS_FRONTEND.md` §3.5, `08_ACCEPTANCE_SCENARIOS.md` A1.
+`spec/02_GLASS_FRONTEND.md` §3.5, `08_ACCEPTANCE_SCENARIOS.md` A1.
 
 A `Site` is investigation-scoped analyst data — an uploaded image, the
 four control points that calibrate it, and a grid definition — not
 deployment config. It is a different concern from `MapProvider(kind=image)`
 (`packages/schemas/mapconfig.py`), which is an ops-provisioned, already-
 georeferenced image registered in `osprey.yaml` ahead of time
-(`docs/00_ARCHITECTURE.md` §1.2's `site-4471` example); this checkpoint
+(`spec/00_ARCHITECTURE.md` §1.2's `site-4471` example); this checkpoint
 does not touch the provider registry at all. Persisted the same way
 `services/api/investigations.py` persists investigation metadata:
 Postgres, idempotent bootstrap SQL, no migration framework — small,

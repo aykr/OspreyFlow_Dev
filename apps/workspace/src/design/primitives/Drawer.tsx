@@ -8,7 +8,7 @@ export interface DrawerProps {
   children: ReactNode;
 }
 
-/** An overlay: shadow, no hairline (`docs/02_GLASS_FRONTEND.md` §8). Used
+/** An overlay: shadow, no hairline (`spec/02_GLASS_FRONTEND.md` §8). Used
  * for the Inspector and named-step history panel. */
 export function Drawer({ open, onClose, title, children }: DrawerProps) {
   const ref = useRef<HTMLDivElement>(null);

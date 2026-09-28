@@ -1,4 +1,4 @@
-"""`.dockerignore` — `docs/06_DECISIONS.md` ADR-035 §C2's named mechanism, and the build-context
+"""`.dockerignore` — `spec/06_DECISIONS.md` ADR-035 §C2's named mechanism, and the build-context
 half of ADR-034 §B7's two artefact-hygiene assertions. The file's own header has the full reasoning,
 including why it is a defence for images that do not exist yet rather than a fix for a live leak.
 
@@ -54,17 +54,15 @@ MUST_BE_EXCLUDED: tuple[str, ...] = (
     "demo-data/enron/maildir.tar.gz",
     "tests/test_dockerignore.py",
     "tests/fixtures/product_tree_link_allowlist.txt",
-    "docs/06_DECISIONS.md",
-    "docs/07_BUILD_PLAN.md",
-    "docs/design/OspreyFlow_Brand_Foundations.html",
-    "docs/README.md",
-    "docs/archive/anything.md",
+    "process/07_BUILD_PLAN.md",
+    "spec/design/OspreyFlow_Brand_Foundations.html",
+    "process/archive/anything.md",
     "graphify-out/graph.json",
     ".playwright-mcp/trace.zip",
     ".claude/settings.json",
     ".claude/commands/phase.md",
     "CLAUDE.md",
-    "prototypes/ingest-map/app.js",
+    "process/prototypes/ingest-map/app.js",
     "deploy/compose/dev.yaml",
     "Claude outputs/note.md",
     "__pycache__/x.cpython-312.pyc",
@@ -84,9 +82,12 @@ MUST_BE_INCLUDED: tuple[str, ...] = (
     "pyproject.toml",
     "uv.lock",
     "osprey.yaml",
-    # ADR-034 §B8: product source that happens to sit under `docs/` today. The single deliberate
-    # exception to the `docs` exclusion, and the reason this tuple is not just "the obvious ones".
-    "docs/design/tokens.css",
+    "README.md",
+    # Round 14a (Trigger A): `06_DECISIONS.md` moved to `spec/` as product spec, no longer a
+    # private-tree marker; `tokens.css` moved out of `spec/design/` into the product tree
+    # entirely, so it is now ordinary product source needing no exception at all.
+    "spec/06_DECISIONS.md",
+    "apps/workspace/src/design/tokens.css",
 )
 
 
@@ -118,7 +119,11 @@ def test_every_private_tree_marker_resolves_to_a_real_path_that_is_excluded() ->
     spec = _repo_spec()
     resolved = 0
     for marker in PRIVATE_TREE_MARKERS:
-        pattern = f"**/{marker.rstrip('/')}*" if marker.endswith("/") else f"**/{marker}"
+        # A directory marker (round 14a: `process/`, `.claude/`) must glob *into* it, not just
+        # match the directory's own name — `**/process*` matches the `process` directory itself
+        # (skipped below, not a file) and nothing inside it, which would let this whole marker
+        # contribute zero real files without the loop's own vacuity guard ever noticing.
+        pattern = f"**/{marker.rstrip('/')}/**" if marker.endswith("/") else f"**/{marker}"
         for real_path in REPO_ROOT.glob(pattern):
             if not real_path.is_file():
                 continue
@@ -171,47 +176,7 @@ def test_the_claude_md_line_is_what_excludes_claude_md() -> None:
     assert not _without_line("CLAUDE.md").match_file("CLAUDE.md")
 
 
-# --- The one deliberate exception to the `docs` exclusion (ADR-034 §B8) -------
-
-
-def test_tokens_css_is_included_while_the_rest_of_docs_stays_excluded() -> None:
-    """`docs/design/tokens.css` is product source — the Glass cannot build without it — and is
-    re-included by name, while everything else under `docs/` stays out. Both halves asserted
-    together, because either one alone is satisfiable by a mistake: a `.dockerignore` that dropped
-    the `docs` line entirely would pass the inclusion half, and one that dropped the negation would
-    pass the exclusion half.
-    """
-    spec = _repo_spec()
-    assert not spec.match_file("docs/design/tokens.css"), "tokens.css must reach the build"
-    for excluded in (
-        "docs/06_DECISIONS.md",
-        "docs/07_BUILD_PLAN.md",
-        "docs/00_ARCHITECTURE.md",
-        "docs/README.md",
-        "docs/DEMO_GUIDE.md",
-        "docs/archive/anything.md",
-        # Its own sibling in the same directory, and the sharpest case: the negation must be a
-        # named exception, not a relaxation of `docs/design/`.
-        "docs/design/OspreyFlow_Brand_Foundations.html",
-    ):
-        assert spec.match_file(excluded), f"{excluded} must stay out of the build context"
-
-
-def test_the_negation_line_is_what_includes_tokens_css() -> None:
-    """The load-bearing half: with `!docs/design/tokens.css` removed, the file is excluded again by
-    the `docs` line above it. Without this, the assertion above could be passing because of some
-    other pattern's shape rather than because of the exception that was actually added.
-    """
-    assert not _repo_spec().match_file("docs/design/tokens.css")
-    assert _without_line("!docs/design/tokens.css").match_file("docs/design/tokens.css")
-
-
-def test_the_negation_is_scoped_to_the_one_file_and_not_its_directory() -> None:
-    """Guards the failure this exception could quietly become: a negation widened to
-    `!docs/design/` (or `!docs/design/*`) would re-include the brand foundations HTML alongside
-    tokens.css, putting a private-tree file back in the build context while every other test here
-    still passed.
-    """
-    spec = _repo_spec()
-    assert spec.match_file("docs/design/OspreyFlow_Brand_Foundations.html")
-    assert spec.match_file("docs/design/some_future_note.md")
+# --- tokens.css moved into the product tree at Trigger A (round 14a, ADR-034 §B8); it needs no
+# negation exception any more (see tests/harness/test_service_inventory.py for its own coverage
+# of that move) — the three tests that used to prove the negation mechanism here were deleted with
+# the mechanism itself, not repaired.

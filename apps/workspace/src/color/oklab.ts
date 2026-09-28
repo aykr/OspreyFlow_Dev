@@ -1,4 +1,4 @@
-// OKLab colour mixing — `docs/design/tokens.css`'s dimming contract:
+// OKLab colour mixing — `spec/design/tokens.css`'s dimming contract:
 // "State is an oklab mix toward the panel surface: dimmed 32%, filtered
 // out 12%" and `.node--dimmed`'s own comment,
 // `color-mix(in oklab, <channel> 32%, var(--surface-panel))`.
@@ -94,7 +94,7 @@ function toOklab(hex: string): Oklab {
 
 /**
  * `color-mix(in oklab, foreground <foregroundPercent>%, background)` — the
- * exact CSS Color 4 semantics `docs/design/tokens.css` names: the second
+ * exact CSS Color 4 semantics `spec/design/tokens.css` names: the second
  * colour implicitly takes the remaining percentage.
  */
 export function mixOklab(foregroundHex: string, backgroundHex: string, foregroundPercent: number): string {

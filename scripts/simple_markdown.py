@@ -5,7 +5,7 @@ surface: `#`-`######` headers, paragraphs, `**bold**`/`*italic*`, `` `inline cod
 this module does not itself provide), pipe tables, `-`/`*` bullet lists and `1.` ordered lists,
 `>` blockquotes, and `---` horizontal rules. No reference-style or inline `[text](url)` links —
 grepped for across every Apache-scoped file before this was written, and none exist there (they do
-appear in the private-tree `docs/SESSION_HANDOVER.md`, which this renderer never sees). Bare URLs
+appear in the private-tree `process/SESSION_HANDOVER.md`, which this renderer never sees). Bare URLs
 are left as plain text rather than auto-linked, a deliberate simplification rather than a gap this
 module fails to disclose.
 

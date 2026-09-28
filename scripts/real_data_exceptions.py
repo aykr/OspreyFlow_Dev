@@ -13,7 +13,7 @@ narrowness needs two things working together, not one:
    is committed. A repository clone — this one or, eventually, the published one — never contains
    a record of which real datasets anyone has ever admitted, on any device. The owner adds their
    own entries locally, with this module's own CLI (`python -m scripts.real_data_exceptions add`),
-   the shape an eventual admin-console screen (`docs/07_BUILD_PLAN.md`'s own harness/packaging
+   the shape an eventual admin-console screen (`process/07_BUILD_PLAN.md`'s own harness/packaging
    stage) would wrap, not a shortcut around one.
 2. **Code that would load a named real dataset checks `is_permitted()` first and refuses if the
    entry is missing** — fail closed, the same discipline `06_DECISIONS.md` ADR-035's own

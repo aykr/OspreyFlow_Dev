@@ -99,21 +99,27 @@ def test_the_rule_8_debt_names_a_directory_that_is_deployable_and_was_created_be
 
 
 def test_the_glass_dockerfile_can_reach_tokens_css() -> None:
-    """`apps/workspace/Dockerfile` copies `docs/design/tokens.css`, which the repository's own
-    `.dockerignore` excludes by directory and re-includes by name (ADR-034 §B8). If that negation
-    is ever removed, the build fails with a confusing `COPY` error rather than anything naming the
-    real cause — so assert the file is present and the Dockerfile actually asks for it."""
+    """`tokens.css` moved into the product tree at Trigger A (round 14a, ADR-034 §B8):
+    `apps/workspace/src/design/tokens.css`, reached by `apps/workspace/Dockerfile`'s own
+    `COPY apps/workspace ./apps/workspace` line — no separate `COPY` and no `.dockerignore`
+    negation any more, both of which existed only because the file used to live under the private
+    `docs/` tree this image otherwise excludes wholesale. Asserts the file is present, not
+    excluded from the build context, and that the Dockerfile's own blanket copy actually reaches
+    it (not a narrower `COPY apps/workspace/dist` or similar that would silently miss it)."""
     pathspec = pytest.importorskip("pathspec")
     spec = pathspec.PathSpec.from_lines(
         "gitignore", (REPO_ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
     )
 
-    assert (REPO_ROOT / "docs" / "design" / "tokens.css").is_file()
-    assert not spec.match_file("docs/design/tokens.css"), (
+    token_path = REPO_ROOT / "apps" / "workspace" / "src" / "design" / "tokens.css"
+    assert token_path.is_file()
+    assert not spec.match_file("apps/workspace/src/design/tokens.css"), (
         "tokens.css is excluded from the build context, so the Glass image cannot build"
     )
     dockerfile = (REPO_ROOT / "apps" / "workspace" / "Dockerfile").read_text(encoding="utf-8")
-    assert "docs/design/tokens.css" in dockerfile
+    assert "COPY apps/workspace ./apps/workspace" in dockerfile, (
+        "no COPY line reaches apps/workspace/src/design/tokens.css any more"
+    )
 
 
 def test_no_dockerfile_copies_the_whole_context() -> None:

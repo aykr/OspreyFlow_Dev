@@ -1,4 +1,4 @@
-"""`GraphPort` — `docs/00_ARCHITECTURE.md` §2.1.
+"""`GraphPort` — `spec/00_ARCHITECTURE.md` §2.1.
 
 Persistent property graph: write, traverse, subgraph extraction, schema
 management. Gremlin/TinkerPop 3.8 is the query language; the transport is
@@ -204,7 +204,7 @@ class GraphPort(Protocol):
     async def match_count(
         self, pattern: PatternQuery, principal: Principal, *, ceiling: int
     ) -> int:
-        """`docs/02_GLASS_FRONTEND.md` §3.3's "estimated result count" for the visual query
+        """`spec/02_GLASS_FRONTEND.md` §3.3's "estimated result count" for the visual query
         builder, and `08_ACCEPTANCE_SCENARIOS.md` B19's own "estimated count shown before
         running". **Principal-filtered — deliberately not `expand_candidate_count`'s shape.**
         That method exists to compute the *unfiltered* half of a comparison an authorised caller

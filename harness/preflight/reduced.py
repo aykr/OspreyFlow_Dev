@@ -58,7 +58,7 @@ def offer_for(results: list[CheckResult], config: OspreyConfig) -> ReducedVarian
     return ReducedVariantOffer(
         lines=(
             "",
-            "OFFERED — the reduced variant (docs/05_DEPLOYMENT.md §3). Nothing has been changed.",
+            "OFFERED — the reduced variant (spec/05_DEPLOYMENT.md §3). Nothing has been changed.",
             "",
             f"  Drops: {', '.join(DROPPED_COMPONENTS)}",
             "  Falls back to: PostgreSQL full-text search",

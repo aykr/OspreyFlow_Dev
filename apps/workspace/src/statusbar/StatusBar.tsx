@@ -5,7 +5,7 @@ export interface StatusBarProps {
   filteredCount: number;
 }
 
-/** `docs/02_GLASS_FRONTEND.md` §2: "12,481 nodes · 38,902 edges · 214
+/** `spec/02_GLASS_FRONTEND.md` §2: "12,481 nodes · 38,902 edges · 214
  * dimmed by filter · 6 hidden by handling ⓘ" — and its own rule 4: "The
  * status bar never lies... An analyst must never be able to mistake a
  * filtered picture for a complete one."

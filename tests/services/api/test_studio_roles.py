@@ -1,4 +1,4 @@
-"""`require_studio_role` — `docs/09_INGEST_STUDIO.md` §8's role-based
+"""`require_studio_role` — `spec/09_INGEST_STUDIO.md` §8's role-based
 action authorisation for the Ingest Studio, a different axis from
 `AccessFilter`'s per-record clearance/handling gate. Exercised directly
 against the dependency function, the same way `PrincipalResolver` is

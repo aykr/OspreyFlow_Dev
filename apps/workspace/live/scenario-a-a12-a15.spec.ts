@@ -7,7 +7,7 @@
 // Runs against the HMP fixture, which is reachable from the search box because its Person nodes
 // carry `prison_number` — one of the three identifiers the ontology declares for Person, and
 // what `search_nodes` matches on. (Fixture Corp's own entities carry none, which is why its
-// walkthrough is not in this file; see `docs/demo/2026-09-26/RUNBOOK.md` and the round's own
+// walkthrough is not in this file; see `process/demo/2026-09-26/RUNBOOK.md` and the round's own
 // DECISION_NEEDED.md.)
 import { expect, type Page, test } from "@playwright/test";
 

@@ -360,7 +360,7 @@ def seed(compose_file: Path, datasets: list[str], investigation_id: str) -> None
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="python -m harness.apply",
-        description="The scripted golden-path deploy — docs/05_DEPLOYMENT.md §2.3.",
+        description="The scripted golden-path deploy — spec/05_DEPLOYMENT.md §2.3.",
     )
     parser.add_argument("--profile", default=None, help="Overrides osprey.yaml's own profile.")
     parser.add_argument(

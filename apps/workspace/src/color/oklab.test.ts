@@ -4,7 +4,7 @@ import { mixOklab } from "./oklab";
 
 // No independent oracle for an exact expected hex is available offline —
 // these assert the algebraic properties any correct OKLab mix must have.
-// `docs/design/tokens.css`'s literal `color-mix(in oklab, ...)` values are
+// `spec/design/tokens.css`'s literal `color-mix(in oklab, ...)` values are
 // cross-checked against a real browser's own CSS engine during this
 // checkpoint's playwright verification pass, not duplicated as a second
 // hardcoded fixture here.

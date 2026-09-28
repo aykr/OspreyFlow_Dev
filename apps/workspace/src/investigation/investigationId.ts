@@ -5,7 +5,7 @@
 // caller; this lives in its own module (not inline in `App.tsx`) purely so it stays importable
 // without pulling in Sigma/MapLibre and their own WebGL requirement — `App.tsx`'s top-level
 // component tree needs a real browser/WebGL context even in tests, this precedence logic never
-// does. `docs/02_GLASS_FRONTEND.md` is silent on load-time investigation-selection precedence
+// does. `spec/02_GLASS_FRONTEND.md` is silent on load-time investigation-selection precedence
 // (checked directly, not assumed) — recorded there as a proposal, not settled spec.
 export const INVESTIGATION_ID_SESSION_KEY = "ospreyflow.investigationId";
 

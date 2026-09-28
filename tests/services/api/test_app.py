@@ -1,5 +1,5 @@
 """HTTP route wiring for the Conduit's FastAPI app —
-`docs/03_CONDUIT_MIDDLEWARE.md` §3.1/§3.2. Exercises dependency injection,
+`spec/03_CONDUIT_MIDDLEWARE.md` §3.1/§3.2. Exercises dependency injection,
 status codes and the typed-error exception handlers against
 `app.dependency_overrides`, never against a live ArcadeDB/Valkey/Postgres:
 `WorkingSetService`, `AuditWriter` and `InvestigationStore`'s own

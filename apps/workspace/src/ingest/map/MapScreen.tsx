@@ -1,4 +1,4 @@
-// Stage 3 of the Ingest Studio — `docs/09_INGEST_STUDIO.md` §4. Fetches the
+// Stage 3 of the Ingest Studio — `spec/09_INGEST_STUDIO.md` §4. Fetches the
 // draft, its profile (for the source-fields panel — Map is unreachable
 // until Profile has succeeded, same gate `ProfileScreen.tsx` enforces),
 // the ontology schema (POLE-first type narrowing) and the transform

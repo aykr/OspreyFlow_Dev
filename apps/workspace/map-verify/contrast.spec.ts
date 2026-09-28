@@ -1,4 +1,4 @@
-// The map's own contrast-floor Verify check — `docs/00_ARCHITECTURE.md`
+// The map's own contrast-floor Verify check — `spec/00_ARCHITECTURE.md`
 // §1.2.1: "renders a fixture graph over it and compares against a stored
 // reference for contrast floor compliance." Genuinely different from
 // `a11y/a11y.spec.ts`'s axe-core DOM-rule check (component contrast, no

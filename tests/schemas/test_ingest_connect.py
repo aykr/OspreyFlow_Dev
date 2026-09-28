@@ -1,4 +1,4 @@
-"""Connect-stage schemas — `docs/09_INGEST_STUDIO.md` §2 (the connector
+"""Connect-stage schemas — `spec/09_INGEST_STUDIO.md` §2 (the connector
 catalogue and the three mandatory gate questions) and §6 (the
 `studio_recipes` draft shape)."""
 

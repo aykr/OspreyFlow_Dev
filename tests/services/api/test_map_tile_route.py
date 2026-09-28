@@ -1,5 +1,5 @@
 """`GET /v1/map/tiles/{provider_id}/{z}/{x}/{y}` route wiring —
-`docs/00_ARCHITECTURE.md` §1.2's tile proxy. Mirrors `test_sites_routes.py`'s own discipline:
+`spec/00_ARCHITECTURE.md` §1.2's tile proxy. Mirrors `test_sites_routes.py`'s own discipline:
 dependency overrides and monkeypatched module-level helpers, never a live
 network call or live MinIO — `build_upstream_url`/`fetch_tile`'s own
 correctness is proven in `test_tile_proxy.py`, `read_cached_tile`/

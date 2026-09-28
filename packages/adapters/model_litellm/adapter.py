@@ -1,4 +1,4 @@
-"""`ModelLiteLLMAdapter` — `ModelPort` over a LiteLLM proxy (`docs/00_ARCHITECTURE.md` §2.4).
+"""`ModelLiteLLMAdapter` — `ModelPort` over a LiteLLM proxy (`spec/00_ARCHITECTURE.md` §2.4).
 
 All four `ModelPort` methods are real from Stage 2.
 `transcribe()` does not support diarisation yet — `TranscribeRequest.diarize=True` raises

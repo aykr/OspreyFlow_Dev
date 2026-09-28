@@ -1,4 +1,4 @@
-"""Caches proxied tiles to object storage — `docs/00_ARCHITECTURE.md` §1.2's
+"""Caches proxied tiles to object storage — `spec/00_ARCHITECTURE.md` §1.2's
 tile proxy: "caches tiles to object storage, keeping usage within licence
 limits and making the map usable offline/slow-link." Mirrors `services/api/
 site_images.py`'s exact shape: reuses `services/ingest/staging.py`'s

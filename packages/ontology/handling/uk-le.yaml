@@ -1,4 +1,4 @@
-# UK law-enforcement handling scheme — docs/01_DOMAIN_MODEL.md §2.2.
+# UK law-enforcement handling scheme — spec/01_DOMAIN_MODEL.md §2.2.
 # The enforcement logic reads the booleans below, never the code letters.
 classification: [OFFICIAL, "OFFICIAL-SENSITIVE", SECRET]
 

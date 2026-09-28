@@ -1,4 +1,4 @@
-"""Query/analytics result caching — `docs/03_CONDUIT_MIDDLEWARE.md` §7:
+"""Query/analytics result caching — `spec/03_CONDUIT_MIDDLEWARE.md` §7:
 three layers, three invalidation stories, kept separate "or you will
 invalidate the wrong one".
 

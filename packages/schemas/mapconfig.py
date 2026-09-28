@@ -1,4 +1,4 @@
-"""The basemap provider registry — `docs/00_ARCHITECTURE.md` §1.2 ("The
+"""The basemap provider registry — `spec/00_ARCHITECTURE.md` §1.2 ("The
 provider registry"), ADR-014, ADR-015, ADR-016.
 `osprey.yaml`'s `map:` section is data, not code: MapLibre
 consumes any style plus vector or raster sources, so adding a provider is a

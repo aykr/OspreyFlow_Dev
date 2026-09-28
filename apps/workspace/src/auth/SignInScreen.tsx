@@ -1,5 +1,5 @@
 // `06_DECISIONS.md` ADR-050 — the sign-in screen. Shown whenever there is no valid token
-// (`docs/02_GLASS_FRONTEND.md` §2's own "unauthenticated load" case) and, per ADR-050's amendment
+// (`spec/02_GLASS_FRONTEND.md` §2's own "unauthenticated load" case) and, per ADR-050's amendment
 // of objection 7, this is the surface the tests-owed list's "Glass's reaction to a 401" actually
 // tests — not the Conduit's already-covered refusal, but that this screen, specifically, is what
 // an unauthenticated or refused caller sees.

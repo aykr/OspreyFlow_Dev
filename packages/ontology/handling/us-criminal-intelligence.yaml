@@ -1,5 +1,5 @@
-# US criminal-intelligence handling scheme — docs/01_DOMAIN_MODEL.md §2.2,
-# docs/06_DECISIONS.md ADR-017. Models the controls 28 CFR Part 23 imposes on
+# US criminal-intelligence handling scheme — spec/01_DOMAIN_MODEL.md §2.2,
+# spec/06_DECISIONS.md ADR-017. Models the controls 28 CFR Part 23 imposes on
 # federally-funded criminal intelligence systems: an entry standard (recorded
 # in `Handling.legal_basis` at ingestion), a periodic review and purge cycle
 # (`Handling.review_date`), and dissemination recording (the audit stream,

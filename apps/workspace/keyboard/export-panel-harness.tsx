@@ -21,7 +21,7 @@
 import Graph from "graphology";
 import { createRoot } from "react-dom/client";
 
-import "../../../docs/design/tokens.css";
+import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { ExportPanel } from "../src/export/ExportPanel";
 

@@ -766,7 +766,7 @@ is reached around **cycle ~193** of this specific, light workload; at the steepe
 its own — this workload seeds a fixed, small fixture every cycle, not the growing working set a
 real investigation accumulates — but both say the same thing directionally: this is a long runway
 at this workload's scale, not an imminent ceiling, and the growth is real and unbounded so far
-measured, not settled. Two upstream issue drafts for the ArcadeDB tracker — this section's own leak and the readiness-endpoint finding beside it — are in `docs/upstream/arcadedb-database-lifecycle-leak.md`, for the owner to file.
+measured, not settled. Two upstream issue drafts for the ArcadeDB tracker — this section's own leak and the readiness-endpoint finding beside it — are kept internally, for the owner to file.
 
 **The operational consequence, stated plainly:** a running instance should be expected to need
 periodic restarts to recover memory, and **the safe interval between them is not yet known** —

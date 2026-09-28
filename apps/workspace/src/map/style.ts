@@ -1,4 +1,4 @@
-// The bundled dark MapLibre style — `docs/00_ARCHITECTURE.md` §1.2's
+// The bundled dark MapLibre style — `spec/00_ARCHITECTURE.md` §1.2's
 // tier-1 "Two MapLibre styles ship with it, dark and light, built
 // against `design/tokens.css`".
 //

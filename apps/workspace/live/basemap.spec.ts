@@ -2,7 +2,7 @@
 //
 // `07_BUILD_PLAN.md`'s Stage 3a disclosure named "the actual local PMTiles basemap build" as the
 // thing that had never happened. Round 12 built one for real (Geofabrik's Rutland extract →
-// planetiler → PMTiles → `register_local_provider` → `verify_map`; `docs/demo/2026-09-26/
+// planetiler → PMTiles → `register_local_provider` → `verify_map`; `process/demo/2026-09-26/
 // RUNBOOK.md` has the timings). This spec is the other half: proof that the artefact that build
 // produced is one the Glass's Map view can actually draw, which no amount of checking the file
 // on disk establishes.

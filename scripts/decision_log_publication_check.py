@@ -33,7 +33,7 @@ import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DECISIONS_PATH = REPO_ROOT / "docs" / "06_DECISIONS.md"
+DECISIONS_PATH = REPO_ROOT / "spec" / "06_DECISIONS.md"
 ALLOWLIST_PATH = REPO_ROOT / "tests" / "fixtures" / "decision_log_publication_allowlist.txt"
 
 #: `06_DECISIONS.md` ADR-034 §B10's own classification rule: PROCESS is a decision about how this

@@ -16,7 +16,7 @@ export interface DossierProps {
   onSelectNode?: (nodeId: string) => void;
 }
 
-/** `docs/00_ARCHITECTURE.md`'s own component diagram names the Dossier a peer of Canvas/Timeline/
+/** `spec/00_ARCHITECTURE.md`'s own component diagram names the Dossier a peer of Canvas/Timeline/
  * Map/Query, not an Inspector tab or a canvas overlay — `02_GLASS_FRONTEND.md`'s own cross-
  * references from Stage 2/3's transient popovers already treat it as the larger, permanent
  * surface neither should pre-empt. `08_ACCEPTANCE_SCENARIOS.md` B6: "Inspect the shared

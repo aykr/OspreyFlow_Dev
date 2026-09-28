@@ -1,4 +1,4 @@
-"""`PrincipalResolver` — `docs/03_CONDUIT_MIDDLEWARE.md` §6's OIDC-to-
+"""`PrincipalResolver` — `spec/03_CONDUIT_MIDDLEWARE.md` §6's OIDC-to-
 `Principal` resolution, exercised end to end against a real RS256 keypair
 and a real JWKS document, with no live IdP.
 

@@ -1,4 +1,4 @@
-"""`ModelPort` domain types — `docs/00_ARCHITECTURE.md` §2.4.
+"""`ModelPort` domain types — `spec/00_ARCHITECTURE.md` §2.4.
 
 Real types replacing `_pending_port_placeholders`'s stand-ins once each pair's own stage registers
 an adapter that implements it — `ExtractionRequest`/`ExtractionResult` in Stage 1,

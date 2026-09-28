@@ -1,4 +1,4 @@
-"""HTTP route wiring for Verify (`docs/09_INGEST_STUDIO.md` §5) —
+"""HTTP route wiring for Verify (`spec/09_INGEST_STUDIO.md` §5) —
 `POST /v1/ingest/recipes/{id}/verify`. Mirrors `test_studio_map_routes.py`'s
 own discipline: a fake store and a fake `GraphPort`, never a live ArcadeDB —
 `dry_run_recipe`'s own correctness (including the access-control mechanism)

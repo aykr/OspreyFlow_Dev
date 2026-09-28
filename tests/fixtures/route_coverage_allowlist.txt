@@ -1,5 +1,5 @@
 # Routes registered in services/api/app.py not yet documented (after path-parameter
-# normalisation) in docs/03_CONDUIT_MIDDLEWARE.md's own route table.
+# normalisation) in spec/03_CONDUIT_MIDDLEWARE.md's own route table.
 # scripts/route_coverage_check.py enforces this list; 07_BUILD_PLAN.md's Phase 8
 # documentation-refresh step is complete for this axis when this file is empty and deleted.
 # One "METHOD /path" per line, exactly as scripts/route_coverage_check.py's own

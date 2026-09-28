@@ -186,7 +186,7 @@ September) — the claim below about the Ingest Studio review was wrong by that 
 corrected here rather than left to be found by a later audit.
 
 - **The Ingest Studio review happened; a second one has not.** The first review (15 September,
-  `docs/archive/SESSION_HANDOVER.md`, commit `87dbb7b`) covered the prototype against the CDR
+  `process/archive/SESSION_HANDOVER.md`, commit `87dbb7b`) covered the prototype against the CDR
   fixture, before Verify or Publish existed — real feedback, not a well-reasoned guess, but
   against an earlier, narrower build than what Phase 5a eventually shipped. Phase 5a's own
   known-gaps list (`07_BUILD_PLAN.md`) already discloses what remains open: no financial fixture

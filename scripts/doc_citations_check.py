@@ -64,7 +64,9 @@ ALLOWLIST_PATH = REPO_ROOT / "tests" / "fixtures" / "citation_allowlist.txt"
 GITIGNORE_PATH = REPO_ROOT / ".gitignore"
 
 #: Where citations live. Documents and the code comments that carry the "name the test" habit.
-SEARCH_ROOTS: tuple[str, ...] = ("docs", "apps", "services", "packages", "scripts", "harness")
+SEARCH_ROOTS: tuple[str, ...] = (
+    "spec", "process", "apps", "services", "packages", "scripts", "harness",
+)
 
 #: File types whose own text is scanned. Not `.json`/`.lock`/`.yaml` — a path in a config file is a
 #: configured path, not a citation, and it is already enforced by whatever reads it.

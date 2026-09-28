@@ -11,19 +11,19 @@ it every session.
 
 | Read this | When |
 | --- | --- |
-| `docs/00_ARCHITECTURE.md` | Ports, tiers, geospatial providers, licence register |
-| `docs/01_DOMAIN_MODEL.md` | Anything touching entities, edges, provenance, handling, resolution |
-| `docs/02_GLASS_FRONTEND.md` | Anything in `apps/workspace` |
-| `docs/03_CONDUIT_MIDDLEWARE.md` | Anything in `services/api` |
-| `docs/04_VAULT_BACKEND.md` | Adapters, engines, conformance suites |
-| `docs/05_DEPLOYMENT.md` | Harness, profiles, containers |
-| `docs/06_DECISIONS.md` | Before proposing any alternative to what the spec says |
-| `docs/07_BUILD_PLAN.md` | Phase scope and exit criteria |
-| `docs/08_ACCEPTANCE_SCENARIOS.md` | The functional definition of done |
-| `docs/09_INGEST_STUDIO.md` | Ingest, connectors, mapping, review queue |
-| `docs/design/tokens.css` | Any styling. Authoritative — no colour outside these tokens |
+| `spec/00_ARCHITECTURE.md` | Ports, tiers, geospatial providers, licence register |
+| `spec/01_DOMAIN_MODEL.md` | Anything touching entities, edges, provenance, handling, resolution |
+| `spec/02_GLASS_FRONTEND.md` | Anything in `apps/workspace` |
+| `spec/03_CONDUIT_MIDDLEWARE.md` | Anything in `services/api` |
+| `spec/04_VAULT_BACKEND.md` | Adapters, engines, conformance suites |
+| `spec/05_DEPLOYMENT.md` | Harness, profiles, containers |
+| `spec/06_DECISIONS.md` | Before proposing any alternative to what the spec says |
+| `process/07_BUILD_PLAN.md` | Phase scope and exit criteria |
+| `spec/08_ACCEPTANCE_SCENARIOS.md` | The functional definition of done |
+| `spec/09_INGEST_STUDIO.md` | Ingest, connectors, mapping, review queue |
+| `spec/design/tokens.css` | Any styling. Authoritative — no colour outside these tokens |
 
-All eighteen decision records in `docs/06_DECISIONS.md` are accepted. If you believe one is
+All eighteen decision records in `spec/06_DECISIONS.md` are accepted. If you believe one is
 wrong, say so and stop — do not implement an alternative and explain afterwards.
 
 ## Rules that hold in every session
@@ -44,7 +44,7 @@ wrong, say so and stop — do not implement an alternative and explain afterward
    Adapters with golden test files.
 9. **Fixtures are synthetic and in-repo.** No real intelligence data anywhere, ever. Map data in
    the demo and CI is tier 1 only.
-10. **The performance budget in `docs/02_GLASS_FRONTEND.md` §5 is a CI gate**, not a target.
+10. **The performance budget in `spec/02_GLASS_FRONTEND.md` §5 is a CI gate**, not a target.
 
 ## If a knowledge-graph index is available
 

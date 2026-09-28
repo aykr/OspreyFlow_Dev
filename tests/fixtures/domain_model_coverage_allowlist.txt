@@ -1,4 +1,4 @@
-# Classes in packages/schemas/domain.py genuinely undocumented in docs/01_DOMAIN_MODEL.md
+# Classes in packages/schemas/domain.py genuinely undocumented in spec/01_DOMAIN_MODEL.md
 # (GAP, not ELSEWHERE or NOT_SCOPED — scripts/domain_model_coverage_check.py's own docstring
 # has the full triage, including why the ELSEWHERE bar moved Hotlist/Alert/OntologySchema/
 # SchemaReport back here after a first, too-loose classification). 07_BUILD_PLAN.md's Phase 8

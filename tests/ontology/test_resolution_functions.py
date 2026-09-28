@@ -1,5 +1,5 @@
 """The closed function registry for `resolution: {blocking, comparisons}` —
-`docs/06_DECISIONS.md` ADR-021, `01_DOMAIN_MODEL.md` §4."""
+`spec/06_DECISIONS.md` ADR-021, `01_DOMAIN_MODEL.md` §4."""
 
 from __future__ import annotations
 

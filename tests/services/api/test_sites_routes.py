@@ -1,5 +1,5 @@
 """HTTP route wiring for `/v1/investigations/{id}/sites/*` —
-`docs/00_ARCHITECTURE.md` §1.2, `08_ACCEPTANCE_SCENARIOS.md` A1. Mirrors
+`spec/00_ARCHITECTURE.md` §1.2, `08_ACCEPTANCE_SCENARIOS.md` A1. Mirrors
 `test_app.py`'s own discipline: dependency overrides and monkeypatched
 module-level helpers, never a live ArcadeDB/Postgres/MinIO — `SiteStore`'s
 own correctness is proven in `test_sites_store.py`, the connector +

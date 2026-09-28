@@ -1,4 +1,4 @@
-// The MapLibre view — `docs/02_GLASS_FRONTEND.md` §3.5, ADR-014.
+// The MapLibre view — `spec/02_GLASS_FRONTEND.md` §3.5, ADR-014.
 //
 // **A separate Sigma instance over a local node clone, not the shared
 // working-set graph.** `@sigma/layer-maplibre`'s `bindMaplibreLayer`
@@ -7,7 +7,7 @@
 // source, not assumed from its README) — sharing `GlassCanvas`'s
 // graphology instance would have this view's geographic projection
 // silently corrupt the Graph view's own layout the moment both had ever
-// mounted. `docs/02_GLASS_FRONTEND.md` §2's "Graph · Map · Matrix ...
+// mounted. `spec/02_GLASS_FRONTEND.md` §2's "Graph · Map · Matrix ...
 // three renderings of the same working set" holds at the conceptual
 // level (same node/edge membership, same selection) without requiring one
 // literal shared graphology instance a third-party plugin was never
@@ -51,7 +51,7 @@ import { resolveBundledStyle, resolvePmtilesSourceUrl } from "./style";
 const GEO_BINS_SOURCE_ID = "ospreyflow-geo-bins";
 const GEO_BINS_LAYER_ID = "ospreyflow-geo-bins-heat";
 
-// B18's own snail trail (`docs/02_GLASS_FRONTEND.md` §3.5, `08_
+// B18's own snail trail (`spec/02_GLASS_FRONTEND.md` §3.5, `08_
 // ACCEPTANCE_SCENARIOS.md`) — two MapLibre layers over one source: the
 // accumulated path so far (a `LineString`) and the current position (the
 // most recent revealed sighting, a `Point`). Native MapLibre layers, not
@@ -279,7 +279,7 @@ export function MapView({
       sigma.on("clickNode", ({ node }) => onNodeClickRef.current?.(node));
 
       // `attributionControl: false` is this checkpoint's mitigation for
-      // CVE-2026-85061 (docs/06_DECISIONS.md, ADR-014 amendment) — MapLibre's
+      // CVE-2026-85061 (spec/06_DECISIONS.md, ADR-014 amendment) — MapLibre's
       // own control renders attribution HTML through the broken
       // `DOM.sanitize()` path; this component renders the same text itself,
       // below, as a plain (never `innerHTML`) node instead.

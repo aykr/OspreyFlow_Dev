@@ -1,4 +1,4 @@
-"""`services/resolve/conflicts.py` — `docs/01_DOMAIN_MODEL.md` §4, `docs/03_CONDUIT_MIDDLEWARE.md`
+"""`services/resolve/conflicts.py` — `spec/01_DOMAIN_MODEL.md` §4, `spec/03_CONDUIT_MIDDLEWARE.md`
 §5.3: "a later run that would have merged the pair records the conflict for review rather than
 acting on it." Pure function, same discipline as `tests/resolve/test_projection.py`.
 """

@@ -1,4 +1,4 @@
-// The accessibility floor — `docs/02_GLASS_FRONTEND.md` §6: "Contrast
+// The accessibility floor — `spec/02_GLASS_FRONTEND.md` §6: "Contrast
 // floor met in both themes; verify with automated checks in CI, not by
 // eye." An automated, CI-gated pass/fail, not asserted in prose.
 import AxeBuilder from "@axe-core/playwright";

@@ -1,6 +1,6 @@
 """`POST .../ingest/extract`, `GET .../ingest/candidates`, `POST .../candidates/{id}/accept`,
 `POST .../candidates/{id}/reject`, `POST /v1/nodes/{id}/confirm`, `POST /v1/nodes/{id}/retract`
-route wiring — `docs/09_INGEST_STUDIO.md` §4/§7, `docs/01_DOMAIN_MODEL.md` §2.1. The underlying
+route wiring — `spec/09_INGEST_STUDIO.md` §4/§7, `spec/01_DOMAIN_MODEL.md` §2.1. The underlying
 logic is proven in `tests/services/api/test_review.py`/`test_review_store.py` and
 `tests/extract/test_writer.py`; this file proves each route calls it with the right arguments,
 audits, and denies a principal without access.

@@ -1,6 +1,6 @@
 // Fetches and caches `GET /v1/ontology` (`services/api/app.py`) — the
 // channel/shape mapping the Glass needs to render at all
-// (`docs/02_GLASS_FRONTEND.md` §4). One fetch per session; the ontology
+// (`spec/02_GLASS_FRONTEND.md` §4). One fetch per session; the ontology
 // does not change while a session is open.
 import type { EntityTypeDef, OntologySchema } from "../../../../packages/schemas/generated";
 import type { NodeShape } from "../color/nodeVisual";

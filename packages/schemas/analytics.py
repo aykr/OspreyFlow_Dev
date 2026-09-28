@@ -1,5 +1,5 @@
-"""`AnalyticsPort` request and response shapes — `docs/00_ARCHITECTURE.md` §2.2,
-`docs/01_DOMAIN_MODEL.md` §3 and the new §9 it gained alongside this module.
+"""`AnalyticsPort` request and response shapes — `spec/00_ARCHITECTURE.md` §2.2,
+`spec/01_DOMAIN_MODEL.md` §3 and the new §9 it gained alongside this module.
 
 Columnar aggregation over event-shaped data. `EventRecord` is the row the
 staging pipeline writes to Parquet (`01_DOMAIN_MODEL.md` §3: "the analytics

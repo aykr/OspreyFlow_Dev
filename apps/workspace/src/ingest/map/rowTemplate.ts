@@ -1,4 +1,4 @@
-// Pure helpers over `RowTemplate`/`FieldBinding` — `docs/09_INGEST_STUDIO.md`
+// Pure helpers over `RowTemplate`/`FieldBinding` — `spec/09_INGEST_STUDIO.md`
 // §4. No component logic lives here so it can be unit-tested directly
 // (this repo has no RTL/jsdom setup — `ConnectScreen.test.ts`'s own
 // docstring — so a screen's *logic* is what gets covered, not its render).

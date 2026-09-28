@@ -1,7 +1,7 @@
 # OspreyFlow — framing the next Claude Code sessions
 
 Written 18 September 2026, at the close of Phase 6. Read against the Phase 6 → Phase 7 handover,
-`docs/07_BUILD_PLAN.md`, `docs/08_ACCEPTANCE_SCENARIOS.md`, `docs/DESIGN_PROVENANCE.md` and the
+`process/07_BUILD_PLAN.md`, `spec/08_ACCEPTANCE_SCENARIOS.md`, `process/DESIGN_PROVENANCE.md` and the
 repository as it stands at `b8b9207`.
 
 Every claim below was checked against the working tree, not inferred from the documents. Where the
@@ -158,10 +158,10 @@ disagree.
 
 - **`docs/OspreyFlow — Session Handover (Phase 6 → Phase 7).md`** — current and correct, but named
   with spaces and an em dash, and not obviously the successor to the file below.
-- **`docs/SESSION_HANDOVER.md`** — dated 14 September, written at the start of Phase 3, and still
+- **`process/SESSION_HANDOVER.md`** — dated 14 September, written at the start of Phase 3, and still
   serving as the repository's nominal handover through five phases since. Its phase table, Phase 3
   constraint list and open-items list are all stale.
-- **`docs/DESIGN_PROVENANCE.md`** — still framed as "covering the period from the initial brief to
+- **`process/DESIGN_PROVENANCE.md`** — still framed as "covering the period from the initial brief to
   the start of Phase 3". §4's defect table stops at Phase 2. §6 states that no analyst has used any
   of it and the Ingest Studio review has not happened — but the 15 September handover and commit
   `87dbb7b` both record that review as having happened. Two documents in `docs/` now disagree on a
@@ -204,9 +204,9 @@ project's own process calls for it.
 > Phase 6 → Phase 7 handover says B1–B7 are ready with B8+ needing a re-check. I want the whole
 > scenario re-checked, not just B8 onwards.
 >
-> Walk `docs/08_ACCEPTANCE_SCENARIOS.md` Scenario B, B1 to B20, one step at a time. For each step
+> Walk `spec/08_ACCEPTANCE_SCENARIOS.md` Scenario B, B1 to B20, one step at a time. For each step
 > state which of these it is: (a) built and tested today, (b) claimed by Phase 7's own bullet list
-> in `docs/07_BUILD_PLAN.md`, (c) claimed by Phase 8's, or (d) claimed by no phase's bullet list at
+> in `process/07_BUILD_PLAN.md`, (c) claimed by Phase 8's, or (d) claimed by no phase's bullet list at
 > all. Cite the module or the bullet for each answer. Where a step is partly built — an endpoint
 > with no screen — say so rather than rounding it to either side.
 >
@@ -229,7 +229,7 @@ project's own process calls for it.
 > Plan mode first.
 >
 > Two gaps from Phase 2 are load-bearing for Scenario B and both are already named in
-> `docs/07_BUILD_PLAN.md`'s Phase 2 section, but neither is currently tracked as a Scenario B
+> `process/07_BUILD_PLAN.md`'s Phase 2 section, but neither is currently tracked as a Scenario B
 > blocker.
 >
 > First: the ingest load path does not write the analytics store transactionally alongside the graph
@@ -250,7 +250,7 @@ project's own process calls for it.
 
 > Plan mode. No code until I have seen the plan.
 >
-> `docs/07_BUILD_PLAN.md`'s Phase 6 known-gaps list records that no corpus-wide resolution job
+> `process/07_BUILD_PLAN.md`'s Phase 6 known-gaps list records that no corpus-wide resolution job
 > trigger exists: `resolve_entity_type`, `write_same_as_edges`, `detect_conflicts` and
 > `record_conflicts` are real and tested, but nothing schedules or triggers a run against the live
 > corpus — no ingest hook, no cron, no manual endpoint. Every test in `tests/resolve/` calls them
@@ -270,7 +270,7 @@ project's own process calls for it.
 
 > Plan mode. The output is an ADR and a build-plan edit; no implementation this session.
 >
-> `docs/07_BUILD_PLAN.md`'s "Gaps with no owning phase" section — added at Phase 6 close — names the
+> `process/07_BUILD_PLAN.md`'s "Gaps with no owning phase" section — added at Phase 6 close — names the
 > OpenSearch full-text-and-embeddings index and explicitly asks for a scoping decision before a
 > future phase assumes `/v1/search`'s document and index legs work because the graph leg does.
 > Phase 7 is that future phase: Scenario B's B4 seeds a working set by search and B6 renders

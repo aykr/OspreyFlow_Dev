@@ -1,4 +1,4 @@
-// The accessibility floor — `docs/02_GLASS_FRONTEND.md` §6, amendment 24 / ruling 6 (Stage 2 §6
+// The accessibility floor — `spec/02_GLASS_FRONTEND.md` §6, amendment 24 / ruling 6 (Stage 2 §6
 // part C). `apps/workspace/a11y/a11y.spec.ts` is the precedent for the axe-core mechanics — a
 // separate spec, not an extension of `keyboard/setup-screens.spec.ts` — but NOT for its own
 // navigation: that file still loads `/a11y/showcase.html`, a static fragment, which
@@ -15,7 +15,7 @@
 // correctly reaches a screen's last field and Enter saves it, rather than getting stuck — not
 // re-tested here a second way. `prefers-reduced-motion` is emulated below the same way the
 // precedent's own contrast test already found necessary (a real transition-timing race on
-// `.btn--primary`, not a hypothetical), and `docs/design/tokens.css`'s own focus-outline token
+// `.btn--primary`, not a hypothetical), and `spec/design/tokens.css`'s own focus-outline token
 // (2px brass at 2px offset) is shared, unmodified, verbatim, with `apps/workspace` — no
 // harness-specific CSS anywhere overrides it (checked directly: `apps/harness/src/app.css` sets no
 // `outline` property at all).

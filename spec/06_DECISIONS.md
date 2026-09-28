@@ -844,7 +844,7 @@ which stays correct regardless of which phase number ends up doing the re-provin
 **Status.** Accepted, 17 September 2026.
 
 **Decision.** The `ModelPort` conformance suite (`tests/conformance/model_port/test_suite.py`,
-`docs/07_BUILD_PLAN.md` Phase 6 Stage 1) runs against Ollama's `qwen2.5:0.5b-instruct`
+`process/07_BUILD_PLAN.md` Phase 6 Stage 1) runs against Ollama's `qwen2.5:0.5b-instruct`
 (manifest digest `sha256:a8b0c51577010a279d933d14c2a8ab4b268079d44c5c8830c0a93900f1827c67`), served
 from the `ollama/ollama:0.18.2` container image, itself pinned by digest
 (`sha256:5a5d014aa774f78ebe1340c0d4afc2e35afc12a2c3b34c84e71f78ea20af4ba3` — an ordinary image pin,
@@ -1055,7 +1055,7 @@ resolves to the current stable release, 4.0.17) pulls in `igraph>=0.11.2` as a h
 runtime dependency — checked directly against the installed package's own metadata, not assumed
 from a changelog. `python-igraph`'s own declared licence is GPL, which fails
 `scripts/licence_check.py` immediately: `licence-check: igraph 1.0.0 — 'GNU General Public
-License (GPL)' is not on the docs/00_ARCHITECTURE.md §7 allowlist`. `00_ARCHITECTURE.md` §7
+License (GPL)' is not on the spec/00_ARCHITECTURE.md §7 allowlist`. `00_ARCHITECTURE.md` §7
 already rejects Neo4j Community for exactly this class of reason ("GPL reciprocity on a platform
 intended for wide distribution") — the same reasoning applies here regardless of how the GPL
 package arrived, as a direct dependency or a transitive one four layers into `splink`'s own
@@ -1809,7 +1809,7 @@ new Phase 7 known-gaps list alongside the status-bar notice, not only here.
 
 **Status.** Accepted, 19 September 2026.
 
-**The question, as `docs/DEMO_GUIDE.md` §7 has posed it since it was written, unresolved until
+**The question, as `DEMO_GUIDE.md` §7 has posed it since it was written, unresolved until
 now.** The VAST Challenge datasets are fabricated scenarios with no real people, clearing the bar
 the real Enron corpus fails (`CLAUDE.md` rule 9; standing rule 3's own naming of the demo). VAST
 2014 MC2 in particular — GPS tracks, credit-card transactions and employee records for a fictional
@@ -1833,7 +1833,7 @@ to make silently elsewhere (ADR-021's own live-checked licence finding for `spli
 the precedent for checking rather than assuming).
 
 **The decision does not require that question to be resolved, which is the reason it is the right
-one.** `tests/scenarios/fixtures/cdr.py` and the still-unbuilt Fixture Corp (`docs/DEMO_GUIDE.md`
+one.** `tests/scenarios/fixtures/cdr.py` and the still-unbuilt Fixture Corp (`DEMO_GUIDE.md`
 §6) already establish this project's own answer to "a real, well-known case study would be a
 better demo than anything synthesised from nothing": not the real corpus, but a same-shaped
 synthetic one — structural statistics modelled on the published case, zero real identifiers,
@@ -2327,7 +2327,7 @@ a spec).
   record — a log of decisions made over time — but is not one: `CLAUDE.md` makes every accepted
   ADR binding on the same footing as the numbered spec files, so it belongs in `spec/`, not
   `process/`, despite its own narrative shape. Filenames are unchanged, including their numeric
-  prefixes — only the leading path segment changes (`docs/01_DOMAIN_MODEL.md` →
+  prefixes — only the leading path segment changes (`spec/01_DOMAIN_MODEL.md` →
   `spec/01_DOMAIN_MODEL.md`), which is what makes the citation-rewrite below a mechanical prefix
   swap for the numbered files rather than a rename.
 - **`process/`** — the record: `SESSION_HANDOVER.md`, `NEXT_STEPS_PHASE7.md`,
@@ -2406,7 +2406,7 @@ post-move gate; wire it into `ci` permanently from that point on, not only for t
 dangling citation, proving the checker actually fails on one — the same "prove it can fail"
 discipline this repository already applies to every other invariant). A large, mechanical
 citation-rewrite pass across 392 files, verified by the checker rather than by review. Every
-existing citation of `docs/06_DECISIONS.md`'s own ADR numbers, `01_DOMAIN_MODEL.md`'s section
+existing citation of `spec/06_DECISIONS.md`'s own ADR numbers, `01_DOMAIN_MODEL.md`'s section
 numbers, and so on stays correct without further edits, since only the leading path segment
 changes for the numbered files.
 
@@ -2625,7 +2625,7 @@ already places outside `docs/`.
 **Excluded and private** — the build framework: the prompt register (`.claude/`, including
 `CLAUDE.md`), the phase plan (`07_BUILD_PLAN.md`), the decision log (`06_DECISIONS.md`), the
 distribution/delivery record (`PRODUCT_DELIVERY.md`, new 22 September 2026 — the alpha gate, the
-analyst review, and every owner action described in `docs/PRODUCT_DELIVERY.md`'s own text, the
+analyst review, and every owner action described in `process/PRODUCT_DELIVERY.md`'s own text, the
 same "how the product reaches people rather than how it gets built" material this list already
 excludes elsewhere in `07_BUILD_PLAN.md`'s own case), design provenance (`DESIGN_PROVENANCE.md`),
 the gap inventory (contained entirely within `07_BUILD_PLAN.md` — no separate file), and handover
@@ -2754,15 +2754,15 @@ already neutral and is not a search pattern.
 git grep -liE "ayan\.?kar|ayankarsolirius|solirius" -- .
 ```
 
-matches exactly one tracked file: `docs/SESSION_HANDOVER.md` (its own byline line, "2026-09-18 ·
+matches exactly one tracked file: `process/SESSION_HANDOVER.md` (its own byline line, "2026-09-18 ·
 @Ayan", and two body references to "Ayan"/"Ayan's Mac"). No other tracked file in the repository —
 product code, `spec/`-bound docs, or any other `process/`-bound doc — carries a personal name,
-handle or employer domain. `docs/SESSION_HANDOVER.md` is explicitly out of scope for this session
+handle or employer domain. `process/SESSION_HANDOVER.md` is explicitly out of scope for this session
 (its byline is handled at Trigger A) and is unchanged here.
 
 **Binding: the product tree, the published guides and the prompt register carry no personal name,
 employer name or employer email domain.** Where an owner decision needs attributing, the term is
-"the owner". `docs/SESSION_HANDOVER.md` is the one currently-tracked exception, already scoped to
+"the owner". `process/SESSION_HANDOVER.md` is the one currently-tracked exception, already scoped to
 Trigger A rather than this session.
 
 **Open item, owned by Trigger B:** the initial commit of the published repository is authored under
@@ -2825,7 +2825,7 @@ to (the browser harness and its packaging pipeline are Phase 8's own outcome, no
 Phase 8 builds must ship with both assertions from its first version, not add them later —
 `07_BUILD_PLAN.md`'s own packaging stage states and tests them as its own exit criterion. Who an
 artefact satisfying both may then be given to, and when, is a distribution decision downstream of
-this one, recorded in `docs/PRODUCT_DELIVERY.md`, not in this ADR or in the build plan.
+this one, recorded in `process/PRODUCT_DELIVERY.md`, not in this ADR or in the build plan.
 
 **Cost.** Documentation only in this session: two ADR cross-references (this record, and ADR-031's
 own superseded pointer), one `07_BUILD_PLAN.md` amendment (below), and one open item added to
@@ -2850,7 +2850,7 @@ by this addendum.
 
 ### B8 — The split cannot be decided by directory name alone: what the product actually reads
 
-**Found 23 September 2026, generalising a single instance (`docs/design/tokens.css`) that
+**Found 23 September 2026, generalising a single instance (`spec/design/tokens.css`) that
 Trigger A's own exit criterion (`07_BUILD_PLAN.md`, above) had already named.** Every file under
 `docs/` that any code path actually reads or imports, at build time or run time, checked directly
 — `grep` for `import`/`open`/`Path`-construction patterns combined with a `docs/` path, across
@@ -2858,13 +2858,13 @@ every `.py`/`.ts`/`.tsx` file in the repository, not assumed from directory stru
 
 | File | Real consumer(s) | Mechanism |
 | --- | --- | --- |
-| `docs/design/tokens.css` | 12 real source files under `apps/workspace/{export-capture,map-verify,perf,a11y,keyboard}/` and, critically, `apps/workspace/src/main.tsx` — the Glass's own real entry point; plus `apps/workspace/src/color/tokens.test.ts` | TypeScript `import` (compile-time, 12) + `readFileSync` (run-time, 1) |
-| `docs/00_ARCHITECTURE.md`, `02_GLASS_FRONTEND.md`, `04_VAULT_BACKEND.md`, `05_DEPLOYMENT.md`, `08_ACCEPTANCE_SCENARIOS.md`, `09_INGEST_STUDIO.md` | `scripts/route_coverage_check.py`'s own `APACHE_DOC_PATHS` | `Path.read_text()` |
-| `docs/01_DOMAIN_MODEL.md` | `scripts/route_coverage_check.py` (via `APACHE_DOC_PATHS`) and `scripts/domain_model_coverage_check.py` (its own dedicated `DOC_PATH`) | `Path.read_text()` |
-| `docs/03_CONDUIT_MIDDLEWARE.md` | `scripts/route_coverage_check.py`, both via `APACHE_DOC_PATHS` and its own dedicated `DOC_PATH` (route-table extraction) | `Path.read_text()` |
-| `docs/DEMO_GUIDE.md` | `scripts/route_coverage_check.py` (via `APACHE_DOC_PATHS`) and `scripts/demo_guide_check.py` (its own dedicated `DEMO_GUIDE_PATH`) | `Path.read_text()` |
-| `docs/README.md` | `scripts/route_coverage_check.py` (via `APACHE_DOC_PATHS`) | `Path.read_text()` |
-| `docs/06_DECISIONS.md`, `07_BUILD_PLAN.md`, `docs/design/OspreyFlow_Brand_Foundations.html`, everything under `docs/archive/`, `SESSION_HANDOVER.md`, `NEXT_STEPS_PHASE7.md`, `DESIGN_PROVENANCE.md` | **None found** | — |
+| `spec/design/tokens.css` | 12 real source files under `apps/workspace/{export-capture,map-verify,perf,a11y,keyboard}/` and, critically, `apps/workspace/src/main.tsx` — the Glass's own real entry point; plus `apps/workspace/src/color/tokens.test.ts` | TypeScript `import` (compile-time, 12) + `readFileSync` (run-time, 1) |
+| `spec/00_ARCHITECTURE.md`, `02_GLASS_FRONTEND.md`, `04_VAULT_BACKEND.md`, `05_DEPLOYMENT.md`, `08_ACCEPTANCE_SCENARIOS.md`, `09_INGEST_STUDIO.md` | `scripts/route_coverage_check.py`'s own `APACHE_DOC_PATHS` | `Path.read_text()` |
+| `spec/01_DOMAIN_MODEL.md` | `scripts/route_coverage_check.py` (via `APACHE_DOC_PATHS`) and `scripts/domain_model_coverage_check.py` (its own dedicated `DOC_PATH`) | `Path.read_text()` |
+| `spec/03_CONDUIT_MIDDLEWARE.md` | `scripts/route_coverage_check.py`, both via `APACHE_DOC_PATHS` and its own dedicated `DOC_PATH` (route-table extraction) | `Path.read_text()` |
+| `DEMO_GUIDE.md` | `scripts/route_coverage_check.py` (via `APACHE_DOC_PATHS`) and `scripts/demo_guide_check.py` (its own dedicated `DEMO_GUIDE_PATH`) | `Path.read_text()` |
+| `README.md` | `scripts/route_coverage_check.py` (via `APACHE_DOC_PATHS`) | `Path.read_text()` |
+| `spec/06_DECISIONS.md`, `07_BUILD_PLAN.md`, `spec/design/OspreyFlow_Brand_Foundations.html`, everything under `process/archive/`, `SESSION_HANDOVER.md`, `NEXT_STEPS_PHASE7.md`, `DESIGN_PROVENANCE.md` | **None found** | — |
 
 **Two different relationships, not one, and the split follows the relationship, not the file
 extension or the current directory.**
@@ -2878,7 +2878,7 @@ extension or the current directory.**
   exactly the shape ADR-031's own "one repository, two top-level directories" reasoning already
   covers — this needs the path strings rewritten (`docs/` → `spec/` or root), the same mechanical
   pass every other citation gets, not a reclassification.
-- **`docs/design/tokens.css` is a different relationship in kind, not only in count.** The Glass
+- **`spec/design/tokens.css` is a different relationship in kind, not only in count.** The Glass
   does not check this file for drift against something else — it **cannot build or render without
   it**: `main.tsx`, the application's own real entry point, imports it directly, and a build with
   the import unresolved fails outright. **Per this session's own principle, stated plainly: a file
@@ -2892,7 +2892,7 @@ extension or the current directory.**
   `packages/schemas/domain.py` (authoritative, code-linked, not merely descriptive) than to
   `01_DOMAIN_MODEL.md` (describes the schema; does not run as it).
 
-**Decision, owned by Trigger A, not made here as a side effect of finding it:** `docs/design/
+**Decision, owned by Trigger A, not made here as a side effect of finding it:** `spec/design/
 tokens.css` moves with the product tree (a real candidate location: `apps/workspace/src/design/
 tokens.css`, updating all thirteen real consumers' own paths in the same pass, mechanically
 verified by `scripts/product_tree_link_check.py` — built the same session this was found, §B9
@@ -2903,7 +2903,7 @@ decided by which top-level directory a file happens to sit in today.** Not built
 physical move waits for Trigger A, per this document's own standing instruction that a rewrite
 against a structure that has not happened yet drifts before it lands.
 
-### B9 — `README.md`/`docs/README.md` audited against this ADR's own boundary; a link-integrity
+### B9 — `README.md`/`README.md` audited against this ADR's own boundary; a link-integrity
 gate built; the build process itself found mentioned throughout the Apache-scoped set, not only
 in the READMEs
 
@@ -2912,11 +2912,11 @@ separately, reported together since the gate exists specifically to make the aud
 mechanically enforceable rather than a one-time report that goes stale.
 
 **No root `README.md` exists yet — checked directly, not assumed** (matches ADR-031's own already-
-recorded gap: "this repository currently has no root-level `README.md` at all"). `docs/README.md`
+recorded gap: "this repository currently has no root-level `README.md` at all"). `README.md`
 is the only one that exists, and is the one audited below; ADR-031's own text already names it as
 the file `README.md`'s eventual content is drawn from.
 
-**Every reference in `docs/README.md`, classified:**
+**Every reference in `README.md`, classified:**
 
 | Reference | Category | Disposition |
 | --- | --- | --- |
@@ -2934,7 +2934,7 @@ A's own work, below.
 Apache-scoped document, not assumed absent.** `CLAUDE.md` — this project's own AI-assistant
 instruction file, squarely build-process material — is cited by name and by numbered rule
 (`CLAUDE.md` rule 3/7/9/12) from **six** Apache-scoped documents: `01_DOMAIN_MODEL.md` (×2),
-`02_GLASS_FRONTEND.md`, `09_INGEST_STUDIO.md` (×2), `DEMO_GUIDE.md` (×2), plus `docs/README.md`'s
+`02_GLASS_FRONTEND.md`, `09_INGEST_STUDIO.md` (×2), `DEMO_GUIDE.md` (×2), plus `README.md`'s
 own "for implementation by Claude Code." Each is both a **LINKS PRIVATE** case (`CLAUDE.md` is not
 Apache-scoped) and a direct instance of what this search was for.
 
@@ -2943,7 +2943,7 @@ annotations — a real, pervasive provenance pattern embedded throughout the spe
 a README-only phenomenon.** Counted directly (`grep -c`), not estimated: `00_ARCHITECTURE.md` (7),
 `01_DOMAIN_MODEL.md` (28), `02_GLASS_FRONTEND.md` (20), `03_CONDUIT_MIDDLEWARE.md` (7),
 `05_DEPLOYMENT.md` (2), `08_ACCEPTANCE_SCENARIOS.md` (11), `09_INGEST_STUDIO.md` (8),
-`DEMO_GUIDE.md` (17), `docs/README.md` (2) — 102 in total, `04_VAULT_BACKEND.md` the only
+`DEMO_GUIDE.md` (17), `README.md` (2) — 102 in total, `04_VAULT_BACKEND.md` the only
 Apache-scoped document with none. These are **PROVENANCE** by this session's own category
 definition (they describe how the product was designed or built — "Implementation note (Phase 5
 Checkpoint 3a)," "found during Phase 5 Checkpoint 2's live verification" — not what it is or how
@@ -2986,7 +2986,7 @@ actual job, not a formality.
 filesystem, the same answer regardless of where the citing file lives; a `06_DECISIONS.md`
 docstring citing `07_BUILD_PLAN.md` must keep resolving after Trigger A, since both move into
 `spec/` together. `product_tree_link_check.py` asks whether an Apache-scoped file cites a
-non-Apache-scoped one at all — the identical citation, from `docs/README.md`, must not exist,
+non-Apache-scoped one at all — the identical citation, from `README.md`, must not exist,
 because one side of it never publishes. **The two checks reach opposite verdicts on structurally
 identical citations, depending only on the citing file's own destination — they cannot be merged
 into one mechanical rule.** A shared citation-*extraction* utility is a reasonable future
@@ -3141,7 +3141,7 @@ file-coverage-check`, `product-tree-link-check`, `schemas-check`, and the Python
 `licence-check`. Re-run live (23 September 2026), all pass. `decision-log-publication-check`
 itself received an additional live `make`-level demonstration beyond its own unit fixture, being
 the gate specifically found broken: a real `(ADR-006, ADR-042)` reference injected into
-`docs/06_DECISIONS.md`, `make decision-log-publication-check` failed with the new pair named,
+`spec/06_DECISIONS.md`, `make decision-log-publication-check` failed with the new pair named,
 reverted, passed again clean.
 
 **One gate had never been tested at all.** The Node half of `licence-check`
@@ -3363,7 +3363,7 @@ located by environment variable (`OSPREYFLOW_INTERNAL_DEMO_DATA_DIR`, no default
 by the manifest by filename rather than contained in it. **Gitignore entry added in this session:**
 
 ```
-# Internal-only demo datasets (docs/06_DECISIONS.md ADR-035, C1) — never committed, provisioned to
+# Internal-only demo datasets (spec/06_DECISIONS.md ADR-035, C1) — never committed, provisioned to
 # OSPREYFLOW_INTERNAL_DEMO_DATA_DIR at runtime, referenced by filename from a demo's own manifest.
 /demo-data/
 ```
@@ -3447,10 +3447,10 @@ and C2's ownership above is unchanged. The harness/packaging stage's own packagi
 present, uncommitted and unnoticed, on the one machine that builds an owner-run demonstration.
 
 **One hazard, recorded when the file was created and closed the same day.** Excluding `docs/`
-wholesale also excludes `docs/design/tokens.css`, and that file is product source rather than prose
+wholesale also excludes `spec/design/tokens.css`, and that file is product source rather than prose
 — thirteen real consumers, twelve TypeScript `import`s including `apps/workspace/src/main.tsx`, the
 Glass's own entry point, plus one `readFileSync` — so a build with the import unresolved fails
-outright. **Closed by an explicit negation, `!docs/design/tokens.css`, added 24 September 2026 on the
+outright. **Closed by an explicit negation, `!spec/design/tokens.css`, added 24 September 2026 on the
 owner's instruction**, with `tests/test_dockerignore.py` asserting three things rather than one: that
 the file is included; that everything else under `docs/` stays excluded, its own sibling
 `OspreyFlow_Brand_Foundations.html` included in that list; and that removing the negation line
@@ -3642,7 +3642,7 @@ Recorded as a constraint on a path not currently taken, not a decision to avoid 
 
 **Checked directly, both halves.** `scripts/licence_check.py` (Python) runs `pip-licenses` against
 the active Python environment and checks each reported package licence string against an allowlist
-(`docs/00_ARCHITECTURE.md` §7). `scripts/licence_check.mjs` (Node, `package.json`'s own `licence-
+(`spec/00_ARCHITECTURE.md` §7). `scripts/licence_check.mjs` (Node, `package.json`'s own `licence-
 check` script) does the identical check via `license-checker` against `node_modules`. **Neither leg
 inspects a data file's own embedded or accompanying licence** — a fixture carrying its own data
 licence (C6's CDLA-Sharing-1.0 case, or any future dataset with terms of its own) passes both
@@ -3661,7 +3661,7 @@ declared licence alongside any fixture directory). **Recorded as work with an ow
 8**, alongside C1's registry and C5's Fixture Corp, since a shipped fixture's own data licence is
 exactly the class of thing C1's `make demo-manifest` output should also be able to report.
 
-### C8 — `docs/DEMO_GUIDE.md`
+### C8 — `DEMO_GUIDE.md`
 
 Amended in this session (see the file itself) with a new provisioning section describing how
 internal demo datasets are obtained and placed (`OSPREYFLOW_INTERNAL_DEMO_DATA_DIR`, by reference
@@ -4695,7 +4695,7 @@ protocol's own construction, not by an app-code habit this codebase has already 
 sustain across three independent authors.
 
 **Argument three — RFC 8693 is a standard; the Admin API route is Keycloak-specific, and that is a
-commercial constraint bought for no technical gain.** `docs/03_CONDUIT_MIDDLEWARE.md` §6 names
+commercial constraint bought for no technical gain.** `spec/03_CONDUIT_MIDDLEWARE.md` §6 names
 Keycloak as *this deployment's own* choice of IdP, not a commitment this platform makes to every
 customer's — a platform sold to run against a police force's or a bank's own existing identity
 infrastructure cannot assume every customer's IdP exposes Keycloak's own Admin API shape. (a)
@@ -5840,7 +5840,7 @@ CLI's own name: §2.3 calls this `osprey apply`, not `osprey launch`.)
 #### Stage 2 §3 — Scripted golden-path deploy
 
 `python -m harness.apply`: fresh checkout → render (Stage 2 §1) → preflight (Stage 2 §2) → start stack → wait for
-health → seed if requested. docs/demo/2026-09-24/demo_up.sh is retired into this once it exists;
+health → seed if requested. process/demo/2026-09-24/demo_up.sh is retired into this once it exists;
 until then it stays (since removed — see `07_BUILD_PLAN.md`'s Stage 2 §3 entry).
 
 **Amendment 6 — "ordering enforcement" is `05_DEPLOYMENT.md` §2.4's term for something else, and
@@ -6030,7 +6030,7 @@ A test written against the tarball alone goes green while every image layer carr
 prefix, and its test must survive Trigger A.** ADR-034 §B2: "a file's physical location in the private
 working tree and its licence/publication status are independent facts about it, and this is the one
 file in the tree where they visibly disagree" — `06_DECISIONS.md` lives in `spec/` and never
-publishes. §B8: `docs/design/tokens.css` is product source despite sitting under `docs/`. So neither
+publishes. §B8: `spec/design/tokens.css` is product source despite sitting under `docs/`. So neither
 `docs/` nor `spec/` is the right predicate. `scripts/product_tree_link_check.py` already holds the
 authoritative marker list (`06_DECISIONS.md`, `07_BUILD_PLAN.md`, `CLAUDE.md`, `SESSION_HANDOVER.md`,
 `NEXT_STEPS_PHASE7.md`, `DESIGN_PROVENANCE.md`, `PRODUCT_DELIVERY.md`, `archive/`), with
@@ -6521,7 +6521,7 @@ None of this exists today and all of it is rendering work, not Glass work:
   environment variable present at `vite build` — not a source edit.
 - **The golden path's Glass leg becomes**: apply, open the printed URL, sign in, see the seeded
   investigation. It replaces the dev-token step used for the last time on 25 September 2026
-  (`docs/demo/2026-09-25/`).
+  (`process/demo/2026-09-25/`).
 
 ### Open objections
 

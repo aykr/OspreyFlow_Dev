@@ -1,4 +1,4 @@
-"""The Conduit's FastAPI app — `docs/03_CONDUIT_MIDDLEWARE.md` §1/§3.
+"""The Conduit's FastAPI app — `spec/03_CONDUIT_MIDDLEWARE.md` §1/§3.
 
 **Stateless.** Every `app.state` attribute below is a client for an
 external store (ArcadeDB, Valkey, Postgres); none of it is session or
@@ -10,7 +10,7 @@ test_statelessness.py` is the proof this phase's exit criterion asks for
 notices nothing").
 
 **Every route audits before it discloses or before it returns success.**
-`docs/00_ARCHITECTURE.md` §5 / `03_CONDUIT_MIDDLEWARE.md` §8: "an
+`spec/00_ARCHITECTURE.md` §5 / `03_CONDUIT_MIDDLEWARE.md` §8: "an
 unaudited read is worse than a refused one... Reject reads. This is the
 one case where the platform fails closed." Each handler below performs
 its `GraphPort`/`WorkingSetService` action first (a read's result
@@ -351,7 +351,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # model is caller-supplied per call (`ExtractionRequest.model`, ADR-005), never this adapter's
     # own opinion (`services/api/review.py`'s own docstring on `RunExtractionRequest.model`).
     model: ModelPort = ModelLiteLLMAdapter(litellm_client, embed_model=CONFORMANCE_EMBED_MODEL)
-    # `docs/09_INGEST_STUDIO.md` §6's reverse index: "an ontology edit flags
+    # `spec/09_INGEST_STUDIO.md` §6's reverse index: "an ontology edit flags
     # every recipe that depends on the changed version". This deployment's
     # only "ontology reload" trigger today is a process restart after a new
     # `packages/ontology/default.yaml` ships — there is no live-reload admin
@@ -2406,7 +2406,7 @@ async def liveness_route() -> dict[str, str]:
 
 @app.get("/v1/ontology")
 async def get_ontology_route(principal: PrincipalDep, ontology: OntologyDep) -> OntologySchema:
-    """The Glass's channel/shape mapping (`docs/02_GLASS_FRONTEND.md` §4:
+    """The Glass's channel/shape mapping (`spec/02_GLASS_FRONTEND.md` §4:
     "Hue is entity type; shape is entity type too") comes from here, not a
     hardcoded copy of `packages/ontology/default.yaml` in the frontend —
     the ontology already carries `EntityTypeDef.channel`/`.shape` per type,
@@ -2423,7 +2423,7 @@ async def get_ontology_route(principal: PrincipalDep, ontology: OntologyDep) -> 
 async def get_map_providers_route(
     principal: PrincipalDep, map_config: MapConfigDep
 ) -> PublicMapConfig:
-    """The Glass's layer control (`docs/02_GLASS_FRONTEND.md` §3.5: "Layer
+    """The Glass's layer control (`spec/02_GLASS_FRONTEND.md` §3.5: "Layer
     control listing every provider declared in `osprey.yaml`") reads this,
     not a hardcoded copy of the registry — the same reasoning as
     `get_ontology_route` just above. Not in `03_CONDUIT_MIDDLEWARE.md`
@@ -2497,8 +2497,8 @@ async def get_map_local_source_route(
     """Serves a tier-1/2 provider's local `file://` PMTiles source over HTTP —
     Stage 3a's own rehearsal finding, 23 September 2026: a browser cannot fetch a `file://` URI
     at all, so `mapconfig_loader.public_view()` now rewrites that source to this route rather
-    than handing the on-disk path straight to the Glass. `docs/02_GLASS_FRONTEND.md` and
-    `docs/05_DEPLOYMENT.md` do not name which tier serves tier-1/2 tiles over HTTP (checked
+    than handing the on-disk path straight to the Glass. `spec/02_GLASS_FRONTEND.md` and
+    `spec/05_DEPLOYMENT.md` do not name which tier serves tier-1/2 tiles over HTTP (checked
     directly, not assumed silent) — this route is the smallest correct option, since the Conduit
     is already the one exposed service (`05_DEPLOYMENT.md` §2.4's guard table) serving
     `/v1/map/providers` and the tier-3/4 tile proxy right above; recorded as a proposal in
@@ -2784,8 +2784,8 @@ async def geometries_route(
 
 # --- sites ---------------------------------------------------------------
 #
-# `docs/00_ARCHITECTURE.md` §1.2's "Geospatial reference data as entities"
-# table (site plans row), `docs/02_GLASS_FRONTEND.md` §3.5,
+# `spec/00_ARCHITECTURE.md` §1.2's "Geospatial reference data as entities"
+# table (site plans row), `spec/02_GLASS_FRONTEND.md` §3.5,
 # `08_ACCEPTANCE_SCENARIOS.md` A1. A `Site` is investigation-scoped analyst
 # data (`services/api/sites.py`'s own docstring), not deployment config —
 # nothing here touches `osprey.yaml`/the `MapProvider` registry.
@@ -2939,7 +2939,7 @@ async def set_site_grid(
     synchronously against this request — the same call shape
     `tests/scenarios/fixtures/hmp_graph.py`'s fixture code already uses,
     just triggered by an HTTP request instead of a test
-    (`docs/00_ARCHITECTURE.md` §1.2: "Reference geodata is ingested
+    (`spec/00_ARCHITECTURE.md` §1.2: "Reference geodata is ingested
     through the ordinary connector framework"). `on_match: reference` in
     `site_grid_recipe.yaml` makes redrawing the grid idempotent rather
     than creating duplicate `Location`s.

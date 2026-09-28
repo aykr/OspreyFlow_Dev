@@ -1,4 +1,4 @@
-"""`osprey map add` for a tier-4 WMTS endpoint — `docs/00_ARCHITECTURE.md`
+"""`osprey map add` for a tier-4 WMTS endpoint — `spec/00_ARCHITECTURE.md`
 §1.2 ("Capabilities documents are parsed at registration"). No `osprey`
 CLI yet (`CLAUDE.md`'s own Conventions) — a plain,
 directly-runnable script now, the same pattern as `scripts/

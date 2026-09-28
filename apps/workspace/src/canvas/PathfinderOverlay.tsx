@@ -11,7 +11,7 @@ export interface PathfinderOverlayProps {
   onClose: () => void;
 }
 
-/** Phase 7 Stage 5 — `docs/02_GLASS_FRONTEND.md` §3.1: "Select two nodes, get k-shortest paths;
+/** Phase 7 Stage 5 — `spec/02_GLASS_FRONTEND.md` §3.1: "Select two nodes, get k-shortest paths;
  * paths render with the on-path node state... everything else dims to 32%." The same transient
  * `Popover` shape `ClusterExplainOverlay`/`EdgeInspectionOverlay` already use, anchored to the
  * triggering radial-menu position — not an Inspector tab, the same reasoning those two already

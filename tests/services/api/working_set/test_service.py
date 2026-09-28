@@ -1,4 +1,4 @@
-"""`WorkingSetService` — `docs/03_CONDUIT_MIDDLEWARE.md` §4,
+"""`WorkingSetService` — `spec/03_CONDUIT_MIDDLEWARE.md` §4,
 this phase's exit criterion. Exercises the cap check,
 `filtered_count`'s derivation and the reconnect/resnapshot decision against
 `FakeWorkingSetStore`/`FakeGraphPort` — the service's own logic, not

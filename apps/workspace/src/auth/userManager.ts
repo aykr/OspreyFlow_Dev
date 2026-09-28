@@ -1,5 +1,5 @@
 // `06_DECISIONS.md` ADR-050 — the sign-in state machine. Built on `oidc-client-ts` (Apache-2.0,
-// `make licence-check` — see the allowlist in `docs/00_ARCHITECTURE.md` §7) rather than hand-rolled,
+// `make licence-check` — see the allowlist in `spec/00_ARCHITECTURE.md` §7) rather than hand-rolled,
 // per the build brief's own instruction to prefer a maintained library over hand-rolling PKCE.
 import { User, UserManager, WebStorageStateStore } from "oidc-client-ts";
 

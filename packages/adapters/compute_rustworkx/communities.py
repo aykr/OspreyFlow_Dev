@@ -1,4 +1,4 @@
-"""Louvain (`networkx`) plus a connected-components split — `docs/06_DECISIONS.md` ADR-029: Leiden
+"""Louvain (`networkx`) plus a connected-components split — `spec/06_DECISIONS.md` ADR-029: Leiden
 is unavailable on either `ComputePort` compute tier, and Louvain alone can merge two disconnected
 components into one labelled community. The split pass closes that specific, named hazard without
 restoring Leiden's own partition quality — a disclosed trade, not a free fix (ADR-029's own
