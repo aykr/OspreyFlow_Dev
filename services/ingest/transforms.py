@@ -26,6 +26,7 @@ _CONNECTOR_DEFAULT_PARAMS: dict[str, tuple[str, ...]] = {
     "coordinate_lon": ("source_crs",),
     "coordinate_lat": ("source_crs",),
     "geometry_ref": ("source_crs",),
+    "polygon_ref": ("source_crs",),  # round 13cf, owner ruling R9
     # `grid_ref` takes no `source_crs` — a British National Grid reference
     # is EPSG:27700 by construction, never ambiguous, never declared.
 }

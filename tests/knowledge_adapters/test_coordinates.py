@@ -9,7 +9,12 @@ from __future__ import annotations
 
 import pytest
 
-from knowledge_adapters.coordinates import coordinate_lat, coordinate_lon
+from knowledge_adapters.coordinates import (
+    coordinate_lat,
+    coordinate_lon,
+    geometry_ref,
+    polygon_ref,
+)
 from knowledge_adapters.errors import NormalisationError
 
 # OS National Grid reference near central London.
@@ -77,3 +82,42 @@ def test_reprojecting_with_the_wrong_countrys_crs_is_rejected_when_out_of_bounds
     caught as a bounds violation rather than silently stored."""
     with pytest.raises(NormalisationError, match="outside WGS84 bounds"):
         coordinate_lon(("532106", "181020"), source_crs="EPSG:4326")
+
+
+# --- polygon_ref (owner ruling R9 (b), round 13cf) ---------------------------------------------
+
+#: One A1 site cell's four corners, TL/TR/BR/BL, in the calibrated quad the over-the-wire A1 cases
+#: place.
+_CELL = ("-1.836", "52.409", "-1.8355", "52.409", "-1.8355", "52.40875", "-1.836", "52.40875")
+
+
+def test_polygon_ref_is_stable_for_the_same_corners() -> None:
+    """Golden value: a change to the hash input (prefix, separator, or corner formatting) would
+    silently re-key every stored cell, and this is the case that would notice."""
+    assert polygon_ref(_CELL, source_crs="EPSG:4326") == "geo:e0bb0c71a866d86d"
+    assert polygon_ref(_CELL, source_crs="EPSG:4326") == polygon_ref(_CELL, source_crs="EPSG:4326")
+
+
+def test_polygon_ref_depends_on_corner_order_and_crs() -> None:
+    base = polygon_ref(_CELL, source_crs="EPSG:4326")
+    rotated = _CELL[2:] + _CELL[:2]
+    assert polygon_ref(rotated, source_crs="EPSG:4326") != base
+    # The same numbers read as British National Grid metres are a different polygon.
+    assert polygon_ref(_CELL, source_crs="EPSG:27700") != base
+
+
+def test_a_polygon_ref_never_equals_the_point_ref_of_its_first_corner() -> None:
+    """`polygon|` in the hash input keeps the two ref spaces apart."""
+    assert polygon_ref(_CELL, source_crs="EPSG:4326") != geometry_ref(
+        _CELL[:2], source_crs="EPSG:4326"
+    )
+
+
+def test_polygon_ref_refuses_the_wrong_number_of_fields() -> None:
+    with pytest.raises(NormalisationError, match="four corners"):
+        polygon_ref(_CELL[:6], source_crs="EPSG:4326")
+
+
+def test_polygon_ref_refuses_an_undeclared_crs() -> None:
+    with pytest.raises(NormalisationError, match="ambiguous coordinate reference system"):
+        polygon_ref(_CELL, source_crs=None)

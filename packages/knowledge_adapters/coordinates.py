@@ -42,6 +42,7 @@ does).
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Sequence
 from functools import lru_cache
 
 from pyproj import Transformer
@@ -126,3 +127,32 @@ def geometry_ref(raw: tuple[str, ...], *, source_crs: str | None = None) -> str:
     _lon, _lat, x, y = _reproject((raw[0], raw[1]), source_crs=source_crs)
     assert source_crs is not None  # _reproject already rejected the None case
     return geometry_reference(source_crs, x, y)
+
+
+def polygon_reference(source_crs: str, ring: Sequence[tuple[float, float]]) -> str:
+    """A deterministic id for one source polygon — owner ruling R9 (b), round 13cf: a site-grid
+    cell's `geometry_ref` names its polygon, not its centroid. The same `(source_crs, ring)` always
+    yields the same ref, so a redraw of the same grid never mints a second record for a cell.
+
+    `polygon|` prefixes the hashed text so a polygon can never share a ref with a point, whose
+    hash input is `crs|x|y` (`geometry_reference`). The ring is hashed as given, unclosed: corner
+    order is part of the polygon's identity, and the caller's winding (TL, TR, BR, BL) is fixed."""
+    coordinates = "|".join(f"{x}|{y}" for x, y in ring)
+    digest = hashlib.sha256(f"polygon|{source_crs}|{coordinates}".encode()).hexdigest()
+    return f"geo:{digest[:16]}"
+
+
+def polygon_ref(raw: tuple[str, ...], *, source_crs: str | None = None) -> str:
+    """`polygon_ref` over eight fields: four corners as `x, y` pairs in the source CRS. Each
+    corner goes through the same reprojection check `geometry_ref` applies to a point, so a
+    polygon with a corner outside WGS84 bounds is refused by name rather than hashed."""
+    if len(raw) != 8:
+        raise NormalisationError(
+            "coordinates", ",".join(raw), "a polygon ref needs four corners as eight fields"
+        )
+    ring = []
+    for i in range(0, 8, 2):
+        _lon, _lat, x, y = _reproject((raw[i], raw[i + 1]), source_crs=source_crs)
+        ring.append((x, y))
+    assert source_crs is not None  # _reproject already rejected the None case
+    return polygon_reference(source_crs, ring)

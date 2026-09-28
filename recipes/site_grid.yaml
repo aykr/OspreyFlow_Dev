@@ -15,7 +15,7 @@
 # shipped, non-test copy of either recipe should live is still an open
 # item, recorded once already in osm_gazetteer_recipe.yaml.
 id: site-grid
-version: 1
+version: 2
 label: "Site grid cells"
 connector:
   profile: geo-site-grid
@@ -36,6 +36,13 @@ row_template:
       properties:
         site_ref: {field: site_ref}
         name: {field: name}
-        geometry_ref: {fields: [lon, lat], transform: geometry_ref}
+        # Recipe v2, owner ruling R9 (b), round 13cf: the ref names the cell's polygon (its four
+        # corners), not its centroid. `lon`/`lat` stay in the row as the derived centroid and are
+        # declared unmapped below.
+        geometry_ref:
+          fields: [c0_lon, c0_lat, c1_lon, c1_lat, c2_lon, c2_lat, c3_lon, c3_lat]
+          transform: polygon_ref
 
-unmapped_fields: []
+unmapped_fields:
+  - {field: lon, note: "the cell's centroid, derived; the polygon is the geometry (R9)"}
+  - {field: lat, note: "the cell's centroid, derived; the polygon is the geometry (R9)"}

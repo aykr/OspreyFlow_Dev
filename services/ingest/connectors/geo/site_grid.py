@@ -35,4 +35,12 @@ def site_grid_rows(
             "name": f"Grid cell ({cell.row}, {cell.col})",
             "lon": repr(cell.centroid.lon),
             "lat": repr(cell.centroid.lat),
+            # **The cell's extent — owner ruling R9 (a), round 13cf.** TL, TR, BR, BL, the
+            # winding `GridCell.corners` already fixes. The recipe's `polygon_ref` hashes these
+            # into the cell's `geometry_ref`; the centroid above stays a derived value only.
+            **{
+                f"c{i}_{axis}": repr(getattr(corner, axis))
+                for i, corner in enumerate(cell.corners)
+                for axis in ("lon", "lat")
+            },
         }

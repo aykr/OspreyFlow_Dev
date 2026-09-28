@@ -15,7 +15,6 @@ from __future__ import annotations
 #: Imported from one place so this suite and the route cannot come to test different recipes.
 from pathlib import Path
 
-import pytest
 from services.api.app import _SITE_GRID_RECIPE_PATH as SITE_GRID_RECIPE
 from services.ingest.connectors.geo.site_grid import site_grid_rows
 from services.ingest.engine import run_recipe
@@ -24,10 +23,11 @@ from services.ingest.recipe_loader import load_recipe
 from adapters.analytics_duckdb.testing import duckdb_adapter
 from adapters.graph_arcadedb.testing import arcadedb_adapter
 from geo.bilinear import ControlPoint
-from knowledge_adapters.coordinates import geometry_reference, reproject_point
+from geo.wkb import polygon_wkb
+from knowledge_adapters.coordinates import geometry_reference, polygon_reference
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
-from schemas.analytics import GeometryRecord
+from schemas.analytics import GeometryKind, GeometryRecord
 from schemas.domain import Handling, Principal
 
 FIXTURES = Path(__file__).resolve().parents[1] / "scenarios" / "fixtures"
@@ -79,18 +79,20 @@ async def test_site_grid_cells_load_as_location_entities_with_a_resolvable_geome
         assert node is not None
         assert node.properties["name"] == "Grid cell (0, 0)"
 
-        expected_ref = geometry_reference("EPSG:4326", cell_lon, cell_lat)
+        # Recipe v2, owner ruling R9 (b), round 13cf: the ref names the cell's polygon.
+        corners = [
+            (float(top_left_row[f"c{i}_lon"]), float(top_left_row[f"c{i}_lat"])) for i in range(4)
+        ]
+        expected_ref = polygon_reference("EPSG:4326", corners)
         assert node.properties["geometry_ref"] == expected_ref
+        assert expected_ref != geometry_reference("EPSG:4326", cell_lon, cell_lat)
 
-        lon, lat = reproject_point(cell_lon, cell_lat, source_crs="EPSG:4326")
         record = GeometryRecord(
             geometry_ref=expected_ref,
             version=1,
-            lon=lon,
-            lat=lat,
+            kind=GeometryKind.POLYGON,
             source_crs="EPSG:4326",
-            source_x=cell_lon,
-            source_y=cell_lat,
+            geometry_wkb=polygon_wkb(corners),
             handling=Handling(
                 classification="OFFICIAL", handling_code="P", owning_unit="unit-1",
                 originator="unit-1",
@@ -100,8 +102,8 @@ async def test_site_grid_cells_load_as_location_entities_with_a_resolvable_geome
             await analytics.load_geometries([record])
             stored = await analytics.get_geometry(expected_ref, CLEARED)
             assert stored is not None
-            assert stored.lon == pytest.approx(stored.source_x, abs=1e-9)
-            assert stored.lat == pytest.approx(stored.source_y, abs=1e-9)
+            assert stored.kind is GeometryKind.POLYGON
+            assert stored.geometry_wkb == record.geometry_wkb
 
 
 async def test_redrawing_the_same_grid_is_idempotent_not_duplicating_cells() -> None:

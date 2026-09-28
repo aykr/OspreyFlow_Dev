@@ -22,7 +22,7 @@ from collections.abc import Callable
 from typing import Any
 
 from .address import address
-from .coordinates import coordinate_lat, coordinate_lon, geometry_ref
+from .coordinates import coordinate_lat, coordinate_lon, geometry_ref, polygon_ref
 from .datetime_adapter import datetime_adapter
 from .email import email
 from .errors import NormalisationError
@@ -47,6 +47,7 @@ REGISTRY: dict[str, Callable[..., Any]] = {
     "coordinate_lon": coordinate_lon,
     "coordinate_lat": coordinate_lat,
     "geometry_ref": geometry_ref,
+    "polygon_ref": polygon_ref,
     "grid_ref": grid_ref,
     "postcode": postcode,
 }
@@ -60,6 +61,7 @@ ARITY: dict[str, int] = {
     "coordinate_lon": 2,
     "coordinate_lat": 2,
     "geometry_ref": 2,
+    "polygon_ref": 8,
     "grid_ref": 3,
 }
 
@@ -74,6 +76,7 @@ __all__ = [
     "datetime_adapter",
     "email",
     "geometry_ref",
+    "polygon_ref",
     "grid_ref",
     "iban",
     "imei",

@@ -73,13 +73,14 @@ from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from adapters.model_litellm import CONFORMANCE_EMBED_MODEL
 from adapters.model_litellm.adapter import ModelLiteLLMAdapter
 from adapters.model_litellm.client import LiteLLMClient, LiteLLMConfig
-from conduit_common.identity import new_id
+from conduit_common.identity import new_edge_id, new_id, now_utc
 from geo.bilinear import ControlPoint
 from geo.image_dimensions import (
     UnsupportedImageFormatError,
     image_content_type,
     image_dimensions,
 )
+from geo.wkb import polygon_wkb
 from knowledge_adapters import ARITY, REGISTRY
 from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme, load_uk_le_scheme
@@ -91,8 +92,10 @@ from ports.graph import GraphPort
 from ports.model import ModelPort
 from schemas.analytics import (
     CrossFilterRequest,
+    EventFilter,
     GeoBin,
     GeoBinRequest,
+    GeocodeRequest,
     GeometryKind,
     GeometryRecord,
     Histogram,
@@ -103,19 +106,25 @@ from schemas.analytics import (
 from schemas.domain import (
     Assumption,
     Edge,
+    EdgeWrite,
     ExpandRequest,
     Handling,
     Hotlist,
     IntelligenceGap,
+    Interval,
     Judgement,
     Monitor,
     Node,
     NodeId,
+    NodeWrite,
     OntologySchema,
     PathRequest,
     PatternQuery,
     Principal,
+    Provenance,
+    ProvenanceState,
     SavedPattern,
+    SourceRef,
 )
 
 # `Path` is already `pathlib.Path` in this module — `GraphPath` is the same alias
@@ -2960,8 +2969,10 @@ async def set_site_grid(
     down with it. Existing refs are read back and skipped, which is what keeps
     `test_a1_redrawing_the_grid_does_not_duplicate_its_cells` true of geometries too.
 
-    **What this still does not do is A1's own "incidents geocode into cells"** — see the comment
-    at the load below, and `08_ACCEPTANCE_SCENARIOS.md`'s A1 note."""
+    **Round 13cf, owner rulings R9 and R10:** a cell is now a `POLYGON` whose ref its `Location`
+    carries, and the route geocodes the investigation's incidents into the cells it draws. The
+    comments below have the detail, and `08_ACCEPTANCE_SCENARIOS.md`'s A1 note has the contract.
+    The paragraphs above describe the point-shaped cells of 13cde and are kept as history."""
     if site.control_points is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -3007,50 +3018,138 @@ async def set_site_grid(
         )
     await graph.commit_transaction(tx)
 
-    # **Each cell's `geometry_ref` is made to resolve.** Every value below comes from the same
-    # place the recipe got it — the connector's own rows, the shared adapter `REGISTRY`, the
-    # recipe's own `defaults` — so there is exactly one statement of each.
-    #
-    # **A `POINT` at the cell's centroid, not a `POLYGON` of its corners, and that is why A1's
-    # "incidents geocode into cells" is still not claimed.** `GeometryRecord` makes the two kinds
-    # mutually exclusive on purpose ("rather than a `POLYGON` row carrying a meaningless
-    # centroid"), and the `geometry_ref` adapter hashes a *point* — `(source_crs, x, y)` — so the
-    # ref the `Location` already carries is a point's ref and could not identify a polygon row
-    # without changing what the recipe writes. Geocoding an incident into a cell needs the cell's
-    # extent and a containment predicate; no port method and no route resolves a point to the
-    # area containing it, and `ST_Contains` appears nowhere in this repository. That is a real
-    # piece of work with a real design question in front of it (which kind a site cell is, and
-    # what happens to the `Location`'s ref when it changes), recorded in
-    # `08_ACCEPTANCE_SCENARIOS.md` beside A1 rather than guessed at here.
+    # **Each cell is a polygon, and its `geometry_ref` names it — owner ruling R9 (a)/(b), round
+    # 13cf.** Every value comes from where the recipe got it: the connector's own corner fields,
+    # the shared adapter `REGISTRY`, and the recipe's `defaults`. So the ref on the `Location` and
+    # the ref on the partition row are computed once each, by the same function.
     source_crs = recipe.connector.source_crs or "EPSG:4326"
-    to_ref = REGISTRY["geometry_ref"]
+    to_polygon_ref = REGISTRY["polygon_ref"]
     to_lon, to_lat = REGISTRY["coordinate_lon"], REGISTRY["coordinate_lat"]
     cell_handling = Handling(**recipe.defaults.handling)
-    cell_geometries = [
-        GeometryRecord(
-            geometry_ref=to_ref((row["lon"], row["lat"]), source_crs=source_crs),
+    corner_fields = [f"c{i}_{axis}" for i in range(4) for axis in ("lon", "lat")]
+    polygon_by_site_ref: dict[str, GeometryRecord] = {}
+    for row in rows:
+        raw = tuple(row[f] for f in corner_fields)
+        ring = [
+            (
+                to_lon((raw[i], raw[i + 1]), source_crs=source_crs),
+                to_lat((raw[i], raw[i + 1]), source_crs=source_crs),
+            )
+            for i in range(0, 8, 2)
+        ]
+        polygon_by_site_ref[row["site_ref"]] = GeometryRecord(
+            geometry_ref=to_polygon_ref(raw, source_crs=source_crs),
             version=_SITE_GRID_GEOMETRY_VERSION,
-            kind=GeometryKind.POINT,
-            lon=to_lon((row["lon"], row["lat"]), source_crs=source_crs),
-            lat=to_lat((row["lon"], row["lat"]), source_crs=source_crs),
+            kind=GeometryKind.POLYGON,
             source_crs=source_crs,
-            source_x=float(row["lon"]),
-            source_y=float(row["lat"]),
+            geometry_wkb=polygon_wkb(ring),
             handling=cell_handling,
         )
-        for row in rows
-    ]
+
+    # **A cell drawn before R9 keeps its identity; its ref moves (R9 (b)).** `on_match:
+    # reference` reuses an existing `Location` without touching its properties, so a grid drawn
+    # with the point-shaped ref would otherwise keep it forever. The same node id is re-written
+    # with the polygon's ref. That is an ordinary upsert: a new revision of the same node, with
+    # provenance merged, never a second node. The old point row stays in the partition at its
+    # version, unreferenced: the partition is insert-only by design, and nothing reads a ref no
+    # `Location` carries.
+    cell_node_by_ref: dict[str, NodeId] = {}
+    moved: list[NodeWrite] = []
+    now = now_utc()
+    for site_ref, polygon in polygon_by_site_ref.items():
+        node = await graph.find_node("Location", "site_ref", site_ref, principal)
+        if node is None:
+            continue  # rejected rows already failed the route above; nothing to point at
+        cell_node_by_ref[polygon.geometry_ref] = node.id
+        if node.properties.get("geometry_ref") != polygon.geometry_ref:
+            moved.append(
+                NodeWrite(
+                    id=node.id,
+                    type=node.type,
+                    properties={**node.properties, "geometry_ref": polygon.geometry_ref},
+                    provenance=Provenance(
+                        state=ProvenanceState.ASSERTED,
+                        sources=[
+                            SourceRef(
+                                document_id=f"site:{updated.id}",
+                                locator=f"grid-redraw:{site_ref}",
+                                excerpt_hash="",
+                            )
+                        ],
+                        first_seen=now,
+                    ),
+                    handling=node.handling,
+                    created_by=principal.id,
+                    created_at=now,
+                    load_id=f"site-grid-{updated.id}",
+                    recipe_id=recipe.id,
+                    recipe_version=recipe.version,
+                )
+            )
+
+    polygons = list(polygon_by_site_ref.values())
     already_loaded = {
         record.geometry_ref
         for record in await analytics.get_geometries(
-            [record.geometry_ref for record in cell_geometries],
+            [record.geometry_ref for record in polygons],
             principal,
             version=_SITE_GRID_GEOMETRY_VERSION,
         )
     }
     await analytics.load_geometries(
-        [record for record in cell_geometries if record.geometry_ref not in already_loaded]
+        [record for record in polygons if record.geometry_ref not in already_loaded]
     )
+
+    # **Incidents geocode into cells, at draw time — R9 (c), R10.** One containment call over
+    # the investigation's events with a point. Each covered event records its cell (the event
+    # half), and each `PRESENT_AT` incident whose cell changed gets an edge from its subject to the
+    # cell `Location` (the graph half). "Changed" is what keeps a redraw from adding a second
+    # occurrence to every edge, since `upsert_edges` sums occurrences on a same-pair write.
+    # Incidents arriving after the draw are geocoded by the next redraw, not on ingest (R10).
+    geocoded = await analytics.geocode_events(
+        GeocodeRequest(
+            filter=EventFilter(investigation_scope=updated.investigation_id),
+            cells={ref: node_id for ref, node_id in cell_node_by_ref.items()},
+        ),
+        principal,
+    )
+    edges = [
+        EdgeWrite(
+            id=new_edge_id(),
+            type="PRESENT_AT",
+            source=event.source_id,
+            target=event.value,
+            interval=Interval(valid_from=event.occurred_at, valid_to=event.occurred_at),
+            provenance=Provenance(
+                state=ProvenanceState.ASSERTED,
+                sources=[
+                    SourceRef(
+                        document_id=f"site:{updated.id}",
+                        locator=f"geocode:{event.event_id}",
+                        excerpt_hash="",
+                    )
+                ],
+                first_seen=now,
+            ),
+            handling=event.handling,
+            created_by=principal.id,
+            created_at=now,
+            load_id=f"site-grid-{updated.id}",
+        )
+        for event in geocoded
+        if event.edge_type == "PRESENT_AT" and event.previous_value != event.value
+    ]
+    if moved or edges:
+        tx = await graph.begin_transaction()
+        try:
+            if moved:
+                await graph.upsert_nodes(moved, tx)
+            if edges:
+                await graph.upsert_edges(edges, tx)
+        except Exception:
+            await graph.rollback_transaction(tx)
+            raise
+        await graph.commit_transaction(tx)
 
     await audit.record(
         principal=principal,

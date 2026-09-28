@@ -37,9 +37,9 @@ finding after the table.
 
 | Row | Over the wire here | Note |
 | --- | --- | --- |
-| A1 | **yes** (cells half) | Round 13cdc: uploaded, control-pointed, gridded. Round 13cde: each
-  cell's `geometry_ref` resolves (the grid route now calls `load_geometries`). "Incidents geocode
-  into cells" is **not** claimed — a cell is a `POINT` with no extent; 08's A1 note has why. |
+| A1 | **yes** | Round 13cdc: uploaded, control-pointed, gridded. Round 13cf (owner rulings R9,
+  R10): each cell is a polygon its ref names, and the seeded incidents geocode into the cells
+  that contain them, on the event and as an edge. |
 | A2, A3 | **yes** | `cross-filter` on `target_id` — 08's own "Implementation note — A2". |
 | A4, A5 | **yes** | `weekday_hour` bucketing restricted to the hotspot cells. |
 | A6 | **yes** | Round 13cdd: the reports are seeded `Document` entities and each one
@@ -164,6 +164,7 @@ import httpx
 import pytest
 import yaml
 from tests.scenarios.fixtures.fixture_corp import _synthetic_nino
+from tests.scenarios.fixtures.hmp import generate_hmp_events
 from tests.scenarios.fixtures.hmp_population import (
     PRINCIPAL_SUBJECT_PRISON_NUMBER,
     RELAY_GROUP_PRISON_NUMBERS,
@@ -2136,17 +2137,133 @@ def test_a1_a_cells_geometry_reference_resolves_to_its_centroid(
     )
     geometry = rows[0]
     assert geometry["geometry_ref"] == ref, geometry
-    assert geometry["kind"] == "point", (
-        f"a grid cell resolved as {geometry['kind']!r}; see this case's docstring on why a cell "
-        "is a point and what that costs A1's geocode clause"
+    # **Round 13cf, owner ruling R9 (a)/(b): a cell is a polygon, and its centroid is derived.**
+    assert geometry["kind"] == "polygon", (
+        f"a grid cell resolved as {geometry['kind']!r}; R9 makes a site cell a POLYGON"
     )
-    # Inside the control quad this test placed. Loose bounds on purpose: the exact centroid is
-    # `packages/geo/bilinear.py`'s business and `tests/geo/test_bilinear.py` already holds it to
-    # the arithmetic. What would fail here is a route that loaded a *different* point than the
-    # cell the ref came from — a units mix-up, a lon/lat swap, or the pixel coordinates leaking
-    # through unprojected.
-    assert -1.836 <= geometry["lon"] <= -1.834, geometry
-    assert 52.408 <= geometry["lat"] <= 52.409, geometry
+    assert geometry["lon"] is None and geometry["lat"] is None, geometry
+    corners = _polygon_corners(geometry["geometry_wkb"])
+    assert len(corners) == 4, corners
+    # Inside the control quad this test placed, corners and derived centroid alike. What would
+    # fail here is a route that wrote a different shape than the cell the ref came from: a lon/lat
+    # swap, or pixel coordinates leaking through unprojected.
+    for lon, lat in corners:
+        assert -1.836 <= lon <= -1.834 and 52.408 <= lat <= 52.409, corners
+    centroid_lon = sum(lon for lon, _ in corners) / 4
+    centroid_lat = sum(lat for _, lat in corners) / 4
+    assert -1.836 < centroid_lon < -1.834 and 52.408 < centroid_lat < 52.409
+
+
+def _polygon_corners(wkb_base64: str) -> list[tuple[float, float]]:
+    """A polygon's outer-ring corners from the base64 WKB `GeometryRecord` carries on the wire
+    (round 13cf), less the closing point. Read here with `struct` rather than through the product's
+    own reader, so the check does not share the code it is checking."""
+    # Pydantic's `base64` JSON mode is URL-safe and unpadded; `b64decode` would silently drop
+    # the `-`/`_` characters instead of failing.
+    raw = base64.urlsafe_b64decode(wkb_base64 + "=" * (-len(wkb_base64) % 4))
+    byte_order, kind, rings, points = struct.unpack_from("<BIII", raw, 0)
+    assert (byte_order, kind, rings) == (1, 3, 1), (byte_order, kind, rings)
+    ring = [struct.unpack_from("<dd", raw, 13 + 16 * i) for i in range(points)]
+    assert ring[0] == ring[-1], "the ring is not closed"
+    return ring[:-1]
+
+
+def test_a1_incidents_geocode_into_the_cells_that_contain_them(
+    analyst: httpx.Client, seeded_scope: str
+) -> None:
+    """**A1's second clause, "incidents geocode into cells" — owner rulings R9 and R10, 13cf.**
+
+    The analyst places a site over the HMP yards and draws a 10×10 grid. Each seeded incident with
+    a point inside a cell is then *recorded* in that cell, which R10 makes two things: the event
+    carries `site_cell`, observable here through the analytics routes' own `value_filters`; and
+    the incident's subject gains a `PRESENT_AT` edge to the cell `Location`. An event outside the
+    site (B18's sightings, in London) is in no cell.
+
+    **The expected numbers come from the fixture's own generator**, `generate_hmp_events`, the
+    function the seed itself calls, so this case and the seed resolve the same population. Its
+    points are one per yard (`_YARD_COORDINATES` in `hmp.py`); nothing here restates them.
+    """
+    incidents = generate_hmp_events(investigation_scope=seeded_scope)
+    yard_point = {e.properties["yard"]: (e.lon, e.lat) for e in incidents}
+    # The yards run diagonally, south-west to north-east. The quad pads them by 0.0005° on every
+    # side, so every yard point is strictly inside the site and none falls on a cell edge.
+    west = min(lon for lon, _ in yard_point.values()) - 0.0005
+    east = max(lon for lon, _ in yard_point.values()) + 0.0005
+    south = min(lat for _, lat in yard_point.values()) - 0.0005
+    north = max(lat for _, lat in yard_point.values()) + 0.0005
+    created = analyst.post(
+        f"/v1/investigations/{seeded_scope}/sites",
+        data={"label": "A1 — the yards"},
+        files={"image": ("site.png", _synthetic_site_png(1000, 1000), "image/png")},
+    )
+    assert created.status_code == 201, created.text
+    site_id = str(created.json()["id"])
+    placed = analyst.patch(
+        f"/v1/investigations/{seeded_scope}/sites/{site_id}/control-points",
+        json={
+            "control_points": [
+                {"px": 0, "py": 0, "lon": west, "lat": north},
+                {"px": 1000, "py": 0, "lon": east, "lat": north},
+                {"px": 1000, "py": 1000, "lon": east, "lat": south},
+                {"px": 0, "py": 1000, "lon": west, "lat": south},
+            ]
+        },
+    )
+    assert placed.status_code == 200, placed.text
+    drawn = analyst.post(
+        f"/v1/investigations/{seeded_scope}/sites/{site_id}/grid", json={"rows": 10, "cols": 10}
+    )
+    assert drawn.status_code == 200, drawn.text
+
+    # Yard A's cell, by the grid's own convention: row 0 is the north edge, col 0 the west.
+    lon, lat = yard_point["A"]
+    col = int((lon - west) / (east - west) * 10)
+    row = int((north - lat) / (north - south) * 10)
+    found = analyst.post(
+        "/v1/search", json={"query": f"{site_id}-r{row}-c{col}", "limit": 5}
+    ).json()["nodes"]
+    assert len(found) == 1, f"no single cell r{row}-c{col} for yard A: {found}"
+    cell_id = found[0]["id"]
+
+    def in_cell(value: str, **extra: object) -> dict:
+        response = analyst.post(
+            "/v1/analytics/cross-filter",
+            json={
+                "filter": {
+                    "investigation_scope": seeded_scope,
+                    "value_filters": {"site_cell": [value]},
+                    **extra,
+                },
+                "dimensions": [{"name": "yard", "field": "yard", "bucketing": "categorical"}],
+            },
+        )
+        assert response.status_code == 200, response.text
+        return response.json()["yard"]
+
+    expected = sum(1 for e in incidents if e.properties["yard"] == "A")
+    got = in_cell(cell_id)
+    assert got["total"] == expected, (
+        f"yard A has {expected} incidents at a point inside cell r{row}-c{col}; the cell records "
+        f"{got['total']}. Zero means nothing geocoded them"
+    )
+    assert {b["label"] for b in got["buckets"]} == {"A"}, got["buckets"]
+
+    # Outside the site: B18's four sightings are in London, so none of them is in any cell.
+    all_cells = analyst.post(
+        "/v1/analytics/cross-filter",
+        json={
+            "filter": {"investigation_scope": seeded_scope, "node_ids": [SCENARIOS_HANDSET_ID]},
+            "dimensions": [{"name": "cell", "field": "site_cell", "bucketing": "categorical"}],
+        },
+    )
+    assert all_cells.status_code == 200, all_cells.text
+    labels = {b["label"] for b in all_cells.json()["cell"]["buckets"]}
+    assert labels == {None}, f"a sighting outside the site was geocoded into a cell: {labels}"
+
+    # The graph half: the cell now has incoming PRESENT_AT edges from yard A's subjects.
+    _, edges = _expand(analyst, seeded_scope, [cell_id])
+    present = [e for e in edges if e["type"] == "PRESENT_AT" and e["target"] == cell_id]
+    assert present, "the cell has no PRESENT_AT edge, so the graph does not know the geocode"
 
 
 def test_a7_reports_can_be_filtered_to_one_item_category(

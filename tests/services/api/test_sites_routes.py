@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import struct
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import duckdb
 import pytest
@@ -32,7 +33,7 @@ from services.api.sites import ControlPointRecord, Site, SiteNotFoundError
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
 from ontology.handling import load_uk_le_scheme
-from schemas.domain import Principal
+from schemas.domain import Handling, Principal
 from tests.services.api.test_app import _FakeAudit, _FakeInvestigations
 
 PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
@@ -107,6 +108,40 @@ class _FakeGraph:
     def __init__(self) -> None:
         self.committed = False
         self.rolled_back = False
+        #: Round 13cf: the grid route now reads back each cell `Location` the recipe made and
+        #: moves its ref (R9 (b)), and writes geocode edges (R10). `run_recipe` is still
+        #: monkeypatched, so this stands in for "the recipe created one node per site_ref".
+        #: The real graph's behaviour is proven over the wire, not here.
+        self.nodes: dict[str, SimpleNamespace] = {}
+        self.node_writes: list[object] = []
+        self.edge_writes: list[object] = []
+
+    async def find_node(
+        self, entity_type: str, key: str, value: str, principal: object
+    ) -> SimpleNamespace:
+        return self.nodes.setdefault(
+            value,
+            SimpleNamespace(
+                id=f"node-{value}",
+                type=entity_type,
+                properties={"site_ref": value, "geometry_ref": "geo:point-shaped"},
+                handling=Handling(
+                    classification="OFFICIAL", handling_code="P", owning_unit="unit-1",
+                    originator="unit-1",
+                ),
+            ),
+        )
+
+    async def upsert_nodes(self, writes: list[object], tx: str) -> list[str]:
+        self.node_writes.extend(writes)
+        for write in writes:
+            node = self.nodes[write.properties["site_ref"]]  # type: ignore[attr-defined]
+            node.properties = dict(write.properties)  # type: ignore[attr-defined]
+        return [w.id for w in writes]  # type: ignore[attr-defined]
+
+    async def upsert_edges(self, writes: list[object], tx: str) -> list[str]:
+        self.edge_writes.extend(writes)
+        return [w.id for w in writes]  # type: ignore[attr-defined]
 
     async def begin_transaction(self) -> str:
         return "tx-1"
@@ -270,12 +305,77 @@ def test_grid_runs_the_recipe_and_returns_the_updated_site(client: TestClient) -
     assert client.graph.committed  # type: ignore[attr-defined]
     assert not client.graph.rolled_back  # type: ignore[attr-defined]
 
-    # Round 13cde: every cell's geometry is loaded, and a redraw loads nothing more.
-    count = "SELECT count(*) FROM geometries"
-    assert client.analytics_con.execute(count).fetchone() == (4,)  # type: ignore[attr-defined]
+    # Rounds 13cde/13cf: every cell's geometry is loaded as a polygon, none as a point, and a
+    # redraw loads nothing more (R9 (a)).
+    con = client.analytics_con  # type: ignore[attr-defined]
+    kinds = "SELECT kind, count(*) FROM geometries GROUP BY kind"
+    assert con.execute(kinds).fetchall() == [("polygon", 4)]
     again = client.post("/v1/investigations/inv-1/sites/site-1/grid", json={"rows": 2, "cols": 2})
     assert again.status_code == 200, again.text
-    assert client.analytics_con.execute(count).fetchone() == (4,)  # type: ignore[attr-defined]
+    assert con.execute(kinds).fetchall() == [("polygon", 4)]
+
+
+def test_grid_moves_each_cell_ref_to_its_polygon_and_geocodes_incidents(
+    client: TestClient,
+) -> None:
+    """**R9 (b), R9 (c) and R10, in process — round 13cf.** A cell drawn with the old
+    point-shaped ref keeps its node and gets the polygon's ref. An incident with a point inside a
+    cell records that cell and gains a `PRESENT_AT` edge to it, carrying the incident's own
+    handling. One outside the site is untouched. A redraw writes no second edge and moves nothing.
+    """
+    client.sites.site = _site(control_points=_CONTROL_POINTS)  # type: ignore[attr-defined]
+    con = client.analytics_con  # type: ignore[attr-defined]
+    incidents = [
+        # r0-c0 is the north-west quarter of the quad; r0-c1 north-east; r1-c1 south-east.
+        ("inc-nw", -1.8355, 52.4088, "OFFICIAL", "hmp-intel"),
+        ("inc-se", -1.8345, 52.4082, "OFFICIAL", "unit-1"),
+        ("inc-secret", -1.8345, 52.4088, "SECRET", "unit-1"),
+        ("inc-out", -1.8, 52.5, "OFFICIAL", "unit-1"),
+    ]
+    for event_id, lon, lat, classification, originator in incidents:
+        con.execute(
+            "INSERT INTO events (event_id, edge_id, edge_type, source_id, target_id, "
+            "occurred_at, lat, lon, properties, investigation_scope, handling_classification, "
+            "handling_code, owning_unit, originator) VALUES (?, ?, 'PRESENT_AT', ?, 'yard-a', "
+            "TIMESTAMP '2026-01-05 10:00:00', ?, ?, '{}', 'inv-1', ?, 'P', 'unit-1', ?)",
+            [event_id, f"edge-{event_id}", f"person-{event_id}", lat, lon, classification,
+             originator],
+        )
+
+    grid = {"rows": 2, "cols": 2}
+    response = client.post("/v1/investigations/inv-1/sites/site-1/grid", json=grid)
+    assert response.status_code == 200, response.text
+
+    graph = client.graph  # type: ignore[attr-defined]
+    moved = {w.properties["site_ref"]: w.properties["geometry_ref"] for w in graph.node_writes}
+    assert set(moved) == {f"site-1-r{r}-c{c}" for r in range(2) for c in range(2)}
+    stored_refs = {row[0] for row in con.execute("SELECT geometry_ref FROM geometries").fetchall()}
+    assert set(moved.values()) == stored_refs, "a Location's ref does not name its polygon"
+
+    cell_of = dict(
+        con.execute(
+            "SELECT event_id, json_extract_string(properties, '$.site_cell') FROM events"
+        ).fetchall()
+    )
+    # The SECRET incident is inside r0-c1 but invisible to this OFFICIAL analyst, so their draw
+    # neither geocodes it nor writes an edge for it: access applies to this path like any read.
+    assert cell_of == {
+        "inc-nw": "node-site-1-r0-c0",
+        "inc-se": "node-site-1-r1-c1",
+        "inc-secret": None,
+        "inc-out": None,
+    }
+    # Each edge carries its incident's handling, not the cell's (whose originator is unit-1).
+    edges = {(w.source, w.target, w.handling.originator) for w in graph.edge_writes}
+    assert edges == {
+        ("person-inc-nw", "node-site-1-r0-c0", "hmp-intel"),
+        ("person-inc-se", "node-site-1-r1-c1", "unit-1"),
+    }
+
+    again = client.post("/v1/investigations/inv-1/sites/site-1/grid", json={"rows": 2, "cols": 2})
+    assert again.status_code == 200, again.text
+    assert len(graph.edge_writes) == 2, "a redraw wrote a second occurrence to an edge"
+    assert len(graph.node_writes) == 4, "a redraw moved a ref that had already moved"
 
 
 def test_get_site_image_returns_the_bytes_with_the_right_content_type(client: TestClient) -> None:
