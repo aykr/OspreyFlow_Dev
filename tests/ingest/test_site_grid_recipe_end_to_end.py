@@ -10,9 +10,13 @@ A1.
 
 from __future__ import annotations
 
+#: Round 13cdc: the site-grid recipe moved out of `tests/` into `recipes/`, because
+#: `services/api/app.py` loads it at runtime and the Conduit's image does not ship `tests/`.
+#: Imported from one place so this suite and the route cannot come to test different recipes.
 from pathlib import Path
 
 import pytest
+from services.api.app import _SITE_GRID_RECIPE_PATH as SITE_GRID_RECIPE
 from services.ingest.connectors.geo.site_grid import site_grid_rows
 from services.ingest.engine import run_recipe
 from services.ingest.recipe_loader import load_recipe
@@ -49,7 +53,7 @@ async def test_site_grid_cells_load_as_location_entities_with_a_resolvable_geome
     top_left_row = next(r for r in rows if r["site_ref"] == "site-hmp-1-r0-c0")
     cell_lon, cell_lat = float(top_left_row["lon"]), float(top_left_row["lat"])
 
-    recipe = load_recipe(FIXTURES / "site_grid_recipe.yaml")
+    recipe = load_recipe(SITE_GRID_RECIPE)
     ontology = load_default_ontology()
     scheme = load_uk_le_scheme()
 
@@ -107,7 +111,7 @@ async def test_redrawing_the_same_grid_is_idempotent_not_duplicating_cells() -> 
     rows = list(
         site_grid_rows(site_id="site-hmp-2", control_points=_CONTROL_POINTS, rows=2, cols=2)
     )
-    recipe = load_recipe(FIXTURES / "site_grid_recipe.yaml")
+    recipe = load_recipe(SITE_GRID_RECIPE)
     ontology = load_default_ontology()
     scheme = load_uk_le_scheme()
 

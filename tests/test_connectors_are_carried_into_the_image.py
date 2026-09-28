@@ -90,3 +90,56 @@ def test_the_conduit_image_carries_the_binaries_the_conduit_shells_out_to() -> N
         f"500 with FileNotFoundError in every rendered deployment. apt-get install lines: "
         f"{installed!r}"
     )
+
+
+def test_the_conduit_image_carries_every_product_file_a_route_loads_at_runtime() -> None:
+    """**The third instance of one class — round 13cdc.**
+
+    `services/api/app.py`'s `POST …/sites/{id}/grid` — `08_ACCEPTANCE_SCENARIOS.md` A1's own
+    route — loaded its recipe from `tests/scenarios/fixtures/site_grid_recipe.yaml`. The Conduit's
+    image deliberately does not ship `tests/`, so that route returned a bare 500 in **every
+    rendered deployment**: `FileNotFoundError` on a path under a directory that is not there.
+    Measured over the wire.
+
+    A route the product serves cannot depend on a file only the test tree has. The recipe moved to
+    `recipes/`, beside `connectors/`, and both are COPYed into the image.
+
+    **The assertion is the general rule, not the instance**: every directory the Conduit loads
+    product data from at runtime must be in the image. `connectors/` was the first (round 13bf),
+    `recipes/` the second, and a third would be caught here rather than by a 500 in front of an
+    operator.
+    """
+    dockerfile = REPO_ROOT / "services" / "api" / "Dockerfile"
+    copied = _copied_paths(dockerfile)
+
+    for directory in ("connectors", "recipes"):
+        assert (REPO_ROOT / directory).is_dir(), f"{directory}/ is missing from the repository"
+        assert directory in copied, (
+            f"services/api/Dockerfile does not COPY {directory}/, but the Conduit loads product "
+            f"data from it at runtime — the route that needs it will 500. COPY lines: "
+            f"{sorted(copied)}"
+        )
+
+
+def test_no_conduit_module_loads_a_path_under_tests() -> None:
+    """**The gate for the class, rather than for the two known instances.**
+
+    A `Path(...)/"tests"/...` inside `services/` is the shape the A1 defect took: it resolves
+    perfectly in a checkout and does not exist in the image, so it passes every test that runs
+    from the source tree and fails only on a real deployment. Nothing was watching for it.
+    """
+    offenders: list[str] = []
+    for module in (REPO_ROOT / "services").rglob("*.py"):
+        source = module.read_text(encoding="utf-8")
+        for line_number, line in enumerate(source.splitlines(), 1):
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                continue
+            if '"tests"' in stripped or "'tests'" in stripped:
+                offenders.append(f"{module.relative_to(REPO_ROOT)}:{line_number}: {stripped}")
+
+    assert not offenders, (
+        "a Conduit module builds a path into tests/, which the image does not ship — the route "
+        "that loads it will 500 on a rendered deployment while every source-tree test passes:\n"
+        + "\n".join(offenders)
+    )

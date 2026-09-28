@@ -141,6 +141,7 @@ import json
 import os
 import re
 import secrets
+import struct
 import urllib.parse
 from collections.abc import Iterator
 from datetime import datetime, timedelta
@@ -1881,6 +1882,147 @@ def test_b14_an_alert_opens_into_an_investigation_linked_to_the_original(
     assert result["investigation"]["branched_from"] == seizure_alert["scope"], (
         "the new investigation is not linked back to the one the alert fired in: "
         f"{result['investigation'].get('branched_from')!r} != {seizure_alert['scope']!r}"
+    )
+
+
+def _synthetic_site_png(width: int, height: int) -> bytes:
+    """A PNG header carrying real dimensions and no image data — round 13cdc.
+
+    `CLAUDE.md` rule 9: fixtures are synthetic. A site plan is aerial imagery of a real place, so
+    there is no in-repo image to use and none should be added. The Conduit's own upload path only
+    reads the IHDR chunk (`packages/geo/image_dimensions.py`) to learn width and height, so a
+    valid header is the whole of what A1 needs — and it makes it impossible for this test to
+    depend on pixels it should not have.
+
+    The same construction `tests/services/api/test_sites_routes.py` already uses, deliberately:
+    two fixtures producing "a PNG" differently is how they come to disagree about what the
+    uploader accepts.
+    """
+    signature = b"\x89PNG\r\n\x1a\n"
+    ihdr = (
+        struct.pack(">I", 13)
+        + b"IHDR"
+        + struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    )
+    return signature + ihdr + b"\x00\x00\x00\x00"
+
+
+def test_a1_a_site_grid_is_placed_and_its_cells_become_location_entities(
+    analyst: httpx.Client, seeded_scope: str
+) -> None:
+    """**A1**: "Upload the site image, place four control points, draw a 10×10 grid … Grid cells
+    become `Location` entities; incidents geocode into cells."
+
+    Walked as the analyst: a real multipart upload, a real control-point PATCH, a real grid POST.
+    The upload is a genuine `UploadFile` route — **not** the "no door" class round 13b found for
+    ingest, checked rather than assumed, so the ingest-root workaround R6 provides is not needed
+    here.
+
+    **Two halves, and only the first is asserted as done.** Cells becoming `Location` entities is
+    proven below. "Incidents geocode into cells" is **not**, and the reason is a gap this
+    repository already documents rather than one this round discovered: the grid route's own
+    docstring records that it does not call `AnalyticsPort.load_geometries`, because the Conduit
+    has no `AnalyticsPort` wired in — every cell gets a real, deterministic `geometry_ref`, but
+    that reference does not resolve to a point yet. Asserting a geocode here would be asserting
+    something the product does not do.
+    """
+    created = analyst.post(
+        f"/v1/investigations/{seeded_scope}/sites",
+        data={"label": "A1 — site plan"},
+        files={"image": ("site.png", _synthetic_site_png(2000, 1500), "image/png")},
+    )
+    assert created.status_code == 201, created.text
+    site = created.json()
+    assert site["image_width_px"] == 2000 and site["image_height_px"] == 1500, (
+        f"the upload did not read the image's own dimensions: {site}"
+    )
+    assert site["control_points"] is None, "a new site should have no control points yet"
+
+    # Four control points, TL/TR/BR/BL — the winding order `packages/geo/bilinear.py` requires.
+    placed = analyst.patch(
+        f"/v1/investigations/{seeded_scope}/sites/{site['id']}/control-points",
+        json={
+            "control_points": [
+                {"px": 0, "py": 0, "lon": -1.836, "lat": 52.409},
+                {"px": 2000, "py": 0, "lon": -1.834, "lat": 52.409},
+                {"px": 2000, "py": 1500, "lon": -1.834, "lat": 52.408},
+                {"px": 0, "py": 1500, "lon": -1.836, "lat": 52.408},
+            ]
+        },
+    )
+    assert placed.status_code == 200, placed.text
+    assert len(placed.json()["control_points"]) == 4
+
+    gridded = analyst.post(
+        f"/v1/investigations/{seeded_scope}/sites/{site['id']}/grid",
+        json={"rows": 10, "cols": 10},
+    )
+    assert gridded.status_code == 200, gridded.text
+
+    # **The cells are `Location` entities in the graph**, reached the way an analyst reaches
+    # anything: by searching for one of them. The recipe gives each cell a
+    # `site_ref`, which `Location` declares as an identifier.
+    found = analyst.post(
+        "/v1/search", json={"query": f"{site['id']}-r0-c0", "limit": 5}
+    )
+    assert found.status_code == 200, found.text
+    hits = found.json()["nodes"]
+    assert hits, (
+        "no grid cell is findable after drawing the grid — the cells did not become Location "
+        f"entities, or they carry no declared identifier. Site {site['id']}"
+    )
+    assert hits[0]["type"] == "Location", hits[0]["type"]
+    assert hits[0]["properties"].get("geometry_ref"), (
+        f"the grid cell has no geometry_ref, so it could never be placed on a map: {hits[0]}"
+    )
+
+
+def test_a1_redrawing_the_grid_does_not_duplicate_its_cells(
+    analyst: httpx.Client, seeded_scope: str
+) -> None:
+    """`site_grid_recipe.yaml`'s `on_match: reference` is what makes redrawing idempotent, and the
+    grid route's own docstring says so. An analyst adjusting a control point and redrawing must
+    not silently double the `Location` population of their own investigation."""
+    created = analyst.post(
+        f"/v1/investigations/{seeded_scope}/sites",
+        data={"label": "A1 — redraw"},
+        files={"image": ("site.png", _synthetic_site_png(1000, 1000), "image/png")},
+    )
+    assert created.status_code == 201, created.text
+    site_id = created.json()["id"]
+    analyst.patch(
+        f"/v1/investigations/{seeded_scope}/sites/{site_id}/control-points",
+        json={
+            "control_points": [
+                {"px": 0, "py": 0, "lon": -1.836, "lat": 52.409},
+                {"px": 1000, "py": 0, "lon": -1.834, "lat": 52.409},
+                {"px": 1000, "py": 1000, "lon": -1.834, "lat": 52.408},
+                {"px": 0, "py": 1000, "lon": -1.836, "lat": 52.408},
+            ]
+        },
+    )
+
+    grid = {"rows": 10, "cols": 10}
+    assert (
+        analyst.post(
+            f"/v1/investigations/{seeded_scope}/sites/{site_id}/grid", json=grid
+        ).status_code
+        == 200
+    )
+    cell_query = {"query": f"{site_id}-r0-c0", "limit": 10}
+    first = analyst.post("/v1/search", json=cell_query).json()["nodes"]
+    assert len(first) == 1, f"one cell should carry this site_ref, found {len(first)}"
+
+    assert (
+        analyst.post(
+            f"/v1/investigations/{seeded_scope}/sites/{site_id}/grid", json=grid
+        ).status_code
+        == 200
+    )
+    second = analyst.post("/v1/search", json=cell_query).json()["nodes"]
+    assert [n["id"] for n in second] == [n["id"] for n in first], (
+        f"redrawing the grid created new cells rather than referencing the existing ones: "
+        f"{[n['id'] for n in first]} -> {[n['id'] for n in second]}"
     )
 
 

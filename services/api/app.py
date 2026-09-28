@@ -2798,13 +2798,19 @@ async def geometries_route(
 # `osm_gazetteer_recipe.yaml` — where a shipped, non-test copy of either
 # recipe should live is still an open item, recorded once already in
 # `osm_gazetteer_recipe.yaml`'s own comment.
-_SITE_GRID_RECIPE_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "tests"
-    / "scenarios"
-    / "fixtures"
-    / "site_grid_recipe.yaml"
-)
+#: **A product recipe, in the image — moved out of `tests/` in round 13cdc.**
+#:
+#: This pointed at `tests/scenarios/fixtures/site_grid_recipe.yaml`, and the Conduit's image
+#: deliberately does not carry `tests/` (`.dockerignore`; `harness/apply.py`'s seed step mounts
+#: the test tree precisely because the image has none of it). So `POST …/sites/{id}/grid` — A1's
+#: own route — returned a bare 500 in **every rendered deployment**, `FileNotFoundError` on a
+#: path under a directory that is not shipped. Measured over the wire, not reasoned about.
+#:
+#: A route the product serves cannot depend on a test fixture. The recipe is product data — it is
+#: what turns grid cells into `Location` entities — so it lives beside `connectors/`, which round
+#: 13bf put in the image for exactly this class of failure, and is COPYed the same way.
+#: `tests/test_connectors_are_carried_into_the_image.py` is what fails if it is dropped again.
+_SITE_GRID_RECIPE_PATH = Path(__file__).resolve().parents[2] / "recipes" / "site_grid.yaml"
 
 #: Publish's own git-repository root (§6: recipes commit to `recipes/<id>.
 #: yaml` at the repository root). An `app.state` value, not a bare module

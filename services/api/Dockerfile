@@ -33,6 +33,7 @@ COPY scripts ./scripts
 # `tests/test_image_imports_are_carried.py` already catches for modules;
 # `tests/test_connectors_are_carried_into_the_image.py` is the case for this one.
 COPY connectors ./connectors
+COPY recipes ./recipes
 
 FROM python:3.12-slim
 
@@ -63,6 +64,7 @@ COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/services ./services
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/connectors ./connectors
+COPY --from=builder /app/recipes ./recipes
 
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONPATH="/app:/app/packages" \
