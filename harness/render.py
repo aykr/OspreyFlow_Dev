@@ -384,7 +384,10 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
             ServiceImage("minio", "quay.io/minio/minio:RELEASE.2024-11-07T00-52-20Z"),
             ServiceImage("postgres", "postgres:16.4"),
             ServiceImage("keycloak", "quay.io/keycloak/keycloak:26.0"),
-            ServiceImage("ollama", "ollama/ollama:0.3.12"),
+            ServiceImage(
+                "ollama",
+                "ollama/ollama@sha256:5a5d014aa774f78ebe1340c0d4afc2e35afc12a2c3b34c84e71f78ea20af4ba3",
+            ),
             # **The model proxy the Conduit actually talks to — round 13cda.**
             # `04_VAULT_BACKEND.md` §4: "Conduit ──► LiteLLM proxy ──┬──► Ollama (local-lite:
             # LLM + VLM, quantised)". It was specified from the first architecture pass and
@@ -408,7 +411,10 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
                 "litellm",
                 "ghcr.io/berriai/litellm@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b",
             ),
-            ServiceImage("whisper", "ghcr.io/speaches-ai/speaches:latest-cpu"),
+            ServiceImage(
+                "whisper",
+                "ghcr.io/speaches-ai/speaches@sha256:21e3df06d842fb7802ab470dd77c25f0e8c0d22950e8d8c6ae886e851af53ef8",
+            ),
         ]
     )
     if config.components.search is SearchBackend.OPENSEARCH:

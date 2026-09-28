@@ -851,32 +851,63 @@ def _invokes_as_a_command(command: str, name: str) -> bool:
     )
 
 
+#: `04_VAULT_BACKEND.md` §4's model tier, as `{renderer's service name: dev.yaml's}`. The two
+#: names differ for transcription (`whisper` here, `speaches` there), which is why this is a map
+#: rather than a set intersection.
+_MODEL_TIER = {"ollama": "ollama", "litellm": "litellm", "whisper": "speaches"}
+
+
 def test_the_rendered_model_proxy_is_the_developer_stacks() -> None:
-    """**The proxy, like the weights, must not drift from `make dev-up` — round 13cdd.**
+    """**The whole model tier, not only its weights, must not drift from `make dev-up` — 13cdd.**
 
     Round 13cda went to some trouble to make the ollama pull script byte-identical to
     `deploy/compose/dev.yaml`'s, so a developer and a deployment could not run different model
-    weights — and then, one line away, pinned LiteLLM by a *tag* while dev pins a **digest**. They
-    were different proxies.
+    weights — and then, in the three lines beside it, pinned every model-tier *image* by a tag it
+    chose, while dev pins all three by digest. The weights matched and the software serving them
+    did not.
 
-    That is not cosmetic: the extraction route's own schema returns a conforming result through
-    the developer stack's proxy and an **empty completion body** through the tagged one, which is
-    what left A6/B6 blocked at the end of 13cda. A model proxy is part of the model tier, and the
-    whole reason the tier is pinned is that its behaviour is what the tests measure.
+    **Both halves of that were load-bearing, found one behind the other.** Against the same
+    ollama, the same config and the request shape the route actually emits:
+
+    - LiteLLM `main-v1.55.8` does not translate `response_format: json_schema` into Ollama's own
+      constrained decoding, so the model answers in *prose* and `json.loads` raises
+      `Expecting value: line 1 column 1` — the exact `ExtractionFailedError`
+      `08_ACCEPTANCE_SCENARIOS.md` recorded as A6/B6's blocker.
+    - Fixing that alone was not enough: Ollama `0.3.12` predates schema-object `format` and
+      answers the corrected request `400 json: cannot unmarshal object into Go struct field
+      ChatRequest.format of type string`.
+
+    So this is asserted over the **tier**, not over LiteLLM. A test naming one service would have
+    gone green on the first fix while the second defect was still there — which is precisely what
+    happened to the round that wrote it.
+
+    `_MODEL_TIER` is explicit rather than derived from matching service names on purpose: the
+    renderer calls the transcription service `whisper` and dev calls it `speaches`, so
+    "same-named services agree" would silently skip it. A new model-tier service that is not
+    added here fails the final assertion rather than being quietly unchecked.
     """
-    developer_image = yaml.safe_load(
+    developer = yaml.safe_load(
         (Path(__file__).resolve().parents[2] / "deploy" / "compose" / "dev.yaml").read_text()
-    )["services"]["litellm"]["image"]
+    )["services"]
+    rendered = {i.service: i.image for i in service_images(OspreyConfig())}
 
-    rendered = [i for i in service_images(OspreyConfig()) if i.service == "litellm"]
-    assert rendered, "no litellm image is rendered"
-    assert rendered[0].image == developer_image, (
-        "the rendered LiteLLM is not the one the developer stack pins, so a deployment and a "
-        f"developer run different proxies: {rendered[0].image!r} vs {developer_image!r}"
-    )
-    assert "@sha256:" in developer_image, (
-        "the developer stack pins LiteLLM by tag rather than digest, so both sides can now move "
-        "underneath this assertion without it noticing"
+    for rendered_service, developer_service in _MODEL_TIER.items():
+        expected = developer[developer_service]["image"]
+        assert rendered_service in rendered, f"no {rendered_service} image is rendered at all"
+        assert rendered[rendered_service] == expected, (
+            f"the rendered {rendered_service} is not the one the developer stack pins, so a "
+            f"deployment and a developer run different model software: "
+            f"{rendered[rendered_service]!r} vs {expected!r}"
+        )
+        assert "@sha256:" in expected, (
+            f"the developer stack pins {developer_service} by tag rather than digest, so both "
+            "sides can now move underneath this assertion without it noticing"
+        )
+
+    unchecked = {"ollama", "litellm", "whisper"} - set(_MODEL_TIER)
+    assert not unchecked, (
+        f"model-tier services the renderer emits but this map does not hold to the developer "
+        f"stack: {sorted(unchecked)}"
     )
 
 
