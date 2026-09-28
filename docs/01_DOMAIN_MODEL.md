@@ -1029,6 +1029,14 @@ class EventFilter(BaseModel):
     edge_types: list[str] = []
 ```
 
+**`properties.site_cell` — an incident geocoded into a site-grid cell (owner rulings R9, R10;
+round 13cf).** The grid route calls `AnalyticsPort.geocode_events` at draw time, and each event
+whose point a cell's polygon covers carries `site_cell` = the cell `Location`'s node id. For a
+`PRESENT_AT` incident, the graph also gains a `PRESENT_AT` edge from the incident's subject to
+that cell, carrying the incident's own handling. No ontology change: `PRESENT_AT` already runs
+`Person|Device|Vehicle → Location`, and event `properties` are undeclared by design.
+`08_ACCEPTANCE_SCENARIOS.md`'s A1 note has the full contract.
+
 **`GeometryRecord`** — the analytics store's geometry reference partition, §7.1's
 `geometry_ref`/`grid_ref` Knowledge Adapters produce the reference a `Location` node points at:
 
@@ -1036,7 +1044,7 @@ class EventFilter(BaseModel):
 its centroid that the grid route writes today. The cell keeps its `Location` identity, its
 `geometry_ref` moves to the polygon, and the centroid becomes a derived value. Point-in-cell
 containment is one `AnalyticsPort` method (DuckDB adapter, held to by the conformance suite).
-`08_ACCEPTANCE_SCENARIOS.md`'s A1 note has the full ruling and what it leaves open. Not yet built.
+`08_ACCEPTANCE_SCENARIOS.md`'s A1 note has the full ruling. Built in round 13cf.
 
 ```python
 class GeometryKind(StrEnum):

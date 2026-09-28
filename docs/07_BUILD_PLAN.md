@@ -31,8 +31,8 @@ a named reason, and neither of them is a test failure:
 > proven by a live spec. The GitHub Actions gap on `main` since 22 September is bug-class work on
 > the checker's brief.
 
-So "Remains before the milestone" is exactly these two build items: A1's cell polygons and
-containment (08's A1 note has what R9 leaves the round to state), and B6's live spec.
+So "Remains before the milestone" was exactly two build items. **A1's cell polygons and
+containment are built (round 13cf, over the wire)**; B6's live spec remains.
 
 A qualification, recorded rather than counted: the Glass-tier halves of B16, B18 and A12–A15 are
 proven by `make glass-live` on the developer stack. That tier cannot run against a rendered
@@ -135,6 +135,7 @@ it got to. `08_ACCEPTANCE_SCENARIOS.md`'s own coverage table and
 | A1 (cells), A7, A15 | 13cdc | The grid route, `EventFilter.value_filters`, the S2 node |
 | A6, B6 | 13cdd | Reports' own source locators; the document view's spans |
 | B16, B18 (the Glass), A1 (refs resolve) | 13cde | `live/scenario-b-timeline.spec.ts`; sighting events seeded beside their `PRESENT_AT` edges; the grid route's `load_geometries` |
+| A1 (incidents geocode into cells) | 13cf | Cells as polygons; `AnalyticsPort.geocode_events`; the grid route geocodes at draw time (owner rulings R9, R10) |
 
 **Two halves remain explicitly unclaimed after round 13cde** (it closed the third, B16/B18's
 rendering and playback, in a real browser). A1's "incidents geocode into cells": `load_geometries`

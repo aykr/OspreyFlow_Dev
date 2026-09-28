@@ -61,7 +61,7 @@ sightings into a rendered deployment.
 | B17 | **over the wire** | `test_b17_the_devices_location_events_are_reachable_and_windowed` |
 | B16 | **over the wire + the Glass** | `test_b16_…` for the data; `apps/workspace/live/scenario-b-timeline.spec.ts` for the second track, round 13cde |
 | B18 | **over the wire + the Glass** | `test_b18_the_sightings_form_an_ordered_track` (now also through `POST /v1/analytics/sightings`); `apps/workspace/live/scenario-b-timeline.spec.ts` for the trail advancing under playback, round 13cde — after a seed defect, see below |
-| A1 | **over the wire** (cells half) | `test_a1_a_site_grid_is_placed_and_its_cells_become_location_entities`, `test_a1_redrawing_the_grid_does_not_duplicate_its_cells`. plus `test_a1_a_cells_geometry_reference_resolves_to_its_centroid` (round 13cde: the ref now resolves). "Incidents geocode into cells" is **not** claimed — a cell is a `POINT` with no extent and nothing resolves a point to a containing area; see below |
+| A1 | **over the wire** | `test_a1_a_site_grid_is_placed_and_its_cells_become_location_entities`, `test_a1_redrawing_the_grid_does_not_duplicate_its_cells`, `test_a1_a_cells_geometry_reference_resolves_to_its_centroid` (the ref names the cell's polygon), `test_a1_incidents_geocode_into_the_cells_that_contain_them` (round 13cf, owner rulings R9 and R10) |
 | A6 | **over the wire** | Round 13cdd: `test_a6_the_reports_for_the_selection_open_with_a_source_locator_each` — not an extraction row |
 | B6 | **over the wire** (data half) | Round 13cdd: `test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place`; highlighting is the Glass's half |
 | B13, B14 | **over the wire** | `test_b13_an_ingest_fires_an_alert_naming_the_identifier_document_and_rule`, `test_b14_an_alert_opens_into_an_investigation_linked_to_the_original` |
@@ -76,7 +76,7 @@ the two walkthrough cases that carry the rows with no case of their own.
 
 | Row | Rendered (over the wire) | Glass (live spec) | Performable under R8? |
 | --- | --- | --- | --- |
-| A1 | `test_a1_…` ×3 (grid, redraw, ref resolves) | — | **No** — "incidents geocode into cells" has no feature; build work under owner ruling R9 |
+| A1 | `test_a1_…` ×4 (grid, redraw, polygon ref, geocode) | — | Yes (round 13cf) |
 | A2–A5 | `test_scenario_a_over_the_wire` | — | Yes |
 | A6 | `test_a6_…` | — | Yes |
 | A7 | `test_a7_…` ×2 | — | Yes |
@@ -202,6 +202,52 @@ the containment method's name and signature, and its access-control test (every 
 and what "geocode into a cell" writes for an incident. That could be the
 event's cell reference, an edge, or both. The row's result is that "incidents geocode into
 cells", and that output is what a test has to observe.
+
+> **Owner ruling R10, 28 September 2026** (the owner's answers to round 13cf's three questions,
+> given in the maker session). Geocoding records **both** an event property and a graph edge.
+> Seeded incidents are geocoded by their own points. Incidents that arrive after a grid is drawn
+> are geocoded **on the next redraw**, not on ingest.
+
+**A1 is over the wire — round 13cf.** What R9 left open, as built:
+
+- **The polygon's ref.** A new Knowledge Adapter, `polygon_ref`, hashes the cell's four corners
+  in the site's CRS (`polygon|crs|x0|y0|…`, TL/TR/BR/BL), with golden cases in
+  `tests/knowledge_adapters/test_coordinates.py`. `recipes/site_grid.yaml` v2 binds it. The
+  prefix keeps polygon refs and point refs from ever colliding.
+- **Redrawing an older grid moves the ref.** `on_match: reference` never updates a matched
+  node, so the grid route re-writes each cell `Location` whose ref differs, under the same node
+  id: an ordinary upsert, a new revision of the same node. A superseded point row stays in the
+  partition at its version, unreferenced. The partition is insert-only and versioned as a whole,
+  so neither deleting that row nor bumping the version (which would hide every other geometry)
+  is right.
+- **Containment is `AnalyticsPort.geocode_events`** (`GeocodeRequest` → `list[GeocodedEvent]`).
+  It is `ST_Covers` in the DuckDB adapter over `POLYGON` rows at the resolved version, and a
+  point on a shared edge goes to the smallest ref. Access applies to events and polygons alike:
+  an event the drawing analyst cannot see is neither geocoded nor returned, so it stays
+  ungeocoded until a cleared analyst redraws. Six conformance cases, each shown red against a
+  planted defect of the real shape.
+- **What it writes.** On the event, `properties.site_cell` = the cell `Location`'s id, which the
+  analytics routes' `value_filters` already filter on. In the graph, a `PRESENT_AT` edge from the
+  incident's subject to the cell, carrying **the incident's handling**, written only when an
+  incident's cell changes. `upsert_edges` sums occurrences on a same-pair write, so re-writing on
+  every redraw would inflate them. A value this site's cells no longer cover is cleared from the
+  event. An edge to a cell an incident has since left is not removed, since edges are never
+  deleted; that is the one stale state a redraw into a *different* grid can leave.
+- **The seed needed no change.** R10's "the fixture gains points" rested on a mistaken reading of
+  mine: the HMP incidents already carry one point per yard (`_YARD_COORDINATES` in
+  `tests/scenarios/fixtures/hmp.py`). The over-the-wire case places its site over those points.
+
+**Found building it, and fixed:**
+- `polygon_ref` was missing from `services/ingest/transforms.py`'s connector-default table. On a
+  real deployment every grid row was refused as "ambiguous coordinate reference system" and the
+  route 500ed; the in-process route test could not see it because it monkeypatches `run_recipe`.
+  `tests/ingest/test_transform_connector_defaults.py` now guards the class: any adapter taking a
+  connector default must receive it.
+- A `POLYGON` `GeometryRecord` could not serialise to JSON at all (`bytes` defaulted to UTF-8).
+  `geometry_wkb` is now base64 on the wire. Pydantic's mode is the URL-safe alphabet, which
+  `atob` refuses, so the Glass maps it back before decoding. The Glass draws a polygon cell at its
+  derived centroid (`apps/workspace/src/map/geometries.ts`); before this, a polygon record was
+  simply absent, and every cell would have vanished from the map.
 
 **B16 is proven in a real browser**, by `apps/workspace/live/scenario-b-timeline.spec.ts`. The row
 reads "Overlay the **second investigation's** timeline on the first", so the spec runs against two
