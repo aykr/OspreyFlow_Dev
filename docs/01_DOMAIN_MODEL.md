@@ -1032,6 +1032,12 @@ class EventFilter(BaseModel):
 **`GeometryRecord`** — the analytics store's geometry reference partition, §7.1's
 `geometry_ref`/`grid_ref` Knowledge Adapters produce the reference a `Location` node points at:
 
+**Owner ruling R9, 28 September 2026 — a site-grid cell is a `POLYGON` here**, not the `POINT` at
+its centroid that the grid route writes today. The cell keeps its `Location` identity, its
+`geometry_ref` moves to the polygon, and the centroid becomes a derived value. Point-in-cell
+containment is one `AnalyticsPort` method (DuckDB adapter, held to by the conformance suite).
+`08_ACCEPTANCE_SCENARIOS.md`'s A1 note has the full ruling and what it leaves open. Not yet built.
+
 ```python
 class GeometryKind(StrEnum):
     POINT = "point"
