@@ -59,8 +59,9 @@ sightings into a rendered deployment.
 | B8 | **over the wire** | `test_b8_the_handle_is_linked_to_the_shared_endpoint_asserted_at_one` |
 | B15 | **over the wire** | `test_b15_both_sims_link_to_one_device_in_one_traversal` |
 | B17 | **over the wire** | `test_b17_the_devices_location_events_are_reachable_and_windowed` |
-| B16, B18 | **data half only** | `test_b16_…`, `test_b18_…`; rendering and playback stay the Glass tier |
-| A1 | **over the wire** (cells half) | `test_a1_a_site_grid_is_placed_and_its_cells_become_location_entities`, `test_a1_redrawing_the_grid_does_not_duplicate_its_cells`. "Incidents geocode into cells" is **not** claimed — the grid route's own docstring records that `AnalyticsPort.load_geometries` is unwired |
+| B16 | **over the wire + the Glass** | `test_b16_…` for the data; `apps/workspace/live/scenario-b-timeline.spec.ts` for the second track, round 13cde |
+| B18 | **data half only** | `test_b18_…`; the trail does not render in the Glass — a defect, measured, see below |
+| A1 | **over the wire** (cells half) | `test_a1_a_site_grid_is_placed_and_its_cells_become_location_entities`, `test_a1_redrawing_the_grid_does_not_duplicate_its_cells`. plus `test_a1_a_cells_geometry_reference_resolves_to_its_centroid` (round 13cde: the ref now resolves). "Incidents geocode into cells" is **not** claimed — a cell is a `POINT` with no extent and nothing resolves a point to a containing area; see below |
 | A6 | **over the wire** | Round 13cdd: `test_a6_the_reports_for_the_selection_open_with_a_source_locator_each` — not an extraction row |
 | B6 | **over the wire** (data half) | Round 13cdd: `test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place`; highlighting is the Glass's half |
 | B13, B14 | **over the wire** | `test_b13_an_ingest_fires_an_alert_naming_the_identifier_document_and_rule`, `test_b14_an_alert_opens_into_an_investigation_linked_to_the_original` |
@@ -141,6 +142,36 @@ already carry. `test_b6_the_shared_endpoints_messages_open_with_the_entity_spans
 extracts from a synthetic transcript, accepts the candidate, and asserts the document view returns
 the submitted text and a span covering the identifier within it — with the span still `inferred`,
 since accepting a candidate does not promote it.
+
+**A1's geocode half, and B16/B18's rendering halves — round 13cde, 28 September 2026.**
+
+**A1: a cell's `geometry_ref` now resolves**; `services/api/app.py`'s grid route loads a
+`GeometryRecord` per cell, which it had declined to do on a stated reason ("the Conduit has no
+`AnalyticsPort` wired in yet") that had itself stopped being true. **"Incidents geocode into
+cells" is still not claimed, and this is what it would take:** a cell is stored as a `POINT` at
+its centroid, because `GeometryRecord` makes `POINT` and `POLYGON` mutually exclusive by design
+and the `geometry_ref` Knowledge Adapter hashes a point — so a cell carries no extent, and
+nothing in this repository resolves a point to the area containing it (`ST_Contains` appears
+nowhere). Closing it needs three decisions, not one fix: whether a site cell is a polygon; what
+happens to the `Location`'s existing ref when its kind changes; and which port method owns
+containment. Raised here rather than guessed at (`CLAUDE.md` rule 11).
+
+**B16 is proven in a real browser**, by `apps/workspace/live/scenario-b-timeline.spec.ts`. The row
+reads "Overlay the **second investigation's** timeline on the first", so the spec runs against two
+separately seeded investigations and asserts both that the overlay adds a track and that the track
+is *drawing something* — an empty second case still produces a histogram, so the track count alone
+goes to 2 for an overlay of nothing onto something. Shown red exactly that way before it was
+trusted.
+
+**B18's rendering half is not claimed, and what blocks it is a defect rather than a missing
+feature.** Measured against a stack seeded `hmp` + `scenarios`, with the device selected and the
+brush window set: `POST /v1/analytics/sightings` returns the handset's four sightings for that
+entity, scope and window; the Inspector shows the Device; the brush window persists; the play
+control renders — and the map draws no trail. Re-selecting the device with the window already set
+re-runs `App.tsx`'s sightings effect and still yields nothing, so it is not the ordering trap it
+first resembled. The fault lies between that effect and what it does with the result. The live
+spec carries the full repro as an executable `test.fixme`, which will report as unexpectedly
+passing the moment it is fixed.
 
 **Proposed — a span should anchor on the property that identifies the entity, not the longest
 one.** This row's own wording above says "the span text **equals** the entity's identifier", and

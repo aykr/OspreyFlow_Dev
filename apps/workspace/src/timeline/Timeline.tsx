@@ -141,7 +141,8 @@ export function Timeline({
   // investigation on a distinct track" names no cross-filter narrowing for
   // the overlay itself) so the two tracks' own bucket boundaries line up
   // exactly on the shared axis below.
-  const [crossCaseHistogram, setCrossCaseHistogram] = useState<Histogram | null>(null);
+  const [crossCaseHistogram, setCrossCaseHistogram] =
+    useState<Histogram | null>(null);
   useEffect(() => {
     if (!crossCaseInvestigationScope) {
       setCrossCaseHistogram(null);
@@ -223,8 +224,20 @@ export function Timeline({
           backgroundColor: "transparent",
           grid: overlayActive
             ? [
-                { left: 8, right: 8, top: 8, height: primaryHeight, containLabel: true },
-                { left: 8, right: 8, bottom: 40, height: "38%", containLabel: true },
+                {
+                  left: 8,
+                  right: 8,
+                  top: 8,
+                  height: primaryHeight,
+                  containLabel: true,
+                },
+                {
+                  left: 8,
+                  right: 8,
+                  bottom: 40,
+                  height: "38%",
+                  containLabel: true,
+                },
               ]
             : { left: 8, right: 8, top: 8, bottom: 40, containLabel: true },
           xAxis: overlayActive
@@ -278,10 +291,7 @@ export function Timeline({
                 { type: "slider", height: 16, bottom: 4, xAxisIndex: [0, 1] },
                 { type: "inside", xAxisIndex: [0, 1] },
               ]
-            : [
-                { type: "slider", height: 20, bottom: 4 },
-                { type: "inside" },
-              ],
+            : [{ type: "slider", height: 20, bottom: 4 }, { type: "inside" }],
           series: overlayActive
             ? [
                 {
@@ -404,7 +414,24 @@ export function Timeline({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div
+      style={{ display: "flex", flexDirection: "column", height: "100%" }}
+      /* **How many tracks are drawn against this axis — round 13cde.**
+       *
+       * The chart is one `<canvas>`, so a second track is invisible to anything that is not
+       * looking at pixels, and B16's own claim ("both event sets render on distinct tracks
+       * against a shared axis") had no tier that could prove it. This is the component's own
+       * state, published once rather than re-derived: `overlayActive` below is the same
+       * `crossCaseHistogram != null`, and if the two ever disagreed the ECharts option and this
+       * attribute would be describing different charts. `live/scenario-b-timeline.spec.ts` is
+       * what fails if the overlay stops adding its grid. */
+      data-timeline-tracks={crossCaseHistogram != null ? 2 : 1}
+      /* How many events the overlay track is actually drawing. A second investigation
+       * with no events still produces a `Histogram` (an empty one), so `data-timeline-
+       * tracks` alone would read 2 for an overlay of nothing onto something — a test
+       * against it would pass without the row being true. */
+      data-timeline-overlay-events={crossCaseHistogram?.total ?? 0}
+    >
       <div
         style={{
           display: "flex",
@@ -413,10 +440,16 @@ export function Timeline({
           padding: "var(--sp-4) var(--sp-8)",
         }}
       >
-        <Button aria-pressed={mode === "density"} onClick={() => setMode("density")}>
+        <Button
+          aria-pressed={mode === "density"}
+          onClick={() => setMode("density")}
+        >
           Density
         </Button>
-        <Button aria-pressed={mode === "cyclical"} onClick={() => setMode("cyclical")}>
+        <Button
+          aria-pressed={mode === "cyclical"}
+          onClick={() => setMode("cyclical")}
+        >
           Cyclical
         </Button>
         {mode === "density" && (
@@ -461,16 +494,24 @@ export function Timeline({
                 (the same reasoning the input fields above already assume
                 by rendering only in density mode). */}
             <Button
-              aria-label={playback.isPlaying ? "Pause playback" : "Play playback"}
+              aria-label={
+                playback.isPlaying ? "Pause playback" : "Play playback"
+              }
               aria-pressed={playback.isPlaying}
-              onClick={() => (playback.isPlaying ? playback.pause() : playback.play())}
+              onClick={() =>
+                playback.isPlaying ? playback.pause() : playback.play()
+              }
             >
               {playback.isPlaying ? "Pause" : "Play"}
             </Button>
             <Select
               aria-label="Playback speed"
               value={String(playback.speed)}
-              onChange={(e) => playback.setSpeed(Number(e.target.value) as typeof playback.speed)}
+              onChange={(e) =>
+                playback.setSpeed(
+                  Number(e.target.value) as typeof playback.speed,
+                )
+              }
             >
               {PLAYBACK_SPEEDS.map((speed) => (
                 <option key={speed} value={speed}>

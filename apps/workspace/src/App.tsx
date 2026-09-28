@@ -87,8 +87,9 @@ const API_BASE_URL =
 // `deploy/compose/dev.yaml`'s lightweight dev stack (`scripts/mint_dev_token.py` mints against a
 // throwaway keypair instead), so this path — not the real OIDC flow below — is what `make dev-up`
 // and `npm run dev` actually exercise.
-const DEV_MODE_BEARER_TOKEN =
-  import.meta.env.DEV ? (import.meta.env.VITE_DEV_BEARER_TOKEN ?? "") : "";
+const DEV_MODE_BEARER_TOKEN = import.meta.env.DEV
+  ? (import.meta.env.VITE_DEV_BEARER_TOKEN ?? "")
+  : "";
 
 /** The origin to open the delta WebSocket against.
  *
@@ -166,7 +167,10 @@ export function App() {
     async function bootstrap() {
       const params = new URLSearchParams(window.location.search);
       if (params.has("error")) {
-        const reason = params.get("error_description") ?? params.get("error") ?? "sign-in failed";
+        const reason =
+          params.get("error_description") ??
+          params.get("error") ??
+          "sign-in failed";
         clearRedirectCallbackParams();
         if (!cancelled) {
           setSignInReason(
@@ -189,7 +193,8 @@ export function App() {
           restoreViewStateAfterReauth();
         } catch {
           clearRedirectCallbackParams();
-          if (!cancelled) setSignInReason("Your sign-in could not be completed. Try again.");
+          if (!cancelled)
+            setSignInReason("Your sign-in could not be completed. Try again.");
         }
       }
       if (!cancelled) setAuthChecked(true);
@@ -245,14 +250,18 @@ export function App() {
   // (not `MetricsPanel` itself) turns it into hull geometry — `MetricsPanel` has no dependency on
   // Sigma/the canvas at all, the same separation `onSelectionChange`/`onViewMessages` already draw
   // between "what happened" and "what the canvas does about it."
-  const [communities, setCommunities] = useState<Record<string, string> | null>(null);
+  const [communities, setCommunities] = useState<Record<string, string> | null>(
+    null,
+  );
   const [ontology, setOntology] = useState<OntologyRegistry | null>(null);
   const [edgeTypes, setEdgeTypes] = useState<EdgeTypeDef[]>([]);
   // The full schema, not only `OntologyRegistry`'s own channel/shape lookup — Phase 7 Stage 4's
   // `QueryBuilderPanel` needs the entity/edge type *names* to populate its own palette and connect
   // controls, which `OntologyRegistry` was never built to expose. Captured from the same `/v1
   // /ontology` fetch `edgeTypes` already comes from, not a third redundant request.
-  const [ontologySchema, setOntologySchema] = useState<OntologySchema | null>(null);
+  const [ontologySchema, setOntologySchema] = useState<OntologySchema | null>(
+    null,
+  );
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -272,7 +281,9 @@ export function App() {
     edges: 0,
     filteredCount: 0,
   });
-  const [view, setView] = useState<"graph" | "map" | "ingest" | "dossier" | "watches">("graph");
+  const [view, setView] = useState<
+    "graph" | "map" | "ingest" | "dossier" | "watches"
+  >("graph");
   const [dossierNodeId, setDossierNodeId] = useState<string | null>(null);
   const [mapConfig, setMapConfig] = useState<PublicMapConfig | null>(null);
   const [siteWizardOpen, setSiteWizardOpen] = useState(false);
@@ -302,7 +313,9 @@ export function App() {
     dimmedNodeIds: EMPTY_DIMMED_NODE_IDS,
     dimmedCount: 0,
   });
-  const [nodeCoordinates, setNodeCoordinates] = useState(EMPTY_NODE_COORDINATES);
+  const [nodeCoordinates, setNodeCoordinates] = useState(
+    EMPTY_NODE_COORDINATES,
+  );
   const [geoBins, setGeoBins] = useState<readonly GeoBin[]>(EMPTY_GEO_BINS);
 
   useEffect(() => {
@@ -311,11 +324,9 @@ export function App() {
     // supplies it), and every effect below that reaches `/v1` is gated on it for exactly that
     // reason — this one first, since it is the earliest bootstrap call in the component.
     if (!bearerToken) return;
-    void fetchOntologyRegistry(API_BASE_URL, bearerToken).then(
-      (registry) => {
-        setOntology(registry);
-      },
-    );
+    void fetchOntologyRegistry(API_BASE_URL, bearerToken).then((registry) => {
+      setOntology(registry);
+    });
     void fetch(`${API_BASE_URL}/v1/ontology`, {
       headers: { Authorization: `Bearer ${bearerToken}` },
     })
@@ -390,9 +401,11 @@ export function App() {
       // whenever membership changes. A no-op fast path when the working
       // set has no `Location` nodes yet (`resolveNodeCoordinates`'s own
       // early return).
-      void resolveNodeCoordinates(API_BASE_URL, bearerToken, workingSet.graph).then(
-        setNodeCoordinates,
-      );
+      void resolveNodeCoordinates(
+        API_BASE_URL,
+        bearerToken,
+        workingSet.graph,
+      ).then(setNodeCoordinates);
     });
 
     const wsUrl = websocketOrigin(API_BASE_URL);
@@ -461,7 +474,11 @@ export function App() {
     // FRONTEND.md` §3.4's "the map restricts to it" is this bullet, named
     // literally.
     async function refresh(state: CrossFilterStoreState) {
-      const filter = buildEventFilter(scope, state.window, state.selectedNodeIds);
+      const filter = buildEventFilter(
+        scope,
+        state.window,
+        state.selectedNodeIds,
+      );
       const bins = await fetchGeoBins(API_BASE_URL, bearerToken, {
         filter,
         precision: GEO_BIN_PRECISION,
@@ -472,7 +489,8 @@ export function App() {
     let lastSelected = crossFilter.store.getState().selectedNodeIds;
     void refresh(crossFilter.store.getState());
     const unsubscribe = crossFilter.store.subscribe((state) => {
-      if (state.window === lastWindow && state.selectedNodeIds === lastSelected) return;
+      if (state.window === lastWindow && state.selectedNodeIds === lastSelected)
+        return;
       lastWindow = state.window;
       lastSelected = state.selectedNodeIds;
       void refresh(state);
@@ -508,7 +526,9 @@ export function App() {
       });
     }
     refresh(crossFilter.store.getState().window);
-    const unsubscribe = crossFilter.store.subscribe((state) => refresh(state.window));
+    const unsubscribe = crossFilter.store.subscribe((state) =>
+      refresh(state.window),
+    );
     return () => {
       cancelled = true;
       unsubscribe();
@@ -537,7 +557,10 @@ export function App() {
   // Declared before the "not ready yet" early return below, per the rules of Hooks — every Hook
   // in this component must run on every render, loading state included.
   const communityHulls = useMemo(
-    () => (communities ? computeCommunityHulls(workingSetRef.current.graph, communities) : undefined),
+    () =>
+      communities
+        ? computeCommunityHulls(workingSetRef.current.graph, communities)
+        : undefined,
     [communities],
   );
 
@@ -545,7 +568,9 @@ export function App() {
   // not an error page and not an empty workspace." Checked before the "not ready yet" branch below
   // — an unauthenticated caller is never "still loading", it has a definite answer already.
   if (!isDevBypass && authChecked && !bearerToken) {
-    return <SignInScreen reason={signInReason} onSignIn={() => void signIn()} />;
+    return (
+      <SignInScreen reason={signInReason} onSignIn={() => void signIn()} />
+    );
   }
 
   if (!investigationId || !ontology || !crossFilterRef.current) {
@@ -593,14 +618,23 @@ export function App() {
         <Button aria-pressed={view === "map"} onClick={() => setView("map")}>
           Map
         </Button>
-        <Button aria-pressed={view === "ingest"} onClick={() => setView("ingest")}>
+        <Button
+          aria-pressed={view === "ingest"}
+          onClick={() => setView("ingest")}
+        >
           Ingest
         </Button>
-        <Button aria-pressed={view === "watches"} onClick={() => setView("watches")}>
+        <Button
+          aria-pressed={view === "watches"}
+          onClick={() => setView("watches")}
+        >
           Watches
         </Button>
         {dossierNodeId && (
-          <Button aria-pressed={view === "dossier"} onClick={() => setView("dossier")}>
+          <Button
+            aria-pressed={view === "dossier"}
+            onClick={() => setView("dossier")}
+          >
             Messages
           </Button>
         )}
@@ -616,7 +650,10 @@ export function App() {
         {view === "graph" && (
           // `02_GLASS_FRONTEND.md` §2's own workspace-layout mockup: "Resolution: ●Balanced
           // Export ⚙" — the top-bar trigger for the export drawer (§10).
-          <Button aria-pressed={exportOpen} onClick={() => setExportOpen((open) => !open)}>
+          <Button
+            aria-pressed={exportOpen}
+            onClick={() => setExportOpen((open) => !open)}
+          >
             Export ⚙
           </Button>
         )}
@@ -677,7 +714,11 @@ export function App() {
             bearerToken={bearerToken}
             onSelectNode={(nodeId) => {
               const graph = workingSetRef.current.graph;
-              setSelectedNode(graph.hasNode(nodeId) ? graph.getNodeAttribute(nodeId, "data") : null);
+              setSelectedNode(
+                graph.hasNode(nodeId)
+                  ? graph.getNodeAttribute(nodeId, "data")
+                  : null,
+              );
               setView("graph");
             }}
           />
@@ -687,14 +728,26 @@ export function App() {
           // gives (`patterns/api.ts`'s own module docstring) — so this view, like "ingest" and
           // "dossier", opts out of the investigation-scoped side panel/timeline/status bar below
           // rather than being squeezed into `view === "graph"`'s own 320px column.
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--sp-8)", overflowY: "auto", padding: "var(--sp-8)" }}>
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--sp-8)",
+              overflowY: "auto",
+              padding: "var(--sp-8)",
+            }}
+          >
             <HotlistPanel apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} />
             <MonitorPanel apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} />
             <AlertInbox
               apiBaseUrl={API_BASE_URL}
               bearerToken={bearerToken}
               onOpenInvestigation={(newInvestigationId) => {
-                sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, newInvestigationId);
+                sessionStorage.setItem(
+                  INVESTIGATION_ID_SESSION_KEY,
+                  newInvestigationId,
+                );
                 setInvestigationId(newInvestigationId);
                 setView("graph");
               }}
@@ -702,214 +755,255 @@ export function App() {
           </div>
         )}
         {view !== "ingest" && view !== "dossier" && view !== "watches" && (
-        <div style={{ flex: 1, position: "relative" }}>
-          {view === "graph" && (
-            <GlassCanvas
-              ref={glassCanvasRef}
-              graph={workingSetRef.current.graph}
-              store={workingSetRef.current.store}
-              ontology={ontology}
-              edgeTypes={edgeTypes}
-              investigationId={investigationId}
-              apiBaseUrl={API_BASE_URL}
-              bearerToken={bearerToken}
-              dimmedNodeIds={dimming.dimmedNodeIds}
-              communityHulls={communityHulls}
-              onSelectionChange={(nodeIds) => {
-                const first = nodeIds[0];
-                const graph = workingSetRef.current.graph;
-                setSelectedNode(
-                  first && graph.hasNode(first)
-                    ? graph.getNodeAttribute(first, "data")
-                    : null,
-                );
-              }}
-              onViewMessages={(nodeId) => {
-                setDossierNodeId(nodeId);
-                setView("dossier");
-              }}
-            />
-          )}
-          {view === "map" &&
-            mapConfig &&
-            (() => {
-              const provider = defaultProvider(mapConfig);
-              if (!provider) {
+          <div style={{ flex: 1, position: "relative" }}>
+            {view === "graph" && (
+              <GlassCanvas
+                ref={glassCanvasRef}
+                graph={workingSetRef.current.graph}
+                store={workingSetRef.current.store}
+                ontology={ontology}
+                edgeTypes={edgeTypes}
+                investigationId={investigationId}
+                apiBaseUrl={API_BASE_URL}
+                bearerToken={bearerToken}
+                dimmedNodeIds={dimming.dimmedNodeIds}
+                communityHulls={communityHulls}
+                onSelectionChange={(nodeIds) => {
+                  const first = nodeIds[0];
+                  const graph = workingSetRef.current.graph;
+                  setSelectedNode(
+                    first && graph.hasNode(first)
+                      ? graph.getNodeAttribute(first, "data")
+                      : null,
+                  );
+                }}
+                onViewMessages={(nodeId) => {
+                  setDossierNodeId(nodeId);
+                  setView("dossier");
+                }}
+              />
+            )}
+            {view === "map" &&
+              mapConfig &&
+              (() => {
+                const provider = defaultProvider(mapConfig);
+                if (!provider) {
+                  return (
+                    <div
+                      style={{
+                        padding: "var(--sp-24)",
+                        color: "var(--text-secondary)",
+                      }}
+                    >
+                      No default basemap provider is configured.
+                    </div>
+                  );
+                }
                 return (
-                  <div
-                    style={{
-                      padding: "var(--sp-24)",
-                      color: "var(--text-secondary)",
-                    }}
-                  >
-                    No default basemap provider is configured.
-                  </div>
-                );
-              }
-              return (
-                <>
-                  <MapView
-                    graph={workingSetRef.current.graph}
-                    provider={provider}
-                    nodeCoordinates={nodeCoordinates}
-                    geoBins={geoBins}
-                    snailTrail={revealedSightings}
-                    apiBaseUrl={API_BASE_URL}
-                    bearerToken={bearerToken}
-                    onMapReady={setLiveMap}
-                    onNodeClick={(nodeId) => {
-                      // A3's "select the hotspot cells" — clicking a
-                      // grid-cell Location toggles it in/out of the
-                      // cross-filter's node selection (multi-select, since
-                      // A3 selects several cells at once).
-                      const current = crossFilterStore.store.getState().selectedNodeIds ?? [];
-                      const next = current.includes(nodeId)
-                        ? current.filter((id) => id !== nodeId)
-                        : [...current, nodeId];
-                      crossFilterStore.store
-                        .getState()
-                        .setSelectedNodeIds(next.length > 0 ? next : null);
-                      void crossFilterStore.refresh(workingSetRef.current.graph.nodes());
-                    }}
-                  />
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "var(--sp-8)",
-                      left: "var(--sp-8)",
-                      width: 240,
-                      height: 220,
-                      background: "var(--surface-panel)",
-                      border: "1px solid var(--border-subtle)",
-                      borderRadius: "var(--r-panel)",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <HotspotHistogram
-                      apiBaseUrl={API_BASE_URL}
-                      bearerToken={bearerToken}
-                      investigationScope={investigationId}
-                      crossFilterStore={crossFilterStore}
-                      getNodeIds={() => workingSetRef.current.graph.nodes()}
-                    />
-                  </div>
-                  {siteWizardOpen && (
-                    <SiteCalibrationWizard
-                      apiBaseUrl={API_BASE_URL}
-                      bearerToken={bearerToken}
-                      investigationId={investigationId}
-                      map={liveMap}
-                      onClose={() => setSiteWizardOpen(false)}
-                    />
-                  )}
-                  {boundaryToolOpen && (
-                    <BoundaryFilterTool
-                      map={liveMap}
-                      crossFilterStore={crossFilterStore}
+                  <>
+                    {/* **The snail trail's own readout — round 13cde.**
+                     *
+                     * B18's track is a MapLibre GeoJSON source
+                     * (`map/MapView.tsx`'s `ospreyflow-snail-trail`), so what
+                     * playback changes is pixels and nothing else: a screen
+                     * reader is told nothing at all when the trail advances,
+                     * and no test at any tier can observe it without
+                     * comparing images. Both of those are the same gap.
+                     *
+                     * `02_GLASS_FRONTEND.md` §2 fixes the status bar's own
+                     * four segments, so this is a readout beside the surface
+                     * it describes rather than a fifth segment there.
+                     * Rendered only when there is a trail to describe —
+                     * an empty live region announcing "0 of 0" on every view
+                     * would be noise, and `aria-live` is not a place to put
+                     * noise. */}
+                    {sightings.length > 0 && (
+                      <div
+                        role="status"
+                        aria-live="polite"
+                        className="value"
+                        style={{
+                          padding: "var(--sp-4) var(--sp-16)",
+                          color: "var(--text-secondary)",
+                          fontSize: "var(--fs-13)",
+                        }}
+                      >
+                        {revealedSightings.length.toLocaleString()} of{" "}
+                        {sightings.length.toLocaleString()} sightings revealed
+                      </div>
+                    )}
+                    <MapView
+                      graph={workingSetRef.current.graph}
+                      provider={provider}
                       nodeCoordinates={nodeCoordinates}
-                      getNodeIds={() => workingSetRef.current.graph.nodes()}
-                      onClose={() => setBoundaryToolOpen(false)}
+                      geoBins={geoBins}
+                      snailTrail={revealedSightings}
+                      apiBaseUrl={API_BASE_URL}
+                      bearerToken={bearerToken}
+                      onMapReady={setLiveMap}
+                      onNodeClick={(nodeId) => {
+                        // A3's "select the hotspot cells" — clicking a
+                        // grid-cell Location toggles it in/out of the
+                        // cross-filter's node selection (multi-select, since
+                        // A3 selects several cells at once).
+                        const current =
+                          crossFilterStore.store.getState().selectedNodeIds ??
+                          [];
+                        const next = current.includes(nodeId)
+                          ? current.filter((id) => id !== nodeId)
+                          : [...current, nodeId];
+                        crossFilterStore.store
+                          .getState()
+                          .setSelectedNodeIds(next.length > 0 ? next : null);
+                        void crossFilterStore.refresh(
+                          workingSetRef.current.graph.nodes(),
+                        );
+                      }}
                     />
-                  )}
-                </>
-              );
-            })()}
-        </div>
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "var(--sp-8)",
+                        left: "var(--sp-8)",
+                        width: 240,
+                        height: 220,
+                        background: "var(--surface-panel)",
+                        border: "1px solid var(--border-subtle)",
+                        borderRadius: "var(--r-panel)",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <HotspotHistogram
+                        apiBaseUrl={API_BASE_URL}
+                        bearerToken={bearerToken}
+                        investigationScope={investigationId}
+                        crossFilterStore={crossFilterStore}
+                        getNodeIds={() => workingSetRef.current.graph.nodes()}
+                      />
+                    </div>
+                    {siteWizardOpen && (
+                      <SiteCalibrationWizard
+                        apiBaseUrl={API_BASE_URL}
+                        bearerToken={bearerToken}
+                        investigationId={investigationId}
+                        map={liveMap}
+                        onClose={() => setSiteWizardOpen(false)}
+                      />
+                    )}
+                    {boundaryToolOpen && (
+                      <BoundaryFilterTool
+                        map={liveMap}
+                        crossFilterStore={crossFilterStore}
+                        nodeCoordinates={nodeCoordinates}
+                        getNodeIds={() => workingSetRef.current.graph.nodes()}
+                        onClose={() => setBoundaryToolOpen(false)}
+                      />
+                    )}
+                  </>
+                );
+              })()}
+          </div>
         )}
         {view !== "ingest" && view !== "dossier" && view !== "watches" && (
-        <div
-          style={{
-            width: 320,
-            borderLeft: "1px solid var(--border-subtle)",
-            display: "flex",
-            flexDirection: "column",
-            overflowY: "auto",
-          }}
-        >
-          <Inspector
-            node={selectedNode}
-            assessment={{
-              apiBaseUrl: API_BASE_URL,
-              bearerToken: bearerToken,
-              investigationId,
-              workingSetGraph: workingSetRef.current.graph,
-              onHighlightNodes: (nodeIds) => glassCanvasRef.current?.highlightNodes(nodeIds),
+          <div
+            style={{
+              width: 320,
+              borderLeft: "1px solid var(--border-subtle)",
+              display: "flex",
+              flexDirection: "column",
+              overflowY: "auto",
             }}
-          />
-          {view === "graph" && (
-            <MetricsPanel
-              apiBaseUrl={API_BASE_URL}
-              bearerToken={bearerToken}
-              investigationId={investigationId}
-              graph={workingSetRef.current.graph}
-              onFocusNode={(nodeId) => glassCanvasRef.current?.focusOnNode(nodeId)}
-              onCommunitiesChange={setCommunities}
+          >
+            <Inspector
+              node={selectedNode}
+              assessment={{
+                apiBaseUrl: API_BASE_URL,
+                bearerToken: bearerToken,
+                investigationId,
+                workingSetGraph: workingSetRef.current.graph,
+                onHighlightNodes: (nodeIds) =>
+                  glassCanvasRef.current?.highlightNodes(nodeIds),
+              }}
             />
-          )}
-          {view === "graph" && ontologySchema && (
-            <QueryBuilderPanel
-              apiBaseUrl={API_BASE_URL}
-              bearerToken={bearerToken}
-              schema={ontologySchema}
-            />
-          )}
-        </div>
+            {view === "graph" && (
+              <MetricsPanel
+                apiBaseUrl={API_BASE_URL}
+                bearerToken={bearerToken}
+                investigationId={investigationId}
+                graph={workingSetRef.current.graph}
+                onFocusNode={(nodeId) =>
+                  glassCanvasRef.current?.focusOnNode(nodeId)
+                }
+                onCommunitiesChange={setCommunities}
+              />
+            )}
+            {view === "graph" && ontologySchema && (
+              <QueryBuilderPanel
+                apiBaseUrl={API_BASE_URL}
+                bearerToken={bearerToken}
+                schema={ontologySchema}
+              />
+            )}
+          </div>
         )}
       </div>
       {view !== "ingest" && view !== "dossier" && view !== "watches" && (
-      <div
-        style={{
-          height: 252,
-          borderTop: "1px solid var(--border-subtle)",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        {/* B16's own cross-case overlay trigger — this build has no
+        <div
+          style={{
+            height: 252,
+            borderTop: "1px solid var(--border-subtle)",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {/* B16's own cross-case overlay trigger — this build has no
             cross-investigation picker anywhere yet, so a directly-entered
             investigation id is this stage's own real, minimal input, not
             a placeholder for a picker that doesn't exist. */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--sp-8)",
-            padding: "var(--sp-4) var(--sp-8)",
-          }}
-        >
-          <label htmlFor="cross-case-scope" style={{ fontSize: 11, color: "var(--text-secondary)" }}>
-            Overlay investigation
-          </label>
-          <input
-            id="cross-case-scope"
-            type="text"
-            aria-label="Cross-case overlay investigation id"
-            placeholder="investigation id"
-            value={crossCaseScope}
-            onChange={(e) => setCrossCaseScope(e.target.value)}
-            style={{ width: 200 }}
-          />
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--sp-8)",
+              padding: "var(--sp-4) var(--sp-8)",
+            }}
+          >
+            <label
+              htmlFor="cross-case-scope"
+              style={{ fontSize: 11, color: "var(--text-secondary)" }}
+            >
+              Overlay investigation
+            </label>
+            <input
+              id="cross-case-scope"
+              type="text"
+              aria-label="Cross-case overlay investigation id"
+              placeholder="investigation id"
+              value={crossCaseScope}
+              onChange={(e) => setCrossCaseScope(e.target.value)}
+              style={{ width: 200 }}
+            />
+          </div>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <Timeline
+              apiBaseUrl={API_BASE_URL}
+              bearerToken={bearerToken}
+              investigationScope={investigationId}
+              crossFilterStore={crossFilterStore}
+              getNodeIds={() => workingSetRef.current.graph.nodes()}
+              crossCaseInvestigationScope={crossCaseScope || undefined}
+              onPlaybackFractionChange={setPlaybackFraction}
+            />
+          </div>
         </div>
-        <div style={{ flex: 1, minHeight: 0 }}>
-          <Timeline
-            apiBaseUrl={API_BASE_URL}
-            bearerToken={bearerToken}
-            investigationScope={investigationId}
-            crossFilterStore={crossFilterStore}
-            getNodeIds={() => workingSetRef.current.graph.nodes()}
-            crossCaseInvestigationScope={crossCaseScope || undefined}
-            onPlaybackFractionChange={setPlaybackFraction}
-          />
-        </div>
-      </div>
       )}
       {view !== "ingest" && view !== "dossier" && view !== "watches" && (
-      <StatusBar
-        nodeCount={counts.nodes}
-        edgeCount={counts.edges}
-        dimmedCount={dimming.dimmedCount}
-        filteredCount={counts.filteredCount}
-      />
+        <StatusBar
+          nodeCount={counts.nodes}
+          edgeCount={counts.edges}
+          dimmedCount={dimming.dimmedCount}
+          filteredCount={counts.filteredCount}
+        />
       )}
       <HistoryPanel
         open={historyOpen}
@@ -931,7 +1025,9 @@ export function App() {
         onExportChartImage={(mark) => {
           const handle = glassCanvasRef.current;
           if (!handle) {
-            return Promise.reject(new Error("chart export: canvas is not mounted"));
+            return Promise.reject(
+              new Error("chart export: canvas is not mounted"),
+            );
           }
           return handle.exportImage(mark);
         }}
