@@ -68,6 +68,35 @@ sightings into a rendered deployment.
 | A7 | **over the wire** | `test_a7_reports_can_be_filtered_to_one_item_category`, `test_a7_an_unknown_field_name_is_refused_rather_than_ignored` — the "Known gap" below is closed by `EventFilter.value_filters` |
 | A15 | **over the wire** | `test_a15_a_consult_originator_item_blocks_the_export_by_name_then_proceeds_with_a_justification` |
 
+**Every row, by tier — closing pass 13ce, 28 September 2026.** "Rendered" is
+`tests/scenarios/test_phase8_exit_over_the_wire.py` against a fresh-clone `local-lite` install,
+signed in as the demo analyst (26 passed). "Glass" is `make glass-live` on the developer stack
+(`apps/workspace/live/`). `test_scenario_a_over_the_wire` and `test_scenario_b_over_the_wire` are
+the two walkthrough cases that carry the rows with no case of their own.
+
+| Row | Rendered (over the wire) | Glass (live spec) | Performable under R8? |
+| --- | --- | --- | --- |
+| A1 | `test_a1_…` ×3 (grid, redraw, ref resolves) | — | **No** — "incidents geocode into cells" has no feature (see A1 note) |
+| A2–A5 | `test_scenario_a_over_the_wire` | — | Yes |
+| A6 | `test_a6_…` | — | Yes |
+| A7 | `test_a7_…` ×2 | — | Yes |
+| A8–A11 | `test_scenario_a_over_the_wire` | — | Yes |
+| A12 | `test_scenario_a_over_the_wire` | `scenario-a-a12-a15.spec.ts` A12 | Yes |
+| A13, A14 | `test_scenario_a_over_the_wire` | `scenario-a-a12-a15.spec.ts` A13–A15 | Yes |
+| A15 | `test_a15_…` | `scenario-a-a12-a15.spec.ts` A15 | Yes |
+| B1–B3 | `test_b1_…`, `test_b2_…`, `test_b3_…` | `ingest-folder.spec.ts` | Yes |
+| B4, B5 | `test_scenario_b_over_the_wire` (adapted) | `fixture-corp.spec.ts` (search) | Yes |
+| B6 | `test_b6_…` (data half) | — | **Unproven** — in-place highlighting is driven by no test |
+| B7, B8 | `test_b7_…`, `test_b8_…` | — | Yes |
+| B9, B10 | `test_scenario_b_over_the_wire` | `fixture-corp.spec.ts` (threshold, explain) | Yes |
+| B11, B12 | `test_scenario_b_over_the_wire` | — | Yes |
+| B13, B14 | `test_b13_…` ×2, `test_b14_…` | — | Yes |
+| B15, B17 | `test_b15_…`, `test_b17_…` | — | Yes |
+| B16 | `test_b16_…` | `scenario-b-timeline.spec.ts` B16 | Yes |
+| B18 | `test_b18_…` (incl. the sightings route) | `scenario-b-timeline.spec.ts` B18 | Yes |
+| B19, B20 | `test_scenario_b_over_the_wire` | — | Yes |
+| B21 | `test_scenario_b_over_the_wire` | `fixture-corp.spec.ts` (pathfinder) | Yes |
+
 Each of the six was **shown red first** against a deployment seeded `hmp,fixture-corp` only, then
 green against **the same deployment** after seeding `scenarios` — one variable, not two
 deployments.

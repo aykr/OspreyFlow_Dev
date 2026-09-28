@@ -10,7 +10,41 @@ none, because it is what gets read.**
 laptop from the documentation, started, and demonstrated (both acceptance scenarios passing on
 `local-lite` is one component of that, not the whole of it).
 
-**V1 END TO END is NOT reached as of 27 September 2026. Round 13c re-ran the closing pass in
+**V1 END TO END is NOT reached as of 28 September 2026 — closing pass 13ce, third run, against
+the seeded tree.** Clauses 1 and 2 hold again, on a fresh clone of `origin/main` (`930b902`).
+Clause 3 under owner ruling R8 ("every row of both acceptance scenarios performable through the
+analyst's own door on a rendered `local-lite` deployment") fails on **two row halves**, each with
+a named reason, and neither of them is a test failure:
+
+| Row | What is not performable | Why |
+| --- | --- | --- |
+| **A1** | "incidents geocode into cells" | No feature exists. A cell is stored as a `POINT` (`GeometryRecord` makes POINT and POLYGON exclusive; the `geometry_ref` adapter hashes a point), and nothing resolves a point to a containing area. Needs three decisions, set out in `08_ACCEPTANCE_SCENARIOS.md`'s A1 note: is a cell a polygon, what happens to the `Location`'s ref, which port owns containment |
+| **B6** | "entity spans highlighted in place" | The spans come back over the wire (`test_b6_…`). No test at any tier drives the document view's highlighting, so it is unproven, not known to be broken |
+
+A qualification, recorded rather than counted: the Glass-tier halves of B16, B18 and A12–A15 are
+proven by `make glass-live` on the developer stack. That tier cannot run against a rendered
+deployment by design (its CORS allowlist is the workspace origin only), so "in a real browser" and
+"on a rendered deployment" are both proven for those rows, but by different runs.
+
+What closing pass 13ce measured, one machine, one pass:
+
+| Step | Result |
+| --- | --- |
+| Environment | 19.50 GiB memory, 83.0 GiB free. `make docker-clean` first; airbyte untouched |
+| Clean install: `git clone` of origin, `uv sync`, `harness.apply --profile local-lite --build --seed hmp,fixture-corp,scenarios --demo-analyst` | **exit 0, ready in 100 s** (clone 3 s, build 43 s warm, up 23 s with 7 healthy, seed 31 s, `harness.verify` 3/3). One disclosed deviation: `/var/lib/osprey/ingest` needs `sudo` on this host, so the clone's `osprey.yaml` set `components.storage.ingest` locally |
+| `make exit-over-the-wire` against that install | **26 passed** (every id in `REPORT-13ce.md`) |
+| `tests/harness/test_workspace_bundle.py` against that install | **7 passed**, after `930b902`. The first run failed: `oidc-client-ts`'s URL-parsing base (`http://127.0.0.1`) tripped the check, which could not have passed on any build since 25 September |
+| `tests/harness/test_restore_exit_test.py` against that install | **9 passed** |
+| `test_six_screen_live_exit.py` / `test_bundle_exit_test.py` / `test_harness_image.py` (each self-deploying) | **2 / 1 / 7 passed** (see the report for the one-retry causes) |
+| `test_sustained_load.py` | **not measured**: 401 from the workspace after the host suspended mid-run (the token outlived its TTL); not re-run within budget |
+| `make -k ci` | **20/20 targets ran and passed**, 1 m 26 s (warm images) |
+| `make test-all` (Floor B) | **310 passed, 0 skipped, 0 failed**, 4 m 41 s; the five token-exchange tests ran and passed (`idp-test` 5/5) for the first time in a closing pass |
+
+**A finding independent of the milestone: GitHub Actions has not run on `main` since 22 September**
+(the last run is on `12810f4`, and it failed). Every `ci.yml` job, including the exit-test jobs, has
+therefore been unwatched for six days. The bundle check above is what that cost, found in this pass.
+
+**Superseded (kept as history) — V1 END TO END was NOT reached as of 27 September 2026. Round 13c re-ran the closing pass in
 full against the fixed tree and closed two of the three clauses; the third is now a single,
 precisely-bounded question that needs an owner ruling** (`Claude outputs/handoff/
 DECISION_NEEDED.md`). What round 13c measured, all on one machine, in one pass:
@@ -411,7 +445,7 @@ this table exists to stop.
 classes, tester/alpha/beta material, and Trigger B's own downstream distribution questions. Not a
 build step, a stage, or a precondition of anything above; a different question, answered there.
 
-**Last updated:** 26 September 2026 (round 12 — Stage 3a).
+**Last updated:** 28 September 2026 (closing pass 13ce — the milestone line at the top; the sections below it keep their own dates).
 
 ---
 
