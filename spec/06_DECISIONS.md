@@ -2414,6 +2414,10 @@ changes for the numbered files.
 delay the move a further, explicitly-named increment rather than force it against a target still
 moving, the same reasoning that sets this timing in the first place.
 
+**Executed 28 September 2026, round 14a — see `process/07_BUILD_PLAN.md`'s own Trigger A entry for
+the full closure record** (the exit-criterion result, the root listing, and the gates re-verified
+against the new tree). `docs/` no longer exists in this repository.
+
 ---
 
 ## ADR-032 — The visual query builder is a keyboard-native list/palette editor, not a second drawing canvas; `02_GLASS_FRONTEND.md` §3.3 is corrected to match

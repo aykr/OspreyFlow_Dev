@@ -7527,6 +7527,38 @@ tool (`licenseheaders`, `addlicense`, or similar) appears in `pyproject.toml`, `
 `Makefile`; introducing one, not adapting an existing one, would be the first step if the owner
 decides to build this.
 
+**Trigger A executed, round 14a, 28 September 2026.** `docs/` no longer exists; `spec/` and
+`process/` are its two replacements, `README.md`/`DEMO_GUIDE.md` sit at the repository root,
+`CLAUDE.md` moved to `process/CLAUDE.md` (root stub unchanged in substance), `prototypes/` moved
+under `process/`, and `apps/workspace/src/design/tokens.css` is the product tree's own copy per
+ADR-034 §B8 — confirmed by a `git ls-files` root listing carrying no top-level entry this ADR did
+not name: `.claude .dockerignore .github .gitignore .graphifyignore .trivyignore apps CLAUDE.md
+config connectors DEMO_GUIDE.md deploy eslint.config.js harness LICENSE Makefile NOTICE
+osprey.yaml package-lock.json package.json packages process providers pyproject.toml README.md
+recipes scripts services spec tests tsconfig.json uv.lock`. All six close-step deliverables above
+are discharged: B5's authorship record and B7's packaging-hygiene properties predate this round
+unchanged; `LICENSE`/`NOTICE` are present and byte-correct (new `licence-check` third leg,
+`scripts/licence_check.py::find_own_licence_violations`, red-then-green proven both by unit test
+and a real edit to the live `NOTICE` file); `doc_citations_check.py` already existed and is
+unaffected by the ADR-number-citation scope note (that scope is 14b's own, not re-litigated here).
+The exit criterion above passed against a freshly brought-up `local-lite` stack:
+`tests/scenarios/test_phase8_exit_criterion_end_to_end.py` — 2 passed. The bundle exit test
+(`tests/harness/test_bundle_exit_test.py`, opt-in, `OSPREY_TEST_DIST_BUNDLE=1`) was run twice
+after the restructure to confirm the packaging pipeline (render, `packaging_gate.check_artefact`'s
+private-tree scan, image save/load, and a real `docker compose up`) survives the new paths — the
+first run failed at the final `docker compose up` step on a registry manifest lookup unrelated to
+any path this round moved (`ghcr.io/ospreyflow/*` pull attempted against an image already loaded
+locally under the identical tag); an immediate retry, no code changed between runs, passed clean,
+confirming a transient Docker Desktop registry-check race rather than a restructure regression.
+Floor A (`make test`) and every fast gate (`lint`, `typecheck`, `licence-check`, `bundle`,
+`schemas-check`, `authorized-query-check`, `demo-guide-check`, `domain-model-coverage-check`,
+`route-coverage-check`, `product-tree-link-check`, `decision-log-publication-check`,
+`test-file-coverage-check`, `citation-check`, `conformance-guard`) are green on the restructured
+tree. Not touched this round, by design: `06_DECISIONS.md`'s own ADR-number citations in the six
+Apache-scoped files, and the `product_tree_link_check.py` allowlist's shrink to zero — both
+explicitly 14b's own scoped work (owner ruling R12's publication-readiness stage), not folded into
+this close step.
+
 ---
 
 ## Phase 8a — The cluster profile
