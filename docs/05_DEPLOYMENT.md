@@ -734,6 +734,40 @@ section was first written from (117s → 151s → 203s on an identical workload)
 in it. Re-measuring the original three-run sequence against 25.5.1 is the work that would let this
 section be closed rather than narrowed; it has not been done.
 
+**Re-measured, round 13e, 28 September 2026 — §8 STAYS OPEN.** The original closing-pass fixture
+load is no longer runnable as written (`test_phase8_exit_over_the_wire.py` supersedes it); the
+sustained-load harness's own per-cycle load is the fallback the brief names, run fresh against a
+`local-lite` deployment on the current pin (`25.5.1`, `-Xmx8G`), never torn down between cycles:
+
+| Cycle | ArcadeDB RSS (`docker stats`) | Query-sample wall time |
+| --- | --- | --- |
+| 1 | 2620.4 MiB | 0.26 s |
+| 2 | 2737.2 MiB | 0.16 s |
+| 3 | 2837.5 MiB | 0.16 s |
+| 4 | 2882.6 MiB | 0.15 s |
+| 5 | 2912.3 MiB | 0.20 s |
+| 6 | 2993.2 MiB | 0.20 s |
+
+**Wall time is flat within noise** (0.15–0.26 s across all six — this is the light, fixed query
+sample the harness runs, not the closing-pass walkthrough §8's own original figures came from;
+`test_arcadedb_memory_and_query_latency_under_sustained_ingest_cycles` already draws that
+distinction). **RSS does not plateau over three cycles, or six**: +116.8 MiB (1→2), +100.3 MiB
+(2→3), +74.6 MiB/cycle on average across all six — the same order of magnitude as the ~61 MiB/cycle
+this section already recorded, not a new number, but not flat either. Under this round's own
+closure test (flat wall time **and** plateaued RSS), that fails on the RSS half, so **§8 stays
+open** rather than closing.
+
+**A first estimate of the restart interval, from these six points, labelled as an estimate and
+nothing firmer.** This host's Docker VM reports 19968.0 MiB total (`docker info`); the sustained-
+load test's own already-decided ceiling is 85% of that, 16972.8 MiB. At cycle 6 (2993.2 MiB) that
+leaves 13979.6 MiB of headroom. At the six-cycle average growth rate (74.6 MiB/cycle), the ceiling
+is reached around **cycle ~193** of this specific, light workload; at the steeper cycles-1–3 rate
+(~108.5 MiB/cycle), around **cycle ~135**. Neither number is a restart-interval recommendation on
+its own — this workload seeds a fixed, small fixture every cycle, not the growing working set a
+real investigation accumulates — but both say the same thing directionally: this is a long runway
+at this workload's scale, not an imminent ceiling, and the growth is real and unbounded so far
+measured, not settled. Two upstream issue drafts for the ArcadeDB tracker — this section's own leak and the readiness-endpoint finding beside it — are in `docs/upstream/arcadedb-database-lifecycle-leak.md`, for the owner to file.
+
 **The operational consequence, stated plainly:** a running instance should be expected to need
 periodic restarts to recover memory, and **the safe interval between them is not yet known** —
 nobody has measured how far this degradation goes, whether it plateaus at some working-set size
