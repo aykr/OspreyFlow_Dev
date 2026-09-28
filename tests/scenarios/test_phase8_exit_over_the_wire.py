@@ -1971,7 +1971,7 @@ def test_a1_a_site_grid_is_placed_and_its_cells_become_location_entities(
 def test_a1_redrawing_the_grid_does_not_duplicate_its_cells(
     analyst: httpx.Client, seeded_scope: str
 ) -> None:
-    """`site_grid_recipe.yaml`'s `on_match: reference` is what makes redrawing idempotent, and the
+    """`recipes/site_grid.yaml`'s `on_match: reference` is what makes redrawing idempotent, and the
     grid route's own docstring says so. An analyst adjusting a control point and redrawing must
     not silently double the `Location` population of their own investigation."""
     created = analyst.post(
@@ -2015,6 +2015,109 @@ def test_a1_redrawing_the_grid_does_not_duplicate_its_cells(
         f"redrawing the grid created new cells rather than referencing the existing ones: "
         f"{[n['id'] for n in first]} -> {[n['id'] for n in second]}"
     )
+
+    # **Round 13cde: redrawing must not break the geometry load either.** `(geometry_ref,
+    # version)` is the geometry partition's primary key, so the second draw above would have
+    # 500ed on a blind re-insert rather than quietly duplicating — a failure mode the node-level
+    # assertion above cannot see, because the nodes really are unchanged. The second draw
+    # returning 200 is already the proof; this reads the geometry back so the case says out loud
+    # what it is protecting.
+    ref = second[0]["properties"]["geometry_ref"]
+    resolved = analyst.post("/v1/analytics/geometries", json={"geometry_refs": [ref]})
+    assert resolved.status_code == 200, resolved.text
+    assert len(resolved.json()) == 1, (
+        f"one cell's ref {ref!r} resolves to {len(resolved.json())} geometry rows after two "
+        "draws, not 1. Zero means the route never loaded them; more than one should be "
+        "impossible under the partition's primary key, so it would mean the two draws wrote "
+        "different refs for the same cell"
+    )
+
+
+def _a_calibrated_site(analyst: httpx.Client, investigation: str) -> str:
+    """A site with an image and its four control points placed — the state A1's grid step starts
+    from. The quad is the same one the two cases above use, so a coordinate assertion written
+    against one holds for the other."""
+    created = analyst.post(
+        f"/v1/investigations/{investigation}/sites",
+        data={"label": "A1 — calibrated"},
+        files={"image": ("site.png", _synthetic_site_png(1000, 1000), "image/png")},
+    )
+    assert created.status_code == 201, created.text
+    site_id = str(created.json()["id"])
+    placed = analyst.patch(
+        f"/v1/investigations/{investigation}/sites/{site_id}/control-points",
+        json={
+            "control_points": [
+                {"px": 0, "py": 0, "lon": -1.836, "lat": 52.409},
+                {"px": 1000, "py": 0, "lon": -1.834, "lat": 52.409},
+                {"px": 1000, "py": 1000, "lon": -1.834, "lat": 52.408},
+                {"px": 0, "py": 1000, "lon": -1.836, "lat": 52.408},
+            ]
+        },
+    )
+    assert placed.status_code == 200, placed.text
+    return site_id
+
+
+def test_a1_a_cells_geometry_reference_resolves_to_its_centroid(
+    analyst: httpx.Client, seeded_scope: str
+) -> None:
+    """**A1's "grid cells become `Location` entities", completed — round 13cde.**
+
+    Every cell has always carried a real, deterministic `geometry_ref`. Until this round it
+    pointed at nothing: `services/api/app.py`'s grid route did not call
+    `AnalyticsPort.load_geometries`, on a stated reason ("the Conduit has no `AnalyticsPort`
+    wired in yet") that had itself stopped being true — `AnalyticsDep` already backed four other
+    routes. The gap outlived its own justification because it was written down.
+
+    **What this asserts is that the two halves agree**: the ref on the `Location` node in the
+    graph resolves, through the analyst's own door, to a point in the analytics store. Asserted
+    as a *resolution*, not as "a geometry came back": the returned row's `geometry_ref` must be
+    the one asked for, and its coordinates must be inside the quad the four control points span,
+    because a route that loaded the right number of rows at the wrong coordinates would satisfy
+    anything weaker.
+
+    **A1's other clause, "incidents geocode into cells", is still not claimed**, and this case is
+    deliberately not written as though it were. A cell is stored as a `POINT` at its centroid —
+    `GeometryRecord` makes `POINT` and `POLYGON` mutually exclusive, and the `geometry_ref`
+    adapter hashes a point — so a cell has no extent to contain anything, and nothing in this
+    repository resolves a point to the area containing it. 08's A1 note has what that would take.
+    """
+    site_id = _a_calibrated_site(analyst, seeded_scope)
+    assert (
+        analyst.post(
+            f"/v1/investigations/{seeded_scope}/sites/{site_id}/grid", json={"rows": 4, "cols": 4}
+        ).status_code
+        == 200
+    )
+
+    cells = analyst.post("/v1/search", json={"query": f"{site_id}-r1-c2", "limit": 5}).json()[
+        "nodes"
+    ]
+    assert len(cells) == 1, f"one cell should carry this site_ref, found {len(cells)}"
+    ref = cells[0]["properties"]["geometry_ref"]
+    assert ref, "the cell carries no geometry_ref at all, so there is nothing to resolve"
+
+    resolved = analyst.post("/v1/analytics/geometries", json={"geometry_refs": [ref]})
+    assert resolved.status_code == 200, resolved.text
+    rows = resolved.json()
+    assert len(rows) == 1, (
+        f"the cell's geometry_ref {ref!r} resolves to {len(rows)} rows. Before round 13cde this "
+        "was 0 — the ref was real and pointed at nothing"
+    )
+    geometry = rows[0]
+    assert geometry["geometry_ref"] == ref, geometry
+    assert geometry["kind"] == "point", (
+        f"a grid cell resolved as {geometry['kind']!r}; see this case's docstring on why a cell "
+        "is a point and what that costs A1's geocode clause"
+    )
+    # Inside the control quad this test placed. Loose bounds on purpose: the exact centroid is
+    # `packages/geo/bilinear.py`'s business and `tests/geo/test_bilinear.py` already holds it to
+    # the arithmetic. What would fail here is a route that loaded a *different* point than the
+    # cell the ref came from — a units mix-up, a lon/lat swap, or the pixel coordinates leaking
+    # through unprojected.
+    assert -1.836 <= geometry["lon"] <= -1.834, geometry
+    assert 52.408 <= geometry["lat"] <= 52.409, geometry
 
 
 def test_a7_reports_can_be_filtered_to_one_item_category(

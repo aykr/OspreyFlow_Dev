@@ -93,6 +93,7 @@ from schemas.analytics import (
     CrossFilterRequest,
     GeoBin,
     GeoBinRequest,
+    GeometryKind,
     GeometryRecord,
     Histogram,
     HistogramRequest,
@@ -103,6 +104,7 @@ from schemas.domain import (
     Assumption,
     Edge,
     ExpandRequest,
+    Handling,
     Hotlist,
     IntelligenceGap,
     Judgement,
@@ -842,18 +844,14 @@ async def _site_not_found_handler(request: Request, exc: SiteNotFoundError) -> J
 
 
 @app.exception_handler(PatternNotFoundError)
-async def _pattern_not_found_handler(
-    request: Request, exc: PatternNotFoundError
-) -> JSONResponse:
+async def _pattern_not_found_handler(request: Request, exc: PatternNotFoundError) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND, content={"error": "pattern_not_found"}
     )
 
 
 @app.exception_handler(HotlistNotFoundError)
-async def _hotlist_not_found_handler(
-    request: Request, exc: HotlistNotFoundError
-) -> JSONResponse:
+async def _hotlist_not_found_handler(request: Request, exc: HotlistNotFoundError) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND, content={"error": "hotlist_not_found"}
     )
@@ -962,9 +960,7 @@ async def _compliance_role_required_handler(
 
 
 @app.exception_handler(MonitorNotFoundError)
-async def _monitor_not_found_handler(
-    request: Request, exc: MonitorNotFoundError
-) -> JSONResponse:
+async def _monitor_not_found_handler(request: Request, exc: MonitorNotFoundError) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND, content={"error": "monitor_not_found"}
     )
@@ -972,9 +968,7 @@ async def _monitor_not_found_handler(
 
 @app.exception_handler(AlertNotFoundError)
 async def _alert_not_found_handler(request: Request, exc: AlertNotFoundError) -> JSONResponse:
-    return JSONResponse(
-        status_code=status.HTTP_404_NOT_FOUND, content={"error": "alert_not_found"}
-    )
+    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "alert_not_found"})
 
 
 @app.exception_handler(NodeNotInWorkingSetError)
@@ -1340,8 +1334,7 @@ async def expand(
         investigation.id,
         seq=outcome.delta.seq,
         label=(
-            f"Expanded {len(outcome.delta.nodes)} node(s) from "
-            f"{len(body.request.node_ids)} seed(s)"
+            f"Expanded {len(outcome.delta.nodes)} node(s) from {len(body.request.node_ids)} seed(s)"
         ),
         principal=principal,
     )
@@ -2042,9 +2035,7 @@ async def list_hotlists_route(
     return HotlistList(hotlists=await hotlists_store.list_authorized(principal))
 
 
-@app.post(
-    "/v1/investigations/{investigation_id}/judgements", status_code=status.HTTP_201_CREATED
-)
+@app.post("/v1/investigations/{investigation_id}/judgements", status_code=status.HTTP_201_CREATED)
 async def save_judgement_route(
     investigation: AuthorizedInvestigationDep,
     principal: PrincipalDep,
@@ -2128,9 +2119,7 @@ async def list_gaps_route(
     )
 
 
-@app.post(
-    "/v1/investigations/{investigation_id}/assumptions", status_code=status.HTTP_201_CREATED
-)
+@app.post("/v1/investigations/{investigation_id}/assumptions", status_code=status.HTTP_201_CREATED)
 async def save_assumption_route(
     investigation: AuthorizedInvestigationDep,
     principal: PrincipalDep,
@@ -2524,8 +2513,7 @@ async def get_map_local_source_route(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=(
-                f"basemap not built — {path} does not exist yet; see "
-                "scripts/build_local_basemap.py"
+                f"basemap not built — {path} does not exist yet; see scripts/build_local_basemap.py"
             ),
         )
     return FileResponse(path, media_type="application/vnd.pmtiles")
@@ -2812,6 +2800,15 @@ async def geometries_route(
 #: `tests/test_connectors_are_carried_into_the_image.py` is what fails if it is dropped again.
 _SITE_GRID_RECIPE_PATH = Path(__file__).resolve().parents[2] / "recipes" / "site_grid.yaml"
 
+#: **The geometry partition version a site grid's own cells are loaded at — round 13cde.**
+#: The partition is versioned as a whole so a gazetteer refresh can load a new version without
+#: overwriting the one an investigation already resolved against (`GeometryRecord`'s docstring).
+#: Nothing in this product has ever written to it, so this route is its first writer and there is
+#: no earlier version to be consistent with. What a later gazetteer refresh should do with
+#: site-specific geometry — carry it forward, or leave a site's cells unresolvable at the new
+#: version — has no answer in the spec and is raised in `05_DEPLOYMENT.md`, not decided here.
+_SITE_GRID_GEOMETRY_VERSION = 1
+
 #: Publish's own git-repository root (§6: recipes commit to `recipes/<id>.
 #: yaml` at the repository root). An `app.state` value, not a bare module
 #: constant `studio_publish.py` reaches for on its own, so a route test can
@@ -2925,6 +2922,7 @@ async def set_site_grid(
     sites: SitesDep,
     graph: GraphDep,
     ontology: OntologyDep,
+    analytics: AnalyticsDep,
     audit: AuditDep,
     body: GridRequest,
 ) -> Site:
@@ -2937,14 +2935,33 @@ async def set_site_grid(
     `site_grid_recipe.yaml` makes redrawing the grid idempotent rather
     than creating duplicate `Location`s.
 
-    **A stated gap, not a silent one**: this does not call
-    `AnalyticsPort.load_geometries` for the cells it creates — the Conduit
-    has no `AnalyticsPort` wired in yet. Every `Location` gets a real, deterministic
-    `geometry_ref`, but that reference does not resolve to a point until
-    Checkpoint 2 wires geometry loading through — exactly the same
-    already-documented gap `test_osm_gazetteer_recipe_end_to_end.py`'s own
-    docstring records for the OSM gazetteer connector, not a new one this
-    route introduces."""
+    **That gap is closed — round 13cde.** This route now loads a `GeometryRecord` per cell, so a
+    cell's `geometry_ref` resolves through `POST /v1/analytics/geometries` instead of pointing at
+    nothing. The docstring here used to say the Conduit "has no `AnalyticsPort` wired in yet",
+    which had stopped being true: `AnalyticsDep` backs the histogram, cross-filter, geo-bin and
+    geometry routes. The gap outlived its own reason by being written down.
+
+    **Three things about how it is loaded, each a choice rather than an accident:**
+
+    - **The ref comes from the same Knowledge Adapter the recipe uses**, through the same
+      `REGISTRY`, rather than being recomputed here. A second implementation of
+      `geometry_reference`'s hash would be one more of the "two copies that drift" defects this
+      phase keeps finding, and it would fail silently: the `Location` would carry one ref and the
+      geometry partition another, with nothing to notice.
+    - **Handling is read off the recipe's own `defaults`**, not restated, for the same reason.
+    - **Version 1, deliberately.** The partition is versioned as a whole for gazetteer refreshes
+      (`GeometryRecord`'s docstring), and nothing in this product has ever written to it — this
+      route is its first writer, so there is no other version to be consistent with. What a
+      *later* gazetteer refresh should do with site-specific geometry is a real question with no
+      answer in the spec, and it is raised in `05_DEPLOYMENT.md` rather than decided here.
+
+    Re-drawing the grid re-loads nothing: `(geometry_ref, version)` is the partition's primary
+    key, so a blind second insert would not duplicate — it would **fail**, taking the whole route
+    down with it. Existing refs are read back and skipped, which is what keeps
+    `test_a1_redrawing_the_grid_does_not_duplicate_its_cells` true of geometries too.
+
+    **What this still does not do is A1's own "incidents geocode into cells"** — see the comment
+    at the load below, and `08_ACCEPTANCE_SCENARIOS.md`'s A1 note."""
     if site.control_points is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -2989,6 +3006,51 @@ async def set_site_grid(
             detail="grid cells were rejected by the recipe engine",
         )
     await graph.commit_transaction(tx)
+
+    # **Each cell's `geometry_ref` is made to resolve.** Every value below comes from the same
+    # place the recipe got it — the connector's own rows, the shared adapter `REGISTRY`, the
+    # recipe's own `defaults` — so there is exactly one statement of each.
+    #
+    # **A `POINT` at the cell's centroid, not a `POLYGON` of its corners, and that is why A1's
+    # "incidents geocode into cells" is still not claimed.** `GeometryRecord` makes the two kinds
+    # mutually exclusive on purpose ("rather than a `POLYGON` row carrying a meaningless
+    # centroid"), and the `geometry_ref` adapter hashes a *point* — `(source_crs, x, y)` — so the
+    # ref the `Location` already carries is a point's ref and could not identify a polygon row
+    # without changing what the recipe writes. Geocoding an incident into a cell needs the cell's
+    # extent and a containment predicate; no port method and no route resolves a point to the
+    # area containing it, and `ST_Contains` appears nowhere in this repository. That is a real
+    # piece of work with a real design question in front of it (which kind a site cell is, and
+    # what happens to the `Location`'s ref when it changes), recorded in
+    # `08_ACCEPTANCE_SCENARIOS.md` beside A1 rather than guessed at here.
+    source_crs = recipe.connector.source_crs or "EPSG:4326"
+    to_ref = REGISTRY["geometry_ref"]
+    to_lon, to_lat = REGISTRY["coordinate_lon"], REGISTRY["coordinate_lat"]
+    cell_handling = Handling(**recipe.defaults.handling)
+    cell_geometries = [
+        GeometryRecord(
+            geometry_ref=to_ref((row["lon"], row["lat"]), source_crs=source_crs),
+            version=_SITE_GRID_GEOMETRY_VERSION,
+            kind=GeometryKind.POINT,
+            lon=to_lon((row["lon"], row["lat"]), source_crs=source_crs),
+            lat=to_lat((row["lon"], row["lat"]), source_crs=source_crs),
+            source_crs=source_crs,
+            source_x=float(row["lon"]),
+            source_y=float(row["lat"]),
+            handling=cell_handling,
+        )
+        for row in rows
+    ]
+    already_loaded = {
+        record.geometry_ref
+        for record in await analytics.get_geometries(
+            [record.geometry_ref for record in cell_geometries],
+            principal,
+            version=_SITE_GRID_GEOMETRY_VERSION,
+        )
+    }
+    await analytics.load_geometries(
+        [record for record in cell_geometries if record.geometry_ref not in already_loaded]
+    )
 
     await audit.record(
         principal=principal,
@@ -3702,9 +3764,7 @@ async def _handle_resync_requests(
     while True:
         payload = await websocket.receive_json()
         last_ack = payload.get("last_acknowledged_seq")
-        deltas = await working_set.sync(
-            investigation_id, principal, last_acknowledged_seq=last_ack
-        )
+        deltas = await working_set.sync(investigation_id, principal, last_acknowledged_seq=last_ack)
         for delta in deltas:
             await websocket.send_text(delta.model_dump_json())
 
@@ -3774,9 +3834,7 @@ async def stream(websocket: WebSocket, investigation_id: str) -> None:
             _handle_resync_requests(websocket, working_set, investigation_id, principal)
         )
         try:
-            await asyncio.wait(
-                {forward_task, resync_task}, return_when=asyncio.FIRST_COMPLETED
-            )
+            await asyncio.wait({forward_task, resync_task}, return_when=asyncio.FIRST_COMPLETED)
         finally:
             for task in (forward_task, resync_task):
                 task.cancel()
