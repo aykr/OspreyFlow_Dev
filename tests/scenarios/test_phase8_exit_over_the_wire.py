@@ -1884,6 +1884,100 @@ def test_b14_an_alert_opens_into_an_investigation_linked_to_the_original(
     )
 
 
+def test_a7_reports_can_be_filtered_to_one_item_category(
+    analyst: httpx.Client, seeded_scope: str
+) -> None:
+    """**A7's item-category half — round 13cdc.** "Filter reports to one residential sub-unit and
+    one item category."
+
+    `08_ACCEPTANCE_SCENARIOS.md` carried a "Known gap" section for this: `EventFilter` had
+    `investigation_scope`, `window`, `node_ids` and `edge_types` only. `cross_filter`'s
+    categorical dimensions *display* a field's distinct values; nothing let a caller **restrict
+    by** one. `value_filters` is that predicate, compiled into the adapter's own `WHERE` clause
+    beside the access filter — never applied after retrieval (`CLAUDE.md` rule 2).
+
+    **The data was always there.** The HMP fixture has written `item_type` on every event since
+    Phase 3; only the filter was missing. So this row needed a feature, not a fixture.
+
+    Asserted as a *restriction*, not as "a response came back": the filtered total must be
+    strictly smaller than the unfiltered one and must equal that category's own bucket. A filter
+    that quietly matched everything would satisfy a weaker check.
+    """
+    unfiltered = analyst.post(
+        "/v1/analytics/cross-filter",
+        json={
+            "filter": {"investigation_scope": seeded_scope},
+            "dimensions": [{"name": "category", "field": "item_type", "bucketing": "categorical"}],
+        },
+    )
+    assert unfiltered.status_code == 200, unfiltered.text
+    buckets = {b["label"]: b["count"] for b in unfiltered.json()["category"]["buckets"]}
+    assert len(buckets) > 1, (
+        f"the seeded population has only one item category, so filtering to one proves nothing: "
+        f"{buckets}"
+    )
+    total = unfiltered.json()["category"]["total"]
+    category, expected = sorted(buckets.items())[0]
+
+    filtered = analyst.post(
+        "/v1/analytics/cross-filter",
+        json={
+            "filter": {
+                "investigation_scope": seeded_scope,
+                "value_filters": {"item_type": [category]},
+            },
+            "dimensions": [{"name": "category", "field": "item_type", "bucketing": "categorical"}],
+        },
+    )
+    assert filtered.status_code == 200, filtered.text
+    result = filtered.json()["category"]
+
+    assert result["total"] == expected, (
+        f"filtering to {category!r} returned {result['total']} events, not that category's own "
+        f"{expected}"
+    )
+    assert result["total"] < total, (
+        f"the filter did not restrict anything — {result['total']} of {total}. A predicate that "
+        "matches everything would pass a weaker assertion than this one"
+    )
+    assert {b["label"] for b in result["buckets"]} == {category}, (
+        f"events of other categories survived the filter: {result['buckets']}"
+    )
+
+
+def test_a7_an_unknown_field_name_is_refused_rather_than_ignored(
+    analyst: httpx.Client, seeded_scope: str
+) -> None:
+    """A field name that is not a safe identifier must be refused at the boundary, not
+    interpolated. The values are parameterised; the *column* is not, which is why the adapter
+    validates it — and why this is asserted over the wire rather than only in the conformance
+    suite."""
+    hostile = analyst.post(
+        "/v1/analytics/cross-filter",
+        json={
+            "filter": {
+                "investigation_scope": seeded_scope,
+                "value_filters": {"item_type'); DROP TABLE events; --": ["x"]},
+            },
+            "dimensions": [{"name": "category", "field": "item_type", "bucketing": "categorical"}],
+        },
+    )
+    assert hostile.status_code >= 400, (
+        f"a field name carrying SQL was accepted: {hostile.status_code} {hostile.text[:200]}"
+    )
+
+    # The table is still there — the assertion that matters if the guard ever failed.
+    after = analyst.post(
+        "/v1/analytics/cross-filter",
+        json={
+            "filter": {"investigation_scope": seeded_scope},
+            "dimensions": [{"name": "category", "field": "item_type", "bucketing": "categorical"}],
+        },
+    )
+    assert after.status_code == 200, after.text
+    assert after.json()["category"]["total"] > 0
+
+
 def test_a15_a_consult_originator_item_blocks_the_export_by_name_then_proceeds_with_a_justification(
     analyst: httpx.Client, seeded_scope: str
 ) -> None:

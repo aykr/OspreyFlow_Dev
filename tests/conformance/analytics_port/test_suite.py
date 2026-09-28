@@ -244,6 +244,124 @@ async def test_event_filter_edge_types_restricts_to_matching_edges(
         assert hist.total == 1
 
 
+async def test_event_filter_value_filters_restrict_by_a_property_not_merely_aggregate_it(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """**A7's item-category half — round 13cdc.**
+
+    `08_ACCEPTANCE_SCENARIOS.md` A7 filters reports "to one residential sub-unit and one item
+    category". The sub-unit half is `node_ids`, already supported. The category half had nothing:
+    `cross_filter`'s categorical dimensions *display* a field's distinct values but never let a
+    caller restrict to one, and 08 carried a "Known gap" section saying so.
+
+    The field here lives inside the JSON `properties` blob, which is the case that matters —
+    `item_type` is not a declared event column, and a filter that only worked on the five
+    top-level columns would not reach A7's row.
+    """
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    events = [
+        _event(occurred_at=now, properties={"item_type": "bicycle"}),
+        _event(occurred_at=now, properties={"item_type": "bicycle"}),
+        _event(occurred_at=now, properties={"item_type": "power tool"}),
+        _event(occurred_at=now, properties={}),
+    ]
+    async with factory.context(events) as adapter:
+        req = HistogramRequest(
+            filter=_filter(value_filters={"item_type": ["bicycle"]}),
+            bucketing=HistogramBucketing.FIXED_INTERVAL,
+            interval_seconds=3600,
+        )
+        assert (await adapter.histogram(req, CLEARED)).total == 2
+
+        # Values within one field are OR-ed: an item category is *one of* these.
+        both = req.model_copy(
+            update={"filter": _filter(value_filters={"item_type": ["bicycle", "power tool"]})}
+        )
+        assert (await adapter.histogram(both, CLEARED)).total == 3
+
+        # An event with no such property is not matched, and does not error.
+        missing = req.model_copy(
+            update={"filter": _filter(value_filters={"item_type": ["kayak"]})}
+        )
+        assert (await adapter.histogram(missing, CLEARED)).total == 0
+
+
+async def test_event_filter_value_filters_combine_with_everything_else_by_and(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """A7 asks for a sub-unit **and** a category. Fields are AND-ed, which is what a filter bar
+    with several facets means; OR-ing them would silently widen the population an analyst
+    believes they have narrowed."""
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    events = [
+        _event(occurred_at=now, source_id="unit-a", properties={"item_type": "bicycle"}),
+        _event(occurred_at=now, source_id="unit-b", properties={"item_type": "bicycle"}),
+        _event(occurred_at=now, source_id="unit-a", properties={"item_type": "power tool"}),
+    ]
+    async with factory.context(events) as adapter:
+        req = HistogramRequest(
+            filter=_filter(node_ids=["unit-a"], value_filters={"item_type": ["bicycle"]}),
+            bucketing=HistogramBucketing.FIXED_INTERVAL,
+            interval_seconds=3600,
+        )
+        assert (await adapter.histogram(req, CLEARED)).total == 1
+
+        # Two fields, also AND-ed.
+        two = req.model_copy(
+            update={
+                "filter": _filter(
+                    value_filters={"item_type": ["bicycle"], "direction": ["inbound"]}
+                )
+            }
+        )
+        assert (await adapter.histogram(two, CLEARED)).total == 0
+
+
+async def test_event_filter_an_empty_value_list_does_not_restrict_and_does_not_error(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """A facet expanded with nothing ticked means "do not restrict by this field", not "match
+    nothing" — and must not compile to `IN ()`, which is a syntax error the analyst would see as
+    a 500."""
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    events = [_event(occurred_at=now, properties={"item_type": "bicycle"})]
+    async with factory.context(events) as adapter:
+        req = HistogramRequest(
+            filter=_filter(value_filters={"item_type": []}),
+            bucketing=HistogramBucketing.FIXED_INTERVAL,
+            interval_seconds=3600,
+        )
+        assert (await adapter.histogram(req, CLEARED)).total == 1
+
+
+async def test_event_filter_value_filters_cannot_smuggle_sql_through_a_field_name(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """**The field name is interpolated into SQL; the values are parameterised.**
+
+    A value filter is the first place a caller names a *column*, so the identifier guard
+    `cross_filter`'s dimensions already rely on has to hold here too. Asserted as a refusal rather
+    than trusted: a name that is not a plain identifier must not reach the query at all.
+    """
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    async with factory.context([_event(occurred_at=now)]) as adapter:
+        req = HistogramRequest(
+            filter=_filter(value_filters={"item_type'); DROP TABLE events; --": ["x"]}),
+            bucketing=HistogramBucketing.FIXED_INTERVAL,
+            interval_seconds=3600,
+        )
+        with pytest.raises(ValueError):
+            await adapter.histogram(req, CLEARED)
+
+        # The table is still there, which is the assertion that would matter if the guard failed.
+        ok = HistogramRequest(
+            filter=_filter(),
+            bucketing=HistogramBucketing.FIXED_INTERVAL,
+            interval_seconds=3600,
+        )
+        assert (await adapter.histogram(ok, CLEARED)).total == 1
+
+
 async def test_histogram_categorical_buckets_by_cell_site(
     factory: AnalyticsAdapterFactory,
 ) -> None:

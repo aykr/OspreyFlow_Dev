@@ -35,10 +35,14 @@ export interface EventFilter {
   window?: Interval | null;
   node_ids?: NodeIds;
   edge_types?: EdgeTypes;
+  value_filters?: ValueFilters;
   [k: string]: unknown;
 }
 export interface Interval {
   valid_from: ValidFrom;
   valid_to?: ValidTo;
   [k: string]: unknown;
+}
+export interface ValueFilters {
+  [k: string]: string[];
 }

@@ -158,6 +158,25 @@ class EventFilter(BaseModel):
     window: Interval | None = None
     node_ids: list[NodeId] = Field(default_factory=list)
     edge_types: list[str] = Field(default_factory=list)
+    #: **Restrict by a field's value, not merely aggregate over it — round 13cdc.**
+    #:
+    #: `08_ACCEPTANCE_SCENARIOS.md` A7 filters reports "to one residential sub-unit and one item
+    #: category". The sub-unit half is `node_ids`; the item-category half had nothing — that
+    #: document's own "Known gap" section recorded it. `cross_filter`'s categorical dimensions
+    #: *display* a field's distinct values; they never let a caller restrict to one.
+    #:
+    #: `{field: [value, ...]}`. Values within one field are **OR**-ed (an item category is one of
+    #: these), fields are **AND**-ed (this sub-unit *and* this category) — the shape a filter bar
+    #: with several facets actually has. Equality only: nothing fuzzy, no ranges, no negation,
+    #: because A7 needs none of them and each is a separate decision about what an analyst is
+    #: asserting when they click a facet.
+    #:
+    #: A field may be a top-level event column or a key inside the JSON `properties` blob; the
+    #: adapter resolves which and validates the name as a safe identifier first, the same
+    #: defence-in-depth `cross_filter`'s own dimensions already use. The predicate is compiled
+    #: **into** the adapter's `WHERE` clause alongside the access filter, never applied after
+    #: retrieval (`03_CONDUIT_MIDDLEWARE.md` §6, `CLAUDE.md` rule 2).
+    value_filters: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class HistogramBucketing(StrEnum):

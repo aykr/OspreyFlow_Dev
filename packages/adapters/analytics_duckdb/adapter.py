@@ -87,6 +87,21 @@ class AnalyticsDuckDBAdapter:
             placeholders = ",".join("?" for _ in event_filter.edge_types)
             clauses.append(f"edge_type IN ({placeholders})")
             params.extend(event_filter.edge_types)
+        # **A7's item-category half — round 13cdc.** Values are parameterised; only the *column*
+        # is interpolated, and `_field_expression` validates it as a safe identifier first, which
+        # is the same guard `cross_filter`'s own dimensions already rely on.
+        #
+        # An empty value list would compile to `IN ()`, which is a syntax error in DuckDB and
+        # would otherwise surface as a 500 on an empty facet selection; it is skipped, so
+        # "no values chosen for this field" means "do not restrict by this field" rather than
+        # "match nothing". That is what a filter bar with a facet expanded and nothing ticked
+        # means to an analyst.
+        for field, values in sorted(event_filter.value_filters.items()):
+            if not values:
+                continue
+            placeholders = ",".join("?" for _ in values)
+            clauses.append(f"{_field_expression(field)} IN ({placeholders})")
+            params.extend(values)
         return SqlPredicate(" AND ".join(clauses), params)
 
     def _predicate(self, event_filter: EventFilter, principal: Principal) -> SqlPredicate:
