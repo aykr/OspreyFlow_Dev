@@ -59,7 +59,8 @@ finding after the table.
 | B11 | **yes** | A manual `SAME_AS`, score 1.0, attributed to this signed-in analyst. |
 | B12 | **yes** | Hotlist created over HTTP and read back with its owner and review date. |
 | B13, B14 | **yes** | Round 13cdb: hotlist, then the seizure record ingested through the Studio. |
-| B15, B17 | **yes** | The handset and its sightings are seeded; B15's second SIM arrives with B13's ingest. |
+| B15, B17 | **yes** | The handset and its sightings are seeded; B15's second SIM arrives
+  with B13's ingest. |
 | B16, B18 | **partly** | The data half — ordered, geolocated, on a shared axis. Rendering and
   playback are the Glass tier. |
 | B19, B20 | **yes** | Pattern preview (estimated count first), run, save, monitor. |
