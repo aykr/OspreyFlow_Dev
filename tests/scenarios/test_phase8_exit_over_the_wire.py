@@ -56,7 +56,8 @@ finding after the table.
 | B4 | **yes** (adapted) | Fixture Corp's resolution cohort, search-seeded, no edges between them. |
 | B5 | **yes** (adapted) | One hop out from a seeded node. |
 | B6 | **yes** (data half) | Round 13cdd: extracted, accepted, and the span's own slice of
-  the returned text equals the identifier. Highlighting is the Glass's half, as for B16/B18. |
+  the returned text **covers** the identifier. That it *equals* it is 08's wording and is not
+  guaranteed — `_locate` anchors on the longest property; see the case's own docstring and 08. |
 | B7, B8 | **yes** | Round 13cb: the `scenarios` seed dataset. B8 is asserted by the analyst. |
 | B9 | **yes** | Strict does not merge the close-given-name pair; Balanced does. |
 | B10 | **yes** | `explain` on the merged cluster, per-comparison weights, not just the total. |
@@ -111,11 +112,21 @@ Fixture Corp is untouched.
 **Running it.**
 
 ```bash
-python -m harness.apply --profile local-lite --build --demo-analyst --seed hmp,fixture-corp
+# The drop folder first: nothing places these files, and eight cases here need them.
+# `--osprey-config` is what makes this work for a deployment whose ingest root is not the
+# default (`components.storage.ingest`, owner ruling R6).
+python -m scripts.seed_ingest_folder --osprey-config osprey.yaml
+
+python -m harness.apply --profile local-lite --build --demo-analyst \
+  --seed hmp,fixture-corp,scenarios
 OSPREY_TEST_OVER_THE_WIRE=1 \
   OSPREY_LIVE_INVESTIGATION_ID=<the id apply printed> \
   .venv/bin/python -m pytest tests/scenarios/test_phase8_exit_over_the_wire.py
 ```
+
+**`scenarios` is not optional**, though this block used to omit it (corrected round 13cdd, found
+running the suite rather than reading it): B7, B8, B13–B18 and B6 all rest on that seed dataset,
+and `_require_seeded` fails by name rather than mysteriously if it is missing.
 
 **Run it against a freshly seeded deployment, once.** Two rows make assertions the platform
 deliberately does not let a caller take back — B11's manual `SAME_AS` (`POST /resolution/split`
