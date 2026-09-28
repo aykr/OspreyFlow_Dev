@@ -31,13 +31,21 @@ a named reason, and neither of them is a test failure:
 > proven by a live spec. The GitHub Actions gap on `main` since 22 September is bug-class work on
 > the checker's brief.
 
-So "Remains before the milestone" was exactly two build items. **A1's cell polygons and
-containment are built (round 13cf, over the wire)**; B6's live spec remains.
+**Both build items are now built. A1's cell polygons and containment (round 13cf, over the
+wire); B6's live spec (round 13cg, `apps/workspace/live/scenario-b-document.spec.ts`).** R9's own
+bar for B6 was "proven by a live spec", not "on a rendered deployment" — the same qualification
+below already applies to it.
 
-A qualification, recorded rather than counted: the Glass-tier halves of B16, B18 and A12–A15 are
-proven by `make glass-live` on the developer stack. That tier cannot run against a rendered
+A qualification, recorded rather than counted: the Glass-tier halves of B6, B16, B18 and A12–A15
+are proven by `make glass-live` on the developer stack. That tier cannot run against a rendered
 deployment by design (its CORS allowlist is the workspace origin only), so "in a real browser" and
 "on a rendered deployment" are both proven for those rows, but by different runs.
+
+**A finding from building B6's live spec, round 13cg — recorded, not fixed here.** One run in
+eight (across this round's own testing) accepted a candidate whose span covered text that does not
+contain the identifier at all, a sharper case of the over-capture `08_ACCEPTANCE_SCENARIOS.md`'s
+own "Proposed" note under B6 already names. Neither tier retries past it; both fail hard, which is
+correct until that note's own decision (what property an `Endpoint` is identified by) is taken.
 
 What closing pass 13ce measured, one machine, one pass:
 

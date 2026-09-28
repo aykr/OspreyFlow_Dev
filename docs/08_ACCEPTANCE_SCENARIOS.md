@@ -63,7 +63,7 @@ sightings into a rendered deployment.
 | B18 | **over the wire + the Glass** | `test_b18_the_sightings_form_an_ordered_track` (now also through `POST /v1/analytics/sightings`); `apps/workspace/live/scenario-b-timeline.spec.ts` for the trail advancing under playback, round 13cde — after a seed defect, see below |
 | A1 | **over the wire** | `test_a1_a_site_grid_is_placed_and_its_cells_become_location_entities`, `test_a1_redrawing_the_grid_does_not_duplicate_its_cells`, `test_a1_a_cells_geometry_reference_resolves_to_its_centroid` (the ref names the cell's polygon), `test_a1_incidents_geocode_into_the_cells_that_contain_them` (round 13cf, owner rulings R9 and R10) |
 | A6 | **over the wire** | Round 13cdd: `test_a6_the_reports_for_the_selection_open_with_a_source_locator_each` — not an extraction row |
-| B6 | **over the wire** (data half) | Round 13cdd: `test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place`; highlighting is the Glass's half |
+| B6 | **over the wire + the Glass** | Round 13cdd: `test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place`; round 13cg: `apps/workspace/live/scenario-b-document.spec.ts` for the highlight in place |
 | B13, B14 | **over the wire** | `test_b13_an_ingest_fires_an_alert_naming_the_identifier_document_and_rule`, `test_b14_an_alert_opens_into_an_investigation_linked_to_the_original` |
 | A7 | **over the wire** | `test_a7_reports_can_be_filtered_to_one_item_category`, `test_a7_an_unknown_field_name_is_refused_rather_than_ignored` — the "Known gap" below is closed by `EventFilter.value_filters` |
 | A15 | **over the wire** | `test_a15_a_consult_originator_item_blocks_the_export_by_name_then_proceeds_with_a_justification` |
@@ -86,7 +86,7 @@ the two walkthrough cases that carry the rows with no case of their own.
 | A15 | `test_a15_…` | `scenario-a-a12-a15.spec.ts` A15 | Yes |
 | B1–B3 | `test_b1_…`, `test_b2_…`, `test_b3_…` | `ingest-folder.spec.ts` | Yes |
 | B4, B5 | `test_scenario_b_over_the_wire` (adapted) | `fixture-corp.spec.ts` (search) | Yes |
-| B6 | `test_b6_…` (data half) | — | **Unproven** — in-place highlighting is driven by no test; a live spec is required by owner ruling R9 |
+| B6 | `test_b6_…` (data half) | `scenario-b-document.spec.ts` ×2 | Yes (round 13cg) |
 | B7, B8 | `test_b7_…`, `test_b8_…` | — | Yes |
 | B9, B10 | `test_scenario_b_over_the_wire` | `fixture-corp.spec.ts` (threshold, explain) | Yes |
 | B11, B12 | `test_scenario_b_over_the_wire` | — | Yes |
@@ -166,8 +166,8 @@ ChatRequest.format of type string`. Both pins now come from `deploy/compose/dev.
 `tests/harness/test_render.py::test_the_rendered_model_proxy_is_the_developer_stacks` holds the
 whole model tier to it.
 
-**B6's data half is proven; its rendering half is the Glass's**, the split B16 and B18
-carried until round 13cde. `test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place`
+**B6's data half is proven; its rendering half was the Glass's**, the split B16 and B18
+carried until round 13cde — closed for B6 in round 13cg, below. `test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place`
 extracts from a synthetic transcript, accepts the candidate, and asserts the document view returns
 the submitted text and a span covering the identifier within it — with the span still `inferred`,
 since accepting a candidate does not promote it.
@@ -270,6 +270,26 @@ rows through `list_sightings` with the Glass's own filter; shown red with the lo
 over-the-wire B18 case (now also through the route), and the live spec (red against a scope with no
 `scenarios` seed). The earlier note's claim that the route returned the four sightings "for that
 entity, scope and window" was not a measurement of the request the Glass sends.
+
+**B6 is proven in a real browser — round 13cg.** `apps/workspace/live/scenario-b-document.spec.ts`
+holds two claims. First, a red state that costs nothing extra to seed: the *seeded* shared
+endpoint's own provenance names a document id (`"fixture"`) that was never really ingested, so its
+Dossier shows the empty state and no highlighted span — shown red by removing `Dossier.tsx`'s own
+null-document filter, which would otherwise crash trying to render it. Second, the real claim:
+extracting and accepting the same transcript `test_b6_…` uses, then reaching the accepted node's
+own Dossier through the working set's one entry point (search, the radial menu's "View messages"
+item, the same route `apps/workspace/keyboard/keyboard.spec.ts` already proves keyboard-reachable)
+renders a real `<button>` over the message text, `title="Endpoint"`, covering the identifier. Shown
+red by dropping the highlighted run's own `title` attribute.
+
+**One run in eight surfaced a sharper case of the gap the paragraph below already names, worth
+recording precisely rather than folded into "sometimes over-captures".** The accepted candidate's
+span covered `"confirming the drop for tonight."` — not merely a wider span containing the
+identifier (this file's own next paragraph's example), but a substring that does not contain it at
+all. The live spec does not retry on this, deliberately: `test_b6_…` does not either, so retrying
+here would make the two tiers disagree about what counts as a pass for the same underlying
+`_locate` behaviour. Both fail hard on it, which is correct until the paragraph below's own
+decision is taken.
 
 **Proposed — a span should anchor on the property that identifies the entity, not the longest
 one.** This row's own wording above says "the span text **equals** the entity's identifier", and
