@@ -23,6 +23,8 @@ from scripts.seed_scenarios import (
     build_everything,
 )
 
+from ontology.handling import load_uk_le_scheme
+
 
 def test_b4_b5_the_cohort_converges_on_the_shared_endpoint() -> None:
     nodes, edges, landmarks = build_everything()
@@ -179,7 +181,7 @@ def test_the_seed_counts_are_what_the_rows_need() -> None:
     rather than only as a downstream failure."""
     nodes, edges, _ = build_everything()
     assert dict(Counter(n.type for n in nodes)) == {
-        "Endpoint": 7,
+        "Endpoint": 8,
         "Device": 1,
         "Person": 8,
         "Location": 4,
@@ -190,3 +192,41 @@ def test_the_seed_counts_are_what_the_rows_need() -> None:
         "PAIRED_WITH": 1,
         "PRESENT_AT": 4,
     }
+
+
+def test_a15_one_node_is_marked_consult_originator() -> None:
+    """**A15's export block needs something to block on** — round 13cdc.
+
+    `08_ACCEPTANCE_SCENARIOS.md` A15: "Items marked consult-originator block the export by name."
+    No seeded population carried `sanitisation_code: "S2"`, so that clause had never been walked
+    on a deployment; REPORT-13b recorded it as the reason A15 was only "partly" over the wire.
+
+    **It is in this population and not Fixture Corp's**, because ADR-035 §C5's re-measured
+    resolution scores are computed from Fixture Corp and adding a node there moves them.
+    """
+    nodes, _, landmarks = build_everything()
+    by_id = {n.id: n for n in nodes}
+
+    marked = [n for n in nodes if n.handling.sanitisation_code == "S2"]
+    assert len(marked) == 1, f"expected exactly one consult-originator node, got {len(marked)}"
+    assert marked[0].id == landmarks["consult_originator_node_id"]
+
+    # **S2 is the consult-originator code in the scheme, not by assumption.**
+    scheme = load_uk_le_scheme()
+    assert scheme.sanitisation_codes["S2"].consult_originator is True
+
+    # Readable like any other node: `sanitisation_code` never gates a read, and A15 is about the
+    # *export* boundary. A node the analyst could not see would prove the wrong thing.
+    node = by_id[landmarks["consult_originator_node_id"]]
+    assert node.handling.classification == "OFFICIAL"
+    assert node.properties["value_normalised"] == landmarks["consult_originator_value"]
+
+
+def test_fixture_corps_population_is_untouched_by_this_seeder() -> None:
+    """ADR-035 §C5's scores are computed from Fixture Corp. This seeder must not add to it —
+    the brief for round 13cdc says so, and `test_fixture_corp_shape.py` is what would fail."""
+    nodes, _, _ = build_everything()
+    assert not [n for n in nodes if n.id.startswith("corp-")], (
+        "the scenarios seeder is writing Fixture Corp nodes, which would move ADR-035 §C5's "
+        "re-measured resolution scores"
+    )

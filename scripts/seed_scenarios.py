@@ -15,6 +15,7 @@ simply not there. A row proven only in process no longer counts towards clause 3
 |        | from one shared `Endpoint` |
 | B7 | A second cohort sharing one messaging-handle `Endpoint` |
 | B8 | *Nothing.* The `SAME_AS` is the analyst's own asserted link — see below |
+| A15 | One `Endpoint` marked `sanitisation_code: S2`, which blocks an export by name |
 | B15 | A handset (`imei`) with the SIM it held *before* the swap; B13's ingest brings the other |
 | B16, B17, B18 | Location `Event`s for that handset, ordered in time, so a track
 |               | exists to brush and plot |
@@ -92,6 +93,18 @@ SCENARIOS_TOKEN = "scenarios"
 #: The shared endpoint B4/B5's cohort converges on. A literal, for the same reason: the test
 #: searches for it by value.
 SHARED_ENDPOINT_ID = "scenarios-shared-endpoint"
+
+#: **A15's consult-originator item — round 13cdc.** `08_ACCEPTANCE_SCENARIOS.md` A15: "Items
+#: marked consult-originator block the export by name; export proceeds only with a recorded
+#: justification and carries a withheld-item manifest." Nothing in any seeded population carried
+#: `sanitisation_code: "S2"`, so that clause had never been walked on a deployment.
+#:
+#: **It lives here rather than in Fixture Corp, deliberately.** REPORT-13b recorded why: Fixture
+#: Corp's population is what ADR-035 §C5's re-measured resolution scores are computed from, and
+#: adding a node to it moves those numbers. Scenario A's own population is the right home, and
+#: `tests/scenarios/test_fixture_corp_shape.py` stays untouched.
+CONSULT_ORIGINATOR_NODE_ID = "scenarios-consult-originator-endpoint"
+CONSULT_ORIGINATOR_VALUE = "+447700900999"
 SHARED_ENDPOINT_VALUE = "+447700900500"
 
 #: **The seizure fixture's own date, not one invented here.** B17 brushes "to the seizure date",
@@ -128,6 +141,40 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 def _handling() -> Handling:
     return Handling(
         classification="OFFICIAL", handling_code="P", originator="fixture", owning_unit="unit-1"
+    )
+
+
+def _consult_originator_handling() -> Handling:
+    """`S2` is the UK LE scheme's consult-originator code — checked against
+    `ontology.handling.load_uk_le_scheme()`, not assumed from the letter.
+
+    `sanitisation_code` never gates a *read* (`schemas/domain.py`'s own note): this node is
+    readable by the demo analyst exactly like any other, and it is the **export** boundary that
+    must stop on it. That is the distinction A15 exists to prove, and seeding a node the analyst
+    could not see would prove the wrong one.
+    """
+    return Handling(
+        classification="OFFICIAL",
+        handling_code="P",
+        originator="fixture",
+        owning_unit="unit-1",
+        sanitisation_code="S2",
+    )
+
+
+def build_consult_originator_node() -> Node:
+    """One `Endpoint` marked `S2`, for A15's export block."""
+    return Node(
+        id=CONSULT_ORIGINATOR_NODE_ID,
+        type="Endpoint",
+        properties={
+            "value_raw": CONSULT_ORIGINATOR_VALUE,
+            "value_normalised": CONSULT_ORIGINATOR_VALUE,
+            "endpoint_kind": "msisdn",
+        },
+        provenance=_provenance("scenarios:consult-originator"),
+        handling=_consult_originator_handling(),
+        audit=_audit(),
     )
 
 
@@ -266,12 +313,15 @@ def build_everything() -> tuple[list[Node], list[Edge], dict[str, object]]:
     )
     sighting_nodes, sighting_edges = build_sightings(legs)
 
-    nodes = [shared, *cohort.nodes, *handles.nodes, *legs.nodes, *sighting_nodes]
+    consult = build_consult_originator_node()
+    nodes = [shared, consult, *cohort.nodes, *handles.nodes, *legs.nodes, *sighting_nodes]
     edges = [*cohort.edges, *handles.edges, *legs.edges, *sighting_edges]
 
     landmarks: dict[str, object] = {
         "shared_endpoint_id": SHARED_ENDPOINT_ID,
         "shared_endpoint_value": SHARED_ENDPOINT_VALUE,
+        "consult_originator_node_id": CONSULT_ORIGINATOR_NODE_ID,
+        "consult_originator_value": CONSULT_ORIGINATOR_VALUE,
         "cohort_person_ids": cohort.person_ids,
         "handle_cohort_person_ids": handles.person_ids,
         "handle_id": handles.shared_id,

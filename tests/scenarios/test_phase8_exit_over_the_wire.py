@@ -179,6 +179,11 @@ from scripts.seed_scenarios import (  # noqa: E402
 
 SCENARIOS_HANDLE_ID = "beta-scenarios-handle"
 
+#: A15's consult-originator item, imported from the seeder so the two cannot drift.
+from scripts.seed_scenarios import (  # noqa: E402
+    CONSULT_ORIGINATOR_VALUE as SCENARIOS_CONSULT_ORIGINATOR_VALUE,
+)
+
 #: The SIM still in the handset at seizure — the identifier B13's hotlist watches. Imported from
 #: the fixture that generates both the seeded graph node and the ingested file, so the hotlist,
 #: the ingest and the pivot cannot come to mean three different SIMs.
@@ -1876,6 +1881,110 @@ def test_b14_an_alert_opens_into_an_investigation_linked_to_the_original(
     assert result["investigation"]["branched_from"] == seizure_alert["scope"], (
         "the new investigation is not linked back to the one the alert fired in: "
         f"{result['investigation'].get('branched_from')!r} != {seizure_alert['scope']!r}"
+    )
+
+
+def test_a15_a_consult_originator_item_blocks_the_export_by_name_then_proceeds_with_a_justification(
+    analyst: httpx.Client, seeded_scope: str
+) -> None:
+    """**A15's fourth clause, closed — round 13cdc.** "Items marked consult-originator block the
+    export **by name**; export proceeds only with a recorded justification and carries a
+    withheld-item manifest."
+
+    This module's own note used to record why it could not be walked: A15 is evaluated against
+    each item's **stored** handling and no seeded node carried `sanitisation_code: "S2"`. Closing
+    it meant seeding one — and doing that in Fixture Corp would have moved the population
+    `test_fixture_corp_shape.py` and `06_DECISIONS.md` ADR-035 §C5's re-measured scores are
+    asserted against. So it lives in the `scenarios` population, which is Scenario A's own.
+
+    Three things are asserted and each fails differently:
+
+    1. **Blocked, and the item is named** — not merely counted. `BlockedItem`'s own docstring
+       calls that "A15's own literal assertion".
+    2. **A justification is required, not optional.** The same request with no justification is
+       still refused, so the override is a real gate rather than a field nobody checks.
+    3. **It then proceeds, and the artefact carries a withheld-item manifest.**
+    """
+    marked = analyst.post(
+        "/v1/search", json={"query": SCENARIOS_CONSULT_ORIGINATOR_VALUE, "limit": 5}
+    )
+    assert marked.status_code == 200, marked.text
+    hits = marked.json()["nodes"]
+    assert hits, (
+        f"no node carries {SCENARIOS_CONSULT_ORIGINATOR_VALUE} — A15's consult-originator item is "
+        "seeded by `--seed scenarios`; without it this row cannot be walked"
+    )
+    node = hits[0]
+    assert node["handling"]["sanitisation_code"] == "S2", (
+        f"the seeded item is not marked consult-originator: {node['handling']}"
+    )
+
+    selection = {
+        "artefact_kind": "subgraph",
+        "resolution_threshold": 0.95,
+        "items": [
+            {
+                "id": node["id"],
+                "kind": "node",
+                "handling": node["handling"],
+                "label": "the consult-originator endpoint",
+            }
+        ],
+    }
+
+    # 1. Blocked, by name.
+    blocked = analyst.post(f"/v1/investigations/{seeded_scope}/export", json=selection)
+    assert blocked.status_code == 422, (
+        f"an export naming a consult-originator item was not blocked: {blocked.status_code} "
+        f"{blocked.text}"
+    )
+    body = blocked.json()
+    named = json.dumps(body)
+    assert "consult_originator" in named, body
+    assert node["id"] in named or "consult-originator endpoint" in named, (
+        f"the block does not name the item, only counts it: {body}"
+    )
+
+    # 2. A justification alone is not enough — the originator reference is required with it.
+    half = analyst.post(
+        f"/v1/investigations/{seeded_scope}/export",
+        json={**selection, "justification": "Operational necessity, SIO authorised."},
+    )
+    assert half.status_code == 422, (
+        "an export overrode a consult-originator block with a justification but no originator "
+        f"reference: {half.status_code} {half.text}"
+    )
+
+    # 3. Both recorded — it proceeds, and says what it withheld.
+    allowed = analyst.post(
+        f"/v1/investigations/{seeded_scope}/export",
+        json={
+            **selection,
+            "justification": "Operational necessity, SIO authorised.",
+            "originator_reference": "ORIG/2026/0114",
+        },
+    )
+    assert allowed.status_code == 200, allowed.text
+    result = allowed.json()
+
+    # The artefact carries the Osprey mark (ADR-047) and its own handling level — the export is a
+    # real artefact, not a status code.
+    assert result["mark"]["osprey_mark"], result["mark"]
+    assert result["mark"]["investigation_id"] == seeded_scope
+    assert result["mark"]["handling_level"], result["mark"]
+
+    # **The withheld-item manifest**, which is what keeps the artefact honest about what it does
+    # not contain (ADR-045). `withheld_count` is computed server-side: `ExportRequest` has no such
+    # field, deliberately, so a client cannot make the manifest misstate completeness.
+    assert result["manifest"] is not None, (
+        "the export proceeded without a withheld-item manifest"
+    )
+    assert "withheld_count" in result["manifest"], result["manifest"]
+    assert result["manifest"]["policy"], result["manifest"]
+
+    # The override is recorded, not merely accepted — there is a ledger entry to point at.
+    assert result["ledger_entry_id"], (
+        "the export produced no ledger entry, so the recorded justification is recorded nowhere"
     )
 
 
