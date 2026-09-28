@@ -1,4 +1,4 @@
-"""`make licence-check` — enforces the allowlist in `docs/00_ARCHITECTURE.md` §7.
+"""`make licence-check` — enforces the allowlist in `spec/00_ARCHITECTURE.md` §7.
 
 Runs `pip-licenses` against a Python environment and fails, naming every
 offending package, if any reported licence is not on the allowlist. Exit 1 on
@@ -34,6 +34,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.demo_registry import REGISTRY, DemoManifest  # noqa: E402
+from scripts.packaging_gate import check_license_and_notice  # noqa: E402
 
 ALLOWED_MARKERS = (
     "mit",
@@ -76,6 +77,23 @@ def find_offenders(packages: list[dict[str, str]]) -> list[dict[str, str]]:
     return [p for p in packages if not is_allowed(p["License"])]
 
 
+def find_own_licence_violations(repo_root: Path = REPO_ROOT) -> list[str]:
+    """The third `licence-check` leg — round 14a's own close-step addition, `process/
+    07_BUILD_PLAN.md`'s Trigger A entry: the two legs above check third-party *dependency*
+    licence metadata; nothing checked this project's own `LICENSE`/`NOTICE`. Reuses
+    `packaging_gate.check_license_and_notice` (already built and unit-tested against fabricated
+    text for a bundle's own copy) against the repository's real root files, rather than a second
+    implementation of the same comparison. `repo_root` is a parameter, not always `REPO_ROOT`, so
+    this test's own red-first case can point it at a planted, temporary copy instead of editing
+    this repository's real `LICENSE`."""
+    license_path = repo_root / "LICENSE"
+    notice_path = repo_root / "NOTICE"
+    return check_license_and_notice(
+        license_path.read_text(encoding="utf-8") if license_path.is_file() else None,
+        notice_path.read_text(encoding="utf-8") if notice_path.is_file() else None,
+    )
+
+
 def find_data_licence_offenders(
     registry: tuple[DemoManifest, ...] = REGISTRY,
 ) -> list[tuple[str, str]]:
@@ -114,7 +132,7 @@ def main() -> int:
     for offender in offenders:
         print(
             f"licence-check: {offender['Name']} {offender['Version']} — "
-            f"{offender['License']!r} is not on the docs/00_ARCHITECTURE.md §7 allowlist",
+            f"{offender['License']!r} is not on the spec/00_ARCHITECTURE.md §7 allowlist",
             file=sys.stderr,
         )
 
@@ -122,15 +140,23 @@ def main() -> int:
     for demo_id, licence in data_offenders:
         print(
             f"licence-check: demo {demo_id!r}'s own data licence {licence!r} is not on the "
-            "docs/00_ARCHITECTURE.md §7 allowlist (06_DECISIONS.md ADR-035 §C7)",
+            "spec/00_ARCHITECTURE.md §7 allowlist (06_DECISIONS.md ADR-035 §C7)",
             file=sys.stderr,
         )
 
-    if offenders or data_offenders:
+    own_violations = find_own_licence_violations()
+    for violation in own_violations:
+        print(
+            f"licence-check: this project's own {violation} (06_DECISIONS.md ADR-034 §B2/§B6)",
+            file=sys.stderr,
+        )
+
+    if offenders or data_offenders or own_violations:
         return 1
     print(
         f"licence-check: {len(packages)} packages, all allowed "
-        f"({len(REGISTRY)} demo data licence(s) checked, all allowed or undeclared)."
+        f"({len(REGISTRY)} demo data licence(s) checked, all allowed or undeclared); "
+        "this project's own LICENSE/NOTICE present and correct."
     )
     return 0
 
