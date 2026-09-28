@@ -52,6 +52,27 @@ ABSOLUTE_API_URL = re.compile(
     r"https?://(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?|https?://[^\"'`\s]+/v1/"
 )
 
+#: **One exemption, exact to the construct — closing pass 13ce, 28 September 2026.**
+#: `oidc-client-ts` (added 25 September for PKCE sign-in, `3a508da`) parses a possibly-relative
+#: redirect URL against a throwaway base in `UrlUtils.readParams`:
+#: `new URL(url, "http://127.0.0.1")[responseMode === "fragment" ? "hash" : "search"]`. That
+#: origin is never requested; only the parsed hash or query is read. The bare-origin
+#: alternative of `ABSOLUTE_API_URL` matched it, so this test could not pass on any build since
+#: that dependency arrived, and nothing ran it (the `deployment-exit-tests` job had not executed
+#: since 22 September). Matched as the minified expression **including** its `[…"hash":"search"]`
+#: property access, so the same origin anywhere else in the bundle, or with a port, or as a
+#: plain string, is still flagged; `test_the_exemption_hides_only_the_library_parsing_base` holds
+#: that. A version of the library that changes the expression makes this test red again, which
+#: is the safe direction.
+LIBRARY_URL_PARSING_BASE = re.compile(
+    r'new URL\([\w$]+,"http://127\.0\.0\.1"\)\[[\w$]+==="fragment"\?"hash":"search"\]'
+)
+
+
+def absolute_api_urls(bundle: str) -> list[str]:
+    """Every baked-in Conduit-shaped address in `bundle`, less the one library parsing base."""
+    return sorted(set(ABSOLUTE_API_URL.findall(LIBRARY_URL_PARSING_BASE.sub("", bundle))))
+
 
 def _build(env: dict[str, str]) -> str:
     """Builds the Glass and returns every emitted JavaScript file concatenated.
@@ -82,7 +103,7 @@ def test_the_bundle_built_for_a_deployment_contains_no_absolute_api_url() -> Non
     with relative `/v1/…` paths and no origin at all."""
     bundle = _build({"VITE_API_BASE_URL": ""})
 
-    found = sorted(set(ABSOLUTE_API_URL.findall(bundle)))
+    found = absolute_api_urls(bundle)
     assert not found, (
         "the built bundle carries an absolute API address, so every deployment made from this "
         f"image would send requests there regardless of where its Conduit is: {found}"
@@ -104,10 +125,30 @@ def test_the_same_check_fails_for_a_bundle_built_with_an_absolute_url() -> None:
     """
     bundle = _build({"VITE_API_BASE_URL": "http://localhost:8000"})
 
-    assert ABSOLUTE_API_URL.search(bundle), (
+    assert absolute_api_urls(bundle), (
         "a bundle built with an absolute Conduit address was not flagged, so the check above "
         "cannot detect the defect it exists for"
     )
+
+
+def test_the_exemption_hides_only_the_library_parsing_base() -> None:
+    """Not opt-in: this is the exemption's own red proof and needs no build.
+
+    The library's minified expression, verbatim from the 25 September bundle, is exempt. The same
+    origin in every shape a baked Conduit address could take beside it is not: the identical
+    `new URL(…)` call without the `hash`/`search` access, the origin with a port, and a bare
+    string literal.
+    """
+    library = 'const n=new URL(r,"http://127.0.0.1")[e==="fragment"?"hash":"search"];'
+    assert absolute_api_urls(library) == []
+
+    for baked in (
+        'fetch(new URL(p,"http://127.0.0.1"))',
+        'new URL(r,"http://127.0.0.1:8000")[e==="fragment"?"hash":"search"]',
+        'const base="http://127.0.0.1";',
+        'const base="http://localhost:8000";',
+    ):
+        assert absolute_api_urls(library + baked), f"{baked!r} was hidden by the exemption"
 
 
 @requires_opt_in
