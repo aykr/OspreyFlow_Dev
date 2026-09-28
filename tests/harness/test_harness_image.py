@@ -43,9 +43,12 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
+import yaml
+from harness.preflight.ports import _is_bindable, declared_ports
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("OSPREY_TEST_HARNESS_IMAGE") != "1",
@@ -97,9 +100,67 @@ def test_the_image_builds(built_image: str) -> None:
     assert built_image == IMAGE_TAG
 
 
+#: Round 13e, owner ruling R11: bounded so a genuinely stuck port still fails the test, rather
+#: than hanging it — 90 s is comfortably above the handful of seconds a `TIME_WAIT`-held port from
+#: a *preceding* exit test's own teardown has been observed to clear in (13ce, 13ch).
+_PORT_WAIT_TIMEOUT_SECONDS = 90.0
+_PORT_WAIT_POLL_SECONDS = 2.0
+
+
+def _wait_for_ports_bindable(
+    rendered_out_root: Path,
+    *,
+    timeout_seconds: float = _PORT_WAIT_TIMEOUT_SECONDS,
+    poll_seconds: float = _PORT_WAIT_POLL_SECONDS,
+) -> None:
+    """**Owner ruling R11, round 13e.** The host half of the parity comparison below binds every
+    port the rendered compose file publishes, the same way `harness/preflight/ports.py::check`
+    does — deliberately without `SO_REUSEADDR`, so a port still in `TIME_WAIT` from a *preceding*
+    exit test's own deployment teardown (this suite runs `test_bundle_exit_test.py` immediately
+    before this file) correctly reads as taken. That correctness is exactly what made this test
+    order-sensitive: measured directly (13ce, 13ch), it fails when run straight after that
+    teardown and passes run on its own a few minutes later, once the kernel has released the
+    ports. The fix is not to weaken the comparison (`ports` is not excluded, and
+    `harness/preflight/ports.py`'s binding semantics are untouched, per R11) — it is to wait,
+    bounded, for the transient condition to clear before measuring anything.
+
+    Reads the rendered compose file's own declared ports (`declared_ports`, the same function the
+    check itself calls) rather than hardcoding 8080/8081, so this stays correct if `local-lite`'s
+    published ports ever change. Fails with a named reason, not a hang, if the ports are still
+    held after the bound — a *genuinely* occupied port (not `TIME_WAIT`) must still fail the test
+    it was going to fail anyway, just without the order-sensitivity.
+    """
+    # `--out-root` is a *root*, not the profile's own directory: `harness.preflight.__main__`
+    # joins it with `config.profile.value` (`deploy/generated/<profile>/`) before ever reading a
+    # compose file — found running this for real, `FileNotFoundError` at `rendered_out_root/
+    # compose.yaml`, which does not exist. Globbing for it rather than hardcoding `local-lite`
+    # keeps this correct if the profile this suite renders ever changes.
+    compose_path = next(rendered_out_root.glob("*/compose.yaml"))
+    compose = yaml.safe_load(compose_path.read_text(encoding="utf-8")) or {}
+    ports = [port for _service, port in declared_ports(compose)]
+    if not ports:
+        return
+
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        taken = [port for port in ports if not _is_bindable(port)]
+        if not taken:
+            return
+        if time.monotonic() >= deadline:
+            pytest.fail(
+                f"port(s) {taken} still not bindable after waiting {timeout_seconds:.0f}s — "
+                "this is not the TIME_WAIT-after-teardown case this wait exists for (that clears "
+                "in seconds); something else is holding them, and the parity comparison below "
+                "would fail on `ports` for a real reason"
+            )
+        time.sleep(poll_seconds)
+
+
 def test_containerized_preflight_reaches_the_same_result_as_the_host_cli(
     built_image: str, rendered_out_root: Path
 ) -> None:
+    _wait_for_ports_bindable(rendered_out_root)
+
     host = subprocess.run(
         [sys.executable, "-m", "harness.preflight", "--out-root", str(rendered_out_root)],
         cwd=REPO_ROOT,
