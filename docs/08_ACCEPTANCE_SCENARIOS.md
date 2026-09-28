@@ -66,10 +66,30 @@ Each of the six was **shown red first** against a deployment seeded `hmp,fixture
 green against **the same deployment** after seeding `scenarios` — one variable, not two
 deployments.
 
-**Why A6 and B6 did not move, precisely rather than "not seeded".** Both are document-view rows,
-and a document's *spans* come from the extraction-candidates store — `GET /v1/investigations/{id}/
-dossier/documents/{id}` reads `ExtractionCandidates`, not the graph. The `scenarios` seeder writes
-to the graph. Those rows need a seeding path into that second store, which is different work and
+**A6 and B6 — the blocker is removed, the rows are not yet walked (round 13cda, 28 September
+2026).** Both are document-view rows, and a document's *spans* come from the extraction-candidates
+store — `GET /v1/investigations/{id}/dossier/documents/{id}` reads `ExtractionCandidates`, not the
+graph. They are populated by `POST /v1/investigations/{id}/ingest/extract`, which is the product's
+own route and needs no seeding.
+
+**That route had never worked on a rendered deployment.** `04_VAULT_BACKEND.md` §4 specifies
+"Conduit → LiteLLM proxy → Ollama (local-lite: LLM + VLM, quantised)"; the renderer emitted
+neither half — no LiteLLM service at all, and `ollama` as a bare image with no model pull, no
+healthcheck and no volume. Measured over the wire: `500`, `httpx.ConnectError: All connection
+attempts failed`. So `09_INGEST_STUDIO.md` §4's whole review queue was unreachable, not just
+these two rows. **Fixed and proven**: a chat completion issued from inside the Conduit's own
+container, through LiteLLM, to Ollama, now returns 200 with a real completion.
+
+**The exact remaining step**, so the next round starts from a lead rather than a shrug:
+`POST /ingest/extract` with `qwen2.5:0.5b-instruct` returns
+`ExtractionFailedError: … did not return a response conforming to the given schema after 3
+attempt(s): Expecting value: line 1 column 1 (char 0)` — an empty completion body — while
+`tests/scenarios/test_witness_statement_extraction.py` exercises the same model through the same
+adapter successfully in the conformance tier (`make conformance`). **The difference between those
+two call sites is where to look**: the conformance test's own profile, prompt and
+`response_format` handling against what the route sends. Once a conforming extraction lands, A6
+asserts the reports come back with a source locator each and B6 asserts the span text equals the
+entity's identifier. Neither row is claimed here. Those rows need a seeding path into that second store, which is different work and
 is not pretended to be done here. A1 needs a placed site grid; B13/B14 need an ingest to fire an
 alert, and `09_INGEST_STUDIO.md`'s own rule is that a row worded "ingest …" is performed through
 the Studio rather than seeded around it.

@@ -28,7 +28,6 @@ import pytest
 import yaml
 from harness.images import ImageRef, ServiceImage
 from harness.render import (
-    _OLLAMA_HEALTHCHECK,
     _OLLAMA_PULL_SCRIPT,
     INGEST_CONTAINER_PATH,
     LITELLM_KEY,  # noqa: F401
@@ -874,20 +873,12 @@ def test_the_rendered_model_pull_matches_the_developer_stacks() -> None:
         "deployment would run different weights, and ADR-020's digest check would be verifying "
         "two different things"
     )
-    # **The healthcheck legitimately differs, and only this one thing does.** dev.yaml waits for
-    # all three models, which is right before running the whole suite. A *deployment* gating
-    # readiness on the vision model is wrong: measured, on a 673 KB/s link `moondream` had 16
-    # minutes left when chat and embed were already in, and `apply` failed at `up`. So the
-    # rendered healthcheck waits for what the Conduit serves with and the pull still fetches all
-    # three. Asserted as a subset rather than left unchecked, so a healthcheck that stopped
-    # waiting for the *chat* model — which extraction does need — still fails here.
-    rendered_check = " ".join(_OLLAMA_HEALTHCHECK)
-    for needed in ("qwen2.5:0.5b-instruct", "all-minilm:22m-l6-v2-fp16"):
-        assert needed in rendered_check, f"readiness no longer waits for {needed}"
-    assert "moondream" not in rendered_check, (
-        "readiness waits for the vision model again; a deployment then cannot start while a "
-        "model nothing in the demo path uses is still downloading"
-    )
+    # **The rendered deployment deliberately has no ollama healthcheck**, which is the one thing
+    # that differs from the developer stack. dev waits for all three models, right before running
+    # the whole suite. A deployment waiting for them is not: measured, gating readiness on the
+    # pull took Floor A from 9m40s to 1h43m, because `test_apply_env.py` applies ten deployments
+    # and destroys the model volume each time, so every apply re-downloaded ~2.2GB while
+    # `--wait` blocked. The pull and its digest verification are unchanged; only the waiting is.
 
     # The pull is worthless without somewhere to keep it: without a volume the ~2.2GB is fetched
     # again on every `up`.
@@ -898,7 +889,8 @@ def test_the_rendered_model_pull_matches_the_developer_stacks() -> None:
 def test_the_rendered_deployment_keeps_its_models_between_restarts(
     rendered: RenderResult,
 ) -> None:
-    """A pull with no volume is a ~2.2GB download on every `up`."""
+    """A pull with no volume is a ~2.2GB download on every `up` — and with readiness no longer
+    waiting for it, this volume is the only thing that makes the second start fast."""
     document = yaml.safe_load(rendered.artefacts["compose.yaml"])
     ollama = document["services"]["ollama"]
 

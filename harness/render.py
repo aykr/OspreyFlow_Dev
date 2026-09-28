@@ -519,17 +519,19 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
         "entrypoint": ["/bin/sh", "-c"],
         "command": [_OLLAMA_PULL_SCRIPT],
         "volumes": ["ollama-models:/root/.ollama"],
-        "healthcheck": {
-            "test": _OLLAMA_HEALTHCHECK,
-            "interval": "5s",
-            "timeout": "5s",
-            "retries": 90,
-            # Round 13cd measured this on `dev.yaml`: 90 retries at 5s is 450 seconds against a
-            # ~2.2GB cold pull, which a slow link does not finish inside. A check failing during
-            # `start_period` does not count against `retries`, so the steady-state gate is
-            # unchanged.
-            "start_period": "600s",
-        },
+        # **No healthcheck, deliberately — and this is a correction to my own first attempt.**
+        #
+        # Gating readiness on the pull made `apply` wait for it. Measured: Floor A went from
+        # 9m40s to **1h43m**, because `tests/harness/test_apply_env.py` applies ten deployments
+        # and its teardown destroys the model volume each time, so every apply re-downloaded
+        # ~2.2GB at this link's 673 KB/s while `--wait` blocked. A CI gate cannot cost that, and
+        # the cost is not the product's — it is an artefact of waiting.
+        #
+        # So the models are still pulled and still digest-verified (ADR-020), on a volume that
+        # persists for any deployment not deliberately torn down; the deployment simply does not
+        # *wait* for them. **The disclosed cost:** `apply` reports ready while the first pull is
+        # still running, and extraction fails until it completes — `05_DEPLOYMENT.md` §2.1.1
+        # says so and tells an operator how to watch it.
     },
     # `04_VAULT_BACKEND.md` §4's own diagram: the Conduit reaches every model through this one
     # OpenAI-compatible endpoint, never Ollama directly, so swapping a model is a config edit
@@ -538,11 +540,12 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
         "command": ["--config", "/app/config.yaml", "--port", "4000"],
         "volumes": ["./litellm.yaml:/app/config.yaml:ro"],
         "environment": {"LITELLM_MASTER_KEY": LITELLM_KEY},
-        # **`ollama` only, not `whisper`.** `deploy/compose/dev.yaml` waits on both, which is
-        # right for a developer stack that always runs transcription. Waiting on `whisper` here
-        # would make every extraction wait on a Whisper model pull it never uses, and would fail
-        # the whole deployment if that service were unhealthy for an unrelated reason.
-        "depends_on": {"ollama": {"condition": "service_healthy"}},
+        # **`service_started`, not `service_healthy`** — `ollama` has no healthcheck by design
+        # (see its own comment: waiting for the model pull cost Floor A ten times its runtime).
+        # The proxy only needs the server process reachable; a request for a model still being
+        # pulled fails at that request, which is the disclosed window, rather than blocking the
+        # whole deployment from starting.
+        "depends_on": {"ollama": {"condition": "service_started"}},
         "healthcheck": {
             "test": [
                 "CMD",

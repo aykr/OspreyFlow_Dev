@@ -193,6 +193,19 @@ finding: Keycloak **does** issue a token for a disabled subject when asked by a 
 impersonation, so the refusal has to be the Conduit's. A fixture IdP written to suit the test
 would have agreed with whatever the code did.
 
+**The model tier arrives shortly after `apply` reports ready, not before it** (round 13cda).
+`04_VAULT_BACKEND.md` §4's LiteLLM proxy and Ollama are both rendered, and Ollama pulls and
+digest-verifies its three models (ADR-020) on a persistent volume. The deployment deliberately
+does **not wait** for that pull: on a slow link it is roughly 2.2GB, and gating readiness on it
+made a CI gate ten times slower — measured, Floor A 9m40s → 1h43m, because the test suite applies
+ten deployments and destroys the model volume each time.
+
+**So on a first install, extraction and the review queue fail until the pull finishes.** Watch it
+with `docker compose logs -f ollama`, or `docker compose exec ollama ollama list` — when
+`qwen2.5:0.5b-instruct` and `all-minilm:22m-l6-v2-fp16` appear, extraction works; `moondream`
+backs image description only. On any later start the models are already on the volume and the
+tier is ready in seconds.
+
 **Open defect, 27 September 2026 — a stopped-and-started deployment loses the demo analyst's
 password.** `--demo-analyst` sets that password *after* the realm import, through the admin API,
 and Keycloak's database is not on a persistent volume, so `docker compose down` discards it. On
