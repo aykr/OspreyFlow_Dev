@@ -28,8 +28,10 @@ supply a source file** — `POST /v1/ingest/recipes` takes a `source_location` t
 container must be able to read, nothing is mounted there, and the only upload route in the Conduit
 is the site image. So B1–B3 and every row that depends on data arriving that way (B6, B7, B8, B13,
 B14, B15–B18) cannot be performed by an analyst against a rendered deployment at all. That is a
-product gap, not a shortfall of the test. **B1–B3 were closed on 27 September 2026 — see below;
-the remaining rows in that list are not.**
+product gap, not a shortfall of the test. **Every row in that list has since been closed** —
+B1–B3 on 27 September 2026 (the ingest root, owner ruling R6), B7/B8/B15–B18 by the
+`scenarios` seed dataset, B13/B14 through the Ingest Studio, and B6 on 28 September 2026 once
+the rendered model tier was pinned to the developer stack's. The table below carries each one's proof.
 
 **Owner ruling R8, 27 September 2026 — those remaining rows are milestone-blocking, and this
 section used to leave their weight unstated.** Round 13c put the question to the owner because
@@ -59,7 +61,8 @@ sightings into a rendered deployment.
 | B17 | **over the wire** | `test_b17_the_devices_location_events_are_reachable_and_windowed` |
 | B16, B18 | **data half only** | `test_b16_…`, `test_b18_…`; rendering and playback stay the Glass tier |
 | A1 | **over the wire** (cells half) | `test_a1_a_site_grid_is_placed_and_its_cells_become_location_entities`, `test_a1_redrawing_the_grid_does_not_duplicate_its_cells`. "Incidents geocode into cells" is **not** claimed — the grid route's own docstring records that `AnalyticsPort.load_geometries` is unwired |
-| A6, B6 | still not | Need extraction; round 13cda removed the blocker (no model tier at all) — see there |
+| A6 | **over the wire** | Round 13cdd: `test_a6_the_reports_for_the_selection_open_with_a_source_locator_each` — not an extraction row |
+| B6 | **over the wire** (data half) | Round 13cdd: `test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place`; highlighting is the Glass's half |
 | B13, B14 | **over the wire** | `test_b13_an_ingest_fires_an_alert_naming_the_identifier_document_and_rule`, `test_b14_an_alert_opens_into_an_investigation_linked_to_the_original` |
 | A7 | **over the wire** | `test_a7_reports_can_be_filtered_to_one_item_category`, `test_a7_an_unknown_field_name_is_refused_rather_than_ignored` — the "Known gap" below is closed by `EventFilter.value_filters` |
 | A15 | **over the wire** | `test_a15_a_consult_originator_item_blocks_the_export_by_name_then_proceeds_with_a_justification` |
@@ -94,8 +97,10 @@ retro-fire against what is already in the graph, so the row can only be walked o
 where this record has not been ingested. The fixture asserts that precondition by name rather than
 failing three assertions later on an empty list.
 
-**A6 and B6 — the blocker is removed, the rows are not yet walked (round 13cda, 28 September
-2026).** Both are document-view rows, and a document's *spans* come from the extraction-candidates
+**A6 and B6 — walked over the wire in round 13cdd, 28 September 2026.** What follows is the
+account round 13cda wrote when only the first half of the blocker was understood; the correction
+is the subsection after it, kept together because the wrong diagnosis is as instructive as the
+right one. Both are document-view rows, and a document's *spans* come from the extraction-candidates
 store — `GET /v1/investigations/{id}/dossier/documents/{id}` reads `ExtractionCandidates`, not the
 graph. They are populated by `POST /v1/investigations/{id}/ingest/extract`, which is the product's
 own route and needs no seeding.
@@ -108,16 +113,60 @@ attempts failed`. So `09_INGEST_STUDIO.md` §4's whole review queue was unreacha
 these two rows. **Fixed and proven**: a chat completion issued from inside the Conduit's own
 container, through LiteLLM, to Ollama, now returns 200 with a real completion.
 
-**The exact remaining step**, so the next round starts from a lead rather than a shrug:
-`POST /ingest/extract` with `qwen2.5:0.5b-instruct` returns
-`ExtractionFailedError: … did not return a response conforming to the given schema after 3
-attempt(s): Expecting value: line 1 column 1 (char 0)` — an empty completion body — while
-`tests/scenarios/test_witness_statement_extraction.py` exercises the same model through the same
-adapter successfully in the conformance tier (`make conformance`). **The difference between those
-two call sites is where to look**: the conformance test's own profile, prompt and
-`response_format` handling against what the route sends. Once a conforming extraction lands, A6
-asserts the reports come back with a source locator each and B6 asserts the span text equals the
-entity's identifier. Neither row is claimed here. Those rows need a seeding path into that second store, which is different work and
+**Both rows are over the wire as of round 13cdd (28 September 2026), and the diagnosis above was
+wrong in two ways worth recording.**
+
+**First, A6 is not an extraction row at all.** Its own step reads "Open the reports for the
+filtered selection … each links to its source with a locator", and the reports are seeded
+`Document` entities loaded by `tests/scenarios/fixtures/hmp_reports_recipe.yaml`; the locator is
+the `SourceRef.locator` that ingest wrote. No model is involved. The paragraph above assumed both
+document-view rows shared one blocker because they sit in one table cell —
+`test_a6_the_reports_for_the_selection_open_with_a_source_locator_each` walks it with the model
+tier untouched.
+
+**Second, the named lead was the wrong place to look.** "The difference between those two call
+sites" was the hypothesis; measured, the two sites send an **identical** request. What differed
+was *which LiteLLM served it*: the conformance tier runs against `make dev-up`, which pins LiteLLM
+and Ollama by digest, while `harness/render.py` pinned both by tags it had chosen — so a rendered
+deployment ran LiteLLM `main-v1.55.8`, which does not translate `response_format: json_schema`
+into Ollama's own constrained decoding and therefore let the model answer in prose. Correcting
+that alone surfaced the second half: Ollama `0.3.12` predates schema-object `format` and refuses
+the corrected request with `400 json: cannot unmarshal object into Go struct field
+ChatRequest.format of type string`. Both pins now come from `deploy/compose/dev.yaml`, and
+`tests/harness/test_render.py::test_the_rendered_model_proxy_is_the_developer_stacks` holds the
+whole model tier to it.
+
+**B6's data half is proven; its rendering half is the Glass's**, the same split B16 and B18
+already carry. `test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place`
+extracts from a synthetic transcript, accepts the candidate, and asserts the document view returns
+the submitted text and a span covering the identifier within it — with the span still `inferred`,
+since accepting a candidate does not promote it.
+
+**Proposed — a span should anchor on the property that identifies the entity, not the longest
+one.** This row's own wording above says "the span text **equals** the entity's identifier", and
+that is not currently guaranteed. `services/extract/candidates.py::_locate` tries every
+string-valued property longest-first, on the stated reasoning that the longest value is the most
+specific and so least likely to false-positive. Length is only a proxy for specificity, and
+round 13cdd measured where the proxy fails: the pinned model sometimes returns the whole message
+line as `value_raw`, and the span then covered `Incoming from +447700900500: same yard as last
+time.` rather than the endpoint. A span that wide cannot highlight an entity in place.
+
+The obvious fix — anchor on the entity's identifying property — has no ontology concept to rest
+on: for `Endpoint`, §7 of `01_DOMAIN_MODEL.md` makes `identifiers:` a list of *kinds*, not
+property names, so nothing declares that `value_normalised` is what identifies the node. Choosing
+one is a decision about the domain model, not a heuristic to pick in a test, so it is raised here
+rather than made. Until it is taken, the row's test asserts containment, which is what the Glass
+needs to highlight the entity at all, and this paragraph is the difference between that and the
+row's own wording.
+
+**One disclosed cost.** The CI-pinned `qwen2.5:0.5b-instruct` is sampled, and returned a candidate
+carrying the shared endpoint on 6 of 15 consecutive extractions of that transcript. B6 therefore
+retries the extraction up to twelve times — a bound taken from that measurement, and the same
+run-to-run variance `tests/golden/harness.py` records for its own `N_RUNS`. Every assertion is
+made in full once a candidate arrives; what is retried is the model's willingness to find
+something, which is not what B6 is about.
+
+Separately, A1's geocode half and the rows below need a seeding path into that second store, which is different work and
 is not pretended to be done here. A1 needs a placed site grid; B13/B14 need an ingest to fire an
 alert, and `09_INGEST_STUDIO.md`'s own rule is that a row worded "ingest …" is performed through
 the Studio rather than seeded around it.

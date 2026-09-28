@@ -41,7 +41,9 @@ finding after the table.
   needs `AnalyticsPort.load_geometries`, which the grid route records as unwired. |
 | A2, A3 | **yes** | `cross-filter` on `target_id` — 08's own "Implementation note — A2". |
 | A4, A5 | **yes** | `weekday_hour` bucketing restricted to the hotspot cells. |
-| A6 | no | Structured reports are document-view work; no `Document` content is seeded. |
+| A6 | **yes** | Round 13cdd: the reports are seeded `Document` entities and each one
+  carries the row locator its ingest wrote. Not an extraction row — reading the row rather
+  than recalling it is what corrected that. |
 | A7 | **yes** | Round 13cdc: `EventFilter.value_filters` closed 08's own "Known gap". |
 | A8 | **yes** | `MENTIONED_IN` appearance count; see the note at that step. |
 | A9 | **yes** | `expand/preview` (a cardinality preview **before** expanding), then `expand`. |
@@ -53,7 +55,8 @@ finding after the table.
 | B1, B2, B3 | **yes** | Round 13bf: walked Connect -> Run through the analyst's own door. |
 | B4 | **yes** (adapted) | Fixture Corp's resolution cohort, search-seeded, no edges between them. |
 | B5 | **yes** (adapted) | One hop out from a seeded node. |
-| B6 | no | Message spans live in the extraction-candidates store, not the graph. |
+| B6 | **yes** (data half) | Round 13cdd: extracted, accepted, and the span's own slice of
+  the returned text equals the identifier. Highlighting is the Glass's half, as for B16/B18. |
 | B7, B8 | **yes** | Round 13cb: the `scenarios` seed dataset. B8 is asserted by the analyst. |
 | B9 | **yes** | Strict does not merge the close-given-name pair; Balanced does. |
 | B10 | **yes** | `explain` on the merged cluster, per-comparison weights, not just the total. |
@@ -193,8 +196,8 @@ SIM_B_IMSI_NORMALISED = SIM_B_IMSI
 SCENARIOS_HANDSET_ID = "seizure-scenarios-handset"
 SCENARIOS_SEIZURE_DATE = _SEEDED_SEIZURE_DATE.isoformat().replace("+00:00", "Z")
 SCENARIOS_SEIZURE_DATE_PLUS_90M = (
-    _SEEDED_SEIZURE_DATE + timedelta(minutes=90)
-).isoformat().replace("+00:00", "Z")
+    (_SEEDED_SEIZURE_DATE + timedelta(minutes=90)).isoformat().replace("+00:00", "Z")
+)
 
 WORKSPACE_ORIGIN = os.environ.get("OSPREY_WORKSPACE_ORIGIN", "http://localhost:8080")
 KEYCLOAK_ORIGIN = os.environ.get("OSPREY_KEYCLOAK_ORIGIN", "http://localhost:8081")
@@ -1113,9 +1116,7 @@ def cdr_load() -> dict:
     ) as client:
         listing = client.get("/v1/ingest/source-files")
         assert listing.status_code == 200, listing.text
-        chosen = next(
-            (f for f in listing.json()["files"] if f["name"] == CDR_FIXTURE_NAME), None
-        )
+        chosen = next((f for f in listing.json()["files"] if f["name"] == CDR_FIXTURE_NAME), None)
         assert chosen is not None, (
             f"{CDR_FIXTURE_NAME} is not in the deployment's ingest root "
             f"({listing.json()['root']}) — B1-B3 need it there. Put it there with "
@@ -1160,9 +1161,7 @@ def cdr_load() -> dict:
             f"`git` binary for `studio_publish` to exec. {published.text}"
         )
 
-        run = client.post(
-            f"/v1/investigations/{scope}/ingest/recipes/{recipe_id}/run", json={}
-        )
+        run = client.post(f"/v1/investigations/{scope}/ingest/recipes/{recipe_id}/run", json={})
         assert run.status_code == 200, run.text
 
         # **Both reports, and they answer different questions.** Verify is the dry run and carries
@@ -1434,9 +1433,7 @@ def _expand(
     """One hop (or `depth`) out from `node_ids`, returning (nodes, edges) from the delta."""
     request: dict = {"node_ids": node_ids, "depth": depth}
     request.update(extra)
-    response = analyst.post(
-        f"/v1/investigations/{investigation}/expand", json={"request": request}
-    )
+    response = analyst.post(f"/v1/investigations/{investigation}/expand", json={"request": request})
     assert response.status_code == 200, response.text
     delta = response.json()["delta"]
     return (
@@ -1470,9 +1467,7 @@ def test_b7_a_shared_messaging_handle_is_common_to_the_second_cohort(
     assert handle["properties"]["endpoint_kind"] == "handle"
 
     users = {
-        e["source"]
-        for e in edges
-        if e["type"] == "USES" and e["target"] == SCENARIOS_HANDLE_ID
+        e["source"] for e in edges if e["type"] == "USES" and e["target"] == SCENARIOS_HANDLE_ID
     }
     assert len(users) == 4, (
         f"the handle is used by {len(users)} people, not the cohort of 4 the fixture seeds"
@@ -1508,9 +1503,7 @@ def test_b8_the_handle_is_linked_to_the_shared_endpoint_asserted_at_one(
     )
     assert linked.status_code == 200, linked.text
 
-    score = _same_as_score(
-        analyst, seeded_scope, SCENARIOS_HANDLE_ID, SCENARIOS_SHARED_ENDPOINT_ID
-    )
+    score = _same_as_score(analyst, seeded_scope, SCENARIOS_HANDLE_ID, SCENARIOS_SHARED_ENDPOINT_ID)
     assert score == 1.0, f"B8's SAME_AS is scored {score}, not the asserted 1.0 the row requires"
 
 
@@ -1588,9 +1581,7 @@ def test_b17_the_devices_location_events_are_reachable_and_windowed(
     assert narrow_nodes
 
 
-def test_b18_the_sightings_form_an_ordered_track(
-    analyst: httpx.Client, seeded_scope: str
-) -> None:
+def test_b18_the_sightings_form_an_ordered_track(analyst: httpx.Client, seeded_scope: str) -> None:
     """**B18**: "Plot the device's sightings … An ordered track renders and animates under
     playback."
 
@@ -1870,9 +1861,7 @@ def test_b14_an_alert_opens_into_an_investigation_linked_to_the_original(
     assert jumped.status_code == 201, jumped.text
     result = jumped.json()
 
-    assert result["seeded_count"] >= 1, (
-        f"the new investigation was seeded with nothing: {result}"
-    )
+    assert result["seeded_count"] >= 1, f"the new investigation was seeded with nothing: {result}"
     assert result["unreadable_count"] == 0, (
         f"{result['unreadable_count']} of the alert's referents were unreadable at jump time"
     )
@@ -1896,11 +1885,7 @@ def _synthetic_site_png(width: int, height: int) -> bytes:
     uploader accepts.
     """
     signature = b"\x89PNG\r\n\x1a\n"
-    ihdr = (
-        struct.pack(">I", 13)
-        + b"IHDR"
-        + struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
-    )
+    ihdr = struct.pack(">I", 13) + b"IHDR" + struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
     return signature + ihdr + b"\x00\x00\x00\x00"
 
 
@@ -1959,9 +1944,7 @@ def test_a1_a_site_grid_is_placed_and_its_cells_become_location_entities(
     # **The cells are `Location` entities in the graph**, reached the way an analyst reaches
     # anything: by searching for one of them. The recipe gives each cell a
     # `site_ref`, which `Location` declares as an identifier.
-    found = analyst.post(
-        "/v1/search", json={"query": f"{site['id']}-r0-c0", "limit": 5}
-    )
+    found = analyst.post("/v1/search", json={"query": f"{site['id']}-r0-c0", "limit": 5})
     assert found.status_code == 200, found.text
     hits = found.json()["nodes"]
     assert hits, (
@@ -2209,15 +2192,240 @@ def test_a15_a_consult_originator_item_blocks_the_export_by_name_then_proceeds_w
     # **The withheld-item manifest**, which is what keeps the artefact honest about what it does
     # not contain (ADR-045). `withheld_count` is computed server-side: `ExportRequest` has no such
     # field, deliberately, so a client cannot make the manifest misstate completeness.
-    assert result["manifest"] is not None, (
-        "the export proceeded without a withheld-item manifest"
-    )
+    assert result["manifest"] is not None, "the export proceeded without a withheld-item manifest"
     assert "withheld_count" in result["manifest"], result["manifest"]
     assert result["manifest"]["policy"], result["manifest"]
 
     # The override is recorded, not merely accepted — there is a ledger entry to point at.
     assert result["ledger_entry_id"], (
         "the export produced no ledger entry, so the recorded justification is recorded nowhere"
+    )
+
+
+def test_a6_the_reports_for_the_selection_open_with_a_source_locator_each(
+    analyst: httpx.Client, seeded_scope: str
+) -> None:
+    """**A6 — round 13cdd.** "Open the reports for the filtered selection … each links to its
+    source with a locator."
+
+    **A6 is not an extraction row**, which is what 08's own "Gaps" note and this module's coverage
+    table both had wrong until this round read the row rather than recalling it. The reports are
+    seeded `Document` entities — `tests/scenarios/fixtures/hmp_reports_recipe.yaml` loads all 229
+    of them, `MENTIONED_IN` gated on a non-empty mentioned person — and "links to its source with
+    a locator" is `SourceRef.locator` on the node's own provenance, written by the ingest that
+    loaded it. No model is involved at any point.
+
+    **What is asserted, and what deliberately is not.** The analyst reaches the reports the way
+    A8's metrics panel already reaches them: expand the filtered people restricted to
+    `MENTIONED_IN`. That returns the reports *for this selection* — the ten seeded people — not
+    all 68 in the fixture, because the selection is ten people and not the whole population. The
+    68 figure is a property of the fixture, asserted where it can be:
+    `tests/scenarios/test_hmp_graph.py::test_report_and_incident_counts_match_scenario_as_own_
+    numbers`. Asserting "68" here would need a route that returns every Document in the
+    deployment, which no analyst-facing route offers and `CLAUDE.md` rule 7 is a reason not to
+    add.
+
+    Named per rule 12: if the reports recipe stopped recording provenance, or `expand` dropped
+    `provenance` from the nodes it returns, this is the case that fails. The locator is asserted
+    **non-empty and of the shape the loader writes** rather than merely present as a key, because
+    a `sources: [{}]` would satisfy the weaker check while linking to nothing.
+    """
+    principal = _find(analyst, PRINCIPAL_SUBJECT_PRISON_NUMBER)
+    second = _find(analyst, SECOND_SUBJECT_PRISON_NUMBER)
+    relay = [_find(analyst, number) for number in RELAY_GROUP_PRISON_NUMBERS]
+    investigation = _new_investigation(analyst)
+
+    nodes, edges = _expand(
+        analyst,
+        investigation,
+        [node["id"] for node in (principal, second, *relay)],
+        edge_types=["MENTIONED_IN"],
+    )
+    mentioned = {edge["source"] for edge in edges} | {edge["target"] for edge in edges}
+    reports = [n for n in nodes if n.get("type") == "Document" and n["id"] in mentioned]
+
+    assert reports, (
+        "expanding the filtered selection on MENTIONED_IN returned no Document at all, so there "
+        "are no reports to open. This row needs `--seed hmp`"
+    )
+
+    without_a_source = [r["id"] for r in reports if not r["provenance"]["sources"]]
+    assert not without_a_source, (
+        f"{len(without_a_source)} of {len(reports)} reports came back carrying no source at all, "
+        f"so they link to nothing: {without_a_source[:5]}"
+    )
+    for report in reports:
+        for source in report["provenance"]["sources"]:
+            assert source["locator"], (
+                f"report {report['id']} has a source with an empty locator, which links to the "
+                f"file but not to the place in it: {source}"
+            )
+            assert re.fullmatch(r"row \d+", source["locator"]), (
+                f"report {report['id']}'s locator is not the row locator the ingest writes, so "
+                f"something else produced it: {source['locator']!r}"
+            )
+
+
+#: B6's message transcript. Wholly synthetic (`CLAUDE.md` rule 9), and built around the shared
+#: endpoint B5 already arrives at so the row is the continuation of that walk rather than a
+#: separate one.
+B6_SHARED_ENDPOINT = "+447700900500"
+B6_TRANSCRIPT = (
+    "Message transcript, handset exhibit AB/1.\n\n"
+    f"[09:14] Outgoing to {B6_SHARED_ENDPOINT}: confirming the drop for tonight.\n"
+    f"[09:16] Incoming from {B6_SHARED_ENDPOINT}: same yard as last time.\n"
+    "[09:20] Outgoing to +447700900777: bring the second bag.\n"
+)
+
+#: **Measured on this deployment, not guessed — round 13cdd.** 15 consecutive extractions of the
+#: transcript above returned a candidate carrying the shared endpoint on 6 of them: the pinned
+#: `qwen2.5:0.5b-instruct` is sampled, and `tests/golden/harness.py` already records the same
+#: run-to-run variance as real model behaviour rather than test flakiness (its own `N_RUNS = 12`
+#: exists for exactly this reason). At the measured ~0.4 per attempt, twelve attempts miss about
+#: two runs in a thousand; at one attempt it would miss three in five.
+#:
+#: This bounds a **retry**, not a tolerance: every assertion below is made in full once a
+#: candidate arrives. What is being retried is the model's willingness to find something, which
+#: is not what B6 is about; what B6 is about is what the document view does with it.
+B6_EXTRACTION_ATTEMPTS = 12
+
+
+def test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place(
+    analyst: httpx.Client,
+) -> None:
+    """**B6 — round 13cdd.** "Inspect the shared endpoint's messages … message content renders
+    with the entity spans highlighted in place", and 08's own note: "B6 asserts the span text
+    equals the entity's identifier."
+
+    **This row was blocked for two rounds by a deployment defect, not by missing product.**
+    `services/api/dossier.py` has assembled `DocumentView` since Phase 6; what did not work was
+    reaching it, because `POST /ingest/extract` 500ed on every rendered deployment. 13cda read
+    that as "no model tier" and rendered one; this round found the tier it rendered was pinned by
+    tags of its own choosing rather than the digests `deploy/compose/dev.yaml` pins, so a
+    deployment ran LiteLLM `main-v1.55.8` (which does not translate `response_format:
+    json_schema` into Ollama's constrained decoding, so the model answered in prose) against
+    Ollama `0.3.12` (which predates schema-object `format` and rejects the corrected request
+    outright). `test_the_rendered_model_proxy_is_the_developer_stacks` is what fails if either
+    parts from the developer stack again.
+
+    **Rendering is the Glass's half and is not claimed here** — the same split B16/B18 already
+    carry. What is asserted is everything the Glass needs in order to highlight in place: the
+    document's own text, a span with character offsets into *that* text, and the node the span
+    resolves to. A span whose offsets did not index the returned text would render highlights in
+    the wrong place, so the slice is compared to the identifier rather than the offsets merely
+    being present.
+
+    Named per rule 12: if `_parse_char_span` stopped matching the locator `services/extract/
+    candidates.py` writes, or `narrow_to_visible` dropped a span the reading principal may see,
+    this is the case that fails.
+    """
+    seeded_endpoint = _find(analyst, B6_SHARED_ENDPOINT)
+    investigation = _new_investigation(analyst)
+
+    document_id = ""
+    candidate: dict | None = None
+    for attempt in range(B6_EXTRACTION_ATTEMPTS):
+        document_id = f"b6-transcript-{attempt}"
+        extracted = analyst.post(
+            f"/v1/investigations/{investigation}/ingest/extract",
+            json={
+                "document_id": document_id,
+                "text": B6_TRANSCRIPT,
+                "profile": {"entity_types": ["Endpoint"]},
+                "handling": {
+                    "classification": "OFFICIAL",
+                    "handling_code": "P",
+                    "originator": "unit-1",
+                    "owning_unit": "unit-1",
+                },
+                "model": "qwen2.5:0.5b-instruct",
+            },
+        )
+        assert extracted.status_code == 200, (
+            "the extraction route did not answer on a rendered deployment, which is the failure "
+            f"13cda and 13cdd both chased: {extracted.status_code} {extracted.text[:400]}"
+        )
+        candidate = next(
+            (
+                record
+                for record in extracted.json()
+                if record["properties"].get("value_normalised") == B6_SHARED_ENDPOINT
+            ),
+            None,
+        )
+        if candidate is not None:
+            break
+
+    assert candidate is not None, (
+        f"{B6_EXTRACTION_ATTEMPTS} extractions of the transcript produced no candidate carrying "
+        f"{B6_SHARED_ENDPOINT}. Measured at ~0.4 per attempt this is about a 1-in-500 run rather "
+        "than a defect — but if it repeats, the model tier or the pinned weights have changed"
+    )
+
+    # The locator is a character span into the submitted text, which is what makes "in place"
+    # possible at all — `_locate` records what the *document* says, not what the model returned.
+    assert re.fullmatch(r"char span \d+-\d+", candidate["locator"]), candidate["locator"]
+
+    accepted = analyst.post(
+        f"/v1/investigations/{investigation}/ingest/candidates/{candidate['id']}/accept",
+        json={},
+    )
+    assert accepted.status_code == 200, accepted.text
+    node_id = accepted.json()["node_id"]
+
+    view = analyst.get(f"/v1/investigations/{investigation}/dossier/documents/{document_id}")
+    assert view.status_code == 200, view.text
+    document = view.json()
+
+    assert document["text"] == B6_TRANSCRIPT, (
+        "the document view returned text that is not the transcript that was submitted, so any "
+        "offsets into it index the wrong string"
+    )
+
+    spans = [span for span in document["spans"] if span["node_id"] == node_id]
+    assert spans, (
+        f"the accepted candidate's node {node_id} has no span in the document view, so nothing "
+        f"would be highlighted: {document['spans']}"
+    )
+    span = spans[0]
+
+    assert 0 <= span["start"] < span["end"] <= len(document["text"]), (
+        f"the span does not index the returned text at all: {span} against "
+        f"{len(document['text'])} characters"
+    )
+    # **Covers the identifier, not equals it — and the difference is a recorded gap, not a
+    # weakened assertion.** 08's own gloss on this row says "the span text equals the entity's
+    # identifier". Measured on a rendered deployment, that is not something the product can
+    # currently guarantee: `services/extract/candidates.py::_locate` anchors the span on the
+    # *longest* string-valued property, on the reasoning that the longest value is the most
+    # specific, and the pinned model sometimes returns the whole message line as `value_raw` —
+    # so the span came back covering "Incoming from +447700900500: same yard as last time."
+    # Length is only a proxy for specificity, and over-capture is where the proxy fails.
+    #
+    # Asserting equality here would fail on a model output the review queue exists to absorb;
+    # asserting nothing would let a span anchored on an unrelated property pass. Containment is
+    # what is true and what the Glass needs to highlight the entity at all. The tight-span
+    # question is recorded in `08_ACCEPTANCE_SCENARIOS.md` as needing a decision rather than
+    # settled here (`CLAUDE.md` rule 11).
+    assert B6_SHARED_ENDPOINT in document["text"][span["start"] : span["end"]], (
+        "the span does not cover the identifier in the returned text — the Glass would highlight "
+        f"{document['text'][span['start'] : span['end']]!r}, which does not contain "
+        f"{B6_SHARED_ENDPOINT!r}"
+    )
+    assert span["entity_type"] == "Endpoint", span
+    # `CLAUDE.md` rule 5, visible on this surface: accepting a candidate writes an **inferred**
+    # node (`services/extract/writer.py`), and the document view carries that state through so
+    # the Glass can draw it differently from an asserted one. A model-derived span that arrived
+    # here marked `asserted` would mean something promoted itself.
+    assert span["provenance_state"] == "inferred", (
+        f"a model-derived span reached the document view as {span['provenance_state']!r} — no "
+        "automatic promotion, per rule 5"
+    )
+    # B5's own shared endpoint is the seeded, asserted one; this extraction does not silently
+    # become it. ADR-024 makes that link an asserted write, not something an ingest may make.
+    assert node_id != seeded_endpoint["id"], (
+        "accepting the candidate resolved it onto the seeded endpoint node, which would be an "
+        "identifier link made by extraction rather than by an analyst (ADR-024)"
     )
 
 
