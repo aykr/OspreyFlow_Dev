@@ -75,6 +75,25 @@ deployment. That is the same shape as the ingest-folder work owner ruling R6 ord
 13bc/13bf built, and `scripts/seed_ingest_folder.py` is the precedent for how a synthetic fixture
 reaches a deployment without being duplicated. The checker queues this; it is not done here.
 
+**Status of that blocking work, 28 September 2026 — every row named above is now walked.** The
+paragraphs above are the finding as it stood at round 13 and are left as written; this is where
+it got to. `08_ACCEPTANCE_SCENARIOS.md`'s own coverage table and
+`tests/scenarios/test_phase8_exit_over_the_wire.py`'s module table carry each row's test id.
+
+| Rows | Closed by | How |
+| --- | --- | --- |
+| B7, B8, B15–B18 | 13cb | The `scenarios` seed dataset (`scripts/seed_scenarios.py`) |
+| B1–B3 | 13bf | The ingest root plus connector profiles as files (owner ruling R6) |
+| B13, B14 | 13cdb | The seizure record ingested through the Studio, firing a hotlist |
+| A1 (cells), A7, A15 | 13cdc | The grid route, `EventFilter.value_filters`, the S2 node |
+| A6, B6 | 13cdd | Reports' own source locators; the document view's spans |
+
+**Three halves remain explicitly unclaimed, and they are not seeding work.** A1's "incidents
+geocode into cells" needs `AnalyticsPort.load_geometries`, which the grid route's own docstring
+records as unwired; B6's highlighting and B16/B18's rendering and playback are Glass-tier
+behaviour that an HTTP test cannot observe at all. Whether clause 3 of V1 END TO END is reached
+with those three outstanding is the owner's reading to make, not this document's to assume.
+
 **A finding from this pass that is independent of that question and may bear on it.** Floor B's
 only five skips are the whole of `tests/services/api/test_revoked_principal_precheck.py`, each
 "`OSPREY_TEST_KEYCLOAK_URL` is not set — this test needs a real IdP by design". **Nothing anywhere
@@ -229,8 +248,9 @@ The three clauses as round 13 found them, kept for history:
        directory, rebuilt on every deploy — in a *third* independent copy of that constant, in
        `services/api/app.py`, which was the one the route actually used.
 
-     **Still open:** B6–B8 and B13–B18 do not move with them. Those need fixture data the
-     deployment's seed does not carry, which is a separate piece of unscoped work.
+     **Still open at the time:** B6–B8 and B13–B18 did not move with them, needing fixture data
+     the deployment's seed did not carry. **All of them have since been closed** — see "Status of
+     that blocking work, 28 September 2026" above for which round closed which.
 
 - **`08_ACCEPTANCE_SCENARIOS.md`'s own "retraction propagates" assertion is not what the analyst
   sees.** The flag is written; the judgement then disappears from the Judgements tab rather than

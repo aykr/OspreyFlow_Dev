@@ -471,6 +471,24 @@ whether a particular subgroup is unusually insular.
    the point that provenance is per-element and that model-derived values sit at `inferred` until a
    human confirms them — nothing is promoted automatically, and no confidence threshold promotes on
    the analyst's behalf.
+7. **Open the reports for the filtered selection** (`08`'s A6). Each report is a `Document` that
+   links back to the file and the row it came from — worth showing because "where did this come
+   from" is the first question anyone asks of an intelligence product, and the answer is one click
+   rather than a spreadsheet lookup.
+8. **Open a message document** (`08`'s B6). The message text renders with the extracted entities
+   highlighted **in place**, each span drawn as `inferred` rather than asserted. Two things to say
+   while it is on screen: the highlight is anchored to a character span in the *source* text, not
+   to a copy of it; and a span whose node the viewer may not see is dropped from the response
+   entirely rather than shown redacted, because a redacted highlight still says "something was
+   found here".
+
+   **Before this step, submit a document.** Extraction is the only part of the demo that needs the
+   model tier, so it is also the only part that will not work in the first minute or two after a
+   first install — the models are still being pulled (§3.7 has the check). The pinned demo model
+   is a 0.5B one chosen for size and speed, not for extraction quality: it will sometimes return
+   nothing from a short document, and running the extraction again is the honest thing to do in
+   front of an audience rather than pretending otherwise. A 7–14B model is what
+   `03_CONDUIT_MIDDLEWARE.md` §5.2 names as the production default.
 
 7. **Rank the insular subgroup (A12).** Metrics panel → Primary metric → Clique Metric. Expand at
    least one node first: the metric measures how tightly a node's neighbours interconnect, so on
