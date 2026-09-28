@@ -37,18 +37,19 @@ finding after the table.
 
 | Row | Over the wire here | Note |
 | --- | --- | --- |
-| A1 | no | The site grid is Phase 5's map screen; no seeded site exists to grid. |
+| A1 | **yes** (cells half) | Round 13cdc: uploaded, control-pointed, gridded. The geocode half
+  needs `AnalyticsPort.load_geometries`, which the grid route records as unwired. |
 | A2, A3 | **yes** | `cross-filter` on `target_id` — 08's own "Implementation note — A2". |
 | A4, A5 | **yes** | `weekday_hour` bucketing restricted to the hotspot cells. |
 | A6 | no | Structured reports are document-view work; no `Document` content is seeded. |
-| A7 | **yes** (reachable half) | The item-category half is 08's own recorded "Known gap". |
+| A7 | **yes** | Round 13cdc: `EventFilter.value_filters` closed 08's own "Known gap". |
 | A8 | **yes** | `MENTIONED_IN` appearance count; see the note at that step. |
 | A9 | **yes** | `expand/preview` (a cardinality preview **before** expanding), then `expand`. |
 | A10, A11 | **yes** | The family link, and prior-period events appearing when the window widens. |
 | A12 | **yes** | `compute/clique_metric` vs `compute/degree` on the relay group. |
 | A13, A14 | **yes** | Including the refusal: a judgement with no supporting reference is 422. |
-| A15 | **partly** | The artefact, the mark, the manifest and the ledger entry: yes. **The
-  consult-originator block: no** — see the finding below. |
+| A15 | **yes** | Round 13cdc: the consult-originator block, the justification gate, the mark,
+  the manifest and the ledger entry. |
 | B1, B2, B3 | **yes** | Round 13bf: walked Connect -> Run through the analyst's own door. |
 | B4 | **yes** (adapted) | Fixture Corp's resolution cohort, search-seeded, no edges between them. |
 | B5 | **yes** (adapted) | One hop out from a seeded node. |
@@ -96,17 +97,13 @@ Measured over the wire, not assumed: a draft naming `cdr-generic-csv` is refused
 `07_BUILD_PLAN.md`; until then these rows stay at the in-process tier, where the recipe engine is
 driven directly with a hand-written recipe.
 
-**And the one A15 clause that is not reachable, named rather than quietly dropped.** A15's
-"items marked consult-originator block the export by name" is evaluated against each item's
-**stored** handling, and no node in either seeded fixture carries `sanitisation_code: "S2"` —
-checked, not assumed. The gate's other three clauses (justification recorded, manifest carried,
-a real artefact of the requested shape bearing the mark) are proven below against real seeded
-nodes. Closing the fourth means seeding one consult-originator node, which would change the
-population `test_fixture_corp_shape.py` and `06_DECISIONS.md` ADR-035 §C5's re-measured scores
-are asserted against — a deliberate fixture change, not a closing-pass tweak, so it is recorded
-and not made here. It remains proven at the in-process tier
-(`tests/services/api/test_export_routes.py::test_export_route_blocks_a_consult_originator_item_
-and_names_it_over_http`).
+**A15's consult-originator clause is now reachable — round 13cdc.** It used to be the one clause
+this file could not walk: A15 is evaluated against each item's **stored** handling, and no seeded
+node carried `sanitisation_code: "S2"`. Closing it meant seeding one, and REPORT-13b had recorded
+why that was not a closing-pass tweak — adding a node to Fixture Corp moves the population
+`test_fixture_corp_shape.py` and `06_DECISIONS.md` ADR-035 §C5's re-measured scores are asserted
+against. The node therefore lives in the `scenarios` population, which is Scenario A's own, and
+Fixture Corp is untouched.
 
 **Running it.**
 

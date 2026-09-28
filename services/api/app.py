@@ -2800,7 +2800,7 @@ async def geometries_route(
 # `osm_gazetteer_recipe.yaml`'s own comment.
 #: **A product recipe, in the image — moved out of `tests/` in round 13cdc.**
 #:
-#: This pointed at `tests/scenarios/fixtures/site_grid_recipe.yaml`, and the Conduit's image
+#: This pointed at a path under `tests/scenarios/fixtures/`, and the Conduit's image
 #: deliberately does not carry `tests/` (`.dockerignore`; `harness/apply.py`'s seed step mounts
 #: the test tree precisely because the image has none of it). So `POST …/sites/{id}/grid` — A1's
 #: own route — returned a bare 500 in **every rendered deployment**, `FileNotFoundError` on a

@@ -58,9 +58,11 @@ sightings into a rendered deployment.
 | B15 | **over the wire** | `test_b15_both_sims_link_to_one_device_in_one_traversal` |
 | B17 | **over the wire** | `test_b17_the_devices_location_events_are_reachable_and_windowed` |
 | B16, B18 | **data half only** | `test_b16_…`, `test_b18_…`; rendering and playback stay the Glass tier |
-| A1, A6, B6 | still not | A6/B6 need extraction (round 13cda removed the blocker; see there). A1 needs a placed site grid |
+| A1 | **over the wire** (cells half) | `test_a1_a_site_grid_is_placed_and_its_cells_become_location_entities`, `test_a1_redrawing_the_grid_does_not_duplicate_its_cells`. "Incidents geocode into cells" is **not** claimed — the grid route's own docstring records that `AnalyticsPort.load_geometries` is unwired |
+| A6, B6 | still not | Need extraction; round 13cda removed the blocker (no model tier at all) — see there |
 | B13, B14 | **over the wire** | `test_b13_an_ingest_fires_an_alert_naming_the_identifier_document_and_rule`, `test_b14_an_alert_opens_into_an_investigation_linked_to_the_original` |
-| A7 (item-category), A15 (consult-originator block) | still not | Recorded gaps, not seeding |
+| A7 | **over the wire** | `test_a7_reports_can_be_filtered_to_one_item_category`, `test_a7_an_unknown_field_name_is_refused_rather_than_ignored` — the "Known gap" below is closed by `EventFilter.value_filters` |
+| A15 | **over the wire** | `test_a15_a_consult_originator_item_blocks_the_export_by_name_then_proceeds_with_a_justification` |
 
 Each of the six was **shown red first** against a deployment seeded `hmp,fixture-corp` only, then
 green against **the same deployment** after seeding `scenarios` — one variable, not two
@@ -235,16 +237,25 @@ Map view ships both: the `geo_bins` heat layer (`02_GLASS_FRONTEND.md` §3.5 nam
 and it stays correct at a coarser scale this fixture doesn't exercise) and a ranked "hotspot
 cells" panel on `target_id` as the mechanism A2/A3 actually rely on at this fixture's scale.
 
-### Known gap — A7's "item category" filter
+### Closed — A7's "item category" filter, 28 September 2026 (round 13cdc)
 
-A7 asks to filter reports "to one residential sub-unit and one item category". The sub-unit half
-is a `node_ids` restriction (already supported — a sub-unit is a `Location`). The item-category
-half is not: `EventFilter` (`packages/schemas/analytics.py`) carries `investigation_scope`,
-`window`, `node_ids` and `edge_types` only — no generic field/value predicate an event property
-such as `item_type` could be filtered on. `cross_filter`'s categorical dimensions *aggregate and
-display* a field's distinct values; they do not let a caller *restrict by* one. Building that
-(a `value_filters` field on `EventFilter`, or an equivalent) is real, unscoped work, not something
-Checkpoint 2 quietly worked around.
+This was a "Known gap". It read: `EventFilter` carries `investigation_scope`, `window`,
+`node_ids` and `edge_types` only, with no field/value predicate an event property such as
+`item_type` could be filtered on — `cross_filter`'s categorical dimensions *display* a field's
+distinct values without letting a caller *restrict by* one.
+
+**`EventFilter.value_filters` is that predicate.** `{field: [value, ...]}`; values within a field
+OR-ed, fields AND-ed — the shape a filter bar with several facets has. Equality only: no ranges,
+no negation, nothing fuzzy, because A7 needs none of them and each is a separate decision about
+what an analyst asserts by clicking a facet. It is compiled into the adapter's own `WHERE` clause
+beside the access filter, never applied after retrieval (`03_CONDUIT_MIDDLEWARE.md` §6 — access
+control lives in the query, never after it), and a field may be a top-level event column or a key
+inside the JSON `properties` blob.
+
+**The data was never the problem.** The HMP fixture has written `item_type` on every event since
+Phase 3; only the predicate was missing, which is why this row needed a feature rather than a
+fixture. Four conformance cases hold every adapter to it, including that a field name carrying
+SQL is refused — a value filter is the first place a caller names a *column*.
 
 ### Additional assertion — retraction propagates
 
