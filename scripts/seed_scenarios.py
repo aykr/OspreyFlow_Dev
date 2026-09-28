@@ -55,8 +55,11 @@ import argparse
 import asyncio
 import os
 import sys
+from collections.abc import Sequence
 from datetime import timedelta
+from pathlib import Path
 
+import duckdb
 from tests.scenarios.fixtures.scenario_cohorts import (
     Cohort,
     DeviceLegs,
@@ -66,12 +69,15 @@ from tests.scenarios.fixtures.scenario_cohorts import (
 )
 from tests.scenarios.fixtures.seizure_record import SEIZURE_DATE as _SEIZURE_DAY
 
+from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
+from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from conduit_common.identity import new_edge_id, now_utc
-from ontology.handling import load_uk_le_scheme
+from ontology.handling import HandlingScheme, load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from ports.graph import GraphPort
+from schemas.analytics import EventRecord
 from schemas.domain import (
     AuditStub,
     Edge,
@@ -134,6 +140,9 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         "--investigation-scope",
         required=True,
         help="The real investigation id these nodes/edges should be written under.",
+    )
+    parser.add_argument(
+        "--analytics-db-path", default=os.environ.get("ANALYTICS_DB_PATH", "data/analytics.duckdb")
     )
     return parser.parse_args(argv)
 
@@ -283,6 +292,74 @@ def build_sightings(legs: DeviceLegs) -> tuple[list[Node], list[Edge]]:
     return nodes, edges
 
 
+def build_sighting_events(edges: Sequence[Edge], *, investigation_scope: str) -> list[EventRecord]:
+    """**B18's trail, in the store the Glass reads it from — round 13cde.**
+
+    The graph edges above are what B15/B17 pivot and brush on; the Glass's snail trail is a
+    different read — `POST /v1/analytics/sightings`, `AnalyticsPort.list_sightings` over the
+    analytics store's `events` rows, filtered on `source_id`/`target_id`. Seeding only the edges
+    left that read empty: measured in a real browser, the Glass sent the handset, the scope and
+    the seizure-day window and got `[]` back, while the over-the-wire B18 case — reading the
+    graph — passed. Two tiers, two populations.
+
+    `EventRecord`'s own docstring makes an event "one occurrence of" a summarised graph edge, so
+    each sighting is written as both, tied by `edge_id` — the same pairing the HMP fixture's
+    events carry. Event ids are pinned, like every other id this module writes, so a re-seed can
+    recognise what it already loaded (`load_sighting_events`).
+    """
+    points = {
+        f"scenarios-location-{index}": (latitude, longitude)
+        for index, (_, latitude, longitude) in enumerate(_SIGHTING_POINTS)
+    }
+    events: list[EventRecord] = []
+    for edge in edges:
+        if edge.type != "PRESENT_AT" or edge.target not in points:
+            continue
+        assert edge.interval is not None  # `build_sightings` gives every sighting its moment
+        latitude, longitude = points[edge.target]
+        events.append(
+            EventRecord(
+                event_id=f"scenarios-sighting-{edge.target.removeprefix('scenarios-location-')}",
+                edge_id=edge.id,
+                edge_type=edge.type,
+                source_id=edge.source,
+                target_id=edge.target,
+                occurred_at=edge.interval.valid_from,
+                lat=latitude,
+                lon=longitude,
+                investigation_scope=investigation_scope,
+                handling=edge.handling,
+            )
+        )
+    return events
+
+
+async def load_sighting_events(
+    con: duckdb.DuckDBPyConnection, scheme: HandlingScheme, events: Sequence[EventRecord]
+) -> int:
+    """Loads the sightings not already present, and returns how many it wrote.
+
+    `events` has no primary key and `load_events` is a plain insert, so without this a second
+    seed would double the track — four sightings drawn as eight, each pair on one instant.
+    Existing ids are read back and skipped, the same way the grid route treats its geometries.
+    """
+    create_events_table(con)
+    create_geometries_table(con)
+    wanted = [e.event_id for e in events]
+    if not wanted:
+        return 0
+    placeholders = ",".join("?" for _ in wanted)
+    present = {
+        row[0]
+        for row in con.execute(
+            f"SELECT event_id FROM events WHERE event_id IN ({placeholders})", wanted
+        ).fetchall()
+    }
+    missing = [e for e in events if e.event_id not in present]
+    await AnalyticsDuckDBAdapter(con, scheme).load_events(missing)
+    return len(missing)
+
+
 async def _write(
     graph: GraphPort, nodes: list[Node], edges: list[Edge], *, load_id: str
 ) -> tuple[int, int]:
@@ -308,9 +385,7 @@ def build_everything() -> tuple[list[Node], list[Edge], dict[str, object]]:
     # **The earlier state only — see `generate_device_legs`' own docstring.** B13 ingests the
     # later seizure record, and that ingest is what must create the swapped SIM; seeding it here
     # left the ingest with nothing to do and the hotlist never fired.
-    legs: DeviceLegs = generate_device_legs(
-        run_token=SCENARIOS_TOKEN, include_swapped_sim=False
-    )
+    legs: DeviceLegs = generate_device_legs(run_token=SCENARIOS_TOKEN, include_swapped_sim=False)
     sighting_nodes, sighting_edges = build_sightings(legs)
 
     consult = build_consult_originator_node()
@@ -352,6 +427,19 @@ async def _run(args: argparse.Namespace) -> int:
     nodes, edges, landmarks = build_everything()
     node_count, edge_count = await _write(graph, nodes, edges, load_id=load_id)
 
+    # The analytics half — the same file and the same env fallback `seed_hmp_fixture` uses, and
+    # the same reason this runs with the Conduit stopped: DuckDB's lock is exclusive.
+    Path(args.analytics_db_path).parent.mkdir(parents=True, exist_ok=True)
+    analytics_con = duckdb.connect(args.analytics_db_path)
+    try:
+        loaded = await load_sighting_events(
+            analytics_con,
+            scheme,
+            build_sighting_events(edges, investigation_scope=args.investigation_scope),
+        )
+    finally:
+        analytics_con.close()
+
     print(
         f"  seed[scenarios]: Seeded {node_count} nodes and {edge_count} edges for Scenario A/B "
         f"under investigation_scope={args.investigation_scope!r}."
@@ -364,7 +452,8 @@ async def _run(args: argparse.Namespace) -> int:
     print(
         f"  seed[scenarios]: B15 handset {landmarks['handset_id']} with "
         f"{len(landmarks['sim_ids'])} SIMs; B16-B18 "
-        f"{len(landmarks['sighting_location_ids'])} sightings around {SEIZURE_DATE:%Y-%m-%d}."
+        f"{len(landmarks['sighting_location_ids'])} sightings around {SEIZURE_DATE:%Y-%m-%d}; "
+        f"{loaded} sighting events newly loaded into the analytics store for B18's trail."
     )
     print(
         "  seed[scenarios]: B8 seeds no SAME_AS — ADR-024 makes it the analyst's own asserted "

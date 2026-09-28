@@ -87,12 +87,14 @@ it got to. `08_ACCEPTANCE_SCENARIOS.md`'s own coverage table and
 | B13, B14 | 13cdb | The seizure record ingested through the Studio, firing a hotlist |
 | A1 (cells), A7, A15 | 13cdc | The grid route, `EventFilter.value_filters`, the S2 node |
 | A6, B6 | 13cdd | Reports' own source locators; the document view's spans |
+| B16, B18 (the Glass), A1 (refs resolve) | 13cde | `live/scenario-b-timeline.spec.ts`; sighting events seeded beside their `PRESENT_AT` edges; the grid route's `load_geometries` |
 
-**Three halves remain explicitly unclaimed, and they are not seeding work.** A1's "incidents
-geocode into cells" needs `AnalyticsPort.load_geometries`, which the grid route's own docstring
-records as unwired; B6's highlighting and B16/B18's rendering and playback are Glass-tier
-behaviour that an HTTP test cannot observe at all. Whether clause 3 of V1 END TO END is reached
-with those three outstanding is the owner's reading to make, not this document's to assume.
+**Two halves remain explicitly unclaimed after round 13cde** (it closed the third, B16/B18's
+rendering and playback, in a real browser). A1's "incidents geocode into cells": `load_geometries`
+is now wired, but a cell is a `POINT` with no extent and nothing resolves a point to a containing
+area — three decisions, set out in 08's A1 note, not one fix. And B6's highlighting, which is
+Glass-tier behaviour no live spec yet drives. Whether clause 3 of V1 END TO END is reached with
+those two outstanding is the owner's reading to make, not this document's to assume.
 
 **A finding from this pass that is independent of that question and may bear on it.** Floor B's
 only five skips are the whole of `tests/services/api/test_revoked_principal_precheck.py`, each

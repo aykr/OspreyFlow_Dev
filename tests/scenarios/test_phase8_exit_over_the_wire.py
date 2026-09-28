@@ -37,8 +37,9 @@ finding after the table.
 
 | Row | Over the wire here | Note |
 | --- | --- | --- |
-| A1 | **yes** (cells half) | Round 13cdc: uploaded, control-pointed, gridded. The geocode half
-  needs `AnalyticsPort.load_geometries`, which the grid route records as unwired. |
+| A1 | **yes** (cells half) | Round 13cdc: uploaded, control-pointed, gridded. Round 13cde: each
+  cell's `geometry_ref` resolves (the grid route now calls `load_geometries`). "Incidents geocode
+  into cells" is **not** claimed — a cell is a `POINT` with no extent; 08's A1 note has why. |
 | A2, A3 | **yes** | `cross-filter` on `target_id` — 08's own "Implementation note — A2". |
 | A4, A5 | **yes** | `weekday_hour` bucketing restricted to the hotspot cells. |
 | A6 | **yes** | Round 13cdd: the reports are seeded `Document` entities and each one
@@ -66,8 +67,9 @@ finding after the table.
 | B13, B14 | **yes** | Round 13cdb: hotlist, then the seizure record ingested through the Studio. |
 | B15, B17 | **yes** | The handset and its sightings are seeded; B15's second SIM arrives
   with B13's ingest. |
-| B16, B18 | **partly** | The data half — ordered, geolocated, on a shared axis. Rendering and
-  playback are the Glass tier. |
+| B16, B18 | **yes** (+ the Glass) | The data half here — ordered, geolocated, on a shared axis,
+  and B18's trail through `/v1/analytics/sightings`, the route the Glass draws from (round
+  13cde: it had returned `[]`). Rendering and playback: `live/scenario-b-timeline.spec.ts`. |
 | B19, B20 | **yes** | Pattern preview (estimated count first), run, save, monitor. |
 | B21 | **yes** | `POST /v1/paths` across the fixture's own eight-spoke hub. |
 | Cross-cutting | **yes** (the reachable half) | The delta WebSocket through the proxy, via the
@@ -1622,6 +1624,33 @@ def test_b18_the_sightings_form_an_ordered_track(analyst: httpx.Client, seeded_s
         assert location["properties"].get("geometry_ref"), (
             f"{location['id']} has no geometry_ref, so there is nothing to plot"
         )
+
+    # **And the trail the Glass draws reads the same sightings — round 13cde.** Everything above
+    # reads the graph; the Glass's snail trail reads `POST /v1/analytics/sightings`, and until
+    # this round that route returned `[]` on a seeded deployment while this case passed — the seed
+    # wrote the edges and not their occurrences. The request is the one `App.tsx` sends
+    # (`buildEventFilter(scope, window, [selectedNode.id])`), over the seizure day.
+    day = min(_parsed(m) for m in moments).replace(hour=0, minute=0, second=0, microsecond=0)
+    trail = analyst.post(
+        "/v1/analytics/sightings",
+        json={
+            "filter": {
+                "investigation_scope": seeded_scope,
+                "window": {
+                    "valid_from": day.isoformat(),
+                    "valid_to": (day + timedelta(days=1)).isoformat(),
+                },
+                "node_ids": [SCENARIOS_HANDSET_ID],
+                "edge_types": [],
+            }
+        },
+    )
+    assert trail.status_code == 200, trail.text
+    trail_moments = [_parsed(s["occurred_at"]) for s in trail.json()]
+    assert trail_moments == sorted(_parsed(m) for m in moments), (
+        f"the Glass's own sightings request returns {len(trail_moments)} points against "
+        f"{len(moments)} seeded sightings — the map would draw a different track, or none"
+    )
 
 
 def test_b16_both_event_sets_are_retrievable_for_a_shared_axis(

@@ -305,8 +305,16 @@ OSPREY_TEST_LIVE_GLASS=1 \
 OSPREY_LIVE_API_BASE_URL=http://127.0.0.1:8000 \
 OSPREY_LIVE_BEARER_TOKEN=<the token from §2> \
 OSPREY_LIVE_INVESTIGATION_ID=<the id from §3.3> \
+OSPREY_LIVE_SECOND_INVESTIGATION_ID=<a second investigation, seeded with hmp> \
   make glass-live
 ```
+
+**B16 and B18 (`live/scenario-b-timeline.spec.ts`) need two things the other specs do not.** The
+first investigation must also be seeded with `scripts.seed_scenarios` (§3.4, the same way as the
+other two) — B18's trail is the seized handset's sightings. And B16 overlays a *second*
+investigation's timeline, so `OSPREY_LIVE_SECOND_INVESTIGATION_ID` names one: create it in §3.3's
+step and seed `seed_hmp_fixture` under it. A second investigation with no events fails B16 by
+name rather than passing on an empty track.
 
 **Each spec creates its own investigation** and asserts its working set starts empty, so a run
 never inherits state from an earlier one. That is not tidiness: the working set is server-side and

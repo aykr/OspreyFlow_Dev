@@ -60,7 +60,7 @@ sightings into a rendered deployment.
 | B15 | **over the wire** | `test_b15_both_sims_link_to_one_device_in_one_traversal` |
 | B17 | **over the wire** | `test_b17_the_devices_location_events_are_reachable_and_windowed` |
 | B16 | **over the wire + the Glass** | `test_b16_…` for the data; `apps/workspace/live/scenario-b-timeline.spec.ts` for the second track, round 13cde |
-| B18 | **data half only** | `test_b18_…`; the trail does not render in the Glass — a defect, measured, see below |
+| B18 | **over the wire + the Glass** | `test_b18_the_sightings_form_an_ordered_track` (now also through `POST /v1/analytics/sightings`); `apps/workspace/live/scenario-b-timeline.spec.ts` for the trail advancing under playback, round 13cde — after a seed defect, see below |
 | A1 | **over the wire** (cells half) | `test_a1_a_site_grid_is_placed_and_its_cells_become_location_entities`, `test_a1_redrawing_the_grid_does_not_duplicate_its_cells`. plus `test_a1_a_cells_geometry_reference_resolves_to_its_centroid` (round 13cde: the ref now resolves). "Incidents geocode into cells" is **not** claimed — a cell is a `POINT` with no extent and nothing resolves a point to a containing area; see below |
 | A6 | **over the wire** | Round 13cdd: `test_a6_the_reports_for_the_selection_open_with_a_source_locator_each` — not an extraction row |
 | B6 | **over the wire** (data half) | Round 13cdd: `test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place`; highlighting is the Glass's half |
@@ -137,8 +137,8 @@ ChatRequest.format of type string`. Both pins now come from `deploy/compose/dev.
 `tests/harness/test_render.py::test_the_rendered_model_proxy_is_the_developer_stacks` holds the
 whole model tier to it.
 
-**B6's data half is proven; its rendering half is the Glass's**, the same split B16 and B18
-already carry. `test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place`
+**B6's data half is proven; its rendering half is the Glass's**, the split B16 and B18
+carried until round 13cde. `test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place`
 extracts from a synthetic transcript, accepts the candidate, and asserts the document view returns
 the submitted text and a span covering the identifier within it — with the span still `inferred`,
 since accepting a candidate does not promote it.
@@ -163,15 +163,20 @@ is *drawing something* — an empty second case still produces a histogram, so t
 goes to 2 for an overlay of nothing onto something. Shown red exactly that way before it was
 trusted.
 
-**B18's rendering half is not claimed, and what blocks it is a defect rather than a missing
-feature.** Measured against a stack seeded `hmp` + `scenarios`, with the device selected and the
-brush window set: `POST /v1/analytics/sightings` returns the handset's four sightings for that
-entity, scope and window; the Inspector shows the Device; the brush window persists; the play
-control renders — and the map draws no trail. Re-selecting the device with the window already set
-re-runs `App.tsx`'s sightings effect and still yields nothing, so it is not the ordering trap it
-first resembled. The fault lies between that effect and what it does with the result. The live
-spec carries the full repro as an executable `test.fixme`, which will report as unexpectedly
-passing the moment it is fixed.
+**B18 is proven in a real browser, after a defect that was in the seed, not the Glass.** First
+recorded here as a Glass defect: with the device selected and the brush window set, the play control
+rendered and the map drew no trail. Logging the page's own traffic showed the Glass sending exactly
+the right request (`node_ids: ["seizure-scenarios-handset"]`, the scope, the seizure-day window) and
+the Conduit answering `200 []`. The trail reads `AnalyticsPort.list_sightings` over the analytics
+store's `events` rows; `scripts/seed_scenarios.py` wrote the sightings only as graph `PRESENT_AT`
+edges — which is exactly what the over-the-wire B18 case read, so that case passed while the Glass
+had nothing to draw. The seed now writes each sighting as both, tied by `edge_id` (`EventRecord` is
+"one occurrence of" a summarised graph edge), idempotently. Held at three tiers: `tests/
+test_seed_scenarios.py::test_b18_the_seeded_sightings_are_the_ones_the_glass_trail_reads` (the seeded
+rows through `list_sightings` with the Glass's own filter; shown red with the load removed), the
+over-the-wire B18 case (now also through the route), and the live spec (red against a scope with no
+`scenarios` seed). The earlier note's claim that the route returned the four sightings "for that
+entity, scope and window" was not a measurement of the request the Glass sends.
 
 **Proposed — a span should anchor on the property that identifies the entity, not the longest
 one.** This row's own wording above says "the span text **equals** the entity's identifier", and

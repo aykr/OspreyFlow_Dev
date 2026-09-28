@@ -110,33 +110,22 @@ const SEIZED_HANDSET_IMEI = "49015420323751";
 const SIGHTINGS_WINDOW_START = "2026-02-03T00:00:00Z";
 const SIGHTINGS_WINDOW_END = "2026-02-04T00:00:00Z";
 
-// **B18 is `fixme`, not `skip`, and not a passing test — round 13cde found a real defect.**
+// **B18 — round 13cde. It was recorded first as a Glass defect; the defect was in the seed.**
 //
-// Everything this row needs is present and was measured present: `POST /v1/analytics/sightings`
-// returns the handset's four sightings for exactly the entity, scope and window below; the
-// Inspector shows the Device selected; the brush window persists in the timeline's own fields;
-// the play control renders. The map still shows no trail, and the readout beside it never
-// appears, which means `App.tsx` is holding an empty `sightings` array throughout.
+// The first version of this case was a `test.fixme`: the device selected, the window set, the play
+// control rendered, and no trail. Its note put the fault "between `App.tsx`'s sightings effect and
+// what it does with the result". Logging the page's own traffic showed otherwise — the Glass sent
+// exactly the right request (`node_ids: ["seizure-scenarios-handset"]`, the scope, the seizure-day
+// window) and the Conduit answered `200 []`. The trail reads `AnalyticsPort.list_sightings` over
+// the analytics store's `events` rows; `scripts/seed_scenarios.py` wrote the sightings only as
+// graph `PRESENT_AT` edges, which is what the over-the-wire B18 case reads. Two tiers were each
+// green against a different population. The seed now writes each sighting as both, tied by
+// `edge_id` (`tests/test_seed_scenarios.py`'s `…_the_ones_the_glass_trail_reads` holds it there),
+// and this case runs.
 //
-// Measured directly, in this order, against a stack seeded with `hmp` + `scenarios`:
-//
-//   window after selecting the device  ""                       (the selection does not set one)
-//   window after filling both fields   "2026-02-03T00:00:00Z"   (it persists)
-//   readout present                    0
-//   window after re-selecting          "2026-02-03T00:00:00Z"   (still set, effect re-run)
-//   readout present                    0
-//
-// So it is not the ordering trap it first looked like — re-selecting with the window already set
-// re-runs the effect and still yields nothing. **What is wrong is between `App.tsx`'s sightings
-// effect and what it does with the result**, and finding it is the remaining work, recorded in
-// `08_ACCEPTANCE_SCENARIOS.md` beside B18 rather than guessed at here.
-//
-// Left as an executable `fixme` rather than deleted: it fails for the right reason, it carries
-// the repro, and Playwright will report it as unexpectedly passing the moment the defect is
-// fixed — which is a better handover than a paragraph in a document nobody runs.
-test.fixme("B18 — the sightings track advances under playback", async ({
-  page,
-}) => {
+// The earlier claim that the route "returns the handset's four sightings" for this request was not
+// a measurement of this request. Recorded because it is how a correct component got the blame.
+test("B18 — the sightings track advances under playback", async ({ page }) => {
   await openTimeline(page);
 
   // The trail is drawn on the map, so that is the view B18 is performed in — and the readout
@@ -148,11 +137,10 @@ test.fixme("B18 — the sightings track advances under playback", async ({
   await page.getByLabel("Brush window end").fill(SIGHTINGS_WINDOW_END);
   await page.getByLabel("Brush window end").blur();
 
-  // **The window before the selection, and the order is load-bearing.** `App.tsx`'s
-  // sightings effect keys on the selected node, not on the brush window, so a window set
-  // afterwards never triggers the fetch and the trail stays empty — measured, after this
-  // spec did it the other way round and found no readout on a page that otherwise looked
-  // exactly right.
+  // The window first, then the selection — the order an analyst brushing to the seizure day and
+  // then picking the handset works in. (`App.tsx`'s sightings effect also re-fetches on a window
+  // change, so the order is not load-bearing; an earlier note here said it was, from the same
+  // misdiagnosis recorded above.)
   // "Plot **the device's** sightings" — the trail follows the Inspector's own selection
   // (`App.tsx`), so selecting the handset is the row's own first action, not test scaffolding.
   const search = page

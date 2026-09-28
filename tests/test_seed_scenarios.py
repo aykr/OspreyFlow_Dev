@@ -15,15 +15,21 @@ from __future__ import annotations
 
 from collections import Counter
 
+import duckdb
 from scripts.seed_scenarios import (
     SCENARIOS_TOKEN,
     SEIZURE_DATE,
     SHARED_ENDPOINT_ID,
     SHARED_ENDPOINT_VALUE,
     build_everything,
+    build_sighting_events,
+    load_sighting_events,
 )
 
+from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from ontology.handling import load_uk_le_scheme
+from schemas.analytics import EventFilter, SightingRequest
+from schemas.domain import Interval, Principal
 
 
 def test_b4_b5_the_cohort_converges_on_the_shared_endpoint() -> None:
@@ -229,4 +235,57 @@ def test_fixture_corps_population_is_untouched_by_this_seeder() -> None:
     assert not [n for n in nodes if n.id.startswith("corp-")], (
         "the scenarios seeder is writing Fixture Corp nodes, which would move ADR-035 §C5's "
         "re-measured resolution scores"
+    )
+
+
+async def test_b18_the_seeded_sightings_are_the_ones_the_glass_trail_reads() -> None:
+    """**B18's trail, through the function the Glass actually calls — round 13cde.**
+
+    The Glass's snail trail is `POST /v1/analytics/sightings`, which is `AnalyticsPort.
+    list_sightings` over the analytics store's `events` rows. This seeder used to write the
+    sightings only as graph `PRESENT_AT` edges, so the over-the-wire B18 case (which reads the
+    graph) passed while the Glass, reading the analytics store, drew nothing — measured in a real
+    browser: the request carried the right entity, scope and window and came back `[]`. Two
+    tiers were measuring two different populations.
+
+    `EventRecord`'s own docstring says an event is "one occurrence of" a summarised graph edge, so
+    each sighting is both, tied by `edge_id`. This case asserts the property the Glass depends on:
+    the seeded rows come back through `list_sightings`, filtered **exactly as `App.tsx` filters**
+    (`buildEventFilter(scope, window, [selectedNode.id])` — the handset, the seizure day), for a
+    principal shaped like the demo analyst's token. Seeding twice must not double the track.
+    """
+    nodes, edges, landmarks = build_everything()
+    scope = "inv-under-test"
+    handset = str(landmarks["handset_id"])
+    events = build_sighting_events(edges, investigation_scope=scope)
+
+    present_at = {e.id: e for e in edges if e.type == "PRESENT_AT"}
+    assert {ev.edge_id for ev in events} == set(present_at), (
+        "every sighting edge needs exactly one occurrence in the analytics store, tied by edge_id"
+    )
+
+    con = duckdb.connect(":memory:")
+    scheme = load_uk_le_scheme()
+    assert await load_sighting_events(con, scheme, events) == len(events)
+    assert await load_sighting_events(con, scheme, events) == 0, (
+        "a second seed wrote the sightings again; re-seeding must not double the track"
+    )
+
+    day = SEIZURE_DATE.replace(hour=0)
+    request = SightingRequest(
+        filter=EventFilter(
+            investigation_scope=scope,
+            window=Interval(valid_from=day, valid_to=day.replace(day=day.day + 1)),
+            node_ids=[handset],
+        )
+    )
+    demo_analyst = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
+    track = await AnalyticsDuckDBAdapter(con, scheme).list_sightings(request, demo_analyst)
+
+    assert len(track) == len(present_at), (
+        f"the Glass's own sightings request returns {len(track)} of {len(present_at)} seeded "
+        "sightings — the trail it draws is not the track this seeder wrote"
+    )
+    assert [s.occurred_at for s in track] == sorted(
+        e.interval.valid_from for e in present_at.values()
     )
