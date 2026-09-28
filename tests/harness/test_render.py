@@ -851,6 +851,35 @@ def _invokes_as_a_command(command: str, name: str) -> bool:
     )
 
 
+def test_the_rendered_model_proxy_is_the_developer_stacks() -> None:
+    """**The proxy, like the weights, must not drift from `make dev-up` — round 13cdd.**
+
+    Round 13cda went to some trouble to make the ollama pull script byte-identical to
+    `deploy/compose/dev.yaml`'s, so a developer and a deployment could not run different model
+    weights — and then, one line away, pinned LiteLLM by a *tag* while dev pins a **digest**. They
+    were different proxies.
+
+    That is not cosmetic: the extraction route's own schema returns a conforming result through
+    the developer stack's proxy and an **empty completion body** through the tagged one, which is
+    what left A6/B6 blocked at the end of 13cda. A model proxy is part of the model tier, and the
+    whole reason the tier is pinned is that its behaviour is what the tests measure.
+    """
+    developer_image = yaml.safe_load(
+        (Path(__file__).resolve().parents[2] / "deploy" / "compose" / "dev.yaml").read_text()
+    )["services"]["litellm"]["image"]
+
+    rendered = [i for i in service_images(OspreyConfig()) if i.service == "litellm"]
+    assert rendered, "no litellm image is rendered"
+    assert rendered[0].image == developer_image, (
+        "the rendered LiteLLM is not the one the developer stack pins, so a deployment and a "
+        f"developer run different proxies: {rendered[0].image!r} vs {developer_image!r}"
+    )
+    assert "@sha256:" in developer_image, (
+        "the developer stack pins LiteLLM by tag rather than digest, so both sides can now move "
+        "underneath this assertion without it noticing"
+    )
+
+
 def test_the_rendered_model_pull_matches_the_developer_stacks() -> None:
     """**The rendered deployment and `make dev-up` must pull the same weights — round 13cda.**
 

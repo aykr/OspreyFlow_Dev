@@ -391,7 +391,16 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
             # never rendered: the deployment brought up `ollama` and the Conduit dialled
             # `localhost:4000` inside its own container, so every extraction returned a bare 500
             # (`httpx.ConnectError: All connection attempts failed`, measured over the wire).
-            ServiceImage("litellm", "ghcr.io/berriai/litellm:main-v1.55.8"),
+            # **The same image the developer stack pins, by digest — corrected in round 13cdd.**
+            # Round 13cda pinned a tag chosen here instead, so a deployment ran a *different*
+            # LiteLLM from `make dev-up`. That is the exact "two copies that drift" defect the
+            # ollama pull beside it was made byte-identical to avoid, reintroduced one line away
+            # from it. Measured: the route's own extraction schema returns a conforming (if empty)
+            # result through the developer stack's proxy and an **empty body** through the tag,
+            # which is what `13cda` left as A6/B6's blocker.
+            #
+            # `test_the_rendered_model_proxy_is_the_developer_stacks` is what fails if they part.
+            ServiceImage("litellm", "ghcr.io/berriai/litellm@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b"),
             ServiceImage("whisper", "ghcr.io/speaches-ai/speaches:latest-cpu"),
         ]
     )
