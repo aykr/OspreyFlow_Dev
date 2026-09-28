@@ -90,10 +90,10 @@ RECIPE_REPO_DIRNAME = "recipes"
 #: is 191 characters and must not be wrapped: wrapping it would change the script's bytes, and
 #: byte-identity with `dev.yaml` is the property the test above checks.
 _OLLAMA_PULL_SCRIPT = (
-    'set -e\n'
-    'ollama serve &\n'
-    'until ollama list >/dev/null 2>&1; do sleep 1; done\n'
-    'pull_and_verify() {\n'
+    "set -e\n"
+    "ollama serve &\n"
+    "until ollama list >/dev/null 2>&1; do sleep 1; done\n"
+    "pull_and_verify() {\n"
     '  model="$$1"; expected="$$2"\n'
     '  ollama pull "$$model"\n'
     '  actual="$$(ollama list | awk -v m="$$model" \'$$1 == m {print $$2}\')"\n'
@@ -101,13 +101,13 @@ _OLLAMA_PULL_SCRIPT = (
     '    echo "FATAL: $$model resolved to manifest $$actual, expected $$expected '
     "(docs/06_DECISIONS.md ADR-020) \u2014 the tag moved upstream; update the ADR "
     'deliberately, do not proceed silently." >&2\n'
-    '    exit 1\n'
-    '  fi\n'
-    '}\n'
-    'pull_and_verify qwen2.5:0.5b-instruct a8b0c5157701\n'
-    'pull_and_verify all-minilm:22m-l6-v2-fp16 1b226e2802db\n'
-    'pull_and_verify moondream:1.8b-v2-q4_K_M c865c80afc38\n'
-    'wait\n'
+    "    exit 1\n"
+    "  fi\n"
+    "}\n"
+    "pull_and_verify qwen2.5:0.5b-instruct a8b0c5157701\n"
+    "pull_and_verify all-minilm:22m-l6-v2-fp16 1b226e2802db\n"
+    "pull_and_verify moondream:1.8b-v2-q4_K_M c865c80afc38\n"
+    "wait\n"
 )
 
 #: **Healthy once the two models the Conduit actually serves with are present — not all three.**
@@ -395,12 +395,19 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
             # Round 13cda pinned a tag chosen here instead, so a deployment ran a *different*
             # LiteLLM from `make dev-up`. That is the exact "two copies that drift" defect the
             # ollama pull beside it was made byte-identical to avoid, reintroduced one line away
-            # from it. Measured: the route's own extraction schema returns a conforming (if empty)
-            # result through the developer stack's proxy and an **empty body** through the tag,
-            # which is what `13cda` left as A6/B6's blocker.
+            # from it. Measured against the same ollama, the same config and the request shape the
+            # route actually emits: the developer stack's proxy returns `{"Endpoint": []}`, while
+            # the tag returns *prose* ("I'm sorry, but I cannot…"), because `main-v1.55.8` does not
+            # translate `response_format: json_schema` into Ollama's own constrained decoding. That
+            # is the `Expecting value: line 1 column 1` `08_ACCEPTANCE_SCENARIOS.md` records as
+            # A6/B6's blocker — not an empty body, which is what it was read as before it was
+            # measured.
             #
             # `test_the_rendered_model_proxy_is_the_developer_stacks` is what fails if they part.
-            ServiceImage("litellm", "ghcr.io/berriai/litellm@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b"),
+            ServiceImage(
+                "litellm",
+                "ghcr.io/berriai/litellm@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b",
+            ),
             ServiceImage("whisper", "ghcr.io/speaches-ai/speaches:latest-cpu"),
         ]
     )

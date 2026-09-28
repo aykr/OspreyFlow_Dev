@@ -211,9 +211,9 @@ def test_pull_mode_renders_owned_images_with_no_build_stanza_and_a_locked_digest
         assert "build" not in compose["services"][service], (
             f"{service}: pull mode must not emit a build: stanza"
         )
-        assert compose["services"][service]["image"].startswith("ghcr.io/ospreyflow/"), (
-            compose["services"][service]["image"]
-        )
+        assert compose["services"][service]["image"].startswith("ghcr.io/ospreyflow/"), compose[
+            "services"
+        ][service]["image"]
 
     lock = yaml.safe_load(result.artefacts["versions.lock"])
     owned_rows = [row for row in lock["images"] if row["service"] in owned_services]
