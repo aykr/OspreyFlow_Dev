@@ -2176,7 +2176,15 @@ def test_a7_reports_can_be_filtered_to_one_item_category(
         },
     )
     assert unfiltered.status_code == 200, unfiltered.text
-    buckets = {b["label"]: b["count"] for b in unfiltered.json()["category"]["buckets"]}
+    # **Events with no `item_type` form a `None` bucket, and that bucket is not a category** —
+    # round 13cde, when the `scenarios` seed began writing B18's sightings as events under the
+    # same scope. They carry no item, so their bucket is correctly null; picking "a category" to
+    # filter to must skip it rather than try to order `None` against a string.
+    buckets = {
+        b["label"]: b["count"]
+        for b in unfiltered.json()["category"]["buckets"]
+        if b["label"] is not None
+    }
     assert len(buckets) > 1, (
         f"the seeded population has only one item category, so filtering to one proves nothing: "
         f"{buckets}"
