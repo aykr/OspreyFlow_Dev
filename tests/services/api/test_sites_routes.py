@@ -12,11 +12,13 @@ from __future__ import annotations
 import struct
 from datetime import UTC, datetime
 
+import duckdb
 import pytest
 from fastapi.testclient import TestClient
 from services.api.app import (
     ControlPointQuad,
     app,
+    get_analytics,
     get_audit,
     get_graph,
     get_investigations,
@@ -27,6 +29,9 @@ from services.api.app import (
 )
 from services.api.sites import ControlPointRecord, Site, SiteNotFoundError
 
+from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
+from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
+from ontology.handling import load_uk_le_scheme
 from schemas.domain import Principal
 from tests.services.api.test_app import _FakeAudit, _FakeInvestigations
 
@@ -137,7 +142,17 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setattr("services.api.app.write_site_image", fake_write_site_image)
     monkeypatch.setattr("services.api.app.read_site_image", fake_read_site_image)
     monkeypatch.setattr("services.api.app.run_recipe", fake_run_recipe)
-    monkeypatch.setattr("services.api.app.load_recipe", lambda path: object())
+    # **The real recipe, not a stand-in — round 13cde.** The grid route now reads the recipe's
+    # own `connector.source_crs` and `defaults.handling` to load each cell's geometry, so an
+    # `object()` here stopped fitting the route the moment it did something with the recipe.
+
+    # **A real analytics store, in memory — round 13cde.** The grid route loads a
+    # `GeometryRecord` per cell through `AnalyticsPort`; a fake would prove the route calls a
+    # method, not that a cell's ref resolves afterwards.
+    analytics_con = duckdb.connect(":memory:")
+    create_events_table(analytics_con)
+    create_geometries_table(analytics_con)
+    analytics = AnalyticsDuckDBAdapter(analytics_con, load_uk_le_scheme())
 
     app.dependency_overrides[get_principal] = lambda: PRINCIPAL
     app.dependency_overrides[get_sites] = lambda: sites
@@ -145,6 +160,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     app.dependency_overrides[get_ontology] = lambda: object()
     app.dependency_overrides[get_site_image_storage] = lambda: object()
     app.dependency_overrides[get_audit] = lambda: _FakeAudit()
+    app.dependency_overrides[get_analytics] = lambda: analytics
 
     # `AuthorizedInvestigationDep` on `create_site` needs `investigations`
     # too — reuse `test_app.py`'s own fake rather than a third copy.
@@ -154,6 +170,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     test_client.sites = sites  # type: ignore[attr-defined]
     test_client.graph = graph  # type: ignore[attr-defined]
     test_client.written_images = written_images  # type: ignore[attr-defined]
+    test_client.analytics_con = analytics_con  # type: ignore[attr-defined]
     try:
         yield test_client
     finally:
@@ -252,6 +269,13 @@ def test_grid_runs_the_recipe_and_returns_the_updated_site(client: TestClient) -
     assert (body["grid_rows"], body["grid_cols"]) == (2, 2)
     assert client.graph.committed  # type: ignore[attr-defined]
     assert not client.graph.rolled_back  # type: ignore[attr-defined]
+
+    # Round 13cde: every cell's geometry is loaded, and a redraw loads nothing more.
+    count = "SELECT count(*) FROM geometries"
+    assert client.analytics_con.execute(count).fetchone() == (4,)  # type: ignore[attr-defined]
+    again = client.post("/v1/investigations/inv-1/sites/site-1/grid", json={"rows": 2, "cols": 2})
+    assert again.status_code == 200, again.text
+    assert client.analytics_con.execute(count).fetchone() == (4,)  # type: ignore[attr-defined]
 
 
 def test_get_site_image_returns_the_bytes_with_the_right_content_type(client: TestClient) -> None:

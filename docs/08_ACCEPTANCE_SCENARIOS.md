@@ -154,7 +154,7 @@ and the `geometry_ref` Knowledge Adapter hashes a point — so a cell carries no
 nothing in this repository resolves a point to the area containing it (`ST_Contains` appears
 nowhere). Closing it needs three decisions, not one fix: whether a site cell is a polygon; what
 happens to the `Location`'s existing ref when its kind changes; and which port method owns
-containment. Raised here rather than guessed at (`CLAUDE.md` rule 11).
+containment. Raised here, in the spec, rather than guessed at in code.
 
 **B16 is proven in a real browser**, by `apps/workspace/live/scenario-b-timeline.spec.ts`. The row
 reads "Overlay the **second investigation's** timeline on the first", so the spec runs against two
