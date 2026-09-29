@@ -8,6 +8,7 @@ import { useState } from "react";
 
 import type { StudioRecipeDraft } from "../../../../packages/schemas/generated";
 import { Tabs } from "../design/primitives/Tabs";
+import { CaseSwitcher } from "../investigation/CaseSwitcher";
 import { ConnectScreen } from "./ConnectScreen";
 import { MapScreen } from "./map/MapScreen";
 import { ProfileScreen } from "./ProfileScreen";
@@ -22,11 +23,18 @@ export interface IngestStudioProps {
    * host has one yet (mirrors `App.tsx`'s own `investigationId` state,
    * which starts `null` until the first `POST /v1/investigations` lands). */
   investigationId: string | null;
+  /** Switching to another case, or one just created, from the studio (owner, 29 September 2026). */
+  onOpenCase: (id: string) => void;
 }
 
 type Stage = "connect" | "profile" | "map" | "verify" | "publish";
 
-export function IngestStudio({ apiBaseUrl, bearerToken, investigationId }: IngestStudioProps) {
+export function IngestStudio({
+  apiBaseUrl,
+  bearerToken,
+  investigationId,
+  onOpenCase,
+}: IngestStudioProps) {
   const [stage, setStage] = useState<Stage>("connect");
   const [activeDraft, setActiveDraft] = useState<StudioRecipeDraft | null>(null);
 
@@ -63,6 +71,25 @@ export function IngestStudio({ apiBaseUrl, bearerToken, investigationId }: Inges
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+      {investigationId && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--sp-16)",
+            padding: "var(--sp-8) var(--sp-16)",
+            borderBottom: "1px solid var(--border-subtle)",
+          }}
+        >
+          <span className="label">Data loaded from this studio goes into</span>
+          <CaseSwitcher
+            apiBaseUrl={apiBaseUrl}
+            bearerToken={bearerToken}
+            currentId={investigationId}
+            onOpen={onOpenCase}
+          />
+        </div>
+      )}
       <Tabs
         tabs={[
           { id: "connect", label: "Connect" },

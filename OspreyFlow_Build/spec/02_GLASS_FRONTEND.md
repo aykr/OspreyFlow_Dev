@@ -225,6 +225,14 @@ and whether the query parameter should survive into the URL the Glass itself set
 navigation (it does not today — this is load-time resolution only, not a routing scheme). Left
 for the owner to accept, amend or reject as real spec.
 
+**Superseded in part by ADR-052 Amendment 5 (29 September 2026).** Step 3 above (create a case on
+every load with no id) is gone. With no case resolved, and the analyst signed in, the Glass shows a
+**case picker**: the cases the caller holds a level on, each with the caller's own level, and a
+"New case" form. The header carries a case switcher, and the Ingest Studio shows the same switcher
+above its tabs ("Data loaded from this studio goes into"), with "New case" in it. Choosing a case
+sets the sessionStorage key and reloads the page, because the working set, cross-filter store and
+delta stream are built once per case. Steps 1 and 2 (query parameter, then session) are unchanged.
+
 ### 2.2 Opening from the launcher
 
 The launcher (`make launch`, `05_DEPLOYMENT.md` §3) opens the Glass with `?from=launcher`, and with

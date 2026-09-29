@@ -7534,3 +7534,21 @@ plus the earlier stage's).
 **Not yet:** the Glass picker and Share panel (stage 3), with counts in the listing and the case name
 becoming required; the demo seeds' grants and the acceptance rows (stage 4).
 
+### ADR-052, Amendment 5 (29 September 2026) — stage 3 built: the picker and the switchers
+
+**Seen:** the owner opened the Glass and got an empty, freshly created case ("Case 01M3PYS1", 0
+nodes) with no way to choose the dataset to work on, and no way to choose or create a case from the
+Ingest Studio. Cause: the Glass created a case on every load that had no id.
+
+**Built, tests first:** the Glass no longer creates a case on load. With no case chosen it shows a
+picker of the cases the caller holds a level on (name and own level), pre-selecting the last case
+used in this browser tab, and a "New case" form (a blank name is refused). The header shows the
+current case with a switcher. The Ingest Studio shows the same switcher above its tabs, so data is
+loaded into a case the analyst has chosen on purpose. Switching reloads the page (the per-case state
+is built once). 20 new tests; workspace lint, typecheck and all 297 tests pass.
+
+**Reading for the owner to overrule:** the case name is still optional at the API; the Glass always
+sends one. Making it required is a one-line change once you agree.
+
+**Not yet:** the Share panel for Authors and hiding edit controls from Viewers (the Conduit already
+refuses them), counts in the listing, and stage 4 (demo grants and acceptance rows).

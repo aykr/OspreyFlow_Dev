@@ -38,6 +38,7 @@ import { Inspector } from "./inspector/Inspector";
 import {
   INVESTIGATION_ID_SESSION_KEY,
   initialInvestigationId,
+  investigationIdFromSession,
 } from "./investigation/investigationId";
 import { computeCommunityHulls } from "./metrics/hulls";
 import { MetricsPanel } from "./metrics/MetricsPanel";
@@ -55,6 +56,9 @@ import {
 import { GlobalSearch } from "./search/GlobalSearch";
 import { BoundaryFilterTool } from "./map/BoundaryFilterTool";
 import { IngestStudio } from "./ingest/IngestStudio";
+import { CasePicker } from "./investigation/CasePicker";
+import { CaseSwitcher } from "./investigation/CaseSwitcher";
+import { openCase } from "./investigation/cases";
 import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
 import { StatusBar } from "./statusbar/StatusBar";
 import { Timeline } from "./timeline/Timeline";
@@ -384,25 +388,9 @@ export function App() {
       sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, investigationId);
       return;
     }
-    if (!bearerToken) return;
-    void fetch(`${API_BASE_URL}/v1/investigations`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${bearerToken}` },
-    })
-      .then((r) => {
-        if (r.status === 401) {
-          handleUnauthenticatedResponse();
-          return null;
-        }
-        hasResolvedAPrincipalOnceRef.current = true;
-        return r.json();
-      })
-      .then((investigation) => {
-        if (!investigation) return;
-        sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, investigation.id);
-        setInvestigationId(investigation.id);
-      });
-  }, [investigationId, bearerToken, handleUnauthenticatedResponse]);
+    // No case is created here any more (ADR-052, owner's ruling of 29 September 2026): with no
+    // case chosen the Glass shows the case picker, and a case is only ever created by naming one.
+  }, [investigationId]);
 
   useEffect(() => {
     if (!investigationId || !bearerToken) return;
@@ -603,6 +591,17 @@ export function App() {
     );
   }
 
+  if (!investigationId && (isDevBypass || bearerToken)) {
+    return (
+      <CasePicker
+        apiBaseUrl={API_BASE_URL}
+        bearerToken={bearerToken}
+        lastCaseId={investigationIdFromSession()}
+        onOpen={(id) => openCase(id)}
+      />
+    );
+  }
+
   if (!investigationId || !ontology || !crossFilterRef.current) {
     return (
       <div style={{ padding: "var(--sp-24)", color: "var(--text-secondary)" }}>
@@ -623,7 +622,12 @@ export function App() {
           borderBottom: "1px solid var(--border-subtle)",
         }}
       >
-        <strong>Case {investigationId.slice(0, 8)}</strong>
+        <CaseSwitcher
+          apiBaseUrl={API_BASE_URL}
+          bearerToken={bearerToken}
+          currentId={investigationId}
+          onOpen={(id) => openCase(id)}
+        />
         <div style={{ flex: 1, maxWidth: 480 }}>
           <GlobalSearch
             apiBaseUrl={API_BASE_URL}
@@ -732,6 +736,7 @@ export function App() {
             apiBaseUrl={API_BASE_URL}
             bearerToken={bearerToken}
             investigationId={investigationId}
+            onOpenCase={(id) => openCase(id)}
           />
         )}
         {view === "dossier" && dossierNodeId && (
