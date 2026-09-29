@@ -95,6 +95,7 @@ def register(*, issuer: str, realm: str, env_path: Path, config: OspreyConfig) -
     (admin,) = [u for u in rendered["users"] if u["username"] == DEMO_ADMIN_SUBJECT]
     lines: list[str] = []
 
+    keycloak_admin.ensure_unmanaged_attributes(issuer=issuer, realm=realm, token=token)
     for client_id in (LAUNCHER_CLIENT_ID, HARNESS_CLIENT_ID):
         (client,) = [c for c in rendered["clients"] if c["clientId"] == client_id]
         lines.append(

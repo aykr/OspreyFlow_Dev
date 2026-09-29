@@ -111,6 +111,29 @@ def ensure_client(*, issuer: str, realm: str, token: str, client: dict[str, Any]
     return "registered"
 
 
+def ensure_unmanaged_attributes(*, issuer: str, realm: str, token: str) -> None:
+    """Switch on custom user attributes. The policy lives in the realm's user profile, which is not
+    part of `RealmRepresentation` and so cannot travel in the realm import. Without it Keycloak
+    silently discards every custom attribute written to a user: no error, and the account signs in
+    with no `roles`, no clearance, nothing."""
+    from harness.realm import UNMANAGED_ATTRIBUTE_POLICY
+
+    status, profile = _call(f"{issuer}/admin/realms/{realm}/users/profile", token=token)
+    if status == 200 and isinstance(profile, dict):
+        profile["unmanagedAttributePolicy"] = UNMANAGED_ATTRIBUTE_POLICY
+        status, _ = _call(
+            f"{issuer}/admin/realms/{realm}/users/profile",
+            token=token,
+            data=profile,
+            method="PUT",
+        )
+        if status not in (200, 204):
+            raise RealmConfigurationFailed(
+                f"could not enable unmanaged user attributes: {status} — every custom claim would "
+                "be silently discarded and principals would arrive with no clearance"
+            )
+
+
 def ensure_user(*, issuer: str, realm: str, token: str, user: dict[str, Any]) -> str:
     """As `ensure_client`, for a subject. The subject is created without a password."""
     username = user["username"]
@@ -118,6 +141,19 @@ def ensure_user(*, issuer: str, realm: str, token: str, user: dict[str, Any]) ->
         f"{issuer}/admin/realms/{realm}/users?username={username}&exact=true", token=token
     )
     if status == 200 and found:
+        wanted = user.get("attributes")
+        if wanted and found[0].get("attributes") != wanted:
+            # Present but without what the realm renders for it (for instance created while custom
+            # attributes were still off): put the attributes back rather than leave it as found.
+            status, body = _call(
+                f"{issuer}/admin/realms/{realm}/users/{found[0]['id']}",
+                token=token,
+                data={**found[0], "attributes": wanted},
+                method="PUT",
+            )
+            if status not in (200, 204):
+                raise RealmConfigurationFailed(f"could not repair {username!r}: {status} {body}")
+            return "already there; attributes restored"
         return "already there"
     status, body = _call(f"{issuer}/admin/realms/{realm}/users", token=token, data=user)
     if status == 409:
@@ -173,24 +209,7 @@ def grant_service_account_roles(
             method="PUT",
         )
 
-    # The user-profile policy, which is not part of `RealmRepresentation` and so cannot travel in
-    # the realm import. Without it every custom attribute written below is silently discarded.
-    from harness.realm import UNMANAGED_ATTRIBUTE_POLICY
-
-    status, profile = _call(f"{issuer}/admin/realms/{realm}/users/profile", token=token)
-    if status == 200 and isinstance(profile, dict):
-        profile["unmanagedAttributePolicy"] = UNMANAGED_ATTRIBUTE_POLICY
-        status, _ = _call(
-            f"{issuer}/admin/realms/{realm}/users/profile",
-            token=token,
-            data=profile,
-            method="PUT",
-        )
-        if status not in (200, 204):
-            raise RealmConfigurationFailed(
-                f"could not enable unmanaged user attributes: {status} — every custom claim would "
-                "be silently discarded and principals would arrive with no clearance"
-            )
+    ensure_unmanaged_attributes(issuer=issuer, realm=realm, token=token)
 
     status, conduit = _call(
         f"{issuer}/admin/realms/{realm}/clients?clientId={CONDUIT_CLIENT_ID}", token=token

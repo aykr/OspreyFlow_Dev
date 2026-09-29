@@ -333,7 +333,9 @@ themselves. Sign-in is the deployment's own realm through the public client `osp
 the console says so and admits nobody, and the launcher (`make launch`) is how the stack is started
 first. A demonstration deployment (`apply --demo-analyst`) includes the account `osprey-demo-admin`;
 its password is `OSPREY_DEMO_ADMIN_PASSWORD` in `deployment.env`. A deployment applied earlier gets
-the client and the account with `make register-sign-in`.
+the client and the account with `make register-sign-in`, which also switches on custom user
+attributes in the realm and restores the account's attributes if it was created without them (the
+`osprey-admin` role travels as one, and Keycloak discards it silently when they are off).
 
 - **Before any realm is rendered the console is open**, loopback only, because there is nothing to
   sign in to; the enforcement is decided when the console starts, so the Launch that renders the

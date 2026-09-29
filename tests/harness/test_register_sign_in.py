@@ -52,6 +52,9 @@ class FakeKeycloak:
         self.passwords: dict[str, str] = {}
         self.refuse_reset = False
         self.unreachable = False
+        # A realm imported from `realm.json` starts with custom user attributes switched off, and
+        # Keycloak then silently discards them when a user is created (no error, no warning).
+        self.unmanaged_attributes = "DISABLED"
         self.calls: list[tuple[str, str]] = []
 
     def call(
@@ -87,12 +90,27 @@ class FakeKeycloak:
         if route.startswith("/users?username="):
             wanted = route.split("=", 1)[1].split("&")[0]
             return 200, [u for u in self.users.values() if u["username"] == wanted]
+        if route == "/users/profile":
+            if verb == "PUT":
+                self.unmanaged_attributes = data["unmanagedAttributePolicy"]
+                return 200, ""
+            return 200, {"attributes": [], "unmanagedAttributePolicy": self.unmanaged_attributes}
         if route == "/users" and verb == "POST":
             if data["username"] in {u["username"] for u in self.users.values()}:
                 return 409, {"errorMessage": "User exists with same username"}
             identifier = f"uid-{len(self.users) + 1}"
-            self.users[identifier] = {**data, "id": identifier}
+            stored = {**data, "id": identifier}
+            if self.unmanaged_attributes != "ENABLED":
+                stored.pop("attributes", None)
+            self.users[identifier] = stored
             return 201, ""
+        identifier = route.removeprefix("/users/")
+        if route.startswith("/users/uid-") and "/" not in identifier and verb == "PUT":
+            merged = {**self.users[identifier], **data}
+            if self.unmanaged_attributes != "ENABLED":
+                merged.pop("attributes", None)
+            self.users[identifier] = merged
+            return 204, ""
         if route.endswith("/reset-password") and verb == "PUT":
             if self.refuse_reset:
                 return 403, {"error": "forbidden"}
@@ -339,3 +357,30 @@ def test_the_summary_never_carries_a_password(
     assert ADMIN_PASSWORD not in out
     assert DEMO_ADMIN_SUBJECT in out
     assert "OSPREY_DEMO_ADMIN_PASSWORD" in out
+
+
+def test_the_demo_admin_arrives_with_its_role_even_on_a_realm_that_discards_custom_attributes(
+    tmp_path: Path, keycloak: FakeKeycloak
+) -> None:
+    """Seen on the owner's deployment: signed in as the demo admin and the launcher offered only
+    The Glass, because Keycloak had dropped the account's `roles` attribute on creation. A realm
+    imported from `realm.json` has custom attributes off until the policy is switched on."""
+    env = _env(tmp_path)
+
+    _register(env)
+
+    (admin,) = [u for u in keycloak.users.values() if u["username"] == DEMO_ADMIN_SUBJECT]
+    assert admin["attributes"]["roles"] == [ADMIN_ROLE]
+
+
+def test_a_demo_admin_created_earlier_without_its_role_is_repaired(
+    tmp_path: Path, keycloak: FakeKeycloak
+) -> None:
+    """The same deployment, second run: the account already exists with no roles. 'Already there'
+    must not mean 'left as it was' — that is how the missing role would have survived the fix."""
+    env = _env(tmp_path)
+    keycloak.users["uid-1"] = {"id": "uid-1", "username": DEMO_ADMIN_SUBJECT}
+
+    _register(env)
+
+    assert keycloak.users["uid-1"]["attributes"]["roles"] == [ADMIN_ROLE]
