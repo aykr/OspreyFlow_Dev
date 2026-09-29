@@ -376,7 +376,7 @@ class ExportLedgerStore:
             )
 
     async def list_all(self, principal: Principal) -> list[ExportLedgerEntry]:
-        """The one cross-investigation read in this module — `scripts/authorized_query_check.py`'s
+        """The one cross-investigation read in this module — `tools/authorized_query_check.py`'s
         own detection shape is a syntactic, single-call check for a *principal-scoped* query; this
         method is deliberately *not* principal-scoped by investigation, the same disclosed,
         by-design exemption `06_DECISIONS.md` ADR-038's own addendum already establishes for

@@ -1,0 +1,34 @@
+// Deterministic proof that `tools/licence_check.mjs`'s own `isAllowed` predicate is sensitive
+// to a real violation — the Node half of `make licence-check` had no test at all until this one
+// (`06_DECISIONS.md` ADR-034 §B10's own gate audit found it), the same "prove it can fail"
+// discipline `tests/licence_check/test_gpl_rejection.py` already applies to the Python half.
+
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { isAllowed } from "../../tools/licence_check.mjs";
+
+test("a GPL-3.0 licence is rejected", () => {
+  assert.equal(isAllowed("GPL-3.0"), false);
+});
+
+test("a GNU General Public License, spelled out, is rejected", () => {
+  assert.equal(isAllowed("GNU General Public License v3.0"), false);
+});
+
+test("an MIT licence is allowed", () => {
+  assert.equal(isAllowed("MIT"), true);
+});
+
+test("an Apache-2.0 licence is allowed", () => {
+  assert.equal(isAllowed("Apache-2.0"), true);
+});
+
+test("LGPL-3.0 is allowed -- the file's own disclosed gap: linkage mode is not checked", () => {
+  assert.equal(isAllowed("LGPL-3.0"), true);
+});
+
+test("a dual-licensed package naming both an allowed licence and GPL is rejected -- the real " +
+  "shape main() produces via licenses.join(\" AND \"), where an allowed marker elsewhere in " +
+  "the string must not let a GPL term slip through", () => {
+  assert.equal(isAllowed("MIT AND GPL-3.0"), false);
+});

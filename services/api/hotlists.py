@@ -5,7 +5,7 @@ a review date, nothing about a second viewer, and ADR-038's own "what a second a
 a hotlist they do not own" is settled as "nothing: no count, no ordering, no readable membership."
 
 **`owner_id` filtered in the query itself, from the start** (`06_DECISIONS.md` ADR-041) —
-`scripts/authorized_query_check.py` is what actually proves this, not this docstring's own claim
+`tools/authorized_query_check.py` is what actually proves this, not this docstring's own claim
 of it.
 """
 

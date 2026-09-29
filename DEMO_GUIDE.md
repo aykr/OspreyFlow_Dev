@@ -86,12 +86,12 @@ The Conduit validates JWTs against a JWKS URL (`OIDC_JWKS_URL`, read with no def
 correction already made three times for `revert_load`, the local-basemap build and the HMP seed.
 
 **Use the project venv's own interpreter, not a bare `python`** — the 23 September 2026 demo
-rehearsal (an internal record) found a bare `python -m scripts.mint_dev_token` picks
+rehearsal (an internal record) found a bare `python -m tools.mint_dev_token` picks
 up whatever interpreter is first on `PATH`, which on a machine with more than one Python install is
 not necessarily the one with this project's own dependencies (`pyjwt`, `cryptography`) installed:
 
 ```
-PYTHONPATH=.:packages .venv/bin/python3 -m scripts.mint_dev_token --jwks-path /tmp/dev-jwks/jwks.json
+PYTHONPATH=.:packages .venv/bin/python3 -m tools.mint_dev_token --jwks-path /tmp/dev-jwks/jwks.json
 ```
 
 Prints a signed token to stdout and writes the public JWKS to the given path. Re-running it at the
@@ -381,7 +381,7 @@ other part of this guide and wrong for this one — the folder simply 403s, with
 `principal lacks required studio role: source_author`. Mint one that can:
 
 ```
-PYTHONPATH=.:packages .venv/bin/python3 -m scripts.mint_dev_token \
+PYTHONPATH=.:packages .venv/bin/python3 -m tools.mint_dev_token \
   --jwks-path /tmp/dev-jwks/jwks.json \
   --roles analyst,source_author,source_approver,loader
 ```

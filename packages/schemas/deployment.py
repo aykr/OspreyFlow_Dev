@@ -23,7 +23,7 @@ indistinguishable, in a generated deployment, from one that was never written â€
 would surface as a missing service rather than as a typo.
 
 TypeScript types are generated from these (`generate_ts.py`); a drift between the two fails the
-build (`scripts/schemas_check.py`), per `CLAUDE.md`'s own Conventions.
+build (`tools/schemas_check.py`), per `CLAUDE.md`'s own Conventions.
 """
 
 from __future__ import annotations

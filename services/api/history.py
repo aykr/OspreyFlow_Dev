@@ -33,7 +33,7 @@ visible only at record time. The narrower-clearance re-projection is
 `tests/services/api/test_history_routes.py`'s own header also says.
 (Until 25 September 2026 this named a test_history.py under that
 directory — a file that has never existed. The case is real; the path was
-not, and `scripts/doc_citations_check.py` now catches the class.)
+not, and `tools/doc_citations_check.py` now catches the class.)
 
 **Storage-scaling assumption, named rather than left implicit.** A full
 node/edge body snapshot per mutating action means a long-running,

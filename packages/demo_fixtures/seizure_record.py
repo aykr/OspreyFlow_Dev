@@ -131,7 +131,9 @@ def generate_seizure_rows(seed: int = 7) -> list[dict[str, str]]:
     assert isinstance(seizure_date, datetime)
 
     rows: list[dict[str, str]] = []
-    for sim in record["sims"]:  # type: ignore[union-attr]
+    sims = record["sims"]
+    assert isinstance(sims, list)
+    for sim in sims:
         paired_to = sim["paired_to"]
         rows.append(
             {

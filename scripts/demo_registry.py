@@ -19,7 +19,7 @@ outright" for Fixture Corp; the HMP fixture's own "Enron-*shaped*, not Enron-der
 ADR, §C3). Neither Enron (real data, admitted only via `scripts/real_data_exceptions.py`, never
 committed) nor the VAST-shaped fixture (§C4, not yet built) exists as a file in this tree today —
 checked directly, `git grep`/`find` for either name returns nothing. This registry therefore has
-two real entries, not the seven narrative rows `scripts/demo_guide_check.py`'s own `DEMO_REGISTRY`
+two real entries, not the seven narrative rows `tools/demo_guide_check.py`'s own `DEMO_REGISTRY`
 enumerates — that module keys off `DEMO_GUIDE.md`'s own prose ("Scenario A", "the Ingest Studio"),
 a feature-level grain; this one keys off the packaging grain, "which files does the build have to
 either include or refuse to include" — the same "shares a shape, not an implementation" distinction

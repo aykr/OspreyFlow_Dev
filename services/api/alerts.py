@@ -3,7 +3,7 @@ foundation. Same shape `investigations.py`/`sites.py`/`pattern_store.py` already
 relational, control-plane metadata, Postgres-backed rather than a fourth store — an alert is a
 record of what fired, not graph content.
 
-**The first store built since `scripts/authorized_query_check.py` existed — `owner_id` is filtered
+**The first store built since `tools/authorized_query_check.py` existed — `owner_id` is filtered
 in the query itself from the start** (`06_DECISIONS.md` ADR-041), not written unscoped and fixed
 later the way `sites.py`/`investigations.py`/`studio_recipes.py`/`pattern_store.py` each
 independently were. `get_authorized` below has no Python-side ownership comparison anywhere in its
@@ -132,7 +132,7 @@ class AlertStore:
 
     async def get_authorized(self, alert_id: str, principal: Principal) -> Alert:
         """`owner_id` filtered in the query itself — `06_DECISIONS.md` ADR-041, proven (not
-        merely claimed) by `scripts/authorized_query_check.py`, which this store must pass on
+        merely claimed) by `tools/authorized_query_check.py`, which this store must pass on
         first write. This is the *ownership* check only; a caller reading evidence still needs
         `evidence_available` below for the *referent* recheck ADR-039 separately requires."""
         async with self._pool.acquire() as conn:

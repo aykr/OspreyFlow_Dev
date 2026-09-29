@@ -7,7 +7,7 @@
 # source directories this image's own entrypoint actually reaches are copied in. Checked directly,
 # not assumed: tracing every module `harness.render`, `harness.apply`, `harness.backup`,
 # `harness.restore`, `harness.preflight.__main__`, `harness.webapp` (`Stage 2 §6` part A) and
-# `scripts.osprey_bundle` import, recursively, touches exactly three project-tree roots —
+# `tools.osprey_bundle` import, recursively, touches exactly three project-tree roots —
 # `harness`, `packages/schemas`, `packages/principal_auth`, `scripts` — and nothing under
 # `services/`.
 #

@@ -189,7 +189,15 @@ _UNSTRUCTURED_CATALOGUE: tuple[ConnectorCatalogueEntry, ...] = (
 #: Where connector profiles live, relative to the repository root — `09_INGEST_STUDIO.md` §2's
 #: own `connectors/`. Overridable so a deployment can ship its own layouts without a rebuild,
 #: which is the other half of "a file rather than a release".
-CONNECTORS_DIR = Path(os.environ.get("OSPREY_CONNECTORS_DIR", "connectors"))
+def _default_connectors_dir() -> Path:
+    """The catalogue beside `packages/`, wherever the process was started from (tests now run from
+    the Build folder, ADR-054); falls back to the working directory's `connectors/` for an image
+    whose layout differs."""
+    beside_packages = Path(__file__).resolve().parents[2] / "connectors"
+    return beside_packages if beside_packages.is_dir() else Path("connectors")
+
+
+CONNECTORS_DIR = Path(os.environ.get("OSPREY_CONNECTORS_DIR") or _default_connectors_dir())
 
 _DECLARED_CATALOGUE: tuple[ConnectorCatalogueEntry, ...] = (
     _STRUCTURED_CATALOGUE + _UNSTRUCTURED_CATALOGUE

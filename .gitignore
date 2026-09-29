@@ -61,6 +61,9 @@ Claude outputs/
 # rendered from it would assert the opposite. A deployment's own repository un-ignores this.
 /deploy/generated/
 
-# `python -m scripts.osprey_bundle` output (06_DECISIONS.md ADR-049 Stage 2 §5b) — a locally built
+# `python -m tools.osprey_bundle` output (06_DECISIONS.md ADR-049 Stage 2 §5b) — a locally built
 # distribution artefact, not something this repository ships of itself.
 /dist/
+
+# Generated bundle staging, now under the Build folder (ADR-054).
+/OspreyFlow_Build/dist/

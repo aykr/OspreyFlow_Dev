@@ -74,6 +74,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Protocol
 
+from harness import oidc
 from harness.apply import _compose
 from harness.oidc import (
     Identity,
@@ -94,7 +95,6 @@ from harness.realm import (
     LAUNCHER_REDIRECT_URI,
 )
 
-from harness import oidc
 from schemas.ingest import StudioRole
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

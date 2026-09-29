@@ -14,7 +14,7 @@ belongs to an investigation multiple analysts in the same unit can read and writ
 `principal.org_unit == investigation.owning_unit` authorization boundary
 `services/api/investigations.py`'s own module docstring establishes, not a single-owner object.
 `get_authorized`/`list_authorized` below filter `owning_unit` in the query itself
-(`scripts/authorized_query_check.py`), the *ownership* half of access; `06_DECISIONS.md` ADR-046's
+(`tools/authorized_query_check.py`), the *ownership* half of access; `06_DECISIONS.md` ADR-046's
 own per-citation hide rule is a second, independent check below that, exactly the two-check
 composition `alerts.py`'s own `get_authorized`/`evidence_available` split already establishes.
 
@@ -256,7 +256,7 @@ class JudgementStore:
         return _row_to_judgement(row)
 
     async def get_authorized(self, judgement_id: str, principal: Principal) -> Judgement:
-        """`owning_unit` filtered in the query itself — `scripts/authorized_query_check.py`'s own
+        """`owning_unit` filtered in the query itself — `tools/authorized_query_check.py`'s own
         shape, `sites.py::get_authorized`'s twin. This is the *ownership* check only; ADR-046's
         own per-citation hide rule is a separate, second check (`judgement_visible_to` below)."""
         async with self._pool.acquire() as conn:

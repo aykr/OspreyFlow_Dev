@@ -177,7 +177,7 @@ class MissingDockerfileError(RuntimeError):
     pointing at a Dockerfile that does not exist renders a compose file that fails at
     `docker compose build` with Docker's own error, several steps and one confusing message later.
     Refusing here, by name, is the same "named refusal, not a silent partial" shape
-    `scripts/osprey_bundle.py` already uses for a non-redistributable provider.
+    `tools/osprey_bundle.py` already uses for a non-redistributable provider.
     """
 
     def __init__(self, services: Sequence[str], *, source_path: str) -> None:
@@ -841,7 +841,7 @@ def _render_versions_lock(
         # file that is partly a real pin and partly a gap, and a reader needs to know which line is
         # which. `local-docker-daemon` (the default, `harness.apply`'s own usage) means "this is
         # the digest this machine happened to have", a snapshot, not an authority —
-        # `resolved_source_label` is how `scripts.osprey_bundle.build_bundle` writes `"registry"`
+        # `resolved_source_label` is how `tools.osprey_bundle.build_bundle` writes `"registry"`
         # here instead, matching what `harness.images.registry_digest_resolver` actually resolved
         # against, once the bundle's own Stage 2 §5b landed.
         source = resolved_source_label
@@ -985,7 +985,7 @@ def render(
 
     `resolved_source_label` names, in `versions.lock`, *how* a resolved digest was obtained — it
     does not change what gets resolved, only how the lock file describes it. Left at its default
-    for every caller except `scripts.osprey_bundle.build_bundle`, which passes a resolver AND a
+    for every caller except `tools.osprey_bundle.build_bundle`, which passes a resolver AND a
     label that actually agree with each other (`harness.images.registry_digest_resolver` /
     `"registry"`) rather than this function silently mislabelling a registry-resolved digest as a
     local-daemon one.

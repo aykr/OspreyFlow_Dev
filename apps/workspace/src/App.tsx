@@ -85,7 +85,7 @@ const API_BASE_URL =
 // `import.meta.env.DEV` is Vite's own `command === "serve"` flag — `false` for every production
 // build, so this branch is dead code (and the variable read below moot) in anything
 // `vite.config.ts`'s own build-time fence would have let through. There is no Keycloak in
-// `deploy/compose/dev.yaml`'s lightweight dev stack (`scripts/mint_dev_token.py` mints against a
+// `deploy/compose/dev.yaml`'s lightweight dev stack (`tools/mint_dev_token.py` mints against a
 // throwaway keypair instead), so this path — not the real OIDC flow below — is what `make dev-up`
 // and `npm run dev` actually exercise.
 const DEV_MODE_BEARER_TOKEN = import.meta.env.DEV

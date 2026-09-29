@@ -7,8 +7,8 @@ through one name instead of remembering six.
 `05_DEPLOYMENT.md` §2's own bootstrap command runs this image. `07_BUILD_PLAN.md`'s Stage 2 §5b
 brief names the six subcommands this dispatcher wires: render, preflight, apply, backup, restore,
 bundle. `bundle` is the one exception to "its own `harness.<name>`" — it wraps
-`scripts.osprey_bundle`, which predates this dispatcher and is deliberately not part of the
-`harness` package itself (`06_DECISIONS.md` ADR-049: "wraps `scripts/osprey_bundle.py`... rather
+`tools.osprey_bundle`, which predates this dispatcher and is deliberately not part of the
+`harness` package itself (`06_DECISIONS.md` ADR-049: "wraps `tools/osprey_bundle.py`... rather
 than writing a second implementation").
 
 **No subcommand is now the browser setup harness** (`Stage 2 §6` part A) — `05_DEPLOYMENT.md` §2's
@@ -25,7 +25,7 @@ import importlib
 import sys
 from collections.abc import Callable
 
-#: `bundle` maps to `scripts.osprey_bundle`, the one deliberate exception — see the module
+#: `bundle` maps to `tools.osprey_bundle`, the one deliberate exception — see the module
 #: docstring. `preflight` is a package, not a module, and its own `main()` lives in its
 #: `__main__.py` (what `python -m harness.preflight` itself resolves via `runpy`, not a plain
 #: `import_module` of the package's `__init__.py` — found the moment this dispatcher first ran:
@@ -39,7 +39,7 @@ _SUBCOMMANDS: dict[str, str] = {
     "apply": "harness.apply",
     "backup": "harness.backup",
     "restore": "harness.restore",
-    "bundle": "scripts.osprey_bundle",
+    "bundle": "tools.osprey_bundle",
 }
 
 

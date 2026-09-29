@@ -1,0 +1,21 @@
+# Known private-tree references from an Apache-scoped document — round 14b, 29 September 2026.
+# Every prior entry here (from 23 September 2026, before Trigger A's restructure and before this
+# round's rewrite pass) has been checked directly against the current tree and is gone: each was
+# either a real citation, now rewritten to state its substance inline rather than pointing at a
+# private file, or a marker (`06_DECISIONS.md`, `07_BUILD_PLAN.md`, `DESIGN_PROVENANCE.md`,
+# `NEXT_STEPS_PHASE7.md`, `SESSION_HANDOVER.md`, `archive/`) that is no longer part of
+# `PRIVATE_TREE_MARKERS` at all (round 14a simplified it to `process/`, `CLAUDE.md`, `.claude/`,
+# `.graphifyignore` — see `tools/product_tree_link_check.py`'s own docstring). This is not the
+# same list carried forward; it is a fresh one, re-derived from a live `find_violations()` run
+# against the current tree, not assumed clean from the old entries' mere continued presence.
+#
+# One entry remains, and it is not a citation of private content — checked directly, the same
+# judgement `06_DECISIONS.md` ADR-031's own text already applies to itself: `README.md` has to
+# say that `process/` exists and what it is for, the same way ADR-031 does, and that sentence
+# necessarily contains the substring `process/`. A reader does not need to open `process/` to
+# understand what `README.md` says about it; the sentence carries its own explanation. This does
+# not shrink to zero the way a real citation would — it shrinks only if `README.md` stops
+# describing the repository's own top-level layout, which would make it a worse README.
+#
+# Format: <path relative to repo root>\t<private-tree marker matched>
+README.md	process/

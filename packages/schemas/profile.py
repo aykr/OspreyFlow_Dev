@@ -19,7 +19,7 @@ this shape, not a second implementation of profiling or of the masking
 decision.
 
 TypeScript types are generated from these (`generate_ts.py`); a drift
-between the two fails the build (`scripts/schemas_check.py`).
+between the two fails the build (`tools/schemas_check.py`).
 """
 
 from __future__ import annotations

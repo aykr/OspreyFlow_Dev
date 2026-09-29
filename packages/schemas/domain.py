@@ -3,7 +3,7 @@
 Source of truth for `GraphPort`'s DTOs and the node/edge shape every adapter
 writes and reads. TypeScript types are generated from these
 (`generate_ts.py`); a drift between the two fails the build
-(`scripts/schemas_check.py`).
+(`tools/schemas_check.py`).
 
 Supersedes packages/schemas/_phase0_placeholders.py (since removed) for everything
 `GraphPort` references. `_pending_port_placeholders.py` (the same idea for

@@ -2,7 +2,7 @@
 §1.2 ("Capabilities documents are parsed at registration"). No `osprey`
 CLI yet (`CLAUDE.md`'s own Conventions) — a plain,
 directly-runnable script now, the same pattern as `scripts/
-build_local_basemap.py`/`scripts/osprey_bundle.py`. Fetches a WMTS
+build_local_basemap.py`/`tools/osprey_bundle.py`. Fetches a WMTS
 service's own `GetCapabilities` document, parses it, and prints the
 discovered layers/projection/zoom range — a deployer pastes the result
 into a new `osprey.yaml` provider entry by hand; this does not write the

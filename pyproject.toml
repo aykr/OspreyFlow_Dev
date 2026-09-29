@@ -64,11 +64,6 @@ dev = [
     "types-networkx>=3.4",
 ]
 
-[tool.pytest.ini_options]
-pythonpath = ["packages"]
-testpaths = ["tests"]
-asyncio_mode = "auto"
-
 [tool.mypy]
 mypy_path = "packages"
 python_version = "3.12"
@@ -104,7 +99,7 @@ ignore_missing_imports = true
 
 [tool.ruff]
 target-version = "py312"
-src = ["packages", "services", "tests"]
+src = ["packages", "services", "OspreyFlow_Build"]
 line-length = 100
 
 [tool.ruff.lint]

@@ -3,7 +3,7 @@ control-plane store in this codebase already is. References a `SavedPattern` by 
 never copies its own definition (`schemas.domain.Monitor`'s own docstring has the full reasoning).
 
 **`owner_id` filtered in the query itself, from the start** (`06_DECISIONS.md` ADR-041) —
-`scripts/authorized_query_check.py` is what actually proves this.
+`tools/authorized_query_check.py` is what actually proves this.
 """
 
 from __future__ import annotations

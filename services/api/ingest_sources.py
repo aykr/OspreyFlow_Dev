@@ -22,7 +22,7 @@ refusals are the interesting part and each one has a test:
   the traversal surface to exactly one directory, and a Connect stage that cannot express "descend"
   cannot be talked into descending.
 - **No dotfiles.** `.DS_Store` and friends are host debris, never evidence — the same class of
-  junk `scripts/osprey_bundle.py` already filters out of a customer-facing artefact.
+  junk `tools/osprey_bundle.py` already filters out of a customer-facing artefact.
 - **A missing root is an empty list, not an error.** Docker creates a bind-mount source that does
   not exist, so an operator who has not yet put anything there is in a normal state, and the
   Studio should say "nothing here" rather than 500.

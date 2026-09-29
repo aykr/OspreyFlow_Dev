@@ -22,7 +22,7 @@ here, not silently normalised, because it is a real inconsistency in the
 input examples, not a typo in one of them.
 
 TypeScript types are generated from these (`generate_ts.py`); a drift
-between the two fails the build (`scripts/schemas_check.py`). Only the
+between the two fails the build (`tools/schemas_check.py`). Only the
 fields the Glass's layer control actually needs travel to the frontend —
 `services/api/mapconfig_loader.py`'s `public_view()` is what strips a tier 3
 `credential` reference before the Conduit serves this to the browser.

@@ -15,7 +15,7 @@
 # **What this workflow cannot prove from a CI runner, disclosed rather than assumed:** the push
 # itself (`docker push` reaching `ghcr.io` for real, with real, currently-valid credentials) is
 # only exercised by an actual run of this workflow, which needs a real tag push and this repository's
-# own `GITHUB_TOKEN` — `scripts/release_local.py` runs every other step (build, scan, `make bundle`)
+# own `GITHUB_TOKEN` — `OspreyFlow_Build/tools/release_local.py` runs every other step (build, scan, `make bundle`)
 # locally with `--dry-run` in place of the four `docker push`/registry-attach calls below, printing
 # the references it would have pushed, so everything up to the push itself is exercised without
 # this sandbox ever needing `packages: write` credentials it does not have.
@@ -49,7 +49,7 @@ jobs:
   # pushes to `main` since 13 September) — `07_BUILD_PLAN.md`'s round 13cg finding has the
   # investigation and what it does and does not rule out. A release gate is the one place this
   # repository can make that silence load-bearing rather than merely visible: nothing downstream
-  # of this job can build or push an image until `scripts/ci_status_check.py` sees a green check
+  # of this job can build or push an image until `OspreyFlow_Build/tools/ci_status_check.py` sees a green check
   # run for `github.sha`, and on the repository's current state (zero runs, ever) this job fails
   # every release until that changes — which is the correct behaviour, not a bug in the gate.
   ci-status-gate:
@@ -64,7 +64,7 @@ jobs:
       - name: Refuse to release unless main's own CI is green for this commit
         env:
           GH_TOKEN: ${{ github.token }}
-        run: PYTHONPATH=.:packages uv run python -m scripts.ci_status_check --ref ${{ github.sha }}
+        run: PYTHONPATH=.:packages:OspreyFlow_Build uv run python -m tools.ci_status_check --ref ${{ github.sha }}
 
   build-scan-push:
     needs: ci-status-gate
@@ -139,10 +139,10 @@ jobs:
       - run: uv sync
 
       # Pull mode is `make bundle`'s own default render (round 07's own fix to
-      # `scripts/osprey_bundle.py`) — no flag needed here. The four owned images this job's own
+      # `OspreyFlow_Build/tools/osprey_bundle.py`) — no flag needed here. The four owned images this job's own
       # `needs:` just pushed are what its `versions.lock` now resolves against, for real, over the
       # network — `registry_digest_resolver` (already `build_bundle`'s own default resolver), the
-      # same call `scripts/release_local.py --dry-run` exercises locally short of the push.
+      # same call `OspreyFlow_Build/tools/release_local.py --dry-run` exercises locally short of the push.
       - run: make bundle
 
       - name: Copy the standalone versions.lock beside the bundle
