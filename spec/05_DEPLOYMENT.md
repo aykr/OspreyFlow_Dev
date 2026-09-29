@@ -331,8 +331,10 @@ requires a signed-in account holding the `osprey-admin` role, on **every** route
 themselves. Sign-in is the deployment's own realm through the public client `osprey-harness`
 (authorization code with PKCE), so the console needs the identity provider running: with it down
 the console says so and admits nobody, and the launcher (`make launch`) is how the stack is started
-first. A demonstration deployment (`apply --demo-analyst`) includes the account `osprey-demo-admin`;
-its password is `OSPREY_DEMO_ADMIN_PASSWORD` in `deployment.env`. A deployment applied earlier gets
+first. A demonstration deployment (`apply --demo-analyst`) includes the account `osprey-demo-admin`,
+which holds `osprey-admin` and also every role the demo analyst holds, so one demonstration login
+can open the Admin console, the Glass and the Ingest Studio (each role is still enforced by the
+Conduit itself); its password is `OSPREY_DEMO_ADMIN_PASSWORD` in `deployment.env`. A deployment applied earlier gets
 the client and the account with `make register-sign-in`, which also switches on custom user
 attributes in the realm and restores the account's attributes if it was created without them (the
 `osprey-admin` role travels as one, and Keycloak discards it silently when they are off).

@@ -300,14 +300,23 @@ def test_the_demo_admin_is_absent_by_default() -> None:
     assert DEMO_ADMIN_SUBJECT not in usernames
 
 
-def test_the_demo_admin_holds_only_the_admin_role_and_nothing_an_analyst_has() -> None:
-    """The owner's ruling of 29 September 2026: a second demo account, so the analyst account stays
-    unprivileged. If it also held the Studio roles the two accounts would differ only in name."""
+def test_the_demo_admin_holds_the_admin_role_and_every_role_the_demo_analyst_holds() -> None:
+    """The owner's ruling of 29 September 2026 (superseding the same day's first one, which kept the
+    admin to `osprey-admin` alone): the disposable demo admin can also open the Glass and the Ingest
+    Studio, so one demo login does everything. The Conduit still enforces each role itself; the
+    analyst account stays without `osprey-admin`."""
     realm = render_realm(_config(), demo_analyst=True)
     (admin,) = [u for u in realm["users"] if u["username"] == DEMO_ADMIN_SUBJECT]
     (analyst,) = [u for u in realm["users"] if u["username"] == DEMO_ANALYST_SUBJECT]
 
-    assert admin["attributes"]["roles"] == [ADMIN_ROLE]
+    assert admin["attributes"]["roles"] == [
+        ADMIN_ROLE,
+        "analyst",
+        "source_author",
+        "source_approver",
+        "loader",
+    ]
+    assert set(analyst["attributes"]["roles"]) <= set(admin["attributes"]["roles"])
     assert ADMIN_ROLE not in analyst["attributes"]["roles"]
     assert admin["enabled"] is True
     assert "credentials" not in admin, "the password travels beside the realm, never inside it"

@@ -186,11 +186,15 @@ _DEMO_ANALYST_ATTRIBUTES = {
 }
 
 
+#: **The demo admin also holds every role the demo analyst holds** (owner ruling of 29 September
+#: 2026, superseding the first one the same day, which kept it to `osprey-admin` alone): one
+#: disposable login that can open the Glass and the Ingest Studio as well as the Admin console. The
+#: Conduit still enforces each role itself (ADR-050); this changes what this one demo account holds,
+#: not what any role permits. The clearance and handling attributes match the analyst's so the
+#: seeded investigation is visible to it.
 _DEMO_ADMIN_ATTRIBUTES = {
-    "clearance": ["OFFICIAL"],
-    "org_unit": ["verify"],
-    "receivable_handling_codes": ["P"],
-    "roles": [ADMIN_ROLE],
+    **_DEMO_ANALYST_ATTRIBUTES,
+    "roles": [ADMIN_ROLE, *_DEMO_ANALYST_ATTRIBUTES["roles"]],
 }
 
 

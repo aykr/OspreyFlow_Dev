@@ -61,7 +61,7 @@ OSPREY_DEMO_ADMIN_PASSWORD={DEMO_ADMIN_PASSWORD}
 USERS = {
     "ada": [ADMIN_ROLE, "analyst", *(r.value for r in StudioRole)],  # everything
     "demo-analyst": ["analyst", *(r.value for r in StudioRole)],
-    "demo-admin": [ADMIN_ROLE],
+    "admin-only": [ADMIN_ROLE],  # a real administrator: no analysis or Studio role
     "plain": ["analyst"],
     "nobody": [],
 }
@@ -314,7 +314,7 @@ def test_the_admin_console_cannot_be_started_without_an_admin_session(
 
 def test_an_admin_session_can_start_the_admin_console(rig: Rig, idp: FakeIdentityProvider) -> None:
     admin = rig.browser()
-    assert admin.sign_in(idp, "demo-admin") == 303
+    assert admin.sign_in(idp, "admin-only") == 303
     assert admin.post("/start/admin")[0] == 202
     rig.launcher.wait_idle()
     assert any(call[-2:] == ["-m", "harness"] for call in rig.spawner.calls)
@@ -337,7 +337,7 @@ def test_a_start_request_still_needs_the_page_token_when_signed_in(
     [
         ("ada", [GLASS, STUDIO, ADMIN]),
         ("demo-analyst", [GLASS, STUDIO]),
-        ("demo-admin", [GLASS, ADMIN]),
+        ("admin-only", [GLASS, ADMIN]),
         ("plain", [GLASS]),  # an analyst with no Studio role: no Ingest Studio
         ("nobody", [GLASS]),  # the Glass is open to any signed-in account
     ],

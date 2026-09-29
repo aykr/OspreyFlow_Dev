@@ -35,6 +35,7 @@ from schemas.deployment import OspreyConfig
 
 ISSUER = "http://kc.test"
 ADMIN_PASSWORD = "the-keycloak-admin-password"
+DEMO_ADMIN_ROLES = [ADMIN_ROLE, "analyst", "source_author", "source_approver", "loader"]
 SECRET_SHAPED = "s3cret-value-that-must-never-be-printed"
 
 
@@ -235,7 +236,7 @@ def test_registering_adds_both_sign_in_clients_and_the_demo_admin_exactly_as_the
     (admin,) = [u for u in rendered["users"] if u["username"] == DEMO_ADMIN_SUBJECT]
     (created,) = keycloak.users.values()
     assert {k: v for k, v in created.items() if k != "id"} == admin
-    assert created["attributes"]["roles"] == [ADMIN_ROLE]
+    assert created["attributes"]["roles"] == DEMO_ADMIN_ROLES
 
 
 def test_registering_writes_the_demo_admins_password_to_the_env_file_and_it_works(
@@ -381,7 +382,7 @@ def test_the_demo_admin_arrives_with_its_role_even_on_a_realm_that_discards_cust
     _register(env)
 
     (admin,) = [u for u in keycloak.users.values() if u["username"] == DEMO_ADMIN_SUBJECT]
-    assert admin["attributes"]["roles"] == [ADMIN_ROLE]
+    assert admin["attributes"]["roles"] == DEMO_ADMIN_ROLES
 
 
 def test_a_demo_admin_created_earlier_without_its_role_is_repaired(
@@ -394,7 +395,7 @@ def test_a_demo_admin_created_earlier_without_its_role_is_repaired(
 
     _register(env)
 
-    assert keycloak.users["uid-1"]["attributes"]["roles"] == [ADMIN_ROLE]
+    assert keycloak.users["uid-1"]["attributes"]["roles"] == DEMO_ADMIN_ROLES
 
 
 def test_the_sign_in_page_is_restyled_when_keycloak_can_see_the_theme(
@@ -421,3 +422,21 @@ def test_a_theme_keycloak_cannot_see_is_never_named_and_the_next_step_is_said(
     assert keycloak.realm["displayName"] == DISPLAY_NAME
     (note,) = [line for line in lines if "sign-in page" in line]
     assert "python -m harness.apply" in note
+
+
+def test_a_demo_admin_that_holds_only_the_admin_role_is_brought_up_to_the_current_set(
+    tmp_path: Path, keycloak: FakeKeycloak
+) -> None:
+    """The state on the owner's Keycloak after the first ruling: the account exists with
+    `osprey-admin` alone. Registering again must add the analyst and Studio roles, or the ruling
+    would only ever apply to a deployment applied from scratch."""
+    keycloak.unmanaged_attributes = "ENABLED"
+    keycloak.users["uid-1"] = {
+        "id": "uid-1",
+        "username": DEMO_ADMIN_SUBJECT,
+        "attributes": {"roles": [ADMIN_ROLE]},
+    }
+
+    _register(_env(tmp_path))
+
+    assert keycloak.users["uid-1"]["attributes"]["roles"] == DEMO_ADMIN_ROLES
