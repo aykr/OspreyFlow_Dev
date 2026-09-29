@@ -48,6 +48,7 @@ from harness.render import (
 )
 
 from schemas.deployment import DEFAULT_PUBLIC_ORIGIN, OspreyConfig, SearchBackend
+from tools.layout import CORE
 from tools.layout import REPO as REPO_ROOT
 from tools.layout import REPO as _REPO
 
@@ -103,7 +104,7 @@ def config(tmp_path: Path) -> OspreyConfig:
     path.write_text(FIXTURE_CONFIG, encoding="utf-8")
     loaded = load_config(path)
     return loaded.model_copy(
-        update={"components": loaded.components.model_copy(update={"source_path": str(REPO_ROOT)})}
+        update={"components": loaded.components.model_copy(update={"source_path": str(CORE)})}
     )
 
 

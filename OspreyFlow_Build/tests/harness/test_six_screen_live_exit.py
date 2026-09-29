@@ -42,6 +42,7 @@ import pytest
 from fastapi.testclient import TestClient
 from harness.webapp import create_app
 
+from tools.layout import CORE
 from tools.layout import REPO as REPO_ROOT
 
 pytestmark = pytest.mark.skipif(
@@ -135,7 +136,7 @@ def test_launch_from_the_six_screens_reaches_a_verified_local_lite_deployment(
         for section in ("components", "models", "governance"):
             payload = config[section]
             if section == "components":
-                payload = {**payload, "source_path": str(REPO_ROOT)}
+                payload = {**payload, "source_path": str(CORE)}
             response = client.put("/api/config", json={section: payload})
             assert response.status_code == 200, response.text
 

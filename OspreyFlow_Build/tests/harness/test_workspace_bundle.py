@@ -35,6 +35,7 @@ import time
 
 import pytest
 
+from tools.layout import CORE
 from tools.layout import REPO as REPO_ROOT
 
 WORKSPACE = REPO_ROOT / "apps" / "workspace"
@@ -85,7 +86,7 @@ def _build(env: dict[str, str]) -> str:
         shutil.rmtree(out)
     completed = subprocess.run(  # noqa: S603
         ["npm", "run", "build", "--workspace", "apps/workspace"],
-        cwd=REPO_ROOT,
+        cwd=CORE,
         env={**os.environ, **env},
         capture_output=True,
         text=True,
@@ -162,7 +163,7 @@ def test_a_production_build_fails_with_the_dev_bearer_token_set() -> None:
     """
     completed = subprocess.run(  # noqa: S603
         ["npm", "run", "build", "--workspace", "apps/workspace"],
-        cwd=REPO_ROOT,
+        cwd=CORE,
         env={**os.environ, "VITE_DEV_BEARER_TOKEN": "fake-dev-token"},
         capture_output=True,
         text=True,
@@ -204,7 +205,7 @@ def test_the_workspace_serves_with_no_conduit_reachable_at_all() -> None:
     image = "osprey/workspace:bundle-test"
     built = subprocess.run(  # noqa: S603
         ["docker", "build", "-f", "apps/workspace/Dockerfile", "-t", image, "."],
-        cwd=REPO_ROOT,
+        cwd=CORE,
         capture_output=True,
         text=True,
         check=False,
@@ -261,7 +262,7 @@ def test_the_proxied_liveness_route_answers_for_the_conduit_not_the_glass() -> N
     image = "osprey/workspace:bundle-test"
     built = subprocess.run(  # noqa: S603
         ["docker", "build", "-f", "apps/workspace/Dockerfile", "-t", image, "."],
-        cwd=REPO_ROOT,
+        cwd=CORE,
         capture_output=True,
         text=True,
         check=False,

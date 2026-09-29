@@ -23,7 +23,7 @@ from demo_fixtures.seizure_record import (
     SIM_A_IMSI_NORMALISED,
     SIM_B_IMSI_NORMALISED,
 )
-from tools.layout import REPO as _REPO
+from tools.layout import CORE as _REPO
 
 SHARED = "shared-endpoint-under-test"
 

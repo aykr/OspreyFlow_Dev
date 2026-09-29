@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+defaults:
+  run:
+    working-directory: OspreyFlow_Core
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -48,10 +52,10 @@ jobs:
       # Deterministic proof that a GPL dependency fails the build
       # (Phase 0 exit criterion, process/07_BUILD_PLAN.md) — see
       # OspreyFlow_Build/tests/licence_check/test_gpl_rejection.py.
-      - run: uv run pytest -c OspreyFlow_Build/pytest.ini OspreyFlow_Build/tests/licence_check
+      - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/licence_check
       # Same proof for the Node half's own isAllowed predicate — had no test at all until
       # 06_DECISIONS.md ADR-034 §B10's own gate audit found it.
-      - run: node --test OspreyFlow_Build/tests/licence_check/*.test.mjs
+      - run: node --test ../OspreyFlow_Build/tests/licence_check/*.test.mjs
 
   # `spec/06_DECISIONS.md` ADR-041 (accepted, option (b)): mechanical control for the
   # fetch-then-check authorization bug class found three times over (review.py, the fakes that
@@ -68,7 +72,7 @@ jobs:
       - run: PYTHONPATH=OspreyFlow_Build uv run python -m tools.authorized_query_check
       # Deterministic proof it actually fails on the bug class it exists to catch — see
       # OspreyFlow_Build/tests/authorized_query_check/test_principal_predicate_required.py.
-      - run: uv run pytest -c OspreyFlow_Build/pytest.ini OspreyFlow_Build/tests/authorized_query_check
+      - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/authorized_query_check
 
   # `07_BUILD_PLAN.md`'s Phase 8 documentation-refresh entry: a small, real stand-in for
   # ADR-035's own still-unbuilt fail-closed demo registry, so a demo added with no matching
@@ -83,7 +87,7 @@ jobs:
       - run: PYTHONPATH=OspreyFlow_Build uv run python -m tools.demo_guide_check
       # Deterministic proof it is not vacuous — see
       # OspreyFlow_Build/tests/test_demo_guide_registry_check.py's own two negative cases.
-      - run: uv run pytest -c OspreyFlow_Build/pytest.ini OspreyFlow_Build/tests/test_demo_guide_registry_check.py
+      - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_demo_guide_registry_check.py
 
   # `07_BUILD_PLAN.md`'s Phase 8 documentation-refresh entry, same shape as demo-guide-check
   # above: an allowlist of current debt (OspreyFlow_Build/tests/fixtures/domain_model_coverage_allowlist.txt) so
@@ -96,7 +100,7 @@ jobs:
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
       - run: PYTHONPATH=OspreyFlow_Build uv run python -m tools.domain_model_coverage_check
-      - run: uv run pytest -c OspreyFlow_Build/pytest.ini OspreyFlow_Build/tests/test_domain_model_coverage_check.py
+      - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_domain_model_coverage_check.py
 
   # Same shape, for `spec/03_CONDUIT_MIDDLEWARE.md`'s own route table — allowlist at
   # OspreyFlow_Build/tests/fixtures/route_coverage_allowlist.txt. See OspreyFlow_Build/tools/route_coverage_check.py's own
@@ -108,7 +112,7 @@ jobs:
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
       - run: PYTHONPATH=OspreyFlow_Build uv run python -m tools.route_coverage_check
-      - run: uv run pytest -c OspreyFlow_Build/pytest.ini OspreyFlow_Build/tests/test_route_coverage_check.py
+      - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_route_coverage_check.py
 
   # Same shape, for the product-tree link-integrity gate — `06_DECISIONS.md` ADR-034 §B8.
   # Allowlist at OspreyFlow_Build/tests/fixtures/product_tree_link_allowlist.txt. See
@@ -122,7 +126,7 @@ jobs:
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
       - run: PYTHONPATH=OspreyFlow_Build uv run python -m tools.product_tree_link_check
-      - run: uv run pytest -c OspreyFlow_Build/pytest.ini OspreyFlow_Build/tests/test_product_tree_link_check.py
+      - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_product_tree_link_check.py
 
   # Same shape, one level down — does a PRODUCT-classified ADR in 06_DECISIONS.md cite a
   # PROCESS-classified one by number. `06_DECISIONS.md` ADR-034 §B10. Allowlist at
@@ -135,7 +139,7 @@ jobs:
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
       - run: PYTHONPATH=OspreyFlow_Build uv run python -m tools.decision_log_publication_check
-      - run: uv run pytest -c OspreyFlow_Build/pytest.ini OspreyFlow_Build/tests/test_decision_log_publication_check.py
+      - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_decision_log_publication_check.py
 
   # Same shape, for test-file CI coverage — found four test files running in no intended job
   # before this gate existed (test_pattern_store.py, test_alerts.py, test_change_stream.py,
@@ -148,7 +152,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
-      - run: uv run pytest -c OspreyFlow_Build/pytest.ini OspreyFlow_Build/tests/test_doc_citations_check.py
+      - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_doc_citations_check.py
 
   test-file-coverage-check:
     runs-on: ubuntu-latest
@@ -157,7 +161,7 @@ jobs:
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
       - run: PYTHONPATH=OspreyFlow_Build uv run python -m tools.test_file_coverage_check
-      - run: uv run pytest -c OspreyFlow_Build/pytest.ini OspreyFlow_Build/tests/test_test_file_coverage_check.py
+      - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_test_file_coverage_check.py
 
   trivy:
     runs-on: ubuntu-latest
@@ -169,6 +173,7 @@ jobs:
       - uses: aquasecurity/trivy-action@v0.24.0
         with:
           scan-type: fs
+          scan-ref: OspreyFlow_Core
           scanners: vuln,secret
           severity: HIGH,CRITICAL
           exit-code: "1"
@@ -262,7 +267,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
-      - run: uv run pytest -c OspreyFlow_Build/pytest.ini OspreyFlow_Build/tests/conformance -k test_guard
+      - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/conformance -k test_guard
 
   # GraphPort's conformance suite (Phase 1, process/07_BUILD_PLAN.md) runs
   # against a live ArcadeDB — the graph store local-lite actually ships —
@@ -419,42 +424,42 @@ jobs:
       # to catch, now caught by the gate itself rather than found by accident a fifth and sixth
       # time.
       - run: >-
-          uv run pytest -c OspreyFlow_Build/pytest.ini OspreyFlow_Build/tests/conformance/graph_port OspreyFlow_Build/tests/ingest
-          OspreyFlow_Build/tests/services/api/test_valkey_store.py
-          OspreyFlow_Build/tests/services/api/test_ws_ticket.py
-          OspreyFlow_Build/tests/services/api/test_statelessness.py
-          OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py
-          OspreyFlow_Build/tests/services/api/test_sites_store.py
-          OspreyFlow_Build/tests/scenarios/test_hmp_graph.py
-          OspreyFlow_Build/tests/services/api/test_change_stream.py
-          OspreyFlow_Build/tests/services/api/test_alerts.py
-          OspreyFlow_Build/tests/services/api/test_pattern_store.py
-          OspreyFlow_Build/tests/services/api/test_hotlists.py
-          OspreyFlow_Build/tests/services/api/test_monitors.py
-          OspreyFlow_Build/tests/services/api/test_evaluation.py
-          OspreyFlow_Build/tests/geocoder/test_match_live.py
-          OspreyFlow_Build/tests/resolve/test_projection_access_control.py
-          OspreyFlow_Build/tests/resolve/test_trigger.py
-          OspreyFlow_Build/tests/scenarios/test_phase6a_glass_surfaces.py
-          OspreyFlow_Build/tests/services/api/test_access.py
-          OspreyFlow_Build/tests/services/api/test_dossier_access_control.py
-          OspreyFlow_Build/tests/services/api/test_prefetch.py
-          OspreyFlow_Build/tests/services/api/test_review.py
-          OspreyFlow_Build/tests/services/api/test_review_store.py
-          OspreyFlow_Build/tests/services/api/test_studio_recipes_store.py
-          OspreyFlow_Build/tests/services/api/test_tile_cache.py
-          OspreyFlow_Build/tests/services/api/working_set/test_compute_access_control.py
-          OspreyFlow_Build/tests/services/api/working_set/test_explain_cluster_access_control.py
-          OspreyFlow_Build/tests/services/api/working_set/test_manual_resolution_access_control.py
-          OspreyFlow_Build/tests/services/api/working_set/test_resolution_threshold_access_control.py
-          OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py
-          OspreyFlow_Build/tests/services/api/test_assessments.py
-          OspreyFlow_Build/tests/services/api/test_suppression.py
-          OspreyFlow_Build/tests/services/api/test_assessment_routes.py
-          OspreyFlow_Build/tests/services/api/test_export.py
-          OspreyFlow_Build/tests/services/api/test_export_routes.py
-          OspreyFlow_Build/tests/scenarios/test_fixture_corp_shape.py
-          OspreyFlow_Build/tests/services/api/test_worker.py OspreyFlow_Build/tests/services/api/test_worker_replicas.py OspreyFlow_Build/tests/services/api/test_revoked_principal_precheck.py
+          uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/conformance/graph_port ../OspreyFlow_Build/tests/ingest
+          ../OspreyFlow_Build/tests/services/api/test_valkey_store.py
+          ../OspreyFlow_Build/tests/services/api/test_ws_ticket.py
+          ../OspreyFlow_Build/tests/services/api/test_statelessness.py
+          ../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py
+          ../OspreyFlow_Build/tests/services/api/test_sites_store.py
+          ../OspreyFlow_Build/tests/scenarios/test_hmp_graph.py
+          ../OspreyFlow_Build/tests/services/api/test_change_stream.py
+          ../OspreyFlow_Build/tests/services/api/test_alerts.py
+          ../OspreyFlow_Build/tests/services/api/test_pattern_store.py
+          ../OspreyFlow_Build/tests/services/api/test_hotlists.py
+          ../OspreyFlow_Build/tests/services/api/test_monitors.py
+          ../OspreyFlow_Build/tests/services/api/test_evaluation.py
+          ../OspreyFlow_Build/tests/geocoder/test_match_live.py
+          ../OspreyFlow_Build/tests/resolve/test_projection_access_control.py
+          ../OspreyFlow_Build/tests/resolve/test_trigger.py
+          ../OspreyFlow_Build/tests/scenarios/test_phase6a_glass_surfaces.py
+          ../OspreyFlow_Build/tests/services/api/test_access.py
+          ../OspreyFlow_Build/tests/services/api/test_dossier_access_control.py
+          ../OspreyFlow_Build/tests/services/api/test_prefetch.py
+          ../OspreyFlow_Build/tests/services/api/test_review.py
+          ../OspreyFlow_Build/tests/services/api/test_review_store.py
+          ../OspreyFlow_Build/tests/services/api/test_studio_recipes_store.py
+          ../OspreyFlow_Build/tests/services/api/test_tile_cache.py
+          ../OspreyFlow_Build/tests/services/api/working_set/test_compute_access_control.py
+          ../OspreyFlow_Build/tests/services/api/working_set/test_explain_cluster_access_control.py
+          ../OspreyFlow_Build/tests/services/api/working_set/test_manual_resolution_access_control.py
+          ../OspreyFlow_Build/tests/services/api/working_set/test_resolution_threshold_access_control.py
+          ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py
+          ../OspreyFlow_Build/tests/services/api/test_assessments.py
+          ../OspreyFlow_Build/tests/services/api/test_suppression.py
+          ../OspreyFlow_Build/tests/services/api/test_assessment_routes.py
+          ../OspreyFlow_Build/tests/services/api/test_export.py
+          ../OspreyFlow_Build/tests/services/api/test_export_routes.py
+          ../OspreyFlow_Build/tests/scenarios/test_fixture_corp_shape.py
+          ../OspreyFlow_Build/tests/services/api/test_worker.py ../OspreyFlow_Build/tests/services/api/test_worker_replicas.py ../OspreyFlow_Build/tests/services/api/test_revoked_principal_precheck.py
       - run: npm ci
       # `deltaClient.integration.test.ts` (Phase 4) spawns the real
       # `services.api.app` (`apps/workspace/test/glass_test_server.py`)
@@ -593,11 +598,11 @@ jobs:
       # warning for that one unreachable model entry — harmless; test_suite_vision.py is excluded
       # below and no other test in this job calls it.
       - run: >-
-          uv run pytest -c OspreyFlow_Build/pytest.ini OspreyFlow_Build/tests/conformance/model_port
-          --ignore=OspreyFlow_Build/tests/conformance/model_port/test_suite_vision.py
-          OspreyFlow_Build/tests/scenarios/test_witness_statement_extraction.py
-          OspreyFlow_Build/tests/golden
-          OspreyFlow_Build/tests/scenarios/test_phase6_extraction_and_resolution.py
+          uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/conformance/model_port
+          --ignore=../OspreyFlow_Build/tests/conformance/model_port/test_suite_vision.py
+          ../OspreyFlow_Build/tests/scenarios/test_witness_statement_extraction.py
+          ../OspreyFlow_Build/tests/golden
+          ../OspreyFlow_Build/tests/scenarios/test_phase6_extraction_and_resolution.py
 
   # `describe_image()`'s own conformance case (`spec/06_DECISIONS.md` ADR-020's Stage 2 addendum)
   # — merge-to-main only, not every PR: a vision-language model is materially heavier (1.8GB) than
@@ -640,7 +645,7 @@ jobs:
             curl -sf http://localhost:4000/health/liveliness && break
             sleep 2
           done
-      - run: uv run pytest -c OspreyFlow_Build/pytest.ini OspreyFlow_Build/tests/conformance/model_port/test_suite_vision.py
+      - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/conformance/model_port/test_suite_vision.py
 
   test:
     runs-on: ubuntu-latest
@@ -670,53 +675,53 @@ jobs:
       # See `conformance-model`'s own comment above for the outcome of extending that job to cover
       # it (attempted the same session).
       - run: >-
-          uv run pytest -c OspreyFlow_Build/pytest.ini --ignore=OspreyFlow_Build/tests/conformance/graph_port
-          --ignore=OspreyFlow_Build/tests/conformance/model_port --ignore=OspreyFlow_Build/tests/golden --ignore=OspreyFlow_Build/tests/ingest
-          --ignore=OspreyFlow_Build/tests/services/api/test_valkey_store.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_ws_ticket.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_statelessness.py
-          --ignore=OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py
-          --ignore=OspreyFlow_Build/tests/scenarios/test_witness_statement_extraction.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_sites_store.py
-          --ignore=OspreyFlow_Build/tests/scenarios/test_hmp_graph.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_change_stream.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_alerts.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_hotlists.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_monitors.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_evaluation.py
-          --ignore=OspreyFlow_Build/tests/scenarios/test_phase6_extraction_and_resolution.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_pattern_store.py
-          --ignore=OspreyFlow_Build/tests/geocoder/test_match_live.py
-          --ignore=OspreyFlow_Build/tests/resolve/test_projection_access_control.py
-          --ignore=OspreyFlow_Build/tests/resolve/test_trigger.py
-          --ignore=OspreyFlow_Build/tests/scenarios/test_phase6a_glass_surfaces.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_access.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_dossier_access_control.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_prefetch.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_review.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_review_store.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_studio_recipes_store.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_tile_cache.py
-          --ignore=OspreyFlow_Build/tests/services/api/working_set/test_compute_access_control.py
-          --ignore=OspreyFlow_Build/tests/services/api/working_set/test_explain_cluster_access_control.py
-          --ignore=OspreyFlow_Build/tests/services/api/working_set/test_manual_resolution_access_control.py
-          --ignore=OspreyFlow_Build/tests/services/api/working_set/test_resolution_threshold_access_control.py
-          --ignore=OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_assessments.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_suppression.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_assessment_routes.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_export.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_export_routes.py
-          --ignore=OspreyFlow_Build/tests/scenarios/test_fixture_corp_shape.py
-          --ignore=OspreyFlow_Build/tests/services/api/test_worker.py --ignore=OspreyFlow_Build/tests/services/api/test_worker_replicas.py --ignore=OspreyFlow_Build/tests/services/api/test_revoked_principal_precheck.py
-          --ignore=OspreyFlow_Build/tests/harness/test_restore_exit_test.py
-          --ignore=OspreyFlow_Build/tests/harness/test_workspace_bundle.py
-          --ignore=OspreyFlow_Build/tests/harness/test_bundle_exit_test.py
-          --ignore=OspreyFlow_Build/tests/harness/test_harness_image.py
-          --ignore=OspreyFlow_Build/tests/harness/test_sustained_load.py
-          --ignore=OspreyFlow_Build/tests/harness/test_six_screen_live_exit.py
-          --ignore=OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py
-          --ignore=OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py
+          uv run pytest -c ../OspreyFlow_Build/pytest.ini --ignore=../OspreyFlow_Build/tests/conformance/graph_port
+          --ignore=../OspreyFlow_Build/tests/conformance/model_port --ignore=../OspreyFlow_Build/tests/golden --ignore=../OspreyFlow_Build/tests/ingest
+          --ignore=../OspreyFlow_Build/tests/services/api/test_valkey_store.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_ws_ticket.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_statelessness.py
+          --ignore=../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py
+          --ignore=../OspreyFlow_Build/tests/scenarios/test_witness_statement_extraction.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_sites_store.py
+          --ignore=../OspreyFlow_Build/tests/scenarios/test_hmp_graph.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_change_stream.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_alerts.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_hotlists.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_monitors.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_evaluation.py
+          --ignore=../OspreyFlow_Build/tests/scenarios/test_phase6_extraction_and_resolution.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_pattern_store.py
+          --ignore=../OspreyFlow_Build/tests/geocoder/test_match_live.py
+          --ignore=../OspreyFlow_Build/tests/resolve/test_projection_access_control.py
+          --ignore=../OspreyFlow_Build/tests/resolve/test_trigger.py
+          --ignore=../OspreyFlow_Build/tests/scenarios/test_phase6a_glass_surfaces.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_access.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_dossier_access_control.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_prefetch.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_review.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_review_store.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_studio_recipes_store.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_tile_cache.py
+          --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_compute_access_control.py
+          --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_explain_cluster_access_control.py
+          --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_manual_resolution_access_control.py
+          --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_resolution_threshold_access_control.py
+          --ignore=../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_assessments.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_suppression.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_assessment_routes.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_export.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_export_routes.py
+          --ignore=../OspreyFlow_Build/tests/scenarios/test_fixture_corp_shape.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_worker.py --ignore=../OspreyFlow_Build/tests/services/api/test_worker_replicas.py --ignore=../OspreyFlow_Build/tests/services/api/test_revoked_principal_precheck.py
+          --ignore=../OspreyFlow_Build/tests/harness/test_restore_exit_test.py
+          --ignore=../OspreyFlow_Build/tests/harness/test_workspace_bundle.py
+          --ignore=../OspreyFlow_Build/tests/harness/test_bundle_exit_test.py
+          --ignore=../OspreyFlow_Build/tests/harness/test_harness_image.py
+          --ignore=../OspreyFlow_Build/tests/harness/test_sustained_load.py
+          --ignore=../OspreyFlow_Build/tests/harness/test_six_screen_live_exit.py
+          --ignore=../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py
+          --ignore=../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py
       # The Glass's fast, no-live-infra unit tests (`store.test.ts`,
       # `zoomBands.test.ts`) — `*.integration.test.ts` is excluded by
       # `vitest.config.ts` and runs in the `conformance` job instead.
@@ -742,7 +747,7 @@ jobs:
         with: { node-version: "22" }
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-        working-directory: apps/workspace
+        working-directory: OspreyFlow_Core/apps/workspace
       - run: npm run test:perf --workspace apps/workspace
       - run: npm run test:a11y --workspace apps/workspace
       - run: npm run test:keyboard --workspace apps/workspace
@@ -765,7 +770,7 @@ jobs:
       - run: uv sync
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-        working-directory: apps/harness
+        working-directory: OspreyFlow_Core/apps/harness
       - run: npm run test:keyboard --workspace apps/harness
       - run: npm run test:a11y --workspace apps/harness
 
@@ -792,7 +797,7 @@ jobs:
       - run: uv sync
       - name: Render, build, launch and seed a local-lite deployment
         run: |
-          PYTHONPATH=.:packages:OspreyFlow_Build uv run python -m harness.apply \
+          PYTHONPATH=.:packages:../OspreyFlow_Build uv run python -m harness.apply \
             --profile local-lite --build --seed hmp,fixture-corp
       - uses: actions/setup-node@v4
         with: { node-version: "22" }
@@ -801,15 +806,15 @@ jobs:
         env:
           OSPREY_TEST_BUNDLE: "1"
         run: >-
-          PYTHONPATH=.:packages:OspreyFlow_Build uv run pytest -c OspreyFlow_Build/pytest.ini -p no:randomly
-          OspreyFlow_Build/tests/harness/test_workspace_bundle.py
+          PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly
+          ../OspreyFlow_Build/tests/harness/test_workspace_bundle.py
       - name: Exit test #1 — backup, destroy, restore, deep comparison
         env:
           OSPREY_TEST_COMPOSE_FILE: deploy/generated/local-lite/compose.yaml
         run: >-
-          PYTHONPATH=.:packages:OspreyFlow_Build uv run pytest -c OspreyFlow_Build/pytest.ini -p no:randomly
-          OspreyFlow_Build/tests/harness/test_restore_exit_test.py
-          OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py
+          PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly
+          ../OspreyFlow_Build/tests/harness/test_restore_exit_test.py
+          ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py
       - name: Tear down
         if: always()
         run: >-
@@ -840,7 +845,7 @@ jobs:
       - run: uv sync
       - name: Render, build, launch and seed a local-lite deployment with a demo analyst
         run: |
-          PYTHONPATH=.:packages:OspreyFlow_Build uv run python -m harness.apply \
+          PYTHONPATH=.:packages:../OspreyFlow_Build uv run python -m harness.apply \
             --profile local-lite --build --demo-analyst --seed hmp,fixture-corp,scenarios \
             | tee apply.log
           # The seeded investigation id has no discoverable route (the Conduit has no "list
@@ -853,8 +858,8 @@ jobs:
         env:
           OSPREY_TEST_OVER_THE_WIRE: "1"
         run: >-
-          PYTHONPATH=.:packages:OspreyFlow_Build uv run pytest -c OspreyFlow_Build/pytest.ini -p no:randomly
-          OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py
+          PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly
+          ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py
       - name: Tear down
         if: always()
         run: >-
@@ -879,8 +884,8 @@ jobs:
         env:
           OSPREY_TEST_DIST_BUNDLE: "1"
         run: >-
-          PYTHONPATH=.:packages:OspreyFlow_Build uv run pytest -c OspreyFlow_Build/pytest.ini -p no:randomly
-          OspreyFlow_Build/tests/harness/test_bundle_exit_test.py
+          PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly
+          ../OspreyFlow_Build/tests/harness/test_bundle_exit_test.py
 
   # `05_DEPLOYMENT.md` §8 / `07_BUILD_PLAN.md` Stage 2a addendum's own named-not-built test, built.
   # A separate job for the same reason `bundle-install-exit-test` above is one: this renders the
@@ -900,8 +905,8 @@ jobs:
         env:
           OSPREY_TEST_SUSTAINED_LOAD: "1"
         run: >-
-          PYTHONPATH=.:packages:OspreyFlow_Build uv run pytest -c OspreyFlow_Build/pytest.ini -p no:randomly
-          OspreyFlow_Build/tests/harness/test_sustained_load.py
+          PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly
+          ../OspreyFlow_Build/tests/harness/test_sustained_load.py
 
   # ADR-049 Stage 2 §6's own exit — the one item `REPORT-03d.md` left owed: Launch from the six
   # real setup screens (not `harness.apply` in-process, unlike the job above) reaches a
@@ -927,7 +932,7 @@ jobs:
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
       - name: The five token-exchange tests against a real Keycloak
-        run: make idp-test PY="uv run python" PYTEST="uv run pytest -c OspreyFlow_Build/pytest.ini"
+        run: make idp-test PY="uv run python" PYTEST="uv run pytest -c ../OspreyFlow_Build/pytest.ini"
 
   six-screen-live-exit-test:
     runs-on: ubuntu-latest
@@ -940,8 +945,8 @@ jobs:
         env:
           OSPREY_TEST_SIX_SCREEN_EXIT: "1"
         run: >-
-          PYTHONPATH=.:packages:OspreyFlow_Build uv run pytest -c OspreyFlow_Build/pytest.ini -p no:randomly
-          OspreyFlow_Build/tests/harness/test_six_screen_live_exit.py
+          PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly
+          ../OspreyFlow_Build/tests/harness/test_six_screen_live_exit.py
       - name: Tear down
         if: always()
         run: >-
@@ -964,5 +969,5 @@ jobs:
         env:
           OSPREY_TEST_HARNESS_IMAGE: "1"
         run: >-
-          PYTHONPATH=.:packages:OspreyFlow_Build uv run pytest -c OspreyFlow_Build/pytest.ini -p no:randomly
-          OspreyFlow_Build/tests/harness/test_harness_image.py
+          PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly
+          ../OspreyFlow_Build/tests/harness/test_harness_image.py

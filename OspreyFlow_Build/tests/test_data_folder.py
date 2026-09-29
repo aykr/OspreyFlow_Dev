@@ -14,6 +14,7 @@ from scripts import seed_hmp_fixture, seed_scenarios
 from services.api.config import DEFAULT_ANALYTICS_DB_PATH, ApiConfig
 
 from tools import packaging_gate
+from tools.layout import CORE
 from tools.layout import REPO as REPO_ROOT
 
 DATA_FOLDER = "OspreyFlow_Data"
@@ -25,7 +26,7 @@ def test_the_analytics_store_defaults_to_the_data_folder_not_the_product_tree(
     """Catches a Conduit run from a checkout that writes its store back into the tree."""
     monkeypatch.delenv("ANALYTICS_DB_PATH", raising=False)
     monkeypatch.setenv("OIDC_JWKS_URL", "http://localhost:8081/jwks")
-    assert DEFAULT_ANALYTICS_DB_PATH == f"{DATA_FOLDER}/_local-runtime/analytics.duckdb"
+    assert DEFAULT_ANALYTICS_DB_PATH == f"../{DATA_FOLDER}/_local-runtime/analytics.duckdb"
     assert ApiConfig.from_env().analytics_db_path == DEFAULT_ANALYTICS_DB_PATH
 
 
@@ -45,7 +46,7 @@ def test_the_preflight_check_looks_where_the_conduit_writes() -> None:
     from harness.preflight.context import PreflightContext
 
     field = PreflightContext.__dataclass_fields__["analytics_db_path"]
-    assert field.default_factory().relative_to(REPO_ROOT).as_posix() == DEFAULT_ANALYTICS_DB_PATH  # type: ignore[misc]
+    assert field.default_factory().resolve() == (CORE / DEFAULT_ANALYTICS_DB_PATH).resolve()  # type: ignore[misc]
 
 
 def test_the_packaging_gate_refuses_anything_under_the_data_folder() -> None:

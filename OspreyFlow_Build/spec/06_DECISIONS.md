@@ -7265,3 +7265,33 @@ points the step settled that the layout table above did not state:
   same catalogue; `OSPREY_CONNECTORS_DIR` still overrides.
 
 **State of the build.** Steps 5 (the Core folder) and 6 (machine-bound rebuild) remain.
+
+### ADR-054, Amendment 2 (29 September 2026) — step 5 done: the product is in OspreyFlow_Core
+
+The product folders, manifests (`pyproject.toml`, `uv.lock`, `package.json` and its lock,
+`tsconfig.json`, `eslint.config.js`), `LICENSE`, `NOTICE`, `README.md`, `DEMO_GUIDE.md`,
+`osprey.yaml` and `.dockerignore` are in `OspreyFlow_Core/`. Points the step settled that the
+layout table did not state:
+
+- **The real Makefile is in Core; the root Makefile forwards.** The recipes need the interpreter,
+  `node_modules`, `pyproject.toml` and the product's relative paths, all of which are in Core, so
+  they run from there (`make -C OspreyFlow_Core`). The root `Makefile` passes every target
+  through, so `make launch` from the root and from Core do the same thing. The table's "Makefile
+  stays at the root" is amended to say this; `layout.py` maps the logical name `Makefile` to Core.
+- **The Docker build context is Core.** Every `context:` and `docker build ... .` is relative to a
+  file inside Core, so none changed; `.dockerignore` moved with the context, and `OspreyFlow_Build`
+  is still named in its private-tree block as a second line of defence, though a Core context
+  cannot contain it. The workflows run from Core (`defaults.run.working-directory`); a step that
+  is not a `run` step (the Trivy file scan, the release upload) names its folder itself.
+- **The Data folder is Core's sibling**, so the Conduit's default store is
+  `../OspreyFlow_Data/_local-runtime/analytics.duckdb`, relative to Core, where the seeds and
+  `make` run. A deployment sets `ANALYTICS_DB_PATH` itself and is unaffected.
+- **Bundles and other build output go to `OspreyFlow_Build/dist/`**, which `.gitignore` names.
+- **Linting the Build folder's `.mjs` checks** runs from Build with Core's ESLint configuration
+  (`npm run lint`), because ESLint will not lint outside its own base folder.
+- The fallback that let `layout.py` treat the root as Core is gone, and
+  `test_no_product_folder_is_left_at_the_root` fails if a product folder is left behind.
+
+**State of the build.** Step 6 (rebuild `.venv`, `node_modules` and the generated deployment inside
+Core, and run the whole suite on the owner's machine) remains. `.venv` is still at the root and is
+stale: it holds absolute paths.

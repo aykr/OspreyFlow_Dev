@@ -12,7 +12,7 @@ export default [
       ".venv/**",
       "apps/workspace/dist/**",
       "apps/harness/dist/**",
-      "OspreyFlow_Build/process/prototypes/**",
+      "process/prototypes/**", // the Build folder's, when linted from there (ADR-054)
     ],
   },
   {
@@ -22,7 +22,7 @@ export default [
     // same reason.
     files: [
       "scripts/**/*.mjs",
-      "OspreyFlow_Build/tools/**/*.mjs",
+      "tools/**/*.mjs", // the Build folder's checks, linted from there (ADR-054)
       "apps/workspace/compute-tier1/**/*.mjs",
     ],
     languageOptions: {

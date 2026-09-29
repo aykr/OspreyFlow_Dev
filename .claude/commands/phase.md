@@ -4,8 +4,8 @@ description: Start a build phase from the specification
 
 Start Phase $ARGUMENTS of the OspreyFlow build.
 
-1. Read the Phase $ARGUMENTS section of `process/07_BUILD_PLAN.md`, and every spec document it
-   references. Read `spec/06_DECISIONS.md` for any ADR that governs this phase.
+1. Read the Phase $ARGUMENTS section of `OspreyFlow_Build/process/07_BUILD_PLAN.md`, and every spec document it
+   references. Read `OspreyFlow_Build/spec/06_DECISIONS.md` for any ADR that governs this phase.
 2. Check what already exists in the repository against that phase's scope. Do not rebuild
    what is there; do not assume anything is finished because a file exists.
 3. Propose a plan covering every bullet in the phase scope, ending at the phase's exit

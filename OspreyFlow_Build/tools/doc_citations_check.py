@@ -60,7 +60,7 @@ from pathlib import Path, PurePath
 import pathspec
 
 from tools.layout import REPO as REPO_ROOT
-from tools.layout import rel
+from tools.layout import ROOT, home, rel
 
 ALLOWLIST_PATH = REPO_ROOT / "tests" / "fixtures" / "citation_allowlist.txt"
 GITIGNORE_PATH = REPO_ROOT / ".gitignore"
@@ -183,6 +183,14 @@ def citations_in(text: str) -> list[str]:
     return CITATION.findall(text)
 
 
+def _as_stored(cited: str, root: Path) -> str:
+    """The name `.gitignore` sees: `config/x.yaml` is stored at `OspreyFlow_Core/config/x.yaml`
+    (ADR-054), and the ignore rules are written against the stored path."""
+    if root != REPO_ROOT:
+        return cited
+    return home(cited).relative_to(ROOT).as_posix()
+
+
 def find_broken(root: Path = REPO_ROOT) -> list[str]:
     """`"<citing file>:<line>: <cited path>"` for every citation naming a file that is not there."""
     allowlist = load_allowlist()
@@ -199,6 +207,7 @@ def find_broken(root: Path = REPO_ROOT) -> list[str]:
                     or (root / cited).exists()
                     or (root / MOVED.get(cited, cited)).exists()
                     or gitignore.match_file(cited)
+                    or gitignore.match_file(_as_stored(cited, root))
                 ):
                     continue
                 broken.append(f"{relative}:{number}: cites '{cited}', which does not exist")

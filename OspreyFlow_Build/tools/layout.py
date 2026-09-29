@@ -22,9 +22,8 @@ from pathlib import Path, PurePath
 ROOT = Path(__file__).resolve().parents[2]
 BUILD = ROOT / "OspreyFlow_Build"
 DATA = ROOT / "OspreyFlow_Data"
-#: The product folder. While the product still sits at the root (before ADR-054 step 5) this is the
-#: root itself; the fallback is removed in that step and a test then proves it is gone.
-CORE = ROOT / "OspreyFlow_Core" if (ROOT / "OspreyFlow_Core").is_dir() else ROOT
+#: The product folder.
+CORE = ROOT / "OspreyFlow_Core"
 
 #: First segments that live in the Build folder.
 BUILD_NAMES = frozenset(
@@ -44,7 +43,7 @@ BUILD_NAMES = frozenset(
     }
 )
 #: First segments that must stay at the root because a tool requires it.
-ROOT_NAMES = frozenset({".git", ".gitignore", ".github", "Makefile", ".claude"})
+ROOT_NAMES = frozenset({".git", ".gitignore", ".github", ".claude"})
 #: The three folders themselves, when a name already carries one.
 FOLDER_NAMES = frozenset({"OspreyFlow_Core", "OspreyFlow_Build", "OspreyFlow_Data"})
 

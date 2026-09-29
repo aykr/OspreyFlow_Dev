@@ -30,7 +30,7 @@ from tools import layout
         ("osprey.yaml", "core"),
         ("OspreyFlow_Data/enron/x.csv", ""),
         (".github/workflows/ci.yml", ""),
-        ("Makefile", ""),
+        ("Makefile", "core"),  # the recipes; the root Makefile only forwards (ADR-054 Am. 2)
         (".claude/settings.json", ""),
     ],
 )
@@ -55,7 +55,8 @@ def test_a_path_maps_back_to_its_logical_name() -> None:
 
 def test_the_three_folders_and_the_root_are_where_the_names_say() -> None:
     assert layout.BUILD.name == "OspreyFlow_Build"
-    assert layout.CORE.name in {"OspreyFlow_Core", layout.ROOT.name}
+    assert layout.CORE.name == "OspreyFlow_Core"
+    assert layout.CORE.parent == layout.ROOT
     assert layout.DATA.name == "OspreyFlow_Data"
     assert layout.BUILD.parent == layout.ROOT
 
@@ -74,3 +75,20 @@ def test_rel_gives_a_logical_name_under_the_repository_and_a_plain_one_under_any
     assert layout.rel(layout.BUILD / "spec" / "a.md", layout.REPO) == "spec/a.md"
     assert layout.rel(layout.CORE / "harness" / "b.py", layout.REPO) == "harness/b.py"
     assert layout.rel(tmp_path / "spec" / "a.md", tmp_path) == "spec/a.md"
+
+
+def test_no_product_folder_is_left_at_the_root() -> None:
+    """Catches the half-finished move (ADR-054 step 5): a product folder or manifest still at the
+    root beside the three folders, found by `layout.home` in the wrong place or by nobody."""
+    stayed = {"Makefile", ".git", ".gitignore", ".github", ".claude", "CLAUDE.md", ".trivyignore"}
+    allowed = stayed | {"OspreyFlow_Core", "OspreyFlow_Build", "OspreyFlow_Data"}
+    untracked_or_machine = {".venv", "data", "Icon\r", ".DS_Store", ".playwright-mcp"}
+    left = {
+        p.name
+        for p in layout.ROOT.iterdir()
+        if p.name not in allowed
+        and p.name not in untracked_or_machine
+        and not p.name.endswith("_cache")
+        and not p.name.startswith("Icon")
+    }
+    assert left == set(), f"still at the root: {sorted(left)}"

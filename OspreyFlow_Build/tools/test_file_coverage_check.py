@@ -129,7 +129,7 @@ CALL_REQUIRED_MARKERS: frozenset[str] = frozenset({"PostgresConfig"})
 _JOB_HEADER = re.compile(r"^  ([a-z][a-z0-9_-]*):\s*$", re.MULTILINE)
 #: `ci.yml` and the `Makefile` name the tests at `OspreyFlow_Build/tests/...` (ADR-054); the
 #: gate's own vocabulary is the logical `tests/...`, so the folder prefix is read and dropped.
-_PYTEST_TOKEN = re.compile(r"(--ignore=)?(?:OspreyFlow_Build/)?(tests/[\w./-]*)")
+_PYTEST_TOKEN = re.compile(r"(--ignore=)?(?:\.\./)?(?:OspreyFlow_Build/)?(tests/[\w./-]*)")
 
 
 def list_test_files() -> list[Path]:

@@ -124,7 +124,7 @@ class PreflightContext:
     #: Where the Conduit's analytics store lives (`services/api/config.py`'s own default).
     analytics_db_path: Path = field(
         default_factory=lambda: (
-            REPO_ROOT / "OspreyFlow_Data" / "_local-runtime" / "analytics.duckdb"
+            REPO_ROOT.parent / "OspreyFlow_Data" / "_local-runtime" / "analytics.duckdb"
         )
     )
     interpreter: Path = field(default_factory=lambda: Path(sys.executable))

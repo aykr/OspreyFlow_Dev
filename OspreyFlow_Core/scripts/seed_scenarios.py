@@ -146,7 +146,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         # The Data folder (ADR-054); the same string as the Conduit's default, kept equal by
         # `tests/test_data_folder.py`.
         default=os.environ.get(
-            "ANALYTICS_DB_PATH", "OspreyFlow_Data/_local-runtime/analytics.duckdb"
+            "ANALYTICS_DB_PATH", "../OspreyFlow_Data/_local-runtime/analytics.duckdb"
         ),
     )
     return parser.parse_args(argv)

@@ -44,7 +44,7 @@ import websockets.sync.client as ws_client
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 from tests.conftest import default_claims, sign_token
-from tools.layout import REPO as _REPO
+from tools.layout import CORE as _REPO
 
 
 def _free_port() -> int:

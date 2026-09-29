@@ -38,6 +38,10 @@ permissions:
   contents: write
   packages: write
 
+defaults:
+  run:
+    working-directory: OspreyFlow_Core
+
 env:
   REGISTRY: ghcr.io
   OWNER: ospreyflow
@@ -64,7 +68,7 @@ jobs:
       - name: Refuse to release unless main's own CI is green for this commit
         env:
           GH_TOKEN: ${{ github.token }}
-        run: PYTHONPATH=.:packages:OspreyFlow_Build uv run python -m tools.ci_status_check --ref ${{ github.sha }}
+        run: PYTHONPATH=.:packages:../OspreyFlow_Build uv run python -m tools.ci_status_check --ref ${{ github.sha }}
 
   build-scan-push:
     needs: ci-status-gate
@@ -146,11 +150,11 @@ jobs:
       - run: make bundle
 
       - name: Copy the standalone versions.lock beside the bundle
-        run: cp dist/osprey-bundle-local-lite-staging/versions.lock dist/versions.lock
+        run: cp ../OspreyFlow_Build/dist/osprey-bundle-local-lite-staging/versions.lock ../OspreyFlow_Build/dist/versions.lock
 
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           files: |
-            dist/osprey-bundle-local-lite.tar.gz
-            dist/versions.lock
+            OspreyFlow_Build/dist/osprey-bundle-local-lite.tar.gz
+            OspreyFlow_Build/dist/versions.lock

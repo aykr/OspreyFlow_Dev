@@ -13,7 +13,7 @@ import os
 import subprocess
 import sys
 
-from tools.layout import REPO as _REPO_ROOT
+from tools.layout import CORE as _REPO_ROOT
 
 #: `pyproject.toml`'s own `[tool.pytest.ini_options] pythonpath = ["packages"]` puts this repo
 #: root and `packages/` on *this* process's `sys.path` — a pytest-internal mechanism, not the

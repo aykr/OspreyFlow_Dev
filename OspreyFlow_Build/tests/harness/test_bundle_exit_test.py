@@ -35,7 +35,7 @@ from pathlib import Path
 
 import pytest
 
-from tools.layout import REPO as REPO_ROOT
+from tools.layout import CORE
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("OSPREY_TEST_DIST_BUNDLE") != "1",
@@ -48,7 +48,7 @@ pytestmark = pytest.mark.skipif(
 def _run(args: list[str], *, timeout: int) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         args,
-        cwd=REPO_ROOT,
+        cwd=CORE,
         env={**os.environ, "PYTHONPATH": "packages"},
         capture_output=True,
         text=True,

@@ -50,7 +50,7 @@ import pytest
 import yaml
 from harness.preflight.ports import _is_bindable, declared_ports
 
-from tools.layout import REPO as REPO_ROOT
+from tools.layout import CORE
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("OSPREY_TEST_HARNESS_IMAGE") != "1",
@@ -72,7 +72,7 @@ def _statuses(output: str) -> dict[str, str]:
 def built_image() -> str:
     result = subprocess.run(
         ["docker", "build", "-f", "harness/Dockerfile", "-t", IMAGE_TAG, "."],
-        cwd=REPO_ROOT,
+        cwd=CORE,
         capture_output=True,
         text=True,
         timeout=900,
@@ -88,7 +88,7 @@ def rendered_out_root(tmp_path_factory: pytest.TempPathFactory) -> Path:
     out_root = tmp_path_factory.mktemp("harness-image-test")
     result = subprocess.run(
         [sys.executable, "-m", "harness.render", "--out-root", str(out_root), "--build"],
-        cwd=REPO_ROOT,
+        cwd=CORE,
         env={**os.environ, "PYTHONPATH": "packages"},
         capture_output=True,
         text=True,
@@ -165,7 +165,7 @@ def test_containerized_preflight_reaches_the_same_result_as_the_host_cli(
 
     host = subprocess.run(
         [sys.executable, "-m", "harness.preflight", "--out-root", str(rendered_out_root)],
-        cwd=REPO_ROOT,
+        cwd=CORE,
         env={**os.environ, "PYTHONPATH": "packages"},
         capture_output=True,
         text=True,
@@ -182,7 +182,7 @@ def test_containerized_preflight_reaches_the_same_result_as_the_host_cli(
             "--user",
             "root",
             "-v",
-            f"{REPO_ROOT}:/workspace",
+            f"{CORE}:/workspace",
             "-v",
             f"{rendered_out_root}:/workspace-out",
             "-v",
