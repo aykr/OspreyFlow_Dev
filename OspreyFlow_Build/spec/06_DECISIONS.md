@@ -7295,3 +7295,24 @@ layout table did not state:
 **State of the build.** Step 6 (rebuild `.venv`, `node_modules` and the generated deployment inside
 Core, and run the whole suite on the owner's machine) remains. `.venv` is still at the root and is
 stale: it holds absolute paths.
+
+### ADR-054, Amendment 3 (29 September 2026) — step 6: what was rebuilt here, and what the owner rebuilds
+
+Every check, the fast test subset, `ruff`, `mypy`, `npm run lint`, `npm run typecheck` and
+`npm run licence-check` were run against the Core layout from a clean interpreter environment kept
+outside the repository. That proves the paths; it does not replace a run on the owner's machine,
+because the environment used has no Docker, Keycloak or database and runs Python 3.14.
+
+**Machine-bound and not rebuilt from the sandbox** (an environment built there is for another
+operating system and would only mislead): the root `.venv` (stale, holds absolute paths; delete
+it), `OspreyFlow_Core/.venv`, and the generated deployment. On the owner's machine:
+
+    rm -rf .venv                              # the stale one at the root
+    cd OspreyFlow_Core && uv sync && npm ci   # the interpreter and node_modules, now in Core
+    make register-sign-in && make launch      # from the root or from Core; both work
+
+`make ci` (or the full `make test-all`, which needs Docker) is then the whole-suite run.
+`OSPREYFLOW_INTERNAL_DEMO_DATA_DIR` still points at `OspreyFlow_Data`; nothing about it changed.
+
+**Left as they were:** an empty `data/` at the root (the old store's shell; delete it) and the
+stale `.mypy_cache`, `.pytest_cache` and `.ruff_cache` at the root.
