@@ -7065,3 +7065,83 @@ Nothing built. Spec pointers added to `02_GLASS_FRONTEND.md` §2.1 and `03_CONDU
   keeps the real corpus `internal` and never seeds it. Nothing has been changed: the seed stays as
   ADR-052 describes it (Fixture Corp, the synthetic Enron-shaped demo, by name; no real corpus) until
   the owner rules on that conflict explicitly. Stage 4 waits on it; stages 1 to 3 do not depend on it.
+
+
+## ADR-053 — Seeding the real Enron corpus on the owner's own machine only: local, opt-in, never shipped
+
+**Status: Accepted, 29 September 2026, on the owner's explicit ruling. Design only: no loader exists,
+no corpus is provisioned and nothing here is built.**
+
+### Context: what was seen
+
+The owner asked, when ADR-052's seeding point was put to them, for the Enron corpus to be seeded
+as well as the synthetic demos, and chose to lift the rule against admitting a real dataset "for your
+own machine only", provided the corpus stays `internal` and can never enter a shipped build.
+
+What already exists, checked directly rather than assumed:
+
+- ADR-035 §C3 records the owner's own admission of Enron for local development, scale testing and an
+  owner-run demonstration on the owner's own secured device, through a local, gitignored list
+  (`config/real_data_exceptions.yaml`, managed by `python -m scripts.real_data_exceptions`). Its
+  module says plainly that no loader exists yet and that whatever loader is built must call
+  `is_permitted()` first and refuse when there is no entry.
+- ADR-035 §C1 and §C2: a demo is `shipped` or `internal` (fail-closed), internal datasets are
+  provisioned to a gitignored directory named by `OSPREYFLOW_INTERNAL_DEMO_DATA_DIR` and never
+  committed, and a packaging gate refuses any artefact that contains one, including inside image
+  layers. `.dockerignore` excludes `demo-data/`.
+- The deployment's seeds are `hmp`, `fixture-corp` and `scenarios`, all synthetic. There is no Enron
+  seed, and the registry (`scripts/demo_registry.py`) has two entries, both synthetic.
+
+### Decision
+
+1. **The rule is lifted for one dataset, on one machine, for the uses ADR-035 §C3 already lists.** It
+   is not lifted for any other real dataset, and each of those still needs its own entry and its own
+   decision. Nothing in this record changes ADR-035; it builds what §C3 said must be built.
+2. **A new seed name, `enron`, is opt-in.** `python -m harness.apply --seed enron` (alone or with the
+   others) never runs by default and is never implied by another seed. It refuses, with a sentence
+   naming what is missing, unless **all** of these hold:
+   - the exceptions list has an entry for the Enron corpus permitting `owner_run_demonstration`
+     (checked with `is_permitted()`; the entry names this machine, so a copied checkout on another
+     machine is refused);
+   - the corpus is present under `OSPREYFLOW_INTERNAL_DEMO_DATA_DIR` (no default, so absence means
+     "not provisioned", never a search elsewhere);
+   - the seed is being run from a checkout, as the other seeds are (a distributed bundle has no seed
+     scripts to run).
+3. **The corpus is provisioned by the owner, never fetched by the build or by Claude.** The
+   owner places the files under the internal directory. Nothing downloads them, nothing copies them
+   into the repository or an image, and the seed reads them in place.
+4. **It stays `internal` in the registry.** A third manifest, `distribution: internal`, names its
+   paths under `demo-data/`. ADR-035 §C2's packaging gate keeps refusing any artefact containing
+   them, and the existing test that reclassifying an internal demo as shipped is still refused
+   covers this manifest too. A build that leaves the owner's machine has no Enron seed script in it
+   (the seed modules are not in the image), so the opt-in cannot even be attempted there.
+5. **Access follows ADR-052.** The seeded case is named for what it is ("Enron corpus (real data,
+   this machine only)"), has no unit-wide level, and grants the demo admin Author and the demo
+   analyst Editor. It appears in the picker only for an account holding a level on it, and never on a
+   deployment where the seed was not run.
+6. **The Glass says so when it is not provisioned**, as ADR-035 §C1 already designs: a demo whose
+   dataset is absent is shown as unavailable with the reason "dataset not provisioned", not as an
+   error. (That display is part of ADR-052's picker stage.)
+7. **Tests, named before the code (rule 12).** The seed refuses with no exceptions entry; refuses
+   with an entry for another dataset or another use; refuses with an entry but no corpus; refuses
+   from a bundle; is never selected by any other seed name; and the registry test proves the
+   manifest is `internal` and that flipping it to `shipped` with the data still present is refused by
+   the gate. Each is proved to fail by planting the fault it names.
+
+### What this does not change
+
+The rule against real data in the repository and in CI (nothing here is committed or reaches CI, which
+has no corpus and no exceptions list), the rule that nothing real is distributed to an attendee, and
+the synthetic Fixture Corp, which remains the shippable demo.
+
+### State of the build
+
+Nothing built. The owner has not yet added the exceptions entry or provisioned the corpus; both are
+theirs to do on their own machine.
+
+
+### ADR-052, Amendment 2 (29 September 2026) — P4 settled
+
+**P4 is confirmed as amended.** The demo analyst is Editor and the demo admin is Author on the
+seeded demos, Fixture Corp is offered by name, and the real Enron corpus is seeded too, on the
+owner's own machine only, opt-in and never shipped, as ADR-053 decides. Stage 4 seeds both.
