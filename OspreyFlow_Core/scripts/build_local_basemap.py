@@ -219,6 +219,12 @@ def run_planetiler(
 
     `--osm-path`, `--output` and `--force` were right as they stood, confirmed against the same
     real `--help` output; planetiler accepts either `-` or `_` in a flag name."""
+    if jar_path.suffix.lower() != ".jar" and jar_path.is_file():
+        raise PlanetilerNotAvailableError(
+            f"{jar_path} is not a .jar. `--planetiler-jar` wants the planetiler release jar "
+            "(a Java program); a `.osm.pbf` file is the map extract, which is a different thing "
+            "and is given with `--extract`."
+        )
     if not jar_path.is_file():
         raise PlanetilerNotAvailableError(
             f"planetiler jar not found at {jar_path} — download a release jar and pass its "
@@ -274,6 +280,29 @@ class BasemapBuildResult:
     map_config: MapConfig
 
 
+def resolve_extract(
+    region: str,
+    output_dir: Path,
+    *,
+    existing: Path | None,
+    downloader: Callable[[str, Path], Path] = download_extract,
+    progress: Callable[[str], None] = print,
+) -> Path:
+    """The OSM extract to build from: the one the owner already has when `existing` is given,
+    otherwise the region's Geofabrik download beside the output. A given path that is not there is
+    refused by name, never replaced by a download the owner did not ask for (a Great Britain
+    extract is about 2 GB)."""
+    if existing is not None:
+        if not existing.is_file():
+            raise NotAnOsmExtractError(f"extract not found at {existing}")
+        progress(f"Using the extract you already have: {existing}")
+        return existing
+    pbf_path = output_dir / f"{region}.osm.pbf"
+    progress(f"Downloading the {region!r} Geofabrik extract...")
+    downloader(region, pbf_path)
+    return pbf_path
+
+
 async def build_local_basemap(
     *,
     region: str,
@@ -287,6 +316,7 @@ async def build_local_basemap(
     progress: Callable[[str], None] = print,
     downloader: Callable[[str, Path], Path] = download_extract,
     planetiler_runner: Callable[..., Path] = run_planetiler,
+    existing_extract: Path | None = None,
 ) -> BasemapBuildResult:
     """The full tier-1 pipeline in one call — `00_ARCHITECTURE.md` §1.2's
     "one button." Each stage's own function is independently callable and
@@ -295,11 +325,10 @@ async def build_local_basemap(
     caller substituting its own `downloader`/`planetiler_runner` (as the
     tests do) should not also have to reimplement that."""
     output_dir.mkdir(parents=True, exist_ok=True)
-    pbf_path = output_dir / f"{region}.osm.pbf"
     pmtiles_path = output_dir / f"{region}.pmtiles"
-
-    progress(f"Downloading the {region!r} Geofabrik extract...")
-    downloader(region, pbf_path)
+    pbf_path = resolve_extract(
+        region, output_dir, existing=existing_extract, downloader=downloader, progress=progress
+    )
 
     progress("Running planetiler...")
     planetiler_runner(pbf_path, pmtiles_path, jar_path=planetiler_jar_path)
@@ -341,6 +370,10 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--region", required=True, choices=sorted(GEOFABRIK_REGIONS))
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--planetiler-jar", required=True)
+    parser.add_argument(
+        "--extract",
+        help="An OSM extract (.osm.pbf) you already have; skips the Geofabrik download.",
+    )
     parser.add_argument("--osprey-config", default="osprey.yaml")
     parser.add_argument(
         "--principal-id", default=os.environ.get("OSPREY_PRINCIPAL_ID", "geo-build-worker")
@@ -367,6 +400,7 @@ async def _run(args: argparse.Namespace) -> int:
             region=args.region,
             output_dir=Path(args.output_dir),
             planetiler_jar_path=Path(args.planetiler_jar),
+            existing_extract=Path(args.extract) if args.extract else None,
             osprey_config_path=Path(args.osprey_config),
             graph=graph,
             ontology=ontology,

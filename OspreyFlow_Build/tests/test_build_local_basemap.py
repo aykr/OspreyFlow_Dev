@@ -26,6 +26,7 @@ from scripts.build_local_basemap import (
     UnknownRegionError,
     download_extract,
     register_local_provider,
+    resolve_extract,
     run_planetiler,
 )
 from services.api.mapconfig_loader import load_map_config
@@ -278,3 +279,64 @@ def test_register_local_provider_preserves_other_top_level_keys(tmp_path: Path) 
     assert raw["governance"]["identity_provider"] == "keycloak"
     reloaded = load_map_config(config_path)
     assert reloaded.providers[0].id == "osm-local-gb"
+
+
+# --- an extract the owner already has, and a jar that is not one ---------------
+
+
+def test_an_extract_the_owner_already_has_is_used_and_nothing_is_downloaded(
+    tmp_path: Path,
+) -> None:
+    """Catches a build that fetches a second 2 GB copy of a file that is already on disk: the
+    owner downloaded `great-britain-260928.osm.pbf` and the script downloaded it again."""
+    have = tmp_path / "great-britain-260928.osm.pbf"
+    have.write_bytes(b"pbf")
+
+    def downloader(region: str, dest: Path) -> Path:
+        raise AssertionError("must not download when an extract is given")
+
+    used = resolve_extract(
+        "great-britain", tmp_path / "out", existing=have, downloader=downloader
+    )
+
+    assert used == have
+
+
+def test_a_missing_extract_is_refused_by_name_rather_than_downloaded_instead(
+    tmp_path: Path,
+) -> None:
+    """A mistyped path must not quietly turn into a multi-gigabyte download."""
+    with pytest.raises(NotAnOsmExtractError, match="not found"):
+        resolve_extract(
+            "great-britain",
+            tmp_path / "out",
+            existing=tmp_path / "typo.osm.pbf",
+            downloader=lambda region, dest: dest,
+        )
+
+
+def test_with_no_extract_given_the_region_is_downloaded_beside_the_output(
+    tmp_path: Path,
+) -> None:
+    fetched: list[Path] = []
+
+    def downloader(region: str, dest: Path) -> Path:
+        fetched.append(dest)
+        return dest
+
+    used = resolve_extract("rutland", tmp_path / "out", existing=None, downloader=downloader)
+
+    assert used == tmp_path / "out" / "rutland.osm.pbf"
+    assert fetched == [used]
+
+
+def test_run_planetiler_says_when_it_was_given_a_map_extract_instead_of_the_jar(
+    tmp_path: Path,
+) -> None:
+    """The real mistake: `--planetiler-jar great-britain-260928.osm.pbf`. The message must name
+    what was passed and what is wanted, not fail inside Java."""
+    extract = tmp_path / "great-britain-260928.osm.pbf"
+    extract.write_bytes(b"pbf")
+
+    with pytest.raises(PlanetilerNotAvailableError, match=r"not a \.jar"):
+        run_planetiler(extract, tmp_path / "out.pmtiles", jar_path=extract)
