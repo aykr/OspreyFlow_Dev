@@ -60,6 +60,7 @@ def register_local_provider(
     label: str,
     pmtiles_path: Path,
     make_default: bool = True,
+    served_path: str | None = None,
 ) -> MapConfig:
     """Upserts one tier-1 provider entry into `osprey.yaml`'s `map:`
     section — replaces an existing entry with the same id, otherwise
@@ -90,7 +91,9 @@ def register_local_provider(
         id=provider_id,
         label=label,
         kind=MapSourceKind.VECTOR,
-        source=f"file://{pmtiles_path}",
+        # `served_path` is the file as the Conduit sees it (`/data/tiles/...` inside its container);
+        # the host path is only right for a Conduit running on the same filesystem.
+        source=f"file://{served_path or pmtiles_path}",
         style="bundled:osprey-dark",
         attribution=TIER1_PLANETILER_ATTRIBUTION,
         licence=_default_licence(),

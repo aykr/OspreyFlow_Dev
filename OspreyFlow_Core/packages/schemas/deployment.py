@@ -83,6 +83,10 @@ class SearchBackend(StrEnum):
     POSTGRES_FULLTEXT = "postgres-fulltext"
 
 
+#: Where the Conduit's container sees `components.storage.tiles`.
+TILES_CONTAINER_PATH = "/data/tiles"
+
+
 class StorageRoots(BaseModel):
     """`05_DEPLOYMENT.md` §2.1's Components screen: "the storage roots for data, staging and
     backups", plus `ingest` (owner ruling R6, 27 September 2026). Paths on the deployment host,
@@ -112,6 +116,15 @@ class StorageRoots(BaseModel):
     #: onto the host, owns the contents. A browser upload route is explicitly post-milestone.
     ingest: str = Field(
         default="/var/lib/osprey/ingest", description="Default: /var/lib/osprey/ingest"
+    )
+    #: **The folder the built basemap lives in (ADR-054 Amendment 4).** A map provider's
+    #: `source` is a path inside the Conduit's container (`/data/tiles/...`,
+    #: `TILES_CONTAINER_PATH`); this is the
+    #: host folder mounted there, read-only, for every profile. Before it existed the generated
+    #: deployment mounted nothing at that path, so tiles built on the host were never visible to the
+    #: process that serves them.
+    tiles: str = Field(
+        default="/var/lib/osprey/tiles", description="Default: /var/lib/osprey/tiles"
     )
 
 

@@ -26,8 +26,11 @@ from scripts.build_local_basemap import (
     UnknownRegionError,
     download_extract,
     register_local_provider,
+    UNREACHABLE_DATABASE,
+    build_tiles_only,
     resolve_extract,
     run_planetiler,
+    set_tiles_root,
 )
 from services.api.mapconfig_loader import load_map_config
 
@@ -340,3 +343,98 @@ def test_run_planetiler_says_when_it_was_given_a_map_extract_instead_of_the_jar(
 
     with pytest.raises(PlanetilerNotAvailableError, match=r"not a \.jar"):
         run_planetiler(extract, tmp_path / "out.pmtiles", jar_path=extract)
+
+
+# --- tiles only: the map without the database ------------------------------------
+
+
+def test_a_provider_can_be_registered_under_the_path_the_conduit_sees(tmp_path: Path) -> None:
+    """The file is built on the host and served from inside a container. The provider's source is
+    the container's view of it; registering the host path made the layer unreachable."""
+    config_path = tmp_path / "osprey.yaml"
+    register_local_provider(
+        config_path,
+        provider_id="osm-local-gb",
+        label="OpenStreetMap (GB)",
+        pmtiles_path=tmp_path / "host" / "gb.pmtiles",
+        served_path="/data/tiles/gb.pmtiles",
+    )
+
+    assert load_map_config(config_path).providers[0].source == "file:///data/tiles/gb.pmtiles"
+
+
+def test_the_tiles_folder_is_recorded_without_disturbing_the_rest_of_the_config(
+    tmp_path: Path,
+) -> None:
+    """The deployment mounts `components.storage.tiles`; the build has to point it at the folder it
+    wrote to, and must not lose the other keys the console wrote (the same fault
+    `register_local_provider` once had)."""
+    config_path = tmp_path / "osprey.yaml"
+    config_path.write_text(
+        yaml.safe_dump({"profile": "local-lite", "components": {"storage": {"data": "/d"}}})
+    )
+
+    set_tiles_root(config_path, tmp_path / "basemap")
+
+    raw = yaml.safe_load(config_path.read_text())
+    assert raw["components"]["storage"]["tiles"] == str((tmp_path / "basemap").resolve())
+    assert raw["components"]["storage"]["data"] == "/d"
+    assert raw["profile"] == "local-lite"
+
+
+def test_a_tiles_only_build_never_needs_the_database(tmp_path: Path) -> None:
+    """Catches the build that dies on `ConnectError` before any tile exists. `build_tiles_only`
+    takes no graph at all, so it cannot reach for one."""
+    extract = tmp_path / "great-britain.osm.pbf"
+    extract.write_bytes(b"pbf")
+    out = tmp_path / "basemap"
+    config_path = tmp_path / "osprey.yaml"
+
+    def fake_planetiler(osm: Path, target: Path, *, jar_path: Path) -> Path:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"pmtiles")
+        return target
+
+    result = build_tiles_only(
+        region="great-britain",
+        output_dir=out,
+        planetiler_jar_path=tmp_path / "planetiler.jar",
+        osprey_config_path=config_path,
+        existing_extract=extract,
+        planetiler_runner=fake_planetiler,
+        progress=lambda _line: None,
+    )
+
+    assert result == out / "great-britain.pmtiles"
+    raw = yaml.safe_load(config_path.read_text())
+    assert raw["map"]["default"] == "osm-local-great-britain"
+    assert raw["map"]["providers"][0]["source"] == "file:///data/tiles/great-britain.pmtiles"
+    assert raw["components"]["storage"]["tiles"] == str(out.resolve())
+
+
+def test_an_unreachable_database_is_explained_not_dumped_as_a_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The first real run ended in forty lines of `httpx.ConnectError`. It should say that the
+    database is not reachable, why the launched deployment's is not, and the way round it."""
+    import argparse
+    import asyncio
+
+    import httpx
+    from scripts import build_local_basemap as module
+
+    async def refuse(self: object) -> None:
+        raise httpx.ConnectError("All connection attempts failed")
+
+    monkeypatch.setattr(module.ArcadeDBClient, "create_database_if_absent", refuse)
+    args = argparse.Namespace(
+        region="rutland", output_dir=str(tmp_path), planetiler_jar="x.jar", extract=None,
+        osprey_config=str(tmp_path / "osprey.yaml"), tiles_only=False,
+        principal_id="p", clearance="OFFICIAL", org_unit="u",
+    )
+
+    code = asyncio.run(module._run(args))
+
+    assert code == 1
+    assert "--tiles-only" in capsys.readouterr().err
+    assert "Cannot reach ArcadeDB" in UNREACHABLE_DATABASE

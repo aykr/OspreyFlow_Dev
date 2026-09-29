@@ -1294,3 +1294,16 @@ def test_the_conduit_is_told_where_the_ingest_root_is_mounted() -> None:
     two places is how those two drift apart."""
     env = render(OspreyConfig(), allow_unpinned=True).artefacts["deployment.env"]
     assert f"OSPREY_INGEST_ROOT={INGEST_CONTAINER_PATH}" in env, env
+
+
+def test_the_conduit_gets_the_tiles_folder_read_only_where_the_provider_source_points(
+    rendered: RenderResult, config: OspreyConfig
+) -> None:
+    """Catches a built basemap the Glass can never show. A provider's source is a path inside the
+    Conduit's container (`/data/tiles/...`); the generated deployment mounted nothing there, so
+    tiles built on the host were invisible to the process that serves them. Read-only for the same
+    reason the ingest folder is: the Conduit reads what the operator put there and never writes."""
+    document = yaml.safe_load(rendered.artefacts["compose.yaml"])
+    volumes = document["services"]["api"]["volumes"]
+
+    assert f"{config.components.storage.tiles}:/data/tiles:ro" in volumes

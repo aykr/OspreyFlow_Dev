@@ -144,3 +144,16 @@ def test_the_reduced_variant_is_declarable() -> None:
     has to be able to express it, which is what lets Stage 2 §1 render it when asked."""
     components = ComponentsConfig.model_validate({"search": "postgres-fulltext"})
     assert components.search is SearchBackend.POSTGRES_FULLTEXT
+
+
+def test_the_tiles_folder_has_a_default_and_an_unknown_storage_key_is_still_refused() -> None:
+    """`storage.tiles` is the host folder mounted at `/data/tiles`; an existing `osprey.yaml`
+    without it must keep validating, and the model must still refuse a misspelt sibling."""
+    from schemas.deployment import StorageRoots
+
+    assert StorageRoots().tiles == "/var/lib/osprey/tiles"
+    try:
+        StorageRoots.model_validate({"tile": "/x"})
+    except Exception:  # noqa: BLE001 - the refusal is what is asserted
+        return
+    raise AssertionError("a misspelt storage key must be refused, not ignored")

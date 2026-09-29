@@ -63,7 +63,7 @@ from harness.images import (
 )
 from harness.profiles import arcadedb_java_memory_opts
 from harness.realm import CONDUIT_CLIENT_ID, HARNESS_PORT
-from schemas.deployment import OspreyConfig, Profile, SearchBackend
+from schemas.deployment import TILES_CONTAINER_PATH, OspreyConfig, Profile, SearchBackend
 
 #: **Where the ingest root is mounted inside the Conduit — fixed, not configurable** (owner ruling
 #: R6, 27 September 2026). The *host* side is `components.storage.ingest` and an operator moves it
@@ -736,6 +736,9 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
                 # material it is reading from. Rendered for every profile, so an analyst always
                 # has a door; `05_DEPLOYMENT.md` §3 and `DEMO_GUIDE.md` name the folder.
                 f"{config.components.storage.ingest}:{INGEST_CONTAINER_PATH}:ro",
+                # The built basemap, read-only, at the path a map provider's `source` names. See
+                # `StorageRoots.tiles`.
+                f"{config.components.storage.tiles}:{TILES_CONTAINER_PATH}:ro",
             ]
             service["depends_on"] = {
                 dependency: {"condition": "service_healthy"}

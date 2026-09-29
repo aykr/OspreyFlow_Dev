@@ -7317,6 +7317,45 @@ it), `OspreyFlow_Core/.venv`, and the generated deployment. On the owner's machi
 **Left as they were:** an empty `data/` at the root (the old store's shell; delete it) and the
 stale `.mypy_cache`, `.pytest_cache` and `.ruff_cache` at the root.
 
+### ADR-054, Amendment 4 (29 September 2026) — OpenStreetMap by default: the tiles folder, the mount and `--tiles-only`
+
+**Seen.** A launched deployment drew no map. Three faults sat behind it, found in order: the
+generated deployment mounted nothing at the path a `file://` map provider names, so tiles built on
+the host were never visible to the Conduit; the Launch preflight check for the basemap *failed*
+once the tiles existed (it looked for the container path on the host), so a successful build
+blocked Launch; and the build script always tried to load place names into ArcadeDB, which
+`make launch` does not publish, so it stopped with a bare connection error.
+
+**Decided (owner: "option A").**
+
+1. `components.storage.tiles` (default `/var/lib/osprey/tiles`) is the host folder holding the
+   built basemap. Every profile mounts it read-only at `/data/tiles` (`TILES_CONTAINER_PATH`) in
+   the Conduit. A provider's `source` is a path inside the container; the preflight maps it back
+   to the host folder before looking for the file.
+2. `build_local_basemap --tiles-only` builds the tiles, registers the provider under the
+   container path, and records the tiles folder in the deployment config. It needs no database.
+   The place-name load stays a separate step and now explains, in plain words, why it cannot reach
+   ArcadeDB and names `--tiles-only`.
+3. The preflight passes when the tiles exist behind a `file://` source.
+
+**Not decided.** How the place-name load and the dataset seeds reach ArcadeDB in a launched
+deployment (publishing it to 127.0.0.1 only) is an open question for the owner; nothing here
+changes that. Also open: the schema allows a blank provider id and a blank default (the Admin
+console wrote both to `osprey.yaml`); the proposed class fix is a non-empty rule on both, awaiting
+the owner's go-ahead and a reproduction of the console save.
+
+**Tests that fail without this** (each written first and red): in `test_build_local_basemap.py`,
+`test_a_tiles_only_build_never_needs_the_database`,
+`test_a_provider_can_be_registered_under_the_path_the_conduit_sees`,
+`test_the_tiles_folder_is_recorded_without_disturbing_the_rest_of_the_config` and
+`test_an_unreachable_database_is_explained_not_dumped_as_a_traceback`;
+`test_the_conduit_gets_the_tiles_folder_read_only_where_the_provider_source_points` in
+`test_render.py`; `test_the_tiles_folder_has_a_default_and_an_unknown_storage_key_is_still_refused`
+in `test_deployment_schema.py`; and in `test_preflight.py`
+`test_tiles_that_exist_behind_a_file_url_pass_because_the_conduit_serves_them`,
+`test_tiles_in_the_mounted_folder_are_found_where_the_conduit_will_see_them` and
+`test_a_missing_tile_file_in_the_mounted_folder_names_the_host_folder`.
+
 ## ADR-055 — The PaySim mobile-money dataset as an internal demo: what goes in the graph, what goes in the analytics store
 
 **Status: Proposed, 29 September 2026. Three points need the owner's ruling (marked "Owner to rule");

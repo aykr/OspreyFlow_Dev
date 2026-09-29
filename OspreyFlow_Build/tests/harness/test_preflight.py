@@ -427,55 +427,83 @@ def test_tiles_that_do_not_exist_yet_warn_rather_than_block(context: PreflightCo
 
 
 def test_the_gate_passes_on_a_warning_and_still_fails_on_a_failure(
-    context: PreflightContext, tmp_path: Path
+    context: PreflightContext,
 ) -> None:
     """The property the split exists for, asserted through `ok` rather than by reading the status
     name — a fourth status that everything still treated as blocking would pass the case above and
-    change nothing."""
+    change nothing. The blocking case is a real one: a default provider that is not in the list,
+    which is what an empty `map.default` in `osprey.yaml` produces and leaves no layer selected."""
     unbuilt = basemap.check(context)
     assert unbuilt.ok
 
-    tiles = tmp_path / "osm-local.pmtiles"
-    tiles.write_bytes(b"PMTiles")
-    context.config.map.providers[0].source = f"file://{tiles}"
-    unservable = basemap.check(context)
-    assert not unservable.ok, "an unservable URL must still block"
+    context.config.map.default = ""
+    no_default = basemap.check(context)
+    assert not no_default.ok, "a default that names no provider must block"
 
 
-def test_removing_the_split_makes_both_cases_wrong(
-    context: PreflightContext, tmp_path: Path
-) -> None:
+def test_removing_the_split_makes_both_cases_wrong(context: PreflightContext) -> None:
     """Rule 15's own lever for this change. The two cases must reach **different** statuses; a
     check that collapsed them — whichever way — would satisfy one of the two assertions above and
     fail this one. Without it, a regression that made both `fail` again (or both `warn`) would be
     caught by exactly one test and might be read as that test being wrong."""
     unbuilt = basemap.check(context)
 
-    tiles = tmp_path / "osm-local.pmtiles"
-    tiles.write_bytes(b"PMTiles")
-    context.config.map.providers[0].source = f"file://{tiles}"
-    unservable = basemap.check(context)
+    context.config.map.default = ""
+    no_default = basemap.check(context)
 
-    assert unbuilt.status is not unservable.status, (
-        "an absent file and an unservable URL are different faults with different urgencies; a "
-        "check that gives them the same status has lost the distinction the split was made for"
+    assert unbuilt.status is not no_default.status, (
+        "tiles not built yet and no default provider are different faults with different "
+        "urgencies; a check that gives them the same status has lost the distinction the split "
+        "was made for"
     )
-    assert (unbuilt.ok, unservable.ok) == (True, False)
+    assert (unbuilt.ok, no_default.ok) == (True, False)
 
 
-def test_tiles_that_exist_but_are_still_served_from_file_url_fail_differently(
+def test_tiles_that_exist_behind_a_file_url_pass_because_the_conduit_serves_them(
     context: PreflightContext, tmp_path: Path
 ) -> None:
-    """The second half, and the one that looks like everything worked. A real file on disk, a real
-    `file://` URI pointing at it."""
+    """**This case used to assert FAIL, and that was the defect.** The Conduit serves a `file://`
+    provider over `/v1/map/local-source/<id>` and `mapconfig_loader.public_view` rewrites the URI for
+    the Glass, so a `file://` entry with the tiles present is the correct, working configuration.
+    The old check failed on it, which meant a successfully built basemap blocked Launch. The
+    planted fault is the real shape: a real file on disk and a real `file://` URI pointing at it."""
     tiles = tmp_path / "osm-local.pmtiles"
     tiles.write_bytes(b"PMTiles")
     context.config.map.providers[0].source = f"file://{tiles}"
 
     result = basemap.check(context)
-    assert result.status is Status.FAIL
-    assert "cannot fetch file://" in result.what_is_wrong
-    assert "/v1/map/local-source" in result.what_to_do
+
+    assert result.status is Status.PASS
+    assert result.ok
+
+
+def test_tiles_in_the_mounted_folder_are_found_where_the_conduit_will_see_them(
+    context: PreflightContext, tmp_path: Path
+) -> None:
+    """The provider's source is the path *inside the Conduit's container* (`/data/tiles/...`); the
+    file lives in the host folder `components.storage.tiles`. A check that looked for the container
+    path on the host would say "does not exist yet" for ever, however often the build succeeded."""
+    host_tiles = tmp_path / "tiles"
+    host_tiles.mkdir()
+    (host_tiles / "great-britain.pmtiles").write_bytes(b"PMTiles")
+    context.config.components.storage.tiles = str(host_tiles)
+    context.config.map.providers[0].source = "file:///data/tiles/great-britain.pmtiles"
+
+    result = basemap.check(context)
+
+    assert result.status is Status.PASS
+
+
+def test_a_missing_tile_file_in_the_mounted_folder_names_the_host_folder(
+    context: PreflightContext, tmp_path: Path
+) -> None:
+    context.config.components.storage.tiles = str(tmp_path / "tiles")
+    context.config.map.providers[0].source = "file:///data/tiles/great-britain.pmtiles"
+
+    result = basemap.check(context)
+
+    assert result.status is Status.WARN
+    assert str(tmp_path / "tiles" / "great-britain.pmtiles") in result.what_is_wrong
 
 
 def test_a_provider_already_served_over_http_passes(context: PreflightContext) -> None:
@@ -605,27 +633,30 @@ def _write_config(tmp_path: Path, body: str) -> Path:
 
 
 def test_gate_exits_non_zero_with_one_failing_check(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Red. The failing check is the real basemap one, failing for the real reason — a `file://`
-    provider whose tiles **do** exist, which is the unservable case rather than the unbuilt one.
-    (The unbuilt case now warns and the gate passes on it, which is exactly why this test had to
-    stop relying on it: a gate test whose "failure" stops being one silently starts proving
-    nothing.)"""
-    tiles = tmp_path / "osm-local.pmtiles"
-    tiles.write_bytes(b"PMTiles")
-    body = FIXTURE_CONFIG.replace(
-        "source: file:///data/tiles/osm-local.pmtiles", f"source: file://{tiles}"
-    )
-    config_path = _write_config(tmp_path, body)
+    """Red. The failing check is the real bind-address one, failing for its real reason (`localhost`
+    resolving to IPv6 only). It used to be a basemap case, a `file://` provider whose tiles existed;
+    that is the correct, working configuration and no longer fails, and a gate test whose "failure"
+    stops being one silently starts proving nothing. The one remaining basemap failure, a default
+    that names no provider, is now refused by the schema before any check runs."""
+
+    def ipv6_only(*_args: object, **_kwargs: object) -> list[tuple]:
+        return [(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::1", 0, 0, 0))]
+
+    monkeypatch.setattr(bind_address.socket, "getaddrinfo", ipv6_only)
+    config_path = _write_config(tmp_path, FIXTURE_CONFIG)
     out_root = tmp_path / "generated"
     write(
-        render(OspreyConfig.model_validate(yaml.safe_load(body)), allow_unpinned=True),
+        render(OspreyConfig.model_validate(yaml.safe_load(FIXTURE_CONFIG)), allow_unpinned=True),
         out_root / "local-lite",
     )
 
     code = main(
-        ["--config", str(config_path), "--out-root", str(out_root), "--gate", "--only", "basemap"]
+        [
+            "--config", str(config_path), "--out-root", str(out_root),
+            "--gate", "--only", "bind-address",
+        ]
     )
 
     assert code == 1

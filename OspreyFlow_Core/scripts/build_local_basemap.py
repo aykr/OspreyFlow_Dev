@@ -46,6 +46,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
+import yaml
 from scripts.geo_local_provider import register_local_provider as register_local_provider
 from services.ingest.connectors.geo.osm import read_osm_places
 from services.ingest.engine import run_recipe
@@ -56,6 +57,7 @@ from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from ports.graph import GraphPort
+from schemas.deployment import TILES_CONTAINER_PATH
 from schemas.domain import OntologySchema, Principal, TxId
 from schemas.ingest import LoadReport
 from schemas.mapconfig import MapConfig
@@ -303,6 +305,53 @@ def resolve_extract(
     return pbf_path
 
 
+def set_tiles_root(config_path: Path, host_dir: Path) -> None:
+    """Records `components.storage.tiles` (the host folder mounted at `/data/tiles`) as `host_dir`,
+    resolved to an absolute path, leaving every other key as it was."""
+    raw: dict[str, object] = {}
+    if config_path.exists():
+        raw = yaml.safe_load(config_path.read_text()) or {}
+    components = raw.setdefault("components", {})
+    assert isinstance(components, dict)
+    storage = components.setdefault("storage", {})
+    assert isinstance(storage, dict)
+    storage["tiles"] = str(host_dir.resolve())
+    config_path.write_text(yaml.safe_dump(raw, sort_keys=False))
+
+
+def build_tiles_only(
+    *,
+    region: str,
+    output_dir: Path,
+    planetiler_jar_path: Path,
+    osprey_config_path: Path,
+    existing_extract: Path | None = None,
+    downloader: Callable[[str, Path], Path] = download_extract,
+    planetiler_runner: Callable[..., Path] = run_planetiler,
+    progress: Callable[[str], None] = print,
+) -> Path:
+    """The map without the database: the tiles, the deployment's tiles folder and the provider
+    registration, and none of the place-name loading. It takes no graph, so it cannot fail because a
+    database is not reachable, and the gazetteer can be loaded later from where the database is."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    pmtiles_path = output_dir / f"{region}.pmtiles"
+    pbf_path = resolve_extract(
+        region, output_dir, existing=existing_extract, downloader=downloader, progress=progress
+    )
+    progress("Running planetiler...")
+    planetiler_runner(pbf_path, pmtiles_path, jar_path=planetiler_jar_path)
+    progress(f"Registering provider osm-local-{region} and the tiles folder...")
+    register_local_provider(
+        osprey_config_path,
+        provider_id=f"osm-local-{region}",
+        label=f"OpenStreetMap ({region})",
+        pmtiles_path=pmtiles_path,
+        served_path=f"{TILES_CONTAINER_PATH}/{pmtiles_path.name}",
+    )
+    set_tiles_root(osprey_config_path, output_dir)
+    return pmtiles_path
+
+
 async def build_local_basemap(
     *,
     region: str,
@@ -376,6 +425,12 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--osprey-config", default="osprey.yaml")
     parser.add_argument(
+        "--tiles-only",
+        action="store_true",
+        help="Build the tiles and register the layer only; skip the place-name (gazetteer) load, "
+        "so no database is needed.",
+    )
+    parser.add_argument(
         "--principal-id", default=os.environ.get("OSPREY_PRINCIPAL_ID", "geo-build-worker")
     )
     parser.add_argument("--clearance", default=os.environ.get("OSPREY_CLEARANCE", "OFFICIAL"))
@@ -383,13 +438,38 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+#: What the full build says when ArcadeDB cannot be reached, in place of a raw connection traceback.
+UNREACHABLE_DATABASE = (
+    "Cannot reach ArcadeDB at {url}, so the place names cannot be loaded. The deployment that "
+    "`make launch` starts keeps ArcadeDB inside Docker and does not publish it; "
+    "`make dev-up` does, "
+    "on port 2480. To build the map itself without the database, add --tiles-only."
+)
+
+
 async def _run(args: argparse.Namespace) -> int:
+    if args.tiles_only:
+        pmtiles = build_tiles_only(
+            region=args.region,
+            output_dir=Path(args.output_dir),
+            planetiler_jar_path=Path(args.planetiler_jar),
+            osprey_config_path=Path(args.osprey_config),
+            existing_extract=Path(args.extract) if args.extract else None,
+        )
+        print(f"Tiles written to {pmtiles}. Restart the deployment to mount them.")
+        return 0
     ontology = load_default_ontology()
     scheme = load_uk_le_scheme()
 
     database = os.environ.get("ARCADEDB_DATABASE", "ospreyflow")
-    client = ArcadeDBClient(ArcadeDBConfig.from_env(database))
-    await client.create_database_if_absent()
+    config = ArcadeDBConfig.from_env(database)
+    client = ArcadeDBClient(config)
+    try:
+        await client.create_database_if_absent()
+    except httpx.ConnectError:
+        await client.aclose()
+        print(UNREACHABLE_DATABASE.format(url=config.base_url), file=sys.stderr)
+        return 1
     graph = GraphArcadeDBAdapter(client, scheme)
     await graph.apply_schema(ontology)
 

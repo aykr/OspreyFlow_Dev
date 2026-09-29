@@ -21,10 +21,17 @@ from pathlib import Path
 
 from harness.preflight.context import PreflightContext
 from harness.preflight.result import CheckResult, failed, passed, skipped, warned
+from schemas.deployment import TILES_CONTAINER_PATH
 
 NAME = "basemap"
 
-_LOCAL_SOURCE_ROUTE_PREFIX = "/v1/map/local-source"
+def _host_path(source: Path, context: PreflightContext) -> Path:
+    """A provider's source is a path inside the Conduit's container; the file is in the host
+    folder mounted there (`components.storage.tiles`). Anything else is a host path already."""
+    mount = Path(TILES_CONTAINER_PATH)
+    if source.is_relative_to(mount):
+        return Path(context.config.components.storage.tiles) / source.relative_to(mount)
+    return source
 
 
 def check(context: PreflightContext) -> CheckResult:
@@ -53,7 +60,7 @@ def check(context: PreflightContext) -> CheckResult:
     if default.source is None or not default.source.startswith("file://"):
         return passed(NAME, detail=detail)
 
-    tiles = Path(default.source.removeprefix("file://"))
+    tiles = _host_path(Path(default.source.removeprefix("file://")), context)
     if not tiles.is_file():
         # **Warn, not fail — the two outcomes are different faults with different urgencies.**
         # Tiles that have not been built yet are a post-install step: the stack comes up, every
@@ -72,27 +79,16 @@ def check(context: PreflightContext) -> CheckResult:
                 "this does not block Launch."
             ),
             what_to_do=(
-                "After install, build it: `python -m scripts.build_local_basemap`. It downloads "
-                "the extract, runs planetiler and writes the PMTiles file this provider expects. "
+                "After install, build it: "
+                "`python -m scripts.build_local_basemap --tiles-only`. It runs "
+                "planetiler on an extract and writes the PMTiles file this provider expects. "
                 "Re-check this one afterwards rather than re-running the whole deploy."
             ),
             detail=detail,
         )
 
-    return failed(
-        NAME,
-        what_is_wrong=(
-            f"the tiles at {tiles} exist, but the provider's source is a file:// URI. A browser "
-            "cannot fetch file:// at all — no network stack reaches it — so the map renders blank "
-            "with no error anywhere. This is the second half of the 23 September rehearsal's own "
-            "basemap failure, and it is the half that looks like everything worked."
-        ),
-        what_to_do=(
-            f"The Conduit serves these tiles over HTTP at {_LOCAL_SOURCE_ROUTE_PREFIX}/"
-            f"{default.id}, and mapconfig_loader.public_view() rewrites the URI for the Glass "
-            "automatically — so confirm the Glass is reading the Conduit's provider list rather "
-            "than osprey.yaml directly. Tiles served straight from disk are the failure, not the "
-            "file:// entry in osprey.yaml, which is correct as written."
-        ),
-        detail=detail,
-    )
+    # The tiles exist and the provider is a `file://` source. That is the correct, working
+    # configuration: the Conduit serves it over `/v1/map/local-source/<id>` and
+    # `mapconfig_loader.public_view` rewrites the URI for the Glass. (This case used to *fail*,
+    # which meant a successfully built basemap blocked Launch.)
+    return passed(NAME, detail=detail)

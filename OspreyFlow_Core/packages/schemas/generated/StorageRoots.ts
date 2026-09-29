@@ -16,6 +16,10 @@ export type Backups = string;
  * Default: /var/lib/osprey/ingest
  */
 export type Ingest = string;
+/**
+ * Default: /var/lib/osprey/tiles
+ */
+export type Tiles = string;
 
 /**
  * `05_DEPLOYMENT.md` §2.1's Components screen: "the storage roots for data, staging and
@@ -27,4 +31,5 @@ export interface StorageRoots {
   staging?: Staging;
   backups?: Backups;
   ingest?: Ingest;
+  tiles?: Tiles;
 }
