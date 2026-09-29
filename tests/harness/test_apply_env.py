@@ -183,6 +183,7 @@ def test_demo_analyst_password_is_absent_without_the_flag(tmp_path: Path) -> Non
     not mint a credential for a subject nobody asked to exist."""
     env = _rendered_env(tmp_path)
     assert "OSPREY_DEMO_ANALYST_PASSWORD" not in env
+    assert "OSPREY_DEMO_ADMIN_PASSWORD" not in env
 
 
 def test_demo_analyst_password_is_written_and_realm_carries_the_subject_with_the_flag(
@@ -195,7 +196,7 @@ def test_demo_analyst_password_is_written_and_realm_carries_the_subject_with_the
     import json
 
     from harness.apply import main
-    from harness.realm import DEMO_ANALYST_SUBJECT
+    from harness.realm import DEMO_ADMIN_SUBJECT, DEMO_ANALYST_SUBJECT
 
     main(
         [
@@ -217,10 +218,15 @@ def test_demo_analyst_password_is_written_and_realm_carries_the_subject_with_the
         name, _, value = line.partition("=")
         values[name.strip()] = value.strip()
     assert values.get("OSPREY_DEMO_ANALYST_PASSWORD"), "no demo-analyst password was written"
+    assert values.get("OSPREY_DEMO_ADMIN_PASSWORD"), "no demo-admin password was written"
+    assert values["OSPREY_DEMO_ADMIN_PASSWORD"] != values["OSPREY_DEMO_ANALYST_PASSWORD"], (
+        "two accounts, one password: the analyst could open the Admin console"
+    )
 
     realm = json.loads((tmp_path / "local-lite" / "realm.json").read_text(encoding="utf-8"))
     usernames = {u["username"] for u in realm["users"]}
     assert DEMO_ANALYST_SUBJECT in usernames
+    assert DEMO_ADMIN_SUBJECT in usernames
 
 
 def test_the_deployment_this_file_starts_is_a_real_one_and_the_teardown_removes_it(

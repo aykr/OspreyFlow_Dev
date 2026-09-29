@@ -1,0 +1,142 @@
+"""Add the launcher's sign-in to a Keycloak that is already running.
+
+`06_DECISIONS.md` ADR-051. A realm import runs only when Keycloak first starts against an empty
+database, so a deployment applied before the launcher had a sign-in holds a realm with no
+`osprey-launcher` client and no `osprey-demo-admin` subject, and re-rendering `realm.json` changes
+nothing there. This registers both through the admin API, from the **same rendered realm** a fresh
+`apply --demo-analyst` builds (`harness.realm.render_realm`), so a running deployment cannot drift
+from a new one.
+
+Safe to run again. An existing client or subject is left alone; the demo admin's password is kept
+if `deployment.env` already names one (Keycloak's database is not persisted, so after a restart the
+subject is gone while the file still names a password, and running this makes the file true again).
+The password is written to `deployment.env` only after Keycloak has accepted it, and is never
+printed.
+
+    python -m harness.register_sign_in            # from the repository root, PYTHONPATH=.:packages
+"""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+from harness import keycloak_admin
+from harness.keycloak_admin import RealmConfigurationFailed
+from harness.realm import (
+    DEMO_ADMIN_SUBJECT,
+    LAUNCHER_CLIENT_ID,
+    generate_client_secret,
+    render_realm,
+)
+from harness.render import DEFAULT_CONFIG_PATH, DEFAULT_OUT_ROOT, load_config
+from schemas.deployment import OspreyConfig
+
+ADMIN_PASSWORD_KEY = "OSPREY_KEYCLOAK_ADMIN_PASSWORD"
+DEMO_ADMIN_PASSWORD_KEY = "OSPREY_DEMO_ADMIN_PASSWORD"
+
+
+def _read_env(env_path: Path) -> dict[str, str]:
+    try:
+        text = env_path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise RealmConfigurationFailed(
+            f"cannot read {env_path.name} ({error}) — apply the deployment first, or point "
+            "--out-root at the folder that holds its deployment.env"
+        ) from error
+    values: dict[str, str] = {}
+    for line in text.splitlines():
+        name, _, value = line.partition("=")
+        if name and not name.startswith("#"):
+            values[name.strip()] = value.strip()
+    return values
+
+
+def _write_env_value(env_path: Path, key: str, value: str) -> None:
+    lines = env_path.read_text(encoding="utf-8").splitlines()
+    replaced = False
+    for index, line in enumerate(lines):
+        if line.partition("=")[0].strip() == key:
+            lines[index] = f"{key}={value}"
+            replaced = True
+    if not replaced:
+        lines.append(f"{key}={value}")
+    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def register(*, issuer: str, realm: str, env_path: Path, config: OspreyConfig) -> list[str]:
+    """Returns one plain-language line per thing done. Raises `RealmConfigurationFailed` naming
+    what Keycloak refused, or that it could not be reached — those are different next steps."""
+    values = _read_env(env_path)
+    admin_password = values.get(ADMIN_PASSWORD_KEY)
+    if not admin_password:
+        raise RealmConfigurationFailed(
+            f"{env_path.name} has no {ADMIN_PASSWORD_KEY} — it was not written by `apply`"
+        )
+    token = keycloak_admin.admin_token(
+        issuer=issuer, admin_user="admin", admin_password=admin_password
+    )
+
+    rendered = render_realm(config, realm_name=realm, demo_analyst=True)
+    (launcher,) = [c for c in rendered["clients"] if c["clientId"] == LAUNCHER_CLIENT_ID]
+    (admin,) = [u for u in rendered["users"] if u["username"] == DEMO_ADMIN_SUBJECT]
+    lines: list[str] = []
+
+    lines.append(
+        f"sign-in client {LAUNCHER_CLIENT_ID}: "
+        + keycloak_admin.ensure_client(issuer=issuer, realm=realm, token=token, client=launcher)
+    )
+    lines.append(
+        f"account {DEMO_ADMIN_SUBJECT}: "
+        + keycloak_admin.ensure_user(issuer=issuer, realm=realm, token=token, user=admin)
+    )
+
+    password = values.get(DEMO_ADMIN_PASSWORD_KEY) or generate_client_secret()
+    keycloak_admin.set_user_password(
+        issuer=issuer,
+        realm=realm,
+        token=token,
+        username=DEMO_ADMIN_SUBJECT,
+        password=password,
+    )
+    _write_env_value(env_path, DEMO_ADMIN_PASSWORD_KEY, password)
+    lines.append(f"password for {DEMO_ADMIN_SUBJECT} set; it is in {env_path.name}")
+    return lines
+
+
+def print_summary(lines: list[str], env_path: Path) -> None:
+    print("Sign-in registered on the running identity provider:")
+    for line in lines:
+        print(f"  - {line}")
+    print(
+        f"\n  Sign in as {DEMO_ADMIN_SUBJECT} for the Admin console. Its password is the value of "
+        f"{DEMO_ADMIN_PASSWORD_KEY}\n  in {env_path}. It is not printed here."
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("--profile", default="local-lite")
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    parser.add_argument("--out-root", type=Path, default=DEFAULT_OUT_ROOT)
+    parser.add_argument("--keycloak-url", default="http://127.0.0.1:8081")
+    parser.add_argument("--realm", default="osprey")
+    args = parser.parse_args(argv)
+
+    env_path = args.out_root / args.profile / "deployment.env"
+    try:
+        lines = register(
+            issuer=args.keycloak_url,
+            realm=args.realm,
+            env_path=env_path,
+            config=load_config(args.config),
+        )
+    except RealmConfigurationFailed as error:
+        print(f"Could not register sign-in: {error}")
+        return 1
+    print_summary(lines, env_path)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

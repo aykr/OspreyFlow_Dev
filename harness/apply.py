@@ -45,11 +45,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from harness.keycloak_admin import grant_service_account_roles, set_demo_analyst_password
+from harness.keycloak_admin import (
+    grant_service_account_roles,
+    set_demo_admin_password,
+    set_demo_analyst_password,
+)
 from harness.preflight import ALL_CHECKS, PreflightContext
 from harness.preflight.result import Status
 from harness.realm import (
     CONDUIT_CLIENT_ID,
+    DEMO_ADMIN_SUBJECT,
     DEMO_ANALYST_SUBJECT,
     generate_client_secret,
     render_realm_json,
@@ -451,6 +456,9 @@ def main(argv: list[str] | None = None) -> int:
         # in the repository, never printed except in the one-time summary at the very end
         # (06_DECISIONS.md ADR-050 objection 3's resolution).
         demo_analyst_password = generate_client_secret() if args.demo_analyst else None
+        # The second demo subject (ADR-051) exists exactly when the first does, and has its own
+        # password: two people, two credentials.
+        demo_admin_password = generate_client_secret() if args.demo_analyst else None
         postgres_user = "osprey"
         postgres_database = "ospreyflow"
         minio_user = "ospreyflow"
@@ -510,6 +518,11 @@ def main(argv: list[str] | None = None) -> int:
             + (
                 f"OSPREY_DEMO_ANALYST_PASSWORD={demo_analyst_password}\n"
                 if demo_analyst_password is not None
+                else ""
+            )
+            + (
+                f"OSPREY_DEMO_ADMIN_PASSWORD={demo_admin_password}\n"
+                if demo_admin_password is not None
                 else ""
             ),
             encoding="utf-8",
@@ -571,6 +584,15 @@ def main(argv: list[str] | None = None) -> int:
                 password=demo_analyst_password,
             )
             result.record("demo-analyst", "password set on the disposable analyst subject")
+        if demo_admin_password is not None:
+            set_demo_admin_password(
+                issuer=args.keycloak_url,
+                realm=args.realm,
+                admin_user="admin",
+                admin_password=admin_password,
+                password=demo_admin_password,
+            )
+            result.record("demo-admin", "password set on the disposable admin subject")
 
         # 5. Seed, under the ordering guard.
         datasets = [d for d in args.seed.split(",") if d]
@@ -647,6 +669,7 @@ def main(argv: list[str] | None = None) -> int:
     # `06_DECISIONS.md` ADR-050 objection 3's resolution.
     if demo_analyst_password is not None:
         print(f"\n  sign in as {DEMO_ANALYST_SUBJECT} with the password in {env_path}")
+        print(f"  the Admin console account is {DEMO_ADMIN_SUBJECT}, same file")
     return 0
 
 

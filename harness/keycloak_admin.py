@@ -69,9 +69,9 @@ def _call(
         raise RealmConfigurationFailed(f"{url} unreachable: {error}") from error
 
 
-def grant_service_account_roles(
-    *, issuer: str, realm: str, admin_user: str, admin_password: str, client_secret: str
-) -> None:
+def admin_token(*, issuer: str, admin_user: str, admin_password: str) -> str:
+    """A master-realm admin token. A refusal and an unreachable Keycloak are different failures:
+    `_call` raises for the second, this raises for the first (ADR-044's distinction)."""
     status, token_response = _call(
         f"{issuer}/realms/master/protocol/openid-connect/token",
         data={
@@ -86,7 +86,72 @@ def grant_service_account_roles(
         raise RealmConfigurationFailed(
             f"could not authenticate to Keycloak: {status} {token_response}"
         )
-    token = token_response["access_token"]
+    return str(token_response["access_token"])
+
+
+def ensure_client(*, issuer: str, realm: str, token: str, client: dict[str, Any]) -> str:
+    """Create a client unless it exists. Keycloak's 409 for a duplicate is the expected answer on
+    a second run, not a failure. An existing client is left as it is."""
+    status, found = _call(
+        f"{issuer}/admin/realms/{realm}/clients?clientId={client['clientId']}", token=token
+    )
+    if status == 200 and found:
+        return "already registered"
+    status, body = _call(f"{issuer}/admin/realms/{realm}/clients", token=token, data=client)
+    if status == 409:
+        return "already registered"
+    if status not in (200, 201):
+        raise RealmConfigurationFailed(
+            f"could not register client {client['clientId']!r}: {status} {body}"
+        )
+    return "registered"
+
+
+def ensure_user(*, issuer: str, realm: str, token: str, user: dict[str, Any]) -> str:
+    """As `ensure_client`, for a subject. The subject is created without a password."""
+    username = user["username"]
+    status, found = _call(
+        f"{issuer}/admin/realms/{realm}/users?username={username}&exact=true", token=token
+    )
+    if status == 200 and found:
+        return "already there"
+    status, body = _call(f"{issuer}/admin/realms/{realm}/users", token=token, data=user)
+    if status == 409:
+        return "already there"
+    if status not in (200, 201):
+        raise RealmConfigurationFailed(f"could not create {username!r}: {status} {body}")
+    return "created"
+
+
+def set_user_password(
+    *, issuer: str, realm: str, token: str, username: str, password: str
+) -> None:
+    """Sets a non-temporary password on a subject that must already exist."""
+    status, found = _call(
+        f"{issuer}/admin/realms/{realm}/users?username={username}&exact=true", token=token
+    )
+    if status != 200 or not found:
+        raise RealmConfigurationFailed(
+            f"{username!r} not found in the realm — was it rendered with demo_analyst=True, or "
+            "has Keycloak restarted since?"
+        )
+    status, _ = _call(
+        f"{issuer}/admin/realms/{realm}/users/{found[0]['id']}/reset-password",
+        token=token,
+        data={"type": "password", "value": password, "temporary": False},
+        method="PUT",
+    )
+    if status not in (204, 200):
+        raise RealmConfigurationFailed(
+            f"could not set {username}'s password: {status} — the credentials written to the "
+            "environment file will not work"
+        )
+
+
+def grant_service_account_roles(
+    *, issuer: str, realm: str, admin_user: str, admin_password: str, client_secret: str
+) -> None:
+    token = admin_token(issuer=issuer, admin_user=admin_user, admin_password=admin_password)
 
     from harness.realm import CONDUIT_CLIENT_ID, UNPRIVILEGED_CLIENT_ID
 
@@ -172,42 +237,22 @@ def set_demo_analyst_password(
     means the demo/exit-test subject cannot sign in, which is exactly the failure ADR-050's own exit
     test would otherwise discover the hard way — as a login that refuses the printed credentials.
     """
-    status, token_response = _call(
-        f"{issuer}/realms/master/protocol/openid-connect/token",
-        data={
-            "client_id": "admin-cli",
-            "username": admin_user,
-            "password": admin_password,
-            "grant_type": "password",
-        },
-        form=True,
-    )
-    if status != 200:
-        raise RealmConfigurationFailed(
-            f"could not authenticate to Keycloak: {status} {token_response}"
-        )
-    token = token_response["access_token"]
-
     from harness.realm import DEMO_ANALYST_SUBJECT
 
-    status, found = _call(
-        f"{issuer}/admin/realms/{realm}/users?username={DEMO_ANALYST_SUBJECT}&exact=true",
-        token=token,
+    token = admin_token(issuer=issuer, admin_user=admin_user, admin_password=admin_password)
+    set_user_password(
+        issuer=issuer, realm=realm, token=token, username=DEMO_ANALYST_SUBJECT, password=password
     )
-    if status != 200 or not found:
-        raise RealmConfigurationFailed(
-            f"{DEMO_ANALYST_SUBJECT!r} not found after realm import — was the realm rendered with "
-            "demo_analyst=True?"
-        )
-    user_id = found[0]["id"]
-    status, _ = _call(
-        f"{issuer}/admin/realms/{realm}/users/{user_id}/reset-password",
-        token=token,
-        data={"type": "password", "value": password, "temporary": False},
-        method="PUT",
+
+
+def set_demo_admin_password(
+    *, issuer: str, realm: str, admin_user: str, admin_password: str, password: str
+) -> None:
+    """`06_DECISIONS.md` ADR-051: the second demo subject's password, set the same way and for the
+    same reason as the analyst's. Only its own subject is touched."""
+    from harness.realm import DEMO_ADMIN_SUBJECT
+
+    token = admin_token(issuer=issuer, admin_user=admin_user, admin_password=admin_password)
+    set_user_password(
+        issuer=issuer, realm=realm, token=token, username=DEMO_ADMIN_SUBJECT, password=password
     )
-    if status not in (204, 200):
-        raise RealmConfigurationFailed(
-            f"could not set the demo analyst's password: {status} — the credentials `apply` "
-            "printed will not work"
-        )
