@@ -64,16 +64,38 @@ import tempfile
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import webbrowser
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Protocol
 
 from harness.apply import _compose
-from harness.realm import HARNESS_PORT, LAUNCHER_PORT
+from harness.oidc import (
+    Identity,
+    IdentityProviderUnreachable,
+    LoginAttempts,
+    SessionStore,
+    SignInConfig,
+    default_issuer,
+    handle_callback,
+    rendered_realm_exists,
+)
+from harness.realm import (
+    ADMIN_ROLE,
+    HARNESS_PORT,
+    LAUNCHER_CLIENT_ID,
+    LAUNCHER_ORIGIN,
+    LAUNCHER_PORT,
+    LAUNCHER_REDIRECT_URI,
+)
+
+from harness import oidc
+from schemas.ingest import StudioRole
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WORKSPACE_PORT = 8080
@@ -90,6 +112,15 @@ GLASS = "The Glass"
 INGEST = "Ingest Studio"
 ADMIN = "Admin console"
 NAMES = (GLASS, INGEST, ADMIN)
+
+#: ADR-051. The roles that show the Ingest Studio tile: any one of the Studio's own roles. Taken
+#: from the Studio's definition so a role added there is not silently missing here.
+STUDIO_ROLES = frozenset(role.value for role in StudioRole)
+SESSION_COOKIE = "osprey_launcher_session"
+LOGIN_COOKIE = "osprey_launcher_login"
+SESSION_TTL_SECONDS = 8 * 3600.0
+#: What the person sees before signing in: one tile, which is either "start it" or "sign in".
+SIGN_IN_TILE = "OspreyFlow"
 
 #: Word and shape for each state — the design system's rule that hue never carries a
 #: distinction on its own.
@@ -121,6 +152,10 @@ class Surface:
     hint: str
     starts: str  # "stack" or "admin"
     audience: str  # "analysts" or "admin"
+    #: Who is shown this tile once sign-in is required: None means any signed-in account, otherwise
+    #: an account holding at least one of these roles. A courtesy to the person at the screen, not
+    #: an access control (the Conduit and the Admin console enforce their own).
+    roles: frozenset[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -202,6 +237,7 @@ class Launcher:
         spawner: Spawner,
         frontend_built: bool | None = None,
         clock: Callable[[], float] = time.monotonic,
+        oidc_issuer: str | None = None,
     ) -> None:
         self.repo_root = repo_root
         self._prober = prober
@@ -218,6 +254,37 @@ class Launcher:
         self._running: set[str] = set()
         self._started_at: dict[str, float] = {}
         self._lock = threading.Lock()
+        # ADR-051. Once a deployment has been rendered there is a realm to sign in to, and this
+        # launcher asks first and shows each account only what its roles allow. Before that it is
+        # open, because there is nothing to sign in to and the Admin console that renders the realm
+        # would otherwise be unreachable. Decided now, for the life of this process.
+        generated = repo_root / "deploy" / "generated"
+        self.enforced = rendered_realm_exists(generated)
+        self.sign_in_config = SignInConfig(
+            issuer=oidc_issuer or default_issuer(generated),
+            client_id=LAUNCHER_CLIENT_ID,
+            redirect_uri=LAUNCHER_REDIRECT_URI,
+            post_logout_uri=f"{LAUNCHER_ORIGIN}/",
+        )
+        self.sessions = SessionStore(ttl_seconds=SESSION_TTL_SECONDS, clock=clock)
+        self.attempts = LoginAttempts(clock=clock)
+
+    # -- who is signed in -----------------------------------------------------------------------
+
+    def identity(self, session_token: str | None) -> Identity | None:
+        return self.sessions.get(session_token)
+
+    def can_see(self, surface: Surface, identity: Identity | None) -> bool:
+        if not self.enforced:
+            return True
+        if identity is None:
+            return False
+        return surface.roles is None or any(identity.has_role(r) for r in surface.roles)
+
+    def mode(self, identity: Identity | None) -> str:
+        if not self.enforced:
+            return "open"
+        return "signed-in" if identity is not None else "signed-out"
 
     # -- what the deployment is ------------------------------------------------------------
 
@@ -244,15 +311,21 @@ class Launcher:
             return "deploy/generated/<profile>/deployment.env"
         return f"{directory.relative_to(self.repo_root)}/deployment.env"
 
-    def surfaces(self) -> list[Surface]:
+    def surfaces(self, identity: Identity | None = None) -> list[Surface]:
         workspace = self.workspace_url()
+        who = identity.username if identity is not None else None
+        signed_in = self.enforced and who is not None
         return [
             Surface(
                 GLASS,
                 workspace,
                 "Where analysts work: the network, timeline, map, dossier and search, "
                 "together in one workspace.",
-                "Sign in as osprey-demo-analyst. The details are under “Signing in” below.",
+                (
+                    f"You are signed in as {who}."
+                    if signed_in
+                    else "Sign in as osprey-demo-analyst. The details are under “Signing in” below."
+                ),
                 "stack",
                 "analysts",
             ),
@@ -264,15 +337,22 @@ class Launcher:
                 "Sign in, then choose the Ingest tab at the top.",
                 "stack",
                 "analysts",
+                STUDIO_ROLES,
             ),
             Surface(
                 ADMIN,
                 f"http://localhost:{HARNESS_PORT}/",
                 "Settings and set-up for the person who looks after OspreyFlow. "
                 "Not needed for analysis.",
-                "It opens on this computer only, without a sign-in.",
+                (
+                    "Sign in there with an account that holds the osprey-admin role, such as "
+                    "osprey-demo-admin."
+                    if signed_in
+                    else "It opens on this computer only, without a sign-in."
+                ),
                 "admin",
                 "admin",
+                frozenset({ADMIN_ROLE}),
             ),
         ]
 
@@ -301,6 +381,11 @@ class Launcher:
             else:
                 out[surface.name] = "starting" if self._within_grace("admin") else "down"
         return out
+
+    def status_for(self, identity: Identity | None) -> dict[str, str]:
+        """Only the interfaces this account may see."""
+        visible = {s.name for s in self.surfaces(identity) if self.can_see(s, identity)}
+        return {name: state for name, state in self.status().items() if name in visible}
 
     # -- starting --------------------------------------------------------------------------
 
@@ -374,15 +459,24 @@ class Launcher:
 
     # -- the page --------------------------------------------------------------------------
 
-    def _tile(self, surface: Surface, state: str) -> str:
+    def _tile(
+        self,
+        surface: Surface,
+        state: str,
+        *,
+        open_text: str | None = None,
+        start_text: str | None = None,
+        new_tab: bool = True,
+    ) -> str:
         name = html.escape(surface.name)
         slug = surface.name.lower().replace(" ", "-")
         label = STATE_LABELS[state]
         shape = STATE_SHAPES[state]
         if state == "up":
+            target = ' target="_blank" rel="noopener"' if new_tab else ""
             action = (
-                f'<a class="btn primary" href="{html.escape(surface.url)}" '
-                f'target="_blank" rel="noopener">Open {name}</a>'
+                f'<a class="btn primary" href="{html.escape(surface.url)}"{target}>'
+                f"{html.escape(open_text or f'Open {surface.name}')}</a>"
             )
             wait = ""
         elif state == "starting":
@@ -394,33 +488,62 @@ class Launcher:
         else:
             action = (
                 f'<button type="button" class="btn primary" '
-                f'data-target="{html.escape(surface.starts)}">Start {name}</button>'
+                f'data-target="{html.escape(surface.starts)}">'
+                f"{html.escape(start_text or f'Start {surface.name}')}</button>"
             )
             wait = ""
+        hint = f'<p class="hint">{html.escape(surface.hint)}</p>' if surface.hint else ""
         return f"""      <section class="tile" data-name="{name}" data-state="{state}" aria-labelledby="t-{slug}">
         <header>
           <h3 id="t-{slug}">{name}</h3>
           <span class="chip" data-state="{state}"><span class="shape" data-shape="{shape}" aria-hidden="true"></span>{label}</span>
         </header>
         <p class="purpose">{html.escape(surface.purpose)}</p>
-        <p class="hint">{html.escape(surface.hint)}</p>
+        {hint}
         <p class="actions">{action}</p>
         {wait}<p class="message" role="status"></p>
       </section>"""  # noqa: E501
 
-    def render_tiles(self, status: dict[str, str] | None = None) -> str:
+    def _signed_out_tile(self, status: dict[str, str]) -> str:
+        """Before sign-in there is one tile: start OspreyFlow if it is not running (nobody can sign
+        in to something that is not there), sign in if it is."""
+        door = Surface(
+            SIGN_IN_TILE,
+            "/login",
+            "Sign in to see what you can open. Each person is shown only the parts their role "
+            "allows.",
+            "",
+            "stack",
+            "everyone",
+        )
+        return self._tile(
+            door,
+            status.get(GLASS, "down"),
+            open_text="Sign in",
+            start_text="Start OspreyFlow",
+            new_tab=False,
+        )
+
+    def render_tiles(
+        self, status: dict[str, str] | None = None, identity: Identity | None = None
+    ) -> str:
         status = self.status() if status is None else status
+        if self.enforced and identity is None:
+            return self._signed_out_tile(status)
         groups = (
             ("analysts", "For analysts"),
             ("admin", "For whoever looks after OspreyFlow"),
         )
         parts: list[str] = []
         for audience, heading in groups:
-            tiles = "\n".join(
-                self._tile(s, status.get(s.name, "down"))
-                for s in self.surfaces()
-                if s.audience == audience
-            )
+            shown = [
+                s
+                for s in self.surfaces(identity)
+                if s.audience == audience and self.can_see(s, identity)
+            ]
+            if not shown:
+                continue
+            tiles = "\n".join(self._tile(s, status.get(s.name, "down")) for s in shown)
             parts.append(
                 f'    <h2 class="group">{heading}</h2>\n    <div class="grid">\n{tiles}\n    </div>'
             )
@@ -437,10 +560,62 @@ class Launcher:
         <span class="value">OSPREY_DEMO_ANALYST_PASSWORD</span>. It is not shown on this page.</p>
     </section>"""  # noqa: E501
 
-    def render_page(self) -> str:
+    def render_accounts(self) -> str:
+        """Before sign-in: which accounts exist and where their passwords are kept. Names and file
+        locations only; a password is never shown."""
+        return f"""    <section class="panel" aria-labelledby="signin-title">
+      <h2 id="signin-title" class="group">Signing in</h2>
+      <p>This set-up has two demonstration accounts.</p>
+      <p><span class="value">osprey-demo-analyst</span>, for analysts: opens The Glass and the Ingest Studio.
+        <button type="button" class="btn" data-copy="osprey-demo-analyst">Copy</button></p>
+      <p><span class="value">osprey-demo-admin</span>, for whoever looks after OspreyFlow: opens The Glass and the Admin console.
+        <button type="button" class="btn" data-copy="osprey-demo-admin">Copy</button></p>
+      <p>The passwords were created when OspreyFlow was set up and are kept in
+        <span class="value">{html.escape(self.env_file_hint())}</span>, on the lines that start
+        <span class="value">OSPREY_DEMO_ANALYST_PASSWORD</span> and
+        <span class="value">OSPREY_DEMO_ADMIN_PASSWORD</span>. They are not shown on this page.</p>
+      <p>If OspreyFlow was set up before the admin account existed, run
+        <span class="value">make register-sign-in</span> once to add it.</p>
+    </section>"""  # noqa: E501
+
+    def render_who(self, identity: Identity) -> str:
         return (
-            _PAGE.replace("__TILES__", self.render_tiles())
-            .replace("__SIGNIN__", self.render_signin())
+            '    <p class="who">Signed in as '
+            f'<span class="value">{html.escape(identity.username)}</span> '
+            '<a class="btn" href="/logout">Sign out</a></p>'
+        )
+
+    def render_page(self, identity: Identity | None = None) -> str:
+        mode = self.mode(identity)
+        if mode == "signed-out":
+            lede = (
+                "Sign in to see what you can open. OspreyFlow shows each person only the parts "
+                "their role allows. If it is not running yet, press Start and this page will "
+                "update when it is ready."
+            )
+            extra = self.render_accounts()
+        elif mode == "signed-in" and identity is not None:
+            lede = (
+                "These are the parts of OspreyFlow your account can open. If one is not running "
+                "yet, press Start and this page will update when it is ready."
+            )
+            extra = self.render_who(identity)
+        else:
+            lede = (
+                "OspreyFlow has two parts: the workspace where analysts work, which includes the "
+                "Ingest Studio, and an Admin console for whoever looks after it. Choose what you "
+                "want to use. If it is not running yet, press Start and this page will update when "
+                "it is ready."
+            )
+            extra = self.render_signin()
+        who = extra if mode == "signed-in" else ""
+        signin = extra if mode != "signed-in" else ""
+        return (
+            _PAGE.replace("__LEDE__", html.escape(lede))
+            .replace("__WHO__", who)
+            .replace("__TILES__", self.render_tiles(identity=identity))
+            .replace("__SIGNIN__", signin)
+            .replace("__MODE__", mode)
             .replace("__TOKEN__", html.escape(self.token))
         )
 
@@ -487,16 +662,18 @@ _PAGE = """<!doctype html>
   .btn.primary:active { background: var(--brass-press); }
   a.btn.primary, a.btn.primary:hover { color: var(--brass-ink); border-bottom-color: var(--brass-hover); }
   .btn:disabled { background: var(--surface-raised); border-color: var(--border-subtle); color: var(--text-disabled); cursor: default; }
+  .who { margin: var(--sp-16) 0 0; font-size: var(--fs-14); line-height: var(--lh-14); }
   .message { min-height: var(--lh-14); color: var(--text-secondary); }
   .foot { margin-top: var(--sp-32); font-size: var(--fs-12); line-height: var(--lh-12); color: var(--text-tertiary); }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 </style>
 </head>
-<body>
+<body data-mode="__MODE__">
 <div class="wrap">
   <main>
     <h1>OspreyFlow</h1>
-    <p class="lede">OspreyFlow has two parts: the workspace where analysts work, which includes the Ingest Studio, and an Admin console for whoever looks after it. Choose what you want to use. If it is not running yet, press Start and this page will update when it is ready.</p>
+    <p class="lede">__LEDE__</p>
+__WHO__
     <div id="tiles">
 __TILES__
     </div>
@@ -513,7 +690,12 @@ const LABELS = { up: "running", starting: "starting", down: "not running" };
 
 async function refresh() {
   let markup;
-  try { markup = await (await fetch("/tiles")).text(); } catch (_) { return; }
+  try {
+    const reply = await fetch("/tiles");
+    // The person signed in or out (or their session ended) since this page was made: start over.
+    if (reply.headers.get("X-Launcher-Mode") !== document.body.dataset.mode) { location.reload(); return; }
+    markup = await reply.text();
+  } catch (_) { return; }
   const next = new DOMParser().parseFromString(markup, "text/html");
   next.querySelectorAll(".tile").forEach((fresh) => {
     const name = fresh.dataset.name;
@@ -570,11 +752,41 @@ def _handler(launcher: Launcher) -> type[BaseHTTPRequestHandler]:
         def log_message(self, format: str, *args: object) -> None:  # noqa: A002
             return
 
+        def _host(self) -> str:
+            return self.headers.get("Host", "")
+
         def _host_ok(self) -> bool:
             allowed = {f"127.0.0.1:{launcher.bound_port}", f"localhost:{launcher.bound_port}"}
-            return self.headers.get("Host", "") in allowed
+            return self._host() in allowed
 
-        def _send(self, code: int, body: str, content_type: str) -> None:
+        def _session_token(self) -> str | None:
+            jar: SimpleCookie = SimpleCookie()
+            try:
+                jar.load(self.headers.get("Cookie", ""))
+            except Exception:  # a malformed Cookie header is no cookie
+                return None
+            morsel = jar.get(SESSION_COOKIE)
+            return morsel.value if morsel else None
+
+        def _login_cookie(self) -> str | None:
+            jar: SimpleCookie = SimpleCookie()
+            try:
+                jar.load(self.headers.get("Cookie", ""))
+            except Exception:
+                return None
+            morsel = jar.get(LOGIN_COOKIE)
+            return morsel.value if morsel else None
+
+        def _identity(self) -> Identity | None:
+            return launcher.identity(self._session_token())
+
+        def _send(
+            self,
+            code: int,
+            body: str,
+            content_type: str,
+            headers: Sequence[tuple[str, str]] = (),
+        ) -> None:
             data = body.encode("utf-8")
             self.send_response(code)
             self.send_header("Content-Type", f"{content_type}; charset=utf-8")
@@ -582,29 +794,140 @@ def _handler(launcher: Launcher) -> type[BaseHTTPRequestHandler]:
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Content-Security-Policy", "frame-ancestors 'none'")
+            for name, value in headers:
+                self.send_header(name, value)
             self.end_headers()
             self.wfile.write(data)
 
         def _json(self, code: int, payload: object) -> None:
             self._send(code, json.dumps(payload), "application/json")
 
+        def _redirect(
+            self, location: str, code: int = 303, cookies: Sequence[str] = ()
+        ) -> None:
+            self._send(
+                code,
+                "",
+                "text/plain",
+                [("Location", location), *(("Set-Cookie", c) for c in cookies)],
+            )
+
+        def _simple_page(self, code: int, title: str, body: str) -> None:
+            self._send(
+                code,
+                "<!doctype html><html lang=\"en-GB\"><meta charset=\"utf-8\">"
+                f"<title>{html.escape(title)} — OspreyFlow</title>"
+                '<link rel="stylesheet" href="/tokens.css">'
+                "<style>main { max-width: 62ch; margin: 0 auto; "
+                "padding: var(--sp-40) var(--sp-24); }</style>"
+                f"<main><h1>{html.escape(title)}</h1>{body}</main></html>",
+                "text/html",
+            )
+
+        def _page_headers(self, identity: Identity | None) -> list[tuple[str, str]]:
+            return [("X-Launcher-Mode", launcher.mode(identity))]
+
         def do_GET(self) -> None:  # noqa: N802
             if not self._host_ok():
                 self._json(403, {"message": "Unexpected host name."})
-            elif self.path == "/":
-                self._send(200, launcher.render_page(), "text/html")
-            elif self.path == "/tiles":
-                self._send(200, launcher.render_tiles(), "text/html")
-            elif self.path == "/tokens.css":
+                return
+            parts = urllib.parse.urlsplit(self.path)
+            path = parts.path
+            if launcher.enforced and self._host().startswith("127.0.0.1"):
+                # The sign-in redirect and the cookie are both for `localhost`; keep them together.
+                target = f"http://localhost:{launcher.bound_port}{path}"
+                self._redirect(target + (f"?{parts.query}" if parts.query else ""), 307)
+                return
+            identity = self._identity()
+            if path == "/":
+                self._send(
+                    200, launcher.render_page(identity), "text/html", self._page_headers(identity)
+                )
+            elif path == "/tiles":
+                self._send(
+                    200,
+                    launcher.render_tiles(identity=identity),
+                    "text/html",
+                    self._page_headers(identity),
+                )
+            elif path == "/tokens.css":
                 css = launcher.tokens_css()
                 if css is None:
                     self._json(404, {"message": "The design tokens file was not found."})
                 else:
                     self._send(200, css, "text/css")
-            elif self.path == "/status":
-                self._json(200, launcher.status())
+            elif path == "/status":
+                if launcher.enforced and identity is None:
+                    self._json(401, {"message": "Sign in first."})
+                else:
+                    self._json(200, launcher.status_for(identity))
+            elif launcher.enforced and path == "/login":
+                self._login(identity)
+            elif launcher.enforced and path == "/callback":
+                self._callback(urllib.parse.parse_qs(parts.query))
+            elif launcher.enforced and path == "/logout":
+                launcher.sessions.destroy(self._session_token())
+                self._redirect(
+                    launcher.sign_in_config.logout_url,
+                    cookies=[f"{SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"],
+                )
             else:
                 self._json(404, {"message": "Not found."})
+
+        def _not_running_page(self) -> None:
+            self._simple_page(
+                503,
+                "The sign-in service is not running",
+                "<p>OspreyFlow did not answer, so nobody can be signed in. "
+                "This is not a problem with your account.</p>"
+                '<p><a href="/">Go back</a>, press Start, wait until it says it is running, '
+                "then sign in.</p>",
+            )
+
+        def _login(self, identity: Identity | None) -> None:
+            if identity is not None:
+                self._redirect("/")
+                return
+            try:
+                oidc.probe(launcher.sign_in_config)
+            except IdentityProviderUnreachable:
+                self._not_running_page()
+                return
+            url, state = launcher.attempts.begin(launcher.sign_in_config)
+            self._redirect(
+                url,
+                cookies=[f"{LOGIN_COOKIE}={state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600"],
+            )
+
+        def _callback(self, query: dict[str, list[str]]) -> None:
+            outcome = handle_callback(
+                launcher.sign_in_config,
+                launcher.attempts,
+                code=_first(query, "code"),
+                state=_first(query, "state"),
+                error=_first(query, "error"),
+                login_cookie=self._login_cookie(),
+            )
+            again = '<p><a href="/login">Start again</a></p>'
+            if outcome.kind == "invalid_link":
+                self._simple_page(400, "This sign-in link is not valid", again)
+            elif outcome.kind == "not_completed":
+                self._simple_page(403, "Sign-in was not completed", again)
+            elif outcome.kind == "unreachable":
+                self._not_running_page()
+            elif outcome.kind == "refused" or outcome.identity is None:
+                self._simple_page(403, "Sign-in was refused", again)
+            else:
+                # Any account that signs in gets a session; which tiles it sees is decided by its
+                # roles, and what each interface allows is decided by that interface itself.
+                token = launcher.sessions.create(outcome.identity)
+                self._redirect(
+                    "/",
+                    cookies=[
+                        f"{SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax",
+                        f"{LOGIN_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0",
+                    ],
+                )
 
         def do_POST(self) -> None:  # noqa: N802
             if not self._host_ok():
@@ -614,12 +937,25 @@ def _handler(launcher: Launcher) -> type[BaseHTTPRequestHandler]:
             if not secrets.compare_digest(token, launcher.token):
                 self._json(403, {"message": "This request did not come from the launcher page."})
                 return
+            origin = self.headers.get("Origin")
+            if origin is not None and origin != f"http://{self._host()}":
+                self._json(403, {"message": "This request came from another site."})
+                return
             prefix = "/start/"
             if not self.path.startswith(prefix):
                 self._json(404, {"message": "Not found."})
                 return
+            target = self.path[len(prefix) :]
+            if launcher.enforced and target == "admin":
+                identity = self._identity()
+                if identity is None or not identity.has_role(ADMIN_ROLE):
+                    self._json(
+                        403,
+                        {"message": "Starting the Admin console needs an administrator account."},
+                    )
+                    return
             try:
-                launcher.start_in_background(self.path[len(prefix) :])
+                launcher.start_in_background(target)
             except KeyError:
                 self._json(404, {"message": "Not found."})
             except LaunchError as err:
@@ -628,6 +964,21 @@ def _handler(launcher: Launcher) -> type[BaseHTTPRequestHandler]:
                 self._json(202, {"message": "Started. This tile updates when it is ready."})
 
     return Handler
+
+
+def _first(query: dict[str, list[str]], key: str) -> str | None:
+    values = query.get(key)
+    return values[0] if values else None
+
+
+def port_problem(port: int, *, enforced: bool) -> str | None:
+    """Sign-in redirects to one exact address, so another port could never complete it."""
+    if enforced and port != LAUNCHER_PORT:
+        return (
+            f"sign-in is required and the identity provider only redirects to port "
+            f"{LAUNCHER_PORT}; start the launcher on {LAUNCHER_PORT}, not {port}"
+        )
+    return None
 
 
 def make_server(launcher: Launcher, *, port: int = LAUNCHER_PORT) -> ThreadingHTTPServer:
@@ -650,6 +1001,10 @@ def main(argv: list[str] | None = None) -> int:
 
     spawner = ProcessSpawner(args.repo_root)
     launcher = Launcher(repo_root=args.repo_root, prober=http_probe, spawner=spawner)
+    problem = port_problem(args.port, enforced=launcher.enforced)
+    if problem:
+        sys.stderr.write(f"launcher: {problem}\n")
+        return 2
     try:
         server = make_server(launcher, port=args.port)
     except OSError as err:
@@ -660,6 +1015,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     url = f"http://localhost:{launcher.bound_port}/"
     sys.stdout.write(f"OspreyFlow launcher: {url}   (Ctrl-C to stop)\n")
+    if launcher.enforced:
+        sys.stdout.write("Sign-in is required; the identity provider must be running.\n")
     if not args.no_browser:
         webbrowser.open(url)
     try:

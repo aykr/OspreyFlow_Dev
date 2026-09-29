@@ -27,11 +27,8 @@ redirect agree.
 from __future__ import annotations
 
 import html
-import os
-import secrets
 import urllib.parse
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -43,7 +40,9 @@ from harness.oidc import (
     LoginAttempts,
     SessionStore,
     SignInConfig,
-    SignInRefused,
+    default_issuer,
+    handle_callback,
+    rendered_realm_exists,
 )
 from harness.realm import (
     ADMIN_ROLE,
@@ -58,10 +57,6 @@ SESSION_COOKIE = "osprey_harness_session"
 LOGIN_COOKIE = "osprey_harness_login"
 PUBLIC_PATHS = frozenset({"/login", "/callback", "/logout"})
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
-DEFAULT_KEYCLOAK_PORT = 8081
-REALM_NAME = "osprey"
-#: Read only from an operator's own environment, for a Keycloak published on another address.
-ISSUER_ENV = "OSPREY_HARNESS_OIDC_ISSUER"
 
 
 @dataclass
@@ -69,32 +64,6 @@ class SignInSettings:
     config: SignInConfig
     sessions: SessionStore = field(default_factory=SessionStore)
     attempts: LoginAttempts = field(default_factory=LoginAttempts)
-
-
-def rendered_realm_exists(out_root: Path) -> bool:
-    try:
-        return any(out_root.glob("*/realm.json"))
-    except OSError:
-        # Cannot tell. Refusing to guess "nothing rendered": enforce.
-        return True
-
-
-def default_issuer(out_root: Path) -> str:
-    """Where the person's browser reaches the realm. The port comes from the rendered deployment's
-    own environment file when it names one."""
-    override = os.environ.get(ISSUER_ENV)
-    if override:
-        return override.rstrip("/")
-    port = DEFAULT_KEYCLOAK_PORT
-    for env_file in sorted(out_root.glob("*/deployment.env")):
-        try:
-            for line in env_file.read_text(encoding="utf-8").splitlines():
-                key, _, value = line.partition("=")
-                if key.strip() == "OSPREY_KEYCLOAK_PORT":
-                    port = int(value.strip())
-        except (OSError, ValueError):
-            continue
-    return f"http://localhost:{port}/realms/{REALM_NAME}"
 
 
 def make_settings(issuer: str) -> SignInSettings:
@@ -172,22 +141,24 @@ def _install_routes(app: FastAPI, settings: SignInSettings) -> None:
         state: str | None = None,
         error: str | None = None,
     ) -> Response:
-        cookie = request.cookies.get(LOGIN_COOKIE)
         again = '<p><a href="/login">Start again</a></p>'
-        if not state or not cookie or not secrets.compare_digest(cookie, state):
+        outcome = handle_callback(
+            config,
+            settings.attempts,
+            code=code,
+            state=state,
+            error=error,
+            login_cookie=request.cookies.get(LOGIN_COOKIE),
+        )
+        if outcome.kind == "invalid_link":
             return _page(400, "This sign-in link is not valid", again)
-        try:
-            attempt = settings.attempts.finish(state)
-        except SignInRefused:
-            return _page(400, "This sign-in link is not valid any more", again)
-        if error or not code:
+        if outcome.kind == "not_completed":
             return _page(403, "Sign-in was not completed", again)
-        try:
-            identity = oidc.complete(config, code=code, attempt=attempt)
-        except IdentityProviderUnreachable:
+        if outcome.kind == "unreachable":
             return _unreachable_page()
-        except SignInRefused:
+        if outcome.kind == "refused" or outcome.identity is None:
             return _page(403, "Sign-in was refused", again)
+        identity = outcome.identity
         if not identity.has_role(ADMIN_ROLE):
             return _page(
                 403,

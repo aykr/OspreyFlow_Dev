@@ -20,6 +20,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
 import secrets
 import time
 import urllib.error
@@ -27,6 +28,8 @@ import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Literal
 
 import jwt
 from jwt import PyJWKClient
@@ -285,3 +288,77 @@ class SessionStore:
         now = self.clock()
         for token in [t for t, (_, exp) in self._sessions.items() if exp <= now]:
             del self._sessions[token]
+
+
+# --- Where the realm is, from the rendered deployment ---------------------------------------
+
+DEFAULT_KEYCLOAK_PORT = 8081
+REALM_NAME = "osprey"
+#: Read only from an operator's own environment, for a Keycloak published on another address.
+ISSUER_ENV = "OSPREY_HARNESS_OIDC_ISSUER"
+
+
+def rendered_realm_exists(out_root: Path) -> bool:
+    """Has a deployment been rendered (is there a realm to sign in to)? When it cannot be told, the
+    answer is yes: a failed listing must never open a console."""
+    try:
+        return any(out_root.glob("*/realm.json"))
+    except OSError:
+        return True
+
+
+def default_issuer(out_root: Path) -> str:
+    """Where the person's browser reaches the realm. The port comes from the rendered deployment's
+    own environment file when it names one."""
+    override = os.environ.get(ISSUER_ENV)
+    if override:
+        return override.rstrip("/")
+    port = DEFAULT_KEYCLOAK_PORT
+    for env_file in sorted(out_root.glob("*/deployment.env")):
+        try:
+            for line in env_file.read_text(encoding="utf-8").splitlines():
+                key, _, value = line.partition("=")
+                if key.strip() == "OSPREY_KEYCLOAK_PORT":
+                    port = int(value.strip())
+        except (OSError, ValueError):
+            continue
+    return f"http://localhost:{port}/realms/{REALM_NAME}"
+
+
+# --- The callback, once, for every tool that signs in ---------------------------------------
+
+
+@dataclass(frozen=True)
+class CallbackOutcome:
+    kind: Literal["signed_in", "invalid_link", "not_completed", "unreachable", "refused"]
+    identity: Identity | None = None
+
+
+def handle_callback(
+    config: SignInConfig,
+    attempts: LoginAttempts,
+    *,
+    code: str | None,
+    state: str | None,
+    error: str | None,
+    login_cookie: str | None,
+) -> CallbackOutcome:
+    """Everything between 'the browser came back' and 'here is who signed in'. The state must equal
+    the cookie set by the browser that started the sign-in (so someone else's code cannot sign this
+    browser in as them), and is single-use. Callers turn the outcome into a page; what they do with
+    a signed-in identity (which roles matter) is theirs."""
+    if not state or not login_cookie or not secrets.compare_digest(login_cookie, state):
+        return CallbackOutcome("invalid_link")
+    try:
+        attempt = attempts.finish(state)
+    except SignInRefused:
+        return CallbackOutcome("invalid_link")
+    if error or not code:
+        return CallbackOutcome("not_completed")
+    try:
+        identity = complete(config, code=code, attempt=attempt)
+    except IdentityProviderUnreachable:
+        return CallbackOutcome("unreachable")
+    except SignInRefused:
+        return CallbackOutcome("refused")
+    return CallbackOutcome("signed_in", identity)

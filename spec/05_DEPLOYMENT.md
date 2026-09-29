@@ -433,6 +433,20 @@ Glass — so its tile opens the workspace and says so. The launcher reads only `
 from `deployment.env`, so no credential reaches its page (`scripts/launch.py`,
 `tests/test_launch.py`).
 
+**Once a deployment has been rendered the launcher asks you to sign in first** (ADR-051), through the
+realm's public client `osprey-launcher`, and then shows only the interfaces your roles allow: the
+Glass to any signed-in account, the Ingest Studio to an account holding any Studio role
+(`source_author`, `source_approver` or `loader`), the Admin console to `osprey-admin`. Before you
+sign in it shows one tile, which is **Start OspreyFlow** when the stack is not running (the identity
+provider is part of it, so it has to be startable first) and **Sign in** when it is. Starting the
+Admin console needs an `osprey-admin` session, which the launcher checks itself; hiding a tile is a
+courtesy and is not what protects anything. Sessions are held in memory for eight hours from
+sign-in, and `/logout` ends the identity provider's session too. Before any realm has been rendered
+the launcher is open, as it always was. It must be served on port 7070 when sign-in is required.
+Cookies are per host name, not per port, so the launcher's and the Admin console's session cookies
+(different names) are also sent to other services on `localhost`; on a machine you own that is a
+known limit, not a hole to close here (`tests/test_launch_sign_in.py`).
+
 **The bootstrap command above works as documented, with
 no operator checkout at all.** `harness/render.
 py`'s render step used to refuse by name (`MissingDockerfileError`) unless `services/api/Dockerfile`,

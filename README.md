@@ -41,6 +41,9 @@ and the Admin console — and shows which are running:
 make launch
 ```
 
+It asks you to sign in first and then shows only what your account's roles allow. If OspreyFlow
+was set up before the admin account existed, run `make register-sign-in` once.
+
 Once it is up, `DEMO_GUIDE.md` walks through seeding a fixture investigation and the analyst
 journey through the Glass.
 

@@ -350,3 +350,77 @@ def test_the_logout_address_names_the_client_and_the_registered_return_address(
     assert parsed.path.endswith("/protocol/openid-connect/logout")
     assert query["client_id"] == [CLIENT]
     assert query["post_logout_redirect_uri"] == ["http://localhost:7000/"]
+
+
+# --- the callback, once, for every tool that signs in ---
+
+
+def _callback(idp: FakeIdentityProvider, **override: object):
+    config, attempts, query = _sign_in(idp)
+    args = {
+        "code": query["code"],
+        "state": query["state"],
+        "error": None,
+        "login_cookie": query["state"],
+        **override,
+    }
+    return oidc.handle_callback(config, attempts, **args)  # type: ignore[arg-type]
+
+
+def test_a_good_callback_yields_the_identity(idp: FakeIdentityProvider) -> None:
+    outcome = _callback(idp)
+    assert outcome.kind == "signed_in"
+    assert outcome.identity is not None and outcome.identity.username == "ada"
+
+
+@pytest.mark.parametrize("cookie", [None, "", "somebody-elses-state"])
+def test_a_callback_whose_browser_did_not_start_the_sign_in_is_an_invalid_link(
+    idp: FakeIdentityProvider, cookie: str | None
+) -> None:
+    assert _callback(idp, login_cookie=cookie).kind == "invalid_link"
+
+
+def test_a_callback_with_no_state_or_an_unknown_one_is_an_invalid_link(
+    idp: FakeIdentityProvider,
+) -> None:
+    assert _callback(idp, state=None).kind == "invalid_link"
+    assert _callback(idp, state="never-issued", login_cookie="never-issued").kind == "invalid_link"
+
+
+def test_an_error_from_the_provider_or_a_missing_code_is_not_completed(
+    idp: FakeIdentityProvider,
+) -> None:
+    assert _callback(idp, error="access_denied").kind == "not_completed"
+    assert _callback(idp, code=None).kind == "not_completed"
+
+
+def test_the_callback_keeps_unreachable_and_refused_apart(idp: FakeIdentityProvider) -> None:
+    idp.token_status = 400
+    assert _callback(idp).kind == "refused"
+    idp.token_status = 500
+    assert _callback(idp).kind == "unreachable"
+
+
+# --- where the realm is, from the rendered deployment ---
+
+
+def test_a_realm_is_found_only_when_one_has_been_rendered(tmp_path) -> None:
+    assert oidc.rendered_realm_exists(tmp_path / "nothing-here") is False
+    (tmp_path / "local-lite").mkdir()
+    assert oidc.rendered_realm_exists(tmp_path) is False
+    (tmp_path / "local-lite" / "realm.json").write_text("{}", encoding="utf-8")
+    assert oidc.rendered_realm_exists(tmp_path) is True
+
+
+def test_the_issuer_uses_the_deployments_own_keycloak_port_and_an_operator_override(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv(oidc.ISSUER_ENV, raising=False)
+    assert oidc.default_issuer(tmp_path) == "http://localhost:8081/realms/osprey"
+    (tmp_path / "local-lite").mkdir()
+    (tmp_path / "local-lite" / "deployment.env").write_text(
+        "OSPREY_KEYCLOAK_PORT=9081\nOSPREY_DEMO_ADMIN_PASSWORD=x\n", encoding="utf-8"
+    )
+    assert oidc.default_issuer(tmp_path) == "http://localhost:9081/realms/osprey"
+    monkeypatch.setenv(oidc.ISSUER_ENV, "http://idp.example:8443/realms/osprey/")
+    assert oidc.default_issuer(tmp_path) == "http://idp.example:8443/realms/osprey"

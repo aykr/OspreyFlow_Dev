@@ -6851,3 +6851,32 @@ registration on a running Keycloak (`make register-sign-in`), the shared sign-in
 console's enforcement. **Not built:** the launcher's own sign-in and role-filtered tiles (decisions 1
 and 2), and a test against a real Keycloak (the provider in the tests is a stand-in that models the
 refusals, per rule 15, and has not been checked against Keycloak itself).
+
+### Amendment 2 (29 September 2026): the launcher's sign-in, built
+
+Decisions 1 and 2 are built. What the code does, where the ruling left room:
+
+- **Open until a deployment is rendered, decided at start-up**, as for the Admin console. The stack
+  start is the one thing allowed **before** sign-in, because the identity provider is part of the
+  stack and nobody can sign in to something that is not running; before sign-in the launcher shows a
+  single tile, **Start OspreyFlow** or **Sign in**, and names no interface and gives no address.
+- **After sign-in, the tiles follow the rulings:** the Glass for any signed-in account, the Ingest
+  Studio for any one of the Studio's three roles (the set is read from the Studio's own definition),
+  the Admin console for `osprey-admin`. The filter is applied on the server to the page, the tile
+  fragment and `/status`, so a hidden interface is absent, not merely not drawn.
+- **The one control here is starting the Admin console**, which needs an `osprey-admin` session and
+  the page token. Everything else the launcher does was already available before sign-in.
+- **Any signed-in account gets a launcher session**, including one with no roles (it sees the Glass).
+  The Glass's own tile hint no longer tells a signed-in person to look up a demo password.
+- **One implementation of the callback** (`harness.oidc.handle_callback`) serves the launcher and the
+  Admin console: the state must equal the cookie set by the browser that started the sign-in, and is
+  single-use; unreachable and refused stay apart.
+- **The launcher must be on port 7070 when sign-in is required**, for the same exact-redirect
+  reason as the console on 7000; it refuses to start otherwise.
+- **A known limit:** cookies are per host name, not per port, so the launcher's and console's
+  session cookies are sent to any other service on `localhost` (the Glass, for one). They are
+  HttpOnly and eight-hour, and this is a machine the operator owns; recorded, not fixed.
+
+**State of the build after this amendment.** All four decisions are built. **Not done:** a test
+against a real Keycloak (the tests use a stand-in that models the refusals); and the harness's
+browser end-to-end specs were not run against an enforced console.
