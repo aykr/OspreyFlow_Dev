@@ -99,6 +99,15 @@ REGISTRY: tuple[DemoManifest, ...] = (
         seed_module="scripts.seed_fixture_corp",
         paths=("packages/demo_fixtures/fixture_corp.py",),
     ),
+    # ADR-055. Synthetic, but third-party (Kaggle `ealaxi/paysim1`; simulator GPL-3.0; the data
+    # licence is not verified, so `data_licence` stays empty until the owner records it from the
+    # Kaggle page). Never shipped; the data lives under `OspreyFlow_Data/`.
+    DemoManifest(
+        id="paysim",
+        distribution=DISTRIBUTION_INTERNAL,
+        seed_module="scripts.seed_paysim",
+        paths=("OspreyFlow_Data/PaySIM_Dataset/PS_20174392719_1491204439457_log.csv",),
+    ),
 )
 
 

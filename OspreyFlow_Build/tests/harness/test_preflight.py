@@ -463,8 +463,9 @@ def test_tiles_that_exist_behind_a_file_url_pass_because_the_conduit_serves_them
     context: PreflightContext, tmp_path: Path
 ) -> None:
     """**This case used to assert FAIL, and that was the defect.** The Conduit serves a `file://`
-    provider over `/v1/map/local-source/<id>` and `mapconfig_loader.public_view` rewrites the URI for
-    the Glass, so a `file://` entry with the tiles present is the correct, working configuration.
+    provider over `/v1/map/local-source/<id>` and `mapconfig_loader.public_view` rewrites the URI
+    for the Glass, so a `file://` entry with the tiles present is the correct, working
+    configuration.
     The old check failed on it, which meant a successfully built basemap blocked Launch. The
     planted fault is the real shape: a real file on disk and a real `file://` URI pointing at it."""
     tiles = tmp_path / "osm-local.pmtiles"

@@ -40,11 +40,10 @@ def test_a_correctly_spelled_shipped_manifest_is_included() -> None:
     assert manifest in shipped_manifests((manifest,))
 
 
-def test_the_real_registry_has_no_internal_entries_today() -> None:
-    """Checked directly, not assumed: neither the real Enron corpus nor the VAST-shaped fixture
-    exists as a committed file in this repository (06_DECISIONS.md ADR-035 §C3/§C4) — both stay
-    unbuilt. The registry's own two real entries (`hmp`, `fixture-corp`) are both `shipped`, and
-    this test is the one place that assumption is checked rather than silently relied on by every
-    other test in this file using a hand-built fixture manifest instead of the real registry."""
+def test_the_real_registry_holds_exactly_the_datasets_it_is_known_to_hold() -> None:
+    """Checked directly, not assumed. Two shipped, synthetic, generated demos (`hmp`,
+    `fixture-corp`), and the internal ones the owner has ruled on: PaySim (ADR-055). Neither the
+    Enron corpus nor the VAST-shaped fixture is registered yet. Adding a dataset must change this
+    test, so a registry entry can never appear unnoticed."""
     assert {m.id for m in shipped_manifests(REGISTRY)} == {"hmp", "fixture-corp"}
-    assert internal_manifests(REGISTRY) == ()
+    assert {m.id for m in internal_manifests(REGISTRY)} == {"paysim"}

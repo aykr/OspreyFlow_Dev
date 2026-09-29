@@ -62,7 +62,14 @@
 # carry none" allowance), and `nad_address_id` (US National Address
 # Database). Every recipe fixture pinned to `ontology_version: 8` is
 # bumped to 9 alongside this.
-version: 9
+#
+# v10 (ADR-055, the PaySim dataset): an account is an `Endpoint`, so `endpoint_kind` gained
+# `account` (customers and merchants alike). `TRANSACTED` gained `amount` (float) and
+# `transaction_type` (CASH_IN, CASH_OUT, DEBIT, PAYMENT, TRANSFER) so a money flow can be followed
+# by value from the graph itself. Fraud labels are deliberately not edge properties: they live on
+# the analytics events. Every recipe fixture pinned to `ontology_version: 10` is bumped to 10
+# alongside this.
+version: 10
 entity_types:
   - name: Person
     pole_class: person
@@ -86,7 +93,7 @@ entity_types:
     properties:
       - {name: value_raw, type: string}
       - {name: value_normalised, type: string, indexed: true, required: true}
-      - {name: endpoint_kind, type: enum, values: [msisdn, imsi, email, handle, iban, card]}
+      - {name: endpoint_kind, type: enum, values: [msisdn, imsi, email, handle, iban, card, account]}
 
   - name: Device
     pole_class: object
@@ -161,7 +168,14 @@ edge_types:
     properties:
       - {name: relation, type: string}
   - {name: MEMBER_OF,         from: [Person], to: [Organisation], directed: true}
-  - {name: TRANSACTED,        from: [Asset, Endpoint], to: [Asset, Endpoint], directed: true, temporal: true}
+  - name: TRANSACTED
+    from: [Asset, Endpoint]
+    to: [Asset, Endpoint]
+    directed: true
+    temporal: true
+    properties:
+      - {name: amount, type: float}
+      - {name: transaction_type, type: enum, values: [CASH_IN, CASH_OUT, DEBIT, PAYMENT, TRANSFER]}
   # By convention the source is an Endpoint of kind `imsi` only — an MSISDN
   # reaches the same Device via SAME_AS to its IMSI Endpoint first, never
   # directly (06_DECISIONS.md ADR-023). `from`/`to` check entity type, not

@@ -7455,3 +7455,34 @@ accounts are real people: it is simulated data, and the case says so.
 ### State of the build
 
 Nothing built. Owner to rule on points 1 and 2, then the loader is built tests first.
+
+### ADR-055, Amendment 1 (29 September 2026) — accepted, and what was built
+
+**Owner's ruling: "accept both".** Status is now **Accepted**. Point 1 (analytics store takes every
+row; graph takes the fraud neighbourhood only) and point 2 (ontology change: `account` endpoint kind;
+`TRANSACTED` gains `amount` and `transaction_type`; version 9 to 10) stand as written.
+
+**Built:** ontology version 10 and the 20 recipe pins moved from 9 to 10; `demo_fixtures/paysim.py`
+(reader, neighbourhood selection, `step` mapping, events, graph writes); `scripts/seed_paysim.py`;
+the `paysim` registry entry (`internal`, data licence left empty for the owner to record).
+
+**Two decisions made while building, for the owner to overrule:**
+
+1. Graph node and edge identifiers are deterministic (`paysim-acct-<hash of the account name>`,
+   `paysim-tx-<hash of the row>`), not ULIDs, and the analytics events use the same ones. That is what
+   lets an account selected in the Glass find its events, and lets a second run overwrite rather than
+   duplicate. The graph load also refuses if the first account already exists.
+2. The graph is written directly, not through a recipe, because the recipe engine's events carry
+   only edge properties and the fraud labels must sit on the events, not the edges.
+
+**Not built yet, and stated plainly:** the case "PaySim mobile money (internal)" and its access (ADR-052
+stage 1, still queued); the Glass's "dataset not provisioned" state; and a real run. Nothing here has
+run against ArcadeDB or the full 6.36 million rows; the tests cover the 11-row fixture, the
+refusals and the registry. The first real run is the owner's, and its timing and any ArcadeDB
+transaction failures will be recorded here.
+
+**Tests (each proved to fail by planting its fault):** in `tests/scenarios/test_paysim_fixture.py`:
+the reader, the missing-column refusal, the fraud neighbourhood, the `step` mapping at both ends, the
+labels, the shared identifiers, the graph shape; `tests/demo_registry/test_paysim_manifest.py`;
+`tests/test_seed_paysim.py`; `tests/ontology/test_paysim_ontology.py`.
+
