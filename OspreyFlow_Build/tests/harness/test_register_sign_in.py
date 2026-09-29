@@ -490,3 +490,52 @@ def test_a_client_already_at_the_current_address_is_not_rewritten(
     keycloak.clients = Watching(keycloak.clients)
     _register(env)
     assert writes == []
+
+
+# --- the demo analyst: seen on the owner's deployment, its password stopped working ---
+
+
+ANALYST_PASSWORD = "the-analysts-own-password"
+
+
+def test_the_demo_analysts_password_is_made_true_again_after_keycloak_restarts_empty(
+    keycloak: FakeKeycloak, tmp_path: Path
+) -> None:
+    """Seen: after Keycloak was restarted, the password `deployment.env` names for the demo analyst
+    was refused. The realm document carries no credentials, `apply` sets the analyst's password
+    through the admin API once, and a restart drops it while the file still names it. Registering
+    repaired only the administrator. Catches a registration that leaves the analyst passwordless."""
+    env = _env(tmp_path, f"OSPREY_DEMO_ANALYST_PASSWORD={ANALYST_PASSWORD}")
+
+    _register(env)
+
+    assert keycloak.passwords[DEMO_ANALYST_SUBJECT] == ANALYST_PASSWORD
+
+
+def test_the_analyst_and_the_administrator_keep_their_own_passwords(
+    keycloak: FakeKeycloak, tmp_path: Path
+) -> None:
+    """Catches a repair that hands one demo account the other's password."""
+    env = _env(tmp_path, f"OSPREY_DEMO_ANALYST_PASSWORD={ANALYST_PASSWORD}")
+    _register(env)
+    assert keycloak.passwords[DEMO_ADMIN_SUBJECT] != ANALYST_PASSWORD
+    assert keycloak.passwords[DEMO_ADMIN_SUBJECT] == _env_values(env)["OSPREY_DEMO_ADMIN_PASSWORD"]
+
+
+def test_a_deployment_applied_without_a_demo_analyst_gets_none(
+    keycloak: FakeKeycloak, tmp_path: Path
+) -> None:
+    """Catches a repair that invents an analyst nobody asked for: the env file has no analyst
+    password, so there is no account to make true."""
+    _register(_env(tmp_path))
+    assert DEMO_ANALYST_SUBJECT not in keycloak.passwords
+    assert all(u["username"] != DEMO_ANALYST_SUBJECT for u in keycloak.users.values())
+
+
+def test_the_analyst_password_is_never_printed_or_rewritten(
+    keycloak: FakeKeycloak, tmp_path: Path
+) -> None:
+    env = _env(tmp_path, f"OSPREY_DEMO_ANALYST_PASSWORD={ANALYST_PASSWORD}")
+    lines = _register(env)
+    assert ANALYST_PASSWORD not in "\n".join(lines)
+    assert _env_values(env)["OSPREY_DEMO_ANALYST_PASSWORD"] == ANALYST_PASSWORD

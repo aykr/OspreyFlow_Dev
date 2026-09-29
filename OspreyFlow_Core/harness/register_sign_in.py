@@ -25,6 +25,7 @@ from harness import keycloak_admin
 from harness.keycloak_admin import RealmConfigurationFailed
 from harness.realm import (
     DEMO_ADMIN_SUBJECT,
+    DEMO_ANALYST_SUBJECT,
     HARNESS_CLIENT_ID,
     LAUNCHER_CLIENT_ID,
     LOGIN_THEME_NAME,
@@ -36,6 +37,7 @@ from harness.render import DEFAULT_CONFIG_PATH, DEFAULT_OUT_ROOT, load_config
 from schemas.deployment import OspreyConfig
 
 ADMIN_PASSWORD_KEY = "OSPREY_KEYCLOAK_ADMIN_PASSWORD"
+DEMO_ANALYST_PASSWORD_KEY = "OSPREY_DEMO_ANALYST_PASSWORD"
 DEMO_ADMIN_PASSWORD_KEY = "OSPREY_DEMO_ADMIN_PASSWORD"
 
 
@@ -129,6 +131,25 @@ def register(*, issuer: str, realm: str, env_path: Path, config: OspreyConfig) -
     )
     _write_env_value(env_path, DEMO_ADMIN_PASSWORD_KEY, password)
     lines.append(f"password for {DEMO_ADMIN_SUBJECT} set; it is in {env_path.name}")
+
+    # The demo analyst's password is set through the admin API once, by `apply`, and Keycloak keeps
+    # nothing between restarts, so a restart drops it while the file still names it. Only when the
+    # deployment was applied with a demo analyst (the file names a password): none is invented.
+    analyst_password = values.get(DEMO_ANALYST_PASSWORD_KEY)
+    if analyst_password:
+        (analyst,) = [u for u in rendered["users"] if u["username"] == DEMO_ANALYST_SUBJECT]
+        lines.append(
+            f"account {DEMO_ANALYST_SUBJECT}: "
+            + keycloak_admin.ensure_user(issuer=issuer, realm=realm, token=token, user=analyst)
+        )
+        keycloak_admin.set_user_password(
+            issuer=issuer,
+            realm=realm,
+            token=token,
+            username=DEMO_ANALYST_SUBJECT,
+            password=analyst_password,
+        )
+        lines.append(f"password for {DEMO_ANALYST_SUBJECT} set; it is in {env_path.name}")
     return lines
 
 

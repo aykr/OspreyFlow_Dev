@@ -7573,3 +7573,15 @@ is 900 seconds because a build after a code change takes minutes.
 `--force-recreate`; no restart when the theme is unchanged; registration last; a failed registration
 names `make register-sign-in`; a failed build starts nothing) and `tests/test_launch.py`. Three
 faults were planted (build skipped, restart always, registration skipped); each is caught.
+
+### ADR-049, Amendment 2 (29 September 2026) — the demo analyst is repaired too
+
+**Seen:** after `make refresh` the owner still could not sign in with the password in `deployment.env`.
+Cause: the realm document carries no credentials; `apply` sets the demo analyst's password once,
+through the admin API, and Keycloak keeps nothing across a restart. Registering the sign-in accounts
+(ADR-049 Amendment, ADR-051) repaired only the demo administrator, so the analyst had no password
+while the file still named one. Registering now also creates the analyst if absent and sets its
+password from `OSPREY_DEMO_ANALYST_PASSWORD`, only when the file names one (a deployment applied
+without a demo analyst gets none). No secret is regenerated, printed or rewritten. Named tests:
+`tests/harness/test_register_sign_in.py` (restored after an empty restart; each account keeps its
+own password; none invented; never printed).
