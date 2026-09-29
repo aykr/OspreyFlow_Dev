@@ -6880,3 +6880,75 @@ Decisions 1 and 2 are built. What the code does, where the ruling left room:
 **State of the build after this amendment.** All four decisions are built. **Not done:** a test
 against a real Keycloak (the tests use a stand-in that models the refusals); and the harness's
 browser end-to-end specs were not run against an enforced console.
+
+### Amendment 3 (29 September 2026): the demo admin also holds the analyst and Studio roles
+
+**Status: Accepted, by the owner's ruling, after signing in as `osprey-demo-admin` and finding no way
+to the Ingest Studio.** This supersedes one detail of the second-demo-account decision above, which
+kept that account to `osprey-admin` alone so that the analyst account stayed unprivileged and the two
+differed in more than name. Nothing else in the record changes.
+
+- **What is decided.** The disposable demo admin (rendered only with `apply --demo-analyst`) holds
+  `osprey-admin` and every role the demo analyst holds: `analyst`, `source_author`, `source_approver`
+  and `loader`. One demonstration login can therefore open the Admin console, the Glass and the
+  Ingest Studio. Its clearance and handling attributes match the analyst's, so the seeded
+  investigation is visible to it. The analyst account still does not hold `osprey-admin`.
+- **What is not decided or changed.** No role permits anything new. The Conduit still enforces each
+  role on each request (ADR-050), and the launcher's tile is still a convenience, not an access
+  control. `osprey-admin` did not become a Studio role: that would let every real administrator
+  author, approve and load sources, and approve their own, which changes the Studio's separation of
+  duties and would need its own record. A real administrator gets only what their organisation's
+  provider grants.
+- **Why the tile alone was not the answer.** Showing the Ingest Studio tile to an account without a
+  Studio role would open a Studio that refuses it at the first step, which reads as a defect.
+- **What it costs.** The demonstration no longer shows an account that can administer but cannot
+  analyse or approve. `09_INGEST_STUDIO.md` §8 already allows one principal to hold several roles,
+  and the analyst account already holds author and approver together, so the demonstration
+  already shows one person doing both; this adds administration to that. Where the separation
+  matters, sign in as an account that holds one role.
+- **On a running Keycloak** the change reaches an existing demo admin by re-running
+  `make register-sign-in`, which brings the account's attributes up to the current set. Roles are
+  read at sign-in, so the person signs out and in again.
+
+### Amendment 4 (29 September 2026): first run against a real Keycloak, and the sign-in page's look
+
+**What running it found.** The tests use a stand-in identity provider; this was the first time the
+work met a real Keycloak, on the owner's deployment. Three things surfaced. None changes a ruling.
+
+- **A custom user attribute is discarded silently unless the realm allows it.** The `roles` claim
+  the launcher and the Admin console read is a user attribute. `register-sign-in` created the demo
+  admin on a realm where custom attributes were off, so the account signed in with no role and the
+  launcher offered only the Glass. `register-sign-in` now switches the setting on first and restores
+  the attributes of an account that already exists without them. The stand-in now discards
+  attributes as Keycloak does, so the tests can see this.
+- **A refused administrator password is the usual sign of two renders disagreeing.** Each `apply`
+  writes fresh generated passwords into `deployment.env`; a Keycloak started from an earlier render
+  refuses the new one. The error now says so and names the recreate command instead of a bare
+  `401`. Keycloak keeps nothing between recreations, so accounts created after its first start do
+  not survive one. (Recorded already for the demo analyst; the demo admin is restored by
+  `register-sign-in`.)
+- **A failed `apply` still rewrites `deployment.env`.** Preflight runs after the files are written,
+  so an apply stopped by a busy port or the wrong interpreter leaves new passwords in the file while
+  the running stack still has the old ones. Not fixed here; noted so the next operator is not
+  surprised.
+
+**Decision: Keycloak's sign-in page is restyled with the design system.** The stock grey page,
+under the realm's name in capitals, appeared in the middle of an otherwise designed journey. A login
+theme is generated from `apps/workspace/src/design/tokens.css` (the authoritative source: no colour
+of its own is introduced, and a test enforces it). `apply` writes it beside the compose file;
+compose mounts it into Keycloak **beside** Keycloak's own themes, never over them; the realm names it
+and calls itself "OspreyFlow". It extends Keycloak's own login theme, so password reset and error
+pages still exist. It changes appearance and wording only. **Nothing about who may sign in or what
+they may do is touched.** Like `realm.json` and `litellm.yaml` it is a service's own config, not one
+of the deployment's four rendered artefacts. A running Keycloak sees it only after it is recreated
+from a compose file that mounts it; `register-sign-in` names the theme in the realm only when
+Keycloak lists it, because naming a theme that is absent risks a sign-in page that will not render.
+
+**State of the build after this amendment.** Seen working against a real Keycloak, by the owner in a
+browser: sign-in, and the launcher's role-filtered tiles for the demo admin (the Glass and the Admin
+console, before Amendment 3's roles reached it). **Not yet seen:** the restyled sign-in page; the
+demo admin's Ingest Studio tile; the Admin console opening from the launcher and admitting the
+demo admin; the analyst account's view. **Still not done:** the harness's browser end-to-end specs
+against an enforced console, and the Docker-backed `apply` test, which has not been run since these
+changes. The theme was written against Keycloak 26's sign-in markup without its own stylesheet list
+to hand, so it may need a second pass once it has been seen.
