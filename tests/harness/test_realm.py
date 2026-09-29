@@ -10,9 +10,14 @@ from __future__ import annotations
 
 import yaml
 from harness.realm import (
+    ADMIN_ROLE,
     CONDUIT_CLIENT_ID,
+    DEMO_ADMIN_SUBJECT,
     DEMO_ANALYST_SUBJECT,
     GLASS_CLIENT_ID,
+    LAUNCHER_CLIENT_ID,
+    LAUNCHER_PORT,
+    LAUNCHER_REDIRECT_URI,
     VERIFY_SUBJECT,
     render_realm,
 )
@@ -227,3 +232,94 @@ def test_the_realm_still_carries_only_fields_keycloak_defines_with_demo_analyst_
         assert set(user) <= known_user_fields, (
             f"{user['username']}: unexpected field(s) {sorted(set(user) - known_user_fields)}"
         )
+
+
+# --- The launcher's client and the demo admin (friction log, 29 September 2026, third item;
+# 06_DECISIONS.md ADR-051, the owner's ruling of that date) ---
+#
+# The launcher (`scripts/launch.py`) signs a person in so it can show the interfaces their roles
+# allow. It is a third public client beside the Glass, and it is *not* the Glass: its tokens must
+# not be usable against the Conduit, its redirect is a fixed loopback address, and the account that
+# unlocks the Admin console is a separate subject rather than a power added to the demo analyst.
+
+
+def _launcher_client(realm: dict) -> dict:
+    (client,) = [c for c in realm["clients"] if c["clientId"] == LAUNCHER_CLIENT_ID]
+    return client
+
+
+def test_the_launcher_client_is_public_with_pkce_and_the_standard_flow_only() -> None:
+    client = _launcher_client(render_realm(_config()))
+
+    assert client["publicClient"] is True
+    assert client["standardFlowEnabled"] is True
+    assert client.get("serviceAccountsEnabled") is False
+    assert client.get("directAccessGrantsEnabled") is False, (
+        "a password grant would let anything holding a password mint launcher tokens without the "
+        "browser sign-in the client exists for"
+    )
+    assert client["attributes"]["pkce.code.challenge.method"] == "S256"
+
+
+def test_the_launchers_redirect_and_post_logout_uris_are_exact_loopback_addresses() -> None:
+    """The same rule ADR-050's objection 2 states for the Glass: exact, no wildcard. Loopback and
+    not `network.public_origin`, because the launcher runs on the operator's own machine whatever
+    the workspace's public origin is."""
+    client = _launcher_client(render_realm(_config()))
+
+    assert client["redirectUris"] == [LAUNCHER_REDIRECT_URI]
+    assert LAUNCHER_REDIRECT_URI == f"http://localhost:{LAUNCHER_PORT}/callback"
+    assert client["webOrigins"] == [f"http://localhost:{LAUNCHER_PORT}"]
+    assert client["attributes"]["post.logout.redirect.uris"] == f"http://localhost:{LAUNCHER_PORT}/"
+    for uri in [*client["redirectUris"], client["attributes"]["post.logout.redirect.uris"]]:
+        assert "*" not in uri
+        assert "9999" not in uri, "derived from the workspace origin, not the loopback address"
+
+
+def test_a_launcher_token_carries_the_roles_claim_but_is_not_acceptable_to_the_conduit() -> None:
+    """The launcher reads `roles` from its ID token. It must carry no audience mapper: the Conduit's
+    `verify_aud` refuses any token whose audience is not `osprey-conduit`, so a launcher token that
+    leaked could not be replayed against the Conduit — which the Glass's own client deliberately
+    can be (`_audience_mapper`)."""
+    client = _launcher_client(render_realm(_config()))
+
+    mappers = {m["name"]: m for m in client["protocolMappers"]}
+    assert mappers["roles"]["config"]["id.token.claim"] == "true"
+    assert mappers["roles"]["config"]["multivalued"] == "true"
+    kinds = [m["protocolMapper"] for m in client["protocolMappers"]]
+    assert "oidc-audience-mapper" not in kinds
+
+
+def test_the_demo_admin_is_absent_by_default() -> None:
+    usernames = [u["username"] for u in render_realm(_config())["users"]]
+    assert DEMO_ADMIN_SUBJECT not in usernames
+
+
+def test_the_demo_admin_holds_only_the_admin_role_and_nothing_an_analyst_has() -> None:
+    """The owner's ruling of 29 September 2026: a second demo account, so the analyst account stays
+    unprivileged. If it also held the Studio roles the two accounts would differ only in name."""
+    realm = render_realm(_config(), demo_analyst=True)
+    (admin,) = [u for u in realm["users"] if u["username"] == DEMO_ADMIN_SUBJECT]
+    (analyst,) = [u for u in realm["users"] if u["username"] == DEMO_ANALYST_SUBJECT]
+
+    assert admin["attributes"]["roles"] == [ADMIN_ROLE]
+    assert ADMIN_ROLE not in analyst["attributes"]["roles"]
+    assert admin["enabled"] is True
+    assert "credentials" not in admin, "the password travels beside the realm, never inside it"
+
+
+def test_the_demo_admin_has_a_complete_profile_so_keycloak_does_not_demand_one() -> None:
+    realm = render_realm(_config(), demo_analyst=True)
+    (admin,) = [u for u in realm["users"] if u["username"] == DEMO_ADMIN_SUBJECT]
+    assert admin["email"].endswith(".invalid")
+    assert admin["emailVerified"] is True
+    assert admin["firstName"] and admin["lastName"]
+
+
+def test_the_admin_role_has_one_name_across_the_realm_the_harness_and_the_conduit() -> None:
+    """Three modules each check the same role; a rename in one leaves an admin the harness admits
+    and the Conduit refuses (or the reverse) with every test still green."""
+    from harness.webapp_auth import ADMIN_ROLE as HARNESS_ADMIN_ROLE
+    from services.api.app import ADMIN_ROLE as CONDUIT_ADMIN_ROLE
+
+    assert ADMIN_ROLE == HARNESS_ADMIN_ROLE == CONDUIT_ADMIN_ROLE == "osprey-admin"

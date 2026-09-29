@@ -67,6 +67,29 @@ GLASS_CLIENT_ID = "osprey-glass"
 #: tweaks silently change what the three-sided verify asserts.
 DEMO_ANALYST_SUBJECT = "osprey-demo-analyst"
 
+#: `06_DECISIONS.md` ADR-051 — the launcher's own **public** client (authorization code with PKCE,
+#: no secret). It is *not* the Glass's client: it carries no audience mapper, so a launcher token is
+#: refused by the Conduit's `verify_aud` if it ever leaks. Its redirect is the launcher's fixed
+#: loopback address, not `network.public_origin`, because the launcher runs on the operator's own
+#: machine whatever origin the workspace is published at.
+LAUNCHER_CLIENT_ID = "osprey-launcher"
+#: The one definition of the launcher's port; `scripts/launch.py` imports it.
+LAUNCHER_PORT = 7070
+LAUNCHER_ORIGIN = f"http://localhost:{LAUNCHER_PORT}"
+LAUNCHER_REDIRECT_URI = f"{LAUNCHER_ORIGIN}/callback"
+
+#: ADR-051 — the Admin console's own public client (built with the console's enforcement, not yet).
+HARNESS_CLIENT_ID = "osprey-harness"
+
+#: The role that opens the Admin console, and the Conduit's admin routes. One definition:
+#: `harness/webapp_auth.py` imports it and `services/api/app.py` names the same string, a test
+#: holds the three equal (a rename in one would otherwise admit and refuse the same person).
+ADMIN_ROLE = "osprey-admin"
+
+#: ADR-051 — a second disposable demo subject holding `ADMIN_ROLE` and nothing else, so the
+#: analyst account stays unprivileged. Rendered only with `demo_analyst=True`, beside the analyst.
+DEMO_ADMIN_SUBJECT = "osprey-demo-admin"
+
 #: Granted to the Conduit's service account *after* import, by `harness/keycloak_admin.py`: a realm
 #: import cannot express a service-account role mapping onto `realm-management` without ids that do
 #: not exist until the import has run.
@@ -146,6 +169,14 @@ _DEMO_ANALYST_ATTRIBUTES = {
     "org_unit": ["verify"],
     "receivable_handling_codes": ["P"],
     "roles": ["analyst", "source_author", "source_approver", "loader"],
+}
+
+
+_DEMO_ADMIN_ATTRIBUTES = {
+    "clearance": ["OFFICIAL"],
+    "org_unit": ["verify"],
+    "receivable_handling_codes": ["P"],
+    "roles": [ADMIN_ROLE],
 }
 
 
@@ -242,6 +273,27 @@ def _glass_client(config: OspreyConfig) -> dict[str, Any]:
     }
 
 
+def _launcher_client() -> dict[str, Any]:
+    """ADR-051's launcher client. Exact loopback redirect and post-logout URIs (no wildcard, the
+    Glass's own rule); PKCE S256; no password grant; the claim mappers so its ID token carries
+    `roles`, and deliberately **no** audience mapper."""
+    return {
+        "clientId": LAUNCHER_CLIENT_ID,
+        "enabled": True,
+        "publicClient": True,
+        "serviceAccountsEnabled": False,
+        "standardFlowEnabled": True,
+        "directAccessGrantsEnabled": False,
+        "attributes": {
+            "pkce.code.challenge.method": "S256",
+            "post.logout.redirect.uris": f"{LAUNCHER_ORIGIN}/",
+        },
+        "redirectUris": [LAUNCHER_REDIRECT_URI],
+        "webOrigins": [LAUNCHER_ORIGIN],
+        "protocolMappers": _claim_mappers(),
+    }
+
+
 def render_realm(
     config: OspreyConfig, *, realm_name: str = "osprey", demo_analyst: bool = False
 ) -> dict[str, Any]:
@@ -289,6 +341,17 @@ def render_realm(
                 "lastName": "Analyst",
             }
         )
+        users.append(
+            {
+                "username": DEMO_ADMIN_SUBJECT,
+                "enabled": True,
+                "attributes": dict(_DEMO_ADMIN_ATTRIBUTES),
+                "email": "osprey-demo-admin@ospreyflow.invalid",
+                "emailVerified": True,
+                "firstName": "Demo",
+                "lastName": "Admin",
+            }
+        )
     return {
         "realm": realm_name,
         "enabled": True,
@@ -313,6 +376,7 @@ def render_realm(
                 "standardFlowEnabled": False,
             },
             _glass_client(config),
+            _launcher_client(),
         ],
         "users": users,
     }

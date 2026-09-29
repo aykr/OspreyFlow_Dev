@@ -23,8 +23,7 @@ import jwt
 from fastapi import HTTPException, Request
 from jwt import PyJWKClient
 
-#: R2's own named role.
-ADMIN_ROLE = "osprey-admin"
+from harness.realm import ADMIN_ROLE  # R2's own named role; one definition, in the realm module.
 
 
 def _not_found() -> HTTPException:
