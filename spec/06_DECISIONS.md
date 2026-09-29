@@ -7054,3 +7054,14 @@ and handling model, the existence-leak rule, and which roles exist.
 ### State of the build
 
 Nothing built. Spec pointers added to `02_GLASS_FRONTEND.md` §2.1 and `03_CONDUIT_MIDDLEWARE.md` §3.
+
+### ADR-052, Amendment 1 (29 September 2026) — the owner's answers to the four proposed points
+
+- **P1 (branching needs Editor on the source) — confirmed.**
+- **P2 (export needs Editor, as well as its existing gates) — confirmed.**
+- **P3 (an Author names the grantee by account name; a typo grants nothing) — confirmed.**
+- **P4 (demo seeding) — not confirmed.** The owner asked for the Enron corpus to be seeded as well.
+  That conflicts with the standing rule against admitting a real dataset and with ADR-035, which
+  keeps the real corpus `internal` and never seeds it. Nothing has been changed: the seed stays as
+  ADR-052 describes it (Fixture Corp, the synthetic Enron-shaped demo, by name; no real corpus) until
+  the owner rules on that conflict explicitly. Stage 4 waits on it; stages 1 to 3 do not depend on it.
