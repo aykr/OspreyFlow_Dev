@@ -30,7 +30,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any, Final
+from typing import Annotated, Any, Final, Literal
 
 import duckdb
 from fastapi import (
@@ -49,7 +49,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from scripts.build_local_basemap import GEOFABRIK_REGIONS, BasemapBuildResult, build_local_basemap
 from scripts.verify_map import verify_map
 from services.extract.writer import (
@@ -210,6 +210,7 @@ from .history import (
 from .hotlists import HotlistNotFoundError, HotlistStore
 from .ingest_sources import IngestSourceListing, list_source_files
 from .investigations import (
+    AccessHistoryEntry,
     AccessLevel,
     InsufficientAccessError,
     Investigation,
@@ -726,12 +727,18 @@ async def require_admin_role(principal: PrincipalDep) -> Principal:
     return principal
 
 
-def _authorized_at(level: AccessLevel) -> Callable[..., Awaitable[Investigation]]:
+def _authorized_at(
+    level: AccessLevel, *, admin_safety_net: bool = False
+) -> Callable[..., Awaitable[Investigation]]:
     """The one gate every investigation-scoped route depends on, at the level the route needs
     (ADR-052 §8). `required_level` is what the route-level test reads to prove that no route is
     left without one. "No level at all" and "wrong unit" and "no such case" are the same 404
     (ADR-041's existence-leak rule); a level too low is a 403, since the account can already see
-    the case exists. Either denial is audited before it propagates."""
+    the case exists. Either denial is audited before it propagates.
+
+    `admin_safety_net` is for the access routes only (ADR-052 §4): an `osprey-admin` in the case's
+    own unit may manage its access when they hold no level, so a case whose Authors have left is
+    not stranded. That confers no level: every other route still needs one."""
 
     async def dependency(
         investigation_id: str,
@@ -739,14 +746,34 @@ def _authorized_at(level: AccessLevel) -> Callable[..., Awaitable[Investigation]
         investigations: InvestigationsDep,
         audit: AuditDep,
     ) -> Investigation:
+        denial: Exception
         try:
             return await investigations.get_authorized(investigation_id, principal, need=level)
-        except InvestigationNotFoundError:
-            await _audit_denied(audit, principal, investigation_id, {})
-            raise
-        except InsufficientAccessError as error:
+        except (InvestigationNotFoundError, InsufficientAccessError) as error:
+            denial = error
+
+        if admin_safety_net and ADMIN_ROLE in principal.roles:
+            try:
+                case = await investigations.get_for_access_admin(investigation_id, principal)
+            except InvestigationNotFoundError:
+                await _audit_denied(audit, principal, investigation_id, {})
+                raise
+            await audit.record(
+                principal=principal,
+                action="access_admin_override",
+                investigation_id=investigation_id,
+                resolved_query={},
+                result_cardinality=1,
+            )
+            return case
+
+        if isinstance(denial, InsufficientAccessError):
             await _audit_denied(audit, principal, investigation_id, {"needed": level.value})
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=str(denial)
+            ) from denial
+        await _audit_denied(audit, principal, investigation_id, {})
+        raise denial
 
     dependency.required_level = level  # type: ignore[attr-defined]
     return dependency
@@ -772,6 +799,10 @@ InvestigationEditorDep = Annotated[
 ]
 InvestigationAuthorDep = Annotated[
     Investigation, Depends(_authorized_at(AccessLevel.AUTHOR))
+]
+#: Access management: an Author, or the administrator's safety net (ADR-052 §4).
+InvestigationAccessManagerDep = Annotated[
+    Investigation, Depends(_authorized_at(AccessLevel.AUTHOR, admin_safety_net=True))
 ]
 
 
@@ -1254,6 +1285,186 @@ async def create_investigation(
         result_cardinality=1,
     )
     return investigation
+
+
+class InvestigationListing(BaseModel):
+    """One row of the case picker (ADR-052 §7): what the account may see of a case it holds a level
+    on. Counts are not here yet: they need the working set read under the caller's own handling
+    filter, and are added with the Glass picker (stage 3)."""
+
+    id: str
+    name: str
+    level: AccessLevel
+    created_at: datetime
+    created_by: str
+    branched_from: str | None = None
+
+
+@app.get("/v1/investigations")
+async def list_investigations(
+    principal: PrincipalDep, investigations: InvestigationsDep
+) -> list[InvestigationListing]:
+    return [
+        InvestigationListing(
+            id=case.id,
+            name=case.name,
+            level=level,
+            created_at=case.created_at,
+            created_by=case.created_by,
+            branched_from=case.branched_from,
+        )
+        for case, level in await investigations.list_for(principal)
+    ]
+
+
+class RenameInput(BaseModel):
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("a case needs a name")
+        return value.strip()
+
+
+@app.patch("/v1/investigations/{investigation_id}")
+async def rename_investigation(
+    investigation: InvestigationAuthorDep,
+    body: RenameInput,
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+    audit: AuditDep,
+) -> Investigation:
+    await investigations.rename(investigation.id, body.name, by=principal)
+    await audit.record(
+        principal=principal,
+        action="rename_investigation",
+        investigation_id=investigation.id,
+        resolved_query={"name": body.name},
+        result_cardinality=1,
+    )
+    return investigation.model_copy(update={"name": body.name})
+
+
+class AccessView(BaseModel):
+    """What `GET .../access` shows. Everyone sees their own level; only an Author sees who else
+    holds one, so a Viewer cannot learn the case's other participants."""
+
+    your_level: AccessLevel | None
+    unit_level: AccessLevel | None
+    grants: dict[str, AccessLevel] | None
+
+
+@app.get("/v1/investigations/{investigation_id}/access")
+async def get_investigation_access(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+) -> AccessView:
+    level = await investigations.effective_level(investigation.id, principal)
+    if level is not AccessLevel.AUTHOR:
+        return AccessView(your_level=level, unit_level=None, grants=None)
+    return AccessView(
+        your_level=level,
+        unit_level=await investigations.unit_level(investigation.id),
+        grants=await investigations.list_grants(investigation.id),
+    )
+
+
+class UnitLevelInput(BaseModel):
+    """`author` is deliberately not accepted: the unit-wide level is none, Viewer or Editor
+    (ADR-052 §5). Authority over a case is always named."""
+
+    unit_level: Literal["viewer", "editor"] | None
+
+
+@app.put("/v1/investigations/{investigation_id}/access", status_code=status.HTTP_204_NO_CONTENT)
+async def set_investigation_unit_level(
+    investigation: InvestigationAccessManagerDep,
+    body: UnitLevelInput,
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+    audit: AuditDep,
+) -> None:
+    level = None if body.unit_level is None else AccessLevel(body.unit_level)
+    await investigations.set_unit_level(investigation.id, level, by=principal)
+    await audit.record(
+        principal=principal,
+        action="set_unit_level",
+        investigation_id=investigation.id,
+        resolved_query={"unit_level": body.unit_level},
+        result_cardinality=1,
+    )
+
+
+class GrantInput(BaseModel):
+    level: AccessLevel
+
+
+def _grantee(account_id: str) -> str:
+    """The account name the identity provider knows the person by (ADR-052 P3, confirmed). A
+    mistyped name grants nothing to anyone, so the only check is that it is a plain, sensible
+    string."""
+    name = account_id.strip()
+    if not name or len(name) > 200:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="an account name is 1 to 200 characters",
+        )
+    return name
+
+
+@app.put(
+    "/v1/investigations/{investigation_id}/access/grants/{account_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def set_investigation_grant(
+    investigation: InvestigationAccessManagerDep,
+    account_id: str,
+    body: GrantInput,
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+    audit: AuditDep,
+) -> None:
+    grantee = _grantee(account_id)
+    await investigations.set_grant(investigation.id, grantee, body.level, by=principal)
+    await audit.record(
+        principal=principal,
+        action="grant_access",
+        investigation_id=investigation.id,
+        resolved_query={"account": grantee, "level": body.level.value},
+        result_cardinality=1,
+    )
+
+
+@app.delete(
+    "/v1/investigations/{investigation_id}/access/grants/{account_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_investigation_grant(
+    investigation: InvestigationAccessManagerDep,
+    account_id: str,
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+    audit: AuditDep,
+) -> None:
+    grantee = _grantee(account_id)
+    await investigations.remove_grant(investigation.id, grantee, by=principal)
+    await audit.record(
+        principal=principal,
+        action="revoke_access",
+        investigation_id=investigation.id,
+        resolved_query={"account": grantee},
+        result_cardinality=1,
+    )
+
+
+@app.get("/v1/investigations/{investigation_id}/access/history")
+async def get_investigation_access_history(
+    investigation: InvestigationAccessManagerDep, investigations: InvestigationsDep
+) -> list[AccessHistoryEntry]:
+    return await investigations.access_history(investigation.id)
 
 
 @app.get("/v1/investigations/{investigation_id}")

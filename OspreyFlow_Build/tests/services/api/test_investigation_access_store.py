@@ -193,3 +193,76 @@ async def test_every_change_of_access_is_recorded_with_who_what_to_whom(
         ("revoke", "bob", None),
     ]
     assert all(h.changed_by == "alice" for h in history)
+
+
+# --- stage 2: listing, renaming, reading who holds what ----------------------------------------
+
+
+async def test_the_list_holds_only_the_cases_the_account_holds_a_level_on(
+    store: InvestigationStore,
+) -> None:
+    mine = await store.create(AUTHOR, name="Mine")
+    shared = await store.create(AUTHOR, name="Shared with bob")
+    await store.set_grant(shared.id, "bob", AccessLevel.VIEWER, by=AUTHOR)
+    whole_unit = await store.create(AUTHOR, name="Whole unit")
+    await store.set_unit_level(whole_unit.id, AccessLevel.EDITOR, by=AUTHOR)
+    await store.create(AUTHOR, name="Private")
+
+    bobs = {c.name: level for c, level in await store.list_for(COLLEAGUE)}
+    alices = {c.name: level for c, level in await store.list_for(AUTHOR)}
+
+    assert bobs == {
+        "Shared with bob": AccessLevel.VIEWER,
+        "Whole unit": AccessLevel.EDITOR,
+    }
+    assert set(alices) == {"Mine", "Shared with bob", "Whole unit", "Private"}
+    assert alices["Mine"] is AccessLevel.AUTHOR
+    assert mine.name in alices
+    # Another unit sees nothing, whatever grants exist.
+    await store.set_grant(shared.id, "carol", AccessLevel.AUTHOR, by=AUTHOR)
+    assert await store.list_for(OUTSIDER) == []
+
+
+async def test_an_author_can_rename_a_case_and_the_rename_is_recorded(
+    store: InvestigationStore,
+) -> None:
+    case = await store.create(AUTHOR, name="Old")
+
+    await store.rename(case.id, "  New name ", by=AUTHOR)
+
+    assert (await store.get(case.id)).name == "New name"
+    assert [(h.action, h.subject) for h in await store.access_history(case.id)][-1] == (
+        "rename",
+        "New name",
+    )
+    with pytest.raises(ValueError, match="name"):
+        await store.rename(case.id, " ", by=AUTHOR)
+
+
+async def test_the_grants_and_the_unit_wide_level_can_be_read_back(
+    store: InvestigationStore,
+) -> None:
+    case = await store.create(AUTHOR, name="Read back")
+    await store.set_grant(case.id, "bob", AccessLevel.EDITOR, by=AUTHOR)
+    await store.set_unit_level(case.id, AccessLevel.VIEWER, by=AUTHOR)
+
+    grants = await store.list_grants(case.id)
+
+    assert grants == {"alice": AccessLevel.AUTHOR, "bob": AccessLevel.EDITOR}
+    assert await store.unit_level(case.id) is AccessLevel.VIEWER
+
+
+async def test_the_administrator_lookup_finds_a_case_in_the_unit_without_any_level(
+    store: InvestigationStore,
+) -> None:
+    """The safety net for a case whose Authors have left (ADR-052 §4). It confirms the case exists
+    in the account's own unit and returns nothing of its contents; another unit gets nothing."""
+    case = await store.create(AUTHOR, name="Stranded")
+    admin = Principal(id="root", clearance="OFFICIAL", org_unit="unit-1")
+
+    found = await store.get_for_access_admin(case.id, admin)
+
+    assert found.id == case.id
+    assert await store.effective_level(case.id, admin) is None  # still cannot read it
+    with pytest.raises(InvestigationNotFoundError):
+        await store.get_for_access_admin(case.id, OUTSIDER)

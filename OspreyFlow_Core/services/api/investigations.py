@@ -342,3 +342,77 @@ class InvestigationStore:
                 investigation_id,
             )
         return [AccessHistoryEntry(**dict(r)) for r in rows]
+
+    # --- stage 2: listing, naming, reading who holds what ---------------------------------
+
+    async def list_for(self, principal: Principal) -> list[tuple[Investigation, AccessLevel]]:
+        """The cases `principal` holds a level on, newest first, with that level. Another unit's
+        cases never appear, whatever grants exist; a case nobody has shared with this account does
+        not either (ADR-052 §7)."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT i.id, i.name, i.created_at, i.created_by, i.owning_unit, "
+                "i.branched_from, g.level AS grant_level, i.unit_level "
+                "FROM investigations i "
+                "LEFT JOIN investigation_grants g "
+                "ON g.investigation_id = i.id AND g.account_id = $2 "
+                "WHERE i.owning_unit = $1 AND (g.level IS NOT NULL OR i.unit_level IS NOT NULL) "
+                "ORDER BY i.created_at DESC, i.id DESC",
+                principal.org_unit,
+                principal.id,
+            )
+        listed: list[tuple[Investigation, AccessLevel]] = []
+        for row in rows:
+            found = self._parse_level_row(row)
+            if found is not None and found[1] is not None:
+                listed.append((found[0], found[1]))
+        return listed
+
+    async def rename(self, investigation_id: str, name: str, *, by: Principal) -> None:
+        clean_name = name.strip()
+        if not clean_name:
+            raise ValueError("a case needs a name")
+        async with self._pool.acquire() as conn, conn.transaction():
+            updated = await conn.fetchval(
+                "UPDATE investigations SET name = $2 WHERE id = $1 RETURNING id",
+                investigation_id,
+                clean_name,
+            )
+            if updated is None:
+                raise InvestigationNotFoundError(investigation_id)
+            await self._record(conn, investigation_id, by.id, "rename", clean_name, None)
+
+    async def list_grants(self, investigation_id: str) -> dict[str, AccessLevel]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT account_id, level FROM investigation_grants WHERE investigation_id = $1 "
+                "ORDER BY account_id",
+                investigation_id,
+            )
+        return {r["account_id"]: AccessLevel(r["level"]) for r in rows}
+
+    async def unit_level(self, investigation_id: str) -> AccessLevel | None:
+        async with self._pool.acquire() as conn:
+            value = await conn.fetchval(
+                "SELECT unit_level FROM investigations WHERE id = $1", investigation_id
+            )
+        return None if value is None else AccessLevel(value)
+
+    async def get_for_access_admin(
+        self, investigation_id: str, principal: Principal
+    ) -> Investigation:
+        """The administrator's safety net (ADR-052 §4): the case's record, found by unit only, so
+        a case whose Authors have left can be given a new one. It returns the record and nothing of
+        the case's contents, and it confers no level: reading still needs one. Another unit's
+        administrator finds nothing."""
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT id, name, created_at, created_by, owning_unit, branched_from "
+                "FROM investigations WHERE id = $1 AND owning_unit = $2",
+                investigation_id,
+                principal.org_unit,
+            )
+        if row is None:
+            raise InvestigationNotFoundError(investigation_id)
+        return Investigation(**dict(row))
+

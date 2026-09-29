@@ -7512,3 +7512,25 @@ older route tests' fakes were updated for the new signature.
 **Not yet:** the listing and access routes with the admin safety net (stage 2); the Glass picker and
 Share panel (stage 3); the demo seeds' grants and the acceptance rows (stage 4).
 
+### ADR-052, Amendment 4 (29 September 2026) — stage 2 built
+
+**Built, tests first:** `GET /v1/investigations` (the cases the caller holds a level on); `PATCH` to
+rename (Author); `GET .../access` (own level for anyone; the unit-wide level and all grants for an
+Author only); `PUT .../access` (the unit-wide level: none, Viewer or Editor); `PUT` and `DELETE
+.../access/grants/{account}`; `GET .../access/history`. Every change is written to the case's access
+history and to the audit stream. Store tests run against a real Postgres; route tests go through the
+real level dependencies. Six faults were planted and each is caught (any account treated as
+administrator; a Viewer shown the grant list; the list ignoring the unit; a unit-wide Author level;
+plus the earlier stage's).
+
+**Two readings for the owner to overrule:**
+
+1. The administrator safety net requires the administrator to be in the case's **own unit**. ADR-052
+   §4 says "any case"; the Conduit's unit rule (ADR-041) has no cross-unit exception anywhere, so I
+   did not add one for this. An administrator of another unit finds nothing.
+2. The unit-wide level is refused as `author`. §5 lists none, viewer and editor; a whole unit being
+   Authors would make "who manages access" unanswerable.
+
+**Not yet:** the Glass picker and Share panel (stage 3), with counts in the listing and the case name
+becoming required; the demo seeds' grants and the acceptance rows (stage 4).
+

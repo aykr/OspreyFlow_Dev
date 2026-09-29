@@ -61,6 +61,14 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("PATCH", P + "/sites/{site_id}/control-points"): E,
     ("POST", P + "/sites/{site_id}/grid"): E,
     ("POST", P + "/ingest/recipes/{recipe_id}/run"): E,
+    # Stage 2: naming, and reading and changing who holds what. Reading needs only Viewer because
+    # everyone may see their own level; the handler shows the full list to an Author only.
+    ("PATCH", P): A,
+    ("GET", P + "/access"): V,
+    ("PUT", P + "/access"): A,
+    ("PUT", P + "/access/grants/{account_id}"): A,
+    ("DELETE", P + "/access/grants/{account_id}"): A,
+    ("GET", P + "/access/history"): A,
 }
 
 
@@ -236,8 +244,9 @@ async def test_the_stream_needs_a_viewer_grant_and_closes_without_one(audit: _Au
 
     viewer = _LevelAwareInvestigations(AccessLevel.VIEWER)
     socket = _FakeSocket(viewer, audit)
-    with patch("services.api.app._authenticate_websocket", return_value=_PRINCIPAL), pytest.raises(
-        _Stop
+    with (
+        patch("services.api.app._authenticate_websocket", return_value=_PRINCIPAL),
+        pytest.raises(_Stop),
     ):
         await stream(socket, "inv-1")  # type: ignore[arg-type]
     assert viewer.asked == [AccessLevel.VIEWER] and socket.accepted

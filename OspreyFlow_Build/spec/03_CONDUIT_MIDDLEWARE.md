@@ -102,10 +102,15 @@ Author; a new case is visible to nobody else until shared; cases that existed be
 |---|---|
 | Viewer | `GET` the case; `expand/preview`; `resolution/threshold` (GET); `resolution/explain/{cluster}`; `compute/{metric}`; `ingest/candidates` (GET); `dossier/documents/{doc}`; `history` (GET); `judgements`, `gaps`, `assumptions` (GET); `sites/{site}` and its `image` (GET); the delta stream |
 | Editor | `branch`; `seed`; `expand`; `nodes` (DELETE); `resolution/threshold` (PUT), `link`, `split`; `ingest/extract`, candidate `accept` and `reject`; `history/{step}` (restore); `judgements`, `gaps`, `assumptions` (POST); `export`; `sites` (POST), `control-points`, `grid`; `ingest/recipes/{recipe}/run` |
-| Author | Not yet used: access management arrives with stage 2. |
+| Author | `PATCH` the case (rename); `access` (PUT: the unit-wide level, which is none, Viewer or Editor, never Author); `access/grants/{account}` (PUT, DELETE); `access/history`. An `osprey-admin` in the case's own unit may also use these four without holding a level (the safety net, audited as `access_admin_override`); that gives no other access. |
 
-`POST /v1/investigations` needs no grant. Not yet built: the listing and access routes (stage 2), the
-Glass picker (stage 3), the demo seeds' grants (stage 4).
+`GET /v1/investigations` lists the cases the caller holds a level on (id, name, their level, created,
+created by, branched from). `GET .../access` shows anyone their own level, and shows an Author the
+unit-wide level and every grant. A grantee is named by the account name the identity provider knows
+them by; a mistyped name grants nothing to anyone (ADR-052 P3).
+
+`POST /v1/investigations` needs no grant. Not yet built: the Glass picker and Share panel (stage 3) and the demo seeds' grants (stage 4). The
+listing has no counts yet; they need the working set read under the caller's handling filter.
 
 ### 3.2 Working set
 
