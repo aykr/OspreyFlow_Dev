@@ -2207,6 +2207,88 @@ repeated in full here, so this summary stays a map, not a second copy:**
    prior wording, which had the order backwards; `process/PRODUCT_DELIVERY.md`'s own territory,
    named here only because it is where alpha/beta's own detail lives, not because it gates Trigger
    B.
+
+   **Rehearsed, round 15, 29 September 2026 — everything but the public push, exactly as the
+   rehearsal's own brief scoped it. Trigger B itself remains owner-gated and unfired.**
+
+   - **Seed script**: `scripts/publish_seed.py`, new this round. Builds the publishable tree as a
+     fresh, single-commit git repository from any given commit, under the neutral identity ADR-034
+     §B5 already names. `--dry-run` lists every included/excluded path with nothing created.
+   - **A real defect found rehearsing, not a fixture one — recorded because a rehearsal that only
+     ever tests its own fixtures proves the fixtures work, not the tool.** The first version used
+     `scripts.product_tree_link_check.PRIVATE_TREE_MARKERS` as its own publication-exclusion set.
+     That list is correctly scoped for the citation-check gate it was built for, which deliberately
+     does *not* treat `spec/06_DECISIONS.md` as private (it is allowed to cite `process/`/
+     `CLAUDE.md` freely). But ADR-034 §B2 is separate and explicit: `06_DECISIONS.md` itself is
+     "Excluded and private" from publication, even though it lives in `spec/` physically. The first
+     seed included it — the entire internal decision log would have published. Found running the
+     real authorship-identifier sweep (`git grep -liE "ayan\.?kar|ayankarsolirius|solirius"`) against
+     the actual seeded tree and noticing `spec/06_DECISIONS.md` matched — not from reading the
+     script's own logic and assuming it was right. Fixed: `PUBLICATION_EXCLUSIONS` is now
+     `PRIVATE_TREE_MARKERS` plus `spec/06_DECISIONS.md`, named separately so the reason it differs
+     is not lost. A regression test (`test_06_decisions_is_excluded_even_though_it_lives_in_spec`)
+     pins it.
+   - **Proven against the real repository, not only fixtures**: a private-tree file planted in the
+     real tree's own file list and shown to fail the scan by name; removed and shown green; the
+     real seeded tree (914 files, 48 excluded) passed `packaging_gate.check_artefact` cleanly; the
+     two remaining `git grep` "authorship" hits in the seeded tree
+     (`scripts/packaging_gate.py`'s own detection pattern, and its test fixture's fabricated
+     example string) are the check's own necessary self-reference, not a real leaked identifier —
+     confirmed by reading each hit, not assumed benign from its file name.
+   - **`make ci`'s static gates, run inside the real seeded tree**: `doc_citations_check`,
+     `product_tree_link_check`, `provenance_annotation_check`, `decision_log_publication_check`,
+     `route_coverage_check`, `domain_model_coverage_check`, `demo_guide_check`,
+     `test_file_coverage_check`, `ruff`, `mypy` all green. `schemas_check` failed for an expected,
+     unrelated reason — `node_modules` is not git-tracked and was never seeded, the same
+     precondition any fresh clone has regardless of the private/public split; not a publication
+     defect, not fixed here. Full test collection (1572 tests) succeeded with no import error,
+     confirming nothing references the excluded files at import time.
+   - **The documented bootstrap install, run for real from the seeded tree, on this machine**:
+     `uv sync` (a real, separate venv inside the seed — `harness.apply`'s own preflight correctly
+     refused to run through the checkout's venv first, exactly the cross-contamination check it
+     exists for) then `python -m harness.apply --build`. **36 seconds, `local-lite` ready, 7
+     service(s) healthy, verify 3/3 green** — the Glass and the Conduit both reachable, entirely
+     from a tree with zero private-tree files. Torn down afterward
+     (`docker compose --env-file deployment.env down -v`).
+   - **GitHub Actions precondition (item 4): still not proven.** `gh run list --limit 3` against
+     `ospreyflow/ospreyflow-dev` returns zero runs — confirming, not merely repeating, 13cg's own
+     finding that no workflow has ever completed on this repository. Account-level (a spending
+     limit or email verification only the owner can check); not attempted here, per the brief's own
+     instruction not to try to fix the account. **The rehearsal is proven for everything except
+     this one precondition — the release workflow itself has never been shown to run, so "a green
+     CI run" (one of Trigger B's own three preconditions, above) cannot yet be claimed true.**
+   - **The §B4/§B6 open items, listed for the owner with a recommendation each, not decided:**
+     1. *`github.com/ospreyflow` account → organisation, before any public push.* GitHub permits
+        one free personal account per person; converting after external collaborators exist is more
+        disruptive than before. Recommendation: convert before the push, not after — nothing about
+        the seeded tree or this rehearsal depends on which the account is, so there is no cost to
+        deciding it early.
+     2. *DCO vs CLA (§B6).* ADR-034 §B6 already recommends a DCO (a `Signed-off-by` line, no
+        paperwork) over a CLA, for a services-based commercial model needing no relicensing right.
+        Restated, not re-argued: still the right call absent a new reason to want relicensing
+        leverage.
+     3. *Copyright year (§B6).* Mechanical, not a judgement call — "the year of first publication,"
+        set to whatever year Trigger B actually fires in.
+     4. *Per-file Apache 2.0 headers.* No tooling exists in this repository today (checked at round
+        14a); roughly 455 source files would be touched if chosen. Recommendation: skip unless the
+        owner has a specific reason to want them — the root `LICENSE`/`NOTICE` already cover the
+        tree as a whole, and per-file headers are a maintenance cost with no legal necessity most
+        Apache-licensed projects of this size do not pay.
+   - **The exact command sequence for the day, with the one irreversible step named as such:**
+     ```
+     1.  git rev-parse HEAD; make ci                         # confirm green, at the commit to publish
+     2.  Decide the four §B4/§B6 items above (owner)
+     3.  python -m scripts.publish_seed --commit <sha> --out <scratch-dir>
+     4.  cd <scratch-dir> && python3 -c '...check_artefact...'   # re-confirm clean, same as this round proved
+     5.  gh repo create ospreyflow/ospreyflow --public --source=. \
+           --remote=origin --description "..."                # or the org name, per item 1 above
+     6.  git push -u origin main                              # <-- THE ONLY IRREVERSIBLE STEP
+     7.  gh run list --limit 3 --repo ospreyflow/ospreyflow    # confirm Actions actually runs here —
+                                                                #   the one thing this rehearsal could not prove
+     8.  (optional) tag and cut the first release
+     ```
+     Step 6 is the only step this rehearsal did not and could not execute — everything before it is
+     now scripted and proven; everything after it depends on step 6 having happened.
 6. **ArcadeDB stability — closed, 23 September 2026** (previously filed in "Legacy disclosures,"
    relocated into this list, promoted and closed the same day — see its own entry, further down,
    for the re-pointed exit criterion and the measurement that met it) — a demo that fails more
