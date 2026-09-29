@@ -4,10 +4,10 @@ Open-source intelligence analysis and network discovery platform. Three tiers �
 (React workspace), the Conduit (FastAPI orchestration), the Vault (graph store, analytics,
 models) — separated by four typed ports.
 
-## The specification is in `docs/` and it is binding
+## The specification is in `spec/` and it is binding
 
-`docs/` holds the full architecture pack. Read what the current task needs; do not read all of
-it every session.
+`spec/` holds the full architecture pack; `process/` holds the build record. Read what the
+current task needs; do not read all of it every session.
 
 | Read this | When |
 | --- | --- |
@@ -26,7 +26,7 @@ it every session.
 All decision records in `spec/06_DECISIONS.md` are accepted. If you believe one is wrong, say so
 and stop — do not implement an alternative and explain afterwards.
 
-`docs/` is the source of truth for the specification. When a correction to a doc arrives as a
+`spec/` is the source of truth for the specification. When a correction to a doc arrives as a
 whole replacement file, diff it against the working copy before applying it, and reject any hunk
 outside the stated scope of the change — a correction to one section must not revert another.
 
@@ -56,8 +56,8 @@ outside the stated scope of the change — a correction to one section must not 
    data in the demo and CI is tier 1 only.
 10. **The performance budget in `spec/02_GLASS_FRONTEND.md` §5 is a CI gate**, not a target.
 11. **A genuine spec gap gets fixed in the spec, not answered in chat.** An answer given only in
-    conversation is lost by the next session — if `docs/` is ambiguous or silent on something
-    needed, the fix is an edit to `docs/` (an ADR, if it is a real decision), not a reply.
+    conversation is lost by the next session — if `spec/` is ambiguous or silent on something
+    needed, the fix is an edit to `spec/` (an ADR, if it is a real decision), not a reply.
 12. **When a spec sentence states an invariant, ask which test would fail if it were violated.**
     `upsert_edges` never merged same-pair edges for a whole phase while the conformance suite
     passed, because no case wrote the same pair twice — the invariant was stated in prose and
@@ -192,7 +192,7 @@ Rules:
   smaller than `GRAPH_REPORT.md` or raw grep output, specifically because they are built for
   "where do I even start" — not for "what does this function I already found do."
   - **Do not reach for a query when you already know which file to look at** — a path named in
-    this conversation, a prior message, another file's import, or one of `docs/*.md`'s own file
+    this conversation, a prior message, another file's import, or one of `spec/*.md`'s own file
     references. A direct `Read` of that file is faster and more precise than a BFS neighbourhood
     around it; this is the case the live test above actually measured.
 - `graphify-out/wiki/index.md` exists — use it for broad navigation instead of raw source browsing.
