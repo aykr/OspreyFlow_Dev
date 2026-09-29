@@ -62,6 +62,7 @@ confirmed.
 | 048 | The disclosure doctrine: what makes "something was withheld" safe, unsafe or required to be visible | | **Accepted** — 22 Sep 2026 |
 | 049 | The harness / packaging pipeline; Phase 8's Stage 2 §1–§7 | | **Accepted** — 24 Sep 2026, after rulings on all seven objections, D1 narrowed, and the four follow-on items settled |
 | 050 | Sign-in for the Glass: OIDC authorization code with PKCE against the deployment's realm | | **Proposed** — 25 Sep 2026, milestone-blocking; seven open objections, three of them blocking |
+| 051 | Sign in first, then show the interfaces the role allows: one launcher, one realm, the Admin console enforcing `osprey-admin` itself | | **Accepted** — 29 Sep 2026, owner's ruling; design only, build in progress |
 
 **This table lagged again, and is caught here for the second time.** Records 042 through 048 were
 written on 22 September 2026 and never added above — the identical omission this section's own
@@ -6709,3 +6710,108 @@ the Conduit's own client and not only the Glass's, an investigation-id-persisten
 auth when it should not have been, Keycloak's own default profile-completion wall on a fresh
 admin-API subject, and two access-control attributes (handling code, `org_unit`) the demo analyst
 needed and did not have. Each is fixed, each has a named test.
+
+## ADR-051 — Sign in first, then show the interfaces the role allows
+
+**Status: Accepted, 29 September 2026, by the owner's ruling (Option C, with E1). Design only: the
+sign-in flow, the second demo account, the Admin console's enforcement and the launcher's
+role-filtered tiles are not built.** What is built is listed under "State of the build" below and
+nothing else in this record is implemented.
+
+### Context: what was seen
+
+The launcher (`make launch`, `scripts/launch.py`) offers three interfaces: the Glass, Ingest Studio
+and the Admin console. It shows all three to anyone who reaches it. The owner asked that the user
+be asked to sign in first, and shown only the interfaces their role allows. Measured on 29 September
+2026:
+
+- The realm has no sign-in for the launcher and no administrator subject. Only `osprey-glass` is a
+  public browser client; `osprey-demo-analyst` holds roles `analyst`, `source_author`,
+  `source_approver` and `loader`, and no `osprey-admin`.
+- The Admin console (the harness on port 7000) has `require_admin_role`, but in its setup mode it is
+  unauthenticated and loopback-only by design. A launcher that merely hid its tile would leave the
+  address itself open to anyone on the machine.
+- ADR-050 already rules that the Glass never derives access from roles; the Conduit enforces. A
+  launcher that hides tiles is therefore a convenience for the person signed in and **is not an
+  access control**. Any recommendation that made it one was wrong, and one made earlier in this
+  work (Option B, below) was withdrawn on exactly that ground.
+
+### Decision
+
+**1. Sign in first (Option C).** The launcher shows a start screen before sign-in and a role-filtered
+page after it. Sign-in is OIDC authorization code with PKCE against the deployment's own realm,
+using a new **public** client, `osprey-launcher`, redirecting to the launcher's own loopback origin
+(port 7070). No secret is held by the launcher's browser page. The shared OIDC code lives once, in
+`harness/oidc.py`, and the launcher and the Admin console both use it.
+
+**2. Which role shows which tile.**
+
+| Tile | Shown to |
+| --- | --- |
+| The Glass | any signed-in user |
+| Ingest Studio | a user holding any Studio role (`source_author`, `source_approver` or `loader`) |
+| Admin console | a user holding `osprey-admin` |
+
+The tile filter is a courtesy. The claim it reads is the `roles` claim the realm already maps.
+
+**3. A second demo account.** `osprey-demo-admin`, holding `osprey-admin` only, is added beside
+`osprey-demo-analyst` so the demonstration can show both views. Its password is generated at apply
+time and written to `deployment.env` as `OSPREY_DEMO_ADMIN_PASSWORD`, exactly as the analyst's is.
+Neither the launcher nor its page ever states a password.
+
+**4. The Admin console enforces `osprey-admin` itself (E1).** The harness gets its own public
+client, `osprey-harness`, and a session cookie. Every Admin route requires `osprey-admin`. It is
+open only in bootstrap, meaning no rendered realm exists yet, because there is nothing to sign in
+to; and it **fails closed** when the realm exists but the identity provider cannot be reached. Per
+ADR-044, "the identity provider is unreachable" and "the identity provider said no" are distinct
+outcomes and must be reported as such. `ADMIN_ROLE` becomes canonical in `harness/realm.py` and
+`webapp_auth` imports it rather than repeating the string.
+
+### Alternatives rejected
+
+- **A: keep one page and hide nothing.** Rejected: it does not answer the request.
+- **B: hide tiles and treat the launcher as the gate.** Rejected and withdrawn. It contradicts
+  ADR-050: the launcher would hold an access decision the Conduit is meant to own.
+- **E2: keep the Admin console open and rely on the launcher.** Rejected: the console's address stays
+  reachable directly.
+- **E3: a shared secret handed from the launcher to the console.** Rejected: it invents a second
+  credential the realm does not know about and cannot revoke.
+- **Glass restricted to a Glass-only role.** Rejected by the owner: any signed-in user may open it.
+
+### What this costs
+
+The harness's setup mode no longer means "anyone on the machine may act" once a realm exists. An
+operator who loses the demo admin's password has to use the identity provider's own administrator
+console to recover, which is the correct place. The realm import runs only at the identity
+provider's first start, so a deployment already running needs a one-time registration of
+`osprey-launcher`, `osprey-harness` and `osprey-demo-admin` through the admin API; the render alone
+does not reach it.
+
+### What would make it wrong
+
+If the harness ever runs somewhere the identity provider is not reachable from the operator's browser,
+fail-closed locks the operator out and a break-glass path becomes necessary. Amendment 22 of the
+harness and packaging decision (setup mode unauthenticated and loopback-only) is narrowed by this
+record, not contradicted: bootstrap stays open, and only the post-realm state closes.
+
+### Tests owed (standing rules 4, 12 and 15)
+
+Each names the failure it would catch, and the fake identity provider must model refusals and an
+unreachable state rather than only success:
+
+- Realm: the `osprey-launcher` and `osprey-harness` clients are public with PKCE S256 and the exact
+  loopback redirect URIs; `osprey-demo-admin` exists with `osprey-admin` and not the Studio roles;
+  the demo analyst does not hold `osprey-admin`; `ADMIN_ROLE` has one definition. These are written
+  in `tests/harness/test_realm.py` and currently fail, as they should.
+- Every Admin route, one test per route: no session, a session without `osprey-admin`, an expired
+  token and an unreachable provider each refuse; a valid admin passes.
+- The launcher: no tile before sign-in; the tile sets above; no password or token in the page or in
+  `/status`; the pre-login start screen carries no role-only content.
+- One real-Keycloak test in the `idp-test` style, because rule 15 says a first green against a fake
+  is untested.
+
+### State of the build
+
+Built and committed locally: the launcher (`762a569`), the runbook port defect (`c07d612`) and the
+launcher's design-system styling (`1318c75`, not yet pushed). Not built: everything in decisions 1
+to 4 above.
