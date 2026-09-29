@@ -17,6 +17,24 @@ beforeEach(() => {
 });
 
 describe("reading the launcher's hand-off", () => {
+  test("switching case signs back in without a click and returns to the tab it was on", () => {
+    // Seen: choosing a case reloads the page, the sign-in is held in memory, and the person met the
+    // sign-in screen and had to press its button.
+    expect(readHandoff("?investigation=c1&from=case", sessionStorage, NOW)).toEqual({
+      autoSignIn: true,
+      view: null,
+    });
+    expect(readHandoff("?investigation=c1&from=case&view=ingest", sessionStorage, NOW)).toEqual({
+      autoSignIn: true,
+      view: "ingest",
+    });
+  });
+
+  test("only the exact value `case` counts as a case switch", () => {
+    expect(readHandoff("?from=Case", sessionStorage, NOW).autoSignIn).toBe(false);
+    expect(readHandoff("?from=cases", sessionStorage, NOW).autoSignIn).toBe(false);
+  });
+
   test("a plain load is not a hand-off and starts nothing", () => {
     expect(readHandoff("", sessionStorage, NOW)).toEqual({ autoSignIn: false, view: null });
   });

@@ -7585,3 +7585,23 @@ password from `OSPREY_DEMO_ANALYST_PASSWORD`, only when the file names one (a de
 without a demo analyst gets none). No secret is regenerated, printed or rewritten. Named tests:
 `tests/harness/test_register_sign_in.py` (restored after an empty restart; each account keeps its
 own password; none invented; never printed).
+
+### ADR-052, Amendment 6 (29 September 2026) — the picker on a real deployment
+
+**Seen on the owner's deployment**, four things, each reproduced in a test before it was fixed:
+
+1. Rows in the picker were empty buttons. Cases made before names existed have no name. They are now
+   shown as "Untitled case · created <date time UTC>", never an empty button, in the picker and the
+   switcher. Named cases are listed first, then untitled ones, newest first within each.
+2. Choosing a case showed the sign-in screen. Switching reloads the page (the working set, filters and
+   delta stream are built once per case) and the sign-in is held in memory. The Glass now opens a case
+   with `?investigation=<id>&from=case` (plus `&view=ingest` from the Ingest Studio), which starts the
+   sign-in without a click, exactly as arriving from the launcher does (`auth/launcherHandoff.ts`); it
+   grants nothing and the Conduit still checks every request.
+3. The cases are empty. The twelve listed were created by the old Glass, which made a blank case on
+   every load. Nothing was wrong with them. No dataset has been seeded into a named case yet (stage 4).
+4. The 405 on the case list was an API image built before stage 2; fixed by the refresh sequence
+   (ADR-049 Amendment).
+
+**Not built, and asked of the owner:** whether to offer clearing out the blank cases (a delete, so an
+ADR-052 decision: only an Author, an audited soft delete, never a hard delete) or leave them.

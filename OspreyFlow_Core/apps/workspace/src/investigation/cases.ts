@@ -15,6 +15,36 @@ export interface CaseListing {
   branched_from?: string | null;
 }
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// Written by hand, not by Intl: the month abbreviation differs between engines ("Sep" or "Sept").
+function utcStamp(made: Date): string {
+  const two = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${made.getUTCDate()} ${MONTHS[made.getUTCMonth()]} ${made.getUTCFullYear()} ` +
+    `${two(made.getUTCHours())}:${two(made.getUTCMinutes())} UTC`
+  );
+}
+
+/** What a case is called on screen. A case made before names existed has none; it is shown as
+ * untitled with when it was made, never as an empty button. */
+export function caseLabel(entry: Pick<CaseListing, "name" | "created_at">): string {
+  const name = entry.name.trim();
+  if (name) return name;
+  const made = new Date(entry.created_at);
+  if (Number.isNaN(made.getTime())) return "Untitled case";
+  return `Untitled case · created ${utcStamp(made)}`;
+}
+
+/** Named cases first, then untitled ones; newest first within each. */
+export function orderCases(cases: readonly CaseListing[]): CaseListing[] {
+  return [...cases].sort((a, b) => {
+    const named = Number(Boolean(b.name.trim())) - Number(Boolean(a.name.trim()));
+    if (named !== 0) return named;
+    return b.created_at.localeCompare(a.created_at);
+  });
+}
+
 export async function listCases(apiBaseUrl: string, bearerToken: string): Promise<CaseListing[]> {
   const response = await fetch(`${apiBaseUrl}/v1/investigations`, {
     headers: { Authorization: `Bearer ${bearerToken}` },
@@ -46,8 +76,11 @@ export async function createCase(
 }
 
 /** The URL the Glass already reads on load (`initialInvestigationId`). */
-export function caseUrl(id: string): string {
-  return `/?investigation=${encodeURIComponent(id)}`;
+export function caseUrl(id: string, view?: "ingest"): string {
+  // `from=case` makes the Glass sign back in by itself: the reload drops the in-memory sign-in
+  // (`auth/launcherHandoff.ts`), and without it the person met the sign-in screen after every switch.
+  const base = `/?investigation=${encodeURIComponent(id)}&from=case`;
+  return view ? `${base}&view=${view}` : base;
 }
 
 /** Switching case reloads the page on purpose: the working set, the cross-filter store and the
@@ -55,8 +88,9 @@ export function caseUrl(id: string): string {
  * of the previous case's state is left behind. */
 export function openCase(
   id: string,
+  view?: "ingest",
   navigate: (url: string) => void = (url) => window.location.assign(url),
 ): void {
   sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, id);
-  navigate(caseUrl(id));
+  navigate(caseUrl(id, view));
 }

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "../design/primitives/Button";
 import { Select } from "../design/primitives/Select";
-import { type CaseListing, listCases } from "./cases";
+import { type CaseListing, caseLabel, listCases, orderCases } from "./cases";
 import { NewCaseForm } from "./NewCaseForm";
 
 export interface CaseSwitcherProps {
@@ -46,9 +46,9 @@ export function CaseSwitcher({ apiBaseUrl, bearerToken, currentId, onOpen }: Cas
           }}
         >
           {!known && <option value={currentId}>Current case</option>}
-          {cases.map((entry) => (
+          {orderCases(cases).map((entry) => (
             <option key={entry.id} value={entry.id}>
-              {entry.name}
+              {caseLabel(entry)}
             </option>
           ))}
         </Select>

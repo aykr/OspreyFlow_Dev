@@ -65,7 +65,11 @@ export function readHandoff(
   now: number = Date.now(),
 ): Handoff {
   const params = new URLSearchParams(search);
-  if (params.get("from") === "launcher") {
+  // `case`: the Glass switched case by reloading the page, which drops the in-memory sign-in. Same
+  // treatment as arriving from the launcher (sign back in without a click, the identity provider
+  // still knows the person), and it may name the tab to return to. It grants nothing either.
+  const from = params.get("from");
+  if (from === "launcher" || from === "case") {
     const view = viewFrom(params.get("view"));
     stash(storage, { view, at: now });
     return { autoSignIn: true, view };

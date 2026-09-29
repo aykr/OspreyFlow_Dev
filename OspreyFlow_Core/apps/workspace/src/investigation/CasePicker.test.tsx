@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CasePicker } from "./CasePicker";
 import { CaseSwitcher } from "./CaseSwitcher";
-import type { CaseListing } from "./cases";
+import { caseLabel, type CaseListing } from "./cases";
 
 afterEach(() => {
   cleanup();
@@ -135,5 +135,47 @@ describe("CaseSwitcher (the header, and the Ingest Studio)", () => {
     fireEvent.click(screen.getByRole("button", { name: /create/i }));
 
     await waitFor(() => expect(onOpen).toHaveBeenCalledWith("fresh"));
+  });
+});
+
+
+describe("cases with no name (seen on the owner's deployment: rows with an empty button)", () => {
+  const UNNAMED = [
+    { id: "u1", name: "", level: "viewer", created_at: "2026-09-29T09:41:00Z", created_by: "a" },
+    { id: "u2", name: "   ", level: "viewer", created_at: "2026-09-28T17:05:00Z", created_by: "a" },
+    { id: "c1", name: "Fixture Corp", level: "author", created_at: "2026-09-27T09:00:00Z", created_by: "a" },
+  ] as const satisfies readonly CaseListing[];
+
+  it("labels a case with no name as untitled, with when it was created, so each row can be told apart", () => {
+    expect(caseLabel(UNNAMED[0])).toMatch(/^Untitled case/);
+    expect(caseLabel(UNNAMED[0])).toMatch(/29 Sep 2026/);
+    expect(caseLabel(UNNAMED[0])).not.toEqual(caseLabel(UNNAMED[1]));
+    expect(caseLabel(UNNAMED[2])).toBe("Fixture Corp");
+  });
+
+  it("never renders an empty button for a case in the picker or the switcher", async () => {
+    stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: UNNAMED }) });
+    render(<CasePicker apiBaseUrl="http://api" bearerToken="t" lastCaseId={null} onOpen={() => undefined} />);
+    await screen.findByText("Fixture Corp");
+    for (const button of screen.getAllByRole("button")) {
+      expect((button.textContent ?? "").trim()).not.toBe("");
+    }
+    cleanup();
+    stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: UNNAMED }) });
+    render(<CaseSwitcher apiBaseUrl="http://api" bearerToken="t" currentId="c1" onOpen={() => undefined} />);
+    await screen.findByText("Fixture Corp");
+    for (const option of screen.getAllByRole("option")) {
+      expect((option.textContent ?? "").trim()).not.toBe("");
+    }
+  });
+
+  it("lists named cases first, then untitled ones, newest first within each", async () => {
+    stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: UNNAMED }) });
+    render(<CasePicker apiBaseUrl="http://api" bearerToken="t" lastCaseId={null} onOpen={() => undefined} />);
+    await screen.findByText("Fixture Corp");
+    const labels = screen.getAllByRole("button").map((b) => b.textContent ?? "");
+    expect(labels[0]).toBe("Fixture Corp");
+    expect(labels[1]).toMatch(/29 Sep 2026/);
+    expect(labels[2]).toMatch(/28 Sep 2026/);
   });
 });

@@ -69,15 +69,19 @@ describe("createCase", () => {
 
 describe("opening a case", () => {
   it("names the case in the URL the Glass already reads", () => {
-    expect(caseUrl("abc 1")).toBe("/?investigation=abc%201");
+    expect(caseUrl("abc 1")).toBe("/?investigation=abc%201&from=case");
+  });
+
+  it("asks the Glass to sign back in on arrival, and to reopen the Ingest tab when it was there", () => {
+    expect(caseUrl("c1", "ingest")).toBe("/?investigation=c1&from=case&view=ingest");
   });
 
   it("remembers it for the sign-in round trip before navigating", () => {
     const navigate = vi.fn();
 
-    openCase("case-9", navigate);
+    openCase("case-9", undefined, navigate);
 
     expect(sessionStorage.getItem(INVESTIGATION_ID_SESSION_KEY)).toBe("case-9");
-    expect(navigate).toHaveBeenCalledWith("/?investigation=case-9");
+    expect(navigate).toHaveBeenCalledWith("/?investigation=case-9&from=case");
   });
 });

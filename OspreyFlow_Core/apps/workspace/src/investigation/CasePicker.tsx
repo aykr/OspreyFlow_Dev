@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "../design/primitives/Button";
 import { Panel } from "../design/primitives/Panel";
-import { type CaseListing, listCases } from "./cases";
+import { type CaseListing, caseLabel, listCases, orderCases } from "./cases";
 import { NewCaseForm } from "./NewCaseForm";
 
 export interface CasePickerProps {
@@ -55,7 +55,7 @@ export function CasePicker({ apiBaseUrl, bearerToken, lastCaseId, onOpen }: Case
           )}
           {cases !== null && cases.length > 0 && (
             <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-              {cases.map((entry) => (
+              {orderCases(cases).map((entry) => (
                 <li
                   key={entry.id}
                   style={{
@@ -67,7 +67,7 @@ export function CasePicker({ apiBaseUrl, bearerToken, lastCaseId, onOpen }: Case
                     borderBottom: "1px solid var(--border-subtle)",
                   }}
                 >
-                  <Button onClick={() => onOpen(entry.id)}>{entry.name}</Button>
+                  <Button onClick={() => onOpen(entry.id)}>{caseLabel(entry)}</Button>
                   <span className="label">
                     {entry.id === lastCaseId ? "Last opened · " : ""}
                     {entry.level}

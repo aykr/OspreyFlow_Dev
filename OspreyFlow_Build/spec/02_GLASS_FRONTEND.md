@@ -231,7 +231,7 @@ every load with no id) is gone. With no case resolved, and the analyst signed in
 "New case" form. The header carries a case switcher, and the Ingest Studio shows the same switcher
 above its tabs ("Data loaded from this studio goes into"), with "New case" in it. Choosing a case
 sets the sessionStorage key and reloads the page, because the working set, cross-filter store and
-delta stream are built once per case. Steps 1 and 2 (query parameter, then session) are unchanged.
+delta stream are built once per case, and it signs back in by itself (`from=case`, ADR-052 Amendment 6). Steps 1 and 2 (query parameter, then session) are unchanged.
 
 ### 2.2 Opening from the launcher
 

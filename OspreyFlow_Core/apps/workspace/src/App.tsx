@@ -626,7 +626,7 @@ export function App() {
           apiBaseUrl={API_BASE_URL}
           bearerToken={bearerToken}
           currentId={investigationId}
-          onOpen={(id) => openCase(id)}
+          onOpen={(id) => openCase(id, view === "ingest" ? "ingest" : undefined)}
         />
         <div style={{ flex: 1, maxWidth: 480 }}>
           <GlobalSearch
@@ -736,7 +736,7 @@ export function App() {
             apiBaseUrl={API_BASE_URL}
             bearerToken={bearerToken}
             investigationId={investigationId}
-            onOpenCase={(id) => openCase(id)}
+            onOpenCase={(id) => openCase(id, "ingest")}
           />
         )}
         {view === "dossier" && dossierNodeId && (
