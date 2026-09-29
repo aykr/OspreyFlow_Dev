@@ -89,7 +89,7 @@ _ENV_REFERENCE = re.compile(r"^env:[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class MapProvider(BaseModel):
-    id: str
+    id: str = Field(min_length=1)
     label: str
     kind: MapSourceKind
     licence: ProviderLicence
@@ -174,7 +174,7 @@ class MapProvider(BaseModel):
 class MapConfig(BaseModel):
     """`osprey.yaml`'s `map:` section."""
 
-    default: str
+    default: str = Field(min_length=1)
     providers: list[MapProvider] = Field(min_length=1)
 
     @model_validator(mode="after")

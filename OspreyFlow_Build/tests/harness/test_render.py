@@ -663,6 +663,18 @@ def test_every_published_port_is_overridable_with_the_spec_s_own_default(
     assert "OSPREY_API_PORT=8000" in env
 
 
+def test_arcadedb_is_published_to_this_machine_only(rendered: RenderResult) -> None:
+    """The place-name load and the dataset seeds run on the host and need ArcadeDB (owner's ruling
+    of 29 September 2026). It is bound to 127.0.0.1, never all interfaces: a bare
+    `2480:2480` would put an unauthenticated-by-network database on the office LAN."""
+    compose = yaml.safe_load(rendered.artefacts["compose.yaml"])
+
+    assert compose["services"]["arcadedb"]["ports"] == [
+        "127.0.0.1:${OSPREY_ARCADEDB_PORT:-2480}:2480"
+    ]
+    assert "OSPREY_ARCADEDB_PORT=2480" in rendered.artefacts["deployment.env"]
+
+
 def test_the_conduit_is_not_published_by_default_and_is_when_asked_for() -> None:
     """`05_DEPLOYMENT.md` §2.6 item 1, the owner's decision of 25 September 2026.
 

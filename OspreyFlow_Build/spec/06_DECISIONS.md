@@ -7356,6 +7356,24 @@ in `test_deployment_schema.py`; and in `test_preflight.py`
 `test_tiles_in_the_mounted_folder_are_found_where_the_conduit_will_see_them` and
 `test_a_missing_tile_file_in_the_mounted_folder_names_the_host_folder`.
 
+### ADR-054, Amendment 5 (29 September 2026) — ArcadeDB published to this machine only; blank map ids refused
+
+**Owner's rulings, 29 September 2026: "Yes" to both.**
+
+1. **ArcadeDB is published on `127.0.0.1` only** (`127.0.0.1:${OSPREY_ARCADEDB_PORT:-2480}:2480`),
+   in every profile. The place-name load and the dataset seeds run on the host and need it; the
+   launched deployment previously kept it inside Docker, which is why the basemap build could not
+   reach it. Bound to loopback, never all interfaces, so it is not reachable from the network.
+   The published port joins the Launch port checks through the same override table as the others.
+   **Not changed:** the seeds and the build still default to `localhost:2480` and a fixed password;
+   the launched deployment generates its own, so they must be pointed at it (a follow-up).
+2. **`MapProvider.id` and `MapConfig.default` must be non-empty.** The Admin console had written
+   `id: ''` and `default: ''`, which agree with each other, so the consistency check passed them.
+
+**Tests that fail without this:** `test_arcadedb_is_published_to_this_machine_only`
+(`test_render.py`); `test_a_provider_with_a_blank_id_is_refused` and
+`test_a_blank_default_is_refused_even_when_a_blank_id_would_match_it` (`test_mapconfig.py`).
+
 ## ADR-055 — The PaySim mobile-money dataset as an internal demo: what goes in the graph, what goes in the analytics store
 
 **Status: Proposed, 29 September 2026. Three points need the owner's ruling (marked "Owner to rule");

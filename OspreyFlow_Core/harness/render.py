@@ -446,9 +446,20 @@ PORT_OVERRIDES: dict[str, tuple[str, int]] = {
     # Published because the post-launch verify talks to it from the host, and because an operator
     # diagnosing a principal-resolution fault needs the admin console.
     "keycloak": ("OSPREY_KEYCLOAK_PORT", 8081),
+    # Published to this machine only (`LOOPBACK_ONLY`): the place-name load and the dataset seeds
+    # run on the host and need the database (owner's ruling of 29 September 2026).
+    "arcadedb": ("OSPREY_ARCADEDB_PORT", 2480),
 }
 
-_CONTAINER_PORTS: dict[str, int] = {"workspace": 8080, "api": 8000, "keycloak": 8080}
+_CONTAINER_PORTS: dict[str, int] = {
+    "workspace": 8080,
+    "api": 8000,
+    "keycloak": 8080,
+    "arcadedb": 2480,
+}
+
+#: Services whose published port is bound to 127.0.0.1, not every interface.
+LOOPBACK_ONLY = frozenset({"arcadedb"})
 
 #: Per-service compose stanzas that are not derivable from the image alone. Keycloak is the only
 #: entry today and every line of it is load-bearing — `05_DEPLOYMENT.md` §2.1.1 records why each
@@ -755,7 +766,8 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
         if publishes:
             variable, default = PORT_OVERRIDES[entry.service]
             container_port = _CONTAINER_PORTS[entry.service]
-            service["ports"] = [f"${{{variable}:-{default}}}:{container_port}"]
+            bind = "127.0.0.1:" if entry.service in LOOPBACK_ONLY else ""
+            service["ports"] = [f"{bind}${{{variable}:-{default}}}:{container_port}"]
         if entry.service == "ingest":
             service["volumes"] = [f"osprey-staging:{config.components.storage.staging}"]
         service.update(_SERVICE_EXTRAS.get(entry.service, {}))

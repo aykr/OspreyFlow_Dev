@@ -89,3 +89,20 @@ def test_map_config_accepts_a_single_tier_1_provider() -> None:
     config = MapConfig(default="osm-local", providers=[_provider()])
     assert config.default == "osm-local"
     assert len(config.providers) == 1
+
+
+def test_a_provider_with_a_blank_id_is_refused() -> None:
+    """Seen: the Admin console saved `osprey.yaml` with `id: ''` and `default: ''`. Those two agree
+    with each other, so the consistency check let them through and the map went blank."""
+    with pytest.raises(ValidationError):
+        _provider(id="")
+
+
+def test_a_blank_default_is_refused_even_when_a_blank_id_would_match_it() -> None:
+    with pytest.raises(ValidationError):
+        MapConfig.model_validate(
+            {
+                "default": "",
+                "providers": [_provider().model_dump(mode="json") | {"id": ""}],
+            }
+        )
