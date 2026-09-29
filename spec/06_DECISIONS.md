@@ -6815,3 +6815,39 @@ unreachable state rather than only success:
 Built and committed locally: the launcher (`762a569`), the runbook port defect (`c07d612`) and the
 launcher's design-system styling (`1318c75`, not yet pushed). Not built: everything in decisions 1
 to 4 above.
+
+### Amendment 1 (29 September 2026): what building decision 4 fixed
+
+Written while building, so the record says what the code does. None of it changes the ruling.
+
+- **Enforcement is decided when the console starts.** A console started with no rendered realm stays
+  open for its lifetime; the next start enforces. The alternative (deciding per request) would lock
+  the operator out the moment the Launch they are running renders the realm. The cost: a console
+  left running through a Launch stays open, on loopback, until it is restarted.
+- **It covers every route, pages included**, and is tested from the real route table so a route
+  added later is covered without anyone remembering to. Refused API calls answer `401`
+  (`sign_in_required`), refused pages redirect to `/login`. These are not `404`: the console's
+  existence is not a secret to someone who can already reach its port, unlike console-mode
+  `/admin`, which keeps its `404` and its bearer token.
+- **Two refusals are told apart** (ADR-044): "the sign-in service is not running" (with what to do)
+  and "sign-in was refused" or "this account is not an administrator". An account that signs in but
+  lacks the role is not given a session, and is offered a sign-out that also ends the provider's
+  session, since signing in again would otherwise re-use the same account silently.
+- **One way in:** a server-side session behind an opaque cookie (HttpOnly, SameSite=Lax, host-only,
+  eight hours absolute, in memory). A bearer token is not accepted. A state-changing request with a
+  foreign `Origin` is refused, as is any host name other than `localhost` or `127.0.0.1` on the
+  console's port; `127.0.0.1` is redirected to `localhost`.
+- **The session is not re-checked against the provider**, so removing a role takes effect at the
+  session's expiry, not immediately.
+- **Port 7000 only when enforced**, because the client registers one exact redirect.
+- **The `docker run` bootstrap cannot sign in once a realm exists** (it reaches the provider as its
+  own `localhost`). The supported route after the first Launch is the host (`make launch`). Recorded
+  in `05_DEPLOYMENT.md` §2.5.1.
+- **The identity used is the ID token**, whose audience is the client's own id; the launcher and
+  console clients carry no Conduit audience, so their tokens are refused by the Conduit.
+
+**State of the build after this amendment.** Built: the realm clients and demo admin, their
+registration on a running Keycloak (`make register-sign-in`), the shared sign-in code, and the Admin
+console's enforcement. **Not built:** the launcher's own sign-in and role-filtered tiles (decisions 1
+and 2), and a test against a real Keycloak (the provider in the tests is a stand-in that models the
+refusals, per rule 15, and has not been checked against Keycloak itself).

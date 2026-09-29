@@ -117,6 +117,11 @@ class LoginAttempts:
 
     def start(self, config: SignInConfig) -> str:
         """The address to send the browser to."""
+        return self.begin(config)[0]
+
+    def begin(self, config: SignInConfig) -> tuple[str, str]:
+        """The address to send the browser to, and the `state` it will carry back — for a caller
+        that also binds the sign-in to the browser that started it (a cookie holding the state)."""
         self._evict()
         if len(self._attempts) >= MAX_ATTEMPTS:
             oldest = min(self._attempts, key=lambda s: self._attempts[s].expires)
@@ -140,7 +145,7 @@ class LoginAttempts:
                 "code_challenge_method": "S256",
             }
         )
-        return f"{config.auth_url}?{query}"
+        return f"{config.auth_url}?{query}", state
 
     def finish(self, state: str | None) -> Attempt:
         """Consumes the attempt. An unknown, reused or expired state is refused."""

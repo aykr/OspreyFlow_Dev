@@ -324,6 +324,33 @@ button.
   socket; the admin console it becomes afterwards does not, and runs with the same non-root,
   read-only-root posture as every other component (§7).
 
+#### 2.5.1 Signing in to the Admin console — `06_DECISIONS.md` ADR-051
+
+Once a realm has been rendered (`deploy/generated/<profile>/realm.json` exists) the Admin console
+requires a signed-in account holding the `osprey-admin` role, on **every** route including the pages
+themselves. Sign-in is the deployment's own realm through the public client `osprey-harness`
+(authorization code with PKCE), so the console needs the identity provider running: with it down
+the console says so and admits nobody, and the launcher (`make launch`) is how the stack is started
+first. A demonstration deployment (`apply --demo-analyst`) includes the account `osprey-demo-admin`;
+its password is `OSPREY_DEMO_ADMIN_PASSWORD` in `deployment.env`. A deployment applied earlier gets
+the client and the account with `make register-sign-in`.
+
+- **Before any realm is rendered the console is open**, loopback only, because there is nothing to
+  sign in to; the enforcement is decided when the console starts, so the Launch that renders the
+  realm does not lock the operator out mid-flow. The next start enforces.
+- **The console must be served on port 7000 when enforced.** The realm registers one exact redirect
+  address, `http://localhost:7000/callback`, and the console refuses to start on another port
+  rather than fail at the provider's error page.
+- **Run the console on the host (`make launch`, or `python -m harness`) once a deployment exists.**
+  The `docker run` bootstrap above reaches the identity provider as `localhost`, which inside the
+  container is the container itself, so an enforced console started that way reports the provider
+  as not running. This is a known limit, not a fault to work around.
+- `/admin` in console mode is unchanged: bearer-only, and `404` when refused.
+- The session is held in the console's memory (a restart signs everyone out), lasts eight hours from
+  sign-in whatever happens in between, and is not re-checked against the provider: an administrator
+  whose role is removed stays signed in until then. Signing out (`/logout`) also ends the provider's
+  own session.
+
 ### 2.6 How the Glass reaches the Conduit, and how an analyst signs in
 
 Two holes, found running the seeded golden path: a rendered `local-lite` deployment came up

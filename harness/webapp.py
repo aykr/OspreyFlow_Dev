@@ -167,6 +167,14 @@ from harness.screens import (
     profile_options,
 )
 from harness.webapp_auth import loopback_only_middleware, require_admin_role
+from harness.webapp_signin import (
+    SignInSettings,
+    default_issuer,
+    make_settings,
+    port_problem,
+    rendered_realm_exists,
+)
+from harness.webapp_signin import install as install_sign_in
 from schemas.deployment import OspreyConfig, Profile
 
 #: The built frontend's own output directory — `apps/harness/dist`, present once `npm run build`
@@ -264,14 +272,19 @@ def create_app(
     *,
     config_path: Path = DEFAULT_CONFIG_PATH,
     real_data_exceptions_path: Path = REAL_DATA_EXCEPTIONS_PATH,
-    out_root: Path = DEFAULT_OUT_ROOT,
+    out_root: Path | None = None,
     render_resolver: DigestResolver | None = None,
     mode: str = "setup",
     docker_context_resolver: Any = _current_docker_context,
     apply_command: list[str] | None = None,
+    oidc_issuer: str | None = None,
+    sign_in: SignInSettings | None = None,
 ) -> FastAPI:
     if mode not in ("setup", "console"):
         raise ValueError(f"mode must be 'setup' or 'console', got {mode!r}")
+    # Resolved when the app is built, not when the module is imported, so a test (or a caller) that
+    # points the default elsewhere is honoured.
+    out_root = DEFAULT_OUT_ROOT if out_root is None else out_root
     app = FastAPI(title="OspreyFlow setup harness")
     app.state.last_artefacts = None
     app.state.artefacts_confirmed = False
@@ -281,6 +294,15 @@ def create_app(
     # loopback refusal below, since which routes exist at all is a coarser boundary than who may
     # reach them.
     app.middleware("http")(_mode_gate_middleware(mode))
+    # ADR-051: once a realm has been rendered there is an identity provider to ask, and the setup
+    # console requires an `osprey-admin` session. Decided now, at start-up — see
+    # `harness/webapp_signin.py`. Console mode keeps its own bearer-only `/admin` (R2).
+    sign_in_settings = sign_in
+    if sign_in_settings is None and mode == "setup" and rendered_realm_exists(out_root):
+        sign_in_settings = make_settings(oidc_issuer or default_issuer(out_root))
+    app.state.sign_in = sign_in_settings if mode == "setup" else None
+    if app.state.sign_in is not None:
+        install_sign_in(app, app.state.sign_in)
     # Setup mode's own second layer of defence — R2, `webapp_auth.loopback_only_middleware`'s own
     # docstring has the full reasoning (the bootstrap command's `-p 127.0.0.1:...` is the first).
     app.middleware("http")(loopback_only_middleware)
@@ -638,6 +660,17 @@ def main(argv: list[str] | None = None) -> int:
         out_root=args.out_root,
         mode=args.mode,
         apply_command=apply_command,
+    )
+    enforced = app.state.sign_in is not None
+    problem = port_problem(args.port, enforced=enforced)
+    if problem:
+        print(f"harness: {problem}", file=sys.stderr)
+        return 2
+    print(
+        "harness: sign-in required (an osprey-admin account); "
+        "the identity provider must be running"
+        if enforced
+        else "harness: no realm rendered yet, so this console is open (loopback only)"
     )
     uvicorn.run(app, host=args.host, port=args.port)
     return 0
