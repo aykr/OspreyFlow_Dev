@@ -264,7 +264,7 @@ def test_the_runbook_carries_this_deployment_s_own_paths_not_a_template(
     assert "/srv/osprey/data" in runbook
     assert "/srv/osprey/staging" in runbook
     assert "/srv/osprey/backups" in runbook
-    assert "| Admin console | `http://localhost:7000/` |" in runbook
+    assert "| Admin console | `http://localhost:7100/` |" in runbook
     assert "config/real_data_exceptions.yaml" in runbook
     assert "deploy/RUNBOOK.md" in runbook, (
         "the generated runbook must point at §6's hand-written recovery-time runbook rather than "

@@ -1,5 +1,5 @@
 """`DECISIONS.md` ruling R2: "in setup mode the harness binds to loopback only... and refuses any
-non-loopback source." The bootstrap command's own `-p 127.0.0.1:7000:7000` (`harness/webapp.py`'s
+non-loopback source." The bootstrap command's own `-p 127.0.0.1:7100:7100` (`harness/webapp.py`'s
 own `_parse_args`, `--host` defaulting to `127.0.0.1`) is the first layer; this file proves the
 second, application-level one — a real ASGI request whose own client address is not loopback,
 refused before it reaches any route at all, not a unit test of `is_loopback` alone.

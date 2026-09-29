@@ -1,15 +1,15 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-// `HARNESS_API_PORT` — `05_DEPLOYMENT.md` §2's own bootstrap command names port 7000 as this
+// `HARNESS_API_PORT` — `05_DEPLOYMENT.md` §2's own bootstrap command names port 7100 as this
 // app's real default, kept as the default here too; overridable because `keyboard/playwright.
 // config.ts` needs a different one. **Found needing this, not anticipated:** port 7000 is macOS's
 // own AirPlay Receiver / ControlCenter service (registered as `afs3-fileserver`) on a real
 // development machine — `reuseExistingServer` silently treated that already-listening port as
 // this app's own server, and every proxied request got ControlCenter's own 403 refusal instead of
 // a connection error, which is what first surfaced this. Only the keyboard suite's own scratch
-// server needs to move; the real app keeps 7000.
-const API_PORT = process.env.HARNESS_API_PORT ?? "7000";
+// server needs to move; the real app uses 7100 (it moved off 7000 for the same reason).
+const API_PORT = process.env.HARNESS_API_PORT ?? "7100";
 
 export default defineConfig({
   plugins: [react()],

@@ -3,7 +3,7 @@
 **Why this exists (friction log, 29 September 2026).** Starting the product meant knowing that
 three interfaces are three different things: the Glass is the workspace at `localhost:8080` and
 asks for a sign-in; the Ingest Studio is not an address at all but the "Ingest" tab inside the
-Glass; and the admin console is the harness's own process on `localhost:7000` — the workspace does
+Glass; and the admin console is the harness's own process on `localhost:7100` — the workspace does
 not serve it (`localhost:8080/admin` answers with the Glass's sign-in page). Nothing put the three
 in one place, so the way in was a run book rather than a click.
 
@@ -135,10 +135,25 @@ STATE_SHAPES = {"up": "filled", "starting": "half", "down": "hollow"}
 Prober = Callable[[str], int | None]
 
 
-class Spawner(Protocol):
-    """`(argv, cwd=..., wait=...)` — runs a command; a protocol so the tests can fake it."""
+class Handle(Protocol):
+    """What a background start leaves behind: whether it is still running, and where it logs."""
 
-    def __call__(self, argv: Sequence[str], *, cwd: Path, wait: bool = False) -> None: ...
+    log_path: Path
+
+    def poll(self) -> int | None:
+        """None while running, otherwise the exit code."""
+        ...
+
+
+class Spawner(Protocol):
+    """`(argv, cwd=..., wait=...)` — runs a command; a protocol so the tests can fake it.
+
+    A command started without waiting returns a `Handle`, so the launcher can tell that it has
+    stopped. (A spawner with nothing to report may return None.)"""
+
+    def __call__(
+        self, argv: Sequence[str], *, cwd: Path, wait: bool = False
+    ) -> Handle | None: ...
 
 
 class LaunchError(Exception):
@@ -192,6 +207,15 @@ def http_probe(url: str) -> int | None:
         return None
 
 
+@dataclass(frozen=True)
+class _Child:
+    process: subprocess.Popen[bytes]
+    log_path: Path
+
+    def poll(self) -> int | None:
+        return self.process.poll()
+
+
 class ProcessSpawner:
     """Runs commands with the repository's own import path, logging to a temp file."""
 
@@ -200,9 +224,10 @@ class ProcessSpawner:
         self._children: list[subprocess.Popen[bytes]] = []
         self.log_dir = Path(tempfile.gettempdir()) / "ospreyflow-launch"
 
-    def __call__(self, argv: Sequence[str], *, cwd: Path, wait: bool = False) -> None:
+    def __call__(self, argv: Sequence[str], *, cwd: Path, wait: bool = False) -> Handle | None:
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        log = (self.log_dir / f"{Path(argv[0]).name}.log").open("ab")
+        log_path = self.log_dir / f"{Path(argv[0]).name}.log"
+        log = log_path.open("ab")
         env = dict(os.environ)
         env["PYTHONPATH"] = os.pathsep.join(
             [str(self._repo_root), str(self._repo_root / "packages")]
@@ -217,13 +242,14 @@ class ProcessSpawner:
                         f"`{' '.join(argv[:3])} …` failed (exit {done.returncode}); "
                         f"the output is in {self.log_dir}"
                     )
-                return
+                return None
             child = subprocess.Popen(  # noqa: S603
                 list(argv), cwd=cwd, env=env, stdout=log, stderr=log, start_new_session=True
             )
             if Path(argv[0]).name != "docker":
                 # The containers are meant to outlive the launcher; the admin console is not.
                 self._children.append(child)
+            return _Child(child, log_path)
         except FileNotFoundError as err:
             raise LaunchError(f"`{argv[0]}` was not found on this machine's PATH.") from err
 
@@ -258,6 +284,7 @@ class Launcher:
         self._threads: list[threading.Thread] = []
         self._running: set[str] = set()
         self._started_at: dict[str, float] = {}
+        self._handles: dict[str, Handle] = {}
         self._lock = threading.Lock()
         # ADR-051. Once a deployment has been rendered there is a realm to sign in to, and this
         # launcher asks first and shows each account only what its roles allow. Before that it is
@@ -365,7 +392,42 @@ class Launcher:
 
     def _within_grace(self, target: str) -> bool:
         started = self._started_at.get(target)
-        return started is not None and self._clock() - started < START_GRACE_SECONDS
+        return (
+            started is not None
+            and self._clock() - started < START_GRACE_SECONDS
+            and not self._stopped(target)
+        )
+
+    def _stopped(self, target: str) -> bool:
+        """The process started for this target has ended when it should not have. The console is
+        meant to keep running; `docker compose up --wait` is meant to finish, so only a non-zero
+        exit from it is a failure."""
+        handle = self._handles.get(target)
+        code = handle.poll() if handle is not None else None
+        return code is not None and (target == "admin" or code != 0)
+
+    def failure_text(self, target: str) -> str:
+        """Why a start ended, in the words a person can act on; empty while nothing has failed."""
+        handle = self._handles.get(target)
+        if handle is None or not self._stopped(target):
+            return ""
+        name = ADMIN if target == "admin" else GLASS
+        try:
+            text = handle.log_path.read_text(encoding="utf-8", errors="replace")
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+        except OSError:
+            lines = []
+        tail = "\n".join(lines[-3:])
+        if "address already in use" in tail:
+            cause = (
+                f"another program on this computer is already using port {HARNESS_PORT}. "
+                "Close it, then press Start again."
+            )
+        elif lines:
+            cause = f"its last log line reads: {lines[-1]}"
+        else:
+            cause = "it wrote nothing to its log."
+        return f"{name} stopped before it was ready: {cause} The full log is {handle.log_path}."
 
     def status(self) -> dict[str, str]:
         out: dict[str, str] = {}
@@ -425,9 +487,12 @@ class Launcher:
 
     def _execute(self, target: str, steps: Sequence[Step]) -> None:
         self._started_at[target] = self._clock()
+        self._handles.pop(target, None)
         try:
             for step in steps:
-                self._spawner(list(step.argv), cwd=self.repo_root, wait=step.wait)
+                handle = self._spawner(list(step.argv), cwd=self.repo_root, wait=step.wait)
+                if handle is not None and not step.wait:
+                    self._handles[target] = handle
         except LaunchError:
             self._started_at.pop(target, None)
             raise
@@ -498,6 +563,7 @@ class Launcher:
             )
             wait = ""
         hint = f'<p class="hint">{html.escape(surface.hint)}</p>' if surface.hint else ""
+        problem = html.escape(self.failure_text(surface.starts)) if state == "down" else ""
         return f"""      <section class="tile" data-name="{name}" data-state="{state}" aria-labelledby="t-{slug}">
         <header>
           <h3 id="t-{slug}">{name}</h3>
@@ -506,7 +572,7 @@ class Launcher:
         <p class="purpose">{html.escape(surface.purpose)}</p>
         {hint}
         <p class="actions">{action}</p>
-        {wait}<p class="message" role="status"></p>
+        {wait}<p class="message" role="status">{problem}</p>
       </section>"""  # noqa: E501
 
     def _signed_out_tile(self, status: dict[str, str]) -> str:

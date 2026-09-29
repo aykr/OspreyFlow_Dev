@@ -1,6 +1,6 @@
 """Sign-in for the Admin console — `06_DECISIONS.md` ADR-051, decision 4.
 
-The setup harness (`python -m harness`, port 7000) is the Admin console: it edits the deployment's
+The setup harness (`python -m harness`, port 7100) is the Admin console: it edits the deployment's
 configuration, starts and stops the stack and reads its files. Once a realm has been rendered there
 is an identity provider to ask, so from then on every route requires a signed-in account holding
 `osprey-admin`. Before that (nothing rendered) the console is open, because there is nothing to

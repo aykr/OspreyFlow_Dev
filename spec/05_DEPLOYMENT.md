@@ -28,17 +28,25 @@ The harness is a **browser application**, not a command-line tool. One bootstrap
 it; everything after that happens on screen.
 
 ```bash
-docker run --rm -p 127.0.0.1:7000:7000 \
+docker run --rm -p 127.0.0.1:7100:7100 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$PWD:/workspace" \
   ghcr.io/ospreyflow/harness:latest \
   --config /workspace/osprey.yaml --out-root /workspace/deploy/generated
-# → INFO:     Uvicorn running on http://0.0.0.0:7000 (Press CTRL+C to quit)
+# → INFO:     Uvicorn running on http://0.0.0.0:7100 (Press CTRL+C to quit)
 ```
 
+**The console's port is 7100, not 7000.** Port 7000 is macOS's own AirPlay Receiver (`ControlCenter`),
+which is on by default, so on a Mac the console exited at start-up with "address already in use". One
+definition (`harness.realm.HARNESS_PORT`) feeds the runbook, the console's default and the sign-in
+client's redirect. The launcher now notices when the console (or the stack start) has stopped, shows
+the tile as "Not running" with the last line of its log and the log's location, and names an occupied
+port in plain words. `make register-sign-in` brings an existing client's redirect address up to date, so
+a deployment registered before this change needs that one command.
+
 **Two corrections, found running the real image rather than by reading the code.**
-`-p 127.0.0.1:7000:7000`, not a bare `-p 7000:7000` — R2's own loopback-only guarantee
-needs the port itself bound to loopback on the host side; a bare `7000:7000` publishes to every
+`-p 127.0.0.1:7100:7100`, not a bare `-p 7100:7100` — R2's own loopback-only guarantee
+needs the port itself bound to loopback on the host side; a bare `7100:7100` publishes to every
 interface, which the application-layer refusal in `harness/webapp.py` cannot fully make up for on
 its own. **The `-p 127.0.0.1:` port-binding above is R2's own enforcement for this documented
 command; `harness/webapp.py`'s own `loopback_only_middleware` is real defence only for the
@@ -352,8 +360,8 @@ compose file that mounts it, so `make register-sign-in` names the theme only whe
 - **Before any realm is rendered the console is open**, loopback only, because there is nothing to
   sign in to; the enforcement is decided when the console starts, so the Launch that renders the
   realm does not lock the operator out mid-flow. The next start enforces.
-- **The console must be served on port 7000 when enforced.** The realm registers one exact redirect
-  address, `http://localhost:7000/callback`, and the console refuses to start on another port
+- **The console must be served on port 7100 when enforced.** The realm registers one exact redirect
+  address, `http://localhost:7100/callback`, and the console refuses to start on another port
   rather than fail at the provider's error page.
 - **Run the console on the host (`make launch`, or `python -m harness`) once a deployment exists.**
   The `docker run` bootstrap above reaches the identity provider as `localhost`, which inside the
@@ -414,14 +422,14 @@ test. Until it is built, the dev-token path is fenced so that no rendered deploy
 ## 3. Standing it up on a laptop
 
 ```bash
-docker run --rm -p 127.0.0.1:7000:7000 \
+docker run --rm -p 127.0.0.1:7100:7100 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$PWD:/workspace" \
   ghcr.io/ospreyflow/harness:latest \
   --config /workspace/osprey.yaml --out-root /workspace/deploy/generated
 ```
 
-Then open `http://localhost:7000` and work through the six screens. For a laptop: choose
+Then open `http://localhost:7100` and work through the six screens. For a laptop: choose
 **local-lite** on Profile, accept the defaults on Components, Models and Governance, press
 **Register a local provider** (or **Build local basemap**, once §2.2's own pipeline reaches a
 machine with Java/planetiler — `harness/geospatial.py`'s own docstring has the current, disclosed
@@ -431,7 +439,7 @@ that follows.
 
 Roughly fifteen minutes end to end, most of it pulling model weights and building tiles, with
 progress shown throughout. The workspace is then at `http://localhost:8080`. **The admin console
-stays at `http://localhost:7000`** — the harness's own port, not the workspace's, and its screens
+stays at `http://localhost:7100`** — the harness's own port, not the workspace's, and its screens
 are served at the root: `/admin` answers 404 in the default (setup) mode and exists only in console
 mode, where it is a bearer-only placeholder for the post-launch console that is not yet built. §2's
 own "the harness does not go away, it becomes /admin" describes the same process switching mode,

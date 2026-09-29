@@ -593,7 +593,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         default="0.0.0.0",  # noqa: S104 - see the docstring below for why this is the correct default
         help=(
             "05_DEPLOYMENT.md §2's own bootstrap command restricts reachability at the docker "
-            "port-publish (`-p 127.0.0.1:7000:7000`, per ruling R2), not at this process's own "
+            "port-publish (`-p 127.0.0.1:7100:7100`, per ruling R2), not at this process's own "
             "bind — found running the real image: bridge-mode port publishing cannot deliver "
             "traffic to a process bound only to loopback inside its own container network "
             "namespace, which made the documented command serve nothing at all."

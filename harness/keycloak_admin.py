@@ -95,12 +95,36 @@ def admin_token(*, issuer: str, admin_user: str, admin_password: str) -> str:
 
 def ensure_client(*, issuer: str, realm: str, token: str, client: dict[str, Any]) -> str:
     """Create a client unless it exists. Keycloak's 409 for a duplicate is the expected answer on
-    a second run, not a failure. An existing client is left as it is."""
+    a second run, not a failure. An existing client keeps everything it has except the addresses it
+    redirects to, which are brought up to date: they are exact-match, so a client registered at an
+    address that has since moved would fail at Keycloak's own error page."""
     status, found = _call(
         f"{issuer}/admin/realms/{realm}/clients?clientId={client['clientId']}", token=token
     )
     if status == 200 and found:
-        return "already registered"
+        existing = found[0]
+        attributes = {**existing.get("attributes", {})}
+        for key in ("post.logout.redirect.uris",):
+            if key in client.get("attributes", {}):
+                attributes[key] = client["attributes"][key]
+        wanted = {
+            "redirectUris": client["redirectUris"],
+            "webOrigins": client["webOrigins"],
+            "attributes": attributes,
+        }
+        if all(existing.get(k) == v for k, v in wanted.items()):
+            return "already registered"
+        status, body = _call(
+            f"{issuer}/admin/realms/{realm}/clients/{existing['id']}",
+            token=token,
+            data={**existing, **wanted},
+            method="PUT",
+        )
+        if status not in (200, 204):
+            raise RealmConfigurationFailed(
+                f"could not update client {client['clientId']!r}: {status} {body}"
+            )
+        return "already registered; redirect address brought up to date"
     status, body = _call(f"{issuer}/admin/realms/{realm}/clients", token=token, data=client)
     if status == 409:
         return "already registered"

@@ -85,8 +85,9 @@ HARNESS_CLIENT_ID = "osprey-harness"
 #: mode, `/admin` (`05_DEPLOYMENT.md` §2 and §2.5). One definition: the runbook prints it,
 #: `harness.webapp`'s `--port` default reads it, and this client's redirect is built from it, so
 #: none can disagree. The admin console is *not* a page the workspace serves — the workspace's
-#: proxy carries only `/v1/`. (`harness.render` re-exports it.)
-HARNESS_PORT = 7000
+#: proxy carries only `/v1/`. (`harness.render` re-exports it.) Not 7000: that is macOS's own
+#: AirPlay Receiver, on by default, and the console then exits at start-up (found on a real Mac).
+HARNESS_PORT = 7100
 HARNESS_ORIGIN = f"http://localhost:{HARNESS_PORT}"
 HARNESS_REDIRECT_URI = f"{HARNESS_ORIGIN}/callback"
 

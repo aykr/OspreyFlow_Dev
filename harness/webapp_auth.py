@@ -56,7 +56,7 @@ def is_loopback(client_host: str | None) -> bool:
 
 async def loopback_only_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
     """R2: "in setup mode the harness binds to loopback only... and refuses any non-loopback
-    source." The bootstrap command's own `-p 127.0.0.1:7000:7000` is the first, docker-level layer
+    source." The bootstrap command's own `-p 127.0.0.1:7100:7100` is the first, docker-level layer
     of this; this middleware is the second, application-level one — belt and braces, not a
     substitute for the port binding, since a operator who runs the container with a wider publish
     by mistake should still get a refusal rather than a silently-reachable setup harness.
@@ -68,7 +68,7 @@ async def loopback_only_middleware(request: Request, call_next):  # type: ignore
     own secured tunnel, never a bare published port.
 
     **A real limit, found running the built image, not a hypothetical.** Docker's own bridge-mode
-    port publishing (`-p 127.0.0.1:7000:7000`, the exact shape 05 §2's own bootstrap command uses)
+    port publishing (`-p 127.0.0.1:7100:7100`, the exact shape 05 §2's own bootstrap command uses)
     NATs every forwarded connection through the bridge gateway — `request.client.host` sees the
     same address for a genuine host-loopback caller and, were the operator to publish more widely
     by mistake, for a genuine LAN caller too. **The two are indistinguishable at this layer**, so

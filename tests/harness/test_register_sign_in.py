@@ -26,6 +26,8 @@ from harness.realm import (
     DEMO_ADMIN_SUBJECT,
     DEMO_ANALYST_SUBJECT,
     HARNESS_CLIENT_ID,
+    HARNESS_ORIGIN,
+    HARNESS_REDIRECT_URI,
     LAUNCHER_CLIENT_ID,
     render_realm,
 )
@@ -93,6 +95,9 @@ class FakeKeycloak:
         if route.startswith("/clients?clientId="):
             wanted = route.split("=", 1)[1]
             return 200, [c for c in self.clients.values() if c["clientId"] == wanted]
+        if route.startswith("/clients/cid-") and verb == "PUT":
+            self.clients[route.rsplit("/", 1)[1]] = data
+            return 204, ""
         if route == "/clients" and verb == "POST":
             if data["clientId"] in {c["clientId"] for c in self.clients.values()}:
                 return 409, {"errorMessage": "Client already exists"}
@@ -440,3 +445,48 @@ def test_a_demo_admin_that_holds_only_the_admin_role_is_brought_up_to_the_curren
     _register(_env(tmp_path))
 
     assert keycloak.users["uid-1"]["attributes"]["roles"] == DEMO_ADMIN_ROLES
+
+
+def test_an_existing_client_registered_at_an_old_address_is_brought_to_the_current_one(
+    keycloak: FakeKeycloak, tmp_path: Path
+) -> None:
+    """Seen when the Admin console moved off port 7000 (macOS's AirPlay Receiver holds it): the
+    running realm still registered the old redirect, and Keycloak keeps nothing but what it was
+    first given, so signing in to the console would have failed at its own error page. Same class as
+    the lost attributes: a rerun must correct what is there, not leave it as it was."""
+    env = _env(tmp_path)
+    _register(env)
+    (identifier,) = [i for i, c in keycloak.clients.items() if c["clientId"] == "osprey-harness"]
+    old = "http://localhost:7000/callback"
+    keycloak.clients[identifier] = {
+        **keycloak.clients[identifier],
+        "redirectUris": [old],
+        "webOrigins": ["http://localhost:7000"],
+        "attributes": {"post.logout.redirect.uris": "http://localhost:7000/", "keep": "me"},
+    }
+
+    _register(env)
+
+    now = keycloak.clients[identifier]
+    assert now["redirectUris"] == [HARNESS_REDIRECT_URI]
+    assert now["webOrigins"] == [HARNESS_ORIGIN]
+    assert now["attributes"]["post.logout.redirect.uris"] == f"{HARNESS_ORIGIN}/"
+    assert now["attributes"]["keep"] == "me"
+
+
+def test_a_client_already_at_the_current_address_is_not_rewritten(
+    keycloak: FakeKeycloak, tmp_path: Path
+) -> None:
+    env = _env(tmp_path)
+    _register(env)
+    writes: list[str] = []
+    real = keycloak.clients.__setitem__
+
+    class Watching(dict[str, Any]):
+        def __setitem__(self, key: str, value: Any) -> None:
+            writes.append(key)
+            real(key, value)
+
+    keycloak.clients = Watching(keycloak.clients)
+    _register(env)
+    assert writes == []

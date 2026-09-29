@@ -4,7 +4,7 @@ console.
 **Seen on the running `local-lite` deployment, 29 September 2026.** Starting the product meant
 knowing that three interfaces are three different things: the Glass is `localhost:8080` and asks
 for a sign-in; the Ingest Studio is not an address at all but the "Ingest" tab inside the Glass;
-and the admin console is the harness's own process on `localhost:7000`, which the workspace does
+and the admin console is the harness's own process on `localhost:7100`, which the workspace does
 not serve (`localhost:8080/admin` answers with the Glass's sign-in page). Nothing put the three in
 one place.
 

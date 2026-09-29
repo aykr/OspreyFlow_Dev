@@ -223,7 +223,7 @@ def test_before_sign_in_no_interface_is_named_or_addressed(rig: Rig) -> None:
     for name in (GLASS, STUDIO, ADMIN):
         assert f'data-name="{name}"' not in page
     assert "localhost:8080" not in page
-    assert "localhost:7000" not in page
+    assert f"localhost:{launch.HARNESS_PORT}" not in page
 
 
 def test_before_sign_in_the_status_and_the_tiles_reveal_only_the_sign_in_tile(rig: Rig) -> None:
@@ -357,7 +357,7 @@ def test_the_tiles_shown_are_exactly_those_the_roles_allow(
     assert sorted(json.loads(status)) == sorted(expected)
     assert headers["x-launcher-mode"] == "signed-in"
     if ADMIN not in expected:
-        assert "localhost:7000" not in page, "the Admin console's address must not be in the page"
+        assert f"localhost:{launch.HARNESS_PORT}" not in page, "the console's address is shown"
 
 
 @pytest.mark.parametrize("role", [r.value for r in StudioRole])

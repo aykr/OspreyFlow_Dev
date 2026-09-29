@@ -363,7 +363,7 @@ def test_the_harness_redirect_and_logout_addresses_are_exact_and_on_the_harness_
     redirect ADR-050's objection 2 forbids."""
     client = _harness_client(render_realm(_config()))
 
-    assert HARNESS_PORT == 7000
+    assert HARNESS_PORT == 7100
     assert HARNESS_REDIRECT_URI == f"http://localhost:{HARNESS_PORT}/callback"
     assert client["redirectUris"] == [HARNESS_REDIRECT_URI]
     assert client["webOrigins"] == [f"http://localhost:{HARNESS_PORT}"]
@@ -384,3 +384,10 @@ def test_the_harness_client_is_rendered_by_default_because_the_console_must_be_r
     """Unlike the demo subjects, the client is not optional: the Admin console enforces sign-in
     against the realm whether or not `--demo-analyst` was passed."""
     assert HARNESS_CLIENT_ID in [c["clientId"] for c in render_realm(_config())["clients"]]
+
+
+def test_the_consoles_port_is_not_one_that_macos_itself_listens_on() -> None:
+    """Seen on the owner's Mac: the Admin console exited at once because 7000 is macOS's own AirPlay
+    Receiver (`ControlCenter`), and 5000 is the same service on older releases. Every Mac with that
+    switched on, which is the default, would meet the same wall."""
+    assert HARNESS_PORT not in {5000, 7000}

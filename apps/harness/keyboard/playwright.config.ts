@@ -19,8 +19,8 @@ const SCRATCH_RDE = join(tmpdir(), `real-data-exceptions-keyboard-spec-${process
 // above).
 const SCRATCH_OUT_ROOT = join(tmpdir(), `osprey-generated-keyboard-spec-${process.pid}`);
 
-// Not port 7000, `05_DEPLOYMENT.md` §2's own real default — `vite.config.ts`'s own module
-// docstring has the reason: it collides with macOS's AirPlay Receiver on a real development
+// Not the real default (7100; it was 7000 until that was found to collide) — `vite.config.ts`'s
+// own module docstring has the reason: 7000 collides with macOS's AirPlay Receiver on a real development
 // machine, which answered every proxied request with its own 403 while `reuseExistingServer`
 // quietly never started this suite's own server at all. A scratch port for a scratch server.
 const API_PORT = "7217";
