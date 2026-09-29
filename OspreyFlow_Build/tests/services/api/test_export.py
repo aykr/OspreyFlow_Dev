@@ -539,7 +539,7 @@ async def test_export_ledger_entry_survives_investigation_deletion(
     scheme = load_uk_le_scheme()
     async with arcadedb_adapter(ontology, scheme) as graph:
         working_set = _working_set(graph, scheme)
-        investigation = await investigations.create(ANALYST)
+        investigation = await investigations.create(ANALYST, name="Test case")
 
         tx = await graph.begin_transaction()
         (node_id,) = await graph.upsert_nodes([_node_write(owning_unit=ANALYST.org_unit)], tx)

@@ -105,7 +105,11 @@ class _FakeAudit:
 
 
 class _FakeInvestigations:
-    async def get_authorized(self, investigation_id: str, principal: Principal) -> Investigation:
+    async def get_authorized(
+        self, investigation_id: str, principal: Principal, *, need: object = None
+    ) -> Investigation:
+        # `need` (ADR-052) is accepted and ignored: this fake proves the unit check. The level
+        # rules have their own tests in `test_investigation_levels.py`.
         if investigation_id != "inv-1":
             raise InvestigationNotFoundError(investigation_id)
         investigation = Investigation(

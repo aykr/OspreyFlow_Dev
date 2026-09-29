@@ -88,10 +88,24 @@ handling filter). A principal in the wrong unit gets the same 404 an unknown inv
 would — never a 403 — extending the existence-leak discipline `00_ARCHITECTURE.md` §5 already
 requires at node/edge level up to the investigation id itself.
 
-**Designed, not built (ADR-052): access by level.** The unit check above stays. On top of it a
-principal must hold a level on the case, Viewer, Editor or Author, or the case's unit-wide level, and
-each route declares the level it needs. A grant never widens what the unit, clearance and handling
-rules allow. Until ADR-052 is built, every account in the owning unit acts as an Author.
+**Access by level (ADR-052, stage 1 built 29 September 2026).** The unit check above stays. On top of
+it a principal must hold a level on the case: their own grant (Viewer, Editor or Author) or the
+case's unit-wide level, whichever is higher. Each route declares the level it needs
+(`_authorized_at` in `services/api/app.py`), and `tests/services/api/test_investigation_levels.py`
+holds the table below and fails any route that is missing from it or declares a different level. No
+level at all is the same 404 as an unknown case; a level that is too low is a 403. A grant never
+widens what the unit, clearance and handling rules allow. Cases have a name; the creator is the first
+Author; a new case is visible to nobody else until shared; cases that existed before were migrated once
+(creator Author, unit Viewer).
+
+| Level | Routes under `/v1/investigations/{id}` |
+|---|---|
+| Viewer | `GET` the case; `expand/preview`; `resolution/threshold` (GET); `resolution/explain/{cluster}`; `compute/{metric}`; `ingest/candidates` (GET); `dossier/documents/{doc}`; `history` (GET); `judgements`, `gaps`, `assumptions` (GET); `sites/{site}` and its `image` (GET); the delta stream |
+| Editor | `branch`; `seed`; `expand`; `nodes` (DELETE); `resolution/threshold` (PUT), `link`, `split`; `ingest/extract`, candidate `accept` and `reject`; `history/{step}` (restore); `judgements`, `gaps`, `assumptions` (POST); `export`; `sites` (POST), `control-points`, `grid`; `ingest/recipes/{recipe}/run` |
+| Author | Not yet used: access management arrives with stage 2. |
+
+`POST /v1/investigations` needs no grant. Not yet built: the listing and access routes (stage 2), the
+Glass picker (stage 3), the demo seeds' grants (stage 4).
 
 ### 3.2 Working set
 

@@ -7486,3 +7486,29 @@ the reader, the missing-column refusal, the fraud neighbourhood, the `step` mapp
 labels, the shared identifiers, the graph shape; `tests/demo_registry/test_paysim_manifest.py`;
 `tests/test_seed_paysim.py`; `tests/ontology/test_paysim_ontology.py`.
 
+### ADR-052, Amendment 3 (29 September 2026) — stage 1 built
+
+**Built, tests first:** case names, per-account grants, the unit-wide level, the one-off migration and
+the access history in `InvestigationStore`; `get_authorized(id, principal, need=...)` with a required
+level; every case route (30 HTTP routes, the site routes and the delta stream) declares its level; a
+route-level test holds the table (`03_CONDUIT_MIDDLEWARE.md` §3.1) and fails a route with no level.
+Verified against a real Postgres for the store and through the real dependency for the routes; the
+older route tests' fakes were updated for the new signature.
+
+**Readings I took that the owner may overrule:**
+
+1. `seed`, `expand`, `nodes` (DELETE) and `history/{step}` change the working set, so they need
+   **Editor**; only `expand/preview` is Viewer. A Viewer therefore sees a case as saved and can query
+   it, but cannot add to it, which follows "nothing they do changes it" strictly. If the owner wants a
+   Viewer to explore freely into their own copy, that is a different rule (a branch, which needs Editor).
+2. `compute/{metric}` is Viewer (it queries; it does not save).
+3. The case name is optional on `POST /v1/investigations` for now (default "Untitled case") so the
+   Glass keeps working; it becomes required when the Glass proposes one (stage 3).
+4. Other stores keyed to a case or unit (studio recipes, patterns, alerts, assessments) still check
+   their own records by unit only; they are not yet level-aware.
+5. `alerts/{id}/jump` creates a new case owned by the caller and does not read the source case, so it
+   needs no level on it.
+
+**Not yet:** the listing and access routes with the admin safety net (stage 2); the Glass picker and
+Share panel (stage 3); the demo seeds' grants and the acceptance rows (stage 4).
+

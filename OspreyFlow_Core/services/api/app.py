@@ -26,7 +26,7 @@ import asyncio
 import functools
 import json
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -209,7 +209,13 @@ from .history import (
 )
 from .hotlists import HotlistNotFoundError, HotlistStore
 from .ingest_sources import IngestSourceListing, list_source_files
-from .investigations import Investigation, InvestigationNotFoundError, InvestigationStore
+from .investigations import (
+    AccessLevel,
+    InsufficientAccessError,
+    Investigation,
+    InvestigationNotFoundError,
+    InvestigationStore,
+)
 from .jobs import JobQueue
 from .mapconfig_loader import load_map_config, public_view
 from .monitors import MonitorNotFoundError, MonitorStore
@@ -720,66 +726,96 @@ async def require_admin_role(principal: PrincipalDep) -> Principal:
     return principal
 
 
-async def get_authorized_investigation(
-    investigation_id: str,
-    principal: PrincipalDep,
-    investigations: InvestigationsDep,
-    audit: AuditDep,
-) -> Investigation:
-    """The one gate every investigation-scoped route depends on instead of
-    a bare `investigation_id` path param — divergence-review fix #1.
-    `InvestigationStore.get_authorized` already collapses "no such
-    investigation" and "wrong `owning_unit`" into the same exception,
-    mapped to the same 404 by `_investigation_not_found_handler`; this
-    wrapper's only addition is recording the denial in the audit stream
-    before it propagates, same as every other action here."""
-    try:
-        return await investigations.get_authorized(investigation_id, principal)
-    except InvestigationNotFoundError:
-        await audit.record(
-            principal=principal,
-            action="access_denied",
-            investigation_id=investigation_id,
-            resolved_query={},
-            result_cardinality=0,
-        )
-        raise
+def _authorized_at(level: AccessLevel) -> Callable[..., Awaitable[Investigation]]:
+    """The one gate every investigation-scoped route depends on, at the level the route needs
+    (ADR-052 §8). `required_level` is what the route-level test reads to prove that no route is
+    left without one. "No level at all" and "wrong unit" and "no such case" are the same 404
+    (ADR-041's existence-leak rule); a level too low is a 403, since the account can already see
+    the case exists. Either denial is audited before it propagates."""
+
+    async def dependency(
+        investigation_id: str,
+        principal: PrincipalDep,
+        investigations: InvestigationsDep,
+        audit: AuditDep,
+    ) -> Investigation:
+        try:
+            return await investigations.get_authorized(investigation_id, principal, need=level)
+        except InvestigationNotFoundError:
+            await _audit_denied(audit, principal, investigation_id, {})
+            raise
+        except InsufficientAccessError as error:
+            await _audit_denied(audit, principal, investigation_id, {"needed": level.value})
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+
+    dependency.required_level = level  # type: ignore[attr-defined]
+    return dependency
 
 
-AuthorizedInvestigationDep = Annotated[Investigation, Depends(get_authorized_investigation)]
+async def _audit_denied(
+    audit: AuditWriter, principal: Principal, investigation_id: str, detail: dict[str, str]
+) -> None:
+    await audit.record(
+        principal=principal,
+        action="access_denied",
+        investigation_id=investigation_id,
+        resolved_query=detail,
+        result_cardinality=0,
+    )
 
 
-async def get_authorized_site(
-    investigation_id: str,
-    site_id: str,
-    principal: PrincipalDep,
-    sites: SitesDep,
-    audit: AuditDep,
-) -> Site:
-    """Mirrors `get_authorized_investigation` — `SiteStore.get_authorized`
-    already collapses "no such site" and "wrong owning_unit" into the same
-    `SiteNotFoundError`; this wrapper adds the audit record on denial, plus
-    the check that the site actually belongs to the investigation named in
-    the URL, not just to the same org unit — a real site id under a
-    *different* investigation is "not found" here too, not a cross-
-    investigation peek."""
-    try:
-        site = await sites.get_authorized(site_id, principal)
-        if site.investigation_id != investigation_id:
-            raise SiteNotFoundError(site_id)
-        return site
-    except SiteNotFoundError:
-        await audit.record(
-            principal=principal,
-            action="access_denied",
-            investigation_id=investigation_id,
-            resolved_query={"site_id": site_id},
-            result_cardinality=0,
-        )
-        raise
+InvestigationViewerDep = Annotated[
+    Investigation, Depends(_authorized_at(AccessLevel.VIEWER))
+]
+InvestigationEditorDep = Annotated[
+    Investigation, Depends(_authorized_at(AccessLevel.EDITOR))
+]
+InvestigationAuthorDep = Annotated[
+    Investigation, Depends(_authorized_at(AccessLevel.AUTHOR))
+]
 
 
-AuthorizedSiteDep = Annotated[Site, Depends(get_authorized_site)]
+def _authorized_site_at(level: AccessLevel) -> Callable[..., Awaitable[Site]]:
+    """Mirrors `_authorized_at` for the site routes. The case is checked first, at `level`, so a
+    Viewer cannot change a site and an account with no level cannot tell a site exists;
+    `SiteStore.get_authorized` then collapses "no such site" and "wrong owning_unit" into the same
+    `SiteNotFoundError`, and the site must belong to the investigation named in the URL, not just
+    to the same org unit — a real site id under a *different* investigation is "not found" here
+    too."""
+
+    async def dependency(
+        investigation_id: str,
+        site_id: str,
+        principal: PrincipalDep,
+        investigations: InvestigationsDep,
+        sites: SitesDep,
+        audit: AuditDep,
+    ) -> Site:
+        try:
+            await investigations.get_authorized(investigation_id, principal, need=level)
+        except InvestigationNotFoundError:
+            await _audit_denied(audit, principal, investigation_id, {"site_id": site_id})
+            raise
+        except InsufficientAccessError as error:
+            await _audit_denied(
+                audit, principal, investigation_id, {"site_id": site_id, "needed": level.value}
+            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+        try:
+            site = await sites.get_authorized(site_id, principal)
+            if site.investigation_id != investigation_id:
+                raise SiteNotFoundError(site_id)
+            return site
+        except SiteNotFoundError:
+            await _audit_denied(audit, principal, investigation_id, {"site_id": site_id})
+            raise
+
+    dependency.required_level = level  # type: ignore[attr-defined]
+    return dependency
+
+
+SiteViewerDep = Annotated[Site, Depends(_authorized_site_at(AccessLevel.VIEWER))]
+SiteEditorDep = Annotated[Site, Depends(_authorized_site_at(AccessLevel.EDITOR))]
 
 
 async def get_authorized_studio_recipe(
@@ -1192,11 +1228,24 @@ async def _unsupported_image_format_handler(
 # --- investigations ---------------------------------------------------------
 
 
+DEFAULT_CASE_NAME = "Untitled case"
+
+
+class CreateInvestigationInput(BaseModel):
+    name: str | None = None
+
+
 @app.post("/v1/investigations", status_code=status.HTTP_201_CREATED)
 async def create_investigation(
-    principal: PrincipalDep, investigations: InvestigationsDep, audit: AuditDep
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+    audit: AuditDep,
+    body: CreateInvestigationInput | None = None,
 ) -> Investigation:
-    investigation = await investigations.create(principal)
+    """Needs no grant: whoever creates a case is its first Author (ADR-052 §4). The name is
+    optional here only until the Glass proposes one (stage 3), after which it is required."""
+    name = (body.name if body is not None else None) or DEFAULT_CASE_NAME
+    investigation = await investigations.create(principal, name=name)
     await audit.record(
         principal=principal,
         action="create_investigation",
@@ -1209,7 +1258,7 @@ async def create_investigation(
 
 @app.get("/v1/investigations/{investigation_id}")
 async def get_investigation(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationViewerDep,
     principal: PrincipalDep,
     audit: AuditDep,
 ) -> Investigation:
@@ -1225,7 +1274,7 @@ async def get_investigation(
 
 @app.post("/v1/investigations/{investigation_id}/branch", status_code=status.HTTP_201_CREATED)
 async def branch_investigation(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationEditorDep,
     principal: PrincipalDep,
     investigations: InvestigationsDep,
     working_set: WorkingSetDep,
@@ -1238,7 +1287,10 @@ async def branch_investigation(
     # `AuthorizedInvestigationDep` has already checked the branching
     # principal against the *source* investigation's `owning_unit`; the
     # new investigation gets its own, from this principal, not inherited.
-    new_investigation = await investigations.create(principal, branched_from=investigation.id)
+    new_investigation = await investigations.create(
+        principal, name=f"{investigation.name or DEFAULT_CASE_NAME} (branch)",
+        branched_from=investigation.id,
+    )
     outcome = await working_set.branch(investigation.id, new_investigation.id, principal)
     await publish_delta(valkey, new_investigation.id, outcome.delta)
     await _record_history_step(
@@ -1297,7 +1349,7 @@ class RemoveNodesRequest(BaseModel):
 
 @app.post("/v1/investigations/{investigation_id}/seed")
 async def seed(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationEditorDep,
     body: SeedRequest,
     principal: PrincipalDep,
     working_set: WorkingSetDep,
@@ -1327,7 +1379,7 @@ async def seed(
 
 @app.post("/v1/investigations/{investigation_id}/expand")
 async def expand(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationEditorDep,
     body: ExpandBody,
     principal: PrincipalDep,
     working_set: WorkingSetDep,
@@ -1360,7 +1412,7 @@ async def expand(
 
 @app.post("/v1/investigations/{investigation_id}/expand/preview")
 async def expand_preview(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationViewerDep,
     body: ExpandBody,
     principal: PrincipalDep,
     working_set: WorkingSetDep,
@@ -1379,7 +1431,7 @@ async def expand_preview(
 
 @app.delete("/v1/investigations/{investigation_id}/nodes")
 async def remove_nodes(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationEditorDep,
     body: RemoveNodesRequest,
     principal: PrincipalDep,
     working_set: WorkingSetDep,
@@ -1414,7 +1466,7 @@ async def remove_nodes(
 
 @app.get("/v1/investigations/{investigation_id}/resolution/threshold")
 async def get_resolution_threshold_route(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationViewerDep,
     principal: PrincipalDep,
     working_set: WorkingSetDep,
     audit: AuditDep,
@@ -1432,7 +1484,7 @@ async def get_resolution_threshold_route(
 
 @app.put("/v1/investigations/{investigation_id}/resolution/threshold")
 async def set_resolution_threshold_route(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationEditorDep,
     body: SetThresholdRequest,
     principal: PrincipalDep,
     working_set: WorkingSetDep,
@@ -1453,7 +1505,7 @@ async def set_resolution_threshold_route(
 
 @app.post("/v1/investigations/{investigation_id}/resolution/link")
 async def link_resolution_route(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationEditorDep,
     body: ManualAssertionRequest,
     principal: PrincipalDep,
     working_set: WorkingSetDep,
@@ -1505,7 +1557,7 @@ async def link_resolution_route(
 
 @app.post("/v1/investigations/{investigation_id}/resolution/split")
 async def split_resolution_route(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationEditorDep,
     body: ManualAssertionRequest,
     principal: PrincipalDep,
     working_set: WorkingSetDep,
@@ -1526,7 +1578,7 @@ async def split_resolution_route(
 
 @app.get("/v1/investigations/{investigation_id}/resolution/explain/{cluster_id}")
 async def explain_resolution_route(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationViewerDep,
     cluster_id: str,
     principal: PrincipalDep,
     working_set: WorkingSetDep,
@@ -1548,7 +1600,7 @@ async def explain_resolution_route(
 
 @app.post("/v1/investigations/{investigation_id}/compute/{metric}")
 async def compute_metric_route(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationViewerDep,
     metric: ComputeMetricName,
     body: ComputeMetricRequest,
     principal: PrincipalDep,
@@ -1592,7 +1644,7 @@ async def compute_metric_route(
 
 @app.post("/v1/investigations/{investigation_id}/ingest/extract")
 async def run_extraction_route(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationEditorDep,
     body: RunExtractionRequest,
     principal: PrincipalDep,
     model: ModelDep,
@@ -1623,7 +1675,7 @@ async def run_extraction_route(
 
 @app.get("/v1/investigations/{investigation_id}/ingest/candidates")
 async def list_extraction_candidates_route(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationViewerDep,
     document_id: str,
     principal: PrincipalDep,
     extraction_candidates: ExtractionCandidatesDep,
@@ -1642,7 +1694,7 @@ async def list_extraction_candidates_route(
 
 @app.post("/v1/investigations/{investigation_id}/ingest/candidates/{candidate_id}/accept")
 async def accept_extraction_candidate_route(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationEditorDep,
     candidate_id: str,
     body: AcceptCandidateRequest,
     principal: PrincipalDep,
@@ -1672,7 +1724,7 @@ async def accept_extraction_candidate_route(
 
 @app.post("/v1/investigations/{investigation_id}/ingest/candidates/{candidate_id}/reject")
 async def reject_extraction_candidate_route(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationEditorDep,
     candidate_id: str,
     principal: PrincipalDep,
     extraction_candidates: ExtractionCandidatesDep,
@@ -1698,7 +1750,7 @@ async def reject_extraction_candidate_route(
 
 @app.get("/v1/investigations/{investigation_id}/dossier/documents/{document_id}")
 async def get_dossier_document_route(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationViewerDep,
     document_id: str,
     principal: PrincipalDep,
     graph: GraphDep,
@@ -1854,7 +1906,7 @@ async def retract_node_route(
 
 @app.get("/v1/investigations/{investigation_id}/history")
 async def get_investigation_history(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationViewerDep,
     principal: PrincipalDep,
     history: HistoryDep,
     audit: AuditDep,
@@ -1872,7 +1924,7 @@ async def get_investigation_history(
 
 @app.post("/v1/investigations/{investigation_id}/history/{step_id}")
 async def restore_history_step(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationEditorDep,
     step_id: str,
     principal: PrincipalDep,
     working_set: WorkingSetDep,
@@ -2046,7 +2098,7 @@ async def list_hotlists_route(
 
 @app.post("/v1/investigations/{investigation_id}/judgements", status_code=status.HTTP_201_CREATED)
 async def save_judgement_route(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationEditorDep,
     principal: PrincipalDep,
     body: SaveJudgementRequest,
     judgements_store: JudgementsStoreDep,
@@ -2079,7 +2131,7 @@ async def save_judgement_route(
 
 @app.get("/v1/investigations/{investigation_id}/judgements")
 async def list_judgements_route(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationViewerDep,
     principal: PrincipalDep,
     judgements_store: JudgementsStoreDep,
     graph: GraphDep,
@@ -2095,7 +2147,7 @@ async def list_judgements_route(
 
 @app.post("/v1/investigations/{investigation_id}/gaps", status_code=status.HTTP_201_CREATED)
 async def save_gap_route(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationEditorDep,
     principal: PrincipalDep,
     body: SaveGapRequest,
     gaps_store: GapsStoreDep,
@@ -2121,7 +2173,7 @@ async def save_gap_route(
 
 @app.get("/v1/investigations/{investigation_id}/gaps")
 async def list_gaps_route(
-    investigation: AuthorizedInvestigationDep, principal: PrincipalDep, gaps_store: GapsStoreDep
+    investigation: InvestigationViewerDep, principal: PrincipalDep, gaps_store: GapsStoreDep
 ) -> IntelligenceGapListResponse:
     return IntelligenceGapListResponse(
         gaps=await gaps_store.list_for_investigation(investigation.id, principal)
@@ -2130,7 +2182,7 @@ async def list_gaps_route(
 
 @app.post("/v1/investigations/{investigation_id}/assumptions", status_code=status.HTTP_201_CREATED)
 async def save_assumption_route(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationEditorDep,
     principal: PrincipalDep,
     body: SaveAssumptionRequest,
     assumptions_store: AssumptionsStoreDep,
@@ -2155,7 +2207,7 @@ async def save_assumption_route(
 
 @app.get("/v1/investigations/{investigation_id}/assumptions")
 async def list_assumptions_route(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationViewerDep,
     principal: PrincipalDep,
     assumptions_store: AssumptionsStoreDep,
 ) -> AssumptionListResponse:
@@ -2166,7 +2218,7 @@ async def list_assumptions_route(
 
 @app.post("/v1/investigations/{investigation_id}/export")
 async def submit_export_route(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationEditorDep,
     principal: PrincipalDep,
     body: ExportRequest,
     graph: GraphDep,
@@ -2286,7 +2338,9 @@ async def jump_alert_route(
     branch still succeeds, simply unlinked, disclosed via `Investigation.branched_from` being
     `None` rather than silently pointed at a wrong investigation."""
     alert = await alerts_store.get_authorized(alert_id, principal)
-    branch = await investigations.create(principal, branched_from=alert.investigation_id)
+    branch = await investigations.create(
+        principal, name=f"Opened from alert {alert.id}", branched_from=alert.investigation_id
+    )
     nodes, unreadable = await fetch_jumpable_referents(alert, principal=principal, graph=graph)
     outcome = await working_set.seed(branch.id, nodes, [], principal)
     await publish_delta(valkey, branch.id, outcome.delta)
@@ -2847,7 +2901,7 @@ class GridRequest(BaseModel):
 
 @app.post("/v1/investigations/{investigation_id}/sites", status_code=status.HTTP_201_CREATED)
 async def create_site(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationEditorDep,
     principal: PrincipalDep,
     sites: SitesDep,
     audit: AuditDep,
@@ -2884,7 +2938,7 @@ async def create_site(
 
 
 @app.get("/v1/investigations/{investigation_id}/sites/{site_id}")
-async def get_site(site: AuthorizedSiteDep, principal: PrincipalDep, audit: AuditDep) -> Site:
+async def get_site(site: SiteViewerDep, principal: PrincipalDep, audit: AuditDep) -> Site:
     await audit.record(
         principal=principal,
         action="get_site",
@@ -2896,7 +2950,7 @@ async def get_site(site: AuthorizedSiteDep, principal: PrincipalDep, audit: Audi
 
 
 @app.get("/v1/investigations/{investigation_id}/sites/{site_id}/image")
-async def get_site_image(site: AuthorizedSiteDep, storage: SiteImageStorageDep) -> Response:
+async def get_site_image(site: SiteViewerDep, storage: SiteImageStorageDep) -> Response:
     """The browser never talks to the object store directly — the same
     reasoning as the tile proxy (`00_ARCHITECTURE.md` §1.2 "The tile
     proxy"): credentials stay server-side and every read is a request this
@@ -2907,7 +2961,7 @@ async def get_site_image(site: AuthorizedSiteDep, storage: SiteImageStorageDep) 
 
 @app.patch("/v1/investigations/{investigation_id}/sites/{site_id}/control-points")
 async def set_site_control_points(
-    site: AuthorizedSiteDep,
+    site: SiteEditorDep,
     principal: PrincipalDep,
     sites: SitesDep,
     audit: AuditDep,
@@ -2926,7 +2980,7 @@ async def set_site_control_points(
 
 @app.post("/v1/investigations/{investigation_id}/sites/{site_id}/grid")
 async def set_site_grid(
-    site: AuthorizedSiteDep,
+    site: SiteEditorDep,
     principal: PrincipalDep,
     sites: SitesDep,
     graph: GraphDep,
@@ -3603,7 +3657,7 @@ async def create_studio_recipe_version(
 
 @app.post("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/run")
 async def run_studio_recipe(
-    investigation: AuthorizedInvestigationDep,
+    investigation: InvestigationEditorDep,
     recipe: AuthorizedStudioRecipeDep,
     principal: Annotated[Principal, Depends(require_studio_role(StudioRole.LOADER))],
     graph: GraphDep,
@@ -3889,8 +3943,8 @@ async def stream(websocket: WebSocket, investigation_id: str) -> None:
     investigations: InvestigationStore = websocket.app.state.investigations
     audit: AuditWriter = websocket.app.state.audit
     try:
-        await investigations.get_authorized(investigation_id, principal)
-    except InvestigationNotFoundError:
+        await investigations.get_authorized(investigation_id, principal, need=AccessLevel.VIEWER)
+    except (InvestigationNotFoundError, InsufficientAccessError):
         await audit.record(
             principal=principal,
             action="access_denied",

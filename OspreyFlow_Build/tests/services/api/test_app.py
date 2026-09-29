@@ -114,10 +114,11 @@ class _FakeInvestigations:
         self.created: Investigation | None = None
 
     async def create(
-        self, principal: Principal, *, branched_from: str | None = None
+        self, principal: Principal, *, name: str, branched_from: str | None = None
     ) -> Investigation:
         self.created = Investigation(
             id="inv-1",
+            name=name,
             created_at=datetime(2026, 1, 1, tzinfo=UTC),
             created_by=principal.id,
             owning_unit=principal.org_unit,
@@ -135,7 +136,11 @@ class _FakeInvestigations:
             owning_unit="unit-1",
         )
 
-    async def get_authorized(self, investigation_id: str, principal: Principal) -> Investigation:
+    async def get_authorized(
+        self, investigation_id: str, principal: Principal, *, need: object = None
+    ) -> Investigation:
+        # `need` (ADR-052) is accepted and ignored: this fake proves the unit check. The level
+        # rules have their own tests in `test_investigation_levels.py`.
         investigation = await self.get(investigation_id)
         if investigation.owning_unit != principal.org_unit:
             raise InvestigationNotFoundError(investigation_id)

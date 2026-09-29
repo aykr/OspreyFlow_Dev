@@ -124,7 +124,7 @@ async def _write_node(*, owning_unit: str, sanitisation_code: str | None = None)
 async def _write_investigation(principal: Principal) -> str:
     store = await InvestigationStore.connect(PostgresConfig.from_env().dsn)
     try:
-        investigation = await store.create(principal)
+        investigation = await store.create(principal, name="Test case")
         return investigation.id
     finally:
         await store.close()
