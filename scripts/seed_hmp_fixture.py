@@ -71,7 +71,12 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--analytics-db-path", default=os.environ.get("ANALYTICS_DB_PATH", "data/analytics.duckdb")
+        "--analytics-db-path",
+        # The Data folder (ADR-054); the same string as the Conduit's default, kept equal by
+        # `tests/test_data_folder.py`.
+        default=os.environ.get(
+            "ANALYTICS_DB_PATH", "OspreyFlow_Data/_local-runtime/analytics.duckdb"
+        ),
     )
     parser.add_argument(
         "--principal-id", default=os.environ.get("OSPREY_PRINCIPAL_ID", "hmp-seed-worker")

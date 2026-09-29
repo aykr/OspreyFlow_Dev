@@ -23,6 +23,13 @@ def _env_float(name: str, default: float) -> float:
     return float(value) if value else default
 
 
+#: Where a Conduit run from a checkout keeps its analytics store: the Data folder, never the product
+#: tree (ADR-054). Relative to the repository root, where `make` and the seeds run from. The seeds
+#: and the pre-flight check carry the same string, and `tests/test_data_folder.py` fails if any of
+#: them drifts. A deployment sets `ANALYTICS_DB_PATH` itself.
+DEFAULT_ANALYTICS_DB_PATH = "OspreyFlow_Data/_local-runtime/analytics.duckdb"
+
+
 @dataclass(frozen=True)
 class ValkeyConfig:
     host: str
@@ -167,7 +174,7 @@ class ApiConfig:
                 )
             ),
             osprey_config_path=os.environ.get("OSPREY_CONFIG_PATH", "osprey.yaml"),
-            analytics_db_path=os.environ.get("ANALYTICS_DB_PATH", "data/analytics.duckdb"),
+            analytics_db_path=os.environ.get("ANALYTICS_DB_PATH", DEFAULT_ANALYTICS_DB_PATH),
             hotlist_alert_policy=disclosure_policy_from_value(
                 os.environ.get("HOTLIST_ALERT_POLICY")
             ),

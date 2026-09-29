@@ -76,6 +76,7 @@ NOTICE_HOLDER_TEXT = "The OspreyFlow Authors"
 _ALWAYS_INTERNAL_MARKERS: tuple[str, ...] = (
     "config/real_data_exceptions.yaml",
     "demo-data/",
+    "OspreyFlow_Data/",
 )
 
 #: ADR-034 §B5's own verified pattern, reused rather than re-derived: `git grep -liE

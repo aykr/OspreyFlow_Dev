@@ -75,6 +75,7 @@ spec/design/OspreyFlow_Brand_Foundations.html
 config/real_data_exceptions.yaml
 demo-data
 data
+OspreyFlow_Data
 backups
 
 # --- Tests, fixtures and development-only trees -------------------------------

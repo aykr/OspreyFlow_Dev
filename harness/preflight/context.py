@@ -122,7 +122,11 @@ class PreflightContext:
     #: True when the operator is about to seed; the DuckDB lock check is about seeding specifically.
     seeding: bool = False
     #: Where the Conduit's analytics store lives (`services/api/config.py`'s own default).
-    analytics_db_path: Path = field(default_factory=lambda: REPO_ROOT / "data" / "analytics.duckdb")
+    analytics_db_path: Path = field(
+        default_factory=lambda: (
+            REPO_ROOT / "OspreyFlow_Data" / "_local-runtime" / "analytics.duckdb"
+        )
+    )
     interpreter: Path = field(default_factory=lambda: Path(sys.executable))
     container_runtime: str = "docker"
     memory_probe: MemoryProbe = default_memory_probe

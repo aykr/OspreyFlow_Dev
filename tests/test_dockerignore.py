@@ -49,6 +49,8 @@ MUST_BE_EXCLUDED: tuple[str, ...] = (
     "node_modules/some-package/index.js",
     "apps/workspace/node_modules/some-package/index.js",
     "data/analytics.duckdb",
+    "OspreyFlow_Data/enron/maildir.tar.gz",
+    "OspreyFlow_Data/_local-runtime/analytics.duckdb",
     "backups/2026-09-24T00-00-00Z-local-lite-abc1234/manifest.json",
     "config/real_data_exceptions.yaml",
     "demo-data/enron/maildir.tar.gz",

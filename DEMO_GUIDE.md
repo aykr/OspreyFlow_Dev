@@ -182,7 +182,7 @@ nor `uvicorn` puts them on `sys.path`, which is why `services/api/Dockerfile` se
 
 Other settings default sensibly for local use and are all read from the environment
 (`services/api/config.py`): `VALKEY_HOST`/`VALKEY_PORT`, `POSTGRES_HOST`/`POSTGRES_PORT`/
-`POSTGRES_USER`/`POSTGRES_DB`, `ANALYTICS_DB_PATH` (default `data/analytics.duckdb`),
+`POSTGRES_USER`/`POSTGRES_DB`, `ANALYTICS_DB_PATH` (default `OspreyFlow_Data/_local-runtime/analytics.duckdb`),
 `OSPREY_CONFIG_PATH` (default `osprey.yaml`).
 
 ### 3.3 Create an investigation and note its id, then stop the Conduit
@@ -212,7 +212,7 @@ filters on. **Pass the wrong scope and you will seed data that no query in your 
 — the graph will look populated and the timeline will be empty.
 
 Optional arguments to `seed_hmp_fixture`, all with environment fallbacks: `--analytics-db-path`
-(default `data/analytics.duckdb`), `--principal-id` (default `hmp-seed-worker`), `--clearance`
+(default `OspreyFlow_Data/_local-runtime/analytics.duckdb`), `--principal-id` (default `hmp-seed-worker`), `--clearance`
 (default `OFFICIAL`), `--org-unit` (default `unit-1`). §6 has `seed_fixture_corp`'s own shape.
 
 Both scripts write to the same stores a real Conduit reads from — `build_hmp_graph`/the Fixture

@@ -16,9 +16,11 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Conduit's local persistent analytics store (services/api/config.py's
-# ANALYTICS_DB_PATH default, Phase 5 Checkpoint 2) — dev-machine data, not
-# something to commit.
+# OspreyFlow_Data: every dataset and the Conduit's local analytics store (services/api/config.py's
+# ANALYTICS_DB_PATH default) live here and nothing in it is ever committed, except the README that
+# makes the folder exist in a clone (spec/06_DECISIONS.md ADR-054). `/data/` is the old location.
+/OspreyFlow_Data/*
+!/OspreyFlow_Data/README.md
 /data/
 
 # Internal-only demo datasets (spec/06_DECISIONS.md ADR-035, C1) — never committed, provisioned to
