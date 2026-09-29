@@ -269,13 +269,35 @@ def test_a_refused_password_reset_leaves_the_env_file_without_a_password_that_do
     assert "OSPREY_DEMO_ADMIN_PASSWORD" not in _env_values(env)
 
 
+def test_a_refused_admin_password_says_which_file_and_what_to_do_about_it(
+    keycloak: FakeKeycloak, tmp_path: Path
+) -> None:
+    """Seen on the running deployment, 29 September 2026: `make register-sign-in` stopped with a
+    bare `401 invalid_grant`. The cause was that `deployment.env` had been rewritten by a later
+    render, so it named an admin password the still-running Keycloak (started from the earlier one)
+    did not have. The message must say that, and how to get the two back in step, in the
+    product's own words, without printing any password."""
+    env = tmp_path / "deployment.env"
+    env.write_text("OSPREY_KEYCLOAK_ADMIN_PASSWORD=stale-value-9911\n", encoding="utf-8")
+
+    with pytest.raises(RealmConfigurationFailed) as refused:
+        _register(env)
+
+    message = str(refused.value)
+    assert "deployment.env" in message
+    assert "started from an earlier" in message
+    assert "--force-recreate keycloak" in message
+    assert "stale-value-9911" not in message
+    assert "invalid_grant" not in message, "the protocol detail is not the explanation"
+
+
 def test_a_wrong_admin_password_in_the_env_file_stops_before_anything_is_created(
     keycloak: FakeKeycloak, tmp_path: Path
 ) -> None:
     env = tmp_path / "deployment.env"
     env.write_text("OSPREY_KEYCLOAK_ADMIN_PASSWORD=stale\n", encoding="utf-8")
 
-    with pytest.raises(RealmConfigurationFailed, match="could not authenticate"):
+    with pytest.raises(RealmConfigurationFailed, match="refused the administrator password"):
         _register(env)
 
     assert not keycloak.clients

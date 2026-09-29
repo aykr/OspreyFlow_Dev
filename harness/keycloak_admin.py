@@ -33,6 +33,10 @@ class RealmConfigurationFailed(RuntimeError):
     loudly here rather than silently later."""
 
 
+class AdminLoginRefused(RealmConfigurationFailed):
+    """Keycloak was reached and refused the admin login (as opposed to not being reachable)."""
+
+
 def _call(
     url: str,
     *,
@@ -83,7 +87,7 @@ def admin_token(*, issuer: str, admin_user: str, admin_password: str) -> str:
         form=True,
     )
     if status != 200:
-        raise RealmConfigurationFailed(
+        raise (AdminLoginRefused if status in (400, 401) else RealmConfigurationFailed)(
             f"could not authenticate to Keycloak: {status} {token_response}"
         )
     return str(token_response["access_token"])
@@ -123,9 +127,7 @@ def ensure_user(*, issuer: str, realm: str, token: str, user: dict[str, Any]) ->
     return "created"
 
 
-def set_user_password(
-    *, issuer: str, realm: str, token: str, username: str, password: str
-) -> None:
+def set_user_password(*, issuer: str, realm: str, token: str, username: str, password: str) -> None:
     """Sets a non-temporary password on a subject that must already exist."""
     status, found = _call(
         f"{issuer}/admin/realms/{realm}/users?username={username}&exact=true", token=token

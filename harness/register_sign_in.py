@@ -74,9 +74,22 @@ def register(*, issuer: str, realm: str, env_path: Path, config: OspreyConfig) -
         raise RealmConfigurationFailed(
             f"{env_path.name} has no {ADMIN_PASSWORD_KEY} — it was not written by `apply`"
         )
-    token = keycloak_admin.admin_token(
-        issuer=issuer, admin_user="admin", admin_password=admin_password
-    )
+    try:
+        token = keycloak_admin.admin_token(
+            issuer=issuer, admin_user="admin", admin_password=admin_password
+        )
+    except keycloak_admin.AdminLoginRefused as error:
+        folder = env_path.parent
+        raise RealmConfigurationFailed(
+            f"Keycloak refused the administrator password in {env_path.name}. That usually means "
+            "the running Keycloak was started from an earlier render of the deployment than the "
+            f"one now in {folder.name}/, so the file and Keycloak disagree. To bring them back in "
+            f"step, recreate Keycloak from the current file:\n\n"
+            f"    docker compose -f {folder}/compose.yaml --env-file {folder}/{env_path.name} "
+            "up -d --force-recreate keycloak\n\n"
+            "then run this again. Keycloak keeps nothing between recreations, so any account "
+            "created after its first start is gone and has to be created again."
+        ) from error
 
     rendered = render_realm(config, realm_name=realm, demo_analyst=True)
     (admin,) = [u for u in rendered["users"] if u["username"] == DEMO_ADMIN_SUBJECT]
