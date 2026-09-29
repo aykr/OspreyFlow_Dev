@@ -112,7 +112,7 @@ class GraphPort(Protocol):
         `upsert_nodes(..., tx)` under a still-open transaction is **not**
         guaranteed visible to `find_node` until that transaction commits —
         confirmed empirically against the ArcadeDB adapter (Phase 5's HMP
-        fixture work, `tests/scenarios/fixtures/hmp_graph.py`), which does
+        fixture work, `packages/demo_fixtures/hmp_graph.py`), which does
         not offer read-your-writes within one open transaction. A caller
         that needs an `on_match: reference` lookup to see an earlier write
         in the same batch must commit between the write and the lookup, not

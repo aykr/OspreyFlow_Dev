@@ -13,12 +13,12 @@ Rule 9, asserted rather than trusted: `test_every_number_is_in_the_reserved_dram
 
 from __future__ import annotations
 
-from tests.scenarios.fixtures.scenario_cohorts import (
+from demo_fixtures.scenario_cohorts import (
     generate_cohort,
     generate_device_legs,
     generate_handle_cohort,
 )
-from tests.scenarios.fixtures.seizure_record import (
+from demo_fixtures.seizure_record import (
     HANDSET_IMEI_NORMALISED,
     SIM_A_IMSI_NORMALISED,
     SIM_B_IMSI_NORMALISED,
@@ -165,7 +165,7 @@ def test_a_pinned_token_produces_the_same_fixture_in_a_different_process() -> No
     repo_root = Path(__file__).resolve().parents[3]
     program = (
         "import sys; sys.path[:0]=['packages','services','.']\n"
-        "from tests.scenarios.fixtures.scenario_cohorts import (\n"
+        "from demo_fixtures.scenario_cohorts import (\n"
         "    generate_cohort, generate_device_legs)\n"
         "c = generate_cohort(shared_endpoint_id='s', prefix='alpha', run_token='scenarios')\n"
         "d = generate_device_legs(run_token='scenarios')\n"

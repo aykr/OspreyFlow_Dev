@@ -156,3 +156,25 @@ def test_the_repository_itself_is_clean() -> None:
     assert broken == [], "new citation(s) name a file that does not exist:\n  " + "\n  ".join(
         broken
     )
+
+
+def test_a_citation_of_a_moved_file_is_accepted_at_its_new_location(tmp_path: Path) -> None:
+    """A document written before the demo-data generators moved into the product (ADR-054) still
+    names `tests/scenarios/fixtures/hmp.py`. The citation is history and stays; the file it names
+    is where the move table says it now is."""
+    root = _repo(
+        tmp_path,
+        {
+            "spec/x.md": "See `tests/scenarios/fixtures/hmp.py` for the shape.\n",
+            "packages/demo_fixtures/hmp.py": "",
+        },
+    )
+    assert find_broken(root) == []
+
+
+def test_a_moved_citation_is_still_broken_when_the_new_location_is_missing(
+    tmp_path: Path,
+) -> None:
+    """The mapping is not a blanket pass: if the file is at neither place the citation is broken."""
+    root = _repo(tmp_path, {"spec/x.md": "See `tests/scenarios/fixtures/hmp.py`.\n"})
+    assert len(find_broken(root)) == 1

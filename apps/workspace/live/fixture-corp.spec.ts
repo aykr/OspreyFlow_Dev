@@ -27,7 +27,7 @@ import { freshWorkspaceUrl, liveOnly } from "./live";
 
 test.beforeEach(liveOnly);
 
-/** Deterministic, from `tests/scenarios/fixtures/fixture_corp.py`'s own `_synthetic_nino`.
+/** Deterministic, from `packages/demo_fixtures/fixture_corp.py`'s own `_synthetic_nino`.
  * `QQ` is a prefix HMRC never issues, so these cannot collide with a real person's NINO. */
 const PAIR_A = { nino: "QQ118439C", id: "corp-res-identical-1" };
 const RING_A = { nino: "QQ789396A", id: "corp-ring0-member0" };

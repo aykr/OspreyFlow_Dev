@@ -49,7 +49,7 @@ idempotently too, so re-seeding it changes nothing about what accumulates, only 
 holds under repetition.
 
 **The fixed query sample, and why each member needs no fixture-specific node lookup.** Fixture
-Corp's own structural ids are literal, not generated (`tests/scenarios/fixtures/fixture_corp.py`):
+Corp's own structural ids are literal, not generated (`packages/demo_fixtures/fixture_corp.py`):
 `corp-path-hub`, the resolution pair `corp-res-identical-1`/`corp-res-identical-2`, and
 `corp-path-spoke{length}-{length}` as each spoke's own terminal. HMP's own events are filtered by
 `investigation_scope` alone, no node id needed.

@@ -7,7 +7,7 @@ copy source files into `components.storage.ingest` before opening the Ingest Stu
     sudo cp tests/scenarios/fixtures/files/*.csv /var/lib/osprey/ingest/
 
 **`tests/scenarios/fixtures/files/` has never existed.** The CDR fixture is *generated*
-(`tests/scenarios/fixtures/cdr.py`), never stored as a CSV, so the documented procedure copies
+(`packages/demo_fixtures/cdr.py`), never stored as a CSV, so the documented procedure copies
 nothing and fails. Found on the closing pass, installing from a fresh clone and following the
 documentation as written rather than from memory — the same way round 13 found §3's missing
 `PYTHONPATH` line, and the same way round 13bd found §3.7a's `mint_dev_token` step 403ing.
@@ -17,7 +17,7 @@ claim in its failure message ("the harness places it"). Nothing placed it; I had
 there by hand the round before and not noticed that made the test unrunnable anywhere else.
 
 **Why the rows are imported rather than written out here.** `CLAUDE.md` rule 9 requires fixtures
-to be synthetic and in-repo, and `tests/scenarios/fixtures/cdr.py` already is exactly that,
+to be synthetic and in-repo, and `packages/demo_fixtures/cdr.py` already is exactly that,
 deterministically (`seed=42`). Copying its rows into this module would be a second definition of
 one fixture — which is the defect round 13bf spent itself removing from connector availability,
 and it would drift the first time either side changed. The generator stays the single source; this
@@ -42,8 +42,9 @@ import sys
 from pathlib import Path
 
 import yaml
-from tests.scenarios.fixtures.cdr import generate_cdr_rows
-from tests.scenarios.fixtures.seizure_record import SEIZURE_CSV_COLUMNS, generate_seizure_rows
+
+from demo_fixtures.cdr import generate_cdr_rows
+from demo_fixtures.seizure_record import SEIZURE_CSV_COLUMNS, generate_seizure_rows
 
 #: The name `08_ACCEPTANCE_SCENARIOS.md`'s B1-B3 and the over-the-wire test both expect. Changing
 #: it breaks `test_b1_…`/`test_b2_…`/`test_b3_…`, which look the file up by name — that coupling

@@ -12,7 +12,7 @@ step would call at load time.
 
 from __future__ import annotations
 
-from tests.scenarios.fixtures.seizure_record import (
+from demo_fixtures.seizure_record import (
     HANDSET_IMEI_NORMALISED,
     SEIZURE_DATE,
     SIM_A_IMSI_NORMALISED,
@@ -20,7 +20,6 @@ from tests.scenarios.fixtures.seizure_record import (
     SIM_B_MSISDN_NORMALISED,
     generate_seizure_record,
 )
-
 from knowledge_adapters.imei import imei
 from knowledge_adapters.imsi import imsi
 from knowledge_adapters.msisdn import msisdn

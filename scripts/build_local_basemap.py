@@ -87,7 +87,7 @@ from schemas.mapconfig import MapConfig
 #: **`berkshire` is the one to build for the demo, and `rutland` is the one to build to prove the
 #: pipeline works.** They are not interchangeable, and choosing wrongly produces a failure that
 #: looks exactly like a broken basemap: the HMP fixture's ten yards sit at roughly 51.5°N,
-#: -0.6°E (`tests/scenarios/fixtures/hmp.py`), which is in Berkshire. Rutland is 130km north of
+#: -0.6°E (`packages/demo_fixtures/hmp.py`), which is in Berkshire. Rutland is 130km north of
 #: them. A Rutland basemap is a perfectly good PMTiles file that the Glass loads, reads and draws
 #: nothing from, because the viewport — which `@sigma/layer-maplibre` centres on the graph's own
 #: coordinates, not on the basemap's — is over an area the extract does not cover. Found

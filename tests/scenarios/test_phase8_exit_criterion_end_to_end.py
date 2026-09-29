@@ -73,19 +73,19 @@ from services.resolve.projection import THRESHOLD_BALANCED, THRESHOLD_STRICT
 from services.resolve.resolver import resolve_entity_type
 from services.resolve.same_as_writer import write_same_as_edges
 from tests.conftest import default_claims, sign_token
-from tests.scenarios.fixtures.cdr import A_PARTY_RENDERINGS, B_PARTY, generate_cdr_rows
-from tests.scenarios.fixtures.fixture_corp import generate_resolution_persons
-from tests.scenarios.fixtures.hmp_graph import build_hmp_graph
-from tests.scenarios.fixtures.seizure_record import (
+
+from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
+from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
+from conduit_common.identity import new_edge_id, new_id
+from demo_fixtures.cdr import A_PARTY_RENDERINGS, B_PARTY, generate_cdr_rows
+from demo_fixtures.fixture_corp import generate_resolution_persons
+from demo_fixtures.hmp_graph import build_hmp_graph
+from demo_fixtures.seizure_record import (
     HANDSET_IMEI_NORMALISED,
     SIM_A_IMSI_NORMALISED,
     SIM_B_IMSI_NORMALISED,
     generate_seizure_record,
 )
-
-from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
-from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
-from conduit_common.identity import new_edge_id, new_id
 from knowledge_adapters.msisdn import msisdn as _normalise_msisdn
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
@@ -442,7 +442,7 @@ async def _seed_and_resolve_b9_b10_person_pair(
     signal at all).
 
     **Using the same generator that already carries the non-Latin pair** —
-    `tests.scenarios.fixtures.fixture_corp.generate_resolution_persons()` — rather than a second,
+    `demo_fixtures.fixture_corp.generate_resolution_persons()` — rather than a second,
     hand-rolled near-duplicate invented here: its own `close_given_name` pair ("Volkov, Mikael" vs
     "Volkov, Mikhail", same DOB) is already measured, live, at 0.981285 — inside the exact band
     needed, not merely close to it. Reusing its own values (not its own fixed node ids, which

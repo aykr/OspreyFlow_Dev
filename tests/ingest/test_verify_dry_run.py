@@ -91,7 +91,7 @@ async def test_dry_run_matches_the_real_loads_own_counts_but_writes_nothing(
     identically to a real load (in-sample references still count as
     "referenced", exactly like `_write_entity`'s own `local_index` cache),
     except that nothing lands in the graph afterwards."""
-    from tests.scenarios.fixtures.cdr import generate_cdr_rows
+    from demo_fixtures.cdr import generate_cdr_rows
 
     rows = generate_cdr_rows()
     csv_path = _write_csv(tmp_path / "cdr.csv", rows)

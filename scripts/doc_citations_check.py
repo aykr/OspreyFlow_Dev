@@ -63,6 +63,29 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 ALLOWLIST_PATH = REPO_ROOT / "tests" / "fixtures" / "citation_allowlist.txt"
 GITIGNORE_PATH = REPO_ROOT / ".gitignore"
 
+#: Files that moved, old path to new. A document written before a move still names the old path;
+#: that citation is history and is not rewritten (ADR-054), so it is accepted when the file is at
+#: its new location. Not a pass for a file that exists at neither.
+MOVED: dict[str, str] = {
+    f"tests/scenarios/fixtures/{name}": f"packages/demo_fixtures/{name}"
+    for name in (
+        "hmp.py",
+        "hmp_graph.py",
+        "hmp_population.py",
+        "fixture_corp.py",
+        "fixture_corp_resolution.py",
+        "cdr.py",
+        "seizure_record.py",
+        "scenario_cohorts.py",
+        "hmp_yards_recipe.yaml",
+        "hmp_persons_recipe.yaml",
+        "hmp_families_recipe.yaml",
+        "hmp_groups_recipe.yaml",
+        "hmp_associates_recipe.yaml",
+        "hmp_reports_recipe.yaml",
+    )
+}
+
 #: Where citations live. Documents and the code comments that carry the "name the test" habit.
 SEARCH_ROOTS: tuple[str, ...] = (
     "spec", "process", "apps", "services", "packages", "scripts", "harness",
@@ -141,7 +164,12 @@ def find_broken(root: Path = REPO_ROOT) -> list[str]:
             path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1
         ):
             for cited in citations_in(line):
-                if cited in allowlist or (root / cited).exists() or gitignore.match_file(cited):
+                if (
+                    cited in allowlist
+                    or (root / cited).exists()
+                    or (root / MOVED.get(cited, cited)).exists()
+                    or gitignore.match_file(cited)
+                ):
                     continue
                 broken.append(f"{relative}:{number}: cites '{cited}', which does not exist")
     return broken

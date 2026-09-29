@@ -13,7 +13,7 @@ A static HTML/JS page (no framework, no build step) rendering the three-pane lay
 `09_INGEST_STUDIO.md` §4 — source fields, the row template as a small graph, and an inspector —
 over **real** data: the actual `cdr-fixture` recipe
 (`tests/scenarios/fixtures/cdr_recipe.yaml`) resolved against the actual synthetic CDR fixture
-(`tests/scenarios/fixtures/cdr.py`) by the actual headless recipe engine
+(`packages/demo_fixtures/cdr.py`) by the actual headless recipe engine
 (`services/ingest/engine.py`), not mocked-up JSON shaped to look convincing.
 
 `generate_data.py` calls `resolve_rows` — the same function `run_recipe` calls — and writes what

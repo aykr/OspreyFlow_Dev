@@ -95,7 +95,7 @@ def _small_subgraph() -> tuple[Subgraph, str, str]:
 
 def _insular_cluster_vs_broad_hub_subgraph() -> tuple[Subgraph, str, str]:
     """A small, purpose-built fixture for this suite's own structural claim — distinct from, and
-    simpler than, `tests/scenarios/fixtures/hmp_graph.py`'s full 400-person population (whose own
+    simpler than, `packages/demo_fixtures/hmp_graph.py`'s full 400-person population (whose own
     8-person relay group is the real insular-cluster substrate `hmp_population.py`'s own docstring
     names as "the substrate the Clique Metric needs"). That fixture has no matching high-degree,
     low-clique "hub" counterpart built into it; this one is self-contained and needs no live

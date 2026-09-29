@@ -45,13 +45,12 @@ import zlib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from tests.scenarios.fixtures.seizure_record import (
+from conduit_common.identity import new_edge_id, new_id
+from demo_fixtures.seizure_record import (
     HANDSET_IMEI_NORMALISED,
     SIM_A_IMSI_NORMALISED,
     SIM_B_IMSI_NORMALISED,
 )
-
-from conduit_common.identity import new_edge_id, new_id
 from schemas.domain import (
     AuditStub,
     Edge,

@@ -1,6 +1,6 @@
 """Generates `data.json` for the throwaway Map-screen prototype by calling
 the REAL headless recipe engine (`services/ingest/engine.py`) against the
-REAL CDR fixture (`tests/scenarios/fixtures/cdr.py`) — ADR-018: "a
+REAL CDR fixture (`packages/demo_fixtures/cdr.py`) — ADR-018: "a
 throwaway front end over a real recipe and a real fixture", not mocked-up
 data shaped to look convincing.
 
@@ -24,7 +24,8 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from services.ingest.engine import resolve_rows  # noqa: E402
 from services.ingest.recipe_loader import load_recipe  # noqa: E402
-from tests.scenarios.fixtures.cdr import generate_cdr_rows  # noqa: E402
+
+from demo_fixtures.cdr import generate_cdr_rows  # noqa: E402
 
 RECIPE_PATH = REPO_ROOT / "tests" / "scenarios" / "fixtures" / "cdr_recipe.yaml"
 OUTPUT_PATH = Path(__file__).resolve().parent / "data.json"

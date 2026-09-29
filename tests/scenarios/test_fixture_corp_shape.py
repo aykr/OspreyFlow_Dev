@@ -1,4 +1,4 @@
-"""Proves Fixture Corp (`tests/scenarios/fixtures/fixture_corp.py`) actually exercises the four
+"""Proves Fixture Corp (`packages/demo_fixtures/fixture_corp.py`) actually exercises the four
 properties `06_DECISIONS.md` ADR-035 §C5 pins, against real adapters — not a docstring claim
 nobody checks, the same "fixture-shape-proven-early" discipline `test_hmp_fixture_shape.py`
 already established for Scenario A's own fixture.
@@ -18,19 +18,19 @@ from services.resolve.projection import (
     THRESHOLD_STRICT,
     compute_clusters,
 )
-from tests.scenarios.fixtures.fixture_corp import (
+
+from adapters.compute_rustworkx.testing import compute_rustworkx_adapter
+from adapters.graph_arcadedb.testing import arcadedb_adapter
+from demo_fixtures.fixture_corp import (
     build_path_spokes,
     generate_community_rings,
     generate_resolution_persons,
 )
-from tests.scenarios.fixtures.fixture_corp_resolution import (
+from demo_fixtures.fixture_corp_resolution import (
     ADR_035_C5_SCORES,
     resolve_fixture_corp_pairs,
     scores_by_pair_label,
 )
-
-from adapters.compute_rustworkx.testing import compute_rustworkx_adapter
-from adapters.graph_arcadedb.testing import arcadedb_adapter
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from schemas.compute import CommunityRequest

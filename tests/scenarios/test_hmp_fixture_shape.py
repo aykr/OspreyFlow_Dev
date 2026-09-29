@@ -1,4 +1,4 @@
-"""Proves the HMP fixture (`tests/scenarios/fixtures/hmp.py`) actually
+"""Proves the HMP fixture (`packages/demo_fixtures/hmp.py`) actually
 carries the statistical shape `08_ACCEPTANCE_SCENARIOS.md` A2/A4 assert,
 against a real `AnalyticsPort` adapter — not a docstring claim nobody
 checks. `08_ACCEPTANCE_SCENARIOS.md`'s own Scenario A (the site grid, the
@@ -13,14 +13,13 @@ generated `EventRecord`s, the same `duckdb_adapter` helper the
 
 from __future__ import annotations
 
-from tests.scenarios.fixtures.hmp import (
+from adapters.analytics_duckdb.testing import duckdb_adapter
+from demo_fixtures.hmp import (
     HOTSPOT_YARDS,
     PEAK_HOURS,
     TOTAL_INCIDENTS,
     generate_hmp_events,
 )
-
-from adapters.analytics_duckdb.testing import duckdb_adapter
 from ontology.handling import load_uk_le_scheme
 from schemas.analytics import EventFilter, HistogramBucketing, HistogramRequest
 from schemas.domain import Principal

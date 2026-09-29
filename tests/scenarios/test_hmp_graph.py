@@ -18,9 +18,11 @@ location is still legible from the assertion message and traceback.
 
 from __future__ import annotations
 
-from tests.scenarios.fixtures.hmp import HOTSPOT_YARDS, PEAK_HOURS, TOTAL_INCIDENTS
-from tests.scenarios.fixtures.hmp_graph import PRIOR_PERIOD_YARD, build_hmp_graph
-from tests.scenarios.fixtures.hmp_population import (
+from adapters.analytics_duckdb.testing import duckdb_adapter
+from adapters.graph_arcadedb.testing import arcadedb_adapter
+from demo_fixtures.hmp import HOTSPOT_YARDS, PEAK_HOURS, TOTAL_INCIDENTS
+from demo_fixtures.hmp_graph import PRIOR_PERIOD_YARD, build_hmp_graph
+from demo_fixtures.hmp_population import (
     PRINCIPAL_SUBJECT_INDEX,
     RELAY_GROUP_INDICES,
     RELAY_ORG_REF,
@@ -31,9 +33,6 @@ from tests.scenarios.fixtures.hmp_population import (
     YARD_LETTERS,
     generate_persons,
 )
-
-from adapters.analytics_duckdb.testing import duckdb_adapter
-from adapters.graph_arcadedb.testing import arcadedb_adapter
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from schemas.analytics import EventFilter, HistogramBucketing, HistogramRequest

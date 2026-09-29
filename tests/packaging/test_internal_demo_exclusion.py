@@ -63,7 +63,7 @@ def test_a_real_internal_registry_entrys_own_path_is_caught_without_the_fixed_ma
     )
 
     violations = packaging_gate.find_internal_demo_data(
-        ["tests/scenarios/fixtures/enron.py", "tests/scenarios/fixtures/hmp.py"],
+        ["tests/scenarios/fixtures/enron.py", "packages/demo_fixtures/hmp.py"],
         registry=(internal_demo,),
     )
 
@@ -87,9 +87,9 @@ def test_the_real_registry_produces_no_violations_for_a_clean_artefact() -> None
     from scripts.demo_registry import REGISTRY
 
     clean_paths = [
-        "tests/scenarios/fixtures/hmp.py",
-        "tests/scenarios/fixtures/hmp_graph.py",
-        "tests/scenarios/fixtures/fixture_corp.py",
+        "packages/demo_fixtures/hmp.py",
+        "packages/demo_fixtures/hmp_graph.py",
+        "packages/demo_fixtures/fixture_corp.py",
     ]
     assert packaging_gate.find_internal_demo_data(clean_paths, registry=REGISTRY) == []
 
@@ -192,7 +192,7 @@ def test_check_artefact_aggregates_every_finding_and_is_empty_when_clean() -> No
     assert set(dirty) == {"private_tree_files", "internal_demo_data", "authorship_identifiers"}
 
     clean = packaging_gate.check_artefact(
-        ["spec/00_ARCHITECTURE.md", "tests/scenarios/fixtures/hmp.py"],
+        ["spec/00_ARCHITECTURE.md", "packages/demo_fixtures/hmp.py"],
         text_blobs={"label": "OspreyFlow"},
     )
     assert clean == {}

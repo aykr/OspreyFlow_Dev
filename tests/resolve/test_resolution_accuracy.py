@@ -1,6 +1,6 @@
 """Hand-labelled resolution-accuracy check — the resolution-quality equivalent of the golden set
 (`tests/golden/harness.py`) for `services/resolve/resolver.py`, following the same fixture
-discipline `tests/scenarios/fixtures/cdr.py` established: deliberately encode known
+discipline `packages/demo_fixtures/cdr.py` established: deliberately encode known
 alias/variation patterns as a synthetic, hand-labelled set and confirm the system lands on the
 correct side of a threshold, rather than trusting the mechanism runs without checking whether it
 runs *correctly*.

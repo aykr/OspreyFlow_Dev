@@ -338,14 +338,10 @@ def seed(compose_file: Path, datasets: list[str], investigation_id: str) -> None
                 "python",
                 "-v",
                 f"{root.resolve()}/scripts:/app/scripts:ro",
-                # `scripts/seed_hmp_fixture.py` imports `tests.scenarios.fixtures.hmp_graph`
-                # directly rather than duplicating the fixture — deliberately, per its own
-                # docstring. So the seed needs the test tree as well, and the image does not carry
-                # it (`.dockerignore` excludes `tests/`). **This is why seeding is a checkout-only
-                # operation**: a distributed bundle has no fixtures to seed from, which is the
-                # correct behaviour and not a limitation to work around.
-                "-v",
-                f"{root.resolve()}/tests:/app/tests:ro",
+                # The synthetic generators the seeds call live in `packages/demo_fixtures/`, which
+                # the image carries, so the seed no longer needs the test tree mounted (it used to
+                # import them from `tests/`, which is why seeding was checkout-only;
+                # `spec/06_DECISIONS.md` ADR-054).
                 "api",
                 "-m",
                 script,

@@ -9,7 +9,7 @@ already made for `revert_load` (Phase 2) and the local-basemap build
 `osprey seed --fixture hmp` wraps.
 
 **Why `--investigation-scope` is required, not defaulted.** Every existing
-HMP test builds the fixture under `tests/scenarios/fixtures/hmp_graph.py`'s
+HMP test builds the fixture under `packages/demo_fixtures/hmp_graph.py`'s
 own `INVESTIGATION_SCOPE` constant (`"case-hmp-fixture"`), which is fine
 for a test that asserts entirely within its own process. A live demo needs
 the events tagged with the *real* investigation id an analyst is actually
@@ -25,7 +25,7 @@ same persistent analytics DuckDB file (`ANALYTICS_DB_PATH`,
 `services/api/config.py`'s own default) — not a bypass of either.
 
 Run as `PYTHONPATH=.:packages python -m scripts.seed_hmp_fixture ...` from
-the repo root — this module imports `tests.scenarios.fixtures.hmp_graph`
+the repo root — this module imports `demo_fixtures.hmp_graph`
 directly rather than duplicating the fixture, the same reason
 `tests/services/api/test_statelessness.py`'s own spawned `uvicorn`
 subprocess needs `PYTHONPATH` set explicitly: neither `pytest`'s own
@@ -42,12 +42,12 @@ import sys
 from pathlib import Path
 
 import duckdb
-from tests.scenarios.fixtures.hmp_graph import build_hmp_graph
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
+from demo_fixtures.hmp_graph import build_hmp_graph
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from ports.analytics import AnalyticsPort

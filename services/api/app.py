@@ -2937,7 +2937,7 @@ async def set_site_grid(
 ) -> Site:
     """Runs the site-grid connector + the existing recipe engine
     synchronously against this request — the same call shape
-    `tests/scenarios/fixtures/hmp_graph.py`'s fixture code already uses,
+    `packages/demo_fixtures/hmp_graph.py`'s fixture code already uses,
     just triggered by an HTTP request instead of a test
     (`spec/00_ARCHITECTURE.md` §1.2: "Reference geodata is ingested
     through the ordinary connector framework"). `on_match: reference` in

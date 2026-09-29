@@ -33,9 +33,9 @@ from scripts.seed_ingest_folder import (
     write_seizure_fixture,
 )
 
+from demo_fixtures.scenario_cohorts import generate_device_legs
+from demo_fixtures.seizure_record import SEIZURE_CSV_COLUMNS
 from knowledge_adapters import REGISTRY
-from tests.scenarios.fixtures.scenario_cohorts import generate_device_legs
-from tests.scenarios.fixtures.seizure_record import SEIZURE_CSV_COLUMNS
 
 
 def test_seeding_an_empty_folder_produces_a_readable_csv(tmp_path: Path) -> None:

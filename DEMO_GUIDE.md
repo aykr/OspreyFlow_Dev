@@ -351,7 +351,7 @@ PYTHONPATH=.:packages .venv/bin/python -m scripts.seed_ingest_folder \
 
 **Corrected.** This block used to say
 `sudo cp tests/scenarios/fixtures/files/*.csv …`. **That directory has never existed** — the CDR
-fixture is generated (`tests/scenarios/fixtures/cdr.py`), not stored — so the documented step
+fixture is generated (`packages/demo_fixtures/cdr.py`), not stored — so the documented step
 copied nothing and left Connect listing an empty folder. Found installing from a fresh clone and
 following this guide as written rather than from memory; `tests/test_seed_ingest_folder.py` is
 what fails if the procedure stops working, and one of its cases asserts that directory stays
@@ -659,7 +659,7 @@ rather than Enron is a point to make in the demo, not a caveat to bury. It is no
 hierarchy/departments shape the Scenario C script's own C1–C20 narrative was written against — the
 property fixture and that narrative script are not yet the same thing, per the correction above.
 
-Built following the discipline `tests/scenarios/fixtures/cdr.py` already set: seeded,
+Built following the discipline `packages/demo_fixtures/cdr.py` already set: seeded,
 deterministic, in-repo, with its own shape-correctness test
 (`tests/scenarios/test_fixture_corp_shape.py`) proving `06_DECISIONS.md` ADR-035 §C5's own minimum
 set (τ 0.99/0.95/0.80 resolution, Louvain community structure, the pathfinder's full hop range, and
@@ -673,7 +673,7 @@ and nobody has walked C1–C20 against what is actually built.
 ## 7. The VAST Challenge datasets — decided, `internal`
 
 `06_DECISIONS.md` ADR-026 settles this: a VAST-2014-MC2-*shaped* fixture, built by a seeded
-generator the same way `tests/scenarios/fixtures/cdr.py` and Fixture Corp (§6) already are — never
+generator the same way `packages/demo_fixtures/cdr.py` and Fixture Corp (§6) already are — never
 the published dataset's own files. The licence question (whether VAST's own files could have lived
 in-repo) was checked, not assumed, and found genuinely unresolved between two distribution
 channels with different apparent terms; the decision does not depend on resolving it, since a

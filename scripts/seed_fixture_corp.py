@@ -9,7 +9,7 @@ from the repo root, with `PYTHONPATH=.:packages` set (neither `pytest`'s own `py
 ["packages"]` nor a bare `python -m` invocation puts the repo root and `packages/` on `sys.path`
 by itself — the same note `seed_hmp_fixture.py` already carries).
 
-Writes three independent sub-fixtures from `tests/scenarios/fixtures/fixture_corp.py` into one
+Writes three independent sub-fixtures from `packages/demo_fixtures/fixture_corp.py` into one
 real `GraphPort`, under the given `--investigation-scope`:
 
 - The four resolution `Person` pairs, plus the real `SAME_AS` edges Splink computes over them —
@@ -30,16 +30,16 @@ import os
 import sys
 
 from services.resolve.same_as_writer import write_same_as_edges
-from tests.scenarios.fixtures.fixture_corp import (
-    build_path_spokes,
-    generate_community_rings,
-    generate_resolution_persons,
-)
-from tests.scenarios.fixtures.fixture_corp_resolution import resolve_fixture_corp_pairs
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from conduit_common.identity import now_utc
+from demo_fixtures.fixture_corp import (
+    build_path_spokes,
+    generate_community_rings,
+    generate_resolution_persons,
+)
+from demo_fixtures.fixture_corp_resolution import resolve_fixture_corp_pairs
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from ports.graph import GraphPort

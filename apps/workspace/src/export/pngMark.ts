@@ -3,7 +3,7 @@
 // carrying the same fields"). A small, self-contained chunk writer/reader rather than a new
 // dependency — PNG chunk framing (4-byte length, 4-byte type, data, 4-byte CRC32) is simple enough
 // that pulling in a library for it would cost more than it saves, the same "no new dependency
-// unless genuinely needed" call `tests/scenarios/fixtures/fixture_corp.py`'s own AMLSim/
+// unless genuinely needed" call `packages/demo_fixtures/fixture_corp.py`'s own AMLSim/
 // gen-fraud-graph finding already made for this project.
 //
 // One `tEXt` chunk per mark field, inserted immediately after the PNG's own `IHDR` chunk — valid

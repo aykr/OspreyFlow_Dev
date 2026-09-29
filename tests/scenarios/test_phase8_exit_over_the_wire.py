@@ -163,9 +163,10 @@ from pathlib import Path
 import httpx
 import pytest
 import yaml
-from tests.scenarios.fixtures.fixture_corp import _synthetic_nino
-from tests.scenarios.fixtures.hmp import generate_hmp_events
-from tests.scenarios.fixtures.hmp_population import (
+
+from demo_fixtures.fixture_corp import _synthetic_nino
+from demo_fixtures.hmp import generate_hmp_events
+from demo_fixtures.hmp_population import (
     PRINCIPAL_SUBJECT_PRISON_NUMBER,
     RELAY_GROUP_PRISON_NUMBERS,
     SECOND_SUBJECT_PRISON_NUMBER,
@@ -202,7 +203,7 @@ from scripts.seed_scenarios import (  # noqa: E402
 #: The SIM still in the handset at seizure — the identifier B13's hotlist watches. Imported from
 #: the fixture that generates both the seeded graph node and the ingested file, so the hotlist,
 #: the ingest and the pivot cannot come to mean three different SIMs.
-from tests.scenarios.fixtures.seizure_record import (  # noqa: E402
+from demo_fixtures.seizure_record import (  # noqa: E402
     SIM_B_IMSI_NORMALISED as SIM_B_IMSI,
 )
 
@@ -2478,7 +2479,7 @@ def test_a6_the_reports_for_the_selection_open_with_a_source_locator_each(
 
     **A6 is not an extraction row**, which is what 08's own "Gaps" note and this module's coverage
     table both had wrong until this round read the row rather than recalling it. The reports are
-    seeded `Document` entities — `tests/scenarios/fixtures/hmp_reports_recipe.yaml` loads all 229
+    seeded `Document` entities — `packages/demo_fixtures/hmp_reports_recipe.yaml` loads all 229
     of them, `MENTIONED_IN` gated on a non-empty mentioned person — and "links to its source with
     a locator" is `SourceRef.locator` on the node's own provenance, written by the ingest that
     loaded it. No model is involved at any point.

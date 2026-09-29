@@ -35,7 +35,7 @@ a second, separate passage ("no `osprey` CLI yet"); two Glass files cited a thir
 stated in prose that no test exercises"). Those three passages are durable, cross-cutting facts
 that happened to live only in a handover, not historical record — moved into `CLAUDE.md` (rules
 11 and 12, and the Conventions section) rather than repeated per citation, and all nine of those
-citations now point there. `tests/scenarios/fixtures/hmp_graph.py` cited a fourth passage
+citations now point there. `packages/demo_fixtures/hmp_graph.py` cited a fourth passage
 entirely (the Phase 1 ArcadeDB heap-pressure finding) — repointed to `deploy/compose/dev.yaml`,
 which already carries the same finding consolidated with its own later occurrences.
 `07_BUILD_PLAN.md`'s citation was the one genuinely citing this document as a historical record

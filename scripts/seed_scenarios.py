@@ -60,20 +60,20 @@ from datetime import timedelta
 from pathlib import Path
 
 import duckdb
-from tests.scenarios.fixtures.scenario_cohorts import (
-    Cohort,
-    DeviceLegs,
-    generate_cohort,
-    generate_device_legs,
-    generate_handle_cohort,
-)
-from tests.scenarios.fixtures.seizure_record import SEIZURE_DATE as _SEIZURE_DAY
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from conduit_common.identity import new_edge_id, now_utc
+from demo_fixtures.scenario_cohorts import (
+    Cohort,
+    DeviceLegs,
+    generate_cohort,
+    generate_device_legs,
+    generate_handle_cohort,
+)
+from demo_fixtures.seizure_record import SEIZURE_DATE as _SEIZURE_DAY
 from ontology.handling import HandlingScheme, load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from ports.graph import GraphPort

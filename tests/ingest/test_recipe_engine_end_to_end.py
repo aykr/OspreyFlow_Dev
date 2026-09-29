@@ -38,7 +38,7 @@ CLEARED = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
 
 
 async def test_cdr_fixture_loads_through_a_hand_written_recipe(tmp_path: Path) -> None:
-    from tests.scenarios.fixtures.cdr import generate_cdr_rows
+    from demo_fixtures.cdr import generate_cdr_rows
 
     rows = generate_cdr_rows()
     csv_path = tmp_path / "cdr.csv"

@@ -1,5 +1,5 @@
 """Gives the HMP fixture a graph side — `08_ACCEPTANCE_SCENARIOS.md`
-Scenario A. `tests/scenarios/fixtures/hmp.py`'s
+Scenario A. `packages/demo_fixtures/hmp.py`'s
 own `generate_hmp_events()` stays untouched: its 262 `EventRecord`s and
 their statistical shape are already proved correct against a real
 `AnalyticsPort` (`test_hmp_fixture_shape.py`), and nothing here changes

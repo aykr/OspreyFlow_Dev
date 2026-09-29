@@ -519,8 +519,9 @@ was the gap.
 `scenarios` was added on 27 September 2026 under **owner ruling R8**, which set the bar that every
 acceptance row must be performable through the analyst's own door on a rendered deployment — a row
 proven only in process does not count. Before it, those rows had no data to walk against on a real
-deployment at all. Seeding is a checkout-only operation for all three (the images deliberately do
-not carry `tests/`), and re-seeding `scenarios` is idempotent: it pins its own ids, so a second
+deployment at all. Seeding is still run from a checkout (`apply` mounts the seed scripts from it), but the
+synthetic generators the seeds call are now in the image (`packages/demo_fixtures/`, ADR-054), not
+in the test tree, and re-seeding `scenarios` is idempotent: it pins its own ids, so a second
 seed upserts the same elements rather than building a second, parallel cohort.
 
 **Where source files go — the ingest folder.** A rendered deployment bind-mounts

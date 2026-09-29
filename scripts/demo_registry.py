@@ -89,15 +89,15 @@ REGISTRY: tuple[DemoManifest, ...] = (
         distribution=DISTRIBUTION_SHIPPED,
         seed_module="scripts.seed_hmp_fixture",
         paths=(
-            "tests/scenarios/fixtures/hmp.py",
-            "tests/scenarios/fixtures/hmp_graph.py",
+            "packages/demo_fixtures/hmp.py",
+            "packages/demo_fixtures/hmp_graph.py",
         ),
     ),
     DemoManifest(
         id="fixture-corp",
         distribution=DISTRIBUTION_SHIPPED,
         seed_module="scripts.seed_fixture_corp",
-        paths=("tests/scenarios/fixtures/fixture_corp.py",),
+        paths=("packages/demo_fixtures/fixture_corp.py",),
     ),
 )
 
