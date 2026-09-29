@@ -233,6 +233,14 @@ def run_planetiler(
             "path, or set it up before calling this function. Never silently skipped: a "
             "missing tile output is a build failure, not a degraded basemap."
         )
+    try:
+        subprocess_run(["java", "-version"], check=True)
+    except (FileNotFoundError, subprocess.CalledProcessError) as error:
+        raise PlanetilerNotAvailableError(
+            "Java is needed to run planetiler and none was found. Install Java 21 or later "
+            "(a JDK, for example Temurin 21) and run this again. On macOS `/usr/bin/java` is only "
+            "a stub until a JDK is installed."
+        ) from error
     output_pmtiles_path.parent.mkdir(parents=True, exist_ok=True)
     subprocess_run(
         [
@@ -505,7 +513,11 @@ async def _run(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv if argv is not None else sys.argv[1:])
-    return asyncio.run(_run(args))
+    try:
+        return asyncio.run(_run(args))
+    except PlanetilerNotAvailableError as error:
+        print(error, file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

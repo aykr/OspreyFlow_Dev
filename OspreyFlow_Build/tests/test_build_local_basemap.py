@@ -21,13 +21,13 @@ import pytest
 import yaml
 from scripts.build_local_basemap import (
     GEOFABRIK_REGIONS,
+    UNREACHABLE_DATABASE,
     NotAnOsmExtractError,
     PlanetilerNotAvailableError,
     UnknownRegionError,
+    build_tiles_only,
     download_extract,
     register_local_provider,
-    UNREACHABLE_DATABASE,
-    build_tiles_only,
     resolve_extract,
     run_planetiler,
     set_tiles_root,
@@ -167,6 +167,7 @@ def test_run_planetiler_invokes_java_with_the_expected_arguments(tmp_path: Path)
     run_planetiler(osm_path, output_path, jar_path=jar_path, subprocess_run=fake_run)
 
     assert captured == [
+        ["java", "-version"],
         [
             "java", "-jar", str(jar_path),
             f"--osm-path={osm_path}", f"--output={output_path}",
@@ -175,7 +176,7 @@ def test_run_planetiler_invokes_java_with_the_expected_arguments(tmp_path: Path)
     ]
     # The download directory is pinned *under the output directory*, never left to planetiler's
     # own relative default — the half of this fix that a flag-name check alone would not catch.
-    assert f"--download_dir={tmp_path / 'sources'}" in captured[0]
+    assert f"--download_dir={tmp_path / 'sources'}" in captured[1]
 
 
 # --- register_local_provider ---------------------------------------------------
@@ -343,6 +344,46 @@ def test_run_planetiler_says_when_it_was_given_a_map_extract_instead_of_the_jar(
 
     with pytest.raises(PlanetilerNotAvailableError, match=r"not a \.jar"):
         run_planetiler(extract, tmp_path / "out.pmtiles", jar_path=extract)
+
+
+def test_a_missing_java_is_explained_not_dumped_as_a_traceback(tmp_path: Path) -> None:
+    """Seen on macOS: `/usr/bin/java` exists as a stub that exits non-zero with "Unable to locate
+    a Java Runtime", so the build died in a `CalledProcessError` traceback from the planetiler
+    command. The message must say Java 21 or later is needed, before planetiler is attempted."""
+    jar_path = tmp_path / "planetiler.jar"
+    jar_path.write_bytes(b"")
+    calls: list[list[str]] = []
+
+    def no_java(argv: list[str], *, check: bool) -> subprocess.CompletedProcess[bytes]:
+        calls.append(argv)
+        raise subprocess.CalledProcessError(1, argv)
+
+    with pytest.raises(PlanetilerNotAvailableError, match=r"Java 21"):
+        run_planetiler(
+            tmp_path / "e.osm.pbf",
+            tmp_path / "o.pmtiles",
+            jar_path=jar_path,
+            subprocess_run=no_java,
+        )
+    assert calls == [["java", "-version"]]
+
+
+def test_the_command_line_prints_the_planetiler_problem_and_exits_non_zero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from scripts.build_local_basemap import main
+
+    extract = tmp_path / "extract.osm.pbf"
+    extract.write_bytes(b"pbf")  # given, so nothing is downloaded
+    code = main(
+        [
+            "--region", "great-britain", "--extract", str(extract), "--output-dir", str(tmp_path),
+            "--planetiler-jar", str(tmp_path / "missing.jar"), "--tiles-only",
+        ]
+    )
+
+    assert code == 1
+    assert "planetiler jar not found" in capsys.readouterr().err
 
 
 # --- tiles only: the map without the database ------------------------------------
