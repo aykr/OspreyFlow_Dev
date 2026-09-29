@@ -162,3 +162,53 @@ def test_apply_writes_the_theme_beside_the_compose_file_it_is_mounted_from(
     theme = profile_dir / "keycloak-theme" / THEME_NAME
     assert (theme / THEME_PROPERTIES).is_file()
     assert (theme / THEME_STYLESHEET).read_text(encoding="utf-8").startswith(TOKENS)
+
+
+def test_the_wordmark_sits_above_the_card_as_the_logo_and_not_beside_it() -> None:
+    """Seen on the owner's deployment: at desktop widths "OspreyFlow" floated to the right of the
+    sign-in card as loose text. Keycloak's own stylesheet puts the login container's header in a
+    second grid column from 1200px up, and this theme's rules did not undo that. Catches a page
+    where the header is still placed in a column beside the card: it must be a single column with
+    the header first, and the loose text replaced by the brand mark."""
+    own = _own_rules()
+    container = re.search(r"\.pf-v5-c-login__container\s*\{([^}]*)\}", own)
+    assert container is not None
+    assert "display: block" in container.group(1)
+    assert "grid-template-columns" not in container.group(1) or "1fr" in container.group(1)
+    header = re.search(r"\.pf-v5-c-login__header\s*\{([^}]*)\}", own)
+    assert header is not None
+    assert "grid-column: 1" in header.group(1)
+    assert "grid-row: 1" in header.group(1)
+
+
+def test_the_brand_mark_is_drawn_from_the_brand_foundations_and_takes_its_colour_from_a_token() -> (
+    None
+):
+    """Catches a logo that is a different drawing from the brand's, or one filled with a colour of
+    its own. The six paths are the mark in `spec/design/OspreyFlow_Brand_Foundations.html`; the
+    mark is a mask over a token-coloured block, so it follows the theme."""
+    own = _own_rules()
+    foundations = (
+        REPO_ROOT.parent
+        / "OspreyFlow_Build"
+        / "spec"
+        / "design"
+        / "OspreyFlow_Brand_Foundations.html"
+    ).read_text(encoding="utf-8")
+    brand_paths = re.findall(r'<path d=\\"(M[^"\\]*)\\"', foundations)[:6]
+    assert len(brand_paths) == 6
+    decoded = own.replace("%20", " ").replace("%3C", "<").replace("%3E", ">")
+    for path in brand_paths:
+        assert f"d='{path}'" in decoded, path
+    mark = re.search(r"\.kc-logo-text::before\s*\{([^}]*)\}", own)
+    assert mark is not None
+    assert "background-color: var(--text-primary)" in mark.group(1)
+    assert "mask:" in mark.group(1)
+
+
+def test_the_loose_wordmark_text_is_not_displayed_but_stays_for_screen_readers() -> None:
+    """The realm name is still the page's accessible name; it is only not shown as loose text."""
+    own = _own_rules()
+    text_rule = re.search(r"\.kc-logo-text\s*\{([^}]*)\}", own)
+    assert text_rule is not None
+    assert "font-size: 0" in text_rule.group(1)

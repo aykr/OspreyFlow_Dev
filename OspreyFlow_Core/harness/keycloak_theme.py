@@ -44,6 +44,19 @@ loginAccountTitle=Sign in to {DISPLAY_NAME}
 doLogIn=Sign in
 """
 
+_BRAND_MARK = (
+    'url("data:image/svg+xml,'
+    "%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2048%2048'%3E"
+    "%3Cpath%20d='M4.9%206.7L6.4%2017.2L23.9%2011.1Z'/%3E"
+    "%3Cpath%20d='M6.8%2017.9L24.3%2019.9L24.2%2011.7Z'/%3E"
+    "%3Cpath%20d='M6.6%2018.6L8%2029.1L24.2%2020.7Z'/%3E"
+    "%3Cpath%20d='M8.4%2030.1L9.4%2041L24.4%2021.2Z'/%3E"
+    "%3Cpath%20d='M9.8%2041.2L24.4%2030.2L24.7%2021.5Z'/%3E"
+    "%3Cpath%20d='M25.6%2011.9L26.2%2029.2L43.9%2025.7Z'/%3E"
+    "%3C/svg%3E"
+    '")'
+)
+
 #: Rules only: every colour, size and typeface is a token from the file this is appended to (a test
 #: forbids a colour literal here). Written against Keycloak 26's PatternFly 5 login markup, and it
 #: replaces the stock page's background picture, card, inputs and button.
@@ -56,16 +69,31 @@ html, body, .login-pf, .login-pf-page, .pf-v5-c-login {
   font-family: var(--ui);
 }
 .pf-v5-c-login__container {
+  display: block;
   max-width: 26rem;
   margin-inline: auto;
   padding: var(--sp-40) var(--sp-24);
 }
-#kc-header-wrapper, .pf-v5-c-login__header { padding: 0 0 var(--sp-24); text-align: left; }
-#kc-header-wrapper, .kc-logo-text {
-  color: var(--text-primary);
-  font: 700 var(--fs-23) / var(--lh-23) var(--ui);
-  letter-spacing: 0;
-  text-transform: none;
+/* Keycloak's own sheet puts the header in a second grid column from 1200px up, which left the name
+   floating to the right of the card. One column, header first, above the card. */
+.pf-v5-c-login__header {
+  grid-column: 1;
+  grid-row: 1;
+  padding: 0 0 var(--sp-24);
+  text-align: left;
+}
+#kc-header-wrapper { padding: 0; text-align: left; }
+/* The brand mark stands in for the loose wordmark. The text stays in the page (it is the realm's
+   accessible name) but is not displayed; the mark is a mask, so its colour is a token. */
+.kc-logo-text { font-size: 0; line-height: 0; }
+.kc-logo-text::before {
+  content: "";
+  display: block;
+  width: var(--sp-40);
+  height: var(--sp-40);
+  background-color: var(--text-primary);
+  -webkit-mask: __MARK__ center / contain no-repeat;
+  mask: __MARK__ center / contain no-repeat;
 }
 .pf-v5-c-login__main {
   background: var(--surface-panel);
@@ -145,11 +173,15 @@ def read_tokens(repo_root: Path = REPO_ROOT) -> str:
         ) from error
 
 
+def _rules() -> str:
+    return _RULES.replace("__MARK__", _BRAND_MARK)
+
+
 def render_login_theme(tokens_css: str) -> dict[str, str]:
     """The theme's files, keyed by path relative to the theme's own directory."""
     return {
         THEME_PROPERTIES: _PROPERTIES,
-        THEME_STYLESHEET: tokens_css + _RULES,
+        THEME_STYLESHEET: tokens_css + _rules(),
         THEME_MESSAGES: _MESSAGES,
     }
 
