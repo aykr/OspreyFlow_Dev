@@ -202,7 +202,9 @@ def test_the_realm_still_carries_only_fields_keycloak_defines_with_demo_analyst_
     the flag on — a realm import refuses any field it does not recognise outright."""
     realm = render_realm(_config(), demo_analyst=True)
 
-    known_top_level = {"realm", "enabled", "clients", "users"}
+    # `displayName` and `loginTheme` are `RealmRepresentation` fields: the sign-in page's
+    # name and look.
+    known_top_level = {"realm", "displayName", "loginTheme", "enabled", "clients", "users"}
     assert set(realm) <= known_top_level
 
     known_client_fields = {

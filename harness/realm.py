@@ -121,6 +121,11 @@ REQUIRED_SERVICE_ACCOUNT_ROLES = ("impersonation", "view-users")
 #: once for a note-to-self left in the same document.
 UNMANAGED_ATTRIBUTE_POLICY = "ENABLED"
 
+#: The sign-in page's look (`harness/keycloak_theme.py` renders the theme these name). Held here,
+#: not imported from there: that module imports the renderer, and this one must not.
+LOGIN_THEME_NAME = "osprey"
+REALM_DISPLAY_NAME = "OspreyFlow"
+
 #: The claims `services/api/auth.py` builds a `Principal` from. A mapper is rendered for each:
 #: without one, an exchanged token verifies as a token and then fails as a principal, and the error
 #: names a missing claim rather than a missing mapper.
@@ -372,6 +377,8 @@ def render_realm(
         )
     return {
         "realm": realm_name,
+        "displayName": REALM_DISPLAY_NAME,
+        "loginTheme": LOGIN_THEME_NAME,
         "enabled": True,
         "clients": [
             {

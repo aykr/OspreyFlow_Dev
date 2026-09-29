@@ -747,7 +747,9 @@ def test_the_rendered_realm_carries_only_fields_keycloak_defines() -> None:
 
     # `unmanagedAttributePolicy` is deliberately absent: it belongs to the user-profile
     # endpoint, and including it makes the whole realm import fail.
-    known = {"realm", "enabled", "clients", "users"}
+    # `displayName` and `loginTheme` are `RealmRepresentation` fields: the sign-in page's
+    # name and look.
+    known = {"realm", "displayName", "loginTheme", "enabled", "clients", "users"}
     assert set(realm) <= known, (
         f"unexpected top-level key(s) in the realm document: {sorted(set(realm) - known)}"
     )

@@ -134,6 +134,36 @@ def ensure_unmanaged_attributes(*, issuer: str, realm: str, token: str) -> None:
             )
 
 
+def ensure_realm_look(*, issuer: str, realm: str, token: str, theme: str, display_name: str) -> str:
+    """Give a running realm its sign-in page's name and, if Keycloak can see it, its theme.
+
+    The theme is named only when Keycloak lists it: a theme is mounted by compose, so a Keycloak
+    started before it was written cannot see it, and naming a theme that is not there risks a
+    sign-in page that will not render. Returns one plain sentence for the operator."""
+    status, info = _call(f"{issuer}/admin/serverinfo", token=token)
+    available = (
+        {t.get("name") for t in info.get("themes", {}).get("login", [])}
+        if status == 200 and isinstance(info, dict)
+        else set()
+    )
+    status, current = _call(f"{issuer}/admin/realms/{realm}", token=token)
+    if status != 200 or not isinstance(current, dict):
+        raise RealmConfigurationFailed(f"could not read realm {realm!r}: {status}")
+    wanted = {**current, "displayName": display_name}
+    if theme in available:
+        wanted["loginTheme"] = theme
+    status, body = _call(f"{issuer}/admin/realms/{realm}", token=token, data=wanted, method="PUT")
+    if status not in (200, 204):
+        raise RealmConfigurationFailed(f"could not update realm {realm!r}: {status} {body}")
+    if theme in available:
+        return f"sign-in page: {display_name} look applied"
+    return (
+        f"sign-in page: named {display_name}, but Keycloak cannot see the {display_name} look yet. "
+        "Run `python -m harness.apply` again (it writes the look and recreates the stack), then "
+        "`make register-sign-in` once more"
+    )
+
+
 def ensure_user(*, issuer: str, realm: str, token: str, user: dict[str, Any]) -> str:
     """As `ensure_client`, for a subject. The subject is created without a password."""
     username = user["username"]

@@ -337,6 +337,16 @@ the client and the account with `make register-sign-in`, which also switches on 
 attributes in the realm and restores the account's attributes if it was created without them (the
 `osprey-admin` role travels as one, and Keycloak discards it silently when they are off).
 
+**The sign-in page's look.** Keycloak's own sign-in page is restyled with the design system
+(`apps/workspace/src/design/tokens.css`) so the journey from launcher to workspace does not change
+character in the middle. `apply` writes a Keycloak login theme beside the compose file
+(`keycloak-theme/osprey/`, from `harness/keycloak_theme.py`); compose mounts it into Keycloak
+beside, not over, Keycloak's own themes, and the realm names it (`loginTheme`) and calls itself
+"OspreyFlow" (`displayName`). Like `realm.json` and `litellm.yaml` it is a service's own config, not
+one of §2.1's four artefacts. It changes only appearance and wording: who may sign in, and what
+they may then do, are untouched. A running Keycloak sees it only after it is recreated from a
+compose file that mounts it, so `make register-sign-in` names the theme only when Keycloak lists it.
+
 - **Before any realm is rendered the console is open**, loopback only, because there is nothing to
   sign in to; the enforcement is decided when the console starts, so the Launch that renders the
   realm does not lock the operator out mid-flow. The next start enforces.

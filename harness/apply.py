@@ -50,6 +50,7 @@ from harness.keycloak_admin import (
     set_demo_admin_password,
     set_demo_analyst_password,
 )
+from harness.keycloak_theme import write_login_theme
 from harness.preflight import ALL_CHECKS, PreflightContext
 from harness.preflight.result import Status
 from harness.realm import (
@@ -380,9 +381,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--out-root", type=Path, default=DEFAULT_OUT_ROOT)
-    parser.add_argument(
-        "--seed", default="", help="Comma-separated: hmp,fixture-corp,scenarios"
-    )
+    parser.add_argument("--seed", default="", help="Comma-separated: hmp,fixture-corp,scenarios")
     parser.add_argument(
         "--health-timeout", type=int, default=DEFAULT_HEALTH_TIMEOUT_SECONDS, metavar="SECONDS"
     )
@@ -448,6 +447,9 @@ def main(argv: list[str] | None = None) -> int:
         # reason as the realm above: a generated *service config*, mounted by the compose file,
         # rather than one of `05_DEPLOYMENT.md` §2.1's four operator-facing artefacts.
         (out_dir / "litellm.yaml").write_text(render_litellm_config(config), encoding="utf-8")
+        # The sign-in page's look, beside the compose file that mounts it
+        # (harness/keycloak_theme.py).
+        write_login_theme(out_dir)
         secret = generate_client_secret()
         admin_password = generate_client_secret()
         arcadedb_password = generate_client_secret()

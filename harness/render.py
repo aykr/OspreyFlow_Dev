@@ -592,6 +592,10 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
         "command": ["start-dev", "--import-realm", "--features=token-exchange"],
         "volumes": [
             "./realm.json:/opt/keycloak/data/import/realm.json:ro",
+            # The sign-in page's look (`harness/keycloak_theme.py`), written beside this file by
+            # `apply`. Mounted **beside** Keycloak's own themes: a mount onto `/opt/keycloak/themes`
+            # itself would hide them and leave the realm with no sign-in page at all.
+            "./keycloak-theme/osprey:/opt/keycloak/themes/osprey:ro",
             # **Keycloak's database is deliberately NOT persisted, and both halves of that
             # cost this project a round each — round 13cb added a volume here, round 13cd took
             # it away again after measuring what it broke.**

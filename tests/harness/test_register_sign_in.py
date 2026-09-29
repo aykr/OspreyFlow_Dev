@@ -20,6 +20,7 @@ from typing import Any
 import pytest
 import yaml
 from harness.keycloak_admin import RealmConfigurationFailed
+from harness.keycloak_theme import DISPLAY_NAME, THEME_NAME
 from harness.realm import (
     ADMIN_ROLE,
     DEMO_ADMIN_SUBJECT,
@@ -55,6 +56,9 @@ class FakeKeycloak:
         # A realm imported from `realm.json` starts with custom user attributes switched off, and
         # Keycloak then silently discards them when a user is created (no error, no warning).
         self.unmanaged_attributes = "DISABLED"
+        self.realm: dict[str, Any] = {"realm": "osprey", "enabled": True}
+        # Themes Keycloak can see. The OspreyFlow one is there only if compose mounted it.
+        self.themes = ["keycloak", "keycloak.v2"]
         self.calls: list[tuple[str, str]] = []
 
     def call(
@@ -77,7 +81,14 @@ class FakeKeycloak:
             return 200, {"access_token": "admin-token"}
         if token != "admin-token":
             return 401, {"error": "no token"}
+        if path == "/admin/serverinfo":
+            return 200, {"themes": {"login": [{"name": n} for n in self.themes]}}
         route = path.removeprefix("/admin/realms/osprey")
+        if route == "":
+            if verb == "PUT":
+                self.realm = {**self.realm, **data}
+                return 204, ""
+            return 200, dict(self.realm)
         if route.startswith("/clients?clientId="):
             wanted = route.split("=", 1)[1]
             return 200, [c for c in self.clients.values() if c["clientId"] == wanted]
@@ -384,3 +395,29 @@ def test_a_demo_admin_created_earlier_without_its_role_is_repaired(
     _register(env)
 
     assert keycloak.users["uid-1"]["attributes"]["roles"] == [ADMIN_ROLE]
+
+
+def test_the_sign_in_page_is_restyled_when_keycloak_can_see_the_theme(
+    tmp_path: Path, keycloak: FakeKeycloak
+) -> None:
+    keycloak.themes.append(THEME_NAME)
+
+    lines = _register(_env(tmp_path))
+
+    assert keycloak.realm["loginTheme"] == THEME_NAME
+    assert keycloak.realm["displayName"] == DISPLAY_NAME
+    assert keycloak.realm["enabled"] is True  # the rest of the realm is carried through
+    assert any("sign-in page" in line and "OspreyFlow look" in line for line in lines)
+
+
+def test_a_theme_keycloak_cannot_see_is_never_named_and_the_next_step_is_said(
+    tmp_path: Path, keycloak: FakeKeycloak
+) -> None:
+    """Naming a theme Keycloak does not have risks a sign-in page that will not render. The
+    running Keycloak sees it only after a recreate from a compose file that mounts it."""
+    lines = _register(_env(tmp_path))
+
+    assert "loginTheme" not in keycloak.realm
+    assert keycloak.realm["displayName"] == DISPLAY_NAME
+    (note,) = [line for line in lines if "sign-in page" in line]
+    assert "python -m harness.apply" in note

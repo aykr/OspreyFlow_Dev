@@ -27,6 +27,8 @@ from harness.realm import (
     DEMO_ADMIN_SUBJECT,
     HARNESS_CLIENT_ID,
     LAUNCHER_CLIENT_ID,
+    LOGIN_THEME_NAME,
+    REALM_DISPLAY_NAME,
     generate_client_secret,
     render_realm,
 )
@@ -105,6 +107,16 @@ def register(*, issuer: str, realm: str, env_path: Path, config: OspreyConfig) -
     lines.append(
         f"account {DEMO_ADMIN_SUBJECT}: "
         + keycloak_admin.ensure_user(issuer=issuer, realm=realm, token=token, user=admin)
+    )
+
+    lines.append(
+        keycloak_admin.ensure_realm_look(
+            issuer=issuer,
+            realm=realm,
+            token=token,
+            theme=LOGIN_THEME_NAME,
+            display_name=REALM_DISPLAY_NAME,
+        )
     )
 
     password = values.get(DEMO_ADMIN_PASSWORD_KEY) or generate_client_secret()
