@@ -7145,3 +7145,100 @@ theirs to do on their own machine.
 **P4 is confirmed as amended.** The demo analyst is Editor and the demo admin is Author on the
 seeded demos, Fixture Corp is offered by name, and the real Enron corpus is seeded too, on the
 owner's own machine only, opt-in and never shipped, as ADR-053 decides. Stage 4 seeds both.
+
+
+## ADR-054 — Three folders under one repository: OspreyFlow_Core, OspreyFlow_Build, OspreyFlow_Data
+
+**Status: Accepted in principle on the owner's rulings of 29 September 2026. The layout table below
+is proposed and waits for the owner's approval; nothing has been moved.** This is the one exercise for
+which the owner lifted the standing rule against restructuring the tree.
+
+### Context: what was seen
+
+The owner asked for the product to be separated from the material that builds and governs it, and
+for datasets to have a home of their own. Measured on 29 September 2026:
+
+- 980 tracked files. `tests/` (293), `apps/` (250), `packages/` (195) and `services/` (85) are most.
+- The repository already draws this line in one place: `scripts/product_tree_link_check.py` lists
+  `process/`, `CLAUDE.md`, `.claude/` and `.graphifyignore` as a private tree that publishable
+  documents must not cite. Several large folders (`graphify-out`, `Claude outputs`, `.impeccable`,
+  caches) are untracked.
+- 412 files outside `spec/`, `tests/` and `process/` cite `spec/` (651 ADR mentions in code and
+  docstrings), and 131 cite `process/` or `CLAUDE.md`.
+- Eight files in `scripts/` import from `tests/`; four are demo-data generators that the seeds
+  call, so the product currently depends on its own test tree.
+- Thirty non-test scripts and 45 tests find the repository root from their own location; the
+  Makefile, the workflows, `.dockerignore` and the Dockerfiles carry about 210 path references.
+- `data/` has no tracked files. It is the Conduit's local analytics store, not a set of datasets.
+
+### Decision
+
+1. **One git repository, whose root is the parent of three sibling folders.** History is kept; files
+   move with `git mv`. Nothing is split into a separate repository, and nothing is pushed anywhere
+   public.
+2. **`OspreyFlow_Core` is the product**: what runs and what is built into an image. It holds no
+   dataset and no test. Its Docker build context is the Core folder.
+3. **`OspreyFlow_Build` is everything that builds, checks, governs or explains the product**, including
+   `spec/`, `tests/` and `process/`, the checks that read them, and the Claude-specific material.
+4. **`OspreyFlow_Data` holds datasets, one subfolder per dataset**, plus the Conduit's local runtime
+   store in its own subfolder. Core never contains raw data; a deployment finds data through
+   `OSPREYFLOW_INTERNAL_DEMO_DATA_DIR`, which now points at this folder. ADR-035 §C1's fixed
+   `/demo-data/` is superseded by this location; its rules (internal, never committed, gitignored,
+   refused by the packaging gate) are unchanged, and ADR-053's Enron seed reads from
+   `OspreyFlow_Data/enron/`.
+5. **Citations stay as they are.** `spec/...` and `process/...` in Core files become *logical names*.
+   The citation, link and publication checks learn one mapping from a logical name to its new
+   location; the 412 and 131 files are not rewritten. The private-tree markers are updated to the new
+   locations, and the rule that publishable documents must not cite the private tree is unchanged.
+6. **The product does not depend on Build.** The demo-data generators the seeds call (Fixture Corp,
+   the HMP fixture, the CDR and seizure fixtures, the scenario cohorts) move into Core as a small
+   package, and the tests import them from there. Developer tools that need the test tree
+   (`mint_dev_token.py`, `update_golden_baseline.py`) move to Build.
+7. **Tests.** The Python suite in `tests/` moves to Build. Unit tests written beside front-end code
+   (`*.test.ts(x)` under `apps/`) stay beside it: a test tree cannot be pulled away from the code it
+   compiles with without breaking the front-end tooling. Pytest settings move to Build and put Core
+   on the import path; CI and `make` run from the parent root.
+8. **Root files that must stay at the root** (a tool requires it): `.git`, `.gitignore`,
+   `.github/` (GitHub reads workflows only from the repository root), `Makefile` (the one entry point;
+   its recipes are repointed), `.claude/` (Claude Code reads its settings and commands from where a
+   session opens) and a new one-line `CLAUDE.md` that imports the real one in Build, so a session
+   opened at the root or in Build reads the same rules. Everything else Claude-specific moves to
+   Build.
+9. **Proved, not assumed.** The full test and check suite is run before the move and after each
+   commit of it, and must give the same result apart from tests that assert the old paths, which are
+   corrected in the same commit. A check that would still pass with a path wrong is proved able to
+   fail by planting the fault (rule 12).
+
+### Proposed layout (to be approved)
+
+| Now | Moves to |
+|---|---|
+| `apps/`, `packages/`, `services/`, `harness/`, `providers/`, `connectors/`, `recipes/`, `deploy/`, `config/`, `osprey.yaml` | `OspreyFlow_Core/` (same names) |
+| `pyproject.toml` (dependencies), `uv.lock`, `package.json`, `package-lock.json`, `tsconfig.json`, `eslint.config.js`, `.dockerignore`, `.trivyignore`, `LICENSE`, `NOTICE`, `README.md`, `DEMO_GUIDE.md` | `OspreyFlow_Core/` |
+| `scripts/` that run the product: `launch.py`, the four `seed_*.py`, `real_data_exceptions.py`, `demo_registry.py`, `publish_seed.py`, `osprey_bundle.py`, `release_local.py`, `register_tier4_provider.py`, `build_local_basemap.py`, `geo_local_provider.py` | `OspreyFlow_Core/scripts/` |
+| Demo-data generators now under `tests/scenarios/fixtures/` | `OspreyFlow_Core/packages/`, as a small package |
+| `spec/`, `tests/`, `process/` | `OspreyFlow_Build/` (same names) |
+| `scripts/` that check or govern: the `*_check.py` files, `packaging_gate.py`, `licence_check.*`, `doc_site.py`, `simple_markdown.py`, `idp_test_realm.py`, `verify_map.py`, `mint_dev_token.py`, `update_golden_baseline.py` | `OspreyFlow_Build/tools/` |
+| `CLAUDE.md` (the real one), `.graphifyignore`, `graphify-out/`, `.impeccable/`, `Claude outputs/`, `dist/`, caches, pytest settings | `OspreyFlow_Build/` |
+| `data/` (untracked) | `OspreyFlow_Data/_local-runtime/` (the Conduit's default store path is repointed) |
+| `demo-data/` (untracked, where present) | `OspreyFlow_Data/<dataset>/` |
+| `.git`, `.gitignore`, `.github/`, `Makefile`, `.claude/`, new one-line `CLAUDE.md` | stay at the root |
+
+Scripts marked uncertain (`doc_site.py`, `simple_markdown.py`, `idp_test_realm.py`, `verify_map.py`,
+`publish_seed.py`) are decided by what imports them when the file-level inventory is made; the table
+above states the rule, and the inventory states the file.
+
+### Order of work (each step its own commit; the suite run before and after)
+
+1. File-level inventory of every path reference, no moves, for the owner's approval.
+2. Data folder and the internal-data path (untracked moves, the environment default).
+3. Demo-data generators into Core; tests repointed. No folder moves yet.
+4. Build: `spec/`, `tests/`, `process/`, tools, Claude material; the logical-name mapping in the
+   checks; pytest settings.
+5. Core: the product folders and manifests; Docker contexts, Makefile, workflows, root-finding code.
+6. Rebuild the machine-bound pieces (`.venv`, `node_modules`, the generated deployment) and re-run
+   the whole suite.
+
+### State of the build
+
+Nothing moved. Case-access stage 1 (ADR-052) starts after step 6.
