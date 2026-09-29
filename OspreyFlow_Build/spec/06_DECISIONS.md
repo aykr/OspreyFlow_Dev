@@ -7316,3 +7316,85 @@ it), `OspreyFlow_Core/.venv`, and the generated deployment. On the owner's machi
 
 **Left as they were:** an empty `data/` at the root (the old store's shell; delete it) and the
 stale `.mypy_cache`, `.pytest_cache` and `.ruff_cache` at the root.
+
+## ADR-055 — The PaySim mobile-money dataset as an internal demo: what goes in the graph, what goes in the analytics store
+
+**Status: Proposed, 29 September 2026. Three points need the owner's ruling (marked "Owner to rule");
+nothing is built. The owner has already ruled: the full set, classified `internal`, and this record.**
+
+### Context: what was seen
+
+The owner asked for PaySim ("Synthetic Financial Datasets For Fraud Detection", Kaggle `ealaxi/paysim1`) to
+be built in as a demo dataset. They placed the file at
+`OspreyFlow_Data/PaySIM_Dataset/PS_20174392719_1491204439457_log.csv` (Claude cannot download it: Kaggle needs a
+login and this machine's network refuses the host). Profiled directly on 29 September 2026:
+
+- **6,362,620 rows, 493,534,783 bytes**, eleven columns: `step`, `type`, `amount`, `nameOrig`,
+  `oldbalanceOrg`, `newbalanceOrig`, `nameDest`, `oldbalanceDest`, `newbalanceDest`, `isFraud`,
+  `isFlaggedFraud`. `step` runs 1 to 743; one step is one hour, so the set spans about 31 days.
+- Types: `CASH_OUT` 2,237,500; `PAYMENT` 2,151,495; `CASH_IN` 1,399,284; `TRANSFER` 532,909; `DEBIT` 41,432.
+- **8,213 fraud rows, all `TRANSFER` (4,097) or `CASH_OUT` (4,116); 16 rows flagged by the simulator's own rule.**
+- **6,353,307 distinct originating accounts and 2,722,362 distinct destination accounts** (2,150,401 of
+  the destinations are merchants, named `M…`; customers are `C…`). Only **9,298** originating accounts
+  appear more than once. In graph terms the set is almost entirely disjoint one-edge stars.
+- The 8,213 fraud rows touch **16,382 accounts**; the rows touching any of them number **65,676**.
+
+What already exists: `TRANSACTED` (Asset or Endpoint to Asset or Endpoint, directed, temporal) has no
+properties; `Endpoint.endpoint_kind` has `iban` and `card` but no account kind; the analytics store holds
+events for time-window queries (`load_events`), which is where the HMP incidents live.
+
+### Decision (proposed)
+
+1. **Both stores, split by what each is good at.**
+   - **The analytics store takes all 6,362,620 transactions as events**, one event per row, so every
+     count, time-window and amount query covers the full set. `step` becomes a timestamp from a fixed,
+     declared origin (`step` hours after 2017-01-01T00:00:00Z; the data is simulated and has no real date).
+   - **The graph takes the fraud neighbourhood only**: every account that is the origin or destination of
+     a fraud row, and every transaction touching one (65,676 rows, of the order of 70,000 nodes). Loading
+     all ~8.5 million accounts as nodes would produce a forest with almost no connected structure, cost
+     hours and gigabytes, and show an analyst nothing a query cannot. **Owner to rule:** accept this
+     split, or require every account in the graph (I recommend the split; the full-graph route is
+     buildable but I would want it measured on your machine first).
+2. **Mapping.** An account is an `Endpoint` with a new `endpoint_kind` value `account` (customers and
+   merchants alike; a merchant carries `M` in its identifier, no separate type). A transaction is a
+   `TRANSACTED` edge from origin to destination, with the time from `step`. `TRANSACTED` gains
+   properties `amount` (float) and `transaction_type` (enum of the five types). `isFraud` and
+   `isFlaggedFraud` are stored as labels on the analytics event, not as edge properties, so a query for
+   "what looks fraudulent" can be told apart from "what the simulator says was fraud". **Owner to
+   rule:** this is an ontology change (version 9 to 10; recipes pinned to 9 are re-published, as the
+   ontology file's own notes describe for every earlier bump). The alternative is no ontology change
+   and carrying `amount` and the account kind only in the analytics events (graph edges bare);
+   I recommend the change, because an edge with no amount cannot be followed by value.
+3. **Classification: `internal`.** A new registry manifest, `distribution: internal`, names
+   `OspreyFlow_Data/PaySIM_Dataset/`. The packaging gate already refuses anything under
+   `OspreyFlow_Data/`; the registry test that flipping an internal manifest to `shipped` is refused
+   covers this one. Nothing is committed, and the seed refuses from a bundle, as ADR-053 does.
+4. **Licence.** The simulator is GPL-3.0; the authors ask that E. A. Lopez-Rojas, A. Elmir and
+   S. Axelsson, "PaySim: A financial mobile money simulator for fraud detection" (EMSS, Larnaca, 2016)
+   be cited. The licence on the Kaggle copy of the data was **not verified** (the page could not be read
+   from here); the manifest's `data_licence` is left to the owner to fill from the Kaggle page. Because
+   the set is internal and never leaves the machine, nothing is distributed, so the terms do not
+   restrict local use; they must be recorded before any change of classification. The seed prints the
+   citation.
+5. **It is synthetic, so it needs no real-data exception.** ADR-035 §C3's list and ADR-053's
+   conditions apply to real datasets. The seed still requires the file under
+   `OSPREYFLOW_INTERNAL_DEMO_DATA_DIR` and refuses otherwise, and it is never selected by another seed name.
+6. **Access follows ADR-052.** A case named "PaySim mobile money (internal)", demo admin Author, demo
+   analyst Editor, no unit-wide level. The Glass shows it as unavailable, "dataset not provisioned", where
+   the file is absent.
+7. **Tests, named before the code (rule 12).** The reader gives 6,362,620 rows from the real file's own
+   first rows (a 12-row fixture with the same columns) and refuses a file with a missing or renamed
+   column; the fraud-neighbourhood selection returns exactly the fraud rows' accounts and every row
+   touching them on a fixture with a planted second-hop account it must exclude; `step` maps to the declared
+   timestamps at both ends (1 and 743); every event carries its `isFraud` label unchanged; the
+   registry manifest is `internal` and flipping it is refused; the seed refuses with no file, from a
+   bundle, and when another seed name is given. Each is proved to fail by planting the fault it names.
+
+### What this does not change
+
+The synthetic Fixture Corp remains the shippable demo. Nothing here is a claim that PaySim's
+accounts are real people: it is simulated data, and the case says so.
+
+### State of the build
+
+Nothing built. Owner to rule on points 1 and 2, then the loader is built tests first.
