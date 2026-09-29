@@ -149,6 +149,7 @@ from harness.preflight.context import PreflightContext
 from harness.render import (
     DEFAULT_CONFIG_PATH,
     DEFAULT_OUT_ROOT,
+    HARNESS_PORT,
     ClusterRendererNotBuilt,
     MissingDockerfileError,
     UnpinnedImagesError,
@@ -576,7 +577,9 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
             "namespace, which made the documented command serve nothing at all."
         ),
     )
-    parser.add_argument("--port", type=int, default=7000, help="05_DEPLOYMENT.md §2's own default.")
+    parser.add_argument(
+        "--port", type=int, default=HARNESS_PORT, help="05_DEPLOYMENT.md §2's own default."
+    )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument(
         "--real-data-exceptions",

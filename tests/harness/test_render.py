@@ -29,6 +29,7 @@ import yaml
 from harness.images import ImageRef, ServiceImage
 from harness.render import (
     _OLLAMA_PULL_SCRIPT,
+    HARNESS_PORT,
     INGEST_CONTAINER_PATH,
     LITELLM_KEY,  # noqa: F401
     ClusterRendererNotBuilt,
@@ -263,12 +264,35 @@ def test_the_runbook_carries_this_deployment_s_own_paths_not_a_template(
     assert "/srv/osprey/data" in runbook
     assert "/srv/osprey/staging" in runbook
     assert "/srv/osprey/backups" in runbook
-    assert "http://localhost:8080/admin" in runbook
+    assert "http://localhost:7000/admin" in runbook
     assert "config/real_data_exceptions.yaml" in runbook
     assert "deploy/RUNBOOK.md" in runbook, (
         "the generated runbook must point at §6's hand-written recovery-time runbook rather than "
         "appear to be it"
     )
+
+
+def test_the_runbook_does_not_send_the_operator_to_a_workspace_admin_page(
+    rendered: RenderResult,
+) -> None:
+    """Seen on the running deployment, 29 September 2026: the generated runbook listed
+    `http://localhost:8080/admin`, and opening it showed the Glass's sign-in page — the workspace
+    proxies only `/v1/`, so every other path falls through to the single-page app. §2.5 puts the
+    admin console on the harness's own port (`http://localhost:7000/admin`) — "the same process
+    switching mode, not a page the workspace serves". The docs had this corrected on 26 September
+    (`07_BUILD_PLAN.md`, Stage 2 §5b); the renderer and this file's own assertion above kept the
+    old address, so the correction never reached the one artefact an operator actually follows."""
+    runbook = rendered.artefacts["RUNBOOK.md"]
+    assert "localhost:8080/admin" not in runbook
+    assert f"http://localhost:{HARNESS_PORT}/admin" in runbook
+
+
+def test_the_harness_serves_on_the_port_the_runbook_names() -> None:
+    """One definition, two readers: the port the runbook prints is the port `python -m harness`
+    binds by default, so the two cannot drift apart."""
+    from harness.webapp import _parse_args
+
+    assert _parse_args([]).port == HARNESS_PORT
 
 
 def test_the_rendered_env_names_the_public_origin_as_the_only_cors_origin(

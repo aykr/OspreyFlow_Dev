@@ -149,6 +149,12 @@ _OLLAMA_HEALTHCHECK = [
 LITELLM_KEY = "sk-ospreyflow-dev"
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+#: The harness's own port — where `python -m harness` serves the setup screens and, in console
+#: mode, `/admin` (`05_DEPLOYMENT.md` §2 and §2.5). One definition: the runbook below prints it and
+#: `harness.webapp`'s `--port` default reads it, so the two cannot disagree. The admin console is
+#: *not* a page the workspace serves — the workspace's proxy carries only `/v1/`.
+HARNESS_PORT = 7000
+
 DEFAULT_CONFIG_PATH = REPO_ROOT / "osprey.yaml"
 DEFAULT_OUT_ROOT = REPO_ROOT / "deploy" / "generated"
 
@@ -935,7 +941,7 @@ Search backend: `{config.components.search.value}`{
 | --- | --- |
 | Workspace | `http://localhost:8080` |
 | Conduit | `http://localhost:8000` |
-| Admin console | `http://localhost:8080/admin` |
+| Admin console | `http://localhost:{HARNESS_PORT}/admin` |
 
 ## Governance
 
