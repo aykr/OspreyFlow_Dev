@@ -34,6 +34,13 @@ profile, tier 1 map providers only) and brings the whole stack up: preflight che
 build and start, and a verification pass. `spec/05_DEPLOYMENT.md` has every profile from a laptop
 to a cluster and what each one needs.
 
+After that first apply, one screen starts and opens each interface — the Glass, the Ingest Studio
+and the Admin console — and shows which are running:
+
+```
+make launch
+```
+
 Once it is up, `DEMO_GUIDE.md` walks through seeding a fixture investigation and the analyst
 journey through the Glass.
 

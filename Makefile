@@ -1,4 +1,4 @@
-.PHONY: ci idp-test ci-status lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test dev-up dev-down docker-clean test-all glass-perf glass-a11y glass-keyboard glass-map-verify glass-live exit-over-the-wire harness-keyboard harness-a11y bundle
+.PHONY: ci idp-test ci-status lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test launch dev-up dev-down docker-clean test-all glass-perf glass-a11y glass-keyboard glass-map-verify glass-live exit-over-the-wire harness-keyboard harness-a11y bundle
 
 PY := .venv/bin/python
 PYTEST := .venv/bin/pytest
@@ -201,6 +201,12 @@ test:
 # convenience, not the harness. `--wait` blocks until every service's
 # healthcheck passes, so `make dev-up && make test-all` needs no manual
 # polling.
+# The one screen for starting and opening the Glass, the Ingest Studio or the Admin console
+# (`scripts/launch.py`'s own docstring has why it exists and what it deliberately does not do).
+# It starts an *already-rendered* deployment; the first time, `python -m harness.apply` builds one.
+launch:
+	PYTHONPATH=.:packages $(PY) -m scripts.launch
+
 dev-up:
 	docker compose -f deploy/compose/dev.yaml up -d --wait
 

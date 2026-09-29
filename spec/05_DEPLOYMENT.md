@@ -395,6 +395,15 @@ stays at `http://localhost:7000/admin`** — the harness's own port, not the wor
 page the workspace serves.
 The seeded demo credentials are displayed once and written nowhere.
 
+**Afterwards, `make launch` is the way in.** It serves one page on `127.0.0.1:7070` with a tile each
+for the Glass, the Ingest Studio and the Admin console, shows which answer, and starts one that does
+not: the deployment by `docker compose up -d --wait` against the already-rendered
+`deploy/generated/<profile>/` (never regenerating or re-seeding it), the admin console by
+`python -m harness`. The Ingest Studio has no address of its own — it is the Ingest tab inside the
+Glass — so its tile opens the workspace and says so. The launcher reads only `OSPREY_WORKSPACE_PORT`
+from `deployment.env`, so no credential reaches its page (`scripts/launch.py`,
+`tests/test_launch.py`).
+
 **The bootstrap command above works as documented, with
 no operator checkout at all.** `harness/render.
 py`'s render step used to refuse by name (`MissingDockerfileError`) unless `services/api/Dockerfile`,
