@@ -2,7 +2,7 @@
 
 How to get a running OspreyFlow in front of an analyst, and what to show them once it is there.
 
-Written 18 September 2026, at the close of Phase 6. **This guide documents only what is built and
+**This guide documents only what is built and
 verified today.** Where a demo case is planned but not built, it says so rather than describing it
 as though it works — the failure mode this project has already recorded twice in its own
 documentation.
@@ -20,10 +20,9 @@ instruction that will fail.
 minimum — 16GiB leaves the remaining 6GiB to cover macOS/Docker Desktop's own overhead, the
 Conduit, the Glass, and a browser tab actually rendering the Glass, which is tight rather than
 comfortable. Both numbers come from measuring this stack directly, not from a vendor
-specification (`07_BUILD_PLAN.md`'s Phase 8 "ArcadeDB stability" stage has the full measurement:
-ArcadeDB alone peaked at 7.75GiB in the 23 September 2026 demo rehearsal (an internal rehearsal record from
-RUNBOOK.md`), above an earlier measurement's 5.2–6.9GiB range — corrected here rather than left
-stale, since the 10GiB VM floor above already covers the higher figure with headroom. The Docker
+specification: ArcadeDB alone peaked at 7.75GiB in a demo rehearsal, above an earlier measurement's
+5.2–6.9GiB range — corrected here rather than left stale, since the 10GiB VM floor above already
+covers the higher figure with headroom. The Docker
 Desktop VM's default allocation on a typical machine, 8GiB, is not enough headroom above either
 figure to run reliably — this was measured as repeated out-of-memory kills before the VM allocation
 was raised).
@@ -38,8 +37,8 @@ after `make dev-up` (`docker stop compose-ollama-1 compose-litellm-1 compose-spe
 affect either scenario and meaningfully reduces the memory this demo needs to survive.
 
 **What is unavailable without Ollama/LiteLLM:** free-text entity extraction — "ingest a witness
-statement, extracted entities appear as `inferred` with correct source spans," Phase 6's own exit
-criterion, real and already built, demonstrable through the API — and anything built on top of it.
+statement, extracted entities appear as `inferred` with correct source spans" — real and already
+built, demonstrable through the API — and anything built on top of it.
 Neither of the two acceptance-scenario demo cases in §1 below needs it. `speaches` (speech-to-text)
 is not used anywhere in this codebase's own routes or either scenario; nothing is lost by leaving
 it stopped.
@@ -51,18 +50,18 @@ it stopped.
 Every demo case below has a **distribution class** (`06_DECISIONS.md` ADR-035): `shipped` means it
 is allowed inside an artefact given to a customer or tester; `internal` means it must never leave
 this project, in any form, at packaging time — enforced by a fail-closed registry and a packaging
-gate ADR-035 designs and this phase (Phase 8) owns building. Until that registry exists, treat the
+gate ADR-035 designs and not yet built. Until that registry exists, treat the
 column below as the same binding statement in prose that the registry will enforce mechanically.
 
 | Demo case | Distribution | State | What it shows |
 | --- | --- | --- | --- |
 | **Scenario A, steps A1–A11** (HMP fixture) | `shipped` | **Built and exit-verified** (automated CI — `glass-perf`/`glass-keyboard`/`glass-map-verify` and the acceptance-scenario test suite). **Live-walkthrough verification through a running Glass: recorded in an internal rehearsal log** for exactly which sub-steps have actually been driven through a browser and which have not | Timeline, map, cross-filtering, boundary and site-grid filters, the weekend and time-of-day findings, the site hotspot |
 | **The Ingest Studio**, Connect → Publish (CDR fixture) | `shipped` | **Built and exit-verified** | Onboarding a new source without touching the ontology: profiling, row-template mapping, dry-run verify, publish with versioning |
-| Scenario A, A12 (Clique Metric) | `shipped` | **Built and verified through the Glass**, 26 September 2026 — computed and ranked after a real keyboard-driven expansion (`apps/workspace/live/scenario-a-a12-a15.spec.ts`, and an internal rehearsal log) | Ranking the insular subgroup |
-| Scenario A, A13–A15 (assessment, export) | `shipped` | **Built; partly verified through the Glass**, 26 September 2026 — the assessment composer opens from the Inspector and the export drawer offers all three kinds, both asserted live. **Submitting a judgement end to end, and the S2-marked-item blocked-then-justified path, are still not walked through a browser** (recorded in an internal rehearsal log, §4) | — |
-| Scenario B (comms and identity pivot) | `shipped` | Partly built; split across Phases 6a, 7 and 8 by ADR-022 | — |
-| **Extraction and entity resolution** | `shipped` | Built, **API only** | Demonstrable to engineers through the API; there are no screens until Phase 6a |
-| **Scenario C — "Fixture Corp"** (Enron-*shaped*, R24, AMLSim-*shaped* generator) | `shipped` | **Built** (`scripts.seed_fixture_corp`) — its four ADR-035 §C5 properties are **verified structurally** (`tests/scenarios/test_fixture_corp_shape.py`). Moving the resolution threshold live is now verified through the Glass. **`explain`, the pathfinder and path-length comparison are not, and currently cannot be: no Fixture Corp entity can be loaded into the working set** — 0 of its 65 Persons carry any of the identifiers search matches on, against 400 of 400 for HMP (measured 26 September 2026). See §6 and the internal rehearsal log, §4. Not the ~150-employee Enron-shaped corporation §6 and Scenario C (C1–C20) describe — see §6 | See §6 |
+| Scenario A, A12 (Clique Metric) | `shipped` | **Built and verified through the Glass** — computed and ranked after a real keyboard-driven expansion (`apps/workspace/live/scenario-a-a12-a15.spec.ts`, and an internal rehearsal log) | Ranking the insular subgroup |
+| Scenario A, A13–A15 (assessment, export) | `shipped` | **Built; partly verified through the Glass** — the assessment composer opens from the Inspector and the export drawer offers all three kinds, both asserted live. **Submitting a judgement end to end, and the S2-marked-item blocked-then-justified path, are still not walked through a browser** (recorded in an internal rehearsal log, §4) | — |
+| Scenario B (comms and identity pivot) | `shipped` | Partly built; the remaining work is split across several build stages by ADR-022 | — |
+| **Extraction and entity resolution** | `shipped` | Built, **API only** | Demonstrable to engineers through the API; there are no screens yet |
+| **Scenario C — "Fixture Corp"** (Enron-*shaped*, R24, AMLSim-*shaped* generator) | `shipped` | **Built** (`scripts.seed_fixture_corp`) — its four ADR-035 §C5 properties are **verified structurally** (`tests/scenarios/test_fixture_corp_shape.py`). Moving the resolution threshold live is now verified through the Glass. **`explain`, the pathfinder and path-length comparison are not, and currently cannot be: no Fixture Corp entity can be loaded into the working set** — 0 of its 65 Persons carry any of the identifiers search matches on, against 400 of 400 for HMP (measured directly). See §6 and the internal rehearsal log, §4. Not the ~150-employee Enron-shaped corporation §6 and Scenario C (C1–C20) describe — see §6 | See §6 |
 | **The real Enron email corpus** | `internal`, **admitted only via the owner's own local exceptions list — see §6** | Owner-run demonstration only, on the owner's own device, never distributed to an attendee | — |
 | **VAST Challenge dataset** (generated fixture) | `internal` | Decided (ADR-026); fixture not yet built | See §7 |
 | **VAST Challenge dataset** (the published files themselves) | Not admitted, any class | ADR-026: "standing rule 3 is not amended" — never used, shaped or verbatim | See §7 |
@@ -171,10 +170,10 @@ PYTHONPATH=.:packages OIDC_JWKS_URL=http://localhost:8888/jwks.json \
 (the JWKS URL is whatever §2's `mint_dev_token`/`http.server` pair actually served — this is the
 common local case, not a fixed value)
 
-**`CORS_ALLOWED_ORIGINS` is required now, and was not before 27 September 2026.** The Conduit
-used to default to `http://localhost:5173`, which meant a *rendered deployment* that set nothing
-inherited a development origin — round 13 found exactly that, and round 13b made the default
-empty and the render explicit. A Conduit serving a Vite-hosted Glass must therefore be told the
+**`CORS_ALLOWED_ORIGINS` is required now.** The Conduit used to default to `http://localhost:5173`,
+which meant a *rendered deployment* that set nothing inherited a development origin — found
+running a rendered deployment for real, and fixed by making the default empty and the render
+explicit. A Conduit serving a Vite-hosted Glass must therefore be told the
 Glass's origin; without it every request fails at the browser's preflight and the app sits on
 "Loading…" with nothing in the Conduit's log naming CORS (§3.7 has that story).
 
@@ -318,9 +317,9 @@ name rather than passing on an empty track.
 
 **Each spec creates its own investigation** and asserts its working set starts empty, so a run
 never inherits state from an earlier one. That is not tidiness: the working set is server-side and
-the Glass loads it on open, and round 12's A12 case reported green for exactly that reason while
-its own expansion contributed nothing (the internal build plan's own Stage 3a entry has the full
-account). A consequence worth knowing when demonstrating by hand: **reusing one investigation
+the Glass loads it on open, and the A12 case was once measured reporting green for exactly that
+reason while its own expansion contributed nothing — a false positive worth remembering when
+reading a result. A consequence worth knowing when demonstrating by hand: **reusing one investigation
 across several attempts accumulates nodes and edges**, so if the canvas looks fuller than you
 expect, open a fresh `?investigation=` rather than wondering what expanded.
 
@@ -350,7 +349,7 @@ PYTHONPATH=.:packages .venv/bin/python -m scripts.seed_ingest_folder \
   --ingest-root /var/lib/osprey/ingest
 ```
 
-**Corrected 27 September 2026 (round 13c).** This block used to say
+**Corrected.** This block used to say
 `sudo cp tests/scenarios/fixtures/files/*.csv …`. **That directory has never existed** — the CDR
 fixture is generated (`tests/scenarios/fixtures/cdr.py`), not stored — so the documented step
 copied nothing and left Connect listing an empty folder. Found installing from a fresh clone and
@@ -423,11 +422,10 @@ analyst typed the *canonical* form, while the file contained four different rend
 (`01621926368`, `+44(0)1621926368`, `441621926368`, `#31#01621926368`), is the point of
 `01_DOMAIN_MODEL.md` §7 made visible in one action.
 
-Worth knowing if you are asked: until 27 September 2026 that search returned nothing. Search
-matched each entity type's declared `identifiers` as property names — right for `Person.nino`,
-wrong for `Endpoint`, whose identifier value lives in `value_normalised`. An analyst could ingest
-a number and then not find it (round 13cd; `01_DOMAIN_MODEL.md` §7 now states which reading is
-authoritative).
+Worth knowing if you are asked: that search once returned nothing. Search matched each entity
+type's declared `identifiers` as property names — right for `Person.nino`, wrong for `Endpoint`,
+whose identifier value lives in `value_normalised`. An analyst could ingest a number and then not
+find it; `01_DOMAIN_MODEL.md` §7 now states which reading is authoritative.
 
 **The whole chain runs, Connect → Profile → Map → Verify → Publish → Run.** Verify is the one to
 linger on: it is a dry run that shows the graph it *would* make, plus a rejection report grouped
@@ -506,9 +504,9 @@ whether a particular subgroup is unusually insular.
    refused with every reason named — never silently dropped — and an overridable refusal takes a
    justification and an originator reference before it will resubmit.
 
-**Corrected 26 September 2026.** This section previously ended with "what to avoid promising: the
-Clique Metric [...] is Phase 7. The assessment objects, export and handling gate are Phase 8."
-Both phases are built, and §1's own table had already said so — §4 was left contradicting it.
+**Corrected.** This section previously ended with "what to avoid promising: the Clique Metric [...]
+is not yet built. The assessment objects, export and handling gate are not yet built either." All
+of it is now built, and §1's own table had already said so — §4 was left contradicting it.
 Steps 7 and 8 above are now walked by `apps/workspace/live/scenario-a-a12-a15.spec.ts` against a
 real stack (an internal rehearsal log).
 
@@ -566,10 +564,10 @@ five minutes. See §2.
 
 ---
 
-## 6. Scenario C — the Enron-shaped demo — `shipped`, R24, owning phase Phase 8
+## 6. Scenario C — the Enron-shaped demo — `shipped`, R24
 
 **Built, and narrower than the Scenario C script's own planning-document description — corrected
-here rather than left stale, 23 September 2026.** The Scenario C script (C1–C20) describes "Fixture
+here rather than left stale.** The Scenario C script (C1–C20) describes "Fixture
 Corp" as around 150 fabricated employees, a five-level hierarchy and four departments, structural
 statistics modelled on published Enron corpus research. What `scripts.seed_fixture_corp` actually
 builds and `tests/scenarios/test_fixture_corp_shape.py` proves is `06_DECISIONS.md` ADR-035 §C5's
@@ -584,10 +582,10 @@ turned out to be pip-installable; `06_DECISIONS.md` ADR-035 §C5's own addendum 
 Whether the ~150-employee Enron-shaped corporation the Scenario C script describes is still to be
 built, and whether it replaces or sits beside this property fixture, is undecided — the property
 fixture satisfies ADR-035 §C5's own minimum bar, not Scenario C's full C1–C20 script. `06_DECISIONS.md`
-ADR-035 gives Fixture Corp an owning phase (Phase 8, Stage 4a) and its own distribution class
-(`shipped`) — it is the demo this platform can actually put in front of a customer.
+ADR-035 gives Fixture Corp its own distribution class (`shipped`) — it is the demo this platform
+can actually put in front of a customer.
 
-**Resolved 26 September 2026 by owner ruling R4 — Fixture Corp entities now carry a searchable
+**Resolved by owner ruling R4 — Fixture Corp entities now carry a searchable
 identifier.** Every `Person` has a synthetic `nino` and every `Organisation` an `org_ref`, both
 deterministic from the node id, so the search box reaches them like any HMP entity. `QQ` is a
 prefix HMRC never issues, so no value can collide with a real person's NINO. ADR-035 §C5's five
@@ -603,13 +601,13 @@ addendum has the table.
 | `corp-path-hub` | `QQ418550B` | The eight-spoke hub, for the pathfinder |
 | `corp-ring0-org` | `FIXTURE-67BD0781` | A fraud ring's shell organisation |
 
-**The pathfinder, by keyboard** (round 12d closed the gap that made this mouse-only). Search one
+**The pathfinder, by keyboard.** Search one
 ring member, search another, then from the canvas: `Ctrl`/`Cmd`+`Shift`+`ArrowRight` to walk to
 the second node, `Space` to add it to the selection, `\` to open the menu, and "Find paths to"
 is there. Two members of one ring are one hop apart. Asserted end to end by
 `apps/workspace/live/fixture-corp.spec.ts`.
 
-**`explain` on a merged cluster, by keyboard** — demonstrable as of 27 September 2026, and the
+**`explain` on a merged cluster, by keyboard** — demonstrable, and the
 order matters. Search `QQ118439C`, then `QQ843781D`, so both halves of the identical pair are in
 the working set. From the canvas, `\` and pick **SAME_AS** to pull the resolution edge in — the
 projection collapses over the working set's own edges, and a searched node arrives with none.
@@ -618,10 +616,10 @@ Balanced, so moving *to* Balanced changes nothing and computes nothing). Now `\`
 "Explain cluster" is there, showing every gamma level, the model version, and whether the pair
 meets τ.
 
-**Round 12d claimed this fixture's resolution scores had diverged from ADR-035 §C5. That was
-wrong and is withdrawn** — it read each edge's `weight` (a load-time strength figure every edge
-carries) instead of `properties.score`, which is the match probability resolution actually uses.
-All five scores match §C5 exactly; `07_BUILD_PLAN.md`'s Stage 3a entry has both columns.
+**A claim that this fixture's resolution scores had diverged from ADR-035 §C5 was wrong and is
+withdrawn** — it read each edge's `weight` (a load-time strength figure every edge carries)
+instead of `properties.score`, which is the match probability resolution actually uses. All five
+scores match §C5 exactly.
 
 **The original blocker, kept for the record:** The Glass's working set has exactly one entry point — the search box —
 and `services/api/search.py`'s own scope note states what that does: "exact identifier match
@@ -637,14 +635,15 @@ the set and its count rather than drawing anything, so it loads nothing into the
 That is the specified behaviour, not a defect in it.
 
 So `explain` on a merged cluster, the pathfinder and path-length comparison — three of the four
-interactive checks Stage 3a's disclosure asks for — cannot be performed at all today. Closing
+interactive checks this disclosure asks for — cannot be performed at all today. Closing
 this needs either a searchable identifier on the fixture (an ADR-035 §C5 fixture-shape change,
 which would want checking against §C5's empirically measured resolution scores) or a way to load
 a pattern result into the working set (which ADR-032 considered and decided against). Both are
 design decisions; neither has been taken. Do not promise these three in a demo.
 
 **The real Enron corpus is `internal`, and stays narrower than "usable for any demo audience."**
-`CLAUDE.md` rule 9 and standing rule 3 admit a real dataset only if it is explicitly named in the
+No real intelligence data is admitted anywhere in this repository or in CI, ever, with one narrow
+exception: a real dataset is admitted only if it is explicitly named in the
 local, never-committed real-data exceptions list (`scripts/real_data_exceptions.py`), and only for
 local development, scale/realism testing, or an owner-run demonstration on the owner's own secured
 device — never committed, never in CI, and never distributed to any attendee. ADR-035 §C3 has the
@@ -709,17 +708,17 @@ repository by accident — `.gitignore` excludes exactly that path so a dataset 
 committed even by mistake, but the environment variable has no default, precisely so an unset
 variable means "nothing provisioned" rather than silently resolving to a path that might exist.
 
-**A dataset must be admitted before it is placed.** `CLAUDE.md` rule 9 and standing rule 3 require
-this independently of the mechanism above: before placing any real dataset at its manifest path,
-admit it with `python -m scripts.real_data_exceptions add` (the local, never-committed exceptions
-list this platform's own rule 9 now points to). A dataset placed at its manifest path without a
+**A dataset must be admitted before it is placed.** No real dataset is admitted without an entry
+in the exceptions list, independently of the mechanism above: before placing any real dataset at
+its manifest path, admit it with `python -m scripts.real_data_exceptions add` (the local,
+never-committed exceptions list). A dataset placed at its manifest path without a
 matching admitted entry is treated exactly as an unprovisioned one — "dataset not provisioned,"
 never an error, never a signal that distinguishes "not admitted" from "not placed."
 
 **What happens if it is not set, or the file it names is absent.** The Glass renders that demo as
 unavailable, with the reason "dataset not provisioned" — never an error, never a stack trace naming
 a path that doesn't exist on the machine an analyst is looking at (design target; the rendering
-itself is Phase 8 build work, `06_DECISIONS.md` ADR-035 §C1).
+itself is not yet built, `06_DECISIONS.md` ADR-035 §C1).
 
 **Obtaining rights to an internal dataset is out of scope for this guide entirely.** Whether a given
 dataset may be used at all — under what licence, for what purpose, under what data-protection basis
@@ -735,11 +734,10 @@ this operator-facing guide adjudicates or grants.
 | `08_ACCEPTANCE_SCENARIOS.md` | The full step definitions and assertions behind §4 |
 | `05_DEPLOYMENT.md` | Deployment profiles, the harness, the operator runbook |
 | `09_INGEST_STUDIO.md` | The Ingest Studio's five stages, for demonstrating source onboarding |
-| `07_BUILD_PLAN.md` | What is built, what is not, and each phase's known gaps |
 | `06_DECISIONS.md` (ADR-035) | Demo distribution classes, the packaging gate, and each named demo's own disposition (§1, §6–8 here) |
 | Developer & Operator Guide | The engineering-facing companion to this document |
 
 > **A caveat on the Developer & Operator Guide.** It was written assuming full completion, and its
-> deployment section documents a Phase 8 harness (`docker run ghcr.io/ospreyflow/harness:latest`,
+> deployment section documents a harness (`docker run ghcr.io/ospreyflow/harness:latest`,
 > six setup screens) that does not exist. Do not put it in front of an external audience until that
 > caveat is explicit in the document itself.

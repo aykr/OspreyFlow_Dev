@@ -137,6 +137,74 @@ deployment outgrew nine types.
 The nine shipped types use nine distinct channels, so no sharing occurs in the default ontology.
 The rule exists for the tenth.
 
+### 1.2 The loaded schema's own shape
+
+The YAML above validates into a typed Python object, `OntologySchema` — what `GraphPort.
+apply_schema` takes and what the schema/migration runner turns into vertex/edge types and the
+indexes `04_VAULT_BACKEND.md` §1.4 describes:
+
+```python
+class PropertyDef(BaseModel):
+    name: str
+    type: PropertyType             # STRING, DATETIME, INTEGER, FLOAT, BOOLEAN, ENUM
+    indexed: bool = False
+    required: bool = False
+    sensitivity: Literal["low", "medium", "high"] | None = None
+    values: list[str] | None = None   # required when type is ENUM
+
+class ResolutionConfig(BaseModel):
+    blocking: list[str] = []
+    comparisons: list[str] = []
+
+class EntityTypeDef(BaseModel):
+    name: str
+    pole_class: PoleClass
+    channel: str
+    shape: str
+    identifiers: list[str] = []
+    properties: list[PropertyDef] = []
+    resolution: ResolutionConfig | None = None
+
+class EdgeTypeDef(BaseModel):
+    name: str
+    from_types: list[str]          # `from` in YAML
+    to_types: list[str]            # `to` in YAML
+    directed: bool = True
+    temporal: bool = False
+    system: bool = False
+    properties: list[PropertyDef] = []
+
+class OntologySchema(BaseModel):
+    version: int
+    entity_types: list[EntityTypeDef]
+    edge_types: list[EdgeTypeDef]
+```
+
+`PropertyDef` is one property line from the YAML above (`{name: family_name, type: string,
+indexed: true, required: true}`) — an `enum`-typed property must declare `values`, enforced at
+validation time rather than left to fail later against real data. `EntityTypeDef`/`EdgeTypeDef`
+are one whole entry from `entity_types`/`edge_types`; `resolution` is `None` for an entity type
+the ontology declares no blocking/comparison rules for (`Location`, `Device`, and every other type
+with no `resolution:` block in the example above) rather than an empty `ResolutionConfig` standing
+in for "not configured." `OntologySchema` is the whole loaded, validated document — the object
+`apply_schema` and `revert_schema` (§2.4) both operate on.
+
+Applying a schema returns a report, not a bare success flag:
+
+```python
+class SchemaReport(BaseModel):
+    migration_id: str
+    applied_entity_types: list[str]
+    applied_edge_types: list[str]
+    indexes_created: list[str]
+    reversible: bool = True
+```
+
+`migration_id` is the join key `revert_schema` takes back — the same "every write is addressable
+and revertible" discipline the audit stub (§2.4) applies to element-level writes, applied here at
+the schema level. `reversible` is `False` only for a migration the adapter cannot cleanly undo
+(a destructive index change, say); the loader surfaces that before the migration runs, not after.
+
 ### Why `Endpoint` rather than `Phone`
 
 The CoLP journey turns on the fact that a mobile number, a WhatsApp handle and an IMSI are the
@@ -303,7 +371,8 @@ still fail the unit check for some records — an inconsistent, partially-workin
 a clean one. An empty list instead makes the outcome uniform and honest: the trigger resolves
 every non-restricted record and **never** a restricted-`handling_code` record, corpus-wide, by
 construction — the same `AccessFilter.gremlin_has_step` predicate every other principal is
-compiled against, not a second, privileged path around it (`CLAUDE.md` rule 3). A future
+compiled against, not a second, privileged path around it: access control lives in the adapter's
+own traversal, never a bypass applied after retrieval. A future
 deployment that needs restricted records resolved too needs per-unit service identities, a real,
 separate design question this default does not answer.
 `tests/resolve/test_trigger.py::test_service_principal_cannot_see_a_restricted_handling_code_record`
@@ -361,8 +430,8 @@ retrievable only via `get_node(..., include_superseded=True)`.
 
 **This absence of a hard-delete method is load-bearing for something outside `GraphPort` itself,
 not only a design choice contained here — read this before adding one.** `06_DECISIONS.md`
-ADR-037's own amendment (Phase 7 Stage 6, the corpus-wide change stream a saved-pattern monitor
-watches) proves the stream misses no possible match — including one created by removing
+ADR-037's own amendment (the corpus-wide change stream a saved-pattern monitor watches) proves
+the stream misses no possible match — including one created by removing
 something — on exactly two facts: this section's own "nodes are versioned, not overwritten"
 (supersession is a *write*, which the change stream already captures) and `PatternQuery`'s own
 absence of a negation/"must not exist" clause (`§8.1`, its own matching note). **If a real
@@ -468,7 +537,7 @@ Blocking rules and comparisons come from the ontology's `resolution` block per e
 adding an entity type does not require touching the resolution service.
 
 **`soundex(family_name)` normalises before blocking — a matching-semantics decision, not only the
-crash fix it shipped alongside (`services/resolve/duckdb_setup.py::_soundex`, Phase 7 Stage 6b).**
+crash fix it shipped alongside (`services/resolve/duckdb_setup.py::_soundex`).**
 Before blocking two family names against each other, the value is Unicode-normalised (NFKD) and
 folded to its base Latin letters — `Müller` and `Muller` now block together, `José` and `Jose` too
 — rather than compared on the raw, accent-bearing string. This is a deliberate choice about what
@@ -480,10 +549,10 @@ entire purpose is "probably the same person, worth a closer comparison," not an 
 Whoever next tunes resolution quality (a new comparison function, a change to blocking granularity)
 should read this as the current behaviour, not assume the raw string is what's being compared.
 **No existing test noticed this before it was made** — checked directly, not assumed: every
-family-name fixture in `tests/resolve/` before Stage 6b was plain ASCII (`"Mercer"`, `"Okafor"`,
+family-name fixture in `tests/resolve/` before this fix was plain ASCII (`"Mercer"`, `"Okafor"`,
 `"Ahmed"`), so accent handling was previously untested in both directions, and the resolution
-pipeline's own behaviour on an accented name was unspecified — the same "invariant stated in
-prose and exercised by nothing" gap `CLAUDE.md` rule 12 warns about, closed now by
+pipeline's own behaviour on an accented name was unspecified — an invariant stated in prose and
+exercised by nothing, closed now by
 `tests/resolve/test_duckdb_setup.py::test_an_accented_family_name_does_not_raise_and_folds_to_
 its_base_letters` (`_soundex("müller") == _soundex("muller")` and `_soundex("josé") ==
 _soundex("jose")`), the one test that would notice a future regression of this specific behaviour.
@@ -511,9 +580,9 @@ connection, not only the pure `_soundex` function, which never crashed —
 `tests/resolve/test_duckdb_setup.py::test_a_fully_non_latin_family_name_does_not_crash_the_
 registered_udf`, verified non-vacuous by reverting the fix, watching the real
 `duckdb.InvalidInputException` this defect always raised, and restoring it. `tests/scenarios/
-fixtures/fixture_corp.py` (`07_BUILD_PLAN.md`'s own Stage 4a, "Before the milestone") now carries a
-non-Latin-script resolution pair too, so this fix is exercised by every run of Fixture Corp's own
-real resolution pass, not only by its own dedicated unit test.
+fixtures/fixture_corp.py` now carries a non-Latin-script resolution pair too, so this fix is
+exercised by every run of Fixture Corp's own real resolution pass, not only by its own dedicated
+unit test.
 
 Deterministic identifiers short-circuit the probabilistic path entirely: two `Endpoint` nodes
 with the same normalised E.164 value are the same endpoint, full stop. Only run Splink on types
@@ -610,8 +679,8 @@ again when a caller scopes the formula to a working set rather than the full cor
 freezing a single number and calling it the weight would silently go stale as the corpus grows.
 `WeightComponents` (`occurrences`, `corpus_pair_count`, `corpus_source_degree`,
 `corpus_target_degree`, `corpus_total_occurrences`, `computed_at`) persists exactly what the
-formula needs, so a later, more scoped recompute — Phase 3's working-set service — is arithmetic
-over stored numbers, never a full corpus rescan.
+formula needs, so a later, more scoped recompute — the working-set service — is arithmetic over
+stored numbers, never a full corpus rescan.
 
 ### 6.2 Clique Metric
 
@@ -669,9 +738,8 @@ ingest path. A phone number arriving as `01621926368`, `+44(0)1621926368`, `4416
 `#31#01621926368` must resolve to one `Endpoint`. Get this wrong and the graph silently
 fragments; no amount of analytics recovers it.
 
-**Where the canonical value is stored, and what `identifiers:` means — clarified 27 September 2026
-(round 13cd), after an ambiguity in this document cost an analyst the ability to find what they
-had just ingested.**
+**Where the canonical value is stored, and what `identifiers:` means — clarified after an
+ambiguity in this document cost an analyst the ability to find what they had just ingested.**
 
 For `Person`, `Device`, `Location` and `Organisation`, an `identifiers:` entry is a **property
 name**: a `Person` carries `nino`, a `Device` carries `imei`, and search matches them directly.
@@ -772,10 +840,10 @@ retained original `source_crs`/`source_x`/`source_y`, the same `value_raw` disci
 Knowledge Adapter follows — is what a caller writes into the analytics store's geometry reference
 partition under that ref. No Knowledge Adapter writes anywhere itself, and the recipe engine does
 not yet write `GeometryRecord`s any more than it writes `EventRecord`s to the analytics store's
-served dataset (`services/ingest/__main__.py`'s stated gap) — Phase 2 establishes the correct
-storage tier and shape; the reference partition's own versioning and access-controlled read path,
-plus polygon storage for a boundary with no single point, ship in Phase 5/5a, the same phases that
-build the geospatial connectors and the site grid this table also serves.
+served dataset (`services/ingest/__main__.py`'s stated gap) — the correct storage tier and shape
+are established; the reference partition's own versioning and access-controlled read path, plus
+polygon storage for a boundary with no single point, are not yet implemented — they ship alongside
+the geospatial connectors and the site grid this table also serves.
 
 Tested against three real projections with real place coordinates, not arbitrary numbers, so a
 wrong zone or a transposed axis shows up as a wrong place rather than a plausible wrong number:
@@ -802,14 +870,14 @@ class ExpandRequest(BaseModel):
 class PathRequest(BaseModel):
     source: NodeId
     target: NodeId
-    max_hops: int = 6                    # 1..8 — Phase 7 Stage 5, ADR-033: a disclosed,
+    max_hops: int = 6                    # 1..8 — ADR-033: a disclosed,
                                           # reasoned-but-unmeasured ceiling, not a multiplier
     k: int = 1                           # k-shortest paths, 1..10
     edge_types: list[str] | None = None
 
 class Path(BaseModel):
-    nodes: list[Node]                    # hydrated — Phase 7 Stage 5, `06_DECISIONS.md` ADR-033
-    edges: list[Edge]                    # (was list[NodeId]/list[EdgeId] through Phase 6a)
+    nodes: list[Node]                    # hydrated — `06_DECISIONS.md` ADR-033
+    edges: list[Edge]                    # (previously list[NodeId]/list[EdgeId])
     length: int
 
 class NeighbourhoodStats(BaseModel):
@@ -820,7 +888,7 @@ class NeighbourhoodStats(BaseModel):
 class Subgraph(BaseModel):
     nodes: list[Node]
     edges: list[Edge]
-    filtered_count: int = 0              # §8.2 — placeholder until Phase 3
+    filtered_count: int = 0              # §8.2 — computed via expand_candidate_count, see below
 ```
 
 ### 8.1 Pattern matching
@@ -849,8 +917,8 @@ A fixed set of Conduit-side builders compiles a `PatternQuery` into Gremlin; the
 cannot express an arbitrary traversal, which is what makes it safe to accept from above the Vault
 boundary.
 
-**A pattern may have more than one root, within a real, checked limit — widened in Phase 7 Stage
-4 (`06_DECISIONS.md` ADR-030), replacing the single-chain-only restriction this section
+**A pattern may have more than one root, within a real, checked limit — widened
+(`06_DECISIONS.md` ADR-030), replacing the single-chain-only restriction this section
 previously left undocumented.** Before this widening, `MatchBuilder`'s own compiler could only
 express a traversal linearised from one node (`nodes[0]`), walked forward via `.outE()` only — a
 node reachable exclusively through a second, independent starting point (a diamond: two roots
@@ -885,9 +953,9 @@ error, not a silent wrong answer.
 
 **`PatternQuery`'s own absence of a negation/"must not exist" clause is load-bearing for
 something outside pattern matching itself, not only a scope limit contained here — read this
-before adding one.** `06_DECISIONS.md` ADR-037's own amendment (Phase 7 Stage 6, the corpus-wide
-change stream a saved-pattern monitor watches) proves the stream misses no possible match —
-including one created by removing something — on exactly two facts: `GraphPort`'s own absence of
+before adding one.** `06_DECISIONS.md` ADR-037's own amendment (the corpus-wide change stream a
+saved-pattern monitor watches) proves the stream misses no possible match — including one created
+by removing something — on exactly two facts: `GraphPort`'s own absence of
 a hard-delete method (`§2.4`, above) and this schema's own absence of a negation clause, checked
 directly against `PatternNode`/`PatternEdge` above rather than assumed. A pattern language with no
 "must not exist" shape cannot have a match newly created by removing something, because removing
@@ -909,12 +977,12 @@ ADR-037 and `§2.4` above, so whoever adds it reads this at the point they'd oth
 `06_DECISIONS.md` ADR-030's own "revisit if" (a general multi-root join or negation added to the
 pattern language) is exactly the trigger for re-checking this argument, not a coincidence.
 
-### 8.2 Additions since Phase 1
+### 8.2 Additions beyond the illustrative sketch
 
-Phase 1 shipped `upsert_nodes`/`upsert_edges`/`get_node`/`expand`/`paths`/`match`/
-`neighbourhood_stats`/`apply_schema`/`revert_schema` against `00_ARCHITECTURE.md` §2.1's
-illustrative sketch. Phase 2 added five more, without re-litigating the sketch first, the same
-way Phase 1 itself went beyond it for transaction management and schema application:
+The illustrative sketch in `00_ARCHITECTURE.md` §2.1 covers `upsert_nodes`/`upsert_edges`/
+`get_node`/`expand`/`paths`/`match`/`neighbourhood_stats`/`apply_schema`/`revert_schema`. Five
+more methods were added later, without re-litigating the sketch first, the same way the original
+set itself went beyond it for transaction management and schema application:
 
 - **`find_node(entity_type, identifier_field, value, principal)`.** The recipe engine's
   `on_match: reference` (§7) needs to look an entity up by its declared identifier before
@@ -936,8 +1004,8 @@ way Phase 1 itself went beyond it for transaction management and schema applicat
   clones and asserts the pre-operation graph is exactly restored. **Measured, not estimated:**
   superseding a node of degree 5,000 took 41 seconds against a single ArcadeDB instance — a real
   ceiling, not a projected one. Above some threshold below that, synchronous supersession inside
-  one request is the wrong shape; Phase 3's scope (`07_BUILD_PLAN.md`) records making it a
-  background job past a configured degree rather than discovering the timeout in production.
+  one request is the wrong shape; making it a background job past a configured degree, rather than
+  discovering the timeout in production, is planned but not yet implemented.
 - **`supersede_edge(edge_id, replacement, tx) -> EdgeId`.** The same operation for an edge —
   simpler, since nothing references an edge by id except an assessment's evidence list (§5), which
   is expected to follow `superseded_by`, not be silently rewritten, so there is nothing to
@@ -948,8 +1016,8 @@ way Phase 1 itself went beyond it for transaction management and schema applicat
   load ledger), not a principal-scoped read. A reverted element is invisible to every read
   afterwards, any clearance, and is never actually deleted.
 
-Phase 3 added one more, closing the `filtered_count` gap this section used to describe as
-outstanding (below):
+One more method closes the `filtered_count` gap this section used to describe as outstanding
+(below):
 
 - **`expand_candidate_count(req) -> int`.** The unfiltered half of `Subgraph.filtered_count`'s
   comparison. Same seed set, depth, edge-type and temporal scope as `expand(req, principal)`, but
@@ -959,7 +1027,7 @@ outstanding (below):
   an id or a property, so it cannot itself disclose which nodes are hidden or why.
   `services/api`'s Working-Set Service is the only sanctioned caller — see below.
 
-Phase 7 Stage 1 added the first bulk read this port has ever had (`06_DECISIONS.md` ADR-025):
+The first bulk read this port has ever had (`06_DECISIONS.md` ADR-025):
 
 - **`list_nodes(entity_type, principal, cursor=None, limit=500) -> ListNodesPage`.** "Every
   `Person` node" — the corpus-wide resolution trigger's own population fetch — has no other route
@@ -980,7 +1048,7 @@ Phase 7 Stage 1 added the first bulk read this port has ever had (`06_DECISIONS.
   on the next triggered run rather than this method guaranteeing a perfect snapshot it cannot
   cheaply give. `services/resolve/trigger.py` is the only caller today.
 
-**`Subgraph.filtered_count`** stayed the Phase 1 placeholder `0` through Phase 2. It stood in for
+**`Subgraph.filtered_count`** started as a placeholder `0`. It stood in for
 a specific question `GraphPort` alone could not answer: of the nodes an `expand` call excluded,
 how many were excluded because of the *access filter* specifically, as opposed to depth, edge-type
 or temporal scoping simply not reaching them? Answering that needs both the filtered and
@@ -988,13 +1056,35 @@ unfiltered node sets compared under one authority, and a single `expand()` call 
 already-filtered result — computing the unfiltered side *inside* the adapter would mean a second,
 less-audited query channel with no caller to hold both results and reconcile them.
 
-Phase 3 closes the gap with `expand_candidate_count` above, called by the Working-Set Service
+The gap is closed by `expand_candidate_count` above, called by the Working-Set Service
 alongside the ordinary filtered `expand()`: `expand_candidate_count(req) - len(filtered.nodes)` is
 `filtered_count`. This is the one place the comparison can be made safely — the Working-Set
 Service already holds the filtered result under its own authority, and the unfiltered count adds
 no channel beyond a bare integer that cannot itself leak which nodes are hidden. See
 `03_CONDUIT_MIDDLEWARE.md` §4 for the read-time projection this feeds into, and §3.2 for
 `filtered_count`'s place in the delta protocol.
+
+### 8.3 Saved patterns
+
+A `PatternQuery` (§8.1) becomes reusable once persisted:
+
+```python
+class SavedPattern(BaseModel):
+    id: str
+    pattern_id: str                # stable across saves; `id`/`version` identify one save
+    version: int
+    name: str
+    owner_id: str
+    created_at: datetime
+    definition: PatternQuery
+```
+
+`pattern_id` is stable across a pattern's own edit history; `id` and `version` identify one
+specific saved revision, so "run the pattern I saved" and "run exactly what version 3 said" are
+both addressable. Deliberately carries `owner_id` and nothing shaped like `Handling.owning_unit`
+or a share target — a saved pattern is readable only by its own owner until pattern sharing is
+built; there is no broader-audience field to widen by accident because none exists yet. §11 covers
+the watch this can be turned into.
 
 ## 9. `AnalyticsPort` request and response shapes
 
@@ -1029,8 +1119,8 @@ class EventFilter(BaseModel):
     edge_types: list[str] = []
 ```
 
-**`properties.site_cell` — an incident geocoded into a site-grid cell (owner rulings R9, R10;
-round 13cf).** The grid route calls `AnalyticsPort.geocode_events` at draw time, and each event
+**`properties.site_cell` — an incident geocoded into a site-grid cell (owner rulings R9, R10).**
+The grid route calls `AnalyticsPort.geocode_events` at draw time, and each event
 whose point a cell's polygon covers carries `site_cell` = the cell `Location`'s node id. For a
 `PRESENT_AT` incident, the graph also gains a `PRESENT_AT` edge from the incident's subject to
 that cell, carrying the incident's own handling. No ontology change: `PRESENT_AT` already runs
@@ -1044,12 +1134,12 @@ that cell, carrying the incident's own handling. No ontology change: `PRESENT_AT
 its centroid that the grid route writes today. The cell keeps its `Location` identity, its
 `geometry_ref` moves to the polygon, and the centroid becomes a derived value. Point-in-cell
 containment is one `AnalyticsPort` method (DuckDB adapter, held to by the conformance suite).
-`08_ACCEPTANCE_SCENARIOS.md`'s A1 note has the full ruling. Built in round 13cf.
+`08_ACCEPTANCE_SCENARIOS.md`'s A1 note has the full ruling.
 
 ```python
 class GeometryKind(StrEnum):
     POINT = "point"
-    POLYGON = "polygon"              # a jurisdiction/boundary with no single point (Phase 5)
+    POLYGON = "polygon"              # a jurisdiction/boundary with no single point
 
 class GeometryRecord(BaseModel):
     geometry_ref: str
@@ -1070,7 +1160,7 @@ per row: a site's own control-point/grid geometry is exactly as sensitive as the
 entities it backs, so it gets the same per-row access-control discipline `EventRecord` already has,
 via the same `AccessFilter`. This partition's versioning/access-controlled read path
 (`AnalyticsPort.get_geometry`/`get_geometries`/`list_boundaries`) and polygon storage (`kind`/
-`geometry_wkb`) both shipped in Phase 5's known-gaps closure.
+`geometry_wkb`) are both shipped.
 
 ```python
 class HistogramBucketing(StrEnum):
@@ -1151,8 +1241,8 @@ concurrent writes.
 
 ## 10. `ComputePort` request and response shapes
 
-`packages/schemas/compute.py` is the source of truth — Phase 7 Stage 2, ahead of any adapter
-(standing rule 1). Graph algorithms: centrality, community detection, the Clique Metric, temporal
+`packages/schemas/compute.py` is the source of truth, ahead of any adapter (standing rule 1).
+Graph algorithms: centrality, community detection, the Clique Metric, temporal
 motifs (`00_ARCHITECTURE.md` §2.3).
 
 ```python
@@ -1208,12 +1298,78 @@ for every registered tier. It does **not** prove that a real caller always assem
 `Subgraph` through an access-filtered fetch first — the same residual `compute_clusters` has, which
 `tests/resolve/test_projection_access_control.py` closes for it directly (real `GraphPort` adapter,
 two principals, one hidden node, fed into the pure function). `ComputePort`'s own first real caller
-(the metrics panel, Phase 7 Stage 3) owes the equivalent test the moment it exists — named here so
+(the metrics panel) owes the equivalent test the moment it exists — named here so
 it is not assumed to happen automatically once the route is built.
 
 **`temporal_motifs` is real as a type, not as a claimed capability.** `MotifRequest`/`MotifMatch`
 exist because `_pending_port_placeholders.py`'s retirement needed real content for every one of
-`ComputePort`'s five names, not because any phase's own bullet list has claimed the convoy/relay/
-burst algorithms themselves — `07_BUILD_PLAN.md`'s Phase 7 outcome bullet names only "Degree,
-betweenness, eigenvector, clustering coefficient, Louvain, Clique Metric." Recorded in Phase 7's own
-known-gaps list, not discovered only at the exit gate.
+`ComputePort`'s five names, not because any commitment has claimed the convoy/relay/burst
+algorithms themselves — only "Degree, betweenness, eigenvector, clustering coefficient, Louvain,
+Clique Metric" were ever committed to. Recorded as a known gap from the outset, not discovered
+only at the exit gate.
+
+## 11. Watches: hotlists, monitors and alerts
+
+A hotlist watches a bare identifier; a monitor watches a saved pattern (§8.3); both produce
+alerts when new data matches.
+
+```python
+WatchStatus = Literal["active", "stopped"]
+
+class Hotlist(BaseModel):
+    id: str
+    identifier: str                # a normalised value string — the same shape
+                                    # Endpoint's own identifiers use, not a node id
+    owner_id: str
+    review_date: date
+    status: WatchStatus = "active"
+    created_at: datetime
+
+class Monitor(BaseModel):
+    id: str
+    pattern_id: str                 # references a SavedPattern; never copies its definition
+    owner_id: str
+    status: WatchStatus = "active"
+    created_at: datetime
+```
+
+A `Hotlist` is deliberately bare: an identifier, an owner, a review date, no handling ceiling — an
+analyst can hotlist a bare phone number read off a warrant before it resolves to anything they can
+see. A `Monitor` references a `SavedPattern` by `pattern_id` and never copies its own definition,
+so an edited-then-resaved pattern is evaluated as it now reads, not as it read when the monitor was
+turned on; its query is resolved fresh against the owner's own access on every evaluation, never
+cached. `owner_id` on `Monitor` is redundant with the referenced `SavedPattern.owner_id` (a monitor
+cannot be turned on for a pattern its own creator does not own) but stored directly so a monitor
+row is self-describing without a join for the common "list my own monitors" case.
+
+**`status` surfaces a stopped watch, rather than a silent skip with no visible state change.** Both
+row types stop being evaluated once their owner becomes unresolvable (the same failure mode); a
+stopped watch is shown as stopped in the monitor list or the alert inbox, not simply absent from
+future results with nothing explaining why.
+
+```python
+class AlertMode(StrEnum):
+    FULL = "full"           # referents re-checked against the reading principal at read time
+    NOTIFY_STUB = "notify_stub"   # the triggering referent was outside the recipient's access
+                                   # at write time; carries no referent of any kind
+
+class Alert(BaseModel):
+    id: str
+    rule_id: str                    # the Hotlist or Monitor that fired
+    owner_id: str
+    mode: AlertMode
+    referent_node_ids: list[NodeId] = []
+    investigation_id: str | None = None
+    created_at: datetime
+```
+
+An `Alert` stores references to evidence, never copies — access is re-checked at read time against
+`referent_node_ids`, not trusted from whatever was true when the row was written. A `NOTIFY_STUB`
+row never carries a referent at all: the triggering match was outside the recipient's own access
+when it fired, so nothing about it — not even the identifier that matched — is disclosed to a
+principal who could not see it anyway. `investigation_id` is a best-effort audit-shaped hint, not
+an access-control scope, threaded from whichever producer route was investigation-scoped at the
+point the triggering write happened; `None` for a producer with no single investigation in scope
+(a corpus-wide resolution trigger, say). Jumping from an alert into an investigation branches a new
+one from this field via the same mechanism an ordinary investigation branch already uses; a `None`
+here means the jump starts an unbranched investigation rather than one carrying that link.

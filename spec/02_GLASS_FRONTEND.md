@@ -97,35 +97,34 @@ working set with an entry in the step history. It behaves identically whichever 
 it, so it was never part of this decision.
 
 **Resolution clustering is a separate, unrelated sense of "cluster," and neither this document nor
-the Inspector's own tab list (§2) named a rendering convention for it before Phase 6a — recorded
-here, retroactively for Stage 2 and directly for Stage 3, rather than left implicit in
-`07_BUILD_PLAN.md`'s own narrative.** A community (above) is a Louvain/analytics grouping
+the Inspector's own tab list (§2) ever named a rendering convention for it — recorded here
+directly, rather than left implicit.** A community (above) is a Louvain/analytics grouping
 (`06_DECISIONS.md` ADR-029 — Leiden is unavailable on either compute tier), rendered as a
 translucent hull. A resolution cluster (`Node.resolution.cluster_id`, `01_DOMAIN_MODEL.md`
 §4) is the query-time collapse of `SAME_AS` edges scoring above the session's τ — a different axis
 entirely, and the two must never share a visual channel or an analyst could not tell which kind of
 grouping they were looking at.
 
-*Collapse (Stage 2, B9).* Every node sharing a `cluster_id` with at least one other co-locates at
+*Collapse (B9).* Every node sharing a `cluster_id` with at least one other co-locates at
 the cluster's own anchor position and gains a second, independent `@sigma/node-border` ring (never
 the same attribute the interaction-state ring — on-path/selected/hover — already owns, so both can
 show on one node at once). A node whose cluster splits back apart returns to its own deterministic
 scatter position rather than staying wherever a previous merge left it. This is the picture the
 threshold control's own change-summary counts (`merged`/`split`/`affected`) must agree with.
 
-*Explanation (Stage 3, B10).* `GET .../resolution/explain/{cluster_id}` — the per-comparison match
+*Explanation (B10).* `GET .../resolution/explain/{cluster_id}` — the per-comparison match
 weights behind a cluster — renders in a transient `Popover` overlay anchored to the triggering
 canvas position, the same shape edge inspection (above) already uses, opened from a cluster-aware
 item in the existing radial menu. Not an Inspector tab (none is named "Resolution," and inventing
-one pre-empts the Dossier, B6/Stage 4's own, larger, permanent surface for exactly this class of
+one pre-empts the Dossier, B6's own, larger, permanent surface for exactly this class of
 content) and not a modal. A row is omitted, never shown redacted, if the render cannot independently
 confirm both endpoints of a pairwise comparison from the response's own `member_node_ids` and this
 session's already-access-controlled local graph — belt and braces against a node id the API
 technically cleared but this client has not yet synced, or against a future regression, not a
 claim that the API itself is untrusted.
 
-*Highlighting (Stage 4, B6).* This document had no rendering convention for message-span
-highlighting before Stage 4 — recorded here directly, not left implicit. A highlighted span never
+*Highlighting (B6).* This document had no rendering convention for message-span
+highlighting — recorded here directly, not left implicit. A highlighted span never
 gets a solid channel fill behind its text: that is exactly what would risk the contrast floor over
 dense prose, so instead it reuses the same "8% channel opacity" convention already specified for
 the community-hull overlay above (§3.2), composed via CSS `color-mix()` against the entity's own
@@ -193,8 +192,8 @@ set of widgets:
 
 ### 2.1 Investigation selection on load — proposed, not settled spec
 
-**Found during Stage 3a's own rehearsal, 23 September 2026 — this document was silent on the
-question, checked directly, not assumed.** Before this proposal, the Glass created its own
+**This document was silent on the question — checked directly, not assumed.** Before this
+proposal, the Glass created its own
 investigation via `POST /v1/investigations` on every load, unconditionally — an operator who had
 already created and seeded an investigation via the API (`DEMO_GUIDE.md` §3.3–3.4) saw an empty
 working set, because the Glass never looked at what already existed. The only way to point the
@@ -272,15 +271,16 @@ Three mechanisms, in increasing order of power:
 **Visual query builder.** A node-and-edge pattern the analyst composes — an entity-type palette
 places a node, search pins one to an already-known entity, a connect control joins two with an
 edge — with per-element constraints, compiled to Gremlin in the Conduit. **Not a second drawing
-canvas** (`06_DECISIONS.md` ADR-032, Phase 7 Stage 4, correcting this bullet's own earlier
+canvas** (`06_DECISIONS.md` ADR-032, correcting this bullet's own earlier
 "draws"): a list/palette editor built from the same native controls as every other panel, chosen
 because the pattern shapes ADR-030's own compiler can express are small enough to read as a list,
 and because a canvas inherits every accessibility problem `GlassCanvas` has already needed fixing
 once (that ADR's own reasoning). Never expose the Gremlin; do show the estimated result count
 before running, principal-filtered exactly like the result itself will be, never a raw or
-unfiltered figure (`CLAUDE.md` rules 3 and 7). **Patterns are saveable, shareable and versioned**
-is this bullet's own unbuilt promise — Stage 4 built compose/preview/run only; see
-`07_BUILD_PLAN.md`'s Phase 7 known-gaps list.
+unfiltered figure — access control is enforced before a count reaches the Conduit's response, not
+filtered afterward, and the Glass is never shown an unfiltered count. **Patterns are saveable,
+shareable and versioned** is this bullet's own unbuilt promise — only compose/preview/run are
+built; saving, sharing and versioning a pattern are not yet implemented.
 
 **Hotlists and watchlists.** A list of identifiers with an owner and a review date. Any ingest
 that touches a listed identifier raises an alert. The CoLP journey turns on exactly this — a SIM
@@ -307,8 +307,8 @@ The timeline is the second most important control in the product after the canva
 - **Playback** — animate the brush forward at 0.5× to 8×. Nodes interpolate position and never
   cross-fade, so identity is continuous through a re-layout. The design system fixes the
   interpolation at 420ms with a dedicated easing curve. **A base duration for "1×" was left
-  unstated here — a real spec gap, found and closed while building Stage 4f
-  (`07_BUILD_PLAN.md`): a full traverse of the brush window at 1× takes 8 real seconds**
+  unstated here — a real spec gap, since closed: a full traverse of the brush window at 1× takes
+  8 real seconds**
   (`playback/math.ts`'s own `PLAYBACK_DURATION_MS_AT_1X`), chosen as long enough to read a dense
   timeline's own movement and short enough not to feel stalled at 0.5× (4s) or rushed at 8× (1s).
 - **Cyclical view** — the HMP analysis is a day-of-week and hour-of-day analysis, and a linear
@@ -352,7 +352,7 @@ stadium analysis. Support an uploaded image with two or more control points and 
 and let a `Location` entity be a grid cell.
 
 **Which tier serves a tier-1/2 local PMTiles source over HTTP — proposed, not settled spec.**
-Found during Stage 3a's own rehearsal, 23 September 2026: neither this section's "Offline tiles"
+Neither this section's "Offline tiles"
 row above nor `05_DEPLOYMENT.md` §2.2 names which component actually puts a tier-1/2 local
 `source` on the wire to the browser (checked directly, not assumed silent) — `osprey.yaml`'s own
 `source: file:///data/tiles/osm-local.pmtiles` is an on-disk path, and a browser cannot fetch a
@@ -409,8 +409,7 @@ Node state vocabulary, implemented once in the Sigma node program:
 | Inferred | 1.5px dashed 4-2, channel colour |
 | Unresolved | 1.5px dotted, channel colour |
 
-**Selected and on-path, combined — resolved here rather than left as a disclosed gap
-(`07_BUILD_PLAN.md`'s own Phase 8 entry had recorded the finding, not the fix).** Selected and
+**Selected and on-path, combined — resolved here rather than left as a disclosed gap.** Selected and
 on-path are both a 2px stroke, and the code that first implemented them differentiated a
 select-and-on-path node from a selected-only one by stroke hue alone — a colour-only distinction,
 WCAG 1.4.1, for that one combination. Both states already carry their own non-colour cue in the
@@ -481,19 +480,18 @@ not wait for the whole payload.
 Not negotiable and cheaper to build in than to retrofit.
 
 - Every canvas action reachable by keyboard. Tab and Shift+Tab move focus in and out of the
-  canvas exactly like every other control on the page — corrected in Phase 7 Stage 4 (a
+  canvas exactly like every other control on the page — corrected here (a
   container that instead captures every Tab keydown once it holds focus traps a keyboard user
-  inside it for good, found once a second keyboard-driven surface sat beside the canvas). Reaching
+  inside it for good, a real risk once a second keyboard-driven surface sits beside the canvas). Reaching
   the canvas by any means (Tab, a click, `.focus()`) with nothing selected establishes a one-node
   ring immediately, with no keypress needed after arriving. `Ctrl`/`Cmd`+`ArrowRight`/`Left`
   cycles the focused node through an already-built ring (needed for a lasso-selected set of
   non-adjacent nodes plain arrow-walk cannot reach); plain arrow keys walk edges, moving focus
   only, never the ring itself; `Enter` expands; `\` opens the radial menu as a list; `Space`
-  toggles the focused node's own membership in the selection ring (`07_BUILD_PLAN.md` Phase 6a
-  Stage 1: added for manual link/split, the first action needing a keyboard-built multi-node
-  selection at all). **`Ctrl`/`Cmd`+`Shift`+`ArrowRight`/`Left` walks every node in the working
-  set, adjacency or not** — added 27 September 2026 (round 12d) after a real gap was found
-  against this very bullet: `Explain cluster` and `Find paths to` are both gated on a *two-node*
+  toggles the focused node's own membership in the selection ring (added for manual link/split,
+  the first action needing a keyboard-built multi-node selection at all). **`Ctrl`/`Cmd`+`Shift`+
+  `ArrowRight`/`Left` walks every node in the working set, adjacency or not** — added after a real
+  gap was found against this very bullet: `Explain cluster` and `Find paths to` are both gated on a *two-node*
   selection, and until this binding existed no keyboard route built one for two nodes that share
   no edge. Plain arrow-walk follows edges so it cannot leave a component; `Ctrl`/`Cmd`+Arrow
   cycles only within the existing ring; `Space` toggles only what is focused. Two entities found
@@ -535,7 +533,7 @@ Radii: 0 for canvas and cells, 2px controls, 4px panels, 6px overlays, 999px sta
 
 The HMP report is the model this platform exists to produce: a set of judgements, each resting on
 named evidence, plus explicit gaps and assumptions (`01_DOMAIN_MODEL.md` §5). "Judgements" has
-been named as one of the Inspector's five tabs (§2) since Phase 4; this section is the first place
+been named as one of the Inspector's five tabs (§2); this section is the first place
 that names what the tab actually contains.
 
 ### 9.1 The Judgements tab
@@ -569,10 +567,10 @@ judgements via multi-select against the investigation's own judgement list.
 - **Selecting a judgement highlights its own `supporting`/`contradicting` items on the canvas —
   built as the *selected* node state (`GlassCanvasHandle.highlightNodes`), not the "8% channel
   opacity" overlay this section originally specified.** Corrected here rather than left
-  contradicting the shipped build (Phase 8 Stage 4c): the opacity convention is a per-*region*
+  contradicting the shipped build: the opacity convention is a per-*region*
   hull polygon or a per-*text-span* background, neither of which has a per-*node* shape — building
-  one would be a new WebGL node-program visual channel, real rendering-engine work Stage 4c was
-  not scoped for. Reusing the existing multi-node *selected* state (already real, via lasso) needs
+  one would be a new WebGL node-program visual channel, real rendering-engine work not yet
+  scoped. Reusing the existing multi-node *selected* state (already real, via lasso) needs
   no new channel and reaches the same practical goal — "this is relevant" — at the cost of not
   being visually distinct from an analyst's own manual selection while a judgement's evidence is
   highlighted. `GlassCanvasHandle.highlightNodes`'s own docstring has the full record.
@@ -603,14 +601,14 @@ A judgement flagged for review (`01_DOMAIN_MODEL.md` §5 — triggered when a no
 corrected or retracted) shows a status chip on its own row in the Judgements tab (the `999px`
 status-chip radius §8 already specifies), and a corresponding marker on the flagging node if it is
 currently on the canvas — the same list-row-plus-canvas-marker pairing the resolution-conflict
-pattern (Phase 6a) already establishes for "something here needs a human's attention."
+pattern already establishes for "something here needs a human's attention."
 
 ### 9.5 Marking a node for suppression — owner ruling R7, 27 September 2026, TENTATIVE
 
 **The owner is revisiting this after their own usability walkthrough**, and it is written down in
 that state rather than held back, because a ruling that lives only in a conversation is lost by
-the next session (`CLAUDE.md` rule 11). `06_DECISIONS.md` ADR-046's addendum carries the full
-ruling.
+the next session — a genuine decision belongs in the spec, not in chat alone. `06_DECISIONS.md`
+ADR-046's addendum carries the full ruling.
 
 Retraction becomes two steps. An analyst **marks** a node for suppression from the canvas — the
 radial menu's own `Mark for suppression` item — and that is immediate and reversible. Nothing is
@@ -648,9 +646,8 @@ it its own surface. Three artefact shapes share one handling gate — there is o
 | Report | The investigation's assessment objects (§9), assembled with their own cited evidence — the artefact A15 itself names ("Export the chart and the assessment") | Self-contained HTML |
 
 **File formats, recorded here rather than left undetermined.** This document named where each
-shape's content comes from without ever stating what file it becomes — a real spec gap, found
-while Stage 4h (`07_BUILD_PLAN.md`) gave the rendering pipeline an owning stage rather than
-leaving it a placeholder. Decided, not merely disclosed as open:
+shape's content comes from without ever stating what file it becomes — a real spec gap, closed
+here rather than left a placeholder. Decided, not merely disclosed as open:
 
 - **Chart — PNG**, `@sigma/export-image`'s own native output for the canvas case; ECharts' own
   export for a histogram/timeline/metric view produces the same.

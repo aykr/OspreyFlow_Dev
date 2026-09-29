@@ -65,9 +65,9 @@ loaded without a legal basis cannot be defended.
 **Owner ruling R6, 27 September 2026.** "Where the data is" was, until this ruling, a path the
 analyst had to already know and type, and in a rendered deployment there was no path that worked:
 `POST /v1/ingest/recipes` takes a `source_location` the *Conduit's own container* must be able to
-read, and nothing was mounted there. `07_BUILD_PLAN.md` has the finding — it made eight acceptance
-rows (B1–B3, B6–B8, B13–B18) unperformable through the analyst's own door, not because they were
-hard but because there was no door.
+read, and nothing was mounted there — making eight acceptance rows (B1–B3, B6–B8, B13–B18)
+unperformable through the analyst's own door, not because they were hard but because there was no
+door.
 
 The deployment therefore has a fourth storage root, `components.storage.ingest`
 (`05_DEPLOYMENT.md` §2.1's Components screen, beside data, staging and backups), **bind-mounted
@@ -285,8 +285,9 @@ A dry run over the sample that produces no persistent writes and three outputs.
 **How the clearance scoping in §8 is actually enforced.** An `on_match: reference` lookup during
 the dry run goes through the same `GraphPort.find_node` call the real write path uses
 (`services/ingest/engine.py`'s `_write_entity`), passing the author's own `Principal` — never a
-privileged or bypassing lookup. `GraphPort` is where `AccessFilter` is injected (`CLAUDE.md` rule
-3), so this is what makes "an author cannot use a dry run to see material they could not
+privileged or bypassing lookup. `GraphPort` is where `AccessFilter` is injected — access control lives in the adapter, never
+applied after retrieval, and an unauthorised principal must not be able to detect a filtered
+node's existence via path length, degree count or histogram bucket — so this is what makes "an author cannot use a dry run to see material they could not
 otherwise see" (§8) mechanically true rather than a convention someone could get wrong: the
 author sees exactly what `AccessFilter` would return them on any other read, existence-leak
 protections included. An element the recipe would `create` never touches `AccessFilter` at all —
@@ -395,10 +396,9 @@ editor; the repository is the record.
   runs until someone opens it. Recipes never silently adapt.
 - **Revertible.** A load is a unit. Revert is a function in `services/ingest` (`revert_load`),
   tested directly against a live `GraphPort`, not a CLI command — this build has no `osprey`
-  unified CLI (`07_BUILD_PLAN.md`'s Phase 2 amendment). It supersedes everything the load
-  created, leaving the audit trail intact. The phrasing this section originally used
-  (`osprey ingest revert <load_id>`) predates the harness becoming browser-based; reverting a
-  load gets its own admin console screen in Phase 8, not a terminal command.
+  unified CLI. It supersedes everything the load created, leaving the audit trail intact.
+  Reverting a load is not yet reachable from the admin console; it is a function call today, and
+  gets its own console screen once that surface exists.
 
 ### The recipe registry, and how "flags the affected recipes" (above) actually happens
 
@@ -489,7 +489,8 @@ dependency (`services/api/app.py`), following the same shape as the existing
 `Principal`, raises `403` if the required role isn't in `principal.roles`, and is attached
 per-route, e.g. `Depends(require_studio_role(StudioRole.SOURCE_APPROVER))` on publish. This is
 role-based *action* authorisation, a different axis from `AccessFilter`'s per-record
-clearance/handling gate (§5, `CLAUDE.md` rule 3) — a source approver role does not itself grant
+clearance/handling gate (§5, which lives in the adapter and is never applied after retrieval) —
+a source approver role does not itself grant
 visibility into any material; it only permits the publish/schedule/approve action once the
 recipe's own dry run has already passed under the author's clearance.
 

@@ -291,8 +291,7 @@ one, which is the point of the format.
 | Open hosted | OpenFreeMap, Protomaps |
 | Self-hosted | GeoServer, QGIS Server, TileServer GL, Martin, pg_tileserv |
 
-**Implementation note (Phase 5 Checkpoint 3a) — OS Open Zoomstack appears twice, deliberately,
-not by inconsistency.** The tier-2 table above lists it as a local drop-in ("nothing needed",
+**Implementation note — OS Open Zoomstack appears twice, deliberately, not by inconsistency.** The tier-2 table above lists it as a local drop-in ("nothing needed",
 air-gapped); the UK profile group here lists it again. These are two different consumption paths
 for the same open dataset, not a duplicate entry to reconcile: a deployment that downloads
 Zoomstack once and serves it from a local PMTiles file uses the tier-2 path (`osprey.yaml`'s own
@@ -401,7 +400,7 @@ Use `pyproj` server-side and `proj4js` in the browser for the few display-time c
 it — chiefly showing a British National Grid reference in the inspector alongside the lat/long,
 because UK source documents quote grid references and an analyst needs to match them by eye.
 
-**Implemented in Phase 2** as Knowledge Adapters — `coordinate_lon`/`coordinate_lat` for a bare
+**Implemented as Knowledge Adapters** — `coordinate_lon`/`coordinate_lat` for a bare
 coordinate, `geometry_ref` (the same reprojection, returning a deterministic reference instead)
 and `grid_ref` (parsing a British National Grid reference first) for a `Location` — dispatched by
 the same recipe-engine `transform:` mechanism every other normaliser uses
@@ -579,16 +578,16 @@ never sends it. This is what makes a future move to SQL/PGQ or openCypher an ada
 rather than a frontend rewrite. It is also the security boundary: an analyst cannot author a
 traversal that bypasses the access filter (§5).
 
-**`GraphPort` grew beyond this illustrative snippet from Phase 1 on** — transactions and schema
-management first, then `find_node` and `revert_elements` in Phase 2, without re-litigating the
-snippet each time (`01_DOMAIN_MODEL.md` §8 records why: the doc never specified the request/
-response shapes either, and a real adapter has to). Phase 2 also added
-`get_node(..., include_superseded: bool = False)` and `supersede_node(node_id, replacement, tx)
--> NodeId`, closing a gap the schema already implied: `01_DOMAIN_MODEL.md` §2.4 requires a
-correction to write a new revision and point the old one forward, and nothing before Phase 2
-actually enforced that a superseded node stops appearing in ordinary reads. The workflows that
-call it — Phase 6's retraction, Phase 8's judgement-review loop — land later; the capability
-belongs on the port now, against the one adapter that exists, the same reasoning as `find_node`.
+**`GraphPort` grew beyond this illustrative snippet** — transactions and schema management first,
+then `find_node` and `revert_elements`, without re-litigating the snippet each time
+(`01_DOMAIN_MODEL.md` §8 records why: the doc never specified the request/response shapes either,
+and a real adapter has to). The port also gained `get_node(..., include_superseded: bool = False)`
+and `supersede_node(node_id, replacement, tx) -> NodeId`, closing a gap the schema already
+implied: `01_DOMAIN_MODEL.md` §2.4 requires a correction to write a new revision and point the old
+one forward, and without this method nothing actually enforced that a superseded node stops
+appearing in ordinary reads. The workflows that call it — retraction, the judgement-review loop —
+are not yet implemented; the capability belongs on the port now, against the one adapter that
+exists, the same reasoning as `find_node`.
 `supersede_node` also repoints every edge incident to the old node onto the new one (cloned, not
 moved — confirmed empirically that ArcadeDB does not support relinking an edge's endpoints after
 creation), so a correction cannot silently disconnect a node from its own network. `supersede_edge`

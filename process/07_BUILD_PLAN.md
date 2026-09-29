@@ -2198,12 +2198,15 @@ repeated in full here, so this summary stays a map, not a second copy:**
 5. **Trigger B, publication** (`06_DECISIONS.md` ADR-034 §B3) — the final stage of this list,
    scheduled and visible rather than buried in a different document, not committed to a date. Its
    own entry condition, quoted rather than restated: *"Trigger B, publication. Fires only on
-   explicit owner instruction, after all phases, stages, and alpha and beta testing are
-   complete."* Not itself milestone-blocking — V1 END TO END is reachable, and this document's own
-   exit criterion for it satisfiable, without Trigger B ever firing; alpha/beta testing itself is
-   `process/PRODUCT_DELIVERY.md`'s own territory, named here only because ADR-034's own condition text
-   names it and this document does not get to edit an accepted ADR's own words to remove the
-   mention.
+   explicit owner instruction, once Trigger A, publication readiness (the documentation-refresh
+   stage) and the Trigger B rehearsal (including a green CI run) are all done and §B4's own open
+   items are decided."* Not itself milestone-blocking — V1 END TO END is reachable, and this
+   document's own exit criterion for it satisfiable, without Trigger B ever firing.
+   **Owner ruling, 28 September 2026: alpha and beta testing (analyst review) follow Trigger B —
+   they do not precede it and are not one of its own preconditions**, correcting this entry's own
+   prior wording, which had the order backwards; `process/PRODUCT_DELIVERY.md`'s own territory,
+   named here only because it is where alpha/beta's own detail lives, not because it gates Trigger
+   B.
 6. **ArcadeDB stability — closed, 23 September 2026** (previously filed in "Legacy disclosures,"
    relocated into this list, promoted and closed the same day — see its own entry, further down,
    for the re-pointed exit criterion and the measurement that met it) — a demo that fails more
@@ -6760,6 +6763,49 @@ find something already finished sitting in the queue.
    ArcadeDB, and a dangling `CLAUDE.md` citation does not stop the Conduit from enforcing the
    access filter it describes. The two parts' own exit criteria are independent by construction,
    which is exactly why splitting them was the right move rather than a formality.
+
+   **3b closed, round 14b, 29 September 2026 — the exit criterion above is met, with one exception
+   named below, not silently dropped.** The real counts, measured directly rather than assumed from
+   this section's own stale estimates (several were significantly off — `05_DEPLOYMENT.md`'s "2"
+   was actually 26; `08_ACCEPTANCE_SCENARIOS.md`'s "11" was actually 35 once "found during"/"found
+   while" and bare alphanumeric round-labels like "13ch" were counted too, a second annotation shape
+   this section's own original grep pattern missed entirely):
+
+   - **Provenance annotations**: every real instance across all nine Apache-scoped narrative
+     documents rewritten — reasoning and measured values kept, build-calendar coordinate dropped.
+     A new, permanent gate (`scripts/provenance_annotation_check.py`, wired into `make ci`) proves
+     it stays that way, red-then-green demonstrated against a planted annotation before being
+     trusted. Six lines remain allowlisted, and are not a citation gap: `09_INGEST_STUDIO.md`'s own
+     five-step UI workflow is genuinely named "Stage 1" through "Stage 5" in the product itself.
+   - **The 6 `CLAUDE.md`-by-name citations**: all rewritten, the rule's own substance stated inline.
+     `product-tree-link-check` (widened in scope this round to catch bare `07_BUILD_PLAN.md`
+     citations too, not only `process/`-prefixed ones — a real gap the rewrite pass itself
+     surfaced) now reports one allowlisted entry, and it is not a citation either: `README.md` has
+     to say `process/` exists and what it is for, the same judgement ADR-031's own text already
+     applies to itself.
+   - **The domain-model (10) and route (49) coverage allowlists**: both written to zero and their
+     allowlist files deleted, not merely emptied. Ten `packages/schemas/domain.py` classes gained
+     real sections in `01_DOMAIN_MODEL.md`; all 49 previously-undocumented routes gained real
+     entries in `03_CONDUIT_MIDDLEWARE.md` §3, each read from `services/api/app.py`'s own
+     implementation, not invented.
+   - **`README.md`**: replaced with the landing page ADR-031 describes.
+   - **Not widened, on the tree's own correction of this section's brief**: `06_DECISIONS.md` is
+     **not** added to `route_coverage_check.py`'s `APACHE_DOC_PATHS`, and its own private-tree
+     citations are not rewritten as a gate-scoped population. ADR-034 §B2 is explicit and binding:
+     `06_DECISIONS.md` is "Excluded and private" from the Apache 2.0/publication scope even though
+     it physically stays in `spec/` — widening the gate to scan it would misclassify a file this
+     ADR already, deliberately, keeps unpublished. §B9's own text agrees: `route_coverage_check.py`
+     "deliberately excludes it." A prior draft of this round's own instruction asked for the
+     opposite; the tree's own accepted ADR wins, per standing practice, and this is that
+     correction, not a silent deviation.
+   - **Left open, per instruction, not decided**: the 15 tabled non-numbered `CLAUDE.md` source-code
+     citations (§B11's own table, above) and the one remaining `decision-log-publication-check`
+     entry (ADR-035's 035→026 citation) both still need the owner's own judgement — reported, not
+     resolved, the same as this section's own prior text already asked for.
+   - **Owner ruling recorded, not this stage's own item but landed the same round**: R12's alpha/
+     beta-follows-Trigger-B correction, in this document's own Trigger B entry and in `06_
+     DECISIONS.md` ADR-034 §B3 (this section's brief named §B4; the real text is in §B3 — §B4 is a
+     different, already-settled question, the new-repository mechanics).
 
    **3c — Proposed, 25 September 2026, post-milestone: the Analyst guide.** Neither 3a nor 3b: not
    an install/deploy document (3a) and not a citation or link-integrity rewrite (3b), but

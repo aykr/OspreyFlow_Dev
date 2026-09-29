@@ -1,31 +1,21 @@
-# Known private-tree references from an Apache-scoped document, found 23 September 2026 when
-# `scripts/product_tree_link_check.py` was built. Every line here is a real, current violation —
-# a document destined for the product tree citing a file destined for the private tree — not a
-# permanent exception. This list shrinks to zero as part of Trigger A's own exit criterion
-# (`06_DECISIONS.md` ADR-034 §B3, `07_BUILD_PLAN.md`'s own Trigger A entry): each reference is
-# rewritten or removed as the restructure lands, the same "allowlist shrinks, never grows for a
-# case already covered" discipline `route_coverage_check.py`/`domain_model_coverage_check.py`
-# already hold their own allowlists to. A new violation not on this list fails CI immediately.
+# Known private-tree references from an Apache-scoped document — round 14b, 29 September 2026.
+# Every prior entry here (from 23 September 2026, before Trigger A's restructure and before this
+# round's rewrite pass) has been checked directly against the current tree and is gone: each was
+# either a real citation, now rewritten to state its substance inline rather than pointing at a
+# private file, or a marker (`06_DECISIONS.md`, `07_BUILD_PLAN.md`, `DESIGN_PROVENANCE.md`,
+# `NEXT_STEPS_PHASE7.md`, `SESSION_HANDOVER.md`, `archive/`) that is no longer part of
+# `PRIVATE_TREE_MARKERS` at all (round 14a simplified it to `process/`, `CLAUDE.md`, `.claude/`,
+# `.graphifyignore` — see `scripts/product_tree_link_check.py`'s own docstring). This is not the
+# same list carried forward; it is a fresh one, re-derived from a live `find_violations()` run
+# against the current tree, not assumed clean from the old entries' mere continued presence.
+#
+# One entry remains, and it is not a citation of private content — checked directly, the same
+# judgement `06_DECISIONS.md` ADR-031's own text already applies to itself: `README.md` has to
+# say that `process/` exists and what it is for, the same way ADR-031 does, and that sentence
+# necessarily contains the substring `process/`. A reader does not need to open `process/` to
+# understand what `README.md` says about it; the sentence carries its own explanation. This does
+# not shrink to zero the way a real citation would — it shrinks only if `README.md` stops
+# describing the repository's own top-level layout, which would make it a worse README.
 #
 # Format: <path relative to repo root>\t<private-tree marker matched>
-spec/01_DOMAIN_MODEL.md	06_DECISIONS.md
-spec/01_DOMAIN_MODEL.md	07_BUILD_PLAN.md
-spec/01_DOMAIN_MODEL.md	CLAUDE.md
-spec/02_GLASS_FRONTEND.md	06_DECISIONS.md
-spec/02_GLASS_FRONTEND.md	07_BUILD_PLAN.md
-spec/02_GLASS_FRONTEND.md	CLAUDE.md
-spec/04_VAULT_BACKEND.md	06_DECISIONS.md
-spec/05_DEPLOYMENT.md	07_BUILD_PLAN.md
-spec/08_ACCEPTANCE_SCENARIOS.md	06_DECISIONS.md
-spec/08_ACCEPTANCE_SCENARIOS.md	07_BUILD_PLAN.md
-spec/09_INGEST_STUDIO.md	07_BUILD_PLAN.md
-spec/09_INGEST_STUDIO.md	CLAUDE.md
-DEMO_GUIDE.md	06_DECISIONS.md
-DEMO_GUIDE.md	07_BUILD_PLAN.md
-DEMO_GUIDE.md	CLAUDE.md
-README.md	06_DECISIONS.md
-README.md	07_BUILD_PLAN.md
-README.md	DESIGN_PROVENANCE.md
-README.md	NEXT_STEPS_PHASE7.md
-README.md	SESSION_HANDOVER.md
-README.md	archive/
+README.md	process/

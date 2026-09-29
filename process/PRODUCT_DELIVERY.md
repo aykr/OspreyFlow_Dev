@@ -103,5 +103,7 @@ without duplicating either: **Trigger A** (files move, `docs/` → `spec/`+`proc
 `LICENSE`/`NOTICE` created) fires at `07_BUILD_PLAN.md`'s own documentation-refresh stage close —
 a real build step, still in the build plan, just moved to run after the milestone rather than
 before it. **Trigger B** (publication — a new, seeded, neutral-identity repository made public) is
-owner-instructed only, after alpha and beta testing, and is not scheduled by any stage in
-`07_BUILD_PLAN.md` at all.
+owner-instructed only, once Trigger A, publication readiness and the Trigger B rehearsal are done
+and §B4's own open items are decided. **Owner ruling, 28 September 2026: alpha and beta testing
+follow Trigger B, not precede it** — this corrects this document's own prior ordering, which had
+it backwards. Trigger B is not scheduled by any stage in `07_BUILD_PLAN.md` at all.

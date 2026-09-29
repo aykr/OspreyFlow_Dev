@@ -36,13 +36,13 @@ docker run --rm -p 127.0.0.1:7000:7000 \
 # → INFO:     Uvicorn running on http://0.0.0.0:7000 (Press CTRL+C to quit)
 ```
 
-**Two corrections, both found running the real image, 26 September 2026, not by reading the
-code.** `-p 127.0.0.1:7000:7000`, not a bare `-p 7000:7000` — R2's own loopback-only guarantee
+**Two corrections, found running the real image rather than by reading the code.**
+`-p 127.0.0.1:7000:7000`, not a bare `-p 7000:7000` — R2's own loopback-only guarantee
 needs the port itself bound to loopback on the host side; a bare `7000:7000` publishes to every
 interface, which the application-layer refusal in `harness/webapp.py` cannot fully make up for on
-its own — **decided, round 09: the `-p 127.0.0.1:` port-binding above is R2's own enforcement for
-this documented command; `harness/webapp.py`'s own `loopback_only_middleware` is real defence only
-for the non-Docker path, redundant-but-harmless here** (`harness/webapp_auth.py`'s own docstring
+its own. **The `-p 127.0.0.1:` port-binding above is R2's own enforcement for this documented
+command; `harness/webapp.py`'s own `loopback_only_middleware` is real defence only for the
+non-Docker path, redundant-but-harmless here** (`harness/webapp_auth.py`'s own docstring
 has the full Docker-NAT reasoning). And the trailing `--config`/`--out-root` are not optional
 flourishes: `harness.webapp`'s own
 default `--config` resolves relative to *where the harness package lives inside the image*
@@ -89,8 +89,8 @@ availability, container runtime version, and for `cluster` connectivity to every
 failure explains what is wrong and what to do about it, with a **Re-check** button rather than a
 loop of edit-and-rerun. Preflight must pass before Launch is enabled.
 
-**Memory and disk verdict on the container runtime's own daemon, not the operator's shell —
-fixed, round 10.** The host running Preflight and the Docker Desktop VM every container actually
+**Memory and disk verdict on the container runtime's own daemon, not the operator's shell.**
+The host running Preflight and the Docker Desktop VM every container actually
 runs inside can have very different resources (this document's own memory and disk figures below
 are what the daemon must provide); the operator's host figure is still shown alongside each result,
 as context, never as what either check passed or failed on.
@@ -131,8 +131,8 @@ than the first.
 `osprey.yaml` is the deployment. Version it, review it in a pull request, and never hand-edit a
 generated artefact — regenerate instead.
 
-**Where the generated artefacts live — a gap in this section, found while building the renderer and
-settled by the owner the same day, 24 September 2026.** This document named two fixed paths for
+**Where the generated artefacts live — a gap in this section, settled by the owner.** This
+document named two fixed paths for
 generated
 output, `deploy/compose/dev.yaml` (§2.4) and `deploy/versions.lock` (§5, §7), and says
 nothing about how either coexists with the four artefacts listed above being renderable for more
@@ -158,8 +158,8 @@ rendered from it would assert something untrue. A real deployment's own reposito
 `deploy/generated/<profile>/` exactly as the paragraph above requires, and reviews it in a pull
 request along with `osprey.yaml` itself.
 
-*Confirmed by the owner in writing on 24 September 2026, in the same message that split Stage 2 §5.
-The renderer already wrote to these paths; this amendment is the document catching up.*
+*The renderer already writes to these paths; this document describes the real behaviour rather
+than a still-pending change.*
 
 ### 2.1.1 What the rendered identity-provider realm must carry
 
@@ -183,8 +183,8 @@ is still enabled before exchanging for them, and it must do so with an authority
 that would mint the token. A pre-check sharing the impersonation grant would be asking the
 component that has already said yes, which is no check at all.
 
-**That pre-check is proven against a real identity provider, not a fixture: `make idp-test`**
-(round 13cc, owner ruling R8). It starts a real Keycloak 26.0 carrying the realm
+**That pre-check is proven against a real identity provider, not a fixture: `make idp-test`.**
+It starts a real Keycloak 26.0 carrying the realm
 `harness/realm.py` renders, applies the grants through `harness/keycloak_admin.py` exactly as
 `harness.apply` does, and runs `tests/services/api/test_revoked_principal_precheck.py`'s five
 cases; CI runs the same target as `token-exchange-idp-test`, and `make test-all` depends on it.
@@ -193,7 +193,7 @@ finding: Keycloak **does** issue a token for a disabled subject when asked by a 
 impersonation, so the refusal has to be the Conduit's. A fixture IdP written to suit the test
 would have agreed with whatever the code did.
 
-**The model tier arrives shortly after `apply` reports ready, not before it** (round 13cda).
+**The model tier arrives shortly after `apply` reports ready, not before it.**
 `04_VAULT_BACKEND.md` §4's LiteLLM proxy and Ollama are both rendered, and Ollama pulls and
 digest-verifies its three models (ADR-020) on a persistent volume. The deployment deliberately
 does **not wait** for that pull: on a slow link it is roughly 2.2GB, and gating readiness on it
@@ -326,8 +326,7 @@ button.
 
 ### 2.6 How the Glass reaches the Conduit, and how an analyst signs in
 
-Two holes, found running the seeded golden path on 24 September 2026 (`07_BUILD_PLAN.md`'s Stage 2
-§3 entry has the measurement and the screenshot): a rendered `local-lite` deployment came up
+Two holes, found running the seeded golden path: a rendered `local-lite` deployment came up
 healthy, seeded both fixtures and passed its three-sided verify — and the Glass served by that same
 deployment could not talk to it at all. **Both are now decided, differently.**
 
@@ -361,14 +360,14 @@ against the built artefact rather than the source, because the source was never 
 #### 2.6.2 Signing in — ADR-050, and it blocks the milestone
 
 **There is no sign-in.** `DEV_BEARER_TOKEN` is `import.meta.env.VITE_DEV_BEARER_TOKEN ?? ""`, and
-`App.tsx` has said so plainly since Phase 4: a login flow was not in that phase's bullets, and the
-token is "a stand-in until a real sign-in screen exists, not a production auth path." No phase has
-owned it since. Every rendered deployment therefore serves a Glass that sends an empty bearer token
+`App.tsx` says so plainly: a real login flow is not yet built, and the
+token is "a stand-in until a real sign-in screen exists, not a production auth path." Nothing has
+owned building it yet. Every rendered deployment therefore serves a Glass that sends an empty bearer token
 to a Conduit that correctly refuses it.
 
 **ADR-050** is where this is decided: OIDC authorization code with PKCE against the realm §2.1.1
 already renders, the Glass as a public client. It is **not** harness work and it is
-**milestone-blocking** — `07_BUILD_PLAN.md`'s sign-in stage, after Stage 2 §3, carries the exit
+**milestone-blocking** — the build plan's own sign-in stage carries the exit
 test. Until it is built, the dev-token path is fenced so that no rendered deployment can carry it.
 
 ## 3. Standing it up on a laptop
@@ -393,13 +392,12 @@ Roughly fifteen minutes end to end, most of it pulling model weights and buildin
 progress shown throughout. The workspace is then at `http://localhost:8080`. **The admin console
 stays at `http://localhost:7000/admin`** — the harness's own port, not the workspace's: §2's own
 "the harness does not go away, it becomes /admin" describes the same process switching mode, not a
-page the workspace serves (a pre-existing inconsistency in this document, corrected 26 September
-2026, found running the real image rather than by reading the two sections against each other).
+page the workspace serves.
 The seeded demo credentials are displayed once and written nowhere.
 
-**Fixed, 26 September 2026 (round 07) — the bootstrap command above now works as documented, with
-no operator checkout at all.** Found running the real image the previous round: `harness/render.
-py`'s render step refused by name (`MissingDockerfileError`) unless `services/api/Dockerfile`,
+**The bootstrap command above works as documented, with
+no operator checkout at all.** `harness/render.
+py`'s render step used to refuse by name (`MissingDockerfileError`) unless `services/api/Dockerfile`,
 `services/ingest/Dockerfile` and `apps/workspace/Dockerfile` were present at the image's own
 filesystem root — which `harness/Dockerfile`'s own header comment already says this image
 deliberately does not carry. The fix is `osprey.yaml`'s new `components.source_path`
@@ -409,15 +407,13 @@ records, and the render step never looks for a local Dockerfile at all. Declared
 root containing the three Dockerfiles above) — **the developer path** — renders exactly as before:
 a `build:` stanza, a local tag, `versions.lock`'s own `local-build` entry. Confirmed directly
 against the real, rebuilt image with only an empty workspace mounted (`tests/harness/
-test_harness_image.py`'s own new case): render succeeds, the rendered `compose.yaml` carries no
-`build:` stanza for any owned service, and `docker compose config` validates it. `docs/07_
-BUILD_PLAN.md`'s own Stage 2 §6 entry keeps the previous round's disclosure as history rather than
-deleting it now that it is no longer true.
+test_harness_image.py`'s own case): render succeeds, the rendered `compose.yaml` carries no
+`build:` stanza for any owned service, and `docker compose config` validates it.
 
 **The developer path, for this repository, CI, and the exit tests below: `--build` on either
 headless command**, or declare `components.source_path` in `osprey.yaml` directly.
 
-**From a fresh clone, in full — corrected 27 September 2026 (round 13), after running exactly
+**From a fresh clone, in full — corrected after running exactly
 what this section used to say and watching it fail.** The three lines before the `apply` command
 were missing entirely: this document jumped from "clone it" to "run it" with no environment step,
 and the command as written raised `ModuleNotFoundError: No module named 'schemas'` because
@@ -464,7 +460,7 @@ sudo cp carrier-a-cdr.csv device-extract.xml /var/lib/osprey/ingest/
 ```
 
 For the synthetic demo source files this repository ships, there is a module rather than a copy —
-they are generated, so there is nothing to copy from a checkout (round 13c):
+they are generated, so there is nothing to copy from a checkout:
 
 ```bash
 PYTHONPATH=.:packages .venv/bin/python -m scripts.seed_ingest_folder \
@@ -483,7 +479,7 @@ Glass has nobody to authenticate as; the flag creates a disposable analyst subje
 password beside the rendered artefacts, which is what "the seeded demo credentials are displayed
 once" above refers to. Omitting it is right for a headless exit test and wrong for a demo.
 
-**Fixed, round 11 — the pull path's own registry reference now resolves for a real customer, with
+**The pull path's own registry reference resolves for a real customer, with
 no flag.** `.github/workflows/release.yml` builds, trivy-scans and pushes all four owned images
 (`api`, `ingest`, `workspace`, `harness`) to `ghcr.io/ospreyflow/<service>:<sha>` on a version tag,
 tagged by the exact commit `harness.render.git_sha()` computes — including for the harness image
@@ -508,8 +504,8 @@ the development stack publishing there — while a rendered container listens on
 client is constructed during startup but **opens no connection**, so it cannot have raised it. The
 real fault is fixed; this paragraph is the correction, left in place rather than quietly rewritten.
 
-**The list does still omit the model gateway, and that remains a real gap — Proposed, after
-Stage 2 §3.** A decision on this was taken on 24 September 2026 and **withdrawn the same day by the
+**The list does still omit the model gateway, and that remains a real gap — Proposed.** A decision
+on this was taken and **withdrawn by the
 owner**, because its premise was the misdiagnosis corrected above: the gateway was never why the
 Conduit would not start. It returns here on its own merits, to be decided separately.
 
@@ -585,7 +581,7 @@ The maintainability requirement, made concrete.
 
 - **Every image is independently versioned.** No service pins another's major version. The only
   shared pin is the port contract version in `packages/ports`.
-- **How a customer gets `versions.lock`'s own digests — fixed, round 11.** They do not fetch it
+- **How a customer gets `versions.lock`'s own digests.** They do not fetch it
   separately: `.github/workflows/release.yml` publishes the three owned images to
   `ghcr.io/ospreyflow` on every version tag, and `harness.render`'s own default resolver finds
   those digests over the network the moment a render runs, the same way it has always resolved a
@@ -633,7 +629,7 @@ separately, with its own retention policy set by the deployment's legal basis.
 with a deployment-scoped key.** That last sentence is the load-bearing one and it is repeated as a
 standing constraint in §7, because it binds every future feature rather than only the restore path.
 
-The problem this settles, found building ADR-049's Stage 2 §4: every credential is minted at apply
+The problem this settles: every credential is minted at apply
 time into the generated, gitignored environment file (§2.5, §7 — "never in `osprey.yaml`, never in
 an image"), so a restore lands old data in a **new** deployment holding **new** secrets, and
 nothing reconciles the two. It worked, and only because nothing in the backed-up data was
@@ -647,7 +643,7 @@ anything at rest with a key of its own. A connector credential that must survive
 therefore held by reference — an environment variable name or a secret-manager path, which is what
 §2.5 already requires of the harness — and never as ciphertext in a store.
 
-**For `cluster`, the answer is different and is Phase 8a's.** Holding secrets outside the
+**For `cluster`, the answer is different and not yet built.** Holding secrets outside the
 deployment, in a secret manager the restored deployment is pointed at, is recorded as the cluster
 profile's approach. It does not apply to `local-lite` or `small`, where standing up a secret
 manager to restore a laptop would be machinery in place of a constraint.
@@ -655,7 +651,7 @@ manager to restore a laptop would be machinery in place of a constraint.
 ### 6.2 What the current implementation does and does not satisfy
 
 `deploy/RUNBOOK.md` is the operational document; this is the specification's own ledger of where the
-build stands against the table above, as of 24 September 2026 (ADR-049 Stage 2 §4):
+build stands against the table above:
 
 - **`pg_dump`, not `pg_basebackup`.** The table names the latter. `local-lite` has no WAL archive to
   ship and a physical copy is tied to the server's page layout, so the implementation takes a
@@ -687,7 +683,7 @@ build stands against the table above, as of 24 September 2026 (ADR-049 Stage 2 �
 - Secrets from the environment or a secret manager, never in `osprey.yaml`, never in an image.
 - Containers run as non-root, read-only root filesystem, no capabilities beyond the defaults.
 - Images signed and verified at pull; digests pinned in `deploy/versions.lock`. For the three
-  OspreyFlow-owned images, that pin now comes from a real published release (round 11's own
+  OspreyFlow-owned images, that pin now comes from a real published release (
   `.github/workflows/release.yml`, §5 above), resolved over the network rather than assumed.
 - Audit written to a separate volume with a separate retention policy and separate access.
 - No telemetry leaves the deployment. OpenTelemetry collection terminates inside it.
@@ -704,7 +700,7 @@ those runs passed** — this is not a bug that fails loudly; it is a live store 
 reclaims memory across workloads nor holds its own query performance steady as data accumulates.
 In any real deployment, data always accumulates — an investigation is added to, not replaced.
 
-**Cause found, and largely fixed, 27 September 2026 (round 13bb) — this section is narrowed, not
+**Cause found, and largely fixed — this section is narrowed, not
 withdrawn.** The mechanism behind "never gave any of it back" is now named: ArcadeDB **24.11.1**
 retained memory per *database lifecycle*, independent of workload. Isolated to its smallest form,
 five bare `create` → `apply_schema` → `drop` cycles — writing no data, running no query — took the
@@ -717,14 +713,14 @@ plateaus at ~1.5 GiB and stays flat (1.499 GiB at five cycles, 1.516 GiB at twen
 six-cycle sustained-load curve improves accordingly, measured on the same host with the same
 workload:
 
-| | round 08 (24.11.1, `-Xmx6G`) | round 13bb (25.5.1, `-Xmx8G`) |
+| | ArcadeDB 24.11.1, `-Xmx6G` | ArcadeDB 25.5.1, `-Xmx8G` |
 | --- | --- | --- |
 | ArcadeDB RSS, cycle 1 → 6 | 6555.6 → 7174.1 MiB | **2165.8 → 2470.9 MiB** |
 | growth per cycle | 123.7 MiB | **61.0 MiB** |
 | heap used at cycle 6 | 5201.9 / 6144 MiB | **976.5 / 8192 MiB** |
 | query latency, cycle 6 ÷ cycle 1 | 1.29× | **1.12×** |
 
-`Claude outputs/handoff/sustained_load_results_round13bb.csv` has the full curve beside round 08's.
+The full curve for both versions is kept alongside this record.
 
 **What this does not settle, and why the section stays.** Growth per cycle is halved and
 flattening (cycles 5→6 added 7.2 MiB), not zero — so a long-running instance still accumulates,
@@ -734,7 +730,7 @@ section was first written from (117s → 151s → 203s on an identical workload)
 in it. Re-measuring the original three-run sequence against 25.5.1 is the work that would let this
 section be closed rather than narrowed; it has not been done.
 
-**Re-measured, round 13e, 28 September 2026 — §8 STAYS OPEN.** The original closing-pass fixture
+**Re-measured — §8 STAYS OPEN.** The original closing-pass fixture
 load is no longer runnable as written (`test_phase8_exit_over_the_wire.py` supersedes it); the
 sustained-load harness's own per-cycle load is the fallback the brief names, run fresh against a
 `local-lite` deployment on the current pin (`25.5.1`, `-Xmx8G`), never torn down between cycles:
@@ -772,14 +768,13 @@ measured, not settled. Two upstream issue drafts for the ArcadeDB tracker — th
 periodic restarts to recover memory, and **the safe interval between them is not yet known** —
 nobody has measured how far this degradation goes, whether it plateaus at some working-set size
 or continues climbing without bound toward the same resource ceiling that a single heavy session
-can already reach on its own (`07_BUILD_PLAN.md`'s own Phase 8 "ArcadeDB stability" stage has the
-single-session measurement this finding sits alongside, not on top of — that stage closed against
-a fresh-install criterion; this finding is what happens *after* a fresh install, under continued
-real use, and neither stage's own measurement answers the other's question).
+can already reach on its own (a separate, single-session measurement closed against a
+fresh-install criterion sits alongside this finding, not on top of it; this finding is what
+happens *after* a fresh install, under continued real use, and neither measurement answers the
+other's question).
 
-**Built, 25 September 2026 — `tests/harness/test_sustained_load.py::test_arcadedb_memory_and_
-query_latency_under_sustained_ingest_cycles`, pulled forward per `07_BUILD_PLAN.md` Stage 2a's own
-addendum, which has the full account: methodology, the six-cycle curve, a real defect found
+**Built — `tests/harness/test_sustained_load.py::test_arcadedb_memory_and_
+query_latency_under_sustained_ingest_cycles`. Full account: methodology, the six-cycle curve, a real defect found
 (`seed_fixture_corp.py` is not safe to re-seed against the same database — `GraphArcadeDBAdapter.
 upsert_nodes` is insert-only), and a platform-dependence finding about `ramOsUsed`/`ramOsTotal`
 being the Docker Desktop VM's own memory on macOS rather than this container's cgroup scope.**
@@ -792,9 +787,8 @@ workloads that a reader comparing the two figures should not average together. Q
 latency showed no growth trend across six cycles, though the fixed query sample this test runs
 (geobins, one Search Around, one pathfinder call, three resolution-threshold projections) is a much
 lighter workload than the closing-pass walkthrough this section's own figures above were measured
-against, so the two latency figures are not directly comparable either. **Decided, 26 September
-2026 (round 08)** — RSS growth ≤400MiB/cycle average, query-sample wall time at cycle 6 ≤3× cycle
+against, so the two latency figures are not directly comparable either. **Decided** — RSS growth
+≤400MiB/cycle average, query-sample wall time at cycle 6 ≤3× cycle
 1, cycle 6's own RSS below 85% of the Docker VM's own configured memory (read live via `docker
-info`, never hard-coded); `07_BUILD_PLAN.md` Stage 2a's addendum has the measured numbers from
-both this test's own runs (round 01 and round 08) beside each threshold. The test now asserts all
-three for real.
+info`, never hard-coded); the measured numbers from this test's own runs are recorded beside
+each threshold. The test now asserts all three for real.

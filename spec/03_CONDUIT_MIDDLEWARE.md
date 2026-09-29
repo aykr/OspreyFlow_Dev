@@ -78,7 +78,7 @@ GET    /v1/investigations/{id}/history         addressable step history
 POST   /v1/investigations/{id}/history/{step}  restore to a step
 ```
 
-**Authorization, added in Phase 3.** Every route above an investigation id checks the calling
+**Authorization.** Every route above an investigation id checks the calling
 `Principal.org_unit` against that investigation's own `owning_unit` — set once at creation (or
 branch) from the acting principal's own unit, the same shape as `Handling.owning_unit`
 (`01_DOMAIN_MODEL.md` §2.2), not a new concept. This is deliberately *not* `clearance`-gated: a
@@ -122,9 +122,9 @@ The delta protocol, client-bound:
 Sequence numbers are monotonic per investigation. A client that misses a sequence reconnects and
 requests a full snapshot rather than attempting to patch — silent divergence between the
 server's picture and the analyst's is the failure this protocol exists to prevent. `snapshot` is
-that full-state response, added in Phase 3: the five ops above are this section's own
-illustrative set, and a full-snapshot reconnect path is required without a shape given for it
-before Phase 3 filled it in — the same way `GraphPort` grew past its own illustrative sketch
+that full-state response: the five ops above are this section's own illustrative set, and a
+full-snapshot reconnect path is required even though no shape was given for it in that
+illustrative set — the same way `GraphPort` grew past its own illustrative sketch
 (`00_ARCHITECTURE.md` §2.1). Its `filtered_count` is the same figure `expand`'s response and the
 status bar both carry, computed fresh for whichever principal is reconnecting (§4).
 
@@ -138,12 +138,32 @@ POST   /v1/search                       federated search across graph, documents
 POST   /v1/paths                        k-shortest paths between two entities
 POST   /v1/patterns/preview             cardinality estimate for a visual query
 POST   /v1/patterns/run                 execute; large results return a job id
+POST   /v1/patterns/save                persist the calling principal's own pattern (a version bump if it exists)
+GET    /v1/patterns                     the calling principal's own saved patterns
+GET    /v1/patterns/{pattern_id}        load a saved pattern (?version= for an older one)
 POST   /v1/analytics/histogram          cross-filter histogram set
+POST   /v1/analytics/cross-filter       the same cross-filter, one histogram per requested dimension
 POST   /v1/analytics/geobins            server-side spatial binning
-POST   /v1/analytics/sightings          the "snail trail" — device/location sightings over time (Phase 8 Stage 4f, B18)
-POST   /v1/compute/{metric}             submit a metric job over a working set
+POST   /v1/analytics/sightings          the "snail trail" — device/location sightings over time (B18)
+POST   /v1/analytics/geometries         batched geometry lookup — a Location's geometry_ref resolved to WGS84, one round trip for a whole working set
+POST   /v1/investigations/{id}/compute/{metric}   submit a metric job over that investigation's own working set
 GET    /v1/jobs/{id}/events             SSE progress stream
 ```
+
+**Saved patterns are private to the principal who saved them.** `GET /v1/patterns` lists only the
+calling principal's own — `PatternStore.list_authorized` filters by owner in the query itself, not
+after fetching everything, and `GET /v1/patterns/{id}` applies the same authorization to a single
+load. Not investigation-scoped: a saved pattern is a reusable query shape, not part of any one
+investigation's own working set. `POST /v1/patterns/save` raises the identical
+`PatternNotFoundError` (404) when `pattern_id` names a pattern the caller does not own — the same
+existence-leak collapse every other route in this surface uses, enforced inside the save itself
+rather than a separate ownership check beforehand.
+
+**`POST .../compute/{metric}` is nested under an investigation** — a metric job runs over one
+investigation's own working set, never a principal-wide one, so the investigation id is part of
+the path, not a body field. Submits a `ComputePort` job (Tier 1 in-process for `local-lite`, a
+queued worker for `cluster`) and returns immediately with a job id; `GET /v1/jobs/{id}/events`
+streams its progress.
 
 ### 3.4 Ingest, extraction, assessment
 
@@ -164,7 +184,98 @@ POST   /v1/investigations/{id}/assumptions
 GET    /v1/investigations/{id}/assumptions  list
 POST   /v1/investigations/{id}/export    runs the handling gate; may return 409 with blockers
 GET    /v1/exports                       the compliance-facing export ledger (ADR-047's own Gap 2) — role-gated, not per-investigation
+GET    /v1/investigations/{id}/ingest/candidates   extraction candidates for one document (?document_id=)
 ```
+
+**The block above illustrates an earlier, abandoned ingest design — `09_INGEST_STUDIO.md`'s own
+recipe-based routes, below, are what the Ingest Studio actually calls.** Neither block is pruned:
+the illustrative one predates the Studio and matches no route this app registers under that shape,
+but removing it would trade a wrong row for a blank one rather than a correct one, so it stays as a
+disclosed historical illustration alongside the real surface.
+
+```
+GET    /v1/ingest/connectors                               the connector catalogue (09_INGEST_STUDIO.md §2)
+POST   /v1/ingest/recipes                                   Connect: create a draft
+GET    /v1/ingest/recipes                                   Connect: the author's own unit's drafts
+GET    /v1/ingest/recipes/{recipe_id}                        load one draft
+PATCH  /v1/ingest/recipes/{recipe_id}                        Connect: edit a draft still in progress
+GET    /v1/ingest/recipes/{recipe_id}/profile                Profile: run and read the automatic source profile
+GET    /v1/ingest/transforms                                 Map: the Knowledge Adapter catalogue
+GET    /v1/ingest/recipes/{recipe_id}/map/sample-rows/{row_index}   Map: page through a real row bound to the template
+PUT    /v1/ingest/recipes/{recipe_id}/row-template            Map: save the row template
+POST   /v1/ingest/recipes/{recipe_id}/map/handling-preview    Map: preview an element's handling/provenance override
+POST   /v1/ingest/recipes/{recipe_id}/verify                  Verify: the dry run — no write of any kind
+GET    /v1/ingest/recipe-registry                             Publish: every recipe the principal's own unit owns, any status
+POST   /v1/ingest/recipes/{recipe_id}/publish                 Publish: draft → published; the sign-off itself
+POST   /v1/ingest/recipes/{recipe_id}/versions                Publish: reopen a published recipe as a new draft version
+PATCH  /v1/ingest/recipes/{recipe_id}/schedule                Publish: change a published recipe's schedule
+```
+
+**Connect (`POST`/`GET`/`PATCH .../recipes`) is `SOURCE_AUTHOR`-gated**, the studio role that also
+gates listing source files (`GET /v1/ingest/source-files`) — creating or editing a draft and
+picking a source to point it at are the same action, one step apart. `GET .../recipes/{id}`
+rejects (409, via `RecipeNotADraftError`'s own sibling checks elsewhere in this family) once a
+recipe has left `draft` status for the edit route, but stays readable regardless of status.
+
+**Profile and Map read the source under the requesting principal's own clearance**, the same
+shape-masking §3.6's `explain`/dossier reads already apply: `GET .../profile` calls the
+profiler and `GET .../map/sample-rows/{row_index}` reads the identical bounded sample, both masked
+identically so a principal who can't see the source's own marking never sees more of it through
+one route than the other. `GET /v1/ingest/transforms` and `GET /v1/ingest/connectors` are
+deployment metadata (the Knowledge Adapter registry, the connector catalogue) — authenticated but
+not investigation-scoped and not audited, the same category `GET /v1/ontology` already is.
+
+**Map's own two writes are gated on the draft already having a profile.** `PUT .../row-template`
+(the template save) and `POST .../map/handling-preview` (what an in-progress element's handling
+would resolve to) both reject with `RecipeNotReadyForProfileError` until `GET .../profile` has
+actually run — an override needs a baseline handling to tighten against, and an incomplete draft
+has none. `PUT .../row-template` also checks every element's own handling override actually
+tightens, never loosens, the source-level marking Connect set (`validate_handling_tightens`) — the
+same independent-minimums rule Profile's own masking already enforces, checked here before the
+template is persisted rather than only at read time. `POST .../map/handling-preview` calls the
+identical resolver Verify's own dry run calls, so Map and Verify never disagree about what an
+override produces.
+
+**Verify is the dry run: no Parquet staging, no graph write, no transaction.** An `on_match:
+reference` element's lookup against the existing graph still goes through the ordinary,
+principal-scoped `GraphPort.find_node` — an access-filtered miss reads as "would create" exactly
+like a genuine miss would, so a dry run cannot be used to discover that a higher-classification
+match exists. A completed run, rejections included, marks the recipe verified; publishing checks
+that flag rather than re-running the dry run itself.
+
+**Publish, its schedule, and reopening a version are all `SOURCE_APPROVER`-gated**, a distinct
+role from `SOURCE_AUTHOR` — the source-approver's sign-off *is* the publish action, not a separate
+step, and reopening a published recipe for a new mapping (`POST .../versions`) needs the identical
+sign-off since publishing the new version *is* the approval; there is no separate "approve a
+changed mapping" action. `GET /v1/ingest/recipe-registry` is Publish's own listing, every status
+the principal's own unit owns, not only drafts — a distinct path from `GET /v1/ingest/recipes`
+rather than a query parameter, since the latter already registers `{recipe_id}` in the same
+position and a literal suffix there would collide with it. `POST .../publish` writes the recipe's
+own YAML and commits it before flipping the registry row to `published` — a published row never
+exists without a matching commit, the safer order given the repository is the record. `PATCH
+.../schedule` re-commits the same YAML with a new schedule without bumping the version — the
+mapping itself is unchanged, only when it runs.
+
+**Unstructured extraction and its review queue — `09_INGEST_STUDIO.md` §7's own mechanism, nested
+under an investigation for audit-context consistency with `run_studio_recipe` above, the identical
+reasoning:**
+
+```
+POST   /v1/investigations/{id}/ingest/extract                          run extraction over a document's text
+POST   /v1/investigations/{id}/ingest/candidates/{candidate_id}/accept accept one candidate into the graph
+POST   /v1/investigations/{id}/ingest/candidates/{candidate_id}/reject reject one candidate
+```
+
+`investigation_id` here is audit attribution, not an access-control scope — an accepted candidate's
+minted node joins the shared graph/Postgres registry like any other write, the same boundary
+`run_studio_recipe` already draws. `POST .../extract` calls the configured extraction model against
+the given text under the requesting principal's own handling marking and returns the raw
+candidates for review (`GET .../ingest/candidates`, above, lists them back). Accept and reject are
+both single-candidate, no bulk operation of either kind exists — `09_INGEST_STUDIO.md` §7's own
+"no bulk accept" is structural here, not a checked rule: the route takes exactly one
+`candidate_id`, never a list. Accepting mints the node (optionally with `properties_override`);
+rejecting discards the candidate with no node ever created, and neither ever produces a dossier
+span (§3.6) until a candidate has actually been accepted.
 
 ### 3.5 Resolution
 
@@ -176,9 +287,43 @@ POST   /v1/resolution/split              analyst-asserted NOT_SAME_AS
 GET    /v1/resolution/explain/{cluster}  the comparison vector and score that produced a cluster
 ```
 
+**Nested under an investigation, not the bare top-level paths above** — the same shape
+`resolution.py`'s own docstring already discloses for `/v1/resolution/link`: every route in this
+section is actually nested, since a session threshold and a resolution decision are both scoped to
+one investigation's own working set, not global to the principal:
+
+```
+GET    /v1/investigations/{id}/resolution/threshold          the same ThresholdResponse PUT sets
+PUT    /v1/investigations/{id}/resolution/threshold          set τ; triggers a reproject delta
+POST   /v1/investigations/{id}/resolution/link               analyst-asserted SAME_AS
+POST   /v1/investigations/{id}/resolution/split               analyst-asserted NOT_SAME_AS
+GET    /v1/investigations/{id}/resolution/explain/{cluster}  the read described just above
+```
+
 `explain` is required, not a nicety. An analyst who cannot see why two records were treated as
 one person will either trust the merge blindly or distrust the whole system. Return the
 per-comparison match weights, not just the total.
+
+**A manual link, unlike a split, can grow a saved pattern's or hotlist's own match set** — `POST
+.../link` evaluates every watch this principal's hotlists/monitors/saved patterns declare, the
+identical evaluation `run_studio_recipe` (§3.4) already performs on an ingest, since a `SAME_AS`
+write and an ingested row are both, from a watch's own point of view, new evidence to check.
+`POST .../split` never evaluates anything — a `NOT_SAME_AS` write can only shrink a match set, and
+a watch has nothing to newly fire on.
+
+**The corpus-wide resolution trigger is a separate route, deliberately not investigation-scoped:**
+
+```
+POST   /v1/resolution/{entity_type}/run   re-run resolution for one entity type across the whole corpus
+```
+
+`ADR-025`'s own mechanism for a resolution comparison config that changed, or a backlog that never
+ran — this acts on every entity of the given type regardless of which investigation's working set
+it happens to appear in, since the resolution `SAME_AS` edges it writes are corpus-wide facts, not
+investigation-scoped ones (§4 already collapses them per-session at read time, at whatever
+threshold that session has set). Returns immediately with an accepted job id; the run itself is
+the same post-ingest resolution job `run_studio_recipe` (§3.4) also submits per resolvable entity
+type.
 
 ### 3.6 Dossier
 
@@ -186,7 +331,7 @@ per-comparison match weights, not just the total.
 GET    /v1/investigations/{id}/dossier/documents/{document_id}   a message, with its entity spans
 ```
 
-Phase 6a Stage 4 (B6): the Dossier's own read, backing `apps/workspace/src/dossier/` — "the
+(B6) The Dossier's own read, backing `apps/workspace/src/dossier/` — "the
 shared endpoint's messages... rendered with the entity spans highlighted in place." A document's
 raw text (persisted once, at extraction time, keyed by `document_id` and scoped to the extracting
 principal's own `owning_unit` — the same `WHERE owning_unit = $2` shape `get_authorized` already
@@ -228,7 +373,110 @@ image deliberately does not carry). Admin-role-gated (`require_admin_role`, `osp
 one process that already has every module both actions need. `build-basemap` streams its own real
 progress the same way Launch does (`text/event-stream`, one `{"line": ...}` per step, `event:
 complete` last); `verify` is fast enough to answer as a plain JSON `{"passed": ..., "issues": [...]}`.
-Not yet called from any UI — `Stage 2 §7`'s own post-launch console has no screen built yet.
+Not yet called from any UI — the post-launch console has no screen built yet.
+
+### 3.8 Hotlists, monitors, alerts
+
+```
+POST   /v1/hotlists                     create; identifier plus a review date
+GET    /v1/hotlists                     the calling principal's own hotlists
+POST   /v1/monitors                     create a standing query the evaluator watches
+GET    /v1/monitors                     the calling principal's own monitors
+GET    /v1/alerts                       the calling principal's own alert inbox
+GET    /v1/alerts/{alert_id}            one alert, expanded to its jumpable referents
+POST   /v1/alerts/{alert_id}/jump       branch a new investigation seeded from the alert
+```
+
+**Owner-only, not investigation-scoped** — a hotlist or a monitor is a standing watch that outlives
+any one investigation, and an alert belongs to the principal who owns the watch that fired it, not
+to whichever investigation happens to be open when it does. `POST .../jump` branches a fresh
+investigation from `Investigation.branched_from`, seeded with the alert's own referent nodes — the
+identical branching mechanism §3.1's `POST /v1/investigations/{id}/branch` already uses, not a
+second implementation of it. `Alert.investigation_id` (the triggering event's own investigation,
+where the underlying ingest or resolution that raised the alert happened) may be absent — a
+resolution-triggered alert carries no single investigation — and the jump still succeeds, simply
+unlinked (`Investigation.branched_from` is `None` rather than pointed at a wrong investigation).
+
+### 3.9 Sites
+
+```
+POST   /v1/investigations/{id}/sites                          create; multipart, a label plus the image itself
+GET    /v1/investigations/{id}/sites/{site_id}                one site's own metadata
+GET    /v1/investigations/{id}/sites/{site_id}/image           the site's uploaded image, proxied
+PATCH  /v1/investigations/{id}/sites/{site_id}/control-points  set the georeferencing control points
+POST   /v1/investigations/{id}/sites/{site_id}/grid            place the grid; its cells become real location entities
+```
+
+A **site** is A1's own mechanism (`08_ACCEPTANCE_SCENARIOS.md`): an uploaded floor plan or
+diagram, georeferenced by a set of control points, whose grid cells become real location entities
+once placed. `POST .../sites` is the first multipart upload in the Conduit — the image's own
+dimensions and format are read from the bytes themselves, never trusted from the browser-supplied
+content-type header, and an unsupported format is refused (422) before anything is stored. The
+image itself is never handed to the browser as a direct object-store URL — `GET .../image` proxies
+it, the same reasoning as the tile proxy (§3.7's neighbour in spirit, `00_ARCHITECTURE.md` §1.2):
+credentials stay server-side and every read is a request this process can see, not a signed URL
+handed to whoever asks. Setting control points is a distinct step from creating the site or placing
+its grid — a site can exist, image and all, before it is georeferenced. `POST .../grid` runs the
+site-grid connector and the ordinary recipe engine synchronously against the placed grid, loading
+one geometry per cell; redrawing the grid is idempotent (`on_match: reference` in the connector's
+own recipe) rather than creating duplicate location entities.
+
+### 3.10 Ontology and map
+
+```
+GET    /v1/ontology                              entity/edge type names, channels, shapes, identifiers
+GET    /v1/map/providers                        the deployment's declared map providers, for the layer control
+GET    /v1/map/tiles/{provider_id}/{z}/{x}/{y}   the tile proxy for a tier-3/4 provider
+GET    /v1/map/local-source/{provider_id}        a tier-1/2 provider's local PMTiles file, over HTTP
+```
+
+**`GET /v1/ontology`** is what the Glass's channel/shape mapping (`02_GLASS_FRONTEND.md` §4: "Hue
+is entity type; shape is entity type too") reads, rather than a hardcoded copy of `packages/
+ontology/default.yaml` in the frontend — the ontology already carries `EntityTypeDef.channel`/
+`.shape` per type, and duplicating that mapping client-side would drift the moment a deployment's
+ontology changes.
+
+**The map routes are a real spec silence, not an oversight in this table alone** — `02_
+GLASS_FRONTEND.md` requires the layer control this section documents but never named the endpoint
+it reads from; recorded as a proposal there, not settled spec. All four routes above are
+deployment-wide configuration/infrastructure metadata: authenticated so an unauthenticated
+caller learns nothing about this deployment's providers or credentials, but not investigation-
+scoped and not audited. `GET .../tiles/...` resolves a `credential: env:VAR` reference server-side
+and caches the fetched tile to object storage per the provider's own TTL, so the browser never
+holds a tier-3/4 credential or talks to a hosted provider directly. `GET .../local-source/{id}`
+exists because a browser cannot fetch a `file://` URI at all — it rewrites a tier-1/2 provider's
+local source to this route instead, answers ranged `Range` requests itself (the `pmtiles` protocol
+handler reads its directory and tile blocks via ranged fetches against this one file), and 404s
+with a named `detail` when the file has not been built, which `apps/workspace/src/map/
+basemapAvailability.ts`'s own preflight check depends on to show "basemap not built" rather than a
+blank map.
+
+### 3.11 Node provenance actions
+
+```
+POST   /v1/nodes/{node_id}/confirm   inferred/unresolved → asserted, human-attested
+POST   /v1/nodes/{node_id}/retract   asserted → inferred, the mirror of confirm
+POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/run   run a published recipe against a file
+```
+
+`confirm`/`retract` supersede the node (`GraphPort.supersede_node` — a fresh id, never the original,
+since the superseded revision's own index entry is still present) rather than editing it in place;
+each is valid from exactly one starting state (`confirm` from `inferred`/`unresolved`; `retract`
+only from `asserted`) and raises rather than silently succeeding against the wrong one — a caller
+attempting either most likely holds a stale view of the node. Confirming clears the superseded
+`extraction_confidence` rather than leaving a stale model-reported figure sitting on a now
+human-attested fact; retracting does not attempt to reconstruct the original figure, it reverts
+honestly to `inferred` with no confidence value. Both flag any judgement that cites the superseded
+node as supporting evidence, within the same session — `08_ACCEPTANCE_SCENARIOS.md`'s own
+"retraction propagates" assertion, generalised to every supersede either route performs.
+
+`POST .../ingest/recipes/{recipe_id}/run` is Loader-gated (`StudioRole.LOADER`) — §8's "Loader: run
+a published recipe against a file at or below their own clearance." `source_location`, when given
+in the request, is that file; omitted, it repeats against the recipe's own recorded location, and
+the recipe's own deduplication key makes a re-run idempotent (§6: "re-runnable"). A load that
+actually creates something submits a post-ingest resolution job per resolvable entity type the
+recipe declares — the only route through which an ingest can raise a hotlist or saved-pattern
+alert against a live deployment, not fixture data assembled by a test harness.
 
 ## 4. The Working-Set Service
 
@@ -246,8 +494,8 @@ right dialogue.
 **Projection.** The stored set is source-fidelity. The projection applied on read is: resolution
 collapse at the session's τ, handling filter for the principal, then delta computation against
 what the client last acknowledged. Projection is pure and cheap; it runs per request. Resolution
-collapse lands in Phase 6 with Splink; the handling filter and delta computation are real from
-Phase 3.
+collapse is implemented with Splink; the handling filter and delta computation are implemented
+too.
 
 **Why the stored set can hold more than one principal's own view, and why the filter must
 therefore run on every read, not once at write time.** An investigation is not single-principal
@@ -312,8 +560,7 @@ spatial predicates are cheap, and the graph holds the `Location` node with a `ge
 pointing at that row — never `lon`, `lat` or a source easting and northing as node properties.
 A `Location` with no single point, such as a jurisdiction or an administrative boundary, can carry
 a polygon-shaped `geometry_ref` instead of a point one (`schemas/analytics.py`'s `GeometryRecord.
-kind`, Phase 5's known-gaps closure) — or none at all, so coordinates can never be a required
-property on the type.
+kind`) — or none at all, so coordinates can never be a required property on the type.
 Putting geometry in the graph store would make spatial filtering a traversal, which is the wrong
 shape of query and constrains engine choice for no gain.
 

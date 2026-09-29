@@ -13,14 +13,14 @@ There are two, and they are not interchangeable.
 
 | Tier | Test | What it is |
 | --- | --- | --- |
-| **The closing-pass proof** | `tests/scenarios/test_phase8_exit_over_the_wire.py` | The rendered `local-lite` deployment, **through the analyst's own door**: OIDC authorization code with PKCE against the deployment's real Keycloak as the `--demo-analyst` subject, every call through the workspace's nginx proxy, the delta stream through the ticket exchange. No store port, no in-process app. Opt-in (`OSPREY_TEST_OVER_THE_WIRE=1`), its own CI job (`over-the-wire-exit-test`), `make exit-over-the-wire`. **This is the test `07_BUILD_PLAN.md`'s milestone line cites.** |
+| **The closing-pass proof** | `tests/scenarios/test_phase8_exit_over_the_wire.py` | The rendered `local-lite` deployment, **through the analyst's own door**: OIDC authorization code with PKCE against the deployment's real Keycloak as the `--demo-analyst` subject, every call through the workspace's nginx proxy, the delta stream through the ticket exchange. No store port, no in-process app. Opt-in (`OSPREY_TEST_OVER_THE_WIRE=1`), its own CI job (`over-the-wire-exit-test`), `make exit-over-the-wire`. **This is the test the V1 END TO END milestone rests on.** |
 | **The fast developer tier** | `tests/scenarios/test_phase8_exit_criterion_end_to_end.py` | The more complete walkthrough — every row below, including the ingest-dependent ones — driven in process (`TestClient`) against `make dev-up`'s published stores. Fast, and what a developer runs while changing a route. |
 
 **Why R5 was needed.** The in-process test reaches ArcadeDB, Postgres and Valkey directly on
 published ports. A rendered deployment publishes only the workspace and Keycloak — correct for a
 deployment (`05_DEPLOYMENT.md` §7), and fatal for that test. Until R5 it was therefore the case
 that the single test the milestone rested on **had never been run against the thing the milestone
-is about**, which `07_BUILD_PLAN.md` records as round 13's finding.
+is about** — a real finding, since fixed by ruling R5.
 
 **The over-the-wire test does not cover every row, and its own module docstring has the row-by-row
 table.** The reason is one fact: a rendered deployment gives an analyst **no route by which to
@@ -34,9 +34,9 @@ B1–B3 on 27 September 2026 (the ingest root, owner ruling R6), B7/B8/B15–B18
 the rendered model tier was pinned to the developer stack's. The table below carries each one's proof.
 
 **Owner ruling R8, 27 September 2026 — those remaining rows are milestone-blocking, and this
-section used to leave their weight unstated.** Round 13c put the question to the owner because
+section used to leave their weight unstated.** The question was put to the owner because
 this section could be read two ways: it nominates the over-the-wire test as the one
-`07_BUILD_PLAN.md`'s milestone line cites (and it is green), while also saying that test does not
+the V1 END TO END milestone rests on (and it is green), while also saying that test does not
 cover every row. R8 settles it:
 
 > Clause 3 of V1 END TO END is **NOT REACHED — Reading B**. The milestone requires **every row of
@@ -48,35 +48,35 @@ cover every row. R8 settles it:
 tier (`test_phase8_exit_criterion_end_to_end.py`, in process against published stores) does **not**
 count towards clause 3, however green it is.
 
-**Built, 27 September 2026 (round 13cb) — six rows now clear that bar.** A third seed dataset,
+**Built — six rows now clear that bar.** A third seed dataset,
 `scenarios` (`scripts/seed_scenarios.py`, `--seed hmp,fixture-corp,scenarios`), puts Scenario B's
 person layer, the shared messaging handle, the seized handset with its two SIMs and the device's
 sightings into a rendered deployment.
 
-| Row | Status after 13cb | Proven by |
+| Row | Status | Proven by |
 | --- | --- | --- |
 | B7 | **over the wire** | `test_b7_a_shared_messaging_handle_is_common_to_the_second_cohort` |
 | B8 | **over the wire** | `test_b8_the_handle_is_linked_to_the_shared_endpoint_asserted_at_one` |
 | B15 | **over the wire** | `test_b15_both_sims_link_to_one_device_in_one_traversal` |
 | B17 | **over the wire** | `test_b17_the_devices_location_events_are_reachable_and_windowed` |
-| B16 | **over the wire + the Glass** | `test_b16_…` for the data; `apps/workspace/live/scenario-b-timeline.spec.ts` for the second track, round 13cde |
-| B18 | **over the wire + the Glass** | `test_b18_the_sightings_form_an_ordered_track` (now also through `POST /v1/analytics/sightings`); `apps/workspace/live/scenario-b-timeline.spec.ts` for the trail advancing under playback, round 13cde — after a seed defect, see below |
-| A1 | **over the wire** | `test_a1_a_site_grid_is_placed_and_its_cells_become_location_entities`, `test_a1_redrawing_the_grid_does_not_duplicate_its_cells`, `test_a1_a_cells_geometry_reference_resolves_to_its_centroid` (the ref names the cell's polygon), `test_a1_incidents_geocode_into_the_cells_that_contain_them` (round 13cf, owner rulings R9 and R10) |
-| A6 | **over the wire** | Round 13cdd: `test_a6_the_reports_for_the_selection_open_with_a_source_locator_each` — not an extraction row |
-| B6 | **over the wire + the Glass** | Round 13cdd: `test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place`; round 13cg: `apps/workspace/live/scenario-b-document.spec.ts` for the highlight in place |
+| B16 | **over the wire + the Glass** | `test_b16_…` for the data; `apps/workspace/live/scenario-b-timeline.spec.ts` for the second track |
+| B18 | **over the wire + the Glass** | `test_b18_the_sightings_form_an_ordered_track` (now also through `POST /v1/analytics/sightings`); `apps/workspace/live/scenario-b-timeline.spec.ts` for the trail advancing under playback — after a seed defect, see below |
+| A1 | **over the wire** | `test_a1_a_site_grid_is_placed_and_its_cells_become_location_entities`, `test_a1_redrawing_the_grid_does_not_duplicate_its_cells`, `test_a1_a_cells_geometry_reference_resolves_to_its_centroid` (the ref names the cell's polygon), `test_a1_incidents_geocode_into_the_cells_that_contain_them` (owner rulings R9 and R10) |
+| A6 | **over the wire** | `test_a6_the_reports_for_the_selection_open_with_a_source_locator_each` — not an extraction row |
+| B6 | **over the wire + the Glass** | `test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place`; `apps/workspace/live/scenario-b-document.spec.ts` for the highlight in place |
 | B13, B14 | **over the wire** | `test_b13_an_ingest_fires_an_alert_naming_the_identifier_document_and_rule`, `test_b14_an_alert_opens_into_an_investigation_linked_to_the_original` |
 | A7 | **over the wire** | `test_a7_reports_can_be_filtered_to_one_item_category`, `test_a7_an_unknown_field_name_is_refused_rather_than_ignored` — the "Known gap" below is closed by `EventFilter.value_filters` |
 | A15 | **over the wire** | `test_a15_a_consult_originator_item_blocks_the_export_by_name_then_proceeds_with_a_justification` |
 
-**Every row, by tier — closing pass 13ch (fourth run), 28 September 2026; first built in 13ce.** "Rendered" is
+**Every row, by tier, on the closing-pass proof.** "Rendered" is
 `tests/scenarios/test_phase8_exit_over_the_wire.py` against a fresh-clone `local-lite` install,
-signed in as the demo analyst (27 passed in 13ch). "Glass" is `make glass-live` on the developer stack
+signed in as the demo analyst (27 passed). "Glass" is `make glass-live` on the developer stack
 (`apps/workspace/live/`). `test_scenario_a_over_the_wire` and `test_scenario_b_over_the_wire` are
 the two walkthrough cases that carry the rows with no case of their own.
 
 | Row | Rendered (over the wire) | Glass (live spec) | Performable under R8? |
 | --- | --- | --- | --- |
-| A1 | `test_a1_…` ×4 (grid, redraw, polygon ref, geocode) | — | Yes (built 13cf; re-run 13ch) |
+| A1 | `test_a1_…` ×4 (grid, redraw, polygon ref, geocode) | — | Yes |
 | A2–A5 | `test_scenario_a_over_the_wire` | — | Yes |
 | A6 | `test_a6_…` | — | Yes |
 | A7 | `test_a7_…` ×2 | — | Yes |
@@ -86,7 +86,7 @@ the two walkthrough cases that carry the rows with no case of their own.
 | A15 | `test_a15_…` | `scenario-a-a12-a15.spec.ts` A15 | Yes |
 | B1–B3 | `test_b1_…`, `test_b2_…`, `test_b3_…` | `ingest-folder.spec.ts` | Yes |
 | B4, B5 | `test_scenario_b_over_the_wire` (adapted) | `fixture-corp.spec.ts` (search) | Yes |
-| B6 | `test_b6_…` (data half) | `scenario-b-document.spec.ts` ×2 | Yes (built 13cg; re-run 13ch) |
+| B6 | `test_b6_…` (data half) | `scenario-b-document.spec.ts` ×2 | Yes |
 | B7, B8 | `test_b7_…`, `test_b8_…` | — | Yes |
 | B9, B10 | `test_scenario_b_over_the_wire` | `fixture-corp.spec.ts` (threshold, explain) | Yes |
 | B11, B12 | `test_scenario_b_over_the_wire` | — | Yes |
@@ -101,7 +101,7 @@ Each of the six was **shown red first** against a deployment seeded `hmp,fixture
 green against **the same deployment** after seeding `scenarios` — one variable, not two
 deployments.
 
-**Built, 28 September 2026 (round 13cdb) — B13 and B14.** The seizure record is a real file in
+**Built — B13 and B14.** The seizure record is a real file in
 the deployment's ingest root, read by `connectors/seizure-record-csv.yaml`, walked Connect →
 Profile → Map → Verify → Publish → Run as the demo analyst. `09_INGEST_STUDIO.md`'s rule that a
 row worded "ingest …" is performed through the Studio rather than seeded around is honoured: no
@@ -115,7 +115,7 @@ had.**
    handset is a `Device` carrying `imei`, so a hotlist on it can never fire. B13's own wording
    ("the matched identifier") does not say which, and this is now recorded so the next reader does
    not lose an hour to it.
-2. **Round 13cb's `scenarios` seeder seeded the SIM that B13 is supposed to ingest**, leaving the
+2. **The `scenarios` seeder seeded the SIM that B13 is supposed to ingest**, leaving the
    ingest nothing to create, producing no change entry, and firing no alert against a graph that
    looked entirely correct. The seeder now holds the *earlier* state — the handset with the SIM it
    held before the swap — and B13's ingest reveals the swap, which is what "the **later** seizure
@@ -127,8 +127,8 @@ retro-fire against what is already in the graph, so the row can only be walked o
 where this record has not been ingested. The fixture asserts that precondition by name rather than
 failing three assertions later on an empty list.
 
-**A6 and B6 — walked over the wire in round 13cdd, 28 September 2026.** What follows is the
-account round 13cda wrote when only the first half of the blocker was understood; the correction
+**A6 and B6 — walked over the wire.** What follows is the
+account written when only the first half of the blocker was understood; the correction
 is the subsection after it, kept together because the wrong diagnosis is as instructive as the
 right one. Both are document-view rows, and a document's *spans* come from the extraction-candidates
 store — `GET /v1/investigations/{id}/dossier/documents/{id}` reads `ExtractionCandidates`, not the
@@ -143,7 +143,7 @@ attempts failed`. So `09_INGEST_STUDIO.md` §4's whole review queue was unreacha
 these two rows. **Fixed and proven**: a chat completion issued from inside the Conduit's own
 container, through LiteLLM, to Ollama, now returns 200 with a real completion.
 
-**Both rows are over the wire as of round 13cdd (28 September 2026), and the diagnosis above was
+**Both rows are over the wire, and the diagnosis above was
 wrong in two ways worth recording.**
 
 **First, A6 is not an extraction row at all.** Its own step reads "Open the reports for the
@@ -167,12 +167,12 @@ ChatRequest.format of type string`. Both pins now come from `deploy/compose/dev.
 whole model tier to it.
 
 **B6's data half is proven; its rendering half was the Glass's**, the split B16 and B18
-carried until round 13cde — closed for B6 in round 13cg, below. `test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place`
+carried — closed for B6 below. `test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place`
 extracts from a synthetic transcript, accepts the candidate, and asserts the document view returns
 the submitted text and a span covering the identifier within it — with the span still `inferred`,
 since accepting a candidate does not promote it.
 
-**A1's geocode half, and B16/B18's rendering halves — round 13cde, 28 September 2026.**
+**A1's geocode half, and B16/B18's rendering halves.**
 
 **A1: a cell's `geometry_ref` now resolves**; `services/api/app.py`'s grid route loads a
 `GeometryRecord` per cell, which it had declined to do on a stated reason ("the Conduit has no
@@ -203,12 +203,12 @@ and what "geocode into a cell" writes for an incident. That could be the
 event's cell reference, an edge, or both. The row's result is that "incidents geocode into
 cells", and that output is what a test has to observe.
 
-> **Owner ruling R10, 28 September 2026** (the owner's answers to round 13cf's three questions,
-> given in the maker session). Geocoding records **both** an event property and a graph edge.
+> **Owner ruling R10** (the owner's answers to three open questions, given in the maker session).
+> Geocoding records **both** an event property and a graph edge.
 > Seeded incidents are geocoded by their own points. Incidents that arrive after a grid is drawn
 > are geocoded **on the next redraw**, not on ingest.
 
-**A1 is over the wire — round 13cf.** What R9 left open, as built:
+**A1 is over the wire.** What R9 left open, as built:
 
 - **The polygon's ref.** A new Knowledge Adapter, `polygon_ref`, hashes the cell's four corners
   in the site's CRS (`polygon|crs|x0|y0|…`, TL/TR/BR/BL), with golden cases in
@@ -271,7 +271,7 @@ over-the-wire B18 case (now also through the route), and the live spec (red agai
 `scenarios` seed). The earlier note's claim that the route returned the four sightings "for that
 entity, scope and window" was not a measurement of the request the Glass sends.
 
-**B6 is proven in a real browser — round 13cg.** `apps/workspace/live/scenario-b-document.spec.ts`
+**B6 is proven in a real browser.** `apps/workspace/live/scenario-b-document.spec.ts`
 holds two claims. First, a red state that costs nothing extra to seed: the *seeded* shared
 endpoint's own provenance names a document id (`"fixture"`) that was never really ingested, so its
 Dossier shows the empty state and no highlighted span — shown red by removing `Dossier.tsx`'s own
@@ -296,7 +296,7 @@ one.** This row's own wording above says "the span text **equals** the entity's 
 that is not currently guaranteed. `services/extract/candidates.py::_locate` tries every
 string-valued property longest-first, on the stated reasoning that the longest value is the most
 specific and so least likely to false-positive. Length is only a proxy for specificity, and
-round 13cdd measured where the proxy fails: the pinned model sometimes returns the whole message
+measurement showed where the proxy fails: the pinned model sometimes returns the whole message
 line as `value_raw`, and the span then covered `Incoming from +447700900500: same yard as last
 time.` rather than the endpoint. A span that wide cannot highlight an entity in place.
 
@@ -320,11 +320,11 @@ is not pretended to be done here. A1 needs a placed site grid; B13/B14 need an i
 alert, and `09_INGEST_STUDIO.md`'s own rule is that a row worded "ingest …" is performed through
 the Studio rather than seeded around it.
 
-**Built, 27 September 2026 (round 13bc) — the "no door" half is closed.** The ingest root is
+**Built — the "no door" half is closed.** The ingest root is
 rendered, mounted read-only, listed by Connect, and walked end to end over the wire by
 `tests/scenarios/test_phase8_exit_over_the_wire.py`.
 
-**Built, 27 September 2026 (round 13bf) — B1–B3 are now over the wire.** They are walked through
+**Built — B1–B3 are now over the wire.** They are walked through
 the analyst's own door, Connect → Profile → Map → Verify → Publish → Run, and asserted by test id
 (`test_b1_…`, `test_b2_…`, `test_b3_…`). Four separate things had to be true and none of them was:
 
@@ -357,9 +357,8 @@ data, staging and backups, set on the Components screen and shown in the summary
 renderer bind-mounts it read-only into the Conduit for every profile; and the Studio's Connect
 stage lists that folder's files so an analyst picks one and maps it on the existing Map canvas to
 the POLE model. A browser upload route is explicitly post-milestone, as are Map's two already
-recorded gaps. `07_BUILD_PLAN.md` carries the ruling verbatim and the five pieces that have to
-land together. Until they do, the rows above stay proven at the in-process tier only, and this
-section's table stays as it reads.
+recorded gaps. The ruling requires all five pieces to land together. Until they do, the rows above
+stay proven at the in-process tier only, and this section's table stays as it reads.
 
 ---
 
@@ -405,17 +404,17 @@ regressed in the way that matters most.
 **A15's own assertion was strengthened rather than left to read as proving more than it did.**
 Before this addition, A15 tested the gate — blocks by name, requires justification, carries a
 manifest — and stopped there, silent on whether anything a recipient could actually open ever
-came out the other side. `07_BUILD_PLAN.md`'s own Phase 8 exit criterion, and through it the alpha
+came out the other side. The milestone's own exit criterion, and through it the alpha
 gate (`06_DECISIONS.md` ADR-042), were both satisfiable by an export feature that exported
 nothing: the gate could pass every check and still hand nobody a file. **This is the second
 instance of the same pattern this document's own standing rule 12 names — a gate proving less
 than its name implies — found at the acceptance-scenario level, not only in a test file.** The
-first was Scenario B's own "B12/B13/B14/B20 pass end to end," which `07_BUILD_PLAN.md`'s Phase 7
-entry originally found true only of the single-session walkthrough as written, not a claim that
+first was Scenario B's own "B12/B13/B14/B20 pass end to end," which was originally
+found true only of the single-session walkthrough as written, not a claim that
 hotlists and monitors fire across different analysts — the operational case B13's own CoLP framing
-is actually modelled on. **That finding no longer holds — superseded by Stage 1 (principal
-resolution, `06_DECISIONS.md` ADR-043), proven by `test_a_hotlist_owned_by_one_analyst_fires_
-from_a_different_analysts_own_ingest` (`07_BUILD_PLAN.md` has the full record) — cited here as the
+is actually modelled on. **That finding no longer holds — superseded once principal
+resolution was built (`06_DECISIONS.md` ADR-043), proven by `test_a_hotlist_owned_by_one_analyst_fires_
+from_a_different_analysts_own_ingest` — cited here as the
 historical example the pattern was first found from, not as a still-open gap.** Both instances
 share the same shape: an acceptance row whose literal wording is
 narrower than what a reader assumes it proves, discovered only by checking the row against the
@@ -423,7 +422,7 @@ system's real behaviour rather than against its own passing test. A15's own asse
 what it means: the artefact must exist, in the requested shape, carrying the mark — not only that
 the gate around producing one behaved correctly.
 
-### Implementation note — A2's mechanism (found during Phase 5 Checkpoint 2's live verification)
+### Implementation note — A2's mechanism
 
 `AnalyticsPort.geo_bins`'s precision ceiling (12, enforced by `GeoBinRequest`'s own validator)
 cannot resolve individual grid cells at this fixture's scale: ten yards a few dozen metres apart
@@ -435,7 +434,7 @@ Map view ships both: the `geo_bins` heat layer (`02_GLASS_FRONTEND.md` §3.5 nam
 and it stays correct at a coarser scale this fixture doesn't exercise) and a ranked "hotspot
 cells" panel on `target_id` as the mechanism A2/A3 actually rely on at this fixture's scale.
 
-### Closed — A7's "item category" filter, 28 September 2026 (round 13cdc)
+### Closed — A7's "item category" filter
 
 This was a "Known gap". It read: `EventFilter` carries `investigation_scope`, `window`,
 `node_ids` and `edge_types` only, with no field/value predicate an event property such as
@@ -451,7 +450,7 @@ control lives in the query, never after it), and a field may be a top-level even
 inside the JSON `properties` blob.
 
 **The data was never the problem.** The HMP fixture has written `item_type` on every event since
-Phase 3; only the predicate was missing, which is why this row needed a feature rather than a
+early in the build; only the predicate was missing, which is why this row needed a feature rather than a
 fixture. Four conformance cases hold every adapter to it, including that a field name carrying
 SQL is refused — a value filter is the first place a caller names a *column*.
 
@@ -489,7 +488,7 @@ addendum carries it in full. Two parts:
   applies to citations the principal is not *permitted* to verify, not to citations the system
   itself superseded.
 
-**The visibility half is now built (round 13bd, 27 September 2026), so this document's own
+**The visibility half is now built, so this document's own
 sentence is true again**: a judgement whose supporting node is retracted stays visible to its
 author, flagged for review, with the citation resolved to the successor for display — and the
 citation itself is never rewritten, because the judgement asserted something about the evidence
@@ -508,14 +507,14 @@ now carries it.
 `/v1/nodes/{id}/retract` route rather than through an ingested retraction record.
 `06_DECISIONS.md` ADR-046's addendum records the two decisions that blocks on.
 
-### The fixture's statistical shape is built and proved in Phase 2
+### The fixture's statistical shape is built and proved independently of the map UI
 
 The A1/A2 site-grid mechanism (upload an image, place control points, draw a 10×10 grid) is
-Phase 5's — it needs the Glass's map screen. But the *finding itself* — four yards at ~52% of
+a later capability — it needs the Glass's map screen. But the *finding itself* — four yards at ~52% of
 incidents, two intra-day peaks, Saturday and Sunday at ~34% — is a property of the event data,
-not of the grid UI, and `07_BUILD_PLAN.md` Phase 2 builds and proves it early
+not of the grid UI, and is built and proved early
 (`tests/scenarios/fixtures/hmp.py`, `tests/scenarios/test_hmp_fixture_shape.py`) against a real
-`AnalyticsPort` adapter. Otherwise Scenario A would only discover in Phase 5, discovered by eye
+`AnalyticsPort` adapter. Otherwise Scenario A would only discover, by eye
 in a UI, whether the fixture ever actually carried the finding it is supposed to demonstrate.
 
 ---
@@ -563,9 +562,9 @@ One later seizure record with two SIMs and a handset identifier.
 The unglamorous part. If identifier normalisation is wrong, the shared endpoint in B5 does not
 exist, every subsequent step fails, and — worse — it fails by returning a clean, confident,
 wrong answer. These three steps are the highest-value assertions in either scenario and should
-be the first tests written in Phase 2.
+be among the very first tests written.
 
-### B8's own disposition — the chain split, 23 September 2026, correcting the scenario rather than working around it
+### B8's own disposition — the chain split, correcting the scenario rather than working around it
 
 **B8, B9 and B10 were one chain until this correction; they no longer are.** `Endpoint` carries no
 `resolution` block in `packages/ontology/default.yaml` — checked directly, not assumed — and the
@@ -587,7 +586,7 @@ B8's own corrected pair — there is nothing for the threshold to newly admit. `
 asserted 1.0 does not have. Both assertions are real and provable, on a real `Person` pair, which is
 what B9/B10 now target.
 
-**The fixture gap above — closed, 23 September 2026.** `Person` resolution needed a genuinely
+**The fixture gap above — closed.** `Person` resolution needed a genuinely
 close-but-not-exact pair; neither of this scenario's own two cohorts provides one
 (`_seed_cohort`/`_seed_handle_cohort` write each cohort's own four `Person` nodes with a shared,
 identical `family_name` and sequential `given_names`, no near-duplicate signal at all). **Closed by
@@ -608,8 +607,8 @@ B9 now proves the threshold move for real (Strict: `merged == 0`; Balanced: `mer
 ADR-023 names B8 as its own precedent for using the `SAME_AS` edge *type* for a duplicate-identity
 question — quoted alongside B11's own manual (asserted) link in the same sentence, never
 distinguishing scored from asserted, so its reasoning holds unchanged; ADR-023 needs no correction.
-Every remaining citation (`06_DECISIONS.md` ADR-025 and its own references, `07_BUILD_PLAN.md`'s
-Phase 7/8 entries) groups B8 with B9/B13/B20 as needing the corpus-wide resolution trigger
+Every remaining citation (`06_DECISIONS.md` ADR-025 and its own references) groups B8 with
+B9/B13/B20 as needing the corpus-wide resolution trigger
 (ADR-025) to run against a live deployment — **this grouping is now stale for B8 specifically**:
 under the corrected, ADR-024-pattern write, B8's own edge is produced by the ingest recipe engine
 at load time (ADR-024's own "natural home"), not by a later batch resolution job, so B8 no longer
@@ -634,11 +633,11 @@ Run against both scenarios, on both the `local-lite` and `cluster` profiles.
 | Results are identical on both profiles, allowing only floating-point tolerance on iterative metrics | Transportability |
 | Disconnecting the network mid-scenario on `local-lite` changes nothing | Air-gap capability is a claim that must be tested |
 
-**The two rows above are not part of V1 END TO END — recorded here by the checker, pending the
-owner's own confirmation, 23 September 2026.** The owner defined `07_BUILD_PLAN.md`'s own milestone
+**The two rows above are not part of V1 END TO END — recorded here pending the
+owner's own confirmation.** The owner defined the V1 END TO END milestone
 as a `local-lite`-only, clean-laptop install-and-demo; neither row is exercised by that milestone
 as a consequence of that definition — this document does not claim the owner separately stated a
 view on these two rows in these terms. Both remain real, standing claims for this document to prove
-once their own owning work exists. Profile-parity testing's home is Phase 8a (the `cluster`
-profile); network-partition resilience has no owning phase yet — both entries, with the full
-reasoning, are in `07_BUILD_PLAN.md`'s "Out of scope for v1" list, not deleted from here.
+once their own owning work exists. Profile-parity testing's home is the `cluster`-profile
+work; network-partition resilience has no owning work yet — both entries, with the full
+reasoning, are recorded as out of scope for v1, not deleted from here.

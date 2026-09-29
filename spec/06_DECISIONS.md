@@ -821,7 +821,7 @@ Scenario A, in one place, regardless of which phase proves which step.
 **Why a doc correction rather than a silent partial build.** The alternative to naming this
 explicitly was building Phase 5 against the literal exit text, quietly stopping short of it, and
 letting whoever reads the build plan next assume A12–A15 either don't matter or were somehow
-proven anyway. `CLAUDE.md`'s own standing rule is that a genuine spec gap gets fixed
+proven anyway. The standing rule for this build is that a genuine spec gap gets fixed
 in the spec, not answered once in conversation and left for the next session to rediscover — this
 is that fix. It was also considered and rejected to reorder phases so `ComputePort`/Assessment
 land before Phase 5 purely to satisfy this one criterion; that would solve a documentation problem
@@ -843,8 +843,8 @@ which stays correct regardless of which phase number ends up doing the re-provin
 
 **Status.** Accepted, 17 September 2026.
 
-**Decision.** The `ModelPort` conformance suite (`tests/conformance/model_port/test_suite.py`,
-`process/07_BUILD_PLAN.md` Phase 6 Stage 1) runs against Ollama's `qwen2.5:0.5b-instruct`
+**Decision.** The `ModelPort` conformance suite (`tests/conformance/model_port/test_suite.py`)
+runs against Ollama's `qwen2.5:0.5b-instruct`
 (manifest digest `sha256:a8b0c51577010a279d933d14c2a8ab4b268079d44c5c8830c0a93900f1827c67`), served
 from the `ollama/ollama:0.18.2` container image, itself pinned by digest
 (`sha256:5a5d014aa774f78ebe1340c0d4afc2e35afc12a2c3b34c84e71f78ea20af4ba3` — an ordinary image pin,
@@ -1611,9 +1611,10 @@ can never have a `resolution:` block.
 
 ## ADR-025 — the corpus-wide resolution and alerting trigger: design, not yet built
 
-**Status.** Accepted, 18 September 2026. Undesigned work per `CLAUDE.md`'s "before you write
-code" rule — every inference below is a proposal, flagged as such, not a claim that `docs/`
-already settles it. Where `docs/` does constrain the answer, it is cited directly.
+**Status.** Accepted, 18 September 2026. Undesigned work, per this build's own standing rule that
+a spec silence is said so and proposed rather than filled silently — every inference below is a
+proposal, flagged as such, not a claim that the spec already settles it. Where the spec does
+constrain the answer, it is cited directly.
 
 **The gap, as `07_BUILD_PLAN.md`'s Phase 6 known-gaps list already states it.**
 `resolve_entity_type`, `write_same_as_edges`, `detect_conflicts` and `record_conflicts`
@@ -1811,7 +1812,8 @@ new Phase 7 known-gaps list alongside the status-bar notice, not only here.
 
 **The question, as `DEMO_GUIDE.md` §7 has posed it since it was written, unresolved until
 now.** The VAST Challenge datasets are fabricated scenarios with no real people, clearing the bar
-the real Enron corpus fails (`CLAUDE.md` rule 9; standing rule 3's own naming of the demo). VAST
+the real Enron corpus fails (fixtures must be synthetic and in-repo, with no real intelligence
+data anywhere in this repository or in CI; standing rule 3's own naming of the demo). VAST
 2014 MC2 in particular — GPS tracks, credit-card transactions and employee records for a fictional
 company — maps closely onto this platform's POLE model and would exercise cross-filtering harder
 than any fixture currently in the repository. Three things need settling, the same three this
@@ -2324,9 +2326,9 @@ a spec).
 
 - **`spec/`** — the binding pack: `00_ARCHITECTURE.md` through `09_INGEST_STUDIO.md`, `design/`
   (`tokens.css`, brand foundations), and `06_DECISIONS.md`. `06_DECISIONS.md` reads like a process
-  record — a log of decisions made over time — but is not one: `CLAUDE.md` makes every accepted
-  ADR binding on the same footing as the numbered spec files, so it belongs in `spec/`, not
-  `process/`, despite its own narrative shape. Filenames are unchanged, including their numeric
+  record — a log of decisions made over time — but is not one: this build's own standing rule
+  makes every accepted ADR binding on the same footing as the numbered spec files, so it belongs
+  in `spec/`, not `process/`, despite its own narrative shape. Filenames are unchanged, including their numeric
   prefixes — only the leading path segment changes (`spec/01_DOMAIN_MODEL.md` →
   `spec/01_DOMAIN_MODEL.md`), which is what makes the citation-rewrite below a mechanical prefix
   swap for the numbered files rather than a rename.
@@ -2356,8 +2358,8 @@ docstring's own citation back to the spec and finding the two disagreed. A citat
 that job when the cited file is a `git checkout` away, not a submodule pin or a separate clone
 that can silently drift to a different commit. Splitting into two repositories would also end
 spec-and-code co-versioning — code at one commit, spec at another, with nothing to detect the
-drift — in a build whose own central discipline, stated throughout `CLAUDE.md`, is that the
-repository itself is the source of truth. Two top-level directories inside one repository keep
+drift — in a build whose own central, standing discipline is that the repository itself is the
+source of truth. Two top-level directories inside one repository keep
 every one of those 1,150 citations exactly as load-bearing as it is today, at the cost of nothing
 this ADR can find.
 
@@ -2629,17 +2631,17 @@ already places outside `docs/`.
 **Excluded and private** — the build framework: the prompt register (`.claude/`, including
 `CLAUDE.md`), the phase plan (`07_BUILD_PLAN.md`), the decision log (`06_DECISIONS.md`), the
 distribution/delivery record (`PRODUCT_DELIVERY.md`, new 22 September 2026 — the alpha gate, the
-analyst review, and every owner action described in `process/PRODUCT_DELIVERY.md`'s own text, the
+analyst review, and every owner action described in that record's own text, the
 same "how the product reaches people rather than how it gets built" material this list already
-excludes elsewhere in `07_BUILD_PLAN.md`'s own case), design provenance (`DESIGN_PROVENANCE.md`),
+excludes elsewhere in the phase plan's own case), design provenance (`DESIGN_PROVENANCE.md`),
 the gap inventory (contained entirely within `07_BUILD_PLAN.md` — no separate file), and handover
 documents (`SESSION_HANDOVER.md`, `NEXT_STEPS_PHASE7.md`, `archive/`).
 
 **This is not the same axis as ADR-031's `spec/`/`process/` split, and the overlap needs stating
 precisely rather than left to be inferred.** ADR-031 places `06_DECISIONS.md` inside `spec/`
-because `CLAUDE.md` makes every accepted ADR binding on this build "on the same footing as the
-numbered spec files" — a statement about what is operationally authoritative *for continuing this
-build*, unrelated to who should be allowed to read it. `06_DECISIONS.md`'s own content is, in
+because this build's own standing rule makes every accepted ADR binding "on the same footing as
+the numbered spec files" — a statement about what is operationally authoritative *for continuing
+this build*, unrelated to who should be allowed to read it. `06_DECISIONS.md`'s own content is, in
 substance, exactly the process record ADR-031's own text says it "reads like" — a log of decisions,
 the mistakes found on the way to them, the internal deliberation behind each — which is precisely
 the class of thing B2's "excluded and private" list is drawn to keep out of a published artefact.
@@ -2687,8 +2689,11 @@ both.
 
 - **Trigger A, restructure.** Fires at the close of Phase 8. Moves files per ADR-031/B1. The
   repository stays private throughout.
-- **Trigger B, publication.** Fires only on explicit owner instruction, after all phases, stages,
-  and alpha and beta testing are complete.
+- **Trigger B, publication.** Fires only on explicit owner instruction, once Trigger A, publication
+  readiness (the documentation-refresh stage) and the Trigger B rehearsal (including a green CI
+  run) are all done and §B4's own open items are decided. **Owner ruling, 28 September 2026:
+  alpha and beta testing (analyst review) follow Trigger B — they do not precede it and are not a
+  precondition of it.** Nothing is shown to anyone outside the project before publication.
 
 **Trigger A completing does not imply Trigger B, and nothing in `07_BUILD_PLAN.md` may treat it as
 implying it.** The Phase 8 close-step paragraph this ADR amends is written to name Trigger A only —
@@ -2758,15 +2763,15 @@ already neutral and is not a search pattern.
 git grep -liE "ayan\.?kar|ayankarsolirius|solirius" -- .
 ```
 
-matches exactly one tracked file: `process/SESSION_HANDOVER.md` (its own byline line, "2026-09-18 ·
+matches exactly one tracked file: the current handover document (its own byline line, "2026-09-18 ·
 @Ayan", and two body references to "Ayan"/"Ayan's Mac"). No other tracked file in the repository —
-product code, `spec/`-bound docs, or any other `process/`-bound doc — carries a personal name,
-handle or employer domain. `process/SESSION_HANDOVER.md` is explicitly out of scope for this session
+product code, the spec, or any other build-record document — carries a personal name,
+handle or employer domain. The handover document is explicitly out of scope for this session
 (its byline is handled at Trigger A) and is unchanged here.
 
 **Binding: the product tree, the published guides and the prompt register carry no personal name,
 employer name or employer email domain.** Where an owner decision needs attributing, the term is
-"the owner". `process/SESSION_HANDOVER.md` is the one currently-tracked exception, already scoped to
+"the owner". The handover document is the one currently-tracked exception, already scoped to
 Trigger A rather than this session.
 
 **Open item, owned by Trigger B:** the initial commit of the published repository is authored under
@@ -2829,7 +2834,7 @@ to (the browser harness and its packaging pipeline are Phase 8's own outcome, no
 Phase 8 builds must ship with both assertions from its first version, not add them later —
 `07_BUILD_PLAN.md`'s own packaging stage states and tests them as its own exit criterion. Who an
 artefact satisfying both may then be given to, and when, is a distribution decision downstream of
-this one, recorded in `process/PRODUCT_DELIVERY.md`, not in this ADR or in the build plan.
+this one, recorded in the distribution/delivery record, not in this ADR or in the build plan.
 
 **Cost.** Documentation only in this session: two ADR cross-references (this record, and ADR-031's
 own superseded pointer), one `07_BUILD_PLAN.md` amendment (below), and one open item added to
@@ -3483,16 +3488,16 @@ below:**
 
 **Where this record departs from what was asked, and why, rather than implementing it silently.**
 The request was: distribution class `internal`, permitting "local development, scale and realism
-testing, and demos run by the owner for the owner's own purposes." `CLAUDE.md`'s own rule 9 —
+testing, and demos run by the owner for the owner's own purposes." Standing rule 9 —
 binding on every session, not merely an accepted ADR — is unqualified: "No real intelligence data
-anywhere, ever." `07_BUILD_PLAN.md`'s own standing rule 3, which `DEMO_GUIDE.md` §6 already cites
+anywhere, ever." Standing rule 3, which `DEMO_GUIDE.md` §6 already cites
 by name against using the real Enron corpus at all, is scoped precisely: "No real intelligence data
 in the repository, in CI, **or in a demo**." A demo "run by the owner for the owner's own purposes"
-is still, in the rule's own words, a demo. `CLAUDE.md` is explicit that an accepted decision record
-believed wrong gets said so and stopped on, not silently implemented around — the same discipline
-applies with more force to a standing rule than to an ADR. **This record does not amend standing
-rule 3 or `CLAUDE.md` rule 9, and does not grant the "demos run by the owner" permission as
-requested.**
+is still, in the rule's own words, a demo. This build's own standing discipline is that an accepted
+decision record believed wrong gets said so and stopped on, not silently implemented around — the
+same discipline applies with more force to a standing rule than to an ADR. **This record does not
+amend standing rule 3 or standing rule 9, and does not grant the "demos run by the owner"
+permission as requested.**
 
 **What this record originally accepted, before the amendment below, because it did not touch
 either rule's own explicit scope:** distribution class `internal`, permitted for **local
@@ -3503,7 +3508,7 @@ regardless), used to stress-test the platform at a scale Fixture Corp does not r
 rendered to any audience, the owner included, as a "demo."
 
 **Open item for the owner — decided, 23 September 2026, by the owner directly, not inferred.**
-Standing rule 3 and `CLAUDE.md` rule 9 are amended: both now admit a dataset explicitly named in
+Standing rule 3 and standing rule 9 are amended: both now admit a dataset explicitly named in
 the local, never-committed real-data exceptions list (`scripts/real_data_exceptions.py` —
 `config/real_data_exceptions.yaml`, gitignored), for local development, scale/realism testing, or
 an owner-run demonstration on the owner's own secured device — never committed, never in CI, never
@@ -3605,7 +3610,7 @@ node id with SHA-256 (not `hash()`, which is salted per process) so a presenter 
 from `DEMO_GUIDE.md` and a live spec can assert on it. **`QQ` is load-bearing, not decorative**:
 HMRC never issues a National Insurance number beginning with Q, so no value the generator can
 produce is capable of colliding with a real person's — the fixture stays synthetic *by
-construction*, which is what standing rule 3 and `CLAUDE.md` rule 9 are about, rather than by
+construction*, which is what standing rule 3 and standing rule 9 are about, rather than by
 anyone remembering to keep it so. `org_ref` takes a `FIXTURE-` prefix for the same reason.
 
 **The re-measurement, which R4 required rather than assumed.** The five scores were measured with
@@ -3681,7 +3686,7 @@ Corp itself — is design and ownership only in this session; `07_BUILD_PLAN.md`
 bullets are amended to claim all of it, so none of it is a second orphaned backlog item the way R24
 already was once.
 
-**Revisit if.** The owner amends standing rule 3/`CLAUDE.md` rule 9 to add an owner-only-demo
+**Revisit if.** The owner amends standing rule 3/standing rule 9 to add an owner-only-demo
 exception (C3's own open item) — at which point this record's own `internal` scope for Enron widens
 to match, by an edit to this record, not a new ADR.
 
@@ -3724,7 +3729,7 @@ themselves.
 **Proposed answer, first half.** A saved-pattern monitor evaluates as the saving analyst's own
 principal, never a service principal. Its query goes through `GraphPort`'s ordinary
 access-filtered path exactly as if the analyst issued it themselves at the moment of evaluation —
-no new privileged code path, no elevated identity, nothing standing rule 2/CLAUDE.md rule 3 does
+no new privileged code path, no elevated identity, nothing standing rule 2/standing rule 3 does
 not already require of every other read.
 
 **Proposed answer, second half, equally binding.** Access is resolved fresh at each evaluation, not
@@ -4077,7 +4082,7 @@ a bare phone number read off a warrant before it resolves to anything they can s
 triggering document and the rule" on *any* ingest that touches a listed identifier — with no
 qualification on whether the triggering document is visible to the hotlist's owner. The feature's
 entire purpose is therefore to report that something appeared in data the analyst who set the
-hotlist may not be able to see — which is precisely the existence leak CLAUDE.md's standing rule 3
+hotlist may not be able to see — which is precisely the existence leak standing rule 3
 exists to prevent ("An unauthorised principal must not be able to detect a filtered node's
 existence via path length, degree count or histogram bucket"). A hotlist alert on a document its
 owner cannot open is that same leak, produced by B13's own text working exactly as specified, not
@@ -4959,7 +4964,7 @@ option (a) (ships unconditionally) and option (c) (omitted from the artefact), *
 **The finding that frames this record, checked rather than assumed.** `03_CONDUIT_MIDDLEWARE.md`
 §6 already commits to the manifest's shape: "Exports carry the Osprey mark, the investigation
 reference, the export timestamp, the resolution threshold in force, and a manifest of withheld
-items by count." Count only, never content or identity — the same shape `CLAUDE.md` standing
+items by count." Count only, never content or identity — the same shape standing
 rule 3 already accepts for the working-set status bar ("6 hidden by handling") and the delta
 protocol's `notice` operation (`03_CONDUIT_MIDDLEWARE.md` §3.2: "carries a count and never carries
 the withheld content, not even its identifiers"). The exporting analyst has already legitimately
@@ -5049,7 +5054,7 @@ picture in front of them is partial, even where they are not owed the content th
 **The counter-argument, recorded fairly rather than only as the position that lost.** The
 artefact's eventual recipient may hold no principal in this system at all — an external
 stakeholder, a court, another agency — and a disclosed count is information about data they have no
-established right to know exists: the exact existence-leak shape `CLAUDE.md` standing rule 3 exists
+established right to know exists: the exact existence-leak shape standing rule 3 exists
 to prevent, applied here to a reader this system cannot authenticate or scope at all. `omit` costs
 this argument nothing — it is available, not merely theorised, for exactly the deployment that
 weighs this risk above the misleading-by-omission risk the default is built around.
@@ -5131,7 +5136,7 @@ stays listed but goes unreadable ("marked unavailable, rather than vanishing"). 
 states whether a judgement's cited evidence is re-checked for access the same way. ADR-039's own
 text is scoped to alerts throughout — it never claims to cover assessments, and inheriting its
 answer silently would be exactly the "an answer given only in conversation... not fixed in the
-spec" failure `CLAUDE.md` standing rule 11 exists to catch.
+spec" failure standing rule 11 exists to catch.
 
 **Why assessments are the harder case, not a smaller version of the same question.** An alert is
 transient — it fires, is read or not, and its own operational relevance fades once the
@@ -5266,7 +5271,7 @@ that also produced ADR-038's identical shape for a different reason and ADR-045'
 **Addendum, 27 September 2026 — owner ruling R7. TENTATIVE: the owner has recorded this as
 subject to revisiting after their own usability walkthrough, and it is written down here in that
 state deliberately rather than held back until it firms up, because a ruling that lives only in a
-conversation is lost by the next session (`CLAUDE.md` rule 11).**
+conversation is lost by the next session (standing rule 11).**
 
 **What produced it.** Running Scenario A against a rendered deployment through the analyst's own
 door for the first time (`tests/scenarios/test_phase8_exit_over_the_wire.py`, owner ruling R5)
@@ -5282,7 +5287,7 @@ found a composition neither rule showed on its own:
 Measured through the deployed Conduit: before the retraction the judgement lists with
 `flagged_for_review: false`; after it, the list is empty. The analyst is never shown the flag this
 platform's own specification promises, and no test could see it because the only test of the flag
-called the flagging function directly and re-read the store, never the route — `CLAUDE.md` rule
+called the flagging function directly and re-read the store, never the route — standing rule
 12's shape exactly.
 
 **The ruling (owner, R7, 27 September 2026, tentative), verbatim:**
@@ -5385,7 +5390,7 @@ for, is undefined. Four questions an acceptance answer must settle, not a code d
   exported through the handling gate at all, versus one that was and lost its mark afterward.
 
 **Gap 2 — nothing specifies a durable record of what left the boundary, independent of the
-Conduit's own audit stream.** `CLAUDE.md` standing rule 4 and `03_CONDUIT_MIDDLEWARE.md` §6's
+Conduit's own audit stream.** Standing rule 4 and `03_CONDUIT_MIDDLEWARE.md` §6's
 audit paragraph both require every export to be recorded in the audit stream — principal,
 timestamp, resolved query, result cardinality, and the justification where a handling boundary was
 crossed. That record is real, but it lives entirely inside the Conduit, readable only by a
@@ -5578,7 +5583,7 @@ thing they are owed — that the picture in front of them is not the whole one.
 **3. Is there a safe partial-disclosure shape, or does any disclosure at all collapse into full
 leak (or into false completeness)?** ADR-045's count is a safe partial shape precisely because it
 discloses a fact (something exists) without disclosing anything actionable about it (what, where,
-which) — the same shape `CLAUDE.md` standing rule 3 already accepts for the status bar and the
+which) — the same shape standing rule 3 already accepts for the status bar and the
 delta protocol's `notice` op, extended once more here. ADR-038 has no safe partial shape available
 to it at all: any existence signal to an in-system principal *is* the leak rule 3 forbids, so
 nothing short of full suppression avoids it — this is `strict`'s own reasoning, unchanged.
@@ -5685,7 +5690,7 @@ gained `"049"` on 24 September 2026, with two fixture cases each shown red again
 source first — one for the false positive the omission caused (an ADR-049 section citing ADR-034 and
 ADR-042 must not be flagged), one for the false negative (a PRODUCT ADR citing ADR-049 must be). The
 pre-existing case citing ADR-034 from ADR-006 passes identically either way, which is why neither new
-case reuses its shape — `CLAUDE.md` rule 15's second clause. Nothing was allowlisted: the allowlist
+case reuses its shape — standing rule 15's second clause. Nothing was allowlisted: the allowlist
 is for known debt that shrinks to zero, and a correctly-classified record is not debt. **Two other
 gates were already red on a clean `HEAD` before this record existed, and are not this record's:**
 `make route-coverage-check` (six undocumented routes) and `make test-file-coverage-check`
@@ -5844,8 +5849,9 @@ CLI's own name: §2.3 calls this `osprey apply`, not `osprey launch`.)
 #### Stage 2 §3 — Scripted golden-path deploy
 
 `python -m harness.apply`: fresh checkout → render (Stage 2 §1) → preflight (Stage 2 §2) → start stack → wait for
-health → seed if requested. process/demo/2026-09-24/demo_up.sh is retired into this once it exists;
-until then it stays (since removed — see `07_BUILD_PLAN.md`'s Stage 2 §3 entry).
+health → seed if requested. The checker's own scripted bring-up from 24 September 2026 is retired
+into this once it exists; until then it stays (since removed — see the phase plan's Stage 2 §3
+entry).
 
 **Amendment 6 — "ordering enforcement" is `05_DEPLOYMENT.md` §2.4's term for something else, and
 reusing it here hides a missing guard.** §2.4's ordering enforcement is: "A profile switch with live
@@ -5934,7 +5940,7 @@ A national-scale replay is measured in days and must be planned, not discovered.
 not payload. Three specific holes:
 
 1. **Handling, provenance and assessment objects are first-class (ADR-010) and are what the adapter
-   filters on (`CLAUDE.md` rule 3).** A restore that drops every `handling` marking passes a multiset
+   filters on (standing rule 3).** A restore that drops every `handling` marking passes a multiset
    comparison unchanged — and would silently widen access on the restored deployment.
 2. **`SAME_AS` edges are scored, and resolution is a query-time projection over those scores
    (ADR-006).** A multiset of node/edge *pairs* that ignores edge properties passes while every
@@ -6003,7 +6009,7 @@ every refused provider — `00_ARCHITECTURE.md` §1.2's "the bundle step refuses
 gazetteers whose profile says `redistributable: false`, and names them." Its own docstring already
 says: "The real `osprey bundle` command wraps `bundle_map_providers` below in Phase 8." Note also the
 invocation convention: every existing operational module runs as `python -m scripts.<name>`
-(`CLAUDE.md` Conventions); `python -m harness.<name>` is a second convention and should be adopted
+(this build's own Conventions); `python -m harness.<name>` is a second convention and should be adopted
 deliberately, with `harness/__init__.py`'s own existing docstring as the warrant, rather than by
 accident.
 
@@ -6048,7 +6054,7 @@ install.
 
 **Amendment 17 — a new assertion nobody has named: `config/real_data_exceptions.yaml` must never
 enter an artefact.** It is gitignored, never committed, names real datasets admitted under standing
-rule 3 / `CLAUDE.md` rule 9 / ADR-035 §C3, and lives on the owner's own device — the same device an
+rule 3 / standing rule 9 / ADR-035 §C3, and lives on the owner's own device — the same device an
 owner-run demonstration build would be produced on. A `docker build .` from the repository root
 includes gitignored files. ADR-034 §B7, ADR-035 §C2 and the submitted design all miss it. Its planted
 violation is the real file's own shape (a valid entry naming a dataset), not a placeholder string.
@@ -6170,7 +6176,7 @@ red-then-green: a fixture entry with the field absent, and one with it malformed
 closed. **Not built by this record** — this round amended documentation only.
 
 **Amendment 21 — a new keyboard-driven surface needs its own action registry and spec file, in the
-same change.** `CLAUDE.md` rule 13, and the machinery that now enforces it:
+same change.** Standing rule 13, and the machinery that now enforces it:
 `apps/workspace/keyboard/actionRegistry.ts`'s `defineActionRegistry`/`ALL_REGISTRIES`, a per-surface
 `*.spec.ts` calling `assertAllCovered`, and `registryCoverage.test.ts`. (This sentence also named
 `check-registry-coverage.mjs` until 25 September 2026. **No such file has ever existed** — the
@@ -6183,7 +6189,7 @@ somewhere — a surface that declares **no** registry is invisible to it. That i
 level up that the registry itself was built to close, and it is exactly the shape rule 12 names.
 
 **Amendment 22 — every read path gets an access-control test, and `/admin` is a read path.**
-`CLAUDE.md` rule 4 / standing rule 2: "No exceptions for internal endpoints." `/admin` serves the
+Standing rule 4 / rule 2: "No exceptions for internal endpoints." `/admin` serves the
 governance configuration, the handling scheme, the real-data exceptions panel and the
 generated-artefacts diff — which carries real hostnames, ports, paths and credential *references*.
 Stage 2 §6 must state which principal may open it and test that an unauthorised one cannot observe it or
@@ -6444,7 +6450,7 @@ Measured against the tree on 25 September 2026, not assumed:
   `WebSocket` cannot set a header. `_authenticate_websocket`'s own docstring names the resulting
   log exposure and names a ticket exchange as "the production hardening this phase does not
   implement".
-- Keyboard coverage is no longer the hardcoded walkthrough `CLAUDE.md` rule 13 describes. There is a
+- Keyboard coverage is no longer the hardcoded walkthrough standing rule 13 describes. There is a
   per-surface `defineActionRegistry` / `registerCovered` / `assertAllCovered` mechanism, plus
   `registryCoverage.test.ts`, a Vitest case in the fast tier that fails when a declared registry
   has no assertion reaching it.
@@ -6462,7 +6468,7 @@ the long-lived credential in the IdP's own cookie rather than in storage the pag
 
 **Claims.** The Glass reads `sub`, `clearance`, `org_unit`, `roles` and `receivable_handling_codes`
 — the four custom claims the realm already maps, plus `sub` — and displays the principal's identity
-and clearance in the workspace chrome. **It never derives access from them.** `CLAUDE.md` rule 3
+and clearance in the workspace chrome. **It never derives access from them.** Standing rule 3
 stands unchanged: the adapter-level filter is the only enforcement and the Glass's display is
 informational. A Glass that hid a control because `roles` lacked an entry would be enforcement in
 the wrong tier; a Glass that showed one it should not is not a leak, because the Conduit refuses.
@@ -6524,8 +6530,8 @@ None of this exists today and all of it is rendering work, not Glass work:
   assert the build fails. The planted value must take the shape the real pipeline receives — an
   environment variable present at `vite build` — not a source edit.
 - **The golden path's Glass leg becomes**: apply, open the printed URL, sign in, see the seeded
-  investigation. It replaces the dev-token step used for the last time on 25 September 2026
-  (`process/demo/2026-09-25/`).
+  investigation. It replaces the dev-token step used for the last time on 25 September 2026,
+  in that day's own internal rehearsal record.
 
 ### Open objections
 
@@ -6635,7 +6641,7 @@ decision because it enlarges the scope meaningfully and that is the owner's call
 
 **9 (spec gap, not an objection). `02_GLASS_FRONTEND.md` does not describe the workspace chrome
 element this design puts the principal's identity and clearance into.** Adding a Glass surface by
-ADR rather than by specification is the thing `CLAUDE.md` rule 11 exists to prevent. Either §2 of
+ADR rather than by specification is the thing standing rule 11 exists to prevent. Either §2 of
 that document gains the element, or this design should not name it.
 
 ### Consequences

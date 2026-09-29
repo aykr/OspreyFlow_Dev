@@ -135,7 +135,8 @@ def main() -> int:
     total = len(violations)
     print(
         f"product-tree-link-check: {total} known (allowlisted) reference(s), 0 new. "
-        f"Allowlist shrinks to zero as part of Trigger A's own exit criterion."
+        f"Round 14b's own rewrite pass emptied every real citation; the one remaining entry "
+        f"describes the repository's own layout, not a citation, and does not shrink further."
     )
     return 0
 
