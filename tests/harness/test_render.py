@@ -264,7 +264,7 @@ def test_the_runbook_carries_this_deployment_s_own_paths_not_a_template(
     assert "/srv/osprey/data" in runbook
     assert "/srv/osprey/staging" in runbook
     assert "/srv/osprey/backups" in runbook
-    assert "http://localhost:7000/admin" in runbook
+    assert "| Admin console | `http://localhost:7000/` |" in runbook
     assert "config/real_data_exceptions.yaml" in runbook
     assert "deploy/RUNBOOK.md" in runbook, (
         "the generated runbook must point at §6's hand-written recovery-time runbook rather than "
@@ -277,14 +277,29 @@ def test_the_runbook_does_not_send_the_operator_to_a_workspace_admin_page(
 ) -> None:
     """Seen on the running deployment, 29 September 2026: the generated runbook listed
     `http://localhost:8080/admin`, and opening it showed the Glass's sign-in page — the workspace
-    proxies only `/v1/`, so every other path falls through to the single-page app. §2.5 puts the
-    admin console on the harness's own port (`http://localhost:7000/admin`) — "the same process
-    switching mode, not a page the workspace serves". The docs had this corrected on 26 September
-    (`07_BUILD_PLAN.md`, Stage 2 §5b); the renderer and this file's own assertion above kept the
-    old address, so the correction never reached the one artefact an operator actually follows."""
+    proxies only `/v1/`, so every other path falls through to the single-page app. It was corrected
+    to the harness's own port, and then seen again the same day: `http://localhost:7000/admin`
+    answers 404, because the console the operator uses is the harness in setup mode, which serves
+    its screens at the root and refuses `/admin` (that path exists only in console mode, where it is
+    a bearer-only placeholder). The address that works is `http://localhost:7000/`, which is also
+    what `make launch` opens."""
     runbook = rendered.artefacts["RUNBOOK.md"]
     assert "localhost:8080/admin" not in runbook
-    assert f"http://localhost:{HARNESS_PORT}/admin" in runbook
+    assert f"localhost:{HARNESS_PORT}/admin" not in runbook
+    assert f"| Admin console | `http://localhost:{HARNESS_PORT}/` |" in runbook
+
+
+def test_the_address_the_runbook_names_for_the_admin_console_is_served_in_the_default_mode(
+    tmp_path: Path,
+) -> None:
+    """Rule 15: the check that would have caught this is asking the real app, not the text. The
+    runbook's address must not be one the default-mode harness refuses."""
+    from fastapi.testclient import TestClient
+    from harness.webapp import create_app
+
+    client = TestClient(create_app(config_path=tmp_path / "osprey.yaml"), client=("127.0.0.1", 1))
+    assert client.get("/api/config").status_code == 200
+    assert client.get("/admin").status_code == 404, "the removed address is indeed not served"
 
 
 def test_the_harness_serves_on_the_port_the_runbook_names() -> None:

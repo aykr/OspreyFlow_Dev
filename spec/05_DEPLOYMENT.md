@@ -417,9 +417,11 @@ that follows.
 
 Roughly fifteen minutes end to end, most of it pulling model weights and building tiles, with
 progress shown throughout. The workspace is then at `http://localhost:8080`. **The admin console
-stays at `http://localhost:7000/admin`** — the harness's own port, not the workspace's: §2's own
-"the harness does not go away, it becomes /admin" describes the same process switching mode, not a
-page the workspace serves.
+stays at `http://localhost:7000`** — the harness's own port, not the workspace's, and its screens
+are served at the root: `/admin` answers 404 in the default (setup) mode and exists only in console
+mode, where it is a bearer-only placeholder for the post-launch console that is not yet built. §2's
+own "the harness does not go away, it becomes /admin" describes the same process switching mode,
+not a page the workspace serves.
 The seeded demo credentials are displayed once and written nowhere.
 
 **Afterwards, `make launch` is the way in.** It serves one page on `127.0.0.1:7070` with a tile each

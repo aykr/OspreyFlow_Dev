@@ -936,7 +936,7 @@ Search backend: `{config.components.search.value}`{
 | --- | --- |
 | Workspace | `http://localhost:8080` |
 | Conduit | `http://localhost:8000` |
-| Admin console | `http://localhost:{HARNESS_PORT}/admin` |
+| Admin console | `http://localhost:{HARNESS_PORT}/` |
 
 ## Governance
 
