@@ -443,7 +443,9 @@ for the Glass, the Ingest Studio and the Admin console, shows which answer, and 
 not: the deployment by `docker compose up -d --wait` against the already-rendered
 `deploy/generated/<profile>/` (never regenerating or re-seeding it), the admin console by
 `python -m harness`. The Ingest Studio has no address of its own — it is the Ingest tab inside the
-Glass — so its tile opens the workspace and says so. The launcher reads only `OSPREY_WORKSPACE_PORT`
+Glass — so its tile opens the workspace on the Ingest tab (`?view=ingest`), and both tiles carry
+`?from=launcher` so the Glass carries the person's sign-in on without asking again
+(`02_GLASS_FRONTEND.md` §2.2). The launcher reads only `OSPREY_WORKSPACE_PORT`
 from `deployment.env`, so no credential reaches its page (`scripts/launch.py`,
 `tests/test_launch.py`).
 

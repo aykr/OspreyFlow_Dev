@@ -12,10 +12,14 @@ export interface SignInScreenProps {
    * and alarming statement about their own access. `null` means neither has happened yet (a plain,
    * first, unauthenticated load). */
   reason?: string | null;
+  /** The launcher's Ingest Studio tile opens the Glass on its Ingest tab. If the sign-in has to be
+   * done by hand, the screen says which of the two the person is signing in to. */
+  intent?: "ingest" | null;
   onSignIn: () => void;
 }
 
-export function SignInScreen({ reason, onSignIn }: SignInScreenProps) {
+export function SignInScreen({ reason, intent, onSignIn }: SignInScreenProps) {
+  const studio = intent === "ingest";
   return (
     <div
       style={{
@@ -29,10 +33,12 @@ export function SignInScreen({ reason, onSignIn }: SignInScreenProps) {
         textAlign: "center",
       }}
     >
-      <h1 style={{ margin: 0 }}>OspreyFlow</h1>
+      <h1 style={{ margin: 0 }}>{studio ? "Ingest Studio" : "OspreyFlow"}</h1>
       <p style={{ color: "var(--text-secondary)", maxWidth: 420 }}>
-        Sign in with your analyst credentials to open the workspace. Credentials are entered at
-        your organisation's identity provider — never here.
+        {studio
+          ? "Sign in to bring a new source of data in: connect it, map it, check it, publish it."
+          : "Sign in with your analyst credentials to open the workspace."}{" "}
+        Credentials are entered at your organisation's identity provider — never here.
       </p>
       {reason && (
         <p role="alert" style={{ color: "var(--error)", maxWidth: 420 }}>

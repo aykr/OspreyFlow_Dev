@@ -133,8 +133,20 @@ def test_the_glass_and_ingest_studio_use_the_deployments_own_workspace_port(
         encoding="utf-8",
     )
     by_name = {s.name: s for s in _launcher(repo).surfaces()}
-    assert by_name["The Glass"].url == "http://localhost:9191/"
-    assert by_name["Ingest Studio"].url == "http://localhost:9191/"
+    assert by_name["The Glass"].url.startswith("http://localhost:9191/")
+    assert by_name["Ingest Studio"].url.startswith("http://localhost:9191/")
+
+
+def test_the_glass_and_the_studio_open_different_places_and_say_they_came_from_the_launcher(
+    repo: Path,
+) -> None:
+    """Seen: both tiles opened the identical page (the Studio is a tab inside the Glass), and the
+    Glass then asked a person who had just signed in to sign in again. `from=launcher` tells the
+    Glass to carry the sign-in on; `view=ingest` lands the Studio tile on the Ingest tab."""
+    by_name = {s.name: s for s in _launcher(repo).surfaces()}
+    assert by_name["The Glass"].url == "http://localhost:8080/?from=launcher"
+    assert by_name["Ingest Studio"].url == "http://localhost:8080/?from=launcher&view=ingest"
+    assert by_name["The Glass"].url != by_name["Ingest Studio"].url
 
 
 def test_the_admin_console_is_on_the_harness_port_never_the_workspace(repo: Path) -> None:
@@ -480,6 +492,9 @@ def test_the_analyst_interfaces_and_the_admin_console_are_grouped_and_explained(
     assert "Admin console" not in text[: text.index("For analysts")]
     ingest = _visible_text(_tile(fragment, launch.INGEST))
     assert "part of The Glass" in ingest, "the Studio must say it runs inside the Glass"
+    assert "Ingest tab" in ingest and "choose the Ingest tab" not in ingest, (
+        "the Studio opens on its tab; it must not tell a person to go and find it"
+    )
 
 
 def test_the_page_speaks_in_the_product_s_own_words_not_the_machinery_s(

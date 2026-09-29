@@ -20,6 +20,7 @@ import {
   signOut,
   type DisplayPrincipal,
 } from "./auth/userManager";
+import { clearHandoff, readHandoff } from "./auth/launcherHandoff";
 import { SignInScreen } from "./auth/SignInScreen";
 import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
 import {
@@ -155,6 +156,11 @@ export function App() {
   // screen only when there is something to say — a refused token, a failed silent renewal, or a
   // sign-in that could not complete. `null` on a plain first, unauthenticated load.
   const [signInReason, setSignInReason] = useState<string | null>(null);
+  // What the launcher said when it opened this page (`auth/launcherHandoff.ts`): carry the sign-in
+  // on without a click (the identity provider already knows the person), and open the Ingest tab
+  // when the Ingest Studio tile was the one pressed. Read once. Grants nothing.
+  const [handoff] = useState(() => readHandoff(window.location.search, sessionStorage));
+  const autoSignInStartedRef = useRef(false);
   // Distinguishes "this token was just refused outright" (wrong audience, wrong claims — show the
   // reason, do not retry) from "this token merely expired mid-session" (retry silently, preserving
   // state) — both surface as a 401 on the same bootstrap call and are otherwise indistinguishable.
@@ -183,6 +189,7 @@ export function App() {
         }
         return;
       }
+      let signedIn = false;
       if (isSignInRedirectCallback()) {
         try {
           const user = await completeSignInFromRedirect();
@@ -191,10 +198,29 @@ export function App() {
           setBearerToken(user.access_token);
           setPrincipal(displayPrincipalFromUser(user));
           restoreViewStateAfterReauth();
+          signedIn = true;
+          clearHandoff(sessionStorage);
         } catch {
           clearRedirectCallbackParams();
           if (!cancelled)
             setSignInReason("Your sign-in could not be completed. Try again.");
+        }
+      }
+      // Arrived from the launcher and not signed in: start the sign-in now rather than show a
+      // screen whose only content is a button. Once per load (`autoSignInStartedRef` survives
+      // React's development double-run), never after a refusal (that returned above, with an
+      // `error` parameter), and never after a completed or failed callback. If it cannot be
+      // started, the screen appears with a plain sentence and its button still works.
+      if (!cancelled && !signedIn && handoff.autoSignIn && !autoSignInStartedRef.current) {
+        autoSignInStartedRef.current = true;
+        try {
+          await signIn();
+          return;
+        } catch {
+          if (!cancelled)
+            setSignInReason(
+              "Sign-in could not be started automatically. Press Sign in to try again.",
+            );
         }
       }
       if (!cancelled) setAuthChecked(true);
@@ -283,7 +309,7 @@ export function App() {
   });
   const [view, setView] = useState<
     "graph" | "map" | "ingest" | "dossier" | "watches"
-  >("graph");
+  >(handoff.view ?? "graph");
   const [dossierNodeId, setDossierNodeId] = useState<string | null>(null);
   const [mapConfig, setMapConfig] = useState<PublicMapConfig | null>(null);
   const [siteWizardOpen, setSiteWizardOpen] = useState(false);
@@ -569,7 +595,11 @@ export function App() {
   // — an unauthenticated caller is never "still loading", it has a definite answer already.
   if (!isDevBypass && authChecked && !bearerToken) {
     return (
-      <SignInScreen reason={signInReason} onSignIn={() => void signIn()} />
+      <SignInScreen
+        reason={signInReason}
+        intent={handoff.view}
+        onSignIn={() => void signIn()}
+      />
     );
   }
 

@@ -107,6 +107,11 @@ TOKENS_RELATIVE_PATH = Path("apps") / "workspace" / "src" / "design" / "tokens.c
 #: "starting" even though nothing answers yet. Past it, with still nothing answering, the tile
 #: says "not running" again rather than claiming progress for ever.
 START_GRACE_SECONDS = 180.0
+#: Appended to the Glass's address. It tells the Glass this person has just signed in through the
+#: launcher, so it carries the sign-in on instead of asking again (the identity provider already
+#: knows them, so no password is asked). It grants nothing: the Glass still signs in, and the
+#: Conduit still checks every request.
+HANDOFF = "from=launcher"
 
 GLASS = "The Glass"
 INGEST = "Ingest Studio"
@@ -318,7 +323,7 @@ class Launcher:
         return [
             Surface(
                 GLASS,
-                workspace,
+                f"{workspace}?{HANDOFF}",
                 "Where analysts work: the network, timeline, map, dossier and search, "
                 "together in one workspace.",
                 (
@@ -331,10 +336,10 @@ class Launcher:
             ),
             Surface(
                 INGEST,
-                workspace,
+                f"{workspace}?{HANDOFF}&view=ingest",
                 "Bring a new source of data in: connect it, map it, check it, publish it.",
-                "It is part of The Glass, so it starts and opens together with it. "
-                "Sign in, then choose the Ingest tab at the top.",
+                "It is part of The Glass, so it starts and opens together with it, on its "
+                "Ingest tab.",
                 "stack",
                 "analysts",
                 STUDIO_ROLES,

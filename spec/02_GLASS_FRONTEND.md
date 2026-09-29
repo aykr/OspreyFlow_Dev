@@ -221,6 +221,21 @@ and whether the query parameter should survive into the URL the Glass itself set
 navigation (it does not today — this is load-time resolution only, not a routing scheme). Left
 for the owner to accept, amend or reject as real spec.
 
+### 2.2 Opening from the launcher
+
+The launcher (`make launch`, `05_DEPLOYMENT.md` §3) opens the Glass with `?from=launcher`, and with
+`&view=ingest` for its Ingest Studio tile. The Ingest Studio is the Ingest tab of the Glass, so the
+two tiles differ only in this parameter. `from=launcher` tells the Glass that the person has just
+signed in there, so it starts its own sign-in without waiting for a click; the identity provider
+already knows them, so no password is asked. If that cannot be done (no identity-provider session,
+or it cannot be reached) the sign-in screen appears as before, worded for the Ingest Studio when
+that was the tile pressed. `view=ingest` opens the Ingest tab after the sign-in, remembered in
+`sessionStorage` for ten minutes because the query does not survive the identity provider's round
+trip. **This grants nothing:** the Glass still signs in with its own client and the Conduit still
+checks every request against the token's roles (ADR-050). A refused sign-in (an `error` parameter
+on return) is shown and is never retried automatically. Only the Ingest tab can be requested
+(`apps/workspace/src/auth/launcherHandoff.ts`, `App.test.tsx`).
+
 ## 3. The five analytical capabilities
 
 ### 3.1 Network analysis

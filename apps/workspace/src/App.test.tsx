@@ -6,7 +6,8 @@
 // Conduit's own already-covered refusal (`tests/services/api/test_auth.py`'s own audience test) —
 // this is the Glass-side assertion that has content: what the Glass itself does about it.
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
+import { StrictMode } from "react";
+import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 
 import type { App as AppComponent } from "./App";
 
@@ -68,10 +69,13 @@ vi.mock("./map/providers", async () => {
 });
 
 import * as userManager from "./auth/userManager";
+import * as ontologySchema from "./ontology/schema";
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  window.history.replaceState({}, "", "/");
+  sessionStorage.clear();
 });
 
 describe("06_DECISIONS.md ADR-050 — the sign-in gate", () => {
@@ -108,5 +112,174 @@ describe("06_DECISIONS.md ADR-050 — the sign-in gate", () => {
     await screen.findByText(/could not be used to reach the workspace/i);
     // `getByRole` itself throws if the element is absent — the sign-in screen, not an error page.
     expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
+  });
+});
+
+describe("the launcher's hand-off (a person who has just signed in at the launcher)", () => {
+  // The mocks above are shared across the file, and the wrong-audience test leaves the callback
+  // mock answering "yes, this is a redirect callback": start each of these from a plain load.
+  beforeEach(() => {
+    vi.mocked(userManager.isSignInRedirectCallback).mockReset().mockReturnValue(false);
+    vi.mocked(userManager.completeSignInFromRedirect).mockReset();
+    vi.mocked(userManager.signIn).mockReset().mockResolvedValue(undefined);
+  });
+
+  // Seen on the owner's deployment: signed in at the launcher, clicked The Glass, and was asked to
+  // sign in again by a screen with a button and nothing else. The identity provider already knows
+  // the person, so the Glass carries the sign-in on when the launcher says that is what happened.
+  test("arriving from the launcher starts the sign-in without a click and issues no /v1 call", async () => {
+    window.history.replaceState({}, "", "/?from=launcher");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}"));
+
+    render(<App />);
+
+    await vi.waitFor(() => expect(vi.mocked(userManager.signIn)).toHaveBeenCalledTimes(1));
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  test("React's development double-run does not start two sign-ins", async () => {
+    window.history.replaceState({}, "", "/?from=launcher");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}"));
+
+    render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+
+    await vi.waitFor(() => expect(vi.mocked(userManager.signIn)).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(vi.mocked(userManager.signIn)).toHaveBeenCalledTimes(1);
+  });
+
+  test("once the sign-in has completed, the remembered tab choice is cleared", async () => {
+    sessionStorage.setItem(
+      "ospreyflow.launcherHandoff",
+      JSON.stringify({ view: "ingest", at: Date.now() }),
+    );
+    vi.mocked(userManager.isSignInRedirectCallback).mockReturnValue(true);
+    vi.mocked(userManager.completeSignInFromRedirect).mockResolvedValue({
+      access_token: "a-token",
+      profile: {
+        sub: "analyst-1",
+        clearance: "OFFICIAL",
+        org_unit: "unit-1",
+        roles: [],
+        receivable_handling_codes: [],
+      },
+    } as never);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 401 }));
+
+    render(<App />);
+
+    await vi.waitFor(() =>
+      expect(sessionStorage.getItem("ospreyflow.launcherHandoff")).toBeNull(),
+    );
+  });
+
+  test("a plain load never starts a sign-in by itself", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}"));
+
+    render(<App />);
+
+    await screen.findByRole("button", { name: "Sign in" });
+    expect(vi.mocked(userManager.signIn)).not.toHaveBeenCalled();
+  });
+
+  test("a refused sign-in is shown, not retried in a loop", async () => {
+    window.history.replaceState({}, "", "/?from=launcher&error=access_denied");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}"));
+
+    render(<App />);
+
+    await screen.findByText(/could not be completed: access_denied/i);
+    expect(vi.mocked(userManager.signIn)).not.toHaveBeenCalled();
+  });
+
+  test("if the sign-in cannot be started, the screen says so and the button still works", async () => {
+    window.history.replaceState({}, "", "/?from=launcher");
+    vi.mocked(userManager.signIn).mockRejectedValue(new Error("nothing answered"));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}"));
+
+    render(<App />);
+
+    await screen.findByText(/could not be started/i);
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
+  });
+
+  test("the Studio tile's sign-in screen says Ingest Studio, not the same words as the Glass's", async () => {
+    window.history.replaceState({}, "", "/?from=launcher&view=ingest");
+    vi.mocked(userManager.signIn).mockRejectedValue(new Error("nothing answered"));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}"));
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Ingest Studio" });
+  });
+
+  test("the Glass tile's own sign-in screen keeps its heading", async () => {
+    window.history.replaceState({}, "", "/?from=launcher");
+    vi.mocked(userManager.signIn).mockRejectedValue(new Error("nothing answered"));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}"));
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "OspreyFlow" });
+  });
+});
+
+describe("the tab the launcher asked for is the tab the Glass opens on", () => {
+  // The Studio tile and the Glass tile used to open the identical page. After sign-in the Studio
+  // tile's choice (remembered across the identity provider's round trip) must be what is shown.
+  const signedInPerson = {
+    access_token: "a-token",
+    profile: {
+      sub: "analyst-1",
+      clearance: "OFFICIAL",
+      org_unit: "unit-1",
+      roles: ["source_author"],
+      receivable_handling_codes: [],
+    },
+  } as never;
+
+  beforeEach(() => {
+    vi.mocked(userManager.isSignInRedirectCallback).mockReset().mockReturnValue(true);
+    vi.mocked(userManager.completeSignInFromRedirect).mockReset().mockResolvedValue(signedInPerson);
+    vi.mocked(ontologySchema.fetchOntologyRegistry).mockResolvedValue(
+      new ontologySchema.OntologyRegistry({ entity_types: [], edge_types: [] } as never),
+    );
+    sessionStorage.setItem("ospreyflow.investigationId", "inv-1");
+    // Just enough of the Conduit for the workspace to draw its toolbar and the Ingest tab's first
+    // screen: empty lists, an empty ontology, an empty handling scheme and an empty ingest folder.
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      const body = url.endsWith("/v1/ontology")
+        ? { entity_types: [], edge_types: [] }
+        : url.endsWith("/v1/handling-scheme")
+          ? { handling_codes: {} }
+          : url.endsWith("/v1/ingest/source-files")
+            ? { root: "/ingest", files: [] }
+            : [];
+      return Promise.resolve(new Response(JSON.stringify(body)));
+    });
+  });
+
+  test("after the Ingest Studio tile, the Ingest tab is the one showing", async () => {
+    sessionStorage.setItem(
+      "ospreyflow.launcherHandoff",
+      JSON.stringify({ view: "ingest", at: Date.now() }),
+    );
+
+    render(<App />);
+
+    const ingest = await screen.findByRole("button", { name: "Ingest" });
+    expect(ingest.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  test("after the Glass tile, the graph is the one showing and Ingest is not", async () => {
+    render(<App />);
+
+    const ingest = await screen.findByRole("button", { name: "Ingest" });
+    expect(ingest.getAttribute("aria-pressed")).toBe("false");
   });
 });
