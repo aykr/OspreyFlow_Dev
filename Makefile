@@ -8,7 +8,7 @@ MYPY := .venv/bin/mypy
 # Phase 0 exit criterion (process/07_BUILD_PLAN.md): CI green; a PR adding a GPL
 # dependency fails; a Pydantic model change not reflected in the generated
 # TypeScript fails the build. See the Phase 0 plan for what each target proves.
-ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check test-file-coverage-check citation-check conformance-guard harness-a11y bundle
+ci: lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard harness-a11y bundle
 
 lint:
 	$(RUFF) check .
@@ -79,6 +79,13 @@ route-coverage-check:
 product-tree-link-check:
 	$(PY) scripts/product_tree_link_check.py
 	@echo "product-tree-link-check: see tests/test_product_tree_link_check.py for the deterministic proof"
+
+# 07_BUILD_PLAN.md Stage 3b: no build-calendar coordinate (Phase N / Stage N / round N / "found
+# during") in the Apache-scoped specification. See scripts/provenance_annotation_check.py's own
+# docstring for the full reasoning and why 06_DECISIONS.md is deliberately out of its scope.
+provenance-annotation-check:
+	$(PY) scripts/provenance_annotation_check.py
+	@echo "provenance-annotation-check: see tests/test_provenance_annotation_check.py for the deterministic proof"
 
 # tests/fixtures/decision_log_publication_allowlist.txt — 06_DECISIONS.md ADR-034 §B10's own filtered
 # decision log, checked one level down from product-tree-link-check: does a PRODUCT ADR cite a PROCESS
