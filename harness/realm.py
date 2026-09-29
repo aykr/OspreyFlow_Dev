@@ -78,8 +78,17 @@ LAUNCHER_PORT = 7070
 LAUNCHER_ORIGIN = f"http://localhost:{LAUNCHER_PORT}"
 LAUNCHER_REDIRECT_URI = f"{LAUNCHER_ORIGIN}/callback"
 
-#: ADR-051 — the Admin console's own public client (built with the console's enforcement, not yet).
+#: ADR-051 — the Admin console's own **public** client, on the same terms as the launcher's: PKCE,
+#: no secret, no Conduit audience, an exact loopback redirect.
 HARNESS_CLIENT_ID = "osprey-harness"
+#: The harness's own port — where `python -m harness` serves the setup screens and, in console
+#: mode, `/admin` (`05_DEPLOYMENT.md` §2 and §2.5). One definition: the runbook prints it,
+#: `harness.webapp`'s `--port` default reads it, and this client's redirect is built from it, so
+#: none can disagree. The admin console is *not* a page the workspace serves — the workspace's
+#: proxy carries only `/v1/`. (`harness.render` re-exports it.)
+HARNESS_PORT = 7000
+HARNESS_ORIGIN = f"http://localhost:{HARNESS_PORT}"
+HARNESS_REDIRECT_URI = f"{HARNESS_ORIGIN}/callback"
 
 #: The role that opens the Admin console, and the Conduit's admin routes. One definition:
 #: `harness/webapp_auth.py` imports it and `services/api/app.py` names the same string, a test
@@ -273,12 +282,13 @@ def _glass_client(config: OspreyConfig) -> dict[str, Any]:
     }
 
 
-def _launcher_client() -> dict[str, Any]:
-    """ADR-051's launcher client. Exact loopback redirect and post-logout URIs (no wildcard, the
-    Glass's own rule); PKCE S256; no password grant; the claim mappers so its ID token carries
-    `roles`, and deliberately **no** audience mapper."""
+def _loopback_public_client(client_id: str, origin: str, redirect_uri: str) -> dict[str, Any]:
+    """A public client for a tool that runs on the operator's own machine (ADR-051). Exact loopback
+    redirect and post-logout URIs (no wildcard, the Glass's own rule); PKCE S256; no password grant;
+    the claim mappers so its ID token carries `roles`, and deliberately **no** audience mapper, so
+    a token minted here is refused by the Conduit's `verify_aud` if it ever leaks."""
     return {
-        "clientId": LAUNCHER_CLIENT_ID,
+        "clientId": client_id,
         "enabled": True,
         "publicClient": True,
         "serviceAccountsEnabled": False,
@@ -286,12 +296,20 @@ def _launcher_client() -> dict[str, Any]:
         "directAccessGrantsEnabled": False,
         "attributes": {
             "pkce.code.challenge.method": "S256",
-            "post.logout.redirect.uris": f"{LAUNCHER_ORIGIN}/",
+            "post.logout.redirect.uris": f"{origin}/",
         },
-        "redirectUris": [LAUNCHER_REDIRECT_URI],
-        "webOrigins": [LAUNCHER_ORIGIN],
+        "redirectUris": [redirect_uri],
+        "webOrigins": [origin],
         "protocolMappers": _claim_mappers(),
     }
+
+
+def _launcher_client() -> dict[str, Any]:
+    return _loopback_public_client(LAUNCHER_CLIENT_ID, LAUNCHER_ORIGIN, LAUNCHER_REDIRECT_URI)
+
+
+def _harness_client() -> dict[str, Any]:
+    return _loopback_public_client(HARNESS_CLIENT_ID, HARNESS_ORIGIN, HARNESS_REDIRECT_URI)
 
 
 def render_realm(
@@ -377,6 +395,7 @@ def render_realm(
             },
             _glass_client(config),
             _launcher_client(),
+            _harness_client(),
         ],
         "users": users,
     }

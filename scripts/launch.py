@@ -73,8 +73,7 @@ from pathlib import Path
 from typing import Protocol
 
 from harness.apply import _compose
-from harness.realm import LAUNCHER_PORT
-from harness.render import HARNESS_PORT
+from harness.realm import HARNESS_PORT, LAUNCHER_PORT
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WORKSPACE_PORT = 8080

@@ -15,6 +15,9 @@ from harness.realm import (
     DEMO_ADMIN_SUBJECT,
     DEMO_ANALYST_SUBJECT,
     GLASS_CLIENT_ID,
+    HARNESS_CLIENT_ID,
+    HARNESS_PORT,
+    HARNESS_REDIRECT_URI,
     LAUNCHER_CLIENT_ID,
     LAUNCHER_PORT,
     LAUNCHER_REDIRECT_URI,
@@ -323,3 +326,50 @@ def test_the_admin_role_has_one_name_across_the_realm_the_harness_and_the_condui
     from services.api.app import ADMIN_ROLE as CONDUIT_ADMIN_ROLE
 
     assert ADMIN_ROLE == HARNESS_ADMIN_ROLE == CONDUIT_ADMIN_ROLE == "osprey-admin"
+
+
+# --- The Admin console's own client (ADR-051 decision 4) ---
+
+
+def _harness_client(realm: dict) -> dict:
+    (client,) = [c for c in realm["clients"] if c["clientId"] == HARNESS_CLIENT_ID]
+    return client
+
+
+def test_the_harness_client_is_public_with_pkce_and_the_standard_flow_only() -> None:
+    client = _harness_client(render_realm(_config()))
+
+    assert client["publicClient"] is True
+    assert client["standardFlowEnabled"] is True
+    assert client.get("serviceAccountsEnabled") is False
+    assert client.get("directAccessGrantsEnabled") is False
+    assert client["attributes"]["pkce.code.challenge.method"] == "S256"
+
+
+def test_the_harness_redirect_and_logout_addresses_are_exact_and_on_the_harness_port() -> None:
+    """The harness serves on `HARNESS_PORT`; a redirect anywhere else would either be refused by
+    Keycloak (sign-in fails with an error page) or, if loosened to make it work, be the loose
+    redirect ADR-050's objection 2 forbids."""
+    client = _harness_client(render_realm(_config()))
+
+    assert HARNESS_PORT == 7000
+    assert HARNESS_REDIRECT_URI == f"http://localhost:{HARNESS_PORT}/callback"
+    assert client["redirectUris"] == [HARNESS_REDIRECT_URI]
+    assert client["webOrigins"] == [f"http://localhost:{HARNESS_PORT}"]
+    assert client["attributes"]["post.logout.redirect.uris"] == f"http://localhost:{HARNESS_PORT}/"
+    for uri in [*client["redirectUris"], client["attributes"]["post.logout.redirect.uris"]]:
+        assert "*" not in uri
+
+
+def test_a_harness_token_carries_roles_and_no_conduit_audience() -> None:
+    client = _harness_client(render_realm(_config()))
+    kinds = [m["protocolMapper"] for m in client["protocolMappers"]]
+    assert "oidc-audience-mapper" not in kinds
+    (roles,) = [m for m in client["protocolMappers"] if m["name"] == "roles"]
+    assert roles["config"]["id.token.claim"] == "true"
+
+
+def test_the_harness_client_is_rendered_by_default_because_the_console_must_be_reachable() -> None:
+    """Unlike the demo subjects, the client is not optional: the Admin console enforces sign-in
+    against the realm whether or not `--demo-analyst` was passed."""
+    assert HARNESS_CLIENT_ID in [c["clientId"] for c in render_realm(_config())["clients"]]

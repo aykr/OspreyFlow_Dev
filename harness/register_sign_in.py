@@ -2,10 +2,10 @@
 
 `06_DECISIONS.md` ADR-051. A realm import runs only when Keycloak first starts against an empty
 database, so a deployment applied before the launcher had a sign-in holds a realm with no
-`osprey-launcher` client and no `osprey-demo-admin` subject, and re-rendering `realm.json` changes
-nothing there. This registers both through the admin API, from the **same rendered realm** a fresh
-`apply --demo-analyst` builds (`harness.realm.render_realm`), so a running deployment cannot drift
-from a new one.
+`osprey-launcher` or `osprey-harness` client and no `osprey-demo-admin` subject, and re-rendering
+`realm.json` changes nothing there. This registers them through the admin API, from the **same
+rendered realm** a fresh `apply --demo-analyst` builds (`harness.realm.render_realm`), so a running
+deployment cannot drift from a new one.
 
 Safe to run again. An existing client or subject is left alone; the demo admin's password is kept
 if `deployment.env` already names one (Keycloak's database is not persisted, so after a restart the
@@ -25,6 +25,7 @@ from harness import keycloak_admin
 from harness.keycloak_admin import RealmConfigurationFailed
 from harness.realm import (
     DEMO_ADMIN_SUBJECT,
+    HARNESS_CLIENT_ID,
     LAUNCHER_CLIENT_ID,
     generate_client_secret,
     render_realm,
@@ -78,14 +79,15 @@ def register(*, issuer: str, realm: str, env_path: Path, config: OspreyConfig) -
     )
 
     rendered = render_realm(config, realm_name=realm, demo_analyst=True)
-    (launcher,) = [c for c in rendered["clients"] if c["clientId"] == LAUNCHER_CLIENT_ID]
     (admin,) = [u for u in rendered["users"] if u["username"] == DEMO_ADMIN_SUBJECT]
     lines: list[str] = []
 
-    lines.append(
-        f"sign-in client {LAUNCHER_CLIENT_ID}: "
-        + keycloak_admin.ensure_client(issuer=issuer, realm=realm, token=token, client=launcher)
-    )
+    for client_id in (LAUNCHER_CLIENT_ID, HARNESS_CLIENT_ID):
+        (client,) = [c for c in rendered["clients"] if c["clientId"] == client_id]
+        lines.append(
+            f"sign-in client {client_id}: "
+            + keycloak_admin.ensure_client(issuer=issuer, realm=realm, token=token, client=client)
+        )
     lines.append(
         f"account {DEMO_ADMIN_SUBJECT}: "
         + keycloak_admin.ensure_user(issuer=issuer, realm=realm, token=token, user=admin)

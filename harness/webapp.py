@@ -146,10 +146,10 @@ from harness.images import DigestResolver
 from harness.preflight import CHECKS_BY_NAME
 from harness.preflight.__main__ import run_streaming
 from harness.preflight.context import PreflightContext
+from harness.realm import HARNESS_PORT
 from harness.render import (
     DEFAULT_CONFIG_PATH,
     DEFAULT_OUT_ROOT,
-    HARNESS_PORT,
     ClusterRendererNotBuilt,
     MissingDockerfileError,
     UnpinnedImagesError,

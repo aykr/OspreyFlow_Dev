@@ -24,6 +24,7 @@ from harness.realm import (
     ADMIN_ROLE,
     DEMO_ADMIN_SUBJECT,
     DEMO_ANALYST_SUBJECT,
+    HARNESS_CLIENT_ID,
     LAUNCHER_CLIENT_ID,
     render_realm,
 )
@@ -121,9 +122,7 @@ def _env(tmp_path: Path, *lines: str) -> Path:
 
 
 def _register(env: Path) -> list[str]:
-    return register_sign_in.register(
-        issuer=ISSUER, realm="osprey", env_path=env, config=_config()
-    )
+    return register_sign_in.register(issuer=ISSUER, realm="osprey", env_path=env, config=_config())
 
 
 def _env_values(env: Path) -> dict[str, str]:
@@ -184,7 +183,7 @@ def test_a_wrong_keycloak_admin_password_is_reported_as_refused(keycloak: FakeKe
 # --- registering on a running Keycloak ---
 
 
-def test_registering_adds_the_launcher_client_and_the_demo_admin_exactly_as_the_realm_renders_them(
+def test_registering_adds_both_sign_in_clients_and_the_demo_admin_exactly_as_the_realm_renders_them(
     keycloak: FakeKeycloak, tmp_path: Path
 ) -> None:
     """Catches a registration that hand-writes its own copy of the client: the running deployment
@@ -194,9 +193,15 @@ def test_registering_adds_the_launcher_client_and_the_demo_admin_exactly_as_the_
     _register(env)
 
     rendered = render_realm(_config(), demo_analyst=True)
-    (launcher,) = [c for c in rendered["clients"] if c["clientId"] == LAUNCHER_CLIENT_ID]
-    (registered,) = keycloak.clients.values()
-    assert {k: v for k, v in registered.items() if k != "id"} == launcher
+    wanted = {
+        c["clientId"]: c
+        for c in rendered["clients"]
+        if c["clientId"] in (LAUNCHER_CLIENT_ID, HARNESS_CLIENT_ID)
+    }
+    registered = {
+        c["clientId"]: {k: v for k, v in c.items() if k != "id"} for c in keycloak.clients.values()
+    }
+    assert registered == wanted, "both sign-in clients, exactly as a fresh apply renders them"
 
     (admin,) = [u for u in rendered["users"] if u["username"] == DEMO_ADMIN_SUBJECT]
     (created,) = keycloak.users.values()
@@ -228,7 +233,7 @@ def test_registering_twice_changes_nothing_and_keeps_the_same_password(
 
     _register(env)
 
-    assert len(keycloak.clients) == 1
+    assert len(keycloak.clients) == 2
     assert len(keycloak.users) == 1
     assert _env_values(env)["OSPREY_DEMO_ADMIN_PASSWORD"] == first
     assert keycloak.passwords[DEMO_ADMIN_SUBJECT] == first
