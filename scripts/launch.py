@@ -12,8 +12,9 @@ yet), from the repository root:
 
     PYTHONPATH=.:packages .venv/bin/python -m scripts.launch        # or: make launch
 
-It serves a small page on `127.0.0.1:7070` and opens it. Each tile shows whether that interface is
-answering and starts it if it is not:
+It serves a small page on `127.0.0.1:7070` and opens it. Each tile shows in words and a shape
+whether that interface is running, and offers exactly one button for its state: **Start** when it
+is not running, a disabled **Starting…** while it comes up, **Open** when it answers.
 
 - **The Glass** and **Ingest Studio** need the deployment up. Start runs
   `docker compose up -d --wait` against the already-rendered `deploy/generated/<profile>/` — the
@@ -23,15 +24,25 @@ answering and starts it if it is not:
 - **Admin console** starts `python -m harness`, building `apps/harness` first when its `dist/` is
   missing (the server mounts nothing without it, and every page would 404).
 
+**Styling (friction log, second item).** The page is styled only from the workspace's own
+`apps/workspace/src/design/tokens.css`, served as it is on disk at `/tokens.css` — not copied here,
+so a token change reaches this page with no second edit — and it defines no colour of its own
+(`tokens.css`: "Do not introduce a colour that is not defined here"). Status is a word plus a shape
+(filled, half, hollow), never a colour alone. The state-to-buttons mapping is written once, in
+Python (`render_tiles`), and the script only swaps in the fragment `/tiles` returns, so the tests
+exercise what the browser shows.
+
 **What it deliberately does not do.**
 
 - It never reads `deployment.env` beyond the one `OSPREY_WORKSPACE_PORT` line, so no password or
   client secret can reach the page. The demo analyst signs in at the Glass as before; the page
-  says which file holds the password and does not show it.
+  names the username and which file holds the password, and does not show it.
 - It never probes or starts anything on the Conduit's port (8000, which another container holds on
   this machine). Readiness is judged from the workspace, whose `/healthz` the workspace's own
   proxy forwards to the Conduit — so a half-started stack reads `starting`, not `up`.
-- It does not mint tokens, sign anyone in, or touch identity or access.
+- It does not mint tokens, sign anyone in, or touch identity or access. (Whether it should sign a
+  person in and show only the interfaces their role allows is a design question put to the owner,
+  not something this module does.)
 
 **Security of a launcher that starts processes.** It binds loopback only; refuses any request whose
 `Host` is not `127.0.0.1:<port>` or `localhost:<port>` (DNS rebinding); and requires a per-run
@@ -51,6 +62,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.error
 import urllib.request
 import webbrowser
@@ -68,10 +80,22 @@ LAUNCHER_PORT = 7070
 DEFAULT_WORKSPACE_PORT = 8080
 DEFAULT_PROFILE = "local-lite"
 LOOPBACK = "127.0.0.1"
+TOKENS_RELATIVE_PATH = Path("apps") / "workspace" / "src" / "design" / "tokens.css"
+
+#: `docker compose up --wait` takes about a minute; for that long a press of Start reads as
+#: "starting" even though nothing answers yet. Past it, with still nothing answering, the tile
+#: says "not running" again rather than claiming progress for ever.
+START_GRACE_SECONDS = 180.0
 
 GLASS = "The Glass"
 INGEST = "Ingest Studio"
 ADMIN = "Admin console"
+NAMES = (GLASS, INGEST, ADMIN)
+
+#: Word and shape for each state — the design system's rule that hue never carries a
+#: distinction on its own.
+STATE_LABELS = {"up": "Running", "starting": "Starting", "down": "Not running"}
+STATE_SHAPES = {"up": "filled", "starting": "half", "down": "hollow"}
 
 Prober = Callable[[str], int | None]
 
@@ -94,9 +118,10 @@ class NothingToStart(LaunchError):
 class Surface:
     name: str
     url: str
-    blurb: str
+    purpose: str
     hint: str
     starts: str  # "stack" or "admin"
+    audience: str  # "analysts" or "admin"
 
 
 @dataclass(frozen=True)
@@ -177,10 +202,12 @@ class Launcher:
         prober: Prober,
         spawner: Spawner,
         frontend_built: bool | None = None,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.repo_root = repo_root
         self._prober = prober
         self._spawner = spawner
+        self._clock = clock
         self._frontend_built = (
             (repo_root / "apps" / "harness" / "dist").is_dir()
             if frontend_built is None
@@ -190,6 +217,7 @@ class Launcher:
         self.bound_port = LAUNCHER_PORT
         self._threads: list[threading.Thread] = []
         self._running: set[str] = set()
+        self._started_at: dict[str, float] = {}
         self._lock = threading.Lock()
 
     # -- what the deployment is ------------------------------------------------------------
@@ -211,39 +239,49 @@ class Launcher:
         )
         return f"http://localhost:{port}/"
 
+    def env_file_hint(self) -> str:
+        directory = self._deployment_dir()
+        if directory is None:
+            return "deploy/generated/<profile>/deployment.env"
+        return f"{directory.relative_to(self.repo_root)}/deployment.env"
+
     def surfaces(self) -> list[Surface]:
         workspace = self.workspace_url()
-        directory = self._deployment_dir()
-        where = (
-            f"{directory.relative_to(self.repo_root)}/deployment.env"
-            if directory is not None
-            else "deploy/generated/<profile>/deployment.env"
-        )
         return [
             Surface(
                 GLASS,
                 workspace,
-                "The analyst workspace: canvas, timeline, map, dossier, query.",
-                f"Sign in as osprey-demo-analyst; the password is in {where}.",
+                "Where analysts work: the network, timeline, map, dossier and search, "
+                "together in one workspace.",
+                "Sign in as osprey-demo-analyst. The details are under “Signing in” below.",
                 "stack",
+                "analysts",
             ),
             Surface(
                 INGEST,
                 workspace,
-                "Connect a source, map it, verify it, publish it.",
-                "It has no address of its own: sign in to the Glass, then open the Ingest tab.",
+                "Bring a new source of data in: connect it, map it, check it, publish it.",
+                "It is part of The Glass, so it starts and opens together with it. "
+                "Sign in, then choose the Ingest tab at the top.",
                 "stack",
+                "analysts",
             ),
             Surface(
                 ADMIN,
                 f"http://localhost:{HARNESS_PORT}/",
-                "The harness: profile, components, models, governance, geospatial, preflight.",
-                "No sign-in. It runs as its own process, separate from the workspace.",
+                "Settings and set-up for the person who looks after OspreyFlow. "
+                "Not needed for analysis.",
+                "It opens on this computer only, without a sign-in.",
+                "admin",
                 "admin",
             ),
         ]
 
     # -- status ----------------------------------------------------------------------------
+
+    def _within_grace(self, target: str) -> bool:
+        started = self._started_at.get(target)
+        return started is not None and self._clock() - started < START_GRACE_SECONDS
 
     def status(self) -> dict[str, str]:
         out: dict[str, str] = {}
@@ -254,13 +292,15 @@ class Launcher:
                 if stack is None:
                     if self._prober(f"{workspace}healthz") == 200:
                         stack = "up"
-                    elif self._prober(workspace) == 200:
+                    elif self._prober(workspace) == 200 or self._within_grace("stack"):
                         stack = "starting"
                     else:
                         stack = "down"
                 out[surface.name] = stack
+            elif self._prober(surface.url) == 200:
+                out[surface.name] = "up"
             else:
-                out[surface.name] = "up" if self._prober(surface.url) == 200 else "down"
+                out[surface.name] = "starting" if self._within_grace("admin") else "down"
         return out
 
     # -- starting --------------------------------------------------------------------------
@@ -294,14 +334,19 @@ class Launcher:
             return steps
         raise KeyError(target)
 
-    def _execute(self, steps: Sequence[Step]) -> None:
-        for step in steps:
-            self._spawner(list(step.argv), cwd=self.repo_root, wait=step.wait)
+    def _execute(self, target: str, steps: Sequence[Step]) -> None:
+        self._started_at[target] = self._clock()
+        try:
+            for step in steps:
+                self._spawner(list(step.argv), cwd=self.repo_root, wait=step.wait)
+        except LaunchError:
+            self._started_at.pop(target, None)
+            raise
         if any(step.argv[0] == "npm" for step in steps):
             self._frontend_built = True
 
     def start(self, target: str) -> None:
-        self._execute(self.plan(target))
+        self._execute(target, self.plan(target))
 
     def start_in_background(self, target: str) -> None:
         steps = self.plan(target)  # validates now, so a refusal reaches the screen
@@ -309,10 +354,11 @@ class Launcher:
             if target in self._running:
                 return
             self._running.add(target)
+        self._started_at[target] = self._clock()
 
         def run() -> None:
             try:
-                self._execute(steps)
+                self._execute(target, steps)
             except LaunchError as err:
                 sys.stderr.write(f"launch: {err}\n")
             finally:
@@ -329,22 +375,82 @@ class Launcher:
 
     # -- the page --------------------------------------------------------------------------
 
-    def render_page(self) -> str:
-        tiles = "\n".join(
-            f"""    <section class="tile" data-name="{html.escape(s.name)}">
-      <h2>{html.escape(s.name)}</h2>
-      <p>{html.escape(s.blurb)}</p>
-      <p class="hint">{html.escape(s.hint)}</p>
-      <p class="state" aria-live="polite"><span class="dot"></span><span class="label">Checking…</span></p>
-      <p class="actions">
-        <a class="open" href="{html.escape(s.url)}" target="_blank" rel="noopener">Open {html.escape(s.name)}</a>
-        <button type="button" class="start" data-target="{html.escape(s.starts)}">Start</button>
-      </p>
-      <p class="message" role="status"></p>
-    </section>"""  # noqa: E501
-            for s in self.surfaces()
+    def _tile(self, surface: Surface, state: str) -> str:
+        name = html.escape(surface.name)
+        slug = surface.name.lower().replace(" ", "-")
+        label = STATE_LABELS[state]
+        shape = STATE_SHAPES[state]
+        if state == "up":
+            action = (
+                f'<a class="btn primary" href="{html.escape(surface.url)}" '
+                f'target="_blank" rel="noopener">Open {name}</a>'
+            )
+            wait = ""
+        elif state == "starting":
+            action = '<button type="button" class="btn primary" disabled>Starting…</button>'
+            wait = (
+                '<p class="wait">This usually takes about a minute. '
+                "This page updates by itself.</p>"
+            )
+        else:
+            action = (
+                f'<button type="button" class="btn primary" '
+                f'data-target="{html.escape(surface.starts)}">Start {name}</button>'
+            )
+            wait = ""
+        return f"""      <section class="tile" data-name="{name}" data-state="{state}" aria-labelledby="t-{slug}">
+        <header>
+          <h3 id="t-{slug}">{name}</h3>
+          <span class="chip" data-state="{state}"><span class="shape" data-shape="{shape}" aria-hidden="true"></span>{label}</span>
+        </header>
+        <p class="purpose">{html.escape(surface.purpose)}</p>
+        <p class="hint">{html.escape(surface.hint)}</p>
+        <p class="actions">{action}</p>
+        {wait}<p class="message" role="status"></p>
+      </section>"""  # noqa: E501
+
+    def render_tiles(self, status: dict[str, str] | None = None) -> str:
+        status = self.status() if status is None else status
+        groups = (
+            ("analysts", "For analysts"),
+            ("admin", "For whoever looks after OspreyFlow"),
         )
-        return _PAGE.replace("__TILES__", tiles).replace("__TOKEN__", html.escape(self.token))
+        parts: list[str] = []
+        for audience, heading in groups:
+            tiles = "\n".join(
+                self._tile(s, status.get(s.name, "down"))
+                for s in self.surfaces()
+                if s.audience == audience
+            )
+            parts.append(
+                f'    <h2 class="group">{heading}</h2>\n    <div class="grid">\n{tiles}\n    </div>'
+            )
+        return "\n".join(parts)  # noqa: E501
+
+    def render_signin(self) -> str:
+        return f"""    <section class="panel" aria-labelledby="signin-title">
+      <h2 id="signin-title" class="group">Signing in</h2>
+      <p>To use The Glass or the Ingest Studio, sign in as the demo analyst.</p>
+      <p>Username: <span class="value">osprey-demo-analyst</span>
+        <button type="button" class="btn" data-copy="osprey-demo-analyst">Copy</button></p>
+      <p>Password: it was created when OspreyFlow was set up and is kept in
+        <span class="value">{html.escape(self.env_file_hint())}</span>, on the line that starts
+        <span class="value">OSPREY_DEMO_ANALYST_PASSWORD</span>. It is not shown on this page.</p>
+    </section>"""  # noqa: E501
+
+    def render_page(self) -> str:
+        return (
+            _PAGE.replace("__TILES__", self.render_tiles())
+            .replace("__SIGNIN__", self.render_signin())
+            .replace("__TOKEN__", html.escape(self.token))
+        )
+
+    def tokens_css(self) -> str | None:
+        path = self.repo_root / TOKENS_RELATIVE_PATH
+        try:
+            return path.read_text(encoding="utf-8")
+        except OSError:
+            return None
 
 
 _PAGE = """<!doctype html>
@@ -352,63 +458,105 @@ _PAGE = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OspreyFlow — launch</title>
+<title>OspreyFlow — choose what to open</title>
+<link rel="stylesheet" href="/tokens.css">
 <style>
-  :root { color-scheme: light dark; }
-  body { font: 16px/1.5 system-ui, sans-serif; margin: 0; padding: 2rem 1rem; background: Canvas; color: CanvasText; }
-  main { max-width: 64rem; margin: 0 auto; }
-  h1 { margin: 0 0 .25rem; }
-  .lede { margin: 0 0 1.5rem; opacity: .75; }
-  .tiles { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); }
-  .tile { border: 1px solid GrayText; border-radius: .5rem; padding: 1rem 1.25rem; }
-  .tile h2 { margin: 0 0 .5rem; font-size: 1.15rem; }
-  .tile p { margin: .4rem 0; }
-  .hint { font-size: .9rem; opacity: .75; }
-  .dot { display: inline-block; width: .7rem; height: .7rem; border-radius: 50%; margin-right: .5rem; border: 2px solid GrayText; }
-  .up .dot { background: AccentColor; border-color: AccentColor; }
-  .starting .dot { border-style: dotted; }
-  .actions { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
-  a.open, button { font: inherit; padding: .4rem .9rem; border-radius: .35rem; border: 1px solid GrayText; background: ButtonFace; color: ButtonText; cursor: pointer; text-decoration: none; }
-  a.open:focus-visible, button:focus-visible { outline: 3px solid AccentColor; outline-offset: 2px; }
-  .up button.start { display: none; }
-  .message { min-height: 1.4em; font-size: .9rem; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: var(--sp-40) var(--sp-24); }
+  h1 { margin: 0; font-size: var(--fs-23); line-height: var(--lh-23); font-weight: 700; }
+  .lede { margin: var(--sp-8) 0 0; max-width: 62ch; font-size: var(--fs-14); line-height: var(--lh-14); color: var(--text-secondary); }
+  h2.group { margin: var(--sp-32) 0 var(--sp-12); font-size: var(--fs-19); line-height: var(--lh-19); font-weight: 600; }
+  .grid { display: grid; gap: var(--sp-16); grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .tile, .panel { background: var(--surface-panel); border: 1px solid var(--border-subtle); border-radius: var(--r-panel); padding: var(--sp-20); }
+  .panel { margin-top: var(--sp-32); }
+  .panel h2.group { margin-top: 0; }
+  .tile header { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-12); }
+  .tile h3 { margin: 0; font-size: var(--fs-16); line-height: var(--lh-16); font-weight: 600; }
+  .tile p, .panel p { margin: var(--sp-12) 0 0; font-size: var(--fs-14); line-height: var(--lh-14); }
+  .hint, .wait { color: var(--text-tertiary); }
+  .chip { display: inline-flex; align-items: center; gap: var(--sp-6); padding: var(--sp-2) var(--sp-8); border: 1px solid currentColor; border-radius: var(--r-chip); font-size: var(--fs-12); line-height: var(--lh-12); font-weight: 600; white-space: nowrap; }
+  .chip[data-state="up"] { color: var(--success); }
+  .chip[data-state="starting"] { color: var(--warning); }
+  .chip[data-state="down"] { color: var(--text-tertiary); }
+  .shape { width: 10px; height: 10px; box-sizing: border-box; border: 2px solid currentColor; border-radius: 50%; }
+  .shape[data-shape="filled"] { background: currentColor; }
+  .shape[data-shape="half"] { background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
+  .btn { display: inline-block; padding: var(--sp-8) var(--sp-16); border: 1px solid var(--border); border-radius: var(--r-control); background: var(--surface-raised); color: var(--text-primary); font: 600 var(--fs-14) / var(--lh-14) var(--ui); text-decoration: none; cursor: pointer; transition: background var(--dur-fast) var(--ease); }
+  .btn:hover { background: var(--surface-hover); }
+  a.btn, a.btn:hover { color: var(--text-primary); border-bottom-color: var(--border); }
+  .btn.primary { background: var(--brass); border-color: var(--brass); color: var(--brass-ink); }
+  .btn.primary:hover { background: var(--brass-hover); border-color: var(--brass-hover); }
+  .btn.primary:active { background: var(--brass-press); }
+  a.btn.primary, a.btn.primary:hover { color: var(--brass-ink); border-bottom-color: var(--brass-hover); }
+  .btn:disabled { background: var(--surface-raised); border-color: var(--border-subtle); color: var(--text-disabled); cursor: default; }
+  .message { min-height: var(--lh-14); color: var(--text-secondary); }
+  .foot { margin-top: var(--sp-32); font-size: var(--fs-12); line-height: var(--lh-12); color: var(--text-tertiary); }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 </style>
 </head>
 <body>
-<main>
-  <h1>OspreyFlow</h1>
-  <p class="lede">Choose an interface. Start brings it up if it is not running; Open shows it in a new tab.</p>
-  <div class="tiles">
+<div class="wrap">
+  <main>
+    <h1>OspreyFlow</h1>
+    <p class="lede">OspreyFlow has two parts: the workspace where analysts work, which includes the Ingest Studio, and an Admin console for whoever looks after it. Choose what you want to use. If it is not running yet, press Start and this page will update when it is ready.</p>
+    <div id="tiles">
 __TILES__
-  </div>
-</main>
+    </div>
+__SIGNIN__
+    <p class="foot">Closing this page does not stop OspreyFlow. To stop this launcher, press Ctrl-C in the terminal where you started it; the Admin console it started stops with it, and The Glass keeps running.</p>
+  </main>
+</div>
+<p id="announce" class="sr-only" role="status" aria-live="polite"></p>
 <script>
 const TOKEN = "__TOKEN__";
-const LABELS = { up: "Running", starting: "Starting…", down: "Not running" };
+const tiles = document.getElementById("tiles");
+const announce = document.getElementById("announce");
+const LABELS = { up: "running", starting: "starting", down: "not running" };
+
 async function refresh() {
-  try {
-    const status = await (await fetch("/status")).json();
-    document.querySelectorAll(".tile").forEach((tile) => {
-      const state = status[tile.dataset.name] || "down";
-      tile.classList.remove("up", "starting", "down");
-      tile.classList.add(state);
-      tile.querySelector(".label").textContent = LABELS[state];
-    });
-  } catch (_) { /* the launcher itself was stopped */ }
+  let markup;
+  try { markup = await (await fetch("/tiles")).text(); } catch (_) { return; }
+  const next = new DOMParser().parseFromString(markup, "text/html");
+  next.querySelectorAll(".tile").forEach((fresh) => {
+    const name = fresh.dataset.name;
+    const current = [...tiles.querySelectorAll(".tile")].find((t) => t.dataset.name === name);
+    if (!current || current.dataset.state === fresh.dataset.state) return;
+    const hadFocus = current.contains(document.activeElement);
+    const replacement = document.importNode(fresh, true);
+    current.replaceWith(replacement);
+    announce.textContent = name + " is now " + LABELS[fresh.dataset.state] + ".";
+    if (hadFocus) (replacement.querySelector(".primary") || replacement).focus();
+  });
 }
-document.querySelectorAll("button.start").forEach((button) => {
-  button.addEventListener("click", async () => {
-    const message = button.closest(".tile").querySelector(".message");
-    message.textContent = "Starting…";
+
+tiles.addEventListener("click", async (event) => {
+  const button = event.target.closest("button[data-target]");
+  if (!button || button.disabled) return;
+  const message = button.closest(".tile").querySelector(".message");
+  button.disabled = true;
+  message.textContent = "Starting…";
+  try {
     const response = await fetch("/start/" + button.dataset.target, {
       method: "POST", headers: { "X-Launch-Token": TOKEN },
     });
     const body = await response.json();
     message.textContent = body.message;
-    refresh();
-  });
+    if (!response.ok) button.disabled = false;
+  } catch (_) {
+    message.textContent = "The launcher is no longer running. Start it again from the terminal.";
+  }
+  refresh();
 });
-refresh();
+
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest("button[data-copy]");
+  if (!button) return;
+  try {
+    await navigator.clipboard.writeText(button.dataset.copy);
+    button.textContent = "Copied";
+    setTimeout(() => { button.textContent = "Copy"; }, 2000);
+  } catch (_) { /* select-and-copy by hand still works */ }
+});
+
 setInterval(refresh, 3000);
 </script>
 </body>
@@ -446,6 +594,14 @@ def _handler(launcher: Launcher) -> type[BaseHTTPRequestHandler]:
                 self._json(403, {"message": "Unexpected host name."})
             elif self.path == "/":
                 self._send(200, launcher.render_page(), "text/html")
+            elif self.path == "/tiles":
+                self._send(200, launcher.render_tiles(), "text/html")
+            elif self.path == "/tokens.css":
+                css = launcher.tokens_css()
+                if css is None:
+                    self._json(404, {"message": "The design tokens file was not found."})
+                else:
+                    self._send(200, css, "text/css")
             elif self.path == "/status":
                 self._json(200, launcher.status())
             else:
@@ -470,7 +626,7 @@ def _handler(launcher: Launcher) -> type[BaseHTTPRequestHandler]:
             except LaunchError as err:
                 self._json(409, {"message": str(err)})
             else:
-                self._json(202, {"message": "Started. This tile updates when it answers."})
+                self._json(202, {"message": "Started. This tile updates when it is ready."})
 
     return Handler
 

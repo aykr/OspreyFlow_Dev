@@ -21,7 +21,7 @@ current task needs; do not read all of it every session.
 | `process/07_BUILD_PLAN.md` | Phase scope and exit criteria |
 | `spec/08_ACCEPTANCE_SCENARIOS.md` | The functional definition of done |
 | `spec/09_INGEST_STUDIO.md` | Ingest, connectors, mapping, review queue |
-| `spec/design/tokens.css` | Any styling. Authoritative — no colour outside these tokens |
+| `apps/workspace/src/design/tokens.css` | Any styling. Authoritative — no colour outside these tokens (it moved here from `spec/design/` in Round 14a; `spec/design/` now holds only the brand foundations) |
 
 All decision records in `spec/06_DECISIONS.md` are accepted. If you believe one is wrong, say so
 and stop — do not implement an alternative and explain afterwards.

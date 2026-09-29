@@ -18,10 +18,11 @@ real call site receives).
 from __future__ import annotations
 
 import json
+import re
 import threading
 import urllib.error
 import urllib.request
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
@@ -68,17 +69,24 @@ def repo(tmp_path: Path) -> Path:
     out.mkdir(parents=True)
     (out / "deployment.env").write_text(DEPLOYMENT_ENV, encoding="utf-8")
     (out / "compose.yaml").write_text("name: osprey-local-lite\nservices: {}\n", encoding="utf-8")
+    tokens = tmp_path / "apps" / "workspace" / "src" / "design" / "tokens.css"
+    tokens.parent.mkdir(parents=True)
+    tokens.write_text(":root { --brass: #c08a34; } /* fixture marker 41d7 */\n", encoding="utf-8")
     return tmp_path
 
 
 def _launcher(
-    repo: Path, prober: FakeProber | None = None, spawner: FakeSpawner | None = None
+    repo: Path,
+    prober: FakeProber | None = None,
+    spawner: FakeSpawner | None = None,
+    clock: Callable[[], float] | None = None,
 ) -> launch.Launcher:
     return launch.Launcher(
         repo_root=repo,
         prober=prober or FakeProber(),
         spawner=spawner or FakeSpawner(),
         frontend_built=True,
+        clock=clock or (lambda: 0.0),
     )
 
 
@@ -306,3 +314,206 @@ def test_the_page_shows_three_tiles_and_the_status_endpoint_is_json(
     code, body = _request(base + "/status")
     assert code == 200
     assert set(json.loads(body)) == {"The Glass", "Ingest Studio", "Admin console"}
+
+
+# --- The page: design system and plain language (friction log, 29 September 2026, second item) ---
+#
+# Seen in the owner's own screenshot: the first version styled itself with the browser's default
+# colours (`AccentColor`, `GrayText`, `ButtonFace`) although "no colour outside the tokens" is a
+# standing rule; every tile showed both "Open" and "Start" whatever its state; the Glass and the
+# Ingest Studio looked like two things when one deployment serves both; and status was a small
+# coloured dot, which the design system says must never carry a distinction alone.
+
+REAL_TOKENS = (
+    Path(__file__).resolve().parents[1] / "apps" / "workspace" / "src" / "design" / "tokens.css"
+)
+
+
+def _tile(fragment: str, name: str) -> str:
+    match = re.search(
+        rf'<section class="tile"[^>]*data-name="{re.escape(name)}".*?</section>', fragment, re.S
+    )
+    assert match, f"no tile for {name!r}"
+    return match.group(0)
+
+
+def _visible_text(page: str) -> str:
+    page = re.sub(r"<(script|style)\b.*?</\1>", " ", page, flags=re.S)
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", page))
+
+
+def _page_css(page: str) -> str:
+    return "\n".join(re.findall(r"<style>(.*?)</style>", page, flags=re.S))
+
+
+def test_the_page_takes_its_styling_from_the_workspaces_own_tokens_file(
+    served: tuple[str, launch.Launcher, FakeProber, FakeSpawner], repo: Path
+) -> None:
+    """One source: the file is served as it is on disk, not copied into the launcher, so a token
+    change in the workspace reaches this page with no second edit."""
+    base, _, _, _ = served
+    _, page = _request(base + "/")
+    assert '<link rel="stylesheet" href="/tokens.css">' in page
+    code, css = _request(base + "/tokens.css")
+    assert code == 200
+    on_disk = repo / "apps" / "workspace" / "src" / "design" / "tokens.css"
+    assert css == on_disk.read_text(encoding="utf-8")
+
+
+def test_the_page_defines_no_colour_of_its_own(
+    served: tuple[str, launch.Launcher, FakeProber, FakeSpawner],
+) -> None:
+    """`tokens.css`: "Do not introduce a colour that is not defined here." The first version used
+    the browser's system colours, which no hex-literal scan would have caught, so they are named."""
+    base, _, _, _ = served
+    _, page = _request(base + "/")
+    css = _page_css(page)
+    assert css, "the page carries no stylesheet of its own to check"
+    forbidden = [
+        r"#[0-9a-fA-F]{3,8}\b",
+        r"\b(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color)\(",
+        r"\b(?:AccentColor|AccentColorText|ButtonFace|ButtonText|ButtonBorder|Canvas|CanvasText"
+        r"|GrayText|LinkText|VisitedText|ActiveText|Highlight|HighlightText|Field|FieldText|Mark"
+        r"|MarkText|SelectedItem|SelectedItemText)\b",
+        r"(?<![-\w])(?:white|black|red|green|blue|gray|grey|orange|yellow|purple)(?![-\w])",
+    ]
+    for pattern in forbidden:
+        assert not re.search(pattern, css), (
+            f"colour outside the tokens: /{pattern}/ in the page CSS"
+        )
+    assert "style=" not in page, "an inline style attribute bypasses the stylesheet check"
+
+
+def test_every_token_the_page_uses_exists_in_the_real_tokens_file(
+    served: tuple[str, launch.Launcher, FakeProber, FakeSpawner],
+) -> None:
+    """A misspelt `var(--brass-hovr)` resolves to nothing and fails silently in a browser. Checked
+    against the repository's real `tokens.css`, not the fixture's."""
+    base, _, _, _ = served
+    _, page = _request(base + "/")
+    used = set(re.findall(r"var\((--[a-z0-9-]+)", _page_css(page)))
+    defined = set(re.findall(r"(--[a-z0-9-]+)\s*:", REAL_TOKENS.read_text(encoding="utf-8")))
+    assert used, "the page's CSS uses no token at all"
+    assert used <= defined, f"tokens used but not defined: {sorted(used - defined)}"
+
+
+@pytest.mark.parametrize(
+    ("state", "label", "shape"),
+    [
+        ("up", "Running", "filled"),
+        ("starting", "Starting", "half"),
+        ("down", "Not running", "hollow"),
+    ],
+)
+def test_each_state_is_a_word_and_a_shape_never_a_colour_alone(
+    repo: Path, state: str, label: str, shape: str
+) -> None:
+    """The design system's own rule: hue never carries a distinction on its own."""
+    tile = _tile(_launcher(repo).render_tiles(dict.fromkeys(launch.NAMES, state)), launch.GLASS)
+    assert f">{label}<" in re.sub(r"\s+", "", tile).replace(
+        "</span>", "<"
+    ) or label in _visible_text(tile)
+    assert f'data-shape="{shape}"' in tile
+
+
+def test_a_running_interface_offers_open_and_nothing_else(repo: Path) -> None:
+    tile = _tile(_launcher(repo).render_tiles(dict.fromkeys(launch.NAMES, "up")), launch.GLASS)
+    assert "Open The Glass" in tile
+    assert "Start" not in _visible_text(tile)
+    assert tile.count('class="btn primary"') == 1
+
+
+def test_an_interface_that_is_not_running_offers_start_and_not_open(repo: Path) -> None:
+    tile = _tile(_launcher(repo).render_tiles(dict.fromkeys(launch.NAMES, "down")), launch.GLASS)
+    assert "Start The Glass" in tile
+    assert "href=" not in tile
+    assert 'data-target="stack"' in tile
+    assert tile.count('class="btn primary"') == 1
+
+
+def test_a_starting_interface_shows_a_disabled_button_so_it_cannot_be_started_twice(
+    repo: Path,
+) -> None:
+    tile = _tile(
+        _launcher(repo).render_tiles(dict.fromkeys(launch.NAMES, "starting")), launch.GLASS
+    )
+    assert "disabled" in tile
+    assert "href=" not in tile
+    assert tile.count('class="btn primary"') == 1
+
+
+def test_pressing_start_reads_as_starting_until_it_answers_then_gives_up_honestly(
+    repo: Path,
+) -> None:
+    """`docker compose up --wait` takes a minute; for that minute nothing answers, and a tile that
+    went straight back to "Not running" invited a second press. After the grace period with still
+    nothing answering, it says so rather than claiming progress for ever."""
+    now = [100.0]
+    launcher = _launcher(repo, clock=lambda: now[0])
+    launcher.start("stack")
+    assert launcher.status()[launch.GLASS] == "starting"
+    now[0] += launch.START_GRACE_SECONDS + 1
+    assert launcher.status()[launch.GLASS] == "down"
+
+
+def test_the_grace_period_never_hides_an_interface_that_is_actually_up(repo: Path) -> None:
+    prober = FakeProber({"http://localhost:8080/healthz": 200})
+    launcher = _launcher(repo, prober)
+    launcher.start("stack")
+    assert launcher.status()[launch.GLASS] == "up"
+
+
+def test_a_refused_start_does_not_claim_the_interface_is_starting(tmp_path: Path) -> None:
+    launcher = _launcher(tmp_path)
+    with pytest.raises(launch.NothingToStart):
+        launcher.start("stack")
+    assert launcher.status()[launch.GLASS] == "down"
+
+
+def test_the_analyst_interfaces_and_the_admin_console_are_grouped_and_explained(
+    repo: Path,
+) -> None:
+    fragment = _launcher(repo).render_tiles(dict.fromkeys(launch.NAMES, "up"))
+    text = _visible_text(fragment)
+    assert text.index("For analysts") < text.index("The Glass") < text.index("Ingest Studio")
+    assert text.index("Ingest Studio") < text.index("Admin console")
+    assert "Admin console" not in text[: text.index("For analysts")]
+    ingest = _visible_text(_tile(fragment, launch.INGEST))
+    assert "part of The Glass" in ingest, "the Studio must say it runs inside the Glass"
+
+
+def test_the_page_speaks_in_the_product_s_own_words_not_the_machinery_s(
+    served: tuple[str, launch.Launcher, FakeProber, FakeSpawner],
+) -> None:
+    """The first version told a first-time user about "the harness". Visible text only — the
+    addresses the buttons open are attributes, not prose."""
+    base, _, _, _ = served
+    _, page = _request(base + "/")
+    text = _visible_text(page).lower()
+    for jargon in ("harness", "conduit", "docker", "compose", "proxy", "localhost", "container"):
+        assert jargon not in text, f"{jargon!r} in the page's visible text"
+
+
+def test_the_page_says_how_to_sign_in_without_showing_the_password(
+    served: tuple[str, launch.Launcher, FakeProber, FakeSpawner],
+) -> None:
+    base, _, _, _ = served
+    _, page = _request(base + "/")
+    text = _visible_text(page)
+    assert "osprey-demo-analyst" in text
+    assert "deployment.env" in text
+    assert DEMO_PASSWORD not in page
+
+
+def test_the_tiles_the_page_refreshes_from_are_the_ones_it_first_shows(
+    served: tuple[str, launch.Launcher, FakeProber, FakeSpawner],
+) -> None:
+    """One implementation of the state-to-buttons mapping, in Python, so the tests above are about
+    what the browser really shows and the script only swaps fragments in."""
+    base, _, _, _ = served
+    _, page = _request(base + "/")
+    code, fragment = _request(base + "/tiles")
+    assert code == 200
+    for name in launch.NAMES:
+        assert f'data-name="{name}"' in fragment
+    assert fragment.strip() in page
