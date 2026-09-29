@@ -220,20 +220,16 @@ def test_a_workspace_that_answers_while_the_conduit_does_not_is_starting_not_up(
     assert status["The Glass"] == "starting"
 
 
-def test_starting_the_stack_reuses_the_rendered_deployment_without_regenerating_it(
+def test_starting_the_stack_runs_the_refresh_sequence_and_never_renders_again(
     repo: Path,
 ) -> None:
+    """Catches the original fault: a bare `docker compose up` never rebuilt an image, so a code
+    change did not reach the running stack. Start runs `scripts.refresh` (its own tests hold the
+    order and the guarantees); it must not re-render, which would mint new secrets."""
     spawner = FakeSpawner()
     _launcher(repo, spawner=spawner).start("stack")
     (argv,) = spawner.calls
-    compose = repo / "deploy" / "generated" / "local-lite" / "compose.yaml"
-    env = compose.parent / "deployment.env"
-    assert argv[:2] == ["docker", "compose"]
-    assert argv[argv.index("--env-file") + 1] == str(env), (
-        "without --env-file the generated secrets are invisible to compose"
-    )
-    assert argv[argv.index("-f") + 1] == str(compose)
-    assert argv[-3:] == ["up", "-d", "--wait"]
+    assert argv[1:] == ["-m", "scripts.refresh"]
     assert "harness.apply" not in " ".join(argv), "a start must not regenerate or re-seed"
 
 

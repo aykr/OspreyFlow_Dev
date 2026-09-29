@@ -17,10 +17,11 @@ whether that interface is running, and offers exactly one button for its state: 
 is not running, a disabled **Starting…** while it comes up, **Open** when it answers.
 
 - **The Glass** and **Ingest Studio** need the deployment up. Start runs
-  `docker compose up -d --wait` against the already-rendered `deploy/generated/<profile>/` — the
-  same command, with the same `--env-file`, `harness.apply` uses (`harness.apply._compose`), and
-  nothing else: it does not regenerate, rebuild or re-seed anything. With no rendered deployment it
-  says so and names `python -m harness.apply` rather than guessing.
+  `python -m scripts.refresh` against the already-rendered `deploy/generated/<profile>/`: write
+  the sign-in theme, build the owned images, `docker compose up -d --wait`, restart Keycloak if the
+  theme changed, and register the sign-in accounts again. It never re-renders the deployment (that
+  would mint new secrets), removes a volume, or seeds. With no rendered deployment it says so and
+  names `python -m harness.apply` rather than guessing.
 - **Admin console** starts `python -m harness`, building `apps/harness` first when its `dist/` is
   missing (the server mounts nothing without it, and every page would 404).
 
@@ -75,7 +76,6 @@ from pathlib import Path
 from typing import Protocol
 
 from harness import oidc
-from harness.apply import _compose
 from harness.oidc import (
     Identity,
     IdentityProviderUnreachable,
@@ -103,10 +103,11 @@ DEFAULT_PROFILE = "local-lite"
 LOOPBACK = "127.0.0.1"
 TOKENS_RELATIVE_PATH = Path("apps") / "workspace" / "src" / "design" / "tokens.css"
 
-#: `docker compose up --wait` takes about a minute; for that long a press of Start reads as
-#: "starting" even though nothing answers yet. Past it, with still nothing answering, the tile
-#: says "not running" again rather than claiming progress for ever.
-START_GRACE_SECONDS = 180.0
+#: Start now rebuilds the owned images first (`scripts/refresh.py`), which takes minutes after a
+#: code change; for that long a press of Start reads as "starting" even though nothing answers yet.
+#: Past it, with still nothing answering, the tile says "not running" again rather than claiming
+#: progress for ever.
+START_GRACE_SECONDS = 900.0
 #: Appended to the Glass's address. It tells the Glass this person has just signed in through the
 #: launcher, so it carries the sign-in on instead of asking again (the identity provider already
 #: knows them, so no password is asked). It grants nothing: the Glass still signs in, and the
@@ -464,8 +465,9 @@ class Launcher:
                     "There is no rendered deployment under deploy/generated/ to start. "
                     "Run `python -m harness.apply` once (README.md, “Running it”) to build one."
                 )
-            argv = [*_compose(directory / "compose.yaml"), "up", "-d", "--wait"]
-            return [Step(tuple(argv))]
+            # One sequence, not `up` alone: `up` never rebuilds an image, so a code change did not
+            # reach the running stack (scripts/refresh.py has the order and what it never does).
+            return [Step((sys.executable, "-m", "scripts.refresh"))]
         if target == "admin":
             steps: list[Step] = []
             if not self._frontend_built:

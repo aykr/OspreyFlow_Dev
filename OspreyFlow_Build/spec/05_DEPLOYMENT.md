@@ -448,9 +448,11 @@ The seeded demo credentials are displayed once and written nowhere.
 
 **Afterwards, `make launch` is the way in.** It serves one page on `127.0.0.1:7070` with a tile each
 for the Glass, the Ingest Studio and the Admin console, shows which answer, and starts one that does
-not: the deployment by `docker compose up -d --wait` against the already-rendered
-`deploy/generated/<profile>/` (never regenerating or re-seeding it), the admin console by
-`python -m harness`. The Ingest Studio has no address of its own — it is the Ingest tab inside the
+not: the deployment by `python -m scripts.refresh` (also `make refresh`) against the
+already-rendered `deploy/generated/<profile>/` — it writes the sign-in theme, builds the owned
+images, runs `docker compose up -d --wait`, restarts Keycloak when the theme changed and registers
+the sign-in accounts again, and never re-renders, removes a volume or seeds (ADR-049 Amendment,
+29 September 2026) — the admin console by `python -m harness`. The Ingest Studio has no address of its own — it is the Ingest tab inside the
 Glass — so its tile opens the workspace on the Ingest tab (`?view=ingest`), and both tiles carry
 `?from=launcher` so the Glass carries the person's sign-in on without asking again
 (`02_GLASS_FRONTEND.md` §2.2). The launcher reads only `OSPREY_WORKSPACE_PORT`

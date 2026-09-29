@@ -7552,3 +7552,24 @@ sends one. Making it required is a one-line change once you agree.
 
 **Not yet:** the Share panel for Authors and hiding edit controls from Viewers (the Conduit already
 refuses them), counts in the listing, and stage 4 (demo grants and acceptance rows).
+
+### ADR-049, Amendment (29 September 2026) — Start brings the deployment up to date
+
+**Seen:** after code changes the Glass, the Conduit and the sign-in page stayed as they were, because
+the launcher's Start ran `docker compose up` alone, which never rebuilds an image or rewrites the
+mounted sign-in theme. Each fix needed its own command, and restarting Keycloak removed the demo
+administrator (Keycloak's database is not persisted) while `deployment.env` still named their
+password, so the password appeared to stop working.
+
+**Decision (taken on the owner's request for one start sequence):** the launcher's Start, and
+`make refresh`, run `scripts/refresh.py`: write the theme, `docker compose build`, `up -d --wait`,
+restart Keycloak only if the theme changed, then register the sign-in accounts again. This replaces
+the earlier statement that Start "does not rebuild anything". It still never re-renders the
+deployment (new secrets for stores that keep the old ones), never removes a volume, never forces a
+recreate and never seeds; first-time set-up stays `python -m harness.apply`. The start grace period
+is 900 seconds because a build after a code change takes minutes.
+
+**Named tests:** `tests/test_refresh.py` (order; `deployment.env` unchanged; no `down`, `-v` or
+`--force-recreate`; no restart when the theme is unchanged; registration last; a failed registration
+names `make register-sign-in`; a failed build starts nothing) and `tests/test_launch.py`. Three
+faults were planted (build skipped, restart always, registration skipped); each is caught.

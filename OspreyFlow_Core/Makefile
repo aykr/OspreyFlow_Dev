@@ -1,4 +1,4 @@
-.PHONY: ci idp-test ci-status lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test launch register-sign-in dev-up dev-down docker-clean test-all glass-perf glass-a11y glass-keyboard glass-map-verify glass-live exit-over-the-wire harness-keyboard harness-a11y bundle
+.PHONY: ci idp-test ci-status lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test launch refresh register-sign-in dev-up dev-down docker-clean test-all glass-perf glass-a11y glass-keyboard glass-map-verify glass-live exit-over-the-wire harness-keyboard harness-a11y bundle
 
 PY := .venv/bin/python
 PYTEST := .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini
@@ -206,6 +206,11 @@ test:
 # It starts an *already-rendered* deployment; the first time, `python -m harness.apply` builds one.
 launch:
 	PYTHONPATH=.:packages:../OspreyFlow_Build $(PY) -m scripts.launch
+
+# Brings a running deployment up to date with this checkout: theme, image builds, up, Keycloak restart
+# when its theme changed, sign-in accounts registered again. The launcher's Start runs the same thing.
+refresh:
+	PYTHONPATH=.:packages:../OspreyFlow_Build $(PY) -m scripts.refresh
 
 # Adds the launcher's sign-in (client and demo admin) to a Keycloak that is already running; a
 # realm import only happens at first start (06_DECISIONS.md ADR-051). Safe to run again.
