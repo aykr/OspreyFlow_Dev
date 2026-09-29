@@ -88,6 +88,11 @@ handling filter). A principal in the wrong unit gets the same 404 an unknown inv
 would — never a 403 — extending the existence-leak discipline `00_ARCHITECTURE.md` §5 already
 requires at node/edge level up to the investigation id itself.
 
+**Designed, not built (ADR-052): access by level.** The unit check above stays. On top of it a
+principal must hold a level on the case, Viewer, Editor or Author, or the case's unit-wide level, and
+each route declares the level it needs. A grant never widens what the unit, clearance and handling
+rules allow. Until ADR-052 is built, every account in the owning unit acts as an Author.
+
 ### 3.2 Working set
 
 ```

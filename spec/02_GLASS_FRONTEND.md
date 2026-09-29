@@ -192,6 +192,10 @@ set of widgets:
 
 ### 2.1 Investigation selection on load — proposed, not settled spec
 
+**Designed, not built (ADR-052):** the Glass will show a picker of the cases the account holds a
+level on before the workspace opens, and a Share panel for a case's Authors. The load order below
+remains what the Glass does until then.
+
 **This document was silent on the question — checked directly, not assumed.** Before this
 proposal, the Glass created its own
 investigation via `POST /v1/investigations` on every load, unconditionally — an operator who had

@@ -6952,3 +6952,105 @@ demo admin; the analyst account's view. **Still not done:** the harness's browse
 against an enforced console, and the Docker-backed `apply` test, which has not been run since these
 changes. The theme was written against Keycloak 26's sign-in markup without its own stylesheet list
 to hand, so it may need a second pass once it has been seen.
+
+
+## ADR-052 — Who may open a case, and at what level: Author, Editor, Viewer
+
+**Status: Accepted on the owner's rulings of 29 September 2026 for the design as a whole. Four
+points are marked "Proposed" and wait for the owner's confirmation. Design only: nothing here is
+built.** Until it is built, the current rule (any account in the case's owning unit may do anything to
+it) is what the Conduit does, and `03_CONDUIT_MIDDLEWARE.md` §3 still describes it truthfully.
+
+### Context: what was seen
+
+The owner asked that an analyst be shown, before the Glass starts, the cases they have access to
+("Fixture vs Enron"), and that an administrator be able to say which analyst has access to which
+case, at three levels. Measured on 29 September 2026:
+
+- Access to a case is `owning_unit` only: `InvestigationStore.get_authorized` filters
+  `WHERE id = $1 AND owning_unit = $2`. Everyone in the unit is equal on every case, and nobody can be
+  made read-only.
+- There is no route that lists cases. The Glass therefore cannot offer a choice: it creates a new,
+  empty case on every load unless given `?investigation=<id>` (`02_GLASS_FRONTEND.md` §2.1). That is
+  why the owner's Glass showed "0 nodes".
+- A case has no name, only an identifier, so there is nothing to show in a list.
+- 33 routes take a case identifier through `AuthorizedInvestigationDep`, and further stores (sites,
+  studio recipes, patterns, alerts, assessments) check ownership of their own records.
+- The Conduit has no directory of accounts. Accounts live in the identity provider.
+- The real Enron corpus is internal and is never admitted (ADR-035); Fixture Corp is the shippable
+  synthetic demo.
+
+### Decision
+
+1. **Three levels, each including the one below it.**
+   - **Viewer** browses and queries a case. Nothing they do changes it.
+   - **Editor** does everything a Viewer can, and updates the case, adds data to it, and edits the
+     settings of its nodes.
+   - **Author** does everything an Editor can, and manages access to the case and renames it.
+2. **A grant is required, and a grant never widens what an account may see.** A principal opens a
+   case only if they hold a level on it. The unit check (`owning_unit`), the clearance check and the
+   handling-code filter of ADR-041 still apply on top, unchanged and in the same query. A grant can
+   only be made to an account in the case's own unit. The level decides what the account may *do*;
+   the existing rules alone decide what it may *see*. A level that does not allow an action is
+   refused with the ordinary refusal, and an account with no grant on a case
+   receives the same 404 as for a case that does not exist (ADR-041's existence-leak rule, not a 403).
+3. **Roles still apply.** A level is necessary, not sufficient: adding data still needs the `loader`
+   role, and Studio work its own roles. An Editor without `loader` cannot load.
+4. **Who creates and administers.** Whoever creates a case is its first Author. A case's Authors
+   manage its access. `osprey-admin` may also manage any case's access as a safety net (so a case
+   whose Authors have left is not stranded); that account is **not** thereby able to read the case's
+   contents, because reading still needs a level, and the clearance and handling rules are not
+   suspended. Every change of access is recorded in the case's history (who, what, to whom, when),
+   and cannot be restored away.
+5. **Existing cases.** On migration the creator becomes Author and the rest of the unit becomes
+   Viewer, until an Author changes it. Because the Conduit has no directory to list "the rest of the
+   unit", this is stored as a **unit-wide level on the case** (`viewer` for migrated cases, none for
+   new ones), not as one grant per person. An Author may set it to none, viewer or editor.
+6. **Cases gain a name.** Required when created (the Glass proposes one), changed by an Author. The
+   picker shows names, and never the identifier alone.
+7. **The Conduit's surface.** `GET /v1/investigations` lists the cases the caller holds a level on
+   (name, their level, counts; nothing the caller may not see). `GET`, `PUT` and `DELETE` on
+   `/v1/investigations/{id}/access` read, set and remove grants and the unit-wide level (Author, or
+   `osprey-admin`; a Viewer or Editor sees only their own level). Each existing route declares the
+   level it needs, and a route with no declared level fails the route-coverage check.
+8. **The level each existing route needs.** Read, query and preview routes need Viewer. Routes that
+   change the case need Editor. `POST /v1/investigations` needs no grant (the caller becomes Author).
+   Access routes need Author. The route-by-route table lives in `03_CONDUIT_MIDDLEWARE.md` §3 once
+   built, and the coverage check enforces it.
+9. **The Glass** shows a case picker before the workspace opens, listing only cases the account holds
+   a level on, and a Share panel for Authors. For a Viewer it hides edit controls; it does not
+   enforce anything (ADR-050: the Conduit enforces). Opening `?investigation=<id>` without a level
+   shows the ordinary "not found" state.
+10. **An Admin console screen for `osprey-admin`** to see and correct access across cases is wanted
+    later and is not part of this ADR's first build.
+
+**Proposed, for the owner to confirm** (each is fail-closed until confirmed):
+
+- **P1 — Branching a case** needs Editor on the source, and the caller becomes Author of the copy.
+  The alternative, Viewer, lets a read-only account take an editable copy.
+- **P2 — Export** (ADR-045, 047) needs Editor as well as its own gates, because it carries data out
+  of the boundary. The alternative, Viewer, is looser than the owner's "browse and query".
+- **P3 — Naming a grantee.** The Conduit has no account directory, so an Author names the person by
+  the account name the identity provider knows them by, and the grant takes effect when that account
+  signs in. A mistyped name grants nothing to anyone. A pick-list of accounts needs the identity
+  provider's user list and is a separate decision.
+- **P4 — Seeding.** The synthetic demos are seeded with the demo analyst as Editor and the demo admin
+  as Author, and Fixture Corp is offered by name. The Enron corpus is not seeded and not listed.
+
+### What this does not change
+
+Sign-in (ADR-050, ADR-051), the launcher's tiles (a convenience, not an access control), the clearance
+and handling model, the existence-leak rule, and which roles exist.
+
+### Build plan (each stage tests first, with planted faults, and its own commit)
+
+1. Store: names, grants and the unit-wide level; migration; level checks in the authorised-case
+   dependency; every route against every level (`route_coverage_check`), including the existence-leak
+   404 and that a grant never widens unit, clearance or handling.
+2. The listing route and the access routes, with history entries.
+3. The Glass picker and Share panel.
+4. The seed's grants (P4), and the acceptance rows in `08_ACCEPTANCE_SCENARIOS.md`.
+
+### State of the build
+
+Nothing built. Spec pointers added to `02_GLASS_FRONTEND.md` §2.1 and `03_CONDUIT_MIDDLEWARE.md` §3.
