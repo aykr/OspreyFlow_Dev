@@ -48,13 +48,19 @@ from scripts.route_coverage_check import APACHE_DOC_PATHS  # noqa: E402
 #: unrelated word never matches, and so a real false positive (a UI or protocol "stage"/"round"
 #: with a number attached, unrelated to this build's own phases) is rare enough to allowlist by
 #: exception rather than a sign the pattern itself is wrong.
+#: **Case-insensitive (round 14c)** — a real instance ("Round 09: the two Geospatial-screen
+#: actions...") opened a sentence with a capital letter, which the pattern's own then-literal
+#: casing missed entirely; checked, not assumed, that `Phase`/`Stage`/`Checkpoint` had the
+#: identical gap in the other direction (a lowercase "phase 3 work is not yet scheduled" mid-
+#: sentence), so all four use one shared flag rather than a fix scoped to the one instance found.
 _PATTERN = re.compile(
     r"\bPhase \d+\w*\b"
     r"|\bStage \d+\w*\b"
     r"|\bCheckpoint \d+\w*\b"
     r"|\bfound during\b"
     r"|\bfound while\b"
-    r"|\bround \d+\w*\b"
+    r"|\bround \d+\w*\b",
+    re.IGNORECASE,
 )
 
 

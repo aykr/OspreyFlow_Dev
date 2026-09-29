@@ -366,11 +366,11 @@ POST   /v1/admin/geospatial/build-basemap   tier-1 pipeline: download, planetile
 POST   /v1/admin/geospatial/verify          attribution and, for a tier-4 provider, a live CRS/zoom probe
 ```
 
-Round 09: the two Geospatial-screen actions `harness/geospatial.py`'s own docstring found
-structurally unreachable from inside the setup harness image (`build_local_basemap` needs a live
-`GraphPort` transaction; both it and `verify_map` import `services`/`adapters` modules the harness
-image deliberately does not carry). Admin-role-gated (`require_admin_role`, `osprey-admin`) — the
-one process that already has every module both actions need. `build-basemap` streams its own real
+The two Geospatial-screen actions are structurally unreachable from inside the setup harness image
+— disclosed in `harness/geospatial.py`'s own docstring — since `build_local_basemap` needs a live
+`GraphPort` transaction, and both it and `verify_map` import `services`/`adapters` modules the
+harness image deliberately does not carry. Admin-role-gated (`require_admin_role`,
+`osprey-admin`) — the one process that already has every module both actions need. `build-basemap` streams its own real
 progress the same way Launch does (`text/event-stream`, one `{"line": ...}` per step, `event:
 complete` last); `verify` is fast enough to answer as a plain JSON `{"passed": ..., "issues": [...]}`.
 Not yet called from any UI — the post-launch console has no screen built yet.

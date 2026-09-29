@@ -88,6 +88,27 @@ def test_a_bare_use_of_stage_or_round_with_no_number_is_not_flagged(tmp_path: Pa
     assert find_violations((doc,)) == []
 
 
+def test_a_capitalised_round_at_a_sentence_start_is_caught(tmp_path: Path) -> None:
+    """Round 14c: `spec/03_CONDUIT_MIDDLEWARE.md` opened a sentence with "Round 09: ..." and the
+    pattern, matching lowercase `round` only, missed it — the class this test pins, not just the
+    one instance. Checked against `Phase`/`Stage`/`Checkpoint` too, so a future lowercase-at-
+    sentence-start variant of any of the four is caught the same way."""
+    cases = (
+        ("Round 09: the two actions are unreachable from the harness image.\n", "Round 09"),
+        ("phase 3 work is not yet scheduled.\n", "phase 3"),
+        ("stage 2 of the pipeline was skipped.\n", "stage 2"),
+        ("checkpoint 4 recorded the same finding.\n", "checkpoint 4"),
+    )
+    for i, (text, expected) in enumerate(cases):
+        doc = tmp_path / f"doc{i}.md"
+        doc.write_text(text, encoding="utf-8")
+        violations = find_violations((doc,))
+        matched_texts = {matched for _, _, matched in violations}
+        assert expected in matched_texts, (
+            f"{expected!r} in {text!r} was not caught — the pattern is still case-sensitive"
+        )
+
+
 def test_apache_doc_paths_is_the_same_set_route_coverage_check_uses() -> None:
     """The two gates share one definition of "Apache-scoped" (`scripts/provenance_annotation_
     check.py`'s own docstring: imported, not redeclared) — this pins that they cannot silently

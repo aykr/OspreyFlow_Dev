@@ -5,9 +5,16 @@
 # Glass, not a build-calendar coordinate. This list shrinks only if the product's own naming
 # changes, not as part of Trigger A/B's own exit criteria the way the other allowlists do.
 #
+# Round 14c: the gate's own pattern became case-insensitive (a real "Round 09" annotation opened
+# a sentence with a capital letter and escaped the old, literal-case pattern) — which surfaced two
+# more instances of this same UI-workflow false positive, referenced in lowercase mid-sentence
+# prose rather than as a section heading. Same product concept, same reasoning, not a new class.
+#
 # Format: <path relative to repo root>\t<matched text>
 spec/09_INGEST_STUDIO.md	Stage 1
 spec/09_INGEST_STUDIO.md	Stage 2
 spec/09_INGEST_STUDIO.md	Stage 3
 spec/09_INGEST_STUDIO.md	Stage 4
 spec/09_INGEST_STUDIO.md	Stage 5
+spec/09_INGEST_STUDIO.md	stage 1
+spec/09_INGEST_STUDIO.md	stage 3
