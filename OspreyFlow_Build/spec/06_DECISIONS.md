@@ -7605,3 +7605,33 @@ own password; none invented; never printed).
 
 **Not built, and asked of the owner:** whether to offer clearing out the blank cases (a delete, so an
 ADR-052 decision: only an Author, an audited soft delete, never a hard delete) or leave them.
+
+### ADR-052, Amendment 7 (29 September 2026) — removing a case
+
+**Owner's request:** "yes please add the remove button" (for the blank cases the old Glass created).
+
+**Decision:** a **soft remove**. `DELETE /v1/investigations/{id}` sets `removed_at` and `removed_by` on
+the case and writes a `remove` line to its access history and the audit stream. Nothing is deleted:
+the row, its grants and history, and everything in the graph and analytics stores stay. Every read
+(the level lookup, the list, the administrator lookup, the raw lookup) then treats the case as one
+that does not exist, the same 404 as an unknown case (ADR-041), so a removed case cannot be told from
+one that never existed. A branch of a removed case is unaffected. Removing it twice is a 404.
+
+**Who:** an Author (level table: `DELETE` on a case needs Author). Reading taken, for the owner to
+overrule: an `osprey-admin` in the case's **own unit** may also remove it, through the same safety net
+as ADR-052 §4, because the blank cases were made by an account no one now holds as Author. It confers
+no read access. An administrator of another unit finds nothing.
+
+**In the Glass:** the picker shows "Remove" on cases the account is an Author of, and on every case to
+an administrator; it asks once ("Remove this case from every list? Nothing is deleted."), then removes.
+A refusal is shown and the case stays listed.
+
+**Not built:** restoring a removed case (an operator can clear `removed_at` in the database; a Glass
+"restore" is a further design question), and a hard delete, which this ADR does not offer.
+
+**Named tests:** `tests/services/api/test_investigation_access_store.py` (real Postgres: same
+not-found at every level; leaves the list; the record and history stay; twice is not-found; a branch
+survives), `test_investigation_access_routes.py` (Author 204, Editor/Viewer 403, no level 404,
+administrator of the unit 204, another unit's 404), `test_investigation_levels.py` (the level table).
+Two faults were planted (the level lookup and the list each forgetting to skip removed cases); each is
+caught. Glass: `CasePicker.test.tsx`, `cases.test.ts`.

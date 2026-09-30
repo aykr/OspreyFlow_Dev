@@ -266,3 +266,89 @@ async def test_the_administrator_lookup_finds_a_case_in_the_unit_without_any_lev
     assert await store.effective_level(case.id, admin) is None  # still cannot read it
     with pytest.raises(InvestigationNotFoundError):
         await store.get_for_access_admin(case.id, OUTSIDER)
+
+
+# --- removing a case (ADR-052 Amendment 7): a soft remove, never a hard delete ---
+
+
+async def test_a_removed_case_is_the_same_not_found_as_one_that_never_existed(
+    store: InvestigationStore,
+) -> None:
+    """The existence-leak rule (ADR-041): every read of a removed case, at every level, by anyone
+    holding any grant, is `InvestigationNotFoundError`, not a 403 and not a special message."""
+    case = await store.create(AUTHOR, name="To go")
+    await store.set_grant(case.id, "bob", AccessLevel.EDITOR, by=AUTHOR)
+    await store.set_unit_level(case.id, AccessLevel.VIEWER, by=AUTHOR)
+
+    await store.remove(case.id, by=AUTHOR)
+
+    for who in (AUTHOR, COLLEAGUE):
+        with pytest.raises(InvestigationNotFoundError):
+            await store.get_authorized(case.id, who, need=AccessLevel.VIEWER)
+        assert await store.effective_level(case.id, who) is None
+    with pytest.raises(InvestigationNotFoundError):
+        await store.get(case.id)
+    with pytest.raises(InvestigationNotFoundError):
+        await store.get_for_access_admin(case.id, AUTHOR)
+
+
+async def test_a_removed_case_leaves_the_list_and_the_others_stay(
+    store: InvestigationStore,
+) -> None:
+    kept = await store.create(AUTHOR, name="Kept")
+    gone = await store.create(AUTHOR, name="Gone")
+
+    await store.remove(gone.id, by=AUTHOR)
+
+    assert [case.id for case, _ in await store.list_for(AUTHOR)] == [kept.id]
+
+
+async def test_removing_keeps_the_record_and_says_who_and_when_in_the_history(
+    store: InvestigationStore, schema: str
+) -> None:
+    """Catches a hard delete: the row and its grants must still be there, and the removal must be
+    in the history with the account that did it."""
+    case = await store.create(AUTHOR, name="Recorded")
+
+    await store.remove(case.id, by=AUTHOR)
+
+    conn = await asyncpg.connect(dsn=PostgresConfig.from_env().dsn)
+    try:
+        row = await conn.fetchrow(
+            f'SELECT removed_by, removed_at FROM "{schema}".investigations WHERE id = $1', case.id
+        )
+        grants = await conn.fetchval(
+            f'SELECT count(*) FROM "{schema}".investigation_grants WHERE investigation_id = $1',
+            case.id,
+        )
+        history = await conn.fetch(
+            f'SELECT action, changed_by FROM "{schema}".investigation_access_history '
+            "WHERE investigation_id = $1 ORDER BY id",
+            case.id,
+        )
+    finally:
+        await conn.close()
+    assert row is not None and row["removed_by"] == "alice" and row["removed_at"] is not None
+    assert grants == 1
+    assert [(h["action"], h["changed_by"]) for h in history][-1] == ("remove", "alice")
+
+
+async def test_removing_a_case_twice_is_not_found_the_second_time(
+    store: InvestigationStore,
+) -> None:
+    case = await store.create(AUTHOR, name="Once")
+    await store.remove(case.id, by=AUTHOR)
+    with pytest.raises(InvestigationNotFoundError):
+        await store.remove(case.id, by=AUTHOR)
+
+
+async def test_a_case_branched_from_a_removed_case_keeps_working(
+    store: InvestigationStore,
+) -> None:
+    """The branch points at its source; removing the source must not break or remove the branch."""
+    source = await store.create(AUTHOR, name="Source")
+    branch = await store.create(AUTHOR, name="Branch", branched_from=source.id)
+
+    await store.remove(source.id, by=AUTHOR)
+
+    assert (await store.get_authorized(branch.id, AUTHOR, need=AccessLevel.AUTHOR)).id == branch.id

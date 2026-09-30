@@ -791,15 +791,9 @@ async def _audit_denied(
     )
 
 
-InvestigationViewerDep = Annotated[
-    Investigation, Depends(_authorized_at(AccessLevel.VIEWER))
-]
-InvestigationEditorDep = Annotated[
-    Investigation, Depends(_authorized_at(AccessLevel.EDITOR))
-]
-InvestigationAuthorDep = Annotated[
-    Investigation, Depends(_authorized_at(AccessLevel.AUTHOR))
-]
+InvestigationViewerDep = Annotated[Investigation, Depends(_authorized_at(AccessLevel.VIEWER))]
+InvestigationEditorDep = Annotated[Investigation, Depends(_authorized_at(AccessLevel.EDITOR))]
+InvestigationAuthorDep = Annotated[Investigation, Depends(_authorized_at(AccessLevel.AUTHOR))]
 #: Access management: an Author, or the administrator's safety net (ADR-052 §4).
 InvestigationAccessManagerDep = Annotated[
     Investigation, Depends(_authorized_at(AccessLevel.AUTHOR, admin_safety_net=True))
@@ -1347,6 +1341,25 @@ async def rename_investigation(
     return investigation.model_copy(update={"name": body.name})
 
 
+@app.delete("/v1/investigations/{investigation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_investigation(
+    investigation: InvestigationAccessManagerDep,
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+    audit: AuditDep,
+) -> None:
+    """A soft remove (ADR-052 Amendment 7). An Author, or the administrator of the case's own unit
+    through the safety net (a case no Author is left to remove); neither gains any read access."""
+    await investigations.remove(investigation.id, by=principal)
+    await audit.record(
+        principal=principal,
+        action="remove_investigation",
+        investigation_id=investigation.id,
+        resolved_query={},
+        result_cardinality=1,
+    )
+
+
 class AccessView(BaseModel):
     """What `GET .../access` shows. Everyone sees their own level; only an Author sees who else
     holds one, so a Viewer cannot learn the case's other participants."""
@@ -1499,7 +1512,8 @@ async def branch_investigation(
     # principal against the *source* investigation's `owning_unit`; the
     # new investigation gets its own, from this principal, not inherited.
     new_investigation = await investigations.create(
-        principal, name=f"{investigation.name or DEFAULT_CASE_NAME} (branch)",
+        principal,
+        name=f"{investigation.name or DEFAULT_CASE_NAME} (branch)",
         branched_from=investigation.id,
     )
     outcome = await working_set.branch(investigation.id, new_investigation.id, principal)

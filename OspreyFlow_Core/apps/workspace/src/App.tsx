@@ -597,6 +597,7 @@ export function App() {
         apiBaseUrl={API_BASE_URL}
         bearerToken={bearerToken}
         lastCaseId={investigationIdFromSession()}
+        isAdministrator={principal?.roles?.includes("osprey-admin") ?? false}
         onOpen={(id) => openCase(id)}
       />
     );

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "../design/primitives/Button";
 import { Panel } from "../design/primitives/Panel";
-import { type CaseListing, caseLabel, listCases, orderCases } from "./cases";
+import { type CaseListing, caseLabel, listCases, orderCases, removeCase } from "./cases";
 import { NewCaseForm } from "./NewCaseForm";
 
 export interface CasePickerProps {
@@ -13,12 +13,34 @@ export interface CasePickerProps {
   bearerToken: string;
   /** The case last opened in this browser tab, marked in the list. */
   lastCaseId: string | null;
+  /** An administrator of the unit may remove any case in it (ADR-052 Amendment 7); the Conduit
+   * decides, this only decides whether to offer the button. */
+  isAdministrator?: boolean;
   onOpen: (id: string) => void;
 }
 
-export function CasePicker({ apiBaseUrl, bearerToken, lastCaseId, onOpen }: CasePickerProps) {
+export function CasePicker({
+  apiBaseUrl,
+  bearerToken,
+  lastCaseId,
+  isAdministrator = false,
+  onOpen,
+}: CasePickerProps) {
   const [cases, setCases] = useState<CaseListing[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [removalError, setRemovalError] = useState<string | null>(null);
+
+  async function remove(id: string): Promise<void> {
+    setRemovalError(null);
+    try {
+      await removeCase(apiBaseUrl, bearerToken, id);
+      setCases((current) => (current ?? []).filter((entry) => entry.id !== id));
+      setConfirming(null);
+    } catch (failure: unknown) {
+      setRemovalError(failure instanceof Error ? failure.message : "The case could not be removed.");
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -49,6 +71,7 @@ export function CasePicker({ apiBaseUrl, bearerToken, lastCaseId, onOpen }: Case
         <h1>Choose a case</h1>
         <Panel>
           {error && <p role="alert">{error}</p>}
+          {removalError && <p role="alert">{removalError}</p>}
           {!error && cases === null && <p className="label">Loading your cases…</p>}
           {!error && cases !== null && cases.length === 0 && (
             <p className="label">You have no cases yet. Create one to begin.</p>
@@ -68,9 +91,31 @@ export function CasePicker({ apiBaseUrl, bearerToken, lastCaseId, onOpen }: Case
                   }}
                 >
                   <Button onClick={() => onOpen(entry.id)}>{caseLabel(entry)}</Button>
-                  <span className="label">
-                    {entry.id === lastCaseId ? "Last opened · " : ""}
-                    {entry.level}
+                  <span style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}>
+                    <span className="label">
+                      {entry.id === lastCaseId ? "Last opened · " : ""}
+                      {entry.level}
+                    </span>
+                    {(entry.level === "author" || isAdministrator) &&
+                      (confirming === entry.id ? (
+                        <>
+                          <span className="label">
+                            Remove this case from every list? Nothing is deleted.
+                          </span>
+                          <Button onClick={() => void remove(entry.id)}>Confirm remove</Button>
+                          <Button onClick={() => setConfirming(null)}>Cancel</Button>
+                        </>
+                      ) : (
+                        <Button
+                          aria-label={`Remove ${caseLabel(entry)}`}
+                          onClick={() => {
+                            setRemovalError(null);
+                            setConfirming(entry.id);
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      ))}
                   </span>
                 </li>
               ))}

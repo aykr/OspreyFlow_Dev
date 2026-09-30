@@ -173,9 +173,80 @@ describe("cases with no name (seen on the owner's deployment: rows with an empty
     stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: UNNAMED }) });
     render(<CasePicker apiBaseUrl="http://api" bearerToken="t" lastCaseId={null} onOpen={() => undefined} />);
     await screen.findByText("Fixture Corp");
-    const labels = screen.getAllByRole("button").map((b) => b.textContent ?? "");
+    const labels = screen
+      .getAllByRole("button")
+      .map((b) => b.textContent ?? "")
+      .filter((text) => text !== "Remove");
     expect(labels[0]).toBe("Fixture Corp");
     expect(labels[1]).toMatch(/29 Sep 2026/);
     expect(labels[2]).toMatch(/28 Sep 2026/);
+  });
+});
+
+
+describe("removing a case from the picker", () => {
+  const MIXED: CaseListing[] = [
+    { id: "a1", name: "Mine", level: "author", created_at: "2026-09-29T09:00:00Z", created_by: "me" },
+    { id: "e1", name: "Edit only", level: "editor", created_at: "2026-09-28T09:00:00Z", created_by: "x" },
+    { id: "v1", name: "View only", level: "viewer", created_at: "2026-09-27T09:00:00Z", created_by: "x" },
+  ];
+
+  it("offers Remove only on cases the account is an Author of", async () => {
+    stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: MIXED }) });
+    render(<CasePicker apiBaseUrl="http://api" bearerToken="t" lastCaseId={null} onOpen={() => undefined} />);
+    await screen.findByText("Mine");
+    expect(screen.getAllByRole("button", { name: /^Remove /i })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Remove Mine" })).toBeTruthy();
+  });
+
+  it("offers Remove on every case to an administrator, who may remove a case no Author is left for", async () => {
+    stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: MIXED }) });
+    render(
+      <CasePicker apiBaseUrl="http://api" bearerToken="t" lastCaseId={null} isAdministrator onOpen={() => undefined} />,
+    );
+    await screen.findByText("Mine");
+    expect(screen.getAllByRole("button", { name: /^Remove /i })).toHaveLength(3);
+  });
+
+  it("asks once before removing, and Cancel changes nothing", async () => {
+    const mock = stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: MIXED }) });
+    render(<CasePicker apiBaseUrl="http://api" bearerToken="t" lastCaseId={null} onOpen={() => undefined} />);
+    await screen.findByText("Mine");
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Mine" }));
+    expect(screen.getByText(/nothing is deleted/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.getByText("Mine")).toBeTruthy();
+    expect(mock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "DELETE")).toBe(false);
+  });
+
+  it("removes the case on confirmation and it leaves the list", async () => {
+    const mock = stubFetch({
+      "GET /v1/investigations": () => ({ status: 200, body: MIXED }),
+      "DELETE /v1/investigations/a1": () => ({ status: 204, body: null }),
+    });
+    render(<CasePicker apiBaseUrl="http://api" bearerToken="t" lastCaseId={null} onOpen={() => undefined} />);
+    await screen.findByText("Mine");
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Mine" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm remove" }));
+
+    await waitFor(() => expect(screen.queryByText("Mine")).toBeNull());
+    expect(screen.getByText("Edit only")).toBeTruthy();
+    expect(mock).toHaveBeenCalledWith("http://api/v1/investigations/a1", expect.objectContaining({ method: "DELETE" }));
+  });
+
+  it("keeps the case listed and says why when the server refuses", async () => {
+    stubFetch({
+      "GET /v1/investigations": () => ({ status: 200, body: MIXED }),
+      "DELETE /v1/investigations/a1": () => ({ status: 403, body: null }),
+    });
+    render(<CasePicker apiBaseUrl="http://api" bearerToken="t" lastCaseId={null} onOpen={() => undefined} />);
+    await screen.findByText("Mine");
+    fireEvent.click(screen.getByRole("button", { name: "Remove Mine" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm remove" }));
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.getByText("Mine")).toBeTruthy();
   });
 });

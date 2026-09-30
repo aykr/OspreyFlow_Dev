@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS investigations (
 _ACCESS_SQL = """
 ALTER TABLE investigations ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '';
 ALTER TABLE investigations ADD COLUMN IF NOT EXISTS unit_level TEXT;
+ALTER TABLE investigations ADD COLUMN IF NOT EXISTS removed_at TIMESTAMPTZ;
+ALTER TABLE investigations ADD COLUMN IF NOT EXISTS removed_by TEXT;
 CREATE TABLE IF NOT EXISTS investigation_grants (
     investigation_id TEXT NOT NULL REFERENCES investigations (id),
     account_id TEXT NOT NULL,
@@ -74,7 +76,7 @@ _LEVEL_SQL = (
     "FROM investigations i "
     "LEFT JOIN investigation_grants g "
     "ON g.investigation_id = i.id AND g.account_id = $3 "
-    "WHERE i.id = $1 AND i.owning_unit = $2"
+    "WHERE i.id = $1 AND i.owning_unit = $2 AND i.removed_at IS NULL"
 )
 
 _RANK = {"viewer": 1, "editor": 2, "author": 3}
@@ -200,7 +202,7 @@ class InvestigationStore:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT id, name, created_at, created_by, owning_unit, branched_from "
-                "FROM investigations WHERE id = $1",
+                "FROM investigations WHERE id = $1 AND removed_at IS NULL",
                 investigation_id,
             )
         if row is None:
@@ -257,7 +259,7 @@ class InvestigationStore:
                 "FROM investigations i "
                 "LEFT JOIN investigation_grants g "
                 "ON g.investigation_id = i.id AND g.account_id = $3 "
-                "WHERE i.id = $1 AND i.owning_unit = $2",
+                "WHERE i.id = $1 AND i.owning_unit = $2 AND i.removed_at IS NULL",
                 investigation_id,
                 principal.org_unit,
                 principal.id,
@@ -356,7 +358,8 @@ class InvestigationStore:
                 "FROM investigations i "
                 "LEFT JOIN investigation_grants g "
                 "ON g.investigation_id = i.id AND g.account_id = $2 "
-                "WHERE i.owning_unit = $1 AND (g.level IS NOT NULL OR i.unit_level IS NOT NULL) "
+                "WHERE i.owning_unit = $1 AND i.removed_at IS NULL "
+                "AND (g.level IS NOT NULL OR i.unit_level IS NOT NULL) "
                 "ORDER BY i.created_at DESC, i.id DESC",
                 principal.org_unit,
                 principal.id,
@@ -381,6 +384,23 @@ class InvestigationStore:
             if updated is None:
                 raise InvestigationNotFoundError(investigation_id)
             await self._record(conn, investigation_id, by.id, "rename", clean_name, None)
+
+    async def remove(self, investigation_id: str, *, by: Principal) -> None:
+        """A soft remove (ADR-052 Amendment 7): the case, its grants and its history stay in the
+        database and the graph and analytics stores are untouched; every read then treats the case
+        as one that does not exist. Authorisation is the caller's job (an Author, or the
+        administrator safety net); this records who and when."""
+        async with self._pool.acquire() as conn, conn.transaction():
+            removed = await conn.fetchval(
+                "UPDATE investigations SET removed_at = $2, removed_by = $3 "
+                "WHERE id = $1 AND removed_at IS NULL RETURNING id",
+                investigation_id,
+                datetime.now(UTC),
+                by.id,
+            )
+            if removed is None:
+                raise InvestigationNotFoundError(investigation_id)
+            await self._record(conn, investigation_id, by.id, "remove", investigation_id, None)
 
     async def list_grants(self, investigation_id: str) -> dict[str, AccessLevel]:
         async with self._pool.acquire() as conn:
@@ -408,11 +428,10 @@ class InvestigationStore:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT id, name, created_at, created_by, owning_unit, branched_from "
-                "FROM investigations WHERE id = $1 AND owning_unit = $2",
+                "FROM investigations WHERE id = $1 AND owning_unit = $2 AND removed_at IS NULL",
                 investigation_id,
                 principal.org_unit,
             )
         if row is None:
             raise InvestigationNotFoundError(investigation_id)
         return Investigation(**dict(row))
-

@@ -64,6 +64,7 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     # Stage 2: naming, and reading and changing who holds what. Reading needs only Viewer because
     # everyone may see their own level; the handler shows the full list to an Author only.
     ("PATCH", P): A,
+    ("DELETE", P): A,
     ("GET", P + "/access"): V,
     ("PUT", P + "/access"): A,
     ("PUT", P + "/access/grants/{account_id}"): A,

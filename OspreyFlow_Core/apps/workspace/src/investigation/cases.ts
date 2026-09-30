@@ -75,6 +75,36 @@ export async function createCase(
   return (await response.json()) as { id: string; name: string };
 }
 
+/** A soft remove: the case leaves every list and answers "not found", and nothing is deleted from
+ * the database or the graph (ADR-052 Amendment 7). An Author may; so may an administrator of the
+ * case's own unit. The Conduit decides; this only asks. */
+export async function removeCase(
+  apiBaseUrl: string,
+  bearerToken: string,
+  id: string,
+): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/v1/investigations/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${bearerToken}` },
+  });
+  if (response.status === 403) {
+    throw new Error("You do not have permission to remove this case.");
+  }
+  if (response.status === 404) {
+    throw new Error("That case was not found. It may already have been removed.");
+  }
+  if (!response.ok) {
+    throw new Error(`The case could not be removed (${response.status}).`);
+  }
+  try {
+    if (sessionStorage.getItem(INVESTIGATION_ID_SESSION_KEY) === id) {
+      sessionStorage.removeItem(INVESTIGATION_ID_SESSION_KEY);
+    }
+  } catch {
+    /* a convenience about this tab: never worth failing a removal over */
+  }
+}
+
 /** The URL the Glass already reads on load (`initialInvestigationId`). */
 export function caseUrl(id: string, view?: "ingest"): string {
   // `from=case` makes the Glass sign back in by itself: the reload drops the in-memory sign-in

@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { INVESTIGATION_ID_SESSION_KEY } from "./investigationId";
-import { caseUrl, createCase, listCases, openCase } from "./cases";
+import { caseUrl, createCase, listCases, openCase, removeCase } from "./cases";
 
 const fetchMock = vi.fn();
 
@@ -83,5 +83,37 @@ describe("opening a case", () => {
 
     expect(sessionStorage.getItem(INVESTIGATION_ID_SESSION_KEY)).toBe("case-9");
     expect(navigate).toHaveBeenCalledWith("/?investigation=case-9&from=case");
+  });
+});
+
+
+describe("removing a case", () => {
+  it("sends a DELETE for that case with the bearer token", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await removeCase("http://api", "tok", "c 1");
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("http://api/v1/investigations/c%201");
+    expect(init.method).toBe("DELETE");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer tok");
+  });
+
+  it("says plainly when the server refuses, and does not pretend it worked", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 403 })));
+    await expect(removeCase("http://api", "tok", "c1")).rejects.toThrow(/permission/i);
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 404 })));
+    await expect(removeCase("http://api", "tok", "c1")).rejects.toThrow(/not found|already/i);
+  });
+
+  it("forgets the case if it was the one remembered for this tab", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 204 })));
+    sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, "c1");
+    await removeCase("http://api", "tok", "c1");
+    expect(sessionStorage.getItem(INVESTIGATION_ID_SESSION_KEY)).toBeNull();
+    sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, "other");
+    await removeCase("http://api", "tok", "c1");
+    expect(sessionStorage.getItem(INVESTIGATION_ID_SESSION_KEY)).toBe("other");
   });
 });

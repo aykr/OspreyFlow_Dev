@@ -277,3 +277,71 @@ def test_a_grantee_name_must_be_a_plain_non_empty_account_name(store: _Store) ->
 
     assert blank.status_code == too_long.status_code == bad_level.status_code == 422
     assert set(store.grants) == {"alice"}
+
+
+# --- removing a case (ADR-052 Amendment 7) ---
+
+
+def _with_remove(store: _Store) -> _Store:
+    async def remove(investigation_id, *, by) -> None:  # type: ignore[no-untyped-def]
+        store.removed = True
+        store._note(by, "remove", investigation_id, None)
+
+    store.remove = remove  # type: ignore[attr-defined]
+    store.removed = False  # type: ignore[attr-defined]
+    return store
+
+
+def test_an_author_removes_the_case_with_a_204_and_it_is_recorded(store: _Store) -> None:
+    _with_remove(store)
+
+    response = _as(ALICE, store).delete("/v1/investigations/inv-1")
+
+    assert response.status_code == 204
+    assert store.removed  # type: ignore[attr-defined]
+    assert store.history[-1].action == "remove"
+    assert store.history[-1].changed_by == "alice"
+
+
+def test_an_editor_or_viewer_cannot_remove_a_case_and_gets_a_403(store: _Store) -> None:
+    _with_remove(store)
+    store.grants["bob"] = AccessLevel.EDITOR
+
+    assert _as(BOB, store).delete("/v1/investigations/inv-1").status_code == 403
+    store.grants["bob"] = AccessLevel.VIEWER
+    assert _as(BOB, store).delete("/v1/investigations/inv-1").status_code == 403
+    assert not store.removed  # type: ignore[attr-defined]
+
+
+def test_an_account_with_no_level_cannot_tell_the_case_exists_when_it_tries_to_remove_it(
+    store: _Store,
+) -> None:
+    _with_remove(store)
+    assert _as(EVE, store).delete("/v1/investigations/inv-1").status_code == 404
+    assert _as(NOT_ADMIN, store).delete("/v1/investigations/inv-1").status_code == 404
+    assert not store.removed  # type: ignore[attr-defined]
+
+
+def test_the_administrator_of_the_cases_own_unit_can_remove_a_stranded_case(
+    store: _Store,
+) -> None:
+    """Reading of ADR-052 §4: the safety net that lets an administrator manage a case's access
+    also lets them remove a case no Author is left to remove (the blank cases the old Glass made).
+    It confers no read access."""
+    _with_remove(store)
+    store.grants.clear()
+
+    response = _as(ROOT, store).delete("/v1/investigations/inv-1")
+
+    assert response.status_code == 204
+    assert store.history[-1].changed_by == "root"
+    assert _as(ROOT, store).get("/v1/investigations/inv-1/access/history").status_code == 200
+
+
+def test_the_administrator_of_another_unit_cannot_remove_it(store: _Store) -> None:
+    _with_remove(store)
+    other_admin = Principal(
+        id="root2", clearance="OFFICIAL", org_unit="unit-2", roles=["osprey-admin"]
+    )
+    assert _as(other_admin, store).delete("/v1/investigations/inv-1").status_code == 404
+    assert not store.removed  # type: ignore[attr-defined]
