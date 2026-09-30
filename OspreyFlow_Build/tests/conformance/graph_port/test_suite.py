@@ -2190,3 +2190,45 @@ async def test_unauthorised_degree_count_matches_a_graph_without_the_wrong_unit_
             receivable_handling_codes=["R"],
         )
         assert (await adapter.neighbourhood_stats(hub, in_unit)).degree == 2
+
+
+async def test_edges_sharing_an_endpoint_written_in_one_batch_are_each_stored_once(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Seen, 30 September 2026, on the owner's machine: a load of 13,068 transactions stored 13,076,
+    eight ids twice, each pair identical to the microsecond (one write, two records), and a hub
+    account among the targets of two of the pairs. Every edge test here wrote its edges to a shared
+    endpoint in *separate* transactions, so none could see a vertex that is reached twice inside
+    one uncommitted batch. A batch is how every load writes (40 at a time), and a hub account is
+    exactly what a real dataset is made of. Both ends are covered: a shared target, then a shared
+    source. Each edge must be stored once and the shared endpoint's degree must be the number of
+    edges written."""
+    async with factory.context() as adapter:
+        nodes, _ = await _write(
+            adapter,
+            [
+                _node("Endpoint", classification="OFFICIAL", value_normalised=f"+4411111111{n:02d}")
+                for n in range(8)
+            ],
+            [],
+        )
+        target, *sources = nodes[:4]
+        source, *targets = nodes[4:]
+
+        into_target = [
+            _edge("COMMUNICATED_WITH", s, target, classification="OFFICIAL") for s in sources
+        ]
+        out_of_source = [
+            _edge("COMMUNICATED_WITH", source, t, classification="OFFICIAL") for t in targets
+        ]
+        _, written_in = await _write(adapter, [], into_target)
+        _, written_out = await _write(adapter, [], out_of_source)
+
+        for hub, edges, written in (
+            (target, into_target, written_in),
+            (source, out_of_source, written_out),
+        ):
+            subgraph = await adapter.expand(ExpandRequest(node_ids=[hub], depth=1), CLEARED)
+            assert sorted(e.id for e in subgraph.edges) == sorted(e.id for e in edges)
+            assert sorted(written) == sorted(e.id for e in edges)
+            assert (await adapter.neighbourhood_stats(hub, CLEARED)).degree == len(edges)

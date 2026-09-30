@@ -8057,3 +8057,23 @@ confirmed.
 answer) to see whether an endpoint vertex exists twice, and lists all duplicated ids compactly
 (rid, source, target). Still no fix; stage 0b stays on hold.
 
+### ADR-056, Amendment 7 (30 September 2026) — the endpoints are not doubled; a hypothesis and the test that decides it
+
+**Seen, on the owner's machine.** Every endpoint of the duplicated transactions exists exactly once (looked
+up by a scan). All eight pairs are one edge written twice (same source, same target). Seven pairs sit 1 to 7
+record numbers apart; one is about 2,000 apart and does not fit the same story. The destinations repeat:
+two accounts are each the target of two of the duplicated transactions. The seed gives every row its own
+id (the row index is in the hash), so it is not feeding a row in twice.
+
+**Hypothesis, not proven.** Inside one uncommitted batch, an account that already has an edge from the same
+batch may be matched twice by `g.V().has("id", ...)` (committed index plus the batch's own changes), so the
+`addE` traversal runs twice and writes two identical records. It would explain records identical to the
+microsecond, small record-number gaps, and counts that differ between loads of the same data. No test has
+ever written two edges to one endpoint in one transaction (`CLAUDE.md` rule 12): every edge case writes them
+in separate transactions.
+
+**Test, written first.** `test_edges_sharing_an_endpoint_written_in_one_batch_are_each_stored_once`
+(conformance suite, real ArcadeDB, run by the owner) covers a shared target and a shared source. It is
+committed before any fix, so it is seen red. The fix follows only if it is red; if it is green the
+hypothesis is wrong and the commit-retry replay (Amendment 5) is next.
+
