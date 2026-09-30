@@ -24,6 +24,7 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import duckdb
+from scripts.seed_support import events_already_loaded, write_graph
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
@@ -33,7 +34,6 @@ from demo_fixtures import enron
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from ports.analytics import AnalyticsPort
-from ports.graph import GraphPort
 from schemas.domain import Handling, Principal
 
 DATASET = "enron"
@@ -103,6 +103,11 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--grant", action="append", default=[], metavar="ACCOUNT=LEVEL")
     parser.add_argument("--attested-checkout", action="store_true")
     parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Carry on an interrupted load: the graph write is an upsert, so repeating it is safe.",
+    )
+    parser.add_argument(
         "--attested-permission",
         action="store_true",
         help="The host checked the exceptions list (a container cannot see it).",
@@ -136,18 +141,6 @@ def _batches(items: Iterator[object], size: int) -> Iterator[list[object]]:
         yield batch
 
 
-async def _write(graph: GraphPort, nodes: list, edges: list) -> None:  # type: ignore[type-arg]
-    for items, upsert in ((nodes, graph.upsert_nodes), (edges, graph.upsert_edges)):
-        for start in range(0, len(items), _GRAPH_CHUNK):
-            tx = await graph.begin_transaction()
-            try:
-                await upsert(items[start : start + _GRAPH_CHUNK], tx)
-            except Exception:
-                await graph.rollback_transaction(tx)
-                raise
-            await graph.commit_transaction(tx)
-
-
 async def _run(args: argparse.Namespace) -> int:
     try:
         source = authorise(args, in_checkout=_is_checkout(), permitted=permitted_here)
@@ -167,6 +160,14 @@ async def _run(args: argparse.Namespace) -> int:
     scope = case.id
     print(f"Case {args.case_name!r} is {scope}.")
 
+    if events_already_loaded(args.analytics_db_path, scope):
+        print(
+            f"Case {scope!r} already has events loaded, and loading them again would double every "
+            "count. Nothing was written.",
+            file=sys.stderr,
+        )
+        return 1
+
     # Pass one: the summarised links for the graph. Pass two: every message as events.
     first = enron.Tally()
     pairs = enron.summarise(enron.read_messages(source, tally=first))
@@ -180,14 +181,14 @@ async def _run(args: argparse.Namespace) -> int:
         await client.create_database_if_absent()
         graph = GraphArcadeDBAdapter(client, scheme)
         await graph.apply_schema(ontology)
-        if nodes and await graph.get_node(nodes[0].id, principal) is not None:
+        if not args.resume and nodes and await graph.get_node(nodes[0].id, principal) is not None:
             print(
-                "The Enron graph is already loaded. Nothing was written; revert the earlier load "
-                "before seeding again.",
+                "The Enron graph is already loaded (or a load was interrupted). Nothing was "
+                "written. If it was interrupted, run again with --resume.",
                 file=sys.stderr,
             )
             return 1
-        await _write(graph, nodes, edges)
+        await write_graph(graph, nodes, edges, chunk=_GRAPH_CHUNK, nouns=("addresses", "links"))
     finally:
         await client.aclose()
 

@@ -291,3 +291,37 @@ def test_the_real_runner_raises_with_the_failure_text_when_the_command_fails() -
 
     with pytest.raises(seed_internal.SeedFailed, match="boom"):
         seed_internal._run([sys.executable, "-c", "import sys; print('boom'); sys.exit(3)"])
+
+
+# --- resuming an interrupted load ---
+
+
+def test_resume_is_passed_to_the_seed_only_when_asked_for(repo: Path) -> None:
+    """Catches --resume never reaching the container, or being on for every run."""
+    plain = Runner()
+    _go(repo, plain)
+    assert "--resume" not in _seed_call(plain)
+
+    resumed = Runner()
+    seed_internal.seed_internal(
+        "paysim",
+        repo,
+        run=resumed,
+        lookup_subs=lambda directory: SUBS,
+        api_running=lambda compose: False,
+        resume=True,
+    )
+    assert "--resume" in _seed_call(resumed)
+
+
+def test_the_command_line_accepts_resume(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Catches `make`'s command line not knowing the flag."""
+    seen: dict[str, object] = {}
+
+    def fake(dataset: str, **kwargs: object) -> list[str]:
+        seen.update(kwargs, dataset=dataset)
+        return []
+
+    monkeypatch.setattr(seed_internal, "seed_internal", fake)
+    assert seed_internal.main(["paysim", "--stop-api", "--resume"]) == 0
+    assert seen["resume"] is True and seen["stop_api"] is True

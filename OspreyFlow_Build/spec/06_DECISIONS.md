@@ -7719,3 +7719,26 @@ unit-wide level, the demo admin as Author and the demo analyst as Editor (ADR-05
 `--case-name` and `--grant` beside the existing `--investigation-scope`, which still works, so
 `harness.apply --seed` is unchanged. They generate their own data, so no data folder is mounted and no
 attestation is passed.
+
+### ADR-055, Amendment 3 (30 September 2026) — an interrupted seed can be resumed; progress is shown
+
+**Seen.** The owner's first `make seed-paysim` ran for over five hours with a single line of output (the
+case name) and was stopped with Ctrl-C. Nothing could tell slow from stuck. The graph write is one
+lookup and one write per element over HTTP, so hours is plausible on a laptop, and it was silent. I
+had also told the owner it "should take minutes" without ever having run it on a real ArcadeDB: that
+was a guess and is withdrawn. A plain re-run would then have refused ("already loaded") on the
+half-written graph, and had it not, would have doubled the events (the analytics load is an INSERT).
+
+**Built, tests first (`scripts/seed_support.py`, used by the PaySim and Enron seeds):**
+
+1. The graph write prints a line every 25 batches with the elapsed time, so a slow write is visible as
+   slow and the rate can be read off after a minute. The host command shows the seed's output as it
+   arrives instead of at the end.
+2. `--resume` (`make`'s `seed_internal ... --resume`) skips the "graph already loaded" refusal. Safe
+   because the graph write is an upsert keyed on id; nothing is deleted.
+3. A seed refuses, before the graph phase, to load events into a case that already has any, so a
+   resume can never double the counts and the owner is never made to wait hours to be refused.
+
+**Not decided here:** how fast the graph write can be made. Bulk writing would bypass the adapter's
+per-element lookups and is a design change to the adapter; I will only propose it once a real run has
+shown the rate.

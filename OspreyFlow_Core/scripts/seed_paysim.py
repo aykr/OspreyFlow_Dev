@@ -22,6 +22,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import duckdb
+from scripts.seed_support import events_already_loaded, write_graph
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
@@ -123,6 +124,11 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Carry on an interrupted load: the graph write is an upsert, so repeating it is safe.",
+    )
+    parser.add_argument(
         "--data-dir",
         default=os.environ.get("OSPREYFLOW_INTERNAL_DEMO_DATA_DIR", "../OspreyFlow_Data"),
     )
@@ -150,31 +156,19 @@ def scope_and_source(args: argparse.Namespace, *, in_checkout: bool) -> Path:
     )
 
 
-async def _load_graph(graph: GraphPort, source: Path, principal: Principal) -> tuple[int, int]:
+async def _load_graph(
+    graph: GraphPort, source: Path, principal: Principal, *, resume: bool = False
+) -> tuple[int, int]:
     accounts = fraud_accounts(read_paysim(source))
     touching = [r for r in read_paysim(source) if r.origin in accounts or r.destination in accounts]
     nodes, edges = build_graph_writes(touching, created_by=principal.id, handling=_HANDLING)
-    if nodes and await graph.get_node(nodes[0].id, principal) is not None:
+    if not resume and nodes and await graph.get_node(nodes[0].id, principal) is not None:
         raise NotProvisionedError(
-            "The PaySim graph is already loaded. Nothing was written; revert the earlier load "
-            "before seeding again."
+            "The PaySim graph is already loaded (or a load was interrupted). Nothing was written. "
+            "If an earlier run was interrupted, run again with --resume: the graph write is an "
+            "upsert, so repeating it is harmless."
         )
-    for start in range(0, len(nodes), _GRAPH_CHUNK):
-        tx = await graph.begin_transaction()
-        try:
-            await graph.upsert_nodes(nodes[start : start + _GRAPH_CHUNK], tx)
-        except Exception:
-            await graph.rollback_transaction(tx)
-            raise
-        await graph.commit_transaction(tx)
-    for start in range(0, len(edges), _GRAPH_CHUNK):
-        tx = await graph.begin_transaction()
-        try:
-            await graph.upsert_edges(edges[start : start + _GRAPH_CHUNK], tx)
-        except Exception:
-            await graph.rollback_transaction(tx)
-            raise
-        await graph.commit_transaction(tx)
+    await write_graph(graph, nodes, edges, chunk=_GRAPH_CHUNK, nouns=("accounts", "transactions"))
     return len(nodes), len(edges)
 
 
@@ -200,13 +194,23 @@ async def _run(args: argparse.Namespace) -> int:
         scope = case.id
         print(f"Case {args.case_name!r} is {scope}.")
 
+    if events_already_loaded(args.analytics_db_path, scope):
+        print(
+            f"Case {scope!r} already has events loaded, and loading them again would double every "
+            "count. Nothing was written.",
+            file=sys.stderr,
+        )
+        return 1
+
     database = os.environ.get("ARCADEDB_DATABASE", "ospreyflow")
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database))
     try:
         await client.create_database_if_absent()
         graph = GraphArcadeDBAdapter(client, scheme)
         await graph.apply_schema(ontology)
-        node_count, edge_count = await _load_graph(graph, source, principal)
+        node_count, edge_count = await _load_graph(
+            graph, source, principal, resume=bool(args.resume)
+        )
     except NotProvisionedError as error:
         print(error, file=sys.stderr)
         return 1

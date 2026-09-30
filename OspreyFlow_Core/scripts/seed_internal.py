@@ -149,6 +149,7 @@ def seed_internal(
     api_running: Callable[[list[str]], bool] = _api_running,
     stop_api: bool = False,
     permitted: Callable[[str, str], bool] = _permitted,
+    resume: bool = False,
 ) -> list[str]:
     """Return the seed report, one line each. Raises `SeedRefused` before starting anything."""
     if dataset not in DATASETS:
@@ -217,6 +218,8 @@ def seed_internal(
         argv += ["--data-dir", CONTAINER_DATA, "--attested-checkout"]
     if spec.real_dataset:
         argv.append("--attested-permission")
+    if resume and spec.data_folder:
+        argv.append("--resume")
     if running:
         run([*compose, "stop", "api"])
     try:
@@ -230,12 +233,18 @@ def seed_internal(
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     stop_api = "--stop-api" in args
+    resume = "--resume" in args
     names = [a for a in args if not a.startswith("--")]
     if len(names) != 1:
-        print(f"usage: seed_internal <{'|'.join(sorted(DATASETS))}> [--stop-api]", file=sys.stderr)
+        print(
+            f"usage: seed_internal <{'|'.join(sorted(DATASETS))}> [--stop-api] [--resume]",
+            file=sys.stderr,
+        )
         return 2
     try:
-        seed_internal(names[0], stop_api=stop_api)  # its output was shown as it arrived
+        seed_internal(
+            names[0], stop_api=stop_api, resume=resume
+        )  # its output was shown as it arrived
     except (SeedRefused, SeedFailed) as error:
         print(f"seed: {error}", file=sys.stderr)
         return 1

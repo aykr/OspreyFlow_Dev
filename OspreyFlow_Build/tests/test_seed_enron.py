@@ -96,3 +96,14 @@ def test_a_container_run_takes_the_hosts_attestations() -> None:
 def test_a_case_name_is_required() -> None:
     with pytest.raises(SystemExit):
         _parse_args([])
+
+
+def test_the_enron_seed_can_resume_and_refuses_a_second_events_load() -> None:
+    """The same protections as PaySim's: an interrupted graph write can be resumed, and events are
+    never loaded twice (ADR-055 Amendment 3)."""
+    assert _parse_args(["--case-name", "x", "--resume"]).resume is True
+    assert _parse_args(["--case-name", "x"]).resume is False
+    from scripts import seed_enron, seed_support
+
+    assert seed_enron.write_graph is seed_support.write_graph
+    assert seed_enron.events_already_loaded is seed_support.events_already_loaded
