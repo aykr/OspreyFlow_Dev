@@ -82,10 +82,21 @@ DATASETS: dict[str, Dataset] = {
 
 
 def _run(argv: Sequence[str]) -> str:
-    result = subprocess.run(list(argv), capture_output=True, text=True, check=False)
-    if result.returncode != 0:
-        raise SeedFailed(f"`{' '.join(argv[:6])} …` exited {result.returncode}\n{result.stderr}")
-    return result.stdout
+    """Run a command, showing each line of its output as it arrives (a seed takes minutes, and a
+    silent one looks hung), and return everything it printed."""
+    process = subprocess.Popen(  # noqa: S603
+        list(argv), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+    )
+    lines: list[str] = []
+    assert process.stdout is not None
+    for line in process.stdout:
+        lines.append(line)
+        print(f"  {line.rstrip()}", flush=True)
+    code = process.wait()
+    text = "".join(lines)
+    if code != 0:
+        raise SeedFailed(f"`{' '.join(argv[:6])} …` exited {code}\n{text}")
+    return text
 
 
 def _permitted(dataset: str, use: str) -> bool:
@@ -224,8 +235,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"usage: seed_internal <{'|'.join(sorted(DATASETS))}> [--stop-api]", file=sys.stderr)
         return 2
     try:
-        for line in seed_internal(names[0], stop_api=stop_api):
-            print(f"  seed[{names[0]}]: {line}")
+        seed_internal(names[0], stop_api=stop_api)  # its output was shown as it arrived
     except (SeedRefused, SeedFailed) as error:
         print(f"seed: {error}", file=sys.stderr)
         return 1

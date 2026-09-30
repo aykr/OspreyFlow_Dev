@@ -267,3 +267,27 @@ def test_the_synthetic_demos_load_into_named_shared_cases_with_no_data_folder(
 def test_an_unknown_dataset_lists_the_known_ones(repo: Path) -> None:
     with pytest.raises(seed_internal.SeedRefused, match="enron.*fixture-corp.*hmp.*paysim"):
         _go(repo, Runner(), dataset="nope")
+
+
+# --- progress is shown as it happens ---
+
+
+def test_the_real_runner_echoes_each_line_as_it_arrives_and_still_returns_them(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Seen: a seed that takes many minutes printed nothing until it finished, so it looked hung.
+    Catches a runner that only captures."""
+    import sys
+
+    out = seed_internal._run([sys.executable, "-c", "print('one', flush=True); print('two')"])
+    assert out.split() == ["one", "two"]
+    shown = capsys.readouterr().out
+    assert "one" in shown and "two" in shown
+
+
+def test_the_real_runner_raises_with_the_failure_text_when_the_command_fails() -> None:
+    """Catches losing the error text now that both streams are read as one."""
+    import sys
+
+    with pytest.raises(seed_internal.SeedFailed, match="boom"):
+        seed_internal._run([sys.executable, "-c", "import sys; print('boom'); sys.exit(3)"])
