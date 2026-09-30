@@ -12,12 +12,14 @@ an interrupted load resumable.)
 
 from __future__ import annotations
 
+import asyncio
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Protocol
 
 import duckdb
+import httpx
 
 from adapters.graph_arcadedb.client import ArcadeDBError
 from adapters.graph_arcadedb.gremlin_literals import groovy_string_literal
@@ -94,24 +96,81 @@ def _is_missing_record(error: ArcadeDBError) -> bool:
     return error.status_code == 404 or "RecordNotFound" in (error.exception_class or "")
 
 
+async def _rows_in(client: _Sql, type_name: str) -> int:
+    rows = await client.sql(f"SELECT count(*) AS n FROM {type_name}")
+    return int(rows[0]["n"]) if rows else 0
+
+
+async def _truncate_and_wait(
+    client: _Sql,
+    type_name: str,
+    *,
+    say: Callable[[str], None],
+    wait_seconds: float,
+    poll_seconds: float,
+    sleep: Callable[[float], Awaitable[object]],
+) -> None:
+    """Truncate one type. Seen: the HTTP client gives up after 30 seconds, and emptying tens of
+    thousands of rows takes longer; the server carries on regardless. So a client timeout is not a
+    failure: wait, counting the rows left (a count that itself times out is retried), until the
+    type is empty or `wait_seconds` have passed (ADR-055 Amendment 8)."""
+    try:
+        await client.sql(f"TRUNCATE TYPE {type_name} UNSAFE")
+        say(f"  clean-up: {type_name} emptied")
+        return
+    except httpx.TimeoutException:
+        say(f"  clean-up: {type_name} is taking longer than the client waits; watching it")
+    waited = 0.0
+    while waited <= wait_seconds:
+        await sleep(poll_seconds)
+        waited += poll_seconds
+        try:
+            left = await _rows_in(client, type_name)
+        except httpx.TimeoutException:
+            say(f"  clean-up: {type_name} is still busy ({int(waited)}s)")
+            continue
+        if left == 0:
+            say(f"  clean-up: {type_name} emptied ({int(waited)}s)")
+            return
+        say(f"  clean-up: {type_name} has {left:,} rows left ({int(waited)}s)")
+    raise CleanUpIncomplete(
+        f"{type_name} was still not empty {int(wait_seconds)}s after the truncate was sent; "
+        "ArcadeDB may still be working, so run --inspect to see"
+    )
+
+
 async def _truncate_if_only_this_seed(
-    client: _Sql, types: list[tuple[str, str]], *, cause: ArcadeDBError
+    client: _Sql,
+    types: list[tuple[str, str]],
+    *,
+    cause: ArcadeDBError,
+    say: Callable[[str], None] = print,
+    wait_seconds: float = 1800.0,
+    poll_seconds: float = 10.0,
+    sleep: Callable[[float], Awaitable[object]] = asyncio.sleep,
 ) -> None:
     """A row-by-row delete hit a record ArcadeDB could not find (interrupted loads left a dangling
     link; ADR-055 Amendment 7). Empty the types instead, edges first, but only if every row in
     each type carries this seed's prefix: the types are shared with other datasets, so a type that
     holds anything else is left alone and the clean-up fails."""
     for type_name, prefix in types:
-        rows = await client.sql(f"SELECT count(*) AS n FROM {type_name}")
-        every = int(rows[0]["n"]) if rows else 0
+        every = await _rows_in(client, type_name)
         ours = await _count(client, type_name, prefix)
         if every != ours:
             raise CleanUpIncomplete(
                 f"{every - ours:,} rows in {type_name} are not this seed's, so it was not "
                 f"truncated; the row delete failed with: {cause}"
             )
+    say("  clean-up: the row delete could not continue; emptying the two types instead")
     for type_name, _ in types:
-        await client.sql(f"TRUNCATE TYPE {type_name} UNSAFE")
+        await _truncate_and_wait(
+            client,
+            type_name,
+            say=say,
+            wait_seconds=wait_seconds,
+            poll_seconds=poll_seconds,
+            sleep=sleep,
+        )
 
 
 async def _delete_scoped(client: _Sql, *, kind: str, type_name: str, prefix: str) -> None:
@@ -150,7 +209,16 @@ async def _delete_scoped(client: _Sql, *, kind: str, type_name: str, prefix: str
 
 
 async def clear_seeded_graph(
-    client: _Sql, *, node_type: str, node_prefix: str, edge_type: str, edge_prefix: str
+    client: _Sql,
+    *,
+    node_type: str,
+    node_prefix: str,
+    edge_type: str,
+    edge_prefix: str,
+    say: Callable[[str], None] = print,
+    wait_seconds: float = 1800.0,
+    poll_seconds: float = 10.0,
+    sleep: Callable[[float], Awaitable[object]] = asyncio.sleep,
 ) -> tuple[int, int]:
     """Delete this seed's own graph rows, and only those: every statement is scoped by the seed's
     id prefix, because the account type and the edge types are shared with other datasets.
@@ -161,6 +229,7 @@ async def clear_seeded_graph(
     occurrence count, so an interrupted load cannot simply be resumed."""
     accounts = await _count(client, node_type, node_prefix)
     transactions = await _count(client, edge_type, edge_prefix)
+    say(f"  clean-up: {accounts:,} accounts and {transactions:,} transactions to remove")
     try:
         await _delete_scoped(client, kind="EDGE", type_name=edge_type, prefix=edge_prefix)
         await _delete_scoped(client, kind="VERTEX", type_name=node_type, prefix=node_prefix)
@@ -171,6 +240,10 @@ async def clear_seeded_graph(
             client,
             [(edge_type, edge_prefix), (node_type, node_prefix)],
             cause=error,
+            say=say,
+            wait_seconds=wait_seconds,
+            poll_seconds=poll_seconds,
+            sleep=sleep,
         )
     left = await _count(client, node_type, node_prefix) + await _count(
         client, edge_type, edge_prefix

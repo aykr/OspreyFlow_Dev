@@ -7830,3 +7830,18 @@ first, then the account type. The types are shared with other datasets, so the f
 type holds anything else it truncates nothing and raises. The count afterwards must still be zero.
 The normal path never truncates. The whole database is not dropped: truncating the two types reaches
 the same clean graph faster and touches nothing else.
+
+### ADR-055, Amendment 8 (30 September 2026) — a truncate the client gives up on is waited for, and the clean-up says what it is doing
+
+**Seen, on the owner's machine.** The Amendment 7 fallback worked as designed: the row delete met the
+missing record, the guard passed, and `TRUNCATE TYPE ... UNSAFE` was sent. The adapter's HTTP client
+then gave up after its 30-second timeout (`httpx.ReadTimeout`) and the seed aborted. Emptying ~74,000
+rows takes longer than that, and the server does not stop when the client does, so the graph was left
+in a state the seed could not describe. The clean-up had also printed nothing, which is what made the
+earlier run look hung.
+
+**Decided.** A client timeout on the truncate is not a failure. The seed waits, counting the rows left
+in that type every 10 seconds (a count that itself times out is retried), until it is empty or 30
+minutes have passed, and raises, naming the type and pointing at `--inspect`, if it is not. The
+adapter's timeout is unchanged: no image rebuild is needed. `clear_seeded_graph` now prints what it is
+doing (the counts to remove, the fallback, each type emptying and how many rows are left).

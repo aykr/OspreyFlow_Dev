@@ -10,6 +10,7 @@ import asyncio
 from pathlib import Path
 
 import duckdb
+import httpx
 import pytest
 from scripts import seed_support
 
@@ -115,6 +116,8 @@ class FakeClient:
         self.parse_error_on = parse_error_on
         self.other_error_on: str | None = None
         self.record_missing_on: str | None = None
+        self.truncate_times_out = False
+        self.empties_after_polls = 0
 
     def _maybe_fail(self, command: str) -> None:
         from adapters.graph_arcadedb.client import ArcadeDBError
@@ -147,11 +150,22 @@ class FakeClient:
         self._maybe_fail(command)
         truncate = re.match(r"TRUNCATE TYPE (\w+) UNSAFE$", command)
         if truncate:
+            if self.truncate_times_out:
+                # The server carries on emptying after the client gives up.
+                self.pending = truncate.group(1)
+                raise httpx.ReadTimeout("read timed out")
             self.rows[truncate.group(1)] = []
             return [{"count": 0}]
         every = re.match(r"SELECT count\(\*\) AS n FROM (\w+)$", command)
         if every:
-            return [{"n": len(self.rows.get(every.group(1), []))}]
+            name = every.group(1)
+            if getattr(self, "pending", None) == name:
+                if self.empties_after_polls > 0:
+                    self.empties_after_polls -= 1
+                    return [{"n": max(len(self.rows.get(name, [])), 1)}]
+                self.rows[name] = []
+                self.pending = None
+            return [{"n": len(self.rows.get(name, []))}]
         kind = re.search(r"(?:FROM|EDGE|VERTEX) (\w+)", command)
         prefix = re.search(r"LIKE '([^']*)%'", command)
         assert kind and prefix, command
@@ -172,10 +186,17 @@ class FakeClient:
         return []
 
 
-def _clear(client: FakeClient) -> tuple[int, int]:
+async def _no_sleep(_: float) -> None:
+    return None
+
+
+def _clear(client: FakeClient, *, wait_seconds: float = 1800.0) -> tuple[int, int]:
     return asyncio.run(
         seed_support.clear_seeded_graph(
             client,  # type: ignore[arg-type]
+            say=lambda _: None,
+            sleep=_no_sleep,
+            wait_seconds=wait_seconds,
             node_type="Endpoint",
             node_prefix="paysim-acct-",
             edge_type="TRANSACTED",
@@ -301,6 +322,47 @@ def test_a_normal_clean_up_never_truncates() -> None:
     client = FakeClient({"Endpoint": ["paysim-acct-1"], "TRANSACTED": ["paysim-tx-1"]})
     _clear(client)
     assert not [s for s in client.statements if s.startswith("TRUNCATE")]
+
+
+def test_a_truncate_the_client_gives_up_on_is_waited_for_not_treated_as_a_failure() -> None:
+    """Seen: the 30-second client timeout fired on TRUNCATE while ArcadeDB was still emptying the
+    type. Catches a clean-up that aborts (leaving a half-emptied graph) instead of waiting."""
+    client = FakeClient(
+        {"Endpoint": ["paysim-acct-1", "paysim-acct-2"], "TRANSACTED": ["paysim-tx-1"]}
+    )
+    client.record_missing_on = "DELETE"
+    client.truncate_times_out = True
+    client.empties_after_polls = 2
+    assert _clear(client) == (2, 1)
+    assert client.rows == {"Endpoint": [], "TRANSACTED": []}
+
+
+def test_a_truncate_that_never_finishes_is_an_error_naming_the_type() -> None:
+    """Catches waiting forever, and reporting success while rows remain."""
+    client = FakeClient({"Endpoint": ["paysim-acct-1"], "TRANSACTED": ["paysim-tx-1"]})
+    client.record_missing_on = "DELETE"
+    client.truncate_times_out = True
+    client.empties_after_polls = 10**6
+    with pytest.raises(seed_support.CleanUpIncomplete, match="TRANSACTED.*still not empty"):
+        _clear(client, wait_seconds=30.0)
+
+
+def test_the_clean_up_says_what_it_is_doing() -> None:
+    """Seen: the clean-up printed nothing and looked hung."""
+    said: list[str] = []
+    client = FakeClient({"Endpoint": ["paysim-acct-1"], "TRANSACTED": ["paysim-tx-1"]})
+    asyncio.run(
+        seed_support.clear_seeded_graph(
+            client,  # type: ignore[arg-type]
+            node_type="Endpoint",
+            node_prefix="paysim-acct-",
+            edge_type="TRANSACTED",
+            edge_prefix="paysim-tx-",
+            say=said.append,
+            sleep=_no_sleep,
+        )
+    )
+    assert said and "1 accounts and 1 transactions to remove" in said[0]
 
 
 # --- reading what the graph holds, without changing it (ADR-055 Amendment 6) ---
