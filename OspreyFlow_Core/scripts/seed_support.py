@@ -96,6 +96,47 @@ def _is_missing_record(error: ArcadeDBError) -> bool:
     return error.status_code == 404 or "RecordNotFound" in (error.exception_class or "")
 
 
+class _Lifecycle(Protocol):
+    async def drop_database(self) -> None: ...
+
+    async def create_database_if_absent(self) -> None: ...
+
+    async def list_databases(self) -> list[str]: ...
+
+
+async def reset_graph_database(
+    client: _Lifecycle,
+    *,
+    database: str,
+    say: Callable[[str], None] = print,
+    wait_seconds: float = 600.0,
+    poll_seconds: float = 5.0,
+    sleep: Callable[[float], Awaitable[object]] = asyncio.sleep,
+) -> None:
+    """Drop the whole graph database and create it again empty (ADR-055 Amendment 9). Everything in
+    it goes, every case's graph rows, which is why it is only ever run when explicitly asked for.
+    Seen: after interrupted loads and a forced truncate the storage held a record ArcadeDB could
+    not read back, and row-level clean-up could not repair that. A client timeout on the drop is
+    waited out, as with the truncate: the server carries on."""
+    say(f"  reset: dropping the graph database {database!r} (all graph data, every case)")
+    try:
+        await client.drop_database()
+    except httpx.TimeoutException:
+        say("  reset: the drop is taking longer than the client waits; watching it")
+        waited = 0.0
+        while database in await client.list_databases():
+            if waited >= wait_seconds:
+                raise CleanUpIncomplete(
+                    f"database {database!r} still exists {int(wait_seconds)}s after the drop"
+                ) from None
+            await sleep(poll_seconds)
+            waited += poll_seconds
+    if database in await client.list_databases():
+        raise CleanUpIncomplete(f"database {database!r} still exists after the drop")
+    await client.create_database_if_absent()
+    say(f"  reset: {database!r} created again, empty")
+
+
 async def _rows_in(client: _Sql, type_name: str) -> int:
     rows = await client.sql(f"SELECT count(*) AS n FROM {type_name}")
     return int(rows[0]["n"]) if rows else 0

@@ -365,6 +365,79 @@ def test_the_clean_up_says_what_it_is_doing() -> None:
     assert said and "1 accounts and 1 transactions to remove" in said[0]
 
 
+class _Server:
+    """A stand-in ArcadeDB server that knows which databases exist."""
+
+    def __init__(self, databases: list[str], *, drop_times_out: bool = False) -> None:
+        self.databases = list(databases)
+        self.drop_times_out = drop_times_out
+        self.calls: list[str] = []
+        self.lists_until_gone = 0
+
+    async def drop_database(self) -> None:
+        self.calls.append("drop")
+        if self.drop_times_out:
+            self.lists_until_gone = 2
+            raise httpx.ReadTimeout("read timed out")
+        self.databases = [d for d in self.databases if d != "ospreyflow"]
+
+    async def create_database_if_absent(self) -> None:
+        self.calls.append("create")
+        if "ospreyflow" not in self.databases:
+            self.databases.append("ospreyflow")
+
+    async def list_databases(self) -> list[str]:
+        if self.drop_times_out and self.lists_until_gone > 0:
+            self.lists_until_gone -= 1
+            if self.lists_until_gone == 0:
+                self.databases = [d for d in self.databases if d != "ospreyflow"]
+        return list(self.databases)
+
+
+def _reset(server: _Server, *, wait_seconds: float = 600.0) -> list[str]:
+    said: list[str] = []
+    asyncio.run(
+        seed_support.reset_graph_database(
+            server,
+            database="ospreyflow",
+            say=said.append,
+            sleep=_no_sleep,
+            wait_seconds=wait_seconds,
+        )
+    )
+    return said
+
+
+def test_the_reset_drops_then_recreates_only_the_named_database() -> None:
+    """Catches a reset that drops another database on the server, or forgets to recreate."""
+    server = _Server(["ospreyflow", "other"])
+    said = _reset(server)
+    assert server.calls == ["drop", "create"]
+    assert server.databases == ["other", "ospreyflow"]
+    assert "all graph data" in said[0]
+
+
+def test_a_drop_the_client_gives_up_on_is_waited_for() -> None:
+    """The same 30-second client limit as the truncate: the server carries on."""
+    server = _Server(["ospreyflow"], drop_times_out=True)
+    _reset(server)
+    assert server.calls == ["drop", "create"] and "ospreyflow" in server.databases
+
+
+def test_a_database_that_will_not_go_is_an_error_not_a_success() -> None:
+    server = _Server(["ospreyflow"], drop_times_out=True)
+    server.lists_until_gone = 10**6
+
+    async def stuck_drop() -> None:
+        server.calls.append("drop")
+        raise httpx.ReadTimeout("read timed out")
+
+    server.drop_database = stuck_drop  # type: ignore[method-assign]
+    with pytest.raises(seed_support.CleanUpIncomplete, match="still exists"):
+        _reset(server, wait_seconds=10.0)
+    assert "create" not in server.calls
+
+
 # --- reading what the graph holds, without changing it (ADR-055 Amendment 6) ---
 
 

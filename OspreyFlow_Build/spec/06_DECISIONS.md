@@ -7845,3 +7845,110 @@ in that type every 10 seconds (a count that itself times out is retried), until 
 minutes have passed, and raises, naming the type and pointing at `--inspect`, if it is not. The
 adapter's timeout is unchanged: no image rebuild is needed. `clear_seeded_graph` now prints what it is
 doing (the counts to remove, the fallback, each type emptying and how many rows are left).
+
+### ADR-055, Amendment 9 (30 September 2026) — an explicit `--reset-graph-database`, after the storage itself proved damaged
+
+**Seen, on the owner's machine.** With the truncate and its wait (Amendments 7 and 8) the graph
+loaded 13,564 accounts and about 2,400 transactions, then ArcadeDB answered the adapter's
+occurrence-sum lookup with a 500, `java.nio.BufferUnderflowException`. The read-only inspection then
+showed 2,400 rows in the transaction type of which 2,399 carry this seed's id prefix, so one stored
+row is unlike the rest. ArcadeDB's own log records, as SEVERE, `Error on loading record #169:80
+(Error on fetching multi page record #169:80)`. The 13,564 accounts contradict a size limit (the
+resumed run reached more than 8,000 transactions). This is a diagnosis by inference, not proof: the
+storage holds at least one record ArcadeDB cannot read back, most likely from the interrupted loads
+and the forced truncate; the `BufferUnderflowException` itself is not in the log tail.
+
+**Decided (owner: "delete the databases and rebuild from the beginning").** Row-level clean-up cannot
+repair unreadable storage, so `seed_paysim` gains `--reset-graph-database` (passed through by
+`seed_internal`, PaySim only for now, and never on by default). It drops the whole graph database,
+waits out a client timeout on the drop as Amendment 8 does for the truncate, checks it is gone,
+creates it empty, and the seed then applies the schema and loads as usual. Everything in that
+database goes, every case's graph rows, which is why the seed says so before doing it and why the
+option must be asked for. The Conduit is stopped for the run as before. Analytics events and case
+records are elsewhere and are not touched. The seed already creates the database and applies the
+schema, so nothing else needs doing before the load.
+
+## ADR-056 — A vault per dataset: separate stores for each dataset, one control plane, and a read-only shared vault
+
+**Status: Accepted in principle, 30 September 2026 (owner's rulings recorded below). Nothing is built.
+Delivery is staged (section 6); each stage lands green before the next starts.**
+
+### Context: what was seen
+
+Loading PaySim on the owner's machine (ADR-055) showed what one graph database for every dataset costs.
+As the code stands, the Conduit opens one ArcadeDB database, `ospreyflow` (hard-coded in
+`services/api/app.py` and `worker_main.py`; 14 places construct an ArcadeDB client outside the tests), and
+every seed writes into it, separated only by id prefix (`paysim-acct-`, `enron-ep-`), `owning_unit` and
+case access on the events side. Four costs were seen or follow directly:
+
+- **Blast radius.** A damaged load needed the whole graph database dropped (ADR-055 Amendment 9), which
+  would have taken every other dataset with it.
+- **Cross-contaminated weights.** The adapter weighs each edge from corpus-wide degrees and totals
+  (`corpus_total_occurrences`, `corpus_source_degree`), so loading one dataset changes the weights of
+  another's edges.
+- **Write cost grows with everything.** Every edge write scans all edges of its type.
+- **Real data is hard to remove or exclude.** ADR-053 keeps Enron on the owner's machine; a database that
+  can be dropped, backed up or left out of a package by name is a cleaner boundary than deleting rows by
+  prefix.
+
+`00_ARCHITECTURE.md` (Non-goals) says: "No multi-tenancy in v1. One deployment serves one organisation.
+Handling markings partition data within it; they are not a tenancy boundary." The owner's answer:
+analysts in the same organisation work on different datasets as a normal case, and segregation gives each
+dataset a **sterile corridor**. That is not tenancy, and this record says so.
+
+### Decisions (the owner's rulings)
+
+1. **Words.** "The Vault" stays the name of the whole backend tier (`00_ARCHITECTURE.md`,
+   `04_VAULT_BACKEND.md`). **A vault** is one dataset's isolated set of stores inside it. **The shared
+   vault** ("the OspreyFlow Vault") is the common one. A vault is not a tenant: one deployment, one
+   organisation, several vaults. **This amends the non-goal quoted above**; that line is not edited, and
+   carries a pointer to this record.
+2. **The unit is the dataset.** A vault equals a dataset; a case belongs to exactly one vault; many
+   cases may share a vault (two analysts on PaySim have two cases in one vault). Choosing a dataset at the
+   start of a session in the Glass or Ingest Studio chooses the active vault for that session.
+3. **What is per vault.** The graph database; the analytics (DuckDB) file; the working-set cache
+   namespace; the object-store bucket; the search and embeddings index. **Models are shared**, not
+   duplicated; what is per vault is which models the vault may use (a real-data vault may forbid external
+   ones), its prompts and settings, its analysis history and its embeddings.
+4. **The Conduit is not segregated.** One vault-aware Conduit remains the control plane: Keycloak identity,
+   cases and access (ADR-052), audit, and job orchestration stay central, because the case picker must
+   list across vaults. Every request and every job carries a vault id, and the ports are built **per
+   vault with no default**, so a missing vault id fails instead of reaching another dataset's database.
+   A process-isolated Conduit for a real-data vault is possible later; it is not built now.
+5. **Sterile corridor.** The only flow across a vault boundary is **from the shared vault into a vault,
+   read-only, and every such read is audited**. No vault reads another vault. Cross-dataset linking, if it
+   is ever wanted, needs its own design; it does not come free from sharing a database.
+6. **The shared vault.** First release: the ontology, recipes, patterns and provider profiles, as
+   versioned content that a vault **pins** to (a live reference would let one change alter another vault's
+   results, which is the weighting problem again). **Read-only for everyone except vault administrators**,
+   who set it up. **A new `vault-admin` role** (a Keycloak role distinct from a case's Author), so owning a
+   case never implies write access to shared content. Reusable algorithms are added later as their own
+   decision.
+7. **Naming (default, accepted).** Vault ids are short and stable (`paysim`, `enron`, `hmp`,
+   `fixture-corp`); physical names derive from them (`vault_<id>` for the graph database, a per-vault
+   directory for the DuckDB file). To be confirmed when the registry is built.
+
+### The existing PaySim load, and the other seeds
+
+Nothing done so far removes the PaySim already in `ospreyflow`, and `--reset-graph-database` is not to be
+run against it again. **Stage 0:** re-seed PaySim into a new, named vault (the seeds already read
+`ARCADEDB_DATABASE`; `seed_internal` does not pass it yet, which is a small change), about 40 minutes and
+deterministic. The original stays live until the owner retires it, because the Glass reads `ospreyflow`
+until routing exists. **Enron is held** until its own vault exists; HMP and Fixture Corp are reloaded into
+their own vaults later.
+
+### Consequences, and what is not yet known
+
+- **Work.** My estimate is three to five weeks: ADR and spec (about 1 day); a vault registry and resolver
+  replacing the hard-coded names (3 to 5 days); binding a case to a vault, and choosing the vault in the
+  Glass and Ingest Studio, with cache and working-set scoping (4 to 6 days); create, reset and back up per
+  vault, and seeds that take `--vault` (3 to 4 days); the shared vault and pinning (4 to 6 days);
+  acceptance rows, leakage tests and the full suite on the owner's Mac (3 to 5 days).
+- **Unsized.** The Glass changes, and how many Conduit routes assume one global graph (about 50 places
+  refer to a case or scope), are the largest unknowns. The estimate gets revised at the end of stage 1.
+- **First slice (stage 1):** a graph database and a DuckDB file per vault behind a fixed registry, proved
+  with PaySim; cache, index, object store and model scoping follow.
+- **The main risk** is a code path that reaches a vault without a vault id; the tests must prove that is
+  impossible, and leakage between two vaults gets acceptance rows of its own.
+- **What this does not decide:** cross-vault linking; how a vault is retired or archived; whether the
+  shared vault is mirrored into each vault for offline use.

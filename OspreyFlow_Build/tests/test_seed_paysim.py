@@ -215,3 +215,8 @@ def test_inspect_needs_no_case_and_reads_the_record_it_is_given() -> None:
     assert args.inspect is True and args.inspect_record == "#169:80"
     with pytest.raises(SystemExit):
         _parse_args([])
+
+
+def test_reset_graph_database_is_read_from_the_command_line_and_off_by_default() -> None:
+    assert _parse_args(["--case-name", "x", "--reset-graph-database"]).reset_graph_database is True
+    assert _parse_args(["--case-name", "x"]).reset_graph_database is False

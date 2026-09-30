@@ -827,5 +827,7 @@ Recorded so that a later reader does not mistake an omission for an oversight.
   to revisit, not a reason to depend on it.
 - **No multi-tenancy in v1.** One deployment serves one organisation. Handling markings
   partition data within it; they are not a tenancy boundary.
+  *Amended by ADR-056 (30 September 2026): one deployment may hold several vaults, one per dataset,
+  within the same organisation. A vault is not a tenant; the organisation is still one.*
 - **No mobile client.** The workspace targets a desktop analyst at ≥ 1440px. Responsive down to
   1024px for review, not for analysis.

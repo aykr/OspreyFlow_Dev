@@ -157,6 +157,7 @@ def seed_internal(
     stop_api: bool = False,
     permitted: Callable[[str, str], bool] = _permitted,
     replace_graph: bool = False,
+    reset_graph_database: bool = False,
     graph_fraud_rows: int | None = None,
     inspect: bool = False,
     inspect_record: str | None = None,
@@ -165,6 +166,8 @@ def seed_internal(
     if dataset not in DATASETS:
         raise SeedRefused(f"unknown dataset {dataset!r}; known: {', '.join(sorted(DATASETS))}")
     spec = DATASETS[dataset]
+    if reset_graph_database and not spec.sampled:
+        raise SeedRefused("--reset-graph-database is only built for paysim so far")
     if spec.real_dataset and not permitted(spec.real_dataset, REAL_DATA_USE):
         raise SeedRefused(
             f"the local real-data exceptions list has no entry for {spec.real_dataset!r} "
@@ -232,6 +235,8 @@ def seed_internal(
         argv.append("--attested-permission")
     if replace_graph and spec.data_folder:
         argv.append("--replace-graph")
+    if reset_graph_database:
+        argv.append("--reset-graph-database")
     if spec.sampled:
         sample = DEFAULT_GRAPH_SAMPLE if graph_fraud_rows is None else graph_fraud_rows
         if sample > 0:
@@ -279,6 +284,7 @@ def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     stop_api = "--stop-api" in args
     replace_graph = "--replace-graph" in args
+    reset_database = "--reset-graph-database" in args
     inspect = "--inspect" in args
     record: str | None = None
     if "--inspect-record" in args:
@@ -298,7 +304,7 @@ def main(argv: list[str] | None = None) -> int:
     if len(names) != 1:
         print(
             f"usage: seed_internal <{'|'.join(sorted(DATASETS))}> [--stop-api] "
-            "[--replace-graph] [--graph-fraud-rows N|all]",
+            "[--replace-graph] [--reset-graph-database] [--graph-fraud-rows N|all]",
             file=sys.stderr,
         )
         return 2
@@ -308,6 +314,7 @@ def main(argv: list[str] | None = None) -> int:
             names[0],
             stop_api=stop_api,
             replace_graph=replace_graph,
+            reset_graph_database=reset_database,
             graph_fraud_rows=sample,
             inspect=inspect,
             inspect_record=record,

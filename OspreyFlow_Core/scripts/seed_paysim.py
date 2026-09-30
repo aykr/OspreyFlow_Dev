@@ -26,6 +26,7 @@ from scripts.seed_support import (
     clear_seeded_graph,
     events_already_loaded,
     inspect_graph,
+    reset_graph_database,
     write_graph,
 )
 
@@ -136,6 +137,15 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         help=(
             "Delete this seed's own graph rows (ids starting paysim-acct- and paysim-tx-) and "
             "load again. For an interrupted load: a transaction written twice is counted twice."
+        ),
+    )
+    parser.add_argument(
+        "--reset-graph-database",
+        action="store_true",
+        help=(
+            "Drop the whole graph database and create it again empty before loading. For a "
+            "database whose storage is damaged. Deletes every case's graph rows, so only on "
+            "request."
         ),
     )
     parser.add_argument(
@@ -255,10 +265,12 @@ async def _run(args: argparse.Namespace) -> int:
     database = os.environ.get("ARCADEDB_DATABASE", "ospreyflow")
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database))
     try:
+        if args.reset_graph_database:
+            await reset_graph_database(client, database=database)
         await client.create_database_if_absent()
         graph = GraphArcadeDBAdapter(client, scheme)
         await graph.apply_schema(ontology)
-        if args.replace_graph:
+        if args.replace_graph and not args.reset_graph_database:
             removed = await clear_seeded_graph(
                 client,
                 node_type=groovy_identifier(physical_type_name("Endpoint")),

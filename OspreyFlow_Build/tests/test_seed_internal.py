@@ -398,3 +398,28 @@ def test_an_inspection_does_not_say_the_dataset_is_loaded(
     assert seed_internal.main(["paysim", "--inspect"]) == 0
     out = capsys.readouterr().out
     assert "is loaded" not in out and "nothing was changed" in out
+
+
+def test_reset_graph_database_reaches_the_seed_only_when_asked_for_and_only_for_paysim(
+    repo: Path,
+) -> None:
+    """Catches a database drop that is on by default, never reaches the container, or is offered
+    for a dataset whose seed does not understand it."""
+    assert "--reset-graph-database" not in _seed_call(_with(repo))
+    assert "--reset-graph-database" in _seed_call(_with(repo, reset_graph_database=True))
+    with pytest.raises(seed_internal.SeedRefused, match="only built for paysim"):
+        seed_internal.seed_internal(
+            "hmp",
+            repo,
+            run=lambda argv: "",
+            lookup_subs=lambda directory: SUBS,
+            api_running=lambda compose: False,
+            reset_graph_database=True,
+        )
+
+
+def test_the_command_line_accepts_reset_graph_database(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+    monkeypatch.setattr(seed_internal, "seed_internal", lambda dataset, **kw: seen.update(kw) or [])
+    assert seed_internal.main(["paysim", "--stop-api", "--reset-graph-database"]) == 0
+    assert seen["reset_graph_database"] is True
