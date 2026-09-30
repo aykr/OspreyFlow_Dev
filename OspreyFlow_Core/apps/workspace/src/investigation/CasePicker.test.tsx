@@ -250,3 +250,54 @@ describe("removing a case from the picker", () => {
     expect(screen.getByText("Mine")).toBeTruthy();
   });
 });
+
+describe("getting back to the picker (owner: once a case is open there was no way back)", () => {
+  it("the switcher offers All cases when it is told how to browse, and not otherwise", async () => {
+    stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: CASES }) });
+    const onBrowse = vi.fn();
+    render(
+      <CaseSwitcher apiBaseUrl="http://api" bearerToken="t" currentId="c1" onOpen={() => undefined} onBrowse={onBrowse} />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "All cases" }));
+    expect(onBrowse).toHaveBeenCalledTimes(1);
+
+    cleanup();
+    stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: CASES }) });
+    render(<CaseSwitcher apiBaseUrl="http://api" bearerToken="t" currentId="c1" onOpen={() => undefined} />);
+    await screen.findByLabelText(/case/i);
+    expect(screen.queryByRole("button", { name: "All cases" })).toBeNull();
+  });
+
+  it("the picker opened over a case offers a way back to it without a reload", async () => {
+    stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: CASES }) });
+    const onClose = vi.fn();
+    render(
+      <CasePicker apiBaseUrl="http://api" bearerToken="t" lastCaseId={null} openCaseId="c1" onClose={onClose} onOpen={() => undefined} />,
+    );
+    await screen.findByText("Fixture Corp");
+    fireEvent.click(screen.getByRole("button", { name: /back to fixture corp/i }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers no way back to a case that has just been removed", async () => {
+    stubFetch({
+      "GET /v1/investigations": () => ({ status: 200, body: CASES }),
+      "DELETE /v1/investigations/c1": () => ({ status: 204, body: null }),
+    });
+    render(
+      <CasePicker apiBaseUrl="http://api" bearerToken="t" lastCaseId={null} openCaseId="c1" onClose={() => undefined} onOpen={() => undefined} />,
+    );
+    await screen.findByText("Fixture Corp");
+    fireEvent.click(screen.getByRole("button", { name: "Remove Fixture Corp" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm remove" }));
+    await waitFor(() => expect(screen.queryByText("Fixture Corp")).toBeNull());
+    expect(screen.queryByRole("button", { name: /^back to/i })).toBeNull();
+  });
+
+  it("does not offer a way back when no case is open", async () => {
+    stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: CASES }) });
+    render(<CasePicker apiBaseUrl="http://api" bearerToken="t" lastCaseId={null} onOpen={() => undefined} />);
+    await screen.findByText("Fixture Corp");
+    expect(screen.queryByRole("button", { name: /^back to/i })).toBeNull();
+  });
+});

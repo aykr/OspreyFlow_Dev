@@ -16,6 +16,9 @@ export interface CasePickerProps {
   /** An administrator of the unit may remove any case in it (ADR-052 Amendment 7); the Conduit
    * decides, this only decides whether to offer the button. */
   isAdministrator?: boolean;
+  /** The case that is open behind this picker, if any, and how to return to it without a reload. */
+  openCaseId?: string | null;
+  onClose?: () => void;
   onOpen: (id: string) => void;
 }
 
@@ -24,6 +27,8 @@ export function CasePicker({
   bearerToken,
   lastCaseId,
   isAdministrator = false,
+  openCaseId = null,
+  onClose,
   onOpen,
 }: CasePickerProps) {
   const [cases, setCases] = useState<CaseListing[] | null>(null);
@@ -69,6 +74,14 @@ export function CasePicker({
     >
       <div style={{ width: "min(720px, 100%)", display: "flex", flexDirection: "column", gap: "var(--sp-16)" }}>
         <h1>Choose a case</h1>
+        {onClose && openCaseId && cases?.some((entry) => entry.id === openCaseId) && (
+          <div>
+            <Button onClick={onClose}>
+              Back to{" "}
+              {caseLabel(cases.find((entry) => entry.id === openCaseId) as CaseListing)}
+            </Button>
+          </div>
+        )}
         <Panel>
           {error && <p role="alert">{error}</p>}
           {removalError && <p role="alert">{removalError}</p>}

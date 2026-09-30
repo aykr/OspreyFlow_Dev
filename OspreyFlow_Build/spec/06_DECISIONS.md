@@ -7635,3 +7635,15 @@ survives), `test_investigation_access_routes.py` (Author 204, Editor/Viewer 403,
 administrator of the unit 204, another unit's 404), `test_investigation_levels.py` (the level table).
 Two faults were planted (the level lookup and the list each forgetting to skip removed cases); each is
 caught. Glass: `CasePicker.test.tsx`, `cases.test.ts`.
+
+### ADR-052, Amendment 8 (29 September 2026) — getting back to the picker
+
+**Seen:** once a case was open there was no way back to the list of cases; the header's case selector is
+a drop-down, which does not scale to a dozen cases, and Remove lives only in the picker.
+
+**Built, tests first:** an **All cases** button in the header (beside the case selector and New case)
+shows the picker over the open case, with **Back to <case>** to return. It does not reload the page, so
+the sign-in and the case's working state are kept. Choosing a different case still reloads (Amendment
+6). The Back button is not offered for a case that has just been removed, or when no case is open.
+Remove is offered only on cases the account is an Author of, and on every case to an administrator
+(Amendment 7); a Viewer or Editor sees no Remove.

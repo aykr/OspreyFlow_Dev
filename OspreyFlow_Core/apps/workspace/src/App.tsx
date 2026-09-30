@@ -273,6 +273,9 @@ export function App() {
     void getUserManager().signinRedirect({ prompt: "none" });
   }, [isDevBypass]);
 
+  // The case picker shown over an open case ("All cases" in the header). It replaces the workspace
+  // in the render, it does not unmount `App`, so the sign-in and the per-case state survive.
+  const [browsingCases, setBrowsingCases] = useState(false);
   const [investigationId, setInvestigationId] = useState<string | null>(
     initialInvestigationId(),
   );
@@ -591,9 +594,11 @@ export function App() {
     );
   }
 
-  if (!investigationId && (isDevBypass || bearerToken)) {
+  if ((!investigationId || browsingCases) && (isDevBypass || bearerToken)) {
     return (
       <CasePicker
+        openCaseId={investigationId}
+        onClose={investigationId ? () => setBrowsingCases(false) : undefined}
         apiBaseUrl={API_BASE_URL}
         bearerToken={bearerToken}
         lastCaseId={investigationIdFromSession()}
@@ -627,6 +632,7 @@ export function App() {
           apiBaseUrl={API_BASE_URL}
           bearerToken={bearerToken}
           currentId={investigationId}
+          onBrowse={() => setBrowsingCases(true)}
           onOpen={(id) => openCase(id, view === "ingest" ? "ingest" : undefined)}
         />
         <div style={{ flex: 1, maxWidth: 480 }}>

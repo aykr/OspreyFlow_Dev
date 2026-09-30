@@ -13,9 +13,17 @@ export interface CaseSwitcherProps {
   bearerToken: string;
   currentId: string;
   onOpen: (id: string) => void;
+  /** Show the full list of cases (the picker) over the workspace. Absent: no such button. */
+  onBrowse?: () => void;
 }
 
-export function CaseSwitcher({ apiBaseUrl, bearerToken, currentId, onOpen }: CaseSwitcherProps) {
+export function CaseSwitcher({
+  apiBaseUrl,
+  bearerToken,
+  currentId,
+  onOpen,
+  onBrowse,
+}: CaseSwitcherProps) {
   const [cases, setCases] = useState<CaseListing[]>([]);
   const [creating, setCreating] = useState(false);
 
@@ -53,6 +61,7 @@ export function CaseSwitcher({ apiBaseUrl, bearerToken, currentId, onOpen }: Cas
           ))}
         </Select>
       </label>
+      {onBrowse && <Button onClick={onBrowse}>All cases</Button>}
       {!creating && <Button onClick={() => setCreating(true)}>New case</Button>}
       {creating && (
         <NewCaseForm
