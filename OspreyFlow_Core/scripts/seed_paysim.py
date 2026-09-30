@@ -192,20 +192,11 @@ async def _run(args: argparse.Namespace) -> int:
     if args.case_name:
         # Inside the deployment the Conduit's Postgres is reachable, and the case is made through
         # the same store the routes use, so the demo accounts can open it (ADR-052).
-        from scripts.case_seed import ensure_case, parse_grant
-        from services.api.config import PostgresConfig
-        from services.api.investigations import InvestigationStore
+        from scripts.case_seed import case_from_arguments
 
-        case_store = await InvestigationStore.connect(PostgresConfig.from_env().dsn)
-        try:
-            case = await ensure_case(
-                case_store,
-                name=args.case_name,
-                seeder=principal,
-                grants=dict(parse_grant(g) for g in args.grant),
-            )
-        finally:
-            await case_store.close()
+        case = await case_from_arguments(
+            name=args.case_name, seeder=principal, grant_texts=list(args.grant)
+        )
         scope = case.id
         print(f"Case {args.case_name!r} is {scope}.")
 

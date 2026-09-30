@@ -108,6 +108,14 @@ REGISTRY: tuple[DemoManifest, ...] = (
         seed_module="scripts.seed_paysim",
         paths=("OspreyFlow_Data/PaySIM_Dataset/PS_20174392719_1491204439457_log.csv",),
     ),
+    # ADR-053. REAL data, admitted for the owner's own machine only through the local exceptions
+    # list, never committed, never shipped. The path is a folder: the gate matches by prefix.
+    DemoManifest(
+        id="enron",
+        distribution=DISTRIBUTION_INTERNAL,
+        seed_module="scripts.seed_enron",
+        paths=("OspreyFlow_Data/Enron_Mails",),
+    ),
 )
 
 

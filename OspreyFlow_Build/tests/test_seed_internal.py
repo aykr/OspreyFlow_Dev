@@ -57,14 +57,17 @@ def _go(
     api_running: bool = False,
     stop_api: bool = False,
     subs: dict[str, str] | None = None,
+    dataset: str = "paysim",
+    permitted: bool = True,
 ) -> list[str]:
     return seed_internal.seed_internal(
-        "paysim",
+        dataset,
         repo,
         run=runner,
         lookup_subs=lambda directory: SUBS if subs is None else subs,
         api_running=lambda compose: api_running,
         stop_api=stop_api,
+        permitted=lambda name, use: permitted,
     )
 
 
@@ -185,3 +188,82 @@ def test_the_seeds_own_report_is_returned_line_by_line_and_carries_no_secret(rep
     assert any("70,000" in line for line in lines)
     call_text = " ".join(_seed_call(_run_and_return(repo)))
     assert "password" not in call_text.lower()
+
+
+# --- Enron (real data), Fixture Corp and HMP (ADR-053 Amendment 1, ADR-052 Amendment 9) ---
+
+
+def _with_enron(repo: Path) -> None:
+    (repo.parent / "OspreyFlow_Data" / "Enron_Mails" / "smith-a").mkdir(parents=True)
+
+
+def test_enron_is_refused_on_the_host_without_an_exceptions_entry_and_nothing_is_started(
+    repo: Path,
+) -> None:
+    """Catches real data being loaded because the container cannot see the exceptions list: the
+    host is the one place that can, so it must check before starting anything."""
+    _with_enron(repo)
+    runner = Runner()
+    with pytest.raises(seed_internal.SeedRefused, match="exceptions"):
+        _go(repo, runner, dataset="enron", permitted=False)
+    assert runner.calls == []
+
+
+def test_enron_asks_the_exceptions_list_about_this_dataset_and_use(repo: Path) -> None:
+    """Catches a check for the wrong name or use, which would admit or refuse the wrong thing."""
+    _with_enron(repo)
+    asked: list[tuple[str, str]] = []
+    seed_internal.seed_internal(
+        "enron",
+        repo,
+        run=Runner(),
+        lookup_subs=lambda directory: SUBS,
+        api_running=lambda compose: False,
+        permitted=lambda name, use: asked.append((name, use)) or True,
+    )
+    assert asked == [("enron", "owner_run_demonstration")]
+
+
+def test_enron_passes_the_hosts_attestations_and_its_own_case_name(repo: Path) -> None:
+    """The container cannot see the exceptions list or a `.git`, so it is told, and the case is
+    the one ADR-053 names, shared only with the two demo accounts."""
+    _with_enron(repo)
+    runner = Runner()
+    _go(repo, runner, dataset="enron")
+    call = _seed_call(runner)
+    assert call[call.index("-m") + 1] == "scripts.seed_enron"
+    assert "--attested-permission" in call and "--attested-checkout" in call
+    assert call[call.index("--case-name") + 1] == "Enron corpus (real data, this machine only)"
+    assert f"{SUBS[ADMIN]}=author" in call and f"{SUBS[ANALYST]}=editor" in call
+
+
+def test_a_synthetic_dataset_is_never_given_a_permission_attestation(repo: Path) -> None:
+    """Catches the attestation leaking to a seed that has no such check."""
+    runner = Runner()
+    _go(repo, runner)
+    assert "--attested-permission" not in _seed_call(runner)
+
+
+@pytest.mark.parametrize(
+    ("dataset", "module"),
+    [("hmp", "scripts.seed_hmp_fixture"), ("fixture-corp", "scripts.seed_fixture_corp")],
+)
+def test_the_synthetic_demos_load_into_named_shared_cases_with_no_data_folder(
+    repo: Path, dataset: str, module: str
+) -> None:
+    """Catches the demos still needing a raw case id, and a data mount or data flags they do not
+    take (these seeds generate their own data)."""
+    runner = Runner()
+    _go(repo, runner, dataset=dataset)
+    call = _seed_call(runner)
+    assert call[call.index("-m") + 1] == module
+    assert "--case-name" in call and "--investigation-scope" not in call
+    assert call[call.index("--org-unit") + 1] == "verify"
+    assert f"{SUBS[ADMIN]}=author" in call and f"{SUBS[ANALYST]}=editor" in call
+    assert "--data-dir" not in call and "--attested-checkout" not in call
+    assert not any(a.endswith(":/internal-data:ro") for a in call)
+
+
+def test_an_unknown_dataset_lists_the_known_ones(repo: Path) -> None:
+    with pytest.raises(seed_internal.SeedRefused, match="enron.*fixture-corp.*hmp.*paysim"):
+        _go(repo, Runner(), dataset="nope")

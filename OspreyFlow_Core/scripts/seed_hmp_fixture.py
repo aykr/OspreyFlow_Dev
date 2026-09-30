@@ -42,6 +42,7 @@ import sys
 from pathlib import Path
 
 import duckdb
+from scripts.case_seed import add_case_arguments, check_case_arguments, scope_for
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
@@ -62,14 +63,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
             "into a real Conduit's stores, under a real investigation's scope."
         ),
     )
-    parser.add_argument(
-        "--investigation-scope",
-        required=True,
-        help=(
-            "The real investigation id events should be tagged with "
-            "(EventFilter.investigation_scope)."
-        ),
-    )
+    add_case_arguments(parser)
     parser.add_argument(
         "--analytics-db-path",
         # The Data folder (ADR-054); the same string as the Conduit's default, kept equal by
@@ -83,7 +77,9 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--clearance", default=os.environ.get("OSPREY_CLEARANCE", "OFFICIAL"))
     parser.add_argument("--org-unit", default=os.environ.get("OSPREY_ORG_UNIT", "unit-1"))
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    check_case_arguments(parser, args)
+    return args
 
 
 async def _run(args: argparse.Namespace) -> int:
@@ -97,13 +93,14 @@ async def _run(args: argparse.Namespace) -> int:
     await graph.apply_schema(ontology)
 
     principal = Principal(id=args.principal_id, clearance=args.clearance, org_unit=args.org_unit)
+    scope = await scope_for(args, seeder=principal)
 
     try:
         result = await build_hmp_graph(
             graph=graph,
             ontology=ontology,
             principal=principal,
-            investigation_scope=args.investigation_scope,
+            investigation_scope=scope,
         )
     finally:
         await client.aclose()
@@ -123,7 +120,7 @@ async def _run(args: argparse.Namespace) -> int:
     print(
         f"Loaded {len(result.current_window_events)} current-window events and "
         f"{len(result.prior_period_events)} prior-period events under "
-        f"investigation_scope={args.investigation_scope!r}."
+        f"investigation_scope={scope!r}."
     )
     return 0
 

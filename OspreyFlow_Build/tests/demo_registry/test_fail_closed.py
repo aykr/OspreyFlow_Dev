@@ -42,8 +42,8 @@ def test_a_correctly_spelled_shipped_manifest_is_included() -> None:
 
 def test_the_real_registry_holds_exactly_the_datasets_it_is_known_to_hold() -> None:
     """Checked directly, not assumed. Two shipped, synthetic, generated demos (`hmp`,
-    `fixture-corp`), and the internal ones the owner has ruled on: PaySim (ADR-055). Neither the
-    Enron corpus nor the VAST-shaped fixture is registered yet. Adding a dataset must change this
-    test, so a registry entry can never appear unnoticed."""
+    `fixture-corp`), and the internal ones the owner has ruled on: PaySim (ADR-055) and the Enron
+    corpus (ADR-053). The VAST-shaped fixture is not registered yet. Adding a dataset must change
+    this test, so a registry entry can never appear unnoticed."""
     assert {m.id for m in shipped_manifests(REGISTRY)} == {"hmp", "fixture-corp"}
-    assert {m.id for m in internal_manifests(REGISTRY)} == {"paysim"}
+    assert {m.id for m in internal_manifests(REGISTRY)} == {"paysim", "enron"}

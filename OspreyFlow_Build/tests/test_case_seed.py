@@ -112,3 +112,20 @@ def test_grants_are_written_account_equals_level_and_a_bad_one_is_refused() -> N
     for bad in ("", "abc", "abc=", "=editor", "abc=owner", "abc=editor=x"):
         with pytest.raises(ValueError, match="grant"):
             parse_grant(bad)
+
+
+# --- the synthetic demos take a case name as PaySim does ---
+
+
+def test_the_hmp_and_fixture_corp_seeds_take_a_case_name_or_a_scope_and_not_neither() -> None:
+    """Catches the demos still needing a raw case id the owner cannot see."""
+    from scripts import seed_fixture_corp, seed_hmp_fixture
+
+    for module in (seed_hmp_fixture, seed_fixture_corp):
+        with pytest.raises(SystemExit):
+            module._parse_args([])
+        with pytest.raises(SystemExit):
+            module._parse_args(["--case-name", "x", "--investigation-scope", "y"])
+        args = module._parse_args(["--case-name", "x", "--grant", "a=author"])
+        assert args.case_name == "x" and args.grant == ["a=author"]
+        assert module._parse_args(["--investigation-scope", "y"]).investigation_scope == "y"

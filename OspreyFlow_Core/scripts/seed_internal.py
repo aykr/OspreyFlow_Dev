@@ -1,7 +1,7 @@
 """Loads an internal demo dataset into the running deployment, in one command.
 
-    PYTHONPATH=.:packages:../OspreyFlow_Build python -m scripts.seed_internal paysim [--stop-api]
-    (or: make seed-paysim)
+    PYTHONPATH=.:packages:../OspreyFlow_Build python -m scripts.seed_internal <dataset> [--stop-api]
+    (or: make seed-paysim | seed-hmp | seed-fixture-corp | seed-enron)
 
 The seed runs in a one-shot container from the Conduit's own image, **inside the deployment's
 network**, the way `harness.apply` runs its own seeds: the deployment's analytics store is a Docker
@@ -53,10 +53,26 @@ class SeedFailed(Exception):
 class Dataset:
     script: str
     case_name: str
-    data_folder: str
+    #: The folder under `OspreyFlow_Data` the seed reads; `None` for a demo that generates its own.
+    data_folder: str | None = None
+    #: The name a real dataset is admitted under in the local exceptions list; `None` if synthetic.
+    real_dataset: str | None = None
 
+
+#: Real data is admitted for this use only (ADR-035 §C3, ADR-053).
+REAL_DATA_USE = "owner_run_demonstration"
 
 DATASETS: dict[str, Dataset] = {
+    "hmp": Dataset(script="scripts.seed_hmp_fixture", case_name="HMP fixture (synthetic demo)"),
+    "fixture-corp": Dataset(
+        script="scripts.seed_fixture_corp", case_name="Fixture Corp (synthetic demo)"
+    ),
+    "enron": Dataset(
+        script="scripts.seed_enron",
+        case_name="Enron corpus (real data, this machine only)",
+        data_folder="Enron_Mails",
+        real_dataset="enron",
+    ),
     "paysim": Dataset(
         script="scripts.seed_paysim",
         case_name="PaySim mobile money (internal)",
@@ -70,6 +86,16 @@ def _run(argv: Sequence[str]) -> str:
     if result.returncode != 0:
         raise SeedFailed(f"`{' '.join(argv[:6])} …` exited {result.returncode}\n{result.stderr}")
     return result.stdout
+
+
+def _permitted(dataset: str, use: str) -> bool:
+    """The local exceptions list, which only this side of the container can see."""
+    from scripts import real_data_exceptions
+
+    try:
+        return real_data_exceptions.is_permitted(dataset, use)
+    except (OSError, ValueError):
+        return False
 
 
 def _api_running(compose: list[str]) -> bool:
@@ -111,11 +137,18 @@ def seed_internal(
     lookup_subs: Callable[[Path], dict[str, str]] = _lookup_subs,
     api_running: Callable[[list[str]], bool] = _api_running,
     stop_api: bool = False,
+    permitted: Callable[[str, str], bool] = _permitted,
 ) -> list[str]:
     """Return the seed report, one line each. Raises `SeedRefused` before starting anything."""
     if dataset not in DATASETS:
         raise SeedRefused(f"unknown dataset {dataset!r}; known: {', '.join(sorted(DATASETS))}")
     spec = DATASETS[dataset]
+    if spec.real_dataset and not permitted(spec.real_dataset, REAL_DATA_USE):
+        raise SeedRefused(
+            f"the local real-data exceptions list has no entry for {spec.real_dataset!r} "
+            f"permitting {REAL_DATA_USE!r}. Add one with `python -m scripts.real_data_exceptions "
+            "add` (ADR-035 §C3, ADR-053); nothing was started"
+        )
     if not (repo_root.parent / ".git").exists():
         raise SeedRefused(
             "this is not a checkout of the repository: an internal dataset is only ever seeded "
@@ -126,7 +159,7 @@ def seed_internal(
     except NothingToRefresh as error:
         raise SeedRefused(str(error)) from error
     data_root = repo_root.parent / "OspreyFlow_Data"
-    if not (data_root / spec.data_folder).is_dir():
+    if spec.data_folder and not (data_root / spec.data_folder).is_dir():
         raise SeedRefused(
             f"the dataset is not provisioned: {data_root / spec.data_folder} is missing"
         )
@@ -146,6 +179,9 @@ def seed_internal(
             "Run again with --stop-api to stop it for the seed and start it again after; "
             "stopping it is your choice, so it is not done for you"
         )
+    mounts = ["-v", f"{repo_root}/scripts:/app/scripts:ro"]
+    if spec.data_folder:
+        mounts += ["-v", f"{data_root}:{CONTAINER_DATA}:ro"]
     argv = [
         *compose,
         "run",
@@ -153,10 +189,7 @@ def seed_internal(
         "--no-deps",
         "--entrypoint",
         "python",
-        "-v",
-        f"{repo_root}/scripts:/app/scripts:ro",
-        "-v",
-        f"{data_root}:{CONTAINER_DATA}:ro",
+        *mounts,
         "api",
         "-m",
         spec.script,
@@ -168,10 +201,11 @@ def seed_internal(
         f"{subs[DEMO_ADMIN_SUBJECT]}=author",
         "--grant",
         f"{subs[DEMO_ANALYST_SUBJECT]}=editor",
-        "--data-dir",
-        CONTAINER_DATA,
-        "--attested-checkout",
     ]
+    if spec.data_folder:
+        argv += ["--data-dir", CONTAINER_DATA, "--attested-checkout"]
+    if spec.real_dataset:
+        argv.append("--attested-permission")
     if running:
         run([*compose, "stop", "api"])
     try:

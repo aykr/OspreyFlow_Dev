@@ -1,4 +1,4 @@
-.PHONY: ci idp-test ci-status lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test launch refresh seed-paysim register-sign-in dev-up dev-down docker-clean test-all glass-perf glass-a11y glass-keyboard glass-map-verify glass-live exit-over-the-wire harness-keyboard harness-a11y bundle
+.PHONY: ci idp-test ci-status lint typecheck licence-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check conformance-guard conformance test launch refresh seed-paysim seed-hmp seed-fixture-corp seed-enron register-sign-in dev-up dev-down docker-clean test-all glass-perf glass-a11y glass-keyboard glass-map-verify glass-live exit-over-the-wire harness-keyboard harness-a11y bundle
 
 PY := .venv/bin/python
 PYTEST := .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini
@@ -216,6 +216,17 @@ refresh:
 # network (06_DECISIONS.md ADR-055 Amendment 2). Stops the Conduit for the run and starts it again.
 seed-paysim:
 	PYTHONPATH=.:packages:../OspreyFlow_Build $(PY) -m scripts.seed_internal paysim --stop-api
+
+# The synthetic demos, into named cases the demo accounts can open (ADR-052 Amendment 9).
+seed-hmp:
+	PYTHONPATH=.:packages:../OspreyFlow_Build $(PY) -m scripts.seed_internal hmp --stop-api
+
+seed-fixture-corp:
+	PYTHONPATH=.:packages:../OspreyFlow_Build $(PY) -m scripts.seed_internal fixture-corp --stop-api
+
+# REAL data, this machine only (ADR-053): refuses without the local exceptions entry.
+seed-enron:
+	PYTHONPATH=.:packages:../OspreyFlow_Build $(PY) -m scripts.seed_internal enron --stop-api
 
 # Adds the launcher's sign-in (client and demo admin) to a Keycloak that is already running; a
 # realm import only happens at first start (06_DECISIONS.md ADR-051). Safe to run again.

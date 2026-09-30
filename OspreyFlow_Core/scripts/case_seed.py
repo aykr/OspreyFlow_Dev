@@ -9,6 +9,8 @@ removed (ADR-052 Amendment 7) is not brought back, a fresh one is made.
 
 from __future__ import annotations
 
+import argparse
+
 from services.api.investigations import AccessLevel, Investigation, InvestigationStore
 
 from schemas.domain import Principal
@@ -44,3 +46,47 @@ async def ensure_case(
     for account, level in grants.items():
         await store.set_grant(case.id, account, level, by=seeder)
     return case
+
+
+async def case_from_arguments(
+    *, name: str, seeder: Principal, grant_texts: list[str]
+) -> Investigation:
+    """`ensure_case` against the Conduit's own database, as a seed run inside the deployment sees
+    it. Shared by the dataset seeds so each makes its case the same way."""
+    from services.api.config import PostgresConfig
+
+    store = await InvestigationStore.connect(PostgresConfig.from_env().dsn)
+    try:
+        return await ensure_case(
+            store,
+            name=name,
+            seeder=seeder,
+            grants=dict(parse_grant(text) for text in grant_texts),
+        )
+    finally:
+        await store.close()
+
+
+def add_case_arguments(parser: argparse.ArgumentParser) -> None:
+    """`--investigation-scope` (an existing case) or `--case-name` (make or reuse a named one,
+    shared as `--grant account=level` says), as the dataset seeds take them. Use with
+    `check_case_arguments` once parsed."""
+    parser.add_argument("--investigation-scope", default=None, help="Write into this case.")
+    parser.add_argument("--case-name", default=None, help="Make or reuse a case of this name.")
+    parser.add_argument("--grant", action="append", default=[], metavar="ACCOUNT=LEVEL")
+
+
+def check_case_arguments(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    if bool(args.investigation_scope) == bool(args.case_name):
+        parser.error("give exactly one of --investigation-scope and --case-name")
+
+
+async def scope_for(args: argparse.Namespace, *, seeder: Principal) -> str:
+    """The case id to write under: the one given, or the named case made now."""
+    if args.investigation_scope:
+        return str(args.investigation_scope)
+    case = await case_from_arguments(
+        name=args.case_name, seeder=seeder, grant_texts=list(args.grant)
+    )
+    print(f"Case {args.case_name!r} is {case.id}.")
+    return case.id

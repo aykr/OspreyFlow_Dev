@@ -7675,3 +7675,47 @@ are given as `--grant <keycloak sub>=<level>` and are applied by the seeding acc
 looks the demo accounts' subjects up in Keycloak; if an account is missing it names
 `make register-sign-in`. Fixture Corp and HMP have not been created on this machine (the owner did not
 run `harness.apply --seed`), so they are loaded the same way, as named, shared cases.
+
+### ADR-053, Amendment 1 (30 September 2026) — the mapping, ruled; the loader built
+
+**Owner's ruling: "Option A and one case for all the 150 mailboxes".** The corpus is one case, not one
+per custodian.
+
+**Mapping (option A, with one correction to my own wording).** An email address is an `Endpoint` of
+kind `email`; no `Person` is invented from an address (a `Person` needs a family name the corpus does
+not give). Each directed sender-to-recipient pair is one summarised `COMMUNICATED_WITH` edge, and each
+message to each recipient (To, Cc and Bcc, kept as `kind`) is one analytics event on that edge, with
+subject, `Message-ID`, custodian, folder and a 300-character excerpt. **No ontology change** (the
+Endpoint kind and the edge already exist). Messages are read once by `Message-ID` (or a hash of the
+headers and body when there is none), in a fixed order. Undated, senderless, unreadable and
+recipientless messages are counted and reported, never guessed. **The graph takes the company's own
+addresses (`@enron.com`) and the links between them; every message, including those to and from
+outside addresses, is in the analytics store**, the same split ADR-055 makes for PaySim. The full
+bodies are not loaded (over a gigabyte of text on every event), only the excerpt: the owner may rule
+otherwise.
+
+**Corrections to ADR-053 as written (by amendment; the ADR is not edited):**
+
+1. Point 4 says the seed scripts are not in the image. They are: the API image copies `scripts/` and
+   `packages/`. What keeps real data out of a shipped build is the data side, unchanged: the corpus is
+   never in the repository or an image, the packaging gate refuses anything under
+   `OspreyFlow_Data/Enron_Mails`, and the seed refuses without the exceptions entry.
+2. The data folder is `OspreyFlow_Data/Enron_Mails/` (ADR-053 and ADR-054 say `enron/`).
+3. The exceptions list is a gitignored file on the host, which the container cannot see. The host
+   command (`scripts/seed_internal.py`) checks `is_permitted("enron", "owner_run_demonstration")`
+   before starting anything and tells the seed with `--attested-permission`; run directly on the host
+   the seed checks it itself. Both refuse, with a sentence, when the entry is missing.
+
+**Built, tests first:** `demo_fixtures/enron.py`, `scripts/seed_enron.py`, the `enron` registry manifest
+(`internal`), `make seed-enron`. The case is "Enron corpus (real data, this machine only)", with no
+unit-wide level, the demo admin as Author and the demo analyst as Editor (ADR-053 point 5).
+**Not yet run** against the real corpus or a real ArcadeDB from here.
+
+### ADR-052, Amendment 10 (30 September 2026) — the synthetic demos join the same route
+
+`hmp` and `fixture-corp` now load through `scripts/seed_internal.py` (`make seed-hmp`,
+`make seed-fixture-corp`) into named cases, "HMP fixture (synthetic demo)" and "Fixture Corp
+(synthetic demo)", shared with the demo admin (Author) and analyst (Editor). Their seeds take
+`--case-name` and `--grant` beside the existing `--investigation-scope`, which still works, so
+`harness.apply --seed` is unchanged. They generate their own data, so no data folder is mounted and no
+attestation is passed.

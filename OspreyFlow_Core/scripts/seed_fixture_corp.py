@@ -29,6 +29,7 @@ import asyncio
 import os
 import sys
 
+from scripts.case_seed import add_case_arguments, check_case_arguments, scope_for
 from services.resolve.same_as_writer import write_same_as_edges
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
@@ -43,7 +44,7 @@ from demo_fixtures.fixture_corp_resolution import resolve_fixture_corp_pairs
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from ports.graph import GraphPort
-from schemas.domain import Edge, EdgeWrite, Node, NodeWrite
+from schemas.domain import Edge, EdgeWrite, Node, NodeWrite, Principal
 
 _CREATED_BY = "fixture-corp-seed-worker"
 
@@ -56,12 +57,15 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
             "ArcadeDB, under a real investigation's scope."
         ),
     )
+    add_case_arguments(parser)
+    parser.add_argument("--org-unit", default=os.environ.get("OSPREY_ORG_UNIT", "unit-1"))
     parser.add_argument(
-        "--investigation-scope",
-        required=True,
-        help="The real investigation id these nodes/edges should be written under.",
+        "--principal-id", default=os.environ.get("OSPREY_PRINCIPAL_ID", _CREATED_BY)
     )
-    return parser.parse_args(argv)
+    parser.add_argument("--clearance", default=os.environ.get("OSPREY_CLEARANCE", "OFFICIAL"))
+    args = parser.parse_args(argv)
+    check_case_arguments(parser, args)
+    return args
 
 
 def _node_write(node: Node, *, load_id: str) -> NodeWrite:
@@ -132,7 +136,9 @@ async def _run(args: argparse.Namespace) -> int:
     graph = GraphArcadeDBAdapter(client, scheme)
     await graph.apply_schema(ontology)
 
-    load_id = f"fixture-corp:{args.investigation_scope}"
+    principal = Principal(id=args.principal_id, clearance=args.clearance, org_unit=args.org_unit)
+    scope = await scope_for(args, seeder=principal)
+    load_id = f"fixture-corp:{scope}"
     try:
         resolution_nodes, resolution_edges = await _seed_resolution_persons(graph, load_id=load_id)
         ring_nodes, ring_edges = await _seed_community_rings(graph, load_id=load_id)
