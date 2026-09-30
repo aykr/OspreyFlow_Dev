@@ -514,9 +514,9 @@ class ProbeClient:
                 exception_class="com.arcadedb.exception.RecordNotFoundException",
             )
         if self.duplicate_id and "GROUP BY id" in command and "TRANSACTED" in command:
-            return [{"id": self.duplicate_id, "n": 2}, {"id": "paysim-tx-other", "n": 1}]
+            return [{"id": self.duplicate_id, "n": 2}, {"id": "paysim-tx-second", "n": 2}]
         if command.startswith("SELECT FROM TRANSACTED WHERE id LIKE"):
-            return [{"id": self.duplicate_id, "out": "a", "in": "b"}] * 2
+            return [{"id": self.duplicate_id, "source": "acct-a", "target": "acct-b"}] * 2
         return [{"n": 7}]
 
 
@@ -567,7 +567,7 @@ def test_inspect_counts_the_ids_stored_more_than_once() -> None:
     client = ProbeClient(duplicate_id="paysim-tx-abc")
     lines = _inspect(client)
     assert not any("FROM (SELECT" in s for s in client.statements)
-    assert any("stored more than once: 1" in line for line in lines)
+    assert any("stored more than once: 2" in line for line in lines)
     assert any("stored more than once: 0" in line for line in _inspect(ProbeClient()))
 
 
@@ -593,3 +593,23 @@ def test_inspect_escapes_a_quote_in_a_duplicated_id() -> None:
     client = ProbeClient(duplicate_id="paysim-tx-a'b")
     _inspect(client)
     assert any("LIKE 'paysim-tx-a\\'b'" in s for s in client.statements)
+
+
+def test_inspect_looks_for_a_second_vertex_behind_each_end_of_a_duplicate_by_a_scan() -> None:
+    """Seen: the two records of a duplicated id were identical down to the microsecond, so one
+    write made two edges. If an endpoint vertex is reachable twice, one traversal fans out to two
+    edges; `LIKE` is answered by a scan, which shows a second vertex an index would hide."""
+    client = ProbeClient(duplicate_id="paysim-tx-abc")
+    _inspect(client)
+    for end in ("acct-a", "acct-b"):
+        assert f"SELECT @rid AS rid, id FROM Endpoint WHERE id LIKE '{end}'" in client.statements
+
+
+def test_inspect_lists_every_duplicated_id_compactly_not_only_the_first() -> None:
+    """Seen: 8 ids were duplicated; whether they share an account or a position is the clue."""
+    client = ProbeClient(duplicate_id="paysim-tx-abc")
+    _inspect(client)
+    assert (
+        "SELECT @rid AS rid, source, target FROM TRANSACTED WHERE id LIKE 'paysim-tx-second'"
+        in client.statements
+    )

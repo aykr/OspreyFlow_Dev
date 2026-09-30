@@ -8037,3 +8037,23 @@ does not fit a whole replayed batch, so this is a lead, not a cause.
 **Built.** `--inspect` counts the ids stored more than once from the grouped rows (up to 1,000 ids), and
 looks the first one up with `LIKE`, which is not answered from the index. Nothing is fixed.
 
+### ADR-056, Amendment 6 (30 September 2026) — the duplicates are real, and each pair came from one write
+
+**Seen, on the owner's machine.** Exactly **8** transaction ids are stored twice, which is the whole
+gap between 13,076 stored and 13,068 written. The first id's two records (`#169:73` and `#169:80`) are
+identical in every field: the same endpoints, the same source row (row 2758), and the same weight,
+corpus figures and `computed_at` to the microsecond. Amendment 5's worry that the count was an index
+artefact is settled: two records exist.
+
+**What that rules out and what it leaves.** Two *separate* writes of one edge would either merge (the
+pair lookup) or compute different degree figures. Identical figures mean the two records came from **one
+write that ran twice or fanned out to two edges**. The candidates: (1) the `addE` traversal
+(`g.V().has("id",src).as("__src").V().has("id",tgt).addE(...)`) had two traversers, because an endpoint
+vertex is reachable twice; (2) the same recorded command was sent twice (the commit-retry replay).
+Replay fits less well, since it would repeat whole batches of 40 and not eight single edges. Neither is
+confirmed.
+
+**Built.** `--inspect` looks up each end of the first duplicate by `LIKE` (a scan, which an index cannot
+answer) to see whether an endpoint vertex exists twice, and lists all duplicated ids compactly
+(rid, source, target). Still no fix; stage 0b stays on hold.
+

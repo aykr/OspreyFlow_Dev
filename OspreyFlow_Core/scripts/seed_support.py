@@ -320,6 +320,24 @@ async def clear_seeded_graph(
     return accounts, transactions
 
 
+def _quoted(value: str) -> str:
+    """`value` for inside a single-quoted SQL literal."""
+    return value.replace("\\", "\\\\").replace("'", "\\'")
+
+
+async def _report(
+    client: _Sql, lines: list[str], label: str, statement: str
+) -> list[dict[str, object]]:
+    """Run one read-only probe and add its result, or its failure, to `lines`."""
+    try:
+        rows = await client.sql(statement)
+    except ArcadeDBError as error:
+        lines.append(f"{label}: FAILED {error}")
+        return []
+    lines.append(f"{label}: {rows}")
+    return rows
+
+
 def _stored_twice(row: dict[str, object]) -> bool:
     """A `GROUP BY id` row that names an id and counts it more than once."""
     count = row.get("n")
@@ -387,15 +405,34 @@ async def inspect_graph(
             lines.append(f"{label}: FAILED {error}")
     # A duplicated id is shown as the records themselves: the merge key is the source-target pair,
     # so two records with one id mean the lookup missed the first, or the endpoints differ.
-    duplicated = next((r for r in most_stored if _stored_twice(r)), None)
-    if duplicated is not None:
-        edge_id = str(duplicated["id"]).replace("\\", "\\\\").replace("'", "\\'")
-        label = f"{edge_type}: both records of {duplicated['id']}"
-        try:
-            rows = await client.sql(f"SELECT FROM {edge_type} WHERE id LIKE '{edge_id}'")
-            lines.append(f"{label}: {rows}")
-        except ArcadeDBError as error:
-            lines.append(f"{label}: FAILED {error}")
+    duplicates = [r for r in most_stored if _stored_twice(r)]
+    if duplicates:
+        first_id = str(duplicates[0]["id"])
+        rows = await _report(
+            client,
+            lines,
+            f"{edge_type}: both records of {first_id}",
+            f"SELECT FROM {edge_type} WHERE id LIKE '{_quoted(first_id)}'",
+        )
+        # A vertex reachable twice would make one traversal write two edges, so each end of the
+        # first duplicate is looked up by a scan (`LIKE`), which an index cannot answer.
+        ends = {str(r[k]) for r in rows for k in ("source", "target") if r.get(k)}
+        for vertex_id in sorted(ends):
+            await _report(
+                client,
+                lines,
+                f"{node_type}: records with id {vertex_id}",
+                f"SELECT @rid AS rid, id FROM {node_type} WHERE id LIKE '{_quoted(vertex_id)}'",
+            )
+        for row in duplicates[1:10]:
+            dup_id = str(row["id"])
+            await _report(
+                client,
+                lines,
+                f"{edge_type}: {dup_id} (rid, source, target)",
+                f"SELECT @rid AS rid, source, target FROM {edge_type} "
+                f"WHERE id LIKE '{_quoted(dup_id)}'",
+            )
     return lines
 
 
