@@ -320,6 +320,12 @@ async def clear_seeded_graph(
     return accounts, transactions
 
 
+def _stored_twice(row: dict[str, object]) -> bool:
+    """A `GROUP BY id` row that names an id and counts it more than once."""
+    count = row.get("n")
+    return isinstance(count, int) and count > 1 and bool(row.get("id"))
+
+
 async def inspect_graph(
     client: _Sql,
     *,
@@ -352,6 +358,11 @@ async def inspect_graph(
             f"SELECT id, count(*) AS n FROM {node_type} GROUP BY id ORDER BY n DESC LIMIT 5",
         ),
         (
+            f"{edge_type}: how many ids are stored more than once",
+            f"SELECT count(*) AS n FROM (SELECT id FROM {edge_type} GROUP BY id "
+            "HAVING count(*) > 1)",
+        ),
+        (
             f"{edge_type}: total of the occurrence counts",
             f"SELECT sum(occurrences) AS total FROM {edge_type}",
         ),
@@ -363,9 +374,23 @@ async def inspect_graph(
     if record:
         probes.append((f"record {record}", f"SELECT FROM {record}"))
     lines: list[str] = []
+    most_stored: list[dict[str, object]] = []
     for label, statement in probes:
         try:
             rows = await client.sql(statement)
+            lines.append(f"{label}: {rows}")
+            if label.startswith(f"{edge_type}: the ids stored most often"):
+                most_stored = rows
+        except ArcadeDBError as error:
+            lines.append(f"{label}: FAILED {error}")
+    # A duplicated id is shown as the records themselves: the merge key is the source-target pair,
+    # so two records with one id mean the lookup missed the first, or the endpoints differ.
+    duplicated = next((r for r in most_stored if _stored_twice(r)), None)
+    if duplicated is not None:
+        edge_id = str(duplicated["id"]).replace("\\", "\\\\").replace("'", "\\'")
+        label = f"{edge_type}: both records of {duplicated['id']}"
+        try:
+            rows = await client.sql(f"SELECT FROM {edge_type} WHERE id = '{edge_id}'")
             lines.append(f"{label}: {rows}")
         except ArcadeDBError as error:
             lines.append(f"{label}: FAILED {error}")

@@ -498,9 +498,10 @@ def test_a_file_someone_else_has_open_is_reported_not_crashed_on(tmp_path: Path)
 
 
 class ProbeClient:
-    def __init__(self, fail_on: str | None = None) -> None:
+    def __init__(self, fail_on: str | None = None, duplicate_id: str | None = None) -> None:
         self.statements: list[str] = []
         self.fail_on = fail_on
+        self.duplicate_id = duplicate_id
 
     async def sql(self, command: str, **_: object) -> list[dict[str, object]]:
         from adapters.graph_arcadedb.client import ArcadeDBError
@@ -512,6 +513,10 @@ class ProbeClient:
                 status_code=404,
                 exception_class="com.arcadedb.exception.RecordNotFoundException",
             )
+        if self.duplicate_id and "GROUP BY id" in command and "TRANSACTED" in command:
+            return [{"id": self.duplicate_id, "n": 2}, {"id": "paysim-tx-other", "n": 1}]
+        if command.startswith("SELECT FROM TRANSACTED WHERE id ="):
+            return [{"id": self.duplicate_id, "out": "a", "in": "b"}] * 2
         return [{"n": 7}]
 
 
@@ -553,3 +558,35 @@ def test_inspect_looks_for_duplicate_ids_and_totals_the_occurrences() -> None:
     assert any("GROUP BY id" in s and "Endpoint" in s for s in client.statements)
     assert any("sum(occurrences)" in s for s in client.statements)
     assert all(s.startswith("SELECT") for s in client.statements)
+
+
+def test_inspect_counts_the_ids_stored_more_than_once() -> None:
+    """Seen twice: the five most-stored ids were each stored twice, which says duplicates exist but
+    not how many. Catches an inspection that cannot give the number."""
+    client = ProbeClient()
+    lines = _inspect(client)
+    assert any("HAVING count(*) > 1" in s and "TRANSACTED" in s for s in client.statements)
+    assert any("stored more than once" in line for line in lines)
+
+
+def test_inspect_shows_both_records_of_a_duplicated_id() -> None:
+    """Seen: the merge key is the source-target pair, so two records with one id mean either the
+    lookup missed the first or the endpoints differ. Only the two records side by side say which."""
+    client = ProbeClient(duplicate_id="paysim-tx-abc")
+    lines = _inspect(client)
+    follow = [s for s in client.statements if s.startswith("SELECT FROM TRANSACTED WHERE id =")]
+    assert follow == ["SELECT FROM TRANSACTED WHERE id = 'paysim-tx-abc'"]
+    assert any("paysim-tx-abc" in line and "both records" in line for line in lines)
+
+
+def test_inspect_does_not_look_up_records_when_nothing_is_duplicated() -> None:
+    client = ProbeClient()
+    _inspect(client)
+    assert not any(s.startswith("SELECT FROM TRANSACTED WHERE id =") for s in client.statements)
+
+
+def test_inspect_escapes_a_quote_in_a_duplicated_id() -> None:
+    """The id comes from the database; a quote in it must not break out of the literal."""
+    client = ProbeClient(duplicate_id="paysim-tx-a'b")
+    _inspect(client)
+    assert any("WHERE id = 'paysim-tx-a\\'b'" in s for s in client.statements)

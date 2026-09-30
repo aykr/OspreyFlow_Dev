@@ -7999,3 +7999,22 @@ written); it cannot be said how a graph can hold more. This is unexplained, and 
 account and transaction types (a count above 1 is a duplicate) and the total of the transaction
 occurrence counts. A duplicated id, a total that still equals what was written, or neither will each
 point somewhere different.
+
+### ADR-056, Amendment 4 (30 September 2026) — the duplicates are real; the inspection now shows the two records
+
+**Seen, on the owner's machine.** Both graphs hold duplicated transaction ids. The vault: 13,076
+transactions stored, the occurrence total also 13,076, the five most-stored ids each stored twice.
+The shared graph: 13,073 stored, total 13,073, the same pattern. The two loads wrote the same data and
+stored different counts (13,073 and 13,076), which points at something timing-dependent, not at the
+data. Because the total of the occurrence counts equals the row count, none of the duplicates was
+merged: they are separate records, each with one occurrence.
+
+**What the code says.** `upsert_edges` merges by the source-target pair (`_find_existing_edge`), not by
+id, and only a miss creates a second record. So one id held twice means either that lookup missed a
+record that existed (for example a write not yet visible to the next lookup) or that the two records have
+different endpoints (an id that does not include them). I have not yet seen which. The pair-merge is
+also not exercised by a test that writes the same id twice in one batch (`CLAUDE.md` rule 12).
+
+**Built.** `--inspect` also counts the ids stored more than once and prints both records of the first
+duplicated id, by `SELECT` only. No fix yet: the cause comes first. Stage 0b stays on hold.
+
