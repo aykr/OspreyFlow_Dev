@@ -90,6 +90,30 @@ def _is_parse_error(error: ArcadeDBError) -> bool:
     return "ParseException" in (error.exception_class or "")
 
 
+def _is_missing_record(error: ArcadeDBError) -> bool:
+    return error.status_code == 404 or "RecordNotFound" in (error.exception_class or "")
+
+
+async def _truncate_if_only_this_seed(
+    client: _Sql, types: list[tuple[str, str]], *, cause: ArcadeDBError
+) -> None:
+    """A row-by-row delete hit a record ArcadeDB could not find (interrupted loads left a dangling
+    link; ADR-055 Amendment 7). Empty the types instead, edges first, but only if every row in
+    each type carries this seed's prefix: the types are shared with other datasets, so a type that
+    holds anything else is left alone and the clean-up fails."""
+    for type_name, prefix in types:
+        rows = await client.sql(f"SELECT count(*) AS n FROM {type_name}")
+        every = int(rows[0]["n"]) if rows else 0
+        ours = await _count(client, type_name, prefix)
+        if every != ours:
+            raise CleanUpIncomplete(
+                f"{every - ours:,} rows in {type_name} are not this seed's, so it was not "
+                f"truncated; the row delete failed with: {cause}"
+            )
+    for type_name, _ in types:
+        await client.sql(f"TRUNCATE TYPE {type_name} UNSAFE")
+
+
 async def _delete_scoped(client: _Sql, *, kind: str, type_name: str, prefix: str) -> None:
     """Delete this type's rows whose id starts with `prefix`, trying the ways ArcadeDB documents.
 
@@ -137,8 +161,17 @@ async def clear_seeded_graph(
     occurrence count, so an interrupted load cannot simply be resumed."""
     accounts = await _count(client, node_type, node_prefix)
     transactions = await _count(client, edge_type, edge_prefix)
-    await _delete_scoped(client, kind="EDGE", type_name=edge_type, prefix=edge_prefix)
-    await _delete_scoped(client, kind="VERTEX", type_name=node_type, prefix=node_prefix)
+    try:
+        await _delete_scoped(client, kind="EDGE", type_name=edge_type, prefix=edge_prefix)
+        await _delete_scoped(client, kind="VERTEX", type_name=node_type, prefix=node_prefix)
+    except ArcadeDBError as error:
+        if not _is_missing_record(error):
+            raise
+        await _truncate_if_only_this_seed(
+            client,
+            [(edge_type, edge_prefix), (node_type, node_prefix)],
+            cause=error,
+        )
     left = await _count(client, node_type, node_prefix) + await _count(
         client, edge_type, edge_prefix
     )
@@ -160,8 +193,6 @@ async def inspect_graph(
     probe is reported on its own, and one that fails is reported as the failure and the rest still
     run: an unreadable record is itself the evidence (ADR-055 Amendment 6)."""
     probes: list[tuple[str, str]] = [
-        ("all vertices", "SELECT count(*) AS n FROM V"),
-        ("all edges", "SELECT count(*) AS n FROM E"),
         (f"{node_type} (every row)", f"SELECT count(*) AS n FROM {node_type}"),
         (
             f"{node_type} with ids {node_prefix}...",

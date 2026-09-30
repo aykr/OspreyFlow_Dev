@@ -7811,3 +7811,22 @@ one is shown as the evidence and the rest still run: counts of all vertices and 
 and transaction types with and without the seed's id prefix, three transaction ids, and the named
 record. `python -m scripts.seed_internal paysim --inspect --inspect-record '#169:80'`. The fix
 to the clean-up will follow from what it shows.
+
+### ADR-055, Amendment 7 (30 September 2026) — when a row delete cannot find a record, empty the types, guarded
+
+**Seen (Amendment 6's inspection, owner's machine).** Every row in the account type (73,863) and in the
+transaction type (9,205) carries this seed's id prefix, so nothing else lives in those two types.
+Record `#169:80` exists and reads normally (a `TRANSACTED` edge, revision 2, written by the first
+load and updated by the resumed one). The 404 is therefore not a lost record; the likely cause is a
+dangling link in an account's edge list left by the interrupted loads. This is a diagnosis by
+inference, not proven. The inspection's "all vertices"/"all edges" probes failed because this
+ArcadeDB has no generic `V`/`E` types; they are removed. It also ended with "paysim is loaded",
+which was false; it now says nothing was changed.
+
+**Decided (owner agreed to clearing and rebuilding).** When the row-by-row delete fails with a
+missing-record error, `clear_seeded_graph` falls back to `TRUNCATE TYPE <type> UNSAFE`, edge type
+first, then the account type. The types are shared with other datasets, so the fallback runs only if
+*every* row in each type carries this seed's prefix (counted with and without the prefix); if either
+type holds anything else it truncates nothing and raises. The count afterwards must still be zero.
+The normal path never truncates. The whole database is not dropped: truncating the two types reaches
+the same clean graph faster and touches nothing else.

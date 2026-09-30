@@ -114,12 +114,19 @@ class FakeClient:
         self.stubborn = False
         self.parse_error_on = parse_error_on
         self.other_error_on: str | None = None
+        self.record_missing_on: str | None = None
 
     def _maybe_fail(self, command: str) -> None:
         from adapters.graph_arcadedb.client import ArcadeDBError
 
         if self.other_error_on and command.startswith(self.other_error_on):
             raise ArcadeDBError("ArcadeDB error 500: disk full", status_code=500)
+        if self.record_missing_on and command.startswith(self.record_missing_on):
+            raise ArcadeDBError(
+                "ArcadeDB error 404: Record #169:80 not found",
+                status_code=404,
+                exception_class="com.arcadedb.exception.RecordNotFoundException",
+            )
         if any(command.startswith(p) for p in self.parse_error_on):
             raise ArcadeDBError(
                 "ArcadeDB error 500: Encountered DELETE",
@@ -138,6 +145,13 @@ class FakeClient:
 
         self.statements.append(command)
         self._maybe_fail(command)
+        truncate = re.match(r"TRUNCATE TYPE (\w+) UNSAFE$", command)
+        if truncate:
+            self.rows[truncate.group(1)] = []
+            return [{"count": 0}]
+        every = re.match(r"SELECT count\(\*\) AS n FROM (\w+)$", command)
+        if every:
+            return [{"n": len(self.rows.get(every.group(1), []))}]
         kind = re.search(r"(?:FROM|EDGE|VERTEX) (\w+)", command)
         prefix = re.search(r"LIKE '([^']*)%'", command)
         assert kind and prefix, command
@@ -254,6 +268,39 @@ def test_when_no_form_is_accepted_the_error_names_every_form_tried() -> None:
     )
     with pytest.raises(seed_support.CleanUpIncomplete, match="DELETE FROM.*DELETE EDGE.*drop"):
         _clear(client)
+
+
+def test_a_missing_record_during_delete_falls_back_to_truncating_types_that_hold_only_this_seed() -> (
+    None
+):
+    """Seen: DELETE FROM failed with 404 `Record #169:80 not found` after interrupted loads. When
+    every row in both types is this seed's, the types are truncated, edges before vertices."""
+    client = FakeClient(
+        {"Endpoint": ["paysim-acct-1", "paysim-acct-2"], "TRANSACTED": ["paysim-tx-1"]}
+    )
+    client.record_missing_on = "DELETE"
+    assert _clear(client) == (2, 1)
+    truncates = [s for s in client.statements if s.startswith("TRUNCATE")]
+    assert truncates == ["TRUNCATE TYPE TRANSACTED UNSAFE", "TRUNCATE TYPE Endpoint UNSAFE"]
+    assert client.rows == {"Endpoint": [], "TRANSACTED": []}
+
+
+def test_the_truncate_is_refused_when_a_type_holds_rows_that_are_not_this_seeds() -> None:
+    """Catches wiping another dataset's accounts (Enron shares the Endpoint type)."""
+    client = FakeClient(
+        {"Endpoint": ["paysim-acct-1", "enron-ep-1"], "TRANSACTED": ["paysim-tx-1"]}
+    )
+    client.record_missing_on = "DELETE"
+    with pytest.raises(seed_support.CleanUpIncomplete, match="not this seed"):
+        _clear(client)
+    assert not [s for s in client.statements if s.startswith("TRUNCATE")]
+    assert client.rows["Endpoint"] == ["paysim-acct-1", "enron-ep-1"]
+
+
+def test_a_normal_clean_up_never_truncates() -> None:
+    client = FakeClient({"Endpoint": ["paysim-acct-1"], "TRANSACTED": ["paysim-tx-1"]})
+    _clear(client)
+    assert not [s for s in client.statements if s.startswith("TRUNCATE")]
 
 
 # --- reading what the graph holds, without changing it (ADR-055 Amendment 6) ---

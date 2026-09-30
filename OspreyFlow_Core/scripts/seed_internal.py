@@ -315,6 +315,9 @@ def main(argv: list[str] | None = None) -> int:
     except (SeedRefused, SeedFailed) as error:
         print(f"seed: {error}", file=sys.stderr)
         return 1
+    if inspect:
+        print("seed: inspection finished; nothing was changed.")
+        return 0
     print(f"seed: {names[0]} is loaded. Sign in and choose it from the case picker.")
     return 0
 

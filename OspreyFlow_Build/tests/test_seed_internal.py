@@ -388,3 +388,13 @@ def test_the_command_line_accepts_inspect(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(seed_internal, "seed_internal", lambda dataset, **kw: seen.update(kw) or [])
     assert seed_internal.main(["paysim", "--inspect", "--inspect-record", "#169:80"]) == 0
     assert seen["inspect"] is True and seen["inspect_record"] == "#169:80"
+
+
+def test_an_inspection_does_not_say_the_dataset_is_loaded(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Seen: --inspect ended with 'paysim is loaded', which was false and misleading."""
+    monkeypatch.setattr(seed_internal, "seed_internal", lambda dataset, **kw: [])
+    assert seed_internal.main(["paysim", "--inspect"]) == 0
+    out = capsys.readouterr().out
+    assert "is loaded" not in out and "nothing was changed" in out
