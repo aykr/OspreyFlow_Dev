@@ -7778,3 +7778,19 @@ sample and ask for it.
 a `LIKE` on the id prefix) are proved only against a fake that answers the statements the code
 sends. The clean-up prints how many rows it removed and fails if any remain, so a statement the
 database rejects or ignores is visible on the first run.
+
+### ADR-055, Amendment 5 (30 September 2026) — ArcadeDB's delete syntax was not the one I wrote
+
+**Seen, on the owner's machine.** `--replace-graph` stopped at its first delete: ArcadeDB's SQL parser
+refused `DELETE EDGE <type> WHERE ...` (a `ParseException`). Amendment 4 had said the delete statements
+were untested against a real ArcadeDB; this is what that risk looked like. Nothing was written or
+deleted, because the failure came before the load, but the owner lost a run and the Conduit was
+restarted.
+
+**Fix.** The clean-up tries the documented forms in turn: `DELETE FROM <type> WHERE id LIKE '<prefix>%'`,
+then `DELETE EDGE|VERTEX <type> WHERE ...`, then the Gremlin bridge the adapter already uses
+(`g.E()|g.V().hasLabel(...).has('id', TextP.startingWith(...)).drop()`). Only a *parse* refusal moves
+on to the next form; any other error is raised as it is. Every form is scoped by the label and the id
+prefix, transactions go before accounts, and the count afterwards must be zero. If no form is accepted
+the error lists every one tried and nothing has been deleted. Which form ArcadeDB accepts is still
+unproven from here: the first run on the owner's machine will show it.

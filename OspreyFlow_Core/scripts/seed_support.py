@@ -19,6 +19,8 @@ from typing import Any, Protocol
 
 import duckdb
 
+from adapters.graph_arcadedb.client import ArcadeDBError
+from adapters.graph_arcadedb.gremlin_literals import groovy_string_literal
 from ports.graph import GraphPort
 
 #: A progress line every this many graph batches, so a slow write is visible as slow.
@@ -70,10 +72,57 @@ class _Sql(Protocol):
         session_id: str | None = None,
     ) -> list[dict[str, Any]]: ...
 
+    async def gremlin(
+        self,
+        command: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        session_id: str | None = None,
+    ) -> list[dict[str, Any]]: ...
+
 
 async def _count(client: _Sql, type_name: str, prefix: str) -> int:
     rows = await client.sql(f"SELECT count(*) AS n FROM {type_name} WHERE id LIKE '{prefix}%'")
     return int(rows[0]["n"]) if rows else 0
+
+
+def _is_parse_error(error: ArcadeDBError) -> bool:
+    return "ParseException" in (error.exception_class or "")
+
+
+async def _delete_scoped(client: _Sql, *, kind: str, type_name: str, prefix: str) -> None:
+    """Delete this type's rows whose id starts with `prefix`, trying the ways ArcadeDB documents.
+
+    Seen: ArcadeDB refused `DELETE EDGE ...` outright (a ParseException), and its SQL differs from
+    the OrientDB dialect it descends from, which I had assumed. So the forms are tried in turn, and
+    only a *parse* refusal moves on to the next one: any other error (a lock, a full disk) is
+    raised, not worked around. Every form is scoped by the label and the id prefix. If none is
+    accepted, the error names each one, so the owner can see what was attempted."""
+    literal = groovy_string_literal
+    step = "E" if kind == "EDGE" else "V"
+    forms = [
+        f"DELETE FROM {type_name} WHERE id LIKE '{prefix}%'",
+        f"DELETE {kind} {type_name} WHERE id LIKE '{prefix}%'",
+        f"g.{step}().hasLabel({literal(type_name)})"
+        f".has('id', TextP.startingWith({literal(prefix)})).drop()",
+    ]
+    refused: list[str] = []
+    for form in forms:
+        try:
+            if form.startswith("g."):
+                await client.gremlin(form)
+            else:
+                await client.sql(form)
+        except ArcadeDBError as error:
+            if not _is_parse_error(error):
+                raise
+            refused.append(form)
+            continue
+        return
+    raise CleanUpIncomplete(
+        "ArcadeDB accepted none of the delete forms tried, so nothing was deleted: "
+        + "; ".join(refused)
+    )
 
 
 async def clear_seeded_graph(
@@ -88,8 +137,8 @@ async def clear_seeded_graph(
     occurrence count, so an interrupted load cannot simply be resumed."""
     accounts = await _count(client, node_type, node_prefix)
     transactions = await _count(client, edge_type, edge_prefix)
-    await client.sql(f"DELETE EDGE {edge_type} WHERE id LIKE '{edge_prefix}%'")
-    await client.sql(f"DELETE VERTEX {node_type} WHERE id LIKE '{node_prefix}%'")
+    await _delete_scoped(client, kind="EDGE", type_name=edge_type, prefix=edge_prefix)
+    await _delete_scoped(client, kind="VERTEX", type_name=node_type, prefix=node_prefix)
     left = await _count(client, node_type, node_prefix) + await _count(
         client, edge_type, edge_prefix
     )

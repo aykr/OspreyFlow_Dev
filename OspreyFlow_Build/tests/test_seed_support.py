@@ -103,28 +103,59 @@ def test_a_missing_analytics_file_or_table_means_no_events_yet(tmp_path: Path) -
 
 
 class FakeClient:
-    """Stands in for ArcadeDB's SQL endpoint: keeps rows by type and answers the three statements
-    the clean-up sends, so the test can see exactly what would be deleted."""
+    """Stands in for ArcadeDB: keeps rows by type, answers the statements the clean-up sends, and
+    can refuse chosen statement forms with the parser error the real server gave (seen on the
+    owner's machine: `DELETE EDGE ...` is not accepted as a first word), so the test can see which
+    forms are tried, in what order, and what each would delete."""
 
-    def __init__(self, rows: dict[str, list[str]]) -> None:
+    def __init__(self, rows: dict[str, list[str]], *, parse_error_on: tuple[str, ...] = ()) -> None:
         self.rows = {k: list(v) for k, v in rows.items()}
         self.statements: list[str] = []
         self.stubborn = False
+        self.parse_error_on = parse_error_on
+        self.other_error_on: str | None = None
+
+    def _maybe_fail(self, command: str) -> None:
+        from adapters.graph_arcadedb.client import ArcadeDBError
+
+        if self.other_error_on and command.startswith(self.other_error_on):
+            raise ArcadeDBError("ArcadeDB error 500: disk full", status_code=500)
+        if any(command.startswith(p) for p in self.parse_error_on):
+            raise ArcadeDBError(
+                "ArcadeDB error 500: Encountered DELETE",
+                status_code=500,
+                exception_class="com.arcadedb.query.sql.parser.ParseException",
+            )
+
+    def _delete(self, name: str, start: str) -> int:
+        matching = [i for i in self.rows.get(name, []) if i.startswith(start)]
+        if not self.stubborn:
+            self.rows[name] = [i for i in self.rows.get(name, []) if i not in matching]
+        return len(matching)
 
     async def sql(self, command: str, **_: object) -> list[dict[str, object]]:
         import re
 
         self.statements.append(command)
+        self._maybe_fail(command)
         kind = re.search(r"(?:FROM|EDGE|VERTEX) (\w+)", command)
         prefix = re.search(r"LIKE '([^']*)%'", command)
         assert kind and prefix, command
         name, start = kind.group(1), prefix.group(1)
-        matching = [i for i in self.rows.get(name, []) if i.startswith(start)]
         if command.startswith("SELECT"):
-            return [{"n": len(matching)}]
-        if not self.stubborn:
-            self.rows[name] = [i for i in self.rows.get(name, []) if i not in matching]
-        return [{"count": len(matching)}]
+            return [{"n": len([i for i in self.rows.get(name, []) if i.startswith(start)])}]
+        return [{"count": self._delete(name, start)}]
+
+    async def gremlin(self, command: str, **_: object) -> list[dict[str, object]]:
+        import re
+
+        self.statements.append(command)
+        self._maybe_fail(command)
+        label = re.search(r"hasLabel\('(\w+)'\)", command)
+        prefix = re.search(r"startingWith\('([^']*)'\)", command)
+        assert label and prefix and command.endswith(".drop()"), command
+        self._delete(label.group(1), prefix.group(1))
+        return []
 
 
 def _clear(client: FakeClient) -> tuple[int, int]:
@@ -158,7 +189,7 @@ def test_transactions_are_deleted_before_accounts_and_every_delete_is_scoped_by_
     client = FakeClient({"Endpoint": ["paysim-acct-1"], "TRANSACTED": ["paysim-tx-1"]})
     _clear(client)
     deletes = [s for s in client.statements if s.startswith("DELETE")]
-    assert deletes[0].startswith("DELETE EDGE") and deletes[1].startswith("DELETE VERTEX")
+    assert "TRANSACTED" in deletes[0] and "Endpoint" in deletes[1]
     assert all("LIKE 'paysim-" in s for s in deletes)
 
 
@@ -172,3 +203,54 @@ def test_a_clean_up_that_leaves_rows_behind_is_an_error_not_a_success() -> None:
 
 def test_an_empty_graph_is_cleared_without_fuss() -> None:
     assert _clear(FakeClient({})) == (0, 0)
+
+
+def test_when_the_parser_refuses_one_delete_form_the_next_is_tried_and_all_are_prefix_scoped() -> (
+    None
+):
+    """Seen: ArcadeDB rejected `DELETE EDGE ...` with a ParseException. Catches a clean-up that
+    stops at the first form the server does not accept, and a fallback form that is not scoped by
+    the id prefix (which would wipe another dataset)."""
+    client = FakeClient(
+        {"Endpoint": ["paysim-acct-1", "enron-ep-1"], "TRANSACTED": ["paysim-tx-1", "other-tx"]},
+        parse_error_on=("DELETE EDGE", "DELETE VERTEX"),
+    )
+    assert _clear(client) == (1, 1)
+    assert client.rows == {"Endpoint": ["enron-ep-1"], "TRANSACTED": ["other-tx"]}
+    deletes = [s for s in client.statements if s.startswith(("DELETE", "g."))]
+    assert all("paysim-" in s for s in deletes)
+
+
+def test_the_gremlin_drop_is_the_last_resort_and_is_scoped_and_labelled() -> None:
+    """If neither SQL form parses, the Gremlin bridge the adapter already uses is tried, by label
+    and id prefix. Catches an unscoped `g.E().drop()`."""
+    client = FakeClient(
+        {"Endpoint": ["paysim-acct-1", "enron-ep-1"], "TRANSACTED": ["paysim-tx-1"]},
+        parse_error_on=("DELETE",),
+    )
+    assert _clear(client) == (1, 1)
+    drops = [s for s in client.statements if s.startswith("g.")]
+    assert len(drops) == 2
+    assert all(".hasLabel(" in s and "startingWith('paysim-" in s for s in drops)
+    assert client.rows["Endpoint"] == ["enron-ep-1"]
+
+
+def test_an_error_that_is_not_a_parse_error_is_raised_not_worked_around() -> None:
+    """Catches masking a real failure (a full disk, a lock) by trying the next form."""
+    from adapters.graph_arcadedb.client import ArcadeDBError
+
+    client = FakeClient({"Endpoint": ["paysim-acct-1"], "TRANSACTED": ["paysim-tx-1"]})
+    client.other_error_on = "DELETE"
+    with pytest.raises(ArcadeDBError, match="disk full"):
+        _clear(client)
+    assert sum(1 for s in client.statements if s.startswith("DELETE")) == 1
+
+
+def test_when_no_form_is_accepted_the_error_names_every_form_tried() -> None:
+    """Catches a failure that leaves the owner unable to tell what was attempted."""
+    client = FakeClient(
+        {"Endpoint": ["paysim-acct-1"], "TRANSACTED": ["paysim-tx-1"]},
+        parse_error_on=("DELETE", "g."),
+    )
+    with pytest.raises(seed_support.CleanUpIncomplete, match="DELETE FROM.*DELETE EDGE.*drop"):
+        _clear(client)
