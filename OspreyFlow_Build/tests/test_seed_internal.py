@@ -358,3 +358,33 @@ def test_the_command_line_accepts_the_new_flags(
     seen.clear()
     assert seed_internal.main(["paysim", "--graph-fraud-rows", "all"]) == 0
     assert seen["graph_fraud_rows"] == 0
+
+
+# --- reading the graph without changing it ---
+
+
+def test_inspect_runs_the_seed_read_only_without_stopping_the_conduit_or_making_a_case(
+    repo: Path,
+) -> None:
+    """Catches an inspection that stops the Conduit, needs the demo accounts, or creates a case."""
+    runner = Runner()
+    seed_internal.seed_internal(
+        "paysim",
+        repo,
+        run=runner,
+        lookup_subs=lambda directory: {},
+        api_running=lambda compose: True,
+        inspect=True,
+        inspect_record="#169:80",
+    )
+    call = _seed_call(runner)
+    assert "--inspect" in call and call[call.index("--inspect-record") + 1] == "#169:80"
+    assert "--case-name" not in call and "--grant" not in call
+    assert not any(c[1:] and "stop" in c for c in runner.calls)
+
+
+def test_the_command_line_accepts_inspect(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+    monkeypatch.setattr(seed_internal, "seed_internal", lambda dataset, **kw: seen.update(kw) or [])
+    assert seed_internal.main(["paysim", "--inspect", "--inspect-record", "#169:80"]) == 0
+    assert seen["inspect"] is True and seen["inspect_record"] == "#169:80"

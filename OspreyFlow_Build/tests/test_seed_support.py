@@ -254,3 +254,53 @@ def test_when_no_form_is_accepted_the_error_names_every_form_tried() -> None:
     )
     with pytest.raises(seed_support.CleanUpIncomplete, match="DELETE FROM.*DELETE EDGE.*drop"):
         _clear(client)
+
+
+# --- reading what the graph holds, without changing it (ADR-055 Amendment 6) ---
+
+
+class ProbeClient:
+    def __init__(self, fail_on: str | None = None) -> None:
+        self.statements: list[str] = []
+        self.fail_on = fail_on
+
+    async def sql(self, command: str, **_: object) -> list[dict[str, object]]:
+        from adapters.graph_arcadedb.client import ArcadeDBError
+
+        self.statements.append(command)
+        if self.fail_on and self.fail_on in command:
+            raise ArcadeDBError(
+                "ArcadeDB error 404: Record #169:80 not found",
+                status_code=404,
+                exception_class="com.arcadedb.exception.RecordNotFoundException",
+            )
+        return [{"n": 7}]
+
+
+def _inspect(client: ProbeClient) -> list[str]:
+    return asyncio.run(
+        seed_support.inspect_graph(
+            client,  # type: ignore[arg-type]
+            node_type="Endpoint",
+            node_prefix="paysim-acct-",
+            edge_type="TRANSACTED",
+            edge_prefix="paysim-tx-",
+            record="#169:80",
+        )
+    )
+
+
+def test_inspect_only_ever_sends_selects() -> None:
+    """The point of the mode is that it cannot change anything. Catches a probe that writes."""
+    client = ProbeClient()
+    _inspect(client)
+    assert client.statements and all(s.startswith("SELECT") for s in client.statements)
+
+
+def test_inspect_reports_each_probe_and_carries_on_past_a_failing_one() -> None:
+    """Catches one unreadable record hiding everything else: the failure is itself the evidence."""
+    lines = _inspect(ProbeClient(fail_on="#169:80"))
+    text = "\n".join(lines)
+    assert "#169:80" in text and "not found" in text
+    assert "paysim-tx-" in text and "paysim-acct-" in text
+    assert text.count("7") >= 3

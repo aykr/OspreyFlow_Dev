@@ -22,7 +22,12 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import duckdb
-from scripts.seed_support import clear_seeded_graph, events_already_loaded, write_graph
+from scripts.seed_support import (
+    clear_seeded_graph,
+    events_already_loaded,
+    inspect_graph,
+    write_graph,
+)
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
@@ -134,6 +139,14 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--inspect",
+        action="store_true",
+        help="Read-only: report what the graph holds, write nothing, and stop.",
+    )
+    parser.add_argument(
+        "--inspect-record", default=None, help="With --inspect: a record id to read."
+    )
+    parser.add_argument(
         "--graph-fraud-rows",
         type=int,
         default=None,
@@ -159,7 +172,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--clearance", default=os.environ.get("OSPREY_CLEARANCE", "OFFICIAL"))
     parser.add_argument("--org-unit", default=os.environ.get("OSPREY_ORG_UNIT", "unit-1"))
     args = parser.parse_args(argv)
-    if bool(args.investigation_scope) == bool(args.case_name):
+    if not args.inspect and bool(args.investigation_scope) == bool(args.case_name):
         parser.error("give exactly one of --investigation-scope and --case-name")
     return args
 
@@ -187,7 +200,29 @@ async def _load_graph(
     return len(nodes), len(edges)
 
 
+async def _inspect(args: argparse.Namespace) -> int:
+    """Read-only. Uses only `SELECT`, so it is safe with the Conduit running."""
+    client = ArcadeDBClient(
+        ArcadeDBConfig.from_env(os.environ.get("ARCADEDB_DATABASE", "ospreyflow"))
+    )
+    try:
+        for line in await inspect_graph(
+            client,
+            node_type=groovy_identifier(physical_type_name("Endpoint")),
+            node_prefix="paysim-acct-",
+            edge_type=groovy_identifier(physical_type_name("TRANSACTED")),
+            edge_prefix="paysim-tx-",
+            record=args.inspect_record,
+        ):
+            print(f"  {line}")
+    finally:
+        await client.aclose()
+    return 0
+
+
 async def _run(args: argparse.Namespace) -> int:
+    if args.inspect:
+        return await _inspect(args)
     try:
         source = scope_and_source(args, in_checkout=_is_checkout())
     except NotProvisionedError as error:

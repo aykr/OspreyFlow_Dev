@@ -158,6 +158,8 @@ def seed_internal(
     permitted: Callable[[str, str], bool] = _permitted,
     replace_graph: bool = False,
     graph_fraud_rows: int | None = None,
+    inspect: bool = False,
+    inspect_record: str | None = None,
 ) -> list[str]:
     """Return the seed report, one line each. Raises `SeedRefused` before starting anything."""
     if dataset not in DATASETS:
@@ -183,6 +185,8 @@ def seed_internal(
         raise SeedRefused(
             f"the dataset is not provisioned: {data_root / spec.data_folder} is missing"
         )
+    if inspect:
+        return _inspect(spec, repo_root, directory, run, inspect_record)
     subs = lookup_subs(directory)
     missing = [name for name in (DEMO_ADMIN_SUBJECT, DEMO_ANALYST_SUBJECT) if name not in subs]
     if missing:
@@ -242,10 +246,43 @@ def seed_internal(
     return [line.strip() for line in output.splitlines() if line.strip()]
 
 
+def _inspect(
+    spec: Dataset,
+    repo_root: Path,
+    directory: Path,
+    run: Callable[[Sequence[str]], str],
+    record: str | None,
+) -> list[str]:
+    """Read the graph without changing anything: no case, no grants, and the Conduit is left
+    running (only `SELECT` is sent, and nothing is written to the analytics store)."""
+    argv = [
+        *_compose(directory / "compose.yaml"),
+        "run",
+        "--rm",
+        "--no-deps",
+        "--entrypoint",
+        "python",
+        "-v",
+        f"{repo_root}/scripts:/app/scripts:ro",
+        "api",
+        "-m",
+        spec.script,
+        "--inspect",
+    ]
+    if record:
+        argv += ["--inspect-record", record]
+    output = run(argv)
+    return [line.strip() for line in output.splitlines() if line.strip()]
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     stop_api = "--stop-api" in args
     replace_graph = "--replace-graph" in args
+    inspect = "--inspect" in args
+    record: str | None = None
+    if "--inspect-record" in args:
+        record = (args[args.index("--inspect-record") + 1 :] or [None])[0]  # type: ignore[list-item]
     sample: int | None = None
     if "--graph-fraud-rows" in args:
         value = args[args.index("--graph-fraud-rows") + 1 :][:1]
@@ -253,7 +290,11 @@ def main(argv: list[str] | None = None) -> int:
             print("--graph-fraud-rows takes a number, or 'all'", file=sys.stderr)
             return 2
         sample = 0 if value[0] == "all" else int(value[0])
-    names = [a for a in args if not a.startswith("--") and a not in ("all",) and not a.isdigit()]
+    names = [
+        a
+        for a in args
+        if not a.startswith("--") and a not in ("all",) and not a.isdigit() and a != record
+    ]
     if len(names) != 1:
         print(
             f"usage: seed_internal <{'|'.join(sorted(DATASETS))}> [--stop-api] "
@@ -264,7 +305,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         # Its output was shown as it arrived.
         seed_internal(
-            names[0], stop_api=stop_api, replace_graph=replace_graph, graph_fraud_rows=sample
+            names[0],
+            stop_api=stop_api,
+            replace_graph=replace_graph,
+            graph_fraud_rows=sample,
+            inspect=inspect,
+            inspect_record=record,
         )
     except (SeedRefused, SeedFailed) as error:
         print(f"seed: {error}", file=sys.stderr)

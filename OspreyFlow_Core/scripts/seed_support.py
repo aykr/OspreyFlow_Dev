@@ -147,6 +147,48 @@ async def clear_seeded_graph(
     return accounts, transactions
 
 
+async def inspect_graph(
+    client: _Sql,
+    *,
+    node_type: str,
+    node_prefix: str,
+    edge_type: str,
+    edge_prefix: str,
+    record: str | None = None,
+) -> list[str]:
+    """What the graph holds, as report lines, by `SELECT` only (it cannot change anything). Each
+    probe is reported on its own, and one that fails is reported as the failure and the rest still
+    run: an unreadable record is itself the evidence (ADR-055 Amendment 6)."""
+    probes: list[tuple[str, str]] = [
+        ("all vertices", "SELECT count(*) AS n FROM V"),
+        ("all edges", "SELECT count(*) AS n FROM E"),
+        (f"{node_type} (every row)", f"SELECT count(*) AS n FROM {node_type}"),
+        (
+            f"{node_type} with ids {node_prefix}...",
+            f"SELECT count(*) AS n FROM {node_type} WHERE id LIKE '{node_prefix}%'",
+        ),
+        (f"{edge_type} (every row)", f"SELECT count(*) AS n FROM {edge_type}"),
+        (
+            f"{edge_type} with ids {edge_prefix}...",
+            f"SELECT count(*) AS n FROM {edge_type} WHERE id LIKE '{edge_prefix}%'",
+        ),
+        (
+            f"three {edge_type} ids {edge_prefix}...",
+            f"SELECT id FROM {edge_type} WHERE id LIKE '{edge_prefix}%' LIMIT 3",
+        ),
+    ]
+    if record:
+        probes.append((f"record {record}", f"SELECT FROM {record}"))
+    lines: list[str] = []
+    for label, statement in probes:
+        try:
+            rows = await client.sql(statement)
+            lines.append(f"{label}: {rows}")
+        except ArcadeDBError as error:
+            lines.append(f"{label}: FAILED {error}")
+    return lines
+
+
 def events_already_loaded(analytics_db_path: Path | str, scope: str) -> bool:
     """Whether the case already has events. A missing file or table means it has none yet."""
     path = Path(analytics_db_path)

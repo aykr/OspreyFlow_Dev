@@ -207,3 +207,11 @@ def test_replace_graph_and_the_sample_size_are_read_from_the_command_line() -> N
     assert args.replace_graph is True and args.graph_fraud_rows == 500
     plain = _parse_args(["--case-name", "x"])
     assert plain.replace_graph is False and plain.graph_fraud_rows is None
+
+
+def test_inspect_needs_no_case_and_reads_the_record_it_is_given() -> None:
+    """Read-only mode must not require (or create) a case."""
+    args = _parse_args(["--inspect", "--inspect-record", "#169:80"])
+    assert args.inspect is True and args.inspect_record == "#169:80"
+    with pytest.raises(SystemExit):
+        _parse_args([])

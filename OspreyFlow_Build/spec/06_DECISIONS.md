@@ -7794,3 +7794,20 @@ on to the next form; any other error is raised as it is. Every form is scoped by
 prefix, transactions go before accounts, and the count afterwards must be zero. If no form is accepted
 the error lists every one tried and nothing has been deleted. Which form ArcadeDB accepts is still
 unproven from here: the first run on the owner's machine will show it.
+
+### ADR-055, Amendment 6 (30 September 2026) — a read-only inspection, after the second failed clean-up
+
+**Seen, on the owner's machine.** With the delete forms of Amendment 5, ArcadeDB accepted
+`DELETE FROM <edge type> WHERE id LIKE 'paysim-tx-%'` (so that syntax is right) and then failed with a
+404, `RecordNotFoundException`, for record `#169:80`. Nothing had been deleted. A record that a
+delete reaches but the database cannot find is an inconsistency, most likely left by the two loads
+that were interrupted mid-write (an index entry, or an edge list on a vertex, pointing at a record
+that is not there). I do not know which, and I will not guess a third time against the owner's
+database or reach for something drastic such as dropping it.
+
+**Built:** `--inspect` (and `--inspect-record <id>`), a mode that sends only `SELECT` statements, needs no
+case and no demo accounts, leaves the Conduit running, and reports each probe on its own so a failing
+one is shown as the evidence and the rest still run: counts of all vertices and edges, of the account
+and transaction types with and without the seed's id prefix, three transaction ids, and the named
+record. `python -m scripts.seed_internal paysim --inspect --inspect-record '#169:80'`. The fix
+to the clean-up will follow from what it shows.
