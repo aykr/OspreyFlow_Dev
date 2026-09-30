@@ -13,10 +13,11 @@ an interrupted load resumable.)
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, NamedTuple, Protocol
 
 import duckdb
 import httpx
@@ -94,6 +95,31 @@ def _is_parse_error(error: ArcadeDBError) -> bool:
 
 def _is_missing_record(error: ArcadeDBError) -> bool:
     return error.status_code == 404 or "RecordNotFound" in (error.exception_class or "")
+
+
+_VAULT_ID = re.compile(r"[a-z][a-z0-9-]{0,30}")
+
+
+class VaultLocations(NamedTuple):
+    """Where one vault keeps its stores (ADR-056, stage 0)."""
+
+    database: str
+    analytics_db_path: str
+
+
+def vault_locations(vault: str, analytics_db_path: str) -> VaultLocations:
+    """The graph database and the analytics file for vault `vault`, derived from its id and from
+    where the deployment keeps its analytics file: `vault_<id>` (hyphens become underscores, which
+    ArcadeDB accepts) and `<analytics directory>/vaults/<id>/analytics.duckdb`. The id is short,
+    lower-case and stable; anything else is refused, so it can never build a path outside
+    `vaults/`."""
+    if not _VAULT_ID.fullmatch(vault):
+        raise ValueError(
+            f"{vault!r} is not a vault id: lower-case letters, digits and hyphens, starting with "
+            "a letter, at most 31 characters"
+        )
+    base = Path(analytics_db_path).parent / "vaults" / vault / "analytics.duckdb"
+    return VaultLocations("vault_" + vault.replace("-", "_"), str(base))
 
 
 class _Lifecycle(Protocol):
@@ -350,3 +376,28 @@ def events_already_loaded(analytics_db_path: Path | str, scope: str) -> bool:
         return bool(row and row[0] > 0)
     finally:
         con.close()
+
+
+def events_summary(analytics_db_path: Path | str) -> list[str]:
+    """What an analytics file holds, as report lines, opened read-only so it cannot change
+    anything: the event count per case. A missing file, a missing table, and a file the Conduit has
+    open (DuckDB allows one writer) are each reported as what they are (ADR-056, stage 0)."""
+    path = Path(analytics_db_path)
+    if not path.exists():
+        return [f"analytics file {path}: does not exist"]
+    try:
+        con = duckdb.connect(str(path), read_only=True)
+    except (duckdb.IOException, duckdb.ConnectionException) as error:
+        return [f"analytics file {path}: cannot be opened now ({str(error).splitlines()[0]})"]
+    try:
+        try:
+            rows = con.execute(
+                "SELECT investigation_scope, count(*) FROM events GROUP BY 1 ORDER BY 1"
+            ).fetchall()
+        except duckdb.CatalogException:
+            return [f"analytics file {path}: no events table"]
+    finally:
+        con.close()
+    if not rows:
+        return [f"analytics file {path}: events table is empty"]
+    return [f"analytics file {path}: {n:,} events in case {scope}" for scope, n in rows]

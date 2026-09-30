@@ -423,3 +423,55 @@ def test_the_command_line_accepts_reset_graph_database(monkeypatch: pytest.Monke
     monkeypatch.setattr(seed_internal, "seed_internal", lambda dataset, **kw: seen.update(kw) or [])
     assert seed_internal.main(["paysim", "--stop-api", "--reset-graph-database"]) == 0
     assert seen["reset_graph_database"] is True
+
+
+def test_a_vault_reaches_the_seed_and_the_inspection_only_when_asked_for(repo: Path) -> None:
+    """Catches the vault never reaching the container, or being on for every run."""
+    assert "--vault" not in _seed_call(_with(repo))
+    call = _seed_call(_with(repo, vault="paysim"))
+    assert call[call.index("--vault") + 1] == "paysim"
+    inspection = _seed_call(_with(repo, vault="paysim", inspect=True))
+    assert "--inspect" in inspection and "--vault" in inspection
+
+
+def test_a_vault_id_that_is_not_a_vault_id_or_a_dataset_without_one_is_refused(repo: Path) -> None:
+    runner = Runner()
+    with pytest.raises(seed_internal.SeedRefused, match="not a vault id"):
+        seed_internal.seed_internal(
+            "paysim",
+            repo,
+            run=runner,
+            lookup_subs=lambda directory: SUBS,
+            api_running=lambda compose: False,
+            vault="../x",
+        )
+    with pytest.raises(seed_internal.SeedRefused, match="only built for paysim"):
+        seed_internal.seed_internal(
+            "hmp",
+            repo,
+            run=runner,
+            lookup_subs=lambda directory: SUBS,
+            api_running=lambda compose: False,
+            vault="hmp",
+        )
+    assert runner.calls == []
+
+
+def test_the_command_line_accepts_a_vault(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+    monkeypatch.setattr(seed_internal, "seed_internal", lambda dataset, **kw: seen.update(kw) or [])
+    assert seed_internal.main(["paysim", "--stop-api", "--vault", "paysim"]) == 0
+    assert seen["vault"] == "paysim"
+    assert seed_internal.main(["paysim", "--vault"]) == 2
+
+
+def test_a_value_that_equals_the_dataset_name_is_not_mistaken_for_a_second_dataset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Seen while building --vault: `paysim --vault paysim` has the word twice."""
+    seen: dict[str, object] = {}
+    monkeypatch.setattr(
+        seed_internal, "seed_internal", lambda dataset, **kw: seen.update(kw, dataset=dataset) or []
+    )
+    assert seed_internal.main(["--vault", "paysim", "paysim", "--stop-api"]) == 0
+    assert seen["dataset"] == "paysim" and seen["vault"] == "paysim"

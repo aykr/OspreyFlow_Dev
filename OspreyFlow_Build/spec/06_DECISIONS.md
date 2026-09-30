@@ -7952,3 +7952,35 @@ their own vaults later.
   impossible, and leakage between two vaults gets acceptance rows of its own.
 - **What this does not decide:** cross-vault linking; how a vault is retired or archived; whether the
   shared vault is mirrored into each vault for offline use.
+
+### ADR-056, Amendment 1 (30 September 2026) — stage 0: the PaySim seed takes a vault, and the shared stores are cleared afterwards
+
+**Owner's ruling.** After the new PaySim vault is verified, **drop the `ospreyflow` graph database and
+the analytics events and create them clean** (case records stay). Not before: until stage 1 (routing)
+the Glass reads only the shared stores, so dropping first would leave no fallback if the re-seed failed.
+
+**Built (stage 0a).** `seed_paysim` and `seed_internal` take `--vault <id>`. The vault's graph database is
+`vault_<id>` (hyphens become underscores) and its analytics file is
+`<the deployment's analytics directory>/vaults/<id>/analytics.duckdb`, both derived from the id inside
+the container, so the graph and the events always move together. An id is lower-case letters, digits and
+hyphens, starting with a letter, at most 31 characters; anything else is refused before anything starts,
+so an id can never build a path outside `vaults/`. Without `--vault` nothing changes. `--inspect` takes
+it too. PaySim only for now. Also fixed: a value equal to the dataset name (`--vault paysim paysim`) was
+read as a second dataset; the command line now skips the word after each value flag instead of comparing
+values.
+
+**Not yet decided or built.** The clean-up of the shared stores (stage 0b) needs its own explicit,
+counted, owner-run step; the case record still names no vault until stage 1 binds a case to one.
+
+### ADR-056, Amendment 2 (30 September 2026) — the inspection also reports the analytics file, and the first vault's numbers
+
+**Seen.** The owner's `--inspect --vault paysim` showed the new vault's graph: 13,564 accounts and 13,076
+transactions, every row carrying the PaySim prefix. The inspection could not say whether the 6,362,620
+events had loaded, which stage 0b (clearing the shared stores) must know first. Also, the load's
+announced size was 13,068 transactions and 13,076 are stored: **a difference of 8 that is not yet
+explained.** It is being checked against the load's own `writing ... transactions` line, not assumed to
+be harmless.
+
+**Built.** `--inspect` now also opens the analytics file read-only and reports the event count per case;
+a missing file, a missing table and a file another process has open are each reported as what they are.
+It writes nothing and needs neither a case nor the Conduit stopped.

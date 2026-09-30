@@ -25,8 +25,10 @@ import duckdb
 from scripts.seed_support import (
     clear_seeded_graph,
     events_already_loaded,
+    events_summary,
     inspect_graph,
     reset_graph_database,
+    vault_locations,
     write_graph,
 )
 
@@ -140,6 +142,14 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--vault",
+        default=None,
+        help=(
+            "Load into this dataset's own vault (ADR-056): its own graph database and analytics "
+            "file, derived from the id. Without it, the shared database and file are used."
+        ),
+    )
+    parser.add_argument(
         "--reset-graph-database",
         action="store_true",
         help=(
@@ -210,11 +220,18 @@ async def _load_graph(
     return len(nodes), len(edges)
 
 
+def _locations(args: argparse.Namespace) -> tuple[str, str]:
+    """The graph database and analytics file to use: the vault's own, or the shared ones."""
+    database = os.environ.get("ARCADEDB_DATABASE", "ospreyflow")
+    if args.vault is None:
+        return database, args.analytics_db_path
+    found = vault_locations(args.vault, args.analytics_db_path)
+    return found.database, found.analytics_db_path
+
+
 async def _inspect(args: argparse.Namespace) -> int:
     """Read-only. Uses only `SELECT`, so it is safe with the Conduit running."""
-    client = ArcadeDBClient(
-        ArcadeDBConfig.from_env(os.environ.get("ARCADEDB_DATABASE", "ospreyflow"))
-    )
+    client = ArcadeDBClient(ArcadeDBConfig.from_env(_locations(args)[0]))
     try:
         for line in await inspect_graph(
             client,
@@ -227,12 +244,21 @@ async def _inspect(args: argparse.Namespace) -> int:
             print(f"  {line}")
     finally:
         await client.aclose()
+    for line in events_summary(_locations(args)[1]):
+        print(f"  {line}")
     return 0
 
 
 async def _run(args: argparse.Namespace) -> int:
+    try:
+        database, analytics_path = _locations(args)
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 2
     if args.inspect:
         return await _inspect(args)
+    if args.vault is not None:
+        print(f"  vault {args.vault!r}: graph database {database}, analytics file {analytics_path}")
     try:
         source = scope_and_source(args, in_checkout=_is_checkout())
     except NotProvisionedError as error:
@@ -254,7 +280,7 @@ async def _run(args: argparse.Namespace) -> int:
         scope = case.id
         print(f"Case {args.case_name!r} is {scope}.")
 
-    if events_already_loaded(args.analytics_db_path, scope):
+    if events_already_loaded(analytics_path, scope):
         print(
             f"Case {scope!r} already has events loaded, and loading them again would double every "
             "count. Nothing was written.",
@@ -262,7 +288,6 @@ async def _run(args: argparse.Namespace) -> int:
         )
         return 1
 
-    database = os.environ.get("ARCADEDB_DATABASE", "ospreyflow")
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database))
     try:
         if args.reset_graph_database:
@@ -288,8 +313,8 @@ async def _run(args: argparse.Namespace) -> int:
     finally:
         await client.aclose()
 
-    Path(args.analytics_db_path).parent.mkdir(parents=True, exist_ok=True)
-    con = duckdb.connect(args.analytics_db_path)
+    Path(analytics_path).parent.mkdir(parents=True, exist_ok=True)
+    con = duckdb.connect(analytics_path)
     loaded = 0
     try:
         create_events_table(con)

@@ -220,3 +220,30 @@ def test_inspect_needs_no_case_and_reads_the_record_it_is_given() -> None:
 def test_reset_graph_database_is_read_from_the_command_line_and_off_by_default() -> None:
     assert _parse_args(["--case-name", "x", "--reset-graph-database"]).reset_graph_database is True
     assert _parse_args(["--case-name", "x"]).reset_graph_database is False
+
+
+def test_a_vault_moves_the_graph_database_and_the_analytics_file_together(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Catches a graph that goes to the vault while the events still go to the shared file."""
+    from scripts import seed_paysim
+
+    monkeypatch.setenv("ARCADEDB_DATABASE", "ospreyflow")
+    plain = _parse_args(["--case-name", "x", "--analytics-db-path", "/d/analytics.duckdb"])
+    assert seed_paysim._locations(plain) == ("ospreyflow", "/d/analytics.duckdb")
+    vaulted = _parse_args(
+        ["--case-name", "x", "--analytics-db-path", "/d/analytics.duckdb", "--vault", "paysim"]
+    )
+    assert seed_paysim._locations(vaulted) == (
+        "vault_paysim",
+        "/d/vaults/paysim/analytics.duckdb",
+    )
+
+
+def test_a_bad_vault_id_is_refused_before_anything_is_touched() -> None:
+    import asyncio
+
+    from scripts import seed_paysim
+
+    args = _parse_args(["--case-name", "x", "--vault", "../x"])
+    assert asyncio.run(seed_paysim._run(args)) == 2

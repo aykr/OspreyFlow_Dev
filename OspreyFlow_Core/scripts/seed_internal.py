@@ -24,6 +24,7 @@ this refuses outside a checkout, and passes the container `--attested-checkout` 
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
@@ -158,6 +159,7 @@ def seed_internal(
     permitted: Callable[[str, str], bool] = _permitted,
     replace_graph: bool = False,
     reset_graph_database: bool = False,
+    vault: str | None = None,
     graph_fraud_rows: int | None = None,
     inspect: bool = False,
     inspect_record: str | None = None,
@@ -168,6 +170,14 @@ def seed_internal(
     spec = DATASETS[dataset]
     if reset_graph_database and not spec.sampled:
         raise SeedRefused("--reset-graph-database is only built for paysim so far")
+    if vault is not None:
+        if not spec.sampled:
+            raise SeedRefused("--vault is only built for paysim so far")
+        if not re.fullmatch(r"[a-z][a-z0-9-]{0,30}", vault):
+            raise SeedRefused(
+                f"{vault!r} is not a vault id: lower-case letters, digits and hyphens, starting "
+                "with a letter, at most 31 characters"
+            )
     if spec.real_dataset and not permitted(spec.real_dataset, REAL_DATA_USE):
         raise SeedRefused(
             f"the local real-data exceptions list has no entry for {spec.real_dataset!r} "
@@ -189,7 +199,7 @@ def seed_internal(
             f"the dataset is not provisioned: {data_root / spec.data_folder} is missing"
         )
     if inspect:
-        return _inspect(spec, repo_root, directory, run, inspect_record)
+        return _inspect(spec, repo_root, directory, run, inspect_record, vault)
     subs = lookup_subs(directory)
     missing = [name for name in (DEMO_ADMIN_SUBJECT, DEMO_ANALYST_SUBJECT) if name not in subs]
     if missing:
@@ -237,6 +247,8 @@ def seed_internal(
         argv.append("--replace-graph")
     if reset_graph_database:
         argv.append("--reset-graph-database")
+    if vault is not None:
+        argv += ["--vault", vault]
     if spec.sampled:
         sample = DEFAULT_GRAPH_SAMPLE if graph_fraud_rows is None else graph_fraud_rows
         if sample > 0:
@@ -257,6 +269,7 @@ def _inspect(
     directory: Path,
     run: Callable[[Sequence[str]], str],
     record: str | None,
+    vault: str | None = None,
 ) -> list[str]:
     """Read the graph without changing anything: no case, no grants, and the Conduit is left
     running (only `SELECT` is sent, and nothing is written to the analytics store)."""
@@ -276,6 +289,8 @@ def _inspect(
     ]
     if record:
         argv += ["--inspect-record", record]
+    if vault is not None:
+        argv += ["--vault", vault]
     output = run(argv)
     return [line.strip() for line in output.splitlines() if line.strip()]
 
@@ -285,6 +300,13 @@ def main(argv: list[str] | None = None) -> int:
     stop_api = "--stop-api" in args
     replace_graph = "--replace-graph" in args
     reset_database = "--reset-graph-database" in args
+    vault: str | None = None
+    if "--vault" in args:
+        value = args[args.index("--vault") + 1 :][:1]
+        if not value or value[0].startswith("--"):
+            print("--vault takes a vault id, for example --vault paysim", file=sys.stderr)
+            return 2
+        vault = value[0]
     inspect = "--inspect" in args
     record: str | None = None
     if "--inspect-record" in args:
@@ -296,15 +318,16 @@ def main(argv: list[str] | None = None) -> int:
             print("--graph-fraud-rows takes a number, or 'all'", file=sys.stderr)
             return 2
         sample = 0 if value[0] == "all" else int(value[0])
+    takes_a_value = {"--vault", "--inspect-record", "--graph-fraud-rows"}
     names = [
         a
-        for a in args
-        if not a.startswith("--") and a not in ("all",) and not a.isdigit() and a != record
+        for i, a in enumerate(args)
+        if not a.startswith("--") and not (i > 0 and args[i - 1] in takes_a_value)
     ]
     if len(names) != 1:
         print(
             f"usage: seed_internal <{'|'.join(sorted(DATASETS))}> [--stop-api] "
-            "[--replace-graph] [--reset-graph-database] [--graph-fraud-rows N|all]",
+            "[--replace-graph] [--reset-graph-database] [--vault ID] [--graph-fraud-rows N|all]",
             file=sys.stderr,
         )
         return 2
@@ -315,6 +338,7 @@ def main(argv: list[str] | None = None) -> int:
             stop_api=stop_api,
             replace_graph=replace_graph,
             reset_graph_database=reset_database,
+            vault=vault,
             graph_fraud_rows=sample,
             inspect=inspect,
             inspect_record=record,

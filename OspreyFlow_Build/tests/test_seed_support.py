@@ -438,6 +438,62 @@ def test_a_database_that_will_not_go_is_an_error_not_a_success() -> None:
     assert "create" not in server.calls
 
 
+def test_a_vault_gets_its_own_database_and_its_own_analytics_file() -> None:
+    """Catches two vaults sharing a file, and a hyphen that ArcadeDB would refuse."""
+    found = seed_support.vault_locations("fixture-corp", "/data/_local-runtime/analytics.duckdb")
+    assert found.database == "vault_fixture_corp"
+    assert found.analytics_db_path == "/data/_local-runtime/vaults/fixture-corp/analytics.duckdb"
+    other = seed_support.vault_locations("paysim", "/data/_local-runtime/analytics.duckdb")
+    assert other.database != found.database and other.analytics_db_path != found.analytics_db_path
+
+
+@pytest.mark.parametrize("bad", ["", "PaySim", "../x", "a/b", "1abc", "a" * 32, "x y", "a_b"])
+def test_a_vault_id_that_could_escape_its_folder_is_refused(bad: str) -> None:
+    """Catches an id that builds a path outside `vaults/`."""
+    with pytest.raises(ValueError, match="not a vault id"):
+        seed_support.vault_locations(bad, "/data/analytics.duckdb")
+
+
+def test_the_events_summary_reports_each_case_and_each_way_a_file_can_be_unreadable(
+    tmp_path: Path,
+) -> None:
+    """Catches a verification that says nothing when the file is missing or locked, and one that
+    could write."""
+    missing = tmp_path / "none.duckdb"
+    assert "does not exist" in seed_support.events_summary(missing)[0]
+
+    path = tmp_path / "a.duckdb"
+    con = duckdb.connect(str(path))
+    con.execute("CREATE TABLE other (x INTEGER)")
+    con.close()
+    assert "no events table" in seed_support.events_summary(path)[0]
+
+    con = duckdb.connect(str(path))
+    con.execute("CREATE TABLE events (investigation_scope VARCHAR)")
+    con.close()
+    assert "empty" in seed_support.events_summary(path)[0]
+
+    con = duckdb.connect(str(path))
+    con.execute("INSERT INTO events VALUES ('c1'), ('c1'), ('c2')")
+    con.close()
+    lines = seed_support.events_summary(path)
+    assert any("2 events in case c1" in x for x in lines)
+    assert any("1 events in case c2" in x for x in lines)
+    con = duckdb.connect(str(path), read_only=True)
+    assert con.execute("SELECT count(*) FROM events").fetchone() == (3,)
+    con.close()
+
+
+def test_a_file_someone_else_has_open_is_reported_not_crashed_on(tmp_path: Path) -> None:
+    path = tmp_path / "busy.duckdb"
+    holder = duckdb.connect(str(path))
+    holder.execute("CREATE TABLE events (investigation_scope VARCHAR)")
+    try:
+        assert "cannot be opened now" in seed_support.events_summary(path)[0]
+    finally:
+        holder.close()
+
+
 # --- reading what the graph holds, without changing it (ADR-055 Amendment 6) ---
 
 
