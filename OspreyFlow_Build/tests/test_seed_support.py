@@ -542,3 +542,14 @@ def test_inspect_reports_each_probe_and_carries_on_past_a_failing_one() -> None:
     assert "#169:80" in text and "not found" in text
     assert "paysim-tx-" in text and "paysim-acct-" in text
     assert text.count("7") >= 3
+
+
+def test_inspect_looks_for_duplicate_ids_and_totals_the_occurrences() -> None:
+    """Seen: a vault held 13,076 transactions after 13,068 were written. Catches an inspection
+    that cannot tell a duplicated id from a genuinely larger graph."""
+    client = ProbeClient()
+    _inspect(client)
+    assert any("GROUP BY id" in s and "TRANSACTED" in s for s in client.statements)
+    assert any("GROUP BY id" in s and "Endpoint" in s for s in client.statements)
+    assert any("sum(occurrences)" in s for s in client.statements)
+    assert all(s.startswith("SELECT") for s in client.statements)

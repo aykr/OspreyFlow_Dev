@@ -344,6 +344,18 @@ async def inspect_graph(
             f"SELECT count(*) AS n FROM {edge_type} WHERE id LIKE '{edge_prefix}%'",
         ),
         (
+            f"{edge_type}: the ids stored most often (n > 1 means a duplicate)",
+            f"SELECT id, count(*) AS n FROM {edge_type} GROUP BY id ORDER BY n DESC LIMIT 5",
+        ),
+        (
+            f"{node_type}: the ids stored most often (n > 1 means a duplicate)",
+            f"SELECT id, count(*) AS n FROM {node_type} GROUP BY id ORDER BY n DESC LIMIT 5",
+        ),
+        (
+            f"{edge_type}: total of the occurrence counts",
+            f"SELECT sum(occurrences) AS total FROM {edge_type}",
+        ),
+        (
             f"three {edge_type} ids {edge_prefix}...",
             f"SELECT id FROM {edge_type} WHERE id LIKE '{edge_prefix}%' LIMIT 3",
         ),

@@ -7984,3 +7984,18 @@ be harmless.
 **Built.** `--inspect` now also opens the analytics file read-only and reports the event count per case;
 a missing file, a missing table and a file another process has open are each reported as what they are.
 It writes nothing and needs neither a case nor the Conduit stopped.
+
+### ADR-056, Amendment 3 (30 September 2026) — the first vault is loaded; eight edges are unexplained, so the inspection looks for duplicates
+
+**Seen.** The owner's `--vault paysim` run finished: 13,564 accounts and 13,068 transactions written
+(1,335 s for the transactions), and 6,362,620 events loaded under the PaySim case in the vault's own
+analytics file. The inspection then reads the graph as 13,564 accounts (matching) and **13,076**
+transactions, every one with the PaySim prefix: **eight more than were written.** The seed writes edges
+by an upsert that adds to an existing edge's occurrence count, so identical rows merge (fewer stored than
+written); it cannot be said how a graph can hold more. This is unexplained, and nothing is to be cleared
+(stage 0b) until it is.
+
+**Built.** `--inspect` also reports, by `SELECT` only: the five ids stored most often in each of the
+account and transaction types (a count above 1 is a duplicate) and the total of the transaction
+occurrence counts. A duplicated id, a total that still equals what was written, or neither will each
+point somewhere different.
