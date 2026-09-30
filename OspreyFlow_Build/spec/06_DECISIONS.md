@@ -8143,3 +8143,22 @@ fix, so the counts are right, and the vault resolver (ADR-056 stage 1), so the r
 **Not decided here.** How the Glass draws a meta-node beyond the existing community hull; expanding a
 community larger than the working set; the flagged-fraud ordering.
 
+### ADR-056, Amendment 8 (30 September 2026) — the first reproduction was green; a hub-shaped one follows
+
+**Seen, on the owner's machine.** The conformance case of Amendment 7 (three edges into a fresh hub in one
+batch, and three out of one) **passed** against a real ArcadeDB. So the hypothesis, *as tested*, is wrong:
+a shared endpoint inside one batch does not by itself write an edge twice.
+
+**What that case did not do.** It used the undirected `COMMUNICATED_WITH` type with three edges and no
+properties, into endpoints that had no other edges. The real duplicates were rare (8 of 13,068), identical to
+the microsecond, and on the directed `TRANSACTED` type with an amount, a type and a timestamp, into hub
+accounts whose edge lists grow across many batches. A hub's edge list can allocate a new segment part-way
+through a batch, which a three-edge case never reaches. That is a guess about why only some edges duplicate,
+not something measured.
+
+**Test, written first.** `test_a_hub_receiving_many_edges_across_batches_stores_each_edge_once`: the same
+`TRANSACTED` shape, one hub receiving 300 edges and one sending 100, 40 to a transaction. Red means a
+duplicate is reproduced and the fix (one vertex per end of the `addE`) follows; green again means the next
+suspects are the commit-retry replay (Amendment 5) and the load's own timing, and the eight duplicates stay
+unexplained until a larger or longer reproduction says otherwise.
+

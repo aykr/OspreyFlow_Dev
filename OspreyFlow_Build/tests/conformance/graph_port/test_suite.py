@@ -2232,3 +2232,62 @@ async def test_edges_sharing_an_endpoint_written_in_one_batch_are_each_stored_on
             assert sorted(e.id for e in subgraph.edges) == sorted(e.id for e in edges)
             assert sorted(written) == sorted(e.id for e in edges)
             assert (await adapter.neighbourhood_stats(hub, CLEARED)).degree == len(edges)
+
+
+async def test_a_hub_receiving_many_edges_across_batches_stores_each_edge_once(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Seen, 30 September 2026: eight of 13,068 transactions were stored twice, rare, identical to
+    the microsecond, and hub accounts were among their targets. The case above (three edges into a
+    fresh hub) passed, so it does not reproduce it. This one is built like the real load: the
+    directed `TRANSACTED` type with its properties and a timestamp, one hub that receives 300 edges
+    and another that sends 100, written 40 to a transaction as the seed writes them, so a hub's edge
+    list grows across many batches and inside them. Every edge must be stored once."""
+    async with factory.context() as adapter:
+        hub_in, hub_out, *others = [
+            _node("Endpoint", classification="OFFICIAL", value_normalised=f"+44{n:010d}")
+            for n in range(402)
+        ]
+        ids: list[str] = []
+        for start in range(0, len(others) + 2, 40):
+            batch = [hub_in, hub_out, *others][start : start + 40]
+            written, _ = await _write(adapter, batch, [])
+            ids.extend(written)
+        hub_in_id, hub_out_id, *other_ids = ids
+        sources, targets = other_ids[:300], other_ids[300:]
+
+        day = datetime(2017, 1, 1, tzinfo=UTC)
+        edges = [
+            _edge(
+                "TRANSACTED",
+                s,
+                hub_in_id,
+                classification="OFFICIAL",
+                interval=Interval(valid_from=day),
+            )
+            for s in sources
+        ] + [
+            _edge(
+                "TRANSACTED",
+                hub_out_id,
+                t,
+                classification="OFFICIAL",
+                interval=Interval(valid_from=day),
+            )
+            for t in targets
+        ]
+        edges = [
+            e.model_copy(
+                update={"properties": {"amount": float(i + 1), "transaction_type": "CASH_IN"}}
+            )
+            for i, e in enumerate(edges)
+        ]
+        for start in range(0, len(edges), 40):
+            await _write(adapter, [], edges[start : start + 40])
+
+        for hub, expected in ((hub_in_id, edges[:300]), (hub_out_id, edges[300:])):
+            subgraph = await adapter.expand(ExpandRequest(node_ids=[hub], depth=1), CLEARED)
+            stored = [e.id for e in subgraph.edges]
+            assert len(stored) == len(set(stored)), "an edge id is stored more than once"
+            assert sorted(stored) == sorted(e.id for e in expected)
+            assert (await adapter.neighbourhood_stats(hub, CLEARED)).degree == len(expected)
