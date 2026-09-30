@@ -7647,3 +7647,31 @@ the sign-in and the case's working state are kept. Choosing a different case sti
 6). The Back button is not offered for a case that has just been removed, or when no case is open.
 Remove is offered only on cases the account is an Author of, and on every case to an administrator
 (Amendment 7); a Viewer or Editor sees no Remove.
+
+### ADR-055, Amendment 2 (30 September 2026) — seeding runs inside the deployment, into a named case
+
+**Why.** The first seed ran on the host and wrote a DuckDB file the deployment never reads: the
+analytics store lives in the Docker volume `osprey-data`, and Postgres and ArcadeDB are on an internal
+network. It also took a raw `--investigation-scope`, so the case it filled was invisible in the picker.
+
+**Built, tests first:** `scripts/seed_internal.py` (`make seed-paysim`) starts a one-shot container from
+the `api` image on the deployment's own network and volume, with the checkout's `scripts/` and the
+data folder mounted read-only, and runs the seed there. The seed creates (or reuses, by name) a case
+named for the dataset in the demo unit and grants the demo administrator Author and the demo analyst
+Editor, so both can open it from the picker (ADR-052). The Conduit is stopped for the run only with
+`--stop-api`, because DuckDB takes one writer; it is always started again afterwards, including when
+the seed fails. Without the flag, a running Conduit is a refusal that names the flag.
+
+**A reading, for the owner to overrule:** the container has no git checkout, so the seed is given
+`--attested-checkout` by the orchestrator, which itself runs from the checkout and refuses to start
+unless the data folder is outside the tree (ADR-053). The flag records that reading; it does not
+weaken the refusal for a direct host run.
+
+### ADR-052, Amendment 9 (30 September 2026) — seeded cases carry their grants
+
+Seeds create cases through the same access store as the Glass (`scripts/case_seed.py`, `ensure_case`),
+not through raw scope strings, so a seeded case appears in the picker with its name and grants. Grants
+are given as `--grant <keycloak sub>=<level>` and are applied by the seeding account. The orchestrator
+looks the demo accounts' subjects up in Keycloak; if an account is missing it names
+`make register-sign-in`. Fixture Corp and HMP have not been created on this machine (the owner did not
+run `harness.apply --seed`), so they are loaded the same way, as named, shared cases.

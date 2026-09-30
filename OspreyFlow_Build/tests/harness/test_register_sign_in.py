@@ -539,3 +539,25 @@ def test_the_analyst_password_is_never_printed_or_rewritten(
     lines = _register(env)
     assert ANALYST_PASSWORD not in "\n".join(lines)
     assert _env_values(env)["OSPREY_DEMO_ANALYST_PASSWORD"] == ANALYST_PASSWORD
+
+
+# --- looking an account up, for the seeds' grants (the Conduit's principal id is the subject) ---
+
+
+def test_an_accounts_subject_is_read_from_keycloak_and_an_unknown_one_is_named(
+    keycloak: FakeKeycloak,
+) -> None:
+    """A grant is written to the identity provider's subject, not the sign-in name, because that is
+    what the Conduit's principal id is (`packages/principal_auth`). Catches granting to a name that
+    can never match a token, which would leave the demo accounts unable to open their own case."""
+    keycloak.users["uid-9"] = {"id": "uid-9", "username": DEMO_ADMIN_SUBJECT}
+
+    found = keycloak_admin.user_id(
+        issuer=ISSUER, realm="osprey", token="admin-token", username=DEMO_ADMIN_SUBJECT
+    )
+
+    assert found == "uid-9"
+    with pytest.raises(RealmConfigurationFailed, match="osprey-nobody"):
+        keycloak_admin.user_id(
+            issuer=ISSUER, realm="osprey", token="admin-token", username="osprey-nobody"
+        )

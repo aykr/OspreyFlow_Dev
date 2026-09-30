@@ -97,7 +97,31 @@ def _batches(items: Iterator[object], size: int) -> Iterator[list[object]]:
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="python -m scripts.seed_paysim", description=__doc__)
-    parser.add_argument("--investigation-scope", required=True)
+    parser.add_argument(
+        "--investigation-scope",
+        default=None,
+        help="Write into this existing case. Give this or --case-name.",
+    )
+    parser.add_argument(
+        "--case-name",
+        default=None,
+        help="Make (or reuse) a case of this name in the Conduit's database and load into it.",
+    )
+    parser.add_argument(
+        "--grant",
+        action="append",
+        default=[],
+        metavar="ACCOUNT=LEVEL",
+        help="With --case-name: the level an account holds on the case. Repeatable.",
+    )
+    parser.add_argument(
+        "--attested-checkout",
+        action="store_true",
+        help=(
+            "The host-side command verified the scripts and this data came from a checkout "
+            "(a container has no .git to check)."
+        ),
+    )
     parser.add_argument(
         "--data-dir",
         default=os.environ.get("OSPREYFLOW_INTERNAL_DEMO_DATA_DIR", "../OspreyFlow_Data"),
@@ -113,14 +137,22 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--clearance", default=os.environ.get("OSPREY_CLEARANCE", "OFFICIAL"))
     parser.add_argument("--org-unit", default=os.environ.get("OSPREY_ORG_UNIT", "unit-1"))
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if bool(args.investigation_scope) == bool(args.case_name):
+        parser.error("give exactly one of --investigation-scope and --case-name")
+    return args
+
+
+def scope_and_source(args: argparse.Namespace, *, in_checkout: bool) -> Path:
+    """The data file, from a checkout or a checkout the host has attested to, else a refusal."""
+    return resolve_source(
+        Path(args.data_dir), is_checkout=in_checkout or bool(args.attested_checkout)
+    )
 
 
 async def _load_graph(graph: GraphPort, source: Path, principal: Principal) -> tuple[int, int]:
     accounts = fraud_accounts(read_paysim(source))
-    touching = [
-        r for r in read_paysim(source) if r.origin in accounts or r.destination in accounts
-    ]
+    touching = [r for r in read_paysim(source) if r.origin in accounts or r.destination in accounts]
     nodes, edges = build_graph_writes(touching, created_by=principal.id, handling=_HANDLING)
     if nodes and await graph.get_node(nodes[0].id, principal) is not None:
         raise NotProvisionedError(
@@ -148,7 +180,7 @@ async def _load_graph(graph: GraphPort, source: Path, principal: Principal) -> t
 
 async def _run(args: argparse.Namespace) -> int:
     try:
-        source = resolve_source(Path(args.data_dir), is_checkout=_is_checkout())
+        source = scope_and_source(args, in_checkout=_is_checkout())
     except NotProvisionedError as error:
         print(error, file=sys.stderr)
         return 1
@@ -156,6 +188,26 @@ async def _run(args: argparse.Namespace) -> int:
     ontology = load_default_ontology()
     scheme = load_uk_le_scheme()
     principal = Principal(id=args.principal_id, clearance=args.clearance, org_unit=args.org_unit)
+    scope = args.investigation_scope
+    if args.case_name:
+        # Inside the deployment the Conduit's Postgres is reachable, and the case is made through
+        # the same store the routes use, so the demo accounts can open it (ADR-052).
+        from scripts.case_seed import ensure_case, parse_grant
+        from services.api.config import PostgresConfig
+        from services.api.investigations import InvestigationStore
+
+        case_store = await InvestigationStore.connect(PostgresConfig.from_env().dsn)
+        try:
+            case = await ensure_case(
+                case_store,
+                name=args.case_name,
+                seeder=principal,
+                grants=dict(parse_grant(g) for g in args.grant),
+            )
+        finally:
+            await case_store.close()
+        scope = case.id
+        print(f"Case {args.case_name!r} is {scope}.")
 
     database = os.environ.get("ARCADEDB_DATABASE", "ospreyflow")
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database))
@@ -178,8 +230,7 @@ async def _run(args: argparse.Namespace) -> int:
         create_geometries_table(con)
         analytics: AnalyticsPort = AnalyticsDuckDBAdapter(con, scheme)
         events = (
-            to_event(r, investigation_scope=args.investigation_scope, handling=_HANDLING)
-            for r in read_paysim(source)
+            to_event(r, investigation_scope=scope, handling=_HANDLING) for r in read_paysim(source)
         )
         for batch in _batches(events, _EVENT_CHUNK):
             await analytics.load_events(batch)  # type: ignore[arg-type]
@@ -189,8 +240,8 @@ async def _run(args: argparse.Namespace) -> int:
         con.close()
 
     print(f"Seeded {node_count} accounts and {edge_count} transactions into the graph.")
-    print(f"Loaded {loaded:,} events under investigation_scope={args.investigation_scope!r}.")
-    print(f"Case to create for it: {CASE_NAME!r}. Cite: {CITATION}")
+    print(f"Loaded {loaded:,} events under investigation_scope={scope!r}.")
+    print(f"Cite: {CITATION}")
     return 0
 
 
