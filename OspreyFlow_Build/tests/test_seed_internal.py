@@ -293,29 +293,57 @@ def test_the_real_runner_raises_with_the_failure_text_when_the_command_fails() -
         seed_internal._run([sys.executable, "-c", "import sys; print('boom'); sys.exit(3)"])
 
 
-# --- resuming an interrupted load ---
+# --- replacing an interrupted load, and the graph sample ---
 
 
-def test_resume_is_passed_to_the_seed_only_when_asked_for(repo: Path) -> None:
-    """Catches --resume never reaching the container, or being on for every run."""
-    plain = Runner()
-    _go(repo, plain)
-    assert "--resume" not in _seed_call(plain)
-
-    resumed = Runner()
+def _with(repo: Path, **kwargs: object) -> Runner:
+    runner = Runner()
     seed_internal.seed_internal(
         "paysim",
         repo,
-        run=resumed,
+        run=runner,
         lookup_subs=lambda directory: SUBS,
         api_running=lambda compose: False,
-        resume=True,
+        **kwargs,  # type: ignore[arg-type]
     )
-    assert "--resume" in _seed_call(resumed)
+    return runner
 
 
-def test_the_command_line_accepts_resume(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Catches `make`'s command line not knowing the flag."""
+def test_replace_graph_is_passed_to_the_seed_only_when_asked_for(repo: Path) -> None:
+    """Catches the flag never reaching the container, or being on for every run."""
+    assert "--replace-graph" not in _seed_call(_with(repo))
+    assert "--replace-graph" in _seed_call(_with(repo, replace_graph=True))
+
+
+def test_paysim_is_given_a_graph_sample_by_default_and_all_can_be_asked_for(repo: Path) -> None:
+    """The full graph takes many hours to write; the sample is the default, the full graph an
+    explicit choice. Catches an unbounded default."""
+    call = _seed_call(_with(repo))
+    assert call[call.index("--graph-fraud-rows") + 1] == str(seed_internal.DEFAULT_GRAPH_SAMPLE)
+    call = _seed_call(_with(repo, graph_fraud_rows=1200))
+    assert call[call.index("--graph-fraud-rows") + 1] == "1200"
+    assert "--graph-fraud-rows" not in _seed_call(_with(repo, graph_fraud_rows=0))
+
+
+def test_a_dataset_with_no_graph_sample_is_never_given_one(repo: Path) -> None:
+    """Catches the sample flag reaching a seed that does not take it."""
+    (repo.parent / "OspreyFlow_Data" / "Enron_Mails" / "a").mkdir(parents=True)
+    runner = Runner()
+    seed_internal.seed_internal(
+        "enron",
+        repo,
+        run=runner,
+        lookup_subs=lambda directory: SUBS,
+        api_running=lambda compose: False,
+        permitted=lambda name, use: True,
+    )
+    assert "--graph-fraud-rows" not in _seed_call(runner)
+
+
+def test_the_command_line_accepts_the_new_flags(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Catches `make`'s command line not knowing the flags."""
     seen: dict[str, object] = {}
 
     def fake(dataset: str, **kwargs: object) -> list[str]:
@@ -323,5 +351,10 @@ def test_the_command_line_accepts_resume(repo: Path, monkeypatch: pytest.MonkeyP
         return []
 
     monkeypatch.setattr(seed_internal, "seed_internal", fake)
-    assert seed_internal.main(["paysim", "--stop-api", "--resume"]) == 0
-    assert seen["resume"] is True and seen["stop_api"] is True
+    argv = ["paysim", "--stop-api", "--replace-graph", "--graph-fraud-rows", "800"]
+    assert seed_internal.main(argv) == 0
+    assert seen["replace_graph"] is True and seen["graph_fraud_rows"] == 800
+    assert seen["stop_api"] is True
+    seen.clear()
+    assert seed_internal.main(["paysim", "--graph-fraud-rows", "all"]) == 0
+    assert seen["graph_fraud_rows"] == 0

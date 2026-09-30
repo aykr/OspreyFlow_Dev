@@ -7742,3 +7742,39 @@ half-written graph, and had it not, would have doubled the events (the analytics
 **Not decided here:** how fast the graph write can be made. Bulk writing would bypass the adapter's
 per-element lookups and is a design change to the adapter; I will only propose it once a real run has
 shown the rate.
+
+### ADR-055, Amendment 4 (30 September 2026) — replace, not resume; the graph is a sample
+
+**Seen, on the owner's machine.** With progress lines on, the graph write's rate was visible: about 65 ms
+per account (74,000 accounts took 80 minutes) and 340 ms per transaction, *rising* to 470 ms by the
+eighth thousand as the graph grew. The adapter runs several lookups per transaction, one of them a
+total over every transaction of that type already stored, so the cost grows with the graph. The
+projection for the remaining 57,000 transactions was many hours. The owner stopped the run.
+
+**Amendment 3 is corrected on one point.** It says `--resume` was safe because the graph write is an
+upsert. That holds for accounts and is **false for transactions**: writing a transaction that already
+exists adds to its occurrence count (`upsert_edges` merges occurrences), which inflates weights.
+`--resume` is withdrawn and removed. The progress lines and the refusal to load events twice stand.
+
+**Decided with the owner's agreement ("I agree with your recommended approach"):**
+
+1. **`--replace-graph` replaces `--resume`.** It deletes this seed's own graph rows and only those
+   (every statement is scoped by the seed's id prefix, `paysim-acct-`/`paysim-tx-` or
+   `enron-ep-`/`enron-comm-`, because the account and edge types are shared between datasets),
+   transactions first, and raises if any are left, then loads fresh.
+2. **The PaySim graph is a sample.** The first 500 fraud transactions in file order and everything
+   touching their accounts: roughly 5,000 accounts and 4,000 transactions, about half an hour. The
+   analytics store still gets every row, so counts, time windows and amounts cover all 6.36 million.
+   `--graph-fraud-rows N` changes the size; `all` restores the full neighbourhood. This narrows
+   ADR-055's point 1 for the graph only (its "fraud neighbourhood" is now the sampled neighbourhood
+   by default); the analytics side is unchanged.
+
+**Not decided, and not built:** a fast bulk-write mode in the graph adapter (skipping the per-element
+lookups on a fresh load) would load the full graph in minutes. It changes the adapter's behaviour and
+cannot be tested here (no ArcadeDB in the build environment), so it waits for the owner to see the
+sample and ask for it.
+
+**Untested against a real ArcadeDB:** the two delete statements (`DELETE EDGE` and `DELETE VERTEX` with
+a `LIKE` on the id prefix) are proved only against a fake that answers the statements the code
+sends. The clean-up prints how many rows it removed and fails if any remain, so a statement the
+database rejects or ignores is visible on the first run.

@@ -98,11 +98,12 @@ def test_a_case_name_is_required() -> None:
         _parse_args([])
 
 
-def test_the_enron_seed_can_resume_and_refuses_a_second_events_load() -> None:
-    """The same protections as PaySim's: an interrupted graph write can be resumed, and events are
-    never loaded twice (ADR-055 Amendment 3)."""
-    assert _parse_args(["--case-name", "x", "--resume"]).resume is True
-    assert _parse_args(["--case-name", "x"]).resume is False
+def test_the_enron_seed_can_replace_its_graph_and_refuses_a_second_events_load() -> None:
+    """The same protections as PaySim's: a load that was interrupted is cleared and redone, not
+    resumed (a repeated transaction is counted twice), and events are never loaded twice
+    (ADR-055 Amendments 3 and 4)."""
+    assert _parse_args(["--case-name", "x", "--replace-graph"]).replace_graph is True
+    assert _parse_args(["--case-name", "x"]).replace_graph is False
     from scripts import seed_enron, seed_support
 
     assert seed_enron.write_graph is seed_support.write_graph

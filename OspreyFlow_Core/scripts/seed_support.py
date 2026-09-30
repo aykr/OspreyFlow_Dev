@@ -13,9 +13,9 @@ an interrupted load resumable.)
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import duckdb
 
@@ -55,6 +55,47 @@ async def write_graph(
             if (start // chunk) % PROGRESS_EVERY == 0 or done == len(items):
                 seconds = int(time.monotonic() - started)
                 say(f"  graph: {done:,} of {len(items):,} {noun} written ({seconds}s)")
+
+
+class CleanUpIncomplete(RuntimeError):
+    """Rows the clean-up meant to delete are still there."""
+
+
+class _Sql(Protocol):
+    async def sql(
+        self,
+        command: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        session_id: str | None = None,
+    ) -> list[dict[str, Any]]: ...
+
+
+async def _count(client: _Sql, type_name: str, prefix: str) -> int:
+    rows = await client.sql(f"SELECT count(*) AS n FROM {type_name} WHERE id LIKE '{prefix}%'")
+    return int(rows[0]["n"]) if rows else 0
+
+
+async def clear_seeded_graph(
+    client: _Sql, *, node_type: str, node_prefix: str, edge_type: str, edge_prefix: str
+) -> tuple[int, int]:
+    """Delete this seed's own graph rows, and only those: every statement is scoped by the seed's
+    id prefix, because the account type and the edge types are shared with other datasets.
+    Transactions first, then accounts. Returns `(accounts, transactions)` deleted. Raises if any
+    are left, so a fresh load is never written on top of leftovers.
+
+    Why this exists (ADR-055 Amendment 4): writing a transaction that already exists adds to its
+    occurrence count, so an interrupted load cannot simply be resumed."""
+    accounts = await _count(client, node_type, node_prefix)
+    transactions = await _count(client, edge_type, edge_prefix)
+    await client.sql(f"DELETE EDGE {edge_type} WHERE id LIKE '{edge_prefix}%'")
+    await client.sql(f"DELETE VERTEX {node_type} WHERE id LIKE '{node_prefix}%'")
+    left = await _count(client, node_type, node_prefix) + await _count(
+        client, edge_type, edge_prefix
+    )
+    if left:
+        raise CleanUpIncomplete(f"{left:,} of this seed's graph rows are left after deleting")
+    return accounts, transactions
 
 
 def events_already_loaded(analytics_db_path: Path | str, scope: str) -> bool:

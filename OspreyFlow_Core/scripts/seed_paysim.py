@@ -22,12 +22,14 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import duckdb
-from scripts.seed_support import events_already_loaded, write_graph
+from scripts.seed_support import clear_seeded_graph, events_already_loaded, write_graph
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
+from adapters.graph_arcadedb.gremlin_literals import groovy_identifier
+from adapters.graph_arcadedb.naming import physical_type_name
 from demo_fixtures.paysim import (
     build_graph_writes,
     fraud_accounts,
@@ -124,9 +126,22 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--resume",
+        "--replace-graph",
         action="store_true",
-        help="Carry on an interrupted load: the graph write is an upsert, so repeating it is safe.",
+        help=(
+            "Delete this seed's own graph rows (ids starting paysim-acct- and paysim-tx-) and "
+            "load again. For an interrupted load: a transaction written twice is counted twice."
+        ),
+    )
+    parser.add_argument(
+        "--graph-fraud-rows",
+        type=int,
+        default=None,
+        help=(
+            "Write to the graph only the first N fraud transactions and everything touching their "
+            "accounts (the full neighbourhood is 74,000 accounts and takes hours). The analytics "
+            "store always gets every row."
+        ),
     )
     parser.add_argument(
         "--data-dir",
@@ -157,16 +172,16 @@ def scope_and_source(args: argparse.Namespace, *, in_checkout: bool) -> Path:
 
 
 async def _load_graph(
-    graph: GraphPort, source: Path, principal: Principal, *, resume: bool = False
+    graph: GraphPort, source: Path, principal: Principal, *, fraud_rows: int | None = None
 ) -> tuple[int, int]:
-    accounts = fraud_accounts(read_paysim(source))
+    accounts = fraud_accounts(read_paysim(source), limit=fraud_rows)
     touching = [r for r in read_paysim(source) if r.origin in accounts or r.destination in accounts]
     nodes, edges = build_graph_writes(touching, created_by=principal.id, handling=_HANDLING)
-    if not resume and nodes and await graph.get_node(nodes[0].id, principal) is not None:
+    if nodes and await graph.get_node(nodes[0].id, principal) is not None:
         raise NotProvisionedError(
             "The PaySim graph is already loaded (or a load was interrupted). Nothing was written. "
-            "If an earlier run was interrupted, run again with --resume: the graph write is an "
-            "upsert, so repeating it is harmless."
+            "To load again, use --replace-graph: it deletes this seed's own rows first, because "
+            "a transaction written twice is counted twice."
         )
     await write_graph(graph, nodes, edges, chunk=_GRAPH_CHUNK, nouns=("accounts", "transactions"))
     return len(nodes), len(edges)
@@ -208,8 +223,17 @@ async def _run(args: argparse.Namespace) -> int:
         await client.create_database_if_absent()
         graph = GraphArcadeDBAdapter(client, scheme)
         await graph.apply_schema(ontology)
+        if args.replace_graph:
+            removed = await clear_seeded_graph(
+                client,
+                node_type=groovy_identifier(physical_type_name("Endpoint")),
+                node_prefix="paysim-acct-",
+                edge_type=groovy_identifier(physical_type_name("TRANSACTED")),
+                edge_prefix="paysim-tx-",
+            )
+            print(f"  graph: removed {removed[0]:,} accounts and {removed[1]:,} transactions")
         node_count, edge_count = await _load_graph(
-            graph, source, principal, resume=bool(args.resume)
+            graph, source, principal, fraud_rows=args.graph_fraud_rows
         )
     except NotProvisionedError as error:
         print(error, file=sys.stderr)

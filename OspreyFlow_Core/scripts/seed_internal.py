@@ -57,7 +57,13 @@ class Dataset:
     data_folder: str | None = None
     #: The name a real dataset is admitted under in the local exceptions list; `None` if synthetic.
     real_dataset: str | None = None
+    #: Whether the seed takes `--graph-fraud-rows` (a sample of the graph; PaySim's is huge).
+    sampled: bool = False
 
+
+#: The PaySim graph sample: the first fraud transactions and everything touching their accounts.
+#: The full neighbourhood is ~74,000 accounts and takes many hours to write to a real ArcadeDB.
+DEFAULT_GRAPH_SAMPLE = 500
 
 #: Real data is admitted for this use only (ADR-035 §C3, ADR-053).
 REAL_DATA_USE = "owner_run_demonstration"
@@ -77,6 +83,7 @@ DATASETS: dict[str, Dataset] = {
         script="scripts.seed_paysim",
         case_name="PaySim mobile money (internal)",
         data_folder="PaySIM_Dataset",
+        sampled=True,
     ),
 }
 
@@ -149,7 +156,8 @@ def seed_internal(
     api_running: Callable[[list[str]], bool] = _api_running,
     stop_api: bool = False,
     permitted: Callable[[str, str], bool] = _permitted,
-    resume: bool = False,
+    replace_graph: bool = False,
+    graph_fraud_rows: int | None = None,
 ) -> list[str]:
     """Return the seed report, one line each. Raises `SeedRefused` before starting anything."""
     if dataset not in DATASETS:
@@ -218,8 +226,12 @@ def seed_internal(
         argv += ["--data-dir", CONTAINER_DATA, "--attested-checkout"]
     if spec.real_dataset:
         argv.append("--attested-permission")
-    if resume and spec.data_folder:
-        argv.append("--resume")
+    if replace_graph and spec.data_folder:
+        argv.append("--replace-graph")
+    if spec.sampled:
+        sample = DEFAULT_GRAPH_SAMPLE if graph_fraud_rows is None else graph_fraud_rows
+        if sample > 0:
+            argv += ["--graph-fraud-rows", str(sample)]
     if running:
         run([*compose, "stop", "api"])
     try:
@@ -233,18 +245,27 @@ def seed_internal(
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     stop_api = "--stop-api" in args
-    resume = "--resume" in args
-    names = [a for a in args if not a.startswith("--")]
+    replace_graph = "--replace-graph" in args
+    sample: int | None = None
+    if "--graph-fraud-rows" in args:
+        value = args[args.index("--graph-fraud-rows") + 1 :][:1]
+        if not value or not (value[0] == "all" or value[0].isdigit()):
+            print("--graph-fraud-rows takes a number, or 'all'", file=sys.stderr)
+            return 2
+        sample = 0 if value[0] == "all" else int(value[0])
+    names = [a for a in args if not a.startswith("--") and a not in ("all",) and not a.isdigit()]
     if len(names) != 1:
         print(
-            f"usage: seed_internal <{'|'.join(sorted(DATASETS))}> [--stop-api] [--resume]",
+            f"usage: seed_internal <{'|'.join(sorted(DATASETS))}> [--stop-api] "
+            "[--replace-graph] [--graph-fraud-rows N|all]",
             file=sys.stderr,
         )
         return 2
     try:
+        # Its output was shown as it arrived.
         seed_internal(
-            names[0], stop_api=stop_api, resume=resume
-        )  # its output was shown as it arrived
+            names[0], stop_api=stop_api, replace_graph=replace_graph, graph_fraud_rows=sample
+        )
     except (SeedRefused, SeedFailed) as error:
         print(f"seed: {error}", file=sys.stderr)
         return 1

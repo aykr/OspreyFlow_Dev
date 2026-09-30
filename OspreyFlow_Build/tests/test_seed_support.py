@@ -97,3 +97,78 @@ def test_a_missing_analytics_file_or_table_means_no_events_yet(tmp_path: Path) -
     empty = tmp_path / "empty.duckdb"
     duckdb.connect(str(empty)).close()
     assert seed_support.events_already_loaded(empty, "case-a") is False
+
+
+# --- replacing a seed's own graph rows (ADR-055 Amendment 4) ---
+
+
+class FakeClient:
+    """Stands in for ArcadeDB's SQL endpoint: keeps rows by type and answers the three statements
+    the clean-up sends, so the test can see exactly what would be deleted."""
+
+    def __init__(self, rows: dict[str, list[str]]) -> None:
+        self.rows = {k: list(v) for k, v in rows.items()}
+        self.statements: list[str] = []
+        self.stubborn = False
+
+    async def sql(self, command: str, **_: object) -> list[dict[str, object]]:
+        import re
+
+        self.statements.append(command)
+        kind = re.search(r"(?:FROM|EDGE|VERTEX) (\w+)", command)
+        prefix = re.search(r"LIKE '([^']*)%'", command)
+        assert kind and prefix, command
+        name, start = kind.group(1), prefix.group(1)
+        matching = [i for i in self.rows.get(name, []) if i.startswith(start)]
+        if command.startswith("SELECT"):
+            return [{"n": len(matching)}]
+        if not self.stubborn:
+            self.rows[name] = [i for i in self.rows.get(name, []) if i not in matching]
+        return [{"count": len(matching)}]
+
+
+def _clear(client: FakeClient) -> tuple[int, int]:
+    return asyncio.run(
+        seed_support.clear_seeded_graph(
+            client,  # type: ignore[arg-type]
+            node_type="Endpoint",
+            node_prefix="paysim-acct-",
+            edge_type="TRANSACTED",
+            edge_prefix="paysim-tx-",
+        )
+    )
+
+
+def test_only_rows_with_the_seeds_own_id_prefix_are_deleted_and_the_counts_are_returned() -> None:
+    """Catches a clean-up that would delete another dataset's accounts or transactions (the
+    Endpoint and edge types are shared with Enron and any later demo)."""
+    client = FakeClient(
+        {
+            "Endpoint": ["paysim-acct-1", "paysim-acct-2", "enron-ep-1"],
+            "TRANSACTED": ["paysim-tx-1", "other-tx-9"],
+        }
+    )
+    assert _clear(client) == (2, 1)
+    assert client.rows["Endpoint"] == ["enron-ep-1"]
+    assert client.rows["TRANSACTED"] == ["other-tx-9"]
+
+
+def test_transactions_are_deleted_before_accounts_and_every_delete_is_scoped_by_prefix() -> None:
+    """Catches an unscoped `DELETE` (a whole type wiped) and the wrong order."""
+    client = FakeClient({"Endpoint": ["paysim-acct-1"], "TRANSACTED": ["paysim-tx-1"]})
+    _clear(client)
+    deletes = [s for s in client.statements if s.startswith("DELETE")]
+    assert deletes[0].startswith("DELETE EDGE") and deletes[1].startswith("DELETE VERTEX")
+    assert all("LIKE 'paysim-" in s for s in deletes)
+
+
+def test_a_clean_up_that_leaves_rows_behind_is_an_error_not_a_success() -> None:
+    """Catches carrying on to a fresh load on top of leftovers (which is what double-counted)."""
+    client = FakeClient({"Endpoint": ["paysim-acct-1"], "TRANSACTED": ["paysim-tx-1"]})
+    client.stubborn = True
+    with pytest.raises(seed_support.CleanUpIncomplete, match="left"):
+        _clear(client)
+
+
+def test_an_empty_graph_is_cleared_without_fuss() -> None:
+    assert _clear(FakeClient({})) == (0, 0)

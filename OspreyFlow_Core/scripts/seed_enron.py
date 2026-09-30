@@ -24,12 +24,14 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import duckdb
-from scripts.seed_support import events_already_loaded, write_graph
+from scripts.seed_support import clear_seeded_graph, events_already_loaded, write_graph
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
+from adapters.graph_arcadedb.gremlin_literals import groovy_identifier
+from adapters.graph_arcadedb.naming import physical_type_name
 from demo_fixtures import enron
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
@@ -103,9 +105,12 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--grant", action="append", default=[], metavar="ACCOUNT=LEVEL")
     parser.add_argument("--attested-checkout", action="store_true")
     parser.add_argument(
-        "--resume",
+        "--replace-graph",
         action="store_true",
-        help="Carry on an interrupted load: the graph write is an upsert, so repeating it is safe.",
+        help=(
+            "Delete this seed's own graph rows (ids starting enron-ep- and enron-comm-) and load "
+            "again. For an interrupted load: a link written twice is counted twice."
+        ),
     )
     parser.add_argument(
         "--attested-permission",
@@ -181,10 +186,20 @@ async def _run(args: argparse.Namespace) -> int:
         await client.create_database_if_absent()
         graph = GraphArcadeDBAdapter(client, scheme)
         await graph.apply_schema(ontology)
-        if not args.resume and nodes and await graph.get_node(nodes[0].id, principal) is not None:
+        if args.replace_graph:
+            removed = await clear_seeded_graph(
+                client,
+                node_type=groovy_identifier(physical_type_name("Endpoint")),
+                node_prefix="enron-ep-",
+                edge_type=groovy_identifier(physical_type_name("COMMUNICATED_WITH")),
+                edge_prefix="enron-comm-",
+            )
+            print(f"  graph: removed {removed[0]:,} addresses and {removed[1]:,} links")
+        if nodes and await graph.get_node(nodes[0].id, principal) is not None:
             print(
                 "The Enron graph is already loaded (or a load was interrupted). Nothing was "
-                "written. If it was interrupted, run again with --resume.",
+                "written. To load again, use --replace-graph: it deletes this seed's own rows "
+                "first.",
                 file=sys.stderr,
             )
             return 1

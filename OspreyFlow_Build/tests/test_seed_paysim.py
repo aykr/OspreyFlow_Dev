@@ -5,8 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from demo_fixtures.paysim import COLUMNS
 from scripts.seed_paysim import FILE_NAME, NotProvisionedError, resolve_source
+
+from demo_fixtures.paysim import COLUMNS
 
 
 def test_the_seed_refuses_when_the_file_is_not_there(tmp_path: Path) -> None:
@@ -14,9 +15,7 @@ def test_the_seed_refuses_when_the_file_is_not_there(tmp_path: Path) -> None:
         resolve_source(tmp_path, is_checkout=True)
 
 
-def test_the_seed_refuses_from_a_bundle_even_when_the_file_is_there(
-    tmp_path: Path,
-) -> None:
+def test_the_seed_refuses_from_a_bundle_even_when_the_file_is_there(tmp_path: Path) -> None:
     folder = tmp_path / "PaySIM_Dataset"
     folder.mkdir()
     (folder / FILE_NAME).write_text("x", encoding="utf-8")
@@ -25,9 +24,7 @@ def test_the_seed_refuses_from_a_bundle_even_when_the_file_is_there(
         resolve_source(tmp_path, is_checkout=False)
 
 
-def test_the_seed_finds_the_file_under_the_data_folder_from_a_checkout(
-    tmp_path: Path,
-) -> None:
+def test_the_seed_finds_the_file_under_the_data_folder_from_a_checkout(tmp_path: Path) -> None:
     folder = tmp_path / "PaySIM_Dataset"
     folder.mkdir()
     (folder / FILE_NAME).write_text("x", encoding="utf-8")
@@ -37,7 +34,7 @@ def test_the_seed_finds_the_file_under_the_data_folder_from_a_checkout(
 
 # --- running inside the deployment (ADR-055 Amendment 2) ---
 
-from scripts.seed_paysim import _parse_args, scope_and_source
+from scripts.seed_paysim import _parse_args, scope_and_source  # noqa: E402
 
 
 def test_the_seed_needs_either_a_case_to_make_or_a_scope_to_write_into() -> None:
@@ -81,9 +78,7 @@ def test_a_seed_run_inside_a_container_refuses_without_the_hosts_attestation(
         )
     assert (
         scope_and_source(
-            _parse_args(
-                ["--case-name", "x", "--data-dir", str(tmp_path), "--attested-checkout"]
-            ),
+            _parse_args(["--case-name", "x", "--data-dir", str(tmp_path), "--attested-checkout"]),
             in_checkout=False,
         )
         == folder / FILE_NAME
@@ -124,13 +119,12 @@ def test_the_graph_phase_prints_progress_for_nodes_and_for_edges(
     Catches a graph load that writes silently."""
     import asyncio
 
-    from schemas.domain import Principal
     from scripts import seed_paysim
 
+    from schemas.domain import Principal
+
     header = ",".join(COLUMNS)
-    rows = [
-        f"1,TRANSFER,10,C{i},0,0,M{i},0,0,1,0" for i in range(120)
-    ]  # step..isFlaggedFraud
+    rows = [f"1,TRANSFER,10,C{i},0,0,M{i},0,0,1,0" for i in range(120)]  # step..isFlaggedFraud
     source = tmp_path / "log.csv"
     source.write_text("\n".join([header, *rows]) + "\n", encoding="utf-8")
     graph = _FakeGraph()
@@ -159,18 +153,19 @@ def _one_fraud_row(tmp_path: Path) -> Path:
     return source
 
 
-def test_a_graph_that_already_has_the_accounts_is_refused_and_says_how_to_resume(
+def test_a_graph_that_already_has_the_accounts_is_refused_and_says_how_to_replace_it(
     tmp_path: Path,
 ) -> None:
-    """Catches a re-run silently writing over a finished load, and a refusal that leaves the owner
-    of an interrupted run with no way forward."""
+    """Catches a re-run silently writing over a finished load (transactions would be counted twice),
+    and a refusal that leaves the owner of an interrupted run with no way forward."""
     import asyncio
 
-    from schemas.domain import Principal
     from scripts import seed_paysim
 
+    from schemas.domain import Principal
+
     graph = _HalfLoadedGraph()
-    with pytest.raises(NotProvisionedError, match="--resume"):
+    with pytest.raises(NotProvisionedError, match="--replace-graph"):
         asyncio.run(
             seed_paysim._load_graph(
                 graph,  # type: ignore[arg-type]
@@ -181,27 +176,34 @@ def test_a_graph_that_already_has_the_accounts_is_refused_and_says_how_to_resume
     assert (graph.nodes, graph.edges) == (0, 0)
 
 
-def test_with_resume_an_existing_graph_is_written_over_not_refused(
-    tmp_path: Path,
-) -> None:
-    """Catches --resume being accepted but ignored."""
+def test_the_graph_sample_limits_what_is_written(tmp_path: Path) -> None:
+    """Catches --graph-fraud-rows being parsed but never reaching the selection."""
     import asyncio
 
-    from schemas.domain import Principal
     from scripts import seed_paysim
 
-    graph = _HalfLoadedGraph()
+    from schemas.domain import Principal
+
+    header = ",".join(COLUMNS)
+    rows = [f"1,TRANSFER,10,C{i},0,0,M{i},0,0,1,0" for i in range(10)]
+    source = tmp_path / "ten.csv"
+    source.write_text("\n".join([header, *rows]) + "\n", encoding="utf-8")
+    graph = _FakeGraph()
+
     asyncio.run(
         seed_paysim._load_graph(
             graph,  # type: ignore[arg-type]
-            _one_fraud_row(tmp_path),
+            source,
             Principal(id="s", clearance="OFFICIAL", org_unit="u"),
-            resume=True,
+            fraud_rows=3,
         )
     )
-    assert (graph.nodes, graph.edges) == (2, 1)
+
+    assert (graph.nodes, graph.edges) == (6, 3)
 
 
-def test_resume_is_read_from_the_command_line() -> None:
-    assert _parse_args(["--case-name", "x", "--resume"]).resume is True
-    assert _parse_args(["--case-name", "x"]).resume is False
+def test_replace_graph_and_the_sample_size_are_read_from_the_command_line() -> None:
+    args = _parse_args(["--case-name", "x", "--replace-graph", "--graph-fraud-rows", "500"])
+    assert args.replace_graph is True and args.graph_fraud_rows == 500
+    plain = _parse_args(["--case-name", "x"])
+    assert plain.replace_graph is False and plain.graph_fraud_rows is None

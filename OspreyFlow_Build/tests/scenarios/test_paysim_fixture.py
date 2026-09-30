@@ -128,3 +128,21 @@ def test_graph_node_ids_are_the_ids_the_events_use() -> None:
         assert events[row.index].source_id in node_ids
         assert events[row.index].target_id in node_ids
     assert {e.id for e in edges} == {events[r.index].edge_id for r in touching}
+
+
+def test_the_graph_sample_takes_only_the_first_n_fraud_rows_in_file_order() -> None:
+    """The full neighbourhood is 74,000 accounts and takes hours to write to a real ArcadeDB. A
+    sample is the first N fraud rows and everything touching their accounts: deterministic (file
+    order), so the same sample is written every time. Catches a limit that is ignored, or that picks
+    by something other than file order."""
+    from demo_fixtures.paysim import fraud_accounts
+
+    rows = list(read_paysim(SAMPLE))
+    fraud_rows = [r for r in rows if r.is_fraud]
+    assert len(fraud_rows) >= 2
+    first = fraud_rows[0]
+
+    assert fraud_accounts(rows, limit=1) == {first.origin, first.destination}
+    assert fraud_accounts(rows, limit=None) == fraud_accounts(rows)
+    assert fraud_accounts(rows, limit=len(fraud_rows)) == fraud_accounts(rows)
+    assert fraud_accounts(rows, limit=1) < fraud_accounts(rows)

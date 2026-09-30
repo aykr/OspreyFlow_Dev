@@ -111,12 +111,19 @@ def fraud_neighbourhood(rows: Iterable[PaysimRow]) -> tuple[set[str], list[Paysi
     return accounts, [r for r in materialised if r.origin in accounts or r.destination in accounts]
 
 
-def fraud_accounts(rows: Iterable[PaysimRow]) -> set[str]:
+def fraud_accounts(rows: Iterable[PaysimRow], *, limit: int | None = None) -> set[str]:
+    """The origin and destination of each fraud row. With `limit`, only those of the first `limit`
+    fraud rows *in file order*: the graph sample (writing all ~74,000 accounts to a real ArcadeDB
+    takes hours), deterministic so the same sample is written every time."""
     accounts: set[str] = set()
+    taken = 0
     for row in rows:
         if row.is_fraud:
+            if limit is not None and taken >= limit:
+                break
             accounts.add(row.origin)
             accounts.add(row.destination)
+            taken += 1
     return accounts
 
 
