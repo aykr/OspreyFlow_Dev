@@ -38,9 +38,13 @@ async def write_graph(
     chunk: int,
     nouns: tuple[str, str],
     progress: Callable[[str], None] | None = None,
+    on_batch: Callable[[str, int], None] | None = None,
 ) -> None:
     """Nodes first, then edges, each in small transactions (ArcadeDB fails larger ones with
-    "Error in execution in lock"). A failing batch is rolled back and the error raised."""
+    "Error in execution in lock"). A failing batch is rolled back and the error raised.
+    `on_batch(noun, index)` is called after each batch is committed, with its position among that
+    noun's batches (counted from 0): a reproduction uses it to line a stored duplicate up with the
+    batch that wrote it."""
     say = progress or (lambda line: print(line, flush=True))
     say(f"  graph: writing {len(nodes):,} {nouns[0]} and {len(edges):,} {nouns[1]}")
     for noun, items, upsert in (
@@ -56,6 +60,8 @@ async def write_graph(
                 await graph.rollback_transaction(tx)
                 raise
             await graph.commit_transaction(tx)
+            if on_batch is not None:
+                on_batch(noun, start // chunk)
             done = min(start + chunk, len(items))
             if (start // chunk) % PROGRESS_EVERY == 0 or done == len(items):
                 seconds = int(time.monotonic() - started)

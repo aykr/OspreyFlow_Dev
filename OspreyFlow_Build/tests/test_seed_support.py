@@ -65,6 +65,30 @@ def test_every_node_and_edge_is_written_in_batches_and_progress_is_printed(
     assert "121 of 121 transactions written" in shown
 
 
+def test_each_committed_batch_is_reported_with_its_position() -> None:
+    """Seen: eight transactions were stored twice and nothing said which batch each came from. A
+    reproduction needs to line a duplicate up with the batch that wrote it, and with a commit the
+    client replayed during that batch. Catches a hook that is never called, called before the
+    commit, or given a position counted across both kinds of item."""
+    graph = FakeGraph()
+    seen: list[tuple[str, int]] = []
+    _write(graph, 81, 81, on_batch=lambda noun, index: seen.append((noun, index)))
+    assert seen == [("accounts", 0), ("accounts", 1), ("accounts", 2)] + [
+        ("transactions", 0),
+        ("transactions", 1),
+        ("transactions", 2),
+    ]
+
+
+def test_a_batch_that_fails_is_not_reported_as_written() -> None:
+    graph = FakeGraph()
+    graph.fail_on_edges = True
+    seen: list[tuple[str, int]] = []
+    with pytest.raises(RuntimeError):
+        _write(graph, 40, 40, on_batch=lambda noun, index: seen.append((noun, index)))
+    assert seen == [("accounts", 0)]
+
+
 def test_a_failing_batch_is_rolled_back_and_the_error_is_not_swallowed() -> None:
     """Catches a half-applied batch, and an error that lets the run carry on as if it worked."""
     graph = FakeGraph()

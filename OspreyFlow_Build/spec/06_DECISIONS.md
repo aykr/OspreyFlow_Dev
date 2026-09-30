@@ -8162,3 +8162,29 @@ duplicate is reproduced and the fix (one vertex per end of the `addE`) follows; 
 suspects are the commit-retry replay (Amendment 5) and the load's own timing, and the eight duplicates stay
 unexplained until a larger or longer reproduction says otherwise.
 
+
+### ADR-056, Amendment 9 (30 September 2026) — both small reproductions were green; the next step is to watch the real load
+
+Two conformance cases (Amendments 7 and 8) wrote the seed's shapes into a real ArcadeDB and stored every edge
+once. Neither reproduces the eight duplicates, so nothing is fixed on a guess. The remaining suspect is the
+client's commit retry (`commit_transaction`), which replays a recorded command log in a fresh transaction after
+a retryable error or an unanswered request, and replays blind `addE` commands. It had no test and no log line,
+so a replay was invisible.
+
+**Changes, none of which alters a result.** The client now logs every replay at warning level, naming the session,
+the exception, the number of recorded commands and the attempt; a transport error (no answer) is logged as an
+outcome UNKNOWN, since replaying can then write the commands twice. `write_graph` takes an optional `on_batch`
+hook called after each committed batch. `scripts/repro_paysim_duplicates.py` runs the seed's own graph build and
+`write_graph` into a throwaway `conformance_*` database, then reports each duplicated id with the batch that
+wrote it, the batches during which a replay was logged, and any slow batch. It passes the seed's real-data gate
+unchanged and touches no vault or case.
+
+**Tests.** `test_client_commit_retry.py` (a clean commit logs nothing; a replay is logged with its count and
+attempt; a read timeout is logged as UNKNOWN; the last attempt raises), the `on_batch` cases in
+`test_seed_support.py`, and `test_repro_paysim_duplicates.py` (replay attributed to its batch; slow batch listed;
+duplicate mapped to its batch; missing dataset refused before any database is touched).
+
+**Not decided.** Whether replays line up with the duplicates. If they do, the fix is at the class: a commit whose
+outcome is unknown is not replayed blind, or the edge create is made idempotent, with a real-ArcadeDB test. If
+they do not, the load's timing and ArcadeDB itself are next. A replay that fails part-way may also lose commands
+(the log for the current attempt holds only those replayed so far); noted, unexamined.

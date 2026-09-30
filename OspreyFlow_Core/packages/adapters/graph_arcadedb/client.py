@@ -23,12 +23,15 @@ raises, same as before.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, cast
 
 import httpx
+
+_log = logging.getLogger(__name__)
 
 
 class ArcadeDBError(Exception):
@@ -200,10 +203,32 @@ class ArcadeDBClient:
                 if non_retryable or attempt == _COMMIT_MAX_ATTEMPTS:
                     self._tx_log.pop(current, None)
                     raise
-            except httpx.TransportError:
+                _log.warning(
+                    "arcadedb: commit of session %s failed (%s: %s); replaying its %d recorded "
+                    "commands in a new transaction (attempt %d of %d)",
+                    current,
+                    exc.status_code,
+                    exc.exception_class,
+                    len(self._tx_log.get(current, [])),
+                    attempt,
+                    _COMMIT_MAX_ATTEMPTS,
+                )
+            except httpx.TransportError as exc:
                 if attempt == _COMMIT_MAX_ATTEMPTS:
                     self._tx_log.pop(current, None)
                     raise
+                # A commit that got no answer may still have been applied. Replaying it then writes
+                # every edge in it a second time, so this is logged as unknown, never as failed.
+                _log.warning(
+                    "arcadedb: commit of session %s got no answer (%s); its outcome is UNKNOWN, "
+                    "and replaying its %d recorded commands in a new transaction can write them "
+                    "twice (attempt %d of %d)",
+                    current,
+                    type(exc).__name__,
+                    len(self._tx_log.get(current, [])),
+                    attempt,
+                    _COMMIT_MAX_ATTEMPTS,
+                )
 
             await asyncio.sleep(_COMMIT_BACKOFF_BASE_SECONDS * (2 ** (attempt - 1)))
             pending_replay = self._tx_log.pop(current, [])
