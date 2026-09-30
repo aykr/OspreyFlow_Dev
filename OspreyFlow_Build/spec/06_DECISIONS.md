@@ -8077,3 +8077,69 @@ in separate transactions.
 committed before any fix, so it is seen red. The fix follows only if it is red; if it is green the
 hypothesis is wrong and the commit-retry replay (Amendment 5) is next.
 
+## ADR-057 — The Glass starts on an overview of the graph, not an empty canvas
+
+**Status.** Accepted 30 September 2026, by the owner's choice of "B" (communities) and "M1" (compute on
+demand) from the written options below. Implementation is staged; the first stage is the Conduit's
+service, built against a fake store.
+
+**Context.** Opening a case shows a timeline and an empty canvas ("0 nodes, 0 edges") until the analyst
+searches for something. The owner asked for an aggregated starting view instead. The data that matters
+for the choice: in PaySim every node is an `account` and every edge a `TRANSACTED`, and accounts are
+sparse, so grouping by type gives one blob and most natural clusters are small. The spec already defines
+a *community* (`02_GLASS_FRONTEND.md` §3.2, ADR-029): a Louvain grouping with a connected-components split
+pass, collapsed into a meta-node in the browser as a real working-set change with an entry in the step
+history. The overview reuses that notion; it does not invent a second meaning of "cluster" (and it must
+never share a visual channel with a *resolution* cluster, §3.2).
+
+**Decision.**
+
+1. **Mechanism M1, compute on demand.** A new read, `GraphPort.vault_subgraph(principal, *, max_nodes,
+   max_edges) -> Subgraph`, returns the access-filtered nodes and edges of the graph the adapter is
+   connected to. The Conduit runs `ComputePort.communities` on it and returns the largest communities as
+   meta-nodes. The Glass draws them and expands one through the existing working-set path.
+2. **Named `vault_subgraph`, not `case_subgraph`.** Under ADR-056 the graph belongs to a vault (one dataset)
+   and a case only supplies authorisation and the cache key. The name says what is read. (The owner
+   approved M1 under the name `case_subgraph`; this renames the method, not the decision.)
+3. **Never a silent slice.** The caps are the working set's (`MAX_NODES` 50,000, `MAX_EDGES` 250,000). A
+   graph over a cap makes the port raise `SubgraphTooLarge(nodes, edges)` (new, in `ports.graph`, beside the method that raises it), which
+   the Conduit turns into the existing typed `limit_exceeded` (HTTP 409). Its counts are of what the
+   principal can see, never of what exists: a count of hidden elements is a leak (`CLAUDE.md` rule 3).
+4. **Access control lives in the adapter,** injected into the read like every other (rule 3), so a hidden
+   node is in no cluster, no size, no total and no "not shown" figure. The Conduit never post-filters.
+5. **Computed once, then cached.** Valkey, through `CachedQuery`, keyed by the vault, the request and the
+   principal's access class (`principal_class`), never by the principal alone or by nothing. A data load
+   invalidates the prefix. The first open pays the read; later opens do not.
+6. **The overview never blocks the Glass opening.** The Glass renders the timeline and search at once and
+   the overview when it arrives, with a visible indicator (02 §5: progressive with an indicator when over
+   budget).
+7. **Shape.** The top 25 communities by size (ties by id, so the order is stable), each with its size, its
+   node-type counts, its internal edge count and a few sample node ids; the links between shown
+   communities with edge counts; and exact figures for what is not shown (`not_shown_clusters`,
+   `not_shown_nodes`). Every visible node is in exactly one community or in `not_shown_nodes`: a node the
+   algorithm leaves unlabelled is its own one-node community, never dropped. Ranking is by size; a
+   "flagged-fraud first" ordering is deferred until the owner asks for it.
+
+**Fallback, M2.** If the first-open read proves too slow on a real ArcadeDB, communities are computed at
+load time and stored once per access level. One stored answer per vault is not acceptable: principals with
+different access would see the same counts (rule 3). M2 is more to build and is taken only on a measured
+failure.
+
+**Tests that would fail if an invariant were violated** (rule 12), written before the code: a hidden node
+absent from every cluster and total, and the overview for a restricted principal equal to the overview of
+a graph that never had the hidden node (the existence-leak shape); a second principal class not served the
+first one's cached result; a cap breach raising `limit_exceeded` and caching nothing; shown plus not-shown
+figures reconciling to the totals; and an unlabelled node counted. The port's own access-filtering and cap
+behaviour gets conformance cases in `tests/conformance/graph_port` before the ArcadeDB adapter implements
+the method (rule 1); until then the adapter's method raises `NotImplementedError`, stated, not silent.
+
+**Stages.** (1) schemas, port method and the Conduit service, against a fake store (this stage); (2) the
+route under an investigation with viewer access, audited, and the cache dependency; (3) the conformance
+cases and the ArcadeDB implementation, then the measured first-open time (a CI gate only after it has been
+shown red, rule 15); (4) the Glass: meta-nodes, the expand step, keyboard reach (rule 13), the indicator
+and the "N more not shown" line; (5) the acceptance row (owner-owned). Stage 3 follows the duplicate-edge
+fix, so the counts are right, and the vault resolver (ADR-056 stage 1), so the read is per vault.
+
+**Not decided here.** How the Glass draws a meta-node beyond the existing community hull; expanding a
+community larger than the working set; the flagged-fraud ordering.
+

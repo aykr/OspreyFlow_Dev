@@ -32,6 +32,18 @@ from schemas.domain import (
 )
 
 
+class SubgraphTooLarge(Exception):
+    """`GraphPort.vault_subgraph` would return more than the caller's cap. The counts are of what
+    the principal can *see*: reporting what exists would disclose what is hidden (`CLAUDE.md`
+    rule 3). `edges` is `None` when the node count alone already breached and edges were not
+    counted."""
+
+    def __init__(self, *, nodes: int, edges: int | None) -> None:
+        super().__init__(f"{nodes} visible nodes, {edges} visible edges")
+        self.nodes = nodes
+        self.edges = edges
+
+
 class GraphPort(Protocol):
     #: Query dialects this adapter can render — `{"gremlin"}`,
     #: `{"gremlin", "opencypher"}`, `{"gql"}` — ADR-003's amendment. The
@@ -118,6 +130,7 @@ class GraphPort(Protocol):
         in the same batch must commit between the write and the lookup, not
         assume `find_node` sees into an open transaction."""
         ...
+
     async def search_nodes(
         self, query: str, principal: Principal, *, limit: int = 20
     ) -> list[Node]:
@@ -286,6 +299,28 @@ class GraphPort(Protocol):
         where that hidden node never existed — the same existence-leak
         discipline `find_node`/`search_nodes` already prove, extended to a
         paginated result."""
+        ...
+
+    async def vault_subgraph(
+        self, principal: Principal, *, max_nodes: int, max_edges: int
+    ) -> Subgraph:
+        """`06_DECISIONS.md` ADR-057: every node and edge `principal` can see in the graph this
+        adapter is connected to (under ADR-056, one vault's graph; a case supplies only the
+        authorisation, never the scope). The overview's read.
+
+        **Access control is in the read itself,** like every other (`CLAUDE.md` rule 3): a hidden
+        node is absent, is not counted, and its edges are absent. `Subgraph.filtered_count` is 0
+        here; a count of hidden elements is what the Conduit must never pass on.
+
+        **Never a slice (rule 2).** Over `max_nodes` or `max_edges` this raises `SubgraphTooLarge`
+        carrying the counts of what the principal can see; it never returns a subset. The adapter
+        counts before it reads, so a breach is cheap.
+
+        **Not paged, deliberately.** The caller needs the whole subgraph at once to find
+        communities; the caps (the working set's 50,000 and 250,000) bound it. A page that looked
+        like the whole
+        would be the silent truncation rule 2 forbids, which is why `list_nodes`' cursor is not
+        reused."""
         ...
 
     async def revert_elements(

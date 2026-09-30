@@ -522,6 +522,15 @@ class GraphArcadeDBAdapter:
         results = await self._client.gremlin(builder.render_gremlin(self._access, principal))
         return [node_from_element_map(r) for r in results]
 
+    async def vault_subgraph(
+        self, principal: Principal, *, max_nodes: int, max_edges: int
+    ) -> Subgraph:
+        """ADR-057 stage 3. Not implemented yet, on purpose: the port's conformance cases come first
+        (`CLAUDE.md` rule 1), and this must fail loudly, never return an empty graph."""
+        raise NotImplementedError(
+            "vault_subgraph is ADR-057 stage 3; its conformance cases come first"
+        )
+
     async def list_nodes(
         self,
         entity_type: str,
