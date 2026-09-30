@@ -351,16 +351,11 @@ async def inspect_graph(
         ),
         (
             f"{edge_type}: the ids stored most often (n > 1 means a duplicate)",
-            f"SELECT id, count(*) AS n FROM {edge_type} GROUP BY id ORDER BY n DESC LIMIT 5",
+            f"SELECT id, count(*) AS n FROM {edge_type} GROUP BY id ORDER BY n DESC LIMIT 1000",
         ),
         (
             f"{node_type}: the ids stored most often (n > 1 means a duplicate)",
             f"SELECT id, count(*) AS n FROM {node_type} GROUP BY id ORDER BY n DESC LIMIT 5",
-        ),
-        (
-            f"{edge_type}: how many ids are stored more than once",
-            f"SELECT count(*) AS n FROM (SELECT id FROM {edge_type} GROUP BY id "
-            "HAVING count(*) > 1)",
         ),
         (
             f"{edge_type}: total of the occurrence counts",
@@ -378,9 +373,16 @@ async def inspect_graph(
     for label, statement in probes:
         try:
             rows = await client.sql(statement)
-            lines.append(f"{label}: {rows}")
             if label.startswith(f"{edge_type}: the ids stored most often"):
+                # Five are shown; the rest are counted, from the rows, because ArcadeDB's parser
+                # refuses `SELECT count(*) FROM (SELECT ...)`.
                 most_stored = rows
+                lines.append(f"{label}: {rows[:5]}")
+                twice = sum(1 for r in rows if _stored_twice(r))
+                more = " (at least: the query stops at 1,000 ids)" if len(rows) >= 1000 else ""
+                lines.append(f"{edge_type}: ids stored more than once: {twice}{more}")
+            else:
+                lines.append(f"{label}: {rows}")
         except ArcadeDBError as error:
             lines.append(f"{label}: FAILED {error}")
     # A duplicated id is shown as the records themselves: the merge key is the source-target pair,
@@ -390,7 +392,7 @@ async def inspect_graph(
         edge_id = str(duplicated["id"]).replace("\\", "\\\\").replace("'", "\\'")
         label = f"{edge_type}: both records of {duplicated['id']}"
         try:
-            rows = await client.sql(f"SELECT FROM {edge_type} WHERE id = '{edge_id}'")
+            rows = await client.sql(f"SELECT FROM {edge_type} WHERE id LIKE '{edge_id}'")
             lines.append(f"{label}: {rows}")
         except ArcadeDBError as error:
             lines.append(f"{label}: FAILED {error}")

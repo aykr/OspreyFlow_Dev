@@ -515,7 +515,7 @@ class ProbeClient:
             )
         if self.duplicate_id and "GROUP BY id" in command and "TRANSACTED" in command:
             return [{"id": self.duplicate_id, "n": 2}, {"id": "paysim-tx-other", "n": 1}]
-        if command.startswith("SELECT FROM TRANSACTED WHERE id ="):
+        if command.startswith("SELECT FROM TRANSACTED WHERE id LIKE"):
             return [{"id": self.duplicate_id, "out": "a", "in": "b"}] * 2
         return [{"n": 7}]
 
@@ -562,31 +562,34 @@ def test_inspect_looks_for_duplicate_ids_and_totals_the_occurrences() -> None:
 
 def test_inspect_counts_the_ids_stored_more_than_once() -> None:
     """Seen twice: the five most-stored ids were each stored twice, which says duplicates exist but
-    not how many. Catches an inspection that cannot give the number."""
-    client = ProbeClient()
-    lines = _inspect(client)
-    assert any("HAVING count(*) > 1" in s and "TRANSACTED" in s for s in client.statements)
-    assert any("stored more than once" in line for line in lines)
-
-
-def test_inspect_shows_both_records_of_a_duplicated_id() -> None:
-    """Seen: the merge key is the source-target pair, so two records with one id mean either the
-    lookup missed the first or the endpoints differ. Only the two records side by side say which."""
+    not how many. Counted from the grouped rows, because ArcadeDB's parser refuses the subquery
+    form (`SELECT count(*) FROM (SELECT ...)`, seen 30 September 2026)."""
     client = ProbeClient(duplicate_id="paysim-tx-abc")
     lines = _inspect(client)
-    follow = [s for s in client.statements if s.startswith("SELECT FROM TRANSACTED WHERE id =")]
-    assert follow == ["SELECT FROM TRANSACTED WHERE id = 'paysim-tx-abc'"]
+    assert not any("FROM (SELECT" in s for s in client.statements)
+    assert any("stored more than once: 1" in line for line in lines)
+    assert any("stored more than once: 0" in line for line in _inspect(ProbeClient()))
+
+
+def test_inspect_shows_both_records_of_a_duplicated_id_by_a_scan_not_the_index() -> None:
+    """Seen: the group count said an id was stored twice, but `WHERE id = '...'` returned one
+    record: the lookup used an index that hid the second. `LIKE` is not answered from that index,
+    so both records show."""
+    client = ProbeClient(duplicate_id="paysim-tx-abc")
+    lines = _inspect(client)
+    follow = [s for s in client.statements if s.startswith("SELECT FROM TRANSACTED WHERE id")]
+    assert follow == ["SELECT FROM TRANSACTED WHERE id LIKE 'paysim-tx-abc'"]
     assert any("paysim-tx-abc" in line and "both records" in line for line in lines)
 
 
 def test_inspect_does_not_look_up_records_when_nothing_is_duplicated() -> None:
     client = ProbeClient()
     _inspect(client)
-    assert not any(s.startswith("SELECT FROM TRANSACTED WHERE id =") for s in client.statements)
+    assert not any(s.startswith("SELECT FROM TRANSACTED WHERE id") for s in client.statements)
 
 
 def test_inspect_escapes_a_quote_in_a_duplicated_id() -> None:
     """The id comes from the database; a quote in it must not break out of the literal."""
     client = ProbeClient(duplicate_id="paysim-tx-a'b")
     _inspect(client)
-    assert any("WHERE id = 'paysim-tx-a\\'b'" in s for s in client.statements)
+    assert any("LIKE 'paysim-tx-a\\'b'" in s for s in client.statements)

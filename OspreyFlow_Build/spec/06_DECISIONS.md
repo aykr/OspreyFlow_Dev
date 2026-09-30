@@ -8018,3 +8018,22 @@ also not exercised by a test that writes the same id twice in one batch (`CLAUDE
 **Built.** `--inspect` also counts the ids stored more than once and prints both records of the first
 duplicated id, by `SELECT` only. No fix yet: the cause comes first. Stage 0b stays on hold.
 
+### ADR-056, Amendment 5 (30 September 2026) — the first look at a duplicate, and a mechanism to test
+
+**Seen, on the owner's machine.** The inspection's count failed: ArcadeDB's parser refuses a subquery
+after `FROM` (`ParseException`). The lookup of "both records" of one duplicated id returned **one**
+record, although the group count said the id was stored twice. That record is a PaySim transaction
+(row 2758, `CASH_IN`, amount 209,929.52), weight computed when only 74 transactions had been written,
+so it is among the first of the load.
+
+**What this says, and does not.** A lookup by `id =` answers from an index and can hide a second record;
+the count of ids stored twice may itself come from that index. So the first thing to settle is whether
+two *records* exist. One mechanism I can see in the code and have **not** confirmed: `commit_transaction`
+retries a failed commit by replaying every recorded command in a fresh session, including each edge's
+unconditional `addE`, and a client timeout (30 s) on a commit that had in fact succeeded would add the
+batch a second time. The batch is 40 edges, and the extra counts are 8 (vault) and 5 (shared), which
+does not fit a whole replayed batch, so this is a lead, not a cause.
+
+**Built.** `--inspect` counts the ids stored more than once from the grouped rows (up to 1,000 ids), and
+looks the first one up with `LIKE`, which is not answered from the index. Nothing is fixed.
+
