@@ -136,6 +136,13 @@
   padding: var(--sp-6) var(--sp-8); border-radius: var(--r-control);
   color: var(--text-primary); cursor: pointer; font-size: var(--fs-13);
 }
+/* The radial layout's entries are bare buttons floating over the canvas, so they need their own
+   surface: without one the browser's light button face showed under near-white text (seen
+   30 September 2026). The list layout sits on `.radial-menu__list`'s surface already. */
+.radial-menu__item {
+  background: var(--surface-raised); border: none;
+  box-shadow: var(--overlay-shadow); font-family: inherit; white-space: nowrap;
+}
 .context-menu__item:hover, .context-menu__item:focus-visible,
 .radial-menu__item:hover, .radial-menu__item:focus-visible { background: var(--surface-hover); }
 

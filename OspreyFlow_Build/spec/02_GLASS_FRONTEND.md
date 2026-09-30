@@ -554,6 +554,9 @@ Twenty primitives, built once, in `src/design/`:
 `ContextMenu` · `RadialMenu` · `Table` · `Histogram` · `Toast`
 
 Docked panels get a hairline and no shadow; overlays get a shadow and no hairline. Never both.
+A floating control with no panel behind it (a `RadialMenu` entry in its radial layout) carries its own
+raised surface, no border and the overlay shadow; it must never fall back to the browser's button face,
+which drew near-white text on a pale fill. `src/design/radialMenuStyle.test.ts` holds this.
 Radii: 0 for canvas and cells, 2px controls, 4px panels, 6px overlays, 999px status chips.
 
 ## 9. Assessment production
