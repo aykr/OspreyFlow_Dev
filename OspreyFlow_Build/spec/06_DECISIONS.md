@@ -8289,3 +8289,26 @@ and `test_adjacency_is_asked_by_walking_the_graph_not_by_scanning_the_type` (red
 
 **Not decided.** The fix, and the guard that goes with it: a load that finishes by scanning for ids stored more than once and
 failing loudly. Both wait for the next run.
+
+### ADR-056, Amendment 15 (1 October 2026) — the second copy is a stray record, not a doubled edge
+
+The fifth 20-batch run (802 stored for 800 written; two ids twice, batches 1 and 2). For each, a traversal reaches the
+edge once out of the source and once into the target, while a scan of the type finds two records, and the two records are
+identical in every field. So the product's traversal reads (expand, degree, paths) see one edge; the second copy is a stray
+record only a scan sees. It is not harmless: a scan-based read counts it, and the adapter has one
+(`_corpus_edge_stats` sums `occurrences` with `g.E().hasLabel(…)`, so the corpus total behind every edge weight is
+inflated by one per stray), and so would any export or count built on a scan of the type. A revert or supersede by id
+(`g.E().has("id", …)`) would touch both copies.
+
+Observed, and not yet explained: in batch 1 the stray is always at record `#169:80`, the slot after the batch's last
+record, while the edge it copies differs between runs (`#169:44`, `:60`, `:62`). That points to something done when the
+batch commits, not to the create. This is a reading of where the records fall, not a finding.
+
+**What is added.** Inside each open transaction, just before it commits, the script scans the type for ids stored twice
+and says so, so the run shows whether the stray exists before the commit; and it names the record the source's edge list
+holds, so which copy is the stray is known. Tests: `test_the_store_is_scanned_inside_the_open_transaction_before_it_commits`
+and `test_the_record_a_traversal_reaches_is_named` (red first).
+
+**Not decided.** The fix. The candidates, once the run says when the stray appears: a different create statement for
+edges, a check after each batch that removes any record of an id the edge list does not reach, or both; and in every
+case the post-load duplicate scan as a guard. That choice, and the real-ArcadeDB test that is red first, follow the run.

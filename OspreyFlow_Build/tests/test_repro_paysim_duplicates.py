@@ -247,3 +247,45 @@ def test_adjacency_is_asked_by_walking_the_graph_not_by_scanning_the_type() -> N
     assert found == {"out_of_source": 1, "into_target": 2, "anywhere": 2}
     assert any(q.startswith("g.E()") for q in client.asked)
     assert not any("SELECT" in q for q in client.asked)
+
+
+def test_the_store_is_scanned_inside_the_open_transaction_before_it_commits() -> None:
+    """Seen 1 October 2026: the stray copy always lands in the slot just after its batch's last
+    record, which looks like something done at commit, not by the create. So the question is
+    whether it exists before the commit. That has to be asked inside the transaction, on a scan
+    (the index may hide a second record), or the answer says nothing. Catches a check made through
+    another session (which sees only committed data), and one that asks the index."""
+    import asyncio
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str | None]] = []
+
+        async def sql(
+            self, command: str, *, session_id: str | None = None
+        ) -> list[dict[str, object]]:
+            self.calls.append((command, session_id))
+            return [{"id": "e1", "n": 2}, {"id": "e2", "n": 1}]
+
+    client = Client()
+    found = asyncio.run(repro.duplicates_before_commit(client, "TRANSACTED", "tx-7", ["e1", "e2"]))
+    assert found == {"e1": 2}
+    (command, session) = client.calls[0]
+    assert session == "tx-7"
+    assert "GROUP BY id" in command and "IN [" not in command
+
+
+def test_the_record_a_traversal_reaches_is_named() -> None:
+    """Which of the two stored copies is the real, linked one decides which is the stray. Catches
+    a lookup that scans, and one that drops the answer."""
+    import asyncio
+
+    class Client(_FakeClient):
+        async def gremlin(self, command: str, **_: object) -> list[dict[str, str]]:
+            self.asked.append(command)
+            return [{"result": "#169:44"}]
+
+    client = Client({})
+    assert asyncio.run(repro.linked_edge_rids(client, "TRANSACTED", "e1", "a")) == ["#169:44"]
+    assert client.asked[0].startswith("g.V().has(") and ".outE(" in client.asked[0]
+    assert client.asked[0].endswith(".id()")

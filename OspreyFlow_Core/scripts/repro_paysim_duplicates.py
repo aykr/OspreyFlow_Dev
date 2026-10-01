@@ -171,6 +171,28 @@ async def adjacency_counts(
     return out
 
 
+async def duplicates_before_commit(
+    client: Any, edge_type: str, session_id: str, wrote: Sequence[str]
+) -> dict[str, int]:
+    """Ids stored more than once as the open transaction sees them, before it commits. A scan, in
+    the transaction's own session: another session sees only committed data, and the index can
+    show one record where a scan finds two."""
+    rows = await client.sql(
+        f"SELECT id, count(*) AS n FROM {edge_type} GROUP BY id ORDER BY n DESC LIMIT 1000",
+        session_id=session_id,
+    )
+    return batch_faults(wrote, {r["id"]: int(r["n"]) for r in rows})
+
+
+async def linked_edge_rids(client: Any, edge_type: str, edge_id: str, source: str) -> list[str]:
+    """The record ids of the edges with this id that the source vertex's own edge list reaches."""
+    rows = await client.gremlin(
+        f'g.V().has("id",{groovy_string_literal(source)}).outE({groovy_string_literal(edge_type)})'
+        f'.has("id",{groovy_string_literal(edge_id)}).id()'
+    )
+    return [str(r["result"]) for r in rows]
+
+
 def limit_batches(
     nodes: list[Any], edges: list[Any], *, batches: int | None, chunk: int
 ) -> tuple[list[Any], list[Any]]:
@@ -223,6 +245,26 @@ async def _run(args: argparse.Namespace, source: Path) -> int:
             client: Any = graph._client  # noqa: SLF001 - a diagnostic, in the adapter's own package
             edge_type = groovy_identifier(physical_type_name("TRANSACTED"))
             first_seen: dict[str, int] = {}
+            before_commit: dict[str, int] = {}
+            commits = {"n": 0}
+            node_batches = -(-len(nodes) // args.chunk)
+            real_commit = graph.commit_transaction
+            all_edge_ids = [e.id for e in edges]
+
+            async def commit_after_looking(tx: Any) -> None:
+                commits["n"] += 1
+                found = await duplicates_before_commit(client, edge_type, tx, all_edge_ids)
+                for edge_id in note_new_faults(
+                    before_commit, found, index=commits["n"] - node_batches - 1
+                ):
+                    print(
+                        f"  !! {edge_id} is stored {found[edge_id]} times INSIDE the transaction, "
+                        f"before batch {before_commit[edge_id]} commits",
+                        flush=True,
+                    )
+                await real_commit(tx)
+
+            graph.commit_transaction = commit_after_looking  # type: ignore[method-assign]
             bodies: list[bytes] = []
 
             async def record_request(request: Any) -> None:
@@ -253,6 +295,8 @@ async def _run(args: argparse.Namespace, source: Path) -> int:
                     reach = await adjacency_counts(
                         client, edge_type, edge_id, edge.source, edge.target
                     )
+                    linked = await linked_edge_rids(client, edge_type, edge_id, edge.source)
+                    print(f"     the source's edge list holds: {linked}", flush=True)
                     copies = [(await client.sql(f"SELECT FROM {w['rid']}"))[0] for w in where]
                     differ = differing_fields(copies[0], copies[1]) if len(copies) == 2 else "n/a"
                     print(
@@ -294,6 +338,10 @@ async def _run(args: argparse.Namespace, source: Path) -> int:
         print(f"  {noun} batch {index}: {message}")
     for noun, index, seconds in watcher.slow:
         print(f"  slow: {noun} batch {index} took {seconds:.0f}s")
+    print(
+        "duplicates already present inside the transaction before it committed: "
+        f"{sorted(set(duplicated) & set(before_commit)) or 'none'}"
+    )
     sent = edge_creates_sent(bodies)
     sent_twice = sorted(i for i, n in sent.items() if n > 1)
     print(
