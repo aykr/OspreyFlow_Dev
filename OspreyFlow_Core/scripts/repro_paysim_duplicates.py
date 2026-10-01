@@ -92,6 +92,27 @@ def batch_faults(wrote: Sequence[str], stored: Mapping[str, int]) -> dict[str, i
     return {i: stored.get(i, 0) for i in wrote if stored.get(i, 0) != 1}
 
 
+def note_new_faults(seen: dict[str, int], faults: Mapping[str, int], *, index: int) -> list[str]:
+    """Remember, once, the batch after which each faulty id was first seen; return the new ones."""
+    new = [i for i in faults if i not in seen]
+    for i in new:
+        seen[i] = index
+    return new
+
+
+def same_pair_edges(
+    edges: Sequence[Any], ids: Iterable[str], *, chunk: int
+) -> dict[str, list[tuple[str, int]]]:
+    """For each id, the other edges the load wrote from the same source to the same target (the
+    type is directed), each with the batch that wrote it. Such an edge takes the adapter's merge
+    path, not its create path."""
+    by_pair: dict[tuple[str, str], list[tuple[str, int]]] = {}
+    for position, edge in enumerate(edges):
+        by_pair.setdefault((edge.source, edge.target), []).append((edge.id, position // chunk))
+    pair_of = {e.id: (e.source, e.target) for e in edges}
+    return {i: [o for o in by_pair[pair_of[i]] if o[0] != i] for i in ids if i in pair_of}
+
+
 def limit_batches(
     nodes: list[Any], edges: list[Any], *, batches: int | None, chunk: int
 ) -> tuple[list[Any], list[Any]]:
@@ -143,26 +164,28 @@ async def _run(args: argparse.Namespace, source: Path) -> int:
         async with arcadedb_adapter(load_default_ontology(), load_uk_le_scheme()) as graph:
             client: Any = graph._client  # noqa: SLF001 - a diagnostic, in the adapter's own package
             edge_type = groovy_identifier(physical_type_name("TRANSACTED"))
-            seen_at_commit: dict[str, int] = {}
+            first_seen: dict[str, int] = {}
 
             async def after_batch(noun: str, index: int) -> None:
                 watcher.batch_done(noun, index)
                 if noun != "transactions":
                     return
-                wrote = [e.id for e in edges[index * args.chunk : (index + 1) * args.chunk]]
-                ids = ", ".join(f"'{i}'" for i in wrote)
+                # Every id written so far, not only this batch's: a duplicate may appear later.
+                wrote = [e.id for e in edges[: (index + 1) * args.chunk]]
                 rows = await client.sql(
-                    f"SELECT id, count(*) AS n FROM {edge_type} WHERE id IN [{ids}] GROUP BY id"
+                    f"SELECT id, count(*) AS n FROM {edge_type} "
+                    "GROUP BY id ORDER BY n DESC LIMIT 1000"
                 )
                 faults = batch_faults(wrote, {r["id"]: int(r["n"]) for r in rows})
-                for edge_id, count in faults.items():
-                    seen_at_commit[edge_id] = count
+                for edge_id in note_new_faults(first_seen, faults, index=index):
                     where = await client.sql(
-                        f"SELECT @rid AS rid FROM {edge_type} WHERE id LIKE '{edge_id}'"
+                        f"SELECT @rid AS rid, occurrences FROM {edge_type} "
+                        f"WHERE id LIKE '{edge_id}'"
                     )
+                    records = [(w["rid"], w.get("occurrences")) for w in where]
                     print(
-                        f"  !! right after batch {index} committed, {edge_id} is stored {count} "
-                        f"time(s): {[w['rid'] for w in where]}",
+                        f"  !! first seen after batch {index} committed: {edge_id} is stored "
+                        f"{faults[edge_id]} time(s): {records}",
                         flush=True,
                     )
 
@@ -197,10 +220,14 @@ async def _run(args: argparse.Namespace, source: Path) -> int:
         print(f"  {noun} batch {index}: {message}")
     for noun, index, seconds in watcher.slow:
         print(f"  slow: {noun} batch {index} took {seconds:.0f}s")
-    print(
-        "duplicates already present right after their own batch committed: "
-        f"{sorted(set(by_batch[i] for i in seen_at_commit if i in by_batch)) or 'none'}"
-    )
+    pairs = same_pair_edges(edges, duplicated, chunk=args.chunk)
+    for edge_id in duplicated:
+        written = by_batch.get(edge_id)
+        print(
+            f"  {edge_id}: written in batch {written}, first seen after batch "
+            f"{first_seen.get(edge_id, 'the end')}; other edges on the same pair: "
+            f"{pairs.get(edge_id) or 'none'}"
+        )
     overlap = sorted(set(by_batch.values()) & set(replay_batches))
     print(f"duplicates that sit in a batch with a replayed commit: {overlap or 'none'}")
     return 0

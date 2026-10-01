@@ -8210,3 +8210,22 @@ coroutine function, awaited before the next batch.
 **Not decided.** The fix. If the duplicate is present at commit, the next step is the ArcadeDB server log and a
 real-ArcadeDB conformance case shaped by what the log shows. If it appears only later, the store is changing
 committed data (compaction or index maintenance) and the question moves to ArcadeDB itself.
+
+### ADR-056, Amendment 11 (1 October 2026) — the duplicates appear after their own batch has committed
+
+`--edge-batches 20` (800 transactions, 14 seconds) reproduced it on a clean database: 803 stored, 3 ids stored
+twice (batches 1, 2 and 5), no replayed commit, and none of the three present right after its own batch
+committed. So the second record is added by something that happens later, not by the write that created the
+first. The cheapest explanation to rule in or out is a later write to the same pair of accounts, which the
+adapter's `upsert_edges` takes down its merge path (`g.E().has("id", …)` plus `.property(…)`) and which should
+never add an edge; the alternative is the store changing committed data.
+
+**What is added.** After every batch the script checks every id written so far, prints the first batch after
+which each duplicate appeared with both record ids and their `occurrences`, and lists, per duplicate, the other
+edges the load wrote on the same pair and the batches that wrote them. Tests:
+`test_a_duplicated_id_is_matched_to_other_edges_between_the_same_two_accounts` and
+`test_the_first_batch_after_which_each_duplicate_is_seen_is_remembered_once` (both red first).
+
+**Not decided.** The fix. If each duplicate sits on a pair that recurs, the merge path is the suspect and a
+conformance case writes that pair twice in separate transactions on the real store. If not, the server log
+and ArcadeDB itself are next.

@@ -123,3 +123,27 @@ def test_a_limited_run_keeps_the_first_batches_and_only_the_accounts_they_touch(
     assert [e.id for e in kept_edges] == ["1", "2"]
     assert [n.id for n in kept_nodes] == ["a", "b", "c"]
     assert repro.limit_batches(nodes, edges, batches=None, chunk=2) == (nodes, edges)  # type: ignore[arg-type]
+
+
+def test_a_duplicated_id_is_matched_to_other_edges_between_the_same_two_accounts() -> None:
+    """Seen 1 October 2026: duplicates were not there right after their own batch committed, so a
+    later write is the suspect, and a later write to the same pair takes the adapter's merge path.
+    Catches a match on one end only, one that ignores direction (the type is directed), and one
+    that lists the edge as its own twin."""
+
+    class E:
+        def __init__(self, id: str, source: str, target: str) -> None:
+            self.id, self.source, self.target = id, source, target
+
+    edges = [E("1", "a", "b"), E("2", "b", "a"), E("3", "a", "b"), E("4", "a", "c")]
+    found = repro.same_pair_edges(edges, ["1", "4"], chunk=2)  # type: ignore[arg-type]
+    assert found == {"1": [("3", 1)], "4": []}
+
+
+def test_the_first_batch_after_which_each_duplicate_is_seen_is_remembered_once() -> None:
+    """Catches a duplicate re-reported after every later batch, and one reported against the batch
+    that wrote it when it only showed up later."""
+    seen: dict[str, int] = {}
+    assert repro.note_new_faults(seen, {"x": 2}, index=3) == ["x"]
+    assert repro.note_new_faults(seen, {"x": 2, "y": 0}, index=4) == ["y"]
+    assert seen == {"x": 3, "y": 4}
