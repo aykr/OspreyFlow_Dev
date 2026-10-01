@@ -8428,3 +8428,15 @@ records of a stray; only the product's counts are protected. The 8 doubled ids a
 **Tests that would fail.** The corpus total taken from a scan (`test_the_corpus_total_does_not_count_records_only_a_scan_finds`,
 whose fake store answers a scan with the strays and a traversal without); an accept that waves through any count or
 ignores the number; an accept dropped on the way to the container. Each was planted and caught.
+
+### ADR-056, Amendment 20 (1 October 2026) — the stage 0b dry run counted through types ArcadeDB does not have
+
+**Seen.** The first real stage 0b dry run passed the vault check ("going on with 8 id(s) stored twice") and then died
+counting the shared graph: `SELECT count(*) FROM V` fails on ArcadeDB (`Type with name 'V' was not found`). Nothing was
+deleted (the dry run deletes nothing); the Conduit was stopped and started again as designed.
+
+**Class.** The same one as Amendment 18: the count was never exercised against anything that refuses what the real store
+refuses; the earlier tests used a stand-in for the whole graph object, so the class that talks to ArcadeDB had no test at
+all. The count is now a traversal (`g.V().count()`, `g.E().count()`), and `ArcadeShared.counts` is tested with a client
+that refuses the SQL form and treats an empty answer as an empty graph. `reset` (drop, create, apply the schema) is the
+same code the `--reset-graph-database` option has already run on the real store, and was not changed.

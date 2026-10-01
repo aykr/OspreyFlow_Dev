@@ -189,9 +189,11 @@ class ArcadeShared:
         self._database = database
 
     async def counts(self) -> tuple[int, int]:
-        async def n(kind: str) -> int:
-            rows = await self._client.sql(f"SELECT count(*) AS n FROM {kind}")
-            return int(rows[0]["n"]) if rows else 0
+        # By traversal: ArcadeDB has no SQL types named `V` or `E` (the first real dry run failed
+        # on `SELECT count(*) FROM V`), and an empty answer is an empty graph, not a failure.
+        async def n(step: str) -> int:
+            rows = await self._client.gremlin(f"g.{step}().count()")
+            return int(rows[0].get("result") or 0) if rows else 0
 
         return await n("V"), await n("E")
 

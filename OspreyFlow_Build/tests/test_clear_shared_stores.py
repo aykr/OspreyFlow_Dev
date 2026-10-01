@@ -216,3 +216,46 @@ def test_a_missing_events_file_or_table_counts_as_no_events_and_is_not_created(
     path = tmp_path / "nothing.duckdb"
     assert css.DuckEvents(path).count() == 0
     assert not path.exists()
+
+
+class _RealisticClient:
+    """Answers what the real ArcadeDB answers about counting: it has no type named `V` or `E` (seen
+    on the first real dry run, 1 October 2026: `Type with name 'V' was not found`), so a count by
+    `SELECT count(*) FROM V` fails; a traversal count works."""
+
+    def __init__(self, vertices: int, edges: int) -> None:
+        self.vertices, self.edges = vertices, edges
+        self.statements: list[str] = []
+
+    async def sql(self, command: str, **_: object) -> list[dict[str, Any]]:
+        self.statements.append(command)
+        if " FROM V" in command or " FROM E" in command:
+            raise RuntimeError("Type with name 'V' was not found")
+        raise AssertionError(f"unexpected statement: {command}")
+
+    async def gremlin(self, command: str, **_: object) -> list[dict[str, Any]]:
+        self.statements.append(command)
+        if command == "g.V().count()":
+            return [{"result": self.vertices}]
+        if command == "g.E().count()":
+            return [{"result": self.edges}]
+        raise AssertionError(f"unexpected statement: {command}")
+
+
+def test_the_shared_graph_is_counted_the_way_the_real_store_can_answer() -> None:
+    """Catches counting through types ArcadeDB does not have: the dry run died on it, before it
+    could say what it would delete. The fake refuses what the real store refuses."""
+    client = _RealisticClient(13_564, 13_076)
+    shared = css.ArcadeShared(client, "ospreyflow")  # type: ignore[arg-type]
+    assert asyncio.run(shared.counts()) == (13_564, 13_076)
+
+
+def test_an_empty_shared_graph_counts_as_zero_not_as_a_failure() -> None:
+    """Catches a count that treats an empty answer as an error: a freshly cleared store is empty."""
+
+    class Empty(_RealisticClient):
+        async def gremlin(self, command: str, **_: object) -> list[dict[str, Any]]:
+            return []
+
+    shared = css.ArcadeShared(Empty(0, 0), "ospreyflow")  # type: ignore[arg-type]
+    assert asyncio.run(shared.counts()) == (0, 0)
