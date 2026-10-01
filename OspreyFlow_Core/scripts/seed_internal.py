@@ -169,6 +169,7 @@ def seed_internal(
     repair_limit: int | None = None,
     clear_shared_stores: bool = False,
     confirm: str | None = None,
+    accept_strays: int = 0,
 ) -> list[str]:
     """Return the seed report, one line each. Raises `SeedRefused` before starting anything."""
     if dataset not in DATASETS:
@@ -187,6 +188,8 @@ def seed_internal(
         )
     if confirm is not None and not clear_shared_stores:
         raise SeedRefused("--confirm only goes with --clear-shared-stores")
+    if accept_strays and not clear_shared_stores:
+        raise SeedRefused("--accept-strays only goes with --clear-shared-stores")
     if (repair_strays or restore_missing) and not spec.sampled:
         raise SeedRefused("--repair-strays and --restore-missing are only built for paysim so far")
     if reset_graph_database and not spec.sampled:
@@ -236,7 +239,7 @@ def seed_internal(
         )
     if clear_shared_stores:
         return _clear_shared_stores(
-            repo_root, directory, run, api_running, stop_api, vault or "", confirm
+            repo_root, directory, run, api_running, stop_api, vault or "", confirm, accept_strays
         )
     subs = lookup_subs(directory)
     missing = [name for name in (DEMO_ADMIN_SUBJECT, DEMO_ANALYST_SUBJECT) if name not in subs]
@@ -392,6 +395,7 @@ def _clear_shared_stores(
     stop_api: bool,
     vault: str,
     confirm: str | None,
+    accept_strays: int = 0,
 ) -> list[str]:
     """Report, and with the owner's exact confirmation delete, the shared graph database and the
     shared analytics events, after checking the vault (ADR-056 Amendment 16, stage 0b). The
@@ -421,6 +425,8 @@ def _clear_shared_stores(
     ]
     if confirm is not None:
         argv += ["--confirm", confirm]
+    if accept_strays:
+        argv += ["--accept-strays", str(accept_strays)]
     if running:
         run([*compose, "stop", "api"])
     try:
@@ -454,6 +460,13 @@ def main(argv: list[str] | None = None) -> int:
             print("--confirm takes the counts the dry run reported, v:e:n", file=sys.stderr)
             return 2
         confirm = value[0]
+    accept_strays = 0
+    if "--accept-strays" in args:
+        value = args[args.index("--accept-strays") + 1 :][:1]
+        if not value or not value[0].isdigit():
+            print("--accept-strays takes the number of strays, for example 8", file=sys.stderr)
+            return 2
+        accept_strays = int(value[0])
     apply = "--apply" in args
     repair_limit: int | None = None
     if "--repair-limit" in args:
@@ -478,6 +491,7 @@ def main(argv: list[str] | None = None) -> int:
         "--graph-fraud-rows",
         "--repair-limit",
         "--confirm",
+        "--accept-strays",
     }
     names = [
         a
@@ -489,7 +503,7 @@ def main(argv: list[str] | None = None) -> int:
             f"usage: seed_internal <{'|'.join(sorted(DATASETS))}> [--stop-api] "
             "[--replace-graph] [--reset-graph-database] [--vault ID] [--graph-fraud-rows N|all] "
             "[--repair-strays | --restore-missing [--apply] [--repair-limit N]] "
-            "[--clear-shared-stores --vault ID [--confirm V:E:N]]",
+            "[--clear-shared-stores --vault ID [--accept-strays N] [--confirm V:E:N]]",
             file=sys.stderr,
         )
         return 2
@@ -510,6 +524,7 @@ def main(argv: list[str] | None = None) -> int:
             repair_limit=repair_limit,
             clear_shared_stores=clear_shared_stores,
             confirm=confirm,
+            accept_strays=accept_strays,
         )
     except (SeedRefused, SeedFailed) as error:
         print(f"seed: {error}", file=sys.stderr)

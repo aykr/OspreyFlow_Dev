@@ -126,7 +126,12 @@ class Sql:
 
 
 def _problems(
-    *, accounts: int = 10, transactions: int = 8, twice: int = 0, events: int = 9
+    *,
+    accounts: int = 10,
+    transactions: int = 8,
+    twice: int = 0,
+    events: int = 9,
+    accept: int = 0,
 ) -> list[str]:
     client = Sql(
         {
@@ -141,6 +146,7 @@ def _problems(
             node_type="Endpoint",
             edge_type="TRANSACTED",
             events=Events(events),
+            accept_strays=accept,
         )
     )
 
@@ -154,8 +160,33 @@ def test_each_way_the_vault_can_be_unready_is_a_named_problem() -> None:
     repaired first, or the clean copy is not clean), or a vault with no events."""
     assert any("no accounts" in p for p in _problems(accounts=0))
     assert any("no transactions" in p for p in _problems(transactions=0))
-    assert any("stored more than once" in p and "repair" in p for p in _problems(twice=2))
+    assert any("stored more than once" in p for p in _problems(twice=2))
     assert any("no events" in p for p in _problems(events=0))
+
+
+def test_strays_the_owner_accepts_by_number_are_not_a_problem_and_any_other_number_is() -> None:
+    """Catches an accept that waves through any number of strays (new damage would go unseen), one
+    that ignores the number, and one that does not say what was found when it refuses. The strays
+    are a known ArcadeDB defect the repair cannot fix (ADR-056 Amendment 19); they are accepted
+    only by naming exactly how many there are."""
+    assert _problems(twice=8, accept=8) == []
+    more = _problems(twice=9, accept=8)
+    fewer = _problems(twice=7, accept=8)
+    assert any("9" in p and "8" in p and "stored more than once" in p for p in more)
+    assert any("7" in p and "8" in p and "stored more than once" in p for p in fewer)
+    assert any("accept-strays 8" in p for p in _problems(twice=8))
+
+
+def test_accepting_strays_does_not_excuse_the_other_ways_a_vault_can_be_unready() -> None:
+    """Catches an accept that short-circuits the rest of the verification."""
+    assert any("no events" in p for p in _problems(twice=8, accept=8, events=0))
+    assert any("no accounts" in p for p in _problems(twice=8, accept=8, accounts=0))
+
+
+def test_the_script_takes_the_accepted_number_and_defaults_to_none() -> None:
+    """Catches an accept that is on by default."""
+    assert css._parse_args(["--vault", "paysim"]).accept_strays == 0
+    assert css._parse_args(["--vault", "paysim", "--accept-strays", "8"]).accept_strays == 8
 
 
 def test_the_events_store_counts_and_clears_only_the_events_table(tmp_path: Path) -> None:

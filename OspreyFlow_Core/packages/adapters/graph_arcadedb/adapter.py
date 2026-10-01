@@ -271,7 +271,11 @@ class GraphArcadeDBAdapter:
             session_id,
         )
         corpus_total = await self._sum_occurrences(
-            f'g.E().hasLabel({label_lit}).has("reverted",false).values("occurrences").sum()',
+            # Reached from the vertices, each edge once through its source's out-list: a scan of the
+            # type (`g.E()`) also counts the stray second records ArcadeDB sometimes stores, which
+            # no traversal reaches (ADR-056 Amendment 19). It visits every vertex, so it costs a
+            # vertex scan more than the edge scan did.
+            f'g.V().outE({label_lit}).has("reverted",false).values("occurrences").sum()',
             session_id,
         )
         return source_degree, target_degree, corpus_total

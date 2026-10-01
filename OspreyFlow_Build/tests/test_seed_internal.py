@@ -616,6 +616,33 @@ def test_clearing_runs_the_clear_module_for_the_verified_vault_and_makes_no_case
     assert "--confirm" not in call and "--case-name" not in call and "--grant" not in call
 
 
+def test_accepted_strays_reach_the_container_only_when_given_and_only_for_the_clearing(
+    repo: Path,
+) -> None:
+    """Catches an accept dropped on the way, one on by default, and one allowed on a load."""
+    runner = Runner()
+    _clear(repo, runner, vault="paysim")
+    assert "--accept-strays" not in _seed_call(runner)
+    runner = Runner()
+    _clear(repo, runner, vault="paysim", accept_strays=8)
+    call = _seed_call(runner)
+    assert call[call.index("--accept-strays") + 1] == "8"
+    with pytest.raises(seed_internal.SeedRefused, match="--accept-strays"):
+        _repair_call(repo, accept_strays=8)
+
+
+def test_the_command_line_accepts_a_number_of_strays(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Catches a flag the host command ignores, and a non-number swallowed as a dataset name."""
+    seen: dict[str, object] = {}
+    monkeypatch.setattr(seed_internal, "seed_internal", lambda dataset, **kw: seen.update(kw) or [])
+    argv = ["paysim", "--clear-shared-stores", "--vault", "paysim", "--accept-strays", "8"]
+    assert seed_internal.main(argv) == 0
+    assert seen["accept_strays"] == 8
+    assert seed_internal.main(["paysim", "--clear-shared-stores", "--accept-strays", "x"]) == 2
+
+
 def test_the_confirmation_reaches_the_container_only_when_given(repo: Path) -> None:
     runner = Runner()
     _clear(repo, runner, vault="paysim", confirm="100:80:5000")

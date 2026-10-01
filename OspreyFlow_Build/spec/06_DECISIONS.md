@@ -8395,3 +8395,36 @@ run (`no ontology schema has been applied`). Nothing was written; the vault is a
 never exercised (CLAUDE.md rule 15: the fake must refuse what the real one refuses). The new test's fake refuses a write
 until a schema was applied, and was shown red without the fix. `_repair` now applies the default ontology first, as the
 load does (the DDL is the one the load and `--replace-graph` already run against a populated vault).
+
+### ADR-056, Amendment 19 (1 October 2026) — the strays are accepted and the product no longer counts them; repair by rewrite is withdrawn
+
+**Seen.** The first real `--restore-missing --apply --repair-limit 1` (after Amendment 18) wrote the one missing edge and
+the store held two records of it, in the same slots as the two Amendment 17 had deleted (`#169:331851`, `#169:331858`),
+and the source's edge list reached both. The vault is back to 13,076 records with 8 ids stored twice, as at the start of
+Amendment 17. The check stopped the run. So the defect happens on one edge written alone in its own transaction, which
+the bulk-load theory in Amendments 9 to 15 did not cover. It is one sample: whether the doubling is the original defect,
+or the earlier deletes left stale links that now resolve to the new records, was not established.
+
+**Decision (Option 1, chosen by the owner).**
+
+1. **Repair by rewrite is withdrawn as a way to clean a vault.** `--repair-strays` and `--restore-missing` stay in the
+   tree as diagnostics (both are dry runs without `--apply`, and each checks what it wrote), but the repair is not
+   expected to clear a stray because the rewrite can double an edge too. Amendment 17's order of operations no longer
+   applies to PaySim.
+2. **The product does not count strays.** The adapter's corpus total behind an edge's weight is now summed by a traversal
+   from the vertices (each edge once, through its source's out-list), not a scan of the edge type, which also counted the
+   stray records. The two degrees were already traversals. Cost: the traversal visits every vertex, so a write's weight
+   query costs a vertex scan more than the edge scan did; not measured on a real store here.
+3. **Stage 0b accepts a named number of strays.** `--clear-shared-stores --vault X --accept-strays N` goes on only if
+   the vault has exactly N ids stored twice; any other number (new damage, or a changed vault) is a problem again, and
+   the other checks (accounts, transactions, events) still apply.
+4. The post-load check stays on every seed, and the root cause stays open as a store defect: one edge in one transaction
+   doubles, at about 8 in 13,068 in the PaySim load.
+
+**Left as it was, and why it matters.** A scan, an export or a revert by id (`g.E().has("id", …)`) still sees both
+records of a stray; only the product's counts are protected. The 8 doubled ids are `paysim-tx-` 7b7cd150…, 4decb3c1…,
+3127fedf…, 9e173fc4…, 86dc9f3d…, 914d2bce…, 7f46080f…, 060ff85d….
+
+**Tests that would fail.** The corpus total taken from a scan (`test_the_corpus_total_does_not_count_records_only_a_scan_finds`,
+whose fake store answers a scan with the strays and a traversal without); an accept that waves through any count or
+ignores the number; an accept dropped on the way to the container. Each was planted and caught.

@@ -120,19 +120,32 @@ async def vault_problems(
     events: SharedEvents,
     node_prefix: str = "paysim-acct-",
     edge_prefix: str = "paysim-tx-",
+    accept_strays: int = 0,
 ) -> list[str]:
-    """Why the vault is not yet fit to replace the shared stores, one line each; empty if it is."""
+    """Why the vault is not yet fit to replace the shared stores, one line each; empty if it is.
+
+    Ids stored twice are a known ArcadeDB defect that no repair here can fix (ADR-056 Amendment 19):
+    a traversal reaches each such edge once and the product's counts no longer scan the type. They
+    are accepted only by naming exactly how many there are, so a different number (new damage, or
+    a changed vault) is a problem again."""
     problems: list[str] = []
     if await _count(client, node_type, node_prefix) == 0:
         problems.append("the vault's graph has no accounts")
     if await _count(client, edge_type, edge_prefix) == 0:
         problems.append("the vault's graph has no transactions")
     twice = await ids_stored_twice(client, edge_type=edge_type, prefix=edge_prefix)
-    if twice:
-        problems.append(
-            f"{len(twice)} transaction id(s) are stored more than once; run the repair first "
-            "(seed_internal paysim --repair-strays --apply)"
-        )
+    if len(twice) != accept_strays:
+        if accept_strays:
+            problems.append(
+                f"{len(twice)} transaction id(s) are stored more than once, but --accept-strays "
+                f"says {accept_strays}; look at the vault again before clearing anything"
+            )
+        else:
+            problems.append(
+                f"{len(twice)} transaction id(s) are stored more than once (a known ArcadeDB "
+                "defect); to go on with exactly these, pass "
+                f"--accept-strays {len(twice)} (ADR-056 Amendment 19)"
+            )
     if events.count() == 0:
         problems.append("the vault's analytics file has no events")
     return problems
@@ -195,6 +208,12 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--vault", required=True, help="The vault that must be verified first.")
     parser.add_argument("--confirm", default=None, help="The counts this run reported, as v:e:n.")
     parser.add_argument(
+        "--accept-strays",
+        type=int,
+        default=0,
+        help="Go on with exactly this many ids stored twice in the vault (a known defect).",
+    )
+    parser.add_argument(
         "--analytics-db-path",
         default=os.environ.get(
             "ANALYTICS_DB_PATH", "../OspreyFlow_Data/_local-runtime/analytics.duckdb"
@@ -219,7 +238,13 @@ async def _run(args: argparse.Namespace) -> int:
             node_type=groovy_identifier(physical_type_name("Endpoint")),
             edge_type=groovy_identifier(physical_type_name("TRANSACTED")),
             events=DuckEvents(found.analytics_db_path),
+            accept_strays=args.accept_strays,
         )
+        if args.accept_strays and not problems:
+            print(
+                f"  vault: going on with {args.accept_strays} id(s) stored twice, as told "
+                "(known ArcadeDB defect, ADR-056 Amendment 19)"
+            )
         return await clear_shared(
             ArcadeShared(shared_client, shared_db),
             DuckEvents(args.analytics_db_path),
