@@ -8452,3 +8452,32 @@ So the defect is not specific to the PaySim load or its size: a small synthetic 
 command Amendment 19 withdrew. The check now says what the position is (a known ArcadeDB defect with no repair; the
 product does not count the strays), through one shared text, and `repair_command` became `advice`. A test asserts the
 line neither says "remove the strays" nor names the withdrawn command (red first).
+
+### ADR-056, Amendment 22 (1 October 2026) — the corpus total is read once per call, not once per edge
+
+**Seen.** The first Enron load (233,890 links, shared graph) slowed as it went: 146 s per 1,000 links at the start,
+about 230 s per 1,000 at 82,000 links, a projected 17 hours for the link phase. The owner interrupted it at 82,040
+links. It left 21,932 addresses and about 82,000 links in the shared graph, and no events.
+
+**Why.** Every edge written asked the store three questions to compute its weight: the source's degree, the target's
+degree (index lookups, cheap) and the total weight of every edge of its type (a whole-corpus traversal). The third ran
+once per edge, so the cost of a write grew with everything already loaded: quadratic in the load. Two causes, one mine:
+the whole-corpus query is older than this record, but Amendment 19 made it a vertex traversal (visiting all 21,932
+addresses on every write) and that fixed cost was never measured on a real store. PaySim's 13k edges hid it. Rule 15's
+point again: a test double does not show cost.
+
+**Change.** `upsert_edges` reads the total once per call, per edge type, and carries it forward: after each write the
+total is the weighed total with that write's delta in it, which is what the store would answer for the next edge. Each
+edge is therefore weighed exactly as if written one at a time. Nothing is kept between calls, because anything may
+write or revert between them. `_corpus_edge_stats` and `_weigh_edge` accept the total when the caller holds it and
+otherwise ask the store as before. A load of 40-edge batches does one whole-corpus traversal per batch instead of 40.
+
+**Tests (red first).** `tests/adapters/graph_arcadedb/test_corpus_total_read_once_per_call.py`: forty writes cost one
+total query (was 40); the batch and the one-at-a-time loads give identical stored weights and components, with a
+repeated pair in the batch so the merge path is exercised; a second call reads the store again. Planted faults: carrying
+the total without the write's delta fails the weight comparison; keeping the totals on the adapter between calls fails
+both the weight comparison and the second-call test.
+
+**Not changed.** The weight formula, the ontology, the stray-record handling of Amendment 19, and the order of the
+statistics. A per-batch traversal still grows with the corpus; the expectation is a link phase of well under an hour,
+which is unmeasured until the Enron load is rerun.

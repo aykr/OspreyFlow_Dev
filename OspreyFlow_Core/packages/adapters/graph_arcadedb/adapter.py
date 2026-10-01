@@ -248,7 +248,13 @@ class GraphArcadeDBAdapter:
         return int(results[0].get("result") or 0)
 
     async def _corpus_edge_stats(
-        self, type_name: str, source: NodeId, target: NodeId, *, session_id: TxId
+        self,
+        type_name: str,
+        source: NodeId,
+        target: NodeId,
+        *,
+        session_id: TxId,
+        corpus_total: int | None = None,
     ) -> tuple[int, int, int]:
         """Occurrences-weighted degree of `source` and `target` and the
         corpus-wide total for this edge type, *before* this write's own
@@ -256,7 +262,11 @@ class GraphArcadeDBAdapter:
         the one write not yet reflected in the store at the moment this
         query runs. Reverted edges are excluded throughout: retracted data
         must not still weigh on the corpus statistics live edges are
-        scored against."""
+        scored against.
+
+        `corpus_total`, when the caller already holds it, is used as it stands and the store is not
+        asked: the total is a whole-corpus traversal, and `upsert_edges` reads it once per call and
+        carries it forward rather than once per edge (ADR-056 Amendment 22)."""
         label_lit = groovy_string_literal(type_name)
         src_lit = groovy_string_literal(source)
         tgt_lit = groovy_string_literal(target)
@@ -270,6 +280,8 @@ class GraphArcadeDBAdapter:
             '.values("occurrences").sum()',
             session_id,
         )
+        if corpus_total is not None:
+            return source_degree, target_degree, corpus_total
         corpus_total = await self._sum_occurrences(
             # Reached from the vertices, each edge once through its source's out-list: a scan of the
             # type (`g.E()`) also counts the stray second records ArcadeDB sometimes stores, which
@@ -316,6 +328,10 @@ class GraphArcadeDBAdapter:
         schema = self._require_schema()
         ids: list[EdgeId] = []
         now = now_utc()
+        # Read once per call, per type, then carried forward: the corpus total is a whole-corpus
+        # traversal, and the only change it can see during this call is the call's own writes
+        # (ADR-056 Amendment 22). Never kept between calls, since anything may write or revert then.
+        corpus_totals: dict[str, int] = {}
         for write in edges:
             edge_type = schema.edge_type(write.type)
             if edge_type is None:
@@ -371,7 +387,11 @@ class GraphArcadeDBAdapter:
                 merged_interval=merged_interval,
                 now=now,
                 session_id=tx,
+                corpus_total=corpus_totals.get(type_name),
             )
+            # `corpus_total_occurrences` is the total with this write's delta in it, which is what
+            # the store would answer for the next edge of this type once this one is written.
+            corpus_totals[type_name] = components.corpus_total_occurrences
             merged_write = write.model_copy(
                 update={
                     "occurrences": merged_occurrences,
@@ -426,13 +446,14 @@ class GraphArcadeDBAdapter:
         merged_interval: Interval | None,
         now: datetime,
         session_id: TxId,
+        corpus_total: int | None = None,
     ) -> tuple[float, WeightComponents]:
         """`01_DOMAIN_MODEL.md` §6.1. `merged_occurrences` already reflects
         this write; the corpus-wide degree/total queries do not yet, since
         the store has not been updated at the point they run — so this
         write's own delta (`write.occurrences`) is added to each below."""
         source_degree, target_degree, corpus_total = await self._corpus_edge_stats(
-            type_name, write.source, write.target, session_id=session_id
+            type_name, write.source, write.target, session_id=session_id, corpus_total=corpus_total
         )
         delta = write.occurrences
         components = WeightComponents(
