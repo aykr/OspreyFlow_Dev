@@ -8383,3 +8383,15 @@ the source's edge list is checked by the traversal count after the write, not by
 **Tests that would fail:** the repair that keeps one copy (`test_every_copy_is_removed_and_the_edge_is_written_once`),
 the repair that never writes back, one that writes over copies a delete failed to remove, a restore that reads one page
 of ids, and a check that counts records but not reachability, were each planted and caught.
+
+### ADR-056, Amendment 18 (1 October 2026) — the restore and repair did not give the adapter the ontology
+
+**Seen.** The first real `--restore-missing --apply --repair-limit 1` found the right edge (13,068 expected, one missing,
+`paysim-tx-060ff85d…`) and then failed before writing it: the adapter refuses `upsert_edges` until `apply_schema` has
+run (`no ontology schema has been applied`). Nothing was written; the vault is as Amendment 17 left it. The load calls
+`apply_schema` first; the new repair path built the adapter and wrote at once.
+
+**Class.** The tests replaced the adapter with a fake that accepted any write, so the real adapter's precondition was
+never exercised (CLAUDE.md rule 15: the fake must refuse what the real one refuses). The new test's fake refuses a write
+until a schema was applied, and was shown red without the fix. `_repair` now applies the default ontology first, as the
+load does (the DDL is the one the load and `--replace-graph` already run against a populated vault).

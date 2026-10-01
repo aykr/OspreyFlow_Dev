@@ -290,6 +290,13 @@ def _patched(monkeypatch: pytest.MonkeyPatch, **names: object) -> dict[str, obje
     seen: dict[str, object] = {}
     _Cfg.seen = seen
     monkeypatch.setattr(seed_paysim, "ArcadeDBClient", _Cfg)
+
+    class _Quiet:
+        def __init__(self, client: object, scheme: object) -> None: ...
+
+        async def apply_schema(self, schema: object) -> None: ...
+
+    monkeypatch.setattr(seed_paysim, "GraphArcadeDBAdapter", _Quiet)
     for name, value in names.items():
         monkeypatch.setattr(seed_paysim, name, value)
     return seen
@@ -428,3 +435,57 @@ def test_the_edges_a_repair_rewrites_are_the_ones_the_load_writes(tmp_path: Path
     _, edges = build_graph_writes(touching, created_by=principal.id, handling=seed_paysim._HANDLING)
     assert set(found) == {e.id for e in edges} and 0 < len(found) < 4
     assert all(found[e.id].source == e.source for e in edges)
+
+
+def test_the_adapter_is_given_the_ontology_before_a_repair_writes_an_edge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The real adapter refuses to write until a schema has been applied (seen on the first real
+    restore, 1 October 2026: `no ontology schema has been applied`). Catches a repair that builds
+    the adapter and writes at once; the fake refuses what the real one refuses."""
+    import asyncio
+
+    from scripts import seed_paysim
+    from scripts.seed_support import RepairReport
+
+    class Graph:
+        def __init__(self, client: object, scheme: object) -> None:
+            self.schema_applied = False
+            self.written: list[str] = []
+
+        async def apply_schema(self, schema: object) -> None:
+            self.schema_applied = True
+
+        async def begin_transaction(self) -> str:
+            return "tx"
+
+        async def upsert_edges(self, edges: list[object], tx: str) -> None:
+            if not self.schema_applied:
+                raise RuntimeError("no ontology schema has been applied")
+            self.written += [getattr(e, "id", "?") for e in edges]
+
+        async def commit_transaction(self, tx: str) -> None: ...
+
+        async def rollback_transaction(self, tx: str) -> None: ...
+
+    graphs: list[Graph] = []
+
+    def make_graph(client: object, scheme: object) -> Graph:
+        graphs.append(Graph(client, scheme))
+        return graphs[-1]
+
+    async def fake_restore(client: object, **kw: object) -> RepairReport:
+        await kw["rewrite"]("paysim-tx-1")  # type: ignore[operator]
+        return RepairReport(planned=[("paysim-tx-1", [])], written=["paysim-tx-1"])
+
+    edge = type("E", (), {"source": "paysim-acct-a", "id": "paysim-tx-1"})()
+    _patched(
+        monkeypatch,
+        GraphArcadeDBAdapter=make_graph,
+        restore_missing_edges=fake_restore,
+        _edges_to_write=lambda args, principal, source: {"paysim-tx-1": edge},
+        scope_and_source=lambda args, in_checkout: Path("x.csv"),
+    )
+    args = _parse_args(["--restore-missing", "--apply", "--vault", "paysim"])
+    assert asyncio.run(seed_paysim._run(args)) == 0
+    assert graphs[0].written == ["paysim-tx-1"]

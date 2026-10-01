@@ -320,6 +320,8 @@ async def _repair(args: argparse.Namespace) -> int:
     client = ArcadeDBClient(ArcadeDBConfig.from_env(_locations(args)[0]))
     try:
         graph = GraphArcadeDBAdapter(client, load_uk_le_scheme())
+        # The adapter refuses to write until it holds the ontology; the load does the same.
+        await graph.apply_schema(load_default_ontology())
 
         async def rewrite(edge_id: str) -> None:
             tx = await graph.begin_transaction()
