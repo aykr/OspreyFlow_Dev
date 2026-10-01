@@ -89,6 +89,31 @@ def test_a_batch_that_fails_is_not_reported_as_written() -> None:
     assert seen == [("accounts", 0)]
 
 
+def test_a_hook_that_awaits_finishes_before_the_next_batch_starts() -> None:
+    """The reproduction checks the database after each commit, which is a query and so must be
+    awaited. Catches a hook whose coroutine is created and dropped (never run, with a warning) or
+    run concurrently with the next batch, which would let a check see a later batch's writes."""
+    events: list[str] = []
+
+    class Ordered(FakeGraph):
+        async def upsert_edges(self, edges: list[object], tx: str) -> list[str]:
+            events.append("write")
+            return await super().upsert_edges(edges, tx)
+
+    async def check(noun: str, index: int) -> None:
+        if noun == "transactions":
+            events.append(f"check {index}")
+            await asyncio.sleep(0)
+            events.append(f"checked {index}")
+
+    _write(Ordered(), 0, 81, on_batch=check)
+    assert events == [
+        "write", "check 0", "checked 0",
+        "write", "check 1", "checked 1",
+        "write", "check 2", "checked 2",
+    ]  # fmt: skip
+
+
 def test_a_failing_batch_is_rolled_back_and_the_error_is_not_swallowed() -> None:
     """Catches a half-applied batch, and an error that lets the run carry on as if it worked."""
     graph = FakeGraph()

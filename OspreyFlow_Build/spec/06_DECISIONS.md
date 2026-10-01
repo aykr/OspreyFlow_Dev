@@ -8188,3 +8188,25 @@ duplicate mapped to its batch; missing dataset refused before any database is to
 outcome is unknown is not replayed blind, or the edge create is made idempotent, with a real-ArcadeDB test. If
 they do not, the load's timing and ArcadeDB itself are next. A replay that fails part-way may also lose commands
 (the log for the current attempt holds only those replayed so far); noted, unexamined.
+
+### ADR-056, Amendment 10 (1 October 2026) — the duplicates reproduce on a clean database, and the client did not cause them
+
+The Amendment 9 script ran against the dev ArcadeDB, from a fresh database: 13,068 transactions written,
+13,075 stored, 7 ids stored twice (batches 1, 2, 16, 44, 72, 144 and 299). The client logged no replayed commit
+and no batch was slow. So the commit-retry replay (Amendments 5 and 9) is ruled out as the cause of these, and
+the fault is a transaction's `addE` being applied twice by the store or the adapter's own write. It differs per
+run (8 in the vault load, 5 in the shared one, 7 here), which fits a rare race, not a property of the data.
+That is a reading of the counts, not something yet isolated.
+
+**What is added, to isolate it.** The script checks, right after each transaction batch commits, that each id
+the batch wrote is stored exactly once, and prints at once any that is not, with the record ids; it reports
+whether a duplicate was already there at commit or appeared later. `--edge-batches N` writes only the first N
+batches and the accounts they touch, so an attempt takes minutes. `write_graph`'s `on_batch` hook may now be a
+coroutine function, awaited before the next batch.
+
+**Tests.** `test_a_hook_that_awaits_finishes_before_the_next_batch_starts`, `test_a_batch_is_checked_against_exactly_the_ids_it_wrote`,
+`test_a_limited_run_keeps_the_first_batches_and_only_the_accounts_they_touch` (all red first).
+
+**Not decided.** The fix. If the duplicate is present at commit, the next step is the ArcadeDB server log and a
+real-ArcadeDB conformance case shaped by what the log shows. If it appears only later, the store is changing
+committed data (compaction or index maintenance) and the question moves to ArcadeDB itself.

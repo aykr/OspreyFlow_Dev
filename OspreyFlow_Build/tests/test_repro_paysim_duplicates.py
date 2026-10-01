@@ -93,3 +93,33 @@ def test_a_missing_dataset_is_refused_before_any_database_is_touched(
 
     assert repro.main(["--data-dir", str(tmp_path)]) == 1
     assert "dataset not provisioned" in capsys.readouterr().err
+
+
+def test_a_batch_is_checked_against_exactly_the_ids_it_wrote() -> None:
+    """Catches a check that passes when an id is missing or stored twice, and one that blames an
+    id from another batch."""
+    wrote = ["a", "b", "c"]
+    assert repro.batch_faults(wrote, {"a": 1, "b": 1, "c": 1}) == {}
+    assert repro.batch_faults(wrote, {"a": 1, "b": 2, "c": 1}) == {"b": 2}
+    assert repro.batch_faults(wrote, {"a": 1, "c": 1}) == {"b": 0}
+    assert repro.batch_faults(wrote, {"a": 1, "b": 1, "c": 1, "z": 2}) == {}
+
+
+def test_a_limited_run_keeps_the_first_batches_and_only_the_accounts_they_touch() -> None:
+    """Catches a limit that cuts a batch short, and one that leaves out an endpoint an edge needs
+    (the adapter refuses an edge whose endpoint does not exist)."""
+
+    class N:
+        def __init__(self, id: str) -> None:
+            self.id = id
+
+    class E:
+        def __init__(self, id: str, source: str, target: str) -> None:
+            self.id, self.source, self.target = id, source, target
+
+    nodes = [N(x) for x in "abcdef"]
+    edges = [E("1", "a", "b"), E("2", "b", "c"), E("3", "d", "e"), E("4", "e", "f")]
+    kept_nodes, kept_edges = repro.limit_batches(nodes, edges, batches=1, chunk=2)  # type: ignore[arg-type]
+    assert [e.id for e in kept_edges] == ["1", "2"]
+    assert [n.id for n in kept_nodes] == ["a", "b", "c"]
+    assert repro.limit_batches(nodes, edges, batches=None, chunk=2) == (nodes, edges)  # type: ignore[arg-type]
