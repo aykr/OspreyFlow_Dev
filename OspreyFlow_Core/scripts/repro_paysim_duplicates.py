@@ -31,7 +31,7 @@ from typing import Any
 from scripts.seed_paysim import _HANDLING, NotProvisionedError, _is_checkout, resolve_source
 from scripts.seed_support import write_graph
 
-from adapters.graph_arcadedb.gremlin_literals import groovy_identifier
+from adapters.graph_arcadedb.gremlin_literals import groovy_identifier, groovy_string_literal
 from adapters.graph_arcadedb.naming import physical_type_name
 from adapters.graph_arcadedb.testing import arcadedb_adapter
 from demo_fixtures.paysim import build_graph_writes, fraud_accounts, read_paysim
@@ -113,6 +113,16 @@ def same_pair_edges(
     return {i: [o for o in by_pair[pair_of[i]] if o[0] != i] for i in ids if i in pair_of}
 
 
+async def endpoint_index_counts(client: Any, source: str, target: str) -> dict[str, int]:
+    """How many vertices the vertex index returns for each end of an edge, asked the way the edge
+    write asks (`g.V().has("id", …)`). A scan would answer 1 even if the index held two entries."""
+    out: dict[str, int] = {}
+    for end, node_id in (("source", source), ("target", target)):
+        rows = await client.gremlin(f'g.V().has("id",{groovy_string_literal(node_id)}).count()')
+        out[end] = int(rows[0]["result"]) if rows else 0
+    return out
+
+
 def limit_batches(
     nodes: list[Any], edges: list[Any], *, batches: int | None, chunk: int
 ) -> tuple[list[Any], list[Any]]:
@@ -165,6 +175,7 @@ async def _run(args: argparse.Namespace, source: Path) -> int:
             client: Any = graph._client  # noqa: SLF001 - a diagnostic, in the adapter's own package
             edge_type = groovy_identifier(physical_type_name("TRANSACTED"))
             first_seen: dict[str, int] = {}
+            by_id = {e.id: e for e in edges}
 
             async def after_batch(noun: str, index: int) -> None:
                 watcher.batch_done(noun, index)
@@ -183,9 +194,12 @@ async def _run(args: argparse.Namespace, source: Path) -> int:
                         f"WHERE id LIKE '{edge_id}'"
                     )
                     records = [(w["rid"], w.get("occurrences")) for w in where]
+                    edge = by_id[edge_id]
+                    ends = await endpoint_index_counts(client, edge.source, edge.target)
                     print(
                         f"  !! first seen after batch {index} committed: {edge_id} is stored "
-                        f"{faults[edge_id]} time(s): {records}",
+                        f"{faults[edge_id]} time(s): {records}; "
+                        f"vertices the index returns for its ends: {ends}",
                         flush=True,
                     )
 

@@ -8229,3 +8229,28 @@ edges the load wrote on the same pair and the batches that wrote them. Tests:
 **Not decided.** The fix. If each duplicate sits on a pair that recurs, the merge path is the suspect and a
 conformance case writes that pair twice in separate transactions on the real store. If not, the server log
 and ArcadeDB itself are next.
+
+### ADR-056, Amendment 12 (1 October 2026) — a correction to Amendment 11, and a sharper suspect
+
+**Correction.** Amendment 11 said the duplicates were not present right after their own batch committed. That
+came from a check that looked each batch's ids up with `WHERE id IN [...]`, which is answered from the `id`
+index, and ArcadeDB's index can show one record where a scan finds two (the same effect that hid the second record
+in the earlier inspection). The check that scans (`GROUP BY id`) found each duplicate straight after the batch that
+wrote it. So the duplicate is created inside the write, not later. The earlier statement was wrong; the facts
+in the second run are: 803 stored for 800 written, duplicates written in batches 1, 2 and 5 (the same batches as
+the first run, though different edges within them), each first seen after its own batch, both records with
+`occurrences` 1, and no other edge on the same pair of accounts in the load. A merge path is therefore not
+involved, and a client replay is not involved.
+
+**The suspect.** The edge create is `g.V().has("id", src).as("__src").V().has("id", tgt).addE(…)`, which adds one
+edge for every vertex the second `has` returns. If the vertex index returns an account twice (a stale or doubled
+index entry, which a scan by id would not show), one transaction is stored twice with the same id and the same
+pair, which is the shape seen. That is a hypothesis; nothing measured yet shows an index returning a vertex twice.
+
+**What is added.** When a duplicate is first seen the script now asks the vertex index, with the same Gremlin
+lookup the write uses, how many vertices it returns for each end of the edge, and prints it. Test:
+`test_an_endpoint_the_index_returns_twice_is_reported_as_such` (red first).
+
+**Not decided.** The fix. If an end comes back as 2, the cause is in how the accounts are written or indexed and the
+fix is at that class (with a conformance case that reads accounts back through the index); if both ends come back
+as 1, the double execution is inside ArcadeDB and the server log is what remains.

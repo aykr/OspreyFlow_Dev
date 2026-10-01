@@ -147,3 +147,32 @@ def test_the_first_batch_after_which_each_duplicate_is_seen_is_remembered_once()
     assert repro.note_new_faults(seen, {"x": 2}, index=3) == ["x"]
     assert repro.note_new_faults(seen, {"x": 2, "y": 0}, index=4) == ["y"]
     assert seen == {"x": 3, "y": 4}
+
+
+class _FakeClient:
+    """Answers `g.V().has("id", X).count()` from a table, and records what it was asked."""
+
+    def __init__(self, counts: dict[str, int]) -> None:
+        self.counts = counts
+        self.asked: list[str] = []
+
+    async def gremlin(self, command: str, **_: object) -> list[dict[str, int]]:
+        self.asked.append(command)
+        for node_id, n in self.counts.items():
+            if node_id in command:
+                return [{"result": n}]
+        return [{"result": 0}]
+
+
+def test_an_endpoint_the_index_returns_twice_is_reported_as_such() -> None:
+    """Hypothesis (1 October 2026): if the vertex index returns an account twice, `addE` runs once
+    per match and one transaction is stored twice with the same id. This asks the question the
+    edge write itself asks (a Gremlin index lookup), not a SQL scan, which would answer 1 either
+    way. Catches a check that asks the scan, and one that reports the wrong end."""
+    import asyncio
+
+    client = _FakeClient({"acct-a": 1, "acct-b": 2})
+    found = asyncio.run(repro.endpoint_index_counts(client, "acct-a", "acct-b"))
+    assert found == {"source": 1, "target": 2}
+    assert all(q.startswith("g.V().has(") and q.endswith(".count()") for q in client.asked)
+    assert not any("SELECT" in q for q in client.asked)
