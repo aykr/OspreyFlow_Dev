@@ -8346,3 +8346,40 @@ we expect, not what ArcadeDB does (CLAUDE.md rule 15).
 markers and would have failed `make ci` since `12fc88b`; it now imports the module. **Found, not mine, not fixed:**
 `test_case_seed.py` and `test_investigation_access_store.py` are in neither the Makefile nor `ci.yml` ignore lists.
 The root cause stays open; the post-load check is its guard.
+
+### ADR-056, Amendment 17 (1 October 2026) — the first repair lost an edge; the repair now removes every copy and writes the edge again
+
+**Seen.** The one-id apply of Amendment 16's repair (`--repair-limit 1`) removed the stray `#169:331858` and, with it, the
+real record `#169:331851`: the id `paysim-tx-060ff85d…` was left with no record and the source reached none. The vault
+went from 13,076 records to 13,074 (13,067 distinct ids with 7 still stored twice, so one of the 13,068 transactions
+was missing). The repair's own check stopped the run before any other id was touched, which is what the one-id limit was
+for. The other seven strays were not touched.
+
+**Cause of the repair's failure.** Amendment 16 assumed a delete by record id removes one record. The two records are
+identical, including both endpoints, and on the real store the delete took both. The mechanism (a delete that follows the
+edge's endpoints, or two records that share one underlying link) was not established and is not needed for the fix.
+The fake store in the tests had a switch for "the delete also unlinks the real edge", but nothing made it the default
+(CLAUDE.md rule 15: a fake models what the real thing refuses and does, not what we hope).
+
+**Decision (Option 1, chosen by the owner).** Nothing is assumed about which record a delete touches.
+
+1. `--restore-missing [--apply] [--repair-limit N]`: works out the edges the dataset writes (the same fraud
+   neighbourhood and the same `--graph-fraud-rows` sample as the load, built by one shared function), reads every stored
+   id by a paged scan, and writes the edges that are missing through the adapter's normal write path. After each write
+   it checks one record is stored and the source reaches it once.
+2. `--repair-strays [--apply] [--repair-limit N]` (replaces Amendment 16's item 2): for each id stored more than once,
+   remove every copy (each delete re-checks which records remain), require none left, write the edge once from the
+   dataset, and check stored once and reached once. An id is left alone if the dataset does not write it or its copies
+   start somewhere else than the dataset says. The first id that fails a check stops the run (exit 3).
+3. Both are dry runs without `--apply`, take no case, load no events, leave the Conduit running, and need the dataset
+   (the host command mounts it and passes the same graph sample the load used).
+
+**Order for the owner.** Restore dry run; restore one; inspect; restore the rest; repair dry run; repair one; inspect;
+repair the rest; re-inspect (13,068 transactions, no id twice, events present); only then stage 0b.
+
+**Not shown.** That a rewritten edge is never itself a stray: it is the original defect's probability (about 8 in
+13,068) applied again, and the post-write check is what catches it. That a stray's removal leaves no dangling entry in
+the source's edge list is checked by the traversal count after the write, not by any inspection of the list.
+**Tests that would fail:** the repair that keeps one copy (`test_every_copy_is_removed_and_the_edge_is_written_once`),
+the repair that never writes back, one that writes over copies a delete failed to remove, a restore that reads one page
+of ids, and a check that counts records but not reachability, were each planted and caught.

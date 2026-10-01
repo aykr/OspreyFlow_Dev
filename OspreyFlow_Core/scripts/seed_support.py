@@ -360,11 +360,18 @@ class RepairAnomaly(RuntimeError):
 
 @dataclass
 class RepairReport:
-    #: (id, the record kept, the records removed or that would be) for each id repaired.
-    planned: list[tuple[str, str, list[str]]] = field(default_factory=list)
+    #: (id, the records removed or that would be) for each id handled. A missing edge has none.
+    planned: list[tuple[str, list[str]]] = field(default_factory=list)
+    #: Records deleted.
     removed: int = 0
-    #: (id, why) for each id left alone because the right record could not be told.
+    #: Ids written again, each checked to be stored once and reached once.
+    written: list[str] = field(default_factory=list)
+    #: (id, why) for each id left alone because it is not what the repair expects.
     skipped: list[tuple[str, str]] = field(default_factory=list)
+
+
+#: Writes one edge, by id, through the normal write path (the caller knows how to build it).
+Rewrite = Callable[[str], Awaitable[None]]
 
 
 _RID = re.compile(r"#\d+:\d+")
@@ -419,66 +426,153 @@ async def _reachable_rids(
     return reached, int(counted[0]["result"]) if counted else 0
 
 
+async def _records_of(client: _Sql, edge_type: str, edge_id: str) -> list[dict[str, Any]]:
+    """Every stored record of this id, by a scan (`LIKE`), never the index."""
+    rows = await client.sql(
+        f"SELECT @rid AS rid, id, source FROM {edge_type} WHERE id LIKE '{_quoted(edge_id)}'"
+    )
+    return [r for r in rows if r.get("id") == edge_id]
+
+
+async def _check_stored_once_and_reached(
+    client: _Sql, edge_type: str, edge_id: str, source: str, *, after: str
+) -> None:
+    """One record stored, and the source's edge list reaches it once: both, because a stray is
+    stored but not reached and a lost link is reached by nothing (ADR-056 Amendments 15 and 17)."""
+    stored = await _records_of(client, edge_type, edge_id)
+    _, reached = await _reachable_rids(client, edge_type, edge_id, source)
+    if len(stored) != 1 or reached != 1:
+        raise RepairAnomaly(
+            f"{edge_id}: after {after}, {len(stored)} record(s) are stored and the source reaches "
+            f"{reached}; stopped before touching any other id"
+        )
+
+
+async def stored_edge_ids(
+    client: _Sql, *, edge_type: str, prefix: str = "", page: int = 5000
+) -> set[str]:
+    """Every id stored under `prefix`, read a page at a time (a scan, not the index)."""
+    found: set[str] = set()
+    skip = 0
+    while True:
+        rows = await client.sql(
+            f"SELECT id FROM {edge_type} WHERE id LIKE '{_quoted(prefix)}%' "
+            f"ORDER BY id SKIP {skip} LIMIT {page}"
+        )
+        found.update(str(r["id"]) for r in rows)
+        if len(rows) < page:
+            return found
+        skip += page
+
+
+async def restore_missing_edges(
+    client: _Sql,
+    *,
+    edge_type: str,
+    prefix: str = "",
+    expected: Mapping[str, str],
+    rewrite: Rewrite,
+    say: Callable[[str], None] = print,
+    apply: bool = False,
+    limit: int | None = None,
+    page: int = 5000,
+) -> RepairReport:
+    """Write the edges the dataset has and the store lacks. `expected` maps each edge id the load
+    writes to its source vertex id. A dry run unless `apply`; after each write the id is checked
+    (stored once, reached once) and the first failure raises `RepairAnomaly`. Ids stored that the
+    dataset does not write are reported and left alone."""
+    report = RepairReport()
+    stored = await stored_edge_ids(client, edge_type=edge_type, prefix=prefix, page=page)
+    extra = sorted(stored - set(expected))
+    if extra:
+        say(f"  {len(extra)} stored id(s) are not ones this load writes (left alone): {extra[:5]}")
+    missing = sorted(set(expected) - stored)
+    if not missing:
+        say(f"  restore: nothing is missing ({len(expected):,} expected, all stored)")
+        return report
+    say(f"  restore: {len(missing):,} of {len(expected):,} expected edge(s) are not stored")
+    for edge_id in missing:
+        if limit is not None and len(report.planned) >= limit:
+            break
+        report.planned.append((edge_id, []))
+        say(f"  {edge_id}: stored 0 times; {'writing it' if apply else 'would write it'}")
+        if not apply:
+            continue
+        await rewrite(edge_id)
+        await _check_stored_once_and_reached(
+            client, edge_type, edge_id, expected[edge_id], after="writing it"
+        )
+        report.written.append(edge_id)
+    return report
+
+
 async def repair_ids_stored_twice(
     client: _Sql,
     *,
     edge_type: str,
     prefix: str = "",
+    expected: Mapping[str, str],
+    rewrite: Rewrite,
     say: Callable[[str], None] = print,
     apply: bool = False,
     limit: int | None = None,
 ) -> RepairReport:
-    """Keep, for each id stored twice, the record the source reaches; remove the other.
+    """Put right each id a scan finds stored more than once: remove every copy, then write the edge
+    once through the normal write path.
 
-    It deletes records, and the only way back is a reload, so: a dry run unless `apply`; one id at
-    a time; an id is left alone (and reported) unless exactly which record to keep can be told;
-    after each removal the id is checked (one record left, still reached) and the repair raises
-    `RepairAnomaly` and stops at the first one that is not; `limit` repairs only that many ids."""
+    It does not keep one copy and delete the other: run against a real ArcadeDB, deleting the stray
+    by its record id removed the real record too (ADR-056 Amendment 17). So nothing is assumed about
+    which record a delete touches: every copy is removed, none may be left, and the edge is written
+    again and checked (stored once, reached once). It deletes records, so: a dry run unless `apply`;
+    one id at a time; an id is left alone unless its copies are what the dataset says they should
+    be; `RepairAnomaly` stops the run at the first id that does not check out; `limit` handles only
+    that many ids."""
     report = RepairReport()
     for edge_id in await ids_stored_twice(client, edge_type=edge_type, prefix=prefix):
         if limit is not None and len(report.planned) >= limit:
             break
-        rows = await client.sql(
-            f"SELECT @rid AS rid, id, source FROM {edge_type} WHERE id LIKE '{_quoted(edge_id)}'"
-        )
-        copies = [r for r in rows if r.get("id") == edge_id]
+        copies = await _records_of(client, edge_type, edge_id)
         rids = [str(r["rid"]) for r in copies]
         sources = {str(r.get("source")) for r in copies}
-        if len(copies) < 2 or len(sources) != 1 or not all(_RID.fullmatch(r) for r in rids):
-            report.skipped.append((edge_id, "its stored copies are not what the repair expects"))
-            say(f"  {edge_id}: left alone (its stored copies are not what the repair expects)")
+        if edge_id not in expected:
+            why = "it is not an edge this load writes, so it cannot be written again"
+        elif len(copies) < 2 or not all(_RID.fullmatch(r) for r in rids):
+            why = "its stored copies are not what the repair expects"
+        elif sources != {expected[edge_id]}:
+            why = "its stored copies do not start where the dataset says they should"
+        else:
+            why = ""
+        if why:
+            report.skipped.append((edge_id, why))
+            say(f"  {edge_id}: left alone ({why})")
             continue
-        (source,) = sources
-        reached, _ = await _reachable_rids(client, edge_type, edge_id, source)
-        kept = sorted(r for r in reached if r in rids)
-        if not kept:
-            report.skipped.append((edge_id, "the source's edge list reaches none of the copies"))
-            say(f"  {edge_id}: left alone (cannot tell which record the source reaches: {reached})")
-            continue
-        keep = kept[0]
-        remove = [r for r in rids if r != keep]
-        report.planned.append((edge_id, keep, remove))
+        report.planned.append((edge_id, rids))
         verb = "removing" if apply else "would remove"
-        say(f"  {edge_id}: keeps {keep}; {verb} {', '.join(remove)}")
+        say(
+            f"  {edge_id}: stored {len(rids)} times ({', '.join(rids)}); {verb} every copy, "
+            f"then {'writing' if apply else 'write'} it once"
+        )
         if not apply:
             continue
-        for rid in remove:
-            await client.sql(f"DELETE FROM {edge_type} WHERE @rid = {rid}")
-        left = [
-            r
-            for r in await client.sql(
-                f"SELECT @rid AS rid, id, source FROM {edge_type} "
-                f"WHERE id LIKE '{_quoted(edge_id)}'"
-            )
-            if r.get("id") == edge_id
-        ]
-        _, still_reached = await _reachable_rids(client, edge_type, edge_id, source)
-        if len(left) != 1 or still_reached != 1:
+        for rid in rids:
+            if any(r["rid"] == rid for r in await _records_of(client, edge_type, edge_id)):
+                await client.sql(f"DELETE FROM {edge_type} WHERE @rid = {rid}")
+                report.removed += 1
+        left = await _records_of(client, edge_type, edge_id)
+        if left:
             raise RepairAnomaly(
-                f"{edge_id}: after removing {remove}, {len(left)} record(s) remain and the "
-                f"source reaches {still_reached}; stopped before touching any other id"
+                f"{edge_id}: {len(left)} record(s) are still stored after removing every copy; "
+                "nothing was written and no other id was touched"
             )
-        report.removed += len(remove)
+        await rewrite(edge_id)
+        await _check_stored_once_and_reached(
+            client,
+            edge_type,
+            edge_id,
+            expected[edge_id],
+            after="removing every copy and writing it",
+        )
+        report.written.append(edge_id)
     return report
 
 

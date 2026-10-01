@@ -164,6 +164,7 @@ def seed_internal(
     inspect: bool = False,
     inspect_record: str | None = None,
     repair_strays: bool = False,
+    restore_missing: bool = False,
     apply: bool = False,
     repair_limit: int | None = None,
     clear_shared_stores: bool = False,
@@ -173,8 +174,10 @@ def seed_internal(
     if dataset not in DATASETS:
         raise SeedRefused(f"unknown dataset {dataset!r}; known: {', '.join(sorted(DATASETS))}")
     spec = DATASETS[dataset]
-    if apply and not repair_strays:
-        raise SeedRefused("--apply only goes with --repair-strays")
+    if repair_strays and restore_missing:
+        raise SeedRefused("--repair-strays and --restore-missing are run one at a time")
+    if apply and not (repair_strays or restore_missing):
+        raise SeedRefused("--apply only goes with --repair-strays or --restore-missing")
     if clear_shared_stores and not spec.sampled:
         raise SeedRefused("--clear-shared-stores is only built for paysim so far")
     if clear_shared_stores and vault is None:
@@ -184,8 +187,8 @@ def seed_internal(
         )
     if confirm is not None and not clear_shared_stores:
         raise SeedRefused("--confirm only goes with --clear-shared-stores")
-    if repair_strays and not spec.sampled:
-        raise SeedRefused("--repair-strays is only built for paysim so far")
+    if (repair_strays or restore_missing) and not spec.sampled:
+        raise SeedRefused("--repair-strays and --restore-missing are only built for paysim so far")
     if reset_graph_database and not spec.sampled:
         raise SeedRefused("--reset-graph-database is only built for paysim so far")
     if vault is not None:
@@ -218,8 +221,19 @@ def seed_internal(
         )
     if inspect:
         return _inspect(spec, repo_root, directory, run, inspect_record, vault)
-    if repair_strays:
-        return _repair_strays(spec, repo_root, directory, run, vault, apply, repair_limit)
+    if repair_strays or restore_missing:
+        return _repair_strays(
+            spec,
+            repo_root,
+            directory,
+            run,
+            vault,
+            apply,
+            repair_limit,
+            restore=restore_missing,
+            graph_fraud_rows=graph_fraud_rows,
+            data_root=data_root,
+        )
     if clear_shared_stores:
         return _clear_shared_stores(
             repo_root, directory, run, api_running, stop_api, vault or "", confirm
@@ -327,10 +341,17 @@ def _repair_strays(
     vault: str | None,
     apply: bool,
     limit: int | None,
+    *,
+    restore: bool,
+    graph_fraud_rows: int | None,
+    data_root: Path,
 ) -> list[str]:
-    """Remove the stray edge records a load left (ADR-056 Amendment 16). Like an inspection it makes
-    no case and loads nothing, and leaves the Conduit running: it touches only the graph database.
-    Without `apply` it is a dry run."""
+    """Put right the edges a load got wrong (ADR-056 Amendment 17): `--repair-strays` removes the
+    copies of an id stored twice and writes the edge once; `--restore-missing` writes edges the
+    dataset has and the graph lacks. Both write the edge again from the dataset, so the container
+    gets the file and the same graph sample the load used. Like an inspection they make no case,
+    load no events, and leave the Conduit running: they touch only the graph database. Without
+    `apply` they are a dry run."""
     argv = [
         *_compose(directory / "compose.yaml"),
         "run",
@@ -340,11 +361,19 @@ def _repair_strays(
         "python",
         "-v",
         f"{repo_root}/scripts:/app/scripts:ro",
+        "-v",
+        f"{data_root}:{CONTAINER_DATA}:ro",
         "api",
         "-m",
         spec.script,
-        "--repair-strays",
+        "--restore-missing" if restore else "--repair-strays",
+        "--data-dir",
+        CONTAINER_DATA,
+        "--attested-checkout",
     ]
+    sample = DEFAULT_GRAPH_SAMPLE if graph_fraud_rows is None else graph_fraud_rows
+    if sample > 0:
+        argv += ["--graph-fraud-rows", str(sample)]
     if apply:
         argv.append("--apply")
     if limit is not None:
@@ -416,6 +445,7 @@ def main(argv: list[str] | None = None) -> int:
         vault = value[0]
     inspect = "--inspect" in args
     repair_strays = "--repair-strays" in args
+    restore_missing = "--restore-missing" in args
     clear_shared_stores = "--clear-shared-stores" in args
     confirm: str | None = None
     if "--confirm" in args:
@@ -458,7 +488,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"usage: seed_internal <{'|'.join(sorted(DATASETS))}> [--stop-api] "
             "[--replace-graph] [--reset-graph-database] [--vault ID] [--graph-fraud-rows N|all] "
-            "[--repair-strays [--apply] [--repair-limit N]] "
+            "[--repair-strays | --restore-missing [--apply] [--repair-limit N]] "
             "[--clear-shared-stores --vault ID [--confirm V:E:N]]",
             file=sys.stderr,
         )
@@ -475,6 +505,7 @@ def main(argv: list[str] | None = None) -> int:
             inspect=inspect,
             inspect_record=record,
             repair_strays=repair_strays,
+            restore_missing=restore_missing,
             apply=apply,
             repair_limit=repair_limit,
             clear_shared_stores=clear_shared_stores,
@@ -489,9 +520,9 @@ def main(argv: list[str] | None = None) -> int:
     if clear_shared_stores:
         print("seed: clearing finished; read the report above for what was, or was not, deleted.")
         return 0
-    if repair_strays:
+    if repair_strays or restore_missing:
         print(
-            "seed: repair finished; stray records were removed."
+            "seed: repair finished; read the report above for what was written."
             if apply
             else "seed: dry run finished; nothing was changed."
         )

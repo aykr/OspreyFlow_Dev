@@ -262,57 +262,169 @@ def test_the_repair_needs_no_case_and_removes_nothing_unless_told_to() -> None:
         _parse_args(["--apply"])  # an apply with nothing to apply
 
 
+def test_the_restore_is_its_own_mode_and_the_two_modes_are_not_mixed() -> None:
+    """Catches `--restore-missing` demanding a case, an `--apply` that goes with nothing, and both
+    modes at once (two sets of writes in one run, one of them unreviewed)."""
+    args = _parse_args(["--restore-missing", "--vault", "paysim"])
+    assert args.restore_missing is True and args.apply is False
+    assert _parse_args(["--restore-missing", "--apply"]).apply is True
+    with pytest.raises(SystemExit):
+        _parse_args(["--restore-missing", "--repair-strays"])
+
+
+class _Cfg:
+    """Stands in for the client: remembers which database it was pointed at."""
+
+    seen: dict[str, object]
+
+    def __init__(self, config: object) -> None:
+        type(self).seen["database"] = getattr(config, "database", None)
+
+    async def aclose(self) -> None:
+        type(self).seen["closed"] = True
+
+
+def _patched(monkeypatch: pytest.MonkeyPatch, **names: object) -> dict[str, object]:
+    from scripts import seed_paysim
+
+    seen: dict[str, object] = {}
+    _Cfg.seen = seen
+    monkeypatch.setattr(seed_paysim, "ArcadeDBClient", _Cfg)
+    for name, value in names.items():
+        monkeypatch.setattr(seed_paysim, name, value)
+    return seen
+
+
+def _edges() -> dict[str, object]:
+    return {"paysim-tx-1": type("E", (), {"source": "paysim-acct-a"})()}
+
+
 def test_the_repair_runs_against_the_vaults_own_database_for_this_seeds_own_ids(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Catches a repair pointed at the shared database, at another seed's ids, or one that applies
-    when it was asked for a dry run."""
+    """Catches a repair pointed at the shared database, at another seed's ids, one that applies
+    when it was asked for a dry run, or one given no list of what the dataset writes."""
     import asyncio
 
     from scripts import seed_paysim
     from scripts.seed_support import RepairReport
 
-    seen: dict[str, object] = {}
-
-    class Client:
-        def __init__(self, config: object) -> None:
-            seen["database"] = getattr(config, "database", None)
-
-        async def aclose(self) -> None:
-            seen["closed"] = True
+    captured: dict[str, object] = {}
 
     async def fake_repair(client: object, **kw: object) -> RepairReport:
-        seen.update(kw)
-        return RepairReport(planned=[("paysim-tx-1", "#1:1", ["#1:2"])])
+        captured.update(kw)
+        return RepairReport(planned=[("paysim-tx-1", ["#1:1", "#1:2"])])
 
-    monkeypatch.setattr(seed_paysim, "ArcadeDBClient", Client)
-    monkeypatch.setattr(seed_paysim, "repair_ids_stored_twice", fake_repair)
+    seen = _patched(
+        monkeypatch,
+        repair_ids_stored_twice=fake_repair,
+        _edges_to_write=lambda args, principal, source: _edges(),
+        scope_and_source=lambda args, in_checkout: Path("x.csv"),
+    )
     args = _parse_args(["--repair-strays", "--vault", "paysim", "--repair-limit", "3"])
     assert asyncio.run(seed_paysim._run(args)) == 0
     assert seen["database"] == "vault_paysim" and seen["closed"] is True
-    assert seen["prefix"] == "paysim-tx-" and seen["apply"] is False and seen["limit"] == 3
-    assert "dry run" in capsys.readouterr().out
+    assert captured["prefix"] == "paysim-tx-" and captured["apply"] is False
+    assert captured["limit"] == 3 and captured["expected"] == {"paysim-tx-1": "paysim-acct-a"}
+    assert callable(captured["rewrite"]) and "dry run" in capsys.readouterr().out
+
+
+def test_the_restore_runs_against_the_vaults_own_database_and_applies_only_when_told(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Catches a restore that writes on a dry run, that goes to the shared database, or that never
+    says how many edges it expected."""
+    import asyncio
+
+    from scripts import seed_paysim
+    from scripts.seed_support import RepairReport
+
+    captured: dict[str, object] = {}
+
+    async def fake_restore(client: object, **kw: object) -> RepairReport:
+        captured.update(kw)
+        return RepairReport(planned=[("paysim-tx-1", [])])
+
+    seen = _patched(
+        monkeypatch,
+        restore_missing_edges=fake_restore,
+        _edges_to_write=lambda args, principal, source: _edges(),
+        scope_and_source=lambda args, in_checkout: Path("x.csv"),
+    )
+    args = _parse_args(["--restore-missing", "--vault", "paysim"])
+    assert asyncio.run(seed_paysim._run(args)) == 0
+    assert seen["database"] == "vault_paysim" and captured["apply"] is False
+    assert captured["expected"] == {"paysim-tx-1": "paysim-acct-a"}
+    out = capsys.readouterr().out
+    assert "dry run" in out and "1 edge" in out
 
 
 def test_a_repair_that_hits_a_surprise_stops_and_exits_non_zero(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Catches an anomaly that is swallowed and reported as success."""
+    """Catches an anomaly that is swallowed and reported as success, in either mode."""
     import asyncio
 
     from scripts import seed_paysim
     from scripts.seed_support import RepairAnomaly
 
-    class Client:
-        def __init__(self, config: object) -> None: ...
+    async def fake(client: object, **kw: object) -> object:
+        raise RepairAnomaly("paysim-tx-1: after writing it, 0 record(s) are stored")
 
-        async def aclose(self) -> None: ...
+    _patched(
+        monkeypatch,
+        repair_ids_stored_twice=fake,
+        restore_missing_edges=fake,
+        _edges_to_write=lambda args, principal, source: _edges(),
+        scope_and_source=lambda args, in_checkout: Path("x.csv"),
+    )
+    for flag in ("--repair-strays", "--restore-missing"):
+        assert asyncio.run(seed_paysim._run(_parse_args([flag, "--apply"]))) == 3
+        assert "paysim-tx-1" in capsys.readouterr().err
 
-    async def fake_repair(client: object, **kw: object) -> object:
-        raise RepairAnomaly("paysim-tx-1: after removing ['#1:2'], 0 record(s) remain")
 
-    monkeypatch.setattr(seed_paysim, "ArcadeDBClient", Client)
-    monkeypatch.setattr(seed_paysim, "repair_ids_stored_twice", fake_repair)
-    args = _parse_args(["--repair-strays", "--apply"])
-    assert asyncio.run(seed_paysim._run(args)) == 3
-    assert "paysim-tx-1" in capsys.readouterr().err
+def test_without_the_dataset_a_repair_refuses_before_touching_the_store(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Catches a repair that carries on without the file it rewrites from."""
+    import asyncio
+
+    from scripts import seed_paysim
+
+    def refuse(args: object, in_checkout: bool) -> Path:
+        raise NotProvisionedError("dataset not provisioned")
+
+    seen = _patched(monkeypatch, scope_and_source=refuse)
+    args = _parse_args(["--restore-missing", "--apply", "--vault", "paysim"])
+    assert asyncio.run(seed_paysim._run(args)) == 1
+    assert "database" not in seen and "not provisioned" in capsys.readouterr().err
+
+
+def test_the_edges_a_repair_rewrites_are_the_ones_the_load_writes(tmp_path: Path) -> None:
+    """Catches a restore built from a different selection than the load (the full file instead of
+    the fraud neighbourhood would write seven million edges), or ids that differ from the load's."""
+    from scripts import seed_paysim
+
+    from demo_fixtures.paysim import build_graph_writes, fraud_accounts, read_paysim
+    from schemas.domain import Principal
+
+    path = tmp_path / "rows.csv"
+    header = ",".join(COLUMNS)
+    rows = [
+        "1,PAYMENT,10.0,C1,0,0,M1,0,0,0,0",
+        "1,TRANSFER,500.0,C2,0,0,C3,0,0,1,0",
+        "2,CASH_OUT,500.0,C3,0,0,C4,0,0,1,0",
+        "3,PAYMENT,5.0,C9,0,0,M9,0,0,0,0",
+    ]
+    path.write_text(header + "\n" + "\n".join(rows) + "\n", encoding="utf-8")
+    assert COLUMNS[:2] == ("step", "type")  # the row layout above follows COLUMNS
+    principal = Principal(id="paysim-seed-worker", clearance="OFFICIAL", org_unit="u")
+    args = _parse_args(
+        ["--restore-missing", "--graph-fraud-rows", "1", "--data-dir", str(tmp_path)]
+    )
+    found = seed_paysim._edges_to_write(args, principal, path)
+    accounts = fraud_accounts(read_paysim(path), limit=1)
+    touching = [r for r in read_paysim(path) if r.origin in accounts or r.destination in accounts]
+    _, edges = build_graph_writes(touching, created_by=principal.id, handling=seed_paysim._HANDLING)
+    assert set(found) == {e.id for e in edges} and 0 < len(found) < 4
+    assert all(found[e.id].source == e.source for e in edges)

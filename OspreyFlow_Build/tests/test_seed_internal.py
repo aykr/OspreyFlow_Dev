@@ -535,6 +535,59 @@ def test_the_command_line_accepts_the_repair_and_says_what_it_did_not_say_is_loa
     assert "is loaded" not in capsys.readouterr().out
 
 
+def test_a_repair_sees_the_dataset_and_the_same_graph_sample_the_load_used(repo: Path) -> None:
+    """Catches a repair that cannot read the file it rewrites from, or that rewrites from a
+    different selection than the load wrote (the sample decides which edges exist)."""
+    _, call = _repair_call(repo, repair_strays=True, vault="paysim")
+    assert "--data-dir" in call and "--attested-checkout" in call
+    assert any(a.endswith(f":{seed_internal.CONTAINER_DATA}:ro") for a in call)
+    assert call[call.index("--graph-fraud-rows") + 1] == str(seed_internal.DEFAULT_GRAPH_SAMPLE)
+    _, call = _repair_call(repo, restore_missing=True, graph_fraud_rows=1200, vault="paysim")
+    assert call[call.index("--graph-fraud-rows") + 1] == "1200"
+    _, call = _repair_call(repo, restore_missing=True, graph_fraud_rows=0, vault="paysim")
+    assert "--graph-fraud-rows" not in call
+
+
+def test_a_restore_reaches_the_container_as_its_own_mode_and_leaves_the_conduit_running(
+    repo: Path,
+) -> None:
+    """Catches `--restore-missing` being dropped on the way, applying by default, or stopping the
+    Conduit (it only touches the graph database)."""
+    runner, call = _repair_call(repo, restore_missing=True, vault="paysim")
+    assert "--restore-missing" in call and "--repair-strays" not in call and "--apply" not in call
+    assert not any(c[1:] and "stop" in c for c in runner.calls)
+    _, call = _repair_call(repo, restore_missing=True, apply=True, repair_limit=1, vault="paysim")
+    assert "--apply" in call and call[call.index("--repair-limit") + 1] == "1"
+
+
+def test_the_two_repair_modes_are_not_mixed_and_are_for_paysim_only(repo: Path) -> None:
+    """Catches two sets of writes in one run, and a restore for a dataset it was not built for."""
+    with pytest.raises(seed_internal.SeedRefused, match="one at a time"):
+        _repair_call(repo, repair_strays=True, restore_missing=True)
+    with pytest.raises(seed_internal.SeedRefused, match="only built for paysim"):
+        seed_internal.seed_internal(
+            "hmp",
+            repo,
+            run=lambda argv: "",
+            lookup_subs=lambda directory: SUBS,
+            api_running=lambda compose: False,
+            restore_missing=True,
+        )
+
+
+def test_the_command_line_accepts_the_restore(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Catches a flag the host command does not pass on, and a summary that says the dataset is
+    loaded after a restore."""
+    seen: dict[str, object] = {}
+    monkeypatch.setattr(seed_internal, "seed_internal", lambda dataset, **kw: seen.update(kw) or [])
+    assert seed_internal.main(["paysim", "--restore-missing", "--vault", "paysim"]) == 0
+    assert seen["restore_missing"] is True and seen["apply"] is False
+    out = capsys.readouterr().out
+    assert "is loaded" not in out and "dry run" in out
+
+
 # --- clearing the shared stores once the vault is verified (ADR-056 Amendment 16, stage 0b) ---
 
 

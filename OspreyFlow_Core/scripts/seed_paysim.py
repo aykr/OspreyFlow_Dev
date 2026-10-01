@@ -31,6 +31,7 @@ from scripts.seed_support import (
     repair_ids_stored_twice,
     report_ids_stored_twice,
     reset_graph_database,
+    restore_missing_edges,
     vault_locations,
     write_graph,
 )
@@ -51,7 +52,7 @@ from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
-from schemas.domain import Handling, Principal
+from schemas.domain import EdgeWrite, Handling, NodeWrite, Principal
 
 FILE_NAME = "PS_20174392719_1491204439457_log.csv"
 CASE_NAME = "PaySim mobile money (internal)"
@@ -173,19 +174,30 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         "--repair-strays",
         action="store_true",
         help=(
-            "Find ids a scan sees stored twice (ArcadeDB wrote a stray copy, ADR-056 Amendment 16) "
-            "and, with --apply, remove the copy the source vertex does not reach. A dry run "
-            "without --apply. Writes no case and loads nothing."
+            "Find ids a scan sees stored twice (ArcadeDB wrote a stray copy, ADR-056 Amendment 17) "
+            "and, with --apply, remove every copy of each and write the edge once from the "
+            "dataset, checking it is stored once and reached once. A dry run without --apply. "
+            "Writes no case and loads no events."
         ),
     )
     parser.add_argument(
-        "--apply", action="store_true", help="With --repair-strays: actually remove the strays."
+        "--restore-missing",
+        action="store_true",
+        help=(
+            "Find edges the dataset has and the graph lacks and, with --apply, write them. A dry "
+            "run without --apply. Writes no case and loads no events."
+        ),
+    )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="With --repair-strays or --restore-missing: actually change the graph.",
     )
     parser.add_argument(
         "--repair-limit",
         type=int,
         default=None,
-        help="With --repair-strays: repair only this many ids (the first run should be one).",
+        help="With --repair-strays or --restore-missing: handle only this many ids (start at 1).",
     )
     parser.add_argument(
         "--graph-fraud-rows",
@@ -213,9 +225,11 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--clearance", default=os.environ.get("OSPREY_CLEARANCE", "OFFICIAL"))
     parser.add_argument("--org-unit", default=os.environ.get("OSPREY_ORG_UNIT", "unit-1"))
     args = parser.parse_args(argv)
-    if args.apply and not args.repair_strays:
-        parser.error("--apply only goes with --repair-strays")
-    if not (args.inspect or args.repair_strays) and (
+    if args.repair_strays and args.restore_missing:
+        parser.error("--repair-strays and --restore-missing are separate runs; give one")
+    if args.apply and not (args.repair_strays or args.restore_missing):
+        parser.error("--apply only goes with --repair-strays or --restore-missing")
+    if not (args.inspect or args.repair_strays or args.restore_missing) and (
         bool(args.investigation_scope) == bool(args.case_name)
     ):
         parser.error("give exactly one of --investigation-scope and --case-name")
@@ -229,12 +243,28 @@ def scope_and_source(args: argparse.Namespace, *, in_checkout: bool) -> Path:
     )
 
 
+def _graph_writes(
+    source: Path, principal: Principal, *, fraud_rows: int | None
+) -> tuple[list[NodeWrite], list[EdgeWrite]]:
+    """What the load writes to the graph: the fraud neighbourhood. One selection, used by the load
+    and by the repairs, so a rewritten edge is the edge the load would have written."""
+    accounts = fraud_accounts(read_paysim(source), limit=fraud_rows)
+    touching = [r for r in read_paysim(source) if r.origin in accounts or r.destination in accounts]
+    return build_graph_writes(touching, created_by=principal.id, handling=_HANDLING)
+
+
+def _edges_to_write(
+    args: argparse.Namespace, principal: Principal, source: Path
+) -> dict[str, EdgeWrite]:
+    """Each edge the load writes, by id."""
+    _, edges = _graph_writes(source, principal, fraud_rows=args.graph_fraud_rows)
+    return {edge.id: edge for edge in edges}
+
+
 async def _load_graph(
     graph: GraphPort, source: Path, principal: Principal, *, fraud_rows: int | None = None
 ) -> tuple[int, int]:
-    accounts = fraud_accounts(read_paysim(source), limit=fraud_rows)
-    touching = [r for r in read_paysim(source) if r.origin in accounts or r.destination in accounts]
-    nodes, edges = build_graph_writes(touching, created_by=principal.id, handling=_HANDLING)
+    nodes, edges = _graph_writes(source, principal, fraud_rows=fraud_rows)
     if nodes and await graph.get_node(nodes[0].id, principal) is not None:
         raise NotProvisionedError(
             "The PaySim graph is already loaded (or a load was interrupted). Nothing was written. "
@@ -275,29 +305,59 @@ async def _inspect(args: argparse.Namespace) -> int:
 
 
 async def _repair(args: argparse.Namespace) -> int:
-    """Remove stray edge records from this seed's own transactions. A dry run unless `--apply`."""
+    """`--repair-strays` or `--restore-missing`, on this seed's own transactions: a dry run unless
+    `--apply`. Both write edges back from the dataset, through the adapter's normal write path, so
+    both need the file; neither makes a case or loads events."""
+    try:
+        source = scope_and_source(args, in_checkout=_is_checkout())
+    except NotProvisionedError as error:
+        print(error, file=sys.stderr)
+        return 1
+    principal = Principal(id=args.principal_id, clearance=args.clearance, org_unit=args.org_unit)
+    edges = _edges_to_write(args, principal, source)
+    print(f"  the dataset writes {len(edges):,} edge(s) to the graph")
+    expected = {edge_id: edge.source for edge_id, edge in edges.items()}
     client = ArcadeDBClient(ArcadeDBConfig.from_env(_locations(args)[0]))
     try:
+        graph = GraphArcadeDBAdapter(client, load_uk_le_scheme())
+
+        async def rewrite(edge_id: str) -> None:
+            tx = await graph.begin_transaction()
+            try:
+                await graph.upsert_edges([edges[edge_id]], tx)
+            except Exception:
+                await graph.rollback_transaction(tx)
+                raise
+            await graph.commit_transaction(tx)
+
+        common = {
+            "edge_type": groovy_identifier(physical_type_name("TRANSACTED")),
+            "prefix": "paysim-tx-",
+            "expected": expected,
+            "rewrite": rewrite,
+            "apply": args.apply,
+            "limit": args.repair_limit,
+        }
         try:
-            report = await repair_ids_stored_twice(
-                client,
-                edge_type=groovy_identifier(physical_type_name("TRANSACTED")),
-                prefix="paysim-tx-",
-                apply=args.apply,
-                limit=args.repair_limit,
-            )
+            if args.restore_missing:
+                report = await restore_missing_edges(client, **common)
+            else:
+                report = await repair_ids_stored_twice(client, **common)
         except RepairAnomaly as error:
             print(f"repair stopped: {error}", file=sys.stderr)
             return 3
     finally:
         await client.aclose()
     if not report.planned and not report.skipped:
-        print("  repair: no id is stored more than once; nothing to do")
+        print("  nothing to do")
     elif args.apply:
-        print(f"  repair: removed {report.removed} stray record(s) for {len(report.planned)} id(s)")
+        print(
+            f"  done: {len(report.written)} edge(s) written and checked, "
+            f"{report.removed} delete statement(s) issued, {len(report.skipped)} left alone"
+        )
     else:
         print(
-            f"  repair: dry run; {len(report.planned)} id(s) would be repaired, "
+            f"  dry run: {len(report.planned)} id(s) would be handled, "
             f"{len(report.skipped)} left alone. Nothing was changed."
         )
     return 1 if report.skipped else 0
@@ -311,7 +371,7 @@ async def _run(args: argparse.Namespace) -> int:
         return 2
     if args.inspect:
         return await _inspect(args)
-    if args.repair_strays:
+    if args.repair_strays or args.restore_missing:
         return await _repair(args)
     if args.vault is not None:
         print(f"  vault {args.vault!r}: graph database {database}, analytics file {analytics_path}")
