@@ -8270,3 +8270,22 @@ sends a create twice and the fix is there; if each was sent once, ArcadeDB ran o
 `test_edge_creates_are_counted_from_what_the_client_actually_sent` (red first).
 
 **Not decided.** The fix.
+
+### ADR-056, Amendment 14 (1 October 2026) — the client sent each create once; ArcadeDB stored some twice
+
+The fourth 20-batch run: the client sent 800 edge creates for 800 distinct ids, none twice, and the store held 804 (four
+ids twice, in batches 1, 2, 5 and 16). The vertex index returned one vertex for both ends of each. So one request produced two
+complete records in the store: neither a client double send (Amendment 9, 13), a merge (Amendment 11), a doubled index
+entry (Amendment 12) nor a replayed commit is the cause. The fault is in ArcadeDB's handling of the create, or in how the
+adapter's create script is executed there. The second copy's record id was the same in several runs (`#169:80` for batch 1,
+about `#169:2108` for batch 2, `#169:6203` for batch 5), which suggests it follows how records fall on storage pages,
+not timing; that is an observation, not a finding.
+
+**What is added.** For each duplicate the script now says how many edges with that id a traversal reaches (out of the
+source, into the target, anywhere), and which fields differ between the two stored copies. The first separates a stray record
+that only a scan sees from a doubled edge that every degree, path and expand would count, which decides how serious the
+defect is for the product and where to look. Tests: `test_two_stored_copies_are_compared_field_by_field_ignoring_the_record_ids`
+and `test_adjacency_is_asked_by_walking_the_graph_not_by_scanning_the_type` (red first).
+
+**Not decided.** The fix, and the guard that goes with it: a load that finishes by scanning for ids stored more than once and
+failing loudly. Both wait for the next run.

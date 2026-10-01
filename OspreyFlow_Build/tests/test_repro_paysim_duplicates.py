@@ -199,3 +199,51 @@ def test_edge_creates_are_counted_from_what_the_client_actually_sent() -> None:
         b"not json at all",
     ]
     assert repro.edge_creates_sent(sent) == {"e1": 2, "e2": 1}
+
+
+def test_two_stored_copies_are_compared_field_by_field_ignoring_the_record_ids() -> None:
+    """The client sent each create once, so the store made two records from one request. Whether
+    the two are the same record twice or differ somewhere says which part of the write ran twice.
+    Catches a comparison that blames the `@rid` (always different), one that misses a field only
+    one copy has, and one that reports nothing when they are identical."""
+    a = {
+        "@rid": "#1:1",
+        "@type": "T",
+        "id": "e",
+        "weight": 1.0,
+        "occurrences": 1,
+        "audit": {"r": 0},
+    }
+    b = {
+        "@rid": "#1:2",
+        "@type": "T",
+        "id": "e",
+        "weight": 1.0,
+        "occurrences": 1,
+        "audit": {"r": 0},
+    }
+    assert repro.differing_fields(a, b) == {}
+    b2 = {**b, "weight": 2.0, "extra": True}
+    assert repro.differing_fields(a, b2) == {"weight": (1.0, 2.0), "extra": (None, True)}
+
+
+def test_adjacency_is_asked_by_walking_the_graph_not_by_scanning_the_type() -> None:
+    """A copy a traversal cannot reach is a stray record; a copy it can reach is a doubled edge,
+    which every degree, path and expand would count. The answers differ in how much they hurt, so
+    the question must be asked the way the product asks it. Catches a check that scans."""
+    import asyncio
+
+    class Client(_FakeClient):
+        async def gremlin(self, command: str, **_: object) -> list[dict[str, int]]:
+            self.asked.append(command)
+            if ".outE(" in command:
+                return [{"result": 1}]
+            if ".inE(" in command:
+                return [{"result": 2}]
+            return [{"result": 2}]
+
+    client = Client({})
+    found = asyncio.run(repro.adjacency_counts(client, "TRANSACTED", "e1", "a", "b"))
+    assert found == {"out_of_source": 1, "into_target": 2, "anywhere": 2}
+    assert any(q.startswith("g.E()") for q in client.asked)
+    assert not any("SELECT" in q for q in client.asked)

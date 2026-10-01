@@ -142,6 +142,35 @@ def edge_creates_sent(bodies: Iterable[bytes]) -> dict[str, int]:
     return dict(sent)
 
 
+def differing_fields(a: Mapping[str, Any], b: Mapping[str, Any]) -> dict[str, tuple[Any, Any]]:
+    """Fields on which two stored copies of an edge differ, ignoring the record's own `@` meta
+    fields (the record ids differ by definition). A field only one copy has shows as None."""
+    keys = {k for k in (*a, *b) if not k.startswith("@")}
+    return {k: (a.get(k), b.get(k)) for k in sorted(keys) if a.get(k) != b.get(k)}
+
+
+async def adjacency_counts(
+    client: Any, edge_type: str, edge_id: str, source: str, target: str
+) -> dict[str, int]:
+    """How many edges with this id a traversal reaches: out of the source, into the target, and
+    anywhere. A copy only a scan finds is a stray record; one a traversal finds is a doubled
+    edge that every degree, path and expand would count."""
+    label = groovy_string_literal(edge_type)
+    ident = groovy_string_literal(edge_id)
+    queries = {
+        "out_of_source": f'g.V().has("id",{groovy_string_literal(source)}).outE({label})'
+        f'.has("id",{ident}).count()',
+        "into_target": f'g.V().has("id",{groovy_string_literal(target)}).inE({label})'
+        f'.has("id",{ident}).count()',
+        "anywhere": f'g.E().has("id",{ident}).count()',
+    }
+    out: dict[str, int] = {}
+    for name, query in queries.items():
+        rows = await client.gremlin(query)
+        out[name] = int(rows[0]["result"]) if rows else 0
+    return out
+
+
 def limit_batches(
     nodes: list[Any], edges: list[Any], *, batches: int | None, chunk: int
 ) -> tuple[list[Any], list[Any]]:
@@ -221,10 +250,16 @@ async def _run(args: argparse.Namespace, source: Path) -> int:
                     records = [(w["rid"], w.get("occurrences")) for w in where]
                     edge = by_id[edge_id]
                     ends = await endpoint_index_counts(client, edge.source, edge.target)
+                    reach = await adjacency_counts(
+                        client, edge_type, edge_id, edge.source, edge.target
+                    )
+                    copies = [(await client.sql(f"SELECT FROM {w['rid']}"))[0] for w in where]
+                    differ = differing_fields(copies[0], copies[1]) if len(copies) == 2 else "n/a"
                     print(
                         f"  !! first seen after batch {index} committed: {edge_id} is stored "
                         f"{faults[edge_id]} time(s): {records}; "
                         f"vertices the index returns for its ends: {ends}",
+                        f"\n     reached by a traversal: {reach}; fields that differ: {differ}",
                         flush=True,
                     )
 
