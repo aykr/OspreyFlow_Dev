@@ -20,10 +20,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
 import os
 import sys
 import time
+from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -123,6 +125,23 @@ async def endpoint_index_counts(client: Any, source: str, target: str) -> dict[s
     return out
 
 
+def edge_creates_sent(bodies: Iterable[bytes]) -> dict[str, int]:
+    """From the request bodies the client sent, how many edge creates (`addE`) carried each id.
+    Anything that is not a Gremlin create, or not JSON, is ignored."""
+    sent: Counter[str] = Counter()
+    for raw in bodies:
+        try:
+            body = json.loads(raw)
+        except ValueError:
+            continue
+        if not isinstance(body, dict) or "addE" not in str(body.get("command", "")):
+            continue
+        params = body.get("params") or {}
+        if "prop_id" in params:
+            sent[str(params["prop_id"])] += 1
+    return dict(sent)
+
+
 def limit_batches(
     nodes: list[Any], edges: list[Any], *, batches: int | None, chunk: int
 ) -> tuple[list[Any], list[Any]]:
@@ -175,6 +194,12 @@ async def _run(args: argparse.Namespace, source: Path) -> int:
             client: Any = graph._client  # noqa: SLF001 - a diagnostic, in the adapter's own package
             edge_type = groovy_identifier(physical_type_name("TRANSACTED"))
             first_seen: dict[str, int] = {}
+            bodies: list[bytes] = []
+
+            async def record_request(request: Any) -> None:
+                bodies.append(request.content)
+
+            client._http.event_hooks["request"].append(record_request)  # noqa: SLF001
             by_id = {e.id: e for e in edges}
 
             async def after_batch(noun: str, index: int) -> None:
@@ -234,6 +259,14 @@ async def _run(args: argparse.Namespace, source: Path) -> int:
         print(f"  {noun} batch {index}: {message}")
     for noun, index, seconds in watcher.slow:
         print(f"  slow: {noun} batch {index} took {seconds:.0f}s")
+    sent = edge_creates_sent(bodies)
+    sent_twice = sorted(i for i, n in sent.items() if n > 1)
+    print(
+        f"edge creates the client sent: {sum(sent.values()):,} requests for {len(sent):,} ids; "
+        f"ids sent more than once: {sent_twice or 'none'}; "
+        f"duplicated ids that were sent twice: "
+        f"{sorted(set(duplicated) & set(sent_twice)) or 'none'}"
+    )
     pairs = same_pair_edges(edges, duplicated, chunk=args.chunk)
     for edge_id in duplicated:
         written = by_batch.get(edge_id)

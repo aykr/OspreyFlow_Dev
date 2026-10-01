@@ -176,3 +176,26 @@ def test_an_endpoint_the_index_returns_twice_is_reported_as_such() -> None:
     assert found == {"source": 1, "target": 2}
     assert all(q.startswith("g.V().has(") and q.endswith(".count()") for q in client.asked)
     assert not any("SELECT" in q for q in client.asked)
+
+
+def test_edge_creates_are_counted_from_what_the_client_actually_sent() -> None:
+    """The question (1 October 2026): are two copies stored because the client sent the create
+    twice, or because the store ran one request twice? Counting the requests on the wire answers
+    it. Catches a count that includes lookups and updates, one that misses a create whose id
+    arrives only as a bound parameter, and one that cannot tell a repeated id from a repeated
+    request."""
+    import json
+
+    def body(command: str, **params: object) -> bytes:
+        return json.dumps({"language": "gremlin", "command": command, "params": params}).encode()
+
+    create = 'g.V().has("id", src).as("__src").V().has("id", tgt).addE("T").from("__src")'
+    sent = [
+        body(create, prop_id="e1"),
+        body(create, prop_id="e2"),
+        body(create, prop_id="e1"),  # the same create sent twice
+        body('g.V().has("id","x").count()'),
+        body('g.E().has("id","e9").property("a", prop_a)', prop_id="e9"),  # an update, not a create
+        b"not json at all",
+    ]
+    assert repro.edge_creates_sent(sent) == {"e1": 2, "e2": 1}

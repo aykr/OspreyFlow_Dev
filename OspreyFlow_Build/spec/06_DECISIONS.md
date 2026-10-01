@@ -8254,3 +8254,19 @@ lookup the write uses, how many vertices it returns for each end of the edge, an
 **Not decided.** The fix. If an end comes back as 2, the cause is in how the accounts are written or indexed and the
 fix is at that class (with a conformance case that reads accounts back through the index); if both ends come back
 as 1, the double execution is inside ArcadeDB and the server log is what remains.
+
+### ADR-056, Amendment 13 (1 October 2026) — the vertex index is not the cause; count what the client sent
+
+The third 20-batch run asked the vertex index, with the lookup the edge write uses, how many vertices it returns
+for each end of each duplicated edge: 1 and 1 in all three cases. So an account returned twice by the index
+(Amendment 12's suspect) is ruled out, at least as seen straight after the write. The saved ArcadeDB log held none of
+"retr", "conflict", "exception", "error", "severe" or "warn". What the runs show: the batch-1 duplicate was the same
+edge with the same two record ids in two runs (`#169:62` and `#169:80`), while batches 2 and 5 differed between runs.
+
+**What is added.** The script records every request the client puts on the wire and reports how many edge
+creates (`addE`) it sent, how many distinct ids they carried, and which ids were sent more than once. That
+separates the two remaining stories: if a duplicated id was sent twice, something in the client or its HTTP layer
+sends a create twice and the fix is there; if each was sent once, ArcadeDB ran one request twice. Test:
+`test_edge_creates_are_counted_from_what_the_client_actually_sent` (red first).
+
+**Not decided.** The fix.
