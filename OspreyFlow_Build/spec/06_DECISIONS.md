@@ -8440,3 +8440,15 @@ refuses; the earlier tests used a stand-in for the whole graph object, so the cl
 all. The count is now a traversal (`g.V().count()`, `g.E().count()`), and `ArcadeShared.counts` is tested with a client
 that refuses the SQL form and treats an empty answer as an empty graph. `reset` (drop, create, apply the schema) is the
 same code the `--reset-graph-database` option has already run on the real store, and was not changed.
+
+### ADR-056, Amendment 21 (1 October 2026) — the demos show the same defect, and the seeds no longer point at a repair that does not exist
+
+**Seen.** After stage 0b, `make seed-hmp` and `make seed-fixture-corp` both reported "4 id(s) stored more than once" over
+the whole shared graph. The Fixture Corp count is the same four, so the HMP load wrote them and the Fixture Corp load
+added none that the check could see (the check does not say which load wrote an id; this is read from the two counts).
+So the defect is not specific to the PaySim load or its size: a small synthetic load (400 people, 10 yards) shows it.
+
+**Fault in my own work.** Every seed's check still told the owner to "remove the strays with `--repair-strays`", the
+command Amendment 19 withdrew. The check now says what the position is (a known ArcadeDB defect with no repair; the
+product does not count the strays), through one shared text, and `repair_command` became `advice`. A test asserts the
+line neither says "remove the strays" nor names the withdrawn command (red first).

@@ -25,6 +25,7 @@ from pathlib import Path
 
 import duckdb
 from scripts.seed_support import (
+    KNOWN_STRAY_ADVICE,
     clear_seeded_graph,
     events_already_loaded,
     report_ids_stored_twice,
@@ -213,7 +214,7 @@ async def _run(args: argparse.Namespace) -> int:
             client,
             edge_types=[groovy_identifier(physical_type_name("COMMUNICATED_WITH"))],
             prefix="enron-comm-",
-            repair_command="(the repair is built for paysim only; reload with --replace-graph)",
+            advice=KNOWN_STRAY_ADVICE,
         )
     finally:
         await client.aclose()

@@ -43,7 +43,7 @@ from pathlib import Path
 
 import duckdb
 from scripts.case_seed import add_case_arguments, check_case_arguments, scope_for
-from scripts.seed_support import report_ids_stored_twice
+from scripts.seed_support import KNOWN_STRAY_ADVICE, report_ids_stored_twice
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
@@ -109,7 +109,7 @@ async def _run(args: argparse.Namespace) -> int:
             client,
             edge_types=[groovy_identifier(physical_type_name(e.name)) for e in ontology.edge_types],
             say=lambda line: print(f"{line} (whole shared graph)"),
-            repair_command="python -m scripts.seed_internal paysim --repair-strays",
+            advice=KNOWN_STRAY_ADVICE,
         )
     finally:
         await client.aclose()

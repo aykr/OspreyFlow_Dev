@@ -388,13 +388,19 @@ async def ids_stored_twice(client: _Sql, *, edge_type: str, prefix: str = "") ->
     )
 
 
+#: What a seed says about ids stored twice: there is no repair (ADR-056 Amendment 19).
+KNOWN_STRAY_ADVICE = (
+    "a known ArcadeDB defect with no repair (ADR-056 Amendment 19); the product does not count them"
+)
+
+
 async def report_ids_stored_twice(
     client: _Sql,
     *,
     edge_types: Sequence[str],
     prefix: str = "",
     say: Callable[[str], None] = print,
-    repair_command: str,
+    advice: str,
 ) -> int:
     """The check every seed ends with: how many ids a scan finds stored more than once, said
     loudly when there are any and plainly when there are none (silence cannot be told from a check
@@ -407,7 +413,7 @@ async def report_ids_stored_twice(
         return 0
     say(f"  check: !! {len(found)} id(s) stored more than once (ArcadeDB wrote a stray copy).")
     say("  check: a traversal reaches each edge once; a scan-based count sees both records.")
-    say(f"  check: look, then remove the strays with: {repair_command}")
+    say(f"  check: {advice}")
     return len(found)
 
 

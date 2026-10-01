@@ -23,6 +23,7 @@ from pathlib import Path
 
 import duckdb
 from scripts.seed_support import (
+    KNOWN_STRAY_ADVICE,
     RepairAnomaly,
     clear_seeded_graph,
     events_already_loaded,
@@ -425,15 +426,11 @@ async def _run(args: argparse.Namespace) -> int:
         node_count, edge_count = await _load_graph(
             graph, source, principal, fraud_rows=args.graph_fraud_rows
         )
-        vault_flag = f" --vault {args.vault}" if args.vault else ""
         strays = await report_ids_stored_twice(
             client,
             edge_types=[groovy_identifier(physical_type_name("TRANSACTED"))],
             prefix="paysim-tx-",
-            repair_command=(
-                f"python -m scripts.seed_internal paysim --repair-strays{vault_flag}  "
-                "(add --apply to remove them)"
-            ),
+            advice=KNOWN_STRAY_ADVICE,
         )
     except NotProvisionedError as error:
         print(error, file=sys.stderr)

@@ -376,12 +376,14 @@ def test_the_post_load_check_says_loudly_how_many_and_what_to_run() -> None:
     lines: list[str] = []
     n = _run(
         ss.report_ids_stored_twice(
-            store, edge_types=[TYPE], prefix=PREFIX, say=lines.append, repair_command="RUN-THIS"
+            store, edge_types=[TYPE], prefix=PREFIX, say=lines.append, advice="DO-THIS"
         )
     )
     assert n == 1
     text = "\n".join(lines)
-    assert "1" in text and "stored more than once" in text and "RUN-THIS" in text
+    assert "1" in text and "stored more than once" in text and "DO-THIS" in text
+    # No repair exists any more (ADR-056 Amendment 19): the line must not send anyone to one.
+    assert "remove the strays" not in text and "--repair-strays" not in text
 
 
 def test_the_post_load_check_is_quiet_about_a_clean_graph_but_still_says_so() -> None:
@@ -391,7 +393,7 @@ def test_the_post_load_check_is_quiet_about_a_clean_graph_but_still_says_so() ->
     lines: list[str] = []
     n = _run(
         ss.report_ids_stored_twice(
-            store, edge_types=[TYPE], prefix=PREFIX, say=lines.append, repair_command="x"
+            store, edge_types=[TYPE], prefix=PREFIX, say=lines.append, advice="x"
         )
     )
     assert n == 0 and any("no id stored more than once" in line for line in lines)
