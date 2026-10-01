@@ -30,10 +30,13 @@ import os
 import sys
 
 from scripts.case_seed import add_case_arguments, check_case_arguments, scope_for
+from scripts.seed_support import report_ids_stored_twice
 from services.resolve.same_as_writer import write_same_as_edges
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
+from adapters.graph_arcadedb.gremlin_literals import groovy_identifier
+from adapters.graph_arcadedb.naming import physical_type_name
 from conduit_common.identity import now_utc
 from demo_fixtures.fixture_corp import (
     build_path_spokes,
@@ -143,6 +146,12 @@ async def _run(args: argparse.Namespace) -> int:
         resolution_nodes, resolution_edges = await _seed_resolution_persons(graph, load_id=load_id)
         ring_nodes, ring_edges = await _seed_community_rings(graph, load_id=load_id)
         spokes = await build_path_spokes(graph)
+        await report_ids_stored_twice(
+            client,
+            edge_types=[groovy_identifier(physical_type_name(e.name)) for e in ontology.edge_types],
+            say=lambda line: print(f"{line} (whole shared graph)"),
+            repair_command="python -m scripts.seed_internal paysim --repair-strays",
+        )
     finally:
         await client.aclose()
 

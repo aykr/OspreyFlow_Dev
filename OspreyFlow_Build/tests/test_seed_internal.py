@@ -475,3 +475,150 @@ def test_a_value_that_equals_the_dataset_name_is_not_mistaken_for_a_second_datas
     )
     assert seed_internal.main(["--vault", "paysim", "paysim", "--stop-api"]) == 0
     assert seen["dataset"] == "paysim" and seen["vault"] == "paysim"
+
+
+# --- repairing stray edge records (ADR-056 Amendment 16) ---
+
+
+def _repair_call(repo: Path, **kw: object) -> tuple[Runner, list[str]]:
+    runner = Runner()
+    seed_internal.seed_internal(
+        "paysim",
+        repo,
+        run=runner,
+        lookup_subs=lambda directory: {},
+        api_running=lambda compose: True,
+        **kw,  # type: ignore[arg-type]
+    )
+    return runner, _seed_call(runner)
+
+
+def test_a_repair_reaches_the_container_without_a_case_or_stopping_the_conduit(repo: Path) -> None:
+    """Catches a repair that stops the Conduit, makes a case, or applies when asked for a look."""
+    runner, call = _repair_call(repo, repair_strays=True, vault="paysim")
+    assert "--repair-strays" in call and call[call.index("--vault") + 1] == "paysim"
+    assert "--apply" not in call and "--case-name" not in call and "--grant" not in call
+    assert not any(c[1:] and "stop" in c for c in runner.calls)
+
+
+def test_apply_and_the_limit_reach_the_container_only_when_asked_for(repo: Path) -> None:
+    _, call = _repair_call(repo, repair_strays=True, apply=True, repair_limit=1, vault="paysim")
+    assert "--apply" in call and call[call.index("--repair-limit") + 1] == "1"
+
+
+def test_an_apply_without_a_repair_and_a_repair_for_another_dataset_are_refused(
+    repo: Path,
+) -> None:
+    """Catches `--apply` quietly doing nothing, and a repair for a dataset it was not built for."""
+    with pytest.raises(seed_internal.SeedRefused, match="--apply"):
+        _repair_call(repo, apply=True)
+    with pytest.raises(seed_internal.SeedRefused, match="only built for paysim"):
+        seed_internal.seed_internal(
+            "hmp",
+            repo,
+            run=lambda argv: "",
+            lookup_subs=lambda directory: SUBS,
+            api_running=lambda compose: False,
+            repair_strays=True,
+        )
+
+
+def test_the_command_line_accepts_the_repair_and_says_what_it_did_not_say_is_loaded(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seen: dict[str, object] = {}
+    monkeypatch.setattr(seed_internal, "seed_internal", lambda dataset, **kw: seen.update(kw) or [])
+    argv = ["paysim", "--repair-strays", "--apply", "--repair-limit", "2", "--vault", "paysim"]
+    assert seed_internal.main(argv) == 0
+    assert seen["repair_strays"] is True and seen["apply"] is True
+    assert seen["repair_limit"] == 2 and seen["vault"] == "paysim"
+    assert "is loaded" not in capsys.readouterr().out
+
+
+# --- clearing the shared stores once the vault is verified (ADR-056 Amendment 16, stage 0b) ---
+
+
+def _clear(repo: Path, runner: Runner, *, running: bool = False, **kw: object) -> list[str]:
+    return seed_internal.seed_internal(
+        "paysim",
+        repo,
+        run=runner,
+        lookup_subs=lambda directory: {},
+        api_running=lambda compose: running,
+        clear_shared_stores=True,
+        **kw,  # type: ignore[arg-type]
+    )
+
+
+def test_clearing_runs_the_clear_module_for_the_verified_vault_and_makes_no_case(
+    repo: Path,
+) -> None:
+    """Catches a clear that runs the loading seed, makes a case, or forgets which vault is the
+    verified one."""
+    runner = Runner()
+    _clear(repo, runner, vault="paysim")
+    call = _seed_call(runner)
+    assert call[call.index("-m") + 1] == "scripts.clear_shared_stores"
+    assert call[call.index("--vault") + 1] == "paysim"
+    assert "--confirm" not in call and "--case-name" not in call and "--grant" not in call
+
+
+def test_the_confirmation_reaches_the_container_only_when_given(repo: Path) -> None:
+    runner = Runner()
+    _clear(repo, runner, vault="paysim", confirm="100:80:5000")
+    call = _seed_call(runner)
+    assert call[call.index("--confirm") + 1] == "100:80:5000"
+
+
+def test_clearing_needs_a_vault_to_have_been_verified_and_the_conduit_stopped(repo: Path) -> None:
+    """Catches a clear with no vault named (nothing says the data is safe elsewhere), and one that
+    runs under a live Conduit (DuckDB's lock), or stops it without being told to."""
+    with pytest.raises(seed_internal.SeedRefused, match="--vault"):
+        _clear(repo, Runner())
+    runner = Runner()
+    with pytest.raises(seed_internal.SeedRefused, match="--stop-api"):
+        _clear(repo, runner, running=True, vault="paysim")
+    assert not any("run" in c for c in runner.calls)
+
+
+def test_clearing_stops_the_conduit_and_starts_it_again_even_if_the_clear_fails(
+    repo: Path,
+) -> None:
+    runner = Runner(fail_seed=True)
+    with pytest.raises(seed_internal.SeedFailed):
+        _clear(repo, runner, running=True, stop_api=True, vault="paysim")
+    verbs = [c[c.index("compose") + 1 :] for c in runner.calls if "stop" in c or "up" in c]
+    assert any("stop" in c for c in verbs) and any("up" in c for c in verbs)
+
+
+def test_clearing_is_only_for_the_dataset_whose_vault_it_checks(repo: Path) -> None:
+    with pytest.raises(seed_internal.SeedRefused, match="only built for paysim"):
+        seed_internal.seed_internal(
+            "hmp",
+            repo,
+            run=lambda argv: "",
+            lookup_subs=lambda directory: SUBS,
+            api_running=lambda compose: False,
+            clear_shared_stores=True,
+            vault="paysim",
+        )
+
+
+def test_the_command_line_accepts_clearing_and_does_not_say_a_dataset_is_loaded(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seen: dict[str, object] = {}
+    monkeypatch.setattr(seed_internal, "seed_internal", lambda dataset, **kw: seen.update(kw) or [])
+    argv = [
+        "paysim",
+        "--clear-shared-stores",
+        "--vault",
+        "paysim",
+        "--confirm",
+        "1:2:3",
+        "--stop-api",
+    ]
+    assert seed_internal.main(argv) == 0
+    assert seen["clear_shared_stores"] is True and seen["confirm"] == "1:2:3"
+    assert seen["vault"] == "paysim" and seen["stop_api"] is True
+    assert "is loaded" not in capsys.readouterr().out

@@ -24,7 +24,12 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import duckdb
-from scripts.seed_support import clear_seeded_graph, events_already_loaded, write_graph
+from scripts.seed_support import (
+    clear_seeded_graph,
+    events_already_loaded,
+    report_ids_stored_twice,
+    write_graph,
+)
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
@@ -204,6 +209,12 @@ async def _run(args: argparse.Namespace) -> int:
             )
             return 1
         await write_graph(graph, nodes, edges, chunk=_GRAPH_CHUNK, nouns=("addresses", "links"))
+        await report_ids_stored_twice(
+            client,
+            edge_types=[groovy_identifier(physical_type_name("COMMUNICATED_WITH"))],
+            prefix="enron-comm-",
+            repair_command="(the repair is built for paysim only; reload with --replace-graph)",
+        )
     finally:
         await client.aclose()
 

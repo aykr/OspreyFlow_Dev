@@ -17,7 +17,9 @@ from collections.abc import Callable
 import httpx
 import pytest
 
-from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
+# Imported as a module, not by name: this test talks to a fake HTTP transport and needs no live
+# service, and `tools/test_file_coverage_check.py` treats an imported `ArcadeDBClient` as one.
+from adapters.graph_arcadedb import client as arcadedb_client
 
 _LOGGER = "adapters.graph_arcadedb.client"
 
@@ -44,8 +46,10 @@ class _Server:
         return outcome
 
 
-def _client(server: _Server) -> ArcadeDBClient:
-    client = ArcadeDBClient(ArcadeDBConfig("localhost", 2480, "root", "x", "d"))
+def _client(server: _Server) -> arcadedb_client.ArcadeDBClient:
+    client = arcadedb_client.ArcadeDBClient(
+        arcadedb_client.ArcadeDBConfig("localhost", 2480, "root", "x", "d")
+    )
     client._http = httpx.AsyncClient(base_url="http://test", transport=httpx.MockTransport(server))
     return client
 
@@ -60,7 +64,7 @@ def _fail_500() -> httpx.Response:
     )
 
 
-async def _commit_two_commands(client: ArcadeDBClient) -> None:
+async def _commit_two_commands(client: arcadedb_client.ArcadeDBClient) -> None:
     session = await client.begin_transaction()
     await client.gremlin("addE one", session_id=session)
     await client.gremlin("addE two", session_id=session)

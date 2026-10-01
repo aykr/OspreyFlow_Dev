@@ -8312,3 +8312,37 @@ and `test_the_record_a_traversal_reaches_is_named` (red first).
 **Not decided.** The fix. The candidates, once the run says when the stray appears: a different create statement for
 edges, a check after each batch that removes any record of an id the edge list does not reach, or both; and in every
 case the post-load duplicate scan as a guard. That choice, and the real-ArcadeDB test that is red first, follow the run.
+
+### ADR-056, Amendment 16 (1 October 2026) — stray records are repaired after the load and every load checks for them
+
+**Decision.** The cause inside ArcadeDB's write path is parked, not solved. Ten diagnostic rounds ruled out the client
+(each `addE` is sent once, no replay), the vertex index, merging and any recurring account pair, and left a store-side
+behaviour: a few edges get a second, identical, traversal-unreachable record. Until a real-ArcadeDB reproduction is red
+first, the product guards against the effect instead.
+
+1. **Post-load check.** Every seed that writes edges (PaySim, Enron, HMP, Fixture Corp) scans for ids stored more than
+   once (`GROUP BY id`, a scan, because the `id` index can hide the second record) and says so loudly. The PaySim seed
+   exits 4 if any exist, after the load and events are done.
+2. **Repair.** `python -m scripts.seed_internal paysim --repair-strays --vault <id>` is a dry run; `--apply` removes, for
+   each such id, every copy the source vertex does not reach (`DELETE FROM <type> WHERE @rid = …`), then verifies one
+   record remains and is still reached. `--repair-limit N` bounds a run; the first apply is run with 1. It stops at the
+   first anomaly (exit 3) and leaves anything it cannot classify alone (exit 1).
+3. **Stage 0b (clearing the shared stores).** `--clear-shared-stores --vault <id> --stop-api` empties the shared graph
+   database and the shared analytics events. It refuses unless the named vault is verified (accounts and transactions
+   present, no id stored twice, and the vault's events present), is a dry run that
+   prints the counts, and deletes only when `--confirm <vertices>:<edges>:<events>` equals the current counts. It never
+   touches a `vault_*` database, case records or other tables. It wipes the shared graph, so the HMP and Fixture Corp
+   demos are loaded after it or reloaded.
+
+**Order of operations.** Repair dry run, repair one id, inspect, repair all, re-inspect (13,068 transactions, no id
+twice, events present), then stage 0b dry run, then stage 0b with the confirm token.
+
+**Unverified.** The behaviour of `DELETE FROM <edge type> WHERE @rid = …` on an unlinked stray against a real ArcadeDB
+(whether it tries to unlink the record from a vertex that does not list it) has not been observed. The dry run, the
+limit of 1, per-id verification and stop-at-first-anomaly exist because of that. The fake store in the tests models what
+we expect, not what ArcadeDB does (CLAUDE.md rule 15).
+
+**Found and fixed on the way.** `test_client_commit_retry.py` imported names the coverage gate treats as live-service
+markers and would have failed `make ci` since `12fc88b`; it now imports the module. **Found, not mine, not fixed:**
+`test_case_seed.py` and `test_investigation_access_store.py` are in neither the Makefile nor `ci.yml` ignore lists.
+The root cause stays open; the post-load check is its guard.

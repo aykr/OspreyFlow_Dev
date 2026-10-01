@@ -247,3 +247,72 @@ def test_a_bad_vault_id_is_refused_before_anything_is_touched() -> None:
 
     args = _parse_args(["--case-name", "x", "--vault", "../x"])
     assert asyncio.run(seed_paysim._run(args)) == 2
+
+
+# --- stray edge records: the repair and the check after a load (ADR-056 Amendment 16) ---
+
+
+def test_the_repair_needs_no_case_and_removes_nothing_unless_told_to() -> None:
+    """Catches a repair that demands a case, or one that deletes by default."""
+    args = _parse_args(["--repair-strays", "--vault", "paysim"])
+    assert args.repair_strays is True and args.apply is False and args.repair_limit is None
+    applied = _parse_args(["--repair-strays", "--apply", "--repair-limit", "1"])
+    assert applied.apply is True and applied.repair_limit == 1
+    with pytest.raises(SystemExit):
+        _parse_args(["--apply"])  # an apply with nothing to apply
+
+
+def test_the_repair_runs_against_the_vaults_own_database_for_this_seeds_own_ids(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Catches a repair pointed at the shared database, at another seed's ids, or one that applies
+    when it was asked for a dry run."""
+    import asyncio
+
+    from scripts import seed_paysim
+    from scripts.seed_support import RepairReport
+
+    seen: dict[str, object] = {}
+
+    class Client:
+        def __init__(self, config: object) -> None:
+            seen["database"] = getattr(config, "database", None)
+
+        async def aclose(self) -> None:
+            seen["closed"] = True
+
+    async def fake_repair(client: object, **kw: object) -> RepairReport:
+        seen.update(kw)
+        return RepairReport(planned=[("paysim-tx-1", "#1:1", ["#1:2"])])
+
+    monkeypatch.setattr(seed_paysim, "ArcadeDBClient", Client)
+    monkeypatch.setattr(seed_paysim, "repair_ids_stored_twice", fake_repair)
+    args = _parse_args(["--repair-strays", "--vault", "paysim", "--repair-limit", "3"])
+    assert asyncio.run(seed_paysim._run(args)) == 0
+    assert seen["database"] == "vault_paysim" and seen["closed"] is True
+    assert seen["prefix"] == "paysim-tx-" and seen["apply"] is False and seen["limit"] == 3
+    assert "dry run" in capsys.readouterr().out
+
+
+def test_a_repair_that_hits_a_surprise_stops_and_exits_non_zero(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Catches an anomaly that is swallowed and reported as success."""
+    import asyncio
+
+    from scripts import seed_paysim
+    from scripts.seed_support import RepairAnomaly
+
+    class Client:
+        def __init__(self, config: object) -> None: ...
+
+        async def aclose(self) -> None: ...
+
+    async def fake_repair(client: object, **kw: object) -> object:
+        raise RepairAnomaly("paysim-tx-1: after removing ['#1:2'], 0 record(s) remain")
+
+    monkeypatch.setattr(seed_paysim, "ArcadeDBClient", Client)
+    monkeypatch.setattr(seed_paysim, "repair_ids_stored_twice", fake_repair)
+    args = _parse_args(["--repair-strays", "--apply"])
+    assert asyncio.run(seed_paysim._run(args)) == 3
+    assert "paysim-tx-1" in capsys.readouterr().err

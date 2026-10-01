@@ -17,6 +17,7 @@ import inspect
 import re
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, NamedTuple, Protocol
 
@@ -351,6 +352,134 @@ def _stored_twice(row: dict[str, object]) -> bool:
     """A `GROUP BY id` row that names an id and counts it more than once."""
     count = row.get("n")
     return isinstance(count, int) and count > 1 and bool(row.get("id"))
+
+
+class RepairAnomaly(RuntimeError):
+    """A removal did not leave the graph as expected; the repair stopped, touching nothing else."""
+
+
+@dataclass
+class RepairReport:
+    #: (id, the record kept, the records removed or that would be) for each id repaired.
+    planned: list[tuple[str, str, list[str]]] = field(default_factory=list)
+    removed: int = 0
+    #: (id, why) for each id left alone because the right record could not be told.
+    skipped: list[tuple[str, str]] = field(default_factory=list)
+
+
+_RID = re.compile(r"#\d+:\d+")
+
+
+async def ids_stored_twice(client: _Sql, *, edge_type: str, prefix: str = "") -> list[str]:
+    """Ids under `prefix` that a scan of the edge type finds more than once. A scan, not an index
+    lookup: the index can show one record where a scan finds two (ADR-056 Amendment 12)."""
+    rows = await client.sql(
+        f"SELECT id, count(*) AS n FROM {edge_type} GROUP BY id ORDER BY n DESC LIMIT 1000"
+    )
+    return sorted(
+        str(r["id"]) for r in rows if _stored_twice(r) and str(r["id"]).startswith(prefix)
+    )
+
+
+async def report_ids_stored_twice(
+    client: _Sql,
+    *,
+    edge_types: Sequence[str],
+    prefix: str = "",
+    say: Callable[[str], None] = print,
+    repair_command: str,
+) -> int:
+    """The check every seed ends with: how many ids a scan finds stored more than once, said
+    loudly when there are any and plainly when there are none (silence cannot be told from a check
+    that did not run). Returns the count."""
+    found: list[str] = []
+    for edge_type in edge_types:
+        found += await ids_stored_twice(client, edge_type=edge_type, prefix=prefix)
+    if not found:
+        say("  check: no id stored more than once")
+        return 0
+    say(f"  check: !! {len(found)} id(s) stored more than once (ArcadeDB wrote a stray copy).")
+    say("  check: a traversal reaches each edge once; a scan-based count sees both records.")
+    say(f"  check: look, then remove the strays with: {repair_command}")
+    return len(found)
+
+
+async def _reachable_rids(
+    client: _Sql, edge_type: str, edge_id: str, source: str
+) -> tuple[list[str], int]:
+    """The records of this edge id the source vertex's own edge list reaches, and how many that is,
+    asked the way the product reads edges (a traversal), not by scanning the type."""
+    base = (
+        f'g.V().has("id",{groovy_string_literal(source)}).outE({groovy_string_literal(edge_type)})'
+        f'.has("id",{groovy_string_literal(edge_id)})'
+    )
+    rows = await client.gremlin(base + ".id()")
+    counted = await client.gremlin(base + ".count()")
+    reached = [str(r.get("result")) for r in rows]
+    return reached, int(counted[0]["result"]) if counted else 0
+
+
+async def repair_ids_stored_twice(
+    client: _Sql,
+    *,
+    edge_type: str,
+    prefix: str = "",
+    say: Callable[[str], None] = print,
+    apply: bool = False,
+    limit: int | None = None,
+) -> RepairReport:
+    """Keep, for each id stored twice, the record the source reaches; remove the other.
+
+    It deletes records, and the only way back is a reload, so: a dry run unless `apply`; one id at
+    a time; an id is left alone (and reported) unless exactly which record to keep can be told;
+    after each removal the id is checked (one record left, still reached) and the repair raises
+    `RepairAnomaly` and stops at the first one that is not; `limit` repairs only that many ids."""
+    report = RepairReport()
+    for edge_id in await ids_stored_twice(client, edge_type=edge_type, prefix=prefix):
+        if limit is not None and len(report.planned) >= limit:
+            break
+        rows = await client.sql(
+            f"SELECT @rid AS rid, id, source FROM {edge_type} WHERE id LIKE '{_quoted(edge_id)}'"
+        )
+        copies = [r for r in rows if r.get("id") == edge_id]
+        rids = [str(r["rid"]) for r in copies]
+        sources = {str(r.get("source")) for r in copies}
+        if len(copies) < 2 or len(sources) != 1 or not all(_RID.fullmatch(r) for r in rids):
+            report.skipped.append((edge_id, "its stored copies are not what the repair expects"))
+            say(f"  {edge_id}: left alone (its stored copies are not what the repair expects)")
+            continue
+        (source,) = sources
+        reached, _ = await _reachable_rids(client, edge_type, edge_id, source)
+        kept = sorted(r for r in reached if r in rids)
+        if not kept:
+            report.skipped.append((edge_id, "the source's edge list reaches none of the copies"))
+            say(f"  {edge_id}: left alone (cannot tell which record the source reaches: {reached})")
+            continue
+        keep = kept[0]
+        remove = [r for r in rids if r != keep]
+        report.planned.append((edge_id, keep, remove))
+        verb = "removing" if apply else "would remove"
+        say(f"  {edge_id}: keeps {keep}; {verb} {', '.join(remove)}")
+        if not apply:
+            continue
+        for rid in remove:
+            await client.sql(f"DELETE FROM {edge_type} WHERE @rid = {rid}")
+        left = [
+            r
+            for r in await client.sql(
+                f"SELECT @rid AS rid, id, source FROM {edge_type} "
+                f"WHERE id LIKE '{_quoted(edge_id)}'"
+            )
+            if r.get("id") == edge_id
+        ]
+        _, still_reached = await _reachable_rids(client, edge_type, edge_id, source)
+        if len(left) != 1 or still_reached != 1:
+            raise RepairAnomaly(
+                f"{edge_id}: after removing {remove}, {len(left)} record(s) remain and the "
+                f"source reaches {still_reached}; stopped before touching any other id"
+            )
+        report.removed += len(remove)
+    return report
 
 
 async def inspect_graph(

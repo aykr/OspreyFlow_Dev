@@ -23,10 +23,13 @@ from pathlib import Path
 
 import duckdb
 from scripts.seed_support import (
+    RepairAnomaly,
     clear_seeded_graph,
     events_already_loaded,
     events_summary,
     inspect_graph,
+    repair_ids_stored_twice,
+    report_ids_stored_twice,
     reset_graph_database,
     vault_locations,
     write_graph,
@@ -167,6 +170,24 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         "--inspect-record", default=None, help="With --inspect: a record id to read."
     )
     parser.add_argument(
+        "--repair-strays",
+        action="store_true",
+        help=(
+            "Find ids a scan sees stored twice (ArcadeDB wrote a stray copy, ADR-056 Amendment 16) "
+            "and, with --apply, remove the copy the source vertex does not reach. A dry run "
+            "without --apply. Writes no case and loads nothing."
+        ),
+    )
+    parser.add_argument(
+        "--apply", action="store_true", help="With --repair-strays: actually remove the strays."
+    )
+    parser.add_argument(
+        "--repair-limit",
+        type=int,
+        default=None,
+        help="With --repair-strays: repair only this many ids (the first run should be one).",
+    )
+    parser.add_argument(
         "--graph-fraud-rows",
         type=int,
         default=None,
@@ -192,7 +213,11 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--clearance", default=os.environ.get("OSPREY_CLEARANCE", "OFFICIAL"))
     parser.add_argument("--org-unit", default=os.environ.get("OSPREY_ORG_UNIT", "unit-1"))
     args = parser.parse_args(argv)
-    if not args.inspect and bool(args.investigation_scope) == bool(args.case_name):
+    if args.apply and not args.repair_strays:
+        parser.error("--apply only goes with --repair-strays")
+    if not (args.inspect or args.repair_strays) and (
+        bool(args.investigation_scope) == bool(args.case_name)
+    ):
         parser.error("give exactly one of --investigation-scope and --case-name")
     return args
 
@@ -249,6 +274,35 @@ async def _inspect(args: argparse.Namespace) -> int:
     return 0
 
 
+async def _repair(args: argparse.Namespace) -> int:
+    """Remove stray edge records from this seed's own transactions. A dry run unless `--apply`."""
+    client = ArcadeDBClient(ArcadeDBConfig.from_env(_locations(args)[0]))
+    try:
+        try:
+            report = await repair_ids_stored_twice(
+                client,
+                edge_type=groovy_identifier(physical_type_name("TRANSACTED")),
+                prefix="paysim-tx-",
+                apply=args.apply,
+                limit=args.repair_limit,
+            )
+        except RepairAnomaly as error:
+            print(f"repair stopped: {error}", file=sys.stderr)
+            return 3
+    finally:
+        await client.aclose()
+    if not report.planned and not report.skipped:
+        print("  repair: no id is stored more than once; nothing to do")
+    elif args.apply:
+        print(f"  repair: removed {report.removed} stray record(s) for {len(report.planned)} id(s)")
+    else:
+        print(
+            f"  repair: dry run; {len(report.planned)} id(s) would be repaired, "
+            f"{len(report.skipped)} left alone. Nothing was changed."
+        )
+    return 1 if report.skipped else 0
+
+
 async def _run(args: argparse.Namespace) -> int:
     try:
         database, analytics_path = _locations(args)
@@ -257,6 +311,8 @@ async def _run(args: argparse.Namespace) -> int:
         return 2
     if args.inspect:
         return await _inspect(args)
+    if args.repair_strays:
+        return await _repair(args)
     if args.vault is not None:
         print(f"  vault {args.vault!r}: graph database {database}, analytics file {analytics_path}")
     try:
@@ -307,6 +363,16 @@ async def _run(args: argparse.Namespace) -> int:
         node_count, edge_count = await _load_graph(
             graph, source, principal, fraud_rows=args.graph_fraud_rows
         )
+        vault_flag = f" --vault {args.vault}" if args.vault else ""
+        strays = await report_ids_stored_twice(
+            client,
+            edge_types=[groovy_identifier(physical_type_name("TRANSACTED"))],
+            prefix="paysim-tx-",
+            repair_command=(
+                f"python -m scripts.seed_internal paysim --repair-strays{vault_flag}  "
+                "(add --apply to remove them)"
+            ),
+        )
     except NotProvisionedError as error:
         print(error, file=sys.stderr)
         return 1
@@ -333,6 +399,13 @@ async def _run(args: argparse.Namespace) -> int:
     print(f"Seeded {node_count} accounts and {edge_count} transactions into the graph.")
     print(f"Loaded {loaded:,} events under investigation_scope={scope!r}.")
     print(f"Cite: {CITATION}")
+    if strays:
+        print(
+            f"The load finished, but {strays} transaction id(s) are stored more than once; see "
+            "the check above.",
+            file=sys.stderr,
+        )
+        return 4
     return 0
 
 

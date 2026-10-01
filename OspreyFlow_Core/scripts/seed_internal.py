@@ -163,11 +163,29 @@ def seed_internal(
     graph_fraud_rows: int | None = None,
     inspect: bool = False,
     inspect_record: str | None = None,
+    repair_strays: bool = False,
+    apply: bool = False,
+    repair_limit: int | None = None,
+    clear_shared_stores: bool = False,
+    confirm: str | None = None,
 ) -> list[str]:
     """Return the seed report, one line each. Raises `SeedRefused` before starting anything."""
     if dataset not in DATASETS:
         raise SeedRefused(f"unknown dataset {dataset!r}; known: {', '.join(sorted(DATASETS))}")
     spec = DATASETS[dataset]
+    if apply and not repair_strays:
+        raise SeedRefused("--apply only goes with --repair-strays")
+    if clear_shared_stores and not spec.sampled:
+        raise SeedRefused("--clear-shared-stores is only built for paysim so far")
+    if clear_shared_stores and vault is None:
+        raise SeedRefused(
+            "--clear-shared-stores needs --vault <id>: it only clears the shared stores once that "
+            "vault has been checked"
+        )
+    if confirm is not None and not clear_shared_stores:
+        raise SeedRefused("--confirm only goes with --clear-shared-stores")
+    if repair_strays and not spec.sampled:
+        raise SeedRefused("--repair-strays is only built for paysim so far")
     if reset_graph_database and not spec.sampled:
         raise SeedRefused("--reset-graph-database is only built for paysim so far")
     if vault is not None:
@@ -200,6 +218,12 @@ def seed_internal(
         )
     if inspect:
         return _inspect(spec, repo_root, directory, run, inspect_record, vault)
+    if repair_strays:
+        return _repair_strays(spec, repo_root, directory, run, vault, apply, repair_limit)
+    if clear_shared_stores:
+        return _clear_shared_stores(
+            repo_root, directory, run, api_running, stop_api, vault or "", confirm
+        )
     subs = lookup_subs(directory)
     missing = [name for name in (DEMO_ADMIN_SUBJECT, DEMO_ANALYST_SUBJECT) if name not in subs]
     if missing:
@@ -295,6 +319,89 @@ def _inspect(
     return [line.strip() for line in output.splitlines() if line.strip()]
 
 
+def _repair_strays(
+    spec: Dataset,
+    repo_root: Path,
+    directory: Path,
+    run: Callable[[Sequence[str]], str],
+    vault: str | None,
+    apply: bool,
+    limit: int | None,
+) -> list[str]:
+    """Remove the stray edge records a load left (ADR-056 Amendment 16). Like an inspection it makes
+    no case and loads nothing, and leaves the Conduit running: it touches only the graph database.
+    Without `apply` it is a dry run."""
+    argv = [
+        *_compose(directory / "compose.yaml"),
+        "run",
+        "--rm",
+        "--no-deps",
+        "--entrypoint",
+        "python",
+        "-v",
+        f"{repo_root}/scripts:/app/scripts:ro",
+        "api",
+        "-m",
+        spec.script,
+        "--repair-strays",
+    ]
+    if apply:
+        argv.append("--apply")
+    if limit is not None:
+        argv += ["--repair-limit", str(limit)]
+    if vault is not None:
+        argv += ["--vault", vault]
+    output = run(argv)
+    return [line.strip() for line in output.splitlines() if line.strip()]
+
+
+def _clear_shared_stores(
+    repo_root: Path,
+    directory: Path,
+    run: Callable[[Sequence[str]], str],
+    api_running: Callable[[list[str]], bool],
+    stop_api: bool,
+    vault: str,
+    confirm: str | None,
+) -> list[str]:
+    """Report, and with the owner's exact confirmation delete, the shared graph database and the
+    shared analytics events, after checking the vault (ADR-056 Amendment 16, stage 0b). The
+    Conduit must be stopped (DuckDB's exclusive lock) and is started again after."""
+    compose = _compose(directory / "compose.yaml")
+    running = api_running(compose)
+    if running and not stop_api:
+        raise SeedRefused(
+            "the Conduit is running, and clearing the shared stores needs it stopped (DuckDB's "
+            "exclusive lock). Run again with --stop-api to stop it and start it again after; "
+            "stopping it is your choice, so it is not done for you"
+        )
+    argv = [
+        *compose,
+        "run",
+        "--rm",
+        "--no-deps",
+        "--entrypoint",
+        "python",
+        "-v",
+        f"{repo_root}/scripts:/app/scripts:ro",
+        "api",
+        "-m",
+        "scripts.clear_shared_stores",
+        "--vault",
+        vault,
+    ]
+    if confirm is not None:
+        argv += ["--confirm", confirm]
+    if running:
+        run([*compose, "stop", "api"])
+    try:
+        output = run(argv)
+    finally:
+        if running:
+            run([*compose, "up", "-d", "--wait", "api"])
+    return [line.strip() for line in output.splitlines() if line.strip()]
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     stop_api = "--stop-api" in args
@@ -308,6 +415,23 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         vault = value[0]
     inspect = "--inspect" in args
+    repair_strays = "--repair-strays" in args
+    clear_shared_stores = "--clear-shared-stores" in args
+    confirm: str | None = None
+    if "--confirm" in args:
+        value = args[args.index("--confirm") + 1 :][:1]
+        if not value or value[0].startswith("--"):
+            print("--confirm takes the counts the dry run reported, v:e:n", file=sys.stderr)
+            return 2
+        confirm = value[0]
+    apply = "--apply" in args
+    repair_limit: int | None = None
+    if "--repair-limit" in args:
+        value = args[args.index("--repair-limit") + 1 :][:1]
+        if not value or not value[0].isdigit():
+            print("--repair-limit takes a number, for example --repair-limit 1", file=sys.stderr)
+            return 2
+        repair_limit = int(value[0])
     record: str | None = None
     if "--inspect-record" in args:
         record = (args[args.index("--inspect-record") + 1 :] or [None])[0]  # type: ignore[list-item]
@@ -318,7 +442,13 @@ def main(argv: list[str] | None = None) -> int:
             print("--graph-fraud-rows takes a number, or 'all'", file=sys.stderr)
             return 2
         sample = 0 if value[0] == "all" else int(value[0])
-    takes_a_value = {"--vault", "--inspect-record", "--graph-fraud-rows"}
+    takes_a_value = {
+        "--vault",
+        "--inspect-record",
+        "--graph-fraud-rows",
+        "--repair-limit",
+        "--confirm",
+    }
     names = [
         a
         for i, a in enumerate(args)
@@ -327,7 +457,9 @@ def main(argv: list[str] | None = None) -> int:
     if len(names) != 1:
         print(
             f"usage: seed_internal <{'|'.join(sorted(DATASETS))}> [--stop-api] "
-            "[--replace-graph] [--reset-graph-database] [--vault ID] [--graph-fraud-rows N|all]",
+            "[--replace-graph] [--reset-graph-database] [--vault ID] [--graph-fraud-rows N|all] "
+            "[--repair-strays [--apply] [--repair-limit N]] "
+            "[--clear-shared-stores --vault ID [--confirm V:E:N]]",
             file=sys.stderr,
         )
         return 2
@@ -342,12 +474,27 @@ def main(argv: list[str] | None = None) -> int:
             graph_fraud_rows=sample,
             inspect=inspect,
             inspect_record=record,
+            repair_strays=repair_strays,
+            apply=apply,
+            repair_limit=repair_limit,
+            clear_shared_stores=clear_shared_stores,
+            confirm=confirm,
         )
     except (SeedRefused, SeedFailed) as error:
         print(f"seed: {error}", file=sys.stderr)
         return 1
     if inspect:
         print("seed: inspection finished; nothing was changed.")
+        return 0
+    if clear_shared_stores:
+        print("seed: clearing finished; read the report above for what was, or was not, deleted.")
+        return 0
+    if repair_strays:
+        print(
+            "seed: repair finished; stray records were removed."
+            if apply
+            else "seed: dry run finished; nothing was changed."
+        )
         return 0
     print(f"seed: {names[0]} is loaded. Sign in and choose it from the case picker.")
     return 0
