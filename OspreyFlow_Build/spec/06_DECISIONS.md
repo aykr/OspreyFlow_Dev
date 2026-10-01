@@ -8481,3 +8481,24 @@ both the weight comparison and the second-call test.
 **Not changed.** The weight formula, the ontology, the stray-record handling of Amendment 19, and the order of the
 statistics. A per-batch traversal still grows with the corpus; the expectation is a link phase of well under an hour,
 which is unmeasured until the Enron load is rerun.
+
+### ADR-056, Amendment 23 (1 October 2026) — Amendment 22 held its test but not its prediction: the load is no faster
+
+**Seen.** The Enron load was rerun with Amendment 22's change in. Elapsed seconds for 1,040 and 10,040 links were 150
+and 1,522, against 146 and 1,489 before. The first 10,000 links are no faster.
+
+**What was wrong in Amendment 22.** Its "expectation of a link phase of well under an hour" was a prediction from the
+first run's growth alone. The cost per link was already about 0.15 s at the very start, when the corpus was almost
+empty, so the corpus total could account for the *growth* but never for that baseline. The change is still right in
+what it does (one whole-corpus traversal per 40-link batch, not 40; weights identical to one-at-a-time writes, which the
+tests show) and it removes the growing part: the time per 1,000 links stays flat at about 150 to 157 s where the first
+run climbed to about 230 s by 82,000 links. It does not touch the baseline.
+
+**Not known.** What the baseline is spent on. A hypothesis, not a finding: several of the per-link queries embed the
+address as a literal in the Groovy script text (`_find_existing_edge` and the two degree queries), so the server may
+compile a new script for every link, where the insert uses bound parameters. It is unmeasured. A measurement needs the
+store idle, since timing against a running load is contaminated (rule 14).
+
+**Position.** The owner is letting this load run to completion (projected about 10 hours if the time per 1,000 links
+stays flat; that is a projection from 10,000 links). The cost is then to be measured on an idle store, one query kind at
+a time, before anything is changed.
