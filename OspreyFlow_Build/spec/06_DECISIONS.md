@@ -8799,3 +8799,24 @@ neither passed nor failed here**: 6 against 8 was by the load check; by the comp
 
 **Next.** Make the comparison run the load check's own `GROUP BY id` query on each vault as well, so one tool reports both
 readings on the same stores. Events loaded without timers on this run (it predates `EventProgress`).
+
+### ADR-058, Amendment 7 (2 October 2026) — the stray copies are still there; the comparison's own read was hiding them
+
+**Seen.** Amendment 6 recorded 6 ids stored twice by the load check and none by the comparison, and asked which to believe.
+The comparison now takes three readings of each vault (paged read, `GROUP BY id`, `count(*)`). On the same two stores:
+original (upsert) vault: 13,068 records by paged read, 8 ids twice by `GROUP BY id`, 13,076 by `count(*)`; twin (bulk, 100 per
+chunk): 13,068, 6 ids twice, 13,074. `GROUP BY id` and `count(*)` agree with each other exactly (13,068 plus the stray
+copies); only the paged read did not.
+
+**Reading (a hypothesis, from the three counts).** The paged read was `ORDER BY id`, which the store answers from the id
+index, one record per id; so it could not see a stray copy. The strays did not go away between the load and the comparison
+(Amendment 6's "0 on both" was the comparison's blind spot, not a change in the store). The paged read now has no ordering
+and walks the records; the next real run is what shows whether the three readings then agree.
+
+**D7 (bulk's stray rate no more than upsert's on the same data), for this data: met.** Bulk 6 of 13,068 against upsert 8 of
+13,068 on the same data, both by the two readings that can see them. One run each, small counts, so this says bulk is not
+worse here, not that it is better; the spike at 10,000 edges (upsert 0, bulk at 100 per chunk 0, at 500 per chunk 2) points
+the same way. Strays remain the parked ArcadeDB defect (ADR-056 Amendment 19); nothing here repairs them.
+
+**Equivalence (D5).** The edge comparison reads one record per id, so it compared the graphs as the product reads them
+(a traversal reaches each edge once). Strays are therefore outside that comparison, and are reported separately.

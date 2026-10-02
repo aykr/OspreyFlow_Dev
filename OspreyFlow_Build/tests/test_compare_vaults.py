@@ -193,10 +193,13 @@ def test_readings_that_agree_say_so_and_a_vault_without_them_is_not_blamed() -> 
 
 class _Store:
     """A store that answers only the query shapes the scan sends, and refuses any other (rule 15:
-    the real parser refuses `count(*)` over a subquery, so this one does too)."""
+    the real parser refuses `count(*)` over a subquery, so this one does too). It also models what
+    the twin showed: a read ordered by `id` is answered from the id index, one record per id,
+    while a read with no ordering walks the records and meets a stray copy too."""
 
     def __init__(self, edges: list[dict[str, Any]], stray_ids: list[str]) -> None:
         self.edges, self.stray_ids, self.seen = edges, stray_ids, []
+        self.strays = [dict(e) for e in self.edges if e["id"] in stray_ids]
 
     async def sql(self, query: str) -> list[dict[str, Any]]:
         self.seen.append(query)
@@ -209,20 +212,43 @@ class _Store:
         if query.startswith("SELECT FROM"):
             skip = int(query.split("SKIP ")[1].split()[0])
             limit = int(query.split("LIMIT ")[1])
-            kind = "Endpoint" if "Endpoint" in query else "TRANSACTED"
-            rows = [{"id": n} for n in "abcd"] if kind == "Endpoint" else self.edges
+            if "Endpoint" in query:
+                rows = [{"id": n} for n in "abcd"]
+            elif "ORDER BY id" in query:
+                rows = self.edges
+            else:
+                rows = self.edges + self.strays
             return rows[skip : skip + limit]
         raise RuntimeError(f"unexpected query: {query}")
 
 
 def test_the_scan_asks_the_store_for_all_three_readings() -> None:
     edges = _records()
-    store = _Store(edges, stray_ids=["p", "q"])
+    stray = [edges[0]["id"], edges[1]["id"]]
+    store = _Store(edges, stray_ids=stray)
     graph = asyncio.run(compare_vaults.scan_with(store))
-    assert graph.grouped_twice == ["p", "q"]
+    assert graph.grouped_twice == stray
     assert graph.counted == len(edges) + 2
-    assert len(graph.edges) == len(edges)
     assert any("GROUP BY id" in q for q in store.seen)
+
+
+def test_the_scan_walks_the_records_so_that_a_stray_copy_is_seen_by_all_three_readings() -> (
+    None
+):
+    """Seen on the twin: the paged read was ordered by `id`, which the store answers from the id
+    index, so it found one record per id (13,068) while `count(*)` found 13,074 and `GROUP BY id`
+    named 6 ids twice. A comparison that cannot see a stray copy cannot count it."""
+    edges = _records()
+    stray = sorted([edges[0]["id"], edges[1]["id"]])
+    store = _Store(edges, stray_ids=stray)
+    graph = asyncio.run(compare_vaults.scan_with(store))
+    assert len(graph.edges) == len(edges) + 2
+    assert compare_vaults.stored_twice(graph.edges) == stray
+    left = compare_vaults.Graph(
+        nodes=graph.nodes, edges=graph.edges, grouped_twice=stray, counted=graph.counted
+    )
+    _, lines = _report(left, left)
+    assert "the three readings agree" in "\n".join(lines)
 
 
 def test_a_group_by_that_finds_ids_the_scan_does_not_is_a_disagreement_on_its_own() -> (

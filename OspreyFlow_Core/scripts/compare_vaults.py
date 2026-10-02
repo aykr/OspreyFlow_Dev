@@ -236,16 +236,17 @@ def report(left: Graph, right: Graph, *, say: Callable[[str], None] = print, sho
 
 
 async def scan_with(client: Any) -> Graph:
-    """Everything the comparison reads from one store, with `SELECT` only."""
+    """Everything the comparison reads from one store, with `SELECT` only. The paged read has no
+    `ORDER BY id`: seen on the twin, that ordering is answered from the id index, one record per
+    id, and hid every stray copy that `count(*)` and `GROUP BY id` both found (13,068 records
+    read, 13,074 counted). Without it the read walks the records, in the store's own order."""
     found: dict[str, list[dict[str, Any]]] = {}
     labels: dict[str, str] = {}
     for kind, type_name in (("nodes", "Endpoint"), ("edges", "TRANSACTED")):
         label = labels[kind] = groovy_identifier(physical_type_name(type_name))
         rows: list[dict[str, Any]] = []
         while True:
-            page = await client.sql(
-                f"SELECT FROM {label} ORDER BY id SKIP {len(rows)} LIMIT {PAGE}"
-            )
+            page = await client.sql(f"SELECT FROM {label} SKIP {len(rows)} LIMIT {PAGE}")
             rows += page
             if len(page) < PAGE:
                 break
