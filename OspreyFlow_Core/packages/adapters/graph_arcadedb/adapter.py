@@ -21,7 +21,7 @@ adapter exists to prevent. Flagged rather than guessed at.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from typing import Any
 
@@ -29,6 +29,7 @@ from conduit_common.identity import new_edge_id, now_utc
 from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme
 from ontology.validation import validate_edge_endpoints, validate_properties
+from ports.graph import BulkEdgeResult
 from schemas.domain import (
     AuditStub,
     Edge,
@@ -53,6 +54,7 @@ from schemas.domain import (
     TxId,
     WeightComponents,
 )
+from schemas.merge import merge_interval, merge_provenance
 
 from .access_filter import AccessFilter
 from .builders import (
@@ -66,6 +68,7 @@ from .builders import (
     SearchNodesBuilder,
     SuggestLocationsBuilder,
 )
+from .bulk import BulkEdgeLoader, BulkTransport, GremlinBulkTransport
 from .client import ArcadeDBClient
 from .gremlin_literals import (
     groovy_identifier,
@@ -97,10 +100,14 @@ class GraphArcadeDBAdapter:
         handling_scheme: HandlingScheme,
         *,
         weight_config: WeightConfig = WeightConfig(),
+        bulk_transport: BulkTransport | None = None,
     ) -> None:
         self._client = client
         self._access = AccessFilter(handling_scheme)
         self._weight_config = weight_config
+        # The bulk-load capability (`ports.graph.BulkGraphLoader`, ADR-058). The transport is
+        # swappable so the loader's logic is testable without a store.
+        self._bulk = BulkEdgeLoader(bulk_transport or GremlinBulkTransport(client), weight_config)
         self._schema: OntologySchema | None = None
         # In-memory only: a real migration runner persists applied versions
         # to survive a restart. Reverting to a version never applied in
@@ -294,35 +301,13 @@ class GraphArcadeDBAdapter:
 
     @staticmethod
     def _merge_provenance(existing: object, incoming: Provenance) -> Provenance:
-        """`01_DOMAIN_MODEL.md` §7: every source row reference is retained
-        on the surviving edge — a second `upsert_edges` call for the same
-        pair adds its sources to the existing edge's, it does not replace
-        them. De-duplicated by `(document_id, locator)` so re-running the
-        same file against the same load is idempotent, not
-        source-list-growing."""
-        existing_provenance = Provenance.model_validate(existing) if existing else None
-        if existing_provenance is None:
-            return incoming
-        seen = {(s.document_id, s.locator) for s in existing_provenance.sources}
-        merged_sources = list(existing_provenance.sources)
-        for source in incoming.sources:
-            if (source.document_id, source.locator) not in seen:
-                merged_sources.append(source)
-                seen.add((source.document_id, source.locator))
-        return incoming.model_copy(update={"sources": merged_sources})
+        """The merge rule is shared with the bulk path (`schemas.merge`, ADR-058 D5): the stored
+        value arrives as a dict, so it is validated and handed to the shared rule."""
+        return merge_provenance(Provenance.model_validate(existing) if existing else None, incoming)
 
     @staticmethod
     def _merge_interval(existing: object, incoming: Interval | None) -> Interval | None:
-        existing_interval = Interval.model_validate(existing) if existing else None
-        if existing_interval is None:
-            return incoming
-        if incoming is None:
-            return existing_interval
-        valid_from = min(existing_interval.valid_from, incoming.valid_from)
-        existing_to = existing_interval.valid_to or existing_interval.valid_from
-        incoming_to = incoming.valid_to or incoming.valid_from
-        valid_to = max(existing_to, incoming_to)
-        return Interval(valid_from=valid_from, valid_to=valid_to)
+        return merge_interval(Interval.model_validate(existing) if existing else None, incoming)
 
     async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: TxId) -> list[EdgeId]:
         schema = self._require_schema()
@@ -436,6 +421,19 @@ class GraphArcadeDBAdapter:
                 )
             ids.append(edge_id)
         return ids
+
+    async def bulk_load_edges(
+        self,
+        edges: Sequence[EdgeWrite],
+        *,
+        chunk_size: int = 500,
+        progress: Callable[[int, int], None] | None = None,
+    ) -> BulkEdgeResult:
+        """`ports.graph.BulkGraphLoader` (ADR-058): the contract is stated there, the logic is
+        `bulk.BulkEdgeLoader`'s. No `TxId`: it commits in chunks of its own."""
+        return await self._bulk.load(
+            self._require_schema(), edges, chunk_size=chunk_size, progress=progress
+        )
 
     async def _weigh_edge(
         self,

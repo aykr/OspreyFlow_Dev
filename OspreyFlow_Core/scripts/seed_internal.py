@@ -161,6 +161,8 @@ def seed_internal(
     reset_graph_database: bool = False,
     vault: str | None = None,
     graph_fraud_rows: int | None = None,
+    method: str = "upsert",
+    compare_vaults: tuple[str, str] | None = None,
     inspect: bool = False,
     inspect_record: str | None = None,
     repair_strays: bool = False,
@@ -194,6 +196,16 @@ def seed_internal(
         raise SeedRefused("--repair-strays and --restore-missing are only built for paysim so far")
     if reset_graph_database and not spec.sampled:
         raise SeedRefused("--reset-graph-database is only built for paysim so far")
+    if method not in ("upsert", "bulk"):
+        raise SeedRefused(f"unknown --method {method!r}; use upsert or bulk")
+    if compare_vaults is not None:
+        if not spec.sampled:
+            raise SeedRefused("--compare-vaults is only built for paysim so far")
+        for name in compare_vaults:
+            if not re.fullmatch(r"[a-z][a-z0-9-]{0,30}", name):
+                raise SeedRefused(f"{name!r} is not a vault id")
+    if method != "upsert" and not spec.sampled:
+        raise SeedRefused("--method bulk is only built for paysim so far")
     if vault is not None:
         if not spec.sampled:
             raise SeedRefused("--vault is only built for paysim so far")
@@ -222,6 +234,8 @@ def seed_internal(
         raise SeedRefused(
             f"the dataset is not provisioned: {data_root / spec.data_folder} is missing"
         )
+    if compare_vaults is not None:
+        return _compare_vaults(repo_root, directory, run, *compare_vaults)
     if inspect:
         return _inspect(spec, repo_root, directory, run, inspect_record, vault)
     if repair_strays or restore_missing:
@@ -290,6 +304,8 @@ def seed_internal(
         argv.append("--reset-graph-database")
     if vault is not None:
         argv += ["--vault", vault]
+    if method != "upsert":
+        argv += ["--method", method]
     if spec.sampled:
         sample = DEFAULT_GRAPH_SAMPLE if graph_fraud_rows is None else graph_fraud_rows
         if sample > 0:
@@ -332,6 +348,34 @@ def _inspect(
         argv += ["--inspect-record", record]
     if vault is not None:
         argv += ["--vault", vault]
+    output = run(argv)
+    return [line.strip() for line in output.splitlines() if line.strip()]
+
+
+def _compare_vaults(
+    repo_root: Path,
+    directory: Path,
+    run: Callable[[Sequence[str]], str],
+    left: str,
+    right: str,
+) -> list[str]:
+    """Compare two vaults' graphs (`scripts.compare_vaults`, ADR-058 D9). Read only: `SELECT`
+    alone is sent, no case is made, and the Conduit is left running."""
+    argv = [
+        *_compose(directory / "compose.yaml"),
+        "run",
+        "--rm",
+        "--no-deps",
+        "--entrypoint",
+        "python",
+        "-v",
+        f"{repo_root}/scripts:/app/scripts:ro",
+        "api",
+        "-m",
+        "scripts.compare_vaults",
+        left,
+        right,
+    ]
     output = run(argv)
     return [line.strip() for line in output.splitlines() if line.strip()]
 
@@ -478,6 +522,23 @@ def main(argv: list[str] | None = None) -> int:
     record: str | None = None
     if "--inspect-record" in args:
         record = (args[args.index("--inspect-record") + 1 :] or [None])[0]  # type: ignore[list-item]
+    compare: tuple[str, str] | None = None
+    if "--compare-vaults" in args:
+        pair = args[args.index("--compare-vaults") + 1 :][:2]
+        if len(pair) != 2 or any(v.startswith("--") for v in pair):
+            print(
+                "--compare-vaults takes two vault ids, for example paysim paysim-bulk",
+                file=sys.stderr,
+            )
+            return 2
+        compare = (pair[0], pair[1])
+    method = "upsert"
+    if "--method" in args:
+        value = args[args.index("--method") + 1 :][:1]
+        if not value or value[0] not in ("upsert", "bulk"):
+            print("--method takes upsert or bulk", file=sys.stderr)
+            return 2
+        method = value[0]
     sample: int | None = None
     if "--graph-fraud-rows" in args:
         value = args[args.index("--graph-fraud-rows") + 1 :][:1]
@@ -487,6 +548,7 @@ def main(argv: list[str] | None = None) -> int:
         sample = 0 if value[0] == "all" else int(value[0])
     takes_a_value = {
         "--vault",
+        "--method",
         "--inspect-record",
         "--graph-fraud-rows",
         "--repair-limit",
@@ -496,12 +558,16 @@ def main(argv: list[str] | None = None) -> int:
     names = [
         a
         for i, a in enumerate(args)
-        if not a.startswith("--") and not (i > 0 and args[i - 1] in takes_a_value)
+        if not a.startswith("--")
+        and not (i > 0 and args[i - 1] in takes_a_value)
+        and not (compare and a in compare and i > args.index("--compare-vaults"))
     ]
     if len(names) != 1:
         print(
             f"usage: seed_internal <{'|'.join(sorted(DATASETS))}> [--stop-api] "
-            "[--replace-graph] [--reset-graph-database] [--vault ID] [--graph-fraud-rows N|all] "
+            "[--replace-graph] [--reset-graph-database] [--vault ID] [--method upsert|bulk] "
+            "[--compare-vaults A B] "
+            "[--graph-fraud-rows N|all] "
             "[--repair-strays | --restore-missing [--apply] [--repair-limit N]] "
             "[--clear-shared-stores --vault ID [--accept-strays N] [--confirm V:E:N]]",
             file=sys.stderr,
@@ -516,6 +582,8 @@ def main(argv: list[str] | None = None) -> int:
             reset_graph_database=reset_database,
             vault=vault,
             graph_fraud_rows=sample,
+            method=method,
+            compare_vaults=compare,
             inspect=inspect,
             inspect_record=record,
             repair_strays=repair_strays,
@@ -529,6 +597,9 @@ def main(argv: list[str] | None = None) -> int:
     except (SeedRefused, SeedFailed) as error:
         print(f"seed: {error}", file=sys.stderr)
         return 1
+    if compare:
+        print("seed: comparison finished; nothing was changed.")
+        return 0
     if inspect:
         print("seed: inspection finished; nothing was changed.")
         return 0

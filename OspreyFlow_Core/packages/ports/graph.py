@@ -9,8 +9,9 @@ above this port may see it.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Protocol
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
+from typing import Protocol, runtime_checkable
 
 from schemas.domain import (
     EdgeId,
@@ -336,3 +337,55 @@ class GraphPort(Protocol):
         by the caller's own audit trail (the load ledger), not a
         principal-scoped read."""
         ...
+
+
+@dataclass(frozen=True)
+class BulkEdgeResult:
+    """What `BulkGraphLoader.bulk_load_edges` did, in full: nothing is dropped silently.
+
+    `written` are the ids of the edges now stored, one per distinct pair. `collisions` are the
+    aggregated writes whose pair was already stored; they were **not** written, and the caller
+    routes them through `GraphPort.upsert_edges`, which merges (ADR-058 D3). `received` is how
+    many `EdgeWrite`s arrived, so `received - len(written) - len(collisions)` is the number
+    collapsed by aggregating repeated pairs in this call."""
+
+    written: list[EdgeId] = field(default_factory=list)
+    collisions: list[EdgeWrite] = field(default_factory=list)
+    received: int = 0
+    chunks: int = 0
+
+
+@runtime_checkable
+class BulkGraphLoader(Protocol):
+    """An optional capability of a graph adapter (ADR-058): write a *set* of edges in bulk.
+
+    `upsert_edges` is the low-volume path: it merges on write, weighs each edge against the live
+    corpus and costs several store round trips per edge. A set that arrives together (an Ingest
+    Studio publish, a seed) goes through this instead, and the engine falls back to chunked
+    `upsert_edges` for an adapter that does not declare it. The contract:
+
+    - **Validation is identical to `upsert_edges`.** Every edge is checked against the active
+      ontology (type, properties, endpoint types) and the handling scheme. The loader is never
+      trusted: a bad edge raises `OntologyError`, and it raises *before anything is written*.
+    - **Endpoints already exist,** committed by the caller (a node written in the same load is
+      written first). A missing endpoint raises `OntologyError`, as `upsert_edges` does.
+    - **Repeated pairs are aggregated** by the one shared merge rule (`schemas.merge`): occurrences
+      add, every provenance source is kept, the interval widens, the first write's id survives.
+    - **A pair already stored is not written** and comes back in `collisions` (a reverted edge is
+      not a collision, as in `upsert_edges`: a fresh edge starts).
+    - **Weights are against the corpus as it stands at the end of the load** (existing edges plus
+      this call's), with the formula and `WeightComponents` unchanged and `computed_at` the end of
+      the load (`01_DOMAIN_MODEL.md` §6.1, ADR-058 D4).
+    - **No `TxId`.** The call is too large for one transaction, so the adapter commits in chunks of
+      `chunk_size` edges, each in its own. A failure part-way raises with the earlier chunks
+      committed; the caller reverts by `load_id` and reruns, it does not resume (ADR-058 D6).
+    - `progress(done, total)` is called after each chunk if given.
+    """
+
+    async def bulk_load_edges(
+        self,
+        edges: Sequence[EdgeWrite],
+        *,
+        chunk_size: int = 500,
+        progress: Callable[[int, int], None] | None = None,
+    ) -> BulkEdgeResult: ...

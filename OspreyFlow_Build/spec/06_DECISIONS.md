@@ -8653,3 +8653,41 @@ publish path through bulk with `upsert_*` fallback, recipe re-run and revert tes
 Cross-vault loading (ADR-056); how this interacts with the vault resolver of ADR-056 stage 1 (a bulk load takes the same
 per-vault graph port and has no default vault); the analytics-store side, which is assumed to be written in chunks
 already and is to be checked, not assumed; a bulk path for the `janusgraph` adapter.
+
+### ADR-058, Amendment 1 (2 October 2026) — the owner accepts D1 to D10 as recommended, and the build starts
+
+**Owner's ruling:** "all as recommended, go ahead with the build", and a PaySim duplicate load to test the new build.
+The record's status is now **ACCEPTED, with the decisions below**; the PROPOSED notes in `00_ARCHITECTURE.md` §2.1,
+`01_DOMAIN_MODEL.md` §6.1, `03_CONDUIT_MIDDLEWARE.md` §5.1, `04_VAULT_BACKEND.md` §6 and `09_INGEST_STUDIO.md` §6 are the
+design from this date, and their "PROPOSED" wording is lifted by the commit that builds the part they describe.
+
+| | Decision taken |
+| --- | --- |
+| D1 | `BulkGraphLoader` is a separate optional capability in `packages/ports`; the engine falls back to chunked `upsert_*` where an adapter does not declare it. |
+| D2 | Bulk for every Ingest Studio publish, no row threshold; `upsert_*` for non-ingest writes and for collisions. The bulk path is correct for one element as well as many. |
+| D3 | A pair already stored is not written by the bulk call: it is returned to the caller as a typed `collisions` result, and the engine routes it through `upsert_*`. |
+| D4 | A bulk load weighs every edge against the corpus as it stands at the end of the load; the formula and `WeightComponents` are unchanged. The equivalence test compares stored counts, not the float. |
+| D5 | The provenance and interval merge rules move to one shared pure module used by both paths, with a test that they agree. |
+| D6 | A failed bulk load is reverted by `load_id` and re-run, not resumed. |
+| D7 | The stray count is measured and reported on every bulk load; a bulk load is not accepted if its rate is higher than the upsert path's on the same data. |
+| D8 | Edges first; nodes in a second stage under this record. |
+| D9 | The PaySim twin: vault `paysim-bulk`, same source and graph sample as `paysim`, loaded by `seed_paysim --method bulk`, then a full-neighbourhood twin; kept until the studio path is proved, retired only at the owner's word. Synthetic, so ADR-053 does not apply. |
+| D10 | The transport spike runs on a scratch database, only when the store is idle. |
+
+**What this changes about the order of work.** The Enron load is still writing to the shared stores, and a timing taken
+against a busy store is not a measurement (rule 14). So what is built first is what needs no live store and no timing:
+the shared merge module, the port and its conformance cases, the spike script, and the adapter and seed code with
+test doubles that refuse what the real store refuses. The transport is **not chosen by guess**: the adapter is written
+with the transport behind one small seam, the first candidate (a parameterised Gremlin script per chunk) is the one the
+code starts with, and it is replaced by whichever the spike measures fastest with the fewest strays. No speed is claimed
+until the spike and the twin have run on an idle store.
+
+### ADR-058, Amendment 2 (2 October 2026) — the twin vault is named `paysim-perftst`
+
+The owner asked for the duplicate PaySim to be called `paysim_perftst` in place of D9's suggested `paysim-bulk`. A vault id
+may use only lower-case letters, digits and hyphens (ADR-056 decision 7; `vault_locations` refuses anything else, so an
+underscore never reaches a path), so the id is **`paysim-perftst`**. Its graph database is `vault_paysim_perftst` (hyphens
+become underscores), which is the name the owner gave. D9 is otherwise unchanged: same source and graph sample as `paysim`,
+loaded by `seed_paysim --method bulk`, kept until the studio path is proved. Nothing had been loaded under the old name.
+The name says what the vault is for (a performance test), not how it was loaded; the load method is recorded by `--method`
+and the comparison, not by the name.

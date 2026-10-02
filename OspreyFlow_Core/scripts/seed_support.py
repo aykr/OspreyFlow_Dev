@@ -26,10 +26,18 @@ import httpx
 
 from adapters.graph_arcadedb.client import ArcadeDBError
 from adapters.graph_arcadedb.gremlin_literals import groovy_string_literal
-from ports.graph import GraphPort
+from ports.graph import BulkGraphLoader, GraphPort
 
 #: A progress line every this many graph batches, so a slow write is visible as slow.
 PROGRESS_EVERY = 25
+
+#: Edges per transaction for a bulk load (ADR-058); the spike (`scripts.spike_bulk_transport`)
+#: measures the sizes worth using.
+BULK_CHUNK = 500
+
+
+class BulkUnavailable(RuntimeError):
+    """`method="bulk"` was asked of a graph adapter that does not declare the capability."""
 
 
 async def write_graph(
@@ -41,18 +49,32 @@ async def write_graph(
     nouns: tuple[str, str],
     progress: Callable[[str], None] | None = None,
     on_batch: Callable[[str, int], Awaitable[None] | None] | None = None,
+    method: str = "upsert",
 ) -> None:
     """Nodes first, then edges, each in small transactions (ArcadeDB fails larger ones with
     "Error in execution in lock"). A failing batch is rolled back and the error raised.
+
+    `method="bulk"` (ADR-058) writes the edges through the adapter's `BulkGraphLoader` capability
+    instead: nodes still go by `upsert_nodes` and are committed first (a bulk edge needs its
+    endpoints stored), and any pair the store already held comes back as a collision and is merged
+    through `upsert_edges`, so nothing is lost or written twice. An adapter without the capability
+    is refused (`BulkUnavailable`): a seed that asked for the new method must not quietly run the
+    old one and report the new one's timings.
     `on_batch(noun, index)` is called after each batch is committed, with its position among that
     noun's batches (counted from 0): a reproduction uses it to line a stored duplicate up with the
     batch that wrote it. A coroutine function is awaited before the next batch starts."""
     say = progress or (lambda line: print(line, flush=True))
-    say(f"  graph: writing {len(nodes):,} {nouns[0]} and {len(edges):,} {nouns[1]}")
-    for noun, items, upsert in (
-        (nouns[0], nodes, graph.upsert_nodes),
-        (nouns[1], edges, graph.upsert_edges),
-    ):
+    if method not in ("upsert", "bulk"):
+        raise ValueError(f"unknown graph load method {method!r}; use 'upsert' or 'bulk'")
+    if method == "bulk" and not isinstance(graph, BulkGraphLoader):
+        raise BulkUnavailable("this graph adapter does not offer bulk loading; use method='upsert'")
+    say(f"  graph: writing {len(nodes):,} {nouns[0]} and {len(edges):,} {nouns[1]} ({method})")
+    stages: list[tuple[str, Sequence[Any], Callable[..., Awaitable[Any]]]] = [
+        (nouns[0], nodes, graph.upsert_nodes)
+    ]
+    if method == "upsert":
+        stages.append((nouns[1], edges, graph.upsert_edges))
+    for noun, items, upsert in stages:
         started = time.monotonic()
         for start in range(0, len(items), chunk):
             tx = await graph.begin_transaction()
@@ -70,6 +92,38 @@ async def write_graph(
             if (start // chunk) % PROGRESS_EVERY == 0 or done == len(items):
                 seconds = int(time.monotonic() - started)
                 say(f"  graph: {done:,} of {len(items):,} {noun} written ({seconds}s)")
+    if method == "bulk":
+        await _bulk_edges(graph, edges, chunk=chunk, noun=nouns[1], say=say)
+
+
+async def _bulk_edges(
+    graph: GraphPort, edges: Sequence[Any], *, chunk: int, noun: str, say: Callable[[str], None]
+) -> None:
+    started = time.monotonic()
+    assert isinstance(graph, BulkGraphLoader)
+
+    def progress(done: int, total: int) -> None:
+        say(
+            f"  graph: {done:,} of {total:,} {noun} written in bulk "
+            f"({int(time.monotonic() - started)}s)"
+        )
+
+    result = await graph.bulk_load_edges(edges, chunk_size=BULK_CHUNK, progress=progress)
+    say(
+        f"  graph: bulk wrote {len(result.written):,} {noun} in {result.chunks} chunk(s); "
+        f"{result.received - len(result.written) - len(result.collisions):,} repeated pair(s) "
+        f"merged before writing; {len(result.collisions):,} already stored"
+    )
+    for start in range(0, len(result.collisions), chunk):
+        tx = await graph.begin_transaction()
+        try:
+            await graph.upsert_edges(result.collisions[start : start + chunk], tx)
+        except Exception:
+            await graph.rollback_transaction(tx)
+            raise
+        await graph.commit_transaction(tx)
+    if result.collisions:
+        say(f"  graph: {len(result.collisions):,} already-stored {noun} merged by upsert")
 
 
 class CleanUpIncomplete(RuntimeError):

@@ -155,6 +155,17 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--method",
+        choices=("upsert", "bulk"),
+        default="upsert",
+        help=(
+            "How the graph edges are written (ADR-058). 'upsert' is the long-standing path, one "
+            "round trip set per edge. 'bulk' writes them in chunks through the adapter's bulk "
+            "loader and weighs them once against the whole load. Default upsert until the bulk "
+            "path is proved on a twin vault."
+        ),
+    )
+    parser.add_argument(
         "--reset-graph-database",
         action="store_true",
         help=(
@@ -263,7 +274,12 @@ def _edges_to_write(
 
 
 async def _load_graph(
-    graph: GraphPort, source: Path, principal: Principal, *, fraud_rows: int | None = None
+    graph: GraphPort,
+    source: Path,
+    principal: Principal,
+    *,
+    fraud_rows: int | None = None,
+    method: str = "upsert",
 ) -> tuple[int, int]:
     nodes, edges = _graph_writes(source, principal, fraud_rows=fraud_rows)
     if nodes and await graph.get_node(nodes[0].id, principal) is not None:
@@ -272,7 +288,9 @@ async def _load_graph(
             "To load again, use --replace-graph: it deletes this seed's own rows first, because "
             "a transaction written twice is counted twice."
         )
-    await write_graph(graph, nodes, edges, chunk=_GRAPH_CHUNK, nouns=("accounts", "transactions"))
+    await write_graph(
+        graph, nodes, edges, chunk=_GRAPH_CHUNK, nouns=("accounts", "transactions"), method=method
+    )
     return len(nodes), len(edges)
 
 
@@ -424,7 +442,7 @@ async def _run(args: argparse.Namespace) -> int:
             )
             print(f"  graph: removed {removed[0]:,} accounts and {removed[1]:,} transactions")
         node_count, edge_count = await _load_graph(
-            graph, source, principal, fraud_rows=args.graph_fraud_rows
+            graph, source, principal, fraud_rows=args.graph_fraud_rows, method=args.method
         )
         strays = await report_ids_stored_twice(
             client,
