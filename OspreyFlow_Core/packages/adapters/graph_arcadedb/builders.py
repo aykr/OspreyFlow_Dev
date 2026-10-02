@@ -11,7 +11,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from schemas.domain import ExpandRequest, PathRequest, PatternEdge, PatternQuery, Principal
+from schemas.domain import (
+    ExpandRequest,
+    OntologySchema,
+    PathRequest,
+    PatternEdge,
+    PatternQuery,
+    Principal,
+    PropertyType,
+)
 
 from .access_filter import AccessFilter
 from .gremlin_literals import (
@@ -127,6 +135,55 @@ class SuggestLocationsBuilder:
             f"g.V().hasLabel({location_type_lit})"
             f".has('name',TextP.containing({name_lit})).{has_access}"
             f".dedup().limit({self.limit}).elementMap()"
+        )
+
+
+def suggestion_scope(schema: OntologySchema) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """The physical types and the property names a prefix suggestion looks at: each entity type's
+    declared identifiers plus its indexed properties, as `search_nodes` does, but only string
+    ones (a prefix of a number or a flag means nothing) and only on types that carry one, so the
+    scan is label-first and as narrow as the ontology allows."""
+    labels: list[str] = []
+    fields: set[str] = set()
+    for entity in schema.entity_types:
+        declared = {p.name: p.type for p in entity.properties}
+        carried = {
+            f
+            for f in entity.identifiers
+            if declared.get(f, PropertyType.STRING) is PropertyType.STRING
+        }
+        carried |= {
+            p.name for p in entity.properties if p.indexed and p.type is PropertyType.STRING
+        }
+        if carried:
+            labels.append(physical_type_name(entity.name))
+            fields |= carried
+    return tuple(labels), tuple(sorted(fields))
+
+
+@dataclass(frozen=True)
+class SuggestNodesBuilder:
+    """`GraphPort.suggest_nodes` — a label-first prefix scan (`TextP.startingWith`, the same
+    predicate family `SuggestLocationsBuilder` proved live). Asks for `limit + 1` so the adapter
+    can say whether more matched without a second query; the extra row is counted after the
+    access step, so it cannot reveal a hidden node."""
+
+    labels: tuple[str, ...]
+    fields: tuple[str, ...]
+    prefix: str
+    limit: int = 10
+
+    def render_gremlin(self, access: AccessFilter, principal: Principal) -> str:
+        has_access = access.gremlin_has_step(principal)
+        prefix_lit = groovy_string_literal(self.prefix)
+        labels = ",".join(groovy_string_literal(label) for label in self.labels)
+        clauses = ",".join(
+            f"__.has({groovy_string_literal(field)},TextP.startingWith({prefix_lit}))"
+            for field in self.fields
+        )
+        return (
+            f"g.V().hasLabel({labels}).or({clauses}).{has_access}"
+            f".dedup().limit({self.limit + 1}).elementMap()"
         )
 
 

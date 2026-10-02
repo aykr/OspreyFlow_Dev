@@ -8853,3 +8853,38 @@ doubles every node write, and whether it has any bearing on the stray copies, is
 
 **Consequence.** The cost is in the adapter's read and write paths alike, not only in bulk loading. What fixes it is not yet
 decided (the label is known on some paths and not on others); see the design choice put to the owner.
+
+## ADR-059 — The search box suggests as the analyst types: a separate prefix read, not a change to the exact search
+
+**Status.** Accepted 2 October 2026, by the owner's choice of option B from the written options below. Built tests
+first (see the friction row in `process/07_BUILD_PLAN.md`).
+
+**Context.** Seen: typing `C` or a partial account id into the Glass search box found nothing, because `POST /v1/search`
+is an exact match against a declared identifier by contract (`GraphPort.search_nodes`, `03_CONDUIT_MIDDLEWARE.md` §3.3).
+An analyst who does not know the full value has no way in. (The full id also found nothing on that occasion, for a
+different reason: the Glass reads the shared store until ADR-056 stage 1, and the PaySim accounts are in a vault.)
+
+**Options put to the owner.** A: make the existing search match prefixes (breaks the exact contract and its tests, and
+scans on every keystroke). B: a separate read and route for prefix suggestions. C: filter in the browser only (cannot find
+anything not already on the canvas). **B chosen.**
+
+**Decision.**
+
+- `GraphPort.suggest_nodes(prefix, principal, *, limit=10) -> NodeSuggestions(nodes, more)`: nodes whose declared
+  identifiers or indexed **string** properties start with `prefix`, case-sensitively. `search_nodes` is unchanged.
+- The adapter scans label first (only the entity types that carry a suggestable field; an unlabelled lookup scans every
+  vertex, ADR-058 Amendment 9) with `TextP.startingWith`, asks for `limit + 1`, returns `limit` and sets `more`. `more` is
+  counted after the access filter, so it cannot reveal a hidden node (rules 2 and 3). An empty prefix is refused.
+- `POST /v1/suggest {query, limit}` in the Conduit: `query` of at least 3 characters (`SUGGEST_MIN_CHARS`), `limit` from 1
+  to 25 (default 10), audited as `suggest`. Response `{nodes, more}`.
+- The Glass asks for suggestions from the third character, after a 250 ms pause, shows at most 10 and says when there are
+  more ("keep typing to narrow"), and selecting one behaves exactly as selecting a search result does today.
+
+**Cost and what would make it wrong.** A prefix scan is not an index lookup: it is bounded by the type's size (about
+11 ms per 15,000 vertices measured for an unindexed id scan, ADR-058 Amendment 9) and by the 250 ms pause. It is
+case-sensitive (a lower-case `c13` does not match `C13`), which is the next thing an analyst will notice; making it
+case-insensitive needs a normalised, indexed form and is not decided here. If the Glass's first-use measurements show a
+suggestion taking over about 300 ms on the largest case, the scan needs an index-backed form before it ships further.
+
+**Not decided here.** Case-insensitive matching; ranking; suggestions that span documents or the index (OpenSearch is
+not wired).

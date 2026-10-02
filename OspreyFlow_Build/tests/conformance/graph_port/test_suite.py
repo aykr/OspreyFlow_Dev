@@ -21,7 +21,6 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
-
 from conduit_common.identity import new_edge_id, new_node_id, now_utc
 from ontology.errors import OntologyError
 from ports.graph import GraphPort
@@ -39,6 +38,7 @@ from schemas.domain import (
     ProvenanceState,
     SourceRef,
 )
+
 from tests.conformance.registry import GRAPH_PORT_ADAPTERS, GraphAdapterFactory
 
 pytestmark = [
@@ -1236,6 +1236,99 @@ async def test_unauthorised_search_matches_a_graph_where_the_node_never_existed(
             adapter, [_node("Person", classification="SECRET", nino="AB123456C")], []
         )
         assert await adapter.search_nodes("AB123456C", OFFICIAL) == []
+
+
+# --- suggest_nodes (ADR-059): the search box as the analyst types ----------------------
+#
+# A prefix read, separate from search_nodes's exact-match contract above. Written before the
+# adapter (rule 1); the unit tests beside the adapter run the same behaviour against a store
+# double, and these run it against the real store.
+
+
+async def test_suggest_nodes_finds_an_account_by_the_start_of_its_normalised_value(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The case the Glass hit: the account is findable by the whole value, so it must be findable
+    by the start of it. Written in the shape the PaySim seed writes (`value_normalised`)."""
+    async with factory.context() as adapter:
+        (account_id,), _ = await _write(
+            adapter,
+            [
+                _node(
+                    "Endpoint",
+                    classification="OFFICIAL",
+                    value_raw="C1305486145",
+                    value_normalised="C1305486145",
+                    endpoint_kind="account",
+                )
+            ],
+            [],
+        )
+        found = await adapter.suggest_nodes("C13054", CLEARED)
+        assert [n.id for n in found.nodes] == [account_id] and found.more is False
+        assert (await adapter.suggest_nodes("C9999", CLEARED)).nodes == []
+
+
+async def test_suggest_nodes_says_when_more_matched_and_never_returns_more_than_the_limit(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Rule 2: a cut-off list says it was cut off."""
+    async with factory.context() as adapter:
+        for n in range(5):
+            await _write(
+                adapter,
+                [
+                    _node(
+                        "Endpoint",
+                        classification="OFFICIAL",
+                        value_raw=f"C77{n}",
+                        value_normalised=f"C77{n}",
+                        endpoint_kind="account",
+                    )
+                ],
+                [],
+            )
+        page = await adapter.suggest_nodes("C77", CLEARED, limit=3)
+        assert len(page.nodes) == 3 and page.more is True
+        everything = await adapter.suggest_nodes("C77", CLEARED, limit=5)
+        assert len(everything.nodes) == 5 and everything.more is False
+
+
+async def test_unauthorised_suggestions_match_a_graph_where_the_node_never_existed(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Rule 3 and 4: a SECRET account whose value starts with the prefix is not returned to an
+    OFFICIAL principal, does not count toward the limit, and does not set `more`."""
+    async with factory.context() as adapter:
+        await _write(
+            adapter,
+            [
+                _node(
+                    "Endpoint",
+                    classification="SECRET",
+                    value_raw="C5550001",
+                    value_normalised="C5550001",
+                    endpoint_kind="account",
+                )
+            ],
+            [],
+        )
+        (visible_id,), _ = await _write(
+            adapter,
+            [
+                _node(
+                    "Endpoint",
+                    classification="OFFICIAL",
+                    value_raw="C5550002",
+                    value_normalised="C5550002",
+                    endpoint_kind="account",
+                )
+            ],
+            [],
+        )
+        found = await adapter.suggest_nodes("C555", OFFICIAL, limit=1)
+        assert [n.id for n in found.nodes] == [visible_id]
+        assert found.more is False, "a hidden match must not be detectable through `more`"
 
 
 # --- suggest_locations (a disclosed known-gaps closure) ---------------------

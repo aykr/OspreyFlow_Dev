@@ -25,6 +25,9 @@ from pydantic import BaseModel, Field
 from ports.graph import GraphPort
 from schemas.domain import Node, Principal
 
+#: A prefix shorter than this is not worth a scan of every suggestable type (ADR-059).
+SUGGEST_MIN_CHARS = 3
+
 
 class SearchRequest(BaseModel):
     query: str
@@ -38,3 +41,27 @@ class SearchResponse(BaseModel):
 async def search(graph: GraphPort, request: SearchRequest, principal: Principal) -> SearchResponse:
     nodes = await graph.search_nodes(request.query, principal, limit=request.limit)
     return SearchResponse(nodes=nodes)
+
+
+class SuggestRequest(BaseModel):
+    query: str = Field(min_length=SUGGEST_MIN_CHARS)
+    limit: int = Field(default=10, ge=1, le=25)
+
+
+class SuggestResponse(BaseModel):
+    """`more` is true when another visible node matched beyond `nodes`: the Glass says so and
+    never shows a cut-off list as if it were complete (rule 2). It is counted after the access
+    filter, so it cannot reveal a hidden node."""
+
+    nodes: list[Node]
+    more: bool
+
+
+async def suggest(
+    graph: GraphPort, request: SuggestRequest, principal: Principal
+) -> SuggestResponse:
+    """`POST /v1/suggest` — the search box as the analyst types (ADR-059). A separate route from
+    `search` above, which stays an exact match; same principal, same access filter in the
+    adapter, same lack of an `owning_unit` check for the same reason."""
+    found = await graph.suggest_nodes(request.query, principal, limit=request.limit)
+    return SuggestResponse(nodes=found.nodes, more=found.more)

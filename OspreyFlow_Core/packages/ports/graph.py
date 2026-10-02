@@ -191,6 +191,24 @@ class GraphPort(Protocol):
         `limit`, or otherwise be detectable."""
         ...
 
+    async def suggest_nodes(
+        self, prefix: str, principal: Principal, *, limit: int = 10
+    ) -> NodeSuggestions:
+        """The Glass search box as the analyst types (ADR-059): nodes whose declared identifiers
+        or indexed string properties **start with** `prefix`, case-sensitively. A separate read
+        from `search_nodes`, which stays an exact match (its contract, and the reason
+        `suggest_locations` is separate too).
+
+        Bounded and graph-native, not full text: a prefix scan of only the entity types that
+        carry a suggestable field, label first (an unlabelled lookup scans every vertex,
+        ADR-058 Amendment 9). An empty `prefix` is refused with `ValueError`; the Conduit also
+        refuses one shorter than its minimum, so a bare scan is never asked for.
+
+        Never truncates silently (rule 2): returns at most `limit` nodes and sets `more` when
+        another visible node matched. Access-filtered like every read (rule 3): a node whose
+        `handling` excludes `principal` must not appear, count toward `limit` or set `more`."""
+        ...
+
     async def expand(self, req: ExpandRequest, principal: Principal) -> Subgraph: ...
 
     async def expand_candidate_count(self, req: ExpandRequest) -> int:
@@ -337,6 +355,16 @@ class GraphPort(Protocol):
         by the caller's own audit trail (the load ledger), not a
         principal-scoped read."""
         ...
+
+
+@dataclass(frozen=True)
+class NodeSuggestions:
+    """What `GraphPort.suggest_nodes` found for a partial value: the first `limit` visible nodes,
+    and whether more visible nodes matched. `more` is counted after the access filter, so it can
+    never say that a hidden node exists (ADR-059)."""
+
+    nodes: list[Node] = field(default_factory=list)
+    more: bool = False
 
 
 @dataclass(frozen=True)

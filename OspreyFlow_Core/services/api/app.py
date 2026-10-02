@@ -245,7 +245,7 @@ from .review import (
     RejectedResponse,
     RunExtractionRequest,
 )
-from .search import SearchRequest, SearchResponse
+from .search import SearchRequest, SearchResponse, SuggestRequest, SuggestResponse
 from .site_images import (
     object_key_for,
     read_site_image,
@@ -2187,6 +2187,23 @@ async def search_route(
     await audit.record(
         principal=principal,
         action="search",
+        resolved_query={"query": body.query},
+        result_cardinality=len(result.nodes),
+    )
+    return result
+
+
+@app.post("/v1/suggest")
+async def suggest_route(
+    body: SuggestRequest,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    audit: AuditDep,
+) -> SuggestResponse:
+    result = await search_module.suggest(graph, body, principal)
+    await audit.record(
+        principal=principal,
+        action="suggest",
         resolved_query={"query": body.query},
         result_cardinality=len(result.nodes),
     )

@@ -29,7 +29,7 @@ from conduit_common.identity import new_edge_id, now_utc
 from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme
 from ontology.validation import validate_edge_endpoints, validate_properties
-from ports.graph import BulkEdgeResult
+from ports.graph import BulkEdgeResult, NodeSuggestions
 from schemas.domain import (
     AuditStub,
     Edge,
@@ -67,6 +67,8 @@ from .builders import (
     PathBuilder,
     SearchNodesBuilder,
     SuggestLocationsBuilder,
+    SuggestNodesBuilder,
+    suggestion_scope,
 )
 from .bulk import BulkEdgeLoader, BulkTransport, GremlinBulkTransport
 from .client import ArcadeDBClient
@@ -544,6 +546,19 @@ class GraphArcadeDBAdapter:
         builder = SuggestLocationsBuilder(name, limit=limit)
         results = await self._client.gremlin(builder.render_gremlin(self._access, principal))
         return [node_from_element_map(r) for r in results]
+
+    async def suggest_nodes(
+        self, prefix: str, principal: Principal, *, limit: int = 10
+    ) -> NodeSuggestions:
+        if not prefix:
+            raise ValueError("suggest_nodes needs a prefix: an empty one is a scan of every vertex")
+        labels, fields = suggestion_scope(self._require_schema())
+        if not labels:
+            return NodeSuggestions()
+        builder = SuggestNodesBuilder(labels, fields, prefix, limit=limit)
+        results = await self._client.gremlin(builder.render_gremlin(self._access, principal))
+        nodes = [node_from_element_map(r) for r in results]
+        return NodeSuggestions(nodes=nodes[:limit], more=len(nodes) > limit)
 
     async def vault_subgraph(
         self, principal: Principal, *, max_nodes: int, max_edges: int

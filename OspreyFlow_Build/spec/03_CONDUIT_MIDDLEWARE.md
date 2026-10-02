@@ -159,6 +159,7 @@ carries the withheld content, not even its identifiers.
 
 ```
 POST   /v1/search                       federated search across graph, documents, index
+POST   /v1/suggest                      type-ahead: nodes whose identifiers start with what is typed (ADR-059)
 POST   /v1/paths                        k-shortest paths between two entities
 POST   /v1/patterns/preview             cardinality estimate for a visual query
 POST   /v1/patterns/run                 execute; large results return a job id
