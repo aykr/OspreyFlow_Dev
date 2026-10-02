@@ -8691,3 +8691,111 @@ become underscores), which is the name the owner gave. D9 is otherwise unchanged
 loaded by `seed_paysim --method bulk`, kept until the studio path is proved. Nothing had been loaded under the old name.
 The name says what the vault is for (a performance test), not how it was loaded; the load method is recorded by `--method`
 and the comparison, not by the name.
+
+### ADR-058, Amendment 3 (2 October 2026) — seed containers take the checkout's packages as well as its scripts
+
+**What was seen.** The first run of the transport spike, inside the deployment's network, died with `ImportError: cannot
+import name 'BulkGraphLoader' from 'ports.graph'`. (Run from the host it had failed earlier because the graph store is not
+published outside the deployment's network, which is why `seed_internal --spike-bulk-transport` exists.)
+
+**Cause.** A seed runs in a one-shot container from the Conduit's image. `seed_internal` mounted the checkout's `scripts/`
+over the image's, but not `packages/`, and the image's copy of `packages/` is as old as its last refresh. `seed_support`
+now imports `BulkGraphLoader`, added to `packages/ports/graph.py` by this ADR, so it failed in every container run, not
+only the spike: any seed, inspection, repair, comparison or stage 0b run built on the committed tree would have failed the
+same way. Nothing had run in a container since that commit, which is why it was not seen sooner.
+
+**Fix, at the class.** One function, `_checkout_mounts`, returns the read-only mounts every container run takes (`scripts/`
+and `packages/`), and all six places that build a run use it. A test starts one container run of every kind (seed, bulk
+seed, inspection, repair, comparison, spike, stage 0b clearing) and requires both mounts in each; with the packages mount
+removed from one kind, it fails. `harness.apply`'s own seeds are unchanged: it builds the image from the checkout at the
+time, so the packages are current.
+
+**Open, to watch for.** Mounting `packages/` read-only replaces the image's copy for the run. A file the image holds under
+`packages/` that is not in the checkout would be hidden; none is known.
+
+### ADR-058, Amendment 4 (2 October 2026) — the first spike on a real store
+
+**Run.** `seed_internal paysim --spike-bulk-transport`, 1,000 PaySim-shaped transactions (773 accounts, 671 distinct pairs),
+each method on its own new scratch database, the store otherwise idle. Measured, not predicted.
+
+| Method | Time | Edges/s | Stored | Ids stored twice |
+|---|---|---|---|---|
+| Upsert, chunks of 40 (today) | 10.2 s | 98 | 671 | 1 |
+| Bulk, Gremlin, chunks of 100 | 1.3 s | 794 | 671 | 1 |
+| Bulk, Gremlin, chunks of 500 | 1.0 s | 1,045 | 671 | 4 |
+| Bulk, Gremlin, chunks of 2,000 | 0.8 s | 1,190 | 671 | 4 |
+| Bulk, SQL script, chunks of 500 (timing only) | 0.4 s | 2,617 | 1,000 | 0 |
+
+**What it settles.** Every query shape `GremlinBulkTransport` sends (`within`, `project`/`by`, `coalesce`, the per-row
+`addE` closure, `bothE`/`otherV`) runs on this ArcadeDB and returns what the loader expects. All three Gremlin runs
+left the same stored edge ids and occurrence counts as the upsert path. So D1's first candidate transport works.
+
+**What it does not settle.**
+1. *The speed-up on a large graph.* Upsert here cost about 10 ms an edge on an empty database; the Enron load cost about
+   150 ms a link from its first thousand and about 510 ms at its end (233,890 links, 69,647 s, no ids stored twice). The
+   1,000-edge test does not reproduce that cost, so "8 to 12 times" is for a small empty graph and is not a forecast for
+   Enron. A larger run (`--spike-edges 10000`) and the PaySim twin are the next measurements.
+2. *Strays (D7).* Upsert left 1 in 671 and bulk 1, 4 and 4 by chunk size. The numbers are tiny and one run each, so this is a
+   lean and not a finding; by D7 (bulk must not be worse than upsert's rate on the same data) only chunks of 100 passes.
+   **The seed's bulk chunk is therefore 100**, raised only on a run showing no rise in strays.
+3. *The SQL-script candidate* is not comparable: it wrote id and occurrences only and stored 1,000 edges because it does not
+   merge repeated pairs. It is faster and left no strays, which makes it worth building to full fidelity (properties,
+   provenance, dates, weights) and measuring, but it is not chosen and not built.
+
+**Decision.** Gremlin at 100 per chunk stays the transport for the twin load. Nothing else changes.
+
+### ADR-058, Amendment 5 (2 October 2026) — the 10,000-edge spike: where the time goes
+
+**Run.** `seed_internal paysim --spike-bulk-transport --spike-edges 10000`: 10,000 transactions, 13,426 accounts, 6,713
+distinct pairs, each method on its own new scratch database, the store otherwise idle.
+
+| Method | Time | Edges/s | Ids stored twice | Same edges as upsert |
+|---|---|---|---|---|
+| Upsert, chunks of 40 | 778.6 s | 13 | 0 | (reference) |
+| Bulk, Gremlin, chunks of 100 | 161.1 s | 62 | 0 | identical |
+| Bulk, Gremlin, chunks of 500 | 167.0 s | 60 | 2 | identical |
+| Bulk, Gremlin, chunks of 2,000 | failed | | | `Timeout on locking http session` |
+| Bulk, SQL script, chunks of 500 (id and occurrences only, no merge) | 2.9 s | 3,407 | 0 | not compared |
+
+**What it shows.**
+1. Bulk by Gremlin at 100 per chunk is 4.8 times faster than upsert here, left the same edges, and no stray: **chunks of 100
+   stay the setting**. 500 is no faster and left two strays; 2,000 does not run (one transaction that long times out).
+2. *Upsert's cost follows the number of accounts, not of edges.* It held at about 79 ms an edge from the first thousand edges
+   to the last (the 1,000-edge run, with 773 accounts, cost 10 ms); writing the accounts themselves slowed from 463 to 97
+   a second as they were added. The Enron load (21,932 addresses) cost about 150 ms a link from its start.
+3. *The bulk Gremlin rate is also flat across chunk sizes* (43 edges/s over the loading phase, 100 or 500 per chunk), so the
+   time is per row, not per chunk. A row is two `g.V().has("id", …)` lookups and an edge: about 23 ms.
+4. *The SQL script did the same two lookups and the create in 0.3 ms a row* (`CREATE EDGE … FROM (SELECT FROM <type> WHERE
+   id = :s) TO (… :t)`), about 80 times faster per row on the same data.
+
+**Reading (a hypothesis, not yet isolated).** The Gremlin `has("id", …)` lookup costs about as much as scanning the vertex
+type; the SQL `WHERE id = :s` uses the type's index. That fits points 2 to 4 and the Enron history, and the cheap way to
+settle it is to time the two lookups alone on a scratch database (and a label-qualified Gremlin lookup, which may reach the
+index). If it holds, the cost is in every Gremlin id lookup the adapter makes, `upsert_*` included, so the fix is at that
+class and not only in the bulk path.
+
+**Decision (D10: the transport is the one the spike measures fastest with the fewest strays).** The SQL script is the next
+transport to build, **to full fidelity** (every property, provenance, handling, dates, weights, audit; repeated pairs merged
+before writing, as the Gremlin loader does) behind the same `BulkTransport` seam, and to be compared against the Gremlin
+runs with the same equivalence report. Until it is proved the Gremlin transport at 100 per chunk is the one the twin load
+uses. The index experiment runs first because it decides whether upsert's lookups need the same change.
+
+### ADR-058, Amendment 6 (2 October 2026) — the PaySim twin load, and the first comparison
+
+**Seen.** The full PaySim twin (`paysim-perftst`, bulk Gremlin, chunks of 100) loaded 13,564 accounts in 93 s and 13,068
+transactions in 300 s (131 chunks, 43 per s, steady), then 6,362,620 events. The load's own check reported 6 ids stored more
+than once. `--compare-vaults paysim paysim-perftst`, run afterwards on the same stores, reported: 13,564 nodes and 13,068
+edge records on both sides, no node or edge differences, the right vault's weight components all matching its own contents,
+**0 ids stored twice by scan on both sides**, and "the vaults agree". (The left vault's 38,705 differing weight values are
+information only: upsert weighs edge by edge, so its stored components differ from end-of-load counts; bulk weighs against the
+end-of-load corpus, as D4 intends.)
+
+**What this does and does not show.** Bulk and upsert produced the same graph from the same data (D5 met for this data). The
+stray counts do not agree between two readings of the same store: the load check (`GROUP BY id`) saw 6 on the twin, the
+comparison (a scan of all edge records, 13,068 of them, so no extra record) saw 0 on both vaults, and the original vault was
+recorded earlier as 8. Either the stray is not present in what the comparison scans, or it was gone by then, or the two
+queries do not see the same thing. That is not yet explained, so **D7 (bulk strays no more than upsert on the same data) is
+neither passed nor failed here**: 6 against 8 was by the load check; by the comparison it is 0 against 0.
+
+**Next.** Make the comparison run the load check's own `GROUP BY id` query on each vault as well, so one tool reports both
+readings on the same stores. Events loaded without timers on this run (it predates `EventProgress`).

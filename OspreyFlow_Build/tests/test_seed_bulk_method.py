@@ -179,9 +179,9 @@ def test_method_reaches_the_container_only_when_it_is_not_the_default(
     """Catches the flag never arriving (a 'bulk' run that is an upsert run), or being sent on every
     run."""
     assert "--method" not in _seed_call(_go(repo))
-    call = _seed_call(_go(repo, method="bulk", vault="paysim-bulk"))
+    call = _seed_call(_go(repo, method="bulk", vault="paysim-perftst"))
     assert call[call.index("--method") + 1] == "bulk"
-    assert call[call.index("--vault") + 1] == "paysim-bulk"
+    assert call[call.index("--vault") + 1] == "paysim-perftst"
 
 
 def test_method_is_refused_for_a_dataset_that_cannot_take_it(repo: Path) -> None:
@@ -213,10 +213,10 @@ def test_compare_vaults_is_read_only_and_makes_no_case(repo: Path) -> None:
         run=runner,
         lookup_subs=lambda directory: {},
         api_running=lambda compose: True,
-        compare_vaults=("paysim", "paysim-bulk"),
+        compare_vaults=("paysim", "paysim-perftst"),
     )
     call = _seed_call(runner)
-    assert call[-3:] == ["scripts.compare_vaults", "paysim", "paysim-bulk"]
+    assert call[-3:] == ["scripts.compare_vaults", "paysim", "paysim-perftst"]
     assert "--case-name" not in call and not any("stop" in c for c in runner.calls)
 
 
@@ -248,17 +248,159 @@ def test_the_command_line_takes_method_and_compare_vaults(
 
     monkeypatch.setattr(seed_internal, "seed_internal", fake)
     assert (
-        seed_internal.main(["paysim", "--method", "bulk", "--vault", "paysim-bulk"])
+        seed_internal.main(["paysim", "--method", "bulk", "--vault", "paysim-perftst"])
         == 0
     )
-    assert seen["method"] == "bulk" and seen["vault"] == "paysim-bulk"
+    assert seen["method"] == "bulk" and seen["vault"] == "paysim-perftst"
     seen.clear()
     assert (
-        seed_internal.main(["paysim", "--compare-vaults", "paysim", "paysim-bulk"]) == 0
+        seed_internal.main(["paysim", "--compare-vaults", "paysim", "paysim-perftst"])
+        == 0
     )
     assert (
-        seen["compare_vaults"] == ("paysim", "paysim-bulk")
+        seen["compare_vaults"] == ("paysim", "paysim-perftst")
         and seen["dataset"] == "paysim"
     )
     assert seed_internal.main(["paysim", "--method", "fast"]) == 2
     assert seed_internal.main(["paysim", "--compare-vaults", "paysim"]) == 2
+
+
+def test_the_spike_runs_in_the_deployment_network_and_touches_no_case(
+    repo: Path,
+) -> None:
+    """Seen: run from the host the spike could not reach the store (it is only published inside
+    the deployment's network). Catches a spike that stops the Conduit, makes a case or asks for the
+    demo accounts, and one that never reaches the container."""
+    runner = Runner()
+    seed_internal.seed_internal(
+        "paysim",
+        repo,
+        run=runner,
+        lookup_subs=lambda directory: {},
+        api_running=lambda compose: True,
+        spike_bulk_transport=True,
+    )
+    call = _seed_call(runner)
+    assert call[-2:] == ["-m", "scripts.spike_bulk_transport"]
+    assert "--case-name" not in call and "--vault" not in call
+    assert not any("stop" in c for c in runner.calls)
+
+
+def test_the_spike_flag_is_refused_for_a_dataset_that_cannot_take_it_and_parsed_from_the_command_line(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Catches the flag silently ignored on another dataset, or `make`'s line not knowing it."""
+    (repo.parent / "OspreyFlow_Data" / "Enron_Mails" / "a").mkdir(parents=True)
+    runner = Runner()
+    with pytest.raises(seed_internal.SeedRefused, match="only built for paysim"):
+        seed_internal.seed_internal(
+            "enron",
+            repo,
+            run=runner,
+            lookup_subs=lambda directory: SUBS,
+            api_running=lambda compose: False,
+            permitted=lambda name, use: True,
+            spike_bulk_transport=True,
+        )
+    assert runner.calls == []
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(
+        seed_internal, "seed_internal", lambda d, **kw: seen.update(kw) or []
+    )
+    assert seed_internal.main(["paysim", "--spike-bulk-transport"]) == 0
+    assert seen["spike_bulk_transport"] is True
+
+
+def _every_container_run(repo: Path) -> list[tuple[str, list[str]]]:
+    """One container run of each kind `seed_internal` can start, as the argv it sent."""
+    (repo.parent / "OspreyFlow_Data" / "PaySIM_Dataset").mkdir(
+        parents=True, exist_ok=True
+    )
+    kinds: dict[str, dict[str, Any]] = {
+        "seed": {},
+        "bulk seed": {"method": "bulk", "vault": "paysim-perftst"},
+        "inspect": {"inspect": True},
+        "repair": {"restore_missing": True},
+        "compare": {"compare_vaults": ("paysim", "paysim-perftst")},
+        "spike": {"spike_bulk_transport": True},
+        "clear shared stores": {
+            "clear_shared_stores": True,
+            "vault": "paysim",
+            "stop_api": True,
+        },
+    }
+    found = []
+    for kind, kwargs in kinds.items():
+        runner = Runner()
+        seed_internal.seed_internal(
+            "paysim",
+            repo,
+            run=runner,
+            lookup_subs=lambda directory: SUBS,
+            api_running=lambda compose: False,
+            **kwargs,
+        )
+        found.append((kind, _seed_call(runner)))
+    return found
+
+
+def test_every_container_run_takes_the_checkouts_packages_as_well_as_its_scripts(
+    repo: Path,
+) -> None:
+    """Seen: the spike, and any seed importing `seed_support`, died with `cannot import name
+    'BulkGraphLoader' from 'ports.graph'`, because the container ran the image's older copy of
+    `packages/` beside the checkout's newer `scripts/`. Catches any kind of run that mounts the
+    scripts and not the packages they import."""
+    runs = _every_container_run(repo)
+    assert len(runs) == 7
+    for kind, call in runs:
+        assert f"{repo}/scripts:/app/scripts:ro" in call, kind
+        assert f"{repo}/packages:/app/packages:ro" in call, kind
+
+
+def test_the_spike_edge_count_reaches_the_container_and_is_bounded(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Catches `--spike-edges` never arriving (a 10,000-edge run that is a 1,000-edge one), a
+    count the spike was not built for, and the flag used on its own."""
+    runner = Runner()
+    kw: dict[str, Any] = {
+        "run": runner,
+        "lookup_subs": lambda directory: SUBS,
+        "api_running": lambda compose: False,
+    }
+    seed_internal.seed_internal(
+        "paysim", repo, spike_bulk_transport=True, spike_edges=10000, **kw
+    )
+    call = _seed_call(runner)
+    assert call[call.index("--edges") + 1] == "10000"
+    for bad in (50, 1_000_000):
+        with pytest.raises(seed_internal.SeedRefused, match="100 to 100000"):
+            seed_internal.seed_internal(
+                "paysim", repo, spike_bulk_transport=True, spike_edges=bad, **kw
+            )
+    with pytest.raises(seed_internal.SeedRefused, match="only goes with"):
+        seed_internal.seed_internal("paysim", repo, spike_edges=1000, **kw)
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(
+        seed_internal, "seed_internal", lambda d, **k: seen.update(k) or []
+    )
+    assert (
+        seed_internal.main(
+            ["paysim", "--spike-bulk-transport", "--spike-edges", "10000"]
+        )
+        == 0
+    )
+    assert seen["spike_edges"] == 10000
+    assert (
+        seed_internal.main(
+            ["paysim", "--spike-bulk-transport", "--spike-edges", "lots"]
+        )
+        == 2
+    )
+
+
+def test_the_bulk_chunk_is_the_size_that_left_no_more_strays_than_upsert() -> None:
+    """The one measured reason for the number (ADR-058 Amendment 4). Catches it being raised for
+    speed without a run that shows the strays do not rise."""
+    assert seed_support.BULK_CHUNK == 100

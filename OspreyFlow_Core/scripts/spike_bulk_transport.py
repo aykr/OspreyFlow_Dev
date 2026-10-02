@@ -49,6 +49,33 @@ _HANDLING = Handling(
 )
 
 
+_STARTED = time.perf_counter()
+
+
+def _say(line: str) -> None:
+    """Progress while a method runs, with the minutes and seconds since the spike began. Flushed,
+    so a long run is seen to be moving."""
+    elapsed = int(time.perf_counter() - _STARTED)
+    print(f"  ... [{elapsed // 60:02d}:{elapsed % 60:02d}] {line}", flush=True)
+
+
+def _rate(done: int, previous: int, seconds: float) -> str:
+    """How fast the last interval went: `(2,000 edges, 9.8 s, 204 per s)`."""
+    count = done - previous
+    return f"{count:,} in {seconds:.1f} s, {count / seconds:,.0f} per s" if seconds else ""
+
+
+async def sweep_leftovers(client: ArcadeDBClient) -> list[str]:
+    """Drops scratch databases an interrupted earlier run left behind (names starting
+    `spike_bulk_`, and only those), so a Ctrl-C does not leave them in the store."""
+    dropped = []
+    for name in await client.list_databases():
+        if name.startswith(SCRATCH_PREFIX):
+            await client.drop_database_named(refuse_unless_scratch(name))
+            dropped.append(name)
+    return dropped
+
+
 class NotScratchError(Exception):
     """The script was about to touch a database that is not its own scratch one."""
 
@@ -131,10 +158,19 @@ async def _fresh(name: str, nodes: list[NodeWrite]) -> tuple[ArcadeDBClient, Gra
     await client.create_database_if_absent()
     graph = GraphArcadeDBAdapter(client, load_uk_le_scheme())
     await graph.apply_schema(load_default_ontology())
+    began = time.perf_counter()
+    last, last_at = 0, began
     for start in range(0, len(nodes), UPSERT_CHUNK):
         tx = await graph.begin_transaction()
         await graph.upsert_nodes(nodes[start : start + UPSERT_CHUNK], tx)
         await graph.commit_transaction(tx)
+        if (start // UPSERT_CHUNK) % 50 == 49:
+            now, done = time.perf_counter(), start + UPSERT_CHUNK
+            _say(
+                f"{name}: {done:,} of {len(nodes):,} accounts written "
+                f"({_rate(done, last, now - last_at)})"
+            )
+            last, last_at = done, now
     return client, graph
 
 
@@ -151,15 +187,18 @@ async def _measure(
 ) -> Outcome:
     """One method on its own freshly created database: time the load only, then read back."""
     outcome = Outcome(label)
+    _say(f"preparing {label}: new scratch database and its accounts")
     client, graph = await _fresh(name, nodes)
     try:
         started = time.perf_counter()
+        _say(f"loading edges: {label}")
         try:
             outcome.note = await load(graph, client)
         except Exception as error:  # reported as a line, never a crash: the point is to find out
             outcome.note = f"{type(error).__name__}: {str(error)[:200]}"
             return outcome
         outcome.seconds = time.perf_counter() - started
+        _say(f"{label}: loaded in {outcome.seconds:.1f} s; reading back and checking")
         outcome.edges = await _stored_edges(client)
         outcome.strays = len(
             await ids_stored_twice(
@@ -224,15 +263,34 @@ def _brief(result: Any) -> str:
 
 
 async def run(edge_count: int, say: Callable[[str], None] = print) -> int:
+    global _STARTED
+    _STARTED = time.perf_counter()
     nodes, edges = synthetic_writes(edge_count)
     stamp = datetime.now(UTC).strftime("%H%M%S")
     say(f"spike: {len(nodes):,} accounts, {len(edges):,} transactions (scratch databases only)")
+    sweeper = ArcadeDBClient(
+        ArcadeDBConfig.from_env(refuse_unless_scratch(f"{SCRATCH_PREFIX}sweep"))
+    )
+    try:
+        for name in await sweep_leftovers(sweeper):
+            say(f"spike: dropped {name}, left by an earlier run that was interrupted")
+    finally:
+        await sweeper.aclose()
 
     async def by_upsert(graph: GraphArcadeDBAdapter, _: ArcadeDBClient) -> str:
+        last, last_at = 0, time.perf_counter()
         for start in range(0, len(edges), UPSERT_CHUNK):
             tx = await graph.begin_transaction()
             await graph.upsert_edges(edges[start : start + UPSERT_CHUNK], tx)
             await graph.commit_transaction(tx)
+            done = start + UPSERT_CHUNK
+            if (start // UPSERT_CHUNK) % 25 == 24:
+                now, done = time.perf_counter(), min(done, len(edges))
+                _say(
+                    f"upsert: {done:,} of {len(edges):,} edges "
+                    f"(last interval {_rate(done, last, now - last_at)})"
+                )
+                last, last_at = done, now
         return f"chunks of {UPSERT_CHUNK}"
 
     reference = await _measure(
@@ -242,7 +300,17 @@ async def run(edge_count: int, say: Callable[[str], None] = print) -> int:
     for size in CHUNK_SIZES:
 
         async def by_bulk(graph: GraphArcadeDBAdapter, _: ArcadeDBClient, size: int = size) -> str:
-            result = await graph.bulk_load_edges(edges, chunk_size=size)
+            marks = {"at": time.perf_counter(), "done": 0}
+
+            def report(done: int, total: int) -> None:
+                now = time.perf_counter()
+                _say(
+                    f"bulk: {done:,} of {total:,} edges "
+                    f"(last chunk {_rate(done, int(marks['done']), now - marks['at'])})"
+                )
+                marks["at"], marks["done"] = now, done
+
+            result = await graph.bulk_load_edges(edges, chunk_size=size, progress=report)
             return f"{result.chunks} chunk(s), {len(result.collisions)} collision(s)"
 
         outcomes.append(

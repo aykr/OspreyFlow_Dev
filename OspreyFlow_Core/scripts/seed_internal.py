@@ -7,7 +7,7 @@ The seed runs in a one-shot container from the Conduit's own image, **inside the
 network**, the way `harness.apply` runs its own seeds: the deployment's analytics store is a Docker
 volume only the Conduit's image can see, and its Postgres, ArcadeDB and their passwords are only
 reachable (and only known) there, so nothing here handles a password. The checkout's `scripts/` and
-the data folder are mounted read-only.
+`packages/` and the data folder are mounted read-only (the image's copy of the packages lags it).
 
 The case the data goes into is made by the seed itself, named, and shared with the two demo accounts
 by their identity-provider subjects (the Conduit's principal ids): the demo administrator as Author,
@@ -89,6 +89,21 @@ DATASETS: dict[str, Dataset] = {
 }
 
 
+def _checkout_mounts(repo_root: Path) -> list[str]:
+    """What every seed container takes from the checkout, read-only: the scripts **and the
+    packages they import**. The image carries its own copy of both, built when it was last
+    refreshed, so a script that imports something added since (ADR-058's `BulkGraphLoader`, which
+    `seed_support` imports) fails with an ImportError unless the packages come from the checkout
+    too, as the scripts do. One list for every container run, so no run can be left with the
+    image's older copy."""
+    return [
+        "-v",
+        f"{repo_root}/scripts:/app/scripts:ro",
+        "-v",
+        f"{repo_root}/packages:/app/packages:ro",
+    ]
+
+
 def _run(argv: Sequence[str]) -> str:
     """Run a command, showing each line of its output as it arrives (a seed takes minutes, and a
     silent one looks hung), and return everything it printed."""
@@ -163,6 +178,8 @@ def seed_internal(
     graph_fraud_rows: int | None = None,
     method: str = "upsert",
     compare_vaults: tuple[str, str] | None = None,
+    spike_bulk_transport: bool = False,
+    spike_edges: int | None = None,
     inspect: bool = False,
     inspect_record: str | None = None,
     repair_strays: bool = False,
@@ -204,6 +221,12 @@ def seed_internal(
         for name in compare_vaults:
             if not re.fullmatch(r"[a-z][a-z0-9-]{0,30}", name):
                 raise SeedRefused(f"{name!r} is not a vault id")
+    if spike_edges is not None and not spike_bulk_transport:
+        raise SeedRefused("--spike-edges only goes with --spike-bulk-transport")
+    if spike_edges is not None and not 100 <= spike_edges <= 100_000:
+        raise SeedRefused("--spike-edges takes a number from 100 to 100000")
+    if spike_bulk_transport and not spec.sampled:
+        raise SeedRefused("--spike-bulk-transport is only built for paysim so far")
     if method != "upsert" and not spec.sampled:
         raise SeedRefused("--method bulk is only built for paysim so far")
     if vault is not None:
@@ -236,6 +259,8 @@ def seed_internal(
         )
     if compare_vaults is not None:
         return _compare_vaults(repo_root, directory, run, *compare_vaults)
+    if spike_bulk_transport:
+        return _spike_bulk_transport(repo_root, directory, run, spike_edges)
     if inspect:
         return _inspect(spec, repo_root, directory, run, inspect_record, vault)
     if repair_strays or restore_missing:
@@ -271,7 +296,7 @@ def seed_internal(
             "Run again with --stop-api to stop it for the seed and start it again after; "
             "stopping it is your choice, so it is not done for you"
         )
-    mounts = ["-v", f"{repo_root}/scripts:/app/scripts:ro"]
+    mounts = _checkout_mounts(repo_root)
     if spec.data_folder:
         mounts += ["-v", f"{data_root}:{CONTAINER_DATA}:ro"]
     argv = [
@@ -337,8 +362,7 @@ def _inspect(
         "--no-deps",
         "--entrypoint",
         "python",
-        "-v",
-        f"{repo_root}/scripts:/app/scripts:ro",
+        *_checkout_mounts(repo_root),
         "api",
         "-m",
         spec.script,
@@ -368,14 +392,41 @@ def _compare_vaults(
         "--no-deps",
         "--entrypoint",
         "python",
-        "-v",
-        f"{repo_root}/scripts:/app/scripts:ro",
+        *_checkout_mounts(repo_root),
         "api",
         "-m",
         "scripts.compare_vaults",
         left,
         right,
     ]
+    output = run(argv)
+    return [line.strip() for line in output.splitlines() if line.strip()]
+
+
+def _spike_bulk_transport(
+    repo_root: Path,
+    directory: Path,
+    run: Callable[[Sequence[str]], str],
+    edges: int | None = None,
+) -> list[str]:
+    """Run the bulk-transport spike (`scripts.spike_bulk_transport`, ADR-058 D10) inside the
+    deployment's network, the only place the graph store is reachable from. It touches only
+    scratch databases named `spike_bulk_*`, which it drops afterwards: no case is made, no vault
+    is opened and the Conduit is left running. Run it with the store otherwise idle."""
+    argv = [
+        *_compose(directory / "compose.yaml"),
+        "run",
+        "--rm",
+        "--no-deps",
+        "--entrypoint",
+        "python",
+        *_checkout_mounts(repo_root),
+        "api",
+        "-m",
+        "scripts.spike_bulk_transport",
+    ]
+    if edges is not None:
+        argv += ["--edges", str(edges)]
     output = run(argv)
     return [line.strip() for line in output.splitlines() if line.strip()]
 
@@ -406,8 +457,7 @@ def _repair_strays(
         "--no-deps",
         "--entrypoint",
         "python",
-        "-v",
-        f"{repo_root}/scripts:/app/scripts:ro",
+        *_checkout_mounts(repo_root),
         "-v",
         f"{data_root}:{CONTAINER_DATA}:ro",
         "api",
@@ -459,8 +509,7 @@ def _clear_shared_stores(
         "--no-deps",
         "--entrypoint",
         "python",
-        "-v",
-        f"{repo_root}/scripts:/app/scripts:ro",
+        *_checkout_mounts(repo_root),
         "api",
         "-m",
         "scripts.clear_shared_stores",
@@ -527,11 +576,19 @@ def main(argv: list[str] | None = None) -> int:
         pair = args[args.index("--compare-vaults") + 1 :][:2]
         if len(pair) != 2 or any(v.startswith("--") for v in pair):
             print(
-                "--compare-vaults takes two vault ids, for example paysim paysim-bulk",
+                "--compare-vaults takes two vault ids, for example paysim paysim-perftst",
                 file=sys.stderr,
             )
             return 2
         compare = (pair[0], pair[1])
+    spike = "--spike-bulk-transport" in args
+    spike_edges: int | None = None
+    if "--spike-edges" in args:
+        value = args[args.index("--spike-edges") + 1 :][:1]
+        if not value or not value[0].isdigit():
+            print("--spike-edges takes a number, for example 10000", file=sys.stderr)
+            return 2
+        spike_edges = int(value[0])
     method = "upsert"
     if "--method" in args:
         value = args[args.index("--method") + 1 :][:1]
@@ -549,6 +606,7 @@ def main(argv: list[str] | None = None) -> int:
     takes_a_value = {
         "--vault",
         "--method",
+        "--spike-edges",
         "--inspect-record",
         "--graph-fraud-rows",
         "--repair-limit",
@@ -566,7 +624,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"usage: seed_internal <{'|'.join(sorted(DATASETS))}> [--stop-api] "
             "[--replace-graph] [--reset-graph-database] [--vault ID] [--method upsert|bulk] "
-            "[--compare-vaults A B] "
+            "[--compare-vaults A B] [--spike-bulk-transport [--spike-edges N]] "
             "[--graph-fraud-rows N|all] "
             "[--repair-strays | --restore-missing [--apply] [--repair-limit N]] "
             "[--clear-shared-stores --vault ID [--accept-strays N] [--confirm V:E:N]]",
@@ -584,6 +642,8 @@ def main(argv: list[str] | None = None) -> int:
             graph_fraud_rows=sample,
             method=method,
             compare_vaults=compare,
+            spike_bulk_transport=spike,
+            spike_edges=spike_edges,
             inspect=inspect,
             inspect_record=record,
             repair_strays=repair_strays,
@@ -597,6 +657,11 @@ def main(argv: list[str] | None = None) -> int:
     except (SeedRefused, SeedFailed) as error:
         print(f"seed: {error}", file=sys.stderr)
         return 1
+    if spike:
+        print(
+            "seed: spike finished; its scratch databases were dropped and nothing else was touched."
+        )
+        return 0
     if compare:
         print("seed: comparison finished; nothing was changed.")
         return 0

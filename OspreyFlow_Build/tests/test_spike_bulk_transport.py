@@ -103,3 +103,56 @@ def test_a_failed_candidate_says_so_instead_of_a_rate() -> None:
     assert "FAILED" in failed.line(100) and "edges/s" not in failed.line(100)
     done = spike.Outcome("bulk", seconds=2.0, edges={"a": 1}, strays=1)
     assert "50 edges/s" in done.line(100) and "1 id(s) stored twice" in done.line(100)
+
+
+class _Server:
+    def __init__(self, names: list[str]) -> None:
+        self.names = names
+        self.dropped: list[str] = []
+
+    async def list_databases(self) -> list[str]:
+        return list(self.names)
+
+    async def drop_database_named(self, name: str) -> None:
+        self.dropped.append(name)
+
+
+def test_leftover_scratch_databases_are_dropped_and_nothing_else() -> None:
+    """Seen: a spike interrupted with Ctrl-C can leave its scratch databases behind. Catches the
+    sweep dropping a database that is not the spike's own (the working database, a vault) or
+    missing one that is."""
+    server = _Server(
+        ["ospreyflow", "vault_paysim", "spike_bulk_up_1", "spike_bulk_g100_1"]
+    )
+    dropped = asyncio.run(spike.sweep_leftovers(server))  # type: ignore[arg-type]
+    assert dropped == ["spike_bulk_up_1", "spike_bulk_g100_1"]
+    assert server.dropped == dropped
+
+
+def test_progress_lines_are_flushed_so_a_long_run_is_seen_moving(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Seen: the 10,000-edge run printed nothing for minutes and looked hung. Catches progress
+    that is buffered (not flushed) when output is piped."""
+    flushes: list[bool] = []
+    real = print
+    monkeypatch.setattr(
+        "builtins.print",
+        lambda *a, **k: (flushes.append(bool(k.get("flush"))), real(*a, **k)),
+    )
+    spike._say("upsert: 1,000 of 10,000 edges")
+    assert flushes == [True]
+    assert "upsert: 1,000 of 10,000 edges" in capsys.readouterr().out
+
+
+def test_a_progress_line_carries_the_elapsed_time_and_the_interval_speed(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Seen: the 10,000-edge run printed 'upsert: 2,000 of 10,000 edges' with no time, so the pace
+    could not be read. Catches a line without the clock, or a speed worked out over the wrong
+    count or interval."""
+    monkeypatch.setattr(spike.time, "perf_counter", lambda: spike._STARTED + 125)
+    spike._say("upsert: 2,000 of 10,000 edges")
+    assert "[02:05] upsert: 2,000 of 10,000 edges" in capsys.readouterr().out
+    assert spike._rate(2000, 1000, 5.0) == "1,000 in 5.0 s, 200 per s"
+    assert spike._rate(2000, 1000, 0) == ""

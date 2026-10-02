@@ -31,9 +31,11 @@ from ports.graph import BulkGraphLoader, GraphPort
 #: A progress line every this many graph batches, so a slow write is visible as slow.
 PROGRESS_EVERY = 25
 
-#: Edges per transaction for a bulk load (ADR-058); the spike (`scripts.spike_bulk_transport`)
-#: measures the sizes worth using.
-BULK_CHUNK = 500
+#: Edges per transaction for a bulk load (ADR-058). The first spike on a real store (1,000 edges,
+#: 2 October 2026; ADR-058 Amendment 4) left 1 id stored twice at 100 per chunk, as the upsert path
+#: did, and 4 at 500 and at 2,000; speed was 794, 1,045 and 1,190 edges/s. 100 is the one that
+#: does not leave more strays than upsert, so it is the default until a larger run says otherwise.
+BULK_CHUNK = 100
 
 
 class BulkUnavailable(RuntimeError):
@@ -110,7 +112,8 @@ async def _bulk_edges(
 
     result = await graph.bulk_load_edges(edges, chunk_size=BULK_CHUNK, progress=progress)
     say(
-        f"  graph: bulk wrote {len(result.written):,} {noun} in {result.chunks} chunk(s); "
+        f"  graph: bulk wrote {len(result.written):,} {noun} in {result.chunks} chunk(s) "
+        f"({int(time.monotonic() - started)}s); "
         f"{result.received - len(result.written) - len(result.collisions):,} repeated pair(s) "
         f"merged before writing; {len(result.collisions):,} already stored"
     )
@@ -124,6 +127,25 @@ async def _bulk_edges(
         await graph.commit_transaction(tx)
     if result.collisions:
         say(f"  graph: {len(result.collisions):,} already-stored {noun} merged by upsert")
+
+
+class EventProgress:
+    """The line printed after each batch of events: how many are in, the time since the load
+    began, and the speed over the last batch. Seen: a 3.6 million event load printed counts alone,
+    so its pace could not be read."""
+
+    def __init__(self, say: Callable[[str], None] | None = None) -> None:
+        self._say = say or (lambda line: print(line, flush=True))
+        self._started = self._last_at = time.monotonic()
+        self._last = 0
+
+    def __call__(self, loaded: int) -> None:
+        now = time.monotonic()
+        elapsed = int(now - self._started)
+        interval = now - self._last_at
+        speed = f", {(loaded - self._last) / interval:,.0f} per s" if interval > 0 else ""
+        self._say(f"  {loaded:,} events loaded ({elapsed // 60}m {elapsed % 60:02d}s{speed})")
+        self._last, self._last_at = loaded, now
 
 
 class CleanUpIncomplete(RuntimeError):

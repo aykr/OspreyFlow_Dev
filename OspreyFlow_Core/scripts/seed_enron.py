@@ -26,6 +26,7 @@ from pathlib import Path
 import duckdb
 from scripts.seed_support import (
     KNOWN_STRAY_ADVICE,
+    EventProgress,
     clear_seeded_graph,
     events_already_loaded,
     report_ids_stored_twice,
@@ -231,10 +232,11 @@ async def _run(args: argparse.Namespace) -> int:
             for message in enron.read_messages(source)
             for event in enron.to_events(message, investigation_scope=scope, handling=_HANDLING)
         )
+        report_events = EventProgress()
         for batch in _batches(events, _EVENT_CHUNK):
             await analytics.load_events(batch)  # type: ignore[arg-type]
             loaded += len(batch)
-            print(f"  {loaded:,} events loaded", flush=True)
+            report_events(loaded)
     finally:
         con.close()
 

@@ -143,7 +143,9 @@ def test_events_already_in_a_case_are_detected_and_other_cases_do_not_count(
 
 def test_a_missing_analytics_file_or_table_means_no_events_yet(tmp_path: Path) -> None:
     """Catches the check crashing on a first-ever run."""
-    assert seed_support.events_already_loaded(tmp_path / "none.duckdb", "case-a") is False
+    assert (
+        seed_support.events_already_loaded(tmp_path / "none.duckdb", "case-a") is False
+    )
     empty = tmp_path / "empty.duckdb"
     duckdb.connect(str(empty)).close()
     assert seed_support.events_already_loaded(empty, "case-a") is False
@@ -158,7 +160,9 @@ class FakeClient:
     owner's machine: `DELETE EDGE ...` is not accepted as a first word), so the test can see which
     forms are tried, in what order, and what each would delete."""
 
-    def __init__(self, rows: dict[str, list[str]], *, parse_error_on: tuple[str, ...] = ()) -> None:
+    def __init__(
+        self, rows: dict[str, list[str]], *, parse_error_on: tuple[str, ...] = ()
+    ) -> None:
         self.rows = {k: list(v) for k, v in rows.items()}
         self.statements: list[str] = []
         self.stubborn = False
@@ -220,7 +224,9 @@ class FakeClient:
         assert kind and prefix, command
         name, start = kind.group(1), prefix.group(1)
         if command.startswith("SELECT"):
-            return [{"n": len([i for i in self.rows.get(name, []) if i.startswith(start)])}]
+            return [
+                {"n": len([i for i in self.rows.get(name, []) if i.startswith(start)])}
+            ]
         return [{"count": self._delete(name, start)}]
 
     async def gremlin(self, command: str, **_: object) -> list[dict[str, object]]:
@@ -254,7 +260,9 @@ def _clear(client: FakeClient, *, wait_seconds: float = 1800.0) -> tuple[int, in
     )
 
 
-def test_only_rows_with_the_seeds_own_id_prefix_are_deleted_and_the_counts_are_returned() -> None:
+def test_only_rows_with_the_seeds_own_id_prefix_are_deleted_and_the_counts_are_returned() -> (
+    None
+):
     """Catches a clean-up that would delete another dataset's accounts or transactions (the
     Endpoint and edge types are shared with Enron and any later demo)."""
     client = FakeClient(
@@ -268,7 +276,9 @@ def test_only_rows_with_the_seeds_own_id_prefix_are_deleted_and_the_counts_are_r
     assert client.rows["TRANSACTED"] == ["other-tx-9"]
 
 
-def test_transactions_are_deleted_before_accounts_and_every_delete_is_scoped_by_prefix() -> None:
+def test_transactions_are_deleted_before_accounts_and_every_delete_is_scoped_by_prefix() -> (
+    None
+):
     """Catches an unscoped `DELETE` (a whole type wiped) and the wrong order."""
     client = FakeClient({"Endpoint": ["paysim-acct-1"], "TRANSACTED": ["paysim-tx-1"]})
     _clear(client)
@@ -296,7 +306,10 @@ def test_when_the_parser_refuses_one_delete_form_the_next_is_tried_and_all_are_p
     stops at the first form the server does not accept, and a fallback form that is not scoped by
     the id prefix (which would wipe another dataset)."""
     client = FakeClient(
-        {"Endpoint": ["paysim-acct-1", "enron-ep-1"], "TRANSACTED": ["paysim-tx-1", "other-tx"]},
+        {
+            "Endpoint": ["paysim-acct-1", "enron-ep-1"],
+            "TRANSACTED": ["paysim-tx-1", "other-tx"],
+        },
         parse_error_on=("DELETE EDGE", "DELETE VERTEX"),
     )
     assert _clear(client) == (1, 1)
@@ -336,7 +349,9 @@ def test_when_no_form_is_accepted_the_error_names_every_form_tried() -> None:
         {"Endpoint": ["paysim-acct-1"], "TRANSACTED": ["paysim-tx-1"]},
         parse_error_on=("DELETE", "g."),
     )
-    with pytest.raises(seed_support.CleanUpIncomplete, match="DELETE FROM.*DELETE EDGE.*drop"):
+    with pytest.raises(
+        seed_support.CleanUpIncomplete, match="DELETE FROM.*DELETE EDGE.*drop"
+    ):
         _clear(client)
 
 
@@ -351,11 +366,16 @@ def test_a_missing_record_during_delete_falls_back_to_truncating_types_that_hold
     client.record_missing_on = "DELETE"
     assert _clear(client) == (2, 1)
     truncates = [s for s in client.statements if s.startswith("TRUNCATE")]
-    assert truncates == ["TRUNCATE TYPE TRANSACTED UNSAFE", "TRUNCATE TYPE Endpoint UNSAFE"]
+    assert truncates == [
+        "TRUNCATE TYPE TRANSACTED UNSAFE",
+        "TRUNCATE TYPE Endpoint UNSAFE",
+    ]
     assert client.rows == {"Endpoint": [], "TRANSACTED": []}
 
 
-def test_the_truncate_is_refused_when_a_type_holds_rows_that_are_not_this_seeds() -> None:
+def test_the_truncate_is_refused_when_a_type_holds_rows_that_are_not_this_seeds() -> (
+    None
+):
     """Catches wiping another dataset's accounts (Enron shares the Endpoint type)."""
     client = FakeClient(
         {"Endpoint": ["paysim-acct-1", "enron-ep-1"], "TRANSACTED": ["paysim-tx-1"]}
@@ -373,7 +393,9 @@ def test_a_normal_clean_up_never_truncates() -> None:
     assert not [s for s in client.statements if s.startswith("TRUNCATE")]
 
 
-def test_a_truncate_the_client_gives_up_on_is_waited_for_not_treated_as_a_failure() -> None:
+def test_a_truncate_the_client_gives_up_on_is_waited_for_not_treated_as_a_failure() -> (
+    None
+):
     """Seen: the 30-second client timeout fired on TRUNCATE while ArcadeDB was still emptying the
     type. Catches a clean-up that aborts (leaving a half-emptied graph) instead of waiting."""
     client = FakeClient(
@@ -392,7 +414,9 @@ def test_a_truncate_that_never_finishes_is_an_error_naming_the_type() -> None:
     client.record_missing_on = "DELETE"
     client.truncate_times_out = True
     client.empties_after_polls = 10**6
-    with pytest.raises(seed_support.CleanUpIncomplete, match="TRANSACTED.*still not empty"):
+    with pytest.raises(
+        seed_support.CleanUpIncomplete, match="TRANSACTED.*still not empty"
+    ):
         _clear(client, wait_seconds=30.0)
 
 
@@ -489,14 +513,26 @@ def test_a_database_that_will_not_go_is_an_error_not_a_success() -> None:
 
 def test_a_vault_gets_its_own_database_and_its_own_analytics_file() -> None:
     """Catches two vaults sharing a file, and a hyphen that ArcadeDB would refuse."""
-    found = seed_support.vault_locations("fixture-corp", "/data/_local-runtime/analytics.duckdb")
+    found = seed_support.vault_locations(
+        "fixture-corp", "/data/_local-runtime/analytics.duckdb"
+    )
     assert found.database == "vault_fixture_corp"
-    assert found.analytics_db_path == "/data/_local-runtime/vaults/fixture-corp/analytics.duckdb"
-    other = seed_support.vault_locations("paysim", "/data/_local-runtime/analytics.duckdb")
-    assert other.database != found.database and other.analytics_db_path != found.analytics_db_path
+    assert (
+        found.analytics_db_path
+        == "/data/_local-runtime/vaults/fixture-corp/analytics.duckdb"
+    )
+    other = seed_support.vault_locations(
+        "paysim", "/data/_local-runtime/analytics.duckdb"
+    )
+    assert (
+        other.database != found.database
+        and other.analytics_db_path != found.analytics_db_path
+    )
 
 
-@pytest.mark.parametrize("bad", ["", "PaySim", "../x", "a/b", "1abc", "a" * 32, "x y", "a_b"])
+@pytest.mark.parametrize(
+    "bad", ["", "PaySim", "../x", "a/b", "1abc", "a" * 32, "x y", "a_b"]
+)
 def test_a_vault_id_that_could_escape_its_folder_is_refused(bad: str) -> None:
     """Catches an id that builds a path outside `vaults/`."""
     with pytest.raises(ValueError, match="not a vault id"):
@@ -533,7 +569,9 @@ def test_the_events_summary_reports_each_case_and_each_way_a_file_can_be_unreada
     con.close()
 
 
-def test_a_file_someone_else_has_open_is_reported_not_crashed_on(tmp_path: Path) -> None:
+def test_a_file_someone_else_has_open_is_reported_not_crashed_on(
+    tmp_path: Path,
+) -> None:
     path = tmp_path / "busy.duckdb"
     holder = duckdb.connect(str(path))
     holder.execute("CREATE TABLE events (investigation_scope VARCHAR)")
@@ -547,7 +585,9 @@ def test_a_file_someone_else_has_open_is_reported_not_crashed_on(tmp_path: Path)
 
 
 class ProbeClient:
-    def __init__(self, fail_on: str | None = None, duplicate_id: str | None = None) -> None:
+    def __init__(
+        self, fail_on: str | None = None, duplicate_id: str | None = None
+    ) -> None:
         self.statements: list[str] = []
         self.fail_on = fail_on
         self.duplicate_id = duplicate_id
@@ -563,9 +603,14 @@ class ProbeClient:
                 exception_class="com.arcadedb.exception.RecordNotFoundException",
             )
         if self.duplicate_id and "GROUP BY id" in command and "TRANSACTED" in command:
-            return [{"id": self.duplicate_id, "n": 2}, {"id": "paysim-tx-second", "n": 2}]
+            return [
+                {"id": self.duplicate_id, "n": 2},
+                {"id": "paysim-tx-second", "n": 2},
+            ]
         if command.startswith("SELECT FROM TRANSACTED WHERE id LIKE"):
-            return [{"id": self.duplicate_id, "source": "acct-a", "target": "acct-b"}] * 2
+            return [
+                {"id": self.duplicate_id, "source": "acct-a", "target": "acct-b"}
+            ] * 2
         return [{"n": 7}]
 
 
@@ -620,13 +665,17 @@ def test_inspect_counts_the_ids_stored_more_than_once() -> None:
     assert any("stored more than once: 0" in line for line in _inspect(ProbeClient()))
 
 
-def test_inspect_shows_both_records_of_a_duplicated_id_by_a_scan_not_the_index() -> None:
+def test_inspect_shows_both_records_of_a_duplicated_id_by_a_scan_not_the_index() -> (
+    None
+):
     """Seen: the group count said an id was stored twice, but `WHERE id = '...'` returned one
     record: the lookup used an index that hid the second. `LIKE` is not answered from that index,
     so both records show."""
     client = ProbeClient(duplicate_id="paysim-tx-abc")
     lines = _inspect(client)
-    follow = [s for s in client.statements if s.startswith("SELECT FROM TRANSACTED WHERE id")]
+    follow = [
+        s for s in client.statements if s.startswith("SELECT FROM TRANSACTED WHERE id")
+    ]
     assert follow == ["SELECT FROM TRANSACTED WHERE id LIKE 'paysim-tx-abc'"]
     assert any("paysim-tx-abc" in line and "both records" in line for line in lines)
 
@@ -634,7 +683,9 @@ def test_inspect_shows_both_records_of_a_duplicated_id_by_a_scan_not_the_index()
 def test_inspect_does_not_look_up_records_when_nothing_is_duplicated() -> None:
     client = ProbeClient()
     _inspect(client)
-    assert not any(s.startswith("SELECT FROM TRANSACTED WHERE id") for s in client.statements)
+    assert not any(
+        s.startswith("SELECT FROM TRANSACTED WHERE id") for s in client.statements
+    )
 
 
 def test_inspect_escapes_a_quote_in_a_duplicated_id() -> None:
@@ -644,14 +695,19 @@ def test_inspect_escapes_a_quote_in_a_duplicated_id() -> None:
     assert any("LIKE 'paysim-tx-a\\'b'" in s for s in client.statements)
 
 
-def test_inspect_looks_for_a_second_vertex_behind_each_end_of_a_duplicate_by_a_scan() -> None:
+def test_inspect_looks_for_a_second_vertex_behind_each_end_of_a_duplicate_by_a_scan() -> (
+    None
+):
     """Seen: the two records of a duplicated id were identical down to the microsecond, so one
     write made two edges. If an endpoint vertex is reachable twice, one traversal fans out to two
     edges; `LIKE` is answered by a scan, which shows a second vertex an index would hide."""
     client = ProbeClient(duplicate_id="paysim-tx-abc")
     _inspect(client)
     for end in ("acct-a", "acct-b"):
-        assert f"SELECT @rid AS rid, id FROM Endpoint WHERE id LIKE '{end}'" in client.statements
+        assert (
+            f"SELECT @rid AS rid, id FROM Endpoint WHERE id LIKE '{end}'"
+            in client.statements
+        )
 
 
 def test_inspect_lists_every_duplicated_id_compactly_not_only_the_first() -> None:
@@ -662,3 +718,21 @@ def test_inspect_lists_every_duplicated_id_compactly_not_only_the_first() -> Non
         "SELECT @rid AS rid, source, target FROM TRANSACTED WHERE id LIKE 'paysim-tx-second'"
         in client.statements
     )
+
+
+def test_event_progress_says_how_many_how_long_and_how_fast(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Seen: the event load of a seed printed '50,000 events loaded' and nothing else, so its pace
+    could not be read. Catches a line without the elapsed time, or a speed worked out over the
+    whole run (or the wrong count) in place of the last batch."""
+    clock = iter([0.0, 10.0, 70.0, 70.0])
+    monkeypatch.setattr(seed_support.time, "monotonic", lambda: next(clock))
+    lines: list[str] = []
+    progress = seed_support.EventProgress(lines.append)  # reads the clock once, at 0.0
+    progress(50_000)  # at 10.0
+    progress(100_000)  # at 70.0: 50,000 more in 60 s
+    assert lines == [
+        "  50,000 events loaded (0m 10s, 5,000 per s)",
+        "  100,000 events loaded (1m 10s, 833 per s)",
+    ]

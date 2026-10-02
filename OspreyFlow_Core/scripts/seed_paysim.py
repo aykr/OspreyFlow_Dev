@@ -24,6 +24,7 @@ from pathlib import Path
 import duckdb
 from scripts.seed_support import (
     KNOWN_STRAY_ADVICE,
+    EventProgress,
     RepairAnomaly,
     clear_seeded_graph,
     events_already_loaded,
@@ -466,10 +467,11 @@ async def _run(args: argparse.Namespace) -> int:
         events = (
             to_event(r, investigation_scope=scope, handling=_HANDLING) for r in read_paysim(source)
         )
+        report_events = EventProgress()
         for batch in _batches(events, _EVENT_CHUNK):
             await analytics.load_events(batch)  # type: ignore[arg-type]
             loaded += len(batch)
-            print(f"  {loaded:,} events loaded", flush=True)
+            report_events(loaded)
     finally:
         con.close()
 
