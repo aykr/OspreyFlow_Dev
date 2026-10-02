@@ -682,6 +682,11 @@ freezing a single number and calling it the weight would silently go stale as th
 formula needs, so a later, more scoped recompute — the working-set service — is arithmetic over
 stored numbers, never a full corpus rescan.
 
+> **PROPOSED, not yet the design (ADR-058 D4).** A bulk load would weigh every edge it writes against the corpus as it
+> stands at the end of the load, with this formula and these `WeightComponents` unchanged and `computed_at` recording the
+> end of the load, instead of against the corpus as it stood when each edge was written. A bulk-loaded edge and an
+> upsert-loaded one would then differ in the weight value but not in the stored counts it is computed from.
+
 ### 6.2 Clique Metric
 
 Both the v2 spec and the Gemini spec require a "Clique Metric" and neither defines it. Here is

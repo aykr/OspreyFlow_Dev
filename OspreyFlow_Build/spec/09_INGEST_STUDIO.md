@@ -399,6 +399,10 @@ editor; the repository is the record.
   unified CLI. It supersedes everything the load created, leaving the audit trail intact.
   Reverting a load is not yet reachable from the admin console; it is a function call today, and
   gets its own console screen once that surface exists.
+- **Written in bulk, by default (PROPOSED, ADR-058).** A publish would aggregate its resolved rows and write nodes then
+  edges through the bulk-load capability in chunks, falling back to `upsert_*` only for what collides with stored data;
+  `upsert_*` stays the path for low-volume and interactive writes. Today's engine writes one element per call, which at
+  234,000 links (the Enron measurement) is hours. Not built; awaiting the owner's decisions.
 
 ### The recipe registry, and how "flags the affected recipes" (above) actually happens
 

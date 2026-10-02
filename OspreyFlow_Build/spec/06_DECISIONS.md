@@ -8502,3 +8502,154 @@ store idle, since timing against a running load is contaminated (rule 14).
 **Position.** The owner is letting this load run to completion (projected about 10 hours if the time per 1,000 links
 stays flat; that is a projection from 10,000 links). The cost is then to be measured on an idle store, one query kind at
 a time, before anything is changed.
+
+### ADR-056, Amendment 24 (2 October 2026) — a correction to Amendment 23: the cost per link still grows, and the load will take about 18 to 19 hours
+
+**Seen.** Amendment 23 said the time per 1,000 links "stays flat at about 150 to 157 s". That was read from the first 10,000
+links only and is wrong. At 154,040 links (36,376 s elapsed) the time per 1,000 links is about 330 s, against about 156 s
+at 10,000: it grows by about 1.2 s with every thousand written, the same growth as the first run. The change in
+Amendment 22 neither removed it nor made it worse. The link phase is projected at 18 to 19 hours (about 8 to 9 hours
+still to run at that point), no better than the first run's projection of 17.
+
+**What is known and not known.** Known: the cost has a baseline of about 0.15 s per link from the start, and a part that
+grows with the graph, and neither is the per-edge corpus total. Not known: what either part is spent on. Two guesses so
+far were wrong because neither was measured; `scripts/probe_write_cost.py` is written to measure it on an idle store, and
+is not yet run.
+
+**Also seen, and the reason for ADR-058.** `services/ingest/engine.py` writes one element per `GraphPort` call (one
+`upsert_nodes([node])` after one `find_node`, one `upsert_edges([edge])` per edge). The per-call carry of Amendment 22
+therefore saves nothing for an Ingest Studio publish, and `03_CONDUIT_MIDDLEWARE.md` §5.1's "batched writes through
+`GraphPort`" is not what the engine does. ADR-058 proposes a bulk-load path.
+
+## ADR-058 — Bulk loading is the default write path for ingest; `upsert_*` is for low-volume writes
+
+**Status: PROPOSED, 2 October 2026. Awaiting the owner's decisions D1 to D10 below. Nothing is built.** Each decision
+carries a recommendation; none is taken until the owner says so. The spec notes this record adds (`00_ARCHITECTURE.md`
+§2.1, `01_DOMAIN_MODEL.md` §6.1, `03_CONDUIT_MIDDLEWARE.md` §5.1, `04_VAULT_BACKEND.md` §6, `09_INGEST_STUDIO.md` §6)
+are marked "PROPOSED" and are not the design until this record is accepted.
+
+### Context: what was seen
+
+- **The Enron load.** 233,890 links through `GraphArcadeDBAdapter.upsert_edges` cost about 0.15 s per link at the start
+  and about 0.33 s at 154,000 links, a projected 18 to 19 hours (ADR-056 Amendments 22 to 24). Two fixes aimed at the
+  per-edge corpus total did not change the baseline.
+- **Why the path is slow by design.** For each edge `upsert_edges` asks the store for the type of both endpoints, for an
+  existing edge between them (to merge, `01_DOMAIN_MODEL.md` §3), for both endpoints' weighted degree and, per call, for
+  the corpus total (`01_DOMAIN_MODEL.md` §6.1), then writes the edge. That is about six round trips per edge, each a
+  separate Groovy script. It is built for correctness on a live graph, one write at a time, which is the right shape for
+  an analyst's edit and the wrong shape for 234,000 pairs the loader already holds in full.
+- **The Ingest Studio is worse off than the seeds.** The engine writes one element per call (`services/ingest/
+  engine.py`: `find_node` then `upsert_nodes([one])` per node; `upsert_edges([one])` per edge), so even the batching a
+  seed can do is not used. `03_CONDUIT_MIDDLEWARE.md` §5.1 already says "load: batched writes through `GraphPort` and
+  `AnalyticsPort` in one logical transaction per document". The spec and the code disagree (rule 11); this record
+  settles which way.
+- **ADR-056's context already named the cost** ("every edge write scans all edges of its type") and answered it with a
+  vault per dataset, which bounds what a write scans but does not change the number of round trips.
+- **Unknown, and to be measured first:** what the baseline and the growing part of the per-edge cost are made of
+  (`scripts/probe_write_cost.py`, to be run on an idle store); and which bulk transport is fastest and avoids the stray
+  records of ADR-056 Amendment 19 (stage 0).
+
+### The proposal
+
+1. **Two write paths, named for what they are for.**
+   - **Bulk load** (new): the default for everything that arrives as a set: an Ingest Studio publish, a seed, a re-load.
+     The loader has already resolved, deduplicated and aggregated its elements, so the store is asked to write them,
+     not to rediscover them.
+   - **`upsert_nodes` / `upsert_edges`** (existing, unchanged): for low-volume and interactive writes where merge-on-
+     write and a weight against the live corpus are the point: an analyst's edit in the Glass, a supersede, a
+     retraction, a watch's output, and any element a bulk load hands back because it collides with what is stored (D3).
+2. **The Ingest Studio publish becomes** (the staging steps are unchanged): resolve rows in memory, aggregate by
+   (type, source, target), write nodes then edges in bulk chunks, append events, record the load. The engine calls
+   `upsert_*` only for what the bulk call returns to it.
+3. **Nothing about what a stored element means changes:** the same properties, provenance, handling, audit stub,
+   `load_id` / `recipe_id` / `recipe_version`, validation, and the same revert (`revert_load`) apply. Validation parity is
+   a requirement, not a choice: every element is validated against the ontology and handling scheme exactly as
+   `upsert_*` validates it; the bulk path never trusts its caller.
+
+### Decisions the owner needs to make
+
+**D1. The shape on the port.** (a) A separate optional capability, `BulkGraphLoader`, in `packages/ports`, with its own
+conformance section; an adapter that does not declare it is loaded through chunked `upsert_*` by the engine. (b) New
+methods added to `GraphPort`, mandatory for every adapter. (c) A flag on `upsert_*`. *Recommendation: (a).* It keeps
+`00_ARCHITECTURE.md` §2.1's promise that a new backend needs only a green suite (the second supported adapter,
+`janusgraph`, is not forced to build one before it can load anything), and it makes the fallback explicit. (b) forces
+every adapter to build bulk; (c) hides a different contract behind a flag and was the shape that let `upsert_edges`
+never merge for a whole phase (rule 12).
+
+**D2. What "low volume" means, and the studio's default.** (a) Bulk always for a publish; `upsert_*` only for collisions
+(D3) and for writes that are not ingest. (b) A row threshold: a publish below N elements uses `upsert_*`, above uses bulk.
+*Recommendation: (a), no threshold.* A threshold is a second code path to test at its edge and it sends small publishes,
+the most common kind, through the slower path. The bulk path must therefore be correct for one element as well.
+
+**D3. An edge for a pair that already exists in the vault.** (a) The bulk call refuses to write that pair and returns
+it to the caller as a typed result (`collisions`, never silently dropped: rule 2's spirit), and the engine routes those
+through `upsert_*`, which merges as today. (b) Bulk merges in the same call. *Recommendation: (a).* One merge
+implementation stays the only one; a fresh vault, the common case for a first load, has no collisions and pays for no
+lookups beyond one batched existence check per chunk.
+
+**D4. What weight means for a bulk load.** Today each edge's weight is a snapshot against the corpus *as it stood when
+that edge was written*, so the first edge of a load is weighed against almost nothing (`01_DOMAIN_MODEL.md` §6.1 already
+says weight is "a load-time snapshot ... never frozen ground truth"). (a) A bulk load weighs every edge against the
+corpus *as it stands at the end of the load* (existing edges plus the load's), with the formula, parameters and
+`WeightComponents` fields unchanged and `computed_at` recording the end of the load. (b) Replay the sequential
+snapshots. *Recommendation: (a).* It is order-independent and cheaper; (b) reproduces an accident of write order.
+**Consequence to accept:** a bulk-loaded edge and the same edge upsert-loaded will not carry identical weight values
+unless the load is a single edge; the equivalence test (below) compares the stored counts, not the float.
+
+**D5. Where the merge rules live.** `_merge_provenance` and `_merge_interval` are private to the ArcadeDB adapter, and a
+bulk load must aggregate repeated pairs by the same rules. (a) Move them to one shared pure module (for example
+`packages/schemas`) used by both paths, with a test that the two paths agree on the same inputs. (b) Re-implement in the
+loader. *Recommendation: (a).* Two implementations of one merge rule are how the two paths would drift.
+
+**D6. A failed bulk load.** A 234,000-edge load cannot be one transaction. (a) A failed load is reverted (`revert_load`
+by `load_id`) and re-run, not resumed, as ADR-055 Amendment 4 already decided for the seeds; chunk progress is logged for
+the owner, not used to resume. (b) Build resumable loads with chunk checkpoints. *Recommendation: (a).* Resume needs
+idempotent chunks, which is the merge-on-write cost the bulk path exists to avoid.
+
+**D7. The stray-record tolerance for the bulk path.** ArcadeDB sometimes stores an edge twice (ADR-056 Amendment 19;
+about 8 in 13,068 in the PaySim upsert load, 4 in each small demo). The cause is unexplained. The bulk transport may or
+may not show it. (a) Acceptance: the stray count is measured and reported on every bulk load, and a bulk load is not
+accepted if its rate is higher than the upsert path's on the same data. (b) Acceptance: no strays. (c) Not a criterion.
+*Recommendation: (a).* (b) may be unachievable until the cause is found, and (c) lets a worse path in unseen.
+
+**D8. Scope of the first slice.** (a) Edges first, nodes in a second stage under this same record. (b) Nodes and edges
+together. *Recommendation: (a).* Edges are where the cost was measured; nodes have the same one-element-per-call shape
+in the engine and are added once edges are proven.
+
+**D9. The PaySim twin.** The owner's ask: a duplicate PaySim dataset to test the new method. (a) A second vault, same
+source file, same graph sample (500 fraud rows and their neighbourhood, about 13,000 edges), loaded by the seed with
+`--method bulk`, compared with the existing `paysim` vault by the equivalence test below; once it passes, a second
+twin at the full neighbourhood (about 74,000 accounts) to prove scale. (b) The same, but loaded through an Ingest
+Studio recipe so the real default path is proved, not only the adapter. *Recommendation: (a) first, (b) as stage 4.*
+**To decide:** the vault id (suggest `paysim-bulk`, per ADR-056 decision 7's `vault_<id>` naming); whether to keep it
+after the comparison (suggest keep until the Ingest Studio path is proved, then retire at the owner's word, as ADR-056
+did for the original); and that the twin is synthetic, so ADR-053's real-data rules do not apply.
+
+**D10. The measurement spike.** Before any adapter code, a throwaway spike on a scratch database (never `ospreyflow`,
+never a real vault, run only when the store is idle) times three transports on the 13,000-edge PaySim sample and counts
+strays for each: (a) one parameterised Gremlin script per chunk; (b) ArcadeDB SQL `CREATE EDGE` in batches; (c)
+ArcadeDB's own importer, if this container offers it (unverified). *Recommendation: yes, about a day.* The spike's table
+goes into this record as an amendment before the port is designed, so the transport is chosen on numbers.
+
+### The equivalence test (the twin's acceptance)
+
+A bulk-loaded vault and an upsert-loaded one, from the same source and sample, must match on: the set of node ids; the
+set of edge ids and their (source, target, type); `occurrences` per pair; the provenance source references per edge
+(every collapsed row retained); handling and `load_id` / `recipe_id`; the intervals; and the `WeightComponents` counts
+(`occurrences`, `corpus_pair_count`, degrees, corpus total) recomputed against the end-of-load corpus, which for the
+bulk vault must equal what the bulk call stored. The count of ids stored twice is reported for both, by scan and by
+traversal. `revert_load` on the bulk load must leave the vault as it was, and a reload after it must match again.
+
+### Staging (nothing started; each stage lands green before the next)
+
+0. Spike (D10), once the Enron load has finished and the store is idle. 1. This record decided; `BulkGraphLoader`
+Protocol and its conformance section written first (rule 1); the shared merge module (D5). 2. The ArcadeDB adapter's bulk
+method. 3. `seed_paysim --method bulk`, the `paysim-bulk` vault, the equivalence report. 4. The Ingest Studio engine's
+publish path through bulk with `upsert_*` fallback, recipe re-run and revert tests, and an acceptance row (owner-owned).
+5. Nodes (D8), the full-size PaySim twin, and the Enron reload by bulk in place of the 18-hour upsert load.
+
+### What this does not decide
+
+Cross-vault loading (ADR-056); how this interacts with the vault resolver of ADR-056 stage 1 (a bulk load takes the same
+per-vault graph port and has no default vault); the analytics-store side, which is assumed to be written in chunks
+already and is to be checked, not assumed; a bulk path for the `janusgraph` adapter.

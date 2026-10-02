@@ -597,6 +597,12 @@ has nothing to repoint, since nothing else in the domain model references an edg
 
 Supported adapters: `arcadedb`, `janusgraph`. Candidate: `hugegraph`.
 
+> **PROPOSED, not yet the design (ADR-058, awaiting the owner's decisions D1 to D10).** `upsert_nodes` and
+> `upsert_edges` are the low-volume write path: merge-on-write, a weight against the live corpus, one element's worth of
+> round trips each. A set that arrives together (an Ingest Studio publish, a seed) would instead go through an optional
+> `BulkGraphLoader` capability, which an adapter may declare and which the engine falls back from to chunked `upsert_*`
+> where it is absent. The shape of that capability is decision D1.
+
 ### 2.2 AnalyticsPort
 
 Columnar aggregation over event-shaped data: temporal histograms, geospatial binning, baseline

@@ -570,6 +570,12 @@ recovery path work. Skipping it is the most expensive shortcut available in this
 - **resolve** — Splink, writing `SAME_AS` edges; see §5.3.
 - **load** — batched writes through `GraphPort` and `AnalyticsPort` in one logical transaction
   per document.
+
+  > **Spec and code disagree here, and ADR-058 (PROPOSED) settles which way.** The engine writes one element per
+  > `GraphPort` call today (`services/ingest/engine.py`), not batches. Proposed: a publish aggregates its resolved
+  > elements and writes them through the bulk-load capability by default, falling back to `upsert_*` only for elements
+  > that collide with what is already stored. One transaction per document stays unachievable at 10^5 elements; a failed
+  > bulk load is reverted and re-run (ADR-058 D6).
 - **index** — full text and embeddings into OpenSearch.
 
 **Geospatial reference data uses the same pipeline with two differences.** Gazetteers, boundary

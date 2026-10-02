@@ -236,6 +236,11 @@ A component without a green suite is not a supported component, whatever its mer
 the documentation, because the failure mode otherwise is someone swapping in an untested adapter
 in production and discovering the differences during an investigation.
 
+> **PROPOSED, not yet the design (ADR-058 D1, D7).** If `BulkGraphLoader` becomes an optional capability, its
+> conformance section is written before any adapter builds it (rule 1) and must prove: the same validation as
+> `upsert_*`; one element and many give the same stored result; a pair already stored is handed back, not merged or
+> dropped; `revert_load` removes exactly what the load wrote; and the count of ids stored twice is reported.
+
 ## 7. Capacity guidance
 
 Starting points, to be replaced by measurements from your own data.
