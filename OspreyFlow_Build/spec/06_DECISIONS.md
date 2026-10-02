@@ -8828,3 +8828,28 @@ upsert vault and 13,074 on the bulk twin, 8 and 6 ids stored twice by the paged 
 the same record counts by `count(*)`: "the three readings agree". The `ORDER BY id` reading in Amendment 7 is now an
 observation, not a hypothesis (the id-ordered read returned one record per id; the unordered read returned them all). Node
 and edge differences: none; the twin's weights match its own contents. D7 stands as recorded in Amendment 7 (bulk 6, upsert 8).
+
+### ADR-058, Amendment 9 (2 October 2026) — the Gremlin id lookup the adapter sends scans the type; label-qualified ones do not
+
+**Measured** (`scripts.probe_lookup_cost`, scratch database, one account looked up by id, median of 30 spread across the
+set; the store otherwise idle):
+
+| accounts | `g.V().has("id",X)` (the adapter's shape) | `hasLabel(T).has("id",X)` | `has(T,"id",X)` | SQL `WHERE id = :id` |
+|---|---|---|---|---|
+| 1,000 | 1.64 ms | 0.93 ms | 0.64 ms | 0.68 ms |
+| 5,000 | 4.01 ms | 0.52 ms | 0.52 ms | 0.59 ms |
+| 15,000 | 11.17 ms | 0.63 ms | 0.58 ms | 0.80 ms |
+
+The shape the adapter sends (`adapter.py` and `builders.py` send it 37 times) grows with the account count, 6.8 times slower
+at 15,000 than at 1,000. The other three stay flat at about 0.6 ms. Amendment 5's hypothesis is therefore confirmed for the
+lookup: the type's unique index on `id` exists and is used when the label is given, and is not when it is not.
+
+**Fits the earlier figures.** At about 13,000 accounts two unlabelled lookups cost about 22 ms, against the 23 ms a row the
+bulk Gremlin transport took; upsert's 79 ms an edge at 13,426 accounts is the same lookup several times over.
+
+**Also seen, not yet understood.** The account type holds two indexes on every property (`mx_Endpoint[id]` and
+`mx_Endpoint_0_<number>`, both unique on `id`; the same for `owning_unit`, `email`, `handle` and the rest). Whether that
+doubles every node write, and whether it has any bearing on the stray copies, is not known. It is recorded, not acted on.
+
+**Consequence.** The cost is in the adapter's read and write paths alike, not only in bulk loading. What fixes it is not yet
+decided (the label is known on some paths and not on others); see the design choice put to the owner.

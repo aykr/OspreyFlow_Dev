@@ -180,6 +180,8 @@ def seed_internal(
     compare_vaults: tuple[str, str] | None = None,
     spike_bulk_transport: bool = False,
     spike_edges: int | None = None,
+    probe_lookup_cost: bool = False,
+    probe_sizes: str | None = None,
     inspect: bool = False,
     inspect_record: str | None = None,
     repair_strays: bool = False,
@@ -227,6 +229,15 @@ def seed_internal(
         raise SeedRefused("--spike-edges takes a number from 100 to 100000")
     if spike_bulk_transport and not spec.sampled:
         raise SeedRefused("--spike-bulk-transport is only built for paysim so far")
+    if probe_sizes is not None and not probe_lookup_cost:
+        raise SeedRefused("--probe-sizes only goes with --probe-lookup-cost")
+    if probe_sizes is not None and not _valid_probe_sizes(probe_sizes):
+        raise SeedRefused(
+            "--probe-sizes takes two to five account counts, rising, each from 100 to 50000, "
+            "for example 1000,5000,15000"
+        )
+    if probe_lookup_cost and not spec.sampled:
+        raise SeedRefused("--probe-lookup-cost is only built for paysim so far")
     if method != "upsert" and not spec.sampled:
         raise SeedRefused("--method bulk is only built for paysim so far")
     if vault is not None:
@@ -261,6 +272,8 @@ def seed_internal(
         return _compare_vaults(repo_root, directory, run, *compare_vaults)
     if spike_bulk_transport:
         return _spike_bulk_transport(repo_root, directory, run, spike_edges)
+    if probe_lookup_cost:
+        return _probe_lookup_cost(repo_root, directory, run, probe_sizes)
     if inspect:
         return _inspect(spec, repo_root, directory, run, inspect_record, vault)
     if repair_strays or restore_missing:
@@ -431,6 +444,42 @@ def _spike_bulk_transport(
     return [line.strip() for line in output.splitlines() if line.strip()]
 
 
+def _valid_probe_sizes(text: str) -> bool:
+    parts = text.split(",")
+    if not 2 <= len(parts) <= 5 or not all(p.isdigit() for p in parts):
+        return False
+    sizes = [int(p) for p in parts]
+    return sizes == sorted(set(sizes)) and all(100 <= n <= 50_000 for n in sizes)
+
+
+def _probe_lookup_cost(
+    repo_root: Path,
+    directory: Path,
+    run: Callable[[Sequence[str]], str],
+    sizes: str | None = None,
+) -> list[str]:
+    """Run the lookup-cost probe (`scripts.probe_lookup_cost`, ADR-058 Amendment 5) inside the
+    deployment's network. Like the spike it touches only a scratch database named `spike_bulk_*`,
+    which it drops afterwards: no case, no vault, the Conduit left running. Run it with the store
+    otherwise idle."""
+    argv = [
+        *_compose(directory / "compose.yaml"),
+        "run",
+        "--rm",
+        "--no-deps",
+        "--entrypoint",
+        "python",
+        *_checkout_mounts(repo_root),
+        "api",
+        "-m",
+        "scripts.probe_lookup_cost",
+    ]
+    if sizes is not None:
+        argv += ["--sizes", sizes]
+    output = run(argv)
+    return [line.strip() for line in output.splitlines() if line.strip()]
+
+
 def _repair_strays(
     spec: Dataset,
     repo_root: Path,
@@ -589,6 +638,16 @@ def main(argv: list[str] | None = None) -> int:
             print("--spike-edges takes a number, for example 10000", file=sys.stderr)
             return 2
         spike_edges = int(value[0])
+    probe = "--probe-lookup-cost" in args
+    probe_sizes: str | None = None
+    if "--probe-sizes" in args:
+        value = args[args.index("--probe-sizes") + 1 :][:1]
+        if not value or value[0].startswith("--"):
+            print(
+                "--probe-sizes takes account counts, for example 1000,5000,15000", file=sys.stderr
+            )
+            return 2
+        probe_sizes = value[0]
     method = "upsert"
     if "--method" in args:
         value = args[args.index("--method") + 1 :][:1]
@@ -607,6 +666,7 @@ def main(argv: list[str] | None = None) -> int:
         "--vault",
         "--method",
         "--spike-edges",
+        "--probe-sizes",
         "--inspect-record",
         "--graph-fraud-rows",
         "--repair-limit",
@@ -625,6 +685,7 @@ def main(argv: list[str] | None = None) -> int:
             f"usage: seed_internal <{'|'.join(sorted(DATASETS))}> [--stop-api] "
             "[--replace-graph] [--reset-graph-database] [--vault ID] [--method upsert|bulk] "
             "[--compare-vaults A B] [--spike-bulk-transport [--spike-edges N]] "
+            "[--probe-lookup-cost [--probe-sizes A,B,C]] "
             "[--graph-fraud-rows N|all] "
             "[--repair-strays | --restore-missing [--apply] [--repair-limit N]] "
             "[--clear-shared-stores --vault ID [--accept-strays N] [--confirm V:E:N]]",
@@ -644,6 +705,8 @@ def main(argv: list[str] | None = None) -> int:
             compare_vaults=compare,
             spike_bulk_transport=spike,
             spike_edges=spike_edges,
+            probe_lookup_cost=probe,
+            probe_sizes=probe_sizes,
             inspect=inspect,
             inspect_record=record,
             repair_strays=repair_strays,
@@ -660,6 +723,11 @@ def main(argv: list[str] | None = None) -> int:
     if spike:
         print(
             "seed: spike finished; its scratch databases were dropped and nothing else was touched."
+        )
+        return 0
+    if probe:
+        print(
+            "seed: probe finished; its scratch database was dropped and nothing else was touched."
         )
         return 0
     if compare:

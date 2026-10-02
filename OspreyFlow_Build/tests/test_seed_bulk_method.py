@@ -323,6 +323,7 @@ def _every_container_run(repo: Path) -> list[tuple[str, list[str]]]:
         "repair": {"restore_missing": True},
         "compare": {"compare_vaults": ("paysim", "paysim-perftst")},
         "spike": {"spike_bulk_transport": True},
+        "lookup probe": {"probe_lookup_cost": True},
         "clear shared stores": {
             "clear_shared_stores": True,
             "vault": "paysim",
@@ -352,7 +353,7 @@ def test_every_container_run_takes_the_checkouts_packages_as_well_as_its_scripts
     `packages/` beside the checkout's newer `scripts/`. Catches any kind of run that mounts the
     scripts and not the packages they import."""
     runs = _every_container_run(repo)
-    assert len(runs) == 7
+    assert len(runs) == 8
     for kind, call in runs:
         assert f"{repo}/scripts:/app/scripts:ro" in call, kind
         assert f"{repo}/packages:/app/packages:ro" in call, kind
@@ -404,3 +405,60 @@ def test_the_bulk_chunk_is_the_size_that_left_no_more_strays_than_upsert() -> No
     """The one measured reason for the number (ADR-058 Amendment 4). Catches it being raised for
     speed without a run that shows the strays do not rise."""
     assert seed_support.BULK_CHUNK == 100
+
+
+def test_the_lookup_probe_runs_in_the_deployment_and_takes_its_sizes(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Catches a probe that stops the Conduit, makes a case or opens a vault; sizes that never
+    arrive or that the probe was not built for; the sizes flag used alone; and a command line that
+    does not know either flag."""
+    kw: dict[str, Any] = {
+        "lookup_subs": lambda directory: SUBS,
+        "api_running": lambda compose: True,
+    }
+    runner = Runner()
+    seed_internal.seed_internal(
+        "paysim", repo, run=runner, probe_lookup_cost=True, **kw
+    )
+    call = _seed_call(runner)
+    assert "scripts.probe_lookup_cost" in call and "--sizes" not in call
+    assert "--case-name" not in call and "--vault" not in call
+    assert not any("stop" in c for c in runner.calls)
+    runner = Runner()
+    seed_internal.seed_internal(
+        "paysim",
+        repo,
+        run=runner,
+        probe_lookup_cost=True,
+        probe_sizes="2000,10000",
+        **kw,
+    )
+    call = _seed_call(runner)
+    assert call[call.index("--sizes") + 1] == "2000,10000"
+    for bad in ("50,1000", "1000", "5000,1000", "1000,x", "1000,99999", "1,2,3,4,5,6"):
+        with pytest.raises(seed_internal.SeedRefused, match="--probe-sizes"):
+            seed_internal.seed_internal(
+                "paysim",
+                repo,
+                run=Runner(),
+                probe_lookup_cost=True,
+                probe_sizes=bad,
+                **kw,
+            )
+    with pytest.raises(seed_internal.SeedRefused, match="only goes with"):
+        seed_internal.seed_internal(
+            "paysim", repo, run=Runner(), probe_sizes="1000,5000", **kw
+        )
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(
+        seed_internal, "seed_internal", lambda d, **k: seen.update(k) or []
+    )
+    assert (
+        seed_internal.main(
+            ["paysim", "--probe-lookup-cost", "--probe-sizes", "1000,5000"]
+        )
+        == 0
+    )
+    assert seen["probe_lookup_cost"] is True and seen["probe_sizes"] == "1000,5000"
+    assert seed_internal.main(["paysim", "--probe-lookup-cost", "--probe-sizes"]) == 2
