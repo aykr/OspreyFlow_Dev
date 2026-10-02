@@ -151,3 +151,93 @@ def test_an_empty_right_vault_is_a_difference_not_agreement() -> None:
     """Catches comparing against a vault that was never loaded and calling it equal."""
     code, text = _plant(lambda rs: rs.clear())
     assert code == 1 and "only in the left vault" in text
+
+
+# --- three readings of one store (ADR-058 Amendment 6) ---------------------------------------
+
+
+def test_the_three_readings_of_stray_copies_are_reported_side_by_side() -> None:
+    """Seen: the load's `GROUP BY id` check found 6 ids stored twice, the paged scan found none.
+    The report now carries the scan, the `GROUP BY id` and the plain count for each vault, so a
+    disagreement between them is on the page and not a guess."""
+    base = _records()
+    left = compare_vaults.Graph(
+        nodes=_graph(base).nodes, edges=base, grouped_twice=[], counted=len(base)
+    )
+    right = compare_vaults.Graph(
+        nodes=_graph(base).nodes,
+        edges=copy.deepcopy(base),
+        grouped_twice=["x", "y", "z"],
+        counted=len(base) + 3,
+    )
+    code, lines = _report(left, right)
+    text = "\n".join(lines)
+    assert "GROUP BY id (the load's own check): left 0, right 3" in text
+    assert f"count(*): left {len(base)}, right {len(base) + 3}" in text
+    assert "the readings disagree" in text
+    assert code == 0, (
+        "a stray copy is the store's defect, not a difference between the loads"
+    )
+
+
+def test_readings_that_agree_say_so_and_a_vault_without_them_is_not_blamed() -> None:
+    base = _records()
+    both = compare_vaults.Graph(
+        nodes=_graph(base).nodes, edges=base, grouped_twice=[], counted=len(base)
+    )
+    _, lines = _report(both, both)
+    assert "the three readings agree" in "\n".join(lines)
+    _, lines = _report(_graph(base), _graph(base))
+    assert "GROUP BY id" not in "\n".join(lines)
+
+
+class _Store:
+    """A store that answers only the query shapes the scan sends, and refuses any other (rule 15:
+    the real parser refuses `count(*)` over a subquery, so this one does too)."""
+
+    def __init__(self, edges: list[dict[str, Any]], stray_ids: list[str]) -> None:
+        self.edges, self.stray_ids, self.seen = edges, stray_ids, []
+
+    async def sql(self, query: str) -> list[dict[str, Any]]:
+        self.seen.append(query)
+        if "(SELECT" in query:
+            raise RuntimeError("parser refuses a subquery here")
+        if query.startswith("SELECT count(*) AS n FROM "):
+            return [{"n": len(self.edges) + len(self.stray_ids)}]
+        if "GROUP BY id" in query:
+            return [{"id": i, "n": 2} for i in self.stray_ids]
+        if query.startswith("SELECT FROM"):
+            skip = int(query.split("SKIP ")[1].split()[0])
+            limit = int(query.split("LIMIT ")[1])
+            kind = "Endpoint" if "Endpoint" in query else "TRANSACTED"
+            rows = [{"id": n} for n in "abcd"] if kind == "Endpoint" else self.edges
+            return rows[skip : skip + limit]
+        raise RuntimeError(f"unexpected query: {query}")
+
+
+def test_the_scan_asks_the_store_for_all_three_readings() -> None:
+    edges = _records()
+    store = _Store(edges, stray_ids=["p", "q"])
+    graph = asyncio.run(compare_vaults.scan_with(store))
+    assert graph.grouped_twice == ["p", "q"]
+    assert graph.counted == len(edges) + 2
+    assert len(graph.edges) == len(edges)
+    assert any("GROUP BY id" in q for q in store.seen)
+
+
+def test_a_group_by_that_finds_ids_the_scan_does_not_is_a_disagreement_on_its_own() -> (
+    None
+):
+    """The case seen on the twin: `GROUP BY id` names ids stored twice while the scan and the
+    count both show one record per id. Each reading alone looks sound; only the three together
+    show it."""
+    base = _records()
+    nodes = _graph(base).nodes
+    left = compare_vaults.Graph(
+        nodes=nodes, edges=base, grouped_twice=[], counted=len(base)
+    )
+    right = compare_vaults.Graph(
+        nodes=nodes, edges=copy.deepcopy(base), grouped_twice=["x"], counted=len(base)
+    )
+    _, lines = _report(left, right)
+    assert "the readings disagree" in "\n".join(lines)

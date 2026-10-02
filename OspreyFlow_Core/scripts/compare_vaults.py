@@ -1,6 +1,6 @@
 """Compares two vaults' graphs, read-only: did the bulk load leave what the upsert load left?
 
-    python -m scripts.seed_internal paysim --compare-vaults paysim paysim-bulk
+    python -m scripts.seed_internal paysim --compare-vaults paysim paysim-perftst
 
 (ADR-058 D9.) Reads nodes and edges from both vaults' graph databases with `SELECT` only and
 reports, for the edges and the nodes: the ids each has that the other lacks; any field that differs
@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from scripts.seed_support import vault_locations
+from scripts.seed_support import ids_stored_twice, vault_locations
 
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from adapters.graph_arcadedb.gremlin_literals import groovy_identifier
@@ -51,6 +51,11 @@ class Graph:
 
     nodes: list[dict[str, Any]]
     edges: list[dict[str, Any]]
+    #: Two more readings of the same edge type, taken when present: the ids a `GROUP BY id` finds
+    #: more than once (the load's own check) and the store's plain record count. Seen: the load
+    #: check found 6 ids twice where the paged scan above found none (ADR-058 Amendment 6).
+    grouped_twice: list[str] | None = None
+    counted: int | None = None
 
 
 def _strip_times(value: Any) -> Any:
@@ -162,6 +167,29 @@ def component_mismatches(edges: Sequence[Mapping[str, Any]]) -> list[str]:
     return lines
 
 
+def _readings(left: Graph, right: Graph) -> list[str]:
+    """The `GROUP BY id` and count readings next to the scan, and whether the three agree. Nothing
+    is said for a graph that was built without them."""
+    if left.grouped_twice is None or right.grouped_twice is None:
+        return []
+    if left.counted is None or right.counted is None:
+        return []
+    lines = [
+        f"ids stored twice by GROUP BY id (the load's own check): "
+        f"left {len(left.grouped_twice)}, right {len(right.grouped_twice)}",
+        f"edge records by count(*): left {left.counted:,}, right {right.counted:,}",
+    ]
+    agree = all(
+        len(g.edges) - len({str(e["id"]) for e in g.edges}) == len(g.grouped_twice or [])
+        and g.counted == len(g.edges)
+        for g in (left, right)
+    )
+    lines.append(
+        "the three readings agree" if agree else "the readings disagree (scan, GROUP BY id, count)"
+    )
+    return lines
+
+
 def _when(value: Any) -> datetime:
     if isinstance(value, datetime):
         return value
@@ -192,6 +220,8 @@ def report(left: Graph, right: Graph, *, say: Callable[[str], None] = print, sho
         f"ids stored twice by scan (ArcadeDB defect, not a difference to fix): "
         f"left {len(left_twice)}, right {len(right_twice)} of {len(right.edges):,}"
     )
+    for line in _readings(left, right):
+        say(line)
     section(
         "right vault: weight components or weight not matching its own contents",
         component_mismatches(right.edges),
@@ -205,22 +235,34 @@ def report(left: Graph, right: Graph, *, say: Callable[[str], None] = print, sho
     return int(bool(problems))
 
 
+async def scan_with(client: Any) -> Graph:
+    """Everything the comparison reads from one store, with `SELECT` only."""
+    found: dict[str, list[dict[str, Any]]] = {}
+    labels: dict[str, str] = {}
+    for kind, type_name in (("nodes", "Endpoint"), ("edges", "TRANSACTED")):
+        label = labels[kind] = groovy_identifier(physical_type_name(type_name))
+        rows: list[dict[str, Any]] = []
+        while True:
+            page = await client.sql(
+                f"SELECT FROM {label} ORDER BY id SKIP {len(rows)} LIMIT {PAGE}"
+            )
+            rows += page
+            if len(page) < PAGE:
+                break
+        found[kind] = rows
+    counted = await client.sql(f"SELECT count(*) AS n FROM {labels['edges']}")
+    return Graph(
+        nodes=found["nodes"],
+        edges=found["edges"],
+        grouped_twice=await ids_stored_twice(client, edge_type=labels["edges"]),
+        counted=int(counted[0]["n"]),
+    )
+
+
 async def _scan(database: str) -> Graph:
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database))
     try:
-        found: dict[str, list[dict[str, Any]]] = {}
-        for kind, type_name in (("nodes", "Endpoint"), ("edges", "TRANSACTED")):
-            label = groovy_identifier(physical_type_name(type_name))
-            rows: list[dict[str, Any]] = []
-            while True:
-                page = await client.sql(
-                    f"SELECT FROM {label} ORDER BY id SKIP {len(rows)} LIMIT {PAGE}"
-                )
-                rows += page
-                if len(page) < PAGE:
-                    break
-            found[kind] = rows
-        return Graph(nodes=found["nodes"], edges=found["edges"])
+        return await scan_with(client)
     finally:
         await client.aclose()
 
