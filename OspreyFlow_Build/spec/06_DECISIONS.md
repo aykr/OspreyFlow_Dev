@@ -8820,3 +8820,11 @@ the same way. Strays remain the parked ArcadeDB defect (ADR-056 Amendment 19); n
 
 **Equivalence (D5).** The edge comparison reads one record per id, so it compared the graphs as the product reads them
 (a traversal reaches each edge once). Strays are therefore outside that comparison, and are reported separately.
+
+### ADR-058, Amendment 8 (2 October 2026) — the three readings agree (confirms Amendment 7)
+
+With the paged read no longer ordered by `id`, the comparison on the same two stores read 13,076 edge records on the
+upsert vault and 13,074 on the bulk twin, 8 and 6 ids stored twice by the paged read, the same 8 and 6 by `GROUP BY id`, and
+the same record counts by `count(*)`: "the three readings agree". The `ORDER BY id` reading in Amendment 7 is now an
+observation, not a hypothesis (the id-ordered read returned one record per id; the unordered read returned them all). Node
+and edge differences: none; the twin's weights match its own contents. D7 stands as recorded in Amendment 7 (bulk 6, upsert 8).
