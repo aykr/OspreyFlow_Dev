@@ -80,6 +80,8 @@ import { LargeExpansionPrompt } from "./LargeExpansionPrompt";
 import { removeFromWorkingSet } from "./removeNodes";
 import { ViewActions } from "./ViewActions";
 import { settleLayout, type LayoutNode } from "./forceLayout";
+import { arrange, type LayoutMode } from "./layoutModes";
+import { LayoutMenu } from "./LayoutMenu";
 import {
   expandOnDoubleClick,
   menuRequestForRightClick,
@@ -266,6 +268,13 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     const hoveredRef = useRef<string | null>(null);
     const edgeTypesRef = useRef<readonly EdgeTypeDef[]>([]);
     const settledRef = useRef<Set<string>>(new Set());
+    // The layout the analyst chose (organic until they choose another). A ref as well as state:
+    // the layout effect below runs from graph events and must read the current choice.
+    const [layoutMode, setLayoutMode] = useState<LayoutMode>("organic");
+    const layoutModeRef = useRef<LayoutMode>("organic");
+    const selectedRef = useRef<Set<string>>(new Set());
+    selectedRef.current = selected;
+    const arrangeNowRef = useRef<() => void>(() => undefined);
     const requestExpansionRef = useRef<
       | ((
           nodeId: string,
@@ -489,8 +498,22 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             node.y = at.y + near.y * 0.1;
           }
         }
-        const settled = settleLayout(nodes, edges);
-        if (!settled) return; // too large to settle quickly: the scatter stays
+        const mode = layoutModeRef.current;
+        const settled =
+          mode === "organic"
+            ? settleLayout(nodes, edges)
+            : arrange(
+                mode,
+                {
+                  nodes: nodes.map((node) => ({
+                    ...node,
+                    type: graph.getNodeAttribute(node.id, "data").type,
+                  })),
+                  edges,
+                },
+                { centre: Array.from(selectedRef.current)[0] ?? null },
+              );
+        if (!settled) return; // too large to arrange quickly: the positions stay
         const targets: Record<string, { x: number; y: number }> = {};
         for (const [id, at] of settled) {
           targets[id] = at;
@@ -505,6 +528,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       const schedule = () => {
         clearTimeout(timer);
         timer = setTimeout(run, 150);
+      };
+      arrangeNowRef.current = () => {
+        clearTimeout(timer);
+        run();
       };
       graph.on("nodeAdded", schedule);
       graph.on("edgeAdded", schedule);
@@ -1554,6 +1581,15 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             onClose={dismissPathError}
           />
         )}
+        <LayoutMenu
+          mode={layoutMode}
+          onChange={(mode) => {
+            layoutModeRef.current = mode;
+            setLayoutMode(mode);
+            arrangeNowRef.current();
+          }}
+          onArrange={() => arrangeNowRef.current()}
+        />
         <ViewActions
           nodeCount={graph.order}
           selectedCount={selected.size}

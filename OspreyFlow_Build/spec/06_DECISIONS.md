@@ -8974,3 +8974,22 @@ Item 7 of ADR-061 said the Glass panel was not yet built. It now is: a **Filters
 With every filter at its default the request is exactly the one ADR-059 defined; a changed filter is sent under the Conduit's own names, and an unchanged one is left out. "Only nodes on screen" asks the Conduit nothing: it compares the typed text with the identifiers of the nodes drawn, as plain text (never a pattern), honouring ignore case, match mode and type, and it searches from the first character. It matches the same identifier properties the box already shows, which is not necessarily every field the Conduit searches.
 
 Still unproven: ignoring case against the real store (the four live conformance cases from ADR-061 have not been run).
+
+
+## ADR-063 — The analyst chooses how the working set is arranged
+
+Status: accepted 3 October 2026.
+
+Context. The owner found the graph unreadable after a large expansion ("no way to reformat the layout"), and a second review asked for several layout algorithms: organic by default, hierarchical, and grouping.
+
+Decision.
+
+1. A **Layout** menu on the canvas offers five arrangements: Organic (the force layout of ADR-060, the default), Radial around the selected node, Hierarchical, Circular and Group by type. Choosing one arranges at once and applies to nodes added afterwards until another is chosen. **Arrange again** repeats the current one, which re-centres a radial layout on whatever is now selected.
+2. The four new layouts are pure functions in `canvas/layoutModes.ts`, behind one `arrange(mode, input, options)` interface. Positions are repeatable for the same graph. Above 6,000 nodes none is attempted and the positions stay.
+3. **Hierarchical is our own small implementation**: edges that close a cycle are set aside, each node goes on the layer below its deepest parent, and four barycentre sweeps reorder each layer to reduce crossings. It is not a full Sugiyama layout (no optimal crossing minimisation, no dummy nodes for long edges). It sits behind `arrange`, so dagre or another library can replace it later without touching the canvas. No library was downloaded.
+4. Radial uses the first selected node as the centre, or the most connected node when nothing is selected. Choosing a different node does not re-arrange by itself, so clicking around does not move the graph under the analyst's hands.
+5. Nothing is stored: a layout is a view of positions, never a change to the data.
+
+Not decided here. Communities (collapsing a group into one node) is a separate step.
+
+Consequences. The layout choice is per session in the browser tab and is not remembered. Radial, hierarchical and circular ignore pinned nodes, which the force layout supports.
