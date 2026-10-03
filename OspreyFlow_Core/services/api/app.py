@@ -227,6 +227,16 @@ from .investigations import (
     InvestigationStore,
 )
 from .jobs import JobQueue
+from .link_changes import (
+    ChangeNotMadeError,
+    InvalidChangeError,
+    LinkChangeRequest,
+    LinkChangeResult,
+    LinkChangeService,
+    LinkChangeStore,
+    LinkHistoryResponse,
+    ResolutionLinkError,
+)
 from .link_notes import (
     InvalidNoteError,
     LinkNoteBody,
@@ -367,6 +377,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     alerts_store = await AlertStore.connect(config.postgres.dsn)
     judgements_store = await JudgementStore.connect(config.postgres.dsn)
     link_notes_store = await LinkNoteStore.connect(config.postgres.dsn)
+    link_changes_store = await LinkChangeStore.connect(config.postgres.dsn)
     suppression_marks = await SuppressionMarkStore.connect(config.postgres.dsn)
     gaps_store = await IntelligenceGapStore.connect(config.postgres.dsn)
     assumptions_store = await AssumptionStore.connect(config.postgres.dsn)
@@ -416,6 +427,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.alerts_store = alerts_store
     app.state.judgements_store = judgements_store
     app.state.link_notes = LinkNoteService(link_notes_store, app.state.working_set)
+    app.state.link_changes = LinkChangeService(
+        link_changes_store, app.state.working_set, graph, ontology, link_notes_store
+    )
     app.state.suppression_marks = suppression_marks
     app.state.gaps_store = gaps_store
     app.state.assumptions_store = assumptions_store
@@ -480,6 +494,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await alerts_store.close()
         await judgements_store.close()
         await link_notes_store.close()
+        await link_changes_store.close()
         await gaps_store.close()
         await assumptions_store.close()
         await export_ledger.close()
@@ -685,6 +700,13 @@ MonitorsStoreDep = Annotated[MonitorStore, Depends(get_monitors_store)]
 AlertsStoreDep = Annotated[AlertStore, Depends(get_alerts_store)]
 JudgementsStoreDep = Annotated[JudgementStore, Depends(get_judgements_store)]
 LinkNotesDep = Annotated[LinkNoteService, Depends(get_link_notes)]
+
+
+def get_link_changes(request: Request) -> LinkChangeService:
+    return request.app.state.link_changes  # type: ignore[no-any-return]
+
+
+LinkChangesDep = Annotated[LinkChangeService, Depends(get_link_changes)]
 
 
 def get_suppression_marks(request: Request) -> SuppressionMarkStore:
@@ -968,6 +990,30 @@ async def _link_not_found_handler(request: Request, exc: LinkNotFoundError) -> J
     """A link that is not in the working set and a link this principal may not see give this one
     answer (`services/api/link_notes.py`)."""
     return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "link_not_found"})
+
+
+@app.exception_handler(InvalidChangeError)
+async def _invalid_change_handler(request: Request, exc: InvalidChangeError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": "invalid_link_change", "detail": str(exc)},
+    )
+
+
+@app.exception_handler(ChangeNotMadeError)
+async def _change_not_made_handler(request: Request, exc: ChangeNotMadeError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": "nothing_changed", "detail": str(exc)},
+    )
+
+
+@app.exception_handler(ResolutionLinkError)
+async def _resolution_link_handler(request: Request, exc: ResolutionLinkError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": "resolution_link", "detail": str(exc)},
+    )
 
 
 @app.exception_handler(NoteNotFoundError)
@@ -1786,6 +1832,12 @@ async def set_resolution_threshold_route(
     return delta
 
 
+def _clean_reason(reason: str | None) -> str | None:
+    """A reason as the audit stream records it: trimmed, and `None` when blank."""
+    text = (reason or "").strip()
+    return text or None
+
+
 @app.post("/v1/investigations/{investigation_id}/resolution/link")
 async def link_resolution_route(
     investigation: InvestigationEditorDep,
@@ -1834,6 +1886,7 @@ async def link_resolution_route(
         investigation_id=investigation.id,
         resolved_query={"node_a": body.node_a, "node_b": body.node_b},
         result_cardinality=delta.affected,
+        justification=_clean_reason(body.reason),
     )
     return delta
 
@@ -1855,6 +1908,7 @@ async def split_resolution_route(
         investigation_id=investigation.id,
         resolved_query={"node_a": body.node_a, "node_b": body.node_b},
         result_cardinality=delta.affected,
+        justification=_clean_reason(body.reason),
     )
     return delta
 
@@ -2448,6 +2502,50 @@ async def list_judgements_route(
             judgements_store, investigation.id, principal, graph
         )
     )
+
+
+@app.post("/v1/investigations/{investigation_id}/links/{edge_id}/change")
+async def change_link_route(
+    investigation: InvestigationEditorDep,
+    edge_id: str,
+    principal: PrincipalDep,
+    body: LinkChangeRequest,
+    link_changes: LinkChangesDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+) -> LinkChangeResult:
+    """Change a link's type or details (ADR-080): a supersede, with a required reason, kept in the
+    link's history and in the audit stream with the old and new values. The old link is kept in
+    the store and replaced in the working set; its notes move to the new one."""
+    result = await link_changes.change(investigation.id, edge_id, principal, body)
+    await publish_delta(valkey, investigation.id, result.delta)
+    await audit.record(
+        principal=principal,
+        action="link_change",
+        investigation_id=investigation.id,
+        resolved_query={
+            "edge_id": edge_id,
+            "new_edge_id": result.edge.id,
+            "before": result.change.before,
+            "after": result.change.after,
+        },
+        result_cardinality=1,
+        justification=result.change.reason,
+    )
+    return result
+
+
+@app.get("/v1/investigations/{investigation_id}/links/{edge_id}/history")
+async def link_history_route(
+    investigation: InvestigationViewerDep,
+    edge_id: str,
+    principal: PrincipalDep,
+    link_changes: LinkChangesDep,
+) -> LinkHistoryResponse:
+    """Every change that led to this link, newest first — only to someone who can see the link,
+    and a link they cannot see answers as one that does not exist. Not audited, like the other
+    case reads here."""
+    return await link_changes.history(investigation.id, edge_id, principal)
 
 
 @app.get("/v1/investigations/{investigation_id}/links/{edge_id}/notes")

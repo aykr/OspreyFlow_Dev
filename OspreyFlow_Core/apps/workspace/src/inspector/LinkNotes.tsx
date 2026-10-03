@@ -20,6 +20,8 @@ export interface LinkNotesProps {
   investigationId: string;
   /** The selected link's id — the working set's own edge id. */
   edgeId: string;
+  /** Counts up each time the link menu's *Add a note* is chosen: the new-note box takes focus. */
+  focusSignal?: number;
 }
 
 type Load = { state: "loading" } | { state: "ready" } | { state: "refused"; message: string };
@@ -56,7 +58,13 @@ function Remaining({ text }: { text: string }) {
 /** The Inspector's **Notes** section for a selected link (`02_GLASS_FRONTEND.md` §2, ADR-075):
  * several dated plain-text notes, newest first, each with who wrote it. Everyone who can see the
  * link sees them; only the author edits or deletes their own. Notes are text, never markup. */
-export function LinkNotes({ apiBaseUrl, bearerToken, investigationId, edgeId }: LinkNotesProps) {
+export function LinkNotes({
+  apiBaseUrl,
+  bearerToken,
+  investigationId,
+  edgeId,
+  focusSignal = 0,
+}: LinkNotesProps) {
   const [notes, setNotes] = useState<LinkNote[]>([]);
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [draft, setDraft] = useState("");
@@ -65,6 +73,12 @@ export function LinkNotes({ apiBaseUrl, bearerToken, investigationId, edgeId }: 
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const draftRef = useRef<HTMLTextAreaElement>(null);
+
+  // Chosen from the link menu: the box for a new note takes focus once the notes have loaded.
+  useEffect(() => {
+    if (focusSignal > 0 && load.state === "ready") draftRef.current?.focus();
+  }, [focusSignal, load.state]);
 
   useEffect(() => {
     let current = true;
@@ -205,6 +219,7 @@ export function LinkNotes({ apiBaseUrl, bearerToken, investigationId, edgeId }: 
           </label>
           <textarea
             id="link-note-new"
+            ref={draftRef}
             className="input"
             rows={3}
             maxLength={MAX_NOTE_CHARS}

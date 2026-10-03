@@ -59,6 +59,9 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("POST", P + "/links/{edge_id}/notes"): E,
     ("PUT", P + "/links/{edge_id}/notes/{note_id}"): E,
     ("DELETE", P + "/links/{edge_id}/notes/{note_id}"): E,
+    # Changing a link (ADR-080) changes the case; reading a link's history is a read of it.
+    ("POST", P + "/links/{edge_id}/change"): E,
+    ("GET", P + "/links/{edge_id}/history"): V,
     ("POST", P + "/export"): E,
     ("POST", P + "/sites"): E,
     ("GET", P + "/sites/{site_id}"): V,

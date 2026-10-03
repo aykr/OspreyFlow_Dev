@@ -100,8 +100,8 @@ Author; a new case is visible to nobody else until shared; cases that existed be
 
 | Level | Routes under `/v1/investigations/{id}` |
 |---|---|
-| Viewer | `GET` the case; `expand/preview`; `resolution/threshold` (GET); `resolution/explain/{cluster}`; `compute/{metric}`; `ingest/candidates` (GET); `dossier/documents/{doc}`; `history` (GET); `judgements`, `gaps`, `assumptions` (GET); `links/{edge}/notes` (GET); `sites/{site}` and its `image` (GET); the delta stream |
-| Editor | `branch`; `seed`; `expand`; `nodes` (DELETE); `resolution/threshold` (PUT), `link`, `split`; `ingest/extract`, candidate `accept` and `reject`; `history/{step}` (restore); `judgements`, `gaps`, `assumptions` (POST); `links/{edge}/notes` (POST), `links/{edge}/notes/{note}` (PUT, DELETE); `export`; `sites` (POST), `control-points`, `grid`; `ingest/recipes/{recipe}/run` |
+| Viewer | `GET` the case; `expand/preview`; `resolution/threshold` (GET); `resolution/explain/{cluster}`; `compute/{metric}`; `ingest/candidates` (GET); `dossier/documents/{doc}`; `history` (GET); `judgements`, `gaps`, `assumptions` (GET); `links/{edge}/notes` (GET), `links/{edge}/history` (GET); `sites/{site}` and its `image` (GET); the delta stream |
+| Editor | `branch`; `seed`; `expand`; `nodes` (DELETE); `resolution/threshold` (PUT), `link`, `split`; `ingest/extract`, candidate `accept` and `reject`; `history/{step}` (restore); `judgements`, `gaps`, `assumptions` (POST); `links/{edge}/notes` (POST), `links/{edge}/notes/{note}` (PUT, DELETE), `links/{edge}/change` (POST); `export`; `sites` (POST), `control-points`, `grid`; `ingest/recipes/{recipe}/run` |
 | Author | `PATCH` the case (rename); `DELETE` the case (a soft remove: it then reads as not found to everyone, nothing is deleted, ADR-052 Amendment 7; the unit's `osprey-admin` may too, through the same safety net); `access` (PUT: the unit-wide level, which is none, Viewer or Editor, never Author); `access/grants/{account}` (PUT, DELETE); `access/history`. An `osprey-admin` in the case's own unit may also use these without holding a level (the safety net, audited as `access_admin_override`); that gives no other access. |
 
 `GET /v1/investigations` lists the cases the caller holds a level on (id, name, their level, created,
@@ -141,7 +141,11 @@ The delta protocol, client-bound:
 {"seq": 416, "op": "notice",  "level": "warning",
  "message": "6 nodes withheld by handling policy", "count": 6}
 {"seq": 417, "op": "snapshot", "nodes": [...], "edges": [...], "filtered_count": 6}
+{"seq": 418, "op": "replace_edge", "old_edge_id": "...", "edge": {...}}
 ```
+
+`replace_edge` (ADR-080) is sent when an analyst changes a link: the client takes the old link out and
+puts the new one in at the same step, so no screen shows both or neither.
 
 Sequence numbers are monotonic per investigation. A client that misses a sequence reconnects and
 requests a full snapshot rather than attempting to patch — silent divergence between the
@@ -211,6 +215,8 @@ GET    /v1/investigations/{id}/links/{edge}/notes   notes on one link, newest fi
 POST   /v1/investigations/{id}/links/{edge}/notes   add a note (`{"body": "..."}`), 201; 422 `invalid_note` for empty or over 4,000 characters
 PUT    /v1/investigations/{id}/links/{edge}/notes/{note}      change the caller's own note; 403 `note_not_yours` for anyone else's
 DELETE /v1/investigations/{id}/links/{edge}/notes/{note}      remove the caller's own note, 204; 403 `note_not_yours` for anyone else's
+POST   /v1/investigations/{id}/links/{edge}/change   change a link's type and/or details (`{"reason": "...", "type"?, "properties"?, "interval"?, "occurrences"?}`) by superseding it; 200 with the new link, the `replace_edge` step and the change record; 404 `link_not_found` as for notes; 422 `invalid_link_change` (no reason, over 1,000 characters, or the ontology refuses), `nothing_changed`, `resolution_link` for a same-as or not-the-same link, either way round (ADR-080)
+GET    /v1/investigations/{id}/links/{edge}/history  every earlier version of one link and the changes between them, newest first, at most 100 steps (`truncated` says so) — 404 `link_not_found` unless the caller may see the link (ADR-080)
 POST   /v1/investigations/{id}/export    runs the handling gate; may return 409 with blockers
 GET    /v1/exports                       the compliance-facing export ledger (ADR-047's own Gap 2) — role-gated, not per-investigation
 GET    /v1/investigations/{id}/ingest/candidates   extraction candidates for one document (?document_id=)
@@ -324,8 +330,8 @@ one investigation's own working set, not global to the principal:
 ```
 GET    /v1/investigations/{id}/resolution/threshold          the same ThresholdResponse PUT sets
 PUT    /v1/investigations/{id}/resolution/threshold          set τ; triggers a reproject delta
-POST   /v1/investigations/{id}/resolution/link               analyst-asserted SAME_AS
-POST   /v1/investigations/{id}/resolution/split               analyst-asserted NOT_SAME_AS
+POST   /v1/investigations/{id}/resolution/link               analyst-asserted SAME_AS (optional `reason`, kept as the audit justification — ADR-080)
+POST   /v1/investigations/{id}/resolution/split               analyst-asserted NOT_SAME_AS (optional `reason`, as above)
 GET    /v1/investigations/{id}/resolution/explain/{cluster}  the read described just above
 ```
 

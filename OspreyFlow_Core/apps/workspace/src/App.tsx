@@ -332,6 +332,10 @@ export function App() {
   );
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [selectedLink, setSelectedLink] = useState<Edge | null>(null);
+  // ADR-080: the link menu's *Add a note* and *Change link…* count these up to bring that part of
+  // the Inspector forward.
+  const [linkNoteSignal, setLinkNoteSignal] = useState(0);
+  const [linkChangeSignal, setLinkChangeSignal] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   // B16's own cross-case overlay — the second investigation's own scope,
@@ -862,6 +866,10 @@ export function App() {
                 judgementCounts={judgementCounts}
                 communityHulls={communityHulls}
                 onEdgeSelect={setSelectedLink}
+                onLinkAction={(_edge, action) => {
+                  if (action === "note") setLinkNoteSignal((n) => n + 1);
+                  if (action === "change") setLinkChangeSignal((n) => n + 1);
+                }}
                 onSelectionChange={(nodeIds) => {
                   const first = nodeIds[0];
                   const graph = workingSetRef.current.graph;
@@ -1025,6 +1033,17 @@ export function App() {
                     }
                   : null
               }
+              linkEditing={{
+                edgeTypes,
+                openChangeSignal: linkChangeSignal,
+                openNoteSignal: linkNoteSignal,
+                onChanged: (result) => {
+                  // The old link leaves the view and the new one arrives in one step; the Inspector
+                  // is then pointed at the new link, whose id is not the old one's.
+                  workingSetRef.current.store.getState().applyDelta(result.delta);
+                  glassCanvasRef.current?.selectLink(result.edge.id);
+                },
+              }}
               assessment={{
                 apiBaseUrl: API_BASE_URL,
                 bearerToken: bearerToken,

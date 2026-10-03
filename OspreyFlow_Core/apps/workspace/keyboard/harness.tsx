@@ -25,6 +25,8 @@ declare global {
       selection: string[];
       viewMessagesNodeId: string | null;
       selectedEdge: string | null;
+      /** The last link-menu entry that hands over to the Inspector (ADR-080): which link and what. */
+      linkAction: { edgeId: string; action: string } | null;
     };
     __CANVAS__?: {
       viewportPositionOf: (nodeId: string) => { x: number; y: number } | null;
@@ -42,7 +44,7 @@ declare global {
   }
 }
 
-const SCHEMA: OntologySchema = {
+const BASE_SCHEMA: OntologySchema = {
   version: 1,
   entity_types: [
     {
@@ -120,7 +122,26 @@ window.__CANVAS__ = {
   nodeImage: (id) => (workingSet.graph.hasNode(id) ? (workingSet.graph.getNodeAttribute(id, "image") as string) : null),
 };
 
-window.__KEYBOARD__ = { focused: null, selection: [], viewMessagesNodeId: null, selectedEdge: null };
+window.__KEYBOARD__ = {
+  focused: null,
+  selection: [],
+  viewMessagesNodeId: null,
+  selectedEdge: null,
+  linkAction: null,
+};
+
+// `?fixture=same-as` is the link menu's fixture (ADR-080); every other fixture leaves `SAME_AS` out
+// of the schema, so the node menu's items — and the Tab counts the walkthroughs rely on — stay put.
+const wantsSameAs = new URLSearchParams(window.location.search).get("fixture") === "same-as";
+const SCHEMA: OntologySchema = wantsSameAs
+  ? {
+      ...BASE_SCHEMA,
+      edge_types: [
+        ...BASE_SCHEMA.edge_types,
+        { name: "SAME_AS", from: ["Person"], to: ["Person"], directed: false },
+      ],
+    }
+  : BASE_SCHEMA;
 
 const workingSet = createWorkingSet();
 const ontology = new OntologyRegistry(SCHEMA);
@@ -179,6 +200,18 @@ if (wantsCommunities) {
   }
   edges.push(edge("bridge", "a0", "b0"));
 }
+// `?fixture=same-as` swaps the chain for three people the engine has matched as one (s0—s1—s2, both
+// links SAME_AS, one cluster `s0`) and a fourth, `p0`, tied to s2 by an ordinary link: a same-as link
+// to fold, and a link of another type to change.
+if (wantsSameAs) {
+  nodes.length = 0;
+  edges.length = 0;
+  for (const id of ["s0", "s1", "s2"]) nodes.push(node(id, { resolution: { cluster_id: "s0" } }));
+  nodes.push(node("p0"));
+  edges.push(edge("sa0", "s0", "s1", "SAME_AS"));
+  edges.push(edge("sa1", "s1", "s2", "SAME_AS"));
+  edges.push(edge("ln0", "s2", "p0"));
+}
 workingSet.store.getState().applyDelta({ seq: 1, op: "snapshot", nodes, edges, filtered_count: 0 });
 
 const container = document.getElementById("root");
@@ -217,6 +250,9 @@ createRoot(container).render(
       }}
       onEdgeSelect={(edge) => {
         window.__KEYBOARD__!.selectedEdge = edge ? edge.id : null;
+      }}
+      onLinkAction={(edge, action) => {
+        window.__KEYBOARD__!.linkAction = { edgeId: edge.id, action };
       }}
       onViewMessages={(nodeId) => {
         window.__KEYBOARD__!.viewMessagesNodeId = nodeId;

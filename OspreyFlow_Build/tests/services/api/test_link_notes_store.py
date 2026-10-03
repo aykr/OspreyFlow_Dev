@@ -60,3 +60,17 @@ async def test_only_the_author_removes_a_note(store) -> None:
     assert await store.remove(inv, edge, note.id, "analyst-1") is True
     assert await store.get(inv, edge, note.id) is None
     assert await store.remove(inv, edge, note.id, "analyst-1") is False
+
+
+async def test_rekey_moves_every_note_on_one_link_in_one_case_and_nothing_else(store) -> None:
+    inv, old, new, other = new_id(), new_id(), new_id(), new_id()
+    await store.add(inv, old, "analyst-1", "one")
+    await store.add(inv, old, "analyst-2", "two")
+    untouched = await store.add(inv, other, "analyst-1", "elsewhere")
+    elsewhere = new_id()
+    await store.add(elsewhere, old, "analyst-1", "another case")
+    assert await store.rekey(inv, old, new) == 2
+    assert len(await store.list_for_link(inv, new)) == 2
+    assert await store.list_for_link(inv, old) == []
+    assert (await store.get(inv, other, untouched.id)) is not None
+    assert len(await store.list_for_link(elsewhere, old)) == 1

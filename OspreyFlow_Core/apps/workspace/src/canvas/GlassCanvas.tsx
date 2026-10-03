@@ -104,7 +104,11 @@ import {
   reconcileCollapsed,
   type Box,
   type CollapsedView,
+  type Community,
 } from "./communities";
+import { linkMenuItems, linkMenuTitle } from "./linkMenu";
+import { sameAsGroup } from "./linkCollapse";
+import { ReasonPrompt } from "./ReasonPrompt";
 import {
   expandOnDoubleClick,
   menuRequestForRightClick,
@@ -206,6 +210,9 @@ export interface GlassCanvasProps {
   /** ADR-070: how many judgements rest on each node, drawn as a small count beside it. Omitted or
    * empty, nothing is drawn. */
   judgementCounts?: ReadonlyMap<string, number>;
+  /** ADR-080: the link menu's *Add a note*, *Change link…* and *Show change history* select the
+   * link and then ask the caller to bring that part of the Inspector forward. */
+  onLinkAction?: (edge: Edge, action: "note" | "change" | "history") => void;
 }
 
 /** Phase 7 Stage 3: what the metrics panel needs from outside the canvas's own event handlers —
@@ -251,6 +258,18 @@ export interface GlassCanvasHandle {
    * already establishes, made a rejection rather than a silent no-op here because a caller
    * that requested a download needs to know it did not get one). */
   exportImage: (mark: ExportMark) => Promise<Blob>;
+  /** Selects the link `edgeId` (or clears the selection with `null`) exactly as a click on it would,
+   * telling `onEdgeSelect`. Used after a link is changed (ADR-080): the replacement has a new id, so
+   * the Inspector is pointed at it. A no-op for an id not in the view. */
+  selectLink: (edgeId: string | null) => void;
+}
+
+/** The right-click menu on a link (ADR-080). */
+interface PendingLinkMenu {
+  x: number;
+  y: number;
+  edgeId: string;
+  layout: "radial" | "list";
 }
 
 interface PendingRadialMenu {
@@ -289,6 +308,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       communityHulls,
       onGroupedCountChange,
       judgementCounts,
+      onLinkAction,
     }: GlassCanvasProps,
     ref,
   ) {
@@ -359,6 +379,18 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     const [hiddenEdges, setHiddenEdges] = useState<ReadonlySet<string>>(new Set());
     const hiddenEdgesRef = useRef<ReadonlySet<string>>(new Set());
     hiddenEdgesRef.current = hiddenEdges;
+    // The right-click menu on a link, and the box that asks why before a write from it (ADR-080).
+    const [linkMenu, setLinkMenu] = useState<PendingLinkMenu | null>(null);
+    const [reasonPrompt, setReasonPrompt] = useState<{
+      x: number;
+      y: number;
+      title: string;
+      confirmLabel: string;
+      run: (reason: string) => void;
+    } | null>(null);
+    // Nodes the analyst folded into one from a same-as link: a view only, like Communities, kept in
+    // this browser tab and gone on reload. Each is a group the fold below treats like a community.
+    const [manualGroups, setManualGroups] = useState<readonly Community[]>([]);
     const [clusterExplain, setClusterExplain] = useState<{
       x: number;
       y: number;
@@ -432,8 +464,14 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
       [communitiesOn, graph, workingSetSeq],
     );
-    const communitiesRef = useRef(communities);
-    communitiesRef.current = communities;
+    // Every group that can be folded: the ones made from same-as links first (so one that overlaps a
+    // community wins), then the communities.
+    const allGroups = useMemo(
+      () => [...manualGroups, ...communities],
+      [manualGroups, communities],
+    );
+    const communitiesRef = useRef(allGroups);
+    communitiesRef.current = allGroups;
     const collapsedRef = useRef(collapsed);
     collapsedRef.current = collapsed;
     const communitiesOnRef = useRef(false);
@@ -568,8 +606,17 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // A group that no longer exists (its nodes were removed, or Communities was switched off) is
     // dropped from what is folded.
     useEffect(() => {
-      setCollapsed((prev) => reconcileCollapsed(prev, communities));
-    }, [communities]);
+      setCollapsed((prev) => reconcileCollapsed(prev, allGroups));
+    }, [allGroups]);
+
+    // A group made from a same-as link goes when one of its nodes leaves the view.
+    useEffect(() => {
+      setManualGroups((prev) => {
+        const kept = prev.filter((g) => g.members.every((id) => graph.hasNode(id)));
+        return kept.length === prev.length ? prev : kept;
+      });
+      // `workingSetSeq` changes whenever nodes or links are added or removed.
+    }, [workingSetSeq, graph]);
 
     // Whenever what is folded changes: work the view out again, tell the status bar, take nodes that
     // are no longer drawn out of the selection and the keyboard focus, and draw.
@@ -586,14 +633,14 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           });
         }
         if (focused && view.hidden.has(focused)) {
-          const owner = communities.find((c) => c.members.includes(focused));
+          const owner = allGroups.find((c) => c.members.includes(focused));
           const standIn = [...view.groups.entries()].find(([, g]) => g.communityId === owner?.id);
           setFocused(standIn ? standIn[0] : null);
         }
       }
       sigmaRef.current?.refresh();
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [collapsed, communities]);
+    }, [collapsed, allGroups]);
 
     // The types that have a node in view now, for the Labels and Icons controls.
     const typesInView = (): string[] => {
@@ -977,6 +1024,33 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       currentSigma = sigma;
       sigmaRef.current = sigma;
 
+      // The link under a point, within a few pixels of its line: a link that is not drawn (hidden by
+      // the analyst, or inside a folded group) is not under it.
+      const edgeAtViewport = (px: number, py: number): string | null => {
+        const segments: ScreenSegment[] = [];
+        graph.forEachEdge((edgeId, _attrs, source, target) => {
+          if (hiddenEdgesRef.current.has(edgeId)) return;
+          if (foldedViewRef.current?.hidesLink(source, target)) return;
+          const a = sigma.graphToViewport({
+            x: graph.getNodeAttribute(source, "x") ?? 0,
+            y: graph.getNodeAttribute(source, "y") ?? 0,
+          });
+          const b = sigma.graphToViewport({
+            x: graph.getNodeAttribute(target, "x") ?? 0,
+            y: graph.getNodeAttribute(target, "y") ?? 0,
+          });
+          segments.push({ id: edgeId, ax: a.x, ay: a.y, bx: b.x, by: b.y });
+        });
+        return nearestEdge(px, py, segments);
+      };
+      // A right-click on a link opens its menu in the list layout, as a right-click on a node does.
+      const openLinkMenuFor = (edgeId: string, original: MouseEvent) => {
+        original.preventDefault();
+        selectLinkRef.current(edgeId);
+        setRadialMenu(null);
+        setLinkMenu({ x: original.clientX, y: original.clientY, edgeId, layout: "list" });
+      };
+
       sigma.on("clickNode", ({ node, event }) => {
         const multi =
           event.original instanceof MouseEvent &&
@@ -994,20 +1068,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         // The renderer picks a link only where its thin line is drawn, which is hard to hit. A
         // click that found neither node nor link is checked against every visible link with a
         // wider reach before it counts as a click on empty space.
-        const segments: ScreenSegment[] = [];
-        graph.forEachEdge((edgeId, _attrs, source, target) => {
-          if (hiddenEdgesRef.current.has(edgeId)) return;
-          const a = sigma.graphToViewport({
-            x: graph.getNodeAttribute(source, "x") ?? 0,
-            y: graph.getNodeAttribute(source, "y") ?? 0,
-          });
-          const b = sigma.graphToViewport({
-            x: graph.getNodeAttribute(target, "x") ?? 0,
-            y: graph.getNodeAttribute(target, "y") ?? 0,
-          });
-          segments.push({ id: edgeId, ax: a.x, ay: a.y, bx: b.x, by: b.y });
-        });
-        const hit = nearestEdge(event.x, event.y, segments);
+        const hit = edgeAtViewport(event.x, event.y);
         if (hit !== null) {
           selectLinkRef.current(hit);
           return;
@@ -1020,6 +1081,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       sigma.on("leaveNode", () => setHovered(null));
       sigma.on("rightClickNode", ({ node, event }) => {
         event.preventSigmaDefault();
+        setLinkMenu(null);
         setFocused(node);
         setRadialMenu(
           menuRequestForRightClick(event.original as MouseEvent, node),
@@ -1049,6 +1111,19 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         });
       });
       sigma.on("clickEdge", ({ edge }) => selectLinkRef.current(edge));
+      sigma.on("rightClickEdge", ({ edge, event }) => {
+        event.preventSigmaDefault();
+        openLinkMenuFor(edge, event.original as MouseEvent);
+      });
+      sigma.on("rightClickStage", ({ event }) => {
+        // The renderer picks a link only where its thin line is drawn; a right-click that found
+        // neither a node nor a link is checked against every drawn link with the wider reach a
+        // click has. Anywhere else the browser's own menu is left alone.
+        const hit = edgeAtViewport(event.x, event.y);
+        if (hit === null) return;
+        event.preventSigmaDefault();
+        openLinkMenuFor(hit, event.original as MouseEvent);
+      });
 
       return () => {
         sigma.kill();
@@ -1103,6 +1178,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           const x = graph.getNodeAttribute(nodeId, "x") ?? 0;
           const y = graph.getNodeAttribute(nodeId, "y") ?? 0;
           return sigma.graphToViewport({ x, y });
+        },
+        selectLink: (edgeId: string | null) => {
+          if (edgeId !== null && !graph.hasEdge(edgeId)) return;
+          selectLinkRef.current(edgeId);
         },
         exportImage: (mark: ExportMark) => {
           const sigma = sigmaRef.current;
@@ -1284,9 +1363,22 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           (rect?.left ?? 0) + 40,
           (rect?.top ?? 0) + 40,
         );
+      } else if (e.key === "\\" && selectedEdge !== null && graph.hasEdge(selectedEdge)) {
+        // With a link selected (`L` steps through a node's links), `\` opens that link's menu in
+        // the list layout, as a right-click on the link does (ADR-080; rule 13).
+        e.preventDefault();
+        const rect = containerRef.current?.getBoundingClientRect();
+        setRadialMenu(null);
+        setLinkMenu({
+          x: (rect?.left ?? 0) + 40,
+          y: (rect?.top ?? 0) + 40,
+          edgeId: selectedEdge,
+          layout: "list",
+        });
       } else if (e.key === "\\" && focused) {
         e.preventDefault();
         const rect = containerRef.current?.getBoundingClientRect();
+        setLinkMenu(null);
         setRadialMenu({
           x: (rect?.left ?? 0) + 40,
           y: (rect?.top ?? 0) + 40,
@@ -1473,6 +1565,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       kind: "link" | "split",
       x: number,
       y: number,
+      reason?: string,
     ): Promise<void> {
       // Fixed first, ahead of expandNode/explainCluster below (CLAUDE.md's own session priority):
       // this is a write, not a read. A silently-dropped expand/explain misleads an analyst about
@@ -1488,7 +1581,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               Authorization: `Bearer ${bearerToken}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ node_a: nodeA, node_b: nodeB }),
+            body: JSON.stringify(
+              reason === undefined
+                ? { node_a: nodeA, node_b: nodeB }
+                : { node_a: nodeA, node_b: nodeB, reason },
+            ),
           },
         );
         if (!response.ok) {
@@ -1838,6 +1935,19 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         });
       }
 
+      // A Group Node (a folded community, or nodes folded from a same-as link) opens from its own
+      // menu too: its links are not drawn while it is folded, so this is the way back from a link.
+      const folded = foldedViewRef.current?.groups.get(nodeId);
+      if (folded) {
+        items.push({
+          id: "expand-group",
+          label: "Expand group",
+          count: undefined,
+          group: "Actions",
+          onSelect: () => unfoldGroup(folded.communityId),
+        });
+      }
+
       // **Owner ruling R7 (TENTATIVE, 27 September 2026) — step one of two.** Offered on every
       // node, not gated on a pair or a type: any record can be proposed for suppression.
       // Marking suppresses nothing — `02_GLASS_FRONTEND.md` §9.5 and
@@ -1854,6 +1964,78 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       });
 
       return items;
+    }
+
+    // A menu or box that closes leaves keyboard focus on the page body, which would strand someone
+    // using the keyboard. If focus has nowhere else to be (the Inspector may have taken it, for a
+    // note), it goes back to the canvas, whose own keys then carry on.
+    function returnFocusToCanvas() {
+      requestAnimationFrame(() => {
+        if (document.activeElement === document.body) containerRef.current?.focus();
+      });
+    }
+
+    // The entries of the right-click menu on a link (ADR-080). Each is a view change or a call that
+    // writes with the analyst's name and a reason; nothing here edits a link in place.
+    function linkMenuEntries(edgeId: string, x: number, y: number): RadialMenuItem[] {
+      if (!graph.hasEdge(edgeId)) return [];
+      const edge = graph.getEdgeAttribute(edgeId, "data");
+      const endLabel = (id: string) =>
+        graph.hasNode(id) ? nodeLabel(graph.getNodeAttribute(id, "data")) : id;
+      const clusterOf = (id: string): string | undefined =>
+        graph.hasNode(id) ? (graph.getNodeAttribute(id, "data").resolution?.cluster_id ?? undefined) : undefined;
+      const group = sameAsGroup(edge.source, edge.target, graph.nodes(), clusterOf);
+      const notice = (message: string) => setActionError({ x, y, message, tone: "notice" });
+      const askWhy = (title: string, confirmLabel: string, run: (reason: string) => void) =>
+        setReasonPrompt({ x, y, title, confirmLabel, run });
+      const reach = (action: "note" | "change" | "history") => {
+        selectLink(edgeId);
+        onLinkAction?.(edge, action);
+      };
+      return linkMenuItems(edge, collapsed.has(group.id), {
+        onCollapse: () => {
+          const view = foldedViewRef.current;
+          if (group.members.some((id) => view?.hidden.has(id) || view?.groups.has(id))) {
+            notice("Open the group these nodes are in first.");
+            return;
+          }
+          if (group.members.length < 2) {
+            notice("Both nodes need to be in view to fold them into one.");
+            return;
+          }
+          setManualGroups((prev) => (prev.some((g) => g.id === group.id) ? prev : [...prev, group]));
+          setCollapsed((prev) => new Set(prev).add(group.id));
+          selectLink(null);
+        },
+        onExpand: () => unfoldGroup(group.id),
+        onConfirm: () =>
+          askWhy(
+            `Confirm ${endLabel(edge.source)} and ${endLabel(edge.target)} as the same`,
+            "Confirm",
+            (reason) => void manualAssertion(edge.source, edge.target, "link", x, y, reason),
+          ),
+        onNotSame: () =>
+          askWhy(
+            `Mark ${endLabel(edge.source)} and ${endLabel(edge.target)} as not the same`,
+            "Mark as not the same",
+            (reason) => void manualAssertion(edge.source, edge.target, "split", x, y, reason),
+          ),
+        onExplain: () => {
+          const cluster = clusterOf(edge.source);
+          if (cluster === undefined || cluster !== clusterOf(edge.target)) {
+            notice("These two are not in one cluster at the current threshold, so there is nothing to explain yet.");
+            return;
+          }
+          void explainCluster(cluster, x, y);
+        },
+        onNote: () => reach("note"),
+        onHide: () => {
+          setHiddenEdges((current) => new Set(current).add(edgeId));
+          selectLink(null);
+        },
+        onChange: () => reach("change"),
+        onHistory: () => reach("history"),
+      });
     }
 
     // Selecting a link clears the node selection (and the other way round, in the effect above), and
@@ -1891,7 +2073,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       const nodeIds = requested.filter((id) => {
         const group = foldedViewRef.current?.groups.get(id);
         if (!group) return true;
-        const owner = communities.find((c) => c.id === group.communityId);
+        const owner = allGroups.find((c) => c.id === group.communityId);
         if (owner && owner.members.every((m) => requested.includes(m))) return true;
         unfoldGroup(group.communityId);
         return false;
@@ -1937,8 +2119,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           // bubbles (via `focusin`), so without this guard, focus landing on a *descendant* — the
           // lasso toggle button, a radial-menu item — would also fire this and re-establish a ring
           // an analyst may have deliberately built past a single node already.
-          if (e.target !== e.currentTarget || selected.size > 0) return;
-          const first = graph.nodes()[0];
+          // A selected link is a position too (`\\` and Delete act on it), so it is left as it is.
+          if (e.target !== e.currentTarget || selected.size > 0 || selectedEdge !== null) return;
+          // The first node that is drawn: a node folded into a Group Node is not on the canvas.
+          const first = graph.nodes().find((id) => !isHiddenInGroup(id));
           if (!first) return;
           setSelected(new Set([first]));
           setFocused(first);
@@ -2026,6 +2210,42 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             }
             items={radialMenuItems(radialMenu.nodeId)}
             onClose={() => setRadialMenu(null)}
+          />
+        )}
+        {linkMenu && graph.hasEdge(linkMenu.edgeId) && (
+          <RadialMenu
+            x={linkMenu.x}
+            y={linkMenu.y}
+            layout={linkMenu.layout}
+            title={(() => {
+              const edge = graph.getEdgeAttribute(linkMenu.edgeId, "data");
+              const end = (id: string) =>
+                graph.hasNode(id) ? nodeLabel(graph.getNodeAttribute(id, "data")) : id;
+              return linkMenuTitle(edge.type, end(edge.source), end(edge.target));
+            })()}
+            items={linkMenuEntries(linkMenu.edgeId, linkMenu.x, linkMenu.y)}
+            onClose={() => {
+              setLinkMenu(null);
+              returnFocusToCanvas();
+            }}
+          />
+        )}
+        {reasonPrompt && (
+          <ReasonPrompt
+            x={reasonPrompt.x}
+            y={reasonPrompt.y}
+            title={reasonPrompt.title}
+            confirmLabel={reasonPrompt.confirmLabel}
+            onSubmit={(reason) => {
+              const run = reasonPrompt.run;
+              setReasonPrompt(null);
+              returnFocusToCanvas();
+              run(reason);
+            }}
+            onCancel={() => {
+              setReasonPrompt(null);
+              returnFocusToCanvas();
+            }}
           />
         )}
         {clusterExplain && (

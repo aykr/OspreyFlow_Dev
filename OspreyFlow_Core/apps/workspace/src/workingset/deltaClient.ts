@@ -25,9 +25,17 @@
 // same socket rather than applying something it cannot place correctly.
 import type { WorkingSetDelta } from "./models";
 
-const DELTA_OPS = new Set(["add", "update", "remove", "reproject", "notice", "snapshot"]);
+const DELTA_OPS = new Set([
+  "add",
+  "update",
+  "remove",
+  "replace_edge",
+  "reproject",
+  "notice",
+  "snapshot",
+]);
 
-function isWorkingSetDelta(value: unknown): value is WorkingSetDelta {
+export function isWorkingSetDelta(value: unknown): value is WorkingSetDelta {
   return (
     typeof value === "object" &&
     value !== null &&

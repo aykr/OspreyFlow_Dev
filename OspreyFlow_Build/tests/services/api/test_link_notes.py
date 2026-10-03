@@ -99,6 +99,14 @@ class InMemoryNotes:
         ]
         return len(self.rows) < before
 
+    async def rekey(self, investigation_id: str, old_edge_id: str, new_edge_id: str) -> int:
+        moved = 0
+        for i, r in enumerate(self.rows):
+            if (r.investigation_id, r.edge_id) == (investigation_id, old_edge_id):
+                self.rows[i] = r.model_copy(update={"edge_id": new_edge_id})
+                moved += 1
+        return moved
+
 
 async def _service() -> tuple[LinkNoteService, InMemoryNotes, FakeWorkingSetStore]:
     working = FakeWorkingSetStore()

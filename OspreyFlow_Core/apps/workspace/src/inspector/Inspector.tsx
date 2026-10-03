@@ -1,16 +1,33 @@
 import type Graph from "graphology";
-import type { Judgement, Node } from "../../../../packages/schemas/generated";
+import type { EdgeTypeDef, Judgement, Node } from "../../../../packages/schemas/generated";
 import { JudgementsPanel } from "../assessment/JudgementsPanel";
 import { Panel } from "../design/primitives/Panel";
 import { Tabs } from "../design/primitives/Tabs";
 import { LinkDetails, type LinkDetailsProps } from "./LinkDetails";
+import { LinkChange } from "./LinkChange";
+import type { LinkChangeResult } from "./linkChangeApi";
+import { LinkHistory } from "./LinkHistory";
 import { LinkNotes } from "./LinkNotes";
 import { useState } from "react";
+
+function isResolutionLink(type: string): boolean {
+  return type === "SAME_AS" || type === "NOT_SAME_AS";
+}
 
 export interface InspectorProps {
   node: Node | null;
   /** A selected link. While one is, the Inspector shows it instead of a node. */
   link?: LinkDetailsProps | null;
+  /** What the link view needs to change a link and react to the link menu (ADR-080). Omitted, the
+   * link is shown and noted but not offered a change. */
+  linkEditing?: {
+    edgeTypes: readonly EdgeTypeDef[];
+    /** Each time one of these counts up, the matching part of the link view opens or takes focus. */
+    openChangeSignal: number;
+    openNoteSignal: number;
+    /** Told of a saved change so the new link can be put in the view. */
+    onChanged: (result: LinkChangeResult) => void;
+  };
   /** Phase 8 Stage 4c: the Judgements tab, `02_GLASS_FRONTEND.md` §9. `undefined` when the
    * caller has not wired assessment production up yet (an existing test harness) — the tab is
    * then simply not offered, the same optional-prop pattern `dimmedNodeIds`/`communityHulls`
@@ -38,16 +55,40 @@ export interface InspectorProps {
  * analytical product, not a per-node fact) — so `Tabs` renders even when
  * `node` is `null`, with only the node-specific tabs' own content gated on
  * it. */
-export function Inspector({ node, link, assessment }: InspectorProps) {
+export function Inspector({ node, link, linkEditing, assessment }: InspectorProps) {
   const [tab, setTab] = useState("properties");
 
   if (link) {
     return (
       <Panel title="Inspector" className="inspector">
         <LinkDetails {...link} />
+        {/* ADR-080: a link is changed with a reason and its history kept — in a case, for any
+            type but the same-as ones, which are confirmed or marked as not the same. */}
+        {assessment && linkEditing && link.source && link.target && !isResolutionLink(link.edge.type) && (
+          <LinkChange
+            apiBaseUrl={assessment.apiBaseUrl}
+            bearerToken={assessment.bearerToken}
+            investigationId={assessment.investigationId}
+            edge={link.edge}
+            sourceType={link.source.type}
+            targetType={link.target.type}
+            edgeTypes={linkEditing.edgeTypes}
+            openSignal={linkEditing.openChangeSignal}
+            onChanged={linkEditing.onChanged}
+          />
+        )}
         {/* ADR-075: notes belong to a case, so they are offered only where one is open. */}
         {assessment && (
           <LinkNotes
+            apiBaseUrl={assessment.apiBaseUrl}
+            bearerToken={assessment.bearerToken}
+            investigationId={assessment.investigationId}
+            edgeId={link.edge.id}
+            focusSignal={linkEditing?.openNoteSignal}
+          />
+        )}
+        {assessment && !isResolutionLink(link.edge.type) && (
+          <LinkHistory
             apiBaseUrl={assessment.apiBaseUrl}
             bearerToken={assessment.bearerToken}
             investigationId={assessment.investigationId}

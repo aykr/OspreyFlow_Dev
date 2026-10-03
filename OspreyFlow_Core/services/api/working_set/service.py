@@ -72,6 +72,7 @@ from .models import (
     DeltaAdd,
     DeltaNotice,
     DeltaRemove,
+    DeltaReplaceEdge,
     DeltaReproject,
     DeltaSnapshot,
     ExpansionOutcome,
@@ -167,6 +168,14 @@ class WorkingSetService:
                 delta.model_copy(update={"nodes": nodes, "edges": edges, "filtered_count": hidden}),
                 hidden,
             )
+        if isinstance(delta, DeltaReplaceEdge):
+            # A change keeps the link's marking and its ends, so whoever could not see the old link
+            # cannot see the new one: for them the step is nothing, counted as one withheld item,
+            # and the new link's content does not leave. Judged on the link's own marking because a
+            # delta carries no ends to judge it by, which is the safe side of that gap.
+            if principal_may_view(delta.edge.handling, principal, self._scheme):
+                return delta, 0
+            return DeltaRemove(seq=delta.seq, node_ids=[]), 1
         return delta, 0
 
     async def get_resolution_threshold(self, investigation_id: str) -> float:
@@ -668,6 +677,28 @@ class WorkingSetService:
         ]
         _, visible, _ = self._project(ends, [edge], principal)
         return visible[0] if visible else None
+
+    async def end_types(self, investigation_id: str, edge: Edge) -> tuple[str, str] | None:
+        """The entity types at the two ends of `edge`, from the working set, or `None` if either end
+        has left it. A change of a link's type has to be checked against them."""
+        source = await self._store.get_node(investigation_id, edge.source)
+        target = await self._store.get_node(investigation_id, edge.target)
+        if source is None or target is None:
+            return None
+        return source.type, target.type
+
+    async def replace_edge(
+        self, investigation_id: str, old_edge_id: EdgeId, new_edge: Edge
+    ) -> DeltaReplaceEdge:
+        """Swaps one link for its replacement in the working set and records the step, so a client
+        that reconnects is told of it. Membership only: nothing is checked here, the caller has
+        already shown the principal may change the old link (`link_changes.py`)."""
+        await self._store.remove_edges(investigation_id, [old_edge_id])
+        await self._store.add_edges(investigation_id, [new_edge])
+        seq = await self._store.next_seq(investigation_id)
+        delta = DeltaReplaceEdge(seq=seq, old_edge_id=old_edge_id, edge=new_edge)
+        await self._store.append_delta(investigation_id, delta)
+        return delta
 
     async def withheld_count_for(self, investigation_id: str, principal: Principal) -> int:
         """The export gate's own trusted source for the withheld-item manifest

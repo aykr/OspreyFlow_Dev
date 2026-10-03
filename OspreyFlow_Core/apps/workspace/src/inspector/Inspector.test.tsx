@@ -37,7 +37,8 @@ function stubNotes() {
   const fetchMock = vi.fn(async (url: string) => ({
     ok: true,
     status: 200,
-    json: async () => (url.includes("/notes") ? { notes: [] } : {}),
+    json: async () =>
+      url.includes("/notes") ? { notes: [] } : url.includes("/history") ? { changes: [], truncated: false } : {},
   }));
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -50,7 +51,7 @@ describe("Inspector — a selected link", () => {
     expect(screen.getByText("ASSOCIATED_WITH")).toBeTruthy();
     expect(screen.getByRole("region", { name: "Notes" })).toBeTruthy();
     await waitFor(() =>
-      expect(fetchMock.mock.calls[0]![0]).toBe(
+      expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(
         "http://api.test/v1/investigations/inv-1/links/e7/notes",
       ),
     );
@@ -70,5 +71,35 @@ describe("Inspector — a selected link", () => {
     render(<Inspector node={node} assessment={assessment} />);
     expect(screen.queryByRole("region", { name: "Notes" })).toBeNull();
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/notes"))).toBe(false);
+  });
+  it("offers a change and a history for an ordinary link, once the ends and the ontology are known (ADR-080)", async () => {
+    stubNotes();
+    const person = { id: "a", type: "Person", properties: {}, provenance: { state: "asserted", sources: [], first_seen: "x" } } as unknown as Node;
+    render(
+      <Inspector
+        node={null}
+        link={{ ...link, source: person, target: { ...person, id: "b" } }}
+        assessment={assessment}
+        linkEditing={{ edgeTypes: [], openChangeSignal: 0, openNoteSignal: 0, onChanged: () => undefined }}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Change this link…" })).toBeTruthy();
+    expect(await screen.findByRole("region", { name: "Change history" })).toBeTruthy();
+  });
+
+  it("offers neither to a same-as link: that is confirmed or marked, not edited", async () => {
+    stubNotes();
+    const person = { id: "a", type: "Person", properties: {}, provenance: { state: "asserted", sources: [], first_seen: "x" } } as unknown as Node;
+    render(
+      <Inspector
+        node={null}
+        link={{ ...link, edge: { ...link.edge, type: "SAME_AS" }, source: person, target: { ...person, id: "b" } }}
+        assessment={assessment}
+        linkEditing={{ edgeTypes: [], openChangeSignal: 0, openNoteSignal: 0, onChanged: () => undefined }}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Change this link…" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Change history" })).toBeNull();
+    expect(screen.getByRole("region", { name: "Notes" })).toBeTruthy();
   });
 });

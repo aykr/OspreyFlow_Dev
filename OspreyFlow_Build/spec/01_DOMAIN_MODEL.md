@@ -1046,7 +1046,10 @@ set itself went beyond it for transaction management and schema application:
 - **`supersede_edge(edge_id, replacement, tx) -> EdgeId`.** The same operation for an edge —
   simpler, since nothing references an edge by id except an assessment's evidence list (§5), which
   is expected to follow `superseded_by`, not be silently rewritten, so there is nothing to
-  repoint.
+  repoint. An analyst's correction of a link (ADR-080) is the one caller outside the loads and
+  resolution. Link notes (ADR-075) are also kept against an edge id, so the service that supersedes a
+  link for an analyst moves its notes to the new id in the same step; the old link and the change
+  between them stay readable through the change history.
 - **`revert_elements(node_ids, edge_ids, tx) -> None`.** Sets `AuditStub.reverted` on existing
   elements; `services/ingest`'s `revert_load` is the only caller. No `principal` argument, unlike
   every read method — this is a backend write attributed by the caller's own audit trail (the

@@ -257,6 +257,39 @@ def test_post_link_publishes_the_delta_and_audits(client: TestClient) -> None:
     assert record["resolved_query"] == {"node_a": "n1", "node_b": "n2"}
 
 
+def test_post_link_audits_the_reason_when_one_is_given(client: TestClient) -> None:
+    client.post(
+        "/v1/investigations/inv-1/resolution/link",
+        json={"node_a": "n1", "node_b": "n2", "reason": "Same phone, same name"},
+    )
+    record = client.audit.records[-1]  # type: ignore[attr-defined]
+    assert record["justification"] == "Same phone, same name"
+
+
+def test_post_split_audits_the_reason_when_one_is_given(client: TestClient) -> None:
+    client.post(
+        "/v1/investigations/inv-1/resolution/split",
+        json={"node_a": "n1", "node_b": "n2", "reason": "Different dates of birth"},
+    )
+    record = client.audit.records[-1]  # type: ignore[attr-defined]
+    assert record["action"] == "manual_split"
+    assert record["justification"] == "Different dates of birth"
+
+
+def test_a_reason_is_optional_so_the_older_caller_still_works(client: TestClient) -> None:
+    client.post("/v1/investigations/inv-1/resolution/link", json={"node_a": "n1", "node_b": "n2"})
+    assert client.audit.records[-1]["justification"] is None  # type: ignore[attr-defined]
+
+
+def test_a_reason_over_the_limit_is_refused_and_nothing_is_written(client: TestClient) -> None:
+    response = client.post(
+        "/v1/investigations/inv-1/resolution/link",
+        json={"node_a": "n1", "node_b": "n2", "reason": "x" * 1001},
+    )
+    assert response.status_code == 422
+    assert client.working_set.link_calls == []  # type: ignore[attr-defined]
+
+
 def test_post_link_returns_404_when_a_node_is_not_in_the_working_set(
     client: TestClient,
 ) -> None:

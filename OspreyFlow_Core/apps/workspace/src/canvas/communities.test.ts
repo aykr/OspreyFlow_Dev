@@ -161,6 +161,33 @@ describe("collapseView", () => {
     expect(v.groups.get("b")).toMatchObject({ communityId: "c:a", count: 3, x: 10, y: 10 });
   });
 
+  it("names a group by its own label when it has one, and by its types when it has none", () => {
+    const named: Community[] = [
+      { id: "s:d|e", members: ["d", "e"], label: "Same entity: 2 nodes" },
+      { id: "c:a", members: ["a", "b", "c"] },
+    ];
+    const v = collapseView(named, new Set(["s:d|e", "c:a"]), positions, degree, type);
+    expect(v.groups.get("d")?.label).toBe("Same entity: 2 nodes");
+    expect(v.groups.get("b")?.label).toBe("Group of 3 nodes: Person 2, Account 1");
+  });
+
+  it("folds a group once: a later group sharing a member with a folded one is left open", () => {
+    const overlapping: Community[] = [
+      { id: "s:a|b", members: ["a", "b"], label: "Same entity: 2 nodes" },
+      { id: "c:a", members: ["a", "b", "c"] },
+    ];
+    const v = collapseView(
+      overlapping,
+      new Set(["s:a|b", "c:a"]),
+      positions,
+      degree,
+      type,
+    );
+    expect([...v.groups.values()].map((g) => g.communityId)).toEqual(["s:a|b"]);
+    expect(v.hidden.has("c")).toBe(false);
+    expect(v.groupedNodeCount).toBe(2);
+  });
+
   it("breaks a tie in connectedness by the smaller id, so the choice is stable", () => {
     expect([...view(["c:d"]).groups.keys()]).toEqual(["d"]);
   });

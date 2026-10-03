@@ -106,6 +106,11 @@ that is not in the person's view shows "This link is not in your view" and no bo
 offered only while a case is open. Keyboard: every step is reachable without a mouse (rule 13,
 `keyboard/link-notes.spec.ts`).
 
+**Changing a link and its history (ADR-080, §3.1f).** Under a selected link that is not a same-as or
+not-the-same link the Inspector also shows **Change this link…** (a form: type, details, dates,
+records behind it and a required reason) and a **Change history** list. A same-as link is not edited:
+it is confirmed or marked as not the same from its menu.
+
 **Zoom-dependent clustering is a data operation, not a rendering one.** Collapsing a community
 into a meta-node, or expanding it back, happens in graphology and produces a real change to the
 working set with an entry in the step history. It behaves identically whichever renderer draws
@@ -371,6 +376,35 @@ view is zoomed in, so the icon is a reading aid at close range, not at overview.
 keyboard (`Tab` to the button, `Enter` to open, arrow keys to choose, `Escape` to close; the file
 control is an ordinary file input), and `keyboard/keyboard.spec.ts` proves it, including that a
 picture given from a file reaches the canvas's pixels.
+
+### 3.1f The right-click menu on a link (ADR-080)
+
+Right-click on a drawn link (the click finds the nearest link within 6 pixels), or select it (`L`
+steps through a focused node's links) and press `\`, to open a list titled `TYPE: A ↔ B`. A
+**same-as** link offers *Collapse into one node* (*Expand* once folded), *Confirm as the same*, *Mark as
+not the same*, *Explain this link*, *Add a note* and *Hide link*. A **not-the-same** link offers *Add a
+note* and *Hide link* only. **Any other** link offers *Change link…*, *Show change history*, *Add a
+note* and *Hide link*.
+
+*Collapse into one node* is a view, not a change: the matched nodes (the whole resolution cluster when
+both ends are in one, otherwise the two ends) fold into one Group Node by the same machinery as
+Communities, nothing is merged in the store (rule 6), and the fold is lost on reload. A link inside a
+folded group is not drawn, so the Group Node's own menu has *Expand group*; double-click and `G` still
+open it. *Confirm as the same* and *Mark as not the same* open a small box that asks **why**: a
+reason is required (the button stays off until there is one; Control/Cmd+Enter confirms, Escape
+cancels) and is kept in the audit trail with the analyst's name. *Explain this link* opens the cluster
+explanation for the cluster the two are in, or says they are not in one at the current threshold.
+*Add a note*, *Change link…* and *Show change history* select the link and take the Inspector to the
+matching section.
+
+The Inspector's **Change this link** form (any link other than same-as and not-the-same) offers the
+link type (only those the ontology allows between the two ends, never a same-as type), the properties
+that type declares, the dates it covers, the records behind it, and a **required reason**. Saving
+replaces the link and keeps the old one: **Change history** lists every change newest first, each with
+who made it, when, the reason, and what the type, details, dates and record count were before and
+after. Notes follow the link to its new version. Every write from the menu is recorded in the audit
+trail attributed to the analyst. Reachable by keyboard throughout (rule 13: `keyboard/link-menu.spec.ts`,
+`keyboard/link-change.spec.ts`). A menu or box that closes returns focus to the canvas.
 
 ### 3.2 Social network analysis
 

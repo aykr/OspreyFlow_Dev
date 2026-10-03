@@ -42,6 +42,15 @@ export interface DeltaRemove {
   node_ids: string[];
 }
 
+/** One link stands in for another (ADR-080): a link was changed, so the old one leaves the view
+ * and the new one arrives in the same step. Mirrors `DeltaReplaceEdge` in `models.py`. */
+export interface DeltaReplaceEdge {
+  seq: number;
+  op: "replace_edge";
+  old_edge_id: string;
+  edge: Edge;
+}
+
 export interface DeltaReproject {
   seq: number;
   op: "reproject";
@@ -75,6 +84,7 @@ export type WorkingSetDelta =
   | DeltaAdd
   | DeltaUpdate
   | DeltaRemove
+  | DeltaReplaceEdge
   | DeltaReproject
   | DeltaNotice
   | DeltaSnapshot;

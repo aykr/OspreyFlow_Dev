@@ -128,6 +128,11 @@ class LinkNoteStorage(Protocol):
         """`False` when no note matches all four."""
         ...
 
+    async def rekey(self, investigation_id: str, old_edge_id: str, new_edge_id: str) -> int:
+        """Moves every note on one link to its replacement (ADR-080: changing a link supersedes it,
+        which gives it a new id, and its notes go with it). Returns how many moved."""
+        ...
+
 
 def _row(row: asyncpg.Record) -> StoredNote:
     return StoredNote(
@@ -219,6 +224,17 @@ class LinkNoteStore:
                 author,
             )
         return str(result).endswith(" 1")
+
+
+    async def rekey(self, investigation_id: str, old_edge_id: str, new_edge_id: str) -> int:
+        async with self._pool.acquire() as conn:
+            result = await conn.execute(
+                "UPDATE link_notes SET edge_id = $3 WHERE investigation_id = $1 AND edge_id = $2",
+                investigation_id,
+                old_edge_id,
+                new_edge_id,
+            )
+        return int(str(result).rsplit(" ", 1)[-1])
 
 
 def _clean(body: str) -> str:

@@ -144,4 +144,60 @@ describe("createWorkingSet", () => {
     expect(graph.hasNode("not-in-graph")).toBe(false);
     expect(graph.getNodeAttribute("n1", "data").resolution?.cluster_id).toBe("n1");
   });
+  it("a replaced link leaves the graph and its replacement arrives in the same step (ADR-080)", () => {
+    const { graph, store } = createWorkingSet();
+    store.getState().applyDelta({
+      seq: 1,
+      op: "add",
+      nodes: [makeNode("n1"), makeNode("n2")],
+      edges: [makeEdge("e1", "n1", "n2")],
+    });
+
+    store.getState().applyDelta({
+      seq: 2,
+      op: "replace_edge",
+      old_edge_id: "e1",
+      edge: makeEdge("e2", "n1", "n2", { type: "FAMILY_OF" }),
+    });
+
+    expect(graph.hasEdge("e1")).toBe(false);
+    expect(graph.hasEdge("e2")).toBe(true);
+    expect(graph.getEdgeAttribute("e2", "data").type).toBe("FAMILY_OF");
+    expect(graph.size).toBe(1);
+    expect(store.getState().seq).toBe(2);
+  });
+
+  it("a replacement is still added when the old link was never in this client's graph", () => {
+    const { graph, store } = createWorkingSet();
+    store.getState().applyDelta({
+      seq: 1,
+      op: "add",
+      nodes: [makeNode("n1"), makeNode("n2")],
+      edges: [],
+    });
+
+    store.getState().applyDelta({
+      seq: 2,
+      op: "replace_edge",
+      old_edge_id: "gone",
+      edge: makeEdge("e2", "n1", "n2"),
+    });
+
+    expect(graph.hasEdge("e2")).toBe(true);
+  });
+
+  it("a replacement whose ends are not in this client's graph is skipped, not thrown on", () => {
+    const { graph, store } = createWorkingSet();
+    store.getState().applyDelta({ seq: 1, op: "add", nodes: [makeNode("n1")], edges: [] });
+
+    store.getState().applyDelta({
+      seq: 2,
+      op: "replace_edge",
+      old_edge_id: "e1",
+      edge: makeEdge("e2", "n1", "missing"),
+    });
+
+    expect(graph.size).toBe(0);
+    expect(store.getState().seq).toBe(2);
+  });
 });

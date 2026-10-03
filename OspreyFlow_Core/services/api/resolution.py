@@ -40,6 +40,10 @@ class ManualAssertionRequest(BaseModel):
 
     node_a: NodeId
     node_b: NodeId
+    #: Why the analyst is asserting this (ADR-080: every write from the link menu says why).
+    #: Optional so an older caller still works; when given it is written to the audit stream as the
+    #: justification. At most 1000 characters, the same limit a link change's reason has.
+    reason: str | None = Field(default=None, max_length=1000)
 
 
 async def get_threshold(working_set: WorkingSetService, investigation_id: str) -> ThresholdResponse:

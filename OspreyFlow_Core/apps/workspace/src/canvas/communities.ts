@@ -6,9 +6,12 @@ import Graph from "graphology";
 import louvain from "graphology-communities-louvain";
 
 export interface Community {
-  /** `c:` plus the smallest member id, so the name survives a re-run on the same nodes. */
+  /** `c:` plus the smallest member id, so the name survives a re-run on the same nodes. A group the
+   * analyst made from a same-as link (ADR-080) is `s:` plus its members' ids. */
   id: string;
   members: string[];
+  /** What the folded node is called. Left out, it is named by the types it holds (`groupLabel`). */
+  label?: string;
 }
 
 export interface Box {
@@ -187,6 +190,9 @@ export function collapseView(
   let groupedNodeCount = 0;
   for (const community of communities) {
     if (!collapsed.has(community.id)) continue;
+    // One node is in one folded group at most: a group that shares a member with one already
+    // folded (a same-as group inside a community, say) stays open until the other is opened.
+    if (community.members.some((id) => folded.has(id))) continue;
     let standIn = community.members[0]!;
     for (const id of community.members) {
       folded.set(id, community.id);
@@ -210,7 +216,7 @@ export function collapseView(
       count: community.members.length,
       x: centre.x,
       y: centre.y,
-      label: groupLabel(community.members.map(typeOf)),
+      label: community.label ?? groupLabel(community.members.map(typeOf)),
     });
     for (const id of community.members) {
       if (id === standIn) continue;

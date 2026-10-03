@@ -85,6 +85,17 @@ class DeltaRemove(BaseModel):
     node_ids: list[NodeId] = Field(default_factory=list)
 
 
+class DeltaReplaceEdge(BaseModel):
+    """One link stands in for another (ADR-080): an analyst changed a link's type or details, which
+    supersedes it. The old link leaves the working set and `edge` arrives in its place, in one step,
+    so a client never shows both and a reconnecting client never keeps the old one."""
+
+    seq: int
+    op: Literal["replace_edge"] = "replace_edge"
+    old_edge_id: EdgeId
+    edge: Edge
+
+
 class DeltaReproject(BaseModel):
     """A resolution-threshold change (`PUT /v1/resolution/threshold`,
     `03_CONDUIT_MIDDLEWARE.md` §3.5) re-collapses the working set at the
@@ -137,7 +148,13 @@ class DeltaSnapshot(BaseModel):
 
 
 WorkingSetDelta = Annotated[
-    DeltaAdd | DeltaUpdate | DeltaRemove | DeltaReproject | DeltaNotice | DeltaSnapshot,
+    DeltaAdd
+    | DeltaUpdate
+    | DeltaRemove
+    | DeltaReplaceEdge
+    | DeltaReproject
+    | DeltaNotice
+    | DeltaSnapshot,
     Field(discriminator="op"),
 ]
 
@@ -231,6 +248,7 @@ __all__ = [
     "DeltaAdd",
     "DeltaNotice",
     "DeltaRemove",
+    "DeltaReplaceEdge",
     "DeltaReproject",
     "DeltaSnapshot",
     "DeltaUpdate",

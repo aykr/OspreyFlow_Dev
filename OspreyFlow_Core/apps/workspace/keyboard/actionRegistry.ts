@@ -304,3 +304,36 @@ export const LINK_NOTES_ACTIONS = defineActionRegistry("LINK_NOTES_ACTIONS", [
   "delete-own-note-by-keyboard-after-confirming",
   "cancel-a-delete-by-keyboard",
 ] as const);
+
+/**
+ * The right-click menu on a link (ADR-080), reached without a mouse: `L` selects a focused node's
+ * link and `\` opens the menu for it (`keyboard/link-menu.spec.ts`, on the `?fixture=same-as`
+ * harness). Each entry either changes the view or writes with the analyst's name and a reason, so
+ * each needs a case that activates it; the two ways a reason is *not* accepted are cases too.
+ */
+export const LINK_MENU_ACTIONS = defineActionRegistry("LINK_MENU_ACTIONS", [
+  "backslash-opens-the-menu-of-a-selected-same-as-link",
+  "collapse-folds-the-matched-nodes-into-one",
+  "group-node-menu-expands-the-group",
+  "confirm-asks-why-and-sends-the-reason",
+  "mark-not-same-asks-why-and-sends-the-reason",
+  "reason-is-required-before-confirming",
+  "escape-cancels-the-reason-box-and-sends-nothing",
+  "explain-this-link-shows-the-cluster",
+  "hide-link-from-the-menu",
+  "add-a-note-hands-over-to-the-inspector",
+  "other-links-offer-change-and-history-and-hand-over",
+] as const);
+
+/**
+ * The Inspector's *Change this link* form (ADR-080) — a keyboard-driven surface of its own
+ * (`keyboard/link-change-harness.tsx`). Saving writes through a real network call with a required
+ * reason, so each way in, the save, the refusal without a reason and the cancel each need a case.
+ */
+export const LINK_CHANGE_ACTIONS = defineActionRegistry("LINK_CHANGE_ACTIONS", [
+  "enter-on-change-this-link-opens-the-form-at-the-type",
+  "change-the-type-and-save-with-ctrl-enter",
+  "save-needs-a-reason",
+  "escape-closes-the-form-and-changes-nothing",
+  "opened-by-the-link-menu-lands-on-the-type",
+] as const);

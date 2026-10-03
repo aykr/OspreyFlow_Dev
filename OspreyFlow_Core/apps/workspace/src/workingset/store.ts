@@ -22,6 +22,7 @@ import type {
   DeltaAdd,
   DeltaNotice,
   DeltaRemove,
+  DeltaReplaceEdge,
   DeltaReproject,
   DeltaSnapshot,
   DeltaUpdate,
@@ -125,6 +126,14 @@ function applyRemove(graph: WorkingSetGraph, delta: DeltaRemove): void {
   }
 }
 
+function applyReplaceEdge(graph: WorkingSetGraph, delta: DeltaReplaceEdge): void {
+  if (graph.hasEdge(delta.old_edge_id)) graph.dropEdge(delta.old_edge_id);
+  const edge = delta.edge;
+  // A replacement whose ends are not here (another screen's view) has nothing to attach to.
+  if (graph.hasEdge(edge.id) || !graph.hasNode(edge.source) || !graph.hasNode(edge.target)) return;
+  graph.addEdgeWithKey(edge.id, edge.source, edge.target, { data: edge });
+}
+
 function applyReproject(graph: WorkingSetGraph, delta: DeltaReproject): void {
   // `affected_cluster_ids` (Phase 6a Stage 2) is already bounded to the nodes whose membership
   // actually moved — every node currently in the graph gets its `data.resolution.cluster_id`
@@ -162,6 +171,9 @@ function applyDeltaToGraph(graph: WorkingSetGraph, delta: WorkingSetDelta): void
       return;
     case "remove":
       applyRemove(graph, delta);
+      return;
+    case "replace_edge":
+      applyReplaceEdge(graph, delta);
       return;
     case "snapshot":
       applySnapshot(graph, delta);
