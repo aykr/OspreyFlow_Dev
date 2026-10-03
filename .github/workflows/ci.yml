@@ -454,6 +454,9 @@ jobs:
           ../OspreyFlow_Build/tests/services/api/working_set/test_resolution_threshold_access_control.py
           ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py
           ../OspreyFlow_Build/tests/services/api/test_assessments.py
+          ../OspreyFlow_Build/tests/test_case_seed.py
+          ../OspreyFlow_Build/tests/services/api/test_investigation_access_store.py
+          ../OspreyFlow_Build/tests/services/api/test_link_notes_store.py
           ../OspreyFlow_Build/tests/services/api/test_suppression.py
           ../OspreyFlow_Build/tests/services/api/test_assessment_routes.py
           ../OspreyFlow_Build/tests/services/api/test_export.py
@@ -708,6 +711,9 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_resolution_threshold_access_control.py
           --ignore=../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_assessments.py
+          --ignore=../OspreyFlow_Build/tests/test_case_seed.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_investigation_access_store.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_link_notes_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_suppression.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_assessment_routes.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_export.py
