@@ -1,5 +1,5 @@
 import type Graph from "graphology";
-import type { Node } from "../../../../packages/schemas/generated";
+import type { Judgement, Node } from "../../../../packages/schemas/generated";
 import { JudgementsPanel } from "../assessment/JudgementsPanel";
 import { Panel } from "../design/primitives/Panel";
 import { Tabs } from "../design/primitives/Tabs";
@@ -20,6 +20,9 @@ export interface InspectorProps {
     investigationId: string;
     workingSetGraph: Graph;
     onHighlightNodes: (nodeIds: string[]) => void;
+    /** Told the full list of judgements each time the panel has fetched it, so the canvas can keep
+     * the count beside each node current (ADR-070). */
+    onJudgementsChange?: (judgements: Judgement[]) => void;
   };
 }
 
@@ -72,6 +75,7 @@ export function Inspector({ node, link, assessment }: InspectorProps) {
           workingSetGraph={assessment.workingSetGraph}
           selectedNodeId={node?.id ?? null}
           onHighlightNodes={assessment.onHighlightNodes}
+          onJudgementsChange={assessment.onJudgementsChange}
         />
       )}
       {!node && activeTab !== "judgements" && (

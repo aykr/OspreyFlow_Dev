@@ -9,6 +9,8 @@ export interface WouldAddRequest {
   edgeTypes: string[] | null;
   /** The working set's node count now: the server reports the size *after* the expansion. */
   currentOrder: number;
+  /** How many steps out to count; one when not given. */
+  depth?: number;
 }
 
 /**
@@ -31,7 +33,7 @@ export async function fetchWouldAdd(
         body: JSON.stringify({
           request: {
             node_ids: [req.nodeId],
-            depth: 1,
+            depth: req.depth ?? 1,
             edge_types: req.edgeTypes,
           },
         }),

@@ -85,3 +85,25 @@ test("with the keyboard: tabbing out of an open menu closes it, and the account 
   await page.keyboard.press("Enter");
   expect(await page.evaluate(() => window.__TOPBAR__?.signedOut)).toBe(true);
 });
+
+test("with the keyboard: the light theme button is reached by Tab and pressed with Enter, and the page changes", async ({ page }) => {
+  await page.goto("/keyboard/top-bar-harness.html");
+  const before = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const button = page.getByRole("button", { name: "Light theme" });
+  await expect(button).toHaveAttribute("aria-pressed", "false");
+  for (let i = 0; i < 30; i++) {
+    if (await button.evaluate((el) => el === document.activeElement)) break;
+    await page.keyboard.press("Tab");
+  }
+  await expect(button).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(button).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  const after = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  expect(after).not.toBe(before);
+  await page.keyboard.press("Enter");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  // The bar is still one line with the button in it.
+  const height = (await page.locator("header.app-header").boundingBox())!.height;
+  expect(height).toBeLessThan(60);
+});

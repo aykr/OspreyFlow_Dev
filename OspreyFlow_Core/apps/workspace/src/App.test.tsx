@@ -338,3 +338,69 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     expect(ingest.getAttribute("aria-pressed")).toBe("false");
   });
 });
+
+describe("a stale sign-in is noticed whichever screen's call finds it (3 October 2026)", () => {
+  // Seen on the owner's machine: after `make refresh` restarted the identity provider the Ingest
+  // Studio and the case menu showed "401" as raw errors while the Glass itself re-signed in, because
+  // only the Glass's own two calls were wired to the re-sign-in.
+  const API = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+
+  async function signedInWithOntologyLoaded() {
+    vi.mocked(userManager.isSignInRedirectCallback).mockReturnValue(true);
+    vi.mocked(userManager.completeSignInFromRedirect).mockResolvedValue({
+      access_token: "good-token",
+      profile: {
+        sub: "analyst-1",
+        clearance: "OFFICIAL",
+        org_unit: "unit-1",
+        roles: [],
+        receivable_handling_codes: [],
+      },
+    } as never);
+    const signinRedirect = vi.fn();
+    vi.mocked(userManager.getUserManager).mockReturnValue({ signinRedirect } as never);
+    const sent: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      sent.push(url);
+      if (url.endsWith("/v1/ontology")) {
+        return new Response(JSON.stringify({ edge_types: [], entity_types: [] }), { status: 200 });
+      }
+      if (url.includes("/v1/ingest/recipes")) return new Response(null, { status: 401 });
+      return new Promise<Response>(() => undefined);
+    });
+    render(<App />);
+    // The first authenticated call has succeeded once the ontology has been asked for.
+    await vi.waitFor(() => expect(sent.some((u) => u.endsWith("/v1/ontology"))).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    return signinRedirect;
+  }
+
+  test("a 401 on a call no Glass code watches (the Ingest Studio's) starts the silent re-sign-in", async () => {
+    const signinRedirect = await signedInWithOntologyLoaded();
+
+    await fetch(`${API}/v1/ingest/recipes`, { headers: { Authorization: "Bearer good-token" } });
+
+    await vi.waitFor(() => expect(signinRedirect).toHaveBeenCalledWith({ prompt: "none" }));
+  });
+
+  test("two refusals at once start one re-sign-in, not two", async () => {
+    const signinRedirect = await signedInWithOntologyLoaded();
+
+    await Promise.all([
+      fetch(`${API}/v1/ingest/recipes`, { headers: { Authorization: "Bearer good-token" } }),
+      fetch(`${API}/v1/ingest/recipes`, { headers: { Authorization: "Bearer good-token" } }),
+    ]);
+
+    await vi.waitFor(() => expect(signinRedirect).toHaveBeenCalled());
+    expect(signinRedirect).toHaveBeenCalledTimes(1);
+  });
+
+  test("a 401 for some other token does not sign the analyst out", async () => {
+    const signinRedirect = await signedInWithOntologyLoaded();
+
+    await fetch(`${API}/v1/ingest/recipes`, { headers: { Authorization: "Bearer an-older-token" } });
+
+    expect(signinRedirect).not.toHaveBeenCalled();
+  });
+});

@@ -9032,3 +9032,98 @@ Decision.
 Not decided here. A different accent colour per application (offered, not chosen). Removing the Ingest Studio's own case row now that the bar carries the case menu in both applications (both are kept).
 
 Consequences. The bar is one line from about 1,440 pixels wide (measured in a browser with a stand-in for the slider's width); narrower windows wrap. The case name in the button is cut at 200 pixels. Existing tests were changed where the controls moved (the case switcher tests now open the menu first; the Ingest tab test names the button `Ingest Studio`). `App.test.tsx`'s fixture was also corrected: its handling-scheme stub had the wrong shape and its other answers did not suit the screens the new tests reach, so the new tests hold every request unanswered. Not exercised: the real `App` bar in a browser (the browser tests render the same components in a harness, `keyboard/top-bar-harness.tsx`); the light theme.
+
+
+## ADR-067 — Upload from the analyst's computer into the ingest folder (amends ruling R6)
+
+Status: accepted 3 October 2026.
+
+Context. Ruling R6 (27 September 2026) gave Connect a list of the files in a read-only ingest folder and deferred any browser upload past the milestone. The owner opened the Ingest Studio and said: "I need a file picker, not just the bar saying file path." With an empty folder the screen offered only a text box, and a path typed from an analyst's own machine names nothing the Conduit's container can open. The owner chose "Upload from my computer".
+
+Decision.
+
+1. `POST /v1/ingest/source-files?name=<file name>` takes the file's bytes as the raw request body and writes them to `<ingest root>/uploaded/<name>`. `SOURCE_AUTHOR` only, checked before any byte is read. It returns the same shape as a listing entry, marked `uploaded`.
+2. It refuses, with a sentence the Glass shows as given: a name with a folder part, a leading dot, a control character or over 200 characters (400); an extension outside the connectors' list (415); a name already used in the root or in `uploaded`, so nothing is ever overwritten (409); an empty file (400); a file over `OSPREY_INGEST_MAX_UPLOAD_BYTES`, default 512 MiB (413). The size is counted as the body streams and the declared length is checked first.
+3. The bytes go to a hidden part-file and are linked into place only when complete; a refused or interrupted upload leaves nothing behind and a half-written file is never listed.
+4. The audit record holds the name and the size, never the contents.
+5. The renderer keeps the root's mount read-only (R6 is unchanged for operator-placed evidence) and lays one writable bind mount over its `uploaded/` sub-folder (`INGEST_UPLOAD_SUBDIR`, tested equal to the Conduit's own `UPLOAD_SUBDIR`).
+6. The listing now includes the `uploaded/` folder (files only; a symlink or folder inside it is not offered; the same resolve-then-compare check applies), each entry carrying `uploaded: true|false`.
+7. Connect shows **Choose file…** first (a real button that presses a hidden file input, so the keyboard reaches it), then the list of what is already on the server, and the typed path behind "Or type a path or address". The chosen file is selected as the data as soon as it has uploaded.
+
+Not decided here. Deleting an uploaded file (nothing removes one yet); a quota across all uploads; scanning an upload for malware; uploading to a deployment whose ingest folder is on object storage.
+
+Consequences. The Conduit can now write inside the ingest root, but only inside `uploaded/`. The write path is covered by module and route tests (names, no overwrite, size limit stopping the read, no leftovers, role, audit) and the mount by two renderer tests. **None of it has been run against Docker by the session that wrote it.** The known risk is Linux host ownership: Docker creates a missing host folder as root, and the Conduit runs as uid 10001, so the operator must create `uploaded/` and give that uid write access (`05_DEPLOYMENT.md`); Docker Desktop on macOS maps ownership itself. If the folder is not writable, the upload fails with a server error rather than a sentence, which is the first thing to check if the owner's first upload fails.
+
+
+## ADR-068 — A blank classification on Connect is recorded as PUBLIC
+
+Status: accepted 3 October 2026.
+
+Context. Spec 09 §2 said none of Connect's three answers is optional. The owner looked at the Connect form and said the classification "needs to include public and also it does not need to be mandatory", and ruled "Blank means PUBLIC" when offered a scheme-named default instead (my recommendation was a default named in the scheme; the owner chose differently).
+
+Decision.
+
+1. The UK scheme (`packages/ontology/handling/uk-le.yaml`) gains `PUBLIC` as its lowest level: `[PUBLIC, OFFICIAL, OFFICIAL-SENSITIVE, SECRET]`. Dominance is by position, so every existing marking keeps its rank relative to the others, an `OFFICIAL` reader clears `PUBLIC`, and a `PUBLIC` reader does not clear `OFFICIAL`.
+2. When a draft is created or edited with no classification (missing, empty or blank), the server records the scheme's lowest level, `PUBLIC` when the scheme has it and otherwise its first level. The Glass does not decide this; it only says "Left blank: recorded as PUBLIC" beside the box.
+3. An analyst's own choice is never replaced. The other parts of the handling marking (handling code, originator, owning unit) and the legal basis stay required for Profile.
+4. Spec 09 §2 is amended to say so.
+
+Not decided here. Whether a blank classification should warn when the source was supplied by another unit; adding a `PUBLIC` level to the US scheme (it has its own lowest level, `UNCLASSIFIED`, which a blank marking takes there).
+
+Consequences. A blank marking is the least protective marking, so a source loaded without thought is visible to every principal who clears `PUBLIC`. That is the owner's ruling and is why the screen says so rather than hiding it. Nothing in storage changes shape; a `PUBLIC` value is an ordinary classification string. Demo realm clearances (`harness/realm.py`) and every existing seed are unaffected because none carries `PUBLIC` as a clearance.
+
+
+## ADR-066 — Communities on screen: boxes round groups of closely linked nodes, folded into one Group Node (appended after ADR-068; numbered earlier because the code cites it)
+
+Status: accepted 3 October 2026.
+
+Context. A busy view is a tangle: the owner asked for the nodes that belong together to be shown as groups the analyst can fold away and open again ("Communities"). Nothing in the spec described grouping on screen; ADR-029's Louvain (with a connected-components fix) runs in the compute tiers for the Metrics panel; the canvas does its own, lighter grouping of just the nodes in view.
+
+Decision.
+
+1. A `Communities` button on the canvas (reached by Tab, pressed by Enter or Space) switches the view on and off. When on, the nodes now in the view are divided into groups by Louvain with a fixed seed, so the same nodes fall into the same groups each time. A node with no link to another is in no group. Nothing is stored and nothing is sent to the server: it is a way of looking at the view, and switching it off puts everything back.
+2. Each group is drawn as a box round its nodes, kept a fixed 16 pixels clear of them whatever the zoom. A box has a fold button (labelled `Fold group of N nodes`).
+3. Folding turns a group into one Group Node: the group's best-connected member is drawn larger with a brass ring and labelled with what the group holds; the other members are drawn at the same place, too small to see, so a link from outside the group still reaches the Group Node, and links inside the group are not drawn. Opening it puts every member back where it was.
+4. Ways to fold and open, all reachable by keyboard: the box's button; `G` on a focused node (folds its group, or opens it when it is the Group Node); `Collapse all` and `Expand all` beside the Communities button; a double-click inside a box folds it; a double-click on a Group Node opens it (and does not ask the server to expand anything).
+5. While a group is folded: keyboard walking, ring walking and the lasso skip the members that are not drawn; a selected or focused hidden member is moved to the Group Node; Delete on a lone Group Node opens it rather than removing it, unless the whole group is being removed; the status bar says how many nodes are folded into groups (spec 02 §2: the bar never lies).
+
+How a folded group is drawn. Sigma reads every node's position from the graph on each draw and ignores a position returned by a reducer (confirmed in `sigma.cjs.dev.js`, `process()`, and in a real browser, where the Group Node was drawn at the stand-in's own place). So the folded members' stored positions are really moved to the group's centre and their true positions kept aside; a position written afterwards (a layout, a drag) is noticed because it no longer matches where the member was put, and becomes its true position. Opening, switching Communities off, or a member leaving the group puts the true position back. The force layout starts from the true positions.
+
+Not decided here. Naming a group by something other than its size; remembering which groups are folded between sessions; grouping by a property (the Layout menu's group-by-type does that for position only).
+
+Consequences. While a group is folded the working set's stored x and y for its members are the group's centre, so anything that reads them directly sees the centre (the Metrics hulls do, which is right for a folded group). Not tested in a browser: a layout run while a group is folded (the logic above handles it, no test drives it). The on-screen Louvain does not apply ADR-029's connected-components split, so a group can in principle be made of two pieces that are not linked to each other. Louvain on a very large view is done on the main thread each time the working set changes; unmeasured, and the performance gate in spec 02 section 5 does not cover it.
+
+
+## ADR-069 — Declutter, first part: the timeline's rarely used boxes behind buttons, and a quieter drawing for a crowded view
+
+Status: accepted 3 October 2026.
+
+Context. The owner found the workspace cluttered. Two causes are fixed here; the rest of the declutter list (the Metrics panel, the judgement badges, a light and dark theme, drawing three degrees out on a search selection) is not decided and is not built.
+
+Decision.
+
+1. The timeline's two boxes for typing exact dates (`from (ISO)`, `to (ISO)`) are behind a `Set exact dates` button in the timeline's own bar, closed until pressed (`aria-expanded` says which). Spec 02 section 3.4's "Brush endpoints are editable as text" still holds; the text boxes are one press away.
+2. The `Overlay investigation` row above the timeline, a labelled box that was always showing, becomes an `Overlay another case` button in the timeline's own bar that reveals the same box (accessible name unchanged: `Cross-case overlay investigation id`). While a second investigation is overlaid, the button names it. The row above the timeline is gone, so the chart has that height back.
+3. A crowded view is drawn quieter. Node size is multiplied, and link width multiplied, by a scale that is 1 up to 150 nodes (or links) and falls steadily on a log scale to 0.55 at 3,000 and beyond. A node is never drawn smaller than 2, nor a link thinner than 0.5, and a link on a found path keeps its width. The scale depends only on how many there are: nothing is hidden, so spec 02 section 1.1's "zoom never changes what exists" and the status bar's counts are unaffected.
+
+Not decided here. The 150, 3,000 and 0.55 are first guesses to be tuned by looking at a real busy view; they are named constants in `canvas/nodeAttributes.ts`.
+
+Consequences. The live scenario B specs press the two new buttons first (changed, not run: they need the owner's seeded stack). A drawing change cannot be judged by a unit test, so what is tested is the arithmetic (it shrinks, has a floor, leaves a small view and a found path alone) and not how it looks; the owner should look at a few hundred nodes and say whether it is quieter enough.
+
+
+## ADR-070 — Declutter, second part: Metrics in closed sections, a count on nodes that have judgements, three steps drawn on a search selection, and a light and dark choice
+
+Status: accepted 3 October 2026 (the four choices were put to the owner and each recommended option was taken).
+
+Context. ADR-069 left four items of the owner's declutter list undecided. They were put to the owner as four questions and answered; this records the answers and what was built.
+
+Decision.
+
+1. **Metrics panel.** It opens closed. Inside it there are two sections, `Ranking` and `Communities`, and only one is open at a time (each heading is a button with `aria-expanded`). Neither metric is fetched until its section is opened, so a closed panel costs the server nothing. Spec 02 section 3.2's "ranked list, not a chart", "clicking a row selects and centres that node" and the hull overlay are unchanged.
+2. **Judgement badges.** A node that has at least one judgement resting on it (listed as supporting or contradicting) carries a small brass count beside it on the canvas, labelled `N judgement(s)` for a screen reader. It shows that a judgement exists and nothing about the judgement: no probability band, no text. It is drawn only from the judgements the signed-in principal can already list, through the existing judgements route, so it opens no new read path and cannot reveal a judgement the principal may not see (`CLAUDE.md` rules 3 and 4; spec 02 section 9.2's hidden-judgement rule is therefore unchanged). The badge ignores the pointer, so it never gets in the way of a click or a drag.
+3. **Choosing a search result.** The node is put on the canvas and drawn out three links (`SEARCH_DRAW_DEPTH = 3`) in one request, not one link as before. The server counts the result first, and above the existing 500-node gate the canvas asks before drawing and keeps the three steps in the answer; nothing is cut silently (`CLAUDE.md` rule 2). The expand request already carried a depth (1 to 4), so no server change was needed.
+4. **Light and dark.** A button in the top bar (`Light theme`, `aria-pressed`) switches between the two themes already defined in `tokens.css`. The choice is kept in this browser only (`localStorage`, key `ospreyflow.theme`), never sent to the server, and is not part of the case. Dark stays the default and is what a new browser, an unreadable stored value or blocked storage gives. Text, panels and borders follow `data-theme` through CSS; what is painted to a canvas cannot read a CSS variable, so a hex palette (`color/palette.ts`, kept equal to `tokens.css` by a test) is chosen by the current theme, and the graph and the timeline draw again when it changes. Spec 02 section 10.4 is untouched: an exported chart still defaults to light whatever the analyst is working in.
+
+Not decided here. The map's basemap is not made theme-aware (it keeps its own styling in both themes). The Timeline's light appearance and the Sigma label colour in light have not been looked at by the owner. Judgement counts for a folded group: a member hidden inside a folded group shows no badge, and the node standing in for the group shows its own count only, not the group's total. Whether the group should show the total is for the owner to say.
+
+Consequences. Keyboard: the Ranking and Communities section buttons and the theme button are ordinary buttons reached by Tab and pressed by Enter; `keyboard/metrics-panel.spec.ts` and `keyboard/top-bar.spec.ts` prove them, and `keyboard/keyboard.spec.ts` proves the badge, the three-step draw (and its large-result prompt) and the repaint on a theme change. `live/scenario-a-a12-a15.spec.ts` presses `Ranking` first (changed, not run: it needs the seeded stack). What a unit test cannot judge is how it looks: the owner should look at the badge, the closed Metrics panel and the light theme.

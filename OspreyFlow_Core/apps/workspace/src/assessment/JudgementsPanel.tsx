@@ -47,6 +47,9 @@ export interface JudgementsPanelProps {
    * contradicting items on the canvas" — `GlassCanvasHandle.highlightNodes`, threaded through by
    * the caller (`App.tsx`) rather than this panel owning a canvas ref of its own. */
   onHighlightNodes: (nodeIds: string[]) => void;
+  /** Called with the whole list each time it has been fetched, so the canvas can show a count
+   * beside each node with judgements (ADR-070). */
+  onJudgementsChange?: (judgements: Judgement[]) => void;
 }
 
 type DrawerTab = "judgement" | "gap" | "assumption";
@@ -126,6 +129,7 @@ export function JudgementsPanel({
   workingSetGraph,
   selectedNodeId,
   onHighlightNodes,
+  onJudgementsChange,
 }: JudgementsPanelProps) {
   const [judgements, setJudgements] = useState<Judgement[]>([]);
   const [gaps, setGaps] = useState<IntelligenceGap[]>([]);
@@ -149,7 +153,12 @@ export function JudgementsPanel({
   const [linkedJudgements, setLinkedJudgements] = useState<string[]>([]);
 
   function refresh(): void {
-    listJudgements(apiBaseUrl, bearerToken, investigationId).then(setJudgements).catch(() => undefined);
+    listJudgements(apiBaseUrl, bearerToken, investigationId)
+      .then((list) => {
+        setJudgements(list);
+        onJudgementsChange?.(list);
+      })
+      .catch(() => undefined);
     listGaps(apiBaseUrl, bearerToken, investigationId).then(setGaps).catch(() => undefined);
     listAssumptions(apiBaseUrl, bearerToken, investigationId).then(setAssumptions).catch(() => undefined);
   }

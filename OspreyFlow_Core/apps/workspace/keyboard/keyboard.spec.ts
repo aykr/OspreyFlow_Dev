@@ -996,6 +996,260 @@ test("a very large expansion can be accepted by keyboard, and only then does it 
   registerCovered("CANVAS_ACTIONS", "large-expansion-add-all-by-keyboard");
 });
 
+// Seen 3 October 2026 while testing Communities: with a node focused on the canvas, pressing Enter on
+// a button inside the canvas (Communities, Arrange again, Collapse all, any other toolbar button)
+// also reached the canvas's own key handler, which read it as "expand the focused node" and asked
+// the Conduit. A key pressed on a control belongs to that control. Not a registry action: it proves
+// that keys on a button do *not* act on the canvas.
+test("Enter on a button inside the canvas presses that button and does not expand the focused node", async ({ page }) => {
+  await page.goto("/keyboard/harness.html?fixture=communities");
+  await settle(page, "a0");
+  let asked = 0;
+  await page.route("**/*/expand/**", async (route) => {
+    asked += 1;
+    await route.fulfill({ status: 500, body: "{}" });
+  });
+  await page.route("**/*/expand", async (route) => {
+    asked += 1;
+    await route.fulfill({ status: 500, body: "{}" });
+  });
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.focused)).toBe("a0");
+  const button = page.getByRole("button", { name: "Communities" });
+  await tabTo(page, button);
+  await page.keyboard.press("Enter");
+  await expect(button).toHaveAttribute("aria-pressed", "true");
+  await page.waitForTimeout(600);
+  expect(asked).toBe(0);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+// --- Communities (ADR-066) -------------------------------------------------------------------
+// Two groups of five (a0–a4, b0–b4), each a hub with four round it, joined by one link a0—b0.
+
+async function settle(page: Page, id: string) {
+  const read = () => page.evaluate((n) => window.__CANVAS__?.viewportPositionOf(n), id);
+  let last = await read();
+  for (let i = 0; i < 40; i++) {
+    await page.waitForTimeout(250);
+    const now = await read();
+    if (JSON.stringify(now) === JSON.stringify(last) && now) return now;
+    last = now;
+  }
+  throw new Error("the layout never settled");
+}
+
+const settleOnce = (page: Page, id: string) => page.evaluate((n) => window.__CANVAS__?.viewportPositionOf(n), id);
+
+const grouped = (page: Page) => page.evaluate(() => (window as unknown as { __GROUPED__?: number }).__GROUPED__);
+
+async function communitiesOn(page: Page) {
+  await page.goto("/keyboard/harness.html?fixture=communities");
+  // A circle puts every node at a known, separate place; the organic layout draws a group this
+  // small too close together for a test of where things are drawn to mean anything.
+  await page.getByRole("combobox", { name: "Layout" }).selectOption("circular");
+  await expect
+    .poll(async () => {
+      const [a, b] = await Promise.all([settleOnce(page, "a0"), settleOnce(page, "a3")]);
+      return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+    })
+    .toBeGreaterThan(20);
+  await settle(page, "a0");
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  await tabTo(page, page.getByRole("button", { name: "Communities" }));
+  await page.keyboard.press("Enter");
+}
+
+test("the Communities button is reached by Tab, and Enter draws a box round each group", async ({ page }) => {
+  await communitiesOn(page);
+  await expect(page.getByRole("button", { name: "Communities" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText("2 groups, 0 folded")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Fold group of 5 nodes" })).toHaveCount(2);
+  registerCovered("CANVAS_ACTIONS", "communities-button-by-keyboard");
+});
+
+test("G on a focused node folds its group into one node, and G on that node opens it again", async ({ page }) => {
+  await communitiesOn(page);
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  await page.keyboard.press("Home").catch(() => undefined);
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.focused)).toBe("a0");
+
+  await page.keyboard.press("g");
+  await expect.poll(() => grouped(page)).toBe(5);
+  await expect(page.getByText("2 groups, 1 folded")).toBeVisible();
+
+  await page.keyboard.press("g");
+  await expect.poll(() => grouped(page)).toBe(0);
+  registerCovered("CANVAS_ACTIONS", "g-folds-and-opens-the-focused-nodes-group");
+});
+
+test("a box's own button folds that group, reached by Tab", async ({ page }) => {
+  await communitiesOn(page);
+  const fold = page.getByRole("button", { name: "Fold group of 5 nodes" }).first();
+  await tabTo(page, fold, 24);
+  await page.keyboard.press("Enter");
+  await expect.poll(() => grouped(page)).toBe(5);
+  registerCovered("CANVAS_ACTIONS", "box-fold-button-by-keyboard");
+});
+
+test("Collapse all and Expand all fold and open every group, by keyboard", async ({ page }) => {
+  await communitiesOn(page);
+  await tabTo(page, page.getByRole("button", { name: "Collapse all" }), 24);
+  await page.keyboard.press("Enter");
+  await expect.poll(() => grouped(page)).toBe(10);
+  await expect(page.getByText("2 groups, 2 folded")).toBeVisible();
+  await tabTo(page, page.getByRole("button", { name: "Expand all" }), 24);
+  await page.keyboard.press("Enter");
+  await expect.poll(() => grouped(page)).toBe(0);
+  registerCovered("CANVAS_ACTIONS", "collapse-all-and-expand-all-by-keyboard");
+});
+
+// The next cases are about what is drawn, not about a key, so they sit outside the registry.
+
+test("a folded group is drawn as one node: its members are drawn where the group is, and come back when it opens", async ({ page }) => {
+  await communitiesOn(page);
+  const before = { a0: await settle(page, "a0"), a3: await settle(page, "a3"), b2: await settle(page, "b2") };
+  expect(Math.hypot(before.a0!.x - before.a3!.x, before.a0!.y - before.a3!.y)).toBeGreaterThan(5);
+
+  await page.getByRole("button", { name: "Collapse all" }).click();
+  await expect.poll(() => grouped(page)).toBe(10);
+  await page.waitForTimeout(400);
+  const folded = { a0: await settle(page, "a0"), a3: await settle(page, "a3"), b2: await settle(page, "b2") };
+  expect(folded.a3).toEqual(folded.a0);
+  expect(folded.b2).not.toEqual(folded.a0);
+
+  await page.getByRole("button", { name: "Expand all" }).click();
+  await expect.poll(() => grouped(page)).toBe(0);
+  await page.waitForTimeout(400);
+  const after = await settle(page, "a3");
+  expect(Math.hypot(after.x - before.a3!.x, after.y - before.a3!.y)).toBeLessThan(2);
+});
+
+test("a double-click inside a box folds the group, and a double-click on the Group Node opens it", async ({ page }) => {
+  await communitiesOn(page);
+  const members = await Promise.all(["a0", "a1", "a2", "a3", "a4"].map((id) => settle(page, id)));
+  const centre = {
+    x: members.reduce((n, p) => n + p!.x, 0) / members.length,
+    y: members.reduce((n, p) => n + p!.y, 0) / members.length,
+  };
+  const box = await page.getByRole("application", { name: "Network canvas" }).boundingBox();
+  await page.mouse.dblclick(box!.x + centre.x, box!.y + centre.y);
+  await expect.poll(() => grouped(page)).toBe(5);
+
+  await page.waitForTimeout(400);
+  const standIn = await settle(page, "a0");
+  await page.mouse.dblclick(box!.x + standIn.x, box!.y + standIn.y);
+  await expect.poll(() => grouped(page)).toBe(0);
+});
+
+test("keyboard walks skip the nodes a folded group hides", async ({ page }) => {
+  await communitiesOn(page);
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.focused)).toBe("a0");
+  await page.keyboard.press("g");
+  await expect.poll(() => grouped(page)).toBe(5);
+  await page.keyboard.press("Control+Shift+ArrowRight");
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.focused)).toBe("b0");
+});
+
+test("switching Communities off puts everything back and forgets what was folded", async ({ page }) => {
+  await communitiesOn(page);
+  await page.getByRole("button", { name: "Collapse all" }).click();
+  await expect.poll(() => grouped(page)).toBe(10);
+  await page.getByRole("button", { name: "Communities" }).click();
+  await expect.poll(() => grouped(page)).toBe(0);
+  await expect(page.getByRole("button", { name: "Fold group of 5 nodes" })).toHaveCount(0);
+});
+
+test("a count of judgements is drawn beside the node they rest on, and only there", async ({ page }) => {
+  await page.goto("/keyboard/harness.html?judged=n1:2,n3:1");
+  const two = page.getByLabel("2 judgements");
+  const one = page.getByLabel("1 judgement");
+  await expect(two).toBeVisible();
+  await expect(one).toBeVisible();
+  await expect(page.getByRole("img", { name: /judgement/ })).toHaveCount(2);
+
+  const node = await settle(page, "n1");
+  const box = await two.boundingBox();
+  const canvasBox = await page.getByRole("application", { name: "Network canvas" }).boundingBox();
+  expect(box).not.toBeNull();
+  expect(canvasBox).not.toBeNull();
+  // Up and to the right of the node, close to it, in the page's own coordinates.
+  const nodeX = (canvasBox?.x ?? 0) + (node?.x ?? 0);
+  const nodeY = (canvasBox?.y ?? 0) + (node?.y ?? 0);
+  expect(Math.abs((box?.x ?? 0) - (nodeX + 8))).toBeLessThan(6);
+  expect(Math.abs((box?.y ?? 0) - (nodeY - 18))).toBeLessThan(6);
+
+  // A picture only: it takes no clicks (the node under it is still pressed) and no focus.
+  await page.mouse.click(nodeX + 1, nodeY + 1);
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual(["n1"]);
+});
+
+test("choosing a search result draws three steps out from it, counted first, in one request", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  const bodies: { preview?: unknown; expand?: unknown } = {};
+  await page.route("**/*/expand/preview", async (route) => {
+    bodies.preview = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ candidate_node_count: 20, candidate_edge_count: 0 }),
+    });
+  });
+  await page.route("**/*/expand", async (route) => {
+    bodies.expand = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] }, filtered_count: 0 }),
+    });
+  });
+  await page.evaluate(() => (window as unknown as { __CANVAS__: { expandFrom: (id: string, depth: number) => void } }).__CANVAS__.expandFrom("n5", 3));
+  await expect.poll(() => bodies.expand !== undefined).toBe(true);
+  expect(bodies.preview).toMatchObject({ request: { node_ids: ["n5"], depth: 3 } });
+  expect(bodies.expand).toMatchObject({ request: { node_ids: ["n5"], depth: 3 } });
+});
+
+test("a three-step draw that is very large asks first, and the answer keeps its three steps", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  let expandBody: unknown = null;
+  await page.route("**/*/expand/preview", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ candidate_node_count: 1200, candidate_edge_count: 0 }),
+    });
+  });
+  await page.route("**/*/expand", async (route) => {
+    expandBody = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] }, filtered_count: 0 }),
+    });
+  });
+  await page.evaluate(() => (window as unknown as { __CANVAS__: { expandFrom: (id: string, depth: number) => void } }).__CANVAS__.expandFrom("n5", 3));
+  await expect(page.getByRole("alertdialog", { name: "Large expansion" })).toBeVisible();
+  expect(expandBody).toBeNull();
+  await tabTo(page, page.getByRole("button", { name: /^Add all/ }));
+  await page.keyboard.press("Enter");
+  await expect.poll(() => expandBody).toMatchObject({ request: { node_ids: ["n5"], depth: 3 } });
+});
+
+test("switching to the light theme repaints the graph's nodes in the light palette, and back", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  const colour = () => page.evaluate(() => window.__CANVAS__?.nodeColour("n1"));
+  await expect.poll(colour).toBe("#677bd6"); // indigo, dark
+  await page.evaluate(() => window.__CANVAS__?.setTheme("light"));
+  await expect.poll(colour).toBe("#5367cb"); // indigo, light
+  await page.evaluate(() => window.__CANVAS__?.setTheme("dark"));
+  await expect.poll(colour).toBe("#677bd6");
+});
+
 test("every registered keyboard action has its own proving test case above", () => {
   assertAllCovered("CANVAS_ACTIONS", CANVAS_ACTIONS);
 });

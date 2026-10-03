@@ -38,6 +38,36 @@ const METRIC_OPTIONS: { value: ComputeMetricName; label: string }[] = [
 //: already exists for that), so it shows the top N by the primary metric rather than paginating.
 const MAX_ROWS = 20;
 
+type Section = "ranking" | "communities";
+
+function SectionButton({
+  label,
+  open,
+  onPress,
+}: {
+  label: string;
+  open: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="metrics-panel__section"
+      aria-expanded={open}
+      onClick={onPress}
+      style={{
+        width: "100%",
+        display: "flex",
+        justifyContent: "space-between",
+        gap: "var(--sp-8)",
+      }}
+    >
+      <span>{label}</span>
+      <span aria-hidden="true">{open ? "▾" : "▸"}</span>
+    </button>
+  );
+}
+
 export interface MetricsPanelProps {
   apiBaseUrl: string;
   bearerToken: string;
@@ -72,8 +102,17 @@ export function MetricsPanel({
   const [valuesA, setValuesA] = useState<Record<string, number> | null>(null);
   const [valuesB, setValuesB] = useState<Record<string, number> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The panel starts as a strip of section names and opens one at a time (ADR-070). The ranking is
+  // only fetched once its section has been opened, and is kept when it is closed again.
+  const [openSection, setOpenSection] = useState<Section | null>(null);
+  const [rankingWanted, setRankingWanted] = useState(false);
+  const toggleSection = (section: Section) => {
+    setOpenSection((current) => (current === section ? null : section));
+    if (section === "ranking") setRankingWanted(true);
+  };
 
   useEffect(() => {
+    if (!rankingWanted) return;
     let cancelled = false;
     setError(null);
     void fetchComputeMetric(apiBaseUrl, bearerToken, investigationId, metricA)
@@ -86,10 +125,10 @@ export function MetricsPanel({
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, bearerToken, investigationId, metricA]);
+  }, [apiBaseUrl, bearerToken, investigationId, metricA, rankingWanted]);
 
   useEffect(() => {
-    if (!compareMode) {
+    if (!compareMode || !rankingWanted) {
       setValuesB(null);
       return;
     }
@@ -104,7 +143,7 @@ export function MetricsPanel({
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, bearerToken, investigationId, metricB, compareMode]);
+  }, [apiBaseUrl, bearerToken, investigationId, metricB, compareMode, rankingWanted]);
 
   useEffect(() => {
     if (!showHulls) {
@@ -134,62 +173,81 @@ export function MetricsPanel({
   return (
     <Panel title="Metrics" className="metrics-panel">
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-8)" }}>
-        <Select
-          aria-label="Primary metric"
-          value={metricA}
-          onChange={(e) => setMetricA(e.target.value as ComputeMetricName)}
-        >
-          {METRIC_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </Select>
-        <Toggle checked={compareMode} onChange={setCompareMode} label="Compare a second metric" />
-        {compareMode && (
-          <Select
-            aria-label="Comparison metric"
-            value={metricB}
-            onChange={(e) => setMetricB(e.target.value as ComputeMetricName)}
-          >
-            {METRIC_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </Select>
-        )}
-        <Toggle checked={showHulls} onChange={setShowHulls} label="Show community hulls" />
-        {error && <p style={{ color: "var(--error)" }}>{error}</p>}
-        <ul
-          role="list"
-          aria-label="Ranked nodes"
-          style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}
-        >
-          {ranked.map(([nodeId, value]) => (
-            <li key={nodeId}>
-              <button
-                type="button"
-                className="metrics-panel__row"
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: "var(--sp-8)",
-                }}
-                onClick={() => onFocusNode(nodeId)}
+        <SectionButton
+          label="Ranking"
+          open={openSection === "ranking"}
+          onPress={() => toggleSection("ranking")}
+        />
+        {openSection === "ranking" && (
+          <>
+            <Select
+              aria-label="Primary metric"
+              value={metricA}
+              onChange={(e) => setMetricA(e.target.value as ComputeMetricName)}
+            >
+              {METRIC_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
+            <Toggle checked={compareMode} onChange={setCompareMode} label="Compare a second metric" />
+            {compareMode && (
+              <Select
+                aria-label="Comparison metric"
+                value={metricB}
+                onChange={(e) => setMetricB(e.target.value as ComputeMetricName)}
               >
-                <span>{nodeLabel(graph, nodeId)}</span>
-                <span className="value">
-                  {value.toFixed(3)}
-                  {compareMode && valuesB && valuesB[nodeId] !== undefined
-                    ? ` / ${(valuesB[nodeId] as number).toFixed(3)}`
-                    : ""}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
+                {METRIC_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </Select>
+            )}
+            {error && <p style={{ color: "var(--error)" }}>{error}</p>}
+            <ul
+              role="list"
+              aria-label="Ranked nodes"
+              style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}
+            >
+              {ranked.map(([nodeId, value]) => (
+                <li key={nodeId}>
+                  <button
+                    type="button"
+                    className="metrics-panel__row"
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: "var(--sp-8)",
+                    }}
+                    onClick={() => onFocusNode(nodeId)}
+                  >
+                    <span>{nodeLabel(graph, nodeId)}</span>
+                    <span className="value">
+                      {value.toFixed(3)}
+                      {compareMode && valuesB && valuesB[nodeId] !== undefined
+                        ? ` / ${(valuesB[nodeId] as number).toFixed(3)}`
+                        : ""}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        <SectionButton
+          label="Communities"
+          open={openSection === "communities"}
+          onPress={() => toggleSection("communities")}
+        />
+        {openSection === "communities" && (
+          <>
+            <Toggle checked={showHulls} onChange={setShowHulls} label="Show community hulls" />
+            {error && <p style={{ color: "var(--error)" }}>{error}</p>}
+          </>
+        )}
       </div>
     </Panel>
   );

@@ -38,6 +38,7 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -82,6 +83,20 @@ import { ViewActions } from "./ViewActions";
 import { settleLayout, type LayoutNode } from "./forceLayout";
 import { arrange, type LayoutMode } from "./layoutModes";
 import { LayoutMenu } from "./LayoutMenu";
+import { CommunitiesControls } from "./CommunitiesControls";
+import { CommunityBoxOverlay } from "./CommunityBoxOverlay";
+import { JudgementBadgeOverlay } from "./JudgementBadgeOverlay";
+import { activePalette } from "../color/palette";
+import { onThemeChange } from "../theme/theme";
+import {
+  boxAt,
+  collapseView,
+  communityBoxes,
+  findCommunities,
+  reconcileCollapsed,
+  type Box,
+  type CollapsedView,
+} from "./communities";
 import {
   expandOnDoubleClick,
   menuRequestForRightClick,
@@ -173,6 +188,12 @@ export interface GlassCanvasProps {
    * own DOM-overlay pattern is, ADR-002's "one honest caveat"), it does not compute them, so a
    * caller that never fetches communities pays nothing beyond the `undefined` check below. */
   communityHulls?: ReadonlyMap<string, readonly [number, number][]>;
+  /** ADR-066: how many nodes are now folded into Group Nodes (the stand-ins included), so the
+   * status bar can say so. Zero when nothing is folded. */
+  onGroupedCountChange?: (count: number) => void;
+  /** ADR-070: how many judgements rest on each node, drawn as a small count beside it. Omitted or
+   * empty, nothing is drawn. */
+  judgementCounts?: ReadonlyMap<string, number>;
 }
 
 /** Phase 7 Stage 3: what the metrics panel needs from outside the canvas's own event handlers —
@@ -201,6 +222,10 @@ export interface GlassCanvasHandle {
    * not in `graph` or nothing is mounted. Lets a browser test click on or beside a link without
    * guessing where the layout put it. */
   viewportPositionOf: (nodeId: string) => { x: number; y: number } | null;
+  /** Draws `nodeId` and everything within `depth` links of it, counted first and asked about when
+   * large, exactly as a double-click expansion is (ADR-070: choosing a search result draws three
+   * steps out). A no-op if `nodeId` is not in the view. */
+  expandFrom: (nodeId: string, depth: number) => void;
   /** Phase 8 Stage 4h: the chart artefact's own real capture path
    * (`02_GLASS_FRONTEND.md` §10.1/§10.3) — delegates to `captureChartImage`
    * (`export/chartExport.ts`), which renders the live Sigma instance to a PNG via
@@ -228,7 +253,6 @@ interface PendingRadialMenu {
 const EMPTY_DIMMED_SET: ReadonlySet<string> = new Set();
 
 /** The selected link: the brass the lasso already uses. */
-const SELECTED_EDGE_HEX = "#c08a34";
 
 export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
   function GlassCanvas(
@@ -246,6 +270,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       onFocusChange,
       onViewMessages,
       communityHulls,
+      onGroupedCountChange,
+      judgementCounts,
     }: GlassCanvasProps,
     ref,
   ) {
@@ -293,6 +319,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           edgeType: string | null,
           x: number,
           y: number,
+          depth?: number,
         ) => Promise<void>)
       | null
     >(null);
@@ -346,6 +373,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       y: number;
       wouldAdd: number | "unavailable";
       options: NarrowingOption[];
+      depth: number;
     } | null>(null);
     // A failed `expandNode`/`manualAssertion`/`explainCluster` call — `ActionErrorOverlay`'s own
     // doc comment has the full reasoning for why these three share one generic overlay rather than
@@ -367,7 +395,187 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     );
     const lastReproject = useStore(store, (s) => s.lastReproject);
     // Re-render when the working set changes, so the view's node count stays current.
-    useStore(store, (s) => s.seq);
+    const workingSetSeq = useStore(store, (s) => s.seq);
+
+    // **Communities (ADR-066).** A way of looking at the nodes now in view: groups of closely linked
+    // nodes get a box, and a group can be folded into one Group Node and opened again. Nothing here
+    // is stored or sent to the server, and switching it off puts every node back as it was.
+    const [communitiesOn, setCommunitiesOn] = useState(false);
+    const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+    const communities = useMemo(
+      () =>
+        communitiesOn
+          ? findCommunities(
+              graph.nodes(),
+              graph.edges().map((e) => [graph.source(e), graph.target(e)] as const),
+            )
+          : [],
+      // `workingSetSeq` changes whenever nodes or links are added or removed.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [communitiesOn, graph, workingSetSeq],
+    );
+    const communitiesRef = useRef(communities);
+    communitiesRef.current = communities;
+    const collapsedRef = useRef(collapsed);
+    collapsedRef.current = collapsed;
+    const communitiesOnRef = useRef(false);
+    communitiesOnRef.current = communitiesOn;
+    // What is folded right now, worked out from where the nodes are drawn. Read by the Sigma
+    // reducers, which are registered once.
+    const foldedViewRef = useRef<CollapsedView | null>(null);
+    const recomputeFoldRef = useRef<() => void>(() => undefined);
+    const foldGroupRef = useRef<(communityId: string) => void>(() => undefined);
+    const unfoldGroupRef = useRef<(communityId: string) => void>(() => undefined);
+    const isHiddenInGroup = (nodeId: string): boolean =>
+      foldedViewRef.current?.hidden.has(nodeId) ?? false;
+    const currentBoxesRef = useRef<() => Box[]>(() => []);
+
+    // Sigma reads every node's position from the graph on each draw and ignores a position a
+    // reducer returns (checked in its source: `process` copies `x` and `y` from the graph's own
+    // attributes). So a folded group is drawn at its centre by really moving its members' stored
+    // positions there, and remembering where they were: `realPositionsRef` holds where each folded
+    // member truly is, `drawnPositionsRef` where it was put, so a layout or a drag that writes a new
+    // position afterwards is noticed (the stored position no longer matches what was put there).
+    const realPositionsRef = useRef(new Map<string, { x: number; y: number }>());
+    const drawnPositionsRef = useRef(new Map<string, { x: number; y: number }>());
+
+    /** Where a node really is, whether or not its group is folded. */
+    function realPositionOf(id: string): { x: number; y: number } {
+      return (
+        realPositionsRef.current.get(id) ?? {
+          x: graph.getNodeAttribute(id, "x") ?? 0,
+          y: graph.getNodeAttribute(id, "y") ?? 0,
+        }
+      );
+    }
+
+    /** Where the nodes of the given groups really are (their layout positions). */
+    function positionsOf(groups: readonly { members: readonly string[] }[]): Map<string, { x: number; y: number }> {
+      const positions = new Map<string, { x: number; y: number }>();
+      for (const group of groups) {
+        for (const id of group.members) {
+          if (!graph.hasNode(id)) continue;
+          positions.set(id, realPositionOf(id));
+        }
+      }
+      return positions;
+    }
+
+    // The boxes to draw: one per group that is not folded, kept a fixed distance (in pixels) clear
+    // of the nodes inside whatever the zoom.
+    currentBoxesRef.current = (): Box[] => {
+      if (!communitiesOn) return [];
+      const sigma = sigmaRef.current;
+      const open = communities.filter((c) => !collapsed.has(c.id));
+      if (!sigma || open.length === 0) return [];
+      const origin = sigma.graphToViewport({ x: 0, y: 0 });
+      const unit = sigma.graphToViewport({ x: 1, y: 0 });
+      const pixelsPerUnit = Math.hypot(unit.x - origin.x, unit.y - origin.y) || 1;
+      return communityBoxes(open, positionsOf(open), 16 / pixelsPerUnit);
+    };
+
+    recomputeFoldRef.current = () => {
+      const real = realPositionsRef.current;
+      const drawn = drawnPositionsRef.current;
+      const place = (id: string, at: { x: number; y: number }) => {
+        if (graph.getNodeAttribute(id, "x") !== at.x || graph.getNodeAttribute(id, "y") !== at.y) {
+          graph.mergeNodeAttributes(id, { x: at.x, y: at.y });
+        }
+      };
+      // A folded member whose stored position is no longer where it was put has been moved (a layout
+      // ran, or it was dragged): that is its real position now.
+      for (const id of [...real.keys()]) {
+        if (!graph.hasNode(id)) {
+          real.delete(id);
+          drawn.delete(id);
+          continue;
+        }
+        const at = drawn.get(id);
+        const x = graph.getNodeAttribute(id, "x") ?? 0;
+        const y = graph.getNodeAttribute(id, "y") ?? 0;
+        if (!at || at.x !== x || at.y !== y) real.set(id, { x, y });
+      }
+      const folded = communitiesRef.current.filter((c) => collapsedRef.current.has(c.id));
+      const foldedIds = new Set(folded.flatMap((c) => c.members));
+      // What is no longer folded goes back to where it really is.
+      for (const [id, at] of [...real]) {
+        if (foldedIds.has(id)) continue;
+        place(id, at);
+        real.delete(id);
+        drawn.delete(id);
+      }
+      if (folded.length === 0) {
+        foldedViewRef.current = null;
+        return;
+      }
+      for (const id of foldedIds) {
+        if (!graph.hasNode(id) || real.has(id)) continue;
+        real.set(id, {
+          x: graph.getNodeAttribute(id, "x") ?? 0,
+          y: graph.getNodeAttribute(id, "y") ?? 0,
+        });
+      }
+      const view = collapseView(
+        communitiesRef.current,
+        collapsedRef.current,
+        positionsOf(folded),
+        (id) => (graph.hasNode(id) ? graph.degree(id) : 0),
+        (id) => (graph.hasNode(id) ? graph.getNodeAttribute(id, "data").type : ""),
+      );
+      foldedViewRef.current = view;
+      // Every member of a folded group is drawn at its centre, so a link from outside still reaches
+      // the group.
+      for (const id of foldedIds) {
+        if (!graph.hasNode(id)) continue;
+        const centre = view.groups.get(id) ?? view.anchorOf(id);
+        if (!centre) continue;
+        const at = { x: centre.x, y: centre.y };
+        place(id, at);
+        drawn.set(id, at);
+      }
+    };
+
+    const foldGroup = (communityId: string) =>
+      setCollapsed((prev) => (prev.has(communityId) ? prev : new Set(prev).add(communityId)));
+    const unfoldGroup = (communityId: string) =>
+      setCollapsed((prev) => {
+        if (!prev.has(communityId)) return prev;
+        const next = new Set(prev);
+        next.delete(communityId);
+        return next;
+      });
+    foldGroupRef.current = foldGroup;
+    unfoldGroupRef.current = unfoldGroup;
+
+    // A group that no longer exists (its nodes were removed, or Communities was switched off) is
+    // dropped from what is folded.
+    useEffect(() => {
+      setCollapsed((prev) => reconcileCollapsed(prev, communities));
+    }, [communities]);
+
+    // Whenever what is folded changes: work the view out again, tell the status bar, take nodes that
+    // are no longer drawn out of the selection and the keyboard focus, and draw.
+    useEffect(() => {
+      recomputeFoldRef.current();
+      const view = foldedViewRef.current;
+      onGroupedCountChange?.(view?.groupedNodeCount ?? 0);
+      if (view && view.hidden.size > 0) {
+        if ([...selectedRef.current].some((id) => view.hidden.has(id))) {
+          setSelected((prev) => {
+            const next = new Set([...prev].filter((id) => !view.hidden.has(id)));
+            onSelectionChange?.(Array.from(next));
+            return next;
+          });
+        }
+        if (focused && view.hidden.has(focused)) {
+          const owner = communities.find((c) => c.members.includes(focused));
+          const standIn = [...view.groups.entries()].find(([, g]) => g.communityId === owner?.id);
+          setFocused(standIn ? standIn[0] : null);
+        }
+      }
+      sigmaRef.current?.refresh();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [collapsed, communities]);
 
     const refreshNodeVisualState = (nodeId: string) => {
       if (!graph.hasNode(nodeId)) return;
@@ -446,6 +654,21 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       }
     };
 
+    // The graph is painted by WebGL, which cannot read the page's CSS variables, so a change of
+    // theme (ADR-070) has to be pushed into the nodes' stored colours and the canvas drawn again.
+    const redrawForThemeRef = useRef<() => void>(() => undefined);
+    redrawForThemeRef.current = () => {
+      const palette = activePalette();
+      graph.forEachNode((nodeId, attrs) => {
+        refreshNodeVisualState(nodeId);
+        if ((attrs.clusterBorderSize ?? 0) > 0) {
+          graph.mergeNodeAttributes(nodeId, { clusterBorderColor: palette.borderSubtle });
+        }
+      });
+      sigmaRef.current?.refresh();
+    };
+    useEffect(() => onThemeChange(() => redrawForThemeRef.current()), []);
+
     // Assign an initial position and the graph-level (rarely-changing)
     // visual attributes exactly once, when a node is added to the working
     // set — never inside the per-frame reducer.
@@ -488,9 +711,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         const clusterOf = (id: string) =>
           graph.getNodeAttribute(id, "data").resolution?.cluster_id ?? id;
         const nodes: LayoutNode[] = [];
-        graph.forEachNode((id, attrs) => {
+        graph.forEachNode((id) => {
           if (clusterOf(id) !== id) return;
-          nodes.push({ id, x: attrs.x ?? 0, y: attrs.y ?? 0 });
+          const at = realPositionOf(id);
+          nodes.push({ id, x: at.x, y: at.y });
         });
         const present = new Set(nodes.map((n) => n.id));
         const edges: [string, string][] = [];
@@ -641,14 +865,31 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           const frame = computeNodeFrameAttributes(data.data, {
             cameraRatio: ratio,
             degree: graph.degree(nodeId),
+            viewNodeCount: graph.order,
           });
-          return {
+          const drawn = {
             ...data,
             ...frame,
-            x: data.x ?? 0,
-            y: data.y ?? 0,
             type: "glass-node",
           };
+          const folded = foldedViewRef.current;
+          if (!folded) return drawn;
+          // A folded group is drawn as one larger, brass-ringed node labelled with what it holds.
+          const group = folded.groups.get(nodeId);
+          if (group) {
+            return {
+              ...drawn,
+              size: Math.min(40, (frame.size || 6) * (1 + Math.log2(group.count) / 1.5)),
+              label: group.label,
+              forceLabel: true,
+              borderColor: activePalette().brass,
+              borderSize: 0.3,
+            };
+          }
+          // The other members sit at the group's centre (their stored position was moved there), too
+          // small to see, so a link from outside still reaches the group.
+          if (folded.hidden.has(nodeId)) return { ...drawn, size: 0.1, label: "" };
+          return drawn;
         },
         edgeReducer: (edgeId, data) => {
           const ratio = currentSigma?.getCamera().ratio ?? 1;
@@ -657,6 +898,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             cameraRatio: ratio,
             strengthFilterFloor: 0,
             onPath: data.onPath ?? false,
+            viewEdgeCount: graph.size,
             touchesHoveredNode:
               hoveredNode !== null &&
               (graph.source(edgeId) === hoveredNode ||
@@ -667,11 +909,15 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             ...data,
             ...attrs,
             // A hidden link is not drawn; the selected one is thicker, brass, and always labelled.
-            hidden: attrs.hidden || hiddenEdgesRef.current.has(edgeId),
+            hidden:
+              attrs.hidden ||
+              hiddenEdgesRef.current.has(edgeId) ||
+              (foldedViewRef.current?.hidesLink(graph.source(edgeId), graph.target(edgeId)) ??
+                false),
             ...(isSelected
               ? {
                   size: Math.max(attrs.size * 2, 4),
-                  color: SELECTED_EDGE_HEX,
+                  color: activePalette().brass,
                   label: `${data.data.type} (${data.data.occurrences ?? 1})`,
                 }
               : {}),
@@ -737,7 +983,25 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           menuRequestForRightClick(event.original as MouseEvent, node),
         );
       });
+      // The fold is re-worked from where the nodes are just before each draw, so a folded group
+      // stays at the centre of its members while the layout moves them.
+      sigma.on("beforeProcess", () => recomputeFoldRef.current());
+      sigma.on("doubleClickStage", ({ event }) => {
+        if (!communitiesOnRef.current) return;
+        const at = sigma.viewportToGraph({ x: event.x, y: event.y });
+        const box = boxAt(currentBoxesRef.current(), at.x, at.y);
+        if (!box) return;
+        event.preventSigmaDefault();
+        foldGroupRef.current(box.id);
+      });
       sigma.on("doubleClickNode", ({ node, event }) => {
+        const group = foldedViewRef.current?.groups.get(node);
+        if (group) {
+          // A Group Node opens; it does not ask the server to expand anything.
+          event.preventSigmaDefault();
+          unfoldGroupRef.current(group.communityId);
+          return;
+        }
         expandOnDoubleClick(event, node, (id, x, y) => {
           void requestExpansionRef.current?.(id, null, x, y);
         });
@@ -774,13 +1038,24 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           setSelected(new Set(present));
           onSelectionChange?.(present);
         },
+        expandFrom: (nodeId: string, depth: number) => {
+          if (!graph.hasNode(nodeId)) return;
+          const box = containerRef.current?.getBoundingClientRect();
+          void requestExpansionRef.current?.(
+            nodeId,
+            null,
+            (box?.width ?? 0) / 2,
+            (box?.height ?? 0) / 2,
+            depth,
+          );
+        },
         viewportPositionOf: (nodeId: string) => {
           const sigma = sigmaRef.current;
           if (!sigma || !graph.hasNode(nodeId)) return null;
-          return sigma.graphToViewport({
-            x: graph.getNodeAttribute(nodeId, "x") ?? 0,
-            y: graph.getNodeAttribute(nodeId, "y") ?? 0,
-          });
+          // Where it is drawn: a folded group's members have been moved to its centre.
+          const x = graph.getNodeAttribute(nodeId, "x") ?? 0;
+          const y = graph.getNodeAttribute(nodeId, "y") ?? 0;
+          return sigma.graphToViewport({ x, y });
         },
         exportImage: (mark: ExportMark) => {
           const sigma = sigmaRef.current;
@@ -798,6 +1073,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // Keyboard: accessibility floor (`spec/02_GLASS_FRONTEND.md` §6) — every
     // canvas action reachable without a mouse.
     const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+      // A key pressed on a control inside the canvas (a toolbar button, the layout menu, a box's fold
+      // button) belongs to that control: React's synthetic events bubble to this container, and
+      // without this guard Enter on any such button also read as "expand the focused node" and asked
+      // the Conduit (found 3 October 2026; `keyboard.spec.ts` has the case). The canvas acts on keys
+      // only when it is itself the focused element.
+      if (e.target !== e.currentTarget) return;
       // `RadialMenu` is rendered as this container's own child, so a keydown on
       // one of its `<button role="menuitem">` items bubbles up to this same
       // handler (React's synthetic events follow real DOM bubbling). Found
@@ -859,7 +1140,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         e.shiftKey
       ) {
         e.preventDefault();
-        const all = graph.nodes();
+        const all = graph.nodes().filter((id) => !isHiddenInGroup(id));
         if (all.length === 0) return;
         const currentIndex = focused ? all.indexOf(focused) : -1;
         const nextIndex =
@@ -873,7 +1154,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         selected.size > 0
       ) {
         e.preventDefault();
-        const ring = Array.from(selected);
+        const ring = Array.from(selected).filter((id) => !isHiddenInGroup(id));
+        if (ring.length === 0) return;
         const currentIndex = focused ? ring.indexOf(focused) : -1;
         const nextIndex =
           e.key === "ArrowLeft"
@@ -881,10 +1163,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             : (currentIndex + 1) % ring.length;
         setFocused(ring[nextIndex] ?? null);
       } else if ((e.key === "ArrowRight" || e.key === "ArrowDown") && focused) {
-        const neighbours = graph.neighbors(focused);
+        const neighbours = graph.neighbors(focused).filter((id) => !isHiddenInGroup(id));
         if (neighbours.length > 0) setFocused(neighbours[0] ?? null);
       } else if ((e.key === "ArrowLeft" || e.key === "ArrowUp") && focused) {
-        const neighbours = graph.neighbors(focused);
+        const neighbours = graph.neighbors(focused).filter((id) => !isHiddenInGroup(id));
         if (neighbours.length > 0)
           setFocused(neighbours[neighbours.length - 1] ?? null);
       } else if (e.key === " " && focused) {
@@ -927,6 +1209,24 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       ) {
         e.preventDefault();
         void removeNodeIds(Array.from(selected));
+      } else if (
+        (e.key === "g" || e.key === "G") &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        focused &&
+        communitiesOn
+      ) {
+        // The keyboard route to folding: `G` on a focused node folds its group into one node, and
+        // on a Group Node opens it again (ADR-066; rule 13).
+        e.preventDefault();
+        const group = foldedViewRef.current?.groups.get(focused);
+        if (group) {
+          unfoldGroup(group.communityId);
+        } else {
+          const owner = communities.find((c) => c.members.includes(focused));
+          if (owner) foldGroup(owner.id);
+        }
       } else if (e.key === "Enter" && focused) {
         // No menu is open here to anchor on — the same container-corner-plus-offset fallback the
         // `\` handler below uses to open one, since a failed expand needs somewhere to render.
@@ -961,6 +1261,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       edgeType: string | null,
       x: number,
       y: number,
+      depth = 1,
     ): Promise<void> {
       const ask = {
         apiBaseUrl,
@@ -968,6 +1269,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         investigationId,
         nodeId,
         currentOrder: graph.order,
+        depth,
       };
       const total = await fetchWouldAdd(fetch, {
         ...ask,
@@ -975,7 +1277,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       });
       const gate = gateExpansion(total);
       if (gate.kind === "proceed") {
-        await expandNode(nodeId, edgeType, x, y);
+        await expandNode(nodeId, edgeType, x, y, depth);
         return;
       }
       let options: NarrowingOption[] = [];
@@ -1000,6 +1302,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         y,
         wouldAdd: gate.wouldAdd,
         options,
+        depth,
       });
     }
 
@@ -1008,6 +1311,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       edgeType: string | null,
       x: number,
       y: number,
+      depth = 1,
     ): Promise<void> {
       let response: Response;
       try {
@@ -1022,7 +1326,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             body: JSON.stringify({
               request: {
                 node_ids: [nodeId],
-                depth: 1,
+                depth,
                 edge_types: edgeType ? [edgeType] : null,
               },
             }),
@@ -1513,7 +1817,19 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // Takes nodes out of the view (the working set); the records stay in the store and the server
     // records a History step. The graph only changes once the server has confirmed: a failure is
     // shown, and the nodes stay where they are.
-    async function removeNodeIds(nodeIds: string[]): Promise<void> {
+    async function removeNodeIds(requested: string[]): Promise<void> {
+      // A Group Node stands for every node in its group. Removing only the stand-in would take one
+      // node out of the group without the analyst having seen it, so unless the whole group is
+      // being removed the group is opened instead and the stand-in is left alone.
+      const nodeIds = requested.filter((id) => {
+        const group = foldedViewRef.current?.groups.get(id);
+        if (!group) return true;
+        const owner = communities.find((c) => c.id === group.communityId);
+        if (owner && owner.members.every((m) => requested.includes(m))) return true;
+        unfoldGroup(group.communityId);
+        return false;
+      });
+      if (nodeIds.length === 0) return;
       const result = await removeFromWorkingSet(fetch, {
         apiBaseUrl,
         bearerToken,
@@ -1589,6 +1905,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           }));
           const inside = new Set<string>();
           graph.forEachNode((nodeId, attrs) => {
+            if (isHiddenInGroup(nodeId)) return;
             const viewport = sigma.graphToViewport({
               x: attrs.x ?? 0,
               y: attrs.y ?? 0,
@@ -1667,6 +1984,35 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             onClose={dismissPathError}
           />
         )}
+        {judgementCounts && judgementCounts.size > 0 && (
+          <JudgementBadgeOverlay
+            sigmaRef={sigmaRef}
+            counts={judgementCounts}
+            positionOf={(nodeId) => {
+              const sigma = sigmaRef.current;
+              if (!sigma || !graph.hasNode(nodeId) || isHiddenInGroup(nodeId)) return null;
+              return sigma.graphToViewport({
+                x: graph.getNodeAttribute(nodeId, "x") ?? 0,
+                y: graph.getNodeAttribute(nodeId, "y") ?? 0,
+              });
+            }}
+          />
+        )}
+        {communitiesOn && (
+          <CommunityBoxOverlay
+            sigmaRef={sigmaRef}
+            getBoxes={() => currentBoxesRef.current()}
+            onFold={foldGroup}
+          />
+        )}
+        <CommunitiesControls
+          on={communitiesOn}
+          groupCount={communities.length}
+          foldedCount={collapsed.size}
+          onToggle={() => setCommunitiesOn((v) => !v)}
+          onCollapseAll={() => setCollapsed(new Set(communities.map((c) => c.id)))}
+          onExpandAll={() => setCollapsed(new Set())}
+        />
         <LayoutMenu
           mode={layoutMode}
           onChange={(mode) => {
@@ -1701,14 +2047,14 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             wouldAdd={pendingExpansion.wouldAdd}
             options={pendingExpansion.options}
             onChooseType={(edgeType) => {
-              const { nodeId, x, y } = pendingExpansion;
+              const { nodeId, x, y, depth } = pendingExpansion;
               setPendingExpansion(null);
-              void expandNode(nodeId, edgeType, x, y);
+              void expandNode(nodeId, edgeType, x, y, depth);
             }}
             onChooseAll={() => {
-              const { nodeId, edgeType, x, y } = pendingExpansion;
+              const { nodeId, edgeType, x, y, depth } = pendingExpansion;
               setPendingExpansion(null);
-              void expandNode(nodeId, edgeType, x, y);
+              void expandNode(nodeId, edgeType, x, y, depth);
             }}
             onCancel={() => setPendingExpansion(null)}
           />

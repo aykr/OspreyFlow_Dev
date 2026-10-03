@@ -63,6 +63,52 @@ test("pressing Play actually advances the playback clock forward, reachable by k
   registerCovered("TIMELINE_PLAYBACK_ACTIONS", "toggle-playback-advances-the-clock");
 });
 
+test("the exact-date boxes stay out of sight until Set exact dates is pressed, by keyboard alone", async ({
+  page,
+}) => {
+  await page.route("**/*/v1/analytics/histogram", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(EMPTY_HISTOGRAM),
+    });
+  });
+  await page.goto("/keyboard/timeline-playback-harness.html");
+  await expect(page.getByLabel("Brush window start")).toHaveCount(0);
+  await expect(page.getByLabel("Brush window end")).toHaveCount(0);
+
+  await tabToElementNamed(page, (active) => active.tag === "BUTTON" && active.text.includes("Set exact dates"));
+  expect(await page.evaluate(() => document.activeElement?.getAttribute("aria-expanded"))).toBe("false");
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Brush window start")).toBeVisible();
+  await expect(page.getByLabel("Brush window end")).toBeVisible();
+  expect(await page.evaluate(() => document.activeElement?.getAttribute("aria-expanded"))).toBe("true");
+
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Brush window start")).toHaveCount(0);
+
+  registerCovered("TIMELINE_PLAYBACK_ACTIONS", "set-exact-dates-reveals-the-date-boxes");
+});
+
+test("the overlay box stays out of sight until Overlay another case is pressed, by keyboard alone", async ({
+  page,
+}) => {
+  await page.route("**/*/v1/analytics/histogram", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(EMPTY_HISTOGRAM),
+    });
+  });
+  await page.goto("/keyboard/timeline-playback-harness.html");
+  await expect(page.getByLabel("Cross-case overlay investigation id")).toHaveCount(0);
+  await tabToElementNamed(page, (active) => active.tag === "BUTTON" && active.text.includes("Overlay another case"));
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Cross-case overlay investigation id")).toBeVisible();
+
+  registerCovered("TIMELINE_PLAYBACK_ACTIONS", "overlay-another-case-reveals-its-box");
+});
+
 test("entering a second investigation's id loads its own cross-case track, reachable by keyboard alone", async ({
   page,
 }) => {
@@ -79,6 +125,8 @@ test("entering a second investigation's id loads its own cross-case track, reach
 
   await page.goto("/keyboard/timeline-playback-harness.html");
 
+  await tabToElementNamed(page, (active) => active.tag === "BUTTON" && active.text.includes("Overlay another case"));
+  await page.keyboard.press("Enter");
   await tabToElementNamed(page, (active) => active.ariaLabel === "Cross-case overlay investigation id");
   await page.keyboard.type("case-2");
   await page.keyboard.press("Tab");

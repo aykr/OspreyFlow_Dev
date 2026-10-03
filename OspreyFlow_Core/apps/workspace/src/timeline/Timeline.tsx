@@ -36,12 +36,8 @@ import type {
   HistogramRequest,
 } from "../../../../packages/schemas/generated";
 import { fetchHistogram } from "../analytics/api";
-import {
-  BORDER_SUBTLE_DARK_HEX,
-  BRASS_HEX,
-  SEQ_HEX,
-  TEXT_SECONDARY_DARK_HEX,
-} from "../color/tokens";
+import { activePalette } from "../color/palette";
+import { currentTheme, onThemeChange, type Theme } from "../theme/theme";
 import { buildEventFilter, type CrossFilterStore } from "../crossfilter/store";
 import { Button } from "../design/primitives/Button";
 import { Select } from "../design/primitives/Select";
@@ -96,6 +92,10 @@ export interface TimelineProps {
    * drift apart. Called on every animation frame while playing; a caller
    * that doesn't need playback (no snail trail mounted) simply omits it. */
   onPlaybackFractionChange?: (fraction: number) => void;
+  /** Called as the analyst types the id of a second investigation to overlay. When given, the
+   * timeline's own bar offers an `Overlay another case` button that reveals the box (it was a
+   * separate row above the timeline that was always showing). */
+  onCrossCaseScopeChange?: (investigationId: string) => void;
 }
 
 export function Timeline({
@@ -106,10 +106,15 @@ export function Timeline({
   getNodeIds,
   crossCaseInvestigationScope,
   onPlaybackFractionChange,
+  onCrossCaseScopeChange,
 }: TimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
   const [mode, setMode] = useState<TimelineMode>("density");
+  // The two boxes for typing exact dates, and the box for a second investigation's id, are tucked
+  // behind a button each: they are rarely used and sat in the bar all the time.
+  const [datesOpen, setDatesOpen] = useState(false);
+  const [overlayOpen, setOverlayOpen] = useState(false);
   const [histogram, setHistogram] = useState<Histogram | null>(null);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[] | null>(
     crossFilterStore.store.getState().selectedNodeIds,
@@ -198,9 +203,19 @@ export function Timeline({
     };
   }, []);
 
+  // The chart paints to a canvas, so it cannot follow the page's theme by itself: draw it again
+  // when the theme changes (ADR-070).
+  const [theme, setTheme] = useState<Theme>(currentTheme());
+  useEffect(() => onThemeChange(setTheme), []);
+
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart || !histogram) return;
+    const palette = activePalette();
+    const borderSubtleHex = palette.borderSubtle;
+    const textSecondaryHex = palette.textSecondary;
+    const brassHex = palette.brass;
+    const seqHex = palette.seq;
 
     if (mode === "density") {
       const buckets = histogram.buckets;
@@ -247,44 +262,44 @@ export function Timeline({
                   gridIndex: 0,
                   data: categoryData,
                   axisLabel: { show: false },
-                  axisLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
+                  axisLine: { lineStyle: { color: borderSubtleHex } },
                 },
                 {
                   type: "category",
                   gridIndex: 1,
                   data: categoryData,
-                  axisLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
-                  axisLabel: { color: TEXT_SECONDARY_DARK_HEX, fontSize: 11 },
+                  axisLine: { lineStyle: { color: borderSubtleHex } },
+                  axisLabel: { color: textSecondaryHex, fontSize: 11 },
                 },
               ]
             : {
                 type: "category",
                 data: categoryData,
-                axisLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
-                axisLabel: { color: TEXT_SECONDARY_DARK_HEX, fontSize: 11 },
+                axisLine: { lineStyle: { color: borderSubtleHex } },
+                axisLabel: { color: textSecondaryHex, fontSize: 11 },
               },
           yAxis: overlayActive
             ? [
                 {
                   type: "value",
                   gridIndex: 0,
-                  axisLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
-                  axisLabel: { color: TEXT_SECONDARY_DARK_HEX, fontSize: 11 },
-                  splitLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
+                  axisLine: { lineStyle: { color: borderSubtleHex } },
+                  axisLabel: { color: textSecondaryHex, fontSize: 11 },
+                  splitLine: { lineStyle: { color: borderSubtleHex } },
                 },
                 {
                   type: "value",
                   gridIndex: 1,
-                  axisLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
-                  axisLabel: { color: TEXT_SECONDARY_DARK_HEX, fontSize: 11 },
-                  splitLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
+                  axisLine: { lineStyle: { color: borderSubtleHex } },
+                  axisLabel: { color: textSecondaryHex, fontSize: 11 },
+                  splitLine: { lineStyle: { color: borderSubtleHex } },
                 },
               ]
             : {
                 type: "value",
-                axisLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
-                axisLabel: { color: TEXT_SECONDARY_DARK_HEX, fontSize: 11 },
-                splitLine: { lineStyle: { color: BORDER_SUBTLE_DARK_HEX } },
+                axisLine: { lineStyle: { color: borderSubtleHex } },
+                axisLabel: { color: textSecondaryHex, fontSize: 11 },
+                splitLine: { lineStyle: { color: borderSubtleHex } },
               },
           dataZoom: overlayActive
             ? [
@@ -299,7 +314,7 @@ export function Timeline({
                   xAxisIndex: 0,
                   yAxisIndex: 0,
                   data: buckets.map((b) => b.count),
-                  itemStyle: { color: BRASS_HEX },
+                  itemStyle: { color: brassHex },
                   barMinWidth: 1,
                   name: "this investigation",
                 },
@@ -313,7 +328,7 @@ export function Timeline({
                     );
                     return match?.count ?? 0;
                   }),
-                  itemStyle: { color: SEQ_HEX[2] },
+                  itemStyle: { color: seqHex[2] },
                   barMinWidth: 1,
                   name: crossCaseInvestigationScope,
                 },
@@ -322,7 +337,7 @@ export function Timeline({
                 {
                   type: "bar",
                   data: buckets.map((b) => b.count),
-                  itemStyle: { color: BRASS_HEX },
+                  itemStyle: { color: brassHex },
                   barMinWidth: 1,
                 },
               ],
@@ -359,13 +374,13 @@ export function Timeline({
           xAxis: {
             type: "category",
             data: HOUR_LABELS,
-            axisLabel: { color: TEXT_SECONDARY_DARK_HEX, fontSize: 11 },
+            axisLabel: { color: textSecondaryHex, fontSize: 11 },
             splitArea: { show: true },
           },
           yAxis: {
             type: "category",
             data: WEEKDAY_LABELS,
-            axisLabel: { color: TEXT_SECONDARY_DARK_HEX, fontSize: 11 },
+            axisLabel: { color: textSecondaryHex, fontSize: 11 },
             splitArea: { show: true },
           },
           visualMap: {
@@ -375,8 +390,8 @@ export function Timeline({
             orient: "horizontal",
             left: "center",
             bottom: 0,
-            inRange: { color: SEQ_HEX },
-            textStyle: { color: TEXT_SECONDARY_DARK_HEX },
+            inRange: { color: seqHex },
+            textStyle: { color: textSecondaryHex },
           },
           series: [{ type: "heatmap", data, label: { show: false } }],
           tooltip: {},
@@ -391,6 +406,7 @@ export function Timeline({
     getNodeIds,
     crossCaseHistogram,
     crossCaseInvestigationScope,
+    theme,
   ]);
 
   useEffect(() => {
@@ -453,6 +469,14 @@ export function Timeline({
           Cyclical
         </Button>
         {mode === "density" && (
+          <Button
+            aria-expanded={datesOpen}
+            onClick={() => setDatesOpen((open) => !open)}
+          >
+            Set exact dates
+          </Button>
+        )}
+        {mode === "density" && datesOpen && (
           <>
             {/* `02_GLASS_FRONTEND.md` §3.4: "Brush endpoints are editable
                 as text." Editing a field updates the active filter
@@ -475,6 +499,26 @@ export function Timeline({
               style={{ width: 180 }}
             />
           </>
+        )}
+        {onCrossCaseScopeChange && (
+          <Button
+            aria-expanded={overlayOpen}
+            onClick={() => setOverlayOpen((open) => !open)}
+          >
+            Overlay another case
+            {crossCaseInvestigationScope ? `: ${crossCaseInvestigationScope}` : ""}
+          </Button>
+        )}
+        {onCrossCaseScopeChange && overlayOpen && (
+          <input
+            id="cross-case-scope"
+            type="text"
+            aria-label="Cross-case overlay investigation id"
+            placeholder="investigation id"
+            value={crossCaseInvestigationScope ?? ""}
+            onChange={(e) => onCrossCaseScopeChange(e.target.value)}
+            style={{ width: 200 }}
+          />
         )}
         {(activeWindow || selectedNodeIds) && (
           <Button

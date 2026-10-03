@@ -143,6 +143,12 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   "show-hidden-links-by-keyboard",
   "overlay-dismiss-large-expansion",
   "large-expansion-add-all-by-keyboard",
+  // 3 October 2026 (ADR-066): Communities groups the nodes in view and folds a group into one node.
+  // Every way of doing it with the mouse has a keyboard route, each proved by its own case.
+  "communities-button-by-keyboard",
+  "g-folds-and-opens-the-focused-nodes-group",
+  "box-fold-button-by-keyboard",
+  "collapse-all-and-expand-all-by-keyboard",
 ] as const);
 
 /**
@@ -157,6 +163,7 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
  * via `GlassCanvasHandle.focusOnNode`), which is why it alone is listed here.
  */
 export const METRICS_PANEL_ACTIONS = defineActionRegistry("METRICS_PANEL_ACTIONS", [
+  "ranking-section-opens-by-keyboard-and-loads-the-list",
   "row-select-and-centre",
 ] as const);
 
@@ -253,6 +260,8 @@ export const EXPORT_PANEL_ACTIONS = defineActionRegistry("EXPORT_PANEL_ACTIONS",
  */
 export const TIMELINE_PLAYBACK_ACTIONS = defineActionRegistry("TIMELINE_PLAYBACK_ACTIONS", [
   "toggle-playback-advances-the-clock",
+  "set-exact-dates-reveals-the-date-boxes",
+  "overlay-another-case-reveals-its-box",
   "cross-case-overlay-loads-second-track",
 ] as const);
 

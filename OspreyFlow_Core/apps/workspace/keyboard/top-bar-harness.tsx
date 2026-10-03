@@ -7,6 +7,7 @@ import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { AppSwitcher } from "../src/AppSwitcher";
 import { AccountMenu } from "../src/auth/AccountMenu";
+import { ThemeToggle } from "../src/theme/ThemeToggle";
 import { Button } from "../src/design/primitives/Button";
 import { CaseSwitcher } from "../src/investigation/CaseSwitcher";
 import { GlobalSearch } from "../src/search/GlobalSearch";
@@ -52,7 +53,8 @@ createRoot(container).render(
     <span style={{ width: 170 }} aria-hidden="true" />
     <Button>Export ⚙</Button>
     <Button>History</Button>
-    <div className="app-header__account">
+    <div className="app-header__account" style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}>
+      <ThemeToggle />
       <AccountMenu
         principal={{
           sub: "2a0683a4-5a9c-40cb-94b9-e9c502084449",

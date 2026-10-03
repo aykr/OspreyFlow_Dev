@@ -1,7 +1,7 @@
 import { useEffect, useState, type RefObject } from "react";
 import type Sigma from "sigma";
 
-import { resolveChannelHex, SEQ_HEX } from "../color/tokens";
+import { activePalette } from "../color/palette";
 import type { WorkingSetEdgeAttributes, WorkingSetNodeAttributes } from "../workingset/store";
 
 export interface CommunityHullOverlayProps {
@@ -47,7 +47,8 @@ export function CommunityHullOverlay({ sigmaRef, hulls }: CommunityHullOverlayPr
       {communityIds.map((communityId, index) => {
         const points = hulls.get(communityId);
         if (!points) return null;
-        const colour = SEQ_HEX[index % SEQ_HEX.length] ?? resolveChannelHex("ochre");
+        const palette = activePalette();
+        const colour = palette.seq[index % palette.seq.length] ?? palette.channel("ochre");
         const viewportPoints = points
           .map(([x, y]) => {
             const p = sigma.graphToViewport({ x, y });

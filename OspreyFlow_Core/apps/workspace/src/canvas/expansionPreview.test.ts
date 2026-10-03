@@ -97,4 +97,14 @@ describe("fetchWouldAdd", () => {
       }),
     ).toBe("unavailable");
   });
+
+  it("asks about one step unless told to look further, and passes the depth it is given", async () => {
+    const fetcher = vi.fn(async () => reply(true, { candidate_node_count: 10 }));
+    await fetchWouldAdd(fetcher, { ...base, nodeId: "n1", edgeTypes: null, currentOrder: 4 });
+    await fetchWouldAdd(fetcher, { ...base, nodeId: "n1", edgeTypes: null, currentOrder: 4, depth: 3 });
+    const depthOf = (call: number) =>
+      JSON.parse(((fetcher.mock.calls[call] as unknown as [string, RequestInit])[1].body as string)).request.depth;
+    expect(depthOf(0)).toBe(1);
+    expect(depthOf(1)).toBe(3);
+  });
 });

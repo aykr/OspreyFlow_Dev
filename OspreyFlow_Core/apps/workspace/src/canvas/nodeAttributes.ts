@@ -27,20 +27,33 @@
 import type { Edge, Node } from "../../../../packages/schemas/generated";
 import { cachedNodeSvgDataUri, type StrokeStyle } from "../color/nodeVisual";
 import { mixOklab } from "../color/oklab";
-import {
-  BORDER_STRONG_DARK_HEX,
-  BORDER_SUBTLE_DARK_HEX,
-  BRASS_HEX,
-  resolveChannelHex,
-  SURFACE_PANEL_DARK_HEX,
-  TEXT_PRIMARY_DARK_HEX,
-} from "../color/tokens";
+import { BRASS_HEX } from "../color/tokens";
+import { activePalette } from "../color/palette";
 import type { EntityVisual } from "../ontology/schema";
 import { zoomBandForRatio, type ZoomBand } from "./zoomBands";
 
 export interface NodeZoomContext {
   cameraRatio: number;
   degree: number;
+  /** How many nodes are in the view. A crowded view draws them smaller; omitted, full size. */
+  viewNodeCount?: number;
+}
+
+const CROWDING_FROM = 150;
+const CROWDING_TO = 3000;
+const CROWDING_FLOOR = 0.55;
+
+/** How much to shrink what is drawn for a view this crowded: 1 up to 150 items, falling steadily
+ * (on a log scale, since the eye sees the doubling not the sum) to 0.55 at 3,000 and beyond. It
+ * depends only on how many there are, so zoom and the data never change what exists, only how
+ * loudly it is drawn. */
+export function crowdingScale(count: number | undefined): number {
+  if (count === undefined || count <= CROWDING_FROM) return 1;
+  const t = Math.min(
+    1,
+    (Math.log(count) - Math.log(CROWDING_FROM)) / (Math.log(CROWDING_TO) - Math.log(CROWDING_FROM)),
+  );
+  return 1 - (1 - CROWDING_FLOOR) * t;
 }
 
 export interface NodeFrameAttributes {
@@ -78,7 +91,7 @@ export function computeNodeFrameAttributes(
   const labelEligible =
     band !== "overview" && (band !== "structure" || context.degree > 10);
   return {
-    size: BAND_SIZE[band],
+    size: Math.max(2, BAND_SIZE[band] * crowdingScale(context.viewNodeCount)),
     label: labelEligible ? nodeLabel(node) : "",
     hidden: false,
   };
@@ -108,7 +121,7 @@ function provenanceStroke(
 ): { style: StrokeStyle; hex: string } {
   const state = node.provenance.state;
   if (state === "asserted")
-    return { style: "solid", hex: BORDER_STRONG_DARK_HEX };
+    return { style: "solid", hex: activePalette().borderStrong };
   if (state === "inferred") return { style: "dashed", hex: channelHex };
   return { style: "dotted", hex: channelHex }; // "unresolved"
 }
@@ -120,11 +133,12 @@ export function computeNodeGraphAttributes(
   visual: EntityVisual,
   state: NodeVisualState,
 ): NodeGraphAttributes {
-  const channelHex = resolveChannelHex(visual.channel);
+  const palette = activePalette();
+  const channelHex = palette.channel(visual.channel);
   const fillHex = state.filteredOut
-    ? mixOklab(channelHex, SURFACE_PANEL_DARK_HEX, 12)
+    ? mixOklab(channelHex, palette.surfacePanel, 12)
     : state.dimmed
-      ? mixOklab(channelHex, SURFACE_PANEL_DARK_HEX, 32)
+      ? mixOklab(channelHex, palette.surfacePanel, 32)
       : channelHex;
 
   const stroke = provenanceStroke(node, channelHex);
@@ -139,11 +153,11 @@ export function computeNodeGraphAttributes(
   // baked into `image`: on-path first (path highlighting takes priority
   // over a merely-hovered node on that path), then selected, then hover.
   const { borderColor, borderSize } = state.onPath
-    ? { borderColor: TEXT_PRIMARY_DARK_HEX, borderSize: 2 }
+    ? { borderColor: palette.textPrimary, borderSize: 2 }
     : state.selected
       ? { borderColor: BRASS_HEX, borderSize: 2 }
       : state.hovered
-        ? { borderColor: TEXT_PRIMARY_DARK_HEX, borderSize: 1.5 }
+        ? { borderColor: palette.textPrimary, borderSize: 1.5 }
         : { borderColor: "transparent", borderSize: 0 };
 
   return { image, color: fillHex, borderColor, borderSize };
@@ -168,7 +182,7 @@ export function computeClusterGraphAttributes(
 ): ClusterGraphAttributes {
   if (clusterMemberCount <= 1)
     return { clusterBorderColor: "transparent", clusterBorderSize: 0 };
-  return { clusterBorderColor: BORDER_SUBTLE_DARK_HEX, clusterBorderSize: 1 };
+  return { clusterBorderColor: activePalette().borderSubtle, clusterBorderSize: 1 };
 }
 
 export interface EdgeRenderContext {
@@ -187,6 +201,8 @@ export interface EdgeRenderContext {
    * analyst can read what a relationship is by pointing at either end of it, without zooming in
    * until every label on the canvas appears at once. */
   touchesHoveredNode?: boolean;
+  /** How many links are in the view. A crowded view draws them thinner; omitted, full width. */
+  viewEdgeCount?: number;
 }
 
 export interface ResolvedEdgeAttributes {
@@ -207,6 +223,7 @@ export function computeEdgeAttributes(
   context: EdgeRenderContext,
 ): ResolvedEdgeAttributes {
   const band = zoomBandForRatio(context.cameraRatio);
+  const palette = activePalette();
   const weight = edge.weight ?? 1;
   const belowStrengthFilter = weight < context.strengthFilterFloor;
 
@@ -216,17 +233,18 @@ export function computeEdgeAttributes(
   if (context.onPath) {
     return {
       size: ON_PATH_EDGE_SIZE,
-      color: TEXT_PRIMARY_DARK_HEX,
+      color: palette.textPrimary,
       label:
         band === "link-detail" ? `${edge.type} (${edge.occurrences ?? 1})` : "",
       hidden: false,
     };
   }
 
+  const crowd = crowdingScale(context.viewEdgeCount);
   if (band === "overview") {
     return {
-      size: 1,
-      color: BORDER_STRONG_DARK_HEX,
+      size: Math.max(0.5, crowd),
+      color: palette.borderStrong,
       label:
         context.touchesHoveredNode && !belowStrengthFilter
           ? `${edge.type} (${edge.occurrences ?? 1})`
@@ -234,10 +252,10 @@ export function computeEdgeAttributes(
       hidden: belowStrengthFilter,
     };
   }
-  const size = Math.max(1, Math.min(4, weight * 2));
+  const size = Math.max(0.5, Math.max(1, Math.min(4, weight * 2)) * crowd);
   return {
     size,
-    color: BORDER_STRONG_DARK_HEX,
+    color: palette.borderStrong,
     label:
       band === "link-detail" || context.touchesHoveredNode
         ? `${edge.type} (${edge.occurrences ?? 1})`

@@ -154,6 +154,8 @@ test("A12 — the Clique Metric ranks nodes in the metrics panel", async ({
     if (r.url().includes("/compute/clique_metric")) computed.push(r.status());
   });
 
+  // The Metrics panel starts closed (ADR-070).
+  await page.getByRole("button", { name: /^Ranking/ }).click();
   await page
     .getByRole("combobox", { name: "Primary metric" })
     .selectOption("clique_metric");

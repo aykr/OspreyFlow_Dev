@@ -22,8 +22,11 @@ import {
   type DisplayPrincipal,
 } from "./auth/userManager";
 import { clearHandoff, readHandoff } from "./auth/launcherHandoff";
+import { installUnauthorisedWatch } from "./auth/unauthorised";
 import { SignInScreen } from "./auth/SignInScreen";
 import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
+import { listJudgements } from "./assessment/api";
+import { judgementCountsByNode } from "./assessment/judgementCounts";
 import {
   buildEventFilter,
   createCrossFilterStore,
@@ -31,6 +34,7 @@ import {
   type CrossFilterStoreState,
 } from "./crossfilter/store";
 import { AccountMenu } from "./auth/AccountMenu";
+import { ThemeToggle } from "./theme/ThemeToggle";
 import { AppSwitcher } from "./AppSwitcher";
 import { Button } from "./design/primitives/Button";
 import { Toast } from "./design/primitives/Toast";
@@ -57,6 +61,7 @@ import {
   type OntologyRegistry,
 } from "./ontology/schema";
 import { GlobalSearch } from "./search/GlobalSearch";
+import { drawSearchResult } from "./search/drawSearchResult";
 import { BoundaryFilterTool } from "./map/BoundaryFilterTool";
 import { IngestStudio } from "./ingest/IngestStudio";
 import { CasePicker } from "./investigation/CasePicker";
@@ -147,6 +152,9 @@ const GEO_BIN_PRECISION = 8;
 export function App() {
   const workingSetRef = useRef(createWorkingSet());
   const glassCanvasRef = useRef<GlassCanvasHandle>(null);
+  const [groupedCount, setGroupedCount] = useState(0);
+  // How many judgements rest on each node, drawn as a small count beside it (ADR-070).
+  const [judgementCounts, setJudgementCounts] = useState<ReadonlyMap<string, number>>(new Map());
 
   // `06_DECISIONS.md` ADR-050 — sign-in. `bearerToken` is the one value every child component
   // already took as a prop before this stage; only its *source* changes, from the dev-only
@@ -254,6 +262,14 @@ export function App() {
     hasResolvedAPrincipalOnceRef.current = false;
   }
 
+  const unauthenticatedHandledRef = useRef(false);
+  const bearerTokenRef = useRef(bearerToken);
+  bearerTokenRef.current = bearerToken;
+  // A new token is a new sign-in: a refusal of *it* is worth reacting to again.
+  useEffect(() => {
+    if (bearerToken) unauthenticatedHandledRef.current = false;
+  }, [bearerToken]);
+
   /** A 401 on the very first authenticated call after sign-in means the token itself was refused
    * (wrong audience, a claim the realm never mapped) — retrying it against the same identity-
    * provider session would only fetch the identical bad token again. A 401 on any later call means
@@ -262,6 +278,9 @@ export function App() {
    * only "has this session ever produced a usable token" can. */
   const handleUnauthenticatedResponse = useCallback((): void => {
     if (isDevBypass) return;
+    // Once per sign-in: several calls refused together must start one re-sign-in, not several.
+    if (unauthenticatedHandledRef.current) return;
+    unauthenticatedHandledRef.current = true;
     if (!hasResolvedAPrincipalOnceRef.current) {
       setBearerToken("");
       setPrincipal(null);
@@ -275,6 +294,19 @@ export function App() {
     setPrincipal(null);
     void getUserManager().signinRedirect({ prompt: "none" });
   }, [isDevBypass]);
+
+  // A 401 from the Conduit on *any* call carrying the signed-in token means the sign-in has gone
+  // stale, whichever screen made the call (3 October 2026: the Ingest Studio and the case menu
+  // showed raw 401s after the identity provider was restarted, because only the Glass's own calls
+  // were wired to the handler above). Watching `fetch` once covers every screen, present and future.
+  useEffect(() => {
+    if (isDevBypass) return;
+    return installUnauthorisedWatch({
+      apiBaseUrl: API_BASE_URL,
+      getToken: () => bearerTokenRef.current,
+      onUnauthorised: handleUnauthenticatedResponse,
+    });
+  }, [isDevBypass, handleUnauthenticatedResponse]);
 
   // The case picker shown over an open case ("All cases" in the header). It replaces the workspace
   // in the render, it does not unmount `App`, so the sign-in and the per-case state survive.
@@ -402,6 +434,25 @@ export function App() {
     // No case is created here any more (ADR-052, owner's ruling of 29 September 2026): with no
     // case chosen the Glass shows the case picker, and a case is only ever created by naming one.
   }, [investigationId]);
+
+  // The count of judgements beside each node (ADR-070): fetched when the case opens, then kept
+  // current by the Judgements tab each time it reloads the list. A failure leaves no badges; it
+  // never blocks the canvas.
+  useEffect(() => {
+    if (!investigationId || !bearerToken) {
+      setJudgementCounts(new Map());
+      return;
+    }
+    let cancelled = false;
+    listJudgements(API_BASE_URL, bearerToken, investigationId)
+      .then((judgements) => {
+        if (!cancelled) setJudgementCounts(judgementCountsByNode(judgements));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [investigationId, bearerToken]);
 
   useEffect(() => {
     if (!investigationId || !bearerToken) return;
@@ -651,12 +702,11 @@ export function App() {
                   return graph.nodes().map((id) => graph.getNodeAttribute(id, "data"));
                 }}
                 onSelect={(node) => {
-                  workingSetRef.current.store.getState().applyDelta({
-                    seq: workingSetRef.current.store.getState().seq,
-                    op: "add",
-                    nodes: [node],
-                    edges: [],
-                  });
+                  drawSearchResult(
+                    workingSetRef.current.store,
+                    node,
+                    glassCanvasRef.current,
+                  );
                   setSelectedNode(node);
                 }}
               />
@@ -722,14 +772,18 @@ export function App() {
           </Button>
         )}
         {app === "glass" && <Button onClick={() => setHistoryOpen(true)}>History</Button>}
-        {!isDevBypass && principal && (
-          // `06_DECISIONS.md` ADR-050: the principal's identity and clearance are shown in the
-          // chrome, informationally only. ADR-065 folds the subject, unit and Sign out behind one
-          // button that keeps the clearance in view. The Glass derives nothing from any of it.
-          <div className="app-header__account">
+        <div
+          className="app-header__account"
+          style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}
+        >
+          <ThemeToggle />
+          {!isDevBypass && principal && (
+            // `06_DECISIONS.md` ADR-050: the principal's identity and clearance are shown in the
+            // chrome, informationally only. ADR-065 folds the subject, unit and Sign out behind one
+            // button that keeps the clearance in view. The Glass derives nothing from any of it.
             <AccountMenu principal={principal} onSignOut={() => void signOut()} />
-          </div>
-        )}
+          )}
+        </div>
       </header>
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         {view === "ingest" && (
@@ -803,6 +857,8 @@ export function App() {
                 apiBaseUrl={API_BASE_URL}
                 bearerToken={bearerToken}
                 dimmedNodeIds={dimming.dimmedNodeIds}
+                onGroupedCountChange={setGroupedCount}
+                judgementCounts={judgementCounts}
                 communityHulls={communityHulls}
                 onEdgeSelect={setSelectedLink}
                 onSelectionChange={(nodeIds) => {
@@ -975,6 +1031,8 @@ export function App() {
                 workingSetGraph: workingSetRef.current.graph,
                 onHighlightNodes: (nodeIds) =>
                   glassCanvasRef.current?.highlightNodes(nodeIds),
+                onJudgementsChange: (judgements) =>
+                  setJudgementCounts(judgementCountsByNode(judgements)),
               }}
             />
             {view === "graph" && (
@@ -1008,34 +1066,6 @@ export function App() {
             flexDirection: "column",
           }}
         >
-          {/* B16's own cross-case overlay trigger — this build has no
-            cross-investigation picker anywhere yet, so a directly-entered
-            investigation id is this stage's own real, minimal input, not
-            a placeholder for a picker that doesn't exist. */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "var(--sp-8)",
-              padding: "var(--sp-4) var(--sp-8)",
-            }}
-          >
-            <label
-              htmlFor="cross-case-scope"
-              style={{ fontSize: 11, color: "var(--text-secondary)" }}
-            >
-              Overlay investigation
-            </label>
-            <input
-              id="cross-case-scope"
-              type="text"
-              aria-label="Cross-case overlay investigation id"
-              placeholder="investigation id"
-              value={crossCaseScope}
-              onChange={(e) => setCrossCaseScope(e.target.value)}
-              style={{ width: 200 }}
-            />
-          </div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <Timeline
               apiBaseUrl={API_BASE_URL}
@@ -1044,6 +1074,7 @@ export function App() {
               crossFilterStore={crossFilterStore}
               getNodeIds={() => workingSetRef.current.graph.nodes()}
               crossCaseInvestigationScope={crossCaseScope || undefined}
+              onCrossCaseScopeChange={setCrossCaseScope}
               onPlaybackFractionChange={setPlaybackFraction}
             />
           </div>
@@ -1055,6 +1086,7 @@ export function App() {
           edgeCount={counts.edges}
           dimmedCount={dimming.dimmedCount}
           filteredCount={counts.filteredCount}
+          groupedCount={groupedCount}
         />
       )}
       <HistoryPanel

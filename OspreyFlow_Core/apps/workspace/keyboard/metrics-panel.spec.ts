@@ -60,6 +60,14 @@ test("a keyboard-activated ranked row centres the canvas on the right node", asy
   // The ranked list sorts descending by value — n1 (5) is the top row, not fixture order's n0.
   // Waited for explicitly: the intercepted fetch above resolves asynchronously, and starting the
   // Tab loop before the list renders would just cycle through the panel's other controls forever.
+  // The panel starts as a strip of section names (ADR-070): the ranking is not loaded until its
+  // section is opened, by keyboard like everything else.
+  await expect(page.getByRole("button", { name: /Person · n1/ })).toHaveCount(0);
+  await tabToButtonNamed(page, "Ranking");
+  expect(await page.evaluate(() => document.activeElement?.getAttribute("aria-expanded"))).toBe("false");
+  await page.keyboard.press("Enter");
+  expect(await page.evaluate(() => document.activeElement?.getAttribute("aria-expanded"))).toBe("true");
+  registerCovered("METRICS_PANEL_ACTIONS", "ranking-section-opens-by-keyboard-and-loads-the-list");
   await page.getByRole("button", { name: /Person · n1/ }).waitFor();
   await tabToButtonNamed(page, "Person · n1");
   await page.keyboard.press("Enter");

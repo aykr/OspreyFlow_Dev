@@ -81,3 +81,53 @@ describe("CHANNEL_HEX matches spec/design/tokens.css (dark theme)", () => {
     expect((hex as string).toLowerCase()).toBe(cssVar(css, `seq-${n}`));
   });
 });
+
+// Light theme (ADR-070): the palette the canvas and the charts use when the page is light must be
+// the light block of tokens.css, not a copy that drifts.
+import { paletteFor } from "./palette";
+
+function lightBlock(css: string): string {
+  const start = css.indexOf('[data-theme="light"]');
+  if (start < 0) throw new Error("no light block in tokens.css");
+  return css.slice(start, css.indexOf("}", start));
+}
+
+function lightVar(name: string): string {
+  const match = lightBlock(readTokensCss()).match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{3,6})`));
+  const hex = match?.[1];
+  if (!hex) throw new Error(`--${name} not found in the light block of tokens.css`);
+  return hex.toLowerCase();
+}
+
+describe("the light palette matches tokens.css ([data-theme=light])", () => {
+  const light = paletteFor("light");
+
+  it.each(Object.keys(CHANNEL_HEX))("channel %s", (channel) => {
+    expect(light.channel(channel).toLowerCase()).toBe(lightVar(`ch-${channel}`));
+  });
+
+  it("the neutrals and the accent", () => {
+    expect(light.textPrimary.toLowerCase()).toBe(lightVar("n11"));
+    expect(light.textSecondary.toLowerCase()).toBe(lightVar("n10"));
+    expect(light.borderStrong.toLowerCase()).toBe(lightVar("n7"));
+    expect(light.borderSubtle.toLowerCase()).toBe(lightVar("n5"));
+    expect(light.surfacePanel.toLowerCase()).toBe(lightVar("n2"));
+    expect(light.surfaceApp.toLowerCase()).toBe(lightVar("n1"));
+    expect(light.brass.toLowerCase()).toBe(lightVar("brass"));
+  });
+
+  it("the sequential ramp", () => {
+    light.seq.forEach((hex, i) => expect(hex.toLowerCase()).toBe(lightVar(`seq-${i + 1}`)));
+  });
+});
+
+describe("the dark palette is the constants already here", () => {
+  it("is unchanged", () => {
+    const dark = paletteFor("dark");
+    expect(dark.textPrimary).toBe(TEXT_PRIMARY_DARK_HEX);
+    expect(dark.borderStrong).toBe(BORDER_STRONG_DARK_HEX);
+    expect(dark.surfacePanel).toBe(SURFACE_PANEL_DARK_HEX);
+    expect(dark.channel("indigo")).toBe(CHANNEL_HEX.indigo);
+    expect(dark.seq).toEqual(SEQ_HEX);
+  });
+});

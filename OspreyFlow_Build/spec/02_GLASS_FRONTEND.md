@@ -209,7 +209,11 @@ never broken in two. From the left:
   same menu.
 - **Search**, with its **Filters** control as an icon inside the box at its right-hand end (a small
   count beside it when filters are on). Its accessible name is still `Filters`, or `Filters (n)`.
+  Choosing a result draws it with everything within three links, counted first and asked about
+  when large (ADR-070).
 - Graph, Map, Watches (and Messages when a dossier is open); the Balanced slider; Export; History.
+- **The theme button** (`Light theme`), just left of the account: switches between the dark default
+  and the light theme, per browser, never sent to the server (ADR-070).
 - **The account**, at the right-hand end (item 5 above).
 
 Every menu opens on Enter or Space, closes on Escape (focus returns to its button), on a click
@@ -290,6 +294,15 @@ nodes the action requires a filter or an explicit acknowledgement. This single c
 stops an analyst turning a legible network into a hairball in one click, and it is the most
 common complaint about link analysis tools.
 
+### 3.1a Communities on screen (ADR-066)
+
+A `Communities` button on the canvas draws a box round each group of closely linked nodes in the
+view (Louvain, fixed seed, so the same nodes give the same groups). A group folds into one Group
+Node (the box's button, `G` on a focused node, `Collapse all`, or a double-click inside the box) and
+opens again (the same keys, or a double-click on the Group Node). The status bar says how many nodes
+are folded into groups. It is a way of looking at the view: nothing is stored or sent to the server.
+Every action is reachable by keyboard, and `keyboard/keyboard.spec.ts` proves each one.
+
 ### 3.2 Social network analysis
 
 Metrics panel, computed on the working set in a Web Worker, recomputed on filter change:
@@ -310,6 +323,9 @@ The metric panel is a ranked list, not a chart. Clicking a row selects and centr
 Two metrics can be shown side by side, which is how the Clique Metric earns its keep — the
 insight is "high clique score, low degree centrality", and that comparison has to be visible in
 one glance.
+
+The panel opens closed. It has two sections, **Ranking** and **Communities**, one open at a
+time, and a closed section fetches nothing (ADR-070).
 
 Community detection produces a **hull overlay**, not a recolour: a translucent boundary drawn
 around each community at 8% channel opacity, labelled with size and dominant entity type.
@@ -355,7 +371,7 @@ The timeline is the second most important control in the product after the canva
 - **Density strip** — event counts per bucket, bucketed automatically to the window, drawn from
   the analytics store not the graph.
 - **Brush** — drag to select a window; the graph dims everything outside it, the map restricts
-  to it, the histograms recompute. Brush endpoints are editable as text.
+  to it, the histograms recompute. Brush endpoints are editable as text. The two boxes sit behind a `Set exact dates` button in the timeline's bar, and the cross-case overlay's investigation box behind an `Overlay another case` button (`06_DECISIONS.md` ADR-069).
 - **Playback** — animate the brush forward at 0.5× to 8×. Nodes interpolate position and never
   cross-fade, so identity is continuous through a re-layout. The design system fixes the
   interpolation at 420ms with a dedicated easing curve. **A base duration for "1×" was left
@@ -475,7 +491,9 @@ is answered: both, via the channel each already had.
 
 Dark is the working default. Light is a separately tuned ramp, not an inversion, and exists for
 screenshots pasted into reports and for print. Both meet the same contrast floor. An exported
-chart destined for an intelligence product should default to light.
+chart destined for an intelligence product should default to light. The top bar's theme button
+chooses between them per browser (ADR-070); canvases draw from a hex palette that a test keeps
+equal to `tokens.css`.
 
 Type: Atkinson Hyperlegible Next for interface, IBM Plex Mono for literal values and every
 tabular figure. The reason is operational, not aesthetic — analysts read identifiers all day and
@@ -631,7 +649,8 @@ judgements via multi-select against the investigation's own judgement list.
   highlighted. `GlassCanvasHandle.highlightNodes`'s own docstring has the full record.
 - Selecting a node lists, in the Judgements tab, every judgement resting on it —
   `01_DOMAIN_MODEL.md` §5's own "selecting a node lists the judgements that rest on it," given a
-  concrete surface for the first time.
+  concrete surface for the first time. On the canvas, a small brass count beside a node says how many
+  judgements rest on it, drawn only from the judgements the principal can already list (ADR-070).
 - **A judgement is hidden from the Judgements tab in full, not shown with a citation marked
   unavailable, when the viewing principal's access does not cover at least one of its own
   `supporting` references** — `06_DECISIONS.md` ADR-046's own decision: a conclusion a viewer

@@ -36,7 +36,7 @@ const seededWorkspace = () => workspaceUrl();
 async function openTimeline(page: Page): Promise<void> {
   await page.goto(seededWorkspace());
   await expect(
-    page.getByLabel("Cross-case overlay investigation id"),
+    page.getByRole("button", { name: /^Overlay another case/ }),
     "the timeline's own controls never appeared — is the Glass pointed at a seeded investigation?",
   ).toBeVisible({ timeout: 30_000 });
 }
@@ -68,6 +68,7 @@ test("B16 — a second investigation's events render as their own track on the s
 
   // The analyst's own control. `App.tsx` records that this build has no cross-investigation
   // picker — typing the id is the real input, not a placeholder for one that does not exist.
+  await page.getByRole("button", { name: /^Overlay another case/ }).click();
   await page
     .getByLabel("Cross-case overlay investigation id")
     .fill(required("OSPREY_LIVE_SECOND_INVESTIGATION_ID"));
@@ -133,6 +134,7 @@ test("B18 — the sightings track advances under playback", async ({ page }) => 
   // fixes.
   await page.getByRole("button", { name: "Map", exact: true }).click();
 
+  await page.getByRole("button", { name: "Set exact dates" }).click();
   await page.getByLabel("Brush window start").fill(SIGHTINGS_WINDOW_START);
   await page.getByLabel("Brush window end").fill(SIGHTINGS_WINDOW_END);
   await page.getByLabel("Brush window end").blur();

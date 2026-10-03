@@ -3,6 +3,8 @@ export interface StatusBarProps {
   edgeCount: number;
   dimmedCount: number;
   filteredCount: number;
+  /** Nodes folded into Group Nodes by Communities, so counted but not drawn one by one. */
+  groupedCount?: number;
 }
 
 /** `spec/02_GLASS_FRONTEND.md` §2: "12,481 nodes · 38,902 edges · 214
@@ -16,7 +18,13 @@ export interface StatusBarProps {
  * `DeltaSnapshot`/accumulated from a `DeltaNotice`) — never recomputed
  * client-side (a stated constraint:
  * a client-side recount would silently diverge from a stale view). */
-export function StatusBar({ nodeCount, edgeCount, dimmedCount, filteredCount }: StatusBarProps) {
+export function StatusBar({
+  nodeCount,
+  edgeCount,
+  dimmedCount,
+  filteredCount,
+  groupedCount = 0,
+}: StatusBarProps) {
   return (
     <div
       role="status"
@@ -34,6 +42,7 @@ export function StatusBar({ nodeCount, edgeCount, dimmedCount, filteredCount }: 
       <span>{edgeCount.toLocaleString()} edges</span>
       <span>{dimmedCount.toLocaleString()} dimmed by filter</span>
       <span>{filteredCount.toLocaleString()} hidden by handling</span>
+      {groupedCount > 0 && <span>{groupedCount.toLocaleString()} folded into groups</span>}
     </div>
   );
 }

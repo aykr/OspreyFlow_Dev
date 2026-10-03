@@ -5,11 +5,10 @@
 // reasoning), so they get their own harness rather than folding into `keyboard.spec.ts`'s own
 // canvas-focused suite.
 //
-// Mounts a small wrapper composing the cross-case-scope `Input` and `Timeline` exactly the way
-// `App.tsx` itself does — not `Timeline` alone — since the input genuinely lives one level up in
-// the real tree, and a keyboard walkthrough proving "type an id, the second track loads" needs
-// both pieces present, the same "mount what a real analyst would actually reach" discipline every
-// other harness in this directory already follows.
+// Mounts `Timeline` with the overlay id held one level up, exactly the way `App.tsx` itself does
+// (the box for the id is behind the timeline's own `Overlay another case` button, since the
+// declutter change of 3 October 2026), so a keyboard walkthrough proving "press the button, type an
+// id, the second track loads" reaches what a real analyst would reach.
 //
 // A brush window is pre-seeded on the cross-filter store at mount — Play/Pause only render with an
 // active window (`Timeline.tsx`'s own `{activeWindow && (...)}` guard), and setting one via the
@@ -50,14 +49,6 @@ function Harness() {
   const [crossCaseScope, setCrossCaseScope] = useState("");
   return (
     <div style={{ width: 700, height: 300 }}>
-      <input
-        id="cross-case-scope"
-        type="text"
-        aria-label="Cross-case overlay investigation id"
-        placeholder="investigation id"
-        value={crossCaseScope}
-        onChange={(e) => setCrossCaseScope(e.target.value)}
-      />
       <div style={{ height: 252 }}>
         <Timeline
           apiBaseUrl="http://keyboard-test.invalid"
@@ -66,6 +57,7 @@ function Harness() {
           crossFilterStore={crossFilterStore}
           getNodeIds={() => []}
           crossCaseInvestigationScope={crossCaseScope || undefined}
+          onCrossCaseScopeChange={setCrossCaseScope}
           onPlaybackFractionChange={(fraction) => {
             window.__TIMELINE_PLAYBACK_HARNESS__!.fraction = fraction;
           }}
