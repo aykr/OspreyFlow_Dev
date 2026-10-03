@@ -8,10 +8,11 @@
 // way to reach, and a real `expand` network call `keyboard.spec.ts`
 // intercepts via `page.route` rather than this harness faking it.
 import { createRoot } from "react-dom/client";
+import { createRef } from "react";
 
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
-import { GlassCanvas } from "../src/canvas/GlassCanvas";
+import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
 import { OntologyRegistry } from "../src/ontology/schema";
 import { createWorkingSet } from "../src/workingset/store";
 import type { OntologySchema, Node, Edge } from "../../../packages/schemas/generated";
@@ -22,7 +23,9 @@ declare global {
       focused: string | null;
       selection: string[];
       viewMessagesNodeId: string | null;
+      selectedEdge: string | null;
     };
+    __CANVAS__?: { viewportPositionOf: (nodeId: string) => { x: number; y: number } | null };
   }
 }
 
@@ -82,7 +85,10 @@ function edge(id: string, source: string, target: string, type = "ASSOCIATE_OF")
   };
 }
 
-window.__KEYBOARD__ = { focused: null, selection: [], viewMessagesNodeId: null };
+const canvasHandle = createRef<GlassCanvasHandle>();
+window.__CANVAS__ = { viewportPositionOf: (id) => canvasHandle.current?.viewportPositionOf(id) ?? null };
+
+window.__KEYBOARD__ = { focused: null, selection: [], viewMessagesNodeId: null, selectedEdge: null };
 
 const workingSet = createWorkingSet();
 const ontology = new OntologyRegistry(SCHEMA);
@@ -128,6 +134,7 @@ if (!container) throw new Error("#root not found");
 createRoot(container).render(
   <>
     <GlassCanvas
+      ref={canvasHandle}
       graph={workingSet.graph}
       store={workingSet.store}
       ontology={ontology}
@@ -140,6 +147,9 @@ createRoot(container).render(
       }}
       onSelectionChange={(ids) => {
         window.__KEYBOARD__!.selection = ids;
+      }}
+      onEdgeSelect={(edge) => {
+        window.__KEYBOARD__!.selectedEdge = edge ? edge.id : null;
       }}
       onViewMessages={(nodeId) => {
         window.__KEYBOARD__!.viewMessagesNodeId = nodeId;

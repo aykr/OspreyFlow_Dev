@@ -132,6 +132,17 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   // expand and explain-cluster too, since each reaches the same overlay through a different
   // existing keyboard action.
   "overlay-dismiss-action-error",
+  // 3 October 2026 (ADR-062, ADR-063, ADR-060 Amendment 1, ADR-064): the view can be tidied and a
+  // link can be selected. Each was added without a keyboard route proven until the keyboard suite
+  // was run against it, which is what these entries and their test cases close.
+  "delete-removes-selected-nodes",
+  "clear-view-by-keyboard",
+  "layout-menu-chooses-layout",
+  "l-steps-through-the-focused-nodes-links",
+  "delete-hides-selected-link",
+  "show-hidden-links-by-keyboard",
+  "overlay-dismiss-large-expansion",
+  "large-expansion-add-all-by-keyboard",
 ] as const);
 
 /**

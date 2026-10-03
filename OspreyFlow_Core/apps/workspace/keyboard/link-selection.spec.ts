@@ -1,0 +1,106 @@
+// Selecting a link with the mouse (ADR-064). A drawn link is a one- or two-pixel line, which the
+// renderer's own picking rarely hits, so a click within a few pixels of one must still select it,
+// and a click well away from every link must not. This is the browser proof of that: the unit test
+// (`src/canvas/edgeSelection.test.ts`) checks the arithmetic, this checks it is wired to a real
+// canvas. Not a keyboard test, so it sits outside the `CANVAS_ACTIONS` registry.
+import { expect, test, type Page } from "@playwright/test";
+
+declare global {
+  interface Window {
+    __KEYBOARD__?: { selectedEdge: string | null; selection: string[] };
+    __CANVAS__?: { viewportPositionOf: (nodeId: string) => { x: number; y: number } | null };
+  }
+}
+
+async function settledPositions(page: Page, a: string, b: string) {
+  const read = () =>
+    page.evaluate(
+      ([x, y]) => ({ a: window.__CANVAS__?.viewportPositionOf(x!), b: window.__CANVAS__?.viewportPositionOf(y!) }),
+      [a, b],
+    );
+  let last = await read();
+  for (let i = 0; i < 40; i++) {
+    await page.waitForTimeout(250);
+    const now = await read();
+    if (JSON.stringify(now) === JSON.stringify(last) && now.a && now.b) return now as { a: { x: number; y: number }; b: { x: number; y: number } };
+    last = now;
+  }
+  throw new Error("the layout never settled");
+}
+
+async function clickBeside(page: Page, offset: number) {
+  const { a, b } = await settledPositions(page, "n0", "n1");
+  const box = await page.getByRole("application", { name: "Network canvas" }).boundingBox();
+  const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  const length = Math.hypot(b.x - a.x, b.y - a.y);
+  const normal = { x: -(b.y - a.y) / length, y: (b.x - a.x) / length };
+  await page.mouse.click(box!.x + mid.x + normal.x * offset, box!.y + mid.y + normal.y * offset);
+}
+
+test("a click a few pixels off a link selects it", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  await clickBeside(page, 4);
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selectedEdge)).toBe("e0");
+});
+
+test("a click on the link itself selects it", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  await clickBeside(page, 0);
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selectedEdge)).toBe("e0");
+});
+
+test("a click well away from every link selects nothing", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  await clickBeside(page, 16);
+  await page.waitForTimeout(400);
+  expect(await page.evaluate(() => window.__KEYBOARD__?.selectedEdge)).toBeNull();
+});
+
+// Seen 3 October 2026: Clear view "did not work" for the owner. The buttons were drawn, but the
+// renderer's canvas layers sat on top of them, so a mouse click never reached them. The keyboard
+// tests could not see it: Enter on a focused button never goes through hit-testing. Playwright's
+// own `click()` refuses to click an element something else covers, which is the check needed here.
+test("the buttons over the canvas can be clicked with the mouse", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  let removed: { node_ids: string[] } | null = null;
+  await page.route("**/*/investigations/*/nodes", async (route) => {
+    removed = route.request().postDataJSON();
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ seq: 9 }) });
+  });
+
+  await page.getByRole("button", { name: "Clear view" }).click({ timeout: 3000 });
+  await expect(page.getByRole("alertdialog", { name: "Clear the view" })).toBeVisible();
+  await page.getByRole("button", { name: /^Clear all/ }).click({ timeout: 3000 });
+  await expect.poll(() => removed?.node_ids.length).toBe(6);
+
+  await page.getByRole("combobox", { name: "Layout" }).selectOption("circular", { timeout: 3000 });
+  await expect(page.getByRole("combobox", { name: "Layout" })).toHaveValue("circular");
+  await page.getByRole("button", { name: "Arrange again" }).click({ timeout: 3000 });
+});
+
+test("the large-expansion prompt's buttons can be clicked with the mouse", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  let expandBody: unknown = null;
+  await page.route("**/*/expand/preview", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ candidate_node_count: 1200, candidate_edge_count: 0 }),
+    });
+  });
+  await page.route("**/*/expand", async (route) => {
+    expandBody = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] }, filtered_count: 0 }),
+    });
+  });
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("alertdialog", { name: "Large expansion" })).toBeVisible();
+  await page.getByRole("button", { name: /^Add all/ }).click({ timeout: 3000 });
+  await expect.poll(() => expandBody).not.toBeNull();
+});

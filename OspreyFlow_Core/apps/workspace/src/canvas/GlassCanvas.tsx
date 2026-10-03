@@ -88,7 +88,7 @@ import {
   previewCountFrom,
   type PreviewCount,
 } from "./nodeGestures";
-import { EdgeInspectionOverlay } from "./EdgeInspectionOverlay";
+import { nearestEdge, nextLink, type ScreenSegment } from "./edgeSelection";
 import { ClusterExplainOverlay } from "./ClusterExplainOverlay";
 import { CommunityHullOverlay } from "./CommunityHullOverlay";
 import { PathfinderOverlay } from "./PathfinderOverlay";
@@ -151,6 +151,9 @@ export interface GlassCanvasProps {
    * that hasn't wired cross-filtering (e.g. an existing test harness). */
   dimmedNodeIds?: ReadonlySet<string>;
   onSelectionChange?: (nodeIds: string[]) => void;
+  /** The link now selected, or `null` when none is. Selecting a link clears the node selection,
+   * and selecting a node clears the link, so the Inspector shows one thing at a time. */
+  onEdgeSelect?: (edge: Edge | null) => void;
   /** The keyboard-focused node id (`spec/02_GLASS_FRONTEND.md` §6: "Tab
    * moves between nodes... arrow keys walk edges"), or `null` when
    * nothing has been keyboard-focused yet. Exposed so a caller can, e.g.,
@@ -194,6 +197,10 @@ export interface GlassCanvasHandle {
    * renders. No camera pan — unlike `focusOnNode`, a multi-node "fit view to selection" is its
    * own real feature this method does not attempt. */
   highlightNodes: (nodeIds: readonly string[]) => void;
+  /** Where `nodeId` is drawn now, in pixels from the canvas's top-left corner, or `null` if it is
+   * not in `graph` or nothing is mounted. Lets a browser test click on or beside a link without
+   * guessing where the layout put it. */
+  viewportPositionOf: (nodeId: string) => { x: number; y: number } | null;
   /** Phase 8 Stage 4h: the chart artefact's own real capture path
    * (`02_GLASS_FRONTEND.md` §10.1/§10.3) — delegates to `captureChartImage`
    * (`export/chartExport.ts`), which renders the live Sigma instance to a PNG via
@@ -220,6 +227,9 @@ interface PendingRadialMenu {
 // prop, not a hypothetical this time either).
 const EMPTY_DIMMED_SET: ReadonlySet<string> = new Set();
 
+/** The selected link: the brass the lasso already uses. */
+const SELECTED_EDGE_HEX = "#c08a34";
+
 export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
   function GlassCanvas(
     {
@@ -232,6 +242,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       bearerToken,
       dimmedNodeIds = EMPTY_DIMMED_SET,
       onSelectionChange,
+      onEdgeSelect,
       onFocusChange,
       onViewMessages,
       communityHulls,
@@ -275,6 +286,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     const selectedRef = useRef<Set<string>>(new Set());
     selectedRef.current = selected;
     const arrangeNowRef = useRef<() => void>(() => undefined);
+    const selectLinkRef = useRef<(edgeId: string | null) => void>(() => undefined);
     const requestExpansionRef = useRef<
       | ((
           nodeId: string,
@@ -294,11 +306,15 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     const [suppressionMarks, setSuppressionMarks] = useState<
       Record<string, string>
     >({});
-    const [inspectedEdge, setInspectedEdge] = useState<{
-      edgeId: string;
-      x: number;
-      y: number;
-    } | null>(null);
+    // A link selected by click or by keyboard. A ref as well, because the Sigma edge reducer
+    // reads it when drawing.
+    const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
+    const selectedEdgeRef = useRef<string | null>(null);
+    selectedEdgeRef.current = selectedEdge;
+    // Links hidden from this view in this browser tab only (not recorded anywhere, not in History).
+    const [hiddenEdges, setHiddenEdges] = useState<ReadonlySet<string>>(new Set());
+    const hiddenEdgesRef = useRef<ReadonlySet<string>>(new Set());
+    hiddenEdgesRef.current = hiddenEdges;
     const [clusterExplain, setClusterExplain] = useState<{
       x: number;
       y: number;
@@ -544,6 +560,17 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [graph]);
 
+    // Choosing a node ends the link selection, so the Inspector shows one thing at a time.
+    useEffect(() => {
+      if (selected.size > 0 && selectedEdge !== null) selectLinkRef.current(null);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selected]);
+
+    // The link drawn highlighted, and the links hidden, are read by the edge reducer.
+    useEffect(() => {
+      sigmaRef.current?.scheduleRefresh();
+    }, [selectedEdge, hiddenEdges]);
+
     // Re-derive graph-level visual attributes only for the node(s) whose
     // hover/selection actually changed — not the whole working set.
     useEffect(() => {
@@ -635,9 +662,19 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               (graph.source(edgeId) === hoveredNode ||
                 graph.target(edgeId) === hoveredNode),
           });
+          const isSelected = edgeId === selectedEdgeRef.current;
           return {
             ...data,
             ...attrs,
+            // A hidden link is not drawn; the selected one is thicker, brass, and always labelled.
+            hidden: attrs.hidden || hiddenEdgesRef.current.has(edgeId),
+            ...(isSelected
+              ? {
+                  size: Math.max(attrs.size * 2, 4),
+                  color: SELECTED_EDGE_HEX,
+                  label: `${data.data.type} (${data.data.occurrences ?? 1})`,
+                }
+              : {}),
             type: edgeProgramFor(data.data.type, edgeTypesRef.current),
           };
         },
@@ -664,11 +701,32 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           return next;
         });
         setFocused(node);
-        setInspectedEdge(null);
       });
-      sigma.on("clickStage", () => {
+      sigma.on("clickStage", ({ event }) => {
+        // The renderer picks a link only where its thin line is drawn, which is hard to hit. A
+        // click that found neither node nor link is checked against every visible link with a
+        // wider reach before it counts as a click on empty space.
+        const segments: ScreenSegment[] = [];
+        graph.forEachEdge((edgeId, _attrs, source, target) => {
+          if (hiddenEdgesRef.current.has(edgeId)) return;
+          const a = sigma.graphToViewport({
+            x: graph.getNodeAttribute(source, "x") ?? 0,
+            y: graph.getNodeAttribute(source, "y") ?? 0,
+          });
+          const b = sigma.graphToViewport({
+            x: graph.getNodeAttribute(target, "x") ?? 0,
+            y: graph.getNodeAttribute(target, "y") ?? 0,
+          });
+          segments.push({ id: edgeId, ax: a.x, ay: a.y, bx: b.x, by: b.y });
+        });
+        const hit = nearestEdge(event.x, event.y, segments);
+        if (hit !== null) {
+          selectLinkRef.current(hit);
+          return;
+        }
         setSelected(new Set());
         onSelectionChange?.([]);
+        selectLinkRef.current(null);
       });
       sigma.on("enterNode", ({ node }) => setHovered(node));
       sigma.on("leaveNode", () => setHovered(null));
@@ -684,22 +742,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           void requestExpansionRef.current?.(id, null, x, y);
         });
       });
-      sigma.on("clickEdge", ({ edge, event }) => {
-        const original = event.original as MouseEvent;
-        setInspectedEdge({
-          edgeId: edge,
-          x: original.clientX,
-          y: original.clientY,
-        });
-      });
-      sigma.on("enterEdge", ({ edge, event }) => {
-        const original = event.original as MouseEvent;
-        setInspectedEdge({
-          edgeId: edge,
-          x: original.clientX,
-          y: original.clientY,
-        });
-      });
+      sigma.on("clickEdge", ({ edge }) => selectLinkRef.current(edge));
 
       return () => {
         sigma.kill();
@@ -731,6 +774,14 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           setSelected(new Set(present));
           onSelectionChange?.(present);
         },
+        viewportPositionOf: (nodeId: string) => {
+          const sigma = sigmaRef.current;
+          if (!sigma || !graph.hasNode(nodeId)) return null;
+          return sigma.graphToViewport({
+            x: graph.getNodeAttribute(nodeId, "x") ?? 0,
+            y: graph.getNodeAttribute(nodeId, "y") ?? 0,
+          });
+        },
         exportImage: (mark: ExportMark) => {
           const sigma = sigmaRef.current;
           if (!sigma) {
@@ -758,7 +809,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // regardless — that is `RadialMenu`'s own `document`-level listener, not
       // this handler, so it needs no exemption here.
       //
-      // Phase 6a Stage 4: `inspectedEdge`/`clusterExplain` get the same exemption, found the same
+      // Phase 6a Stage 4: `clusterExplain` gets the same exemption, found the same
       // way — without it, this container's own Tab/arrow branches below fight a keyboard-only
       // analyst trying to reach either overlay's own close button, the identical bug class
       // `radialMenu` was already exempted from. `Escape` needs no branch here: `Popover` (the base
@@ -768,11 +819,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // focus, and both overlays are opened from a radial-menu item whose own unmount drops focus to
       // `<body>`, past this div entirely.
       if (radialMenu) return;
-      // `pathResult` (Phase 7 Stage 5) gets the identical exemption `inspectedEdge`/`clusterExplain`
+      // `pathResult` (Phase 7 Stage 5) gets the identical exemption `clusterExplain`
       // already have, for the identical reason — `PathfinderOverlay` renders through the same
       // `Popover`, opened from the same radial-menu-item shape.
       if (
-        inspectedEdge ||
         clusterExplain ||
         pathResult ||
         pathError ||
@@ -853,6 +903,24 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           onSelectionChange?.(Array.from(next));
           return next;
         });
+      } else if (
+        (e.key === "l" || e.key === "L") &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        focused
+      ) {
+        // The keyboard route to a link: `L` selects the focused node's next link, `Shift+L` the
+        // previous one, wrapping round. Rule 13: a link can be selected without a mouse.
+        e.preventDefault();
+        const next = nextLink(graph.edges(focused), selectedEdge, e.shiftKey ? -1 : 1);
+        if (next !== null) selectLink(next);
+      } else if (
+        (e.key === "Delete" || e.key === "Backspace") &&
+        selectedEdge !== null
+      ) {
+        e.preventDefault();
+        hideSelectedLink();
       } else if (
         (e.key === "Delete" || e.key === "Backspace") &&
         selected.size > 0
@@ -1417,6 +1485,31 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       return items;
     }
 
+    // Selecting a link clears the node selection (and the other way round, in the effect above), and
+    // tells the caller, whose Inspector shows the link.
+    function selectLink(edgeId: string | null): void {
+      setSelectedEdge(edgeId);
+      if (edgeId !== null) {
+        setSelected(new Set());
+        onSelectionChange?.([]);
+      }
+      onEdgeSelect?.(
+        edgeId !== null && graph.hasEdge(edgeId)
+          ? graph.getEdgeAttribute(edgeId, "data")
+          : null,
+      );
+    }
+    selectLinkRef.current = selectLink;
+
+    // Hiding a link is a view setting for this browser tab: nothing is sent to the server, and
+    // it is not in History. "Show hidden links" brings them all back; so does reloading.
+    function hideSelectedLink(): void {
+      if (selectedEdge === null) return;
+      const hide = selectedEdge;
+      setHiddenEdges((current) => new Set(current).add(hide));
+      selectLink(null);
+    }
+
     // Takes nodes out of the view (the working set); the records stay in the store and the server
     // records a History step. The graph only changes once the server has confirmed: a failure is
     // shown, and the nodes stay where they are.
@@ -1442,6 +1535,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       setSelected(new Set());
       setFocused(null);
       onSelectionChange?.([]);
+      selectLink(null);
     }
 
     return (
@@ -1543,14 +1637,6 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             onClose={() => setRadialMenu(null)}
           />
         )}
-        {inspectedEdge && graph.hasEdge(inspectedEdge.edgeId) && (
-          <EdgeInspectionOverlay
-            x={inspectedEdge.x}
-            y={inspectedEdge.y}
-            edge={graph.getEdgeAttribute(inspectedEdge.edgeId, "data")}
-            onClose={() => setInspectedEdge(null)}
-          />
-        )}
         {clusterExplain && (
           <ClusterExplainOverlay
             x={clusterExplain.x}
@@ -1595,6 +1681,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           selectedCount={selected.size}
           onRemoveSelected={() => void removeNodeIds(Array.from(selected))}
           onClearAll={() => void removeNodeIds(graph.nodes())}
+          selectedLink={selectedEdge !== null}
+          hiddenLinkCount={hiddenEdges.size}
+          onHideLink={hideSelectedLink}
+          onShowHiddenLinks={() => setHiddenEdges(new Set())}
         />
         {actionError && (
           <ActionErrorOverlay

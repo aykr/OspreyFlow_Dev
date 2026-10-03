@@ -61,4 +61,24 @@ describe("ViewActions", () => {
     const button = screen.getByRole("button", { name: "Clear view" });
     expect((button as HTMLButtonElement).disabled).toBe(true);
   });
+
+  it("offers to hide a link only while one is selected", () => {
+    const h = { onHideLink: vi.fn(), onShowHiddenLinks: vi.fn() };
+    setup({ selectedLink: false, ...h });
+    expect(screen.queryByRole("button", { name: "Hide selected link" })).toBeNull();
+    cleanup();
+    setup({ selectedLink: true, ...h });
+    fireEvent.click(screen.getByRole("button", { name: "Hide selected link" }));
+    expect(h.onHideLink).toHaveBeenCalledOnce();
+  });
+
+  it("offers to bring hidden links back, with how many, only when some are hidden", () => {
+    const h = { onHideLink: vi.fn(), onShowHiddenLinks: vi.fn() };
+    setup({ hiddenLinkCount: 0, ...h });
+    expect(screen.queryByRole("button", { name: /Show hidden links/ })).toBeNull();
+    cleanup();
+    setup({ hiddenLinkCount: 3, ...h });
+    fireEvent.click(screen.getByRole("button", { name: "Show hidden links (3)" }));
+    expect(h.onShowHiddenLinks).toHaveBeenCalledOnce();
+  });
 });

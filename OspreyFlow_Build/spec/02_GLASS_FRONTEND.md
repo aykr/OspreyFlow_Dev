@@ -84,12 +84,14 @@ Three rules that make the transitions usable rather than jarring:
   moving is what buys the frame budget at 250,000 edges. They return the moment the camera
   settles.
 
-Inspecting one link does not depend on the canvas at all. Hovering or selecting an edge opens a
-DOM overlay anchored to Sigma's camera showing the edge's type, occurrence count, interval,
-provenance and contributing source records. Rich per-edge decoration is the one area where WebGL
-is genuinely more awkward than a CSS-styled canvas — multi-line edge labels and badges are hard
-in a shader — and the overlay is the answer: it applies to the one or two edges under attention,
-where HTML is easy and cheap, rather than to all 250,000.
+Inspecting one link does not depend on the canvas at all. **Selecting** a link (a click within a
+few pixels of it, or `L` / `Shift+L` from a focused node) highlights it and shows its type, the
+direction between its ends, occurrence count, dates, provenance and contributing source records in
+the Inspector. *Corrected 3 October 2026 (ADR-064): this paragraph said hovering or selecting an
+edge opened a DOM overlay at the pointer. Hovering opened it under the pointer, so the next click
+landed on the overlay and a link could not be selected; hovering now opens nothing, and the details
+live in the Inspector.* A selected link can be hidden from the view (Delete); that is a view setting
+for the browser tab, not a change to the working set.
 
 **Zoom-dependent clustering is a data operation, not a rendering one.** Collapsing a community
 into a meta-node, or expanding it back, happens in graphology and produces a real change to the

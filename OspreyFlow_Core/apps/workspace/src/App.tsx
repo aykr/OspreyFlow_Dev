@@ -2,6 +2,7 @@ import type { Map as MapLibreMap } from "maplibre-gl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
+  Edge,
   EdgeTypeDef,
   GeoBin,
   Node,
@@ -296,6 +297,7 @@ export function App() {
     null,
   );
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [selectedLink, setSelectedLink] = useState<Edge | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   // B16's own cross-case overlay — the second investigation's own scope,
@@ -815,6 +817,7 @@ export function App() {
                 bearerToken={bearerToken}
                 dimmedNodeIds={dimming.dimmedNodeIds}
                 communityHulls={communityHulls}
+                onEdgeSelect={setSelectedLink}
                 onSelectionChange={(nodeIds) => {
                   const first = nodeIds[0];
                   const graph = workingSetRef.current.graph;
@@ -963,6 +966,21 @@ export function App() {
           >
             <Inspector
               node={selectedNode}
+              link={
+                selectedLink
+                  ? {
+                      edge: selectedLink,
+                      source: workingSetRef.current.graph.hasNode(selectedLink.source)
+                        ? workingSetRef.current.graph.getNodeAttribute(selectedLink.source, "data")
+                        : undefined,
+                      target: workingSetRef.current.graph.hasNode(selectedLink.target)
+                        ? workingSetRef.current.graph.getNodeAttribute(selectedLink.target, "data")
+                        : undefined,
+                      directed:
+                        edgeTypes.find((t) => t.name === selectedLink.type)?.directed ?? true,
+                    }
+                  : null
+              }
               assessment={{
                 apiBaseUrl: API_BASE_URL,
                 bearerToken: bearerToken,

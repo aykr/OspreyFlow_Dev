@@ -28,9 +28,22 @@
 // Phase 6a Stage 4: every `test()` below that proves a `CANVAS_ACTIONS` entry calls
 // `registerCovered(id)` at the point it does so; the final test asserts none were missed —
 // `actionRegistry.ts`'s own docstring has the full reasoning for why this exists now.
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { assertAllCovered, CANVAS_ACTIONS, registerCovered } from "./actionRegistry";
+
+// An expansion now asks the Conduit how big it would be before it goes ahead
+// (`canvas/expansionGate.ts`, ADR-060 Amendment 1). The harness has no Conduit, so a test that
+// proves an expand reaches the network answers that question first. Small, so it proceeds.
+async function stubSmallExpansionPreview(page: Page): Promise<void> {
+  await page.route("**/*/expand/preview", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ candidate_node_count: 3, candidate_edge_count: 0 }),
+    });
+  });
+}
 
 declare global {
   interface Window {
@@ -38,6 +51,7 @@ declare global {
       focused: string | null;
       selection: string[];
       viewMessagesNodeId: string | null;
+      selectedEdge: string | null;
     };
   }
 }
@@ -77,7 +91,13 @@ test("Tab leaves the canvas and reaches the next real focusable element on the p
 
   await page.keyboard.press("Tab");
   await expect(page.getByTitle("Lasso select")).toBeFocused();
-  await page.keyboard.press("Tab");
+  // The canvas region holds several real tab-stops of its own (the lasso toggle, the Layout menu
+  // and its Arrange button, Remove selected, Clear view), so the way out is "keep pressing Tab and
+  // arrive", not an exact count that every new control would break. Bounded, so a real trap fails.
+  for (let presses = 0; presses < 12; presses++) {
+    if (await page.locator("#after-canvas").evaluate((el) => el === document.activeElement)) break;
+    await page.keyboard.press("Tab");
+  }
 
   await expect(page.locator("#after-canvas")).toBeFocused();
   registerCovered("CANVAS_ACTIONS", "tab-leaves-the-canvas");
@@ -178,6 +198,7 @@ test("backslash opens the radial menu as a keyboard-navigable list", async ({ pa
 test("Enter expands the focused node — a real network call, not a stub", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
 
+  await stubSmallExpansionPreview(page);
   let expandRequestBody: unknown = null;
   await page.route("**/*/expand", async (route) => {
     expandRequestBody = route.request().postDataJSON();
@@ -328,6 +349,7 @@ test("the radial list's own auto-focused first item is itself reachable and acti
   // behaviour reached two ways.
   await page.goto("/keyboard/harness.html");
 
+  await stubSmallExpansionPreview(page);
   let expandRequestBody: unknown = null;
   await page.route("**/*/expand", async (route) => {
     expandRequestBody = route.request().postDataJSON();
@@ -771,6 +793,7 @@ test("a failed expand announces an error instead of leaving the analyst to wonde
 }) => {
   await page.goto("/keyboard/harness.html");
 
+  await stubSmallExpansionPreview(page);
   await page.route("**/*/expand", async (route) => {
     await route.fulfill({ status: 500, contentType: "text/plain", body: "internal error" });
   });
@@ -811,6 +834,166 @@ test("a failed explain-cluster announces an error rather than leaving the analys
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();
   registerCovered("CANVAS_ACTIONS", "overlay-dismiss-action-error");
+});
+
+// Presses Tab until the control is focused, at most `limit` times. The canvas region holds several
+// real tab-stops of its own, so a test reaches a control the way a keyboard user does: by tabbing
+// to it, never by calling `.focus()` on it.
+async function tabTo(page: Page, control: ReturnType<Page["getByRole"]>, limit = 14): Promise<void> {
+  for (let presses = 0; presses < limit; presses++) {
+    if (await control.evaluate((el) => el === document.activeElement).catch(() => false)) return;
+    await page.keyboard.press("Tab");
+  }
+  await expect(control).toBeFocused();
+}
+
+test("Delete takes the selected nodes out of the view, through a real DELETE", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  let body: unknown = null;
+  await page.route("**/*/investigations/*/nodes", async (route) => {
+    body = route.request().postDataJSON();
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ seq: 5 }) });
+  });
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus(); // n0 selected
+  await page.keyboard.press("Delete");
+
+  await expect.poll(() => body).toEqual({ node_ids: ["n0"] });
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual([]);
+  registerCovered("CANVAS_ACTIONS", "delete-removes-selected-nodes");
+});
+
+test("Clear view asks first, and clears only after Enter on the confirmation", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  let body: { node_ids: string[] } | null = null;
+  await page.route("**/*/investigations/*/nodes", async (route) => {
+    body = route.request().postDataJSON();
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ seq: 6 }) });
+  });
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  await tabTo(page, page.getByRole("button", { name: "Clear view" }));
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("alertdialog", { name: "Clear the view" })).toBeVisible();
+  expect(body).toBeNull();
+
+  await tabTo(page, page.getByRole("button", { name: /^Clear all/ }));
+  await page.keyboard.press("Enter");
+
+  await expect.poll(() => body?.node_ids.slice().sort()).toEqual(["n0", "n1", "n2", "n3", "n4", "n5"]);
+  registerCovered("CANVAS_ACTIONS", "clear-view-by-keyboard");
+});
+
+test("the Layout menu is reached by Tab and changed by the arrow keys", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  const layout = page.getByRole("combobox", { name: "Layout" });
+  await tabTo(page, layout);
+  await expect(layout).toHaveValue("organic");
+  await page.keyboard.press("ArrowDown");
+  await expect(layout).toHaveValue("radial");
+  registerCovered("CANVAS_ACTIONS", "layout-menu-chooses-layout");
+});
+
+test("L steps through the focused node's links and Shift+L goes back, without a mouse", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus(); // n0
+  await page.keyboard.press("ArrowRight"); // n1: links e0 and e1
+  await page.keyboard.press("l");
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selectedEdge)).toBe("e0");
+  await page.keyboard.press("l");
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selectedEdge)).toBe("e1");
+  await page.keyboard.press("Shift+L");
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selectedEdge)).toBe("e0");
+  // Selecting a link leaves no node selected, so the Inspector shows one thing.
+  expect(await page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual([]);
+  // Choosing a node ends the link selection, so the Inspector never shows both.
+  await page.keyboard.press("Space");
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual(["n1"]);
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selectedEdge)).toBeNull();
+  registerCovered("CANVAS_ACTIONS", "l-steps-through-the-focused-nodes-links");
+});
+
+test("Delete hides a selected link, and the Show hidden links button brings it back", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("l");
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selectedEdge)).toBe("e0");
+
+  await page.keyboard.press("Delete");
+  await expect(page.getByRole("button", { name: "Show hidden links (1)" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selectedEdge)).toBeNull();
+  registerCovered("CANVAS_ACTIONS", "delete-hides-selected-link");
+
+  await tabTo(page, page.getByRole("button", { name: "Show hidden links (1)" }));
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: /Show hidden links/ })).toHaveCount(0);
+  registerCovered("CANVAS_ACTIONS", "show-hidden-links-by-keyboard");
+});
+
+test("a very large expansion asks first; Escape cancels it and nothing is added", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  let expandRequested = false;
+  await page.route("**/*/expand/preview", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ candidate_node_count: 1200, candidate_edge_count: 0 }),
+    });
+  });
+  await page.route("**/*/expand", async (route) => {
+    expandRequested = true;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] }, filtered_count: 0 }),
+    });
+  });
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByRole("alertdialog", { name: "Large expansion" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("alertdialog", { name: "Large expansion" })).toBeHidden();
+  expect(expandRequested).toBe(false);
+  registerCovered("CANVAS_ACTIONS", "overlay-dismiss-large-expansion");
+});
+
+test("a very large expansion can be accepted by keyboard, and only then does it go ahead", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  let expandBody: unknown = null;
+  await page.route("**/*/expand/preview", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ candidate_node_count: 1200, candidate_edge_count: 0 }),
+    });
+  });
+  await page.route("**/*/expand", async (route) => {
+    expandBody = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] }, filtered_count: 0 }),
+    });
+  });
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("alertdialog", { name: "Large expansion" })).toBeVisible();
+  expect(expandBody).toBeNull();
+
+  await tabTo(page, page.getByRole("button", { name: /^Add all/ }));
+  await page.keyboard.press("Enter");
+  await expect.poll(() => expandBody).toMatchObject({ request: { node_ids: ["n1"], depth: 1 } });
+  registerCovered("CANVAS_ACTIONS", "large-expansion-add-all-by-keyboard");
 });
 
 test("every registered keyboard action has its own proving test case above", () => {

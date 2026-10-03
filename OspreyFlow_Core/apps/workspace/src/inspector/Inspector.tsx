@@ -3,10 +3,13 @@ import type { Node } from "../../../../packages/schemas/generated";
 import { JudgementsPanel } from "../assessment/JudgementsPanel";
 import { Panel } from "../design/primitives/Panel";
 import { Tabs } from "../design/primitives/Tabs";
+import { LinkDetails, type LinkDetailsProps } from "./LinkDetails";
 import { useState } from "react";
 
 export interface InspectorProps {
   node: Node | null;
+  /** A selected link. While one is, the Inspector shows it instead of a node. */
+  link?: LinkDetailsProps | null;
   /** Phase 8 Stage 4c: the Judgements tab, `02_GLASS_FRONTEND.md` §9. `undefined` when the
    * caller has not wired assessment production up yet (an existing test harness) — the tab is
    * then simply not offered, the same optional-prop pattern `dimmedNodeIds`/`communityHulls`
@@ -31,8 +34,16 @@ export interface InspectorProps {
  * analytical product, not a per-node fact) — so `Tabs` renders even when
  * `node` is `null`, with only the node-specific tabs' own content gated on
  * it. */
-export function Inspector({ node, assessment }: InspectorProps) {
+export function Inspector({ node, link, assessment }: InspectorProps) {
   const [tab, setTab] = useState("properties");
+
+  if (link) {
+    return (
+      <Panel title="Inspector" className="inspector">
+        <LinkDetails {...link} />
+      </Panel>
+    );
+  }
 
   if (!node && !assessment) {
     return (

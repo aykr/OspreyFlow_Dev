@@ -5,6 +5,12 @@ export interface ViewActionsProps {
   selectedCount: number;
   onRemoveSelected: () => void;
   onClearAll: () => void;
+  /** A link is selected, so it can be hidden from this view. */
+  selectedLink?: boolean;
+  /** How many links are hidden in this browser tab. */
+  hiddenLinkCount?: number;
+  onHideLink?: () => void;
+  onShowHiddenLinks?: () => void;
 }
 
 /**
@@ -16,6 +22,10 @@ export function ViewActions({
   selectedCount,
   onRemoveSelected,
   onClearAll,
+  selectedLink = false,
+  hiddenLinkCount = 0,
+  onHideLink,
+  onShowHiddenLinks,
 }: ViewActionsProps) {
   const [confirming, setConfirming] = useState(false);
   const total = nodeCount.toLocaleString("en-GB");
@@ -23,6 +33,9 @@ export function ViewActions({
     <div
       style={{
         position: "absolute",
+        // Above the renderer's canvas layers, which are added to the same container after this
+        // and would otherwise take every click meant for these buttons.
+        zIndex: 10,
         top: "var(--sp-8)",
         right: "var(--sp-8)",
         display: "flex",
@@ -40,6 +53,16 @@ export function ViewActions({
         >
           Remove selected ({selectedCount})
         </button>
+        {selectedLink && (
+          <button type="button" className="radial-menu__item" onClick={onHideLink}>
+            Hide selected link
+          </button>
+        )}
+        {hiddenLinkCount > 0 && (
+          <button type="button" className="radial-menu__item" onClick={onShowHiddenLinks}>
+            Show hidden links ({hiddenLinkCount})
+          </button>
+        )}
         <button
           type="button"
           className="radial-menu__item"

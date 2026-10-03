@@ -8993,3 +8993,22 @@ Decision.
 Not decided here. Communities (collapsing a group into one node) is a separate step.
 
 Consequences. The layout choice is per session in the browser tab and is not remembered. Radial, hierarchical and circular ignore pinned nodes, which the force layout supports.
+
+
+## ADR-064 — A link can be selected, and shown in the Inspector
+
+Status: accepted 3 October 2026.
+
+Context. The owner could not select links ("I am not able to select the links themselves"). A link was only inspectable through a popup that opened on hover, anchored at the pointer, so the click that followed landed on the popup. The drawn line is also one or two pixels wide, and the renderer picks a link only where it is drawn.
+
+Decision.
+
+1. A click on a link selects it: it is drawn thicker, in brass, with its label, and the Inspector shows its type, the direction between its two ends (or that it has none), how many records stand behind it, its dates, its provenance and its sources. Selecting a link clears the node selection and the other way round, so the Inspector shows one thing.
+2. The click target is wider than the line. A click that the renderer did not attribute to a node or a link is checked against every visible link in screen space, with a reach of 6 pixels, before it counts as a click on empty space. The arithmetic is a pure function (`canvas/edgeSelection.ts`); a browser test proves a click 4 pixels off selects, one 16 pixels off does not.
+3. Hovering a link opens nothing. The hover popup is removed; its component is left unused.
+4. Keyboard (rule 13): with a node focused, `L` selects its next link and `Shift+L` the previous, wrapping round.
+5. Delete (or Backspace) on a selected link, and a **Hide selected link** button, hide it from the view **in this browser tab only**. A **Show hidden links (n)** button brings them back, and a reload resets it. This is not recorded in History and nothing is sent to the server, because the server has no way to remove one link from the working set today. Hiding a link on the server, undoable through History, would need a new route and delta; it was offered and not chosen.
+
+Not decided here. Deleting a link from the store; selecting several links.
+
+Consequences. A hidden link still counts in the working set and in layout. The details panel for a link reads only what the working set already holds.

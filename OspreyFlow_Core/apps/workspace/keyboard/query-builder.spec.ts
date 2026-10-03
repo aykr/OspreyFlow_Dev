@@ -60,11 +60,13 @@ test("Add variable places a new, unpinned pattern node", async ({ page }) => {
 });
 
 test("selecting a search result via the keyboard pins it as a new pattern node", async ({ page }) => {
-  await page.route("**/*/v1/search", async (route) => {
+  // The search box asks `/v1/suggest` as the analyst types (ADR-059), not `/v1/search`; this
+  // case still routed the old endpoint and had failed since that change.
+  await page.route("**/*/v1/suggest", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ nodes: [SEARCH_NODE] }),
+      body: JSON.stringify({ nodes: [SEARCH_NODE], more: false }),
     });
   });
 

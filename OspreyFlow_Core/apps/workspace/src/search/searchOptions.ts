@@ -51,6 +51,16 @@ export function activeFilterCount(options: SearchOptions): number {
   );
 }
 
+/** What to call a node on screen: its identifying value, else its id. */
+export function displayValue(node: Node): string {
+  const properties = (node.properties ?? {}) as Record<string, unknown>;
+  for (const key of DISPLAY_PROPERTIES) {
+    const value = properties[key];
+    if (typeof value === "string" && value) return value;
+  }
+  return node.id;
+}
+
 function searchableValues(node: Node): string[] {
   const properties = (node.properties ?? {}) as Record<string, unknown>;
   const values: string[] = [];

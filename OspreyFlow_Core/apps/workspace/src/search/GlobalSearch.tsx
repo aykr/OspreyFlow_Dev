@@ -5,7 +5,7 @@ import { Combobox } from "../design/primitives/Combobox";
 import { SearchFilters } from "./SearchFilters";
 import {
   DEFAULT_SEARCH_OPTIONS,
-  DISPLAY_PROPERTIES,
+  displayValue,
   activeFilterCount,
   matchOnScreen,
   suggestBody,
@@ -27,15 +27,6 @@ export const SUGGEST_MIN_CHARS = 3;
 /** The pause after the last keystroke before the Conduit is asked. */
 export const SUGGEST_PAUSE_MS = 250;
 const SUGGEST_LIMIT = 10;
-
-function displayValue(node: Node): string {
-  const properties = (node.properties ?? {}) as Record<string, unknown>;
-  for (const key of DISPLAY_PROPERTIES) {
-    const value = properties[key];
-    if (typeof value === "string" && value) return value;
-  }
-  return node.id;
-}
 
 type Outcome = "idle" | "found" | "none" | "unavailable";
 
