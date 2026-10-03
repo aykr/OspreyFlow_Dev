@@ -5,7 +5,7 @@
 // wrong-audience token is refused and the Glass shows the sign-in screen with the reason." Not the
 // Conduit's own already-covered refusal (`tests/services/api/test_auth.py`'s own audience test) —
 // this is the Glass-side assertion that has content: what the Glass itself does about it.
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { StrictMode } from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -256,8 +256,14 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
       const body = url.endsWith("/v1/ontology")
         ? { entity_types: [], edge_types: [] }
         : url.endsWith("/v1/handling-scheme")
-          ? { handling_codes: {} }
-          : url.endsWith("/v1/ingest/source-files")
+          ? { name: "test", classification: ["OFFICIAL"], handling_codes: {} }
+          : url.endsWith("/v1/hotlists")
+            ? { hotlists: [] }
+            : url.endsWith("/v1/monitors")
+              ? { monitors: [] }
+              : url.endsWith("/v1/alerts")
+                ? { alerts: [] }
+                : url.endsWith("/v1/ingest/source-files")
             ? { root: "/ingest", files: [] }
             : [];
       return Promise.resolve(new Response(JSON.stringify(body)));
@@ -272,14 +278,63 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
 
     render(<App />);
 
-    const ingest = await screen.findByRole("button", { name: "Ingest" });
+    const ingest = await screen.findByRole("button", { name: "Ingest Studio" });
     expect(ingest.getAttribute("aria-pressed")).toBe("true");
   });
 
-  test("after the Glass tile, the graph is the one showing and Ingest is not", async () => {
+  // The switch tests only look at the bar, so no request is answered: an answer of the wrong shape
+  // for a panel that is not under test would crash that panel after the test had finished.
+  const holdAllRequests = () => {
+    vi.mocked(globalThis.fetch).mockImplementation(() => new Promise<Response>(() => undefined));
+  };
+
+  test("the two apps are named in one switch at the far left, the open one pressed", async () => {
+    holdAllRequests();
     render(<App />);
 
-    const ingest = await screen.findByRole("button", { name: "Ingest" });
+    const group = await screen.findByRole("group", { name: "Application" });
+    const glass = within(group).getByRole("button", { name: "Glass" });
+    const ingest = within(group).getByRole("button", { name: "Ingest Studio" });
+    expect(glass.getAttribute("aria-pressed")).toBe("true");
+    expect(ingest.getAttribute("aria-pressed")).toBe("false");
+    const header = document.querySelector("header.app-header")!;
+    expect(header.firstElementChild).toBe(group);
+    expect(header.getAttribute("data-app")).toBe("glass");
+  });
+
+  test("inside the Ingest Studio the bar keeps only what belongs to it", async () => {
+    holdAllRequests();
+    sessionStorage.setItem("ospreyflow.launcherHandoff", JSON.stringify({ view: "ingest", at: Date.now() }));
+    render(<App />);
+
+    const group = await screen.findByRole("group", { name: "Application" });
+    expect(within(group).getByRole("button", { name: "Ingest Studio" }).getAttribute("aria-pressed")).toBe("true");
+    expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("ingest");
+    for (const gone of ["Graph", "Map", "Watches", "Export ⚙", "History"]) {
+      expect(screen.queryByRole("button", { name: gone })).toBeNull();
+    }
+    expect(screen.queryByRole("combobox", { name: /search entities/i })).toBeNull();
+    // The case menu stays (the Studio's own "goes into" row carries a second one).
+    expect(within(document.querySelector("header.app-header") as HTMLElement).getByRole("button", { name: /^Case:/ })).toBeTruthy();
+  });
+
+  test("the switch moves between the apps, and Glass returns to the view that was open", async () => {
+    holdAllRequests();
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Watches" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ingest Studio" }));
+    expect(screen.queryByRole("button", { name: "Watches" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Glass" }));
+    expect(screen.getByRole("button", { name: "Watches" }).getAttribute("aria-pressed")).toBe("true");
+    expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("glass");
+  });
+
+  test("after the Glass tile, the graph is the one showing and Ingest is not", async () => {
+    holdAllRequests();
+    render(<App />);
+
+    const ingest = await screen.findByRole("button", { name: "Ingest Studio" });
     expect(ingest.getAttribute("aria-pressed")).toBe("false");
   });
 });

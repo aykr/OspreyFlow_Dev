@@ -3,7 +3,7 @@
 // The case picker the owner asked for (29 September 2026: "I don't yet see any option for selecting
 // the dataset / case"): shown before the workspace opens, listing only what the server lists, with
 // a way to create a new case.
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CasePicker } from "./CasePicker";
@@ -109,26 +109,61 @@ describe("CasePicker", () => {
 });
 
 describe("CaseSwitcher (the header, and the Ingest Studio)", () => {
-  it("shows the current case by name and switches to another", async () => {
+  const openMenu = async (name: RegExp = /^Case:/) =>
+    fireEvent.click(await screen.findByRole("button", { name }));
+
+  it("shows only the current case's name until it is opened (ADR-065)", async () => {
+    stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: CASES }) });
+    render(<CaseSwitcher apiBaseUrl="http://api" bearerToken="t" currentId="c1" onOpen={() => undefined} onBrowse={() => undefined} />);
+
+    const trigger = await screen.findByRole("button", { name: /Case: Fixture Corp/ });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("button", { name: "All cases" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "New case" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /PaySim/ })).toBeNull();
+  });
+
+  it("names the case as 'Current case' until the list arrives, and when it fails", async () => {
+    stubFetch({ "GET /v1/investigations": () => ({ status: 500, body: {} }) });
+    render(<CaseSwitcher apiBaseUrl="http://api" bearerToken="t" currentId="c1" onOpen={() => undefined} />);
+    expect(await screen.findByRole("button", { name: /Case: Current case/ })).toBeTruthy();
+  });
+
+  it("switches to another case from the opened menu, and closes", async () => {
     stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: CASES }) });
     const onOpen = vi.fn();
     render(<CaseSwitcher apiBaseUrl="http://api" bearerToken="t" currentId="c1" onOpen={onOpen} />);
 
-    const select = (await screen.findByLabelText(/case/i)) as HTMLSelectElement;
-    await waitFor(() => expect(select.value).toBe("c1"));
-    fireEvent.change(select, { target: { value: "c2" } });
+    await screen.findByRole("button", { name: /Case: Fixture Corp/ });
+    await openMenu();
+    fireEvent.click(screen.getByRole("button", { name: /PaySim mobile money/ }));
 
     expect(onOpen).toHaveBeenCalledWith("c2");
+    expect(screen.queryByRole("group", { name: "Case menu" })).toBeNull();
   });
 
-  it("offers a new case and opens it once created", async () => {
+  it("marks the open case in the menu and does not reopen it", async () => {
+    stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: CASES }) });
+    const onOpen = vi.fn();
+    render(<CaseSwitcher apiBaseUrl="http://api" bearerToken="t" currentId="c1" onOpen={onOpen} />);
+    await screen.findByRole("button", { name: /Case: Fixture Corp/ });
+    await openMenu();
+
+    const current = within(screen.getByRole("group", { name: "Case menu" })).getByRole("button", { name: "Fixture Corp" });
+    expect(current.getAttribute("aria-current")).toBe("true");
+    fireEvent.click(current);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it("offers a new case from the menu and opens it once created", async () => {
     stubFetch({
       "GET /v1/investigations": () => ({ status: 200, body: CASES }),
       "POST /v1/investigations": () => ({ status: 201, body: { id: "fresh", name: "Another" } }),
     });
     const onOpen = vi.fn();
     render(<CaseSwitcher apiBaseUrl="http://api" bearerToken="t" currentId="c1" onOpen={onOpen} />);
-    await screen.findByLabelText(/case/i);
+    await screen.findByRole("button", { name: /Case: Fixture Corp/ });
+    await openMenu();
 
     fireEvent.click(screen.getByRole("button", { name: /new case/i }));
     fireEvent.change(screen.getByLabelText(/new case name/i), { target: { value: "Another" } });
@@ -163,9 +198,10 @@ describe("cases with no name (seen on the owner's deployment: rows with an empty
     cleanup();
     stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: UNNAMED }) });
     render(<CaseSwitcher apiBaseUrl="http://api" bearerToken="t" currentId="c1" onOpen={() => undefined} />);
-    await screen.findByText("Fixture Corp");
-    for (const option of screen.getAllByRole("option")) {
-      expect((option.textContent ?? "").trim()).not.toBe("");
+    fireEvent.click(await screen.findByRole("button", { name: /^Case:/ }));
+    await screen.findByRole("button", { name: "Fixture Corp" });
+    for (const button of screen.getAllByRole("button")) {
+      expect((button.textContent ?? "").trim()).not.toBe("");
     }
   });
 
@@ -258,13 +294,14 @@ describe("getting back to the picker (owner: once a case is open there was no wa
     render(
       <CaseSwitcher apiBaseUrl="http://api" bearerToken="t" currentId="c1" onOpen={() => undefined} onBrowse={onBrowse} />,
     );
-    fireEvent.click(await screen.findByRole("button", { name: "All cases" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Case:/ }));
+    fireEvent.click(screen.getByRole("button", { name: "All cases" }));
     expect(onBrowse).toHaveBeenCalledTimes(1);
 
     cleanup();
     stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: CASES }) });
     render(<CaseSwitcher apiBaseUrl="http://api" bearerToken="t" currentId="c1" onOpen={() => undefined} />);
-    await screen.findByLabelText(/case/i);
+    fireEvent.click(await screen.findByRole("button", { name: /^Case:/ }));
     expect(screen.queryByRole("button", { name: "All cases" })).toBeNull();
   });
 

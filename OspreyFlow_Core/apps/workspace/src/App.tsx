@@ -30,6 +30,8 @@ import {
   type CrossFilterStore,
   type CrossFilterStoreState,
 } from "./crossfilter/store";
+import { AccountMenu } from "./auth/AccountMenu";
+import { AppSwitcher } from "./AppSwitcher";
 import { Button } from "./design/primitives/Button";
 import { Toast } from "./design/primitives/Toast";
 import { Dossier } from "./dossier/Dossier";
@@ -319,6 +321,10 @@ export function App() {
   const [view, setView] = useState<
     "graph" | "map" | "ingest" | "dossier" | "watches"
   >(handoff.view ?? "graph");
+  // Which application is open, and (so the switch can go back to it) the Glass view last open.
+  const app = view === "ingest" ? "ingest" : "glass";
+  const lastGlassView = useRef<"graph" | "map" | "dossier" | "watches">("graph");
+  if (view !== "ingest") lastGlassView.current = view;
   const [dossierNodeId, setDossierNodeId] = useState<string | null>(null);
   const [mapConfig, setMapConfig] = useState<PublicMapConfig | null>(null);
   const [siteWizardOpen, setSiteWizardOpen] = useState(false);
@@ -621,15 +627,11 @@ export function App() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "var(--sp-16)",
-          padding: "var(--sp-8) var(--sp-16)",
-          borderBottom: "1px solid var(--border-subtle)",
-        }}
-      >
+      <header className="app-header" data-app={app}>
+        <AppSwitcher
+          app={app}
+          onChange={(next) => setView(next === "ingest" ? "ingest" : lastGlassView.current)}
+        />
         <CaseSwitcher
           apiBaseUrl={API_BASE_URL}
           bearerToken={bearerToken}
@@ -637,54 +639,52 @@ export function App() {
           onBrowse={() => setBrowsingCases(true)}
           onOpen={(id) => openCase(id, view === "ingest" ? "ingest" : undefined)}
         />
-        <div style={{ flex: 1, maxWidth: 480 }}>
-          <GlobalSearch
-            apiBaseUrl={API_BASE_URL}
-            bearerToken={bearerToken}
-            entityTypes={ontologySchema?.entity_types.map((e) => e.name) ?? []}
-            screenNodes={() => {
-              const graph = workingSetRef.current.graph;
-              return graph.nodes().map((id) => graph.getNodeAttribute(id, "data"));
-            }}
-            onSelect={(node) => {
-              workingSetRef.current.store.getState().applyDelta({
-                seq: workingSetRef.current.store.getState().seq,
-                op: "add",
-                nodes: [node],
-                edges: [],
-              });
-              setSelectedNode(node);
-            }}
-          />
-        </div>
-        <Button
-          aria-pressed={view === "graph"}
-          onClick={() => setView("graph")}
-        >
-          Graph
-        </Button>
-        <Button aria-pressed={view === "map"} onClick={() => setView("map")}>
-          Map
-        </Button>
-        <Button
-          aria-pressed={view === "ingest"}
-          onClick={() => setView("ingest")}
-        >
-          Ingest
-        </Button>
-        <Button
-          aria-pressed={view === "watches"}
-          onClick={() => setView("watches")}
-        >
-          Watches
-        </Button>
-        {dossierNodeId && (
-          <Button
-            aria-pressed={view === "dossier"}
-            onClick={() => setView("dossier")}
-          >
-            Messages
-          </Button>
+        {app === "glass" && (
+          <>
+            <div style={{ flex: "1 1 120px", minWidth: 0, maxWidth: 420 }}>
+              <GlobalSearch
+                apiBaseUrl={API_BASE_URL}
+                bearerToken={bearerToken}
+                entityTypes={ontologySchema?.entity_types.map((e) => e.name) ?? []}
+                screenNodes={() => {
+                  const graph = workingSetRef.current.graph;
+                  return graph.nodes().map((id) => graph.getNodeAttribute(id, "data"));
+                }}
+                onSelect={(node) => {
+                  workingSetRef.current.store.getState().applyDelta({
+                    seq: workingSetRef.current.store.getState().seq,
+                    op: "add",
+                    nodes: [node],
+                    edges: [],
+                  });
+                  setSelectedNode(node);
+                }}
+              />
+            </div>
+            <Button
+              aria-pressed={view === "graph"}
+              onClick={() => setView("graph")}
+            >
+              Graph
+            </Button>
+            <Button aria-pressed={view === "map"} onClick={() => setView("map")}>
+              Map
+            </Button>
+            <Button
+              aria-pressed={view === "watches"}
+              onClick={() => setView("watches")}
+            >
+              Watches
+            </Button>
+            {dossierNodeId && (
+              <Button
+                aria-pressed={view === "dossier"}
+                onClick={() => setView("dossier")}
+              >
+                Messages
+              </Button>
+            )}
+          </>
         )}
         {view === "graph" && (
           <ResolutionThresholdControl
@@ -721,26 +721,13 @@ export function App() {
             Draw boundary
           </Button>
         )}
-        <Button onClick={() => setHistoryOpen(true)}>History</Button>
+        {app === "glass" && <Button onClick={() => setHistoryOpen(true)}>History</Button>}
         {!isDevBypass && principal && (
-          // `06_DECISIONS.md` ADR-050's Decision section: "displays the principal's identity and
-          // clearance in the workspace chrome. It never derives access from them." Purely
-          // informational — `spec/02_GLASS_FRONTEND.md` §2's own workspace-layout description now
-          // names this element (the spec gap ADR-050's own objection 9 raised, closed by that
-          // edit rather than left as an ADR-only decision).
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "var(--sp-8)",
-              fontSize: 12,
-              color: "var(--text-secondary)",
-            }}
-          >
-            <span>
-              {principal.sub} · {principal.clearance}
-            </span>
-            <Button onClick={() => void signOut()}>Sign out</Button>
+          // `06_DECISIONS.md` ADR-050: the principal's identity and clearance are shown in the
+          // chrome, informationally only. ADR-065 folds the subject, unit and Sign out behind one
+          // button that keeps the clearance in view. The Glass derives nothing from any of it.
+          <div className="app-header__account">
+            <AccountMenu principal={principal} onSignOut={() => void signOut()} />
           </div>
         )}
       </header>

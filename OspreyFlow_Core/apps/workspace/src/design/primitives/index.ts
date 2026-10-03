@@ -37,3 +37,4 @@ export type { RadialMenuItem, RadialMenuProps } from "./RadialMenu";
 export type { TableColumn, TableProps } from "./Table";
 export type { HistogramBucket, HistogramProps } from "./Histogram";
 export type { ToastProps } from "./Toast";
+export { DropdownPanel } from "./DropdownPanel";

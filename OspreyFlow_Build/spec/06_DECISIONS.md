@@ -9012,3 +9012,23 @@ Decision.
 Not decided here. Deleting a link from the store; selecting several links.
 
 Consequences. A hidden link still counts in the working set and in layout. The details panel for a link reads only what the working set already holds.
+
+
+## ADR-065 — The top bar: menus for case and account, an application switch, Filters inside the search box
+
+Status: accepted 3 October 2026.
+
+Context. The owner looked at the Glass at about 1,000 pixels wide and found the top bar cluttered ("I don't think we need the case selector expanded here"): the case choice was a bare white box with `All cases` and `New case` stacked under it, `Filters` dropped below the search box looking like a stray button, and `Export`, `Sign out` and the long user id broke over two lines. Two causes were in the stylesheet, not the layout: `.select { composes: input; }` is CSS-modules syntax and does nothing in a plain stylesheet, so every `<Select>` was drawn with the browser's own white face (the same white boxes appear on the Ingest Studio's Connector and Handling marking choices); and the search box's Filters button and the header's buttons had no rules at all. The owner then asked for the Ingest Studio to stand apart from the Glass ("I want to distinguish clearly between the apps") and chose, from three offered designs, the application switch below.
+
+Decision.
+
+1. A shared dropdown panel (`design/primitives/DropdownPanel.tsx`): a button that opens a panel beneath it. Closes on Escape (focus returns to the button), on a click outside, and when keyboard focus moves outside it.
+2. The case choice becomes `Case: <name> ▾`, opening the list of cases (the open one marked), `All cases` and `New case`. The Ingest Studio's "goes into" row uses the same component.
+3. The account becomes one button, `<user name> · <clearance> ▾`, at the right-hand end. The user name may be cut short; the clearance is never cut short, so ADR-050's "always visible" holds. The panel shows the subject, clearance, unit and `Sign out`. `DisplayPrincipal` gains `username` from the token's `preferred_username` (empty when absent; the subject is shown instead).
+4. Filters is an icon inside the search box at its right-hand end, with a small count when filters are on. Its accessible name is unchanged (`Filters`, `Filters (n)`).
+5. An application switch at the far left, `[Glass | Ingest Studio]`, the open one filled in brass; while the Ingest Studio is open, a brass line under the bar and the Glass-only controls are not shown. Choosing Glass returns to the Glass view last open.
+6. `.select` is given the input's own rules. Whole items of the bar wrap to a second line in a narrow window; labels never break.
+
+Not decided here. A different accent colour per application (offered, not chosen). Removing the Ingest Studio's own case row now that the bar carries the case menu in both applications (both are kept).
+
+Consequences. The bar is one line from about 1,440 pixels wide (measured in a browser with a stand-in for the slider's width); narrower windows wrap. The case name in the button is cut at 200 pixels. Existing tests were changed where the controls moved (the case switcher tests now open the menu first; the Ingest tab test names the button `Ingest Studio`). `App.test.tsx`'s fixture was also corrected: its handling-scheme stub had the wrong shape and its other answers did not suit the screens the new tests reach, so the new tests hold every request unanswered. Not exercised: the real `App` bar in a browser (the browser tests render the same components in a harness, `keyboard/top-bar-harness.tsx`); the light theme.

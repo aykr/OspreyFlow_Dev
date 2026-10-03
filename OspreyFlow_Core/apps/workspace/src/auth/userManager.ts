@@ -13,6 +13,8 @@ import { GLASS_CLIENT_ID, oidcAuthority, postLogoutRedirectUri, redirectUri } fr
  * token, which the Glass never decodes; it only ever sends that one to the Conduit as a bearer. */
 export interface DisplayPrincipal {
   sub: string;
+  /** The identity provider's user name (`preferred_username`); empty when the token has none. */
+  username: string;
   clearance: string;
   orgUnit: string;
   roles: string[];
@@ -25,6 +27,7 @@ export function displayPrincipalFromUser(user: User): DisplayPrincipal {
     Array.isArray(value) ? value.map(String) : value != null ? [String(value)] : [];
   return {
     sub: String(profile.sub ?? ""),
+    username: String(profile.preferred_username ?? ""),
     clearance: String(profile.clearance ?? ""),
     orgUnit: String(profile.org_unit ?? ""),
     roles: asStringArray(profile.roles),

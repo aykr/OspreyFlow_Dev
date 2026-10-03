@@ -181,9 +181,11 @@ set of widgets:
    filters everything. This is the Gotham pattern and it is the core interaction of the product.
 4. **The status bar never lies.** Counts of dimmed and handling-hidden items are always visible.
    An analyst must never be able to mistake a filtered picture for a complete one.
-5. **The signed-in principal's own identity is always visible, informationally only.** A small
-   element in the top-bar chrome, beside `History` — `<subject> · <clearance>` (e.g.
-   `analyst-1 · OFFICIAL`), with a `Sign out` control beside it. Added by `06_DECISIONS.md`
+5. **The signed-in principal's own identity is always visible, informationally only.** A button
+   at the right-hand end of the top bar reading `<user name> · <clearance>` (e.g.
+   `analyst-1 · OFFICIAL`; the subject when the token has no user name). The clearance is never
+   cut short. Opening the button shows the subject, clearance and unit, and a `Sign out` control
+   (`06_DECISIONS.md` ADR-065). Added by `06_DECISIONS.md`
    ADR-050, whose own objection 9 found this document silent on the element its design put here;
    this is that gap closed, not a decision made only in the ADR. Rule 3 stands unchanged: the
    Glass reads `sub` and `clearance` from the signed token and displays them, and derives nothing
@@ -191,6 +193,27 @@ set of widgets:
    in what the Conduit itself returns. `Sign out` ends the session at the identity provider
    (`end_session_endpoint`) and clears the Glass's own memory and session storage; it does not
    itself alter what any control shows.
+
+### 2.0 The top bar (ADR-065)
+
+One line at ordinary widths; whole items wrap to a second line in a narrow window, and a label is
+never broken in two. From the left:
+
+- **The application switch**, `[Glass | Ingest Studio]`: the two applications that share the page.
+  The open one is filled in brass. While the Ingest Studio is open the bar shows a brass line under
+  it and drops what belongs only to the Glass (search, Graph, Map, Watches, Messages, the
+  Balanced slider, Export, History). Choosing Glass returns to the Glass view that was last open.
+- **The case menu**, `Case: <name> ▾`: opens the cases the account can reach (the open one marked),
+  `All cases`, and `New case`. The name may be cut short with an ellipsis; its full text is the
+  button's title. The Ingest Studio's own "Data loaded from this studio goes into" row uses the
+  same menu.
+- **Search**, with its **Filters** control as an icon inside the box at its right-hand end (a small
+  count beside it when filters are on). Its accessible name is still `Filters`, or `Filters (n)`.
+- Graph, Map, Watches (and Messages when a dossier is open); the Balanced slider; Export; History.
+- **The account**, at the right-hand end (item 5 above).
+
+Every menu opens on Enter or Space, closes on Escape (focus returns to its button), on a click
+outside it, and when keyboard focus moves outside it, so it never traps a keyboard user.
 
 ### 2.1 Investigation selection on load — proposed, not settled spec
 

@@ -3,8 +3,7 @@
 // is loaded into (29 September 2026).
 import { useEffect, useState } from "react";
 
-import { Button } from "../design/primitives/Button";
-import { Select } from "../design/primitives/Select";
+import { DropdownPanel } from "../design/primitives/DropdownPanel";
 import { type CaseListing, caseLabel, listCases, orderCases } from "./cases";
 import { NewCaseForm } from "./NewCaseForm";
 
@@ -42,35 +41,56 @@ export function CaseSwitcher({
     };
   }, [apiBaseUrl, bearerToken]);
 
-  const known = cases.some((entry) => entry.id === currentId);
+  const current = cases.find((entry) => entry.id === currentId);
+  const currentName = current ? caseLabel(current) : "Current case";
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)", flexWrap: "wrap" }}>
-      <label style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}>
-        <span className="label">Case</span>
-        <Select
-          value={currentId}
-          onChange={(event) => {
-            if (event.target.value !== currentId) onOpen(event.target.value);
-          }}
-        >
-          {!known && <option value={currentId}>Current case</option>}
-          {orderCases(cases).map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {caseLabel(entry)}
-            </option>
-          ))}
-        </Select>
-      </label>
-      {onBrowse && <Button onClick={onBrowse}>All cases</Button>}
-      {!creating && <Button onClick={() => setCreating(true)}>New case</Button>}
-      {creating && (
-        <NewCaseForm
-          apiBaseUrl={apiBaseUrl}
-          bearerToken={bearerToken}
-          inputLabel="New case name"
-          onCreated={onOpen}
-        />
+    <DropdownPanel label={`Case: ${currentName}`} title={currentName} panelLabel="Case menu">
+      {(close) => (
+        <>
+          <div className="menu-panel__list">
+            {orderCases(cases).map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                className="menu-panel__item"
+                aria-current={entry.id === currentId ? "true" : undefined}
+                onClick={() => {
+                  close();
+                  if (entry.id !== currentId) onOpen(entry.id);
+                }}
+              >
+                {caseLabel(entry)}
+              </button>
+            ))}
+          </div>
+          <hr className="menu-panel__rule" />
+          {onBrowse && (
+            <button
+              type="button"
+              className="menu-panel__item"
+              onClick={() => {
+                close();
+                onBrowse();
+              }}
+            >
+              All cases
+            </button>
+          )}
+          {!creating && (
+            <button type="button" className="menu-panel__item" onClick={() => setCreating(true)}>
+              New case
+            </button>
+          )}
+          {creating && (
+            <NewCaseForm
+              apiBaseUrl={apiBaseUrl}
+              bearerToken={bearerToken}
+              inputLabel="New case name"
+              onCreated={onOpen}
+            />
+          )}
+        </>
       )}
-    </div>
+    </DropdownPanel>
   );
 }

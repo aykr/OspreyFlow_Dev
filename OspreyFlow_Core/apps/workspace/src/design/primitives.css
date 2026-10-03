@@ -32,7 +32,7 @@
 .icon-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
 .icon-btn[aria-pressed="true"] { background: var(--surface-hover); color: var(--brass); border-color: var(--border); }
 
-.input {
+.input, .select {
   font: inherit; font-size: var(--fs-13);
   padding: var(--sp-6) var(--sp-8);
   border-radius: var(--r-control);
@@ -43,7 +43,7 @@
 .input::placeholder { color: var(--text-tertiary); }
 .input:disabled { color: var(--text-disabled); }
 
-.select { composes: input; appearance: none; }
+.select { appearance: none; }
 
 .combobox { position: relative; }
 .combobox__listbox {
@@ -167,3 +167,72 @@
 .toast--error { border-left: 3px solid var(--error); }
 .toast--warning { border-left: 3px solid var(--warning); }
 .toast--success { border-left: 3px solid var(--success); }
+
+/* The top bar (ADR-065). Whole items wrap to a second line when the window is narrow; a label is
+   never broken in two. */
+.app-header {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--sp-8) var(--sp-12);
+  padding: var(--sp-8) var(--sp-16);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.app-header .btn { white-space: nowrap; padding-left: var(--sp-8); padding-right: var(--sp-8); }
+/* The account, at the right-hand end. */
+.app-header__account { margin-left: auto; }
+
+/* Which application is open (ADR-065): a two-part switch, the open one filled in brass, and a
+   brass line under the bar while the Ingest Studio is open. */
+.app-switcher { display: inline-flex; border: 1px solid var(--brass); border-radius: var(--r-control); overflow: hidden; }
+.app-switcher .btn { border: 0; border-radius: 0; background: transparent; color: var(--brass); }
+.app-switcher .btn:hover { background: var(--surface-hover); }
+.app-switcher .btn[aria-pressed="true"] { background: var(--brass); color: var(--brass-ink); }
+.app-header[data-app="ingest"] { border-bottom: 3px solid var(--brass); }
+
+/* The search box carries its Filters button inside its own right-hand end. */
+.global-search__field { position: relative; }
+.global-search__field .input { width: 100%; box-sizing: border-box; padding-right: 52px; }
+.global-search__filters {
+  position: absolute; right: var(--sp-4); top: 50%; transform: translateY(-50%);
+  display: inline-flex; align-items: center; gap: var(--sp-4);
+  padding: var(--sp-4);
+  border: 1px solid transparent; border-radius: var(--r-control);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+.global-search__filters:hover { background: var(--surface-hover); color: var(--text-primary); }
+.global-search__filters[aria-expanded="true"],
+.global-search__filters[data-active="true"] { color: var(--brass); }
+.global-search__count { font-size: var(--fs-12, var(--fs-13)); line-height: 1; }
+
+/* A button that opens a small panel (case choice, account). */
+.menu { position: relative; display: inline-block; }
+.menu-button { display: inline-flex; align-items: center; gap: var(--sp-6); max-width: 200px; }
+.menu-button__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-flex; min-width: 0; }
+/* In the account button the user name may be cut short; the clearance never is. */
+.menu-button__name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.menu-button__fixed { flex: none; margin-left: var(--sp-4); }
+.menu-panel {
+  position: absolute; top: 100%; left: 0; z-index: 40; margin-top: var(--sp-4);
+  min-width: 260px; max-width: 420px;
+  display: flex; flex-direction: column; gap: var(--sp-6);
+  padding: var(--sp-8);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-overlay);
+  box-shadow: var(--overlay-shadow);
+}
+.menu-button--account { max-width: 260px; }
+.menu-panel--right { left: auto; right: 0; }
+.menu-panel__item {
+  text-align: left; font: inherit; font-size: var(--fs-13);
+  padding: var(--sp-6) var(--sp-8);
+  border: 1px solid transparent; border-radius: var(--r-control);
+  background: transparent; color: var(--text-primary); cursor: pointer;
+}
+.menu-panel__item:hover { background: var(--surface-hover); }
+.menu-panel__item[aria-current="true"] { border-color: var(--border); color: var(--brass); }
+.menu-panel__rule { border: 0; border-top: 1px solid var(--border-subtle); margin: var(--sp-2, 2px) 0; width: 100%; }
+.menu-panel__list { display: flex; flex-direction: column; gap: var(--sp-2, 2px); max-height: 280px; overflow-y: auto; }
+.menu-panel__term { color: var(--text-secondary); font-size: var(--fs-12, var(--fs-13)); }
+.menu-panel__value { overflow-wrap: anywhere; }

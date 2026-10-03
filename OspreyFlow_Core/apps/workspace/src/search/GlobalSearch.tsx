@@ -123,25 +123,33 @@ export function GlobalSearch({ apiBaseUrl, bearerToken, onSelect, entityTypes = 
 
   return (
     <div className="global-search">
-      <Combobox
-        aria-label="Search entities, identifiers, documents"
-        placeholder="Search entities, identifiers, documents"
-        value={query}
-        options={results.map((node) => ({ value: node.id, label: `${node.type}: ${displayValue(node)}` }))}
-        onQueryChange={onQueryChange}
-        onChange={(value) => {
-          const node = results.find((n) => n.id === value);
-          if (node) onSelect(node);
-        }}
-      />
-      <button
-        type="button"
-        className="global-search__filters"
-        aria-expanded={filtersOpen}
-        onClick={() => setFiltersOpen((open) => !open)}
-      >
-        {filterCount > 0 ? `Filters (${filterCount})` : "Filters"}
-      </button>
+      <div className="global-search__field">
+        <Combobox
+          aria-label="Search entities, identifiers, documents"
+          placeholder="Search entities, identifiers, documents"
+          value={query}
+          options={results.map((node) => ({ value: node.id, label: `${node.type}: ${displayValue(node)}` }))}
+          onQueryChange={onQueryChange}
+          onChange={(value) => {
+            const node = results.find((n) => n.id === value);
+            if (node) onSelect(node);
+          }}
+        />
+        <button
+          type="button"
+          className="global-search__filters"
+          aria-expanded={filtersOpen}
+          aria-label={filterCount > 0 ? `Filters (${filterCount})` : "Filters"}
+          title="Filters"
+          data-active={filterCount > 0 ? "true" : undefined}
+          onClick={() => setFiltersOpen((open) => !open)}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <path d="M2 3h12l-4.5 5.5V13l-3-1.5V8.5z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+          </svg>
+          {filterCount > 0 && <span className="global-search__count">{filterCount}</span>}
+        </button>
+      </div>
       {filtersOpen && <SearchFilters options={options} entityTypes={entityTypes} onChange={setOptions} />}
       {status && <div role="status" className="global-search__status">{status}</div>}
     </div>
