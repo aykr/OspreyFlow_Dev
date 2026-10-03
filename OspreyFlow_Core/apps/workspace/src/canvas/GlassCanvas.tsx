@@ -77,6 +77,8 @@ import {
 } from "./expansionGate";
 import { fetchWouldAdd } from "./expansionPreview";
 import { LargeExpansionPrompt } from "./LargeExpansionPrompt";
+import { removeFromWorkingSet } from "./removeNodes";
+import { ViewActions } from "./ViewActions";
 import { settleLayout, type LayoutNode } from "./forceLayout";
 import {
   expandOnDoubleClick,
@@ -339,6 +341,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       [],
     );
     const lastReproject = useStore(store, (s) => s.lastReproject);
+    // Re-render when the working set changes, so the view's node count stays current.
+    useStore(store, (s) => s.seq);
 
     const refreshNodeVisualState = (nodeId: string) => {
       if (!graph.hasNode(nodeId)) return;
@@ -822,6 +826,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           onSelectionChange?.(Array.from(next));
           return next;
         });
+      } else if (
+        (e.key === "Delete" || e.key === "Backspace") &&
+        selected.size > 0
+      ) {
+        e.preventDefault();
+        void removeNodeIds(Array.from(selected));
       } else if (e.key === "Enter" && focused) {
         // No menu is open here to anchor on — the same container-corner-plus-offset fallback the
         // `\` handler below uses to open one, since a failed expand needs somewhere to render.
@@ -1380,6 +1390,33 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       return items;
     }
 
+    // Takes nodes out of the view (the working set); the records stay in the store and the server
+    // records a History step. The graph only changes once the server has confirmed: a failure is
+    // shown, and the nodes stay where they are.
+    async function removeNodeIds(nodeIds: string[]): Promise<void> {
+      const result = await removeFromWorkingSet(fetch, {
+        apiBaseUrl,
+        bearerToken,
+        investigationId,
+        nodeIds,
+      });
+      if (!result.ok) {
+        const rect = containerRef.current?.getBoundingClientRect();
+        setActionError({
+          x: (rect?.left ?? 0) + 40,
+          y: (rect?.top ?? 0) + 40,
+          message: result.message,
+        });
+        return;
+      }
+      store
+        .getState()
+        .applyDelta({ seq: result.seq, op: "remove", node_ids: nodeIds });
+      setSelected(new Set());
+      setFocused(null);
+      onSelectionChange?.([]);
+    }
+
     return (
       <div
         ref={containerRef}
@@ -1517,6 +1554,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             onClose={dismissPathError}
           />
         )}
+        <ViewActions
+          nodeCount={graph.order}
+          selectedCount={selected.size}
+          onRemoveSelected={() => void removeNodeIds(Array.from(selected))}
+          onClearAll={() => void removeNodeIds(graph.nodes())}
+        />
         {actionError && (
           <ActionErrorOverlay
             x={actionError.x}

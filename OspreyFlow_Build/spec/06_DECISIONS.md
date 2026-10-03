@@ -8949,3 +8949,19 @@ Decision.
 7. The Filters panel in the Glass is not built by this decision; it follows as its own step.
 
 Consequences. The audit record of a suggestion includes mode, ignore_case and types. Access filtering is unchanged and runs after matching.
+
+
+## ADR-062 — The view can be tidied: remove selected nodes, or clear the view
+
+Status: accepted 3 October 2026.
+
+Context. After a large expansion the owner could not clear the graph and had no way to drop nodes they did not want ("I cannot clear out the graph once it is rendered").
+
+Decision.
+
+1. A **Remove selected (n)** button and the Delete or Backspace key take the selected nodes out of the working set. **Clear view** removes every node, after a confirmation that names the count and says the records stay in the store and History can restore them.
+2. Both use the existing `DELETE /v1/investigations/{id}/nodes` route. No new endpoint. The server records a History step and publishes a remove delta.
+3. The graph changes only after the server confirms (a reply with a sequence number). A refusal or a failed request shows the error and leaves every node where it was.
+4. Removal is from the view only. No record, edge or assertion is deleted from the store.
+
+Consequences. Delete and Backspace now act on the canvas when something is selected; they do nothing when nothing is selected. Removing an edge on its own comes with selectable links, not here.
