@@ -69,7 +69,15 @@
 # by value from the graph itself. Fraud labels are deliberately not edge properties: they live on
 # the analytics events. Every recipe fixture pinned to `ontology_version: 10` is bumped to 10
 # alongside this.
-version: 10
+#
+# v11 (ADR-074): the names and titles an analyst types into the search box are now `indexed`, so
+# the type-ahead finds them: `Person.family_name` and `given_names`, `Organisation.name` and
+# `Document.title`. Nothing a recipe may write changed; the version moves because a property's
+# `indexed` flag is ontology content, and the schema step creates an index for each. A sensitive
+# property is never marked, since a prefix match against a masked value would let a reader who
+# may not see it guess it (`tests/ontology/test_searchable_names.py`). Every recipe fixture pinned
+# to `ontology_version: 10` is bumped to 11 alongside this.
+version: 11
 entity_types:
   - name: Person
     pole_class: person
@@ -77,8 +85,8 @@ entity_types:
     shape: circle
     identifiers: [nino, pnc_id, prison_number]
     properties:
-      - {name: family_name, type: string, required: true}
-      - {name: given_names, type: string}
+      - {name: family_name, type: string, required: true, indexed: true}
+      - {name: given_names, type: string, indexed: true}
       - {name: date_of_birth, type: date, sensitivity: high}
       - {name: aliases, type: "string[]"}
     resolution:
@@ -124,7 +132,7 @@ entity_types:
     properties:
       # v8: no display property existed at all before this — the same
       # gap `name` closed for `Location` in v7.
-      - {name: name, type: string}
+      - {name: name, type: string, indexed: true}
 
   - name: Event
     pole_class: event
@@ -136,7 +144,7 @@ entity_types:
     channel: violet
     shape: page
     properties:
-      - {name: title, type: string}
+      - {name: title, type: string, indexed: true}
 
   - name: Vehicle
     pole_class: object

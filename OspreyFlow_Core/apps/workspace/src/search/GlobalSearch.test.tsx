@@ -54,13 +54,23 @@ function mount(onSelect = vi.fn()): ReturnType<typeof vi.fn> {
 }
 
 describe("GlobalSearch as the analyst types", () => {
-  it("asks nothing until three characters are typed", async () => {
+  it("asks nothing until two characters are typed, and says so rather than staying silent", async () => {
     const mock = stubFetch(() => ({}));
     mount();
-    type("C1");
+    type("C");
     await pause(SUGGEST_PAUSE_MS * 4);
-    expect(SUGGEST_MIN_CHARS).toBe(3);
+    expect(SUGGEST_MIN_CHARS).toBe(2);
     expect(mock).not.toHaveBeenCalled();
+    expect(screen.getByRole("status").textContent).toBe("Type at least 2 characters to search.");
+  });
+
+  it("asks after two characters, and stops saying to type more", async () => {
+    const mock = stubFetch(() => ({ body: { nodes: [account("n1", "QQ118439C")], more: false } }));
+    mount();
+    type("QQ");
+    await pause(SUGGEST_PAUSE_MS);
+    expect(mock).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Type at least 2 characters to search.")).toBeNull();
   });
 
   it("asks once, after the pause, for what was typed, with a limit of ten", async () => {
@@ -197,9 +207,12 @@ describe("GlobalSearch as the analyst types", () => {
     const box = type("C13");
     await pause();
     screen.getByText("Endpoint: C1305486145");
-    fireEvent.change(box, { target: { value: "C1" } });
+    fireEvent.change(box, { target: { value: "C" } });
     await pause(10);
     expect(screen.queryByText("Endpoint: C1305486145")).toBeNull();
+    expect(screen.getByRole("status").textContent).toBe("Type at least 2 characters to search.");
+    fireEvent.change(box, { target: { value: "" } });
+    await pause(10);
     expect(screen.queryByRole("status")).toBeNull();
   });
 });

@@ -22,8 +22,8 @@ export interface GlobalSearchProps {
   screenNodes?: () => readonly Node[];
 }
 
-/** A prefix shorter than this is not worth asking about; the Conduit refuses it too (ADR-059). */
-export const SUGGEST_MIN_CHARS = 3;
+/** A prefix shorter than this is not worth asking about; the Conduit refuses it too (ADR-059, ADR-074). */
+export const SUGGEST_MIN_CHARS = 2;
 /** The pause after the last keystroke before the Conduit is asked. */
 export const SUGGEST_PAUSE_MS = 250;
 const SUGGEST_LIMIT = 10;
@@ -31,7 +31,7 @@ const SUGGEST_LIMIT = 10;
  * a nudge, so it should not sit over the page for as long as the list is open. */
 export const SEARCH_HINT_MS = 4000;
 
-type Outcome = "idle" | "found" | "none" | "unavailable";
+type Outcome = "idle" | "short" | "found" | "none" | "unavailable";
 
 /** `spec/02_GLASS_FRONTEND.md`'s workspace layout: "⌘K — Search entities,
  * identifiers, documents". ADR-059: from the third character, after a pause, the box asks
@@ -90,7 +90,8 @@ export function GlobalSearch({ apiBaseUrl, bearerToken, onSelect, entityTypes = 
       return;
     }
     if (value.length < SUGGEST_MIN_CHARS) {
-      settle("idle", [], false);
+      // Say so rather than stay silent: a box that does nothing looks broken.
+      settle(value === "" ? "idle" : "short", [], false);
       return;
     }
     timer.current = setTimeout(() => void ask(value, mine, using), SUGGEST_PAUSE_MS);
@@ -116,17 +117,19 @@ export function GlobalSearch({ apiBaseUrl, bearerToken, onSelect, entityTypes = 
   const status =
     outcome === "unavailable"
       ? "Suggestions are unavailable."
-      : outcome === "none"
-        ? onScreen
-          ? "No node on screen matches that."
-          : "No match starts with that."
-        : more
-          ? `Showing the first ${results.length}; more match. Keep typing to narrow.`
-          : null;
+      : outcome === "short"
+        ? `Type at least ${SUGGEST_MIN_CHARS} characters to search.`
+        : outcome === "none"
+          ? onScreen
+            ? "No node on screen matches that."
+            : "No match starts with that."
+          : more
+            ? `Showing the first ${results.length}; more match. Keep typing to narrow.`
+            : null;
 
   // Only the nudge fades. "Nothing matches" and "could not answer" are answers to what was typed and
   // stay while it stands. A new answer (a new `results`) brings the nudge back.
-  const nudge = status !== null && outcome !== "none" && outcome !== "unavailable";
+  const nudge = status !== null && outcome !== "none" && outcome !== "unavailable" && outcome !== "short";
   const [faded, setFaded] = useState(false);
   useEffect(() => {
     setFaded(false);

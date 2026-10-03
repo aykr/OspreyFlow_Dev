@@ -1,5 +1,5 @@
 """ADR-055 point 2, ruled by the owner on 29 September 2026: an account is an `Endpoint`, and
-`TRANSACTED` carries the amount and the kind of transaction (ontology version 10)."""
+`TRANSACTED` carries the amount and the kind of transaction (ontology version 10, still true at 11)."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from ontology.loader import load_default_ontology
 _TRANSACTION_TYPES = {"CASH_IN", "CASH_OUT", "DEBIT", "PAYMENT", "TRANSFER"}
 
 
-def test_the_ontology_is_at_version_ten() -> None:
-    assert load_default_ontology().version == 10
+def test_the_ontology_is_at_version_eleven() -> None:
+    assert load_default_ontology().version == 11
 
 
 def test_an_account_is_an_endpoint_kind() -> None:

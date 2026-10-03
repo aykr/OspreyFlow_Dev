@@ -28,8 +28,9 @@ from pydantic import BaseModel, Field
 from ports.graph import GraphPort, SuggestOptions
 from schemas.domain import Node, Principal
 
-#: A prefix shorter than this is not worth a scan of every suggestable type (ADR-059).
-SUGGEST_MIN_CHARS = 3
+#: A prefix shorter than this is not worth a scan of every suggestable type (ADR-059). Two, by the
+#: owner's ruling of 3 October 2026 (ADR-074); it had been three.
+SUGGEST_MIN_CHARS = 2
 
 
 class SearchRequest(BaseModel):

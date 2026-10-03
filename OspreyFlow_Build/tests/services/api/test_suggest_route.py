@@ -71,14 +71,22 @@ def test_suggest_says_when_more_matched() -> None:
     assert client.post("/v1/suggest", json={"query": "C13"}).json()["more"] is True
 
 
-def test_a_prefix_shorter_than_three_characters_is_refused_and_asks_the_graph_nothing() -> (
+def test_a_prefix_shorter_than_two_characters_is_refused_and_asks_the_graph_nothing() -> (
     None
 ):
+    """Two characters, the owner's ruling of 3 October 2026 (it had been three, ADR-059)."""
     graph = _FakeGraph()
     client, audit = _client(graph)
-    for short in ("", "C", "C1"):
+    for short in ("", "C"):
         assert client.post("/v1/suggest", json={"query": short}).status_code == 422
     assert graph.calls == [] and audit.records == []
+
+
+def test_a_two_character_prefix_is_answered() -> None:
+    graph = _FakeGraph()
+    client, _ = _client(graph)
+    assert client.post("/v1/suggest", json={"query": "QQ"}).status_code == 200
+    assert graph.calls == [("QQ", PRINCIPAL, 10)]
 
 
 def test_the_limit_is_bounded() -> None:
