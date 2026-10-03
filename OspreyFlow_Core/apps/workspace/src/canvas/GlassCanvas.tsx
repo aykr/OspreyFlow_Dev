@@ -70,6 +70,13 @@ import {
   type RadialMenuItem,
 } from "../design/primitives/RadialMenu";
 import { edgeTypesOfferedFor } from "./edgeTypeMenu";
+import {
+  gateExpansion,
+  narrowingOptions,
+  type NarrowingOption,
+} from "./expansionGate";
+import { fetchWouldAdd } from "./expansionPreview";
+import { LargeExpansionPrompt } from "./LargeExpansionPrompt";
 import { settleLayout, type LayoutNode } from "./forceLayout";
 import {
   expandOnDoubleClick,
@@ -250,14 +257,14 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // and it cost round 12b real time chasing an expansion that could never have worked.
     // Keyed by edge type, for the node the menu is currently open on; `null` means "not answered
     // yet", which renders as `…` rather than as a confident zero.
-    // The latest `expandNode`, for the Sigma handlers registered once in an effect: a closure over
+    // The latest `requestExpansion`, for the Sigma handlers registered once in an effect: a closure over
     // the first render's copy would expand against a stale working set.
     // Read by the Sigma reducers, which are registered once: a closure over the first render's
     // `hovered` or `edgeTypes` would never see a change.
     const hoveredRef = useRef<string | null>(null);
     const edgeTypesRef = useRef<readonly EdgeTypeDef[]>([]);
     const settledRef = useRef<Set<string>>(new Set());
-    const expandNodeRef = useRef<
+    const requestExpansionRef = useRef<
       | ((
           nodeId: string,
           edgeType: string | null,
@@ -302,6 +309,16 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       x: number;
       y: number;
       message: string;
+    } | null>(null);
+    // An expansion that would add more nodes than `EXPANSION_CONFIRM_ABOVE` (or whose size could
+    // not be counted) waits here for the analyst's choice; nothing is added until they make it.
+    const [pendingExpansion, setPendingExpansion] = useState<{
+      nodeId: string;
+      edgeType: string | null;
+      x: number;
+      y: number;
+      wouldAdd: number | "unavailable";
+      options: NarrowingOption[];
     } | null>(null);
     // A failed `expandNode`/`manualAssertion`/`explainCluster` call — `ActionErrorOverlay`'s own
     // doc comment has the full reasoning for why these three share one generic overlay rather than
@@ -633,7 +650,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       });
       sigma.on("doubleClickNode", ({ node, event }) => {
         expandOnDoubleClick(event, node, (id, x, y) => {
-          void expandNodeRef.current?.(id, null, x, y);
+          void requestExpansionRef.current?.(id, null, x, y);
         });
       });
       sigma.on("clickEdge", ({ edge, event }) => {
@@ -809,7 +826,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         // No menu is open here to anchor on — the same container-corner-plus-offset fallback the
         // `\` handler below uses to open one, since a failed expand needs somewhere to render.
         const rect = containerRef.current?.getBoundingClientRect();
-        void expandNode(
+        void requestExpansion(
           focused,
           null,
           (rect?.left ?? 0) + 40,
@@ -827,9 +844,59 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       }
     };
 
-    expandNodeRef.current = expandNode;
+    requestExpansionRef.current = requestExpansion;
     hoveredRef.current = hovered;
     edgeTypesRef.current = edgeTypes;
+
+    // Counts what an expansion would add before running it. Up to the limit it goes ahead; above
+    // it (or when the count fails) the analyst is asked, with the count per relationship type so
+    // they can narrow. Every way of expanding a node goes through here.
+    async function requestExpansion(
+      nodeId: string,
+      edgeType: string | null,
+      x: number,
+      y: number,
+    ): Promise<void> {
+      const ask = {
+        apiBaseUrl,
+        bearerToken,
+        investigationId,
+        nodeId,
+        currentOrder: graph.order,
+      };
+      const total = await fetchWouldAdd(fetch, {
+        ...ask,
+        edgeTypes: edgeType ? [edgeType] : null,
+      });
+      const gate = gateExpansion(total);
+      if (gate.kind === "proceed") {
+        await expandNode(nodeId, edgeType, x, y);
+        return;
+      }
+      let options: NarrowingOption[] = [];
+      if (edgeType === null && graph.hasNode(nodeId)) {
+        const node = graph.getNodeAttribute(nodeId, "data");
+        const types = edgeTypesOfferedFor(edgeTypes, node.type);
+        const counts = await Promise.all(
+          types.map(
+            async (et) =>
+              [
+                et.name,
+                await fetchWouldAdd(fetch, { ...ask, edgeTypes: [et.name] }),
+              ] as const,
+          ),
+        );
+        options = narrowingOptions(Object.fromEntries(counts));
+      }
+      setPendingExpansion({
+        nodeId,
+        edgeType,
+        x,
+        y,
+        wouldAdd: gate.wouldAdd,
+        options,
+      });
+    }
 
     async function expandNode(
       nodeId: string,
@@ -1209,7 +1276,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         count: previewCounts[et.name] ?? null,
         onSelect: () => {
           const anchor = radialMenu ?? { x: 0, y: 0 };
-          void expandNode(nodeId, et.name, anchor.x, anchor.y);
+          void requestExpansion(nodeId, et.name, anchor.x, anchor.y);
         },
       }));
 
@@ -1456,6 +1523,25 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             y={actionError.y}
             message={actionError.message}
             onClose={dismissActionError}
+          />
+        )}
+        {pendingExpansion && (
+          <LargeExpansionPrompt
+            x={pendingExpansion.x}
+            y={pendingExpansion.y}
+            wouldAdd={pendingExpansion.wouldAdd}
+            options={pendingExpansion.options}
+            onChooseType={(edgeType) => {
+              const { nodeId, x, y } = pendingExpansion;
+              setPendingExpansion(null);
+              void expandNode(nodeId, edgeType, x, y);
+            }}
+            onChooseAll={() => {
+              const { nodeId, edgeType, x, y } = pendingExpansion;
+              setPendingExpansion(null);
+              void expandNode(nodeId, edgeType, x, y);
+            }}
+            onCancel={() => setPendingExpansion(null)}
           />
         )}
       </div>

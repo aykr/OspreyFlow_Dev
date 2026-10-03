@@ -8916,3 +8916,36 @@ size read as a hairball, with no sign of which way a relationship pointed. Edge 
 section 5), which is still unmeasured. Dragging a node by hand, and so a pin that survives a re-layout (the layout supports
 a pinned node; nothing in the canvas pins one yet). A visual check in a real browser: the tests cover the layout's behaviour
 (spreading, attraction, repeatability, a pinned node, the size cap), not whether it looks right.
+
+### Amendment 1 (3 October 2026) — an expansion that would add more than 500 nodes asks first
+
+**Seen.** A double-click on a busy Enron address added all 1,090 of its neighbours at once (1,091 nodes, 1,163 edges). That is
+past the layout's own limit of 1,000, so no layout ran and the result was an unreadable disc. The double-click had been built
+without the count-first check the owner had agreed.
+
+**Decision.** Every way of expanding a node (double-click, a right-click menu entry, the Enter key) goes through one function
+that first asks `/expand/preview` how many nodes it would add. Up to 500 it goes ahead. Above 500, or when the count could not be
+obtained, nothing is added until the analyst chooses: a single relationship type (each shown with its own count), everything, or
+nothing. The limit is `EXPANSION_CONFIRM_ABOVE` in `canvas/expansionGate.ts`.
+
+**Not built.** "Add the strongest 100": the expand request has no limit field, so it needs a server change. Whether 500 is the
+right number has not been tried on a real screen.
+
+
+## ADR-061 — Type-ahead search takes options: match mode, ignore case, entity types
+
+Status: accepted 3 October 2026.
+
+Context. ADR-059 gave the Glass a type-ahead box that matched the start of a value, case-sensitively, across every entity type. The owner asked for filters: ignore case, entity type, match mode (starts with, contains, exact) and a scope limited to the graph on screen.
+
+Decision.
+
+1. `/v1/suggest` gains three optional fields: `mode` (`starts_with` default, `contains`, `exact`), `ignore_case` (false default) and `types` (list of entity types, at most 50). Defaults reproduce ADR-059 exactly.
+2. The port takes a frozen `SuggestOptions`. An unknown entity type is a `ValueError` in the adapter and a 422 at the route; it is never silently dropped.
+3. Case-sensitive forms use the predicates already proven on the store (`TextP.startingWith`, `TextP.containing`, `P.eq`).
+4. Ignoring case uses `TextP.regex` with a `(?iu)` flag and the typed text quoted as a literal (`\Q...\E`), so characters such as `.`, `*` and `(` are text. This is unproven on ArcadeDB. Four live conformance cases (ignoring case, contains and exact, typed regex characters are text, access filtering with ignore case) were written first and must be run against a live store before this is relied on.
+5. Contains and ignore-case cannot use an index. Their cost on the Enron data is unmeasured; ADR-059's 300 ms threshold applies once measured.
+6. Searching only the graph on screen is client-side over the drawn nodes and does not call this endpoint.
+7. The Filters panel in the Glass is not built by this decision; it follows as its own step.
+
+Consequences. The audit record of a suggestion includes mode, ignore_case and types. Access filtering is unchanged and runs after matching.
