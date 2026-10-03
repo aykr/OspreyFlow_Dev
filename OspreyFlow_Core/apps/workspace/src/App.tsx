@@ -853,6 +853,7 @@ export function App() {
                 store={workingSetRef.current.store}
                 ontology={ontology}
                 edgeTypes={edgeTypes}
+                entityTypes={ontologySchema?.entity_types}
                 investigationId={investigationId}
                 apiBaseUrl={API_BASE_URL}
                 bearerToken={bearerToken}

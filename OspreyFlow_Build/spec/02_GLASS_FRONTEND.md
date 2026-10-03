@@ -326,6 +326,19 @@ opens again (the same keys, or a double-click on the Group Node). The status bar
 are folded into groups. It is a way of looking at the view: nothing is stored or sent to the server.
 Every action is reachable by keyboard, and `keyboard/keyboard.spec.ts` proves each one.
 
+### 3.1b Labels on nodes (ADR-076)
+
+A `Labels` button on the canvas opens one picker for each type of node now in view, listing the
+type's own properties (its identifiers, then its other properties; a sensitive property and a list
+are never offered) and `Default`. The property chosen names every node of that type on the canvas,
+in the search list and wherever else a node is named; a node that lacks the chosen property keeps
+its default name rather than going blank. With nothing chosen a person is named "Family, Given"
+(family name alone when there are no given names), a thing by its normalised value, anything else
+by its id. The choice is kept in this browser only: it is not sent to the server, is not part of the
+case, and is not shared with other analysts, as with the light and dark theme. The panel says so.
+Reachable by keyboard (`Tab` to the button, `Enter` to open, arrow keys to choose, `Escape` to
+close), and `keyboard/keyboard.spec.ts` proves it.
+
 ### 3.2 Social network analysis
 
 Metrics panel, computed on the working set in a Web Worker, recomputed on filter change:

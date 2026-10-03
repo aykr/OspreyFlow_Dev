@@ -30,6 +30,7 @@ import { mixOklab } from "../color/oklab";
 import { BRASS_HEX } from "../color/tokens";
 import { activePalette } from "../color/palette";
 import type { EntityVisual } from "../ontology/schema";
+import { chosenLabel, defaultLabel } from "./labelChoices";
 import { zoomBandForRatio, type ZoomBand } from "./zoomBands";
 
 export interface NodeZoomContext {
@@ -80,9 +81,8 @@ const BAND_SIZE: Record<ZoomBand, number> = {
  * needs the same human-readable label for a `PairwiseExplanation`'s `node_a`/`node_b`, and
  * duplicating this lookup rather than sharing it would be a second place to keep in sync. */
 export function nodeLabel(node: Node): string {
-  const name =
-    node.properties?.["family_name"] ?? node.properties?.["value_normalised"];
-  return typeof name === "string" ? name : node.id;
+  // The analyst's own choice for this type first (ADR-076), else the default.
+  return chosenLabel(node) ?? defaultLabel(node);
 }
 
 /** Called from `Sigma`'s `nodeReducer`, every node, every frame the

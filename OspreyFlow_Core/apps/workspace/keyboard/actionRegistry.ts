@@ -149,6 +149,10 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   "g-folds-and-opens-the-focused-nodes-group",
   "box-fold-button-by-keyboard",
   "collapse-all-and-expand-all-by-keyboard",
+  // 3 October 2026 (ADR-076): the analyst chooses which property names each type of node. The button
+  // and the pickers it opens are native controls, but whether Tab reaches them, an arrow key chooses,
+  // and the label on the canvas then changes is exactly what the suite exists to prove.
+  "labels-menu-by-keyboard",
 ] as const);
 
 /**

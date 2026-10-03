@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Node } from "../../../../packages/schemas/generated";
+import { forgetLabelChoicesForTest, setLabelChoice } from "../canvas/labelChoices";
 import {
   DEFAULT_SEARCH_OPTIONS,
   activeFilterCount,
@@ -134,5 +135,21 @@ describe("people and documents, by name", () => {
     const nodes = [person("p1", "Petrenko", "Illia"), document];
     expect(matchOnScreen(nodes, "Illia", DEFAULT_SEARCH_OPTIONS, 10).nodes.map((n) => n.id)).toEqual(["p1"]);
     expect(matchOnScreen(nodes, "Q3", DEFAULT_SEARCH_OPTIONS, 10).nodes.map((n) => n.id)).toEqual(["d1"]);
+  });
+});
+
+describe("the label the analyst chose (ADR-076)", () => {
+  const volkov = {
+    id: "p1",
+    type: "Person",
+    properties: { nino: "QQ118439C", family_name: "Volkov", given_names: "Mikhail" },
+  } as unknown as Node;
+
+  it("is what a search result is called, when the analyst chose one for its type", () => {
+    forgetLabelChoicesForTest();
+    expect(displayValue(volkov)).toBe("Volkov, Mikhail");
+    setLabelChoice("Person", "nino");
+    expect(displayValue(volkov)).toBe("QQ118439C");
+    forgetLabelChoicesForTest();
   });
 });

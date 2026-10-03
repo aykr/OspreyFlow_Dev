@@ -46,6 +46,7 @@ import {
 import type {
   Edge,
   EdgeTypeDef,
+  EntityTypeDef,
   Node,
   Path as GraphPath,
 } from "../../../../packages/schemas/generated";
@@ -91,6 +92,8 @@ import { JudgementBadgeOverlay } from "./JudgementBadgeOverlay";
 import { activePalette } from "../color/palette";
 import { onThemeChange } from "../theme/theme";
 import { drawHoveredNode, labelColoursFor } from "./labelStyle";
+import { onLabelChoicesChange } from "./labelChoices";
+import { LabelsMenu } from "./LabelsMenu";
 import {
   boxAt,
   collapseView,
@@ -160,6 +163,9 @@ export interface GlassCanvasProps {
   store: StoreApi<WorkingSetStoreState>;
   ontology: OntologyRegistry;
   edgeTypes: EdgeTypeDef[];
+  /** ADR-076: the ontology's entity types, which say which properties a node of each type can be
+   * labelled by. Omitted, the Labels control is not drawn. */
+  entityTypes?: readonly EntityTypeDef[];
   investigationId: string;
   apiBaseUrl: string;
   bearerToken: string;
@@ -268,6 +274,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       store,
       ontology,
       edgeTypes,
+      entityTypes,
       investigationId,
       apiBaseUrl,
       bearerToken,
@@ -679,6 +686,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       sigmaRef.current?.refresh();
     };
     useEffect(() => onThemeChange(() => redrawForThemeRef.current()), []);
+    // A different label chosen for a type (ADR-076): the labels are worked out in the reducer, so
+    // drawing again is all it takes.
+    useEffect(() => onLabelChoicesChange(() => sigmaRef.current?.refresh()), []);
 
     // Assign an initial position and the graph-level (rarely-changing)
     // visual attributes exactly once, when a node is added to the working
@@ -2043,6 +2053,16 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           onCollapseAll={() => setCollapsed(new Set(communities.map((c) => c.id)))}
           onExpandAll={() => setCollapsed(new Set())}
         />
+        {entityTypes !== undefined && (
+          <LabelsMenu
+            entityTypes={entityTypes}
+            getTypesInView={() => {
+              const types = new Set<string>();
+              graph.forEachNode((_id, attrs) => types.add(attrs.data.type));
+              return Array.from(types);
+            }}
+          />
+        )}
         <LayoutMenu
           mode={layoutMode}
           onChange={(mode) => {

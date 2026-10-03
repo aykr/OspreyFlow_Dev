@@ -43,7 +43,18 @@ declare global {
 const SCHEMA: OntologySchema = {
   version: 1,
   entity_types: [
-    { name: "Person", pole_class: "person", channel: "indigo", shape: "circle", identifiers: [] },
+    {
+      name: "Person",
+      pole_class: "person",
+      channel: "indigo",
+      shape: "circle",
+      identifiers: [],
+      // What the Labels control (ADR-076) offers for a person in the fixture.
+      properties: [
+        { name: "family_name", type: "string", indexed: true },
+        { name: "given_names", type: "string", indexed: true },
+      ],
+    },
     // Phase 6a Stage 4 (B6): the only fixture data the "View messages" radial-menu item needs —
     // it is offered on `Endpoint`-type nodes specifically (`GlassCanvas.tsx`'s own condition).
     { name: "Endpoint", pole_class: "object", channel: "cyan", shape: "hexagon", identifiers: [] },
@@ -135,7 +146,9 @@ const nodes = [
   // mouse-only in practice for the case that actually matters: two entities found by identifier,
   // which is how an analyst reaches them and which leaves them unconnected until something is
   // expanded. `n5` is the fixture datum that makes that reachable-or-not question answerable.
-  node("n5"),
+  // Has given names, so a person's default label ("n5, Zed") differs from the one chosen in the
+  // Labels control's keyboard case (ADR-076); every other fixture person has only a family name.
+  node("n5", { properties: { family_name: "n5", given_names: "Zed" } }),
 ];
 const edges = [
   edge("e0", "n0", "n1"),
@@ -188,6 +201,7 @@ createRoot(container).render(
       store={workingSet.store}
       ontology={ontology}
       edgeTypes={SCHEMA.edge_types}
+      entityTypes={SCHEMA.entity_types}
       investigationId="keyboard-fixture"
       apiBaseUrl="http://keyboard-test.invalid"
       bearerToken="unused"

@@ -9233,3 +9233,22 @@ Decision.
 Not decided here. A count of notes drawn on a link (offered, not chosen: it was the later step); notes on nodes; including notes in an export (nothing exports them, so an export does not mention them and the withheld-item manifest does not count them); searching note text; a note whose text quotes something more sensitive than its link (the section says a note takes the link's marking and asks the analyst not to put in anything more sensitive); a retention rule.
 
 Consequences. A note on a link is unreachable while the link is outside the working set (its nodes were tidied away or the link was never loaded) and comes back when the link does; nothing is deleted. A link that a different working set holds under the same id would show the same case's notes, but the case is part of every lookup, so notes never cross cases. The access rule is tested at both layers: the service against a stand-in store that refuses what Postgres refuses (`test_link_notes.py`, shown red by removing the visibility check: 6 of 23 fail), and the Postgres statements themselves (`test_link_notes_store.py`, owner-run). Not exercised by this session: the four routes over real HTTP with a real token, and the Glass against a real case (owner to check).
+
+
+## ADR-076 — The analyst chooses which property names each type of node
+
+Status: accepted 3 October 2026.
+
+Context. A reviewer of the Fixture Corp walkthrough wrote that the display "show Volkov across all the nodes, this is very confusing": six people of one family were each drawn as "Volkov", because a node was named by its family name alone. The reviewer asked that the analyst be able to choose what labels an entity type. The spec was silent: `02_GLASS_FRONTEND.md` named no rule for what a node is called. Two choices were put to the owner and answered: where the choice is kept ("this browser only", recommended) and what can be chosen ("one property per type", recommended).
+
+Decision.
+
+1. Per entity type, the analyst may choose one property to name its nodes. The choice is kept in this browser's own storage under one key, never sent to the server, and is not part of the case, the same standing the theme has (ADR-070). Another browser or machine starts with the default; another analyst's view is not affected.
+2. A `Labels` button on the canvas offers a picker for each type that has a node in view, listing `Default` and the type's identifiers and other properties. A sensitive property (`sensitivity: high`) and a list property are not offered. The panel says the choice is kept in this browser only.
+3. The chosen property names the node on the canvas, in the search list, in the cluster explanation and in the expansion prompt (they share one function). A node with no value for the chosen property keeps its default name: a label is never blank.
+4. The default for a person is now "Family, Given" (family name alone when there are no given names). Other types keep what they had: the normalised value, else the id.
+5. A new keyboard action, `labels-menu-by-keyboard`, is registered and proved (rule 13).
+
+Not decided here. A label built from several properties; a choice shared by everyone on a case, or kept per analyst on the server (both were offered and not chosen); labelling links; a default for types other than Person (an organisation still shows its id until the analyst chooses `name`); hiding a value on the canvas that the analyst may read in the Inspector.
+
+Consequences. A name chosen here is drawn for anyone looking at the analyst's screen, which is why a sensitive property is never offered. Choices are per type name, so a type renamed in a later ontology version loses its choice silently and shows the default. The canvas redraws when a choice changes; that redraw is proved with the layout settled, because while the layout moves the renderer redraws every frame and would hide a missing one. Not exercised: the Glass against a real case (owner to check).

@@ -1,4 +1,5 @@
 import type { Node } from "../../../../packages/schemas/generated";
+import { chosenLabel } from "../canvas/labelChoices";
 
 export type MatchMode = "starts_with" | "contains" | "exact";
 
@@ -65,8 +66,11 @@ function personName(properties: Record<string, unknown>): string {
   return family || given;
 }
 
-/** What to call a node on screen: a person's name, else its identifying value, else its id. */
+/** What to call a node on screen: the label the analyst chose for its type (ADR-076), else a
+ * person's name, else its identifying value, else its id. */
 export function displayValue(node: Node): string {
+  const chosen = chosenLabel(node);
+  if (chosen !== null) return chosen;
   const properties = (node.properties ?? {}) as Record<string, unknown>;
   const name = personName(properties);
   if (name) return name;

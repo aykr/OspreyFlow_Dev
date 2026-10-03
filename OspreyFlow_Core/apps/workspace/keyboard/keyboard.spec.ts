@@ -1025,6 +1025,56 @@ test("Enter on a button inside the canvas presses that button and does not expan
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
+// --- Labels (ADR-076) ------------------------------------------------------------------------
+// Six people of one family were each drawn as "Volkov". The analyst chooses, per type, which
+// property names its nodes; the choice is kept in this browser only.
+test("the Labels control is reached by Tab, and a property chosen with the arrow keys becomes the label", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  // Let the layout stop moving first: while it runs the renderer redraws every frame, which would
+  // update a label whether or not the choice told the canvas to draw again.
+  await settle(page, "n0");
+  await page.waitForTimeout(500);
+  // n5 has given names, so its default label is "family, given"; the others have a family name only.
+  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n5"))).toBe("n5, Zed");
+  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n0"))).toBe("n0");
+
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  const button = page.getByRole("button", { name: "Labels" });
+  await tabTo(page, button);
+  await page.keyboard.press("Enter");
+  await expect(button).toHaveAttribute("aria-expanded", "true");
+
+  const picker = page.getByRole("combobox", { name: "Label for Person" });
+  await tabTo(page, picker);
+  await page.keyboard.press("ArrowDown"); // family_name
+  await page.keyboard.press("ArrowDown"); // given_names
+  await expect(picker).toHaveValue("given_names");
+  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n5"))).toBe("Zed");
+  // A person with no given names keeps a name rather than going blank.
+  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n0"))).toBe("n0");
+
+  await page.keyboard.press("Escape");
+  await expect(picker).toHaveCount(0);
+  await expect(button).toBeFocused();
+  registerCovered("CANVAS_ACTIONS", "labels-menu-by-keyboard");
+});
+
+test("a chosen label is still there after the page is reloaded, and Default puts it back", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  await settle(page, "n0");
+  await page.waitForTimeout(500);
+  await page.getByRole("button", { name: "Labels" }).click();
+  await page.getByRole("combobox", { name: "Label for Person" }).selectOption("given_names");
+  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n5"))).toBe("Zed");
+
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n5"))).toBe("Zed");
+
+  await page.getByRole("button", { name: "Labels" }).click();
+  await page.getByRole("combobox", { name: "Label for Person" }).selectOption("Default");
+  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n5"))).toBe("n5, Zed");
+});
+
 // --- Communities (ADR-066) -------------------------------------------------------------------
 // Two groups of five (a0–a4, b0–b4), each a hub with four round it, joined by one link a0—b0.
 
