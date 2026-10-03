@@ -5,12 +5,12 @@
 // way the Graph/Map screens are, not opened and dismissed once.
 //
 // Connect asks three things regardless of source — where the data is, the
-// handling marking, and the legal basis — and none is optional or
-// answerable later (§2). Profile (the next stage) does not exist yet, so
-// "cannot proceed to Profile without all three" is enforced here only as a
-// disabled button, gated on `StudioRecipeDraft.ready_for_profile` — the
-// server-side gate this screen has to grow once Profile exists.
-import { useEffect, useMemo, useState } from "react";
+// handling marking, and the legal basis — and none can be answered later
+// (§2). The one exception is the classification inside the marking: left
+// blank it is recorded as PUBLIC (ADR-068). "Cannot proceed to Profile
+// without all three" is enforced as a disabled button, gated on
+// `StudioRecipeDraft.ready_for_profile`, which the server computes.
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   ConnectDraftInput,
@@ -26,9 +26,11 @@ import {
   createDraft,
   fetchConnectorCatalogue,
   fetchHandlingScheme,
+  UPLOAD_ACCEPT,
   fetchIngestSourceFiles,
   listDrafts,
   updateDraft,
+  uploadIngestSourceFile,
   type HandlingScheme,
   type IngestSourceListing,
 } from "./api";
@@ -130,6 +132,11 @@ export function ConnectScreen({
   const [forbidden, setForbidden] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // ADR-067 — the file chosen from the analyst's own computer. `uploading` disables the button so a
+  // second upload cannot start while one is in flight; `uploadError` is the server's own sentence.
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [lastSaved, setLastSaved] = useState<StudioRecipeDraft | null>(null);
 
   useEffect(() => {
@@ -229,6 +236,25 @@ export function ConnectScreen({
       }
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleChosenFile(file: File) {
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const saved = await uploadIngestSourceFile(apiBaseUrl, bearerToken, file);
+      setForm((current) => ({ ...current, sourceLocation: saved.source_location }));
+      try {
+        setSourceFiles(await fetchIngestSourceFiles(apiBaseUrl, bearerToken));
+        setSourceFilesError(null);
+      } catch {
+        // The upload worked and is selected; a failed refresh of the list is not worth an alarm.
+      }
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -336,6 +362,7 @@ export function ConnectScreen({
           <fieldset style={{ border: "none", padding: 0, marginBottom: "var(--sp-16)" }}>
             <legend>Connector</legend>
             <Select
+              aria-label="Connector"
               value={form.connectorProfile}
               onChange={(e) => setForm({ ...form, connectorProfile: e.target.value })}
               style={{ width: "100%" }}
@@ -354,6 +381,13 @@ export function ConnectScreen({
                 </optgroup>
               ))}
             </Select>
+            {/* Owner ruling of 3 October 2026, "Keep them, but say why": the formats the spec lists
+                but no connector reads yet stay visible and greyed, with the reason beside them. */}
+            {catalogue.some((entry) => !entry.available) ? (
+              <p style={{ margin: "var(--sp-4) 0 0", color: "var(--text-tertiary)" }}>
+                Greyed formats have no connector built yet.
+              </p>
+            ) : null}
           </fieldset>
 
           <fieldset style={{ border: "none", padding: 0, marginBottom: "var(--sp-16)" }}>
@@ -361,12 +395,53 @@ export function ConnectScreen({
               Where is the data? <span aria-hidden="true">*</span>
             </legend>
 
-            {/* Owner ruling R6, 27 September 2026 — the deployment's ingest root. The `Select`
-                comes first because in a rendered deployment it is the only thing that works: the
-                Conduit reads `source_location` inside its own container, so a path an analyst
-                types from their own machine names nothing it can open. The free-text field stays
-                for the cases the folder cannot cover (an `s3://` URL, a developer's local path),
-                which is why this is a picker *beside* the field rather than a replacement. */}
+            {/* ADR-067 (amends R6) — the file picker the owner asked for on 3 October 2026: "I need a
+                file picker, not just the bar saying file path". The button is a real <button>, so
+                the keyboard reaches it; it presses a hidden file input, which opens the system's
+                own picker. The chosen file is uploaded to the ingest folder and selected. */}
+            <div style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center", marginBottom: "var(--sp-8)" }}>
+              <input
+                ref={fileInput}
+                type="file"
+                aria-label="Choose a file from your computer"
+                accept={UPLOAD_ACCEPT}
+                tabIndex={-1}
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) void handleChosenFile(file);
+                }}
+              />
+              <Button
+                variant="primary"
+                disabled={uploading}
+                onClick={() => fileInput.current?.click()}
+              >
+                {uploading ? "Uploading…" : "Choose file…"}
+              </Button>
+              <span style={{ color: "var(--text-tertiary)" }}>From your computer</span>
+            </div>
+            {uploadError ? (
+              <div role="alert" style={{ color: "var(--text-secondary)", marginBottom: "var(--sp-8)" }}>
+                {uploadError}
+              </div>
+            ) : null}
+            {form.sourceLocation ? (
+              <p style={{ margin: "0 0 var(--sp-8)" }}>
+                Selected:{" "}
+                <code>
+                  {form.sourceLocation.startsWith("/")
+                    ? (form.sourceLocation.split("/").pop() ?? form.sourceLocation)
+                    : form.sourceLocation}
+                </code>
+              </p>
+            ) : null}
+
+            {/* Owner ruling R6, 27 September 2026 — files an operator placed in the ingest folder
+                (and, since ADR-067, files uploaded earlier). The Conduit reads `source_location`
+                inside its own container, so only a file the server can see names anything it can
+                open. */}
             {sourceFiles && sourceFiles.files.length > 0 ? (
               <Select
                 aria-label="Choose a file from the ingest folder"
@@ -379,10 +454,11 @@ export function ConnectScreen({
                 }}
                 style={{ display: "block", width: "100%", marginBottom: "var(--sp-8)" }}
               >
-                <option value="">Choose from the ingest folder…</option>
+                <option value="">Or choose one already on the server…</option>
                 {sourceFiles.files.map((file) => (
                   <option key={file.source_location} value={file.source_location}>
-                    {file.name} ({Math.max(1, Math.round(file.size_bytes / 1024))} KB)
+                    {file.name} ({Math.max(1, Math.round(file.size_bytes / 1024))} KB
+                    {file.uploaded ? ", uploaded" : ""})
                   </option>
                 ))}
               </Select>
@@ -393,8 +469,8 @@ export function ConnectScreen({
                 not look" will go and ask the wrong person. */}
             {sourceFiles && sourceFiles.files.length === 0 ? (
               <p style={{ margin: "0 0 var(--sp-8)", color: "var(--fg-muted)" }}>
-                The ingest folder (<code>{sourceFiles.root}</code>) is empty. An operator places
-                source files there; see the deployment guide.
+                No files on the server yet (<code>{sourceFiles.root}</code>). Choose one from your
+                computer above, or an operator can place source files there.
               </p>
             ) : null}
             {sourceFilesError ? (
@@ -403,13 +479,20 @@ export function ConnectScreen({
               </p>
             ) : null}
 
-            <Input
-              aria-label="Where is the data?"
-              value={form.sourceLocation}
-              onChange={(e) => setForm({ ...form, sourceLocation: e.target.value })}
-              placeholder="s3://ingest/carrier-a/2026-09.csv"
-              style={{ display: "block", width: "100%" }}
-            />
+            {/* The typed path stays for what a file cannot cover (an `s3://` address, a developer's
+                local path); behind a disclosure so the picker is what the analyst sees first. */}
+            <details>
+              <summary style={{ cursor: "pointer", color: "var(--text-secondary)" }}>
+                Or type a path or address
+              </summary>
+              <Input
+                aria-label="Where is the data?"
+                value={form.sourceLocation}
+                onChange={(e) => setForm({ ...form, sourceLocation: e.target.value })}
+                placeholder="s3://ingest/carrier-a/2026-09.csv"
+                style={{ display: "block", width: "100%", marginTop: "var(--sp-8)" }}
+              />
+            </details>
           </fieldset>
 
           <fieldset style={{ border: "none", padding: 0, marginBottom: "var(--sp-16)" }}>
@@ -418,12 +501,11 @@ export function ConnectScreen({
             </legend>
             <div style={{ display: "flex", gap: "var(--sp-8)", flexWrap: "wrap" }}>
               <Select
+                aria-label="Classification"
                 value={form.classification}
                 onChange={(e) => setForm({ ...form, classification: e.target.value })}
               >
-                <option value="" disabled>
-                  Classification…
-                </option>
+                <option value="">Classification (optional)</option>
                 {scheme.classification.map((c) => (
                   <option key={c} value={c}>
                     {c}
@@ -454,6 +536,14 @@ export function ConnectScreen({
                 placeholder="Owning unit (e.g. unit-1)"
               />
             </div>
+            {/* ADR-068: the server records the scheme's lowest level for a blank classification;
+                this only says so, so a blank is never a silent choice. */}
+            {form.classification === "" ? (
+              <p style={{ margin: "var(--sp-4) 0 0", color: "var(--text-tertiary)" }}>
+                Left blank: recorded as{" "}
+                {scheme.classification.includes("PUBLIC") ? "PUBLIC" : (scheme.classification[0] ?? "PUBLIC")}
+              </p>
+            ) : null}
           </fieldset>
 
           <label style={{ display: "block", marginBottom: "var(--sp-16)" }}>

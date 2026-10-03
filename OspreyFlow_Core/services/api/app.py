@@ -208,7 +208,15 @@ from .history import (
     InvestigationHistoryStore,
 )
 from .hotlists import HotlistNotFoundError, HotlistStore
-from .ingest_sources import IngestSourceListing, list_source_files
+from .ingest_sources import (
+    IngestSourceFile,
+    IngestSourceListing,
+    UploadRefused,
+    ingest_root,
+    list_source_files,
+    max_upload_bytes,
+    save_upload,
+)
 from .investigations import (
     AccessHistoryEntry,
     AccessLevel,
@@ -3523,11 +3531,73 @@ async def list_ingest_source_files(
     return listing
 
 
+_UPLOAD_REFUSAL_STATUS = {
+    "bad_name": status.HTTP_400_BAD_REQUEST,
+    "empty": status.HTTP_400_BAD_REQUEST,
+    "type_not_allowed": status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+    "exists": status.HTTP_409_CONFLICT,
+    "too_large": 413,
+}
+
+
+@app.post("/v1/ingest/source-files", status_code=status.HTTP_201_CREATED)
+async def upload_ingest_source_file(
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))],
+    audit: AuditDep,
+    request: Request,
+    name: str,
+) -> IngestSourceFile:
+    """**ADR-067 (amends ruling R6)** — the Connect stage's "Choose file…": the analyst's own file,
+    sent as the raw request body with its name in the query, lands in the `uploaded` folder under
+    the ingest root and is then offered in the picker like any other file.
+
+    **`SOURCE_AUTHOR`, the same role as the listing and the draft route**, checked as a route
+    dependency before a byte is read. The name, the type, the size and the no-overwrite rule are
+    enforced in `services/api/ingest_sources.py` (see `save_upload`), where the tests prove each.
+    The declared size is checked first so an honest oversized upload is refused without reading it;
+    the streamed count is what actually stops a dishonest one.
+
+    Audited with the name and the size only, never the contents. A refused upload is not a write
+    and so is not audited as one; it is returned as a 4xx the Glass shows as a sentence."""
+    limit = max_upload_bytes()
+    declared = request.headers.get("content-length")
+    if declared is not None and declared.isdigit() and int(declared) > limit:
+        raise HTTPException(
+            status_code=413,
+            detail="That file is larger than the upload limit.",
+        )
+    try:
+        saved = await save_upload(ingest_root(), name, request.stream(), max_bytes=limit)
+    except UploadRefused as refusal:
+        raise HTTPException(
+            status_code=_UPLOAD_REFUSAL_STATUS[refusal.code], detail=refusal.message
+        ) from refusal
+    await audit.record(
+        principal=principal,
+        action="upload_ingest_source_file",
+        resolved_query={"name": saved.name, "size_bytes": saved.size_bytes},
+        result_cardinality=1,
+    )
+    return saved
+
+
+def _with_default_classification(handling: dict[str, Any], scheme: HandlingScheme) -> dict[str, Any]:
+    """**ADR-068.** Connect's classification is optional: left blank it is recorded as the scheme's
+    lowest level, which for the UK scheme is `PUBLIC`. Done here, not in the Glass, so a draft never
+    carries an empty marking whichever client wrote it; an analyst's own choice is never replaced."""
+    chosen = handling.get("classification")
+    if isinstance(chosen, str) and chosen.strip():
+        return handling
+    lowest = "PUBLIC" if "PUBLIC" in scheme.classification else scheme.classification[0]
+    return {**handling, "classification": lowest}
+
+
 @app.post("/v1/ingest/recipes", status_code=status.HTTP_201_CREATED)
 async def create_studio_recipe_draft(
     principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))],
     studio_recipes: StudioRecipesDep,
     audit: AuditDep,
+    scheme: HandlingSchemeDep,
     body: ConnectDraftInput,
 ) -> StudioRecipeDraft:
     """§8: "Source author: create and edit draft recipes." A fresh draft —
@@ -3539,7 +3609,7 @@ async def create_studio_recipe_draft(
         label=body.label,
         connector_profile=body.connector_profile,
         source_location=body.source_location,
-        handling=body.handling,
+        handling=_with_default_classification(body.handling, scheme),
         legal_basis=body.legal_basis,
     )
     await audit.record(
@@ -3557,6 +3627,7 @@ async def update_studio_recipe_draft(
     principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))],
     studio_recipes: StudioRecipesDep,
     audit: AuditDep,
+    scheme: HandlingSchemeDep,
     body: ConnectDraftInput,
 ) -> StudioRecipeDraft:
     """Edits Connect's own fields on a draft still in progress — changing
@@ -3569,7 +3640,7 @@ async def update_studio_recipe_draft(
         label=body.label,
         connector_profile=body.connector_profile,
         source_location=body.source_location,
-        handling=body.handling,
+        handling=_with_default_classification(body.handling, scheme),
         legal_basis=body.legal_basis,
     )
     await audit.record(

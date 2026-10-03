@@ -140,3 +140,249 @@ def test_a_principal_without_the_source_author_role_is_refused(
         )
     finally:
         app.dependency_overrides.clear()
+
+
+# --- Upload from the analyst's computer (ADR-067, owner ruling of 3 October 2026) ----------------
+#
+# The owner asked for a real file picker. Ruling R6 had put browser upload after the milestone; it
+# is now in, and it is the first thing that WRITES into the ingest area. The property R6 protected
+# (the Conduit never alters operator-supplied evidence) is kept by writing only into one separate
+# subfolder, `uploaded/`, and by never overwriting anything. Each refusal below has a case, and
+# each planted violation takes the shape a real request takes.
+
+import asyncio  # noqa: E402
+from collections.abc import AsyncIterator  # noqa: E402
+
+from services.api.ingest_sources import (  # noqa: E402
+    UPLOAD_SUBDIR,
+    UploadRefused,
+    save_upload,
+    validate_upload_name,
+)
+
+
+async def _chunks(*parts: bytes) -> AsyncIterator[bytes]:
+    for part in parts:
+        yield part
+
+
+def _save(root: Path, name: str, *parts: bytes, max_bytes: int = 1024):
+    return asyncio.run(save_upload(root, name, _chunks(*parts), max_bytes=max_bytes))
+
+
+def _refusal(root: Path, name: str, *parts: bytes, max_bytes: int = 1024) -> UploadRefused:
+    with pytest.raises(UploadRefused) as caught:
+        _save(root, name, *parts, max_bytes=max_bytes)
+    return caught.value
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["carrier a 2026-09.csv", "Report.PDF", "extract.tar.gz", "voice_01.wav", "a.b.c.csv"],
+)
+def test_ordinary_names_of_known_types_are_accepted(name: str) -> None:
+    assert validate_upload_name(name) == name
+
+
+@pytest.mark.parametrize(
+    "name, code",
+    [
+        ("", "bad_name"),
+        ("   ", "bad_name"),
+        ("..", "bad_name"),
+        ("../evil.csv", "bad_name"),
+        ("sub/evil.csv", "bad_name"),
+        ("sub\\evil.csv", "bad_name"),
+        (".hidden.csv", "bad_name"),
+        ("nul\x00.csv", "bad_name"),
+        ("tab\t.csv", "bad_name"),
+        ("x" * 201 + ".csv", "bad_name"),
+        ("noextension", "type_not_allowed"),
+        ("run.exe", "type_not_allowed"),
+        ("script.sh", "type_not_allowed"),
+        ("module.py", "type_not_allowed"),
+        ("archive.csv.exe", "type_not_allowed"),
+    ],
+)
+def test_names_that_could_escape_or_hide_or_run_are_refused(name: str, code: str) -> None:
+    with pytest.raises(UploadRefused) as caught:
+        validate_upload_name(name)
+    assert caught.value.code == code, (name, caught.value.code)
+
+
+def test_an_upload_lands_in_the_uploaded_folder_with_its_bytes_intact(root: Path) -> None:
+    saved = _save(root, "new.csv", b"a,b\n", b"1,2\n")
+    assert (root / UPLOAD_SUBDIR / "new.csv").read_bytes() == b"a,b\n1,2\n"
+    assert saved.name == "new.csv"
+    assert saved.source_location == str(root / UPLOAD_SUBDIR / "new.csv")
+    assert saved.size_bytes == 8
+    assert saved.uploaded is True
+
+
+def test_an_upload_never_overwrites_a_file_of_the_same_name(root: Path) -> None:
+    """**The planted violation is a name that already exists in each place it could.** Overwriting
+    in `uploaded/` would silently replace data a draft already points at; matching an operator's
+    file in the root would let the same name mean two things in the picker."""
+    _save(root, "again.csv", b"first")
+    assert _refusal(root, "again.csv", b"second").code == "exists"
+    assert (root / UPLOAD_SUBDIR / "again.csv").read_bytes() == b"first"
+
+    assert _refusal(root, "cdr-carrier-a.csv", b"x").code == "exists"
+    assert (root / "cdr-carrier-a.csv").read_text(encoding="utf-8") == "a,b\n1,2\n"
+
+
+def test_a_refused_upload_leaves_nothing_behind(root: Path) -> None:
+    """Too large, empty and duplicate must all clean up their temporary part-file; a stray
+    `.upload-*.part` would be invisible in the picker (dotfiles are skipped) and never removed."""
+    assert _refusal(root, "big.csv", b"x" * 600, b"x" * 600, max_bytes=1000).code == "too_large"
+    assert _refusal(root, "empty.csv", b"").code == "empty"
+    leftovers = list((root / UPLOAD_SUBDIR).iterdir()) if (root / UPLOAD_SUBDIR).exists() else []
+    assert leftovers == [], leftovers
+
+
+def test_the_size_limit_stops_reading_at_the_limit_not_after_the_whole_body(root: Path) -> None:
+    """Counting while streaming is what makes the limit a limit: a check after the fact would have
+    already written the whole file to disk."""
+    read: list[int] = []
+
+    async def counting() -> AsyncIterator[bytes]:
+        for i in range(100):
+            read.append(i)
+            yield b"x" * 100
+
+    with pytest.raises(UploadRefused) as caught:
+        asyncio.run(save_upload(root, "huge.csv", counting(), max_bytes=250))
+    assert caught.value.code == "too_large"
+    assert len(read) < 10, f"read {len(read)} chunks of a 250-byte limit"
+
+
+def test_uploaded_files_are_listed_and_marked_and_operator_files_are_not(root: Path) -> None:
+    _save(root, "mine.csv", b"1")
+    listing = list_source_files(root)
+    flags = {f.name: f.uploaded for f in listing.files}
+    assert flags == {"cdr-carrier-a.csv": False, "device-extract.xml": False, "mine.csv": True}
+
+
+def test_a_symlink_or_folder_inside_uploaded_is_not_listed(root: Path, tmp_path: Path) -> None:
+    """The uploaded folder is the one place below the root that is listed, so the same
+    resolve-then-compare rule has to hold for it: a link out of it, or a nested folder, is skipped."""
+    folder = root / UPLOAD_SUBDIR
+    folder.mkdir()
+    outside = tmp_path.parent / "elsewhere.txt"
+    outside.write_text("not evidence", encoding="utf-8")
+    (folder / "link.csv").symlink_to(outside)
+    (folder / "nested").mkdir()
+    (folder / "nested" / "deep.csv").write_text("x", encoding="utf-8")
+    _save(root, "real.csv", b"1")
+
+    names = {f.name for f in list_source_files(root).files}
+    assert "link.csv" not in names and "deep.csv" not in names and "nested" not in names
+    assert "real.csv" in names
+
+
+def test_the_uploaded_folder_is_not_itself_offered_as_a_file(root: Path) -> None:
+    _save(root, "one.csv", b"1")
+    assert UPLOAD_SUBDIR not in {f.name for f in list_source_files(root).files}
+
+
+# --- the upload route (CLAUDE.md rule 4: its own access-control case) ---------------------------
+
+
+def _client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, principal_name: str = "SOURCE_AUTHOR"):
+    from fastapi.testclient import TestClient
+    from services.api.app import app, get_audit, get_principal
+
+    from tests.services.api import test_studio_recipe_routes as fixtures
+
+    audit = fixtures._FakeAudit()
+    monkeypatch.setenv("OSPREY_INGEST_ROOT", str(tmp_path))
+    app.dependency_overrides[get_principal] = lambda: getattr(fixtures, principal_name)
+    app.dependency_overrides[get_audit] = lambda: audit
+    return TestClient(app), app, audit
+
+
+def test_a_source_author_can_upload_and_the_file_is_then_listed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, app, _audit = _client(monkeypatch, tmp_path)
+    try:
+        response = client.post(
+            "/v1/ingest/source-files",
+            params={"name": "carrier.csv"},
+            content=b"a,b\n1,2\n",
+            headers={"content-type": "application/octet-stream"},
+        )
+        assert response.status_code == 201, response.text
+        body = response.json()
+        assert body["name"] == "carrier.csv" and body["uploaded"] is True
+        assert body["source_location"] == str(tmp_path / UPLOAD_SUBDIR / "carrier.csv")
+        listed = client.get("/v1/ingest/source-files").json()["files"]
+        assert [f["name"] for f in listed] == ["carrier.csv"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_an_upload_is_audited_with_its_name_and_size(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, app, audit = _client(monkeypatch, tmp_path)
+    try:
+        client.post("/v1/ingest/source-files", params={"name": "c.csv"}, content=b"12345")
+        recorded = [r for r in audit.records if r.get("action") == "upload_ingest_source_file"]
+        assert len(recorded) == 1, audit.records
+        assert recorded[0]["resolved_query"] == {"name": "c.csv", "size_bytes": 5}
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_a_principal_without_the_source_author_role_cannot_upload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """**Rule 4 for the first route that writes here.** The refusal must happen before a byte is
+    written, and must not say anything about what is already in the folder."""
+    client, app, _audit = _client(monkeypatch, tmp_path, "NO_ROLE_ANALYST")
+    (tmp_path / "secret-evidence.csv").write_text("a\n1\n", encoding="utf-8")
+    try:
+        response = client.post(
+            "/v1/ingest/source-files", params={"name": "sneaky.csv"}, content=b"data"
+        )
+        assert response.status_code == 403, response.text
+        assert "secret-evidence" not in response.text
+        assert not (tmp_path / UPLOAD_SUBDIR).exists() or not any(
+            (tmp_path / UPLOAD_SUBDIR).iterdir()
+        ), "a refused principal's upload was written"
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.parametrize(
+    "name, status",
+    [("../evil.csv", 400), ("x.exe", 415), (".hidden.csv", 400), ("a/b.csv", 400)],
+)
+def test_the_route_refuses_unsafe_names_and_writes_nothing_outside_uploaded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str, status: int
+) -> None:
+    client, app, _audit = _client(monkeypatch, tmp_path / "ingest")
+    (tmp_path / "ingest").mkdir()
+    try:
+        response = client.post("/v1/ingest/source-files", params={"name": name}, content=b"data")
+        assert response.status_code == status, (name, response.status_code, response.text)
+        written = [p for p in tmp_path.rglob("*") if p.is_file()]
+        assert written == [], written
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_the_route_says_409_for_an_existing_name_and_413_for_a_file_over_the_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, app, _audit = _client(monkeypatch, tmp_path)
+    monkeypatch.setenv("OSPREY_INGEST_MAX_UPLOAD_BYTES", "10")
+    try:
+        assert client.post("/v1/ingest/source-files", params={"name": "a.csv"}, content=b"1234").status_code == 201
+        assert client.post("/v1/ingest/source-files", params={"name": "a.csv"}, content=b"5678").status_code == 409
+        too_big = client.post("/v1/ingest/source-files", params={"name": "b.csv"}, content=b"x" * 11)
+        assert too_big.status_code == 413, too_big.text
+        assert not (tmp_path / UPLOAD_SUBDIR / "b.csv").exists()
+    finally:
+        app.dependency_overrides.clear()

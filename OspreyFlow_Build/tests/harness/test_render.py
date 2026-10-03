@@ -1319,3 +1319,43 @@ def test_the_conduit_gets_the_tiles_folder_read_only_where_the_provider_source_p
     volumes = document["services"]["api"]["volumes"]
 
     assert f"{config.components.storage.tiles}:/data/tiles:ro" in volumes
+
+
+# --- ADR-067 (amends R6): the one writable door inside the ingest root --------------------------
+#
+# Browser upload (the Connect stage's "Choose file…") needs the Conduit to write somewhere. R6's
+# read-only mount stays exactly as it was; a single sub-folder is mounted writable *over* it, so
+# the evidence an operator put in the root is still not writable and only what an analyst uploads
+# is. These are the cases that fail if the root itself were made writable, or if the writable
+# folder stopped matching the folder the Conduit writes to.
+
+
+def test_only_the_uploaded_folder_inside_the_ingest_root_is_writable_for_the_conduit() -> None:
+    from schemas.deployment import ComponentsConfig, Profile, StorageRoots
+
+    for profile in (Profile.LOCAL_LITE, Profile.SMALL):
+        config = OspreyConfig(profile=profile)
+        volumes = yaml.safe_load(render(config, allow_unpinned=True).artefacts["compose.yaml"])[
+            "services"
+        ]["api"]["volumes"]
+        ingest = config.components.storage.ingest
+        assert f"{ingest}:{INGEST_CONTAINER_PATH}:ro" in volumes, volumes
+        assert f"{ingest}/uploaded:{INGEST_CONTAINER_PATH}/uploaded" in volumes, volumes
+        writable = [v for v in volumes if v.split(":")[1:2] == [INGEST_CONTAINER_PATH] and not v.endswith(":ro")]
+        assert writable == [], f"{profile.value}: the ingest root itself is writable: {writable}"
+
+    moved = OspreyConfig(
+        components=ComponentsConfig(storage=StorageRoots(ingest="/mnt/evidence/incoming"))
+    )
+    volumes = yaml.safe_load(render(moved, allow_unpinned=True).artefacts["compose.yaml"])[
+        "services"
+    ]["api"]["volumes"]
+    assert f"/mnt/evidence/incoming/uploaded:{INGEST_CONTAINER_PATH}/uploaded" in volumes, volumes
+
+
+def test_the_writable_folder_is_the_one_the_conduit_writes_uploads_to() -> None:
+    from services.api.ingest_sources import UPLOAD_SUBDIR
+
+    from harness.render import INGEST_UPLOAD_SUBDIR
+
+    assert INGEST_UPLOAD_SUBDIR == UPLOAD_SUBDIR

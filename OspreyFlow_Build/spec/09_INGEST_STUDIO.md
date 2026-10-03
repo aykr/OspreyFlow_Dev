@@ -56,9 +56,15 @@ YAML file in `connectors/`, so adding a new carrier's CDR layout is a file rathe
 | Archives | ZIP and tarballs, unpacked one level with each member treated on its own merits |
 
 Connect asks three things regardless of source: where the data is, what the handling marking on
-it is, and what the legal basis for processing it is. None is optional, and none can be answered
-later — a source loaded without a handling marking cannot be safely exported, and a source
-loaded without a legal basis cannot be defended.
+it is, and what the legal basis for processing it is. None can be answered later — a source loaded
+without a handling marking cannot be safely exported, and a source loaded without a legal basis
+cannot be defended. **The classification within the handling marking is the one part that may be
+left blank (ADR-068, owner ruling of 3 October 2026): a blank classification is recorded as the
+scheme's lowest level, `PUBLIC` for the UK scheme, and Connect says so beside the box.** The
+server makes this true on both the create and the edit route, so a draft never carries an empty
+marking whichever client wrote it. A blank marking is therefore the *least* protective one; that
+was the owner's choice and is why Connect shows "Left blank: recorded as PUBLIC" rather than
+saying nothing.
 
 ### Where the data is, for a rendered deployment — the ingest root
 
@@ -91,12 +97,37 @@ GET /v1/ingest/source-files
 
 The analyst picks one and continues to Profile → Map on the existing canvas;
 `ConnectDraftInput.source_location` is the chosen file's container path, so nothing about the rest
-of the Studio changes. The Conduit **never writes** to this root — whatever puts evidence on the
-host owns its contents, which is why the mount is read-only.
+of the Studio changes. The mount of the root itself stays read-only: whatever puts evidence on the
+host owns its contents.
 
-**A browser upload route is explicitly post-milestone** (R6), as are Map's two recorded gaps
-(keyboard binding, proposed templates). This ruling closes the "no door at all" case, not the
-"upload from your laptop" one.
+**Upload from the analyst's computer (ADR-067, which amends R6; owner ruling of 3 October 2026,
+"I need a file picker, not just the bar saying file path").** R6 deferred a browser upload past the
+milestone. The owner has since asked for it, so Connect now has a **Choose file…** button that opens
+the system's own file picker and uploads the chosen file:
+
+```
+POST /v1/ingest/source-files
+```
+
+- **Request:** the file's bytes as the raw request body (`application/octet-stream`), its name in the
+  query string (`?name=`). Nothing is parsed as a form.
+- **Authorisation:** `StudioRole.SOURCE_AUTHOR`, as for the listing, checked before a byte is read.
+- **Where it lands:** `<ingest root>/uploaded/<name>`, the one sub-folder the Conduit may write to.
+  The renderer mounts it writable *over* the read-only root, so operator-placed evidence is still
+  not writable. The listing shows both, the uploaded ones marked `uploaded`.
+- **Refuses (each with a sentence the Glass shows as it is):** a name with a folder part, a leading
+  dot, a control character or more than 200 characters (400); an extension outside the list the
+  connectors read (415); a name already present in the root or in `uploaded` — nothing is ever
+  overwritten (409); an empty file (400); a file over `OSPREY_INGEST_MAX_UPLOAD_BYTES`, default
+  512 MiB (413). The size is counted as the body streams, so the limit stops the read; the declared
+  length is checked first so an honest oversized upload is refused unread.
+- **Written safely:** to a hidden part-file first, then linked into place only when complete, so a
+  half-written file is never offered. A refused upload leaves nothing behind.
+- **Audited:** `upload_ingest_source_file` with the name and the size, never the contents.
+
+Typing a path or address stays available behind "Or type a path or address", for what a file
+cannot cover (an `s3://` address, a developer's local path). Map's two recorded gaps (keyboard
+binding, proposed templates) remain post-milestone.
 
 ## 3. Stage 2 — Profile
 

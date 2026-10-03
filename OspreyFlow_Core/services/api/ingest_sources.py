@@ -46,6 +46,8 @@ basis, source) from the analyst, and that is where they stay.
 from __future__ import annotations
 
 import os
+import uuid
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -71,6 +73,11 @@ class IngestSourceFile(BaseModel):
     source_location: str = Field(description="The container path to give the recipe draft")
     size_bytes: int
     modified_at: float = Field(description="Unix timestamp, for ordering by recency in the Glass")
+    uploaded: bool = Field(
+        default=False,
+        description="True for a file uploaded through the Studio (ADR-067), False for one an "
+        "operator placed in the ingest folder",
+    )
 
 
 class IngestSourceListing(BaseModel):
@@ -111,31 +118,148 @@ def is_inside(root: Path, candidate: Path) -> bool:
 
 
 def list_source_files(root: Path | None = None) -> IngestSourceListing:
+    """The files directly in the root (operator-supplied, read-only) and the files directly in its
+    `uploaded/` folder (put there through the Studio, ADR-067). Those two directories and nothing
+    below them: each entry is resolved and must still be inside the directory it was found in."""
     root = root if root is not None else ingest_root()
     files: list[IngestSourceFile] = []
-    for candidate in _candidates(root):
-        if candidate.name.startswith("."):
-            continue
-        if not is_inside(root, candidate.resolved):
-            # A symlink out of the root. Skipped silently rather than reported: naming it would
-            # tell a caller that a path outside the root exists, which is the existence leak
-            # `03_CONDUIT_MIDDLEWARE.md` §3 collapses everywhere else.
-            continue
-        try:
-            stat = candidate.resolved.stat()
-        except OSError:
-            continue
-        if not candidate.resolved.is_file():
-            continue
-        files.append(
-            IngestSourceFile(
-                name=candidate.name,
-                # The *mount* path, not the resolved one — a resolved path could name the host
-                # layout behind a symlink, and the recipe engine reads through the mount anyway.
-                source_location=str(root / candidate.name),
-                size_bytes=stat.st_size,
-                modified_at=stat.st_mtime,
+    for base, uploaded in ((root, False), (root / UPLOAD_SUBDIR, True)):
+        for candidate in _candidates(base):
+            if candidate.name.startswith("."):
+                continue
+            if not is_inside(base, candidate.resolved):
+                # A symlink out of the directory. Skipped silently rather than reported: naming it
+                # would tell a caller that a path outside it exists, which is the existence leak
+                # `03_CONDUIT_MIDDLEWARE.md` §3 collapses everywhere else.
+                continue
+            try:
+                stat = candidate.resolved.stat()
+            except OSError:
+                continue
+            if not candidate.resolved.is_file():
+                continue
+            files.append(
+                IngestSourceFile(
+                    name=candidate.name,
+                    # The *mount* path, not the resolved one: a resolved path could name the host
+                    # layout behind a symlink, and the recipe engine reads through the mount anyway.
+                    source_location=str(base / candidate.name),
+                    size_bytes=stat.st_size,
+                    modified_at=stat.st_mtime,
+                    uploaded=uploaded,
+                )
             )
-        )
     files.sort(key=lambda f: (-f.modified_at, f.name))
     return IngestSourceListing(root=str(root), files=files)
+
+
+# --- Upload from the analyst's computer (ADR-067) ----------------------------------------------
+
+#: The one folder under the root the Conduit may write to. The root itself stays read-only, so a
+#: compromised or mistaken upload can never alter operator-supplied evidence (ruling R6's reason).
+UPLOAD_SUBDIR = "uploaded"
+
+#: What may be uploaded: the formats the connector catalogue names (`09_INGEST_STUDIO.md` §2) and
+#: nothing executable. A name with no extension, or any other extension, is refused.
+UPLOAD_EXTENSIONS = frozenset(
+    {
+        ".csv", ".tsv", ".txt", ".json", ".xml", ".xlsx",
+        ".pdf", ".docx", ".rtf", ".eml", ".msg", ".html", ".htm",
+        ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".heic",
+        ".wav", ".mp3", ".m4a", ".mp4",
+        ".zip", ".tar", ".gz", ".tgz",
+    }
+)  # fmt: skip
+
+_MAX_NAME_LENGTH = 200
+_DEFAULT_MAX_UPLOAD_BYTES = 512 * 1024 * 1024
+
+
+def max_upload_bytes() -> int:
+    raw = os.environ.get("OSPREY_INGEST_MAX_UPLOAD_BYTES")
+    try:
+        value = int(raw) if raw is not None else _DEFAULT_MAX_UPLOAD_BYTES
+    except ValueError:
+        return _DEFAULT_MAX_UPLOAD_BYTES
+    return value if value > 0 else _DEFAULT_MAX_UPLOAD_BYTES
+
+
+class UploadRefused(Exception):
+    """An upload that was not accepted, with a code the route maps to a status and a message that
+    is safe to show the analyst (it never names anything already in the folder)."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def validate_upload_name(name: str) -> str:
+    """The name the file will be stored under, or `UploadRefused`. A name is a single plain file
+    name: no directory part, nothing hidden, no control characters, a known extension."""
+    if not name or not name.strip():
+        raise UploadRefused("bad_name", "The file needs a name.")
+    if (
+        len(name) > _MAX_NAME_LENGTH
+        or name in {".", ".."}
+        or name.startswith(".")
+        or "/" in name
+        or "\\" in name
+        or any(ord(ch) < 32 or ord(ch) == 127 for ch in name)
+    ):
+        raise UploadRefused(
+            "bad_name",
+            "That file name cannot be used. Use a plain name of up to 200 characters, with no "
+            "folders, and not starting with a dot.",
+        )
+    if Path(name).suffix.lower() not in UPLOAD_EXTENSIONS:
+        raise UploadRefused("type_not_allowed", "That type of file cannot be uploaded.")
+    return name
+
+
+async def save_upload(
+    root: Path, name: str, chunks: AsyncIterator[bytes], *, max_bytes: int
+) -> IngestSourceFile:
+    """Write the streamed body into `<root>/uploaded/<name>`. Never overwrites (a name already in
+    the uploaded folder or in the root is refused). The size is counted as it streams, so the limit
+    stops the read rather than being checked after the whole file is on disk. The bytes go to a
+    hidden part-file first and are linked into place only when complete, so a half-written file is
+    never offered in the picker."""
+    name = validate_upload_name(name)
+    folder = root / UPLOAD_SUBDIR
+    final = folder / name
+    if (root / name).exists() or final.exists():
+        raise UploadRefused("exists", "A file with that name is already in the ingest folder.")
+    folder.mkdir(parents=True, exist_ok=True)
+    part = folder / f".upload-{uuid.uuid4().hex}.part"
+    written = 0
+    try:
+        with part.open("xb") as handle:
+            async for chunk in chunks:
+                written += len(chunk)
+                if written > max_bytes:
+                    raise UploadRefused(
+                        "too_large",
+                        f"That file is larger than the limit of {max_bytes // (1024 * 1024)} MB."
+                        if max_bytes >= 1024 * 1024
+                        else f"That file is larger than the limit of {max_bytes} bytes.",
+                    )
+                handle.write(chunk)
+        if written == 0:
+            raise UploadRefused("empty", "That file is empty.")
+        try:
+            os.link(part, final)  # atomic, and fails rather than replaces if the name has appeared
+        except FileExistsError:
+            raise UploadRefused(
+                "exists", "A file with that name is already in the ingest folder."
+            ) from None
+    finally:
+        part.unlink(missing_ok=True)
+    stat = final.stat()
+    return IngestSourceFile(
+        name=name,
+        source_location=str(final),
+        size_bytes=stat.st_size,
+        modified_at=stat.st_mtime,
+        uploaded=True,
+    )

@@ -389,11 +389,12 @@ PYTHONPATH=.:packages .venv/bin/python3 -m tools.mint_dev_token \
 A rendered deployment's own `--demo-analyst` subject already holds all four (`harness/realm.py`),
 so this step is only for the hand-run stack.
 
-Then, in the Glass: **Ingest → Connect → "Choose from the ingest folder…"**, pick the file,
-answer the three gate questions (handling, legal basis, connector), and continue to Profile →
-Map. The analyst never types a path — which is the point, and worth saying out loud during a
-demonstration, because "where is the data?" is the question every other tool answers with a file
-dialog onto the wrong machine.
+Then, in the Glass: **Ingest Studio → Connect → "Choose file…"** and pick a file from your own
+computer (it is uploaded to the deployment's `uploaded` folder and selected), or choose one already
+on the server from the list beneath it. Answer the gate questions (handling — the classification may
+be left blank and is then recorded as PUBLIC — legal basis, connector), and continue to Profile →
+Map. The analyst never types a path (ADR-067); it is still available behind "Or type a path or
+address" for an `s3://` address.
 
 **Which connector to pick, and why it matters on screen.** The connector list is derived from the
 `connectors/` directory — one validated YAML file per carrier layout, the same pattern map

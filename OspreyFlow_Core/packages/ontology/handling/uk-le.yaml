@@ -1,6 +1,7 @@
 # UK law-enforcement handling scheme — spec/01_DOMAIN_MODEL.md §2.2.
 # The enforcement logic reads the booleans below, never the code letters.
-classification: [OFFICIAL, "OFFICIAL-SENSITIVE", SECRET]
+# PUBLIC is the lowest level: what Connect records when the classification is left blank (ADR-068).
+classification: [PUBLIC, OFFICIAL, "OFFICIAL-SENSITIVE", SECRET]
 
 handling_codes:
   P: {label: "Lawful sharing permitted", dissemination: permitted}

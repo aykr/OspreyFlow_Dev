@@ -73,6 +73,11 @@ from schemas.deployment import TILES_CONTAINER_PATH, OspreyConfig, Profile, Sear
 #: the two stop agreeing.
 INGEST_CONTAINER_PATH = "/var/lib/osprey/ingest"
 
+#: The one sub-folder of the ingest root the Conduit may write to (ADR-067, which amends ruling R6):
+#: files an analyst uploads from the browser land here. It must equal
+#: `services.api.ingest_sources.UPLOAD_SUBDIR`; `tests/harness/test_render.py` fails if it drifts.
+INGEST_UPLOAD_SUBDIR = "uploaded"
+
 #: Where the Conduit commits published recipes (`09_INGEST_STUDIO.md` §6). Round 13bf: this sits
 #: *under* the data root deliberately, so it rides the already-persistent `osprey-data` volume
 #: rather than needing a mount of its own — the image's `/app` default is rebuilt on every deploy
@@ -747,6 +752,14 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
                 # material it is reading from. Rendered for every profile, so an analyst always
                 # has a door; `05_DEPLOYMENT.md` §3 and `DEMO_GUIDE.md` name the folder.
                 f"{config.components.storage.ingest}:{INGEST_CONTAINER_PATH}:ro",
+                # **ADR-067 — the one writable door, laid over the read-only root.** Browser upload
+                # needs the Conduit to write somewhere; only this sub-folder is writable, so the
+                # evidence an operator put in the root above is still not. Docker lets a nested
+                # bind mount be writable inside a read-only parent. Not run against Docker from the
+                # session that wrote it: on Linux the host folder's owner must let the container's
+                # user write (ADR-067 names this).
+                f"{config.components.storage.ingest}/{INGEST_UPLOAD_SUBDIR}:"
+                f"{INGEST_CONTAINER_PATH}/{INGEST_UPLOAD_SUBDIR}",
                 # The built basemap, read-only, at the path a map provider's `source` names. See
                 # `StorageRoots.tiles`.
                 f"{config.components.storage.tiles}:{TILES_CONTAINER_PATH}:ro",

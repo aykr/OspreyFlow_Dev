@@ -54,6 +54,9 @@ export interface IngestSourceFile {
   source_location: string;
   size_bytes: number;
   modified_at: number;
+  /** True for a file the analyst uploaded from the browser (ADR-067), false for one an operator
+   * placed in the ingest folder. */
+  uploaded?: boolean;
 }
 
 export interface IngestSourceListing {
@@ -73,6 +76,48 @@ export async function fetchIngestSourceFiles(
     headers: authHeaders(bearerToken),
   });
   return parseOrThrow(response, "GET /v1/ingest/source-files");
+}
+
+/** The file types the server accepts for upload (`services/api/ingest_sources.py`'s
+ * `UPLOAD_EXTENSIONS`), handed to the system file picker so it only offers files the server will
+ * take. The server remains the authority; this only saves an analyst a refusal. */
+export const UPLOAD_ACCEPT = [
+  ".csv", ".tsv", ".txt", ".json", ".xml", ".xlsx",
+  ".pdf", ".docx", ".rtf", ".eml", ".msg", ".html", ".htm",
+  ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".heic",
+  ".wav", ".mp3", ".m4a", ".mp4",
+  ".zip", ".tar", ".gz", ".tgz",
+].join(","); // prettier-ignore
+
+/** `POST /v1/ingest/source-files?name=` (ADR-067, which amends ruling R6) — send the analyst's own
+ * file, as the raw request body, into the deployment's `uploaded` folder. A refusal (bad name,
+ * unsupported type, name already used, too large, no role) throws an `Error` whose message is the
+ * sentence the server gave, so Connect can show it as it is. */
+export async function uploadIngestSourceFile(
+  apiBaseUrl: string,
+  bearerToken: string,
+  file: File,
+): Promise<IngestSourceFile> {
+  const response = await fetch(
+    `${apiBaseUrl}/v1/ingest/source-files?name=${encodeURIComponent(file.name)}`,
+    {
+      method: "POST",
+      headers: { ...authHeaders(bearerToken), "Content-Type": "application/octet-stream" },
+      body: file,
+    },
+  );
+  if (!response.ok) {
+    let reason = `The upload was refused (${response.status}).`;
+    try {
+      const body = (await response.json()) as { detail?: unknown };
+      if (typeof body.detail === "string" && body.detail) reason = body.detail;
+    } catch {
+      // The body was not JSON; the status line above is all there is to say.
+    }
+    if (response.status === 403) reason = "You do not hold the source-author role, so you cannot upload files.";
+    throw new Error(reason);
+  }
+  return (await response.json()) as IngestSourceFile;
 }
 
 export async function fetchConnectorCatalogue(

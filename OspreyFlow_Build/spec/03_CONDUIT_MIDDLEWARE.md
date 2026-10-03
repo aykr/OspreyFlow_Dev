@@ -237,7 +237,7 @@ PATCH  /v1/ingest/recipes/{recipe_id}/schedule                Publish: change a 
 ```
 
 **Connect (`POST`/`GET`/`PATCH .../recipes`) is `SOURCE_AUTHOR`-gated**, the studio role that also
-gates listing source files (`GET /v1/ingest/source-files`) — creating or editing a draft and
+gates listing source files (`GET /v1/ingest/source-files`) and uploading one (`POST /v1/ingest/source-files`, ADR-067) — creating or editing a draft and
 picking a source to point it at are the same action, one step apart. `GET .../recipes/{id}`
 rejects (409, via `RecipeNotADraftError`'s own sibling checks elsewhere in this family) once a
 recipe has left `draft` status for the edit route, but stays readable regardless of status.
