@@ -21,6 +21,7 @@ Indexes created, matching §1.4 exactly:
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import UTC, datetime
 
 import httpx
@@ -30,6 +31,8 @@ from schemas.domain import EdgeTypeDef, EntityTypeDef, OntologySchema, PropertyT
 from .client import ArcadeDBClient, ArcadeDBError
 from .gremlin_literals import groovy_identifier
 from .naming import physical_type_name
+
+_log = logging.getLogger(__name__)
 
 _DDL_MAX_ATTEMPTS = 6
 _DDL_BACKOFF_BASE_SECONDS = 0.5
@@ -199,7 +202,46 @@ async def _apply_indexed_declared_properties(
             created += await _apply_indexed_property(
                 client, type_name, prop.name, _SQL_TYPE[prop.type]
             )
+            if prop.type in _BACKFILLED_TYPES:
+                await _backfill_flattened_field(client, type_name, prop.name)
     return created
+
+
+#: The indexed types worth copying up. Text is what a suggestion or an exact search reads; a date or
+#: a number would need its own conversion from the map's stored form, which nothing needs yet.
+_BACKFILLED_TYPES = frozenset({PropertyType.STRING, PropertyType.ENUM})
+
+
+async def _backfill_flattened_field(client: ArcadeDBClient, type_name: str, prop_name: str) -> None:
+    """Fill an indexed field on nodes written before the property was indexed.
+
+    The store keeps an indexed property twice, inside `properties` and as its own top-level field
+    (`serialization.py`); only the field is indexed and searched, and it is copied at write time.
+    A node written before the ontology marked the property `indexed` therefore has the map and not
+    the field, and is invisible to the index, to `search_nodes` and to `suggest_nodes` for that
+    property (seen 3 October 2026: `family_name` after ontology v11).
+
+    It fills a missing field and never replaces one that is there. It runs on every schema apply, so
+    it also repairs a field that went missing some other way; once nothing is missing it changes
+    nothing. If ArcadeDB refuses it, the schema step carries on (every statement before and after
+    still runs, so the API starts) and the refusal is logged by name: the property then stays
+    unsearchable for old nodes until they are written again, which is what the log line says."""
+    prop = groovy_identifier(prop_name)
+    statement = (
+        f"UPDATE {type_name} SET {prop} = properties.{prop} "
+        f"WHERE {prop} IS NULL AND properties.{prop} IS NOT NULL"
+    )
+    try:
+        await client.sql(statement)
+    except ArcadeDBError as exc:
+        _log.warning(
+            "could not copy %s.%s up from the properties map for nodes written before it was "
+            "indexed (%s); those nodes will not be found by that property until they are written "
+            "again, for example by re-running the seed or load",
+            type_name,
+            prop,
+            exc,
+        )
 
 
 async def _create_property(

@@ -1269,6 +1269,42 @@ async def test_suggest_nodes_finds_an_account_by_the_start_of_its_normalised_val
         assert (await adapter.suggest_nodes("C9999", CLEARED)).nodes == []
 
 
+async def test_applying_the_schema_makes_a_name_findable_on_a_node_written_before_it_was_indexed(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Seen 3 October 2026 (ADR-074): `Petrenko` found nothing although the node existed, because
+    `family_name` became `indexed` after the node was written and the top-level copy the search
+    reads is made at write time. The write is made as it would have been before (the field is
+    emptied by hand), the suggestion finds nothing, and applying the schema again must repair it.
+
+    Written before the repair, and **not yet run** against a live ArcadeDB by the session that
+    wrote it: the `UPDATE ... SET field = properties.field` it relies on is the unproven part."""
+    from adapters.graph_arcadedb.naming import physical_type_name
+    from ontology.loader import load_default_ontology
+
+    async with factory.context() as adapter:
+        (person_id,), _ = await _write(
+            adapter,
+            [
+                _node(
+                    "Person", classification="OFFICIAL", family_name="Petrenko", given_names="Illia"
+                )
+            ],
+            [],
+        )
+        person = physical_type_name("Person")
+        await adapter._client.sql(  # type: ignore[attr-defined]
+            f"UPDATE {person} SET family_name = null WHERE id = '{person_id}'"
+        )
+        assert (await adapter.suggest_nodes("Petrenko", CLEARED)).nodes == []
+
+        await adapter.apply_schema(load_default_ontology())
+
+        found = await adapter.suggest_nodes("Petrenko", CLEARED)
+        assert [n.id for n in found.nodes] == [person_id]
+        assert found.nodes[0].properties["family_name"] == "Petrenko"
+
+
 async def test_suggest_nodes_says_when_more_matched_and_never_returns_more_than_the_limit(
     factory: GraphAdapterFactory,
 ) -> None:

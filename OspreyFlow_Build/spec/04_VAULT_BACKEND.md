@@ -79,6 +79,11 @@ Both engines need explicit indexes; neither will be usable without them.
 - An index for every property the ontology marks `indexed: true`. The flag is a schema
   instruction, not documentation — a loader that reads it and a migration runner that ignores it
   leaves a field that looks indexed and scans.
+  On ArcadeDB an indexed property is also kept as its own top-level field, copied from the
+  `properties` map when a node is written; the index and the search read the field. So applying a
+  schema also fills that field, for text properties, on nodes written before the property was
+  indexed, where it is missing and never where it is present (ADR-074 Amendment 1). A refused fill is
+  logged by name and does not stop the schema step.
 - Composite index on `(type, handling.classification)` — the access filter runs on every read
   and an unindexed filter there costs more than the query.
 - Mixed/full-text index on name-like properties, served by OpenSearch on the cluster profile.
