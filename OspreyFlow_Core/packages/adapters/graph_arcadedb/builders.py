@@ -138,14 +138,24 @@ class SuggestLocationsBuilder:
         )
 
 
-def suggestion_scope(schema: OntologySchema) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """The physical types and the property names a prefix suggestion looks at: each entity type's
+def suggestion_scope(
+    schema: OntologySchema, types: tuple[str, ...] | None = None
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """The physical types and the property names a suggestion looks at: each entity type's
     declared identifiers plus its indexed properties, as `search_nodes` does, but only string
     ones (a prefix of a number or a flag means nothing) and only on types that carry one, so the
-    scan is label-first and as narrow as the ontology allows."""
+    scan is label-first and as narrow as the ontology allows. `types` narrows it to the named
+    entity types; a name the ontology does not have is a `ValueError`."""
+    if types is not None:
+        known = {e.name for e in schema.entity_types}
+        unknown = sorted(set(types) - known)
+        if unknown:
+            raise ValueError(f"unknown entity type(s): {', '.join(unknown)}")
     labels: list[str] = []
     fields: set[str] = set()
     for entity in schema.entity_types:
+        if types is not None and entity.name not in types:
+            continue
         declared = {p.name: p.type for p in entity.properties}
         carried = {
             f
@@ -161,6 +171,13 @@ def suggestion_scope(schema: OntologySchema) -> tuple[tuple[str, ...], tuple[str
     return tuple(labels), tuple(sorted(fields))
 
 
+def java_regex_quote(text: str) -> str:
+    """`java.util.regex.Pattern.quote`: typed text is matched as text, never as a pattern."""
+    if "\\E" not in text:
+        return f"\\Q{text}\\E"
+    return "\\Q" + text.replace("\\E", "\\E\\\\E\\Q") + "\\E"
+
+
 @dataclass(frozen=True)
 class SuggestNodesBuilder:
     """`GraphPort.suggest_nodes` — a label-first prefix scan (`TextP.startingWith`, the same
@@ -172,14 +189,35 @@ class SuggestNodesBuilder:
     fields: tuple[str, ...]
     prefix: str
     limit: int = 10
+    mode: str = "starts_with"
+    ignore_case: bool = False
+
+    def _predicate(self) -> str:
+        """Case-sensitive forms use TinkerPop's own text predicates (proven live for `startingWith`
+        and `containing`). Ignoring case has no such predicate, so it is a regular expression with
+        the `(?iu)` flag over quoted text; **that form is not yet proven on ArcadeDB's Gremlin
+        engine** (ADR-061), and neither it nor `contains` can use an index."""
+        if self.ignore_case:
+            quoted = java_regex_quote(self.prefix)
+            pattern = {
+                "starts_with": f"(?iu)^{quoted}",
+                "contains": f"(?iu){quoted}",
+                "exact": f"(?iu)^{quoted}$",
+            }[self.mode]
+            return f"TextP.regex({groovy_string_literal(pattern)})"
+        lit = groovy_string_literal(self.prefix)
+        return {
+            "starts_with": f"TextP.startingWith({lit})",
+            "contains": f"TextP.containing({lit})",
+            "exact": f"P.eq({lit})",
+        }[self.mode]
 
     def render_gremlin(self, access: AccessFilter, principal: Principal) -> str:
         has_access = access.gremlin_has_step(principal)
-        prefix_lit = groovy_string_literal(self.prefix)
+        predicate = self._predicate()
         labels = ",".join(groovy_string_literal(label) for label in self.labels)
         clauses = ",".join(
-            f"__.has({groovy_string_literal(field)},TextP.startingWith({prefix_lit}))"
-            for field in self.fields
+            f"__.has({groovy_string_literal(field)},{predicate})" for field in self.fields
         )
         return (
             f"g.V().hasLabel({labels}).or({clauses}).{has_access}"

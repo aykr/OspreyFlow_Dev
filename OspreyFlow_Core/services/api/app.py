@@ -2204,7 +2204,12 @@ async def suggest_route(
     await audit.record(
         principal=principal,
         action="suggest",
-        resolved_query={"query": body.query},
+        resolved_query={
+            "query": body.query,
+            "mode": body.mode,
+            "ignore_case": body.ignore_case,
+            "types": body.types,
+        },
         result_cardinality=len(result.nodes),
     )
     return result

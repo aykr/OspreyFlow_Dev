@@ -23,7 +23,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from conduit_common.identity import new_edge_id, new_node_id, now_utc
 from ontology.errors import OntologyError
-from ports.graph import GraphPort
+from ports.graph import GraphPort, SuggestOptions
 from schemas.domain import (
     EdgeWrite,
     ExpandRequest,
@@ -1329,6 +1329,103 @@ async def test_unauthorised_suggestions_match_a_graph_where_the_node_never_exist
         found = await adapter.suggest_nodes("C555", OFFICIAL, limit=1)
         assert [n.id for n in found.nodes] == [visible_id]
         assert found.more is False, "a hidden match must not be detectable through `more`"
+
+
+# --- suggest_nodes options (ADR-061): ignore case, match mode, entity types -------------
+#
+# **These are the cases that prove `TextP.regex('(?iu)...')` on the real engine.** The unit tests
+# run the same behaviour against a store double that interprets the query; only a live store can
+# say whether ArcadeDB's Gremlin accepts the regular-expression predicate and its `(?iu)` flag.
+# If the first one fails here, ignoring case needs another route (ADR-061 says which).
+
+
+async def _suggest_account(
+    adapter: GraphPort, value: str, classification: str = "OFFICIAL"
+) -> str:
+    (node_id,), _ = await _write(
+        adapter,
+        [
+            _node(
+                "Endpoint",
+                classification=classification,
+                value_raw=value,
+                value_normalised=value,
+                endpoint_kind="account",
+            )
+        ],
+        [],
+    )
+    return node_id
+
+
+async def test_suggest_nodes_ignoring_case_finds_either_case_and_the_default_does_not(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        upper = await _suggest_account(adapter, "Jeff.Skilling@enron.com")
+        lower = await _suggest_account(adapter, "jeff.dasovich@enron.com")
+        plain = await adapter.suggest_nodes("jeff", CLEARED)
+        assert [n.id for n in plain.nodes] == [lower]
+        folded = await adapter.suggest_nodes(
+            "JEFF", CLEARED, options=SuggestOptions(ignore_case=True)
+        )
+        assert {n.id for n in folded.nodes} == {upper, lower}
+
+
+async def test_suggest_nodes_contains_and_exact_modes(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        whole = await _suggest_account(adapter, "C13")
+        longer = await _suggest_account(adapter, "C130")
+        inside = await _suggest_account(adapter, "xC13y")
+        contains = await adapter.suggest_nodes(
+            "C13", CLEARED, options=SuggestOptions(mode="contains")
+        )
+        assert {n.id for n in contains.nodes} == {whole, longer, inside}
+        exact = await adapter.suggest_nodes(
+            "C13", CLEARED, options=SuggestOptions(mode="exact")
+        )
+        assert [n.id for n in exact.nodes] == [whole]
+        exact_folded = await adapter.suggest_nodes(
+            "c13", CLEARED, options=SuggestOptions(mode="exact", ignore_case=True)
+        )
+        assert [n.id for n in exact_folded.nodes] == [whole], (
+            "exact must not match C130"
+        )
+
+
+async def test_suggest_nodes_typed_regex_characters_are_text_not_a_pattern(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Catches typed text read as a regular expression when ignoring case: `.` must not be any
+    character, and `+` and `(` must not break the query."""
+    async with factory.context() as adapter:
+        dotted = await _suggest_account(adapter, "a.b")
+        await _suggest_account(adapter, "axb")
+        found = await adapter.suggest_nodes(
+            "a.b", CLEARED, options=SuggestOptions(mode="contains", ignore_case=True)
+        )
+        assert [n.id for n in found.nodes] == [dotted]
+        odd = await adapter.suggest_nodes(
+            "a+(b", CLEARED, options=SuggestOptions(mode="contains", ignore_case=True)
+        )
+        assert odd.nodes == []
+
+
+async def test_suggest_nodes_ignoring_case_still_hides_what_the_principal_may_not_see(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Rule 3 and 4 for the new predicate: a SECRET match is not returned to an OFFICIAL
+    principal, does not count toward the limit and does not set `more`."""
+    async with factory.context() as adapter:
+        await _suggest_account(adapter, "Zed-secret-1", classification="SECRET")
+        visible = await _suggest_account(adapter, "zed-open-2")
+        found = await adapter.suggest_nodes(
+            "ZED", OFFICIAL, limit=1, options=SuggestOptions(ignore_case=True)
+        )
+        assert [n.id for n in found.nodes] == [visible]
+        assert found.more is False
 
 
 # --- suggest_locations (a disclosed known-gaps closure) ---------------------

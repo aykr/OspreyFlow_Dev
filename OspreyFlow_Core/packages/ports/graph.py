@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Protocol, runtime_checkable
+from typing import Literal, Protocol, runtime_checkable
 
 from schemas.domain import (
     EdgeId,
@@ -192,10 +192,17 @@ class GraphPort(Protocol):
         ...
 
     async def suggest_nodes(
-        self, prefix: str, principal: Principal, *, limit: int = 10
+        self,
+        prefix: str,
+        principal: Principal,
+        *,
+        limit: int = 10,
+        options: SuggestOptions | None = None,
     ) -> NodeSuggestions:
         """The Glass search box as the analyst types (ADR-059): nodes whose declared identifiers
-        or indexed string properties **start with** `prefix`, case-sensitively. A separate read
+        or indexed string properties **start with** `prefix`, case-sensitively, unless `options`
+        (ADR-061) asks for `contains`, an exact match, case to be ignored, or only some types. A
+        type name the ontology does not have is refused with `ValueError`. A separate read
         from `search_nodes`, which stays an exact match (its contract, and the reason
         `suggest_locations` is separate too).
 
@@ -355,6 +362,21 @@ class GraphPort(Protocol):
         by the caller's own audit trail (the load ledger), not a
         principal-scoped read."""
         ...
+
+
+SuggestMode = Literal["starts_with", "contains", "exact"]
+
+
+@dataclass(frozen=True)
+class SuggestOptions:
+    """How `GraphPort.suggest_nodes` matches (ADR-061). The default is exactly ADR-059's: the
+    value **starts with** what was typed, case-sensitively, on every type that carries a string
+    identifier. `ignore_case` and `contains` cannot use an index, so they scan the labelled types;
+    `types` (entity type names) narrows that scan."""
+
+    mode: SuggestMode = "starts_with"
+    ignore_case: bool = False
+    types: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)

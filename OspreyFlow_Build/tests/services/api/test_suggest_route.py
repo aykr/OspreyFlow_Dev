@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
-from ports.graph import NodeSuggestions
+from ports.graph import NodeSuggestions, SuggestOptions
 from schemas.domain import Principal
 from services.api.app import app, get_audit, get_graph, get_principal
 
@@ -20,12 +20,22 @@ from tests.services.api.test_search_route import PRINCIPAL, _FakeAudit, _node
 class _FakeGraph:
     def __init__(self, more: bool = False) -> None:
         self.calls: list[tuple[str, Principal, int]] = []
+        self.options: list[SuggestOptions | None] = []
         self.more = more
+        self.refuse: str | None = None
 
     async def suggest_nodes(
-        self, prefix: str, principal: Principal, *, limit: int = 10
+        self,
+        prefix: str,
+        principal: Principal,
+        *,
+        limit: int = 10,
+        options: SuggestOptions | None = None,
     ) -> NodeSuggestions:
+        if self.refuse:
+            raise ValueError(self.refuse)
         self.calls.append((prefix, principal, limit))
+        self.options.append(options)
         return NodeSuggestions(nodes=[_node("hit-1"), _node("hit-2")], more=self.more)
 
 
@@ -95,3 +105,62 @@ def test_the_route_needs_a_principal() -> None:
     response = TestClient(app).post("/v1/suggest", json={"query": "C13"})
     assert response.status_code in (401, 403)
     assert graph.calls == []
+
+
+def test_the_options_default_to_the_plain_prefix_match() -> None:
+    graph = _FakeGraph()
+    client, _ = _client(graph)
+    client.post("/v1/suggest", json={"query": "C13"})
+    assert graph.options == [SuggestOptions()]
+
+
+def test_the_options_are_passed_to_the_graph() -> None:
+    graph = _FakeGraph()
+    client, audit = _client(graph)
+    response = client.post(
+        "/v1/suggest",
+        json={
+            "query": "jef",
+            "mode": "contains",
+            "ignore_case": True,
+            "types": ["Endpoint", "Person"],
+        },
+    )
+    assert response.status_code == 200
+    assert graph.options == [
+        SuggestOptions(mode="contains", ignore_case=True, types=("Endpoint", "Person"))
+    ]
+    assert audit.records[-1]["resolved_query"] == {
+        "query": "jef",
+        "mode": "contains",
+        "ignore_case": True,
+        "types": ["Endpoint", "Person"],
+    }
+
+
+def test_an_unknown_mode_is_refused_before_the_graph_is_asked() -> None:
+    graph = _FakeGraph()
+    client, _ = _client(graph)
+    response = client.post("/v1/suggest", json={"query": "jef", "mode": "regex"})
+    assert response.status_code == 422
+    assert graph.calls == []
+
+
+def test_too_many_types_are_refused() -> None:
+    graph = _FakeGraph()
+    client, _ = _client(graph)
+    response = client.post(
+        "/v1/suggest", json={"query": "jef", "types": [f"T{n}" for n in range(51)]}
+    )
+    assert response.status_code == 422
+    assert graph.calls == []
+
+
+def test_a_type_the_ontology_does_not_have_is_a_client_error_not_a_crash() -> None:
+    graph = _FakeGraph()
+    graph.refuse = "unknown entity type(s): Nonsense"
+    client, audit = _client(graph)
+    response = client.post("/v1/suggest", json={"query": "jef", "types": ["Nonsense"]})
+    assert response.status_code == 422
+    assert "Nonsense" in response.text
+    assert audit.records == []

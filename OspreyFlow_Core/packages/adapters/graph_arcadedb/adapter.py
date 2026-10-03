@@ -29,7 +29,7 @@ from conduit_common.identity import new_edge_id, now_utc
 from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme
 from ontology.validation import validate_edge_endpoints, validate_properties
-from ports.graph import BulkEdgeResult, NodeSuggestions
+from ports.graph import BulkEdgeResult, NodeSuggestions, SuggestOptions
 from schemas.domain import (
     AuditStub,
     Edge,
@@ -548,14 +548,27 @@ class GraphArcadeDBAdapter:
         return [node_from_element_map(r) for r in results]
 
     async def suggest_nodes(
-        self, prefix: str, principal: Principal, *, limit: int = 10
+        self,
+        prefix: str,
+        principal: Principal,
+        *,
+        limit: int = 10,
+        options: SuggestOptions | None = None,
     ) -> NodeSuggestions:
         if not prefix:
             raise ValueError("suggest_nodes needs a prefix: an empty one is a scan of every vertex")
-        labels, fields = suggestion_scope(self._require_schema())
+        options = options or SuggestOptions()
+        labels, fields = suggestion_scope(self._require_schema(), options.types)
         if not labels:
             return NodeSuggestions()
-        builder = SuggestNodesBuilder(labels, fields, prefix, limit=limit)
+        builder = SuggestNodesBuilder(
+            labels,
+            fields,
+            prefix,
+            limit=limit,
+            mode=options.mode,
+            ignore_case=options.ignore_case,
+        )
         results = await self._client.gremlin(builder.render_gremlin(self._access, principal))
         nodes = [node_from_element_map(r) for r in results]
         return NodeSuggestions(nodes=nodes[:limit], more=len(nodes) > limit)
