@@ -63,6 +63,7 @@ import {
   computeClusterGraphAttributes,
   computeEdgeAttributes,
   computeNodeFrameAttributes,
+  nodeLabel,
   computeNodeGraphAttributes,
   edgeProgramFor,
 } from "./nodeAttributes";
@@ -222,6 +223,10 @@ export interface GlassCanvasHandle {
    * not in `graph` or nothing is mounted. Lets a browser test click on or beside a link without
    * guessing where the layout put it. */
   viewportPositionOf: (nodeId: string) => { x: number; y: number } | null;
+  /** The name the canvas draws beside `nodeId` right now (empty when it draws none), or `null` if
+   * the node is not in `graph` or nothing is mounted. Labels are painted to a canvas, so a browser
+   * test cannot read them from the page; this asks the renderer what it was given. */
+  labelOf: (nodeId: string) => string | null;
   /** Draws `nodeId` and everything within `depth` links of it, counted first and asked about when
    * large, exactly as a double-click expansion is (ADR-070: choosing a search result draws three
    * steps out). A no-op if `nodeId` is not in the view. */
@@ -866,10 +871,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             cameraRatio: ratio,
             degree: graph.degree(nodeId),
             viewNodeCount: graph.order,
+            emphasised: data.emphasised === true,
           });
           const drawn = {
             ...data,
             ...frame,
+            ...(data.emphasised === true ? { forceLabel: true } : {}),
             type: "glass-node",
           };
           const folded = foldedViewRef.current;
@@ -1048,6 +1055,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             (box?.height ?? 0) / 2,
             depth,
           );
+        },
+        labelOf: (nodeId: string) => {
+          const sigma = sigmaRef.current;
+          if (!sigma || !graph.hasNode(nodeId)) return null;
+          return sigma.getNodeDisplayData(nodeId)?.label ?? "";
         },
         viewportPositionOf: (nodeId: string) => {
           const sigma = sigmaRef.current;
@@ -1950,6 +1962,13 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             x={radialMenu.x}
             y={radialMenu.y}
             layout={radialMenu.layout}
+            title={
+              graph.hasNode(radialMenu.nodeId)
+                ? `${graph.getNodeAttribute(radialMenu.nodeId, "data").type}: ${nodeLabel(
+                    graph.getNodeAttribute(radialMenu.nodeId, "data"),
+                  )}`
+                : undefined
+            }
             items={radialMenuItems(radialMenu.nodeId)}
             onClose={() => setRadialMenu(null)}
           />
@@ -2046,6 +2065,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             y={pendingExpansion.y}
             wouldAdd={pendingExpansion.wouldAdd}
             options={pendingExpansion.options}
+            subject={
+              graph.hasNode(pendingExpansion.nodeId)
+                ? nodeLabel(graph.getNodeAttribute(pendingExpansion.nodeId, "data"))
+                : undefined
+            }
+            relationship={pendingExpansion.edgeType}
             onChooseType={(edgeType) => {
               const { nodeId, x, y, depth } = pendingExpansion;
               setPendingExpansion(null);

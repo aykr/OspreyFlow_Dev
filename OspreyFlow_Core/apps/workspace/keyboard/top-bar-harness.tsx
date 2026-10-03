@@ -24,7 +24,16 @@ const CASES = [
   { id: "c1", name: "Enron corpus (real data, this machine only)", level: "author", created_at: "2026-09-29T09:00:00Z", created_by: "a" },
   { id: "c2", name: "PaySim mobile money (internal)", level: "viewer", created_at: "2026-09-28T09:00:00Z", created_by: "b" },
 ];
-window.fetch = (async () => ({ ok: true, status: 200, json: async () => CASES })) as unknown as typeof fetch;
+// Ten suggestions with more behind them, so the "Showing the first 10; more match" hint appears.
+const SUGGESTIONS = Array.from({ length: 10 }, (_, i) => ({
+  id: `e${i}`,
+  type: "Endpoint",
+  properties: { value_normalised: `person${i}@enron.com` },
+}));
+window.fetch = (async (url: string) => {
+  const body = String(url).endsWith("/v1/suggest") ? { nodes: SUGGESTIONS, more: true } : CASES;
+  return { ok: true, status: 200, json: async () => body };
+}) as unknown as typeof fetch;
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");

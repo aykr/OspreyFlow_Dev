@@ -16,6 +16,7 @@
 }
 .btn:hover { background: var(--surface-hover); }
 .btn:disabled { color: var(--text-disabled); cursor: not-allowed; }
+.btn[aria-pressed="true"] { background: var(--surface-hover); border-color: var(--brass); color: var(--brass); }
 .btn--primary { background: var(--brass); border-color: var(--brass); color: var(--brass-ink); }
 .btn--primary:hover { background: var(--brass-hover); border-color: var(--brass-hover); }
 .btn--primary:active { background: var(--brass-press); border-color: var(--brass-press); }
@@ -189,7 +190,29 @@
 .app-header[data-app="ingest"] { border-bottom: 3px solid var(--brass); }
 
 /* The search box carries its Filters button inside its own right-hand end. */
+.global-search { position: relative; }
 .global-search__field { position: relative; }
+/* The hint and the Filters panel are laid over the page under the box. In the page's flow they made the
+ * one-line top bar grow a second line (ADR-071). The hint never takes a click and dissolves when its
+ * time is up; it stays in the page, so a screen reader still has it. */
+.global-search__status {
+  position: absolute; top: 100%; left: 0; z-index: 35; margin-top: var(--sp-4);
+  max-width: 360px; padding: var(--sp-4) var(--sp-8);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-overlay);
+  color: var(--text-secondary);
+  font-size: var(--fs-12, var(--fs-13));
+  pointer-events: none;
+  transition: opacity 400ms ease;
+}
+.global-search__status[data-faded="true"] { opacity: 0; }
+.global-search .search-filters {
+  position: absolute; top: 100%; left: 0; z-index: 40; margin-top: var(--sp-4);
+  min-width: 260px;
+  border-radius: var(--r-overlay);
+  box-shadow: var(--overlay-shadow);
+}
 .global-search__field .input { width: 100%; box-sizing: border-box; padding-right: 52px; }
 .global-search__filters {
   position: absolute; right: var(--sp-4); top: 50%; transform: translateY(-50%);

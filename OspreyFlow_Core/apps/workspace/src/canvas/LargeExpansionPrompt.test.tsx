@@ -30,6 +30,22 @@ function setup(
 }
 
 describe("LargeExpansionPrompt", () => {
+  it("names the node being expanded and the relationship, so it is clear what asked", () => {
+    // Seen 3 October 2026: it appeared with no sign of which node or which gesture had brought it up.
+    setup({ subject: "jeff.dasovich@enron.com", relationship: null });
+    const text = screen.getByRole("alertdialog").textContent ?? "";
+    expect(text).toContain("jeff.dasovich@enron.com");
+    expect(text).toContain("every relationship");
+    cleanup();
+    setup({ subject: "jeff.dasovich@enron.com", relationship: "COMMUNICATED_WITH" });
+    expect(screen.getByRole("alertdialog").textContent).toContain("by COMMUNICATED_WITH");
+  });
+
+  it("says nothing has been added yet when the size could not be counted", () => {
+    setup({ wouldAdd: "unavailable", options: [] });
+    expect(screen.getByRole("alertdialog").textContent).toContain("Nothing has been added");
+  });
+
   it("says how many nodes the expansion would add", () => {
     setup();
     expect(screen.getByRole("alertdialog").textContent).toContain("1,090");

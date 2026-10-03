@@ -97,3 +97,43 @@ describe("the dropdown panel", () => {
     expect(label["white-space"]).toBe("nowrap");
   });
 });
+
+// Seen 3 October 2026: the search hint "Showing the first 10; more match. Keep typing to narrow."
+// had no rule, so it sat in the page's flow and the one-line bar grew a second line.
+describe("the search hint", () => {
+  it("is laid over the page under the box, so it can never change the height of the bar", () => {
+    const hint = plainDeclarations(".global-search__status");
+    expect(hint["position"]).toBe("absolute");
+    expect(hint["top"]).toBe("100%");
+    expect(hint["pointer-events"]).toBe("none");
+    expect(hint["background"]).toMatch(/var\(--surface/);
+    expect(Number(hint["z-index"])).toBeGreaterThanOrEqual(30);
+    expect(plainDeclarations(".global-search")["position"]).toBe("relative");
+  });
+
+  it("dissolves rather than vanishing", () => {
+    const faded = plainDeclarations('.global-search__status[data-faded="true"]');
+    expect(faded["opacity"]).toBe("0");
+    expect(plainDeclarations(".global-search__status")["transition"]).toMatch(/opacity/);
+  });
+});
+
+describe("the Filters panel", () => {
+  it("is laid over the page under the box, not in its flow, for the same reason", () => {
+    const panel = plainDeclarations(".global-search .search-filters");
+    expect(panel["position"]).toBe("absolute");
+    expect(panel["top"]).toBe("100%");
+    expect(Number(panel["z-index"])).toBeGreaterThan(Number(plainDeclarations(".global-search__status")["z-index"]));
+  });
+});
+
+describe("a pressed button", () => {
+  it("looks pressed: the theme button and the view buttons show which is on", () => {
+    // Seen 3 October 2026: the light/dark switch was found "almost by mistake", and Graph, Map and
+    // Watches gave no sign of which view was showing. `.btn` had no pressed rule at all.
+    const pressed = plainDeclarations('.btn[aria-pressed="true"]');
+    expect(pressed["border-color"]).toBe("var(--brass)");
+    expect(pressed["color"]).toBe("var(--brass)");
+    expect(pressed["background"]).toBeDefined();
+  });
+});

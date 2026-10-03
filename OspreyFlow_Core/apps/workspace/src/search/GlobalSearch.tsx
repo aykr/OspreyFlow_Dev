@@ -27,6 +27,9 @@ export const SUGGEST_MIN_CHARS = 3;
 /** The pause after the last keystroke before the Conduit is asked. */
 export const SUGGEST_PAUSE_MS = 250;
 const SUGGEST_LIMIT = 10;
+/** How long the "more match" hint stays in view before it fades. It is not a state to act on, only
+ * a nudge, so it should not sit over the page for as long as the list is open. */
+export const SEARCH_HINT_MS = 4000;
 
 type Outcome = "idle" | "found" | "none" | "unavailable";
 
@@ -121,6 +124,17 @@ export function GlobalSearch({ apiBaseUrl, bearerToken, onSelect, entityTypes = 
           ? `Showing the first ${results.length}; more match. Keep typing to narrow.`
           : null;
 
+  // Only the nudge fades. "Nothing matches" and "could not answer" are answers to what was typed and
+  // stay while it stands. A new answer (a new `results`) brings the nudge back.
+  const nudge = status !== null && outcome !== "none" && outcome !== "unavailable";
+  const [faded, setFaded] = useState(false);
+  useEffect(() => {
+    setFaded(false);
+    if (!nudge) return;
+    const timeout = setTimeout(() => setFaded(true), SEARCH_HINT_MS);
+    return () => clearTimeout(timeout);
+  }, [nudge, status, results]);
+
   return (
     <div className="global-search">
       <div className="global-search__field">
@@ -151,7 +165,11 @@ export function GlobalSearch({ apiBaseUrl, bearerToken, onSelect, entityTypes = 
         </button>
       </div>
       {filtersOpen && <SearchFilters options={options} entityTypes={entityTypes} onChange={setOptions} />}
-      {status && <div role="status" className="global-search__status">{status}</div>}
+      {status && (
+        <div role="status" className="global-search__status" data-faded={nudge && faded ? "true" : undefined}>
+          {status}
+        </div>
+      )}
     </div>
   );
 }

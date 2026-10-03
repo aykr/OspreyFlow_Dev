@@ -37,7 +37,14 @@ export interface NodeZoomContext {
   degree: number;
   /** How many nodes are in the view. A crowded view draws them smaller; omitted, full size. */
   viewNodeCount?: number;
+  /** The node is selected, under the pointer or on a found path: it is always named. */
+  emphasised?: boolean;
 }
+
+/** A view of this many nodes or fewer names every node whatever the zoom or the node's links (ADR-071).
+ * The zoom rule below exists to keep a crowded view legible; in a small one it only left the analyst
+ * unable to tell two nodes apart. A first guess, to be tuned by looking at a real view. */
+export const SMALL_VIEW_LABEL_LIMIT = 40;
 
 const CROWDING_FROM = 150;
 const CROWDING_TO = 3000;
@@ -88,8 +95,12 @@ export function computeNodeFrameAttributes(
   context: NodeZoomContext,
 ): NodeFrameAttributes {
   const band = zoomBandForRatio(context.cameraRatio);
+  const smallView =
+    context.viewNodeCount !== undefined && context.viewNodeCount <= SMALL_VIEW_LABEL_LIMIT;
   const labelEligible =
-    band !== "overview" && (band !== "structure" || context.degree > 10);
+    smallView ||
+    context.emphasised === true ||
+    (band !== "overview" && (band !== "structure" || context.degree > 10));
   return {
     size: Math.max(2, BAND_SIZE[band] * crowdingScale(context.viewNodeCount)),
     label: labelEligible ? nodeLabel(node) : "",
@@ -113,6 +124,8 @@ export interface NodeGraphAttributes {
   color: string;
   borderColor: string;
   borderSize: number;
+  /** Selected, under the pointer or on a found path: the canvas names it at any zoom. */
+  emphasised: boolean;
 }
 
 function provenanceStroke(
@@ -160,7 +173,13 @@ export function computeNodeGraphAttributes(
         ? { borderColor: palette.textPrimary, borderSize: 1.5 }
         : { borderColor: "transparent", borderSize: 0 };
 
-  return { image, color: fillHex, borderColor, borderSize };
+  return {
+    image,
+    color: fillHex,
+    borderColor,
+    borderSize,
+    emphasised: state.selected || state.hovered || state.onPath,
+  };
 }
 
 export interface ClusterGraphAttributes {

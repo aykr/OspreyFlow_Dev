@@ -8,6 +8,7 @@ import {
   computeNodeGraphAttributes,
   edgeProgramFor,
   type NodeVisualState,
+  SMALL_VIEW_LABEL_LIMIT,
 } from "./nodeAttributes";
 
 const PERSON_VISUAL = { channel: "indigo", shape: "circle" } as const;
@@ -304,5 +305,57 @@ describe("edgeProgramFor", () => {
 
   it("claims no direction for an edge type the ontology does not know", () => {
     expect(edgeProgramFor("MYSTERY", types)).toBe("glass-edge");
+  });
+});
+
+// Seen 3 October 2026 in the running Glass, on the Enron case: two addresses found by search were
+// drawn as two unlabelled squares, and the node menu did not say whose it was, so the analyst could
+// not tell which node was which. The zoom rule labelled a node only above a degree of 10 (or when
+// zoomed right in), which is right for a thousand nodes and wrong for two.
+describe("telling nodes apart", () => {
+  const address = makeNode("n1", { properties: { value_normalised: "someone@example.test" } });
+
+  it("a small view labels every node whatever the zoom, even one with no links", () => {
+    const attrs = computeNodeFrameAttributes(address, {
+      cameraRatio: 5,
+      degree: 0,
+      viewNodeCount: 2,
+    });
+    expect(attrs.label).toBe("someone@example.test");
+  });
+
+  it("a view at the limit is still labelled, and one node over it falls back to the zoom rule", () => {
+    const at = computeNodeFrameAttributes(address, {
+      cameraRatio: 1,
+      degree: 0,
+      viewNodeCount: SMALL_VIEW_LABEL_LIMIT,
+    });
+    expect(at.label).toBe("someone@example.test");
+    const over = computeNodeFrameAttributes(address, {
+      cameraRatio: 1,
+      degree: 0,
+      viewNodeCount: SMALL_VIEW_LABEL_LIMIT + 1,
+    });
+    expect(over.label).toBe("");
+  });
+
+  it("a node that is selected, hovered or on a path is labelled even in a crowded view", () => {
+    const attrs = computeNodeFrameAttributes(address, {
+      cameraRatio: 5,
+      degree: 0,
+      viewNodeCount: 5000,
+      emphasised: true,
+    });
+    expect(attrs.label).toBe("someone@example.test");
+  });
+
+  it("the graph attributes say which nodes are emphasised", () => {
+    const node = makeNode("n1");
+    const emphasised = (state: Partial<NodeVisualState>) =>
+      computeNodeGraphAttributes(node, PERSON_VISUAL, baseState(state)).emphasised;
+    expect(emphasised({ selected: true })).toBe(true);
+    expect(emphasised({ hovered: true })).toBe(true);
+    expect(emphasised({ onPath: true })).toBe(true);
+    expect(emphasised({})).toBe(false);
   });
 });

@@ -38,11 +38,14 @@ export interface RadialMenuProps {
    * a different feature. Mouse-invoked (right-click) defaults to the
    * radial layout; keyboard-invoked (`\`) defaults to the list. */
   layout: "radial" | "list";
+  /** Whose menu this is, shown at its head (for example `Endpoint: someone@example.test`), so that
+   * with several nodes in view the analyst can tell which one it belongs to. */
+  title?: string;
 }
 
 const RADIUS = 96;
 
-export function RadialMenu({ x, y, items, onClose, layout }: RadialMenuProps) {
+export function RadialMenu({ x, y, items, onClose, layout, title }: RadialMenuProps) {
   const ref = useRef<HTMLUListElement>(null);
 
   // **Focus the first item once, on open — not on every render.** These were one effect keyed on
@@ -67,14 +70,41 @@ export function RadialMenu({ x, y, items, onClose, layout }: RadialMenuProps) {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
+  // A click anywhere outside the menu closes it, the same as every other menu on the page.
+  useEffect(() => {
+    const onPointerDown = (e: MouseEvent) => {
+      if (ref.current && e.target instanceof Node && !ref.current.contains(e.target)) onClose();
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [onClose]);
+
+  const heading = title ? (
+    <li
+      role="none"
+      className="radial-menu__title"
+      style={{
+        padding: "var(--sp-4) var(--sp-8)",
+        color: "var(--text-secondary)",
+        borderBottom: "1px solid var(--border-subtle)",
+        fontFamily: "var(--mono)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {title}
+    </li>
+  ) : null;
+
   if (layout === "list") {
     return (
       <ul
         className="radial-menu__list"
         role="menu"
+        aria-label={title}
         ref={ref}
         style={{ position: "fixed", left: x, top: y }}
       >
+        {heading}
         {items.map((item) => (
           <li key={item.id} role="none">
             <button
@@ -105,6 +135,7 @@ export function RadialMenu({ x, y, items, onClose, layout }: RadialMenuProps) {
     <ul
       className="radial-menu"
       role="menu"
+      aria-label={title}
       ref={ref}
       style={{
         position: "fixed",
@@ -115,6 +146,7 @@ export function RadialMenu({ x, y, items, onClose, layout }: RadialMenuProps) {
         padding: 0,
       }}
     >
+      {heading}
       {items.map((item, i) => {
         const angle = (i / items.length) * 2 * Math.PI - Math.PI / 2;
         const itemX = Math.cos(angle) * RADIUS;

@@ -1253,3 +1253,29 @@ test("switching to the light theme repaints the graph's nodes in the light palet
 test("every registered keyboard action has its own proving test case above", () => {
   assertAllCovered("CANVAS_ACTIONS", CANVAS_ACTIONS);
 });
+
+// --- Telling nodes apart (ADR-071) -----------------------------------------------------------
+// Seen on the Enron case: two searched addresses drawn as two unlabelled squares, and a right-click
+// menu that stayed open whatever was clicked and never said whose it was.
+
+test("in a small view every node is named, even one zoomed out with few links", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n0"))).not.toBe("");
+  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n3"))).not.toBe("");
+});
+
+test("a right-click menu names its node, and a click elsewhere closes it", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  const box = await canvas.boundingBox();
+  const at = await settle(page, "n1");
+  const x = (box?.x ?? 0) + (at?.x ?? 0);
+  const y = (box?.y ?? 0) + (at?.y ?? 0);
+  await page.mouse.click(x, y, { button: "right" });
+  const menu = page.getByRole("menu");
+  await expect(menu).toBeVisible();
+  await expect(menu).toHaveAttribute("aria-label", /^Person: /);
+  // Elsewhere in the canvas, well away from every node and from the menu.
+  await page.mouse.click((box?.x ?? 0) + (box?.width ?? 0) - 12, (box?.y ?? 0) + (box?.height ?? 0) - 12);
+  await expect(menu).toHaveCount(0);
+});

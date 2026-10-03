@@ -8,7 +8,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Node } from "../../../../packages/schemas/generated";
-import { GlobalSearch, SUGGEST_MIN_CHARS, SUGGEST_PAUSE_MS } from "./GlobalSearch";
+import { GlobalSearch, SEARCH_HINT_MS, SUGGEST_MIN_CHARS, SUGGEST_PAUSE_MS } from "./GlobalSearch";
 
 function account(id: string, value: string): Node {
   return { id, type: "Endpoint", properties: { value_normalised: value } } as unknown as Node;
@@ -123,6 +123,34 @@ describe("GlobalSearch as the analyst types", () => {
     fireEvent.change(box, { target: { value: "C130" } });
     await pause();
     expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  // Seen 3 October 2026: "Showing the first 10; more match. Keep typing to narrow." sat in the page's
+  // flow under the box, so the one-line top bar grew a second line the moment a list came back. It is
+  // now a hint laid over the page (see topBarStyle.test.ts) that fades once it has been read. It stays
+  // in the page for a screen reader, and comes back whenever a new answer says it again.
+  it("fades the 'more match' hint after a few seconds, keeps it readable, and brings it back with a new answer", async () => {
+    stubFetch(() => ({ body: { nodes: [account("n1", "C1305486145")], more: true } }));
+    mount();
+    const box = type("C13");
+    await pause();
+    const hint = screen.getByRole("status");
+    expect(hint.getAttribute("data-faded")).toBeNull();
+    await pause(SEARCH_HINT_MS + 50);
+    expect(hint.getAttribute("data-faded")).toBe("true");
+    expect(hint.textContent).toMatch(/more match/i);
+    fireEvent.change(box, { target: { value: "C130" } });
+    await pause();
+    expect(screen.getByRole("status").getAttribute("data-faded")).toBeNull();
+  });
+
+  it("does not fade a message that says nothing matched or that the Conduit could not answer", async () => {
+    stubFetch(() => ({ status: 500 }));
+    mount();
+    type("C13");
+    await pause();
+    await pause(SEARCH_HINT_MS + 50);
+    expect(screen.getByRole("status").getAttribute("data-faded")).toBeNull();
   });
 
   it("says so when the Conduit cannot answer, and does not leave the last answer standing", async () => {

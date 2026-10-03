@@ -107,3 +107,29 @@ test("with the keyboard: the light theme button is reached by Tab and pressed wi
   const height = (await page.locator("header.app-header").boundingBox())!.height;
   expect(height).toBeLessThan(60);
 });
+
+test("the search hint floats over the page, keeps the bar one line, and fades by itself", async ({ page }) => {
+  await page.goto("/keyboard/top-bar-harness.html");
+  const hint = page.getByRole("status");
+  await page.getByRole("combobox").fill("per");
+  await expect(hint).toContainText("more match");
+  // It is laid over the page, not part of the bar: the bar does not grow to hold it.
+  const height = (await page.locator("header.app-header").boundingBox())!.height;
+  expect(height).toBeLessThan(60);
+  const bar = (await page.locator("header.app-header").boundingBox())!;
+  const text = (await hint.boundingBox())!;
+  expect(text.y).toBeGreaterThanOrEqual(bar.y + bar.height - 8);
+  await expect(hint).not.toHaveAttribute("data-faded", "true");
+  // Then it dissolves; the words stay readable for anyone using a screen reader.
+  await expect(hint).toHaveAttribute("data-faded", "true", { timeout: 7000 });
+  await expect.poll(() => hint.evaluate((el) => getComputedStyle(el).opacity)).toBe("0");
+  await expect(hint).toContainText("more match");
+  expect((await page.locator("header.app-header").boundingBox())!.height).toBeLessThan(60);
+});
+
+test("the Filters panel floats over the page too, so opening it does not grow the bar", async ({ page }) => {
+  await page.goto("/keyboard/top-bar-harness.html");
+  await page.getByRole("button", { name: "Filters" }).click();
+  await expect(page.getByText("Ignore case")).toBeVisible();
+  expect((await page.locator("header.app-header").boundingBox())!.height).toBeLessThan(60);
+});

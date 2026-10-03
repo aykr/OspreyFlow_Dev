@@ -19,6 +19,13 @@ describe("ThemeToggle", () => {
     expect(button.getAttribute("title")).toBe("Switch to the light theme");
   });
 
+  it("is a plainly drawn, worded button, not a bare glyph that has to be hunted for", () => {
+    render(<ThemeToggle />);
+    const button = screen.getByRole("button", { name: "Light theme" });
+    expect(button.textContent).toContain("Light");
+    expect(button.classList.contains("btn")).toBe(true);
+  });
+
   it("switches the page to light, keeps the choice in this browser, and says it is pressed", () => {
     render(<ThemeToggle />);
     fireEvent.click(screen.getByRole("button", { name: "Light theme" }));

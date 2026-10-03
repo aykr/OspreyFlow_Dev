@@ -8,6 +8,10 @@ export interface LargeExpansionPromptProps {
   y: number;
   wouldAdd: PreviewCount;
   options: NarrowingOption[];
+  /** The node being expanded, as the canvas names it. */
+  subject?: string;
+  /** The one relationship being expanded by, or `null` for every one. */
+  relationship?: string | null;
   onChooseType: (edgeType: string) => void;
   onChooseAll: () => void;
   onCancel: () => void;
@@ -28,6 +32,8 @@ export function LargeExpansionPrompt({
   y,
   wouldAdd,
   options,
+  subject,
+  relationship = null,
   onChooseType,
   onChooseAll,
   onCancel,
@@ -44,11 +50,17 @@ export function LargeExpansionPrompt({
           minWidth: 280,
         }}
       >
+        {subject && (
+          <span>
+            Expanding <strong>{subject}</strong> by {relationship ?? "every relationship"}.
+          </span>
+        )}
         <strong className="value">
           {wouldAdd === "unavailable"
             ? "The size of this expansion could not be counted."
             : `This would add ${figure(wouldAdd)} nodes, more than ${EXPANSION_CONFIRM_ABOVE.toLocaleString("en-GB")}.`}
         </strong>
+        {wouldAdd === "unavailable" && <span>Nothing has been added.</span>}
         {options.length > 0 && <span>Expand by one relationship instead:</span>}
         {options.map((option) => (
           <button

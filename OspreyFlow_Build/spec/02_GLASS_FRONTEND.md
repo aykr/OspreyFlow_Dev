@@ -72,6 +72,10 @@ Four zoom bands, all driven from the reducers:
 | **Neighbourhood** | in | Full node vocabulary, all six states | Directional arrows, curved parallel edges via `@sigma/edge-curve` | All node labels |
 | **Link detail** | closest | Node labels plus key properties | Per-edge label: type, occurrence count, interval | Edge labels on |
 
+Two exceptions to the Labels column, so that nodes can be told apart (ADR-071): a view of 40 nodes or
+fewer names every node at any zoom, and a node that is selected, under the pointer or on a found
+path is always named.
+
 Three rules that make the transitions usable rather than jarring:
 
 - **Nothing appears or disappears abruptly.** Labels and edges fade across a band boundary rather
@@ -211,9 +215,12 @@ never broken in two. From the left:
   count beside it when filters are on). Its accessible name is still `Filters`, or `Filters (n)`.
   Choosing a result draws it with everything within three links, counted first and asked about
   when large (ADR-070).
+  The "more match" hint is laid over the page under the box and fades after four seconds; the Filters
+  panel is laid over the page too, so neither makes the bar taller (ADR-071).
 - Graph, Map, Watches (and Messages when a dossier is open); the Balanced slider; Export; History.
-- **The theme button** (`Light theme`), just left of the account: switches between the dark default
-  and the light theme, per browser, never sent to the server (ADR-070).
+- **The theme button** (`Light theme`, drawn as a worded `Light` button), just left of the account:
+  switches between the dark default and the light theme, per browser, never sent to the server
+  (ADR-070). A pressed button (it, and the view buttons) is drawn with a brass border and text (ADR-071).
 - **The account**, at the right-hand end (item 5 above).
 
 Every menu opens on Enter or Space, closes on Escape (focus returns to its button), on a click
@@ -283,7 +290,7 @@ on return) is shown and is never retried automatically. Only the Ingest tab can 
 
 | Requirement | Implementation |
 | --- | --- |
-| Expand a node's relationships | Context menu on right-click (a list, so long edge-type names stay readable; the browser's own menu is suppressed); items generated from the ontology's edge types valid for the node's type, each with a live count, or `count unavailable` if the preview failed; actions with no count show none. A double-click on a node expands its neighbours across every edge type |
+| Expand a node's relationships | Context menu on right-click, headed with the node's type and name and closed by a click elsewhere or Escape (a list, so long edge-type names stay readable; the browser's own menu is suppressed); items generated from the ontology's edge types valid for the node's type, each with a live count, or `count unavailable` if the preview failed; actions with no count show none. A double-click on a node expands its neighbours across every edge type |
 | Search Around | Multi-step, filtered traversal builder — `Person → uses → Endpoint → communicated with (≥5 events, in brush window) → Endpoint → used by → Person`. Preview count before committing to the canvas |
 | Pathfinder | Select two nodes, get k-shortest paths; paths render with the on-path node state (2px primary stroke, edges thickened), everything else dims to 32% |
 | Subgraph isolation | Lasso or bounding box, then "Branch to new tab" — the selection opens as a new working set with its own filter state; the parent is untouched |

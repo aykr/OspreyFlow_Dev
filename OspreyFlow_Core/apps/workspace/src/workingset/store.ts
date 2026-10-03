@@ -45,6 +45,9 @@ export type WorkingSetNodeAttributes = {
   color?: string;
   borderColor?: string;
   borderSize?: number;
+  /** Selected, hovered or on a found path (set with the interaction ring); the canvas names it at
+   * any zoom. */
+  emphasised?: boolean;
   /** A second, independent `@sigma/node-border` ring (Phase 6a Stage 2) — never the same channel
    * as `borderColor`/`borderSize`'s own interaction-state ring, so a resolution-cluster indicator
    * and a hover/selection/on-path ring can both show at once rather than one silently overriding
