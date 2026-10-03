@@ -5,6 +5,8 @@
 // canvas. Not a keyboard test, so it sits outside the `CANVAS_ACTIONS` registry.
 import { expect, test, type Page } from "@playwright/test";
 
+import { readPng } from "./pngPixels";
+
 declare global {
   interface Window {
     __KEYBOARD__?: { selectedEdge: string | null; selection: string[] };
@@ -103,4 +105,37 @@ test("the large-expansion prompt's buttons can be clicked with the mouse", async
   await expect(page.getByRole("alertdialog", { name: "Large expansion" })).toBeVisible();
   await page.getByRole("button", { name: /^Add all/ }).click({ timeout: 3000 });
   await expect.poll(() => expandBody).not.toBeNull();
+});
+
+// Seen 3 October 2026 on the Fixture Corp hub: after a search drew the nodes the links were not
+// there, and appeared only once the owner clicked the empty canvas. The renderer leaves links out
+// while the camera is moving (`hideEdgesOnMove`), and the last frame of the camera's settling move
+// was drawn before it counted as finished, so nothing drew the links afterwards. The DOM cannot say
+// whether a WebGL line was painted, so this reads the pixels along the link between two nodes.
+test("the links are drawn once the layout has settled, without a click on the canvas", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  // The layout moves the nodes for about a second and then the camera for a little under half of
+  // one, so wait it out in full and only then read where the nodes are.
+  await page.waitForTimeout(2500);
+  const { a, b } = await settledPositions(page, "n0", "n1");
+  const box = (await page.getByRole("application", { name: "Network canvas" }).boundingBox())!;
+  const pixels = readPng(await page.screenshot());
+  const background = pixels.at(Math.round(box.x) + 20, Math.round(box.y) + 300);
+  let drawn = 0;
+  let sampled = 0;
+  for (let i = 15; i <= 85; i++) {
+    const t = i / 100;
+    const x = Math.round(box.x + a.x + (b.x - a.x) * t);
+    const y = Math.round(box.y + a.y + (b.y - a.y) * t);
+    let strongest = 0;
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const p = pixels.at(x + dx, y + dy);
+        strongest = Math.max(strongest, Math.abs(p[0] - background[0]) + Math.abs(p[1] - background[1]) + Math.abs(p[2] - background[2]));
+      }
+    }
+    sampled += 1;
+    if (strongest > 40) drawn += 1;
+  }
+  expect(drawn / sampled).toBeGreaterThan(0.9);
 });

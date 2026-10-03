@@ -71,6 +71,7 @@ import {
   RadialMenu,
   type RadialMenuItem,
 } from "../design/primitives/RadialMenu";
+import { redrawWhenCameraStops } from "./cameraMoves";
 import { edgeTypesOfferedFor } from "./edgeTypeMenu";
 import {
   gateExpansion,
@@ -767,7 +768,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         animateNodes(graph, targets, { duration: 420 }, () => {
           refreshClusterVisualState();
           sigmaRef.current?.scheduleRefresh();
-          void sigmaRef.current?.getCamera().animatedReset({ duration: 420 });
+          const sigma = sigmaRef.current;
+          if (sigma) redrawWhenCameraStops(sigma, sigma.getCamera().animatedReset({ duration: 420 }));
         });
       };
       const schedule = () => {
@@ -1038,7 +1040,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           // keys, per Sigma's own `CameraState` semantics), so "centre" means exactly that and
           // nothing else, the simplest deterministic behaviour to both implement and assert against
           // in `keyboard/metrics-panel.spec.ts`.
-          sigma.getCamera().animate({ x, y }, { duration: 200 });
+          redrawWhenCameraStops(sigma, sigma.getCamera().animate({ x, y }, { duration: 200 }));
         },
         highlightNodes: (nodeIds: readonly string[]) => {
           const present = nodeIds.filter((id) => graph.hasNode(id));
