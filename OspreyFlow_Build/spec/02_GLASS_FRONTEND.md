@@ -218,9 +218,10 @@ never broken in two. From the left:
   The "more match" hint is laid over the page under the box and fades after four seconds; the Filters
   panel is laid over the page too, so neither makes the bar taller (ADR-071).
 - Graph, Map, Watches (and Messages when a dossier is open); the Balanced slider; Export; History.
-- **The theme button** (`Light theme`, drawn as a worded `Light` button), just left of the account:
-  switches between the dark default and the light theme, per browser, never sent to the server
-  (ADR-070). A pressed button (it, and the view buttons) is drawn with a brass border and text (ADR-071).
+- **The theme button** (a worded button, just left of the account, that names the theme a press
+  switches to: `Light` while the page is dark, `Dark` once it is light; ADR-073): switches between the
+  dark default and the light theme, per browser, never sent to the server (ADR-070). It carries no pressed
+  state; the view buttons, which do, are drawn with a brass border and text when pressed (ADR-071).
   The choice is also kept in a cookie shared by every page of the deployment (the launcher, the sign-in
   page and the setup harness follow it and carry the same button; ADR-072).
 - **The account**, at the right-hand end (item 5 above).

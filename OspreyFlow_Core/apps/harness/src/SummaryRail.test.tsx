@@ -17,16 +17,17 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("SummaryRail's light and dark button", () => {
-  it("is there, as a real button, not pressed while the page is dark", () => {
+  it("is there, as a real button, offering Light while the page is dark and Dark once it is light", () => {
     render(<SummaryRail decided={new Set()} />);
-    const button = screen.getByRole("button", { name: "Light theme" });
-    expect(button.getAttribute("aria-pressed")).toBe("false");
+    const button = screen.getByRole("button", { name: "Switch to the light theme" });
     expect(button.textContent).toContain("Light");
+    fireEvent.click(button);
+    expect(screen.getByRole("button", { name: "Switch to the dark theme" }).textContent).toContain("Dark");
   });
 
   it("switches the page and saves the choice where the Glass and the launcher read it", () => {
     render(<SummaryRail decided={new Set()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Light theme" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to the light theme" }));
     expect(document.documentElement.getAttribute("data-theme")).toBe("light");
     expect(readStoredTheme()).toBe("light");
     expect(document.cookie).toContain(`${THEME_COOKIE_NAME}=light`);

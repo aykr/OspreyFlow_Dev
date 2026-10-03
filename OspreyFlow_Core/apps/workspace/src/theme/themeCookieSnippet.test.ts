@@ -67,23 +67,27 @@ describe("theme_cookie.js", () => {
     expect(theme.current()).toBe("light");
   });
 
-  it("offers a Light button, a real button, that is pressed when the page is light and switches both ways", () => {
+  it("offers a button that names the theme it switches to, and switches both ways", () => {
     const theme = runScript();
     const button = theme.mountButton();
     expect(button.tagName).toBe("BUTTON");
     expect(button.getAttribute("type")).toBe("button");
-    expect(button.getAttribute("aria-label")).toBe("Light theme");
+    expect(button.getAttribute("aria-label")).toBe("Switch to the light theme");
     expect(button.textContent).toContain("Light");
-    expect(button.getAttribute("aria-pressed")).toBe("false");
+    expect(button.textContent).not.toContain("Dark");
+    expect(button.hasAttribute("aria-pressed")).toBe(false);
 
     button.click();
     expect(document.documentElement.getAttribute("data-theme")).toBe("light");
-    expect(button.getAttribute("aria-pressed")).toBe("true");
+    expect(button.getAttribute("aria-label")).toBe("Switch to the dark theme");
+    expect(button.textContent).toContain("Dark");
+    expect(button.textContent).not.toContain("Light");
     expect(readStoredTheme()).toBe("light");
 
     button.click();
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
-    expect(button.getAttribute("aria-pressed")).toBe("false");
+    expect(button.getAttribute("aria-label")).toBe("Switch to the light theme");
+    expect(button.textContent).toContain("Light");
     expect(readStoredTheme()).toBe("dark");
   });
 
@@ -93,10 +97,11 @@ describe("theme_cookie.js", () => {
     expect(document.querySelectorAll("button#osprey-theme-toggle")).toHaveLength(1);
   });
 
-  it("starts its button pressed when the page is already light", () => {
+  it("starts its button saying Dark when the page is already light", () => {
     document.cookie = `${THEME_COOKIE_NAME}=light; Path=/`;
     const button = runScript().mountButton();
-    expect(button.getAttribute("aria-pressed")).toBe("true");
+    expect(button.textContent).toContain("Dark");
+    expect(button.getAttribute("aria-label")).toBe("Switch to the dark theme");
   });
 
   it("colours its button only with the design tokens", () => {

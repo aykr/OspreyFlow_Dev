@@ -28,11 +28,16 @@
   function show(theme) {
     root.setAttribute("data-theme", theme);
     var button = document.getElementById(BUTTON_ID);
-    if (button) {
-      button.setAttribute("aria-pressed", theme === "light" ? "true" : "false");
-      button.style.borderColor = theme === "light" ? "var(--brass)" : "var(--border)";
-      button.style.color = theme === "light" ? "var(--brass)" : "var(--text-primary)";
-    }
+    if (button) label(button, theme);
+  }
+
+  /* The button names the theme a press switches to: Light while the page is dark, Dark once it is
+     light. */
+  function label(button, theme) {
+    var next = theme === "light" ? "dark" : "light";
+    button.setAttribute("aria-label", "Switch to the " + next + " theme");
+    button.title = "Switch to the " + next + " theme";
+    button.textContent = next === "light" ? "\u2600 Light" : "\u263E Dark";
   }
 
   function set(theme) {
@@ -44,17 +49,13 @@
     show(theme);
   }
 
-  /* A Light button, drawn from the tokens, at the top right of the page. Pressed means light. */
+  /* A button, drawn from the tokens, at the top right of the page, worded for the theme it switches to. */
   function mountButton(parent) {
     var existing = document.getElementById(BUTTON_ID);
     if (existing) return existing;
     var button = document.createElement("button");
     button.id = BUTTON_ID;
     button.type = "button";
-    button.setAttribute("aria-label", "Light theme");
-    button.setAttribute("aria-pressed", "false");
-    button.title = "Switch between the light and dark theme";
-    button.textContent = "☀ Light";
     button.setAttribute(
       "style",
       "position: fixed; top: var(--sp-12); right: var(--sp-12); z-index: 1000;" +

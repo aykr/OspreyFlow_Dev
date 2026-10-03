@@ -89,15 +89,17 @@ test("with the keyboard: tabbing out of an open menu closes it, and the account 
 test("with the keyboard: the light theme button is reached by Tab and pressed with Enter, and the page changes", async ({ page }) => {
   await page.goto("/keyboard/top-bar-harness.html");
   const before = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  const button = page.getByRole("button", { name: "Light theme" });
-  await expect(button).toHaveAttribute("aria-pressed", "false");
+  const button = page.locator("header.app-header button[title^='Switch to the']");
+  await expect(button).toHaveAccessibleName("Switch to the light theme");
+  await expect(button).toContainText("Light");
   for (let i = 0; i < 30; i++) {
     if (await button.evaluate((el) => el === document.activeElement)) break;
     await page.keyboard.press("Tab");
   }
   await expect(button).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(button).toHaveAttribute("aria-pressed", "true");
+  await expect(button).toHaveAccessibleName("Switch to the dark theme");
+  await expect(button).toContainText("Dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   const after = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   expect(after).not.toBe(before);

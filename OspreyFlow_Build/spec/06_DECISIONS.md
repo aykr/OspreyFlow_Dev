@@ -9165,3 +9165,20 @@ Decision.
 Not decided here. Anything off this host: the pages of a deployment reached by different host names (`localhost` against `127.0.0.1`, or a separate sign-in domain) do not share a cookie and so do not share the choice; making them do so would need a cookie `Domain` and is for a real deployment to decide. The cookie is sent to every port on the host with every request, including other local services (it holds only `light` or `dark`); that is accepted.
 
 Consequences. `theme.test.ts` (cookie written, read first, migrated, ignored when unknown, survives refused cookies), `themeCookieSnippet.test.ts` (runs the shipped file in a page with a cookie jar, against `theme.ts`, so the two cannot disagree about the cookie; every token it uses exists), `SummaryRail.test.tsx` (the harness button), `test_launch.py` and `test_launch_sign_in.py` (the script is in the head of the welcome page and of the message pages) and `test_keycloak_theme.py` (the theme names the script and ships the shared file). **Not proved:** that Keycloak 26's `keycloak.v2` login theme actually loads a script named by `scripts=` in `theme.properties`. That is how Keycloak's own login themes name scripts, but nothing here ran it against a real Keycloak (CLAUDE.md rule 15: a fixture models what the dependency accepts, not what it refuses), so the sign-in page following the choice is to be checked by the owner on a real deployment. Also not run in a browser: the launcher's and Keycloak's own buttons (they are plain buttons and are tested in a page with a cookie jar, not by keyboard in a browser), and the setup harness's button by keyboard (its Playwright suite needs the real harness server).
+
+## ADR-073 — The light and dark button names the theme a press switches to
+
+Status: accepted 3 October 2026 (the owner looked at the launcher's welcome page after switching it to light and said the button should then say `Dark`).
+
+Context. ADR-071 item 5 made the button a worded `Light` button whose brass, pressed look meant "light is on", and ADR-072 item 4 put the same button on every page. The words never changed, so on a light page it still said `Light`: the only cue to what a press would do was the pressed colour, which does not say what the button will do, and a screen reader heard a fixed name with a pressed state.
+
+Decision.
+
+1. On every page the button's words, accessible name and tooltip name the theme a press switches to: `Light` (sun glyph, name `Switch to the light theme`) while the page is dark, and `Dark` (moon glyph, name `Switch to the dark theme`) once it is light.
+2. Because the words now change with the state, the button no longer carries `aria-pressed` and no longer takes the brass pressed look. It is drawn like its neighbours in both themes.
+3. This replaces the "pressed means light" part of ADR-071 item 5 and ADR-072 item 4 and the accessible name `Light theme` in ADR-070 item 4. Nothing else in those records changes: the button is still a real button, still reached by Tab and pressed by Enter or Space, still beside the account, and the choice is still kept as ADR-070 and ADR-072 say.
+4. Spec 02 section 2 is amended to say so.
+
+Not decided here. Whether the other buttons that show a pressed state (Graph, Map, Watches, Communities) should be reworded in the same way: they name a view, not an action, so they are left as they are.
+
+Consequences. `ThemeToggle.test.tsx`, `SummaryRail.test.tsx` and `themeCookieSnippet.test.ts` assert both wordings and the absence of `aria-pressed`; `keyboard/top-bar.spec.ts` proves the keyboard route and that the words change in a real browser. The unit tests were run red against the old button first; the browser test and the harness test were changed in the same step and not shown red separately.
