@@ -13,7 +13,7 @@ function setup(mode: Parameters<typeof LayoutMenu>[0]["mode"] = "organic") {
 }
 
 describe("LayoutMenu", () => {
-  it("offers all five layouts", () => {
+  it("offers all seven layouts", () => {
     setup();
     const names = screen.getAllByRole("option").map((o) => o.textContent);
     expect(names).toEqual([
@@ -22,6 +22,8 @@ describe("LayoutMenu", () => {
       "Hierarchical",
       "Circular",
       "Group by type",
+      "Force-directed tree",
+      "Clustered bubbles",
     ]);
   });
 
@@ -34,6 +36,15 @@ describe("LayoutMenu", () => {
     const h = setup();
     fireEvent.change(screen.getByRole("combobox", { name: "Layout" }), { target: { value: "circular" } });
     expect(h.onChange).toHaveBeenCalledWith("circular");
+  });
+
+  it("offers what the bubbles hold only while Clustered bubbles is the layout", () => {
+    const { rerender } = render(<LayoutMenu mode="organic" onChange={vi.fn()} onArrange={vi.fn()} onBubbleKeyChange={vi.fn()} />);
+    expect(screen.queryByRole("combobox", { name: "Bubbles by" })).toBeNull();
+    const change = vi.fn();
+    rerender(<LayoutMenu mode="bubbles" onChange={vi.fn()} onArrange={vi.fn()} onBubbleKeyChange={change} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Bubbles by" }), { target: { value: "community" } });
+    expect(change).toHaveBeenCalledWith("community");
   });
 
   it("can arrange again with the layout in use, without changing it", () => {

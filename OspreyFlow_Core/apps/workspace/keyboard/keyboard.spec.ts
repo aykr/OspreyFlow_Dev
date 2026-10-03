@@ -897,6 +897,53 @@ test("the Layout menu is reached by Tab and changed by the arrow keys", async ({
   registerCovered("CANVAS_ACTIONS", "layout-menu-chooses-layout");
 });
 
+test("the Layout menu reaches the Force-directed tree by the arrow keys, and it spreads the nodes out", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  const layout = page.getByRole("combobox", { name: "Layout" });
+  await tabTo(page, layout);
+  for (let i = 0; i < 5; i++) await page.keyboard.press("ArrowDown");
+  await expect(layout).toHaveValue("tree");
+  // n3 shares a place with n2 (they are one resolution cluster), so the others are what is checked:
+  // every one of them has a place of its own.
+  const ids = ["n0", "n1", "n2", "n4", "n5"];
+  await expect
+    .poll(async () => {
+      const at = await page.evaluate((nodes) => nodes.map((id) => window.__CANVAS__?.viewportPositionOf(id) ?? null), ids);
+      if (at.some((p) => p === null)) return false;
+      for (let i = 0; i < at.length; i++)
+        for (let j = i + 1; j < at.length; j++)
+          if (Math.hypot(at[i]!.x - at[j]!.x, at[i]!.y - at[j]!.y) < 5) return false;
+      return true;
+    })
+    .toBe(true);
+  registerCovered("CANVAS_ACTIONS", "layout-menu-chooses-force-directed-tree");
+});
+
+test("the Layout menu reaches Clustered bubbles, draws a bubble for each group, and Bubbles by changes the groups", async ({
+  page,
+}) => {
+  await page.goto("/keyboard/harness.html");
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  const layout = page.getByRole("combobox", { name: "Layout" });
+  await tabTo(page, layout);
+  for (let i = 0; i < 6; i++) await page.keyboard.press("ArrowDown");
+  await expect(layout).toHaveValue("bubbles");
+  // By entity type: five people and one endpoint.
+  const overlay = page.getByTestId("bubble-overlay");
+  await expect(overlay).toContainText("Person (5)");
+  await expect(overlay).toContainText("Endpoint (1)");
+  const by = page.getByRole("combobox", { name: "Bubbles by" });
+  await by.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(by).toHaveValue("community");
+  await expect(overlay).toContainText("Community 1");
+  await expect(overlay).not.toContainText("Endpoint (1)");
+  registerCovered("CANVAS_ACTIONS", "layout-menu-chooses-clustered-bubbles-and-what-they-group-by");
+});
+
 test("L steps through the focused node's links and Shift+L goes back, without a mouse", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });

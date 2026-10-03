@@ -69,6 +69,7 @@ import { CaseSwitcher } from "./investigation/CaseSwitcher";
 import { openCase } from "./investigation/cases";
 import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
 import { StatusBar } from "./statusbar/StatusBar";
+import { BottomPanelFrame, SidePanelFrame } from "./layout/PanelFrames";
 import { Timeline } from "./timeline/Timeline";
 import { AlertInbox } from "./watches/AlertInbox";
 import { HotlistPanel } from "./watches/HotlistPanel";
@@ -789,7 +790,7 @@ export function App() {
           )}
         </div>
       </header>
-      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+      <div style={{ flex: 1, display: "flex", minHeight: 0, position: "relative" }}>
         {view === "ingest" && (
           <IngestStudio
             apiBaseUrl={API_BASE_URL}
@@ -1007,15 +1008,7 @@ export function App() {
           </div>
         )}
         {view !== "ingest" && view !== "dossier" && view !== "watches" && (
-          <div
-            style={{
-              width: 320,
-              borderLeft: "1px solid var(--border-subtle)",
-              display: "flex",
-              flexDirection: "column",
-              overflowY: "auto",
-            }}
-          >
+          <SidePanelFrame name="Inspector">
             <Inspector
               node={selectedNode}
               link={
@@ -1074,19 +1067,12 @@ export function App() {
                 schema={ontologySchema}
               />
             )}
-          </div>
+          </SidePanelFrame>
         )}
       </div>
       {view !== "ingest" && view !== "dossier" && view !== "watches" && (
-        <div
-          style={{
-            height: 252,
-            borderTop: "1px solid var(--border-subtle)",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          <div style={{ flex: 1, minHeight: 0 }}>
+        <BottomPanelFrame title="Timeline" height={252}>
+          <div style={{ height: "100%" }}>
             <Timeline
               apiBaseUrl={API_BASE_URL}
               bearerToken={bearerToken}
@@ -1098,7 +1084,7 @@ export function App() {
               onPlaybackFractionChange={setPlaybackFraction}
             />
           </div>
-        </div>
+        </BottomPanelFrame>
       )}
       {view !== "ingest" && view !== "dossier" && view !== "watches" && (
         <StatusBar

@@ -138,6 +138,8 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   "delete-removes-selected-nodes",
   "clear-view-by-keyboard",
   "layout-menu-chooses-layout",
+  "layout-menu-chooses-force-directed-tree",
+  "layout-menu-chooses-clustered-bubbles-and-what-they-group-by",
   "l-steps-through-the-focused-nodes-links",
   "delete-hides-selected-link",
   "show-hidden-links-by-keyboard",
@@ -337,4 +339,15 @@ export const LINK_CHANGE_ACTIONS = defineActionRegistry("LINK_CHANGE_ACTIONS", [
   "save-needs-a-reason",
   "escape-closes-the-form-and-changes-nothing",
   "opened-by-the-link-menu-lands-on-the-type",
+] as const);
+
+/**
+ * The frames round the Glass's side panel and timeline (`src/layout/PanelFrames.tsx`): hide each,
+ * and open the side panel to the whole work area so the query builder has room. Each is a button, so
+ * each needs a case proving it by keyboard alone (`keyboard/panel-frames.spec.ts`).
+ */
+export const PANEL_FRAME_ACTIONS = defineActionRegistry("PANEL_FRAME_ACTIONS", [
+  "hide-and-show-the-side-panel-by-keyboard",
+  "open-the-side-panel-to-the-full-width-and-return-by-keyboard",
+  "hide-and-show-the-timeline-by-keyboard",
 ] as const);

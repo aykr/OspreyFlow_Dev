@@ -1,6 +1,7 @@
 /**
  * The layouts an analyst can ask for besides the organic force layout (`forceLayout.ts`): radial
- * around a node, layered (hierarchical), circular, and grouped by entity type. Each is a pure
+ * around a node, layered (hierarchical), circular, grouped by entity type, a force-directed tree
+ * and clustered bubbles. Each is a pure
  * function of the nodes and edges it is given, so it is repeatable and testable without a browser.
  *
  * The layered layout is our own, deliberately small (longest-path layers, then a few
@@ -9,7 +10,16 @@
  * minimise crossings optimally and gives long edges no dummy nodes.
  */
 
-export type LayoutMode = "organic" | "radial" | "hierarchical" | "circular" | "group";
+import { settleLayout, type LayoutEdge, type LayoutNode } from "./forceLayout";
+
+export type LayoutMode =
+  | "organic"
+  | "radial"
+  | "hierarchical"
+  | "circular"
+  | "group"
+  | "tree"
+  | "bubbles";
 
 export const LAYOUT_MODES: { mode: LayoutMode; label: string }[] = [
   { mode: "organic", label: "Organic" },
@@ -17,6 +27,8 @@ export const LAYOUT_MODES: { mode: LayoutMode; label: string }[] = [
   { mode: "hierarchical", label: "Hierarchical" },
   { mode: "circular", label: "Circular" },
   { mode: "group", label: "Group by type" },
+  { mode: "tree", label: "Force-directed tree" },
+  { mode: "bubbles", label: "Clustered bubbles" },
 ];
 
 export interface ArrangeInput {
@@ -25,8 +37,11 @@ export interface ArrangeInput {
 }
 
 export interface ArrangeOptions {
-  /** For `radial`: the node to put in the middle. Falls back to the most connected node. */
+  /** For `radial` and `tree`: the node to put in the middle (the tree's root). Falls back to the
+   * most connected node. */
   centre?: string | null;
+  /** For `bubbles`: which bubble a node belongs to. Falls back to the node's entity type. */
+  groupOf?: (id: string) => string;
 }
 
 type Placed = Map<string, { x: number; y: number }>;
@@ -251,6 +266,190 @@ function grouped(input: ArrangeInput): Placed {
   return placed;
 }
 
+
+// ---------------------------------------------------------------------------------------------
+// Force-directed tree. Only the links of a tree (a shortest-path tree from the root, so a link that
+// would close a loop is left out) pull nodes together; every node pushes the others away. The
+// start is a radial tree, so the same graph always settles the same way, and a graph too large to
+// settle (`FORCE_LAYOUT_MAX_NODES`) is left as that radial tree rather than not arranged at all.
+// ---------------------------------------------------------------------------------------------
+
+const TREE_STEP = 70;
+const VIRTUAL_ROOT = "\u0000root";
+
+/** The key of a link, the same whichever end is named first. */
+export function linkKey(a: string, b: string): string {
+  return a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`;
+}
+
+interface Forest {
+  parent: Map<string, string | null>;
+  order: string[];
+  roots: string[];
+}
+
+function forestOf(ids: string[], edges: [string, string][], centreId: string | null | undefined): Forest {
+  const neighbours = new Map<string, string[]>(ids.map((id) => [id, []]));
+  for (const [a, b] of edges) {
+    neighbours.get(a)!.push(b);
+    neighbours.get(b)!.push(a);
+  }
+  for (const list of neighbours.values()) list.sort(byId);
+  const parent = new Map<string, string | null>();
+  const order: string[] = [];
+  const roots: string[] = [];
+  const grow = (root: string) => {
+    roots.push(root);
+    parent.set(root, null);
+    const queue = [root];
+    for (let head = 0; head < queue.length; head++) {
+      const id = queue[head]!;
+      for (const other of neighbours.get(id)!) {
+        if (parent.has(other)) continue;
+        parent.set(other, id);
+        queue.push(other);
+      }
+    }
+    order.push(...queue);
+  };
+  if (centreId && neighbours.has(centreId)) grow(centreId);
+  // Each piece the root does not reach is rooted on its most linked node.
+  const busiest = [...ids].sort((p, q) => neighbours.get(q)!.length - neighbours.get(p)!.length || byId(p, q));
+  for (const id of busiest) if (!parent.has(id)) grow(id);
+  return { parent, order, roots };
+}
+
+/**
+ * The links that make up the tree for these nodes and this root, by `linkKey`. Links not in it are
+ * the ones a tree layout does not use; the canvas draws them faint.
+ */
+export function treeLinkKeys(input: ArrangeInput, centre?: string | null): Set<string> {
+  const ids = input.nodes.map((node) => node.id).sort(byId);
+  const edges = cleanEdges(new Set(ids), input.edges);
+  const { parent } = forestOf(ids, edges, centre);
+  const keys = new Set<string>();
+  for (const [id, up] of parent) if (up !== null) keys.add(linkKey(id, up));
+  return keys;
+}
+
+function forceTree(input: ArrangeInput, edges: [string, string][], centreId: string | null | undefined): Placed {
+  const ids = input.nodes.map((node) => node.id).sort(byId);
+  const { parent, order, roots } = forestOf(ids, edges, centreId);
+  const top = roots.length === 1 ? roots[0]! : VIRTUAL_ROOT;
+  const children = new Map<string, string[]>([[top, []]]);
+  for (const id of ids) children.set(id, []);
+  const depth = new Map<string, number>([[top, 0]]);
+  for (const id of order) {
+    const up = parent.get(id) ?? null;
+    if (up === null) {
+      if (id === top) continue;
+      children.get(top)!.push(id);
+      depth.set(id, 1);
+    } else {
+      children.get(up)!.push(id);
+      depth.set(id, depth.get(up)! + 1);
+    }
+  }
+  const leaves = new Map<string, number>();
+  for (let i = order.length - 1; i >= -1; i--) {
+    const id = i === -1 ? top : order[i]!;
+    if (id === top && i !== -1) continue;
+    const kids = children.get(id)!;
+    leaves.set(id, kids.length === 0 ? 1 : kids.reduce((sum, kid) => sum + leaves.get(kid)!, 0));
+  }
+  // A radial tree: each node takes a slice of its parent's angle in proportion to its leaves.
+  const start: Placed = new Map();
+  const sector = new Map<string, [number, number]>([[top, [0, 2 * Math.PI]]]);
+  const stack = [top];
+  while (stack.length > 0) {
+    const id = stack.pop()!;
+    const [from, to] = sector.get(id)!;
+    const mid = (from + to) / 2;
+    const r = depth.get(id)! * TREE_STEP;
+    start.set(id, { x: r * Math.cos(mid), y: r * Math.sin(mid) });
+    let cursor = from;
+    const total = leaves.get(id)!;
+    for (const kid of children.get(id)!) {
+      const share = ((to - from) * leaves.get(kid)!) / total;
+      sector.set(kid, [cursor, cursor + share]);
+      cursor += share;
+      stack.push(kid);
+    }
+  }
+  const nodes: LayoutNode[] = [...start].map(([id, at]) => ({
+    id,
+    x: at.x,
+    y: at.y,
+    pinned: id === VIRTUAL_ROOT,
+  }));
+  const links: LayoutEdge[] = [];
+  for (const [id, up] of parent) links.push([up ?? top, id]);
+  const settled = settleLayout(nodes, links) ?? start;
+  const placed: Placed = new Map();
+  for (const id of ids) placed.set(id, settled.get(id)!);
+  return placed;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Clustered bubbles. One bubble for each group, the group's nodes packed inside it, and the bubbles
+// themselves packed against one another without overlapping, the largest in the middle.
+// ---------------------------------------------------------------------------------------------
+
+const BUBBLE_PAD = 24;
+const BUBBLE_GAP = 24;
+
+function bubbles(input: ArrangeInput, groupOf: ((id: string) => string) | undefined): Placed {
+  const byGroup = new Map<string, string[]>();
+  for (const node of input.nodes) {
+    const key = groupOf ? groupOf(node.id) : node.type;
+    const list = byGroup.get(key) ?? [];
+    list.push(node.id);
+    byGroup.set(key, list);
+  }
+  const spacing = MIN_NODE_GAP * 1.25;
+  const groups = [...byGroup.entries()]
+    .map(([key, members]) => ({
+      key,
+      members: members.sort(byId),
+      radius: spacing * Math.sqrt(members.length) + MIN_NODE_GAP / 2 + BUBBLE_PAD,
+    }))
+    .sort((p, q) => q.members.length - p.members.length || byId(p.key, q.key));
+  const centres: { x: number; y: number; radius: number }[] = [];
+  const placed: Placed = new Map();
+  for (const group of groups) {
+    let centre = { x: 0, y: 0 };
+    if (centres.length > 0) {
+      // Walk outwards along a spiral to the first spot where this bubble clears every other.
+      for (let step = 1; ; step++) {
+        const angle = step * 0.31;
+        const r = step * 2.5;
+        centre = { x: r * Math.cos(angle), y: r * Math.sin(angle) };
+        if (centres.every((c) => Math.hypot(c.x - centre.x, c.y - centre.y) >= c.radius + group.radius + BUBBLE_GAP)) break;
+      }
+    }
+    centres.push({ ...centre, radius: group.radius });
+    group.members.forEach((id, i) => {
+      const r = spacing * Math.sqrt(i + 0.5);
+      const angle = i * GOLDEN_ANGLE;
+      placed.set(id, { x: centre.x + r * Math.cos(angle), y: centre.y + r * Math.sin(angle) });
+    });
+  }
+  return placed;
+}
+
+/** The smallest circle round the middle of some points that holds them all, with `pad` to spare:
+ * the bubble the canvas draws round a group, worked out from where its nodes are drawn now. */
+export function enclosingCircle(
+  points: readonly { x: number; y: number }[],
+  pad: number,
+): { x: number; y: number; r: number } {
+  if (points.length === 0) return { x: 0, y: 0, r: pad };
+  const x = points.reduce((sum, p) => sum + p.x, 0) / points.length;
+  const y = points.reduce((sum, p) => sum + p.y, 0) / points.length;
+  const r = Math.max(...points.map((p) => Math.hypot(p.x - x, p.y - y))) + pad;
+  return { x, y, r };
+}
+
 /**
  * Positions for every node, by id; `null` when the graph is too large to arrange quickly (the
  * caller keeps the positions it has). `organic` is not handled here: it is the force layout.
@@ -273,5 +472,9 @@ export function arrange(
       return hierarchical(input, edges);
     case "group":
       return grouped(input);
+    case "tree":
+      return forceTree(input, edges, options.centre);
+    case "bubbles":
+      return bubbles(input, options.groupOf);
   }
 }

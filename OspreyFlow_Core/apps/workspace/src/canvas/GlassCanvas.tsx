@@ -84,8 +84,9 @@ import { LargeExpansionPrompt } from "./LargeExpansionPrompt";
 import { removeFromWorkingSet } from "./removeNodes";
 import { ViewActions } from "./ViewActions";
 import { settleLayout, type LayoutNode } from "./forceLayout";
-import { arrange, type LayoutMode } from "./layoutModes";
-import { LayoutMenu } from "./LayoutMenu";
+import { BubbleOverlay, type Bubble } from "./BubbleOverlay";
+import { arrange, enclosingCircle, linkKey, treeLinkKeys, type LayoutMode } from "./layoutModes";
+import { LayoutMenu, type BubbleKey } from "./LayoutMenu";
 import { CommunitiesControls } from "./CommunitiesControls";
 import { CommunityBoxOverlay } from "./CommunityBoxOverlay";
 import { JudgementBadgeOverlay } from "./JudgementBadgeOverlay";
@@ -346,6 +347,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // the layout effect below runs from graph events and must read the current choice.
     const [layoutMode, setLayoutMode] = useState<LayoutMode>("organic");
     const layoutModeRef = useRef<LayoutMode>("organic");
+    // What the Clustered bubbles layout groups by (ADR-083), the groups it drew last, and the links
+    // the Force-directed tree uses: the others are drawn faint.
+    const [bubbleKey, setBubbleKey] = useState<BubbleKey>("type");
+    const bubbleKeyRef = useRef<BubbleKey>("type");
+    const bubbleGroupsRef = useRef<{ id: string; label: string; ids: string[]; count: number }[] | null>(null);
+    const treeLinksRef = useRef<Set<string> | null>(null);
     const selectedRef = useRef<Set<string>>(new Set());
     selectedRef.current = selected;
     const arrangeNowRef = useRef<() => void>(() => undefined);
@@ -711,11 +718,15 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // Phase 6a Stage 2 (B9): "the number and the picture have to agree" — every node sharing a
     // `resolution.cluster_id` with at least one other is co-located at the cluster's own anchor
     // (`compute_clusters`' union-find convention: the cluster id *is* one of its own member ids, the
-    // numerically-smallest one) and gets the second, dedicated cluster-ring attributes. A node no
-    // longer (or never) merged gets its own deterministic `seededScatter` home position back —
-    // recomputed on demand rather than stored, so an un-merge (raising τ back up) has a real
-    // position to return to instead of staying wherever a previous merge last placed it.
-    const refreshClusterVisualState = () => {
+    // numerically-smallest one) and gets the second, dedicated cluster-ring attributes. A node that
+    // is no longer drawn on another's place (the slider moved to a stricter stop, or a match was
+    // refused) goes back to where it was before it was joined, so an un-merge really separates the
+    // nodes. The Fixture Corp walkthrough found it did not: a node that became its own cluster was
+    // skipped, so it stayed stacked on the old anchor and a view at Balanced after Strict and Broad
+    // showed fewer people than before. `joinedFromRef` remembers where each joined node was.
+    const joinedFromRef = useRef(new Map<string, { x: number; y: number }>());
+    const refreshClusterVisualState = (): number => {
+      let released = 0;
       const membersByCluster = new Map<string, string[]>();
       graph.forEachNode((nodeId, attrs) => {
         const clusterId = attrs.data.resolution?.cluster_id ?? nodeId;
@@ -723,20 +734,33 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         if (members) members.push(nodeId);
         else membersByCluster.set(clusterId, [nodeId]);
       });
+      const joinedFrom = joinedFromRef.current;
       for (const [clusterId, members] of membersByCluster) {
         const clusterAttrs = computeClusterGraphAttributes(members.length);
         for (const nodeId of members) {
           graph.mergeNodeAttributes(nodeId, clusterAttrs);
-          if (nodeId === clusterId) continue;
-          const anchorX =
-            members.length > 1
-              ? graph.getNodeAttribute(clusterId, "x")
-              : undefined;
-          const anchorY =
-            members.length > 1
-              ? graph.getNodeAttribute(clusterId, "y")
-              : undefined;
+          const joined = members.length > 1 && nodeId !== clusterId;
+          if (!joined) {
+            const before = joinedFrom.get(nodeId);
+            if (before) {
+              graph.mergeNodeAttributes(nodeId, { x: before.x, y: before.y });
+              joinedFrom.delete(nodeId);
+              released += 1;
+            } else if (nodeId !== clusterId) {
+              const home = seededScatter(nodeId);
+              graph.mergeNodeAttributes(nodeId, { x: home.x, y: home.y });
+            }
+            continue;
+          }
+          const anchorX = graph.hasNode(clusterId) ? graph.getNodeAttribute(clusterId, "x") : undefined;
+          const anchorY = graph.hasNode(clusterId) ? graph.getNodeAttribute(clusterId, "y") : undefined;
           if (anchorX !== undefined && anchorY !== undefined) {
+            if (!joinedFrom.has(nodeId)) {
+              joinedFrom.set(nodeId, {
+                x: graph.getNodeAttribute(nodeId, "x") ?? anchorX,
+                y: graph.getNodeAttribute(nodeId, "y") ?? anchorY,
+              });
+            }
             graph.mergeNodeAttributes(nodeId, { x: anchorX, y: anchorY });
           } else {
             const home = seededScatter(nodeId);
@@ -744,6 +768,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           }
         }
       }
+      return released;
     };
 
     // The graph is painted by WebGL, which cannot read the page's CSS variables, so a change of
@@ -798,8 +823,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // signal for exactly that, so an unrelated `add`/`update` delta doesn't trigger a working-set-wide
     // sweep for nothing.
     useEffect(() => {
-      refreshClusterVisualState();
+      const released = refreshClusterVisualState();
       sigmaRef.current?.scheduleRefresh();
+      // Nodes that have just been separated start where they were before they were joined, which
+      // can be close to one another (ids that differ in one character scatter to nearly the same
+      // point), so the layout runs to give each a place of its own.
+      if (released > 0) arrangeNowRef.current();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [graph, lastReproject]);
 
@@ -841,20 +870,56 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           }
         }
         const mode = layoutModeRef.current;
+        const arrangeInput = {
+          nodes: nodes.map((node) => ({
+            ...node,
+            type: graph.getNodeAttribute(node.id, "data").type,
+          })),
+          edges,
+        };
+        const centre = Array.from(selectedRef.current)[0] ?? null;
+        // Clustered bubbles: which bubble each node is in, by entity type or by community.
+        let groupOf: ((id: string) => string) | undefined;
+        let groupLabels = new Map<string, string>();
+        if (mode === "bubbles") {
+          if (bubbleKeyRef.current === "community") {
+            const found = findCommunities(arrangeInput.nodes.map((n) => n.id), edges);
+            const ofNode = new Map<string, string>();
+            found.forEach((community, i) => {
+              groupLabels.set(community.id, `Community ${i + 1}`);
+              for (const id of community.members) ofNode.set(id, community.id);
+            });
+            groupLabels.set("none", "Not in a community");
+            groupOf = (id) => ofNode.get(id) ?? "none";
+          } else {
+            groupOf = (id) => graph.getNodeAttribute(id, "data").type;
+            groupLabels = new Map(arrangeInput.nodes.map((n) => [n.type, n.type]));
+          }
+        }
         const settled =
           mode === "organic"
             ? settleLayout(nodes, edges)
-            : arrange(
-                mode,
-                {
-                  nodes: nodes.map((node) => ({
-                    ...node,
-                    type: graph.getNodeAttribute(node.id, "data").type,
-                  })),
-                  edges,
-                },
-                { centre: Array.from(selectedRef.current)[0] ?? null },
-              );
+            : arrange(mode, arrangeInput, { centre, groupOf });
+        treeLinksRef.current = mode === "tree" && settled ? treeLinkKeys(arrangeInput, centre) : null;
+        if (mode === "bubbles" && settled && groupOf) {
+          const byGroup = new Map<string, string[]>();
+          for (const n of arrangeInput.nodes) {
+            const key = groupOf(n.id);
+            byGroup.set(key, [...(byGroup.get(key) ?? []), n.id]);
+          }
+          // Nodes the engine has matched as one are drawn as one place, but each is a node: the
+          // size shown beside a bubble counts them all.
+          const sharing = new Map<string, number>();
+          graph.forEachNode((id) => sharing.set(clusterOf(id), (sharing.get(clusterOf(id)) ?? 0) + 1));
+          bubbleGroupsRef.current = [...byGroup].map(([id, ids]) => ({
+            id,
+            label: groupLabels.get(id) ?? id,
+            ids,
+            count: ids.reduce((sum, member) => sum + (sharing.get(member) ?? 1), 0),
+          }));
+        } else {
+          bubbleGroupsRef.current = null;
+        }
         if (!settled) return; // too large to arrange quickly: the positions stay
         const targets: Record<string, { x: number; y: number }> = {};
         for (const [id, at] of settled) {
@@ -1010,9 +1075,21 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
                 graph.target(edgeId) === hoveredNode),
           });
           const isSelected = edgeId === selectedEdgeRef.current;
+          // In the Force-directed tree a link that is not part of the tree stays, drawn faint.
+          const treeLinks = treeLinksRef.current;
+          let faint = false;
+          if (treeLinks) {
+            const anchor = (id: string) => graph.getNodeAttribute(id, "data").resolution?.cluster_id ?? id;
+            const a = anchor(graph.source(edgeId));
+            const b = anchor(graph.target(edgeId));
+            faint = a !== b && !treeLinks.has(linkKey(a, b));
+          }
           return {
             ...data,
             ...attrs,
+            ...(faint && !isSelected
+              ? { color: activePalette().borderSubtle, size: Math.min(attrs.size, 0.5) }
+              : {}),
             // A hidden link is not drawn; the selected one is thicker, brass, and always labelled.
             hidden:
               attrs.hidden ||
@@ -2352,8 +2429,29 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             setLayoutMode(mode);
             arrangeNowRef.current();
           }}
+          bubbleKey={bubbleKey}
+          onBubbleKeyChange={(key) => {
+            bubbleKeyRef.current = key;
+            setBubbleKey(key);
+            arrangeNowRef.current();
+          }}
           onArrange={() => arrangeNowRef.current()}
         />
+        {layoutMode === "bubbles" && (
+          <BubbleOverlay
+            sigmaRef={sigmaRef}
+            getBubbles={() =>
+              (bubbleGroupsRef.current ?? []).flatMap((group): Bubble[] => {
+                const points = group.ids
+                  .filter((id) => graph.hasNode(id))
+                  .map((id) => ({ x: graph.getNodeAttribute(id, "x") ?? 0, y: graph.getNodeAttribute(id, "y") ?? 0 }));
+                if (points.length === 0) return [];
+                const circle = enclosingCircle(points, 20);
+                return [{ id: group.id, label: group.label, count: group.count, ...circle }];
+              })
+            }
+          />
+        )}
         <ViewActions
           nodeCount={graph.order}
           selectedCount={selected.size}

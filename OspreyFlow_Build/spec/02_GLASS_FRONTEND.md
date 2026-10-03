@@ -128,8 +128,10 @@ grouping they were looking at.
 *Collapse (B9).* Every node sharing a `cluster_id` with at least one other co-locates at
 the cluster's own anchor position and gains a second, independent `@sigma/node-border` ring (never
 the same attribute the interaction-state ring — on-path/selected/hover — already owns, so both can
-show on one node at once). A node whose cluster splits back apart returns to its own deterministic
-scatter position rather than staying wherever a previous merge left it. This is the picture the
+show on one node at once). A node whose cluster splits back apart returns to where it was before it was
+joined, and the layout then runs so each node has a place of its own, rather than staying wherever a
+previous merge left it (the Fixture Corp walkthrough found nodes staying stacked; ADR-080
+Amendment 2). This is the picture the
 threshold control's own change-summary counts (`merged`/`split`/`affected`) must agree with.
 
 *Explanation (B10).* `GET .../resolution/explain/{cluster_id}` — the per-comparison match
@@ -211,6 +213,14 @@ set of widgets:
    in what the Conduit itself returns. `Sign out` ends the session at the identity provider
    (`end_session_endpoint`) and clears the Glass's own memory and session storage; it does not
    itself alter what any control shows.
+
+**Hiding panels (ADR-082).** The right-hand column (the Inspector with the metrics and the query
+builder) and the timeline can each be hidden with a *Hide* button and brought back with *Show*. The
+right-hand column can also be opened to the **full width** of the work area, over the canvas, so a
+wide query has room, and returned with *Normal width*. Hidden contents stay mounted and keep what the
+analyst typed or brushed. The choice belongs to the browser tab: it is not stored, and each panel
+opens in its normal state on reload. Every one of these buttons is reachable by keyboard
+(`keyboard/panel-frames.spec.ts`).
 
 ### 2.0 The top bar (ADR-065)
 
@@ -407,6 +417,17 @@ who made it, when, the reason, and what the type, details, dates and record coun
 after. Notes follow the link to its new version. Every write from the menu is recorded in the audit
 trail attributed to the analyst. Reachable by keyboard throughout (rule 13: `keyboard/link-menu.spec.ts`,
 `keyboard/link-change.spec.ts`). A menu or box that closes returns focus to the canvas.
+
+### 3.1g Two more layouts: a force-directed tree and clustered bubbles (ADR-083)
+
+The Layout menu also offers **Force-directed tree** and **Clustered bubbles**. The tree grows from the
+selected node (the most linked node if none is selected) and settles under the same forces as the
+organic layout, with only the links of the tree pulling; each piece of the graph the root does not reach
+gets a tree of its own, so nothing is left out. Links not in the tree stay, drawn faint. Clustered
+bubbles draws one circle for each group, with its name and size, the group's nodes packed inside and
+the circles packed against one another; a second choice, **Bubbles by**, picks *Entity type* (the
+default) or *Community*. Both only move nodes: nothing is stored or removed, and both are reachable by
+keyboard through the Layout choice (`keyboard/keyboard.spec.ts`).
 
 ### 3.2 Social network analysis
 

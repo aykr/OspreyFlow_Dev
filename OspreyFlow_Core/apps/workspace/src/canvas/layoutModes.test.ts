@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { arrange, MIN_NODE_GAP, type ArrangeInput } from "./layoutModes";
+import {
+  arrange,
+  enclosingCircle,
+  MIN_NODE_GAP,
+  treeLinkKeys,
+  type ArrangeInput,
+} from "./layoutModes";
 
 type N = ArrangeInput["nodes"][number];
 const n = (id: string, type = "Endpoint"): N => ({ id, type, x: 0, y: 0 });
@@ -22,7 +28,7 @@ function minGap(m: Map<string, { x: number; y: number }>): number {
   return best;
 }
 
-const MODES = ["radial", "hierarchical", "circular", "group"] as const;
+const MODES = ["radial", "hierarchical", "circular", "group", "tree", "bubbles"] as const;
 
 describe.each(MODES)("%s: what every arrangement promises", (mode) => {
   it("places every node, at a finite position", () => {
@@ -221,5 +227,100 @@ describe("a graph too large to arrange quickly", () => {
       edges: [],
     };
     for (const mode of MODES) expect(arrange(mode, input)).toBeNull();
+  });
+});
+
+describe("tree (a force-directed tree)", () => {
+  const key = (a: string, b: string) => (a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`);
+
+  it("keeps each tree link near the length a link has at rest", () => {
+    const input = chain(10);
+    const placed = arrange("tree", input, { centre: "n000" })!;
+    for (const [a, b] of input.edges) {
+      const d = dist(at(placed, a!), at(placed, b!));
+      expect(d).toBeGreaterThan(40);
+      expect(d).toBeLessThan(160);
+    }
+  });
+
+  it("names the links of the tree: a link that closes a loop is not one of them", () => {
+    const triangle: ArrangeInput = {
+      nodes: [n("a"), n("b"), n("c")],
+      edges: [["a", "b"], ["b", "c"], ["a", "c"]],
+    };
+    const keys = treeLinkKeys(triangle, "a");
+    expect(keys.size).toBe(2);
+    // Rooted at a, both b and c hang from a (a shortest-path tree), so b—c is the link left out.
+    expect(keys.has(key("a", "b"))).toBe(true);
+    expect(keys.has(key("a", "c"))).toBe(true);
+    expect(keys.has(key("b", "c"))).toBe(false);
+  });
+
+  it("roots the tree on the chosen node, else on the most linked one", () => {
+    const star: ArrangeInput = {
+      nodes: ["hub", "a", "b", "c", "z"].map((id) => n(id)),
+      edges: [["hub", "a"], ["hub", "b"], ["hub", "c"], ["c", "z"]],
+    };
+    expect(treeLinkKeys(star, "z").has(key("c", "z"))).toBe(true);
+    // From z the path to hub goes through c, so hub—c is a tree link in both, but a hangs from hub.
+    const fromHub = treeLinkKeys(star, null);
+    expect(fromHub.size).toBe(4);
+    const placedHub = arrange("tree", star, { centre: null })!;
+    const placedZ = arrange("tree", star, { centre: "z" })!;
+    expect([...placedHub]).not.toEqual([...placedZ]);
+  });
+
+  it("places every piece of a graph that is in several pieces, and loses none", () => {
+    const input: ArrangeInput = {
+      nodes: ["a", "b", "c", "x", "y", "lone"].map((id) => n(id)),
+      edges: [["a", "b"], ["b", "c"], ["x", "y"]],
+    };
+    const placed = arrange("tree", input)!;
+    expect(placed.size).toBe(6);
+    expect(treeLinkKeys(input).size).toBe(3);
+  });
+});
+
+describe("bubbles (clustered bubbles)", () => {
+  const mixed: ArrangeInput = {
+    nodes: Array.from({ length: 24 }, (_, i) => n(`m${String(i).padStart(2, "0")}`, i % 3 === 0 ? "Person" : i % 3 === 1 ? "Endpoint" : "Device")),
+    edges: [],
+  };
+  const centroid = (placed: Map<string, { x: number; y: number }>, ids: string[]) => ({
+    x: ids.reduce((s, id) => s + at(placed, id).x, 0) / ids.length,
+    y: ids.reduce((s, id) => s + at(placed, id).y, 0) / ids.length,
+  });
+
+  it("puts each node nearer to the middle of its own bubble than to any other", () => {
+    const placed = arrange("bubbles", mixed)!;
+    const types = ["Person", "Endpoint", "Device"];
+    const mid = new Map(types.map((t) => [t, centroid(placed, mixed.nodes.filter((x) => x.type === t).map((x) => x.id))]));
+    for (const node of mixed.nodes) {
+      const own = dist(at(placed, node.id), mid.get(node.type)!);
+      for (const t of types) {
+        if (t !== node.type) expect(own).toBeLessThan(dist(at(placed, node.id), mid.get(t)!));
+      }
+    }
+  });
+
+  it("groups by what it is told to, not only by type", () => {
+    const groupOf = (id: string) => (Number(id.slice(1)) < 12 ? "first half" : "second half");
+    const placed = arrange("bubbles", mixed, { groupOf })!;
+    const first = mixed.nodes.filter((x) => groupOf(x.id) === "first half").map((x) => x.id);
+    const second = mixed.nodes.filter((x) => groupOf(x.id) === "second half").map((x) => x.id);
+    const a = centroid(placed, first);
+    const b = centroid(placed, second);
+    for (const id of first) expect(dist(at(placed, id), a)).toBeLessThan(dist(at(placed, id), b));
+    for (const id of second) expect(dist(at(placed, id), b)).toBeLessThan(dist(at(placed, id), a));
+  });
+
+  it("draws bubbles that do not overlap one another", () => {
+    const placed = arrange("bubbles", mixed)!;
+    const circles = ["Person", "Endpoint", "Device"].map((t) =>
+      enclosingCircle(mixed.nodes.filter((x) => x.type === t).map((x) => at(placed, x.id)), 12),
+    );
+    for (let i = 0; i < circles.length; i++)
+      for (let j = i + 1; j < circles.length; j++)
+        expect(dist(circles[i]!, circles[j]!)).toBeGreaterThanOrEqual(circles[i]!.r + circles[j]!.r);
   });
 });

@@ -9351,3 +9351,47 @@ Decision.
 Not decided here. Which role is the administrator (ADR-052 has Viewer, Editor and Owner of an investigation, none of them an ontology administrator); whether an analyst-proposed type may declare Direct when the administrator has not yet seen a loader that backs it (this ADR says it may not, and that is my reading of the owner's words, to be confirmed); how a declared thickness combines with a link's weight; what happens to links of a type that is later rejected; the basis of `NOT_SAME_AS`, which is an analyst's judgement and is drawn as today.
 
 Consequences. When built: `EdgeTypeDef` and `OntologySchema` gain `basis`, `colour`, `thickness`; `Edge` gains a per-link `basis`; the TypeScript types are regenerated (drift is a build failure); the ontology YAML and its JSON Schema change; the Ingest Studio's recipe validator checks the basis; a control-plane table for proposals and the routes for propose, list and promote (each with an access-control test, rules 3 and 4, and levels under ADR-052); the Glass draws dotted links. Sigma's stock edge programs draw solid lines; whether the installed version has a dotted one is not yet checked and is the first thing to find out, because the drawing may need a custom edge program. Tests that would fail if an invariant were broken: an ontology without `basis` is refused; a probabilistic link is drawn dotted whatever colour its type declares; a Direct link is never drawn dotted; a recipe naming a Probabilistic type is refused; a Viewer cannot propose, an Editor cannot promote, and a proposal from one investigation is invisible in another. Build in four steps, each its own commit: (A) `basis`, colour and thickness on types and the drawing; (B) the per-link basis; (C) proposals and promotion; (D) the Ingest Studio's rule.
+
+### ADR-080, Amendment 2 (3 October 2026) — correction: the nodes missing after the slider were not a fold
+
+Context. Amendment 1 above said a stale same-as fold explained the owner's report at step 2.7 ("only 2 nodes where previously there were more") and that, with the pair hidden in a Group Node, step 2.8 could not select it. The owner's screenshots then showed no Group Node at any stop: six people at Balanced, three at Strict, two at Broad, and two again on returning to Balanced, with the status bar not counting folded nodes. Amendment 1 named a real fault, reproduced and fixed, but not the one the owner saw. That explanation was wrong for this report and is withdrawn as its cause.
+
+What the owner saw. The cluster drawing (`02_GLASS_FRONTEND.md` §1.1, "Collapse (B9)") puts every node of a cluster at the cluster's anchor. The code that was meant to give a node its own place back when its cluster splits skipped any node that had become its own cluster, so after a split the nodes stayed stacked on the old anchor. Each move of the slider stacked more of them, and returning to Balanced did not separate them: two points on screen for six people. The specification already said a node returns to its own place; the code did not.
+
+Decision. A node that is no longer drawn on another's place goes back to where it was before it was joined, and the layout then runs so each node has a place of its own (ids that differ in one character scatter to nearly the same point). The test that would fail: `keyboard/resolution-slider.spec.ts` ("people matched as one are drawn together; a split puts each back in a place of its own"), shown red before the change (the people stayed together after a split) and green after. Amendment 1's change (same-as folds open when the resolution changes) stands as a separate fault.
+
+Not decided here, not reproduced. The owner's first screenshot, at Balanced and before the slider was touched, shows six separate people although the specification expects the Mikael and Mikhail pair and the identical pair to be merged at Balanced. It may be that nodes drawn into the view arrive without their cluster until the first `reproject`. I have not reproduced it; the owner is asked to repeat 2.1 and 2.2 after this change and say what the first view shows.
+
+## ADR-082 — The side panel and the timeline can be hidden, and the side panel can open to the whole work area
+
+Status: accepted 3 October 2026.
+
+Context. The owner asked that the Inspector and the timeline be collapsible, and that the Inspector be able to expand fully "so that the analyst can use the query function fully". The right-hand column holds the Inspector, the metrics and the query builder in a fixed 320 pixels; the timeline is fixed at 252 pixels.
+
+Decision.
+
+1. The right-hand column is framed by `SidePanelFrame`, with three states: **normal** (320 pixels, as before), **collapsed** (a narrow strip with one button to bring it back) and **full** (it covers the whole work area, over the canvas, which keeps its size so nothing in the view moves). Buttons: *Hide*, *Full width*, *Normal width*, *Show the inspector*.
+2. The timeline is framed by `BottomPanelFrame`: a title row with *Hide* / *Show*; hidden, the work area takes its height.
+3. Hidden contents stay mounted, so a half-written query, the timeline's brush and playback are as they were when the panel is shown again.
+4. This is the layout of one browser tab: nothing is stored or sent, and each panel opens in its normal state on reload.
+
+Not decided here. Remembering a choice between sessions (not done: it would need a place to keep a per-analyst setting); a hide shortcut key; a drag handle to set the width.
+
+Consequences. New `src/layout/PanelFrames.tsx` with unit tests; `App.tsx` uses both frames; the keyboard registry `PANEL_FRAME_ACTIONS` and `keyboard/panel-frames.spec.ts` prove the three buttons by keyboard (rule 13). Spec 02 §2 states the behaviour.
+
+## ADR-083 — Two more layouts: a force-directed tree and clustered bubbles
+
+Status: accepted 3 October 2026.
+
+Context. The owner asked for the force-directed tree and the clustered bubbles of two Observable D3 notebooks to be brought into the Glass. Four choices were put and answered: they are **two new entries in the Layout menu**; the tree is rooted on **the selected node, else the most linked**; the bubbles group by **a key the analyst picks**; and **no new packages** are added (the Glass already has its own force layout, `forceLayout.ts`). The result resembles the examples, it does not reproduce them.
+
+Decision.
+
+1. **Force-directed tree** (`layoutModes.ts`, `tree`). A shortest-path tree is grown from the root (the selected node, otherwise the most linked); each piece of the graph the root does not reach is rooted on its own most linked node, so no node is left out. The tree starts as a radial tree (repeatable: the same graph settles the same way) and the existing force layout then settles it, with only the tree's links pulling. Above 1,000 nodes the force step is skipped and the radial tree stands, so the layout is never refused. Links that are not part of the tree stay in the view, drawn faint (never removed, rule 2); selecting one draws it as any selected link.
+2. **Clustered bubbles** (`bubbles`). One bubble for each group, its nodes packed inside it, the bubbles packed against one another without overlapping, the largest in the middle. A circle with the group's name and size is drawn round each. The key is chosen in a second menu beside Layout, **Bubbles by**: *Entity type* (the default) or *Community* (found from the links in view, whether or not Communities is switched on; nodes in no community form one bubble, "Not in a community"). The size beside a bubble counts every node, including nodes the engine has matched as one and so draws on one place.
+3. Both are views of the working set, like the other layouts: they change where nodes are drawn, never what is stored or what is in the view (rules 2 and 6), and switching layout never refetches.
+4. The choice is kept in the browser tab only, as the other layouts are.
+
+Not decided here. Grouping by resolution cluster (the layout works on one node for each cluster, so every cluster would be a bubble of one); a bubble the analyst can fold into a Group Node (Communities offers that already); drawing the tree with the root at the top; animating the bubbles' packing.
+
+Consequences. Changed: `canvas/layoutModes.ts` (`tree`, `bubbles`, `treeLinkKeys`, `enclosingCircle`, `linkKey`), `canvas/LayoutMenu.tsx` (the *Bubbles by* choice), new `canvas/BubbleOverlay.tsx`, and `canvas/GlassCanvas.tsx` (the faint links and the bubble circles). Tests that would fail if an invariant were broken: `layoutModes.test.ts` (every node placed, repeatable, none stacked, tree links near their length, a loop's closing link not a tree link, no piece lost; each node nearer its own bubble's middle than another's, bubbles not overlapping, grouping by the given key) and two keyboard cases in `keyboard.spec.ts` (registry ids `layout-menu-chooses-force-directed-tree` and `layout-menu-chooses-clustered-bubbles-and-what-they-group-by`).
