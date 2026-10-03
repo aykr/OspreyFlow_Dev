@@ -9182,3 +9182,42 @@ Decision.
 Not decided here. Whether the other buttons that show a pressed state (Graph, Map, Watches, Communities) should be reworded in the same way: they name a view, not an action, so they are left as they are.
 
 Consequences. `ThemeToggle.test.tsx`, `SummaryRail.test.tsx` and `themeCookieSnippet.test.ts` assert both wordings and the absence of `aria-pressed`; `keyboard/top-bar.spec.ts` proves the keyboard route and that the words change in a real browser. The unit tests were run red against the old button first; the browser test and the harness test were changed in the same step and not shown red separately.
+
+## ADR-074 — The search box finds names and titles, and starts after two characters
+
+Status: accepted 3 October 2026 (the owner asked, and chose both options below from a written choice).
+
+Context. The type-ahead (ADR-059, ADR-061) looks at each entity type's declared identifiers and its `indexed` string properties. For a `Person` that was the NI, PNC and prison numbers only, so a family name found nothing; likewise an `Organisation`'s name and a `Document`'s title. The owner saw it on the Fixture Corp case: typing `QQ` (two characters, below the minimum) showed nothing and said nothing, and a name found no one. The verification walkthrough had told the owner to search by name, which could not work.
+
+Decision.
+
+1. The ontology (version 11) marks `indexed: true` on `Person.family_name`, `Person.given_names`, `Organisation.name` and `Document.title` (`Location.name` already was). The type-ahead's scope rule is unchanged, so no new flag was needed; the schema step creates an index for each.
+2. A property marked `sensitivity` is never searchable, since matching a prefix against a masked value would let a reader who may not see it guess it. `tests/ontology/test_searchable_names.py` holds this for every entity type. `Person.aliases` is not searchable yet: it is a list, and the scope rule takes only single strings.
+3. The exact search (`POST /v1/search`) also reads `indexed` properties, so it now matches a family name exactly too. That is the existing rule for `Location.name`, stated in the adapter.
+4. The minimum is two characters (`SUGGEST_MIN_CHARS`, the route and the Glass), down from three. While one character is typed the box says `Type at least 2 characters to search.` and the line stays until the text changes.
+5. Every recipe fixture pinned to ontology version 10 is bumped to 11; a recipe left at 10 is blocked until re-published (spec 09).
+
+Not decided here. Searching list properties such as aliases; ranking exact over partial matches; whether a two-character prefix is too costly on the largest case (ADR-059's 300 ms threshold still applies and is unmeasured for names).
+
+Consequences. After deploying, the case's data must be seen by the new indexes: the API creates them when the schema step runs (a restart). Names are matched case-sensitively by default; the Filters panel's Ignore case option applies. The walkthrough's name searches (`Volkov`, `Ring 0 Holdings`) work only after this is deployed.
+
+
+## ADR-075 — Analysts can keep notes on a link
+
+Status: accepted 3 October 2026.
+
+Context. The owner asked for "the functionality to add notes for links for the analyst", after selecting a link. Two choices were put to the owner and answered: who sees a note ("everyone who can see the link", recommended) and its shape ("several dated notes per link, plain text", recommended). The spec was silent: judgements cite nodes only because `GraphPort` has no `get_edge`, so there was no way to ask the graph whether one link is visible to one person.
+
+Decision.
+
+1. A **note** is plain text, 1 to 4,000 characters, attached to one link in one investigation, with its author and time. A link has several, newest first. Text is shown as text, never as markup. The model is `LinkNote` (`01_DOMAIN_MODEL.md` §5, generated to TypeScript).
+2. **Who may read or write a note: whoever can see its link.** The question is answered by `WorkingSetService.visible_edge`, which reads the one link and its two ends from the investigation's working set and applies the same handling filter every list read applies: the link's own marking and both ends must clear the person's clearance, and the link must be in this investigation's working set. A link the person cannot see answers exactly as a link that does not exist (404 `link_not_found`), on list, add, edit and delete, so a refusal reveals nothing about a hidden link.
+3. A note has **no marking of its own**. It takes the link's by never being shown to anyone the link is not shown to. If the link is later marked above a reader, that reader loses its notes at once.
+4. **Only the author edits or removes a note.** The database statement names the author, so another person's note matches nothing; the service then says 404 for a note that is not there and 403 `note_not_yours` for someone else's (the author is already shown beside every note, so this leaks nothing).
+5. Levels (ADR-052): reading notes needs Viewer; adding, changing and removing need Editor. The route table in `test_investigation_levels.py` has all four rows.
+6. Stored in Postgres, table `link_notes`, keyed by case and link, created idempotently like the other control-plane stores. Never written to the graph. The audit record for add, edit and remove holds the link and note ids, never the text.
+7. Glass: the Inspector's **Notes** section for a selected link (`02_GLASS_FRONTEND.md` §2). Add, list, edit and delete your own (delete asks first), all reachable by keyboard.
+
+Not decided here. A count of notes drawn on a link (offered, not chosen: it was the later step); notes on nodes; including notes in an export (nothing exports them, so an export does not mention them and the withheld-item manifest does not count them); searching note text; a note whose text quotes something more sensitive than its link (the section says a note takes the link's marking and asks the analyst not to put in anything more sensitive); a retention rule.
+
+Consequences. A note on a link is unreachable while the link is outside the working set (its nodes were tidied away or the link was never loaded) and comes back when the link does; nothing is deleted. A link that a different working set holds under the same id would show the same case's notes, but the case is part of every lookup, so notes never cross cases. The access rule is tested at both layers: the service against a stand-in store that refuses what Postgres refuses (`test_link_notes.py`, shown red by removing the visibility check: 6 of 23 fail), and the Postgres statements themselves (`test_link_notes_store.py`, owner-run). Not exercised by this session: the four routes over real HTTP with a real token, and the Glass against a real case (owner to check).

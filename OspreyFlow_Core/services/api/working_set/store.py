@@ -50,6 +50,18 @@ class WorkingSetStorage(Protocol):
         ...
 
     async def edge_ids(self, investigation_id: str) -> set[EdgeId]: ...
+
+    async def get_edge(self, investigation_id: str, edge_id: EdgeId) -> Edge | None:
+        """One link by id, source fidelity, or `None` when this investigation's working set does
+        not hold it. A single hash lookup — link notes ask this on every read and write, and
+        loading the whole edge set to answer it would grow with the case."""
+        ...
+
+    async def get_node(self, investigation_id: str, node_id: NodeId) -> Node | None:
+        """One node by id, source fidelity, or `None` — the other half of `get_edge`'s question
+        (does each end of the link stand in the working set?)."""
+        ...
+
     async def add_nodes(self, investigation_id: str, nodes: Sequence[Node]) -> None: ...
     async def add_edges(self, investigation_id: str, edges: Sequence[Edge]) -> None: ...
     async def remove_nodes(self, investigation_id: str, node_ids: Sequence[NodeId]) -> None: ...
@@ -165,6 +177,18 @@ class ValkeyWorkingSetStore:
     async def edge_ids(self, investigation_id: str) -> set[EdgeId]:
         raw = await _reply(self._client.hkeys(_edge_key(investigation_id)))
         return {key.decode() for key in raw}
+
+    async def get_edge(self, investigation_id: str, edge_id: EdgeId) -> Edge | None:
+        blob = await _reply(self._client.hget(_edge_key(investigation_id), edge_id))
+        if blob is None:
+            return None
+        return Edge.model_validate(msgpack.unpackb(blob, raw=False))
+
+    async def get_node(self, investigation_id: str, node_id: NodeId) -> Node | None:
+        blob = await _reply(self._client.hget(_node_key(investigation_id), node_id))
+        if blob is None:
+            return None
+        return Node.model_validate(msgpack.unpackb(blob, raw=False))
 
     async def add_nodes(self, investigation_id: str, nodes: Sequence[Node]) -> None:
         if not nodes:

@@ -114,6 +114,25 @@ async def test_remove_edges_deletes_from_the_hash(
     assert await working_store.edge_ids(investigation_id) == {"e2"}
 
 
+async def test_one_link_and_one_node_can_be_fetched_by_id_and_a_missing_one_is_none(
+    store: tuple[ValkeyWorkingSetStore, str],
+) -> None:
+    """`get_edge`/`get_node` are the single-hash lookups link notes use for their access check
+    (`WorkingSetService.visible_edge`); `None` — not an error — is what a missing id must give."""
+    working_store, investigation_id = store
+    await working_store.add_nodes(investigation_id, [_node("n1"), _node("n2")])
+    await working_store.add_edges(investigation_id, [_edge("e1", "n1", "n2")])
+
+    edge = await working_store.get_edge(investigation_id, "e1")
+    node = await working_store.get_node(investigation_id, "n1")
+
+    assert edge is not None and (edge.id, edge.source, edge.target) == ("e1", "n1", "n2")
+    assert node is not None and node.id == "n1"
+    assert await working_store.get_edge(investigation_id, "missing") is None
+    assert await working_store.get_node(investigation_id, "missing") is None
+    assert await working_store.get_edge("another-investigation", "e1") is None
+
+
 async def test_seq_is_monotonic_and_per_investigation(
     store: tuple[ValkeyWorkingSetStore, str],
 ) -> None:

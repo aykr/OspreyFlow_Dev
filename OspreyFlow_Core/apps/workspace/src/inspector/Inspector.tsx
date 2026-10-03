@@ -4,6 +4,7 @@ import { JudgementsPanel } from "../assessment/JudgementsPanel";
 import { Panel } from "../design/primitives/Panel";
 import { Tabs } from "../design/primitives/Tabs";
 import { LinkDetails, type LinkDetailsProps } from "./LinkDetails";
+import { LinkNotes } from "./LinkNotes";
 import { useState } from "react";
 
 export interface InspectorProps {
@@ -44,6 +45,15 @@ export function Inspector({ node, link, assessment }: InspectorProps) {
     return (
       <Panel title="Inspector" className="inspector">
         <LinkDetails {...link} />
+        {/* ADR-075: notes belong to a case, so they are offered only where one is open. */}
+        {assessment && (
+          <LinkNotes
+            apiBaseUrl={assessment.apiBaseUrl}
+            bearerToken={assessment.bearerToken}
+            investigationId={assessment.investigationId}
+            edgeId={link.edge.id}
+          />
+        )}
       </Panel>
     );
   }

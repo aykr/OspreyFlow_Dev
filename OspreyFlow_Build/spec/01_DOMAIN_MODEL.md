@@ -645,6 +645,30 @@ retracted, every judgement resting on it is flagged for review. That closed loop
 picture and the assessment is the thing the commercial products do not give you, and it is
 cheap to build once the provenance model above exists.
 
+### Notes on links
+
+An analyst can attach plain-text notes to a link (`06_DECISIONS.md` ADR-075). Notes are analytical
+working, not graph content: they are kept in the investigation's control-plane store and never written to the
+graph, so a note cannot change a link, its weight, its provenance or what resolution does.
+
+```python
+class LinkNote(BaseModel):
+    id: str
+    investigation_id: str
+    edge_id: EdgeId
+    author: PrincipalId
+    body: str                     # plain text, 1 to 4,000 characters, never interpreted as markup
+    created_at: datetime
+    edited_at: datetime | None
+    mine: bool                    # worked out per reader when served; never stored
+```
+
+A link has any number of notes, listed newest first. A note has no handling marking of its own: it is
+shown to exactly the principals the link is shown to (the link's own marking and both of its ends clear
+that principal's clearance, and the link is in the investigation's working set), so a link a principal
+cannot see has no notes they can read, and asking for them answers as a link that does not exist.
+Only a note's author edits or removes it.
+
 ## 6. Edge weight and the Clique Metric
 
 ### 6.1 Weight

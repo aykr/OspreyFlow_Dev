@@ -52,6 +52,7 @@ from schemas.domain import (
     AuditStub,
     ClusterId,
     Edge,
+    EdgeId,
     EdgeWrite,
     ExpandRequest,
     Node,
@@ -641,6 +642,32 @@ class WorkingSetService:
         nodes = await self._store.source_fidelity_nodes(investigation_id)
         edges = await self._store.source_fidelity_edges(investigation_id)
         return list(nodes.values()), list(edges.values())
+
+    async def visible_edge(
+        self, investigation_id: str, edge_id: EdgeId, principal: Principal
+    ) -> Edge | None:
+        """The link `edge_id` as `principal` may see it, or `None`.
+
+        `None` covers three cases that must read identically to the caller: the link is not in
+        this investigation's working set, its own handling is above `principal`, or one of its
+        ends is (or has left the working set). Link notes use this as their whole access
+        question — a note is readable and writable exactly when its link is visible — so a
+        refusal here must not reveal which of the three it was, the same rule `_project` already
+        follows for every list read. It reads the one link and its two ends, not the whole set,
+        and runs the same `_project` the lists use, so the two can never disagree."""
+        edge = await self._store.get_edge(investigation_id, edge_id)
+        if edge is None:
+            return None
+        ends = [
+            end
+            for end in (
+                await self._store.get_node(investigation_id, edge.source),
+                await self._store.get_node(investigation_id, edge.target),
+            )
+            if end is not None
+        ]
+        _, visible, _ = self._project(ends, [edge], principal)
+        return visible[0] if visible else None
 
     async def withheld_count_for(self, investigation_id: str, principal: Principal) -> int:
         """The export gate's own trusted source for the withheld-item manifest

@@ -81,6 +81,12 @@ class FakeWorkingSetStore:
     async def edge_ids(self, investigation_id: str) -> set[EdgeId]:
         return set(self._e(investigation_id))
 
+    async def get_edge(self, investigation_id: str, edge_id: EdgeId) -> Edge | None:
+        return self._e(investigation_id).get(edge_id)
+
+    async def get_node(self, investigation_id: str, node_id: NodeId) -> Node | None:
+        return self._n(investigation_id).get(node_id)
+
     async def add_nodes(self, investigation_id: str, nodes: Sequence[Node]) -> None:
         self._n(investigation_id).update({n.id: n for n in nodes})
 

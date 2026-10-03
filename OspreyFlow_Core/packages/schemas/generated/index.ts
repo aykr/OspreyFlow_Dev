@@ -32,6 +32,7 @@ export type { Monitor } from "./Monitor";
 export type { Judgement } from "./Judgement";
 export type { IntelligenceGap } from "./IntelligenceGap";
 export type { Assumption } from "./Assumption";
+export type { LinkNote } from "./LinkNote";
 export type { NeighbourhoodStats } from "./NeighbourhoodStats";
 export type { Subgraph } from "./Subgraph";
 export type { ListNodesPage } from "./ListNodesPage";

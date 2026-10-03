@@ -97,6 +97,15 @@ landed on the overlay and a link could not be selected; hovering now opens nothi
 live in the Inspector.* A selected link can be hidden from the view (Delete); that is a view setting
 for the browser tab, not a change to the working set.
 
+**Notes on a link (ADR-075).** With a link selected, the Inspector shows a **Notes** section under its
+details: a box to add a note (Add note, or Ctrl/Cmd+Enter), then the notes newest first, each with its
+author and time. Everyone who can see the link sees its notes, and the section says so. On a note of
+their own an analyst has **Edit** (Save, or Escape to cancel) and **Delete** (asks "Confirm delete"
+first); other people's notes have neither. A failed save keeps what was typed and says why. A link
+that is not in the person's view shows "This link is not in your view" and no box. The section is
+offered only while a case is open. Keyboard: every step is reachable without a mouse (rule 13,
+`keyboard/link-notes.spec.ts`).
+
 **Zoom-dependent clustering is a data operation, not a rendering one.** Collapsing a community
 into a meta-node, or expanding it back, happens in graphology and produces a real change to the
 working set with an entry in the step history. It behaves identically whichever renderer draws
@@ -217,6 +226,10 @@ never broken in two. From the left:
   when large (ADR-070).
   The "more match" hint is laid over the page under the box and fades after four seconds; the Filters
   panel is laid over the page too, so neither makes the bar taller (ADR-071).
+  The box looks at each type's identifiers and its names and titles (a person's family and given
+  names, an organisation's name, a place's name, a document's title) and never at a sensitive
+  property; it starts after two characters and says `Type at least 2 characters to search.` while
+  there is one (ADR-074).
 - Graph, Map, Watches (and Messages when a dossier is open); the Balanced slider; Export; History.
 - **The theme button** (a worded button, just left of the account, that names the theme a press
   switches to: `Light` while the page is dark, `Dark` once it is light; ADR-073): switches between the

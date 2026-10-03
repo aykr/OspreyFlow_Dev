@@ -113,6 +113,7 @@ from schemas.domain import (
     IntelligenceGap,
     Interval,
     Judgement,
+    LinkNote,
     Monitor,
     Node,
     NodeId,
@@ -226,6 +227,16 @@ from .investigations import (
     InvestigationStore,
 )
 from .jobs import JobQueue
+from .link_notes import (
+    InvalidNoteError,
+    LinkNoteBody,
+    LinkNoteListResponse,
+    LinkNoteService,
+    LinkNoteStore,
+    LinkNotFoundError,
+    NoteNotFoundError,
+    NoteNotYoursError,
+)
 from .mapconfig_loader import load_map_config, public_view
 from .monitors import MonitorNotFoundError, MonitorStore
 from .notify import notify_channel, publish_delta
@@ -355,6 +366,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     monitors_store = await MonitorStore.connect(config.postgres.dsn)
     alerts_store = await AlertStore.connect(config.postgres.dsn)
     judgements_store = await JudgementStore.connect(config.postgres.dsn)
+    link_notes_store = await LinkNoteStore.connect(config.postgres.dsn)
     suppression_marks = await SuppressionMarkStore.connect(config.postgres.dsn)
     gaps_store = await IntelligenceGapStore.connect(config.postgres.dsn)
     assumptions_store = await AssumptionStore.connect(config.postgres.dsn)
@@ -403,6 +415,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.monitors_store = monitors_store
     app.state.alerts_store = alerts_store
     app.state.judgements_store = judgements_store
+    app.state.link_notes = LinkNoteService(link_notes_store, app.state.working_set)
     app.state.suppression_marks = suppression_marks
     app.state.gaps_store = gaps_store
     app.state.assumptions_store = assumptions_store
@@ -466,6 +479,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await monitors_store.close()
         await alerts_store.close()
         await judgements_store.close()
+        await link_notes_store.close()
         await gaps_store.close()
         await assumptions_store.close()
         await export_ledger.close()
@@ -657,6 +671,10 @@ HistoryDep = Annotated[InvestigationHistoryStore, Depends(get_history)]
 GraphDep = Annotated[GraphPort, Depends(get_graph)]
 OntologyDep = Annotated[OntologySchema, Depends(get_ontology)]
 MapConfigDep = Annotated[MapConfig, Depends(get_map_config)]
+def get_link_notes(request: Request) -> LinkNoteService:
+    return request.app.state.link_notes  # type: ignore[no-any-return]
+
+
 PrincipalDep = Annotated[Principal, Depends(get_principal)]
 PrincipalResolverDep = Annotated[PrincipalResolver, Depends(get_principal_resolver)]
 SitesDep = Annotated[SiteStore, Depends(get_sites)]
@@ -666,6 +684,7 @@ HotlistsStoreDep = Annotated[HotlistStore, Depends(get_hotlists_store)]
 MonitorsStoreDep = Annotated[MonitorStore, Depends(get_monitors_store)]
 AlertsStoreDep = Annotated[AlertStore, Depends(get_alerts_store)]
 JudgementsStoreDep = Annotated[JudgementStore, Depends(get_judgements_store)]
+LinkNotesDep = Annotated[LinkNoteService, Depends(get_link_notes)]
 
 
 def get_suppression_marks(request: Request) -> SuppressionMarkStore:
@@ -941,6 +960,37 @@ async def _judgement_not_found_handler(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND, content={"error": "judgement_not_found"}
+    )
+
+
+@app.exception_handler(LinkNotFoundError)
+async def _link_not_found_handler(request: Request, exc: LinkNotFoundError) -> JSONResponse:
+    """A link that is not in the working set and a link this principal may not see give this one
+    answer (`services/api/link_notes.py`)."""
+    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "link_not_found"})
+
+
+@app.exception_handler(NoteNotFoundError)
+async def _note_not_found_handler(request: Request, exc: NoteNotFoundError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "note_not_found"})
+
+
+@app.exception_handler(NoteNotYoursError)
+async def _note_not_yours_handler(request: Request, exc: NoteNotYoursError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={
+            "error": "note_not_yours",
+            "detail": "Only the person who wrote a note can change or remove it.",
+        },
+    )
+
+
+@app.exception_handler(InvalidNoteError)
+async def _invalid_note_handler(request: Request, exc: InvalidNoteError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": "invalid_note", "detail": str(exc)},
     )
 
 
@@ -2398,6 +2448,85 @@ async def list_judgements_route(
             judgements_store, investigation.id, principal, graph
         )
     )
+
+
+@app.get("/v1/investigations/{investigation_id}/links/{edge_id}/notes")
+async def list_link_notes_route(
+    investigation: InvestigationViewerDep,
+    edge_id: str,
+    principal: PrincipalDep,
+    link_notes: LinkNotesDep,
+) -> LinkNoteListResponse:
+    """Notes on one link, newest first — only to someone who can see the link
+    (`link_notes.py`'s module docstring). Not audited, like the other case reads here."""
+    return LinkNoteListResponse(notes=await link_notes.list(investigation.id, edge_id, principal))
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/links/{edge_id}/notes",
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_link_note_route(
+    investigation: InvestigationEditorDep,
+    edge_id: str,
+    principal: PrincipalDep,
+    body: LinkNoteBody,
+    link_notes: LinkNotesDep,
+    audit: AuditDep,
+) -> LinkNote:
+    note = await link_notes.add(investigation.id, edge_id, principal, body.body)
+    await audit.record(
+        principal=principal,
+        action="link_note_add",
+        investigation_id=investigation.id,
+        resolved_query={"edge_id": edge_id, "note_id": note.id},
+        result_cardinality=1,
+    )
+    return note
+
+
+@app.put("/v1/investigations/{investigation_id}/links/{edge_id}/notes/{note_id}")
+async def edit_link_note_route(
+    investigation: InvestigationEditorDep,
+    edge_id: str,
+    note_id: str,
+    principal: PrincipalDep,
+    body: LinkNoteBody,
+    link_notes: LinkNotesDep,
+    audit: AuditDep,
+) -> LinkNote:
+    note = await link_notes.edit(investigation.id, edge_id, note_id, principal, body.body)
+    await audit.record(
+        principal=principal,
+        action="link_note_edit",
+        investigation_id=investigation.id,
+        resolved_query={"edge_id": edge_id, "note_id": note.id},
+        result_cardinality=1,
+    )
+    return note
+
+
+@app.delete(
+    "/v1/investigations/{investigation_id}/links/{edge_id}/notes/{note_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_link_note_route(
+    investigation: InvestigationEditorDep,
+    edge_id: str,
+    note_id: str,
+    principal: PrincipalDep,
+    link_notes: LinkNotesDep,
+    audit: AuditDep,
+) -> Response:
+    await link_notes.remove(investigation.id, edge_id, note_id, principal)
+    await audit.record(
+        principal=principal,
+        action="link_note_remove",
+        investigation_id=investigation.id,
+        resolved_query={"edge_id": edge_id, "note_id": note_id},
+        result_cardinality=1,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @app.post("/v1/investigations/{investigation_id}/gaps", status_code=status.HTTP_201_CREATED)

@@ -278,3 +278,19 @@ export const TIMELINE_PLAYBACK_ACTIONS = defineActionRegistry("TIMELINE_PLAYBACK
 export const SIGN_IN_ACTIONS = defineActionRegistry("SIGN_IN_ACTIONS", [
   "submit-sign-in",
 ] as const);
+
+/**
+ * The Inspector's Notes section for a selected link (ADR-075) — a keyboard-driven surface of its
+ * own (`keyboard/link-notes-harness.tsx`). Each action changes stored state through a real network
+ * call, so each needs a case; a native textarea's own Tab-reachability does not (the exemption the
+ * registries above already state). Entries are the ways a note is written, changed or dropped
+ * without a mouse, including the two that must not change anything.
+ */
+export const LINK_NOTES_ACTIONS = defineActionRegistry("LINK_NOTES_ACTIONS", [
+  "ctrl-enter-adds-a-note",
+  "add-note-button-by-keyboard",
+  "edit-own-note-and-save-by-keyboard",
+  "escape-cancels-an-edit-and-returns-focus",
+  "delete-own-note-by-keyboard-after-confirming",
+  "cancel-a-delete-by-keyboard",
+] as const);

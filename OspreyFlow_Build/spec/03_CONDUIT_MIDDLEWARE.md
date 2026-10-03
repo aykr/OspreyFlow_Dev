@@ -100,8 +100,8 @@ Author; a new case is visible to nobody else until shared; cases that existed be
 
 | Level | Routes under `/v1/investigations/{id}` |
 |---|---|
-| Viewer | `GET` the case; `expand/preview`; `resolution/threshold` (GET); `resolution/explain/{cluster}`; `compute/{metric}`; `ingest/candidates` (GET); `dossier/documents/{doc}`; `history` (GET); `judgements`, `gaps`, `assumptions` (GET); `sites/{site}` and its `image` (GET); the delta stream |
-| Editor | `branch`; `seed`; `expand`; `nodes` (DELETE); `resolution/threshold` (PUT), `link`, `split`; `ingest/extract`, candidate `accept` and `reject`; `history/{step}` (restore); `judgements`, `gaps`, `assumptions` (POST); `export`; `sites` (POST), `control-points`, `grid`; `ingest/recipes/{recipe}/run` |
+| Viewer | `GET` the case; `expand/preview`; `resolution/threshold` (GET); `resolution/explain/{cluster}`; `compute/{metric}`; `ingest/candidates` (GET); `dossier/documents/{doc}`; `history` (GET); `judgements`, `gaps`, `assumptions` (GET); `links/{edge}/notes` (GET); `sites/{site}` and its `image` (GET); the delta stream |
+| Editor | `branch`; `seed`; `expand`; `nodes` (DELETE); `resolution/threshold` (PUT), `link`, `split`; `ingest/extract`, candidate `accept` and `reject`; `history/{step}` (restore); `judgements`, `gaps`, `assumptions` (POST); `links/{edge}/notes` (POST), `links/{edge}/notes/{note}` (PUT, DELETE); `export`; `sites` (POST), `control-points`, `grid`; `ingest/recipes/{recipe}/run` |
 | Author | `PATCH` the case (rename); `DELETE` the case (a soft remove: it then reads as not found to everyone, nothing is deleted, ADR-052 Amendment 7; the unit's `osprey-admin` may too, through the same safety net); `access` (PUT: the unit-wide level, which is none, Viewer or Editor, never Author); `access/grants/{account}` (PUT, DELETE); `access/history`. An `osprey-admin` in the case's own unit may also use these without holding a level (the safety net, audited as `access_admin_override`); that gives no other access. |
 
 `GET /v1/investigations` lists the cases the caller holds a level on (id, name, their level, created,
@@ -207,6 +207,10 @@ POST   /v1/investigations/{id}/gaps
 GET    /v1/investigations/{id}/gaps         list
 POST   /v1/investigations/{id}/assumptions
 GET    /v1/investigations/{id}/assumptions  list
+GET    /v1/investigations/{id}/links/{edge}/notes   notes on one link, newest first — 404 `link_not_found` unless the link is in the working set and the caller may see it (ADR-075)
+POST   /v1/investigations/{id}/links/{edge}/notes   add a note (`{"body": "..."}`), 201; 422 `invalid_note` for empty or over 4,000 characters
+PUT    /v1/investigations/{id}/links/{edge}/notes/{note}      change the caller's own note; 403 `note_not_yours` for anyone else's
+DELETE /v1/investigations/{id}/links/{edge}/notes/{note}      remove the caller's own note, 204; 403 `note_not_yours` for anyone else's
 POST   /v1/investigations/{id}/export    runs the handling gate; may return 409 with blockers
 GET    /v1/exports                       the compliance-facing export ledger (ADR-047's own Gap 2) — role-gated, not per-investigation
 GET    /v1/investigations/{id}/ingest/candidates   extraction candidates for one document (?document_id=)

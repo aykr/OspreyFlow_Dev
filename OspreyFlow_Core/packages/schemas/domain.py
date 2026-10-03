@@ -624,6 +624,21 @@ class Assumption(BaseModel):
     created_at: datetime
 
 
+class LinkNote(BaseModel):
+    """One analyst note on one link (`06_DECISIONS.md` ADR-075). Plain text, several per link,
+    kept in the investigation, shown to everyone who can see the link. Only its author changes or
+    removes it. `mine` is worked out per reader when the note is served and is never stored."""
+
+    id: str
+    investigation_id: str
+    edge_id: EdgeId
+    author: PrincipalId
+    body: str
+    created_at: datetime
+    edited_at: datetime | None = None
+    mine: bool = False
+
+
 class NeighbourhoodStats(BaseModel):
     node_id: NodeId
     degree: int
@@ -686,6 +701,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     Judgement,
     IntelligenceGap,
     Assumption,
+    LinkNote,
     NeighbourhoodStats,
     Subgraph,
     ListNodesPage,

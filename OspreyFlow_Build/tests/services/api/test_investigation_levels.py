@@ -54,6 +54,11 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("GET", P + "/gaps"): V,
     ("POST", P + "/assumptions"): E,
     ("GET", P + "/assumptions"): V,
+    # Link notes (ADR-075): reading is Viewer; adding, changing and removing a note changes the case.
+    ("GET", P + "/links/{edge_id}/notes"): V,
+    ("POST", P + "/links/{edge_id}/notes"): E,
+    ("PUT", P + "/links/{edge_id}/notes/{note_id}"): E,
+    ("DELETE", P + "/links/{edge_id}/notes/{note_id}"): E,
     ("POST", P + "/export"): E,
     ("POST", P + "/sites"): E,
     ("GET", P + "/sites/{site_id}"): V,
