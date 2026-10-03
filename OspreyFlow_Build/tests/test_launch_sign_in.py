@@ -585,3 +585,14 @@ def test_the_launcher_will_only_start_on_the_port_the_realm_registers() -> None:
     assert launch.port_problem(9999, enforced=False) is None
     problem = launch.port_problem(9999, enforced=True)
     assert problem and str(LAUNCHER_PORT) in problem
+
+
+def test_the_launchers_message_pages_follow_the_light_and_dark_choice_too(rig: Rig) -> None:
+    """ADR-072. The sign-in refusals and "not running" pages are separate small pages; left alone they
+    stay dark when everything else is light. An invalid sign-in link is the quickest one to reach."""
+    status, _, body = rig.browser().get("/callback?state=not-a-real-attempt&code=x")
+    assert status == 400
+    script = (Path(launch.__file__).resolve().parents[1] / "harness" / "theme_cookie.js").read_text(
+        encoding="utf-8"
+    )
+    assert script.strip() in body

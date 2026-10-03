@@ -221,6 +221,8 @@ never broken in two. From the left:
 - **The theme button** (`Light theme`, drawn as a worded `Light` button), just left of the account:
   switches between the dark default and the light theme, per browser, never sent to the server
   (ADR-070). A pressed button (it, and the view buttons) is drawn with a brass border and text (ADR-071).
+  The choice is also kept in a cookie shared by every page of the deployment (the launcher, the sign-in
+  page and the setup harness follow it and carry the same button; ADR-072).
 - **The account**, at the right-hand end (item 5 above).
 
 Every menu opens on Enter or Space, closes on Escape (focus returns to its button), on a click

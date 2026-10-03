@@ -1,3 +1,4 @@
+import { ThemeToggle } from "../../workspace/src/theme/ThemeToggle";
 import { FUTURE_SCREEN_NAMES, SCREEN_NAMES, type ScreenName } from "./store";
 
 export function SummaryRail({
@@ -34,6 +35,9 @@ export function SummaryRail({
           Ingest folder: <code>{ingestRoot}</code>
         </p>
       ) : null}
+      <p>
+        <ThemeToggle />
+      </p>
     </nav>
   );
 }

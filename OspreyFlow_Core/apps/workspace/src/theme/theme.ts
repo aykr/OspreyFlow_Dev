@@ -2,27 +2,67 @@
 // ramp already there under `[data-theme="light"]`. The choice is kept in this browser only: it is a
 // way of looking at the page, so it is never sent to the server and is not part of the case.
 //
+// It is kept in a cookie as well as in this page's storage (ADR-072). The pages of one deployment
+// (the Glass, the launcher, the sign-in page, the setup harness) are on different ports of one host,
+// and a browser keeps a page's storage per port but a cookie per host, so the cookie is how a choice
+// made on one page reaches the rest. The cookie holds only "light" or "dark" and is never read by a
+// server. `harness/theme_cookie.js` is the same logic for the pages that are not React.
+//
 // Everything drawn by CSS follows `data-theme` on its own. What is painted to a canvas (the graph,
 // the timeline) cannot read a CSS variable, so it asks `currentTheme()` and listens with
 // `onThemeChange()` to draw again.
 export type Theme = "dark" | "light";
 
 export const THEME_STORAGE_KEY = "ospreyflow.theme";
+/** Shared by every page on this host; `harness/theme_cookie.js` uses the same name. */
+export const THEME_COOKIE_NAME = "ospreyflow_theme";
+const THEME_COOKIE_MAX_AGE_S = 60 * 60 * 24 * 365;
 
 const listeners = new Set<(theme: Theme) => void>();
 
-/** The saved choice; dark when nothing is saved, the value is not recognised, or the browser will
- * not let the page read its storage (a private window, blocked site data). */
-export function readStoredTheme(): Theme {
+function themeFrom(value: unknown): Theme | null {
+  return value === "light" || value === "dark" ? value : null;
+}
+
+function readCookie(): Theme | null {
   try {
-    const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return stored === "light" ? "light" : "dark";
+    const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${THEME_COOKIE_NAME}=([^;]*)`));
+    return match ? themeFrom(match[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCookie(theme: Theme): void {
+  try {
+    document.cookie = `${THEME_COOKIE_NAME}=${theme}; Path=/; Max-Age=${THEME_COOKIE_MAX_AGE_S}; SameSite=Lax`;
+  } catch {
+    // Without a cookie the choice still holds for this page, through its own storage.
+  }
+}
+
+/** The saved choice; dark when nothing is saved, the value is not recognised, or the browser will
+ * not let the page read its storage or cookies (a private window, blocked site data). The cookie
+ * comes first, since another page may have changed it since this one last did. A choice found only
+ * in this page's storage (made before the cookie existed) is put in the cookie, so the other pages
+ * follow it too. */
+export function readStoredTheme(): Theme {
+  const shared = readCookie();
+  if (shared) return shared;
+  try {
+    const stored = themeFrom(localStorage.getItem(THEME_STORAGE_KEY));
+    if (stored) {
+      writeCookie(stored);
+      return stored;
+    }
+    return "dark";
   } catch {
     return "dark";
   }
 }
 
 export function storeTheme(theme: Theme): void {
+  writeCookie(theme);
   try {
     localStorage.setItem(THEME_STORAGE_KEY, theme);
   } catch {

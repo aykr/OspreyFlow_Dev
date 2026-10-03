@@ -370,6 +370,20 @@ def test_the_page_takes_its_styling_from_the_workspaces_own_tokens_file(
     assert css == on_disk.read_text(encoding="utf-8")
 
 
+def test_the_page_carries_the_shared_light_and_dark_script_in_its_head(
+    served: tuple[str, launch.Launcher, FakeProber, FakeSpawner],
+) -> None:
+    """ADR-072. The welcome page was dark whatever the analyst chose in the Glass, because nothing on
+    it read the choice. The one script (`harness/theme_cookie.js`, also put in Keycloak's sign-in
+    page) must be in the head, so the page is drawn in the chosen theme and does not flash dark."""
+    base, _, _, _ = served
+    _, page = _request(base + "/")
+    script = (_REPO / "harness" / "theme_cookie.js").read_text(encoding="utf-8")
+    head = page.split("</head>")[0]
+    assert script.strip() in head
+    assert head.index(script.strip()) > head.index('<link rel="stylesheet" href="/tokens.css">')
+
+
 def test_the_page_defines_no_colour_of_its_own(
     served: tuple[str, launch.Launcher, FakeProber, FakeSpawner],
 ) -> None:

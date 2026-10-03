@@ -76,6 +76,7 @@ from pathlib import Path
 from typing import Protocol
 
 from harness import oidc
+from harness.theme_script import read_theme_script
 from harness.oidc import (
     Identity,
     IdentityProviderUnreachable,
@@ -690,6 +691,8 @@ class Launcher:
             .replace("__SIGNIN__", signin)
             .replace("__MODE__", mode)
             .replace("__TOKEN__", html.escape(self.token))
+            # Last, so nothing put in the page above (a name, a message) can be taken for the marker.
+            .replace("__THEME_SCRIPT__", read_theme_script())
         )
 
     def tokens_css(self) -> str | None:
@@ -707,6 +710,7 @@ _PAGE = """<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OspreyFlow — choose what to open</title>
 <link rel="stylesheet" href="/tokens.css">
+<script>__THEME_SCRIPT__</script>
 <style>
   .wrap { max-width: 960px; margin: 0 auto; padding: var(--sp-40) var(--sp-24); }
   h1 { margin: 0; font-size: var(--fs-23); line-height: var(--lh-23); font-weight: 700; }
@@ -891,6 +895,7 @@ def _handler(launcher: Launcher) -> type[BaseHTTPRequestHandler]:
                 "<!doctype html><html lang=\"en-GB\"><meta charset=\"utf-8\">"
                 f"<title>{html.escape(title)} — OspreyFlow</title>"
                 '<link rel="stylesheet" href="/tokens.css">'
+                f"<script>{read_theme_script()}</script>"
                 "<style>main { max-width: 62ch; margin: 0 auto; "
                 "padding: var(--sp-40) var(--sp-24); }</style>"
                 f"<main><h1>{html.escape(title)}</h1>{body}</main></html>",

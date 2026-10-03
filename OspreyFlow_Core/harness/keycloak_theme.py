@@ -21,6 +21,7 @@ from pathlib import Path
 
 from harness.realm import LOGIN_THEME_NAME, REALM_DISPLAY_NAME
 from harness.render import REPO_ROOT
+from harness.theme_script import read_theme_script
 
 THEME_NAME = LOGIN_THEME_NAME
 #: What the realm calls itself on the sign-in page and in the tab title.
@@ -29,6 +30,8 @@ DISPLAY_NAME = REALM_DISPLAY_NAME
 THEME_PROPERTIES = "login/theme.properties"
 THEME_STYLESHEET = "login/resources/css/osprey.css"
 THEME_MESSAGES = "login/messages/messages_en.properties"
+#: The light and dark choice (ADR-072): a stylesheet cannot read the cookie the Glass saves it in.
+THEME_SCRIPT = "login/resources/js/osprey-theme.js"
 #: Where, beside the compose file, the theme is written and where compose mounts it from.
 THEME_DIRECTORY = "keycloak-theme"
 
@@ -37,6 +40,7 @@ TOKENS_RELATIVE_PATH = Path("apps") / "workspace" / "src" / "design" / "tokens.c
 _PROPERTIES = """\
 parent=keycloak.v2
 styles=css/osprey.css
+scripts=js/osprey-theme.js
 """
 
 _MESSAGES = f"""\
@@ -183,6 +187,7 @@ def render_login_theme(tokens_css: str) -> dict[str, str]:
         THEME_PROPERTIES: _PROPERTIES,
         THEME_STYLESHEET: tokens_css + _rules(),
         THEME_MESSAGES: _MESSAGES,
+        THEME_SCRIPT: read_theme_script(),
     }
 
 

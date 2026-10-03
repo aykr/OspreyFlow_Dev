@@ -94,6 +94,20 @@ def test_the_stylesheet_reaches_every_part_of_the_stock_page_it_replaces() -> No
         assert stock_part in own, stock_part
 
 
+THEME_SCRIPT = (REPO_ROOT / "harness" / "theme_cookie.js").read_text(encoding="utf-8")
+
+
+def test_the_sign_in_page_loads_the_shared_light_and_dark_script() -> None:
+    """ADR-072. A stylesheet cannot read a cookie, so without a script the sign-in page stays dark
+    whatever the analyst chose in the Glass. Catches a script that is produced but never named in
+    the theme (Keycloak then never loads it), and one that differs from the shared file."""
+    files = _theme()
+    properties = files[THEME_PROPERTIES]
+    match = re.search(r"^scripts=(\S+)$", properties, flags=re.MULTILINE)
+    assert match is not None, "theme.properties does not name a script"
+    assert files[f"login/resources/{match.group(1)}"] == THEME_SCRIPT
+
+
 def test_the_page_says_ospreyflow_and_sign_in_in_plain_words() -> None:
     """The stock heading is "Sign in to your account" under a shouted realm name."""
     messages = _theme()["login/messages/messages_en.properties"]
