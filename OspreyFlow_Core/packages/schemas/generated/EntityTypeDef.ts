@@ -8,6 +8,7 @@ export type Name = string;
 export type PoleClass = "person" | "object" | "location" | "event" | "organisation";
 export type Channel = string;
 export type Shape = string;
+export type Icon = string | null;
 export type Identifiers = string[];
 export type Name1 = string;
 export type PropertyType = "string" | "string[]" | "date" | "datetime" | "integer" | "float" | "boolean" | "enum";
@@ -24,6 +25,7 @@ export interface EntityTypeDef {
   pole_class: PoleClass;
   channel: Channel;
   shape: Shape;
+  icon?: Icon;
   identifiers?: Identifiers;
   properties?: Properties;
   resolution?: ResolutionConfig | null;

@@ -34,6 +34,8 @@ declare global {
       /** The fill colour stored on a node now, which is what the canvas paints it with. */
       nodeColour: (nodeId: string) => string | null;
       setTheme: (theme: "dark" | "light") => void;
+      /** The picture stored on a node now (a data address of its shape and icon), which is what the canvas draws. */
+      nodeImage: (nodeId: string) => string | null;
     };
     /** How many nodes are folded into Group Nodes now (ADR-066). */
     __GROUPED__?: number;
@@ -48,6 +50,7 @@ const SCHEMA: OntologySchema = {
       pole_class: "person",
       channel: "indigo",
       shape: "circle",
+      icon: "person",
       identifiers: [],
       // What the Labels control (ADR-076) offers for a person in the fixture.
       properties: [
@@ -57,7 +60,7 @@ const SCHEMA: OntologySchema = {
     },
     // Phase 6a Stage 4 (B6): the only fixture data the "View messages" radial-menu item needs —
     // it is offered on `Endpoint`-type nodes specifically (`GlassCanvas.tsx`'s own condition).
-    { name: "Endpoint", pole_class: "object", channel: "cyan", shape: "hexagon", identifiers: [] },
+    { name: "Endpoint", pole_class: "object", channel: "cyan", shape: "hexagon", icon: "phone", identifiers: [] },
   ],
   edge_types: [
     { name: "ASSOCIATE_OF", from: ["Person"], to: ["Person"], directed: false },
@@ -114,6 +117,7 @@ window.__CANVAS__ = {
   labelOf: (id) => canvasHandle.current?.labelOf(id) ?? null,
   nodeColour: (id) => (workingSet.graph.hasNode(id) ? (workingSet.graph.getNodeAttribute(id, "color") as string) : null),
   setTheme: (theme) => applyTheme(theme),
+  nodeImage: (id) => (workingSet.graph.hasNode(id) ? (workingSet.graph.getNodeAttribute(id, "image") as string) : null),
 };
 
 window.__KEYBOARD__ = { focused: null, selection: [], viewMessagesNodeId: null, selectedEdge: null };

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { mixOklab } from "./oklab";
+import { mixOklab, oklabLightness, readableTextOn } from "./oklab";
+
+function lightnessGap(a: string, b: string): number {
+  return Math.abs(oklabLightness(a) - oklabLightness(b));
+}
 
 // No independent oracle for an exact expected hex is available offline —
 // these assert the algebraic properties any correct OKLab mix must have.
@@ -36,5 +40,21 @@ describe("mixOklab", () => {
       return Math.abs(n - sn);
     };
     expect(distanceFromSurface(dimmed)).toBeGreaterThan(distanceFromSurface(filteredOut));
+  });
+});
+
+describe("readableTextOn", () => {
+  it("is white on a dark fill and near-black on a light one", () => {
+    expect(readableTextOn("#1b2a6b")).toBe("#ffffff");
+    expect(readableTextOn("#e8d9a0")).toBe("#10131a");
+  });
+
+  it("chooses the colour that is further from the fill, for every channel in either theme", () => {
+    // Not a contrast standard, only that the choice is never the worse of the two.
+    for (const hex of ["#677bd6", "#5367cb", "#35b9c0", "#c08a34", "#d96b8a", "#7b5fd0", "#3f9d6a"]) {
+      const text = readableTextOn(hex);
+      const other = text === "#ffffff" ? "#10131a" : "#ffffff";
+      expect(lightnessGap(hex, text)).toBeGreaterThanOrEqual(lightnessGap(hex, other));
+    }
   });
 });

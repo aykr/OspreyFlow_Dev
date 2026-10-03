@@ -339,6 +339,39 @@ case, and is not shared with other analysts, as with the light and dark theme. T
 Reachable by keyboard (`Tab` to the button, `Enter` to open, arrow keys to choose, `Escape` to
 close), and `keyboard/keyboard.spec.ts` proves it.
 
+### 3.1c An expansion that adds nothing says so (ADR-077)
+
+Choosing a relationship from a node's menu (or pressing `Enter`, or opening a search result) asks the
+Conduit for that node's neighbours. When everything it returns is already drawn, the Glass says so
+beside the node instead of staying silent: "Nothing new: everything linked by SAME_AS is already in
+view." when the type was chosen, or "No links from this node." when nothing came back at all. The
+message is a notice, not an error (no alert, no error colour) and `Escape` closes it. When the
+expansion brings in anything new, there is no message. `keyboard/keyboard.spec.ts` proves it.
+
+### 3.1d The right-click menu (ADR-078)
+
+Right-click on a node (or `\`) opens a list headed by the node's type and name. The relationship
+types sit under a **Show links** heading, each with its count in a quieter tone at the right edge;
+everything else (link, split, find paths, explain cluster, view messages, mark for suppression) sits
+under **Actions**, below a hairline. The order in which the entries are reached by keyboard is
+unchanged; the headings are not focusable. The menu is drawn above the canvas's own layers, so none of
+its labels or nodes show through it. All colours and spacing are from the tokens.
+
+### 3.1e Icons on nodes (ADR-079)
+
+A node is drawn as its type's shape and hue with an icon inside it. The icon comes from the ontology
+(`EntityTypeDef.icon`); an `Icons` button beside `Labels` lets the analyst change it, for each type
+of node now in view, to another of the twenty built-in drawings, to none, or to a small picture of their
+own given from a file (png, jpeg, webp or gif, up to 5 MB; an SVG is refused). The picture is cut to
+its middle square and kept as a 64-unit thumbnail. The choice is kept in this browser only: it is not
+sent to the server, is not part of the case, and is not shared with other analysts, as with the
+theme and the label choice. The panel says so. The icon is drawn in white or near-black, whichever
+reads better on the fill, and fades with a dimmed or filtered-out node. A node is small until the
+view is zoomed in, so the icon is a reading aid at close range, not at overview. Reachable by
+keyboard (`Tab` to the button, `Enter` to open, arrow keys to choose, `Escape` to close; the file
+control is an ordinary file input), and `keyboard/keyboard.spec.ts` proves it, including that a
+picture given from a file reaches the canvas's pixels.
+
 ### 3.2 Social network analysis
 
 Metrics panel, computed on the working set in a Web Worker, recomputed on filter change:

@@ -142,6 +142,12 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   "delete-hides-selected-link",
   "show-hidden-links-by-keyboard",
   "overlay-dismiss-large-expansion",
+  // ADR-077: an expansion that adds nothing says so, and the message is dismissed by Escape.
+  "expand-with-nothing-new-says-so",
+  // ADR-079: the Icons control is reached by Tab and a drawing chosen with the arrow keys, and a
+  // picture can be given from a file.
+  "icons-menu-by-keyboard",
+  "icon-picture-from-file",
   "large-expansion-add-all-by-keyboard",
   // 3 October 2026 (ADR-066): Communities groups the nodes in view and folds a group into one node.
   // Every way of doing it with the mouse has a keyboard route, each proved by its own case.

@@ -13,6 +13,9 @@ export interface RadialMenuItem {
    * to block the expansion behind it. */
   count: number | null | "unavailable" | undefined;
   onSelect: () => void;
+  /** The heading this entry sits under in the list layout (ADR-078). Entries that follow one another
+   * with the same heading share it; entries with none are listed flat. Never changes the order. */
+  group?: string;
 }
 
 /** `…` only while a preview is in flight; `count unavailable` when it failed; nothing at all for
@@ -26,6 +29,17 @@ function countLabel(count: RadialMenuItem["count"]): string {
         ? "count unavailable"
         : String(count);
   return ` (${text})`;
+}
+
+/** An entry's name and, when it has one, its count as a separate muted element at the right edge. */
+function ItemBody({ item }: { item: RadialMenuItem }) {
+  const count = countLabel(item.count);
+  return (
+    <>
+      {item.label}
+      {count === "" ? null : <span className="radial-menu__count">{count}</span>}
+    </>
+  );
 }
 
 export interface RadialMenuProps {
@@ -96,6 +110,35 @@ export function RadialMenu({ x, y, items, onClose, layout, title }: RadialMenuPr
   ) : null;
 
   if (layout === "list") {
+    const entry = (item: RadialMenuItem) => (
+      <li key={item.id} role="none">
+        <button
+          role="menuitem"
+          type="button"
+          className="radial-menu__item"
+          style={{
+            background: "none",
+            border: "none",
+            width: "100%",
+            textAlign: "left",
+          }}
+          onClick={() => {
+            item.onSelect();
+            onClose();
+          }}
+        >
+          <ItemBody item={item} />
+        </button>
+      </li>
+    );
+    // Entries under one heading are drawn together, in the order given, so a keyboard user reaches
+    // them in the same order as before: the headings are not focusable and not read as entries.
+    const runs: { group: string | undefined; items: RadialMenuItem[] }[] = [];
+    for (const item of items) {
+      const last = runs[runs.length - 1];
+      if (last && last.group === item.group) last.items.push(item);
+      else runs.push({ group: item.group, items: [item] });
+    }
     return (
       <ul
         className="radial-menu__list"
@@ -105,28 +148,20 @@ export function RadialMenu({ x, y, items, onClose, layout, title }: RadialMenuPr
         style={{ position: "fixed", left: x, top: y }}
       >
         {heading}
-        {items.map((item) => (
-          <li key={item.id} role="none">
-            <button
-              role="menuitem"
-              type="button"
-              className="radial-menu__item"
-              style={{
-                background: "none",
-                border: "none",
-                width: "100%",
-                textAlign: "left",
-              }}
-              onClick={() => {
-                item.onSelect();
-                onClose();
-              }}
-            >
-              {item.label}
-              {countLabel(item.count)}
-            </button>
-          </li>
-        ))}
+        {runs.map((run, i) =>
+          run.group === undefined ? (
+            run.items.map(entry)
+          ) : (
+            <li key={`${run.group}-${i}`} role="none" className="radial-menu__group">
+              <span className="radial-menu__group-title" aria-hidden="true">
+                {run.group}
+              </span>
+              <ul role="group" aria-label={run.group} className="radial-menu__group-items">
+                {run.items.map(entry)}
+              </ul>
+            </li>
+          ),
+        )}
       </ul>
     );
   }
@@ -169,8 +204,7 @@ export function RadialMenu({ x, y, items, onClose, layout, title }: RadialMenuPr
                 onClose();
               }}
             >
-              {item.label}
-              {countLabel(item.count)}
+              <ItemBody item={item} />
             </button>
           </li>
         );

@@ -117,3 +117,50 @@ describe("closing and naming the menu", () => {
     );
   });
 });
+
+// 3 October 2026, the owner: the right-click menu "looks very cluttered". It was one flat list of
+// relationship types and actions, each with its count run on after the name. ADR-078: the entries are
+// grouped under a heading, each count is its own muted element at the right edge, and the order in
+// which a keyboard user reaches the entries does not change.
+describe("the tidy list", () => {
+  function grouped(id: string, group: string, count: RadialMenuItem["count"] = undefined): RadialMenuItem {
+    return { id, label: id, count, group, onSelect: vi.fn() };
+  }
+
+  it("puts each group's entries under its own heading, in the order given", () => {
+    render(
+      <RadialMenu
+        x={0}
+        y={0}
+        layout="list"
+        onClose={() => {}}
+        items={[
+          grouped("ASSOCIATE_OF", "Show links", 4),
+          grouped("USES", "Show links", 2),
+          grouped("Mark for suppression", "Actions"),
+        ]}
+      />,
+    );
+    const groups = screen.getAllByRole("group");
+    expect(groups.map((g) => g.getAttribute("aria-label"))).toEqual(["Show links", "Actions"]);
+    expect(Array.from(groups[0]!.querySelectorAll("[role='menuitem']")).map((e) => e.textContent)).toEqual([
+      "ASSOCIATE_OF (4)",
+      "USES (2)",
+    ]);
+    expect(labels()).toEqual(["ASSOCIATE_OF (4)", "USES (2)", "Mark for suppression"]);
+    expect(screen.getByText("Show links").getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("draws a count as its own element, so it can sit at the right edge", () => {
+    render(
+      <RadialMenu x={0} y={0} layout="list" onClose={() => {}} items={[grouped("USES", "Show links", 8)]} />,
+    );
+    const count = screen.getByRole("menuitem").querySelector(".radial-menu__count");
+    expect(count?.textContent?.trim()).toBe("(8)");
+  });
+
+  it("draws no group when no entry names one", () => {
+    render(<RadialMenu x={0} y={0} layout="list" onClose={() => {}} items={[item("USES", 3)]} />);
+    expect(screen.queryAllByRole("group")).toHaveLength(0);
+  });
+});

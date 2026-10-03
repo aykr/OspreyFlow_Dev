@@ -53,3 +53,37 @@ describe("the radial menu item's own styling", () => {
     expect(item["color"]).toBe("var(--text-primary)");
   });
 });
+
+// ADR-078: the right-click list was "very cluttered". Its entries put the name at the left and the
+// count at the right edge in a quieter tone, and each group has a small heading, all from tokens.
+describe("the tidy list's own styling", () => {
+  it("lays an entry out with the name left and the count at the right edge", () => {
+    const entry = plainDeclarations(".radial-menu__list .radial-menu__item");
+    expect(entry["display"]).toBe("flex");
+    expect(entry["justify-content"]).toBe("space-between");
+  });
+
+  it("draws the count in the secondary text colour", () => {
+    expect(plainDeclarations(".radial-menu__count")["color"]).toBe("var(--text-secondary)");
+  });
+
+  it("draws a group heading small and secondary, with a hairline above every group but the first", () => {
+    const title = plainDeclarations(".radial-menu__group-title");
+    expect(title["color"]).toBe("var(--text-secondary)");
+    expect(title["font-size"]).toBe("var(--fs-12)");
+    expect(plainDeclarations(".radial-menu__group + .radial-menu__group")["border-top"]).toBe(
+      "1px solid var(--border-subtle)",
+    );
+  });
+});
+
+// Seen 3 October 2026 while looking at the tidy list: the canvas's own labels and nodes were drawn
+// over the top row of the menu, because the menu had no stacking order and Sigma's layers have one.
+// Every other overlay (Popover 30, ContextMenu 40) sets one; the menu, in either layout, sits above them.
+describe("where the menu sits above the canvas", () => {
+  it("has a stacking order at least that of the context menu, in both layouts", () => {
+    for (const selector of [".radial-menu", ".radial-menu__list"]) {
+      expect(Number(plainDeclarations(selector)["z-index"])).toBeGreaterThanOrEqual(40);
+    }
+  });
+});

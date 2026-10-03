@@ -30,6 +30,7 @@ import { mixOklab } from "../color/oklab";
 import { BRASS_HEX } from "../color/tokens";
 import { activePalette } from "../color/palette";
 import type { EntityVisual } from "../ontology/schema";
+import { resolveNodeIcon } from "./iconChoices";
 import { chosenLabel, defaultLabel } from "./labelChoices";
 import { zoomBandForRatio, type ZoomBand } from "./zoomBands";
 
@@ -160,6 +161,9 @@ export function computeNodeGraphAttributes(
     fillHex,
     strokeHex: stroke.hex,
     strokeStyle: stroke.style,
+    // The analyst's own choice for the type, else the ontology's (ADR-079).
+    icon: resolveNodeIcon(node.type, visual.icon, fillHex),
+    iconOpacity: state.filteredOut ? 0.2 : state.dimmed ? 0.45 : 1,
   });
 
   // Interaction-state ring — `@sigma/node-border`'s own layer, never

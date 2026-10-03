@@ -108,3 +108,13 @@ export function mixOklab(foregroundHex: string, backgroundHex: string, foregroun
   };
   return rgbToHex(oklabToLinearRgb(mixed));
 }
+
+/** OKLab lightness of a colour, 0 (black) to 1 (white). */
+export function oklabLightness(hex: string): number {
+  return toOklab(hex).L;
+}
+
+/** White or near-black, whichever reads better drawn on `fillHex` (an icon on a node's fill). */
+export function readableTextOn(fillHex: string): "#ffffff" | "#10131a" {
+  return oklabLightness(fillHex) > (1 + oklabLightness("#10131a")) / 2 ? "#10131a" : "#ffffff";
+}

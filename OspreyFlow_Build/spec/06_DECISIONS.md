@@ -9252,3 +9252,52 @@ Decision.
 Not decided here. A label built from several properties; a choice shared by everyone on a case, or kept per analyst on the server (both were offered and not chosen); labelling links; a default for types other than Person (an organisation still shows its id until the analyst chooses `name`); hiding a value on the canvas that the analyst may read in the Inspector.
 
 Consequences. A name chosen here is drawn for anyone looking at the analyst's screen, which is why a sensitive property is never offered. Choices are per type name, so a type renamed in a later ontology version loses its choice silently and shows the default. The canvas redraws when a choice changes; that redraw is proved with the layout settled, because while the layout moves the renderer redraws every frame and would hide a missing one. Not exercised: the Glass against a real case (owner to check).
+
+## ADR-077 — An expansion that adds nothing says so
+
+Status: accepted 3 October 2026.
+
+Context. A reviewer on the Fixture walkthrough (step 1.6) wrote that choosing any relationship from the right-click menu "shows the change in the inspector but nothing on the canvas", and doubted the test. Read from the code and the dataset, not reproduced live: the Fixture's neighbours were already drawn (six people linked to each other), so each expansion added nothing, and an expansion that added nothing said nothing. The Inspector change was the right-click selecting the node. The spec was silent on what an expansion that adds nothing should do.
+
+Decision.
+
+1. When the answer to an expansion contains no node and no link that is not already drawn, the Glass shows a notice beside the node. If a relationship type was chosen: "Nothing new: everything linked by <type> is already in view." If the node was expanded without a type: "Nothing new: everything linked to this node is already in view." If nothing came back at all: "No <type> links from this node." (or "No links from this node.").
+2. The notice is not an error: it has the `status` role, no error colour, and is closed with `Escape` or its own button. A failed expansion keeps its alert.
+3. Nothing is said when anything new is drawn, including a node that was not drawn before or a link between two drawn nodes.
+4. A new keyboard action, `expand-with-nothing-new-says-so`, is registered and proved (rule 13).
+
+Consequences. The Conduit returns every node and link it found, drawn or not, so the Glass compares against what is on screen before the delta is applied; afterwards everything would count as drawn. Not decided here: telling the analyst how many were already in view; hiding a relationship in the menu once its neighbours are all drawn (the count shown beside it comes from the server's preview, which counts the size after expansion). Not seen in a live Glass: owner to check against the Fixture.
+
+## ADR-078 — The right-click menu is grouped and sits above the canvas
+
+Status: accepted 3 October 2026.
+
+Context. The owner, looking at the Glass: the right-click menu "looks very cluttered". It was one flat list of relationship types and actions with each count run on after its name, and the canvas's own labels and nodes were drawn over its top row because the menu had no stacking order. Three layouts were put to the owner and one was chosen: one tidy list (recommended).
+
+Decision.
+
+1. Right-click and `\` open the same list. The relationship types are under a **Show links** heading and every other entry under **Actions**; a hairline separates the groups. The count is its own element, in the secondary text colour, at the right edge.
+2. The order of the entries, and so the keyboard order, does not change. A heading is not an entry: it is hidden from assistive technology and each group is exposed as a labelled `group`.
+3. The menu has a stacking order of 40, the same as the context menu, so it is drawn above the canvas.
+4. The ring layout stays in the component but nothing opens it; right-click had already stopped using it (3 October 2026, the ring overlapped its own labels).
+
+Consequences. No new keyboard action: the existing cases still prove every entry. The count beside a relationship is the server's preview of the size after expansion, not how many it would add (unchanged, and still to be fixed). Not seen in a live Glass: owner to check; checked in the harness in both themes.
+
+## ADR-079 — A type of node has an icon: the ontology's default, and the analyst's own
+
+Status: accepted 3 October 2026.
+
+Context. The owner asked that icons can be associated with nodes by entity type. Two questions were put and answered: an icon is a glyph inside the existing shape (recommended), not a replacement for it, because shape is the colour-independent carrier of type that `02_GLASS_FRONTEND.md` §4 requires; and the icon is fixed by the ontology, with the analyst also able to define their own (the owner changed the answer from "analyst picks" and then asked for both, as "load icons by default but also allow the analyst to select their own icons or image thumbnails").
+
+Decision.
+
+1. `EntityTypeDef` gains an optional `icon`, one of twenty names held as a closed list in `ontology.schema.json`. The loader refuses any other name. Every type of the default ontology has one (Person: person, Endpoint: phone, Device: device, Location: pin, Organisation: building, Event: calendar, Document: document, Vehicle: vehicle, Asset: box). The ontology version stays 11: nothing a recipe writes, an index or an adapter reads has changed, and moving it would flag every published recipe as stale for a change that only affects how a node looks.
+2. The Glass holds a drawing for each name, made for this project from plain shapes (no download, no licence). A test pins the Glass's list equal to the ontology schema's.
+3. An `Icons` control beside `Labels` lets the analyst choose, per type in view: the default, another built-in drawing, none, or a picture of their own from a file. A picture must be a png, jpeg, webp or gif of up to 5 MB; an SVG is refused because it can carry scripts and links. It is cut to its middle square, drawn at 64 units and kept as a data address; a picture still too large to keep small is refused with a sentence saying so.
+4. The choice is kept in this browser's own storage under one key, never sent to the server, and is not part of the case, the same standing the theme (ADR-070) and the label choice (ADR-076) have. A picture is only ever drawn from a data address that passes a strict check (a raster, base64, and nothing else), because it is placed inside an SVG.
+5. The icon is drawn inside the node's own picture (shape, fill and provenance stroke are unchanged), in white or near-black, whichever is further from the fill. A picture is cut to the shape, with the provenance outline drawn over it. A dimmed or filtered-out node fades its icon.
+6. A new keyboard action, `icons-menu-by-keyboard`, and `icon-picture-from-file` are registered and proved (rule 13). The picture case reads the canvas's pixels, so it proves the image reaches the screen and not only the node's stored attribute.
+
+Not decided here: a picture or icon per node rather than per type; icons in the search list, the Inspector or a legend; sharing a choice between analysts or keeping it on the server (the picture is only in this browser); a larger node when it has an icon (nodes are 6 to 16 pixels across at the usual zoom, so an icon is legible only when zoomed in); more than twenty drawings, or an ontology naming one that is not on the list.
+
+Consequences. A picture an analyst chooses is drawn for anyone looking at their screen, and would be drawn in an image export of the canvas (not checked); nothing checks what the picture shows, which is the analyst's responsibility, as for a typed label (ADR-076). A browser that will not store the picture (a full or blocked store) still shows it for the page and says so. Choices are per type name, so a type renamed in a later ontology loses its choice and shows the default. Not seen in a live Glass: owner to check. Observed, not changed: in the harness a node drawn large shows a coloured square behind its round shape; that predates icons and is recorded in the build plan.

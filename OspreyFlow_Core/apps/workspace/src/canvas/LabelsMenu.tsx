@@ -37,12 +37,7 @@ export function LabelsMenu({ entityTypes, getTypesInView }: LabelsMenuProps) {
   return (
     <div
       style={{
-        position: "absolute",
-        // Below Communities (top 44) and above the renderer's canvas layers, which are added to the
-        // same container after this and would otherwise take every click meant for it.
-        top: 80,
-        left: 48,
-        zIndex: 10,
+        // Placed, with the Icons control beside it, by `GlassCanvas`.
         display: "flex",
         flexDirection: "column",
         gap: "var(--sp-4)",

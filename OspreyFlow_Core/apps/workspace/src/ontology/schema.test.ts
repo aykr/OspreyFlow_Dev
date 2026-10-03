@@ -24,8 +24,16 @@ describe("OntologyRegistry", () => {
   it("looks up channel and shape by entity type name", () => {
     const registry = new OntologyRegistry(schema());
 
-    expect(registry.visualFor("Person")).toEqual({ channel: "indigo", shape: "circle" });
-    expect(registry.visualFor("Endpoint")).toEqual({ channel: "cyan", shape: "hexagon" });
+    expect(registry.visualFor("Person")).toEqual({ channel: "indigo", shape: "circle", icon: null });
+    expect(registry.visualFor("Endpoint")).toEqual({ channel: "cyan", shape: "hexagon", icon: null });
+  });
+
+  it("carries the icon the ontology names for a type (ADR-079), and none when it names none", () => {
+    const withIcon = schema();
+    withIcon.entity_types = withIcon.entity_types.map((e) => (e.name === "Person" ? { ...e, icon: "person" } : e));
+    const registry = new OntologyRegistry(withIcon);
+    expect(registry.visualFor("Person")?.icon).toBe("person");
+    expect(registry.visualFor("Endpoint")?.icon).toBeNull();
   });
 
   it("returns undefined for an unknown entity type", () => {

@@ -118,6 +118,9 @@ class EntityTypeDef(BaseModel):
     pole_class: PoleClass
     channel: str
     shape: str
+    #: The drawing inside the shape on the canvas (ADR-079). One of the names in the ontology JSON
+    #: Schema's closed list, checked there at load; `None` draws the shape alone.
+    icon: str | None = None
     identifiers: list[str] = Field(default_factory=list)
     properties: list[PropertyDef] = Field(default_factory=list)
     resolution: ResolutionConfig | None = None

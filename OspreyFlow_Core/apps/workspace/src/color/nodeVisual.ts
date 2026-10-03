@@ -28,6 +28,8 @@
 // (shape+fill+stroke), not by node id, and stays tiny regardless of
 // working-set size.
 
+import { glyphMarkup } from "./nodeGlyphs";
+
 export type NodeShape =
   | "circle"
   | "square"
@@ -39,11 +41,21 @@ export type NodeShape =
 
 export type StrokeStyle = "solid" | "dashed" | "dotted";
 
+/** What is drawn inside the shape (ADR-079): one of the built-in drawings, in a colour that reads on
+ * the fill, or the analyst's own picture, a small raster given as a data address. `key` names an
+ * image for the cache, so its (long) text is never used as a key. */
+export type NodeIcon =
+  | { kind: "glyph"; name: string; colourHex: string }
+  | { kind: "image"; key: string; dataUrl: string };
+
 export interface NodeVisualSpec {
   shape: NodeShape;
   fillHex: string;
   strokeHex: string;
   strokeStyle: StrokeStyle;
+  icon?: NodeIcon | null;
+  /** How strongly the icon is drawn, 0 to 1; 1 when omitted. Dimmed and filtered-out nodes fade it. */
+  iconOpacity?: number;
 }
 
 const VIEWBOX = 32;
@@ -149,6 +161,55 @@ function strokeDasharray(style: StrokeStyle): string | null {
   }
 }
 
+/** Where a glyph goes in each shape, in the 32-unit picture: its centre and its side. A triangle and
+ * a pin are narrow, so their glyph is smaller and sits where the shape is widest. */
+const GLYPH_BOX: Record<NodeShape, { cx: number; cy: number; size: number }> = {
+  circle: { cx: 16, cy: 16, size: 17 },
+  square: { cx: 16, cy: 16, size: 16 },
+  diamond: { cx: 16, cy: 16, size: 12 },
+  hexagon: { cx: 16, cy: 16, size: 17 },
+  triangle: { cx: 16, cy: 18.5, size: 10 },
+  page: { cx: 16, cy: 17, size: 14 },
+  pin: { cx: 16, cy: 11.9, size: 11 },
+};
+
+/** A picture the analyst chose must be a small raster given as a data address and nothing else:
+ * it is put into an SVG, so anything that could close the attribute, name another address or be an
+ * SVG itself is refused. */
+const SAFE_IMAGE = /^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+
+/** The longest picture kept for a type: a 64-unit thumbnail is well under this. */
+export const MAX_IMAGE_ICON_CHARS = 80_000;
+
+export function isSafeImageDataUrl(value: unknown): value is string {
+  return typeof value === "string" && value.length <= MAX_IMAGE_ICON_CHARS && SAFE_IMAGE.test(value);
+}
+
+function iconMarkup(spec: NodeVisualSpec, shapeElement: string): string {
+  const icon = spec.icon;
+  if (!icon) return "";
+  const opacity = spec.iconOpacity !== undefined && spec.iconOpacity < 1 ? ` opacity="${spec.iconOpacity}"` : "";
+  if (icon.kind === "glyph") {
+    const markup = glyphMarkup(icon.name, icon.colourHex);
+    if (markup === null) return "";
+    const box = GLYPH_BOX[spec.shape];
+    const k = box.size / 24;
+    const x = Math.round((box.cx - box.size / 2) * 100) / 100;
+    const y = Math.round((box.cy - box.size / 2) * 100) / 100;
+    return `<g transform="translate(${x} ${y}) scale(${Math.round(k * 1000) / 1000})"${opacity}>${markup}</g>`;
+  }
+  if (!isSafeImageDataUrl(icon.dataUrl)) return "";
+  return (
+    `<clipPath id="k">${shapeElement}/></clipPath>` +
+    `<image href="${icon.dataUrl}" x="0" y="0" width="${VIEWBOX}" height="${VIEWBOX}" ` +
+    `preserveAspectRatio="xMidYMid slice" clip-path="url(#k)"${opacity}/>` +
+    // The outline again, over the picture, so a dashed or dotted provenance stroke still shows.
+    `${shapeElement} fill="none" stroke="${spec.strokeHex}" stroke-width="${STROKE_WIDTH}"` +
+    `${strokeDasharray(spec.strokeStyle) ? ` stroke-dasharray="${strokeDasharray(spec.strokeStyle)}"` : ""}` +
+    ` stroke-linejoin="round"/>`
+  );
+}
+
 export function renderNodeSvg(spec: NodeVisualSpec): string {
   const shape = shapePathOrPoints(spec.shape);
   const dash = strokeDasharray(spec.strokeStyle);
@@ -175,7 +236,8 @@ export function renderNodeSvg(spec: NodeVisualSpec): string {
     // the actual atlas pixel/UV pipeline, not anticipated in advance.
     `<svg xmlns="http://www.w3.org/2000/svg" width="${VIEWBOX}" height="${VIEWBOX}" viewBox="0 0 ${VIEWBOX} ${VIEWBOX}">` +
     `${element} fill="${spec.fillHex}" stroke="${spec.strokeHex}" ` +
-    `stroke-width="${STROKE_WIDTH}"${dashAttr} stroke-linejoin="round"/></svg>`
+    `stroke-width="${STROKE_WIDTH}"${dashAttr} stroke-linejoin="round"/>` +
+    `${iconMarkup(spec, element)}</svg>`
   );
 }
 
@@ -187,7 +249,13 @@ const imageCache = new Map<string, string>();
 
 /** Content-keyed, not node-keyed — see the module docstring. */
 export function cachedNodeSvgDataUri(spec: NodeVisualSpec): string {
-  const key = `${spec.shape}|${spec.fillHex}|${spec.strokeHex}|${spec.strokeStyle}`;
+  const icon = spec.icon;
+  const iconKey = !icon
+    ? ""
+    : icon.kind === "glyph"
+      ? `glyph:${icon.name}:${icon.colourHex}`
+      : `image:${icon.key}`;
+  const key = `${spec.shape}|${spec.fillHex}|${spec.strokeHex}|${spec.strokeStyle}|${iconKey}|${spec.iconOpacity ?? 1}`;
   const cached = imageCache.get(key);
   if (cached) return cached;
   const uri = nodeSvgDataUri(spec);

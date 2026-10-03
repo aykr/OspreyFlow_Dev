@@ -94,6 +94,8 @@ import { onThemeChange } from "../theme/theme";
 import { drawHoveredNode, labelColoursFor } from "./labelStyle";
 import { onLabelChoicesChange } from "./labelChoices";
 import { LabelsMenu } from "./LabelsMenu";
+import { IconsMenu } from "./IconsMenu";
+import { onIconChoicesChange } from "./iconChoices";
 import {
   boxAt,
   collapseView,
@@ -115,6 +117,7 @@ import { CommunityHullOverlay } from "./CommunityHullOverlay";
 import { PathfinderOverlay } from "./PathfinderOverlay";
 import { PathfinderErrorOverlay } from "./PathfinderErrorOverlay";
 import { ActionErrorOverlay } from "./ActionErrorOverlay";
+import { describeEmptyExpansion } from "./expansionOutcome";
 import type { ClusterExplanation } from "../workingset/models";
 
 const NODE_PROGRAM = createNodeCompoundProgram<
@@ -396,6 +399,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       x: number;
       y: number;
       message: string;
+      tone?: "error" | "notice";
     } | null>(null);
     // Read by `refreshNodeVisualState` (called from many unrelated call sites — hover, selection,
     // dimming) without threading a new parameter through every one of them; written only by the
@@ -591,6 +595,13 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [collapsed, communities]);
 
+    // The types that have a node in view now, for the Labels and Icons controls.
+    const typesInView = (): string[] => {
+      const types = new Set<string>();
+      graph.forEachNode((_id, attrs) => types.add(attrs.data.type));
+      return Array.from(types);
+    };
+
     const refreshNodeVisualState = (nodeId: string) => {
       if (!graph.hasNode(nodeId)) return;
       const node = graph.getNodeAttribute(nodeId, "data");
@@ -689,6 +700,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // A different label chosen for a type (ADR-076): the labels are worked out in the reducer, so
     // drawing again is all it takes.
     useEffect(() => onLabelChoicesChange(() => sigmaRef.current?.refresh()), []);
+    // A different icon chosen for a type (ADR-079): it is baked into each node's picture, so the
+    // nodes' stored pictures are worked out again, then the canvas is drawn.
+    useEffect(() => onIconChoicesChange(() => redrawForThemeRef.current()), []);
 
     // Assign an initial position and the graph-level (rarely-changing)
     // visual attributes exactly once, when a node is added to the working
@@ -1380,7 +1394,20 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         return;
       }
       const outcome = await response.json();
+      // An expansion that adds nothing used to say nothing, so a relationship whose neighbours were
+      // already drawn looked like a click that had not worked (ADR-077). Said before the delta is
+      // applied, because afterwards everything in it is "in view".
+      const delta = outcome.delta as { nodes?: { id: string }[]; edges?: { id: string }[] } | undefined;
+      const emptyNotice = describeEmptyExpansion({
+        rootId: nodeId,
+        nodeIds: (delta?.nodes ?? []).map((n) => n.id),
+        edgeIds: (delta?.edges ?? []).map((e) => e.id),
+        hasNode: (id) => graph.hasNode(id),
+        hasEdge: (id) => graph.hasEdge(id),
+        edgeType,
+      });
       store.getState().applyDelta(outcome.delta);
+      if (emptyNotice !== null) setActionError({ x, y, message: emptyNotice, tone: "notice" });
     }
 
     // `08_ACCEPTANCE_SCENARIOS.md` B11: "a SAME_AS with
@@ -1712,6 +1739,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       const items: RadialMenuItem[] = valid.map((et: EdgeTypeDef) => ({
         id: et.name,
         label: et.name,
+        group: "Show links",
         // The real figure from `/expand/preview`, fetched by the effect below when this menu
         // opened. `null` (still in flight, or the preview failed) renders as `…`, never as `0`:
         // a confident zero on a node with eight associates is the exact fault this replaced.
@@ -1733,6 +1761,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               id: "manual-link",
               label: `Link to ${other}`,
               count: undefined,
+              group: "Actions",
               onSelect: () => {
                 const anchor = radialMenu ?? { x: 0, y: 0 };
                 void manualAssertion(nodeId, other, "link", anchor.x, anchor.y);
@@ -1742,6 +1771,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               id: "manual-split",
               label: `Split from ${other}`,
               count: undefined,
+              group: "Actions",
               onSelect: () => {
                 const anchor = radialMenu ?? { x: 0, y: 0 };
                 void manualAssertion(
@@ -1759,6 +1789,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               id: "find-paths",
               label: `Find paths to ${other}`,
               count: undefined,
+              group: "Actions",
               onSelect: () => {
                 const anchor = radialMenu ?? { x: 0, y: 0 };
                 void findPaths(nodeId, other, anchor.x, anchor.y);
@@ -1784,6 +1815,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             id: "explain-cluster",
             label: "Explain cluster",
             count: undefined,
+            group: "Actions",
             onSelect: () => {
               const anchor = radialMenu ?? { x: 0, y: 0 };
               void explainCluster(clusterId, anchor.x, anchor.y);
@@ -1801,6 +1833,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           id: "view-messages",
           label: "View messages",
           count: undefined,
+          group: "Actions",
           onSelect: () => void onViewMessages(nodeId),
         });
       }
@@ -1816,6 +1849,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           ? "Remove suppression mark"
           : "Mark for suppression",
         count: undefined,
+        group: "Actions",
         onSelect: () => void toggleSuppressionMark(nodeId),
       });
 
@@ -2054,14 +2088,22 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           onExpandAll={() => setCollapsed(new Set())}
         />
         {entityTypes !== undefined && (
-          <LabelsMenu
-            entityTypes={entityTypes}
-            getTypesInView={() => {
-              const types = new Set<string>();
-              graph.forEachNode((_id, attrs) => types.add(attrs.data.type));
-              return Array.from(types);
+          <div
+            style={{
+              // Below Communities (top 44) and above the renderer's canvas layers, which are added to
+              // the same container after this and would otherwise take every click meant for it.
+              position: "absolute",
+              top: 80,
+              left: 48,
+              zIndex: 10,
+              display: "flex",
+              gap: "var(--sp-8)",
+              alignItems: "flex-start",
             }}
-          />
+          >
+            <LabelsMenu entityTypes={entityTypes} getTypesInView={typesInView} />
+            <IconsMenu entityTypes={entityTypes} getTypesInView={typesInView} />
+          </div>
         )}
         <LayoutMenu
           mode={layoutMode}
@@ -2087,6 +2129,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             x={actionError.x}
             y={actionError.y}
             message={actionError.message}
+            tone={actionError.tone}
             onClose={dismissActionError}
           />
         )}

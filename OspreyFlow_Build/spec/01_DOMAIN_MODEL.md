@@ -137,6 +137,13 @@ deployment outgrew nine types.
 The nine shipped types use nine distinct channels, so no sharing occurs in the default ontology.
 The rule exists for the tenth.
 
+**An entity type may name an icon (ADR-079).** `icon` is optional and is one of twenty names (person,
+people, building, bank, phone, mail, device, pin, calendar, document, vehicle, box, key, globe, card,
+shield, flag, link, tag, camera) held as a closed list in `ontology.schema.json`; the loader refuses
+any other. The Glass draws it inside the type's shape. It adds to shape and hue and never replaces
+them, so the rule above is unchanged. The default ontology gives every type one. Adding the field did
+not move the ontology version: nothing a recipe writes, an index or an adapter reads changed.
+
 ### 1.2 The loaded schema's own shape
 
 The YAML above validates into a typed Python object, `OntologySchema` — what `GraphPort.
@@ -161,6 +168,7 @@ class EntityTypeDef(BaseModel):
     pole_class: PoleClass
     channel: str
     shape: str
+    icon: str | None = None        # ADR-079: a name from the closed list in ontology.schema.json
     identifiers: list[str] = []
     properties: list[PropertyDef] = []
     resolution: ResolutionConfig | None = None

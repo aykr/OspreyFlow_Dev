@@ -8,6 +8,8 @@ import type { NodeShape } from "../color/nodeVisual";
 export interface EntityVisual {
   channel: string;
   shape: NodeShape;
+  /** The ontology's default icon for the type (ADR-079): a name from its closed list, or none. */
+  icon?: string | null;
 }
 
 /** `EntityTypeDef.channel`/`.shape` are free-form strings in the schema
@@ -31,7 +33,7 @@ function toEntityVisual(entity: EntityTypeDef): EntityVisual {
       `entity type ${JSON.stringify(entity.name)}: shape ${JSON.stringify(entity.shape)} has no Glass SVG generator`,
     );
   }
-  return { channel: entity.channel, shape: entity.shape as NodeShape };
+  return { channel: entity.channel, shape: entity.shape as NodeShape, icon: entity.icon ?? null };
 }
 
 export class OntologyRegistry {

@@ -144,6 +144,25 @@
   background: var(--surface-raised); border: none;
   box-shadow: var(--overlay-shadow); font-family: inherit; white-space: nowrap;
 }
+/* The right-click list (ADR-078): the name at the left, its count quieter at the right edge, and a
+   small heading over each group with a hairline between groups. Tokens only. */
+.radial-menu__list { min-width: 240px; }
+/* Above the canvas's own layers: its labels and nodes were drawn over the menu's top row. */
+.radial-menu, .radial-menu__list { z-index: 40; }
+.radial-menu__list .radial-menu__item {
+  display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-16);
+  white-space: nowrap;
+}
+.radial-menu__count { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.radial-menu__group { list-style: none; padding: var(--sp-4) 0 0; margin: 0; }
+.radial-menu__group + .radial-menu__group {
+  border-top: 1px solid var(--border-subtle); margin-top: var(--sp-4);
+}
+.radial-menu__group-title {
+  display: block; padding: var(--sp-2) var(--sp-8); color: var(--text-secondary);
+  font-size: var(--fs-12); font-weight: 600; letter-spacing: 0.02em;
+}
+.radial-menu__group-items { list-style: none; margin: 0; padding: 0; }
 .context-menu__item:hover, .context-menu__item:focus-visible,
 .radial-menu__item:hover, .radial-menu__item:focus-visible { background: var(--surface-hover); }
 

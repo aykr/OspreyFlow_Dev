@@ -31,6 +31,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { assertAllCovered, CANVAS_ACTIONS, registerCovered } from "./actionRegistry";
+import { readPng } from "./pngPixels";
 
 // An expansion now asks the Conduit how big it would be before it goes ahead
 // (`canvas/expansionGate.ts`, ADR-060 Amendment 1). The harness has no Conduit, so a test that
@@ -1075,6 +1076,82 @@ test("a chosen label is still there after the page is reloaded, and Default puts
   await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n5"))).toBe("n5, Zed");
 });
 
+// --- Icons (ADR-079) --------------------------------------------------------------------------
+
+const svgOf = (uri: string | null | undefined) => decodeURIComponent((uri ?? "").replace(/^data:image\/svg\+xml;utf8,/, ""));
+const nodeImage = (page: Page, id: string) => page.evaluate((n) => window.__CANVAS__?.nodeImage(n), id);
+
+test("the Icons control is reached by Tab, and a drawing chosen with the arrow keys is drawn in the node", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  await settle(page, "n0");
+  // The ontology's own icon is drawn in every person before anything is chosen.
+  expect(svgOf(await nodeImage(page, "n0"))).toContain("<g ");
+  const first = await nodeImage(page, "n0");
+
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  const button = page.getByRole("button", { name: "Icons" });
+  await tabTo(page, button);
+  await page.keyboard.press("Enter");
+  await expect(button).toHaveAttribute("aria-expanded", "true");
+
+  const picker = page.getByRole("combobox", { name: "Icon for Person" });
+  await tabTo(page, picker);
+  await page.keyboard.press("ArrowDown"); // person, the same as the default
+  await page.keyboard.press("ArrowDown"); // people
+  await expect(picker).toHaveValue("glyph:people");
+  await expect.poll(() => nodeImage(page, "n0")).not.toBe(first);
+  expect(svgOf(await nodeImage(page, "n0"))).toContain("<g ");
+  // Only the type chosen for changes: an Endpoint keeps the ontology's.
+  expect(svgOf(await nodeImage(page, "n4"))).toContain("<g ");
+
+  await page.keyboard.press("End"); // None
+  await expect(picker).toHaveValue("none");
+  await expect.poll(async () => svgOf(await nodeImage(page, "n0"))).not.toContain("<g ");
+
+  await page.keyboard.press("Escape");
+  await expect(picker).toHaveCount(0);
+  await expect(button).toBeFocused();
+  registerCovered("CANVAS_ACTIONS", "icons-menu-by-keyboard");
+});
+
+test("a picture given from a file is drawn in the shape, and is still there after a reload", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  const position = await settle(page, "n0");
+  await page.waitForTimeout(500);
+  const box = (await page.getByRole("application", { name: "Network canvas" }).boundingBox())!;
+  const centreOf = async () => {
+    const pixels = readPng(await page.screenshot());
+    return pixels.at(Math.round(box.x + position!.x), Math.round(box.y + position!.y));
+  };
+  const isRed = ([r, g, b]: [number, number, number]) => r > 170 && g < 90 && b < 90;
+  expect(isRed(await centreOf())).toBe(false);
+
+  const png = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 16;
+    canvas.height = 16;
+    const context = canvas.getContext("2d")!;
+    context.fillStyle = "#ff0000";
+    context.fillRect(0, 0, 16, 16);
+    return canvas.toDataURL("image/png").split(",")[1]!;
+  });
+  await page.getByRole("button", { name: "Icons" }).click();
+  await page.getByLabel("Picture for Person").setInputFiles({
+    name: "red.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(png, "base64"),
+  });
+  await expect(page.getByRole("combobox", { name: "Icon for Person" })).toHaveValue("image");
+  await expect.poll(async () => isRed(await centreOf())).toBe(true);
+
+  await page.reload();
+  const again = await settle(page, "n0");
+  await page.waitForTimeout(800);
+  const pixels = readPng(await page.screenshot());
+  expect(isRed(pixels.at(Math.round(box.x + again!.x), Math.round(box.y + again!.y)))).toBe(true);
+  registerCovered("CANVAS_ACTIONS", "icon-picture-from-file");
+});
+
 // --- Communities (ADR-066) -------------------------------------------------------------------
 // Two groups of five (a0–a4, b0–b4), each a hub with four round it, joined by one link a0—b0.
 
@@ -1300,6 +1377,44 @@ test("switching to the light theme repaints the graph's nodes in the light palet
   await expect.poll(colour).toBe("#677bd6");
 });
 
+test("an expansion that adds nothing says so, and Escape dismisses the message", async ({ page }) => {
+  // The owner's right-click comment: every relationship chosen seemed to do nothing. The neighbours
+  // were already drawn, and an expansion that adds nothing used to say nothing (ADR-077).
+  await page.goto("/keyboard/harness.html");
+  await stubSmallExpansionPreview(page);
+  await page.route("**/*/expand", async (route) => {
+    const body = route.request().postDataJSON() as { request: { edge_types: string[] | null } };
+    const alreadyDrawn = body.request.edge_types !== null;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        delta: alreadyDrawn
+          ? { seq: 2, op: "add", nodes: [{ id: "n0" }, { id: "n1" }], edges: [{ id: "e0" }] }
+          : { seq: 2, op: "add", nodes: [], edges: [] },
+        filtered_count: 0,
+      }),
+    });
+  });
+  // The server returns everything it found, drawn or not, so the n0 and n1 and e0 here are already on screen.
+  await page.evaluate(() => (window as unknown as { __CANVAS__: { expandFrom: (id: string, depth: number) => void } }).__CANVAS__.expandFrom("n0", 1));
+  const notice = page.getByRole("status").filter({ hasText: "No links from this node." });
+  await expect(notice).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(notice).toBeHidden();
+
+  // A relationship chosen from the menu, whose neighbours are all drawn, says so by name.
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus(); // n0
+  await page.keyboard.press("\\");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("status")).toContainText(/^Nothing new: everything linked by [A-Z_]+ is already in view\.$/);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("status")).toBeHidden();
+  registerCovered("CANVAS_ACTIONS", "expand-with-nothing-new-says-so");
+});
+
 test("every registered keyboard action has its own proving test case above", () => {
   assertAllCovered("CANVAS_ACTIONS", CANVAS_ACTIONS);
 });
@@ -1325,7 +1440,9 @@ test("a right-click menu names its node, and a click elsewhere closes it", async
   const menu = page.getByRole("menu");
   await expect(menu).toBeVisible();
   await expect(menu).toHaveAttribute("aria-label", /^Person: /);
-  // Elsewhere in the canvas, well away from every node and from the menu.
-  await page.mouse.click((box?.x ?? 0) + (box?.width ?? 0) - 12, (box?.y ?? 0) + (box?.height ?? 0) - 12);
+  // Elsewhere in the canvas, well away from every node and from the menu. The bottom-left corner:
+  // the grouped list (ADR-078) is wider and taller than the old one and, opened low on the right as
+  // here, reached the bottom-right corner this used to click.
+  await page.mouse.click((box?.x ?? 0) + 12, (box?.y ?? 0) + (box?.height ?? 0) - 12);
   await expect(menu).toHaveCount(0);
 });

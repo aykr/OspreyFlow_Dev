@@ -74,7 +74,9 @@ test("selecting a search result via the keyboard pins it as a new pattern node",
   const search = page.getByRole("combobox", { name: "Search entities, identifiers, documents" });
   await search.focus();
   await search.fill("search");
-  await page.getByRole("option", { name: /Person: n42/ }).waitFor();
+  // The search list names a person by name (ADR-074, ADR-076), not by id: this case still waited for
+  // "Person: n42" and so timed out once that was done.
+  await page.getByRole("option", { name: /Person: Searched/ }).waitFor();
   await page.keyboard.press("Enter");
 
   await expect(page.getByRole("group", { name: /Pattern node a: Person · n42/ })).toBeVisible();

@@ -77,12 +77,17 @@
 # property is never marked, since a prefix match against a masked value would let a reader who
 # may not see it guess it (`tests/ontology/test_searchable_names.py`). Every recipe fixture pinned
 # to `ontology_version: 10` is bumped to 11 alongside this.
+# ADR-079 (no version change): each entity type gained an optional `icon`, the drawing the Glass
+# puts inside its shape. The version does not move: nothing a recipe writes, an index or an
+# adapter reads has changed, and moving it would flag every published recipe as stale for a
+# change that only affects how a node looks. The names are a closed list in `ontology.schema.json`.
 version: 11
 entity_types:
   - name: Person
     pole_class: person
     channel: indigo
     shape: circle
+    icon: person
     identifiers: [nino, pnc_id, prison_number]
     properties:
       - {name: family_name, type: string, required: true, indexed: true}
@@ -97,6 +102,7 @@ entity_types:
     pole_class: object
     channel: cyan
     shape: hexagon
+    icon: phone
     identifiers: [e164, handle, email, imsi]
     properties:
       - {name: value_raw, type: string}
@@ -107,12 +113,14 @@ entity_types:
     pole_class: object
     channel: plum
     shape: square
+    icon: device
     identifiers: [imei]
 
   - name: Location
     pole_class: location
     channel: ochre
     shape: pin
+    icon: pin
     identifiers: [uprn, gnis_feature_id, tiger_geoid, osm_id, site_ref, os_place_id, postcode, gss_code, nad_address_id]
     properties:
       # 03_CONDUIT_MIDDLEWARE.md §5.1: geometry lives in the analytics
@@ -128,6 +136,7 @@ entity_types:
     pole_class: organisation
     channel: azure
     shape: square
+    icon: building
     identifiers: [org_ref]
     properties:
       # v8: no display property existed at all before this — the same
@@ -138,11 +147,13 @@ entity_types:
     pole_class: event
     channel: moss
     shape: diamond
+    icon: calendar
 
   - name: Document
     pole_class: object
     channel: violet
     shape: page
+    icon: document
     properties:
       - {name: title, type: string, indexed: true}
 
@@ -150,11 +161,13 @@ entity_types:
     pole_class: object
     channel: jade
     shape: triangle
+    icon: vehicle
 
   - name: Asset
     pole_class: object
     channel: rose
     shape: diamond
+    icon: box
 
 edge_types:
   - name: COMMUNICATED_WITH

@@ -5,6 +5,9 @@ export interface ActionErrorOverlayProps {
   y: number;
   message: string;
   onClose: () => void;
+  /** `error` (the default) is a call that failed; `notice` is a call that worked and has nothing to
+   * show, which is not an error and must not read as one (ADR-077). */
+  tone?: "error" | "notice";
 }
 
 /** `expandNode`/`manualAssertion`/`explainCluster` (`GlassCanvas.tsx`) used to drop a failed call
@@ -22,15 +25,25 @@ export interface ActionErrorOverlayProps {
  * distinguishable outcomes (search failed vs. search completed with no results); these three have
  * no analogous second outcome to distinguish from, so one generic "the action did not complete"
  * overlay covers all three. */
-export function ActionErrorOverlay({ x, y, message, onClose }: ActionErrorOverlayProps) {
+export function ActionErrorOverlay({ x, y, message, onClose, tone = "error" }: ActionErrorOverlayProps) {
+  const isNotice = tone === "notice";
   return (
     <Popover x={x} y={y} onClose={onClose}>
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-6)", minWidth: 240 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <strong className="value" role="alert" style={{ color: "var(--error)" }}>
+          <strong
+            className="value"
+            role={isNotice ? "status" : "alert"}
+            style={isNotice ? undefined : { color: "var(--error)" }}
+          >
             {message}
           </strong>
-          <button type="button" className="icon-btn" aria-label="Close error" onClick={onClose}>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label={isNotice ? "Close message" : "Close error"}
+            onClick={onClose}
+          >
             ×
           </button>
         </div>
