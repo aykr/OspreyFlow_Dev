@@ -639,6 +639,11 @@ export function App() {
           <GlobalSearch
             apiBaseUrl={API_BASE_URL}
             bearerToken={bearerToken}
+            entityTypes={ontologySchema?.entity_types.map((e) => e.name) ?? []}
+            screenNodes={() => {
+              const graph = workingSetRef.current.graph;
+              return graph.nodes().map((id) => graph.getNodeAttribute(id, "data"));
+            }}
             onSelect={(node) => {
               workingSetRef.current.store.getState().applyDelta({
                 seq: workingSetRef.current.store.getState().seq,

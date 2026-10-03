@@ -8965,3 +8965,12 @@ Decision.
 4. Removal is from the view only. No record, edge or assertion is deleted from the store.
 
 Consequences. Delete and Backspace now act on the canvas when something is selected; they do nothing when nothing is selected. Removing an edge on its own comes with selectable links, not here.
+
+
+### ADR-061 Amendment 1 — The Filters panel is built (3 October 2026)
+
+Item 7 of ADR-061 said the Glass panel was not yet built. It now is: a **Filters** button under the search box opens a panel with an ignore-case tick box, the match mode (starts with, contains, exact), the entity types from the ontology (none ticked means every type) and "Only nodes on screen". The button shows how many filters are on. Changing a filter asks the question again.
+
+With every filter at its default the request is exactly the one ADR-059 defined; a changed filter is sent under the Conduit's own names, and an unchanged one is left out. "Only nodes on screen" asks the Conduit nothing: it compares the typed text with the identifiers of the nodes drawn, as plain text (never a pattern), honouring ignore case, match mode and type, and it searches from the first character. It matches the same identifier properties the box already shows, which is not necessarily every field the Conduit searches.
+
+Still unproven: ignoring case against the real store (the four live conformance cases from ADR-061 have not been run).
