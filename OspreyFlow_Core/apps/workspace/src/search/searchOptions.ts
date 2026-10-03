@@ -23,6 +23,7 @@ export const DEFAULT_SEARCH_OPTIONS: SearchOptions = {
 export const DISPLAY_PROPERTIES = [
   "value_normalised",
   "name",
+  "title",
   "email",
   "handle",
   "nino",
@@ -51,9 +52,24 @@ export function activeFilterCount(options: SearchOptions): number {
   );
 }
 
-/** What to call a node on screen: its identifying value, else its id. */
+function text(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+/** A person's name as it is read, "Petrenko, Illia"; just the family name when that is all there is;
+ * empty when the node has neither. */
+function personName(properties: Record<string, unknown>): string {
+  const family = text(properties.family_name);
+  const given = text(properties.given_names);
+  if (family && given) return `${family}, ${given}`;
+  return family || given;
+}
+
+/** What to call a node on screen: a person's name, else its identifying value, else its id. */
 export function displayValue(node: Node): string {
   const properties = (node.properties ?? {}) as Record<string, unknown>;
+  const name = personName(properties);
+  if (name) return name;
   for (const key of DISPLAY_PROPERTIES) {
     const value = properties[key];
     if (typeof value === "string" && value) return value;
@@ -63,7 +79,8 @@ export function displayValue(node: Node): string {
 
 function searchableValues(node: Node): string[] {
   const properties = (node.properties ?? {}) as Record<string, unknown>;
-  const values: string[] = [];
+  // The name parts are matched one by one, so "Petrenko" and "Illia" each find the person.
+  const values: string[] = [text(properties.family_name), text(properties.given_names)].filter(Boolean);
   for (const key of DISPLAY_PROPERTIES) {
     const value = properties[key];
     if (typeof value === "string" && value) values.push(value);

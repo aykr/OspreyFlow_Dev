@@ -90,6 +90,7 @@ import { CommunityBoxOverlay } from "./CommunityBoxOverlay";
 import { JudgementBadgeOverlay } from "./JudgementBadgeOverlay";
 import { activePalette } from "../color/palette";
 import { onThemeChange } from "../theme/theme";
+import { drawHoveredNode, labelColoursFor } from "./labelStyle";
 import {
   boxAt,
   collapseView,
@@ -671,6 +672,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           graph.mergeNodeAttributes(nodeId, { clusterBorderColor: palette.borderSubtle });
         }
       });
+      sigmaRef.current?.setSettings({
+        ...labelColoursFor(palette),
+        defaultDrawNodeHover: drawHoveredNode(palette),
+      });
       sigmaRef.current?.refresh();
     };
     useEffect(() => onThemeChange(() => redrawForThemeRef.current()), []);
@@ -935,6 +940,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         },
         hideEdgesOnMove: true, // §1.1: "buys the frame budget at 250,000 edges"
         renderLabels: true,
+        // Sigma's own label colour is black and its hover box white: unreadable on the dark canvas.
+        // `redrawForThemeRef` sets these again when the theme changes.
+        ...labelColoursFor(activePalette()),
+        defaultDrawNodeHover: drawHoveredNode(activePalette()),
         // Edge labels were worked out (`computeEdgeAttributes`) but never drawn until this was
         // switched on. They appear only at the closest zoom, or beside the node under the pointer.
         renderEdgeLabels: true,

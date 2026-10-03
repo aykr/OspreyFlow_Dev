@@ -221,15 +221,19 @@ async def _backfill_flattened_field(client: ArcadeDBClient, type_name: str, prop
     the field, and is invisible to the index, to `search_nodes` and to `suggest_nodes` for that
     property (seen 3 October 2026: `family_name` after ontology v11).
 
-    It fills a missing field and never replaces one that is there. It runs on every schema apply, so
-    it also repairs a field that went missing some other way; once nothing is missing it changes
-    nothing. If ArcadeDB refuses it, the schema step carries on (every statement before and after
-    still runs, so the API starts) and the refusal is logged by name: the property then stays
-    unsearchable for old nodes until they are written again, which is what the log line says."""
+    It fills a missing (or empty) field and never replaces one that has a value. It runs on every
+    schema apply, so it also repairs a field that went missing some other way; once nothing is
+    missing it changes nothing. If ArcadeDB refuses it, the schema step carries on (every statement
+    before and after still runs, so the API starts) and the refusal is logged by name: the property
+    then stays unsearchable for old nodes until they are written again, which is what the log line
+    says."""
     prop = groovy_identifier(prop_name)
+    # Not `{prop} IS NULL`: the field is indexed, and on ArcadeDB 25.5.1 that form is answered from
+    # the index, which holds no entry for a missing value, so it matched 0 rows while 463 nodes had
+    # none (seen live 3 October 2026). `ifnull(...)` cannot use the index, so the type is scanned.
     statement = (
         f"UPDATE {type_name} SET {prop} = properties.{prop} "
-        f"WHERE {prop} IS NULL AND properties.{prop} IS NOT NULL"
+        f"WHERE properties.{prop} IS NOT NULL AND ifnull({prop}, '') = ''"
     )
     try:
         await client.sql(statement)

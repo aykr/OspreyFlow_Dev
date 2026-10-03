@@ -83,7 +83,9 @@ Both engines need explicit indexes; neither will be usable without them.
   `properties` map when a node is written; the index and the search read the field. So applying a
   schema also fills that field, for text properties, on nodes written before the property was
   indexed, where it is missing and never where it is present (ADR-074 Amendment 1). A refused fill is
-  logged by name and does not stop the schema step.
+  logged by name and does not stop the schema step. "Missing" is found with `ifnull(field, '') = ''`,
+  not `field IS NULL`: ArcadeDB answers the latter from the index, which holds no entry for a missing
+  value, so it matches nothing (ADR-074 Amendment 2).
 - Composite index on `(type, handling.classification)` — the access filter runs on every read
   and an unindexed filter there costs more than the query.
 - Mixed/full-text index on name-like properties, served by OpenSearch on the cluster profile.

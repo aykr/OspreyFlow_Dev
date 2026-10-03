@@ -139,3 +139,29 @@ test("the links are drawn once the layout has settled, without a click on the ca
   }
   expect(drawn / sampled).toBeGreaterThan(0.9);
 });
+
+// Seen 3 October 2026 (owner, screenshot): in the dark theme the node labels were unreadable. Sigma
+// paints a label in black unless told otherwise, and the graph never told it. The labels are drawn
+// on their own 2D canvas, so their pixels can be read: the text drawn there must be light on the
+// dark theme, not black.
+test("node labels are drawn in a light colour on the dark theme", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  await settledPositions(page, "n0", "n1");
+  await page.waitForTimeout(500);
+  const ink = await page.evaluate(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>("canvas.sigma-labels");
+    if (!canvas) return null;
+    const data = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data;
+    let drawn = 0;
+    let brightness = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3]! < 200) continue; // only the solid middle of a letter, not its soft edge
+      drawn += 1;
+      brightness += (data[i]! + data[i + 1]! + data[i + 2]!) / 3;
+    }
+    return { drawn, mean: drawn ? brightness / drawn : 0 };
+  });
+  expect(ink, "the label canvas exists").not.toBeNull();
+  expect(ink!.drawn, "some label text is drawn").toBeGreaterThan(20);
+  expect(ink!.mean, "and it is light, not black").toBeGreaterThan(180);
+});

@@ -4,6 +4,7 @@ import type { Node } from "../../../../packages/schemas/generated";
 import {
   DEFAULT_SEARCH_OPTIONS,
   activeFilterCount,
+  displayValue,
   matchOnScreen,
   suggestBody,
   type SearchOptions,
@@ -92,5 +93,46 @@ describe("matchOnScreen", () => {
 
   it("finds nothing for an empty query", () => {
     expect(matchOnScreen(nodes, "", DEFAULT_SEARCH_OPTIONS, 10).nodes).toEqual([]);
+  });
+});
+
+// ADR-074 made names searchable on the server. The Glass has to show a person by name and, in its
+// on-screen mode, find one by name, or a correct answer reads as a NINO and a name matches nothing.
+describe("people and documents, by name", () => {
+  const person = (id: string, family: string, given: string): Node =>
+    ({
+      id,
+      type: "Person",
+      properties: { nino: "QQ548351C", family_name: family, given_names: given },
+    }) as unknown as Node;
+  const document = { id: "d1", type: "Document", properties: { title: "Q3 Board Minutes" } } as unknown as Node;
+
+  it("shows a person as their name, not their NINO", () => {
+    expect(displayValue(person("p1", "Petrenko", "Illia"))).toBe("Petrenko, Illia");
+  });
+
+  it("shows a person with only a family name as that name", () => {
+    const only = { id: "p2", type: "Person", properties: { nino: "QQ1", family_name: "Petrenko" } } as unknown as Node;
+    expect(displayValue(only)).toBe("Petrenko");
+  });
+
+  it("still shows a person with no name by their NINO", () => {
+    const nameless = { id: "p3", type: "Person", properties: { nino: "QQ176119C" } } as unknown as Node;
+    expect(displayValue(nameless)).toBe("QQ176119C");
+  });
+
+  it("shows a document by its title", () => {
+    expect(displayValue(document)).toBe("Q3 Board Minutes");
+  });
+
+  it("finds a person on screen by the start of the family name", () => {
+    const found = matchOnScreen([person("p1", "Petrenko", "Illia"), person("p2", "Petrenco", "Ilia")], "Petrenko", DEFAULT_SEARCH_OPTIONS, 10);
+    expect(found.nodes.map((n) => n.id)).toEqual(["p1"]);
+  });
+
+  it("finds a person on screen by given name, and a document by title", () => {
+    const nodes = [person("p1", "Petrenko", "Illia"), document];
+    expect(matchOnScreen(nodes, "Illia", DEFAULT_SEARCH_OPTIONS, 10).nodes.map((n) => n.id)).toEqual(["p1"]);
+    expect(matchOnScreen(nodes, "Q3", DEFAULT_SEARCH_OPTIONS, 10).nodes.map((n) => n.id)).toEqual(["d1"]);
   });
 });

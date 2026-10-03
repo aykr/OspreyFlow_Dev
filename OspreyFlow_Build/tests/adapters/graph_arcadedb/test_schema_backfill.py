@@ -82,9 +82,9 @@ async def test_each_indexed_text_property_is_copied_up_from_the_map() -> None:
     t = _type()
     assert client.updates() == [
         f"UPDATE {t} SET family_name = properties.family_name "
-        "WHERE family_name IS NULL AND properties.family_name IS NOT NULL",
+        "WHERE properties.family_name IS NOT NULL AND ifnull(family_name, '') = ''",
         f"UPDATE {t} SET given_names = properties.given_names "
-        "WHERE given_names IS NULL AND properties.given_names IS NOT NULL",
+        "WHERE properties.given_names IS NOT NULL AND ifnull(given_names, '') = ''",
     ]
 
 
@@ -92,7 +92,17 @@ async def test_the_copy_only_fills_a_missing_field_and_never_overwrites_one() ->
     client = RecordingClient()
     await apply_schema(client, _schema())  # type: ignore[arg-type]
     for statement in client.updates():
-        assert " IS NULL AND " in statement
+        assert "ifnull(" in statement and ", '') = ''" in statement
+
+
+async def test_a_missing_field_is_not_asked_for_with_is_null() -> None:
+    """Seen live on ArcadeDB 25.5.1 (3 October 2026): the field is indexed, and
+    `WHERE field IS NULL` on it matched 0 rows while 463 nodes had no value, so the first form of
+    this copy changed nothing and logged nothing. The `ifnull(...)` form updated all 463."""
+    client = RecordingClient()
+    await apply_schema(client, _schema())  # type: ignore[arg-type]
+    for statement in client.updates():
+        assert " IS NULL" not in statement
 
 
 async def test_a_property_that_is_not_indexed_or_not_text_is_left_alone() -> None:
