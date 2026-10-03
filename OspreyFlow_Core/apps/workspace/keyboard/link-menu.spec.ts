@@ -15,6 +15,7 @@ declare global {
       linkAction: { edgeId: string; action: string } | null;
     };
     __GROUPED__?: number;
+    __CANVAS__?: { reproject: (clusterIds: Record<string, string>) => void };
   }
 }
 
@@ -93,6 +94,20 @@ test("Collapse into one node folds the matched people into one, and the Group No
   await page.keyboard.press("Enter");
   await expect.poll(() => grouped(page)).toBe(0);
   registerCovered(REGISTRY, "group-node-menu-expands-the-group");
+});
+
+test("Moving the resolution slider opens a same-as fold, since the cluster it was made from has changed", async ({
+  page,
+}) => {
+  await openSameAsMenu(page);
+  await page.keyboard.press("Enter"); // Collapse into one node
+  await expect.poll(() => grouped(page)).toBe(3);
+  // The slider moves: the server sends a `reproject` delta and the cluster splits into three.
+  await page.evaluate(() => window.__CANVAS__!.reproject({ s0: "s0", s1: "s1", s2: "s2" }));
+  await expect.poll(() => grouped(page)).toBe(0);
+  // The analyst is told why the nodes are back.
+  await expect(page.getByText(/resolution changed/i)).toBeVisible();
+  registerCovered(REGISTRY, "moving-the-resolution-slider-opens-a-same-as-fold");
 });
 
 test("Confirm as the same asks why first, and sends the reason with the two ends", async ({ page }) => {

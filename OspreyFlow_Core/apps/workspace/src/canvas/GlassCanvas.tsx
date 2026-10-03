@@ -618,6 +618,26 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // `workingSetSeq` changes whenever nodes or links are added or removed.
     }, [workingSetSeq, graph]);
 
+    // A fold made from a same-as link was made from the clusters as they stood. When the resolution
+    // changes (the slider moves, or a match is confirmed or refused) those clusters are different, so
+    // the fold is opened and the nodes come back; the analyst can fold again from the link. Only the
+    // folds made from same-as links go: Communities are worked out afresh from the links in view.
+    const seenReprojectRef = useRef(lastReproject);
+    useEffect(() => {
+      if (seenReprojectRef.current === lastReproject) return;
+      seenReprojectRef.current = lastReproject;
+      if (manualGroups.length === 0) return;
+      setManualGroups([]);
+      const rect = containerRef.current?.getBoundingClientRect();
+      setActionError({
+        x: (rect?.left ?? 0) + 40,
+        y: (rect?.top ?? 0) + 40,
+        message: "The resolution changed, so the nodes you collapsed are shown again.",
+        tone: "notice",
+      });
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [lastReproject]);
+
     // Whenever what is folded changes: work the view out again, tell the status bar, take nodes that
     // are no longer drawn out of the selection and the keyboard focus, and draw.
     useEffect(() => {

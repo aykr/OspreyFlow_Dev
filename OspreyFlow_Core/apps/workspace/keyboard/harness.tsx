@@ -38,6 +38,9 @@ declare global {
       setTheme: (theme: "dark" | "light") => void;
       /** The picture stored on a node now (a data address of its shape and icon), which is what the canvas draws. */
       nodeImage: (nodeId: string) => string | null;
+      /** Land a `reproject` delta, as the server sends when the resolution slider moves: each node
+       * named takes the cluster id given. */
+      reproject: (clusterIds: Record<string, string>) => void;
     };
     /** How many nodes are folded into Group Nodes now (ADR-066). */
     __GROUPED__?: number;
@@ -120,6 +123,16 @@ window.__CANVAS__ = {
   nodeColour: (id) => (workingSet.graph.hasNode(id) ? (workingSet.graph.getNodeAttribute(id, "color") as string) : null),
   setTheme: (theme) => applyTheme(theme),
   nodeImage: (id) => (workingSet.graph.hasNode(id) ? (workingSet.graph.getNodeAttribute(id, "image") as string) : null),
+  reproject: (clusterIds) =>
+    workingSet.store.getState().applyDelta({
+      seq: workingSet.store.getState().seq + 1,
+      op: "reproject",
+      reason: "keyboard fixture",
+      merged: 0,
+      split: Object.keys(clusterIds).length,
+      affected: Object.keys(clusterIds).length,
+      affected_cluster_ids: clusterIds,
+    }),
 };
 
 window.__KEYBOARD__ = {

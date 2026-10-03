@@ -390,7 +390,9 @@ note* and *Hide link*.
 both ends are in one, otherwise the two ends) fold into one Group Node by the same machinery as
 Communities, nothing is merged in the store (rule 6), and the fold is lost on reload. A link inside a
 folded group is not drawn, so the Group Node's own menu has *Expand group*; double-click and `G` still
-open it. *Confirm as the same* and *Mark as not the same* open a small box that asks **why**: a
+open it. A fold made from a same-as link is opened again whenever the resolution changes (the slider moves, or a
+match is confirmed or refused), with a short notice, because the clusters it was made from are no longer
+the same (ADR-080 Amendment 1). *Confirm as the same* and *Mark as not the same* open a small box that asks **why**: a
 reason is required (the button stays off until there is one; Control/Cmd+Enter confirms, Escape
 cancels) and is kept in the audit trail with the analyst's name. *Explain this link* opens the cluster
 explanation for the cluster the two are in, or says they are not in one at the current threshold.

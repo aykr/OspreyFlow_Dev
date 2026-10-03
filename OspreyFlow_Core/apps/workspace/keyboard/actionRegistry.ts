@@ -323,6 +323,7 @@ export const LINK_MENU_ACTIONS = defineActionRegistry("LINK_MENU_ACTIONS", [
   "hide-link-from-the-menu",
   "add-a-note-hands-over-to-the-inspector",
   "other-links-offer-change-and-history-and-hand-over",
+  "moving-the-resolution-slider-opens-a-same-as-fold",
 ] as const);
 
 /**
