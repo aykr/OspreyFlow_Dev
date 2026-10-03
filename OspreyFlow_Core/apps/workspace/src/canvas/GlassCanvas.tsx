@@ -11,21 +11,28 @@
 // docstring explains why that is not the `nodeReducer`'s job.
 //
 // **Known simplifications, disclosed rather than silent:**
-// - Edges render with Sigma's plain `EdgeLineProgram` (straight lines).
+// - Edges render as straight lines (`EdgeLineProgram`), with an arrowhead
+//   (`EdgeArrowProgram`) only for an edge type the ontology declares directed.
 //   `@sigma/edge-curve`'s curved-parallel-edges at the Neighbourhood/
 //   Link-detail bands (§1.1's table) is installed but not yet wired — a
 //   visual refinement, not a correctness requirement this phase's exit
 //   criterion tests.
-// - Initial layout is a deterministic pseudo-random scatter, not
-//   ForceAtlas2 in a worker (§5's own performance technique). A real
-//   force layout is real engineering work of its own; wiring one in
-//   without being able to profile it against the 50k/250k fixture in this
-//   environment would be guessing at the number that actually matters.
+// - A node is first placed by a deterministic pseudo-random scatter; a
+//   force layout (`forceLayout.ts`, repulsion plus edge attraction) then
+//   settles the working set whenever nodes or edges are added, for up to
+//   `FORCE_LAYOUT_MAX_NODES` nodes. It is not ForceAtlas2 in a worker
+//   (§5's own technique for the 50k/250k fixture), which is still not built
+//   and still unmeasured; past the cap the scatter stays as it is.
 import { createNodeBorderProgram } from "@sigma/node-border";
 import { createNodeImageProgram } from "@sigma/node-image";
 import type { StoreApi } from "zustand/vanilla";
 import { useStore } from "zustand/react";
-import { EdgeLineProgram, createNodeCompoundProgram } from "sigma/rendering";
+import {
+  EdgeArrowProgram,
+  EdgeLineProgram,
+  createNodeCompoundProgram,
+} from "sigma/rendering";
+import { animateNodes } from "sigma/utils";
 import Sigma from "sigma";
 import {
   forwardRef,
@@ -56,12 +63,20 @@ import {
   computeEdgeAttributes,
   computeNodeFrameAttributes,
   computeNodeGraphAttributes,
+  edgeProgramFor,
 } from "./nodeAttributes";
 import {
   RadialMenu,
   type RadialMenuItem,
 } from "../design/primitives/RadialMenu";
 import { edgeTypesOfferedFor } from "./edgeTypeMenu";
+import { settleLayout, type LayoutNode } from "./forceLayout";
+import {
+  expandOnDoubleClick,
+  menuRequestForRightClick,
+  previewCountFrom,
+  type PreviewCount,
+} from "./nodeGestures";
 import { EdgeInspectionOverlay } from "./EdgeInspectionOverlay";
 import { ClusterExplainOverlay } from "./ClusterExplainOverlay";
 import { CommunityHullOverlay } from "./CommunityHullOverlay";
@@ -235,8 +250,24 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // and it cost round 12b real time chasing an expansion that could never have worked.
     // Keyed by edge type, for the node the menu is currently open on; `null` means "not answered
     // yet", which renders as `…` rather than as a confident zero.
+    // The latest `expandNode`, for the Sigma handlers registered once in an effect: a closure over
+    // the first render's copy would expand against a stale working set.
+    // Read by the Sigma reducers, which are registered once: a closure over the first render's
+    // `hovered` or `edgeTypes` would never see a change.
+    const hoveredRef = useRef<string | null>(null);
+    const edgeTypesRef = useRef<readonly EdgeTypeDef[]>([]);
+    const settledRef = useRef<Set<string>>(new Set());
+    const expandNodeRef = useRef<
+      | ((
+          nodeId: string,
+          edgeType: string | null,
+          x: number,
+          y: number,
+        ) => Promise<void>)
+      | null
+    >(null);
     const [previewCounts, setPreviewCounts] = useState<
-      Record<string, number | null>
+      Record<string, PreviewCount | null>
     >({});
     // **Owner ruling R7 (TENTATIVE, 27 September 2026) — step one of two.** Node id -> the reason
     // it is marked for suppression. A mark suppresses nothing; it is a visible proposal, and the
@@ -401,6 +432,70 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [graph, lastReproject]);
 
+    // The force layout. Runs a moment after the last node or edge is added (an expansion adds many
+    // at once), settles the working set and moves nodes to their new places over `--dur-graph`.
+    // Cluster members share their anchor's position (`refreshClusterVisualState`), so only one
+    // node per cluster takes part and the others follow it afterwards.
+    useEffect(() => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const run = () => {
+        const clusterOf = (id: string) =>
+          graph.getNodeAttribute(id, "data").resolution?.cluster_id ?? id;
+        const nodes: LayoutNode[] = [];
+        graph.forEachNode((id, attrs) => {
+          if (clusterOf(id) !== id) return;
+          nodes.push({ id, x: attrs.x ?? 0, y: attrs.y ?? 0 });
+        });
+        const present = new Set(nodes.map((n) => n.id));
+        const edges: [string, string][] = [];
+        graph.forEachEdge((_edge, _attrs, source, target) => {
+          const a = clusterOf(source);
+          const b = clusterOf(target);
+          if (a !== b && present.has(a) && present.has(b)) edges.push([a, b]);
+        });
+        // A node arriving beside an already-settled neighbour starts next to it, so an
+        // expansion grows outwards from where the analyst is looking, not from a random spot.
+        const positionOf = new Map(nodes.map((n) => [n.id, n]));
+        for (const node of nodes) {
+          if (settledRef.current.has(node.id)) continue;
+          const anchor = edges
+            .map(([a, b]) => (a === node.id ? b : b === node.id ? a : null))
+            .find((other) => other !== null && settledRef.current.has(other));
+          const at = anchor ? positionOf.get(anchor) : undefined;
+          if (at) {
+            const near = seededScatter(node.id);
+            node.x = at.x + near.x * 0.1;
+            node.y = at.y + near.y * 0.1;
+          }
+        }
+        const settled = settleLayout(nodes, edges);
+        if (!settled) return; // too large to settle quickly: the scatter stays
+        const targets: Record<string, { x: number; y: number }> = {};
+        for (const [id, at] of settled) {
+          targets[id] = at;
+          settledRef.current.add(id);
+        }
+        animateNodes(graph, targets, { duration: 420 }, () => {
+          refreshClusterVisualState();
+          sigmaRef.current?.scheduleRefresh();
+          void sigmaRef.current?.getCamera().animatedReset({ duration: 420 });
+        });
+      };
+      const schedule = () => {
+        clearTimeout(timer);
+        timer = setTimeout(run, 150);
+      };
+      graph.on("nodeAdded", schedule);
+      graph.on("edgeAdded", schedule);
+      schedule();
+      return () => {
+        clearTimeout(timer);
+        graph.removeListener("nodeAdded", schedule);
+        graph.removeListener("edgeAdded", schedule);
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [graph]);
+
     // Re-derive graph-level visual attributes only for the node(s) whose
     // hover/selection actually changed — not the whole working set.
     useEffect(() => {
@@ -451,7 +546,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         defaultNodeType: "glass-node",
         nodeProgramClasses: { "glass-node": NODE_PROGRAM },
         defaultEdgeType: "glass-edge",
-        edgeProgramClasses: { "glass-edge": EdgeLineProgram },
+        edgeProgramClasses: {
+          "glass-edge": EdgeLineProgram,
+          "glass-arrow": EdgeArrowProgram,
+        },
         // Sigma's own `addNode`/`updateNode`: "this function must return a
         // total object and won't be merged" with the raw graph attributes —
         // a reducer's return *replaces* them entirely for every downstream
@@ -477,17 +575,29 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             type: "glass-node",
           };
         },
-        edgeReducer: (_edgeId, data) => {
+        edgeReducer: (edgeId, data) => {
           const ratio = currentSigma?.getCamera().ratio ?? 1;
+          const hoveredNode = hoveredRef.current;
           const attrs = computeEdgeAttributes(data.data, {
             cameraRatio: ratio,
             strengthFilterFloor: 0,
             onPath: data.onPath ?? false,
+            touchesHoveredNode:
+              hoveredNode !== null &&
+              (graph.source(edgeId) === hoveredNode ||
+                graph.target(edgeId) === hoveredNode),
           });
-          return { ...data, ...attrs, type: "glass-edge" };
+          return {
+            ...data,
+            ...attrs,
+            type: edgeProgramFor(data.data.type, edgeTypesRef.current),
+          };
         },
         hideEdgesOnMove: true, // §1.1: "buys the frame budget at 250,000 edges"
         renderLabels: true,
+        // Edge labels were worked out (`computeEdgeAttributes`) but never drawn until this was
+        // switched on. They appear only at the closest zoom, or beside the node under the pointer.
+        renderEdgeLabels: true,
         labelRenderedSizeThreshold: 0,
         enableEdgeEvents: true, // needed for edge inspection (hover/click)
       });
@@ -516,13 +626,14 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       sigma.on("leaveNode", () => setHovered(null));
       sigma.on("rightClickNode", ({ node, event }) => {
         event.preventSigmaDefault();
-        const original = event.original as MouseEvent;
         setFocused(node);
-        setRadialMenu({
-          x: original.clientX,
-          y: original.clientY,
-          nodeId: node,
-          layout: "radial",
+        setRadialMenu(
+          menuRequestForRightClick(event.original as MouseEvent, node),
+        );
+      });
+      sigma.on("doubleClickNode", ({ node, event }) => {
+        expandOnDoubleClick(event, node, (id, x, y) => {
+          void expandNodeRef.current?.(id, null, x, y);
         });
       });
       sigma.on("clickEdge", ({ edge, event }) => {
@@ -715,6 +826,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         });
       }
     };
+
+    expandNodeRef.current = expandNode;
+    hoveredRef.current = hovered;
+    edgeTypesRef.current = edgeTypes;
 
     async function expandNode(
       nodeId: string,
@@ -1037,21 +1152,34 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
                 }),
               },
             );
-            if (!response.ok) return;
+            if (!response.ok) {
+              if (!cancelled)
+                setPreviewCounts((prev) => ({
+                  ...prev,
+                  [et.name]: previewCountFrom({ ok: false }, 0),
+                }));
+              return;
+            }
             const preview = (await response.json()) as {
               candidate_node_count: number;
             };
             if (cancelled) return;
             // `candidate_node_count` is the working set's size *after* this expansion, so the
             // figure the analyst wants — how many this click would add — is the difference.
-            const wouldAdd = Math.max(
-              0,
-              preview.candidate_node_count - graph.order,
+            const wouldAdd = previewCountFrom(
+              { ok: true, candidateNodeCount: preview.candidate_node_count },
+              graph.order,
             );
             setPreviewCounts((prev) => ({ ...prev, [et.name]: wouldAdd }));
           } catch {
-            // Left `null`; the menu shows `…`. Deliberately not surfaced as an action error —
-            // a preview is an aid, and failing to get one must not block the expansion itself.
+            // Said as "count unavailable", not left as `…` (which reads as still loading).
+            // Deliberately not surfaced as an action error — a preview is an aid, and failing to
+            // get one must not block the expansion itself.
+            if (!cancelled)
+              setPreviewCounts((prev) => ({
+                ...prev,
+                [et.name]: previewCountFrom({ ok: false }, 0),
+              }));
           }
         }),
       );
@@ -1072,7 +1200,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       if (!graph.hasNode(nodeId)) return [];
       const node = graph.getNodeAttribute(nodeId, "data");
       const valid = edgeTypesOfferedFor(edgeTypes, node.type);
-      const items = valid.map((et: EdgeTypeDef) => ({
+      const items: RadialMenuItem[] = valid.map((et: EdgeTypeDef) => ({
         id: et.name,
         label: et.name,
         // The real figure from `/expand/preview`, fetched by the effect below when this menu
@@ -1095,7 +1223,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             {
               id: "manual-link",
               label: `Link to ${other}`,
-              count: 0,
+              count: undefined,
               onSelect: () => {
                 const anchor = radialMenu ?? { x: 0, y: 0 };
                 void manualAssertion(nodeId, other, "link", anchor.x, anchor.y);
@@ -1104,7 +1232,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             {
               id: "manual-split",
               label: `Split from ${other}`,
-              count: 0,
+              count: undefined,
               onSelect: () => {
                 const anchor = radialMenu ?? { x: 0, y: 0 };
                 void manualAssertion(
@@ -1121,7 +1249,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               // reused rather than a new selection mechanism invented for it.
               id: "find-paths",
               label: `Find paths to ${other}`,
-              count: 0,
+              count: undefined,
               onSelect: () => {
                 const anchor = radialMenu ?? { x: 0, y: 0 };
                 void findPaths(nodeId, other, anchor.x, anchor.y);
@@ -1146,7 +1274,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           items.push({
             id: "explain-cluster",
             label: "Explain cluster",
-            count: 0,
+            count: undefined,
             onSelect: () => {
               const anchor = radialMenu ?? { x: 0, y: 0 };
               void explainCluster(clusterId, anchor.x, anchor.y);
@@ -1163,7 +1291,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         items.push({
           id: "view-messages",
           label: "View messages",
-          count: 0,
+          count: undefined,
           onSelect: () => void onViewMessages(nodeId),
         });
       }
@@ -1178,7 +1306,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         label: suppressionMarks[nodeId]
           ? "Remove suppression mark"
           : "Mark for suppression",
-        count: 0,
+        count: undefined,
         onSelect: () => void toggleSuppressionMark(nodeId),
       });
 

@@ -11,13 +11,21 @@ export interface RadialMenuItem {
    * worse than showing no figure at all. An action whose count is unknown
    * stays selectable — a missing preview is a reason to say so, not a reason
    * to block the expansion behind it. */
-  count: number | null;
+  count: number | null | "unavailable" | undefined;
   onSelect: () => void;
 }
 
-/** `…` while a preview is in flight or could not be fetched. */
-function countLabel(count: number | null): string {
-  return count === null ? "…" : String(count);
+/** `…` only while a preview is in flight; `count unavailable` when it failed; nothing at all for
+ * an action that has no count (`undefined`), so a placeholder `0` is never shown. */
+function countLabel(count: RadialMenuItem["count"]): string {
+  if (count === undefined) return "";
+  const text =
+    count === null
+      ? "…"
+      : count === "unavailable"
+        ? "count unavailable"
+        : String(count);
+  return ` (${text})`;
 }
 
 export interface RadialMenuProps {
@@ -84,7 +92,8 @@ export function RadialMenu({ x, y, items, onClose, layout }: RadialMenuProps) {
                 onClose();
               }}
             >
-              {item.label} ({countLabel(item.count)})
+              {item.label}
+              {countLabel(item.count)}
             </button>
           </li>
         ))}
@@ -128,7 +137,8 @@ export function RadialMenu({ x, y, items, onClose, layout }: RadialMenuProps) {
                 onClose();
               }}
             >
-              {item.label} ({countLabel(item.count)})
+              {item.label}
+              {countLabel(item.count)}
             </button>
           </li>
         );

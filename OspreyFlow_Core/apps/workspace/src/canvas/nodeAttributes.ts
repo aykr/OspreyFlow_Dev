@@ -60,7 +60,8 @@ const BAND_SIZE: Record<ZoomBand, number> = {
  * needs the same human-readable label for a `PairwiseExplanation`'s `node_a`/`node_b`, and
  * duplicating this lookup rather than sharing it would be a second place to keep in sync. */
 export function nodeLabel(node: Node): string {
-  const name = node.properties?.["family_name"] ?? node.properties?.["value_normalised"];
+  const name =
+    node.properties?.["family_name"] ?? node.properties?.["value_normalised"];
   return typeof name === "string" ? name : node.id;
 }
 
@@ -69,10 +70,18 @@ export function nodeLabel(node: Node): string {
  * generation or colour maths here. Nodes are never `hidden` by zoom
  * (`spec/02_GLASS_FRONTEND.md` §1.1: "Zoom never changes what exists,
  * only what is drawn" — even Overview draws every node, just small). */
-export function computeNodeFrameAttributes(node: Node, context: NodeZoomContext): NodeFrameAttributes {
+export function computeNodeFrameAttributes(
+  node: Node,
+  context: NodeZoomContext,
+): NodeFrameAttributes {
   const band = zoomBandForRatio(context.cameraRatio);
-  const labelEligible = band !== "overview" && (band !== "structure" || context.degree > 10);
-  return { size: BAND_SIZE[band], label: labelEligible ? nodeLabel(node) : "", hidden: false };
+  const labelEligible =
+    band !== "overview" && (band !== "structure" || context.degree > 10);
+  return {
+    size: BAND_SIZE[band],
+    label: labelEligible ? nodeLabel(node) : "",
+    hidden: false,
+  };
 }
 
 export interface NodeVisualState {
@@ -93,9 +102,13 @@ export interface NodeGraphAttributes {
   borderSize: number;
 }
 
-function provenanceStroke(node: Node, channelHex: string): { style: StrokeStyle; hex: string } {
+function provenanceStroke(
+  node: Node,
+  channelHex: string,
+): { style: StrokeStyle; hex: string } {
   const state = node.provenance.state;
-  if (state === "asserted") return { style: "solid", hex: BORDER_STRONG_DARK_HEX };
+  if (state === "asserted")
+    return { style: "solid", hex: BORDER_STRONG_DARK_HEX };
   if (state === "inferred") return { style: "dashed", hex: channelHex };
   return { style: "dotted", hex: channelHex }; // "unresolved"
 }
@@ -150,8 +163,11 @@ export interface ClusterGraphAttributes {
  * `02_GLASS_FRONTEND.md` has no existing convention for resolution-cluster collapse (its own
  * hull overlay is for community detection, a different, unrelated grouping).
  */
-export function computeClusterGraphAttributes(clusterMemberCount: number): ClusterGraphAttributes {
-  if (clusterMemberCount <= 1) return { clusterBorderColor: "transparent", clusterBorderSize: 0 };
+export function computeClusterGraphAttributes(
+  clusterMemberCount: number,
+): ClusterGraphAttributes {
+  if (clusterMemberCount <= 1)
+    return { clusterBorderColor: "transparent", clusterBorderSize: 0 };
   return { clusterBorderColor: BORDER_SUBTLE_DARK_HEX, clusterBorderSize: 1 };
 }
 
@@ -167,6 +183,10 @@ export interface EdgeRenderContext {
    * line's own colour barely registers next to a dimmed node's fill in any case. Disclosed
    * simplification, not an oversight. */
   onPath: boolean;
+  /** One end of this edge is the node under the pointer. Its label is shown at any zoom, so an
+   * analyst can read what a relationship is by pointing at either end of it, without zooming in
+   * until every label on the canvas appears at once. */
+  touchesHoveredNode?: boolean;
 }
 
 export interface ResolvedEdgeAttributes {
@@ -197,19 +217,44 @@ export function computeEdgeAttributes(
     return {
       size: ON_PATH_EDGE_SIZE,
       color: TEXT_PRIMARY_DARK_HEX,
-      label: band === "link-detail" ? `${edge.type} (${edge.occurrences ?? 1})` : "",
+      label:
+        band === "link-detail" ? `${edge.type} (${edge.occurrences ?? 1})` : "",
       hidden: false,
     };
   }
 
   if (band === "overview") {
-    return { size: 1, color: BORDER_STRONG_DARK_HEX, label: "", hidden: belowStrengthFilter };
+    return {
+      size: 1,
+      color: BORDER_STRONG_DARK_HEX,
+      label:
+        context.touchesHoveredNode && !belowStrengthFilter
+          ? `${edge.type} (${edge.occurrences ?? 1})`
+          : "",
+      hidden: belowStrengthFilter,
+    };
   }
   const size = Math.max(1, Math.min(4, weight * 2));
   return {
     size,
     color: BORDER_STRONG_DARK_HEX,
-    label: band === "link-detail" ? `${edge.type} (${edge.occurrences ?? 1})` : "",
+    label:
+      band === "link-detail" || context.touchesHoveredNode
+        ? `${edge.type} (${edge.occurrences ?? 1})`
+        : "",
     hidden: false,
   };
+}
+
+/** Which Sigma edge program draws this edge type: an arrowhead only where the ontology says the
+ * relationship has a direction (`EdgeTypeDef.directed`), a plain line otherwise. A symmetric type
+ * such as `SAME_AS` must not look as if it points one way, and a type the ontology does not know
+ * claims no direction. */
+export function edgeProgramFor(
+  edgeType: string,
+  edgeTypes: readonly { name: string; directed?: boolean }[],
+): "glass-arrow" | "glass-edge" {
+  return edgeTypes.find((t) => t.name === edgeType)?.directed === true
+    ? "glass-arrow"
+    : "glass-edge";
 }

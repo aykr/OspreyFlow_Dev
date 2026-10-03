@@ -8888,3 +8888,31 @@ suggestion taking over about 300 ms on the largest case, the scan needs an index
 
 **Not decided here.** Case-insensitive matching; ranking; suggestions that span documents or the index (OpenSearch is
 not wired).
+
+## ADR-060 — The working set settles into a force layout, and directed relationships carry an arrowhead
+
+**Status:** Accepted, 3 October 2026. Appended; it supersedes nothing. ADR-002's "one parameterised program" for node shapes is
+untouched.
+
+**Seen.** An analyst expanding a node on the Enron case saw nodes scattered at fixed pseudo-random positions, so a network of any
+size read as a hairball, with no sign of which way a relationship pointed. Edge labels had been worked out by
+`computeEdgeAttributes` for the closest zoom band but were never drawn, because Sigma's `renderEdgeLabels` was off.
+
+**Decision.**
+
+- A force layout (`canvas/forceLayout.ts`: every pair of nodes repels, every edge attracts, a weak pull to the centre) runs a
+  moment after the last node or edge is added and moves nodes to their settled places over `--dur-graph`. A node that arrives
+  beside a settled neighbour starts next to it. Cluster members share their anchor's position, so only one node per cluster
+  takes part and the rest follow it.
+- It is bounded. Above `FORCE_LAYOUT_MAX_NODES` (1,000) it does nothing and the scatter stays, because freezing the page is worse
+  than an unsettled picture. Passes are scaled down as the node count rises (60 to 200). Measured in the build environment:
+  about 190 ms at both 500 and 1,000 nodes. That is the cost on one machine; it has not been measured on the analyst's.
+- An edge type the ontology declares `directed` is drawn with an arrowhead (`EdgeArrowProgram`); a symmetric type, such as
+  `SAME_AS`, and a type the ontology does not know are plain lines.
+- Edge labels are drawn (`renderEdgeLabels`) at the closest zoom band, and at any zoom for an edge touching the node under the
+  pointer.
+
+**Not decided here, and not built.** ForceAtlas2 in a worker for the 50,000-node and 250,000-edge case (02_GLASS_FRONTEND.md
+section 5), which is still unmeasured. Dragging a node by hand, and so a pin that survives a re-layout (the layout supports
+a pinned node; nothing in the canvas pins one yet). A visual check in a real browser: the tests cover the layout's behaviour
+(spreading, attraction, repeatability, a pinned node, the size cap), not whether it looks right.

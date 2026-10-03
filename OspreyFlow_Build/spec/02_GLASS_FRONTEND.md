@@ -254,7 +254,7 @@ on return) is shown and is never retried automatically. Only the Ingest tab can 
 
 | Requirement | Implementation |
 | --- | --- |
-| Expand a node's relationships | Radial context menu on right-click; items generated from the ontology's edge types valid for the node's type, each with a live count |
+| Expand a node's relationships | Context menu on right-click (a list, so long edge-type names stay readable; the browser's own menu is suppressed); items generated from the ontology's edge types valid for the node's type, each with a live count, or `count unavailable` if the preview failed; actions with no count show none. A double-click on a node expands its neighbours across every edge type |
 | Search Around | Multi-step, filtered traversal builder — `Person → uses → Endpoint → communicated with (≥5 events, in brush window) → Endpoint → used by → Person`. Preview count before committing to the canvas |
 | Pathfinder | Select two nodes, get k-shortest paths; paths render with the on-path node state (2px primary stroke, edges thickened), everything else dims to 32% |
 | Subgraph isolation | Lasso or bounding box, then "Branch to new tab" — the selection opens as a new working set with its own filter state; the parent is untouched |

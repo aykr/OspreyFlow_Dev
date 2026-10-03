@@ -6,6 +6,7 @@ import {
   computeEdgeAttributes,
   computeNodeFrameAttributes,
   computeNodeGraphAttributes,
+  edgeProgramFor,
   type NodeVisualState,
 } from "./nodeAttributes";
 
@@ -30,14 +31,22 @@ function baseState(overrides: Partial<NodeVisualState> = {}): NodeVisualState {
 
 describe("computeNodeGraphAttributes", () => {
   it("an asserted node's fill is the plain channel colour, undimmed", () => {
-    const attrs = computeNodeGraphAttributes(makeNode("n1"), PERSON_VISUAL, baseState());
+    const attrs = computeNodeGraphAttributes(
+      makeNode("n1"),
+      PERSON_VISUAL,
+      baseState(),
+    );
 
     expect(attrs.color.toLowerCase()).toBe("#677bd6"); // indigo
     expect(decodeSvg(attrs.image)).not.toContain("stroke-dasharray"); // asserted => solid
   });
 
   it("colour never changes for interaction state — only the border ring does", () => {
-    const asserted = computeNodeGraphAttributes(makeNode("n1"), PERSON_VISUAL, baseState());
+    const asserted = computeNodeGraphAttributes(
+      makeNode("n1"),
+      PERSON_VISUAL,
+      baseState(),
+    );
     const selected = computeNodeGraphAttributes(
       makeNode("n1"),
       PERSON_VISUAL,
@@ -51,12 +60,20 @@ describe("computeNodeGraphAttributes", () => {
   });
 
   it("dimmed mixes 32% channel toward the panel surface", () => {
-    const attrs = computeNodeGraphAttributes(makeNode("n1"), PERSON_VISUAL, baseState({ dimmed: true }));
+    const attrs = computeNodeGraphAttributes(
+      makeNode("n1"),
+      PERSON_VISUAL,
+      baseState({ dimmed: true }),
+    );
     expect(attrs.color.toLowerCase()).not.toBe("#677bd6");
   });
 
   it("filtered-out and dimmed produce different fills (12% vs 32%)", () => {
-    const dimmed = computeNodeGraphAttributes(makeNode("n1"), PERSON_VISUAL, baseState({ dimmed: true }));
+    const dimmed = computeNodeGraphAttributes(
+      makeNode("n1"),
+      PERSON_VISUAL,
+      baseState({ dimmed: true }),
+    );
     const filteredOut = computeNodeGraphAttributes(
       makeNode("n1"),
       PERSON_VISUAL,
@@ -67,7 +84,11 @@ describe("computeNodeGraphAttributes", () => {
 
   it("inferred provenance renders a dashed stroke", () => {
     const node = makeNode("n1", {
-      provenance: { state: "inferred", sources: [], first_seen: "2026-01-01T00:00:00Z" },
+      provenance: {
+        state: "inferred",
+        sources: [],
+        first_seen: "2026-01-01T00:00:00Z",
+      },
     });
     const attrs = computeNodeGraphAttributes(node, PERSON_VISUAL, baseState());
     expect(decodeSvg(attrs.image)).toContain('stroke-dasharray="4 2"');
@@ -75,7 +96,11 @@ describe("computeNodeGraphAttributes", () => {
 
   it("unresolved provenance renders a dotted stroke, distinct from dashed", () => {
     const node = makeNode("n1", {
-      provenance: { state: "unresolved", sources: [], first_seen: "2026-01-01T00:00:00Z" },
+      provenance: {
+        state: "unresolved",
+        sources: [],
+        first_seen: "2026-01-01T00:00:00Z",
+      },
     });
     const attrs = computeNodeGraphAttributes(node, PERSON_VISUAL, baseState());
     expect(decodeSvg(attrs.image)).not.toContain('stroke-dasharray="4 2"');
@@ -97,17 +122,28 @@ describe("computeNodeGraphAttributes", () => {
     );
     expect(selected.borderSize).toBe(2);
 
-    const hovered = computeNodeGraphAttributes(makeNode("n1"), PERSON_VISUAL, baseState({ hovered: true }));
+    const hovered = computeNodeGraphAttributes(
+      makeNode("n1"),
+      PERSON_VISUAL,
+      baseState({ hovered: true }),
+    );
     expect(hovered.borderSize).toBe(1.5);
 
-    const none = computeNodeGraphAttributes(makeNode("n1"), PERSON_VISUAL, baseState());
+    const none = computeNodeGraphAttributes(
+      makeNode("n1"),
+      PERSON_VISUAL,
+      baseState(),
+    );
     expect(none.borderSize).toBe(0);
   });
 });
 
 describe("computeNodeFrameAttributes", () => {
   it("label is only eligible above the overview band", () => {
-    const overview = computeNodeFrameAttributes(makeNode("n1"), { cameraRatio: 5, degree: 0 });
+    const overview = computeNodeFrameAttributes(makeNode("n1"), {
+      cameraRatio: 5,
+      degree: 0,
+    });
     expect(overview.label).toBe("");
 
     const linkDetail = computeNodeFrameAttributes(
@@ -133,14 +169,23 @@ describe("computeNodeFrameAttributes", () => {
 
   it("node is never hidden by zoom, only shrunk (nodes always exist)", () => {
     for (const cameraRatio of [0.05, 0.3, 1, 5]) {
-      const attrs = computeNodeFrameAttributes(makeNode("n1"), { cameraRatio, degree: 0 });
+      const attrs = computeNodeFrameAttributes(makeNode("n1"), {
+        cameraRatio,
+        degree: 0,
+      });
       expect(attrs.hidden).toBe(false);
     }
   });
 
   it("node size grows from overview to link-detail", () => {
-    const overview = computeNodeFrameAttributes(makeNode("n1"), { cameraRatio: 5, degree: 0 });
-    const linkDetail = computeNodeFrameAttributes(makeNode("n1"), { cameraRatio: 0.05, degree: 0 });
+    const overview = computeNodeFrameAttributes(makeNode("n1"), {
+      cameraRatio: 5,
+      degree: 0,
+    });
+    const linkDetail = computeNodeFrameAttributes(makeNode("n1"), {
+      cameraRatio: 0.05,
+      degree: 0,
+    });
     expect(linkDetail.size).toBeGreaterThan(overview.size);
   });
 });
@@ -166,11 +211,18 @@ describe("computeEdgeAttributes", () => {
   it("edge labels are only eligible at link-detail", () => {
     const edge = makeEdge("e1", "a", "b");
     expect(
-      computeEdgeAttributes(edge, { cameraRatio: 1, strengthFilterFloor: 0, onPath: false }).label,
+      computeEdgeAttributes(edge, {
+        cameraRatio: 1,
+        strengthFilterFloor: 0,
+        onPath: false,
+      }).label,
     ).toBe("");
     expect(
-      computeEdgeAttributes(edge, { cameraRatio: 0.05, strengthFilterFloor: 0, onPath: false })
-        .label,
+      computeEdgeAttributes(edge, {
+        cameraRatio: 0.05,
+        strengthFilterFloor: 0,
+        onPath: false,
+      }).label,
     ).not.toBe("");
   });
 
@@ -199,5 +251,58 @@ describe("computeClusterGraphAttributes", () => {
     expect(attrs.clusterBorderSize).toBeGreaterThan(0);
     expect(attrs.clusterBorderColor).not.toBe("transparent");
     expect(attrs.clusterBorderColor.toLowerCase()).not.toBe("#c08a34"); // never the selection brass
+  });
+});
+
+describe("edge labels beside a hovered node", () => {
+  const edge = makeEdge("e1", "a", "b");
+  const base = { strengthFilterFloor: 0, onPath: false };
+
+  it("are shown for an edge touching the hovered node, at any zoom", () => {
+    for (const cameraRatio of [0.05, 1, 5]) {
+      const attrs = computeEdgeAttributes(edge, {
+        ...base,
+        cameraRatio,
+        touchesHoveredNode: true,
+      });
+      expect(attrs.label).not.toBe("");
+    }
+  });
+
+  it("stay hidden for an edge that does not touch it, at ordinary zoom", () => {
+    expect(
+      computeEdgeAttributes(edge, {
+        ...base,
+        cameraRatio: 1,
+        touchesHoveredNode: false,
+      }).label,
+    ).toBe("");
+  });
+
+  it("do not bring back an edge the strength filter hid", () => {
+    const weak = makeEdge("e2", "a", "b", { weight: 0.1 });
+    const attrs = computeEdgeAttributes(weak, {
+      cameraRatio: 5,
+      strengthFilterFloor: 0.5,
+      onPath: false,
+      touchesHoveredNode: true,
+    });
+    expect(attrs.hidden).toBe(true);
+  });
+});
+
+describe("edgeProgramFor", () => {
+  const types = [
+    { name: "TRANSACTED", directed: true },
+    { name: "SAME_AS", directed: false },
+  ];
+
+  it("draws an arrowhead only for an edge type the ontology declares directed", () => {
+    expect(edgeProgramFor("TRANSACTED", types)).toBe("glass-arrow");
+    expect(edgeProgramFor("SAME_AS", types)).toBe("glass-edge");
+  });
+
+  it("claims no direction for an edge type the ontology does not know", () => {
+    expect(edgeProgramFor("MYSTERY", types)).toBe("glass-edge");
   });
 });
