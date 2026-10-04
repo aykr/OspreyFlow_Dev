@@ -32,13 +32,13 @@ describe("describeEmptyExpansion", () => {
         hasEdge: only("e1", "e2"),
         edgeType: "SAME_AS",
       }),
-    ).toBe("Nothing new: everything linked by SAME_AS is already in view.");
+    ).toBe("Nothing new: everything linked by \u2018Same as\u2019 is already in view.");
   });
 
   it("says the node has no such links when the server returned nothing", () => {
     expect(
       describeEmptyExpansion({ rootId: "root", nodeIds: [], edgeIds: [], hasNode: none, hasEdge: none, edgeType: "MEMBER_OF" }),
-    ).toBe("No MEMBER_OF links from this node.");
+    ).toBe("No \u2018Member of\u2019 links from this node.");
   });
 
   it("does not name a relationship when every kind was asked for", () => {
@@ -54,6 +54,6 @@ describe("describeEmptyExpansion", () => {
     // The server may return the node itself; a node with no links must still be told so.
     expect(
       describeEmptyExpansion({ rootId: "self", nodeIds: ["self"], edgeIds: [], hasNode: only("self"), hasEdge: none, edgeType: "ASSOCIATE_OF" }),
-    ).toBe("No ASSOCIATE_OF links from this node.");
+    ).toBe("No \u2018Associate of\u2019 links from this node.");
   });
 });

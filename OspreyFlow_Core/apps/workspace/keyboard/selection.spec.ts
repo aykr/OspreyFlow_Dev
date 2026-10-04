@@ -1,60 +1,70 @@
-// Selecting several nodes with the mouse (ADR-084 Amendment 1). Unlike the keyboard specs this one
-// uses the mouse on purpose: the thing under test is what a modifier key does to a click. The
-// keyboard route to a multi-node selection (Space on a focused node) is proved in `keyboard.spec.ts`.
+// The selection, by keyboard alone (ADR-093, rule 13): the canvas chip's Clear, and the Inspector
+// list's Centre and Remove, each against the real canvas. No `page.mouse`, no `.click()`.
 import { expect, test, type Page } from "@playwright/test";
 
-const URL = "/keyboard/harness.html";
-// n2 and n3 are one resolution cluster in the fixture and may be drawn as one, and the disconnected n5
-// settles under the Layout control that floats over the canvas, so neither is clicked here.
-const NODES = ["n0", "n1", "n4"];
+import { SELECTION_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
 
-const positionOf = (page: Page, id: string) =>
-  page.evaluate((nodeId) => window.__CANVAS__?.viewportPositionOf(nodeId), id);
-
-/** Waits until the three nodes stop moving: the layout settles after load, and selecting a node
- * moves the camera, so a position read before either has finished points at empty space. */
-async function settled(page: Page) {
-  let last = "";
-  await expect
-    .poll(
-      async () => {
-        const now = JSON.stringify(await Promise.all(NODES.map((id) => positionOf(page, id))));
-        const still = now === last;
-        last = now;
-        return still;
-      },
-      { intervals: [300], timeout: 20_000 },
-    )
-    .toBe(true);
+declare global {
+  interface Window {
+    __KEYBOARD__?: { focused: string | null; selection: string[] };
+  }
 }
 
-async function clickNode(page: Page, id: string, held: ("Shift" | "ControlOrMeta")[] = []) {
-  await settled(page);
-  const p = await positionOf(page, id);
-  if (!p) throw new Error(`no position for ${id}`);
-  // The modifier is held through the keyboard, as a person holds it. (Playwright's `modifiers`
-  // option on a click was measured to reach the page with neither a keydown nor a flagged click
-  // here, so it proves nothing about the canvas.)
-  for (const key of held) await page.keyboard.down(key);
-  // `viewportPositionOf` answers in page coordinates (the pixel-reading `link-style.spec.ts` relies on it).
-  await page.mouse.click(p.x, p.y);
-  for (const key of held) await page.keyboard.up(key);
+const selection = (page: Page) => page.evaluate(() => window.__KEYBOARD__?.selection ?? []);
+const focused = (page: Page) => page.evaluate(() => window.__KEYBOARD__?.focused ?? null);
+
+async function tabTo(page: Page, name: RegExp, max = 20) {
+  for (let i = 0; i < max; i++) {
+    await page.keyboard.press("Tab");
+    const text = await page.evaluate(
+      () => document.activeElement?.getAttribute("aria-label") ?? document.activeElement?.textContent ?? "",
+    );
+    if (name.test(text)) return;
+  }
+  throw new Error(`Tab never reached ${String(name)}`);
 }
 
-const selection = (page: Page) => page.evaluate(() => [...(window.__KEYBOARD__?.selection ?? [])].sort());
+/** n0 is selected on focus; ArrowRight moves to a neighbour and Space adds it. */
+async function selectTwo(page: Page) {
+  await page.goto("/keyboard/harness.html");
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  await expect.poll(() => selection(page)).toEqual(["n0"]);
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => focused(page)).not.toBe("n0");
+  const second = await focused(page);
+  await page.keyboard.press(" ");
+  await expect.poll(() => selection(page)).toEqual(["n0", second]);
+  return second as string;
+}
 
-test("Shift+click adds a node to the selection and Shift+click again removes it; a plain click replaces", async ({
-  page,
-}) => {
-  await page.goto(URL);
-  await clickNode(page, "n0");
-  expect(await selection(page)).toEqual(["n0"]);
-  await clickNode(page, "n4", ["Shift"]);
-  expect(await selection(page)).toEqual(["n0", "n4"]);
-  await clickNode(page, "n4", ["Shift"]);
-  expect(await selection(page)).toEqual(["n0"]);
-  await clickNode(page, "n4", ["ControlOrMeta"]); // the modifier that already worked still does
-  expect(await selection(page)).toEqual(["n0", "n4"]);
-  await clickNode(page, "n1");
-  expect(await selection(page)).toEqual(["n1"]);
+test("the chip says how many are selected, and its Clear empties the selection", async ({ page }) => {
+  await selectTwo(page);
+  await expect(page.getByRole("status").filter({ hasText: "2 selected" })).toBeVisible();
+  await tabTo(page, /^Clear the selection$/);
+  await page.keyboard.press("Enter");
+  await expect.poll(() => selection(page)).toEqual([]);
+  await expect(page.getByRole("status").filter({ hasText: "selected" })).toHaveCount(0);
+  registerCovered("SELECTION_ACTIONS", "clear-the-selection-from-the-canvas-chip");
+});
+
+test("the list's name centres on that node and leaves the selection as it was", async ({ page }) => {
+  await selectTwo(page);
+  await expect(page.getByRole("heading", { name: "Selected (2)" })).toBeVisible();
+  await tabTo(page, /^Centre on n0/);
+  await page.keyboard.press("Enter");
+  await expect.poll(() => focused(page)).toBe("n0");
+  expect(await selection(page)).toHaveLength(2);
+  registerCovered("SELECTION_ACTIONS", "centre-on-a-selected-node-from-the-list");
+});
+
+test("the list's × takes that node out of the selection", async ({ page }) => {
+  const second = await selectTwo(page);
+  await tabTo(page, new RegExp(`^Remove ${second} from the selection$`));
+  await page.keyboard.press("Enter");
+  await expect.poll(() => selection(page)).toEqual(["n0"]);
+  registerCovered("SELECTION_ACTIONS", "remove-a-node-from-the-selection-from-the-list");
+});
+
+test("every registered selection action has its own proving test case above", () => {
+  assertAllCovered("SELECTION_ACTIONS", SELECTION_ACTIONS);
 });

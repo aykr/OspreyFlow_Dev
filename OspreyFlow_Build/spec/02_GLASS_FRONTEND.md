@@ -490,6 +490,13 @@ the settled nodes where they were.
 
 Selecting nodes enables **Branch selected (n)**, beside Remove selected and Clear view (reachable by Tab; `keyboard/keyboard.spec.ts`). It sends the nodes to a **new case of their own**, holding those nodes and the links between them, and opens it. The case you branched from is left exactly as it was. A branch is a **copy** made at that moment: later changes to either never touch the other. A selected Group Node stands for every member of its group, so choosing one chooses them all. What the new case holds is re-checked against the branching analyst's own clearance, as every read is: a node they may not see is not copied, and a request that leaves nothing to copy says only "None of the selected nodes could be branched", whatever the reason.
 
+**Seeing and working the selection (ADR-093).** A selected node is drawn larger with a bold brass
+ring (§4's table). While anything is selected, a chip in the canvas's bottom-left corner says "n
+selected" with *Clear the selection*. When more than one node is selected, the Inspector lists them
+by name under "Selected (n)": choosing a name centres the canvas on that node and leaves the
+selection as it was, and × takes it out. Proved by keyboard in `keyboard/selection.spec.ts`
+(registry `SELECTION_ACTIONS`); the ring by painted pixels in `keyboard/selection-look.spec.ts`.
+
 The selection is built with the lasso, or by clicking nodes with Shift, Ctrl or Cmd held (each adds the node, or takes it out again). *Branch selected (n)* is the button in the strip over the canvas and, for any node that is in the selection, an entry in that node's own right-click menu (ADR-084 Amendment 1); a node outside the selection does not offer it. Both reach the same route; `keyboard/keyboard.spec.ts` proves each by keyboard.
 
 Each branch is a case saved for the analyst who made it (they are its Author, and it is visible to nobody else until they share it). It starts with the resolution threshold, layout and timeline brush of its own, not shared with the case it came from. The events behind the links it copied (the timeline's counts, *Show emails*, an email to extract from) are read from the case they were loaded into, for the links the branch holds, wherever the analyst can see that case; nothing is copied (ADR-084 Amendment 2).

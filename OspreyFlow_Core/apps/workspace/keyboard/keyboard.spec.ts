@@ -1638,9 +1638,12 @@ test("an expansion that adds nothing says so, and Escape dismisses the message",
   await page.keyboard.press("\\");
   await page.keyboard.press("Tab");
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("status")).toContainText(/^Nothing new: everything linked by [A-Z_]+ is already in view\.$/);
+  // The type by its display name (ADR-091), and the message found by its words: the canvas's
+  // selection chip is a status region too (ADR-093).
+  const nothingNew = page.getByRole("status").filter({ hasText: /^Nothing new:/ });
+  await expect(nothingNew).toContainText(/^Nothing new: everything linked by \u2018[A-Z][a-z ]+\u2019 is already in view\.$/);
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("status")).toBeHidden();
+  await expect(nothingNew).toBeHidden();
   registerCovered("CANVAS_ACTIONS", "expand-with-nothing-new-says-so");
 });
 

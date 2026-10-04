@@ -351,6 +351,14 @@ export const LINK_EVENTS_ACTIONS = defineActionRegistry("LINK_EVENTS_ACTIONS", [
   "accept-a-finding-by-keyboard",
 ] as const);
 
+/** The selection made easy to see and work with (ADR-093): the canvas chip and the Inspector's list.
+ * `keyboard/selection.spec.ts`. */
+export const SELECTION_ACTIONS = defineActionRegistry("SELECTION_ACTIONS", [
+  "clear-the-selection-from-the-canvas-chip",
+  "centre-on-a-selected-node-from-the-list",
+  "remove-a-node-from-the-selection-from-the-list",
+] as const);
+
 /** The full-screen reader (ADR-092): opened from a Document on the canvas, read, extracted from,
  * closed. `keyboard/reader.spec.ts`. */
 export const READER_ACTIONS = defineActionRegistry("READER_ACTIONS", [

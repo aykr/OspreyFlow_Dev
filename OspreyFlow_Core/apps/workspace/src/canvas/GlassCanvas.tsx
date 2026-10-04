@@ -115,6 +115,7 @@ import {
   type Community,
 } from "./communities";
 import { linkCaption, linkTypeName } from "./linkLabel";
+import { SelectionChip } from "./SelectionChip";
 import { linkMenuItems, linkMenuTitle } from "./linkMenu";
 import { sameAsGroup } from "./linkCollapse";
 import { ReasonPrompt } from "./ReasonPrompt";
@@ -267,6 +268,10 @@ export interface GlassCanvasHandle {
    * renders. No camera pan — unlike `focusOnNode`, a multi-node "fit view to selection" is its
    * own real feature this method does not attempt. */
   highlightNodes: (nodeIds: readonly string[]) => void;
+  /** ADR-093: pans to `nodeId` and focuses it, leaving the selection as it is. */
+  centreOn: (nodeId: string) => void;
+  /** ADR-093: takes `nodeId` out of the selection. */
+  deselect: (nodeId: string) => void;
   /** Where `nodeId` is drawn now, in pixels from the canvas's top-left corner, or `null` if it is
    * not in `graph` or nothing is mounted. Lets a browser test click on or beside a link without
    * guessing where the layout put it. */
@@ -1412,6 +1417,24 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           setSelected(new Set(present));
           onSelectionChange?.(present);
         },
+        centreOn: (nodeId: string) => {
+          if (!graph.hasNode(nodeId)) return;
+          setFocused(nodeId);
+          const sigma = sigmaRef.current;
+          if (!sigma) return;
+          const x = graph.getNodeAttribute(nodeId, "x") ?? 0;
+          const y = graph.getNodeAttribute(nodeId, "y") ?? 0;
+          redrawWhenCameraStops(sigma, sigma.getCamera().animate({ x, y }, { duration: 200 }));
+        },
+        deselect: (nodeId: string) => {
+          setSelected((prev) => {
+            if (!prev.has(nodeId)) return prev;
+            const next = new Set(prev);
+            next.delete(nodeId);
+            onSelectionChange?.(Array.from(next));
+            return next;
+          });
+        },
         expandFrom: (nodeId: string, depth: number) => {
           if (!graph.hasNode(nodeId)) return;
           const box = containerRef.current?.getBoundingClientRect();
@@ -1764,6 +1787,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         hasNode: (id) => graph.hasNode(id),
         hasEdge: (id) => graph.hasEdge(id),
         edgeType,
+        edgeTypes: edgeTypesRef.current,
       });
       store.getState().applyDelta(outcome.delta);
       if (emptyNotice !== null) setActionError({ x, y, message: emptyNotice, tone: "notice" });
@@ -2703,6 +2727,13 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             }
           />
         )}
+        <SelectionChip
+          count={selected.size}
+          onClear={() => {
+            setSelected(new Set());
+            onSelectionChange?.([]);
+          }}
+        />
         <ViewActions
           nodeCount={graph.order}
           selectedCount={selected.size}

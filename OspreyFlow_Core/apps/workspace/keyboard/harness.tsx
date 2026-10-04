@@ -8,12 +8,13 @@
 // way to reach, and a real `expand` network call `keyboard.spec.ts`
 // intercepts via `page.route` rather than this harness faking it.
 import { createRoot } from "react-dom/client";
-import { createRef } from "react";
+import { createRef, useEffect, useState } from "react";
 
 import "../src/design/tokens.css";
 import { applyTheme } from "../src/theme/theme";
 import "../src/design/primitives.css";
 import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
+import { SelectionList } from "../src/inspector/SelectionList";
 import { OntologyRegistry } from "../src/ontology/schema";
 import { createWorkingSet } from "../src/workingset/store";
 import type { OntologySchema, Node, Edge } from "../../../packages/schemas/generated";
@@ -308,6 +309,25 @@ const judged = new Map<string, number>(
     }),
 );
 
+// ADR-093: the Inspector's selected list, wired to the canvas as App wires it.
+function HarnessSelectionList() {
+  const [ids, setIds] = useState<string[]>([]);
+  useEffect(() => {
+    selectionListeners.add(setIds);
+    return () => {
+      selectionListeners.delete(setIds);
+    };
+  }, []);
+  return (
+    <SelectionList
+      nodes={ids.filter((id) => workingSet.graph.hasNode(id)).map((id) => workingSet.graph.getNodeAttribute(id, "data"))}
+      onCentre={(id) => canvasHandle.current?.centreOn(id)}
+      onRemove={(id) => canvasHandle.current?.deselect(id)}
+    />
+  );
+}
+const selectionListeners = new Set<(ids: string[]) => void>();
+
 createRoot(container).render(
   <>
     <GlassCanvas
@@ -326,6 +346,7 @@ createRoot(container).render(
       }}
       onSelectionChange={(ids) => {
         window.__KEYBOARD__!.selection = ids;
+        for (const listener of selectionListeners) listener(ids);
       }}
       onEdgeSelect={(edge) => {
         window.__KEYBOARD__!.selectedEdge = edge ? edge.id : null;
@@ -353,5 +374,6 @@ createRoot(container).render(
         before Phase 7 Stage 4, since the canvas's own onKeyDown used to intercept every Tab
         press regardless. */}
     <button id="after-canvas">After canvas</button>
+    <HarnessSelectionList />
   </>,
 );

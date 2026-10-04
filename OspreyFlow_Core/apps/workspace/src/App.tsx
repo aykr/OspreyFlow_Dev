@@ -27,6 +27,7 @@ import { SignInScreen } from "./auth/SignInScreen";
 import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
 import { linkTypeName } from "./canvas/linkLabel";
 import { DocumentReader } from "./reader/DocumentReader";
+import { SelectionList } from "./inspector/SelectionList";
 import { displayValue } from "./search/searchOptions";
 import { listJudgements } from "./assessment/api";
 import { judgementCountsByNode } from "./assessment/judgementCounts";
@@ -374,6 +375,8 @@ export function App() {
   const [dossierNodeId, setDossierNodeId] = useState<string | null>(null);
   // ADR-092: the Document open in the full-screen reader, if any.
   const [readerDocumentId, setReaderDocumentId] = useState<string | null>(null);
+  // ADR-093: every node selected on the canvas, for the Inspector's list.
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [mapConfig, setMapConfig] = useState<PublicMapConfig | null>(null);
   const [siteWizardOpen, setSiteWizardOpen] = useState(false);
   const [boundaryToolOpen, setBoundaryToolOpen] = useState(false);
@@ -966,6 +969,7 @@ export function App() {
                 }}
                 onBranchCreated={(id) => openCase(id)}
                 onSelectionChange={(nodeIds) => {
+                  setSelectedNodeIds(nodeIds);
                   const first = nodeIds[0];
                   const graph = workingSetRef.current.graph;
                   setSelectedNode(
@@ -1109,6 +1113,15 @@ export function App() {
                   id: "inspector" as const,
                   name: "Inspector",
                   content: (
+                    <>
+                    {/* ADR-093: the selection, listed, when more than one node is selected. */}
+                    <SelectionList
+                      nodes={selectedNodeIds
+                        .filter((id) => workingSetRef.current.graph.hasNode(id))
+                        .map((id) => workingSetRef.current.graph.getNodeAttribute(id, "data"))}
+                      onCentre={(id) => glassCanvasRef.current?.centreOn(id)}
+                      onRemove={(id) => glassCanvasRef.current?.deselect(id)}
+                    />
                     <Inspector
                       node={selectedNode}
                       link={
@@ -1155,6 +1168,7 @@ export function App() {
                           setJudgementCounts(judgementCountsByNode(judgements)),
                       }}
                     />
+                    </>
                   ),
                 },
                 ...(view === "graph"
