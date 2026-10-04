@@ -36,6 +36,7 @@ from schemas.analytics import (
     GeometryRecord,
     HistogramBucketing,
     HistogramRequest,
+    InheritedEvents,
     SightingRequest,
 )
 from schemas.domain import Handling, Interval, Principal
@@ -695,6 +696,106 @@ async def test_unauthorised_list_events_matches_a_corpus_without_the_hidden_even
         assert (await adapter.list_events(req, CLEARED)).total == 2
 
 
+# --- a branch's inherited events (ADR-084 Amendment 2) --------------------------------------
+#
+# A branch holds copies of some of its parent's links; the events behind them stay under the
+# parent's scope. `EventFilter.inherited` lets a branch count them, but only on the links it holds.
+
+
+def _inherited(scopes: list[str], edge_ids: list[str]) -> InheritedEvents:
+    return InheritedEvents(scopes=scopes, edge_ids=edge_ids)
+
+
+def _lineage_corpus(now: datetime) -> list[EventRecord]:
+    return [
+        _event(occurred_at=now, edge_id="own"),
+        _event(occurred_at=now, edge_id="ab", investigation_scope="parent"),
+        _event(occurred_at=now, edge_id="ab", investigation_scope="parent"),
+        _event(occurred_at=now, edge_id="cd", investigation_scope="parent"),
+        _event(occurred_at=now, edge_id="ab", investigation_scope="unrelated"),
+    ]
+
+
+async def test_inherited_events_count_only_on_the_links_the_branch_holds(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """The parent's two events on `ab` count; its event on `cd` (a link the branch did not take)
+    and an unrelated case's event on `ab` do not."""
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    async with factory.context(_lineage_corpus(now)) as adapter:
+        own_only = HistogramRequest(filter=_filter(), interval_seconds=3600)
+        assert (await adapter.histogram(own_only, CLEARED)).total == 1
+        branch = HistogramRequest(
+            filter=_filter(inherited=_inherited(["parent"], ["ab"])), interval_seconds=3600
+        )
+        assert (await adapter.histogram(branch, CLEARED)).total == 3
+
+
+async def test_inherited_events_with_no_links_held_add_nothing(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    async with factory.context(_lineage_corpus(now)) as adapter:
+        req = HistogramRequest(
+            filter=_filter(inherited=_inherited(["parent"], [])), interval_seconds=3600
+        )
+        assert (await adapter.histogram(req, CLEARED)).total == 1
+
+
+async def test_inherited_events_obey_every_other_predicate(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """The emails behind one link on a branch: `edge_ids` and the window narrow the inherited
+    events as they narrow the case's own, and the listing pages over both together."""
+    early = datetime(2026, 1, 1, 9, tzinfo=UTC)
+    late = datetime(2026, 1, 1, 15, tzinfo=UTC)
+    events = [
+        _event(occurred_at=late, edge_id="ab", investigation_scope="parent"),
+        _event(occurred_at=early, edge_id="ab", investigation_scope="parent"),
+        _event(occurred_at=late, edge_id="cd", investigation_scope="parent"),
+    ]
+    inherited = _inherited(["parent"], ["ab", "cd"])
+    async with factory.context(events) as adapter:
+        on_ab = await adapter.list_events(
+            EventListRequest(
+                filter=_filter(edge_ids=["ab"], inherited=inherited), offset=0, limit=50
+            ),
+            CLEARED,
+        )
+        assert on_ab.total == 2
+        assert [e.occurred_at for e in on_ab.events] == [late, early]
+        windowed = HistogramRequest(
+            filter=_filter(
+                inherited=inherited,
+                window=Interval(valid_from=datetime(2026, 1, 1, 12, tzinfo=UTC)),
+            ),
+            interval_seconds=3600,
+        )
+        assert (await adapter.histogram(windowed, CLEARED)).total == 2
+
+
+async def test_unauthorised_inherited_event_matches_a_corpus_without_it(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    req = HistogramRequest(
+        filter=_filter(inherited=_inherited(["parent"], ["ab"])), interval_seconds=3600
+    )
+    visible = [_event(occurred_at=now, edge_id="ab", investigation_scope="parent")]
+    async with factory.context(visible) as adapter:
+        before = await adapter.histogram(req, OFFICIAL)
+        assert before.total == 1
+
+    hidden = _event(
+        occurred_at=now, edge_id="ab", investigation_scope="parent", classification="SECRET"
+    )
+    async with factory.context([*visible, hidden]) as adapter:
+        after = await adapter.histogram(req, OFFICIAL)
+        assert after.total == before.total
+        assert after.buckets == before.buckets
+        assert (await adapter.histogram(req, CLEARED)).total == 2
+
+
 # --- first_seen (ADR-087): when each node and link first appears in a window ----------------
 
 
@@ -1329,3 +1430,18 @@ async def test_geocode_uses_only_polygon_rows(factory: AnalyticsAdapterFactory) 
         assert await adapter.geocode_events(
             GeocodeRequest(filter=_filter(), cells={"point-cell": "node-p"}), CLEARED
         ) == []
+
+
+async def test_geocode_refuses_an_inherited_filter(factory: AnalyticsAdapterFactory) -> None:
+    """Geocoding writes a case's own events. A branch's parents' events are read-only to it
+    (ADR-084 Amendment 2): an inherited filter would read them and then write nothing, silently."""
+    on_parent = _event(occurred_at=_T0, lat=51.5072, lon=-0.1276, investigation_scope="parent")
+    async with factory.context([on_parent]) as adapter:
+        await adapter.load_geometries(_cells())
+        with pytest.raises(ValueError, match="inherited"):
+            await adapter.geocode_events(
+                GeocodeRequest(
+                    filter=_filter(inherited=_inherited(["parent"], ["e1"])), cells=_CELLS
+                ),
+                CLEARED,
+            )

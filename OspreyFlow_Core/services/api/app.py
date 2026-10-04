@@ -202,6 +202,7 @@ from .email_extraction import (
     ExtractEmailRequest,
 )
 from .evaluation import evaluate_hotlists_for_entry, evaluate_monitors_for_entry
+from .event_scope import visible_ancestors, with_inherited
 from .export import (
     ComplianceRoleRequiredError,
     ExportBlockedError,
@@ -442,7 +443,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.link_changes = LinkChangeService(
         link_changes_store, app.state.working_set, graph, ontology, link_notes_store
     )
-    app.state.link_events = LinkEventsService(app.state.working_set, analytics)
+    app.state.link_events = LinkEventsService(app.state.working_set, analytics, investigations)
     app.state.email_extraction = EmailExtractionService(
         app.state.working_set,
         analytics,
@@ -451,6 +452,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         extraction_candidates,
         model,
         CONFORMANCE_MODEL,
+        investigations=investigations,
     )
     app.state.suppression_marks = suppression_marks
     app.state.gaps_store = gaps_store
@@ -831,37 +833,49 @@ def _authorized_at(
         investigations: InvestigationsDep,
         audit: AuditDep,
     ) -> Investigation:
-        denial: Exception
-        try:
-            return await investigations.get_authorized(investigation_id, principal, need=level)
-        except (InvestigationNotFoundError, InsufficientAccessError) as error:
-            denial = error
-
-        if admin_safety_net and ADMIN_ROLE in principal.roles:
-            try:
-                case = await investigations.get_for_access_admin(investigation_id, principal)
-            except InvestigationNotFoundError:
-                await _audit_denied(audit, principal, investigation_id, {})
-                raise
-            await audit.record(
-                principal=principal,
-                action="access_admin_override",
-                investigation_id=investigation_id,
-                resolved_query={},
-                result_cardinality=1,
-            )
-            return case
-
-        if isinstance(denial, InsufficientAccessError):
-            await _audit_denied(audit, principal, investigation_id, {"needed": level.value})
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail=str(denial)
-            ) from denial
-        await _audit_denied(audit, principal, investigation_id, {})
-        raise denial
+        return await _authorize(
+            investigation_id, principal, investigations, audit, level, admin_safety_net
+        )
 
     dependency.required_level = level  # type: ignore[attr-defined]
     return dependency
+
+
+async def _authorize(
+    investigation_id: str,
+    principal: Principal,
+    investigations: InvestigationStore,
+    audit: AuditWriter,
+    level: AccessLevel,
+    admin_safety_net: bool = False,
+) -> Investigation:
+    """`_authorized_at`'s gate, callable by a route whose case is in its body, not its path."""
+    denial: Exception
+    try:
+        return await investigations.get_authorized(investigation_id, principal, need=level)
+    except (InvestigationNotFoundError, InsufficientAccessError) as error:
+        denial = error
+
+    if admin_safety_net and ADMIN_ROLE in principal.roles:
+        try:
+            case = await investigations.get_for_access_admin(investigation_id, principal)
+        except InvestigationNotFoundError:
+            await _audit_denied(audit, principal, investigation_id, {})
+            raise
+        await audit.record(
+            principal=principal,
+            action="access_admin_override",
+            investigation_id=investigation_id,
+            resolved_query={},
+            result_cardinality=1,
+        )
+        return case
+
+    if isinstance(denial, InsufficientAccessError):
+        await _audit_denied(audit, principal, investigation_id, {"needed": level.value})
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(denial)) from denial
+    await _audit_denied(audit, principal, investigation_id, {})
+    raise denial
 
 
 async def _audit_denied(
@@ -3403,14 +3417,47 @@ async def verify_map_route(
 # are.
 
 
+async def _case_event_filter(
+    event_filter: EventFilter,
+    principal: Principal,
+    investigations: InvestigationStore,
+    audit: AuditWriter,
+    working_set: WorkingSetService,
+) -> EventFilter:
+    """The filter a body-scoped analytics read runs with (ADR-084 Amendment 2). The case in the
+    body is gated at Viewer exactly as a case in a path is, so a case the account cannot see
+    answers 404 and reads nothing. Whatever `inherited` the caller sent is discarded; on a branch it
+    is set to the visible parents' events on the links the branch holds."""
+    case = await _authorize(
+        event_filter.investigation_scope, principal, investigations, audit, AccessLevel.VIEWER
+    )
+    ancestors = await visible_ancestors(investigations, case, principal)
+    if not ancestors:
+        return with_inherited(event_filter, [], [])
+    _nodes, edges = await working_set.current_membership(case.id)
+    return with_inherited(event_filter, ancestors, [e.id for e in edges])
+
+
 class GeometriesRequest(BaseModel):
     geometry_refs: list[str]
 
 
 @app.post("/v1/analytics/histogram")
 async def histogram_route(
-    body: HistogramRequest, principal: PrincipalDep, analytics: AnalyticsDep, audit: AuditDep
+    body: HistogramRequest,
+    principal: PrincipalDep,
+    analytics: AnalyticsDep,
+    audit: AuditDep,
+    investigations: InvestigationsDep,
+    working_set: WorkingSetDep,
 ) -> Histogram:
+    body = body.model_copy(
+        update={
+            "filter": await _case_event_filter(
+                body.filter, principal, investigations, audit, working_set
+            )
+        }
+    )
     result = await analytics.histogram(body, principal)
     await audit.record(
         principal=principal,
@@ -3424,8 +3471,20 @@ async def histogram_route(
 
 @app.post("/v1/analytics/cross-filter")
 async def cross_filter_route(
-    body: CrossFilterRequest, principal: PrincipalDep, analytics: AnalyticsDep, audit: AuditDep
+    body: CrossFilterRequest,
+    principal: PrincipalDep,
+    analytics: AnalyticsDep,
+    audit: AuditDep,
+    investigations: InvestigationsDep,
+    working_set: WorkingSetDep,
 ) -> dict[str, Histogram]:
+    body = body.model_copy(
+        update={
+            "filter": await _case_event_filter(
+                body.filter, principal, investigations, audit, working_set
+            )
+        }
+    )
     result = await analytics.cross_filter(body, principal)
     await audit.record(
         principal=principal,
@@ -3439,10 +3498,22 @@ async def cross_filter_route(
 
 @app.post("/v1/analytics/first-seen")
 async def first_seen_route(
-    body: FirstSeenRequest, principal: PrincipalDep, analytics: AnalyticsDep, audit: AuditDep
+    body: FirstSeenRequest,
+    principal: PrincipalDep,
+    analytics: AnalyticsDep,
+    audit: AuditDep,
+    investigations: InvestigationsDep,
+    working_set: WorkingSetDep,
 ) -> FirstSeenResult:
     """When each node and link first appears in the brush window (ADR-087), for the timeline's
     playback. Access control is the adapter's, in the query, as for every analytics read."""
+    body = body.model_copy(
+        update={
+            "filter": await _case_event_filter(
+                body.filter, principal, investigations, audit, working_set
+            )
+        }
+    )
     result = await analytics.first_seen(body, principal)
     await audit.record(
         principal=principal,
@@ -3456,8 +3527,20 @@ async def first_seen_route(
 
 @app.post("/v1/analytics/geobins")
 async def geo_bins_route(
-    body: GeoBinRequest, principal: PrincipalDep, analytics: AnalyticsDep, audit: AuditDep
+    body: GeoBinRequest,
+    principal: PrincipalDep,
+    analytics: AnalyticsDep,
+    audit: AuditDep,
+    investigations: InvestigationsDep,
+    working_set: WorkingSetDep,
 ) -> list[GeoBin]:
+    body = body.model_copy(
+        update={
+            "filter": await _case_event_filter(
+                body.filter, principal, investigations, audit, working_set
+            )
+        }
+    )
     result = await analytics.geo_bins(body, principal)
     await audit.record(
         principal=principal,
@@ -3471,10 +3554,22 @@ async def geo_bins_route(
 
 @app.post("/v1/analytics/sightings")
 async def sightings_route(
-    body: SightingRequest, principal: PrincipalDep, analytics: AnalyticsDep, audit: AuditDep
+    body: SightingRequest,
+    principal: PrincipalDep,
+    analytics: AnalyticsDep,
+    audit: AuditDep,
+    investigations: InvestigationsDep,
+    working_set: WorkingSetDep,
 ) -> list[Sighting]:
     """Phase 8 Stage 4f, B18's own snail trail — `packages/ports/analytics.py::AnalyticsPort.
     list_sightings`'s own docstring has the full record of why this route is new."""
+    body = body.model_copy(
+        update={
+            "filter": await _case_event_filter(
+                body.filter, principal, investigations, audit, working_set
+            )
+        }
+    )
     result = await analytics.list_sightings(body, principal)
     await audit.record(
         principal=principal,

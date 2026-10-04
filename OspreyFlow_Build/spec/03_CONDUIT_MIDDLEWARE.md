@@ -187,6 +187,15 @@ POST   /v1/investigations/{id}/compute/{metric}   submit a metric job over that 
 GET    /v1/jobs/{id}/events             SSE progress stream
 ```
 
+**The analytics reads are case reads (ADR-084 Amendment 2).** `histogram`, `cross-filter`,
+`first-seen`, `geobins` and `sightings` carry their case in the body (`EventFilter.investigation_scope`)
+and take the same gate as every case route, at Viewer: a case the account holds no level on answers
+404 and reads nothing, and the refusal is audited. On a branch, the Conduit widens the read to the
+events of each case it came from that the account can see, **on the links the branch holds only**
+(`EventFilter.inherited`), and the same rule holds for the events behind one link and an email
+extracted from one. `inherited` is always set by the Conduit; a value sent by a caller is discarded.
+`geometries` is reference data, not case data, and is unchanged.
+
 **Saved patterns are private to the principal who saved them.** `GET /v1/patterns` lists only the
 calling principal's own — `PatternStore.list_authorized` filters by owner in the query itself, not
 after fetching everything, and `GET /v1/patterns/{id}` applies the same authorization to a single

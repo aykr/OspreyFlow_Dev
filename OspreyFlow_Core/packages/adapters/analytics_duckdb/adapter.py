@@ -112,6 +112,17 @@ class AnalyticsDuckDBAdapter:
     def _event_filter_predicate(self, event_filter: EventFilter) -> SqlPredicate:
         clauses = ["investigation_scope = ?"]
         params: list[object] = [event_filter.investigation_scope]
+        inherited = event_filter.inherited
+        if inherited is not None and inherited.scopes and inherited.edge_ids:
+            # ADR-084 Amendment 2: a branch's parents' events, on the links the branch holds only.
+            scopes = ",".join("?" for _ in inherited.scopes)
+            edges = ",".join("?" for _ in inherited.edge_ids)
+            clauses = [
+                f"(investigation_scope = ? OR (investigation_scope IN ({scopes}) "
+                f"AND edge_id IN ({edges})))"
+            ]
+            params.extend(inherited.scopes)
+            params.extend(inherited.edge_ids)
         if event_filter.window is not None:
             clauses.append("occurred_at >= ?")
             params.append(event_filter.window.valid_from)
@@ -299,6 +310,10 @@ class AnalyticsDuckDBAdapter:
     async def geocode_events(
         self, req: GeocodeRequest, principal: Principal
     ) -> list[GeocodedEvent]:
+        if req.filter.inherited is not None:
+            # A write to the case's own events: a parent's events are read-only to a branch
+            # (ADR-084 Amendment 2), and would otherwise be read here and silently left unwritten.
+            raise ValueError("geocode_events writes a case's own events; it takes no inherited")
         prop = _safe_field_name(req.property)
         resolved_version = (
             req.version if req.version is not None else self._current_partition_version()

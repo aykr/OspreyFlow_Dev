@@ -47,6 +47,7 @@ from schemas.domain import (
     SourceRef,
 )
 
+from .event_scope import CaseRecords, link_event_filter
 from .link_notes import LinkNotFoundError
 from .review import (
     ExtractionCandidateRecord,
@@ -126,6 +127,8 @@ class EmailExtractionService:
         candidates: ExtractionCandidateStore,
         model: ModelPort,
         default_model: str,
+        *,
+        investigations: CaseRecords | None = None,
     ) -> None:
         self._working_set = working_set
         self._analytics = analytics
@@ -134,6 +137,7 @@ class EmailExtractionService:
         self._candidates = candidates
         self._model = model
         self._default_model = default_model
+        self._investigations = investigations
 
     async def _event_on_link(
         self, investigation_id: str, edge_id: str, event_id: str, principal: Principal
@@ -141,13 +145,15 @@ class EmailExtractionService:
         edge = await self._working_set.visible_edge(investigation_id, edge_id, principal)
         if edge is None:
             raise LinkNotFoundError(edge_id)
+        own = EventFilter(
+            investigation_scope=investigation_id,
+            edge_ids=[edge.id],
+            value_filters={"event_id": [event_id]},
+        )
         page = await self._analytics.list_events(
             EventListRequest(
-                filter=EventFilter(
-                    investigation_scope=investigation_id,
-                    edge_ids=[edge.id],
-                    value_filters={"event_id": [event_id]},
-                ),
+                # On a branch the email was loaded under the case it came from (ADR-084 Am. 2).
+                filter=await link_event_filter(self._investigations, own, edge.id, principal),
                 offset=0,
                 limit=1,
             ),

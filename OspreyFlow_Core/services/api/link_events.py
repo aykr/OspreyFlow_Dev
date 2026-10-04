@@ -11,6 +11,9 @@ question link notes and link changes ask, with one refusal for "not there" and "
 events themselves are then read through `AnalyticsPort.list_events`, whose access control is in
 the adapter's own query: an event the principal may not see is neither listed nor counted. The
 case-level Viewer level is checked by the route before this runs.
+
+On a branch, the emails were loaded under the case it came from; `link_event_filter` widens the
+read to those parents' events on this one link (ADR-084 Amendment 2).
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ from ports.analytics import AnalyticsPort
 from schemas.analytics import EventFilter, EventListRequest, EventRecord
 from schemas.domain import Principal
 
+from .event_scope import CaseRecords, link_event_filter
 from .link_notes import LinkNotFoundError
 from .working_set.service import WorkingSetService
 
@@ -35,9 +39,15 @@ class LinkEventListResponse(BaseModel):
 
 
 class LinkEventsService:
-    def __init__(self, working_set: WorkingSetService, analytics: AnalyticsPort) -> None:
+    def __init__(
+        self,
+        working_set: WorkingSetService,
+        analytics: AnalyticsPort,
+        investigations: CaseRecords | None = None,
+    ) -> None:
         self._working_set = working_set
         self._analytics = analytics
+        self._investigations = investigations
 
     async def list(
         self,
@@ -51,9 +61,10 @@ class LinkEventsService:
         edge = await self._working_set.visible_edge(investigation_id, edge_id, principal)
         if edge is None:
             raise LinkNotFoundError(edge_id)
+        own = EventFilter(investigation_scope=investigation_id, edge_ids=[edge.id])
         result = await self._analytics.list_events(
             EventListRequest(
-                filter=EventFilter(investigation_scope=investigation_id, edge_ids=[edge.id]),
+                filter=await link_event_filter(self._investigations, own, edge.id, principal),
                 offset=offset,
                 limit=limit,
             ),

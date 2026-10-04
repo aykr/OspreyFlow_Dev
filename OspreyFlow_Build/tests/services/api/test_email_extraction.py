@@ -52,6 +52,7 @@ from schemas.domain import (
 )
 from schemas.model import ExtractionRequest, ExtractionResult
 
+from .test_link_events import _Cases, _in_scope
 from .working_set.fakes import FakeGraphPort, FakeWorkingSetStore
 from .working_set.test_visible_link import SCHEME, edge, node
 
@@ -88,7 +89,8 @@ class RecordingAnalytics:
         matching = [
             e
             for e in self.events
-            if (not req.filter.edge_ids or e.edge_id in req.filter.edge_ids)
+            if _in_scope(e, req.filter)
+            and (not req.filter.edge_ids or e.edge_id in req.filter.edge_ids)
             and (not wanted or e.event_id in wanted)
         ]
         return EventListResult(total=len(matching), events=matching[: req.limit])
@@ -196,7 +198,7 @@ class FixedModel:
 
 
 async def _build(
-    events: list[EventRecord] | None = None,
+    events: list[EventRecord] | None = None, investigations: object | None = None
 ) -> tuple[
     EmailExtractionService, WritingGraph, FakeWorkingSetStore, InMemoryCandidates, FixedModel
 ]:
@@ -226,7 +228,10 @@ async def _build(
         candidates,  # type: ignore[arg-type]
         model,  # type: ignore[arg-type]
         "local-model",
+        investigations=investigations,  # type: ignore[arg-type]
     )
+    await working.add_nodes("branch-1", [node("a"), node("b")])
+    await working.add_edges("branch-1", [edge("e1", "a", "b")])
     return service, graph, working, candidates, model
 
 
@@ -314,3 +319,18 @@ async def test_a_candidate_from_another_email_cannot_be_accepted_through_this_on
     with pytest.raises(EmailNotFoundError):
         await service.accept("inv-1", "e1", "ev-2", first.candidates[0].id, ANALYST)
     assert len(graph.committed_edges) == before
+
+
+async def test_an_email_loaded_under_the_original_case_can_be_extracted_from_a_branch() -> None:
+    """ADR-084 Amendment 2: the emails behind a branch's link were loaded under the case it came
+    from; extracting from one on the branch finds it there, and the Document joins the branch."""
+    service, graph, working, _, _ = await _build(investigations=_Cases({"inv-1", "branch-1"}))
+    result = await service.extract("branch-1", "e1", "ev-1", ANALYST)
+    assert result.document_id == email_document_id("ev-1")
+    assert await working.get_node("branch-1", result.document_id) is not None
+
+
+async def test_a_branch_cannot_extract_an_email_from_a_parent_the_analyst_cannot_see() -> None:
+    service, _, _, _, _ = await _build(investigations=_Cases({"branch-1"}))
+    with pytest.raises(EmailNotFoundError):
+        await service.extract("branch-1", "e1", "ev-1", ANALYST)
