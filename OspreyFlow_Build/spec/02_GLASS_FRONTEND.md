@@ -496,8 +496,17 @@ Two metrics can be shown side by side, which is how the Clique Metric earns its 
 insight is "high clique score, low degree centrality", and that comparison has to be visible in
 one glance.
 
-The panel opens closed. It has two sections, **Ranking** and **Communities**, one open at a
+The panel opens closed. It has three sections, **Ranking**, **Communities** and **Filter**, one open at a
 time, and a closed section fetches nothing (ADR-070).
+
+**Filter (ADR-088).** Two social-network filters, both of which dim and never remove (§2 rule 2). A
+*Relationship strength* slider dims every link whose weight is below it and every node left with no
+strong link, so the network thins to its strongly linked core and grows back as the slider returns. A
+*Filter by metric* choice, any of the seven metrics above, fetches that metric's values and offers a
+*Metric value at least* slider from the smallest to the largest; nodes below it dim, as does a node the
+metric gave no value. The two add to each other and to the timeline's dimming, and the status bar counts
+the union. A filter belongs to the view and is not stored; *Clear filters* returns the full picture.
+Reachable by keyboard (`keyboard/metrics-panel.spec.ts`).
 
 Community detection produces a **hull overlay**, not a recolour: a translucent boundary drawn
 around each community at 8% channel opacity, labelled with size and dominant entity type.

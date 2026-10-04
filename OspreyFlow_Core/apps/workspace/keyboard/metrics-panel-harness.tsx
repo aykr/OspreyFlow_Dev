@@ -15,13 +15,14 @@ import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
 import { MetricsPanel } from "../src/metrics/MetricsPanel";
+import type { MetricFilter } from "../src/metrics/filters";
 import { OntologyRegistry } from "../src/ontology/schema";
 import { createWorkingSet } from "../src/workingset/store";
 import type { OntologySchema, Node, Edge } from "../../../packages/schemas/generated";
 
 declare global {
   interface Window {
-    __METRICS_PANEL__?: { focusedNodeId: string | null };
+    __METRICS_PANEL__?: { focusedNodeId: string | null; filter: MetricFilter | null };
   }
 }
 
@@ -74,7 +75,7 @@ function edge(id: string, source: string, target: string): Edge {
   };
 }
 
-window.__METRICS_PANEL__ = { focusedNodeId: null };
+window.__METRICS_PANEL__ = { focusedNodeId: null, filter: null };
 
 const workingSet = createWorkingSet();
 const ontology = new OntologyRegistry(SCHEMA);
@@ -109,6 +110,9 @@ function Harness() {
           investigationId="metrics-panel-fixture"
           graph={workingSet.graph}
           onFocusNode={(nodeId) => glassCanvasRef.current?.focusOnNode(nodeId)}
+          onFilterChange={(filter) => {
+            window.__METRICS_PANEL__!.filter = filter;
+          }}
         />
       </div>
     </div>

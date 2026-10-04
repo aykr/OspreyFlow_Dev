@@ -182,6 +182,8 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
 export const METRICS_PANEL_ACTIONS = defineActionRegistry("METRICS_PANEL_ACTIONS", [
   "ranking-section-opens-by-keyboard-and-loads-the-list",
   "row-select-and-centre",
+  "filter-section-sets-a-strength-floor-by-keyboard",
+  "filter-section-dims-below-a-metric-value-by-keyboard",
 ] as const);
 
 /**

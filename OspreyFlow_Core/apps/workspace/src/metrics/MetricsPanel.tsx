@@ -20,6 +20,8 @@ import { useEffect, useState } from "react";
 import { Panel } from "../design/primitives/Panel";
 import { Select } from "../design/primitives/Select";
 import { Toggle } from "../design/primitives/Toggle";
+import { Slider } from "../design/primitives/Slider";
+import { NO_FILTER, valueRange, type MetricFilter } from "./filters";
 import type { WorkingSetGraph } from "../workingset/store";
 import { fetchComputeMetric, type ComputeMetricName } from "./api";
 
@@ -38,7 +40,7 @@ const METRIC_OPTIONS: { value: ComputeMetricName; label: string }[] = [
 //: already exists for that), so it shows the top N by the primary metric rather than paginating.
 const MAX_ROWS = 20;
 
-type Section = "ranking" | "communities";
+type Section = "ranking" | "communities" | "filter";
 
 function SectionButton({
   label,
@@ -79,6 +81,10 @@ export interface MetricsPanelProps {
    * `GlassCanvas`'s own `communityHulls` prop (`metrics/hulls.ts`'s `computeCommunityHulls`),
    * keeping this panel free of any Sigma/camera dependency of its own. */
   onCommunitiesChange?: (communities: Record<string, string> | null) => void;
+  /** The social-network filters (ADR-088), each time one changes; `App.tsx` turns them into
+   * dimming on the canvas with `filters.ts`. Omitted, the Filter section still works but dims
+   * nothing. */
+  onFilterChange?: (filter: MetricFilter) => void;
 }
 
 function nodeLabel(graph: WorkingSetGraph, nodeId: string): string {
@@ -94,6 +100,7 @@ export function MetricsPanel({
   graph,
   onFocusNode,
   onCommunitiesChange,
+  onFilterChange,
 }: MetricsPanelProps) {
   const [metricA, setMetricA] = useState<ComputeMetricName>("degree");
   const [metricB, setMetricB] = useState<ComputeMetricName>("betweenness");
@@ -105,6 +112,15 @@ export function MetricsPanel({
   // The panel starts as a strip of section names and opens one at a time (ADR-070). The ranking is
   // only fetched once its section has been opened, and is kept when it is closed again.
   const [openSection, setOpenSection] = useState<Section | null>(null);
+  // ADR-088: the filters belong to the view, so they live here and nowhere else.
+  const [filter, setFilter] = useState<MetricFilter>(NO_FILTER);
+  const updateFilter = (change: Partial<MetricFilter>) => {
+    setFilter((current) => {
+      const next = { ...current, ...change };
+      onFilterChange?.(next);
+      return next;
+    });
+  };
   const [rankingWanted, setRankingWanted] = useState(false);
   const toggleSection = (section: Section) => {
     setOpenSection((current) => (current === section ? null : section));
@@ -163,6 +179,34 @@ export function MetricsPanel({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiBaseUrl, bearerToken, investigationId, showHulls]);
+
+  // The chosen filter metric's values, fetched when the metric is chosen and dropped with it.
+  useEffect(() => {
+    if (filter.metric === null) return;
+    let cancelled = false;
+    const metric = filter.metric;
+    void fetchComputeMetric(apiBaseUrl, bearerToken, investigationId, metric)
+      .then((accepted) => {
+        if (cancelled) return;
+        const values = accepted.values ?? null;
+        const range = valueRange(values);
+        setFilter((current) => {
+          if (current.metric !== metric) return current;
+          const next = { ...current, values, threshold: current.threshold ?? range.min };
+          onFilterChange?.(next);
+          return next;
+        });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiBaseUrl, bearerToken, investigationId, filter.metric]);
+  const range = valueRange(filter.values);
+  const step = Math.max((range.max - range.min) / 100, 0.001);
 
   const ranked = valuesA
     ? Object.entries(valuesA)
@@ -245,6 +289,64 @@ export function MetricsPanel({
         {openSection === "communities" && (
           <>
             <Toggle checked={showHulls} onChange={setShowHulls} label="Show community hulls" />
+            {error && <p style={{ color: "var(--error)" }}>{error}</p>}
+          </>
+        )}
+        <SectionButton label="Filter" open={openSection === "filter"} onPress={() => toggleSection("filter")} />
+        {openSection === "filter" && (
+          <>
+            <label style={{ display: "grid", gap: "var(--sp-4)" }}>
+              <span style={{ fontSize: "var(--fs-12)", color: "var(--text-secondary)" }}>
+                Relationship strength at least {filter.strengthFloor.toFixed(2)}
+              </span>
+              <Slider
+                aria-label="Relationship strength at least"
+                min={0}
+                max={1}
+                step={0.05}
+                value={filter.strengthFloor}
+                onChange={(strengthFloor) => updateFilter({ strengthFloor })}
+              />
+            </label>
+            <Select
+              aria-label="Filter by metric"
+              value={filter.metric ?? ""}
+              onChange={(e) => {
+                const metric = (e.target.value || null) as ComputeMetricName | null;
+                updateFilter({ metric, values: null, threshold: null });
+              }}
+            >
+              <option value="">No metric filter</option>
+              {METRIC_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
+            {filter.metric !== null && filter.values !== null && (
+              <label style={{ display: "grid", gap: "var(--sp-4)" }}>
+                <span style={{ fontSize: "var(--fs-12)", color: "var(--text-secondary)" }}>
+                  Metric value at least {(filter.threshold ?? range.min).toFixed(3)}
+                </span>
+                <Slider
+                  aria-label="Metric value at least"
+                  min={range.min}
+                  max={range.max}
+                  step={step}
+                  value={filter.threshold ?? range.min}
+                  onChange={(threshold) => updateFilter({ threshold })}
+                />
+              </label>
+            )}
+            {(filter.strengthFloor > 0 || filter.metric !== null) && (
+              <button type="button" className="btn" onClick={() => updateFilter(NO_FILTER)}>
+                Clear filters
+              </button>
+            )}
+            <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
+              Filters dim, they never remove: what falls below stays in place, faint, until the filter is
+              cleared. Nothing is stored.
+            </p>
             {error && <p style={{ color: "var(--error)" }}>{error}</p>}
           </>
         )}

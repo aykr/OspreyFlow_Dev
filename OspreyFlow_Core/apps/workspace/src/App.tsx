@@ -71,6 +71,7 @@ import { openCase } from "./investigation/cases";
 import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
 import { StatusBar } from "./statusbar/StatusBar";
 import { emergence, type FirstSeen } from "./crossfilter/emergence";
+import { NO_FILTER, filterDimming, type MetricFilter } from "./metrics/filters";
 import { BottomPanelFrame, SidePanelFrame } from "./layout/PanelFrames";
 import { SidePanelStack } from "./layout/SidePanelStack";
 import { Timeline } from "./timeline/Timeline";
@@ -647,8 +648,29 @@ export function App() {
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dimming.firstSeen, playbackFraction, counts]);
-  const dimmedNodeIds = playbackDimming?.dimmedNodeIds ?? dimming.dimmedNodeIds;
-  const dimmedEdgeIds = playbackDimming?.dimmedEdgeIds ?? dimming.dimmedEdgeIds;
+  // ADR-088: the Metrics panel's own filters dim too, on top of the timeline's.
+  const [metricFilter, setMetricFilter] = useState<MetricFilter>(NO_FILTER);
+  const metricDimming = useMemo(() => {
+    const graph = workingSetRef.current.graph;
+    const edges = graph.mapEdges((id, attrs, source, target) => ({
+      id,
+      source,
+      target,
+      weight: attrs.data.weight ?? 0,
+    }));
+    return filterDimming(graph.nodes(), edges, metricFilter);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metricFilter, counts]);
+  const timelineNodeDimming = playbackDimming?.dimmedNodeIds ?? dimming.dimmedNodeIds;
+  const timelineEdgeDimming = playbackDimming?.dimmedEdgeIds ?? dimming.dimmedEdgeIds;
+  const dimmedNodeIds = useMemo(
+    () => new Set([...timelineNodeDimming, ...metricDimming.dimmedNodeIds]),
+    [timelineNodeDimming, metricDimming],
+  );
+  const dimmedEdgeIds = useMemo(
+    () => new Set([...timelineEdgeDimming, ...metricDimming.dimmedEdgeIds]),
+    [timelineEdgeDimming, metricDimming],
+  );
 
   const revealedSightings = useMemo(() => {
     const crossFilter = crossFilterRef.current;
@@ -1116,6 +1138,7 @@ export function App() {
                               glassCanvasRef.current?.focusOnNode(nodeId)
                             }
                             onCommunitiesChange={setCommunities}
+                            onFilterChange={setMetricFilter}
                           />
                         ),
                       },
@@ -1162,7 +1185,7 @@ export function App() {
         <StatusBar
           nodeCount={counts.nodes}
           edgeCount={counts.edges}
-          dimmedCount={dimming.dimmedCount}
+          dimmedCount={dimmedNodeIds.size}
           filteredCount={counts.filteredCount}
           groupedCount={groupedCount}
         />

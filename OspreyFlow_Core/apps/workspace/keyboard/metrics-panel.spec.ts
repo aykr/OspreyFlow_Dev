@@ -78,6 +78,52 @@ test("a keyboard-activated ranked row centres the canvas on the right node", asy
   registerCovered("METRICS_PANEL_ACTIONS", "row-select-and-centre");
 });
 
+const filterState = (page: import("@playwright/test").Page) =>
+  page.evaluate(() => window.__METRICS_PANEL__?.filter ?? null);
+
+test("the Filter section's strength slider sets a floor with the arrow keys alone (ADR-088)", async ({ page }) => {
+  await page.goto("/keyboard/metrics-panel-harness.html");
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  await tabToButtonNamed(page, "Filter");
+  await page.keyboard.press("Enter");
+  const slider = page.getByRole("slider", { name: "Relationship strength at least" });
+  await slider.focus();
+  await expect(slider).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(async () => (await filterState(page))?.strengthFloor).toBeCloseTo(0.1, 5);
+  await expect(page.getByText(/Relationship strength at least 0\.10/)).toBeVisible();
+  registerCovered("METRICS_PANEL_ACTIONS", "filter-section-sets-a-strength-floor-by-keyboard");
+});
+
+test("choosing a metric fetches its values and the threshold slider dims below a value, by keyboard (ADR-088)", async ({
+  page,
+}) => {
+  await page.route("**/*/compute/clique_metric", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ mode: "sync", values: { n0: 0.2, n1: 0.9, n2: 0.5 } }),
+    });
+  });
+  await page.goto("/keyboard/metrics-panel-harness.html");
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  await tabToButtonNamed(page, "Filter");
+  await page.keyboard.press("Enter");
+  const metric = page.getByRole("combobox", { name: "Filter by metric" });
+  await metric.focus();
+  await page.keyboard.type("Cliq"); // typed, since an arrow on a closed select opens it on macOS
+  await expect(metric).toHaveValue("clique_metric");
+  await expect.poll(async () => (await filterState(page))?.values?.n1).toBe(0.9);
+  const threshold = page.getByRole("slider", { name: "Metric value at least" });
+  await threshold.focus();
+  await expect(threshold).toBeFocused();
+  // Forty steps of 0.007 from 0.2 reach about 0.48: n0 falls below, n1 and n2 stay.
+  for (let i = 0; i < 40; i++) await page.keyboard.press("ArrowRight");
+  await expect.poll(async () => (await filterState(page))?.threshold ?? 0).toBeGreaterThan(0.4);
+  registerCovered("METRICS_PANEL_ACTIONS", "filter-section-dims-below-a-metric-value-by-keyboard");
+});
+
 test("every registered metrics-panel action has its own proving test case above", () => {
   assertAllCovered("METRICS_PANEL_ACTIONS", METRICS_PANEL_ACTIONS);
 });
