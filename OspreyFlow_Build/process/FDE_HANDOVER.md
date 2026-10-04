@@ -19,7 +19,7 @@ evidence and this file is wrong; say so and fix the file.
 - **Design questions.** Ask with multiple-choice questions (at most four at a time) and then wait. Multiple
   choice is easier for him than free text. Do not build a design he has not answered.
 - **ADRs.** Never edit an existing ADR. Append an amendment or write a new ADR. The last ADR used is
-  **ADR-089** (ADR-086 to ADR-089 were all recorded on 4 October 2026); the next free number is **090**. Check `spec/06_DECISIONS.md` before relying on that.
+  **ADR-090** (ADR-086 to ADR-090 were all recorded on 4 October 2026); the next free number is **091**. Check `spec/06_DECISIONS.md` before relying on that.
 - **Style.** British English in code comments, documentation and all user-facing copy. Always give full,
   complete commands to run, never "add this line" fragments. Keep replies short; one or two sentences on an
   outcome, not a recap.
@@ -97,8 +97,9 @@ the real stack** (see section 5).
   and elsewhere in the tree, and they come back. In `.git/refs` they make git fail with `bad object
   refs/remotes/origin/Icon?` or refuse to rename a remote. They are harmless to delete; from the repository
   root: `find .git -name $'Icon\r' -print -delete`. Do not commit them.
-- **The sign-in page restyle is committed** as `e1a7572`; its friction-log row in `07_BUILD_PLAN.md` still
-  says "Hash: recorded by the follow-up commit." and should carry that hash.
+- **The sign-in page restyle is committed** as `e1a7572`, and its friction-log row carries that hash.
+- **Later commits** run to `4b4a6ba` (ADR-085 to ADR-089, ADR-081 step B); `main` was 20 commits ahead of
+  `origin/main` on 4 October 2026, waiting for the owner to push.
 - **Not mine, leave alone:** `OspreyFlow_Core/osprey.yaml` (modified), `OspreyFlow_Core/data/` (untracked).
 
 ### Known failures that are not caused by recent work
@@ -124,12 +125,12 @@ From the friction log, the owner's live checks still to do or report:
 
 1. Branch tabs: the strip, the Branches menu, close and reopen, Discard with confirmation, on a real case;
    and `test_investigation_access_store.py` (it now holds five tab-flag tests against Postgres).
-1. The panel grip rows (ADR-085): Move up / Move down, dragging, and the order surviving a reload, on a real case.
-1. A link marked probabilistic from the change form (ADR-081 step B): the question in the form, the dotted line, the Basis row.
-2. The sign-in page (reached from the Glass at `localhost:8080`, which sends the browser to the `osprey` realm on 8081).
-3. The dotted and thick links on a real case (the dot is a fixed 3 pixels on and 4 off, which may look blocky
+2. The panel grip rows (ADR-085): Move up / Move down, dragging, and the order surviving a reload, on a real case.
+3. A link marked probabilistic from the change form (ADR-081 step B): the question in the form, the dotted line, the Basis row.
+4. The sign-in page (reached from the Glass at `localhost:8080`, which sends the browser to the `osprey` realm on 8081).
+5. The dotted and thick links on a real case (the dot is a fixed 3 pixels on and 4 off, which may look blocky
    at thickness 4 or 5), and `make glass-perf` with the new edge programs.
-4. Friction-log rows from earlier rounds that still say "Hash: recorded by the follow-up commit." Ask the
+6. Friction-log rows from earlier rounds that still say "Hash: recorded by the follow-up commit." Ask the
    owner for the hashes; do not guess.
 
 ## 6. Open work, in the order the owner raised it
@@ -159,7 +160,7 @@ scripts.seed_internal enron --stop-api --replace-events` (the `Makefile` target 
 the flag to it, or a `seed-enron-events` target, is the owner's edit). The extraction routes use the
 deployment's local model (`CONFORMANCE_MODEL`) unless the caller names one; the Glass names none.
 
-### 6.2 ADR-081 steps B, C and D (each its own commit; B built, C and D not started)
+### 6.2 ADR-081 steps B, C and D (each its own commit; B built, C designed as ADR-090, D not started)
 
 The decision and the owner's answers to its open questions are in `spec/06_DECISIONS.md` (ADR-081 and
 Amendment 1 — read both before touching anything).
@@ -169,7 +170,8 @@ Amendment 1 — read both before touching anything).
   Probabilistic type is always probabilistic; a person never promotes a link to Direct. The Glass draws by
   the link's own basis. The ADR-080 change form asks for the basis each time, with no default, and offers
   Direct only where the type allows it. Confirming a `SAME_AS` link leaves it probabilistic.
-- **C, analyst proposals and promotion.** An Editor proposes a type from the change form (name, the entity
+- **C, analyst proposals and promotion — designed 4 October 2026 as ADR-090 (owner's eight answers), not built;
+  read ADR-090 before building, it widens ADR-081 decision 5 and settles the promotion screen (the Glass).** An Editor proposes a type from the change form (name, the entity
   types at each end, directed or not, basis, colour, thickness). It works at once in that case only, is
   labelled analyst-defined, is kept in the control-plane store, never in the shared ontology or the graph,
   is audited with a reason, and is always probabilistic until an administrator reclassifies it. An
