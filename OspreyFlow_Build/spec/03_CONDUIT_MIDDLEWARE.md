@@ -180,6 +180,9 @@ POST   /v1/analytics/histogram          cross-filter histogram set
 POST   /v1/analytics/cross-filter       the same cross-filter, one histogram per requested dimension
 POST   /v1/analytics/first-seen         when each node and link first appears in the window, for the timeline's playback (ADR-087)
 GET    /v1/investigations/{investigation_id}/links/{edge_id}/events   the events behind one link (the emails between two addresses), newest first, paged, Viewer (ADR-089)
+POST   /v1/investigations/{investigation_id}/links/{edge_id}/events/documents   the emails on the link inside a window written as Documents and put on the canvas, or limit_exceeded, Editor (ADR-092)
+POST   /v1/investigations/{investigation_id}/links/{edge_id}/events/{event_id}/extract   entities from one email, pending for a person to accept, Editor (ADR-089)
+POST   /v1/investigations/{investigation_id}/links/{edge_id}/events/{event_id}/candidates/{candidate_id}/accept   accept one of an email's findings as an inferred node, Editor (ADR-089)
 POST   /v1/analytics/geobins            server-side spatial binning
 POST   /v1/analytics/sightings          the "snail trail" — device/location sightings over time (B18)
 POST   /v1/analytics/geometries         batched geometry lookup — a Location's geometry_ref resolved to WGS84, one round trip for a whole working set

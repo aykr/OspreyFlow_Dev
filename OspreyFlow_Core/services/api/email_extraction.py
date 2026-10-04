@@ -38,6 +38,7 @@ from schemas.domain import (
     AuditStub,
     Edge,
     EdgeWrite,
+    Interval,
     Node,
     NodeWrite,
     OntologySchema,
@@ -81,6 +82,10 @@ class ExtractEmailRequest(BaseModel):
     model: str | None = None
 
 
+#: The largest page `AnalyticsPort.list_events` serves (`EventListRequest.limit`).
+_PAGE = 200
+
+
 class EmailExtractionResult(BaseModel):
     document_id: str
     candidates: list[ExtractionCandidateRecord]
@@ -89,6 +94,14 @@ class EmailExtractionResult(BaseModel):
 
 class EmailAcceptResult(BaseModel):
     node_id: str
+    delta: DeltaAdd
+
+
+class EmailDocumentsResult(BaseModel):
+    """The emails behind a link written as Documents (ADR-092): how many, and the delta that put
+    them and their links to both addresses on the canvas."""
+
+    written: int
     delta: DeltaAdd
 
 
@@ -224,6 +237,8 @@ class EmailExtractionService:
         event = await self._event_on_link(investigation_id, edge_id, event_id, principal)
         now = datetime.now(UTC)
         node, edges = self._document_writes(event, principal, now)
+        # Asked before the graph is written, so a full working set leaves nothing behind (rule 2).
+        await self._working_set.ensure_room(investigation_id, [node.id], [e.id for e in edges])
 
         tx = await self._graph.begin_transaction()
         try:
@@ -254,6 +269,58 @@ class EmailExtractionService:
         )
         return EmailExtractionResult(document_id=node.id, candidates=candidates, delta=delta)
 
+    async def show_as_documents(
+        self,
+        investigation_id: str,
+        edge_id: str,
+        principal: Principal,
+        *,
+        window: Interval | None,
+    ) -> EmailDocumentsResult:
+        """Every email on the link inside `window` (all of them when it is `None`) written as a
+        Document linked to both addresses, and added to the canvas (ADR-092). The whole set or
+        nothing: past the working set's cap, `LimitExceededError` before any write."""
+        edge = await self._working_set.visible_edge(investigation_id, edge_id, principal)
+        if edge is None:
+            raise LinkNotFoundError(edge_id)
+        own = EventFilter(investigation_scope=investigation_id, edge_ids=[edge.id], window=window)
+        event_filter = await link_event_filter(self._investigations, own, edge.id, principal)
+        events: list[EventRecord] = []
+        while True:
+            page = await self._analytics.list_events(
+                EventListRequest(filter=event_filter, offset=len(events), limit=_PAGE),
+                principal,
+            )
+            events.extend(page.events)
+            if not page.events or len(events) >= page.total:
+                break
+
+        now = datetime.now(UTC)
+        nodes: list[NodeWrite] = []
+        edges: list[EdgeWrite] = []
+        for event in events:
+            node, mentions = self._document_writes(event, principal, now)
+            nodes.append(node)
+            edges.extend(mentions)
+        await self._working_set.ensure_room(
+            investigation_id, [n.id for n in nodes], [e.id for e in edges]
+        )
+        if nodes:
+            tx = await self._graph.begin_transaction()
+            try:
+                await self._graph.upsert_nodes(nodes, tx)
+                await self._graph.upsert_edges(edges, tx)
+            except Exception:
+                await self._graph.rollback_transaction(tx)
+                raise
+            await self._graph.commit_transaction(tx)
+        delta = await self._working_set.add_written(
+            investigation_id,
+            [_node_from_write(n) for n in nodes],
+            [_edge_from_write(e) for e in edges],
+        )
+        return EmailDocumentsResult(written=len(nodes), delta=delta)
+
     async def accept(
         self,
         investigation_id: str,
@@ -268,6 +335,10 @@ class EmailExtractionService:
         if record.document_id != document_id:
             raise EmailNotFoundError("candidate")
 
+        # The node's id is made by the acceptance itself; one node and one link are what it adds.
+        await self._working_set.ensure_room(
+            investigation_id, [f"accepting:{candidate_id}"], [f"accepting:{candidate_id}:mention"]
+        )
         node_id = await accept_candidate(self._candidates, self._graph, candidate_id, principal)
         now = datetime.now(UTC)
         mention = EdgeWrite(

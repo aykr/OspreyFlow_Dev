@@ -594,6 +594,37 @@ class WorkingSetService:
         outcome = await self._add(investigation_id, nodes, edges, filtered_count=0)
         return outcome.delta
 
+    async def ensure_room(
+        self, investigation_id: str, node_ids: Sequence[str], edge_ids: Sequence[str]
+    ) -> None:
+        """Raises `LimitExceededError` if adding these ids would take the case's working set past
+        its cap. For a caller that writes the graph first and then adds what it wrote: it asks
+        here before writing, so a refused request leaves nothing in the graph either (rule 2,
+        ADR-092)."""
+        existing_node_ids = await self._store.node_ids(investigation_id)
+        existing_edge_ids = await self._store.edge_ids(investigation_id)
+        breach = _cap_breach(
+            len(existing_node_ids | set(node_ids)), len(existing_edge_ids | set(edge_ids))
+        )
+        if breach is not None:
+            raise LimitExceededError(breach)
+
+    async def _new_within_cap(
+        self, investigation_id: str, nodes: Sequence[Node], edges: Sequence[Edge]
+    ) -> tuple[list[Node], list[Edge]]:
+        existing_node_ids = await self._store.node_ids(investigation_id)
+        existing_edge_ids = await self._store.edge_ids(investigation_id)
+
+        new_nodes = [n for n in nodes if n.id not in existing_node_ids]
+        new_edges = [e for e in edges if e.id not in existing_edge_ids]
+
+        would_be_nodes = len(existing_node_ids) + len(new_nodes)
+        would_be_edges = len(existing_edge_ids) + len(new_edges)
+        breach = _cap_breach(would_be_nodes, would_be_edges)
+        if breach is not None:
+            raise LimitExceededError(breach)
+        return new_nodes, new_edges
+
     async def _add(
         self,
         investigation_id: str,
@@ -607,17 +638,7 @@ class WorkingSetService:
         write, so a would-be-breaching call never partially lands: it is
         rejected whole, or it succeeds whole, never a silent slice of
         either the requested nodes or the requested edges."""
-        existing_node_ids = await self._store.node_ids(investigation_id)
-        existing_edge_ids = await self._store.edge_ids(investigation_id)
-
-        new_nodes = [n for n in nodes if n.id not in existing_node_ids]
-        new_edges = [e for e in edges if e.id not in existing_edge_ids]
-
-        would_be_nodes = len(existing_node_ids) + len(new_nodes)
-        would_be_edges = len(existing_edge_ids) + len(new_edges)
-        breach = _cap_breach(would_be_nodes, would_be_edges)
-        if breach is not None:
-            raise LimitExceededError(breach)
+        new_nodes, new_edges = await self._new_within_cap(investigation_id, nodes, edges)
 
         await self._store.add_nodes(investigation_id, new_nodes)
         await self._store.add_edges(investigation_id, new_edges)

@@ -196,6 +196,7 @@ from .config import ApiConfig
 from .dossier import DocumentView
 from .email_extraction import (
     EmailAcceptResult,
+    EmailDocumentsResult,
     EmailExtractionResult,
     EmailExtractionService,
     EmailNotFoundError,
@@ -2701,6 +2702,39 @@ async def extract_email_route(
         investigation_id=investigation.id,
         resolved_query={"edge_id": edge_id, "event_id": event_id, "model": body.model},
         result_cardinality=len(result.candidates),
+    )
+    return result
+
+
+class EmailDocumentsRequest(BaseModel):
+    """The timeline's brushed window (ADR-092); left out, every email on the link."""
+
+    window: Interval | None = None
+
+
+@app.post("/v1/investigations/{investigation_id}/links/{edge_id}/events/documents")
+async def show_emails_as_documents_route(
+    investigation: InvestigationEditorDep,
+    edge_id: str,
+    body: EmailDocumentsRequest,
+    principal: PrincipalDep,
+    email_extraction: EmailExtractionDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+) -> EmailDocumentsResult:
+    """The emails behind a link onto the canvas (ADR-092): each one inside the window written as a
+    Document linked to both addresses, all into the working set, or none and `limit_exceeded` past
+    the cap. Only to someone who can see the link; Editor, since it writes."""
+    result = await email_extraction.show_as_documents(
+        investigation.id, edge_id, principal, window=body.window
+    )
+    await publish_delta(valkey, investigation.id, result.delta)
+    await audit.record(
+        principal=principal,
+        action="show_emails_as_documents",
+        investigation_id=investigation.id,
+        resolved_query={"edge_id": edge_id, "window": body.model_dump(mode="json")["window"]},
+        result_cardinality=result.written,
     )
     return result
 

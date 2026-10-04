@@ -34,7 +34,7 @@ from services.api.review import (
     ExtractionCandidate,
     ExtractionCandidateRecord,
 )
-from services.api.working_set.models import DeltaAdd
+from services.api.working_set.models import DeltaAdd, LimitExceededError
 from services.api.working_set.service import WorkingSetService
 
 from ontology.loader import load_default_ontology
@@ -42,6 +42,7 @@ from schemas.analytics import EventListRequest, EventListResult, EventRecord
 from schemas.domain import (
     AuditStub,
     Handling,
+    Interval,
     Node,
     NodeId,
     NodeWrite,
@@ -103,8 +104,18 @@ class RecordingAnalytics:
             and (not f.edge_ids or e.edge_id in f.edge_ids)
             and (not f.event_ids or e.event_id in f.event_ids)
             and all(_field(e, name) in values for name, values in f.value_filters.items() if values)
+            and (f.window is None or e.occurred_at >= f.window.valid_from)
+            and (
+                f.window is None
+                or f.window.valid_to is None
+                or e.occurred_at <= f.window.valid_to
+            )
         ]
-        return EventListResult(total=len(matching), events=matching[: req.limit])
+        # Newest first and paged, as the adapter's `list_events` is.
+        matching.sort(key=lambda e: e.occurred_at, reverse=True)
+        return EventListResult(
+            total=len(matching), events=matching[req.offset : req.offset + req.limit]
+        )
 
 
 class WritingGraph(FakeGraphPort):
@@ -345,3 +356,86 @@ async def test_a_branch_cannot_extract_an_email_from_a_parent_the_analyst_cannot
     service, _, _, _, _ = await _build(investigations=_Cases({"branch-1"}))
     with pytest.raises(EmailNotFoundError):
         await service.extract("branch-1", "e1", "ev-1", ANALYST)
+
+
+# --- the emails behind a link onto the canvas as Documents (ADR-092) --------------------------
+
+
+def _at(event_id: str, day: int) -> EventRecord:
+    sent = datetime(2001, 5, day, 10, tzinfo=UTC)
+    return _event(event_id).model_copy(update={"occurred_at": sent})
+
+
+async def test_the_emails_in_the_window_are_written_as_documents_and_drawn() -> None:
+    events = [_at("ev-1", 1), _at("ev-2", 10), _at("ev-3", 20)]
+    service, graph, working, _, _ = await _build(events)
+    window = Interval(
+        valid_from=datetime(2001, 5, 5, tzinfo=UTC), valid_to=datetime(2001, 5, 25, tzinfo=UTC)
+    )
+    result = await service.show_as_documents("inv-1", "e1", ANALYST, window=window)
+    written = {email_document_id("ev-2"), email_document_id("ev-3")}
+    assert set(graph.nodes) == written
+    assert result.written == 2
+    assert {n.id for n in result.delta.nodes} == written
+    for doc in written:
+        assert await working.get_node("inv-1", doc) is not None
+    # Each email is linked to both addresses, as extraction links it.
+    ends = sorted((e.source, e.target) for e in graph.committed_edges)
+    assert ends == sorted([("a", d) for d in written] + [("b", d) for d in written])
+
+
+async def test_with_nothing_brushed_every_email_on_the_link_is_written() -> None:
+    events = [_at(f"ev-{n}", n) for n in range(1, 8)] + [_event("ev-off", "other")]
+    service, graph, _, _, _ = await _build(events)
+    result = await service.show_as_documents("inv-1", "e1", ANALYST, window=None)
+    assert result.written == 7
+    assert email_document_id("ev-off") not in graph.nodes
+
+
+async def test_showing_the_same_emails_twice_adds_nothing_new() -> None:
+    service, graph, working, _, _ = await _build([_at("ev-1", 1), _at("ev-2", 2)])
+    await service.show_as_documents("inv-1", "e1", ANALYST, window=None)
+    before = len(await working.node_ids("inv-1"))
+    again = await service.show_as_documents("inv-1", "e1", ANALYST, window=None)
+    assert len(await working.node_ids("inv-1")) == before
+    assert again.written == 2  # the same derived ids, upserted, not duplicated
+    assert len(graph.nodes) == 2
+
+
+async def test_past_the_cap_nothing_is_written_and_the_answer_is_limit_exceeded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import services.api.working_set.service as service_module
+
+    service, graph, working, _, _ = await _build([_at(f"ev-{n}", n) for n in range(1, 6)])
+    existing = len(await working.node_ids("inv-1"))
+    monkeypatch.setattr(service_module, "MAX_NODES", existing + 2)
+    with pytest.raises(LimitExceededError) as refused:
+        await service.show_as_documents("inv-1", "e1", ANALYST, window=None)
+    assert refused.value.detail.would_be == existing + 5
+    assert graph.nodes == {} and graph.committed_edges == []
+    assert len(await working.node_ids("inv-1")) == existing
+
+
+@pytest.mark.parametrize("edge_id", ["secret-link", "secret-end", "no-such-link"])
+async def test_documents_for_a_hidden_or_missing_link_refuse_alike_and_write_nothing(
+    edge_id: str,
+) -> None:
+    service, graph, _, _, _ = await _build([_event("ev-1", "secret-link")])
+    with pytest.raises(LinkNotFoundError):
+        await service.show_as_documents("inv-1", edge_id, ANALYST, window=None)
+    assert graph.nodes == {}
+
+
+async def test_extraction_past_the_cap_writes_nothing_to_the_graph(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Before ADR-092 the graph was written first and the cap checked after, so a full working
+    set kept a Document the canvas refused: rule 2's "rejected whole" broken."""
+    import services.api.working_set.service as service_module
+
+    service, graph, working, _, _ = await _build()
+    monkeypatch.setattr(service_module, "MAX_NODES", len(await working.node_ids("inv-1")))
+    with pytest.raises(LimitExceededError):
+        await service.extract("inv-1", "e1", "ev-1", ANALYST)
+    assert graph.nodes == {} and graph.committed_edges == []
