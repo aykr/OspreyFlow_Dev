@@ -43,8 +43,14 @@ styles=css/osprey.css
 scripts=js/osprey-theme.js
 """
 
+#: The header's wordmark. The brand splits the compound on weight alone (Osprey 700, Flow 400), so
+#: Keycloak's header message, which it prints unescaped, carries one bold element. Its text is still
+#: the realm's display name, which is what a screen reader reads.
+_WORDMARK_HTML = "<b>Osprey</b>Flow"
+
 _MESSAGES = f"""\
 loginAccountTitle=Sign in to {DISPLAY_NAME}
+loginTitleHtml={_WORDMARK_HTML}
 doLogIn=Sign in
 """
 
@@ -72,29 +78,54 @@ html, body, .login-pf, .login-pf-page, .pf-v5-c-login {
   color: var(--text-primary);
   font-family: var(--ui);
 }
+/* The page is centred, so the card does not sit high on a tall window. */
+.pf-v5-c-login {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
 .pf-v5-c-login__container {
   display: block;
+  box-sizing: border-box;
+  width: 100%;
   max-width: 26rem;
   margin-inline: auto;
   padding: var(--sp-40) var(--sp-24);
 }
 /* Keycloak's own sheet puts the header in a second grid column from 1200px up, which left the name
-   floating to the right of the card. One column, header first, above the card. */
+   floating to the right of the card. One column, header first, above the card, a set distance
+   away. */
 .pf-v5-c-login__header {
   grid-column: 1;
   grid-row: 1;
-  padding: 0 0 var(--sp-24);
+  margin: 0 0 var(--sp-24);
+  padding: 0;
   text-align: left;
 }
-#kc-header-wrapper { padding: 0; text-align: left; }
-/* The brand mark stands in for the loose wordmark. The text stays in the page (it is the realm's
-   accessible name) but is not displayed; the mark is a mask, so its colour is a token. */
-.kc-logo-text { font-size: 0; line-height: 0; }
-.kc-logo-text::before {
+/* The brand's horizontal lockup (spec/design/OspreyFlow_Brand_Foundations.html): the mark, a gap of
+   a third of its width, then the wordmark at the screen-title size, Osprey bold and Flow regular.
+   Keycloak 26 prints the header into `#kc-header-wrapper`; the mark is a mask over a block, so its
+   colour is a token and it follows light and dark. */
+#kc-header-wrapper {
+  --lockup-mark: 36px;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--lockup-mark) / 3);
+  padding: 0;
+  color: var(--text-primary);
+  font: 400 var(--fs-23) / var(--lh-23) var(--ui);
+  letter-spacing: -0.01em;
+  text-align: left;
+}
+#kc-header-wrapper b { font-weight: 700; }
+#kc-header-wrapper::before {
   content: "";
+  flex: none;
   display: block;
-  width: var(--sp-40);
-  height: var(--sp-40);
+  width: var(--lockup-mark);
+  height: var(--lockup-mark);
   background-color: var(--text-primary);
   -webkit-mask: __MARK__ center / contain no-repeat;
   mask: __MARK__ center / contain no-repeat;
@@ -110,11 +141,18 @@ html, body, .login-pf, .login-pf-page, .pf-v5-c-login {
   background: transparent;
   color: var(--text-primary);
 }
+.pf-v5-c-login__main-header { padding: var(--sp-32) var(--sp-32) 0; }
+.pf-v5-c-login__main-body { padding: var(--sp-16) var(--sp-32) var(--sp-32); }
 .pf-v5-c-title, #kc-page-title, h1 {
   color: var(--text-primary);
   font: 700 var(--fs-23) / var(--lh-23) var(--ui);
 }
-.pf-v5-c-form__label-text, label { color: var(--text-secondary); font-family: var(--ui); }
+.pf-v5-c-form { --pf-v5-c-form--GridGap: var(--sp-20); row-gap: var(--sp-20); }
+.pf-v5-c-form__label { padding-block-end: var(--sp-8); }
+.pf-v5-c-form__label-text, label {
+  color: var(--text-secondary);
+  font: 600 var(--fs-13) / var(--lh-13) var(--ui);
+}
 .pf-v5-c-form-control {
   background: var(--surface-raised);
   border: 1px solid var(--border);
@@ -127,10 +165,30 @@ html, body, .login-pf, .login-pf-page, .pf-v5-c-login {
   color: var(--text-primary);
   font-family: var(--ui);
 }
+/* One ring. The tokens give every focused element an outline of its own; the input inside the box
+   would wear it as a second ring, so it carries none and the box shows a single one. */
+.pf-v5-c-form-control input:focus-visible, .pf-v5-c-form-control select:focus-visible {
+  outline: none;
+}
 .pf-v5-c-form-control:focus-within {
   border-color: var(--brass);
-  outline: 2px solid var(--brass);
-  outline-offset: 2px;
+  box-shadow: 0 0 0 1px var(--brass);
+}
+/* The password box and its show button are one control: equal height, no seam, no underline. */
+.pf-v5-c-input-group { display: flex; align-items: stretch; }
+.pf-v5-c-input-group .pf-v5-c-form-control { flex: 1 1 auto; min-width: 0; }
+.pf-v5-c-input-group .pf-v5-c-button {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-left: 0;
+  border-radius: 0 var(--r-control) var(--r-control) 0;
+  color: var(--text-secondary);
+}
+.pf-v5-c-input-group .pf-v5-c-button::before, .pf-v5-c-input-group .pf-v5-c-button::after {
+  display: none;
+}
+.pf-v5-c-input-group .pf-v5-c-form-control:not(:last-child) {
+  border-radius: var(--r-control) 0 0 var(--r-control);
 }
 .pf-v5-c-button.pf-m-primary {
   background: var(--brass);
@@ -138,6 +196,7 @@ html, body, .login-pf, .login-pf-page, .pf-v5-c-login {
   border-radius: var(--r-control);
   color: var(--brass-ink);
   font: 600 var(--fs-14) / var(--lh-14) var(--ui);
+  padding: var(--sp-12) var(--sp-16);
   transition: background var(--dur-fast) var(--ease);
 }
 .pf-v5-c-button.pf-m-primary:hover {
@@ -145,6 +204,7 @@ html, body, .login-pf, .login-pf-page, .pf-v5-c-login {
   border-color: var(--brass-hover);
 }
 .pf-v5-c-button.pf-m-primary:active { background: var(--brass-press); }
+#kc-form-buttons { margin-top: var(--sp-8); }
 .pf-v5-c-button.pf-m-control, .pf-v5-c-button.pf-m-plain {
   background: transparent;
   border-color: var(--border);

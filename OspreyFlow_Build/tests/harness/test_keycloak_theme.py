@@ -214,15 +214,113 @@ def test_the_brand_mark_is_drawn_from_the_brand_foundations_and_takes_its_colour
     decoded = own.replace("%20", " ").replace("%3C", "<").replace("%3E", ">")
     for path in brand_paths:
         assert f"d='{path}'" in decoded, path
-    mark = re.search(r"\.kc-logo-text::before\s*\{([^}]*)\}", own)
+    mark = re.search(r"#kc-header-wrapper::before\s*\{([^}]*)\}", own)
     assert mark is not None
     assert "background-color: var(--text-primary)" in mark.group(1)
     assert "mask:" in mark.group(1)
 
 
-def test_the_loose_wordmark_text_is_not_displayed_but_stays_for_screen_readers() -> None:
-    """The realm name is still the page's accessible name; it is only not shown as loose text."""
+def test_the_logo_is_attached_to_the_header_keycloak_26_actually_renders() -> None:
+    """Seen on the owner's deployment: no mark at all, only the word "OspreyFlow" in small type
+    above the card. The rules named `.kc-logo-text`, a class of Keycloak's older themes; the
+    `keycloak.v2` page of Keycloak 26 renders `#kc-header-wrapper` inside `.pf-v5-c-login__header`
+    and has no such element, so every logo rule matched nothing and no test noticed, because the
+    tests read the stylesheet and not the page. Catches a logo rule aimed at a class the page does
+    not have."""
     own = _own_rules()
-    text_rule = re.search(r"\.kc-logo-text\s*\{([^}]*)\}", own)
-    assert text_rule is not None
-    assert "font-size: 0" in text_rule.group(1)
+    assert "kc-logo-text" not in own
+    assert re.search(r"#kc-header-wrapper::before\s*\{", own)
+
+
+def test_the_header_is_the_brands_horizontal_lockup() -> None:
+    """The brand foundations' lockup: the mark, a gap of one third of the mark's width, and the
+    wordmark in the screen-title size, centred on the mark. Catches a mark with no wordmark beside
+    it, a gap that is not a third of the mark, and a wordmark in the wrong size."""
+    own = _own_rules()
+    wrapper = re.search(r"#kc-header-wrapper\s*\{([^}]*)\}", own)
+    assert wrapper is not None
+    rule = wrapper.group(1)
+    assert "display: flex" in rule
+    assert "align-items: center" in rule
+    assert "gap: calc(var(--lockup-mark) / 3)" in rule
+    assert "--lockup-mark: 36px" in rule
+    assert "var(--fs-23)" in rule
+    mark = re.search(r"#kc-header-wrapper::before\s*\{([^}]*)\}", own)
+    assert mark is not None
+    assert "width: var(--lockup-mark)" in mark.group(1)
+    assert "height: var(--lockup-mark)" in mark.group(1)
+
+
+def test_the_wordmark_splits_on_weight_alone_and_still_reads_as_the_realm_name() -> None:
+    """The brand: Osprey at 700, Flow at 400, no divider and no colour change. Keycloak prints the
+    header from the `loginTitleHtml` message, so the theme sets it; its visible text must stay the
+    realm's display name (the page's accessible name). Catches a wordmark whose words differ from
+    the realm's, and a weight rule with nothing to apply to."""
+    messages = _theme()["login/messages/messages_en.properties"]
+    match = re.search(r"^loginTitleHtml=(.*)$", messages, flags=re.MULTILINE)
+    assert match is not None
+    assert match.group(1) == "<b>Osprey</b>Flow"
+    assert re.sub(r"<[^>]+>", "", match.group(1)) == DISPLAY_NAME
+    own = _own_rules()
+    bold = re.search(r"#kc-header-wrapper b\s*\{([^}]*)\}", own)
+    assert bold is not None
+    assert "font-weight: 700" in bold.group(1)
+    assert "font: 400 " in re.search(r"#kc-header-wrapper\s*\{([^}]*)\}", own).group(1)  # type: ignore[union-attr]
+
+
+def test_the_sign_in_card_is_centred_on_the_page_and_not_left_high_with_a_gap_above_it() -> None:
+    """Seen on the owner's deployment: the wordmark and card sat in the upper-middle of a tall dark
+    page with a wide empty band between them. Catches a page that is not centred vertically and a
+    header with no set distance to the card."""
+    own = _own_rules()
+    page = re.search(r"^\.pf-v5-c-login\s*\{([^}]*)\}", own, flags=re.MULTILINE)
+    assert page is not None
+    for declaration in ("display: flex", "justify-content: center", "min-height: 100vh"):
+        assert declaration in page.group(1), declaration
+    header = re.search(r"\.pf-v5-c-login__header\s*\{([^}]*)\}", own)
+    assert header is not None
+    assert "margin: 0" in header.group(1)
+
+
+def test_a_focused_field_has_one_ring_not_two() -> None:
+    """Seen on the owner's deployment: the username field wore a heavy double brass outline. The
+    design tokens give every focused element an outline of its own (`*:focus-visible`), and this
+    theme added a second on the box around the input, so both showed. Catches either one coming
+    back: the input itself carries none and the box carries a single ring."""
+    own = _own_rules()
+    inner = re.search(r"\.pf-v5-c-form-control input:focus-visible[^{]*\{([^}]*)\}", own)
+    assert inner is not None
+    assert "outline: none" in inner.group(1)
+    box = re.search(r"\.pf-v5-c-form-control:focus-within\s*\{([^}]*)\}", own)
+    assert box is not None
+    assert "border-color: var(--brass)" in box.group(1)
+    assert "outline" not in box.group(1).replace("outline: none", "")
+    assert box.group(1).count("box-shadow") == 1
+
+
+def test_the_password_box_and_its_show_button_are_one_control() -> None:
+    """Seen on the owner's deployment: the password field stopped short of the page's edge, the
+    eye button floated beside it, and a stray line ran under the button. Catches the group not
+    stretching its two parts to one height, the button keeping its own underline, and a seam
+    border between the two."""
+    own = _own_rules()
+    group = re.search(r"\.pf-v5-c-input-group\s*\{([^}]*)\}", own)
+    assert group is not None
+    assert "display: flex" in group.group(1)
+    assert "align-items: stretch" in group.group(1)
+    button = re.search(r"\.pf-v5-c-input-group \.pf-v5-c-button\s*\{([^}]*)\}", own)
+    assert button is not None
+    assert "border-left: 0" in button.group(1)
+    assert re.search(r"\.pf-v5-c-input-group \.pf-v5-c-button::after\s*\{[^}]*display: none", own)
+
+
+def test_each_label_has_room_above_its_field_and_the_fields_are_spaced_evenly() -> None:
+    """Seen on the owner's deployment: "Username or email" sat on top of its input with the input's
+    ring running through the label. Catches a label with no clearance and a form with no set gap."""
+    own = _own_rules()
+    label = re.search(r"\.pf-v5-c-form__label\s*\{([^}]*)\}", own)
+    assert label is not None
+    assert "padding-block-end: var(--sp-8)" in label.group(1)
+    form = re.search(r"\.pf-v5-c-form\s*\{([^}]*)\}", own)
+    assert form is not None
+    assert "--pf-v5-c-form--GridGap: var(--sp-20)" in form.group(1)

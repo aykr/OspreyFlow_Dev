@@ -353,8 +353,10 @@ character in the middle. `apply` writes a Keycloak login theme beside the compos
 (`keycloak-theme/osprey/`, from `harness/keycloak_theme.py`); compose mounts it into Keycloak
 beside, not over, Keycloak's own themes, and the realm names it (`loginTheme`) and calls itself
 "OspreyFlow" (`displayName`). Like `realm.json` and `litellm.yaml` it is a service's own config, not
-one of §2.1's four artefacts. It changes only appearance and wording: who may sign in, and what
-they may then do, are untouched. A running Keycloak sees it only after it is recreated from a
+one of §2.1's four artefacts. The page's header is the brand's horizontal lockup (the mark, then
+the wordmark with Osprey bold and Flow regular), set through Keycloak's `loginTitleHtml` message and
+the `#kc-header-wrapper` element Keycloak 26 renders (ADR-051 Amendment 5). It changes only appearance
+and wording: who may sign in, and what they may then do, are untouched. A running Keycloak sees it only after it is recreated from a
 compose file that mounts it, so `make register-sign-in` names the theme only when Keycloak lists it.
 
 - **Before any realm is rendered the console is open**, loopback only, because there is nothing to
