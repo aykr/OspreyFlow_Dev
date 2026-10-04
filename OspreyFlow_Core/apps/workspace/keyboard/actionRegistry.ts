@@ -342,6 +342,7 @@ export const LINK_CHANGE_ACTIONS = defineActionRegistry("LINK_CHANGE_ACTIONS", [
   "save-needs-a-reason",
   "escape-closes-the-form-and-changes-nothing",
   "opened-by-the-link-menu-lands-on-the-type",
+  "choose-what-stands-behind-the-link-before-saving",
 ] as const);
 
 /**

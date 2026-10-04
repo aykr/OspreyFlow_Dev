@@ -37,6 +37,8 @@ export interface LinkChangeInput {
   /** `null` clears the validity period; leaving the field out leaves it alone. */
   interval?: { valid_from: string; valid_to: string | null } | null;
   occurrences?: number;
+  /** What stands behind the link (ADR-081 step B). Left out, the link keeps what stood behind it. */
+  basis?: "direct" | "probabilistic";
 }
 
 export interface LinkChangeResult {

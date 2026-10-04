@@ -886,6 +886,8 @@ class GraphArcadeDBAdapter:
             properties=edge_record.get("properties") or {},
             interval=interval,
             occurrences=edge_record.get("occurrences", 1),
+            # ADR-081 step B: a correction to the node does not change what stood behind the link.
+            basis=edge_record.get("basis"),
             provenance=Provenance.model_validate(edge_record["provenance"]),
             handling=Handling.model_validate(edge_record["handling"]),
             created_by=created_by,

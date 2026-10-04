@@ -103,6 +103,10 @@ the real stack** (see section 5).
 - `npx tsc --noEmit` fails on this Mac on `main`: `src/inspector/LinkHistory.tsx` and `src/inspector/linkHistory.ts`
   differ only in case, and the filesystem is case-insensitive (TS1149 and a TS2305 that follows from it). The cloud
   mirror's case-sensitive disk never saw it. The fix is a rename of one module, in its own commit.
+  The same defect fails six unit cases in `Inspector.test.tsx` and `LinkHistory.test.tsx` under `npx vitest run src`.
+- Keyboard specs built in the cloud mirror may use keys that behave differently on macOS: ArrowDown on a closed
+  `<select>` opens the menu here instead of moving the choice. `link-change.spec.ts` was corrected on 4 October 2026;
+  any other spec that presses an arrow on a `<select>` will fail the same way until it types a letter instead.
 - `tests/harness/test_apply_env.py` (needs Docker) and `test_deployment_schema.py` (reads the uncommitted
   `osprey.yaml`).
 - The five `graph_arcadedb[gremlin]` working-set tests fail with "connection refused" unless the dev stack
@@ -118,6 +122,7 @@ From the friction log, the owner's live checks still to do or report:
 1. Branch tabs: the strip, the Branches menu, close and reopen, Discard with confirmation, on a real case;
    and `test_investigation_access_store.py` (it now holds five tab-flag tests against Postgres).
 1. The panel grip rows (ADR-085): Move up / Move down, dragging, and the order surviving a reload, on a real case.
+1. A link marked probabilistic from the change form (ADR-081 step B): the question in the form, the dotted line, the Basis row.
 2. The sign-in page at `localhost:8081`.
 3. The dotted and thick links on a real case (the dot is a fixed 3 pixels on and 4 off, which may look blocky
    at thickness 4 or 5), and `make glass-perf` with the new edge programs.
@@ -134,12 +139,12 @@ localStorage (`ospreyflow.side-panel-order`); the timeline does not move and not
 stays open. Code: `src/layout/panelOrder.ts`, `src/layout/SidePanelStack.tsx`, `App.tsx`; keyboard case in
 `keyboard/panel-frames.spec.ts`. **Not seen** on the real Glass: the grip rows above the three panels.
 
-### 6.2 ADR-081 steps B, C and D (each its own commit; the owner has not said go)
+### 6.2 ADR-081 steps B, C and D (each its own commit; B built, C and D not started)
 
 The decision and the owner's answers to its open questions are in `spec/06_DECISIONS.md` (ADR-081 and
 Amendment 1 — read both before touching anything).
 
-- **B, the per-link basis.** `Edge` gains a `basis`. A link takes its type's basis; a link of a Direct type
+- **B, the per-link basis — built 4 October 2026 (ADR-081 Amendment 2); owner's live check to do.** `Edge` gains a `basis`. A link takes its type's basis; a link of a Direct type
   may be marked probabilistic (statistically derived, or declared by an analyst with a reason); a link of a
   Probabilistic type is always probabilistic; a person never promotes a link to Direct. The Glass draws by
   the link's own basis. The ADR-080 change form asks for the basis each time, with no default, and offers

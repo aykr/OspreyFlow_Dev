@@ -214,9 +214,13 @@ style is not authored: the Glass draws a Direct link solid and a Probabilistic o
 (`02_GLASS_FRONTEND.md` §4). A declaration may also carry a `colour`, one of the nine data-channel
 names that an entity type's `channel` already uses, and a `thickness`, a whole number from 1 to 5;
 the loader refuses anything else. The test that would fail if any of this were broken is
-`tests/ontology/test_relationship_basis.py`. A per-link basis (a link of a Direct type marked
-probabilistic), analyst-proposed types and the Ingest Studio's refusal of a probabilistic type are
-decided in ADR-081 and not yet built.
+`tests/ontology/test_relationship_basis.py`. A link may carry a basis of its own (`Edge.basis`, ADR-081 step B, Amendment 2): a link of a
+Direct type marked `probabilistic`, statistically derived or declared by an analyst with a reason that
+is kept in the link's change history. A link written without one takes its type's basis, which every
+loader and the resolution engine write; `effective_basis` reads the two together, and a link of a
+Probabilistic type is probabilistic whatever is stored on it. A person never promotes a link to Direct.
+Analyst-proposed types and the Ingest Studio's refusal of a probabilistic type are decided in ADR-081
+and not yet built.
 
 Applying a schema returns a report, not a bare success flag:
 

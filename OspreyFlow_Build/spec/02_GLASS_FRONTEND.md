@@ -418,6 +418,13 @@ explanation for the cluster the two are in, or says they are not in one at the c
 *Add a note*, *Change link…* and *Show change history* select the link and take the Inspector to the
 matching section.
 
+The change form asks **what stands behind the link** each time, with no default (ADR-081 Amendment
+1 item 6, Amendment 2): *Direct* is offered only where the link's type is Direct and the link is not
+already probabilistic; *Probabilistic* is always offered; where only one answer is possible the form
+states it. The reason given for the change is the reason for a probabilistic mark, and the Inspector's
+*Basis* row points to the change history for it. A link is never promoted to Direct by hand. Reachable
+by keyboard (`keyboard/link-change.spec.ts`).
+
 The Inspector's **Change this link** form (any link other than same-as and not-the-same) offers the
 link type (only those the ontology allows between the two ends, never a same-as type), the properties
 that type declares, the dates it covers, the records behind it, and a **required reason**. Saving
@@ -634,8 +641,9 @@ signal distinguishing it from a selected-but-off-path node. Binding on both stat
 between them — the "which state owns the non-colour channel" question the disclosed gap left open
 is answered: both, via the channel each already had.
 
-**Links are drawn by basis (ADR-081).** The line style follows the relationship type's `basis` and is
-never authored: a Direct link is solid, a Probabilistic link is dotted (a dot three pixels long and
+**Links are drawn by basis (ADR-081).** The line style follows the link's basis and is never
+authored: the link's own `basis` where an analyst has marked a Direct type's link probabilistic (step
+B, Amendment 2), and otherwise its type's. A Direct link is solid, a Probabilistic link is dotted (a dot three pixels long and
 a gap four, in screen pixels, so the pattern does not change with zoom). A dotted link keeps an
 arrowhead where its type is directed; `SAME_AS` is probabilistic and undirected, so it is a plain
 dotted line. A type with no basis (`NOT_SAME_AS`, or a type the ontology does not know) is drawn as

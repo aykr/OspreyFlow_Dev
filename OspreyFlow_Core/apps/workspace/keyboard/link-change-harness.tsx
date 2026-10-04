@@ -20,14 +20,15 @@ declare global {
 window.__CHANGED__ = null;
 
 const EDGE_TYPES: EdgeTypeDef[] = [
-  { name: "ASSOCIATE_OF", from: ["Person"], to: ["Person"] },
+  { name: "ASSOCIATE_OF", from: ["Person"], to: ["Person"], basis: "direct" },
   {
     name: "COLLEAGUE_OF",
     from: ["Person"],
     to: ["Person"],
     properties: [{ name: "role", type: "string" }],
+    basis: "direct",
   },
-  { name: "SAME_AS", from: ["*"], to: ["*"], system: true },
+  { name: "SAME_AS", from: ["*"], to: ["*"], system: true, basis: "probabilistic" },
 ];
 
 const edge: Edge = {

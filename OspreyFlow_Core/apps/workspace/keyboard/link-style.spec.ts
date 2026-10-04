@@ -144,6 +144,15 @@ test("a Probabilistic link is dotted: many short stretches with gaps between", a
   }
 });
 
+test("a link of a Direct type that carries its own probabilistic mark is dotted (ADR-081 step B)", async ({ page }) => {
+  const marked = await read(page, "marked"); // type KNOWS is Direct; the link says probabilistic
+  expect(marked.length, "marked link is long enough to read").toBeGreaterThan(TRIM * 2 + 40);
+  expect(marked.runs, "marked link runs").toBeGreaterThanOrEqual(4);
+  expect(marked.duty, "marked link duty").toBeLessThan(0.7);
+  const plain = await read(page, "solid"); // the same type with no mark stays solid
+  expect(plain.runs).toBe(1);
+});
+
 test("a dotted link is drawn in the colour its type declares, and a solid thick one is thick", async ({ page }) => {
   const dotted = await read(page, "dotted"); // colour: jade
   expect(dotted.green).toBeGreaterThan(dotted.red + 15);

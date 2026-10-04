@@ -52,6 +52,16 @@ async function tabTo(page: Page, name: RegExp | string, max = 12) {
   throw new Error(`Tab never reached "${String(name)}" (stopped on "${await focusedName(page)}")`);
 }
 
+/** Picks COLLEAGUE_OF on the focused type box by typing its first letter. A closed `<select>` takes
+ * an arrow key differently by platform (on macOS it opens the menu instead of moving the choice,
+ * which is why ArrowDown worked on the Linux build machines and not on the owner's Mac); typing a
+ * letter selects the first matching option everywhere. */
+async function chooseColleagueOf(page: Page) {
+  await expect(page.getByLabel("Link type")).toBeFocused();
+  await page.keyboard.type("C");
+  await expect(page.getByLabel("Link type")).toHaveValue("COLLEAGUE_OF");
+}
+
 async function openByKeyboard(page: Page) {
   await page.goto("/keyboard/link-change-harness.html");
   await expect(page.getByRole("button", { name: "Change this link…" })).toBeVisible();
@@ -71,8 +81,11 @@ test("Enter on Change this link… opens the form with focus on the link type", 
 test("Changing the type and pressing Ctrl+Enter in the reason box saves, with the reason", async ({ page }) => {
   const requests = await serve(page);
   await openByKeyboard(page);
-  await page.keyboard.press("ArrowDown"); // ASSOCIATE_OF → COLLEAGUE_OF
+  await chooseColleagueOf(page);
   await expect(page.getByLabel("Link type")).toHaveValue("COLLEAGUE_OF");
+  // What stands behind it is asked each time, with no default (ADR-081): Direct, as it was.
+  await tabTo(page, /^Direct/); // the radio's label carries a hint after the word
+  await page.keyboard.press("Space");
   await tabTo(page, /Why is it being changed/);
   await page.keyboard.type("Both are named on the staff list for the same site.");
   await page.keyboard.press("Control+Enter");
@@ -95,7 +108,7 @@ test("Changing the type and pressing Ctrl+Enter in the reason box saves, with th
 test("Without a reason Save change is off and Ctrl+Enter sends nothing", async ({ page }) => {
   const requests = await serve(page);
   await openByKeyboard(page);
-  await page.keyboard.press("ArrowDown");
+  await chooseColleagueOf(page);
   await expect(page.getByRole("button", { name: "Save change" })).toBeDisabled();
   await tabTo(page, /Why is it being changed/);
   await page.keyboard.press("Control+Enter");
@@ -110,7 +123,7 @@ test("Without a reason Save change is off and Ctrl+Enter sends nothing", async (
 test("Escape closes the form, changes nothing and leaves the link as it was", async ({ page }) => {
   const requests = await serve(page);
   await openByKeyboard(page);
-  await page.keyboard.press("ArrowDown");
+  await chooseColleagueOf(page);
   await tabTo(page, /Why is it being changed/);
   await page.keyboard.type("Typed, then thought better of it.");
   await page.keyboard.press("Escape");
@@ -129,6 +142,27 @@ test("Opened by the link menu's Change link…, focus is already on the link typ
   await page.goto("/keyboard/link-change-harness.html?signal=1");
   await expect(page.getByLabel("Link type")).toBeFocused();
   registerCovered(REGISTRY, "opened-by-the-link-menu-lands-on-the-type");
+});
+
+test("Saving asks what stands behind the link; choosing Probabilistic by keyboard sends the mark", async ({ page }) => {
+  const requests = await serve(page);
+  await openByKeyboard(page);
+  await tabTo(page, /Why is it being changed/);
+  await page.keyboard.type("The pairing is inferred from timing, not from a record.");
+  await page.keyboard.press("Control+Enter");
+  await expect(page.getByRole("alert")).toHaveText(/stands behind/i);
+  expect(requests).toHaveLength(0);
+  await page.getByLabel("Probabilistic").focus();
+  await page.keyboard.press("Space");
+  await expect(page.getByLabel("Probabilistic")).toBeChecked();
+  await page.getByLabel(/Why is it being changed/).focus();
+  await page.keyboard.press("Control+Enter");
+  await expect.poll(() => requests.length).toBe(1);
+  expect(requests[0]!.body).toEqual({
+    reason: "The pairing is inferred from timing, not from a record.",
+    basis: "probabilistic",
+  });
+  registerCovered(REGISTRY, "choose-what-stands-behind-the-link-before-saving");
 });
 
 test("every registered link-change action has its own proving test case above", () => {

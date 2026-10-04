@@ -112,6 +112,10 @@ def edge_write_to_properties(
         "handling": write.handling.model_dump(mode="json"),
         "audit": audit.model_dump(mode="json"),
     }
+    # ADR-081 step B: a link's own basis is stored only where one was written, so a link that
+    # takes its type's basis (every loader's and the resolution engine's) carries no property.
+    if write.basis is not None:
+        props["basis"] = write.basis
     if write.interval is not None:
         props["interval"] = write.interval.model_dump(mode="json")
         # Flattened as epoch milliseconds, not an ISO string: ArcadeDB's
@@ -162,6 +166,7 @@ def edge_from_element_map(record: Mapping[str, Any]) -> Edge:
         occurrences=record.get("occurrences", 1),
         weight=record.get("weight", 0.0),
         weight_components=weight_components,
+        basis=record.get("basis"),
         provenance=Provenance.model_validate(record["provenance"]),
         handling=Handling.model_validate(record["handling"]),
         audit=AuditStub.model_validate(record["audit"]),

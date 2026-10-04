@@ -244,20 +244,24 @@ if (wantsLinkStyle) {
   nodes.length = 0;
   edges.length = 0;
   // One pair for each way a link is drawn; each pair is a link `<kind>-link` between `<kind>-a` and `<kind>-b`.
-  const kinds: Array<[string, string]> = [
-    ["solid", "KNOWS"],
-    ["arrow", "OWNS"],
-    ["dotted", "LIKELY_KNOWS"],
-    ["dotted-arrow", "LIKELY_OWNS"],
-    ["thick", "KNOWS_WELL"],
+  // `marked` is a link of a Direct type (KNOWS) that carries its own probabilistic basis (ADR-081
+  // step B): the link, not its type, decides that it is dotted.
+  const kinds: Array<[string, string, "probabilistic" | undefined]> = [
+    ["solid", "KNOWS", undefined],
+    ["arrow", "OWNS", undefined],
+    ["dotted", "LIKELY_KNOWS", undefined],
+    ["dotted-arrow", "LIKELY_OWNS", undefined],
+    ["thick", "KNOWS_WELL", undefined],
+    ["marked", "KNOWS", "probabilistic"],
   ];
   // `&kind=dotted` loads that pair alone, which the canvas then fits to the whole screen, so its link is
   // long enough to read pixel by pixel.
   const only = new URLSearchParams(window.location.search).get("kind");
-  for (const [kind, type] of kinds) {
+  for (const [kind, type, basis] of kinds) {
     if (only && only !== kind) continue;
     nodes.push(node(`${kind}-a`), node(`${kind}-b`));
-    edges.push(edge(`${kind}-link`, `${kind}-a`, `${kind}-b`, type));
+    const link = edge(`${kind}-link`, `${kind}-a`, `${kind}-b`, type);
+    edges.push(basis ? { ...link, basis } : link);
   }
 }
 workingSet.store.getState().applyDelta({ seq: 1, op: "snapshot", nodes, edges, filtered_count: 0 });

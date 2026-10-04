@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { EdgeTypeDef } from "../../../../packages/schemas/generated";
 import { makeEdge } from "../testing/fixtures";
 import {
+  basisChoicesFor,
   initialDraft,
   retypeDraft,
   toChangeInput,
@@ -78,6 +79,7 @@ describe("initialDraft", () => {
       validFrom: "2026-03-01",
       validTo: "2026-03-09",
       reason: "",
+      basis: "",
     });
   });
 });
@@ -197,5 +199,66 @@ describe("toChangeInput", () => {
   it("refuses a reason over the server's limit", () => {
     const r = toChangeInput(link, draft({ occurrences: "7", reason: "x".repeat(1001) }), EDGE_TYPES);
     expect(r).toEqual({ kind: "problem", message: "A reason can be at most 1000 characters." });
+  });
+});
+
+// ADR-081 step B (Amendment 2): the form asks what stands behind the link, with no default, and
+// offers Direct only where the link's type is Direct and the link is not already probabilistic.
+describe("the basis question", () => {
+  const BASIS_TYPES: EdgeTypeDef[] = [
+    { name: "ASSOCIATE_OF", from: ["Person"], to: ["Person"], basis: "direct" },
+    { name: "FAMILY_OF", from: ["Person"], to: ["Person"], basis: "direct" },
+    { name: "LIKELY_ASSOCIATE_OF", from: ["Person"], to: ["Person"], basis: "probabilistic" },
+  ];
+  const direct = makeEdge("e1", "a", "b", { type: "ASSOCIATE_OF", occurrences: 3 });
+  const marked = makeEdge("e2", "a", "b", { type: "ASSOCIATE_OF", occurrences: 3, basis: "probabilistic" });
+  const likely = makeEdge("e3", "a", "b", { type: "LIKELY_ASSOCIATE_OF", occurrences: 3 });
+
+  it("offers Direct and Probabilistic for a Direct link, Probabilistic alone for a probabilistic one", () => {
+    expect(basisChoicesFor(direct, BASIS_TYPES[0])).toEqual(["direct", "probabilistic"]);
+    expect(basisChoicesFor(marked, BASIS_TYPES[0])).toEqual(["probabilistic"]);
+    expect(basisChoicesFor(likely, BASIS_TYPES[2])).toEqual(["probabilistic"]);
+  });
+
+  it("asks nothing for a type with no basis", () => {
+    expect(basisChoicesFor(direct, undefined)).toEqual([]);
+    expect(basisChoicesFor(direct, { name: "ODD", from: ["Person"], to: ["Person"] })).toEqual([]);
+  });
+
+  it("starts with no basis chosen", () => {
+    expect(initialDraft(direct).basis).toBe("");
+  });
+
+  it("will not save a change until the basis is chosen", () => {
+    const outcome = toChangeInput(direct, { ...initialDraft(direct), occurrences: "7", reason: REASON }, BASIS_TYPES);
+    expect(outcome).toEqual({ kind: "problem", message: expect.stringMatching(/stands behind/i) });
+  });
+
+  it("sends the basis only when it differs from what stands behind the link now", () => {
+    const same = toChangeInput(
+      direct,
+      { ...initialDraft(direct), occurrences: "7", basis: "direct", reason: REASON },
+      BASIS_TYPES,
+    );
+    expect(same).toEqual({ kind: "change", input: { reason: REASON, occurrences: 7 } });
+    const mark = toChangeInput(direct, { ...initialDraft(direct), basis: "probabilistic", reason: REASON }, BASIS_TYPES);
+    expect(mark).toEqual({ kind: "change", input: { reason: REASON, basis: "probabilistic" } });
+  });
+
+  it("is nothing to save when only the basis the link already has is chosen", () => {
+    expect(toChangeInput(direct, { ...initialDraft(direct), basis: "direct", reason: REASON }, BASIS_TYPES)).toEqual({
+      kind: "nothing",
+    });
+  });
+
+  it("takes the one possible basis as chosen when there is only one", () => {
+    const outcome = toChangeInput(likely, { ...initialDraft(likely), occurrences: "7", reason: REASON }, BASIS_TYPES);
+    expect(outcome).toEqual({ kind: "change", input: { reason: REASON, occurrences: 7 } });
+  });
+
+  it("keeps a chosen basis when the type changes to one that allows it, and clears it otherwise", () => {
+    const chosen = { ...initialDraft(direct), basis: "direct" as const };
+    expect(retypeDraft(chosen, "FAMILY_OF", BASIS_TYPES).basis).toBe("direct");
+    expect(retypeDraft(chosen, "LIKELY_ASSOCIATE_OF", BASIS_TYPES).basis).toBe("");
   });
 });

@@ -73,15 +73,27 @@ ONTOLOGY = OntologySchema(
         ),
     ],
     edge_types=[
-        EdgeTypeDef(name="ASSOCIATE_OF", **{"from": ["Person"], "to": ["Person"]}),
+        EdgeTypeDef(name="ASSOCIATE_OF", **{"from": ["Person"], "to": ["Person"]}, basis="direct"),
         EdgeTypeDef(
             name="FAMILY_OF",
             **{"from": ["Person"], "to": ["Person"]},
             properties=[PropertyDef(name="relation", type=PropertyType.STRING)],
+            basis="direct",
         ),
-        EdgeTypeDef(name="MEMBER_OF", **{"from": ["Person"], "to": ["Organisation"]}),
-        EdgeTypeDef(name="MET_AT", **{"from": ["Person"], "to": ["Person"]}, temporal=True),
-        EdgeTypeDef(name="SAME_AS", **{"from": ["*"], "to": ["*"]}, system=True),
+        EdgeTypeDef(
+            name="MEMBER_OF", **{"from": ["Person"], "to": ["Organisation"]}, basis="direct"
+        ),
+        EdgeTypeDef(
+            name="MET_AT", **{"from": ["Person"], "to": ["Person"]}, temporal=True, basis="direct"
+        ),
+        EdgeTypeDef(
+            name="LIKELY_ASSOCIATE_OF",
+            **{"from": ["Person"], "to": ["Person"]},
+            basis="probabilistic",
+        ),
+        EdgeTypeDef(
+            name="SAME_AS", **{"from": ["*"], "to": ["*"]}, system=True, basis="probabilistic"
+        ),
         EdgeTypeDef(name="NOT_SAME_AS", **{"from": ["*"], "to": ["*"]}, system=True),
     ],
 )
@@ -217,6 +229,10 @@ async def _build(
             _edge("m1", "a", "org", "MEMBER_OF"),
             _edge("secret-link", "a", "b", classification="SECRET"),
             _edge("secret-end", "a", "c"),
+            # ADR-081 step B: a link of a Direct type an analyst has marked probabilistic, and a
+            # link of a Probabilistic type.
+            _edge("marked", "a", "b", basis="probabilistic"),
+            _edge("likely", "a", "b", "LIKELY_ASSOCIATE_OF"),
         ]
     )
     await store.add_edges("inv-1", link_set)
@@ -457,3 +473,89 @@ async def test_someone_cleared_for_the_marking_can_change_that_link() -> None:
         "inv-1", "secret-link", CLEARED, LinkChangeRequest(type="FAMILY_OF", reason="r")
     )
     assert result.edge.handling.classification == "SECRET"
+
+
+# --- the link's own basis (ADR-081 step B) -----------------------------------------------------
+
+
+async def test_marking_a_link_of_a_direct_type_probabilistic_is_written_and_recorded() -> None:
+    service, graph, _, changes, _ = await _build()
+    result = await service.change(
+        "inv-1",
+        "e1",
+        ANALYST,
+        LinkChangeRequest(basis="probabilistic", reason="The pairing is inferred from timing."),
+    )
+    assert result.edge.basis == "probabilistic"
+    written = graph.superseded[0][1]
+    assert written.basis == "probabilistic"
+    # The history shows what stood behind the link before and after, so the reason the analyst
+    # gave is the reason for the mark (Amendment 2).
+    assert changes.rows[0].before["basis"] == "direct"
+    assert changes.rows[0].after["basis"] == "probabilistic"
+    assert changes.rows[0].reason == "The pairing is inferred from timing."
+
+
+async def test_a_link_of_a_probabilistic_type_cannot_be_marked_direct() -> None:
+    service, graph, _, _, _ = await _build()
+    with pytest.raises(InvalidChangeError, match="[Dd]irect"):
+        await service.change(
+            "inv-1", "likely", ANALYST, LinkChangeRequest(basis="direct", reason="Told so")
+        )
+    assert graph.superseded == []
+
+
+async def test_a_probabilistic_link_is_never_returned_to_direct() -> None:
+    # "A link is never promoted to Direct by a person" (ADR-081 decision 2), whether the mark was
+    # the analyst's own or the type's.
+    service, graph, _, _, _ = await _build()
+    with pytest.raises(InvalidChangeError, match="[Dd]irect"):
+        await service.change(
+            "inv-1", "marked", ANALYST, LinkChangeRequest(basis="direct", reason="Told so")
+        )
+    # Changing a Probabilistic-type link to a Direct type must not quietly make it Direct either.
+    with pytest.raises(InvalidChangeError, match="[Dd]irect"):
+        await service.change(
+            "inv-1",
+            "likely",
+            ANALYST,
+            LinkChangeRequest(type="ASSOCIATE_OF", basis="direct", reason="Told so"),
+        )
+    assert graph.superseded == []
+
+
+async def test_a_probabilistic_mark_follows_the_link_through_a_type_change() -> None:
+    service, graph, _, _, _ = await _build()
+    result = await service.change(
+        "inv-1",
+        "marked",
+        ANALYST,
+        LinkChangeRequest(type="FAMILY_OF", properties={"relation": "cousin"}, reason="Told so"),
+    )
+    assert result.edge.type == "FAMILY_OF"
+    assert result.edge.basis == "probabilistic"
+    assert graph.superseded[0][1].basis == "probabilistic"
+
+
+async def test_a_probabilistic_type_link_changed_to_a_direct_type_stays_probabilistic() -> None:
+    # With no basis asked for, the link keeps what stood behind it: it was probabilistic by its
+    # type, so it is written with the mark once its new type would otherwise call it Direct.
+    service, graph, _, _, _ = await _build()
+    result = await service.change(
+        "inv-1", "likely", ANALYST, LinkChangeRequest(type="ASSOCIATE_OF", reason="Told so")
+    )
+    assert result.edge.basis == "probabilistic"
+    assert graph.superseded[0][1].basis == "probabilistic"
+
+
+async def test_asking_for_the_basis_a_link_already_has_changes_nothing() -> None:
+    service, graph, _, _, _ = await _build()
+    with pytest.raises(ChangeNotMadeError):
+        await service.change(
+            "inv-1", "e1", ANALYST, LinkChangeRequest(basis="direct", reason="Told so")
+        )
+    with pytest.raises(ChangeNotMadeError):
+        await service.change(
+            "inv-1", "marked", ANALYST, LinkChangeRequest(basis="probabilistic", reason="Told so")
+        )
+    assert graph.superseded == []

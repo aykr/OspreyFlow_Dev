@@ -21,6 +21,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
+
 from conduit_common.identity import new_edge_id, new_node_id, now_utc
 from ontology.errors import OntologyError
 from ports.graph import GraphPort, SuggestOptions
@@ -38,7 +39,6 @@ from schemas.domain import (
     ProvenanceState,
     SourceRef,
 )
-
 from tests.conformance.registry import GRAPH_PORT_ADAPTERS, GraphAdapterFactory
 
 pytestmark = [
@@ -140,6 +140,7 @@ def _edge(
     load_id: str | None = None,
     recipe_id: str | None = None,
     recipe_version: int | None = None,
+    basis: str | None = None,
 ) -> EdgeWrite:
     return EdgeWrite(
         id=new_edge_id(),
@@ -155,6 +156,7 @@ def _edge(
         created_at=now_utc(),
         interval=interval,
         occurrences=occurrences,
+        basis=basis,  # type: ignore[arg-type]
         load_id=load_id,
         recipe_id=recipe_id,
         recipe_version=recipe_version,
@@ -2050,6 +2052,53 @@ async def test_supersede_node_carries_its_whole_network_to_the_replacement(
         # its former edges do not leave a trace either.
         assert await adapter.get_node(person, CLEARED) is None
         assert (await adapter.neighbourhood_stats(person, CLEARED)).degree == 0
+
+
+async def test_a_links_own_basis_round_trips_and_survives_supersede_node(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-081 step B. A link may carry a basis of its own (a link of a Direct type marked
+    probabilistic); a link written without one carries none, and takes its type's basis when it is
+    drawn. The store must hand back exactly what was written, and a correction to a node
+    (`supersede_node`) must clone the mark onto the re-pointed edge rather than drop it: a link an
+    analyst declared probabilistic must not turn solid because the person at one end was
+    corrected."""
+    async with factory.context() as adapter:
+        (person, marked_contact, plain_contact), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL", family_name="Original"),
+                _node("Person", classification="OFFICIAL", family_name="Marked"),
+                _node("Person", classification="OFFICIAL", family_name="Plain"),
+            ],
+            [],
+        )
+        await _write(
+            adapter,
+            [],
+            [
+                _edge(
+                    "ASSOCIATE_OF", person, marked_contact, classification="OFFICIAL",
+                    basis="probabilistic",
+                ),
+                _edge("ASSOCIATE_OF", person, plain_contact, classification="OFFICIAL"),
+            ],
+        )
+
+        def basis_by_target(subgraph) -> dict[str, str | None]:  # type: ignore[no-untyped-def]
+            return {e.target: e.basis for e in subgraph.edges}
+
+        before = await adapter.expand(ExpandRequest(node_ids=[person], depth=1), CLEARED)
+        assert basis_by_target(before) == {marked_contact: "probabilistic", plain_contact: None}
+
+        tx = await adapter.begin_transaction()
+        new_id = await adapter.supersede_node(
+            person, _node("Person", classification="OFFICIAL", family_name="Corrected"), tx
+        )
+        await adapter.commit_transaction(tx)
+
+        after = await adapter.expand(ExpandRequest(node_ids=[new_id], depth=1), CLEARED)
+        assert basis_by_target(after) == {marked_contact: "probabilistic", plain_contact: None}
 
 
 async def test_supersede_node_retains_each_cloned_edges_original_provenance(

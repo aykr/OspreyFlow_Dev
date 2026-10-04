@@ -101,6 +101,9 @@ async def test_manual_link_merges_two_nodes_and_writes_the_edge() -> None:
     assert written.properties["score"] == 1.0
     assert written.provenance.state == ProvenanceState.ASSERTED
     assert "model_version" not in written.properties
+    # ADR-081 decision 3: confirming a match leaves it probabilistic. No basis of its own is
+    # written, so the link takes its type's, and `SAME_AS` is probabilistic.
+    assert written.basis is None
 
 
 async def test_manual_split_separates_two_nodes_even_at_a_broad_threshold() -> None:

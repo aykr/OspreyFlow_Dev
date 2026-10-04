@@ -7,6 +7,7 @@ import {
   computeNodeFrameAttributes,
   computeNodeGraphAttributes,
   edgeProgramFor,
+  effectiveBasis,
   type NodeVisualState,
   SMALL_VIEW_LABEL_LIMIT,
 } from "./nodeAttributes";
@@ -341,6 +342,40 @@ describe("edgeProgramFor and the basis of a type (ADR-081)", () => {
 
   it("is dotted whatever colour and thickness a probabilistic type declares", () => {
     expect(edgeProgramFor("THICK_DOTTED", types)).toBe("glass-edge-dotted");
+  });
+});
+
+// ADR-081 step B: a link may carry a basis of its own. A link of a Direct type marked probabilistic
+// is drawn dotted; a link of a Probabilistic type is dotted whatever is stored on it.
+describe("edgeProgramFor and the link's own basis (ADR-081 step B)", () => {
+  const types = [
+    { name: "OWNS", directed: true, basis: "direct" as const },
+    { name: "KNOWS", directed: false, basis: "direct" as const, thickness: 3 },
+    { name: "SAME_AS", directed: false, basis: "probabilistic" as const },
+    { name: "NOT_SAME_AS", directed: false, basis: null },
+  ];
+
+  it("draws a link of a Direct type dotted when the link itself is marked probabilistic", () => {
+    expect(edgeProgramFor("OWNS", types, "probabilistic")).toBe("glass-arrow-dotted");
+    expect(edgeProgramFor("KNOWS", types, "probabilistic")).toBe("glass-edge-dotted");
+  });
+
+  it("draws a link of a Direct type solid when it carries no mark or says direct", () => {
+    expect(edgeProgramFor("OWNS", types, null)).toBe("glass-arrow");
+    expect(edgeProgramFor("OWNS", types, undefined)).toBe("glass-arrow");
+    expect(edgeProgramFor("KNOWS", types, "direct")).toBe("glass-edge-thick");
+  });
+
+  it("never lets a stored mark make a Probabilistic type solid", () => {
+    expect(edgeProgramFor("SAME_AS", types, "direct")).toBe("glass-edge-dotted");
+  });
+
+  it("reads what stands behind a link from the link and its type together", () => {
+    expect(effectiveBasis(undefined, types[0])).toBe("direct");
+    expect(effectiveBasis("probabilistic", types[0])).toBe("probabilistic");
+    expect(effectiveBasis("direct", types[2])).toBe("probabilistic");
+    expect(effectiveBasis(undefined, types[3])).toBeNull();
+    expect(effectiveBasis(undefined, undefined)).toBeNull();
   });
 });
 

@@ -44,6 +44,7 @@ export type CorpusSourceDegree = number;
 export type CorpusTargetDegree = number;
 export type CorpusTotalOccurrences = number;
 export type ComputedAt = string;
+export type Basis = ("direct" | "probabilistic") | null;
 export type Edges = Edge[];
 export type FilteredCount = number;
 export type MotifType = "convoy" | "relay" | "burst";
@@ -141,6 +142,7 @@ export interface Edge {
   occurrences?: Occurrences;
   weight?: Weight;
   weight_components?: WeightComponents | null;
+  basis?: Basis;
   provenance: Provenance;
   handling: Handling;
   audit: AuditStub;

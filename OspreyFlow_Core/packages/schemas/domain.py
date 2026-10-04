@@ -335,9 +335,33 @@ class Edge(BaseModel):
     occurrences: int = 1
     weight: float = 0.0
     weight_components: WeightComponents | None = None
+    #: ADR-081 step B. The link's own basis, where one was written: `probabilistic` on a link of a
+    #: Direct type that is statistically derived or that an analyst declared so (with a reason,
+    #: kept in the link's change history). `None` means the link takes its type's basis, which is
+    #: what every link written by a loader or the resolution engine carries. A person never
+    #: promotes a link to Direct, so `direct` is never written over a probabilistic type;
+    #: `effective_basis` is the one place that reads the two together.
+    basis: Literal["direct", "probabilistic"] | None = None
     provenance: Provenance
     handling: Handling
     audit: AuditStub
+
+
+def effective_basis(
+    link_basis: Literal["direct", "probabilistic"] | None,
+    edge_type: EdgeTypeDef | None,
+) -> Literal["direct", "probabilistic"] | None:
+    """What stands behind a link, read from the link and its type together (ADR-081 decision 2).
+
+    A link of a Probabilistic type is always probabilistic, whatever is stored on it; a link of a
+    Direct type is direct unless it carries its own probabilistic mark; a type with no basis
+    (`NOT_SAME_AS`, or one the ontology does not know) gives none."""
+    type_basis = edge_type.basis if edge_type is not None else None
+    if type_basis == "probabilistic":
+        return "probabilistic"
+    if link_basis == "probabilistic":
+        return "probabilistic"
+    return type_basis
 
 
 class EdgeWrite(BaseModel):
@@ -351,6 +375,8 @@ class EdgeWrite(BaseModel):
     properties: dict[str, Any] = Field(default_factory=dict)
     interval: Interval | None = None
     occurrences: int = 1
+    #: The link's own basis (see `Edge.basis`); `None`, the usual case, means its type's.
+    basis: Literal["direct", "probabilistic"] | None = None
     provenance: Provenance
     handling: Handling
     created_by: PrincipalId

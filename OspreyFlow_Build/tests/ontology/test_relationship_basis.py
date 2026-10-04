@@ -20,7 +20,7 @@ from pydantic import ValidationError
 
 from ontology.errors import OntologyError
 from ontology.loader import _SCHEMA_PATH, load_default_ontology, load_ontology  # noqa: PLC2701
-from schemas.domain import DATA_CHANNELS, NOT_SAME_AS, SAME_AS, EdgeTypeDef
+from schemas.domain import DATA_CHANNELS, NOT_SAME_AS, SAME_AS, EdgeTypeDef, effective_basis
 
 
 def _doc(**edge: object) -> dict[str, object]:
@@ -118,3 +118,29 @@ def test_the_schema_colour_list_is_the_data_channel_list() -> None:
 def test_the_schema_requires_basis_on_an_edge_type() -> None:
     schema = json.loads(Path(_SCHEMA_PATH).read_text())
     assert "basis" in schema["$defs"]["edge_type"]["required"]
+
+
+# --- a link's own basis (ADR-081 step B) ---------------------------------------------------------
+
+
+def _type(basis: str | None) -> EdgeTypeDef:
+    return EdgeTypeDef(name="KNOWS", **{"from": ["Person"], "to": ["Person"]}, basis=basis)  # type: ignore[arg-type]
+
+
+def test_a_link_with_no_basis_of_its_own_takes_its_types() -> None:
+    assert effective_basis(None, _type("direct")) == "direct"
+    assert effective_basis(None, _type("probabilistic")) == "probabilistic"
+
+
+def test_a_links_own_mark_overrides_a_direct_type() -> None:
+    assert effective_basis("probabilistic", _type("direct")) == "probabilistic"
+
+
+def test_a_links_own_basis_can_never_make_a_probabilistic_type_direct() -> None:
+    # The service refuses to write such a mark; were one ever stored, reading it must not honour it.
+    assert effective_basis("direct", _type("probabilistic")) == "probabilistic"
+
+
+def test_a_type_with_no_basis_gives_a_link_none() -> None:
+    assert effective_basis(None, _type(None)) is None
+    assert effective_basis(None, None) is None

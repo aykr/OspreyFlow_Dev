@@ -1117,7 +1117,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
                   label: `${data.data.type} (${data.data.occurrences ?? 1})`,
                 }
               : {}),
-            type: edgeProgramFor(data.data.type, edgeTypesRef.current),
+            type: edgeProgramFor(data.data.type, edgeTypesRef.current, data.data.basis),
           };
         },
         hideEdgesOnMove: true, // §1.1: "buys the frame budget at 250,000 edges"

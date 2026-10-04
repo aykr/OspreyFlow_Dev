@@ -28,6 +28,13 @@ its ends; it cannot be used to re-mark a link.
 **Notes follow the link.** A superseded link has a new id, and notes are kept against a link's
 id, so a change moves the old link's notes to the new one in the same step.
 
+**What stands behind the link (ADR-081 step B, Amendment 2).** A change may say the link's
+`basis`. A link of a Direct type may be marked `probabilistic`; the reason given for the change is
+the reason for the mark, and the history shows the basis before and after. A link is never
+promoted to Direct by a person: `direct` is refused on a link of a Probabilistic type and on any
+link that is already probabilistic, by its type or by a mark. A basis left out keeps what stood
+behind the link, so a probabilistic link changed to a Direct type is written with the mark.
+
 **Disclosed gaps.** The link's `weight` is a load-time figure computed by the store when it writes
 the replacement, and the port does not hand it back; the working set's copy keeps the old figure
 until the link is next read from the graph. The history is read back by following `previous_edge_id`
@@ -37,7 +44,7 @@ links, bounded at `MAX_HISTORY` steps, and says so when it stops there.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 import asyncpg
 from pydantic import BaseModel, ConfigDict
@@ -58,6 +65,7 @@ from schemas.domain import (
     Provenance,
     ProvenanceState,
     SourceRef,
+    effective_basis,
 )
 
 from .link_notes import LinkNotFoundError
@@ -129,6 +137,8 @@ class LinkChangeRequest(BaseModel):
     properties: dict[str, Any] | None = None
     interval: Interval | None = None
     occurrences: int | None = None
+    #: What stands behind the link (ADR-081). Left out, the link keeps what stood behind it.
+    basis: Literal["direct", "probabilistic"] | None = None
 
 
 class LinkChangeResult(BaseModel):
@@ -221,12 +231,13 @@ class LinkChangeStore:
         return _row(row) if row else None
 
 
-def _snapshot(edge: Edge) -> dict[str, Any]:
+def _snapshot(edge: Edge, ontology: OntologySchema) -> dict[str, Any]:
     return {
         "type": edge.type,
         "properties": dict(edge.properties),
         "interval": edge.interval.model_dump(mode="json") if edge.interval else None,
         "occurrences": edge.occurrences,
+        "basis": effective_basis(edge.basis, ontology.edge_type(edge.type)),
     }
 
 
@@ -290,15 +301,36 @@ class LinkChangeService:
         except OntologyError as exc:
             raise InvalidChangeError(str(exc)) from exc
 
+        # What stands behind the link (ADR-081 step B). Asked for or kept, it is never Direct
+        # over anything probabilistic: not over a Probabilistic type, and not over a link that
+        # was already probabilistic, because a person never promotes a link to Direct.
+        old_basis = effective_basis(old.basis, self._ontology.edge_type(old.type))
+        wanted = request.basis if request.basis is not None else old_basis
+        if wanted == "direct":
+            if type_def.basis == "probabilistic":
+                raise InvalidChangeError(
+                    f"A link of type {new_type} is probabilistic and cannot be marked Direct."
+                )
+            if old_basis == "probabilistic":
+                raise InvalidChangeError(
+                    "A probabilistic link is never returned to Direct: Direct means a loaded "
+                    "record stands behind it."
+                )
+        # Stored only where it says something the type does not: a mark on a Direct type.
+        new_basis: Literal["direct", "probabilistic"] | None = (
+            "probabilistic" if wanted == "probabilistic" and type_def.basis == "direct" else None
+        )
+
         candidate = old.model_copy(
             update={
                 "type": new_type,
                 "properties": dict(new_properties),
                 "interval": new_interval,
                 "occurrences": new_occurrences,
+                "basis": new_basis,
             }
         )
-        if _snapshot(candidate) == _snapshot(old):
+        if _snapshot(candidate, self._ontology) == _snapshot(old, self._ontology):
             raise ChangeNotMadeError("Nothing about the link would change.")
 
         now = datetime.now(UTC)
@@ -321,6 +353,7 @@ class LinkChangeService:
             properties=dict(new_properties),
             interval=new_interval,
             occurrences=new_occurrences,
+            basis=new_basis,
             provenance=provenance,
             handling=old.handling,
             created_by=principal.id,
@@ -342,6 +375,7 @@ class LinkChangeService:
                 "properties": dict(new_properties),
                 "interval": new_interval,
                 "occurrences": new_occurrences,
+                "basis": new_basis,
                 "provenance": provenance,
                 "audit": AuditStub(
                     created_at=now, created_by=principal.id, revision=old.audit.revision + 1
@@ -357,8 +391,8 @@ class LinkChangeService:
             changed_by=principal.id,
             changed_at=now,
             reason=reason,
-            before=_snapshot(old),
-            after=_snapshot(new),
+            before=_snapshot(old, self._ontology),
+            after=_snapshot(new, self._ontology),
         )
         await self._store.add(change)
         await self._notes.rekey(investigation_id, old.id, replacement_id)

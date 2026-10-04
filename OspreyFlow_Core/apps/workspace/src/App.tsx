@@ -1043,6 +1043,8 @@ export function App() {
                                 : undefined,
                               directed:
                                 edgeTypes.find((t) => t.name === selectedLink.type)?.directed ?? true,
+                              typeBasis:
+                                edgeTypes.find((t) => t.name === selectedLink.type)?.basis ?? null,
                             }
                           : null
                       }

@@ -4,6 +4,7 @@ import type { Edge, EdgeTypeDef } from "../../../../packages/schemas/generated";
 import { LinkChangeError, changeLink, type LinkChangeResult } from "./linkChangeApi";
 import {
   MAX_REASON_CHARS,
+  basisChoicesFor,
   initialDraft,
   retypeDraft,
   toChangeInput,
@@ -82,6 +83,9 @@ export function LinkChange({
   const choices = typesFor(edgeTypes, sourceType, targetType);
   const typeDef = edgeTypes.find((t) => t.name === draft.type);
   const showDates = typeDef?.temporal === true || edge.interval != null;
+  // ADR-081 step B: what stands behind the link is asked each time, with no default. With one
+  // possible answer (a Probabilistic type, or a link already marked) it is stated, not asked.
+  const bases = basisChoicesFor(edge, typeDef);
 
   const save = async () => {
     if (busy) return;
@@ -210,6 +214,50 @@ export function LinkChange({
           )}
         </label>
       ))}
+
+      {bases.length > 1 && (
+        <div style={{ display: "grid", gap: "var(--sp-4)" }}>
+          <span id="link-basis-label" style={{ fontSize: "var(--fs-12)", color: "var(--text-secondary)" }}>
+            What stands behind it? (required)
+          </span>
+          <div role="radiogroup" aria-labelledby="link-basis-label" style={{ display: "grid", gap: "var(--sp-4)" }}>
+            <label style={{ display: "flex", gap: "var(--sp-8)", alignItems: "baseline" }}>
+              <input
+                type="radio"
+                name="link-basis"
+                value="direct"
+                checked={draft.basis === "direct"}
+                disabled={busy}
+                onChange={() => setDraft({ ...draft, basis: "direct" })}
+              />
+              <span>
+                Direct
+                <span style={{ color: "var(--text-tertiary)" }}> — a loaded record stands behind it</span>
+              </span>
+            </label>
+            <label style={{ display: "flex", gap: "var(--sp-8)", alignItems: "baseline" }}>
+              <input
+                type="radio"
+                name="link-basis"
+                value="probabilistic"
+                checked={draft.basis === "probabilistic"}
+                disabled={busy}
+                onChange={() => setDraft({ ...draft, basis: "probabilistic" })}
+              />
+              <span>
+                Probabilistic
+                <span style={{ color: "var(--text-tertiary)" }}> — statistically derived, or declared by you</span>
+              </span>
+            </label>
+          </div>
+        </div>
+      )}
+      {bases.length === 1 && (
+        <p style={{ margin: 0, fontSize: "var(--fs-12)", color: "var(--text-secondary)" }}>
+          What stands behind it: <span style={{ color: "var(--text-primary)" }}>Probabilistic</span> — the only
+          basis this link may have. A link is never promoted to Direct by hand.
+        </p>
+      )}
 
       <label style={{ display: "grid", gap: "var(--sp-4)" }}>
         <span style={{ fontSize: "var(--fs-12)", color: "var(--text-secondary)" }}>Records behind it</span>

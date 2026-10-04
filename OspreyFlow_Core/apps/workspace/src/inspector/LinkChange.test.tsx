@@ -136,3 +136,60 @@ describe("LinkChange", () => {
     expect((screen.getByLabelText("Records behind it") as HTMLInputElement).value).toBe("3");
   });
 });
+
+// ADR-081 step B: the form asks what stands behind the link, with no default.
+describe("LinkChange and the basis", () => {
+  const BASIS_TYPES: EdgeTypeDef[] = [
+    { name: "ASSOCIATE_OF", from: ["Person"], to: ["Person"], basis: "direct" },
+    { name: "LIKELY_ASSOCIATE_OF", from: ["Person"], to: ["Person"], basis: "probabilistic" },
+  ];
+  function mountWith(link: ReturnType<typeof makeEdge>, onChanged = vi.fn()) {
+    render(
+      <LinkChange
+        apiBaseUrl="http://api.test"
+        bearerToken="tok"
+        investigationId="inv-1"
+        edge={link}
+        sourceType="Person"
+        targetType="Person"
+        edgeTypes={BASIS_TYPES}
+        openSignal={1}
+        onChanged={onChanged}
+      />,
+    );
+    return onChanged;
+  }
+
+  it("asks with two unchecked choices for a link of a Direct type", () => {
+    mountWith(edge);
+    const group = screen.getByRole("radiogroup", { name: /stands behind/i });
+    const radios = Array.from(group.querySelectorAll("input[type=radio]")) as HTMLInputElement[];
+    expect(radios.map((r) => r.value)).toEqual(["direct", "probabilistic"]);
+    expect(radios.every((r) => !r.checked)).toBe(true);
+  });
+
+  it("will not save until the basis is chosen, then sends the mark with the reason", async () => {
+    const fetchMock = stubFetch(200, {
+      edge: { ...edge, id: "e2", basis: "probabilistic" },
+      delta: { seq: 2, op: "replace_edge", old_edge_id: "e1", edge: { ...edge, id: "e2" } },
+      change: { id: "c1", reason: "Inferred from timing." },
+    });
+    mountWith(edge);
+    fireEvent.change(screen.getByLabelText(/Why is it being changed/), { target: { value: "Inferred from timing." } });
+    fireEvent.click(screen.getByRole("button", { name: "Save change" }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/stands behind/i);
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText(/^Probabilistic/));
+    fireEvent.click(screen.getByRole("button", { name: "Save change" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = (fetchMock.mock.calls[0] as unknown as [string, RequestInit]);
+    expect(JSON.parse(String(init.body))).toEqual({ reason: "Inferred from timing.", basis: "probabilistic" });
+  });
+
+  it("states the one possible basis as fixed text for a link that is already probabilistic", () => {
+    mountWith(makeEdge("e9", "a", "b", { type: "LIKELY_ASSOCIATE_OF" }));
+    expect(screen.queryByRole("radiogroup", { name: /stands behind/i })).toBeNull();
+    expect(document.body.textContent).toMatch(/Probabilistic/);
+    expect(document.body.textContent).toMatch(/only basis/i);
+  });
+});

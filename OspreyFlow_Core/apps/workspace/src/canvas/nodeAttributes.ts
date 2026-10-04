@@ -345,20 +345,41 @@ export type EdgeProgramName =
   | "glass-edge-dotted"
   | "glass-arrow-dotted";
 
-/** Which Sigma edge program draws this edge type. An arrowhead only where the ontology says the
+export type LinkBasis = "direct" | "probabilistic";
+
+/** What stands behind a link, read from the link and its type together (ADR-081 decision 2, step
+ * B). A link of a Probabilistic type is probabilistic whatever is stored on it; a link of a Direct
+ * type is direct unless it carries its own probabilistic mark; a type with no basis (`NOT_SAME_AS`,
+ * or one the ontology does not know) gives none. The same rule as `schemas.domain.effective_basis`. */
+export function effectiveBasis(
+  linkBasis: LinkBasis | null | undefined,
+  edgeType: EdgeTypeStyle | undefined,
+): LinkBasis | null {
+  const typeBasis = edgeType?.basis ?? null;
+  if (typeBasis === "probabilistic") return "probabilistic";
+  if (linkBasis === "probabilistic") return "probabilistic";
+  return typeBasis;
+}
+
+/** Which Sigma edge program draws this link. An arrowhead only where the ontology says the
  * relationship has a direction (`EdgeTypeDef.directed`): a symmetric type such as `SAME_AS` must
  * not look as if it points one way, and a type the ontology does not know claims no direction.
- * The line style follows the type's basis and is never authored (ADR-081): Probabilistic is always
- * dotted, Direct is always solid, and a type with no basis (`NOT_SAME_AS`, or one the ontology does
- * not know) is drawn as it always was. A solid undirected type that declares a thickness uses the
- * program that honours width, since the plain line program is one pixel wide whatever its size. */
+ * The line style follows the link's basis and is never authored (ADR-081): Probabilistic is always
+ * dotted, Direct is always solid, and a link with no basis (`NOT_SAME_AS`, or a type the ontology
+ * does not know) is drawn as it always was. The link's own mark counts (step B): a link of a Direct
+ * type an analyst marked probabilistic is dotted. A solid undirected type that declares a thickness
+ * uses the program that honours width, since the plain line program is one pixel wide whatever its
+ * size. */
 export function edgeProgramFor(
   edgeType: string,
   edgeTypes: readonly EdgeTypeStyle[],
+  linkBasis?: LinkBasis | null,
 ): EdgeProgramName {
   const def = edgeTypes.find((t) => t.name === edgeType);
   const directed = def?.directed === true;
-  if (def?.basis === "probabilistic") return directed ? "glass-arrow-dotted" : "glass-edge-dotted";
+  if (effectiveBasis(linkBasis, def) === "probabilistic") {
+    return directed ? "glass-arrow-dotted" : "glass-edge-dotted";
+  }
   if (directed) return "glass-arrow";
   return typeof def?.thickness === "number" ? "glass-edge-thick" : "glass-edge";
 }

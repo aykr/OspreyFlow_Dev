@@ -97,3 +97,31 @@ describe("LinkDetails", () => {
     expect(document.body.textContent).toContain("b");
   });
 });
+
+// ADR-081 step B: the Inspector says what stands behind the link, and, for a link of a Direct type an
+// analyst marked probabilistic, that the reason is in the change history.
+describe("LinkDetails and the basis", () => {
+  it("says a link of a Direct type is Direct", () => {
+    render(<LinkDetails edge={link()} {...ends} directed typeBasis="direct" />);
+    expect(screen.getByText(/^Direct/)).toBeTruthy();
+    expect(document.body.textContent).toMatch(/loaded record/i);
+  });
+
+  it("says a link of a Probabilistic type is Probabilistic", () => {
+    render(<LinkDetails edge={link()} {...ends} directed typeBasis="probabilistic" />);
+    expect(screen.getByText(/^Probabilistic/)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/change history/i);
+  });
+
+  it("says when an analyst marked a Direct type's link probabilistic, and where the reason is", () => {
+    render(<LinkDetails edge={link({ basis: "probabilistic" })} {...ends} directed typeBasis="direct" />);
+    expect(screen.getByText(/^Probabilistic/)).toBeTruthy();
+    expect(document.body.textContent).toMatch(/declared by an analyst/i);
+    expect(document.body.textContent).toMatch(/change history/i);
+  });
+
+  it("shows no basis row for a type that has none", () => {
+    render(<LinkDetails edge={link()} {...ends} directed typeBasis={null} />);
+    expect(screen.queryByText("Basis")).toBeNull();
+  });
+});

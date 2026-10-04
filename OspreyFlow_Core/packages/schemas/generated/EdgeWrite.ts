@@ -6,6 +6,7 @@ export type NodeId = string;
 export type ValidFrom = string;
 export type ValidTo = string | null;
 export type Occurrences = number;
+export type Basis = ("direct" | "probabilistic") | null;
 export type ProvenanceState = "asserted" | "inferred" | "unresolved";
 export type DocumentId = string;
 export type Locator = string;
@@ -40,6 +41,7 @@ export interface EdgeWrite {
   properties?: Properties;
   interval?: Interval | null;
   occurrences?: Occurrences;
+  basis?: Basis;
   provenance: Provenance;
   handling: Handling;
   created_by: PrincipalId;
