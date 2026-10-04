@@ -33,7 +33,7 @@ import {
   EdgeRectangleProgram,
   createNodeCompoundProgram,
 } from "sigma/rendering";
-import { animateNodes } from "sigma/utils";
+import { animateNodes, graphExtent } from "sigma/utils";
 import Sigma from "sigma";
 import {
   forwardRef,
@@ -249,6 +249,9 @@ export interface GlassCanvasHandle {
    * not in `graph` or nothing is mounted. Lets a browser test click on or beside a link without
    * guessing where the layout put it. */
   viewportPositionOf: (nodeId: string) => { x: number; y: number } | null;
+  /** The camera's position and zoom ratio, so a browser test can assert the view did not move by
+   * itself (ADR-060 Amendment 2); `null` while nothing is mounted. */
+  cameraState: () => { x: number; y: number; ratio: number } | null;
   /** The name the canvas draws beside `nodeId` right now (empty when it draws none), or `null` if
    * the node is not in `graph` or nothing is mounted. Labels are painted to a canvas, so a browser
    * test cannot read them from the page; this asks the renderer what it was given. */
@@ -847,14 +850,27 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // node per cluster takes part and the others follow it afterwards.
     useEffect(() => {
       let timer: ReturnType<typeof setTimeout> | undefined;
-      const run = () => {
+      // ADR-060 Amendment 2. "added": nodes arrived (an expansion, a search result, a stream
+      // delta) — the nodes already settled stay exactly where they are and the new ones settle
+      // around them, and the camera is not touched, so the view never moves under the analyst's
+      // hands. "arrange": the analyst asked (the Layout menu, Arrange again) or the resolution
+      // released nodes — everything is arranged afresh and the view is fitted to the result.
+      // The very first fill of an empty canvas is fitted too, since there is no view to keep.
+      const run = (reason: "added" | "arrange") => {
         const clusterOf = (id: string) =>
           graph.getNodeAttribute(id, "data").resolution?.cluster_id ?? id;
+        const firstFill = settledRef.current.size === 0;
+        const keepSettled = reason === "added" && layoutModeRef.current === "organic";
         const nodes: LayoutNode[] = [];
         graph.forEachNode((id) => {
           if (clusterOf(id) !== id) return;
           const at = realPositionOf(id);
-          nodes.push({ id, x: at.x, y: at.y });
+          nodes.push({
+            id,
+            x: at.x,
+            y: at.y,
+            pinned: keepSettled && settledRef.current.has(id),
+          });
         });
         const present = new Set(nodes.map((n) => n.id));
         const edges: [string, string][] = [];
@@ -930,25 +946,45 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           bubbleGroupsRef.current = null;
         }
         if (!settled) return; // too large to arrange quickly: the positions stay
+        // Only the nodes that are going somewhere else are animated; a node that stays put is not
+        // handed to the animation at all, so nothing nudges it.
         const targets: Record<string, { x: number; y: number }> = {};
         for (const [id, at] of settled) {
-          targets[id] = at;
+          const now = realPositionOf(id);
+          if (Math.abs(now.x - at.x) > 0.5 || Math.abs(now.y - at.y) > 0.5) targets[id] = at;
           settledRef.current.add(id);
         }
-        animateNodes(graph, targets, { duration: 420 }, () => {
+        const fitView = reason === "arrange" || firstFill;
+        // The renderer scales the graph's bounding box to the container, so a node arriving at
+        // the edge would shift every other node on screen although none of them moved. The box
+        // is frozen after each arrangement and released only when the view is fitted afresh.
+        if (fitView) sigmaRef.current?.setCustomBBox(null);
+        const finish = () => {
           refreshClusterVisualState();
           sigmaRef.current?.scheduleRefresh();
           const sigma = sigmaRef.current;
-          if (sigma) redrawWhenCameraStops(sigma, sigma.getCamera().animatedReset({ duration: 420 }));
-        });
+          if (!sigma) return;
+          // The box is the graph's own extent, read from the graph: the renderer's `getBBox()` answers
+          // in its normalised unit square before its next pass, which froze everything into one point.
+          if (fitView) {
+            sigma.setCustomBBox(graphExtent(graph));
+            sigma.refresh();
+            redrawWhenCameraStops(sigma, sigma.getCamera().animatedReset({ duration: 420 }));
+          } else if (sigma.getCustomBBox() === null) {
+            sigma.setCustomBBox(graphExtent(graph));
+            sigma.refresh();
+          }
+        };
+        if (Object.keys(targets).length === 0) finish();
+        else animateNodes(graph, targets, { duration: 420 }, finish);
       };
       const schedule = () => {
         clearTimeout(timer);
-        timer = setTimeout(run, 150);
+        timer = setTimeout(() => run("added"), 150);
       };
       arrangeNowRef.current = () => {
         clearTimeout(timer);
-        run();
+        run("arrange");
       };
       graph.on("nodeAdded", schedule);
       graph.on("edgeAdded", schedule);
@@ -1310,6 +1346,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           const sigma = sigmaRef.current;
           if (!sigma || !graph.hasNode(nodeId)) return null;
           return sigma.getNodeDisplayData(nodeId)?.label ?? "";
+        },
+        cameraState: () => {
+          const sigma = sigmaRef.current;
+          if (!sigma) return null;
+          const { x, y, ratio } = sigma.getCamera().getState();
+          return { x, y, ratio };
         },
         viewportPositionOf: (nodeId: string) => {
           const sigma = sigmaRef.current;

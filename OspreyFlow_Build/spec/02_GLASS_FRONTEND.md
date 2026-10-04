@@ -445,6 +445,14 @@ the circles packed against one another; a second choice, **Bubbles by**, picks *
 default) or *Community*. Both only move nodes: nothing is stored or removed, and both are reachable by
 keyboard through the Layout choice (`keyboard/keyboard.spec.ts`).
 
+**Arranging and the view (ADR-060 Amendment 2).** When nodes arrive (an expansion, a search result, a
+delta) the nodes already settled stay exactly where they are and the new ones settle around the neighbours
+they came in beside; the camera is not touched, so the view never moves under the analyst's hands. When the
+analyst asks (the Layout menu, *Arrange again*), or the resolution releases nodes, everything is arranged
+afresh and the view is fitted to the result; the first fill of an empty canvas is fitted too. Only nodes
+that are going somewhere are animated. `keyboard/keyboard.spec.ts` proves an expansion leaves the camera and
+the settled nodes where they were.
+
 ### 3.1h Branch selected, and the strip of tabs (ADR-084)
 
 Selecting nodes enables **Branch selected (n)**, beside Remove selected and Clear view (reachable by Tab; `keyboard/keyboard.spec.ts`). It sends the nodes to a **new case of their own**, holding those nodes and the links between them, and opens it. The case you branched from is left exactly as it was. A branch is a **copy** made at that moment: later changes to either never touch the other. A selected Group Node stands for every member of its group, so choosing one chooses them all. What the new case holds is re-checked against the branching analyst's own clearance, as every read is: a node they may not see is not copied, and a request that leaves nothing to copy says only "None of the selected nodes could be branched", whatever the reason.

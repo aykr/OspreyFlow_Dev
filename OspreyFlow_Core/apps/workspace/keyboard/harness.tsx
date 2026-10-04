@@ -32,6 +32,7 @@ declare global {
     };
     __CANVAS__?: {
       viewportPositionOf: (nodeId: string) => { x: number; y: number } | null;
+      cameraState: () => { x: number; y: number; ratio: number } | null;
       expandFrom: (nodeId: string, depth: number) => void;
       /** The name the canvas draws beside a node now; empty when it draws none. */
       labelOf: (nodeId: string) => string | null;
@@ -120,6 +121,7 @@ function edge(id: string, source: string, target: string, type = "ASSOCIATE_OF")
 const canvasHandle = createRef<GlassCanvasHandle>();
 window.__CANVAS__ = {
   viewportPositionOf: (id) => canvasHandle.current?.viewportPositionOf(id) ?? null,
+  cameraState: () => canvasHandle.current?.cameraState() ?? null,
   expandFrom: (id, depth) => canvasHandle.current?.expandFrom(id, depth),
   labelOf: (id) => canvasHandle.current?.labelOf(id) ?? null,
   nodeColour: (id) => (workingSet.graph.hasNode(id) ? (workingSet.graph.getNodeAttribute(id, "color") as string) : null),

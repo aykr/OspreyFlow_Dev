@@ -165,6 +165,7 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   // and the pickers it opens are native controls, but whether Tab reaches them, an arrow key chooses,
   // and the label on the canvas then changes is exactly what the suite exists to prove.
   "labels-menu-by-keyboard",
+  "an-expansion-leaves-the-view-and-the-settled-nodes-where-they-were",
 ] as const);
 
 /**

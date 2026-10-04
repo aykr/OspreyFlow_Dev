@@ -226,6 +226,82 @@ test("Enter expands the focused node — a real network call, not a stub", async
   registerCovered("CANVAS_ACTIONS", "enter-expand");
 });
 
+test("an expansion leaves the view and the settled nodes where they were (ADR-060 Amendment 2)", async ({
+  page,
+}) => {
+  await page.goto("/keyboard/harness.html");
+  await stubSmallExpansionPreview(page);
+  const person = (id: string) => ({
+    id,
+    type: "Person",
+    properties: { family_name: id },
+    provenance: { state: "asserted", sources: [], first_seen: "2026-01-01T00:00:00Z" },
+    handling: { classification: "OFFICIAL", handling_code: "P", originator: "unit-1", owning_unit: "unit-1" },
+    audit: { created_at: "2026-01-01T00:00:00Z", created_by: "fixture" },
+  });
+  const link = (id: string, source: string, target: string) => ({
+    id,
+    type: "ASSOCIATE_OF",
+    source,
+    target,
+    provenance: { state: "asserted", sources: [], first_seen: "2026-01-01T00:00:00Z" },
+    handling: { classification: "OFFICIAL", handling_code: "P", originator: "unit-1", owning_unit: "unit-1" },
+    audit: { created_at: "2026-01-01T00:00:00Z", created_by: "fixture" },
+  });
+  await page.route("**/*/expand", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        delta: {
+          seq: 2,
+          op: "add",
+          nodes: [person("x1"), person("x2")],
+          edges: [link("ex1", "n1", "x1"), link("ex2", "n1", "x2")],
+        },
+        filtered_count: 0,
+      }),
+    });
+  });
+  const positions = () =>
+    page.evaluate((ids) => ids.map((id) => window.__CANVAS__?.viewportPositionOf(id)), ["n0", "n1", "n2", "n3", "n4"]);
+  const camera = () => page.evaluate(() => window.__CANVAS__?.cameraState());
+
+  // Let the first layout settle, then move the camera as an analyst would, by zooming in.
+  let last = "";
+  await expect
+    .poll(async () => {
+      const now = JSON.stringify(await positions());
+      const still = now === last;
+      last = now;
+      return still;
+    }, { intervals: [300], timeout: 20_000 })
+    .toBe(true);
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, -300);
+  await page.waitForTimeout(600);
+  const cameraBefore = await camera();
+  expect(cameraBefore!.ratio).toBeLessThan(1);
+  const before = await positions();
+
+  await canvas.focus();
+  await page.keyboard.press("ArrowRight"); // focus n1
+  await page.keyboard.press("Enter"); // expand it: x1 and x2 arrive beside it
+  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.viewportPositionOf("x2") !== null)).toBe(true);
+  await page.waitForTimeout(1200); // past the layout's delay and its animation
+
+  // The camera did not move or re-zoom by itself, and the nodes that were already settled stayed put.
+  expect(await camera()).toEqual(cameraBefore);
+  const after = await positions();
+  for (let i = 0; i < before.length; i++) {
+    expect(Math.abs(after[i]!.x - before[i]!.x), `node ${i} x`).toBeLessThan(1);
+    expect(Math.abs(after[i]!.y - before[i]!.y), `node ${i} y`).toBeLessThan(1);
+  }
+  registerCovered("CANVAS_ACTIONS", "an-expansion-leaves-the-view-and-the-settled-nodes-where-they-were");
+});
+
 test("Ctrl+ArrowRight cycles the focused node forward through an existing ring", async ({
   page,
 }) => {
@@ -840,6 +916,27 @@ test("a failed explain-cluster announces an error rather than leaving the analys
 // Presses Tab until the control is focused, at most `limit` times. The canvas region holds several
 // real tab-stops of its own, so a test reaches a control the way a keyboard user does: by tabbing
 // to it, never by calling `.focus()` on it.
+/** Chooses an option of a focused `<select>` by typing the start of its label. A closed select takes
+ * an arrow key differently by platform (macOS opens the menu instead of moving the choice, which is
+ * why ArrowDown worked on the Linux build machines and never on the owner's Mac); typing letters
+ * selects the first matching option everywhere. `chars` is how much of the label to type: enough to
+ * tell it from its neighbours. */
+async function chooseOption(
+  page: Page,
+  select: ReturnType<Page["getByRole"]>,
+  value: string,
+  chars = 4,
+): Promise<void> {
+  await expect(select).toBeFocused();
+  const label = ((await select.locator(`option[value="${value}"]`).textContent()) ?? "").trim();
+  if (label === "") throw new Error(`no option with value ${value}`);
+  // The browser joins letters typed within about a second into one search, so a second choice on
+  // the same select must not run on from the first.
+  await page.waitForTimeout(1100);
+  await page.keyboard.type(label.slice(0, chars));
+  await expect(select).toHaveValue(value);
+}
+
 async function tabTo(page: Page, control: ReturnType<Page["getByRole"]>, limit = 14): Promise<void> {
   for (let presses = 0; presses < limit; presses++) {
     if (await control.evaluate((el) => el === document.activeElement).catch(() => false)) return;
@@ -975,8 +1072,7 @@ test("the Layout menu is reached by Tab and changed by the arrow keys", async ({
   const layout = page.getByRole("combobox", { name: "Layout" });
   await tabTo(page, layout);
   await expect(layout).toHaveValue("organic");
-  await page.keyboard.press("ArrowDown");
-  await expect(layout).toHaveValue("radial");
+  await chooseOption(page, layout, "radial");
   registerCovered("CANVAS_ACTIONS", "layout-menu-chooses-layout");
 });
 
@@ -986,8 +1082,7 @@ test("the Layout menu reaches the Force-directed tree by the arrow keys, and it 
   await canvas.focus();
   const layout = page.getByRole("combobox", { name: "Layout" });
   await tabTo(page, layout);
-  for (let i = 0; i < 5; i++) await page.keyboard.press("ArrowDown");
-  await expect(layout).toHaveValue("tree");
+  await chooseOption(page, layout, "tree");
   // n3 shares a place with n2 (they are one resolution cluster), so the others are what is checked:
   // every one of them has a place of its own.
   const ids = ["n0", "n1", "n2", "n4", "n5"];
@@ -1012,16 +1107,14 @@ test("the Layout menu reaches Clustered bubbles, draws a bubble for each group, 
   await canvas.focus();
   const layout = page.getByRole("combobox", { name: "Layout" });
   await tabTo(page, layout);
-  for (let i = 0; i < 6; i++) await page.keyboard.press("ArrowDown");
-  await expect(layout).toHaveValue("bubbles");
+  await chooseOption(page, layout, "bubbles");
   // By entity type: five people and one endpoint.
   const overlay = page.getByTestId("bubble-overlay");
   await expect(overlay).toContainText("Person (5)");
   await expect(overlay).toContainText("Endpoint (1)");
   const by = page.getByRole("combobox", { name: "Bubbles by" });
   await by.focus();
-  await page.keyboard.press("ArrowDown");
-  await expect(by).toHaveValue("community");
+  await chooseOption(page, by, "community");
   await expect(overlay).toContainText("Community 1");
   await expect(overlay).not.toContainText("Endpoint (1)");
   registerCovered("CANVAS_ACTIONS", "layout-menu-chooses-clustered-bubbles-and-what-they-group-by");
@@ -1177,9 +1270,7 @@ test("the Labels control is reached by Tab, and a property chosen with the arrow
 
   const picker = page.getByRole("combobox", { name: "Label for Person" });
   await tabTo(page, picker);
-  await page.keyboard.press("ArrowDown"); // family_name
-  await page.keyboard.press("ArrowDown"); // given_names
-  await expect(picker).toHaveValue("given_names");
+  await chooseOption(page, picker, "given_names", 5);
   await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n5"))).toBe("Zed");
   // A person with no given names keeps a name rather than going blank.
   await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n0"))).toBe("n0");
@@ -1226,16 +1317,13 @@ test("the Icons control is reached by Tab, and a drawing chosen with the arrow k
 
   const picker = page.getByRole("combobox", { name: "Icon for Person" });
   await tabTo(page, picker);
-  await page.keyboard.press("ArrowDown"); // person, the same as the default
-  await page.keyboard.press("ArrowDown"); // people
-  await expect(picker).toHaveValue("glyph:people");
+  await chooseOption(page, picker, "glyph:people", 4);
   await expect.poll(() => nodeImage(page, "n0")).not.toBe(first);
   expect(svgOf(await nodeImage(page, "n0"))).toContain("<g ");
   // Only the type chosen for changes: an Endpoint keeps the ontology's.
   expect(svgOf(await nodeImage(page, "n4"))).toContain("<g ");
 
-  await page.keyboard.press("End"); // None
-  await expect(picker).toHaveValue("none");
+  await chooseOption(page, picker, "none", 2); // "No…": None
   await expect.poll(async () => svgOf(await nodeImage(page, "n0"))).not.toContain("<g ");
 
   await page.keyboard.press("Escape");
@@ -1246,10 +1334,13 @@ test("the Icons control is reached by Tab, and a drawing chosen with the arrow k
 
 test("a picture given from a file is drawn in the shape, and is still there after a reload", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
-  const position = await settle(page, "n0");
+  await settle(page, "n0");
   await page.waitForTimeout(500);
   const box = (await page.getByRole("application", { name: "Network canvas" }).boundingBox())!;
+  // The position is read at each check, not once: the view is fitted a moment after the layout
+  // settles, and a position kept from before that points beside the node under load.
   const centreOf = async () => {
+    const position = await settle(page, "n0");
     const pixels = readPng(await page.screenshot());
     return pixels.at(Math.round(box.x + position!.x), Math.round(box.y + position!.y));
   };
