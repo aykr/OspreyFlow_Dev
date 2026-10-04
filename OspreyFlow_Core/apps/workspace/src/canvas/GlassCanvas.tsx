@@ -322,6 +322,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     ref,
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const modifierListenersRef = useRef<(() => void) | null>(null);
     const sigmaRef = useRef<Sigma<
       WorkingSetNodeAttributes,
       WorkingSetEdgeAttributes
@@ -1162,10 +1163,36 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         setLinkMenu({ x: original.clientX, y: original.clientY, edgeId, layout: "list" });
       };
 
+      // Which modifier keys are held, kept from the keyboard itself (ADR-084 Amendment 1). The
+      // click Sigma hands on does not always carry them: measured in Chromium, a Shift+click
+      // arrived with `shiftKey` false although the page's own listener saw it true, so a click
+      // judged by its own flags alone replaced the selection when it should have added to it.
+      const held = { shift: false, ctrl: false, meta: false };
+      const onModifier = (e: KeyboardEvent) => {
+        held.shift = e.shiftKey;
+        held.ctrl = e.ctrlKey;
+        held.meta = e.metaKey;
+      };
+      const onBlur = () => {
+        held.shift = held.ctrl = held.meta = false;
+      };
+      window.addEventListener("keydown", onModifier, true);
+      window.addEventListener("keyup", onModifier, true);
+      window.addEventListener("blur", onBlur);
+      modifierListenersRef.current = () => {
+        window.removeEventListener("keydown", onModifier, true);
+        window.removeEventListener("keyup", onModifier, true);
+        window.removeEventListener("blur", onBlur);
+      };
       sigma.on("clickNode", ({ node, event }) => {
+        // Shift, Ctrl or Cmd with the click adds the node to the selection, or takes it out again
+        // (ADR-084 Amendment 1: Shift is the key most people reach for; the other two stay).
+        const flags = event.original instanceof MouseEvent ? event.original : null;
         const multi =
-          event.original instanceof MouseEvent &&
-          (event.original.metaKey || event.original.ctrlKey);
+          held.shift ||
+          held.ctrl ||
+          held.meta ||
+          (flags !== null && (flags.metaKey || flags.ctrlKey || flags.shiftKey));
         setSelected((prev) => {
           const next = multi ? new Set(prev) : new Set<string>();
           if (next.has(node) && multi) next.delete(node);
@@ -1237,6 +1264,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       });
 
       return () => {
+        modifierListenersRef.current?.();
+        modifierListenersRef.current = null;
         sigma.kill();
         sigmaRef.current = null;
       };
@@ -2056,6 +2085,19 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           count: undefined,
           group: "Actions",
           onSelect: () => unfoldGroup(folded.communityId),
+        });
+      }
+
+      // ADR-084 Amendment 1: a node that is part of the selection offers to branch the whole
+      // selection from its own menu, so the analyst need not find the button over the canvas.
+      // The count is the selection's, Group Nodes included (each stands for its members).
+      if (onBranchCreated && selected.has(nodeId)) {
+        items.push({
+          id: "branch-selected",
+          label: `Branch selected (${selected.size}) to a new tab`,
+          count: undefined,
+          group: "Actions",
+          onSelect: () => void branchSelected(),
         });
       }
 

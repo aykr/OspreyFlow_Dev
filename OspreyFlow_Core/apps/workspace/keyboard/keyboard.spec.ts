@@ -916,6 +916,34 @@ test("Branch selected sends the selected nodes to a new case, by keyboard, and s
   registerCovered("CANVAS_ACTIONS", "branch-selected-opens-a-new-tab");
 });
 
+test("a selected node's own menu offers Branch selected for the whole selection (ADR-084 Amendment 1)", async ({
+  page,
+}) => {
+  await page.goto("/keyboard/harness.html");
+  let body: unknown = null;
+  await page.route("**/*/investigations/*/branch", async (route) => {
+    body = route.request().postDataJSON();
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({ id: "branch-2", name: "Keyboard fixture · 2 selected" }),
+    });
+  });
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus(); // n0 selected and focused
+  await page.keyboard.press("Control+Shift+ArrowRight"); // focus the next node in the working set
+  await page.keyboard.press("Space"); // add it to the selection: two selected, the focused one among them
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selection?.length)).toBe(2);
+  await page.keyboard.press("\\");
+  const item = page.getByRole("menuitem", { name: /^Branch selected \(2\)/ });
+  await expect(item).toBeVisible();
+  await item.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => body).toEqual({ node_ids: expect.arrayContaining(["n0"]) });
+  expect((body as { node_ids: string[] }).node_ids).toHaveLength(2);
+  registerCovered("CANVAS_ACTIONS", "branch-selected-from-a-selected-nodes-menu");
+});
+
 test("Branch selected says so when nothing could be branched, and opens no tab", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
   await page.route("**/*/investigations/*/branch", async (route) => {
