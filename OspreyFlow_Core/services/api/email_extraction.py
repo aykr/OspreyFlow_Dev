@@ -197,6 +197,7 @@ class EmailExtractionService:
         document_id = email_document_id(event.event_id)
         props: dict[str, Any] = dict(event.properties)
         title = props.get("subject")
+        message_id = props.get("message_id")
         provenance = Provenance(
             state=ProvenanceState.ASSERTED,
             sources=[
@@ -214,8 +215,10 @@ class EmailExtractionService:
             properties={
                 "title": title if isinstance(title, str) and title else "(no subject)",
                 "sent_at": event.occurred_at.isoformat(),
-                "message_id": props.get("message_id"),
                 "event_id": event.event_id,
+                # Only what the email has: a missing id is left out, never written as null, which
+                # the ontology's `string` would refuse.
+                **({"message_id": message_id} if isinstance(message_id, str) and message_id else {}),
             },
             provenance=provenance,
             handling=event.handling,

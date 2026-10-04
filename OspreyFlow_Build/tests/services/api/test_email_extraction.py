@@ -40,9 +40,12 @@ from services.api.working_set.models import DeltaAdd, LimitExceededError
 from services.api.working_set.service import WorkingSetService
 
 from ontology.loader import load_default_ontology
+from ontology.validation import validate_properties
 from schemas.analytics import EventListRequest, EventListResult, EventRecord
 from schemas.domain import (
     AuditStub,
+    EdgeId,
+    EdgeWrite,
     Handling,
     Interval,
     Node,
@@ -121,7 +124,10 @@ class RecordingAnalytics:
 
 
 class WritingGraph(FakeGraphPort):
-    """Keeps every node and link it is given, and hands a written node back by id."""
+    """Keeps every node and link it is given, and hands a written node back by id. Refuses what the
+    ArcadeDB adapter refuses (rule 15): every write is checked against the ontology with the same
+    `validate_properties` the adapter calls, so a Document carrying a property the ontology does
+    not declare fails here as it fails there (the defect the owner saw on 4 October 2026)."""
 
     def __init__(self) -> None:
         super().__init__(Subgraph(nodes=[], edges=[]), candidate_count=0)
@@ -134,8 +140,19 @@ class WritingGraph(FakeGraphPort):
         return tx
 
     async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: TxId) -> list[NodeId]:
+        for n in nodes:
+            entity_type = ONTOLOGY.entity_type(n.type)
+            assert entity_type is not None, n.type
+            validate_properties(entity_type, n.properties)
         self._pending_nodes[tx].extend(nodes)
         return [n.id for n in nodes]
+
+    async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: TxId) -> list[EdgeId]:
+        for e in edges:
+            edge_type = ONTOLOGY.edge_type(e.type)
+            assert edge_type is not None, e.type
+            validate_properties(edge_type, e.properties)
+        return await super().upsert_edges(edges, tx)
 
     async def commit_transaction(self, tx: TxId) -> None:
         for n in self._pending_nodes.pop(tx, []):
@@ -477,3 +494,11 @@ async def test_events_without_text_are_counted_not_written() -> None:
     result = await service.show_as_documents("inv-1", "e1", ANALYST, window=None)
     assert (result.written, result.without_text) == (1, 1)
     assert set(graph.nodes) == {email_document_id("ev-1")}
+
+
+async def test_an_email_without_a_message_id_is_written_without_one() -> None:
+    """A missing id is left out, not written as null, which the ontology's `string` refuses."""
+    bare = _event("ev-1").model_copy(update={"properties": {"subject": "Hi", "excerpt": TEXT}})
+    service, graph, _, _, _ = await _build([bare])
+    await service.show_as_documents("inv-1", "e1", ANALYST, window=None)
+    assert "message_id" not in graph.nodes[email_document_id("ev-1")].properties

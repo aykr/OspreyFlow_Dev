@@ -163,6 +163,12 @@ entity_types:
     icon: document
     properties:
       - {name: title, type: string, indexed: true}
+      # An email written as a Document (ADR-089 step 3, ADR-092): when it was sent, its own message
+      # id, and the analytics event it was made from, which the reader reads its text from. All
+      # optional; the version stays 11 for the reason ADR-079 gives (nothing a recipe writes changes).
+      - {name: sent_at, type: datetime}
+      - {name: message_id, type: string}
+      - {name: event_id, type: string}
 
   - name: Vehicle
     pole_class: object
