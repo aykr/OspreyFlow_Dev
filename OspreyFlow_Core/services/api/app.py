@@ -93,6 +93,8 @@ from ports.model import ModelPort
 from schemas.analytics import (
     CrossFilterRequest,
     EventFilter,
+    FirstSeenRequest,
+    FirstSeenResult,
     GeoBin,
     GeoBinRequest,
     GeocodeRequest,
@@ -3320,6 +3322,23 @@ async def cross_filter_route(
         investigation_id=body.filter.investigation_scope,
         resolved_query=body.model_dump(mode="json"),
         result_cardinality=sum(h.total for h in result.values()),
+    )
+    return result
+
+
+@app.post("/v1/analytics/first-seen")
+async def first_seen_route(
+    body: FirstSeenRequest, principal: PrincipalDep, analytics: AnalyticsDep, audit: AuditDep
+) -> FirstSeenResult:
+    """When each node and link first appears in the brush window (ADR-087), for the timeline's
+    playback. Access control is the adapter's, in the query, as for every analytics read."""
+    result = await analytics.first_seen(body, principal)
+    await audit.record(
+        principal=principal,
+        action="analytics_first_seen",
+        investigation_id=body.filter.investigation_scope,
+        resolved_query=body.model_dump(mode="json"),
+        result_cardinality=len(result.nodes) + len(result.edges),
     )
     return result
 

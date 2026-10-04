@@ -15,7 +15,13 @@ import {
   TIMELINE_PLAYBACK_ACTIONS,
 } from "./actionRegistry";
 
-const EMPTY_HISTOGRAM = { bucketing: "fixed_interval", buckets: [], total: 0 };
+// A strip with one dated event: a case with none has no brush and no playback at all (ADR-087), so
+// the playback and exact-date cases below need a case that has them.
+const ONE_EVENT_HISTOGRAM = {
+  bucketing: "fixed_interval",
+  buckets: [{ start: "2026-01-01T00:00:00Z", end: "2026-01-02T00:00:00Z", count: 1 }],
+  total: 1,
+};
 
 async function tabToElementNamed(
   page: Page,
@@ -41,7 +47,7 @@ test("pressing Play actually advances the playback clock forward, reachable by k
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(EMPTY_HISTOGRAM),
+      body: JSON.stringify(ONE_EVENT_HISTOGRAM),
     });
   });
 
@@ -70,7 +76,7 @@ test("the exact-date boxes stay out of sight until Set exact dates is pressed, b
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(EMPTY_HISTOGRAM),
+      body: JSON.stringify(ONE_EVENT_HISTOGRAM),
     });
   });
   await page.goto("/keyboard/timeline-playback-harness.html");
@@ -97,7 +103,7 @@ test("the overlay box stays out of sight until Overlay another case is pressed, 
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(EMPTY_HISTOGRAM),
+      body: JSON.stringify(ONE_EVENT_HISTOGRAM),
     });
   });
   await page.goto("/keyboard/timeline-playback-harness.html");
@@ -119,7 +125,7 @@ test("entering a second investigation's id loads its own cross-case track, reach
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(EMPTY_HISTOGRAM),
+      body: JSON.stringify(ONE_EVENT_HISTOGRAM),
     });
   });
 
@@ -136,6 +142,29 @@ test("entering a second investigation's id loads its own cross-case track, reach
     .toBe(true);
 
   registerCovered("TIMELINE_PLAYBACK_ACTIONS", "cross-case-overlay-loads-second-track");
+});
+
+test("a case with no dated events says so, and offers neither a brush nor playback (ADR-087)", async ({
+  page,
+}) => {
+  await page.route("**/*/v1/analytics/histogram", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ bucketing: "fixed_interval", buckets: [], total: 0 }),
+    });
+  });
+  await page.goto("/keyboard/timeline-playback-harness.html");
+  await expect(page.getByRole("status")).toHaveText(/No dated events in this case/);
+  await expect(page.getByRole("button", { name: /Play/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Set exact dates" })).toHaveCount(0);
+  // Tab through the whole bar: nothing reachable can set a window or start a clock.
+  for (let i = 0; i < 8; i++) {
+    await page.keyboard.press("Tab");
+    const text = await page.evaluate(() => document.activeElement?.textContent ?? "");
+    expect(text).not.toMatch(/Play|exact dates/);
+  }
+  registerCovered("TIMELINE_PLAYBACK_ACTIONS", "no-dated-events-says-so-and-offers-no-brush-or-playback");
 });
 
 test("every registered timeline-playback action has its own proving test case above", () => {

@@ -52,6 +52,8 @@ export type { BaselineRequest } from "./BaselineRequest";
 export type { BaselineResult } from "./BaselineResult";
 export type { CrossFilterDimension } from "./CrossFilterDimension";
 export type { CrossFilterRequest } from "./CrossFilterRequest";
+export type { FirstSeenRequest } from "./FirstSeenRequest";
+export type { FirstSeenResult } from "./FirstSeenResult";
 export type { ConnectorCatalogueEntry } from "./ConnectorCatalogueEntry";
 export type { ConnectDraftInput } from "./ConnectDraftInput";
 export type { StudioRecipeDraft } from "./StudioRecipeDraft";

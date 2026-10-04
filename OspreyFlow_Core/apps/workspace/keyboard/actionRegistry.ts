@@ -280,6 +280,7 @@ export const TIMELINE_PLAYBACK_ACTIONS = defineActionRegistry("TIMELINE_PLAYBACK
   "set-exact-dates-reveals-the-date-boxes",
   "overlay-another-case-reveals-its-box",
   "cross-case-overlay-loads-second-track",
+  "no-dated-events-says-so-and-offers-no-brush-or-playback",
 ] as const);
 
 /**

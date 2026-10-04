@@ -186,6 +186,8 @@ export interface GlassCanvasProps {
    * Defaults to an empty set so this prop stays optional for any caller
    * that hasn't wired cross-filtering (e.g. an existing test harness). */
   dimmedNodeIds?: ReadonlySet<string>;
+  /** Link ids the active cross-filter excludes (ADR-087): dimmed, never removed. */
+  dimmedEdgeIds?: ReadonlySet<string>;
   onSelectionChange?: (nodeIds: string[]) => void;
   /** A branch of the selected nodes was made (ADR-084): the new case's id and name. The caller
    * opens it. Absent: this canvas offers no "Branch selected" button. */
@@ -312,6 +314,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       apiBaseUrl,
       bearerToken,
       dimmedNodeIds = EMPTY_DIMMED_SET,
+      dimmedEdgeIds = EMPTY_DIMMED_SET,
       onSelectionChange,
       onBranchCreated,
       onEdgeSelect,
@@ -326,6 +329,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
     const modifierListenersRef = useRef<(() => void) | null>(null);
+    const dimmedEdgeIdsRef = useRef<ReadonlySet<string>>(EMPTY_DIMMED_SET);
     const sigmaRef = useRef<Sigma<
       WorkingSetNodeAttributes,
       WorkingSetEdgeAttributes
@@ -1003,10 +1007,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selected]);
 
-    // The link drawn highlighted, and the links hidden, are read by the edge reducer.
+    // The link drawn highlighted, the links hidden and the links dimmed are read by the edge reducer.
+    dimmedEdgeIdsRef.current = dimmedEdgeIds;
     useEffect(() => {
       sigmaRef.current?.scheduleRefresh();
-    }, [selectedEdge, hiddenEdges]);
+    }, [selectedEdge, hiddenEdges, dimmedEdgeIds]);
 
     // Re-derive graph-level visual attributes only for the node(s) whose
     // hover/selection actually changed — not the whole working set.
@@ -1120,6 +1125,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             onPath: data.onPath ?? false,
             viewEdgeCount: graph.size,
             declared: declaredFor(data.data.type, edgeTypesRef.current),
+            dimmed: dimmedEdgeIdsRef.current.has(edgeId),
             touchesHoveredNode:
               hoveredNode !== null &&
               (graph.source(edgeId) === hoveredNode ||

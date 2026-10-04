@@ -178,6 +178,7 @@ GET    /v1/patterns                     the calling principal's own saved patter
 GET    /v1/patterns/{pattern_id}        load a saved pattern (?version= for an older one)
 POST   /v1/analytics/histogram          cross-filter histogram set
 POST   /v1/analytics/cross-filter       the same cross-filter, one histogram per requested dimension
+POST   /v1/analytics/first-seen         when each node and link first appears in the window, for the timeline's playback (ADR-087)
 POST   /v1/analytics/geobins            server-side spatial binning
 POST   /v1/analytics/sightings          the "snail trail" — device/location sightings over time (B18)
 POST   /v1/analytics/geometries         batched geometry lookup — a Location's geometry_ref resolved to WGS84, one round trip for a whole working set

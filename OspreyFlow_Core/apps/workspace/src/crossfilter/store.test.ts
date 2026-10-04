@@ -31,7 +31,7 @@ describe("createCrossFilterStore", () => {
   });
 
   it("dims nothing when no filter is active, without calling the API", async () => {
-    const spy = vi.spyOn(api, "fetchCrossFilter");
+    const spy = vi.spyOn(api, "fetchFirstSeen");
     const { store, refresh } = createCrossFilterStore("http://api", "token", "inv-1");
 
     await refresh(["a", "b", "c"]);
@@ -41,18 +41,29 @@ describe("createCrossFilterStore", () => {
     expect(store.getState().dimmedCount).toBe(0);
   });
 
-  it("dims every node id absent from the surviving source_id/target_id buckets", async () => {
-    vi.spyOn(api, "fetchCrossFilter").mockResolvedValue({
-      source_id: { bucketing: "categorical", total: 2, buckets: [{ label: "a", count: 1 }] },
-      target_id: { bucketing: "categorical", total: 1, buckets: [{ label: "b", count: 1 }] },
+  it("dims every node id with no event in the window, and every link too (ADR-087)", async () => {
+    const spy = vi.spyOn(api, "fetchFirstSeen").mockResolvedValue({
+      nodes: { a: "2026-01-02T00:00:00Z", b: "2026-01-02T00:00:00Z" },
+      edges: { ab: "2026-01-02T00:00:00Z" },
     });
     const { store, refresh } = createCrossFilterStore("http://api", "token", "inv-1");
     store.getState().setWindow({ validFrom: "2026-01-01T00:00:00Z", validTo: null });
 
-    await refresh(["a", "b", "c"]);
+    await refresh(["a", "b", "c"], ["ab", "bc"]);
 
+    expect(spy).toHaveBeenCalledWith("http://api", "token", {
+      filter: {
+        investigation_scope: "inv-1",
+        window: { valid_from: "2026-01-01T00:00:00Z", valid_to: null },
+        node_ids: [],
+        edge_types: [],
+      },
+    });
     expect(store.getState().dimmedNodeIds).toEqual(new Set(["c"]));
+    expect(store.getState().dimmedEdgeIds).toEqual(new Set(["bc"]));
     expect(store.getState().dimmedCount).toBe(1);
+    // Kept for the playback, which lights things up in this order.
+    expect(store.getState().firstSeen?.nodes.a).toBe("2026-01-02T00:00:00Z");
   });
 
   it("clearFilter resets both the inputs and the derived dimming state", () => {

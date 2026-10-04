@@ -21,7 +21,8 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 
 import type { EventFilter } from "../../../../packages/schemas/generated";
-import { fetchCrossFilter } from "../analytics/api";
+import { fetchFirstSeen } from "../analytics/api";
+import { emergence, firstSeenFrom, type FirstSeen } from "./emergence";
 
 export interface TimeWindow {
   validFrom: string;
@@ -41,6 +42,11 @@ export interface CrossFilterStoreState {
    * ever removed, only dimmed, and dimming only exists once a filter is
    * actually set. */
   dimmedNodeIds: ReadonlySet<string>;
+  /** Link ids the active filter excludes (ADR-087): a link with no event in the window. */
+  dimmedEdgeIds: ReadonlySet<string>;
+  /** When each node and link first appears in the window, for the playback (ADR-087); `null` with
+   * no filter active. */
+  firstSeen: FirstSeen | null;
   /** For `StatusBar`'s `dimmedCount` prop (`spec/02_GLASS_FRONTEND.md`
    * §2 rule 4 — "the status bar never lies"). */
   dimmedCount: number;
@@ -75,7 +81,7 @@ export interface CrossFilterStore {
    * no dimming state yet otherwise). Takes the id list rather than a
    * graph reference: this store has no graphology dependency, matching
    * `workingset/store.ts`'s own separation. */
-  refresh: (allNodeIds: readonly string[]) => Promise<void>;
+  refresh: (allNodeIds: readonly string[], allEdgeIds?: readonly string[]) => Promise<void>;
 }
 
 export function createCrossFilterStore(
@@ -87,36 +93,47 @@ export function createCrossFilterStore(
     window: null,
     selectedNodeIds: null,
     dimmedNodeIds: new Set(),
+    dimmedEdgeIds: new Set(),
+    firstSeen: null,
     dimmedCount: 0,
     setWindow: (window) => set({ window }),
     setSelectedNodeIds: (selectedNodeIds) => set({ selectedNodeIds }),
     clearFilter: () =>
-      set({ window: null, selectedNodeIds: null, dimmedNodeIds: new Set(), dimmedCount: 0 }),
+      set({
+        window: null,
+        selectedNodeIds: null,
+        dimmedNodeIds: new Set(),
+        dimmedEdgeIds: new Set(),
+        firstSeen: null,
+        dimmedCount: 0,
+      }),
   }));
 
-  async function refresh(allNodeIds: readonly string[]): Promise<void> {
+  /** Re-derives what is dimmed for the nodes and links now in the view. One read: when each node
+   * and link first appears under the filter (ADR-087), which also says which have no event at all. */
+  async function refresh(
+    allNodeIds: readonly string[],
+    allEdgeIds: readonly string[] = [],
+  ): Promise<void> {
     const state = store.getState();
     if (state.window === null && state.selectedNodeIds === null) {
-      store.setState({ dimmedNodeIds: new Set(), dimmedCount: 0 });
+      store.setState({
+        dimmedNodeIds: new Set(),
+        dimmedEdgeIds: new Set(),
+        firstSeen: null,
+        dimmedCount: 0,
+      });
       return;
     }
     const filter = buildEventFilter(investigationScope, state.window, state.selectedNodeIds);
-    const result = await fetchCrossFilter(apiBaseUrl, bearerToken, {
-      filter,
-      dimensions: [
-        { name: "source_id", bucketing: "categorical", field: "source_id" },
-        { name: "target_id", bucketing: "categorical", field: "target_id" },
-      ],
+    const firstSeen = firstSeenFrom(await fetchFirstSeen(apiBaseUrl, bearerToken, { filter }));
+    const dimming = emergence(firstSeen, null, allNodeIds, allEdgeIds);
+    store.setState({
+      firstSeen,
+      dimmedNodeIds: dimming.dimmedNodeIds,
+      dimmedEdgeIds: dimming.dimmedEdgeIds,
+      dimmedCount: dimming.dimmedNodeIds.size,
     });
-    const surviving = new Set<string>();
-    for (const bucket of result.source_id?.buckets ?? []) {
-      if (bucket.label) surviving.add(bucket.label);
-    }
-    for (const bucket of result.target_id?.buckets ?? []) {
-      if (bucket.label) surviving.add(bucket.label);
-    }
-    const dimmed = new Set(allNodeIds.filter((id) => !surviving.has(id)));
-    store.setState({ dimmedNodeIds: dimmed, dimmedCount: dimmed.size });
   }
 
   return { store, refresh };

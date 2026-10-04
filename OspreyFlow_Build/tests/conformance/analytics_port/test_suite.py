@@ -28,6 +28,7 @@ from schemas.analytics import (
     CrossFilterRequest,
     EventFilter,
     EventRecord,
+    FirstSeenRequest,
     GeoBinRequest,
     GeocodeRequest,
     GeometryKind,
@@ -78,10 +79,11 @@ def _event(
     direction: str | None = None,
     properties: dict[str, object] | None = None,
     investigation_scope: str = INVESTIGATION,
+    edge_id: str = "e1",
 ) -> EventRecord:
     return EventRecord(
         event_id=str(ULID()),
-        edge_id="e1",
+        edge_id=edge_id,
         edge_type=edge_type,
         source_id=source_id,
         target_id=target_id,
@@ -618,6 +620,67 @@ async def test_cross_filter_returns_every_dimension_against_the_same_filter(
         assert set(result) == {"temporal", "direction"}
         assert result["temporal"].total == 2
         assert result["direction"].total == 2
+
+
+# --- first_seen (ADR-087): when each node and link first appears in a window ----------------
+
+
+async def test_first_seen_gives_each_node_and_link_its_earliest_event_in_the_window(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """The timeline's playback lights a node or a link up at its first event inside the brush
+    window, so the answer is the earliest event *in the window*, not the earliest ever, and a node
+    is first seen at whichever end of whichever link it is on."""
+    t1 = datetime(2026, 1, 1, 9, tzinfo=UTC)
+    t2 = datetime(2026, 1, 1, 10, tzinfo=UTC)
+    t3 = datetime(2026, 1, 1, 11, tzinfo=UTC)
+    events = [
+        _event(occurred_at=t1, source_id="a", target_id="b", edge_id="ab"),  # before the window
+        _event(occurred_at=t2, source_id="a", target_id="b", edge_id="ab"),
+        _event(occurred_at=t3, source_id="b", target_id="c", edge_id="bc"),
+    ]
+    async with factory.context(events) as adapter:
+        result = await adapter.first_seen(
+            FirstSeenRequest(filter=_filter(window=Interval(valid_from=t2, valid_to=t3))),
+            CLEARED,
+        )
+        assert result.nodes == {"a": t2, "b": t2, "c": t3}
+        assert result.edges == {"ab": t2, "bc": t3}
+
+
+async def test_first_seen_with_no_event_in_the_window_is_empty_not_an_error(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    async with factory.context([_event(occurred_at=now)]) as adapter:
+        later = Interval(
+            valid_from=datetime(2027, 1, 1, tzinfo=UTC), valid_to=datetime(2027, 1, 2, tzinfo=UTC)
+        )
+        result = await adapter.first_seen(FirstSeenRequest(filter=_filter(window=later)), CLEARED)
+        assert result.nodes == {}
+        assert result.edges == {}
+
+
+async def test_unauthorised_first_seen_matches_a_corpus_without_the_hidden_event(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """A hidden earlier event must not pull a node's first appearance forward for someone who may
+    not see it: that would tell them something happened before what they can see."""
+    early = datetime(2026, 1, 1, 8, tzinfo=UTC)
+    later = datetime(2026, 1, 1, 10, tzinfo=UTC)
+    req = FirstSeenRequest(filter=_filter())
+    visible = [_event(occurred_at=later, classification="OFFICIAL")]
+    async with factory.context(visible) as adapter:
+        before = await adapter.first_seen(req, OFFICIAL)
+
+    with_hidden = [*visible, _event(occurred_at=early, classification="SECRET")]
+    async with factory.context(with_hidden) as adapter:
+        after = await adapter.first_seen(req, OFFICIAL)
+        assert before == after
+        assert after.nodes == {"a": later, "b": later}
+
+        authorised = await adapter.first_seen(req, CLEARED)
+        assert authorised.nodes == {"a": early, "b": early}
 
 
 # --- existence-leak assertions ------------------------------------------------

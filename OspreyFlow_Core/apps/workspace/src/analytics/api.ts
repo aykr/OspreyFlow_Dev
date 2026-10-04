@@ -4,6 +4,8 @@
 import type {
   CrossFilterRequest,
   EventFilter,
+  FirstSeenRequest,
+  FirstSeenResult,
   GeoBin,
   GeoBinRequest,
   GeometryRecord,
@@ -55,6 +57,16 @@ export async function fetchCrossFilter(
     request,
     "POST .../cross-filter",
   );
+}
+
+/** When each node and link first appears under the filter (ADR-087), for the timeline's dimming and
+ * its playback. */
+export async function fetchFirstSeen(
+  apiBaseUrl: string,
+  bearerToken: string,
+  request: FirstSeenRequest,
+): Promise<FirstSeenResult> {
+  return postJson(apiBaseUrl, bearerToken, "/v1/analytics/first-seen", request, "POST .../first-seen");
 }
 
 export async function fetchGeoBins(

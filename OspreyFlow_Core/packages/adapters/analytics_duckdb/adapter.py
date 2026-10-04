@@ -25,6 +25,8 @@ from schemas.analytics import (
     CrossFilterRequest,
     EventFilter,
     EventRecord,
+    FirstSeenRequest,
+    FirstSeenResult,
     GeoBin,
     GeoBinRequest,
     GeocodedEvent,
@@ -46,9 +48,7 @@ from .access_filter import AccessFilter, SqlPredicate
 #: else is looked up inside the JSON `properties` column — validated as a
 #: safe identifier first, the same defence-in-depth as the graph adapter's
 #: `groovy_identifier`.
-_TOP_LEVEL_FIELDS = frozenset(
-    {"edge_type", "source_id", "target_id", "cell_site", "direction"}
-)
+_TOP_LEVEL_FIELDS = frozenset({"edge_type", "source_id", "target_id", "cell_site", "direction"})
 
 
 def _safe_field_name(field: str) -> str:
@@ -62,6 +62,11 @@ def _field_expression(field: str) -> str:
     if name in _TOP_LEVEL_FIELDS:
         return name
     return f"json_extract_string(properties, '$.{name}')"
+
+
+def _as_utc(value: object) -> datetime:
+    """DuckDB hands a naive timestamp back for a TIMESTAMP column; events are written in UTC."""
+    return cast(datetime, value).replace(tzinfo=UTC)
 
 
 class AnalyticsDuckDBAdapter:
@@ -323,7 +328,9 @@ class AnalyticsDuckDBAdapter:
                     value=value,
                     previous_value=previous,
                     handling=Handling(
-                        classification=row[8], handling_code=row[9], owning_unit=row[10],
+                        classification=row[8],
+                        handling_code=row[9],
+                        owning_unit=row[10],
                         originator=row[11],
                     ),
                 )
@@ -407,6 +414,28 @@ class AnalyticsDuckDBAdapter:
                 result[dimension.name] = self._categorical_histogram(predicate, dimension.field)
         return result
 
+    # --- first_seen (ADR-087) --------------------------------------------------
+
+    async def first_seen(self, req: FirstSeenRequest, principal: Principal) -> FirstSeenResult:
+        predicate = self._predicate(req.filter, principal)
+        node_rows = self._con.execute(
+            "SELECT id, MIN(occurred_at) AS first FROM ("
+            f"  SELECT source_id AS id, occurred_at FROM events WHERE {predicate.where}"
+            "  UNION ALL "
+            f"  SELECT target_id AS id, occurred_at FROM events WHERE {predicate.where}"
+            ") GROUP BY id",
+            [*predicate.params, *predicate.params],
+        ).fetchall()
+        edge_rows = self._con.execute(
+            "SELECT edge_id, MIN(occurred_at) FROM events "
+            f"WHERE {predicate.where} GROUP BY edge_id",
+            predicate.params,
+        ).fetchall()
+        return FirstSeenResult(
+            nodes={node_id: _as_utc(first) for node_id, first in node_rows},
+            edges={edge_id: _as_utc(first) for edge_id, first in edge_rows},
+        )
+
     # --- writes -------------------------------------------------------------
 
     async def load_events(self, records: Sequence[EventRecord]) -> None:
@@ -419,10 +448,23 @@ class AnalyticsDuckDBAdapter:
             "originator) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 [
-                    r.event_id, r.edge_id, r.edge_type, r.source_id, r.target_id, r.occurred_at,
-                    r.duration_s, r.cell_site, r.lat, r.lon, r.direction, json.dumps(r.properties),
-                    r.investigation_scope, r.handling.classification, r.handling.handling_code,
-                    r.handling.owning_unit, r.handling.originator,
+                    r.event_id,
+                    r.edge_id,
+                    r.edge_type,
+                    r.source_id,
+                    r.target_id,
+                    r.occurred_at,
+                    r.duration_s,
+                    r.cell_site,
+                    r.lat,
+                    r.lon,
+                    r.direction,
+                    json.dumps(r.properties),
+                    r.investigation_scope,
+                    r.handling.classification,
+                    r.handling.handling_code,
+                    r.handling.owning_unit,
+                    r.handling.originator,
                 ]
                 for r in records
             ],
@@ -440,9 +482,18 @@ class AnalyticsDuckDBAdapter:
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ST_GeomFromWKB(?), ?, ?, ?, ?)",
             [
                 [
-                    r.geometry_ref, r.version, r.kind.value, r.lon, r.lat, r.source_crs,
-                    r.source_x, r.source_y, r.geometry_wkb,
-                    r.handling.classification, r.handling.handling_code, r.handling.owning_unit,
+                    r.geometry_ref,
+                    r.version,
+                    r.kind.value,
+                    r.lon,
+                    r.lat,
+                    r.source_crs,
+                    r.source_x,
+                    r.source_y,
+                    r.geometry_wkb,
+                    r.handling.classification,
+                    r.handling.handling_code,
+                    r.handling.owning_unit,
                     r.handling.originator,
                 ]
                 for r in records
@@ -479,8 +530,10 @@ class AnalyticsDuckDBAdapter:
             source_y=cast("float | None", row[7]),
             geometry_wkb=cast(bytes, row[8]) if row[8] is not None else None,
             handling=Handling(
-                classification=cast(str, row[9]), handling_code=cast(str, row[10]),
-                owning_unit=cast(str, row[11]), originator=cast(str, row[12]),
+                classification=cast(str, row[9]),
+                handling_code=cast(str, row[10]),
+                owning_unit=cast(str, row[11]),
+                originator=cast(str, row[12]),
             ),
         )
 

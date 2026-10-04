@@ -70,6 +70,7 @@ import { CaseTabs } from "./investigation/CaseTabs";
 import { openCase } from "./investigation/cases";
 import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
 import { StatusBar } from "./statusbar/StatusBar";
+import { emergence, type FirstSeen } from "./crossfilter/emergence";
 import { BottomPanelFrame, SidePanelFrame } from "./layout/PanelFrames";
 import { SidePanelStack } from "./layout/SidePanelStack";
 import { Timeline } from "./timeline/Timeline";
@@ -389,8 +390,15 @@ export function App() {
       investigationId,
     );
   }
-  const [dimming, setDimming] = useState({
+  const [dimming, setDimming] = useState<{
+    dimmedNodeIds: ReadonlySet<string>;
+    dimmedEdgeIds: ReadonlySet<string>;
+    firstSeen: FirstSeen | null;
+    dimmedCount: number;
+  }>({
     dimmedNodeIds: EMPTY_DIMMED_NODE_IDS,
+    dimmedEdgeIds: EMPTY_DIMMED_NODE_IDS,
+    firstSeen: null,
     dimmedCount: 0,
   });
   const [nodeCoordinates, setNodeCoordinates] = useState(
@@ -478,7 +486,7 @@ export function App() {
       // streamed-in node gets its correct dimmed state right away, per
       // `crossfilter/store.ts`'s own `refresh` doc comment. A no-op fast
       // path when no filter is active (`refresh`'s own early return).
-      void crossFilterRef.current?.refresh(workingSet.graph.nodes());
+      void crossFilterRef.current?.refresh(workingSet.graph.nodes(), workingSet.graph.edges());
       // Likewise, a delta can add a `Location` node the map has never
       // plotted — re-resolve every working-set `Location`'s geometry_ref
       // whenever membership changes. A no-op fast path when the working
@@ -541,6 +549,8 @@ export function App() {
     const unsubscribe = crossFilter.store.subscribe((state) => {
       setDimming({
         dimmedNodeIds: state.dimmedNodeIds,
+        dimmedEdgeIds: state.dimmedEdgeIds,
+        firstSeen: state.firstSeen,
         dimmedCount: state.dimmedCount,
       });
     });
@@ -622,6 +632,24 @@ export function App() {
   // recomputed on every animation frame (`playbackFraction` changes), the
   // real content change B18's own "animates under playback" names, not a
   // CSS trick layered over a static list.
+  // ADR-087: under playback the graph emerges. Until the clock runs (fraction 0) or with no brush,
+  // the store's own dimming stands; while it runs, each node and link stays dimmed until the
+  // playhead passes its first event in the window.
+  const playbackDimming = useMemo(() => {
+    const window = crossFilterRef.current?.store.getState().window;
+    if (!window || dimming.firstSeen === null || playbackFraction <= 0) return null;
+    const graph = workingSetRef.current.graph;
+    return emergence(
+      dimming.firstSeen,
+      instantAtFraction(window, playbackFraction),
+      graph.nodes(),
+      graph.edges(),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dimming.firstSeen, playbackFraction, counts]);
+  const dimmedNodeIds = playbackDimming?.dimmedNodeIds ?? dimming.dimmedNodeIds;
+  const dimmedEdgeIds = playbackDimming?.dimmedEdgeIds ?? dimming.dimmedEdgeIds;
+
   const revealedSightings = useMemo(() => {
     const crossFilter = crossFilterRef.current;
     const window = crossFilter?.store.getState().window;
@@ -875,7 +903,8 @@ export function App() {
                 investigationId={investigationId}
                 apiBaseUrl={API_BASE_URL}
                 bearerToken={bearerToken}
-                dimmedNodeIds={dimming.dimmedNodeIds}
+                dimmedNodeIds={dimmedNodeIds}
+                dimmedEdgeIds={dimmedEdgeIds}
                 onGroupedCountChange={setGroupedCount}
                 judgementCounts={judgementCounts}
                 communityHulls={communityHulls}
@@ -1121,6 +1150,7 @@ export function App() {
               investigationScope={investigationId}
               crossFilterStore={crossFilterStore}
               getNodeIds={() => workingSetRef.current.graph.nodes()}
+              getEdgeIds={() => workingSetRef.current.graph.edges()}
               crossCaseInvestigationScope={crossCaseScope || undefined}
               onCrossCaseScopeChange={setCrossCaseScope}
               onPlaybackFractionChange={setPlaybackFraction}

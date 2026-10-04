@@ -18,6 +18,8 @@ from schemas.analytics import (
     BaselineResult,
     CrossFilterRequest,
     EventRecord,
+    FirstSeenRequest,
+    FirstSeenResult,
     GeoBin,
     GeoBinRequest,
     GeocodedEvent,
@@ -58,6 +60,12 @@ class AnalyticsPort(Protocol):
     ) -> dict[str, Histogram]: ...
 
     async def baseline(self, req: BaselineRequest, principal: Principal) -> BaselineResult: ...
+
+    async def first_seen(self, req: FirstSeenRequest, principal: Principal) -> FirstSeenResult:
+        """The earliest event in `req.filter` per node (either end) and per link (ADR-087). Access
+        control is in the query: an event the principal may not see cannot pull a first appearance
+        forward, so the answer equals the one over a corpus without that event."""
+        ...
 
     # --- writes --------------------------------------------------------------
     #

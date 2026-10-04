@@ -78,6 +78,8 @@ export interface TimelineProps {
    * instead of a value here since a working set's node ids have no single
    * stable snapshot to hold onto). */
   getNodeIds: () => readonly string[];
+  /** The links in the view, so a brush can dim a link with no event in the window (ADR-087). */
+  getEdgeIds?: () => readonly string[];
   /** B16's own cross-case overlay (`08_ACCEPTANCE_SCENARIOS.md`) — a second
    * investigation's own `investigation_scope` to fetch and render as a
    * second track sharing this component's own time axis. `undefined`
@@ -104,6 +106,7 @@ export function Timeline({
   investigationScope,
   crossFilterStore,
   getNodeIds,
+  getEdgeIds,
   crossCaseInvestigationScope,
   onPlaybackFractionChange,
   onCrossCaseScopeChange,
@@ -116,6 +119,8 @@ export function Timeline({
   const [datesOpen, setDatesOpen] = useState(false);
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [histogram, setHistogram] = useState<Histogram | null>(null);
+  // `null` until the first answer: the strip is not declared empty before it has been asked.
+  const hasEvents = histogram === null || histogram.total > 0;
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[] | null>(
     crossFilterStore.store.getState().selectedNodeIds,
   );
@@ -353,6 +358,7 @@ export function Timeline({
       // unambiguous regardless of axis type. `windowFromZoomPercent`
       // (`./math.ts`) does the actual (tested) conversion.
       chart.on("datazoom", () => {
+        if (histogram.total === 0) return; // ADR-087: no brush where there are no dated events
         const option = chart.getOption() as {
           dataZoom?: Array<{ start?: number; end?: number }>;
         };
@@ -361,7 +367,7 @@ export function Timeline({
         const window = windowFromZoomPercent(buckets, zoom.start, zoom.end);
         if (!window) return;
         crossFilterStore.store.getState().setWindow(window);
-        void crossFilterStore.refresh(getNodeIds());
+        void crossFilterStore.refresh(getNodeIds(), getEdgeIds?.());
       });
     } else {
       const buckets = histogram.buckets;
@@ -404,6 +410,7 @@ export function Timeline({
     mode,
     crossFilterStore,
     getNodeIds,
+    getEdgeIds,
     crossCaseHistogram,
     crossCaseInvestigationScope,
     theme,
@@ -426,7 +433,7 @@ export function Timeline({
     else next.validTo = value || null;
     if (!next.validFrom) return;
     crossFilterStore.store.getState().setWindow(next);
-    void crossFilterStore.refresh(getNodeIds());
+    void crossFilterStore.refresh(getNodeIds(), getEdgeIds?.());
   }
 
   return (
@@ -468,7 +475,7 @@ export function Timeline({
         >
           Cyclical
         </Button>
-        {mode === "density" && (
+        {hasEvents && mode === "density" && (
           <Button
             aria-expanded={datesOpen}
             onClick={() => setDatesOpen((open) => !open)}
@@ -524,13 +531,13 @@ export function Timeline({
           <Button
             onClick={() => {
               crossFilterStore.store.getState().clearFilter();
-              void crossFilterStore.refresh(getNodeIds());
+              void crossFilterStore.refresh(getNodeIds(), getEdgeIds?.());
             }}
           >
             Clear filter
           </Button>
         )}
-        {activeWindow && (
+        {hasEvents && activeWindow && (
           <>
             {/* B18's own playback control — `02_GLASS_FRONTEND.md` §3.4:
                 "animate the brush forward at 0.5x to 8x." Disabled with no
@@ -566,7 +573,20 @@ export function Timeline({
           </>
         )}
       </div>
-      <div ref={containerRef} style={{ flex: 1, minHeight: 0 }} />
+      {/* ADR-087: a case with no dated events says so, and offers no brush and no playback, so the
+          graph is never dimmed for a reason the analyst cannot see. The chart stays mounted but
+          out of sight, so a case that gains events later needs no remount. */}
+      {!hasEvents && (
+        <p role="status" style={{ margin: "var(--sp-8)", color: "var(--text-secondary)" }}>
+          No dated events in this case. The timeline, its brush and playback need events with a date,
+          which this case&rsquo;s data does not carry.
+        </p>
+      )}
+      <div
+        ref={containerRef}
+        style={{ flex: 1, minHeight: 0, display: hasEvents ? undefined : "none" }}
+        aria-hidden={!hasEvents}
+      />
     </div>
   );
 }

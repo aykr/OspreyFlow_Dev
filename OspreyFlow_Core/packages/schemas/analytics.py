@@ -311,6 +311,19 @@ class GeocodedEvent(BaseModel):
     handling: Handling
 
 
+class FirstSeenRequest(BaseModel):
+    """When each node and each link first appears under a filter (ADR-087): the earliest event
+    *within* `filter.window` (not the earliest ever), per node id at either end and per edge id.
+    The timeline's playback lights things up in this order."""
+
+    filter: EventFilter
+
+
+class FirstSeenResult(BaseModel):
+    nodes: dict[NodeId, datetime] = Field(default_factory=dict)
+    edges: dict[EdgeId, datetime] = Field(default_factory=dict)
+
+
 class BaselineRequest(BaseModel):
     """Compares a comparison window against a baseline window over the
     same filter and bucketing. The HMP finding — four cells at ~52% of
@@ -373,4 +386,6 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     BaselineResult,
     CrossFilterDimension,
     CrossFilterRequest,
+    FirstSeenRequest,
+    FirstSeenResult,
 )

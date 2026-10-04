@@ -230,6 +230,9 @@ export interface EdgeRenderContext {
    * data-channel names, and a thickness from 1 to 5. Omitted or empty, the ordinary colour and the
    * weight-only width apply. A name that is not a channel is ignored rather than drawn. */
   declared?: { colour?: string | null; thickness?: number | null };
+  /** The timeline dims this link (ADR-087): no event in the brush window, or not yet reached by the
+   * playhead. Drawn as a dimmed node is, mixed towards the panel, label dropped, never removed. */
+  dimmed?: boolean;
 }
 
 export interface ResolvedEdgeAttributes {
@@ -268,13 +271,14 @@ export function computeEdgeAttributes(
   }
 
   const crowd = crowdingScale(context.viewEdgeCount);
-  const colour = declaredColour(context.declared?.colour, palette);
+  const lit = declaredColour(context.declared?.colour, palette);
+  const colour = context.dimmed ? mixOklab(lit, palette.surfacePanel, 32) : lit;
   if (band === "overview") {
     return {
       size: Math.max(0.5, crowd),
       color: colour,
       label:
-        context.touchesHoveredNode && !belowStrengthFilter
+        context.touchesHoveredNode && !belowStrengthFilter && !context.dimmed
           ? `${edge.type} (${edge.occurrences ?? 1})`
           : "",
       hidden: belowStrengthFilter,
@@ -292,7 +296,7 @@ export function computeEdgeAttributes(
     size,
     color: colour,
     label:
-      band === "link-detail" || context.touchesHoveredNode
+      (band === "link-detail" || context.touchesHoveredNode) && !context.dimmed
         ? `${edge.type} (${edge.occurrences ?? 1})`
         : "",
     hidden: false,

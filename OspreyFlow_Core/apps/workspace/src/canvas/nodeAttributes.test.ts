@@ -379,6 +379,28 @@ describe("edgeProgramFor and the link's own basis (ADR-081 step B)", () => {
   });
 });
 
+// ADR-087: a link with no event in the brush window, or not yet reached by the playhead, is dimmed
+// as a node is: its colour mixed towards the panel surface and its label dropped.
+describe("computeEdgeAttributes and a dimmed link (ADR-087)", () => {
+  const edge = makeEdge("e1", "a", "b", { weight: 1, occurrences: 4 });
+  const context = { cameraRatio: 0.3, strengthFilterFloor: 0, onPath: false };
+
+  it("mixes a dimmed link's colour towards the panel and drops its label", () => {
+    const plain = computeEdgeAttributes(edge, context);
+    const dimmed = computeEdgeAttributes(edge, { ...context, dimmed: true });
+    expect(dimmed.color).not.toBe(plain.color);
+    expect(dimmed.label).toBe("");
+    expect(dimmed.hidden).toBe(false); // dimmed, never removed (spec 02 §2 rule 2)
+    expect(dimmed.size).toBe(plain.size);
+  });
+
+  it("lets a found path win over dimming", () => {
+    const onPath = computeEdgeAttributes(edge, { ...context, dimmed: true, onPath: true });
+    const plainPath = computeEdgeAttributes(edge, { ...context, onPath: true });
+    expect(onPath.color).toBe(plainPath.color);
+  });
+});
+
 // ADR-081, Amendment 1: a declared colour is one of the nine channel names; a declared thickness is
 // the base width and the link's weight scales it, between half and one and a half times.
 describe("computeEdgeAttributes with a declaration (ADR-081)", () => {

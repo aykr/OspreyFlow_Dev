@@ -532,15 +532,22 @@ The timeline is the second most important control in the product after the canva
 
 - **Density strip** — event counts per bucket, bucketed automatically to the window, drawn from
   the analytics store not the graph.
-- **Brush** — drag to select a window; the graph dims everything outside it, the map restricts
+- **Brush** — drag to select a window; the graph dims everything outside it, nodes and links
+  alike (a link with no event in the window dims, ADR-087), the map restricts
   to it, the histograms recompute. Brush endpoints are editable as text. The two boxes sit behind a `Set exact dates` button in the timeline's bar, and the cross-case overlay's investigation box behind an `Overlay another case` button (`06_DECISIONS.md` ADR-069).
-- **Playback** — animate the brush forward at 0.5× to 8×. Nodes interpolate position and never
+- **Playback** — animate the brush forward at 0.5× to 8×. **The network emerges as it plays
+  (ADR-087):** every node and link in the view starts dimmed and lights up as the playhead passes
+  its first event in the window, then stays lit, so the analyst watches the network appear in the
+  order it did; nothing moves and nothing vanishes. Nodes interpolate position and never
   cross-fade, so identity is continuous through a re-layout. The design system fixes the
   interpolation at 420ms with a dedicated easing curve. **A base duration for "1×" was left
   unstated here — a real spec gap, since closed: a full traverse of the brush window at 1× takes
   8 real seconds**
   (`playback/math.ts`'s own `PLAYBACK_DURATION_MS_AT_1X`), chosen as long enough to read a dense
   timeline's own movement and short enough not to feel stalled at 0.5× (4s) or rushed at 8× (1s).
+- **No dated events** — a case whose data carries no dated events (Fixture Corp today) says so in
+  the strip's place and offers neither a brush nor playback (ADR-087), so the graph is never dimmed
+  for a reason the analyst cannot see. The strip returns the moment the case gains events.
 - **Cyclical view** — the HMP analysis is a day-of-week and hour-of-day analysis, and a linear
   timeline cannot show that. Provide a second mode that folds the window into a weekday × hour
   grid with counts, which is the same finding the source report reached with a polar plot.
