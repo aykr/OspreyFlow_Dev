@@ -112,6 +112,7 @@ import {
   type CollapsedView,
   type Community,
 } from "./communities";
+import { linkCaption, linkTypeName } from "./linkLabel";
 import { linkMenuItems, linkMenuTitle } from "./linkMenu";
 import { sameAsGroup } from "./linkCollapse";
 import { ReasonPrompt } from "./ReasonPrompt";
@@ -360,6 +361,17 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // `hovered` or `edgeTypes` would never see a change.
     const hoveredRef = useRef<string | null>(null);
     const edgeTypesRef = useRef<readonly EdgeTypeDef[]>([]);
+    // ADR-091: each type's display name, worked out once per type rather than once per link per
+    // frame; emptied whenever the ontology's types change.
+    const typeNamesRef = useRef<Map<string, string>>(new Map());
+    const typeNameOf = (type: string): string => {
+      let name = typeNamesRef.current.get(type);
+      if (name === undefined) {
+        name = linkTypeName(type, edgeTypesRef.current);
+        typeNamesRef.current.set(type, name);
+      }
+      return name;
+    };
     const settledRef = useRef<Set<string>>(new Set());
     // The layout the analyst chose (organic until they choose another). A ref as well as state:
     // the layout effect below runs from graph events and must read the current choice.
@@ -1121,7 +1133,19 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         edgeReducer: (edgeId, data) => {
           const ratio = currentSigma?.getCamera().ratio ?? 1;
           const hoveredNode = hoveredRef.current;
+          const caption = () => {
+            const source = graph.source(edgeId);
+            const sourceKind = graph.hasNode(source)
+              ? (graph.getNodeAttribute(source, "data").properties?.kind as string | undefined)
+              : undefined;
+            return linkCaption(
+              typeNameOf(data.data.type),
+              data.data.occurrences ?? 1,
+              eventsNoun(data.data.type, sourceKind),
+            );
+          };
           const attrs = computeEdgeAttributes(data.data, {
+            caption,
             cameraRatio: ratio,
             strengthFilterFloor: 0,
             onPath: data.onPath ?? false,
@@ -1159,7 +1183,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               ? {
                   size: Math.max(attrs.size * 2, 4),
                   color: activePalette().brass,
-                  label: `${data.data.type} (${data.data.occurrences ?? 1})`,
+                  label: caption(),
                 }
               : {}),
             type: edgeProgramFor(data.data.type, edgeTypesRef.current, data.data.basis),
@@ -1593,6 +1617,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     requestExpansionRef.current = requestExpansion;
     hoveredRef.current = hovered;
     edgeTypesRef.current = edgeTypes;
+    typeNamesRef.current = new Map();
 
     // Counts what an expansion would add before running it. Up to the limit it goes ahead; above
     // it (or when the count fails) the analyst is asked, with the count per relationship type so
@@ -2037,7 +2062,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       const valid = edgeTypesOfferedFor(edgeTypes, node.type);
       const items: RadialMenuItem[] = valid.map((et: EdgeTypeDef) => ({
         id: et.name,
-        label: et.name,
+        label: linkTypeName(et.name, edgeTypes),
         group: "Show links",
         // The real figure from `/expand/preview`, fetched by the effect below when this menu
         // opened. `null` (still in flight, or the preview failed) renders as `…`, never as `0`:
@@ -2475,7 +2500,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               const edge = graph.getEdgeAttribute(linkMenu.edgeId, "data");
               const end = (id: string) =>
                 graph.hasNode(id) ? nodeLabel(graph.getNodeAttribute(id, "data")) : id;
-              return linkMenuTitle(edge.type, end(edge.source), end(edge.target));
+              return linkMenuTitle(linkTypeName(edge.type, edgeTypesRef.current), end(edge.source), end(edge.target));
             })()}
             items={linkMenuEntries(linkMenu.edgeId, linkMenu.x, linkMenu.y)}
             onClose={() => {

@@ -97,6 +97,11 @@
           "type": "string",
           "enum": ["ochre", "rose", "plum", "violet", "indigo", "azure", "cyan", "jade", "moss"]
         },
+        "label": {
+          "description": "ADR-091: the type's display name in sentence case (Communicated with); the name stays the stored key. Optional: without one the Glass derives it from the name.",
+          "type": "string",
+          "pattern": "\\S"
+        },
         "thickness": {
           "description": "ADR-081: the line width at the default weight, a whole number from 1 to 5; a link's weight scales it. Optional.",
           "type": "integer",

@@ -144,3 +144,22 @@ def test_a_links_own_basis_can_never_make_a_probabilistic_type_direct() -> None:
 def test_a_type_with_no_basis_gives_a_link_none() -> None:
     assert effective_basis(None, _type(None)) is None
     assert effective_basis(None, None) is None
+
+
+# --- a display name in sentence case (ADR-091) ------------------------------------------------
+
+
+def test_a_declared_label_is_kept(tmp_path: Path) -> None:
+    schema = load_ontology(_write(tmp_path, _doc(basis="direct", label="Knows")))
+    assert schema.edge_type("KNOWS").label == "Knows"  # type: ignore[union-attr]
+
+
+def test_a_label_is_optional(tmp_path: Path) -> None:
+    schema = load_ontology(_write(tmp_path, _doc(basis="direct")))
+    assert schema.edge_type("KNOWS").label is None  # type: ignore[union-attr]
+
+
+@pytest.mark.parametrize("bad", ["", "   ", 3])
+def test_a_blank_or_non_text_label_is_refused(tmp_path: Path, bad: object) -> None:
+    with pytest.raises(OntologyError):
+        load_ontology(_write(tmp_path, _doc(basis="direct", label=bad)))

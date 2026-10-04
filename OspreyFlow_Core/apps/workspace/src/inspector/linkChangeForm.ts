@@ -3,6 +3,7 @@
 // how what the analyst typed becomes the request the server takes — only what changed, with the
 // reason, or a sentence saying what is wrong.
 import type { Edge, EdgeTypeDef, PropertyDef } from "../../../../packages/schemas/generated";
+import { linkTypeName } from "../canvas/linkLabel";
 import type { LinkChangeInput } from "./linkChangeApi";
 
 /** The same limit the server holds (`services/api/link_changes.py::MAX_REASON_CHARS`). */
@@ -158,7 +159,7 @@ export function toChangeInput(
     const text = draft.properties[def.name] ?? "";
     const empty = text.trim() === "";
     if (empty) {
-      if (def.required) return { kind: "problem", message: `${def.name} is required for ${draft.type}.` };
+      if (def.required) return { kind: "problem", message: `${def.name} is required for ${linkTypeName(draft.type, [])}.` };
       continue;
     }
     const parsed = parseProperty(def, text);

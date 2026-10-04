@@ -1,4 +1,5 @@
 import type { Edge, Node } from "../../../../packages/schemas/generated";
+import { linkTypeName } from "../canvas/linkLabel";
 import { displayValue } from "../search/searchOptions";
 
 export interface LinkDetailsProps {
@@ -10,6 +11,8 @@ export interface LinkDetailsProps {
   directed: boolean;
   /** The basis the link's type declares (ADR-081); `null` or left out for a type with none. */
   typeBasis?: "direct" | "probabilistic" | null;
+  /** The type's display name (ADR-091); left out, it is derived from the type's id. */
+  typeName?: string;
 }
 
 /** What the Inspector says about what stands behind a link (ADR-081 step B, Amendment 2). */
@@ -34,7 +37,7 @@ export function basisText(
 
 /** What the Inspector shows when a link is selected: its type, the direction between its two
  * ends, how many records stand behind it, its dates and its sources. */
-export function LinkDetails({ edge, source, target, directed, typeBasis }: LinkDetailsProps) {
+export function LinkDetails({ edge, source, target, directed, typeBasis, typeName }: LinkDetailsProps) {
   const from = source ? displayValue(source) : edge.source;
   const to = target ? displayValue(target) : edge.target;
   const sources = edge.provenance.sources;
@@ -43,7 +46,13 @@ export function LinkDetails({ edge, source, target, directed, typeBasis }: LinkD
     <dl>
       <div>
         <dt style={{ color: "var(--text-secondary)" }}>Link</dt>
-        <dd className="value">{edge.type}</dd>
+        <dd className="value">{typeName ?? linkTypeName(edge.type, [])}</dd>
+      </div>
+      <div>
+        <dt style={{ color: "var(--text-secondary)" }}>Type ID</dt>
+        <dd className="value" style={{ color: "var(--text-tertiary)" }}>
+          {edge.type}
+        </dd>
       </div>
       <div>
         <dt style={{ color: "var(--text-secondary)" }}>Between</dt>

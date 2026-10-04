@@ -32,6 +32,7 @@ import { activePalette } from "../color/palette";
 import type { EntityVisual } from "../ontology/schema";
 import { resolveNodeIcon } from "./iconChoices";
 import { chosenLabel, defaultLabel } from "./labelChoices";
+import { linkCaption, linkTypeName } from "./linkLabel";
 import { zoomBandForRatio, type ZoomBand } from "./zoomBands";
 
 export interface NodeZoomContext {
@@ -233,6 +234,16 @@ export interface EdgeRenderContext {
   /** The timeline dims this link (ADR-087): no event in the brush window, or not yet reached by the
    * playhead. Drawn as a dimmed node is, mixed towards the panel, label dropped, never removed. */
   dimmed?: boolean;
+  /** What the link reads as (ADR-091): "Communicated with · 3 emails". Called only when a label
+   * is drawn, so the reducer builds no string for an unlabelled link; omitted, the caption is
+   * derived from the type's name with the count as records. */
+  caption?: () => string;
+}
+
+function edgeCaption(edge: Edge, context: EdgeRenderContext): string {
+  return context.caption
+    ? context.caption()
+    : linkCaption(linkTypeName(edge.type, []), edge.occurrences ?? 1, "events");
 }
 
 export interface ResolvedEdgeAttributes {
@@ -265,7 +276,7 @@ export function computeEdgeAttributes(
       size: ON_PATH_EDGE_SIZE,
       color: palette.textPrimary,
       label:
-        band === "link-detail" ? `${edge.type} (${edge.occurrences ?? 1})` : "",
+        band === "link-detail" ? edgeCaption(edge, context) : "",
       hidden: false,
     };
   }
@@ -279,7 +290,7 @@ export function computeEdgeAttributes(
       color: colour,
       label:
         context.touchesHoveredNode && !belowStrengthFilter && !context.dimmed
-          ? `${edge.type} (${edge.occurrences ?? 1})`
+          ? edgeCaption(edge, context)
           : "",
       hidden: belowStrengthFilter,
     };
@@ -297,7 +308,7 @@ export function computeEdgeAttributes(
     color: colour,
     label:
       (band === "link-detail" || context.touchesHoveredNode) && !context.dimmed
-        ? `${edge.type} (${edge.occurrences ?? 1})`
+        ? edgeCaption(edge, context)
         : "",
     hidden: false,
   };
@@ -330,6 +341,8 @@ export interface EdgeTypeStyle {
   basis?: "direct" | "probabilistic" | null;
   colour?: string | null;
   thickness?: number | null;
+  /** ADR-091: the type's display name in sentence case. */
+  label?: string | null;
 }
 
 /** What a link's type declares about colour and thickness, for `computeEdgeAttributes`. */

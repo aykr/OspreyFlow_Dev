@@ -22,7 +22,7 @@ function record(before: LinkSnapshot, after: LinkSnapshot): LinkChangeRecord {
 describe("describeChange", () => {
   it("says what the type was and became", () => {
     expect(describeChange(record(base, { ...base, type: "FAMILY_OF" }))).toEqual([
-      "Type: ASSOCIATE_OF → FAMILY_OF",
+      "Type: Associate of → Family of",
     ]);
   });
 

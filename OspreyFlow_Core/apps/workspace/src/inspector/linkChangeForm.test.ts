@@ -124,7 +124,7 @@ describe("toChangeInput", () => {
     const d = retypeDraft(draft(), "FAMILY_OF", EDGE_TYPES);
     expect(toChangeInput(link, d, EDGE_TYPES)).toEqual({
       kind: "problem",
-      message: "relation is required for FAMILY_OF.",
+      message: "relation is required for Family of.",
     });
   });
 

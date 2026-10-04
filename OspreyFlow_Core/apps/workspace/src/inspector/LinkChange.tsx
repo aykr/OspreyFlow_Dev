@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { Edge, EdgeTypeDef } from "../../../../packages/schemas/generated";
+import { linkTypeName } from "../canvas/linkLabel";
 import { LinkChangeError, changeLink, type LinkChangeResult } from "./linkChangeApi";
 import {
   MAX_REASON_CHARS,
@@ -159,7 +160,7 @@ export function LinkChange({
         >
           {choices.map((t) => (
             <option key={t.name} value={t.name}>
-              {t.name}
+              {linkTypeName(t.name, edgeTypes)}
             </option>
           ))}
         </select>

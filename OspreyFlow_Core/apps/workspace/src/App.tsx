@@ -25,6 +25,7 @@ import { clearHandoff, readHandoff } from "./auth/launcherHandoff";
 import { installUnauthorisedWatch } from "./auth/unauthorised";
 import { SignInScreen } from "./auth/SignInScreen";
 import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
+import { linkTypeName } from "./canvas/linkLabel";
 import { listJudgements } from "./assessment/api";
 import { judgementCountsByNode } from "./assessment/judgementCounts";
 import {
@@ -1099,6 +1100,7 @@ export function App() {
                                 edgeTypes.find((t) => t.name === selectedLink.type)?.directed ?? true,
                               typeBasis:
                                 edgeTypes.find((t) => t.name === selectedLink.type)?.basis ?? null,
+                              typeName: linkTypeName(selectedLink.type, edgeTypes),
                             }
                           : null
                       }

@@ -32,7 +32,7 @@ describe("LinkHistory", () => {
     stub(200, { changes: [change], truncated: false });
     render(<LinkHistory {...props} />);
     await waitFor(() => expect(screen.getByText("Told so by the witness")).toBeTruthy());
-    expect(screen.getByText("Type: ASSOCIATE_OF → FAMILY_OF")).toBeTruthy();
+    expect(screen.getByText("Type: Associate of → Family of")).toBeTruthy();
     expect(screen.getByText("relation: (none) → cousin")).toBeTruthy();
     expect(screen.getByText(/analyst-1/)).toBeTruthy();
   });

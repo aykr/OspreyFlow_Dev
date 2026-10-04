@@ -22,7 +22,7 @@ export interface LinkMenuActions {
   eventsLabel?: string;
 }
 
-/** "SAME_AS: Person: Ada ↔ Person: A. Lovelace" — which link this menu belongs to. */
+/** "Same as: Person: Ada ↔ Person: A. Lovelace" — which link this menu belongs to; the caller passes the type's display name (ADR-091). */
 export function linkMenuTitle(type: string, sourceLabel: string, targetLabel: string): string {
   return `${type}: ${sourceLabel} ↔ ${targetLabel}`;
 }

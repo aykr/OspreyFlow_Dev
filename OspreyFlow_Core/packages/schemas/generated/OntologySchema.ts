@@ -30,6 +30,7 @@ export type System = boolean;
 export type Basis = ("direct" | "probabilistic") | null;
 export type Colour = string | null;
 export type Thickness = number | null;
+export type Label = string | null;
 export type Properties1 = PropertyDef[];
 export type EdgeTypes = EdgeTypeDef[];
 
@@ -84,6 +85,7 @@ export interface EdgeTypeDef {
   basis?: Basis;
   colour?: Colour;
   thickness?: Thickness;
+  label?: Label;
   properties?: Properties1;
   [k: string]: unknown;
 }

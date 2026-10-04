@@ -1,5 +1,6 @@
 import type { Edge } from "../../../../packages/schemas/generated";
 import { Popover } from "../design/primitives/Popover";
+import { linkTypeName } from "./linkLabel";
 
 export interface EdgeInspectionOverlayProps {
   x: number;
@@ -18,7 +19,7 @@ export function EdgeInspectionOverlay({ x, y, edge, onClose }: EdgeInspectionOve
     <Popover x={x} y={y} onClose={onClose}>
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-6)", minWidth: 220 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <strong className="value">{edge.type}</strong>
+          <strong className="value">{linkTypeName(edge.type, [])}</strong>
           <button
             type="button"
             className="icon-btn"

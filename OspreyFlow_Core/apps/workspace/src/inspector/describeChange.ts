@@ -6,6 +6,7 @@
 // component import came back undefined and `tsc` refused the pair (TS1149). Two modules in one folder
 // must never differ only in case.
 import type { LinkChangeRecord, LinkSnapshot } from "./linkChangeApi";
+import { linkTypeName } from "../canvas/linkLabel";
 
 function show(value: unknown): string {
   if (value === undefined || value === null || value === "") return "(none)";
@@ -21,7 +22,7 @@ function dates(interval: LinkSnapshot["interval"]): string {
 export function describeChange(change: LinkChangeRecord): string[] {
   const { before, after } = change;
   const lines: string[] = [];
-  if (before.type !== after.type) lines.push(`Type: ${before.type} → ${after.type}`);
+  if (before.type !== after.type) lines.push(`Type: ${linkTypeName(before.type, [])} → ${linkTypeName(after.type, [])}`);
   const names = new Set([...Object.keys(before.properties), ...Object.keys(after.properties)]);
   for (const name of [...names].sort()) {
     const was = show(before.properties[name]);

@@ -401,6 +401,35 @@ describe("computeEdgeAttributes and a dimmed link (ADR-087)", () => {
   });
 });
 
+// ADR-091: a link reads by its type's name in sentence case and a named count, never in capitals
+// with a bare number ("COMMUNICATED_WITH (3)", which the owner found strange).
+describe("computeEdgeAttributes and the link's caption (ADR-091)", () => {
+  const edge = makeEdge("e1", "a", "b", { type: "COMMUNICATED_WITH", weight: 1, occurrences: 3 });
+  // Link-detail zoom, where every link is labelled.
+  const context = { cameraRatio: 0.1, strengthFilterFloor: 0, onPath: false };
+
+  it("derives the caption from the type when none is given, in every labelled state", () => {
+    const states = [
+      computeEdgeAttributes(edge, context),
+      computeEdgeAttributes(edge, { ...context, onPath: true }),
+      computeEdgeAttributes(edge, { ...context, cameraRatio: 5, touchesHoveredNode: true }),
+    ];
+    for (const state of states) expect(state.label).toBe("Communicated with · 3 records");
+  });
+
+  it("uses the caption it is given, and builds none for a link it does not label", () => {
+    const caption = "Emailed · 3 emails";
+    expect(computeEdgeAttributes(edge, { ...context, caption: () => caption }).label).toBe(caption);
+    let built = 0;
+    const counting = () => {
+      built += 1;
+      return caption;
+    };
+    computeEdgeAttributes(edge, { ...context, cameraRatio: 5, caption: counting });
+    expect(built).toBe(0);
+  });
+});
+
 // ADR-081, Amendment 1: a declared colour is one of the nine channel names; a declared thickness is
 // the base width and the link's weight scales it, between half and one and a half times.
 describe("computeEdgeAttributes with a declaration (ADR-081)", () => {

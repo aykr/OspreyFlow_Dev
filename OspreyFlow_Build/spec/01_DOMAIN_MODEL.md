@@ -186,6 +186,7 @@ class EdgeTypeDef(BaseModel):
     basis: Literal["direct", "probabilistic"] | None = None   # ADR-081; required in YAML, None only for NOT_SAME_AS
     colour: str | None = None      # one of the nine data-channel names; None keeps the ordinary line colour
     thickness: int | None = None   # 1 to 5; None keeps the weight-only width
+    label: str | None = None       # ADR-091: display name in sentence case; None derives it from name
     properties: list[PropertyDef] = []
 
 class OntologySchema(BaseModel):
@@ -213,7 +214,9 @@ not a claim that a link exists, so it sits outside the rule and has no basis (Am
 style is not authored: the Glass draws a Direct link solid and a Probabilistic one dotted
 (`02_GLASS_FRONTEND.md` §4). A declaration may also carry a `colour`, one of the nine data-channel
 names that an entity type's `channel` already uses, and a `thickness`, a whole number from 1 to 5;
-the loader refuses anything else. The test that would fail if any of this were broken is
+the loader refuses anything else. A declaration may carry a `label` (ADR-091), the name a person
+reads, in sentence case ("Communicated with"); `name` stays the key stored on every link, and a blank
+label is refused. The test that would fail if any of this were broken is
 `tests/ontology/test_relationship_basis.py`. A link may carry a basis of its own (`Edge.basis`, ADR-081 step B, Amendment 2): a link of a
 Direct type marked `probabilistic`, statistically derived or declared by an analyst with a reason that
 is kept in the link's change history. A link written without one takes its type's basis, which every

@@ -61,7 +61,7 @@ describe("LinkChange", () => {
     const options = Array.from(screen.getByLabelText("Link type").querySelectorAll("option")).map(
       (o) => o.textContent,
     );
-    expect(options).toEqual(["ASSOCIATE_OF", "FAMILY_OF"]);
+    expect(options).toEqual(["Associate of", "Family of"]);
   });
 
   it("will not save without a reason", () => {
@@ -99,7 +99,7 @@ describe("LinkChange", () => {
     fireEvent.change(screen.getByLabelText("Link type"), { target: { value: "FAMILY_OF" } });
     fireEvent.change(screen.getByLabelText(/Why is it being changed/), { target: { value: "Told so" } });
     fireEvent.click(screen.getByRole("button", { name: "Save change" }));
-    expect(screen.getByRole("alert").textContent).toBe("relation is required for FAMILY_OF.");
+    expect(screen.getByRole("alert").textContent).toBe("relation is required for Family of.");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

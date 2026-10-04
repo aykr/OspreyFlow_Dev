@@ -147,6 +147,9 @@ class EdgeTypeDef(BaseModel):
     #: A whole number from 1 to 5 drawn as the line's width at the default weight; a link's weight
     #: scales it (ADR-081 Amendment 1). `None` keeps the weight-only width.
     thickness: int | None = Field(default=None, ge=1, le=5)
+    #: ADR-091. The name shown to a person, in sentence case ("Communicated with"); `name` stays
+    #: the key stored on every link. `None` lets the Glass derive it from `name`.
+    label: str | None = Field(default=None, pattern=r"\S")
     properties: list[PropertyDef] = Field(default_factory=list)
 
     model_config = {"populate_by_name": True}

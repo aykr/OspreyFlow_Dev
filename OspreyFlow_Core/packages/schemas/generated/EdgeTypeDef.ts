@@ -9,6 +9,7 @@ export type System = boolean;
 export type Basis = ("direct" | "probabilistic") | null;
 export type Colour = string | null;
 export type Thickness = number | null;
+export type Label = string | null;
 export type Name1 = string;
 export type PropertyType = "string" | "string[]" | "date" | "datetime" | "integer" | "float" | "boolean" | "enum";
 export type Indexed = boolean;
@@ -27,6 +28,7 @@ export interface EdgeTypeDef {
   basis?: Basis;
   colour?: Colour;
   thickness?: Thickness;
+  label?: Label;
   properties?: Properties;
   [k: string]: unknown;
 }

@@ -444,7 +444,7 @@ test("the radial list's own auto-focused first item is itself reachable and acti
   await page.keyboard.press("\\");
   const menu = page.locator(".radial-menu__list[role='menu']");
   await expect(menu).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: /^ASSOCIATE_OF/ })).toBeFocused();
+  await expect(page.getByRole("menuitem", { name: /^Associate of/ })).toBeFocused();
 
   await page.keyboard.press("Enter");
 
@@ -549,7 +549,7 @@ test("Escape dismisses the cluster-explanation overlay, reachable by keyboard al
   await page.keyboard.press("ArrowLeft"); // focus n2 — see the Explain-cluster test above
   await page.keyboard.press("\\");
   await page.keyboard.press("Tab");
-  await page.keyboard.press("Tab"); // past ASSOCIATE_OF, then USES — see the explain-cluster test above
+  await page.keyboard.press("Tab"); // past Associate of, then Uses — see the explain-cluster test above
   await expect(page.getByRole("menuitem", { name: "Explain cluster" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByText("Cluster explanation")).toBeVisible();
