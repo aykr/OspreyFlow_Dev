@@ -19,7 +19,7 @@ evidence and this file is wrong; say so and fix the file.
 - **Design questions.** Ask with multiple-choice questions (at most four at a time) and then wait. Multiple
   choice is easier for him than free text. Do not build a design he has not answered.
 - **ADRs.** Never edit an existing ADR. Append an amendment or write a new ADR. The last ADR used is
-  **ADR-091** (ADR-086 to ADR-091 were all recorded on 4 October 2026); the next free number is **092**. Check `spec/06_DECISIONS.md` before relying on that.
+  **ADR-092** (ADR-086 to ADR-092 were all recorded on 4 October 2026); the next free number is **093**. Check `spec/06_DECISIONS.md` before relying on that.
 - **Style.** British English in code comments, documentation and all user-facing copy. Always give full,
   complete commands to run, never "add this line" fragments. Keep replies short; one or two sentences on an
   outcome, not a recap.
