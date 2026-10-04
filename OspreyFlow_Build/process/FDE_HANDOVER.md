@@ -80,11 +80,16 @@ the real stack** (see section 5).
 - **Committed:** ADR-081 step A, `346c987` (basis, colour and thickness on relationship types; dotted and
   thick link drawing). Branch tabs, ADR-084, `42d87f6` (branch selected nodes into a new case; the strip of
   case tabs; the Branches list; per-analyst hide flag).
-- **Written but not yet committed by the owner (check `git status`):** the sign-in page restyle
-  (ADR-051 Amendment 5): `OspreyFlow_Core/harness/keycloak_theme.py`,
-  `OspreyFlow_Build/tests/harness/test_keycloak_theme.py`, `OspreyFlow_Build/spec/05_DEPLOYMENT.md`; and the
-  hash line in `07_BUILD_PLAN.md`. `make refresh` has been run and reported "sign-in page: OspreyFlow look
-  applied"; the owner has not yet said how it looks.
+- **Remotes (changed 4 October 2026):** `origin` is the owner's private repo `github.com/aykr/OspreyFlow_Dev`
+  (HTTPS, a personal access token held in the macOS Keychain; never put a token in a remote URL).
+  `old-origin` is the previous repo, kept for reading, with its push URL set to `DISABLED`. `backup` is
+  `github.com/ayankarsolirius/ospreyflow`. Commits are authored as `Ayan`. The owner pushes; you do not.
+- **Stray `Icon\r` files:** macOS leaves empty files named `Icon` plus a carriage return throughout `.git`
+  and elsewhere in the tree, and they come back. In `.git/refs` they make git fail with `bad object
+  refs/remotes/origin/Icon?` or refuse to rename a remote. They are harmless to delete; from the repository
+  root: `find .git -name $'Icon\r' -print -delete`. Do not commit them.
+- **The sign-in page restyle is committed** as `e1a7572`; its friction-log row in `07_BUILD_PLAN.md` still
+  says "Hash: recorded by the follow-up commit." and should carry that hash.
 - **Not mine, leave alone:** `OspreyFlow_Core/osprey.yaml` (modified), `OspreyFlow_Core/data/` (untracked).
 
 ### Known failures that are not caused by recent work
