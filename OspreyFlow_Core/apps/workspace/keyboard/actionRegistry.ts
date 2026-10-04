@@ -351,6 +351,14 @@ export const LINK_EVENTS_ACTIONS = defineActionRegistry("LINK_EVENTS_ACTIONS", [
   "accept-a-finding-by-keyboard",
 ] as const);
 
+/** The full-screen reader (ADR-092): opened from a Document on the canvas, read, extracted from,
+ * closed. `keyboard/reader.spec.ts`. */
+export const READER_ACTIONS = defineActionRegistry("READER_ACTIONS", [
+  "enter-on-a-document-opens-it-to-read",
+  "escape-closes-the-reader",
+  "extract-and-accept-from-the-reader-by-keyboard",
+] as const);
+
 export const LINK_CHANGE_ACTIONS = defineActionRegistry("LINK_CHANGE_ACTIONS", [
   "enter-on-change-this-link-opens-the-form-at-the-type",
   "change-the-type-and-save-with-ctrl-enter",

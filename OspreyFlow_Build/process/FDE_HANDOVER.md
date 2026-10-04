@@ -117,6 +117,7 @@ the real stack** (see section 5).
   is up.
 - `route_coverage_check` lists many existing case routes.
 - `make glass-perf` fails two cases (the 50k/250k first frame and the pan/zoom sweep both time out at 60 seconds), at `b10f801` as well as after ADR-091, so the failure predates both; first seen 4 October 2026, not yet investigated.
+- `link-selection.spec.ts` ("a click a few pixels off a link selects it", "a click on the link itself") fails on a single worker and passes in the full keyboard run, at `b10f801` as well as later; not investigated.
 - One flaky browser case: "a failed expand announces an error" failed once under load and passed four
   times alone.
 

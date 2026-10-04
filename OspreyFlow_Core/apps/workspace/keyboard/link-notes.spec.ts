@@ -122,7 +122,7 @@ test("Edit, change the text and Save by keyboard", async ({ page }) => {
   await page.keyboard.press("Enter");
   const box = page.getByLabel("Note text");
   await expect(box).toBeFocused();
-  await page.keyboard.press("Control+A");
+  await page.keyboard.press("ControlOrMeta+A");
   await page.keyboard.type("Revised wording.");
   await tabTo(page, "Save");
   await page.keyboard.press("Enter");

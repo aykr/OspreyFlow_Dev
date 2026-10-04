@@ -29,6 +29,8 @@ declare global {
       linkAction: { edgeId: string; action: string } | null;
       /** The case the canvas was told a branch of the selection was made as (ADR-084). */
       branchedTo: string | null;
+      /** The Document the canvas asked to open to read (ADR-092). */
+      openedDocument: string | null;
     };
     __CANVAS__?: {
       viewportPositionOf: (nodeId: string) => { x: number; y: number } | null;
@@ -149,6 +151,7 @@ window.__KEYBOARD__ = {
   selectedEdge: null,
   linkAction: null,
   branchedTo: null,
+  openedDocument: null,
 };
 
 // `?fixture=same-as` is the link menu's fixture (ADR-080); every other fixture leaves `SAME_AS` out
@@ -260,6 +263,9 @@ if (wantsEmails) {
     );
   }
   edges.push({ ...edge("em0", "ea", "eb", "COMMUNICATED_WITH"), occurrences: 2 });
+  // One email already on the canvas as a Document (ADR-092), linked to its sender.
+  nodes.push(node("email:ev-1", { type: "Document", properties: { title: "Dabhol" } }));
+  edges.push(edge("email:ev-1:mentions:ea", "ea", "email:ev-1", "MENTIONED_IN"));
 }
 if (wantsLinkStyle) {
   nodes.length = 0;
@@ -327,6 +333,9 @@ createRoot(container).render(
       getEventsWindow={() =>
         wantsEmails ? { validFrom: "2001-05-01T00:00:00Z", validTo: "2001-05-31T00:00:00Z" } : null
       }
+      onOpenDocument={(nodeId) => {
+        window.__KEYBOARD__!.openedDocument = nodeId;
+      }}
       onLinkAction={(edge, action) => {
         window.__KEYBOARD__!.linkAction = { edgeId: edge.id, action };
       }}

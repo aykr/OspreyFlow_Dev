@@ -26,6 +26,8 @@ import { installUnauthorisedWatch } from "./auth/unauthorised";
 import { SignInScreen } from "./auth/SignInScreen";
 import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
 import { linkTypeName } from "./canvas/linkLabel";
+import { DocumentReader } from "./reader/DocumentReader";
+import { displayValue } from "./search/searchOptions";
 import { listJudgements } from "./assessment/api";
 import { judgementCountsByNode } from "./assessment/judgementCounts";
 import {
@@ -370,6 +372,8 @@ export function App() {
   const lastGlassView = useRef<"graph" | "map" | "dossier" | "watches">("graph");
   if (view !== "ingest") lastGlassView.current = view;
   const [dossierNodeId, setDossierNodeId] = useState<string | null>(null);
+  // ADR-092: the Document open in the full-screen reader, if any.
+  const [readerDocumentId, setReaderDocumentId] = useState<string | null>(null);
   const [mapConfig, setMapConfig] = useState<PublicMapConfig | null>(null);
   const [siteWizardOpen, setSiteWizardOpen] = useState(false);
   const [boundaryToolOpen, setBoundaryToolOpen] = useState(false);
@@ -857,6 +861,25 @@ export function App() {
         />
       )}
       <div style={{ flex: 1, display: "flex", minHeight: 0, position: "relative" }}>
+        {readerDocumentId !== null && investigationId && bearerToken && ontology && (
+          <DocumentReader
+            apiBaseUrl={API_BASE_URL}
+            bearerToken={bearerToken}
+            investigationId={investigationId}
+            documentId={readerDocumentId}
+            ontology={ontology}
+            labelOf={(id) => {
+              const graph = workingSetRef.current.graph;
+              return graph.hasNode(id) ? displayValue(graph.getNodeAttribute(id, "data")) : id;
+            }}
+            onClose={() => {
+              setReaderDocumentId(null);
+              // Back where the analyst was: the canvas, with its focused node, untouched behind.
+              document.querySelector<HTMLElement>('[role="application"][aria-label="Network canvas"]')?.focus();
+            }}
+            onDelta={(delta) => workingSetRef.current.store.getState().applyDelta(delta as WorkingSetDelta)}
+          />
+        )}
         {view === "ingest" && (
           <IngestStudio
             apiBaseUrl={API_BASE_URL}
@@ -935,6 +958,7 @@ export function App() {
                 communityHulls={communityHulls}
                 onEdgeSelect={setSelectedLink}
                 getEventsWindow={() => crossFilterRef.current?.store.getState().window ?? null}
+                onOpenDocument={setReaderDocumentId}
                 onLinkAction={(_edge, action) => {
                   if (action === "note") setLinkNoteSignal((n) => n + 1);
                   if (action === "change") setLinkChangeSignal((n) => n + 1);

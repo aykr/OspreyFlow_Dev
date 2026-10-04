@@ -340,7 +340,7 @@ on return) is shown and is never retried automatically. Only the Ingest tab can 
 
 | Requirement | Implementation |
 | --- | --- |
-| Expand a node's relationships | Context menu on right-click, headed with the node's type and name and closed by a click elsewhere or Escape (a list, so long edge-type names stay readable; the browser's own menu is suppressed); items generated from the ontology's edge types valid for the node's type, each with a live count, or `count unavailable` if the preview failed; actions with no count show none. A double-click on a node expands its neighbours across every edge type |
+| Expand a node's relationships | Context menu on right-click, headed with the node's type and name and closed by a click elsewhere or Escape (a list, so long edge-type names stay readable; the browser's own menu is suppressed); items generated from the ontology's edge types valid for the node's type, each with a live count, or `count unavailable` if the preview failed; actions with no count show none. A double-click on a node (or Enter on a focused one) expands its neighbours across every edge type, except on a Document, which opens to read (ADR-092; its right-click menu still expands it) |
 | Search Around | Multi-step, filtered traversal builder — `Person → uses → Endpoint → communicated with (≥5 events, in brush window) → Endpoint → used by → Person`. Preview count before committing to the canvas |
 | Pathfinder | Select two nodes, get k-shortest paths; paths render with the on-path node state (2px primary stroke, edges thickened), everything else dims to 32% |
 | Subgraph isolation | Select nodes (by lasso, or by clicking with Shift, Ctrl or Cmd held to add one at a time; a plain click selects one node alone), then **Branch selected** — the strip's button, or the same entry in any selected node's right-click menu (ADR-084 Amendment 1) — and the selection opens as a new case in a tab of its own (§3.1h, ADR-084), with its own filter state; the parent is untouched. A bounding-box selection has no implementation yet |
@@ -714,6 +714,16 @@ a thickness, and both dotted lines, are drawn by programs of the Glass's own
 gap can be pointed at. Tests: `src/canvas/nodeAttributes.test.ts` (which program, what colour and
 width) and `keyboard/link-style.spec.ts`, which reads the painted pixels along a link and fails if a
 probabilistic link is not dotted or a direct one is.
+
+**Reading a Document (ADR-092).** A double-click on a Document, or Enter on a focused one, opens it
+full screen: an overlay over the whole work area (canvas, side column and timeline) with its title,
+for an email its sender, recipient and date, and its full text with the entities already accepted
+marked in place (the Dossier's marking); a note says when an email's text is its first 4,000
+characters. An email offers *Extract entities* and each finding's *Accept*, as the Inspector's email
+view does, and the text is read again after an acceptance so the new entity is marked. Focus starts
+on *Close*; Close or Escape returns to the canvas with nothing moved behind it. The text comes from
+`GET .../documents/{id}/reader`. Tests: `src/reader/DocumentReader.test.tsx` and
+`keyboard/reader.spec.ts` (Enter opens it, Escape closes it, Extract and Accept by keyboard).
 
 **What a link reads as (ADR-091).** A link is labelled by its type's display name and a named count,
 "Communicated with · 3 emails": the type's `label` where the ontology declares one, otherwise its

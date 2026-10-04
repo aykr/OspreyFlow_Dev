@@ -229,6 +229,9 @@ export interface GlassCanvasProps {
   /** ADR-092: the timeline's brushed window, read when *Show emails* puts a link's emails on the
    * canvas; `null` (nothing brushed) means every email on the link. */
   getEventsWindow?: () => { validFrom: string; validTo: string | null } | null;
+  /** ADR-092: double-click (or Enter) on a Document opens it to read rather than expanding it;
+   * expanding a Document stays in its right-click menu. */
+  onOpenDocument?: (nodeId: string) => void;
 }
 
 /** Phase 7 Stage 3: what the metrics panel needs from outside the canvas's own event handlers —
@@ -331,6 +334,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       judgementCounts,
       onLinkAction,
       getEventsWindow,
+      onOpenDocument,
     }: GlassCanvasProps,
     ref,
   ) {
@@ -366,6 +370,13 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // `hovered` or `edgeTypes` would never see a change.
     const hoveredRef = useRef<string | null>(null);
     const edgeTypesRef = useRef<readonly EdgeTypeDef[]>([]);
+    const onOpenDocumentRef = useRef(onOpenDocument);
+    onOpenDocumentRef.current = onOpenDocument;
+    // ADR-092: a Document is opened to read, not expanded, when the caller can show it.
+    const opensToRead = (nodeId: string): boolean =>
+      onOpenDocumentRef.current !== undefined &&
+      graph.hasNode(nodeId) &&
+      graph.getNodeAttribute(nodeId, "data").type === "Document";
     // ADR-091: each type's display name, worked out once per type rather than once per link per
     // frame; emptied whenever the ontology's types change.
     const typeNamesRef = useRef<Map<string, string>>(new Map());
@@ -1327,6 +1338,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           unfoldGroupRef.current(group.communityId);
           return;
         }
+        if (opensToRead(node)) {
+          event.preventSigmaDefault();
+          onOpenDocumentRef.current?.(node);
+          return;
+        }
         expandOnDoubleClick(event, node, (id, x, y) => {
           void requestExpansionRef.current?.(id, null, x, y);
         });
@@ -1584,6 +1600,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           const owner = communities.find((c) => c.members.includes(focused));
           if (owner) foldGroup(owner.id);
         }
+      } else if (e.key === "Enter" && focused && opensToRead(focused)) {
+        e.preventDefault();
+        onOpenDocumentRef.current?.(focused);
       } else if (e.key === "Enter" && focused) {
         // No menu is open here to anchor on — the same container-corner-plus-offset fallback the
         // `\` handler below uses to open one, since a failed expand needs somewhere to render.
