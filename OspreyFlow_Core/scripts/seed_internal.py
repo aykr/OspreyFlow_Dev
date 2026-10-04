@@ -173,6 +173,7 @@ def seed_internal(
     stop_api: bool = False,
     permitted: Callable[[str, str], bool] = _permitted,
     replace_graph: bool = False,
+    replace_events: bool = False,
     reset_graph_database: bool = False,
     vault: str | None = None,
     graph_fraud_rows: int | None = None,
@@ -338,6 +339,8 @@ def seed_internal(
         argv.append("--attested-permission")
     if replace_graph and spec.data_folder:
         argv.append("--replace-graph")
+    if replace_events and spec.data_folder:
+        argv.append("--replace-events")
     if reset_graph_database:
         argv.append("--reset-graph-database")
     if vault is not None:
@@ -583,6 +586,7 @@ def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     stop_api = "--stop-api" in args
     replace_graph = "--replace-graph" in args
+    replace_events = "--replace-events" in args
     reset_database = "--reset-graph-database" in args
     vault: str | None = None
     if "--vault" in args:
@@ -683,7 +687,8 @@ def main(argv: list[str] | None = None) -> int:
     if len(names) != 1:
         print(
             f"usage: seed_internal <{'|'.join(sorted(DATASETS))}> [--stop-api] "
-            "[--replace-graph] [--reset-graph-database] [--vault ID] [--method upsert|bulk] "
+            "[--replace-graph] [--replace-events] [--reset-graph-database] [--vault ID] "
+            "[--method upsert|bulk] "
             "[--compare-vaults A B] [--spike-bulk-transport [--spike-edges N]] "
             "[--probe-lookup-cost [--probe-sizes A,B,C]] "
             "[--graph-fraud-rows N|all] "
@@ -698,6 +703,7 @@ def main(argv: list[str] | None = None) -> int:
             names[0],
             stop_api=stop_api,
             replace_graph=replace_graph,
+            replace_events=replace_events,
             reset_graph_database=reset_database,
             vault=vault,
             graph_fraud_rows=sample,

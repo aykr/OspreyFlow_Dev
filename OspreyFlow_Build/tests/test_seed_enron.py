@@ -108,3 +108,17 @@ def test_the_enron_seed_can_replace_its_graph_and_refuses_a_second_events_load()
 
     assert seed_enron.write_graph is seed_support.write_graph
     assert seed_enron.events_already_loaded is seed_support.events_already_loaded
+
+
+def test_the_enron_seed_can_replace_a_cases_events_after_the_loader_changed() -> None:
+    """ADR-089: the excerpt grew from 300 to 4,000 characters, and the events guard alone would
+    refuse the re-seed for ever. `--replace-events` deletes the case's own events first and loads
+    them again, keeping the graph; without it the guard still refuses."""
+    assert _parse_args(["--case-name", "x", "--replace-events"]).replace_events is True
+    assert _parse_args(["--case-name", "x"]).replace_events is False
+    from scripts import seed_enron
+
+    assert seed_enron.events_plan(already_loaded=True, replace_events=False) == "refuse"
+    assert seed_enron.events_plan(already_loaded=True, replace_events=True) == "replace"
+    assert seed_enron.events_plan(already_loaded=False, replace_events=True) == "load"
+    assert seed_enron.events_plan(already_loaded=False, replace_events=False) == "load"

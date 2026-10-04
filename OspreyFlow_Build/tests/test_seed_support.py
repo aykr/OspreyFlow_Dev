@@ -141,6 +141,25 @@ def test_events_already_in_a_case_are_detected_and_other_cases_do_not_count(
     assert seed_support.events_already_loaded(path, "case-b") is False
 
 
+def test_a_cases_own_events_can_be_deleted_and_nobody_elses_are_touched(tmp_path: Path) -> None:
+    """ADR-089: a loader that changes what an event carries (longer excerpts) needs the case's
+    events replaced, not doubled and not refused for ever. The deleter removes that case's rows
+    only and says how many."""
+    path = _db(tmp_path)
+    con = duckdb.connect(str(path))
+    con.execute("INSERT INTO events VALUES ('e2', 'case-a'), ('e3', 'case-b')")
+    con.close()
+    assert seed_support.delete_case_events(path, "case-a") == 2
+    assert seed_support.events_already_loaded(path, "case-a") is False
+    assert seed_support.events_already_loaded(path, "case-b") is True
+    # A second call finds nothing, and a missing file or table is nothing to delete, not a crash.
+    assert seed_support.delete_case_events(path, "case-a") == 0
+    assert seed_support.delete_case_events(tmp_path / "none.duckdb", "case-a") == 0
+    empty = tmp_path / "empty.duckdb"
+    duckdb.connect(str(empty)).close()
+    assert seed_support.delete_case_events(empty, "case-a") == 0
+
+
 def test_a_missing_analytics_file_or_table_means_no_events_yet(tmp_path: Path) -> None:
     """Catches the check crashing on a first-ever run."""
     assert (

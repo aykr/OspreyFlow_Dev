@@ -768,6 +768,30 @@ def events_already_loaded(analytics_db_path: Path | str, scope: str) -> bool:
         con.close()
 
 
+def delete_case_events(analytics_db_path: Path | str, scope: str) -> int:
+    """Removes the case's own events and says how many (ADR-089): the way a case takes a loader
+    that now carries more on each event (the Enron excerpt grew from 300 to 4,000 characters)
+    without doubling its counts. Other cases' rows are not touched. A missing file or table is
+    nothing to delete, not an error."""
+    path = Path(analytics_db_path)
+    if not path.exists():
+        return 0
+    con = duckdb.connect(str(path))
+    try:
+        try:
+            row = con.execute(
+                "SELECT count(*) FROM events WHERE investigation_scope = ?", [scope]
+            ).fetchone()
+        except duckdb.CatalogException:
+            return 0
+        count = int(row[0]) if row else 0
+        if count:
+            con.execute("DELETE FROM events WHERE investigation_scope = ?", [scope])
+        return count
+    finally:
+        con.close()
+
+
 def events_summary(analytics_db_path: Path | str) -> list[str]:
     """What an analytics file holds, as report lines, opened read-only so it cannot change
     anything: the event count per case. A missing file, a missing table, and a file the Conduit has

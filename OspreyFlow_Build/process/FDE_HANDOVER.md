@@ -150,8 +150,13 @@ rows and the sashes.
 ADR-086 resizable panels; ADR-087 timeline emergence, dimmed links and the no-events state; ADR-088 the
 social-network filters in the Metrics panel; ADR-089 the emails behind an Enron link in three steps (list,
 open, extract and accept); ADR-084 Amendment 1 (Shift+click, Branch from a selected node's menu); ADR-060
-Amendment 2 (the view never moves by itself). **Enron needs a re-seed** (`make seed-enron`) for the
-4,000-character excerpts before the emails can be read or extracted from. The extraction routes use the
+Amendment 2 (the view never moves by itself). **Enron needs its events re-seeded** for the
+4,000-character excerpts before the emails can be read or extracted from. `make seed-enron` refuses
+(the events are already loaded and a second load would double every count); run the wrapper
+directly with `--replace-events`, which deletes the case's own events, reloads them and keeps the
+graph: `cd OspreyFlow_Core && PYTHONPATH=.:packages:../OspreyFlow_Build .venv/bin/python -m
+scripts.seed_internal enron --stop-api --replace-events` (the `Makefile` target is unchanged; adding
+the flag to it, or a `seed-enron-events` target, is the owner's edit). The extraction routes use the
 deployment's local model (`CONFORMANCE_MODEL`) unless the caller names one; the Glass names none.
 
 ### 6.2 ADR-081 steps B, C and D (each its own commit; B built, C and D not started)

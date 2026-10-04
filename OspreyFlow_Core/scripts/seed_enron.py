@@ -28,6 +28,7 @@ from scripts.seed_support import (
     KNOWN_STRAY_ADVICE,
     EventProgress,
     clear_seeded_graph,
+    delete_case_events,
     events_already_loaded,
     report_ids_stored_twice,
     write_graph,
@@ -120,6 +121,16 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--replace-events",
+        action="store_true",
+        help=(
+            "Delete this case's own events and load them again, keeping the graph as it is. For a "
+            "loader that now carries more on each event (ADR-089: the excerpt grew to 4,000 "
+            "characters); without it a second events load is refused, since it would double every "
+            "count."
+        ),
+    )
+    parser.add_argument(
         "--attested-permission",
         action="store_true",
         help="The host checked the exceptions list (a container cannot see it).",
@@ -172,10 +183,15 @@ async def _run(args: argparse.Namespace) -> int:
     scope = case.id
     print(f"Case {args.case_name!r} is {scope}.")
 
-    if events_already_loaded(args.analytics_db_path, scope):
+    plan = events_plan(
+        already_loaded=events_already_loaded(args.analytics_db_path, scope),
+        replace_events=args.replace_events,
+    )
+    if plan == "refuse":
         print(
             f"Case {scope!r} already has events loaded, and loading them again would double every "
-            "count. Nothing was written.",
+            "count. Nothing was written. To load them again, use --replace-events: it deletes "
+            "this case's own events first and keeps the graph.",
             file=sys.stderr,
         )
         return 1
@@ -202,7 +218,11 @@ async def _run(args: argparse.Namespace) -> int:
                 edge_prefix="enron-comm-",
             )
             print(f"  graph: removed {removed[0]:,} addresses and {removed[1]:,} links")
-        if nodes and await graph.get_node(nodes[0].id, principal) is not None:
+        graph_present = bool(nodes) and await graph.get_node(nodes[0].id, principal) is not None
+        if graph_present and plan == "replace":
+            # Only the events are being replaced: the graph stays exactly as it is.
+            print("  graph: kept as it is (--replace-events reloads the events only)")
+        elif graph_present:
             print(
                 "The Enron graph is already loaded (or a load was interrupted). Nothing was "
                 "written. To load again, use --replace-graph: it deletes this seed's own rows "
@@ -210,7 +230,8 @@ async def _run(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 1
-        await write_graph(graph, nodes, edges, chunk=_GRAPH_CHUNK, nouns=("addresses", "links"))
+        else:
+            await write_graph(graph, nodes, edges, chunk=_GRAPH_CHUNK, nouns=("addresses", "links"))
         await report_ids_stored_twice(
             client,
             edge_types=[groovy_identifier(physical_type_name("COMMUNICATED_WITH"))],
@@ -221,6 +242,9 @@ async def _run(args: argparse.Namespace) -> int:
         await client.aclose()
 
     Path(args.analytics_db_path).parent.mkdir(parents=True, exist_ok=True)
+    if plan == "replace":
+        removed = delete_case_events(args.analytics_db_path, scope)
+        print(f"  events: removed {removed:,} of this case's own, to load them again")
     con = duckdb.connect(args.analytics_db_path)
     loaded = 0
     try:
@@ -243,6 +267,14 @@ async def _run(args: argparse.Namespace) -> int:
     print(f"Seeded {len(nodes)} addresses and {len(edges)} links into the graph.")
     print(f"Loaded {loaded:,} events under investigation_scope={scope!r}.")
     return 0
+
+
+def events_plan(*, already_loaded: bool, replace_events: bool) -> str:
+    """What to do about a case's events: load them for the first time, replace them because the
+    caller asked, or refuse because they are there and loading again would double every count."""
+    if not already_loaded:
+        return "load"
+    return "replace" if replace_events else "refuse"
 
 
 def main(argv: list[str] | None = None) -> int:
