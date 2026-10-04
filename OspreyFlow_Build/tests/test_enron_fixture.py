@@ -43,6 +43,11 @@ def _mail(
     return "\n".join(lines)
 
 
+def _message_with_body(root: Path, name: str, body: str) -> enron.Message:
+    _put(root, "smith-a", "sent", name, _mail(message_id=f"<{name}@thyme>", body=body))
+    return next(m for m in enron.read_messages(root) if m.message_id == f"<{name}@thyme>")
+
+
 def _put(root: Path, custodian: str, folder: str, name: str, text: str) -> None:
     path = root / custodian / folder / name
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -139,12 +144,18 @@ def test_a_file_that_is_not_mail_is_counted_and_skipped(tmp_path: Path) -> None:
     assert tally.unreadable + tally.undated + tally.senderless >= 1
 
 
-def test_the_excerpt_is_short_and_single_spaced(tmp_path: Path) -> None:
-    """Catches whole bodies (over a gigabyte of text) riding on every event."""
-    _put(tmp_path, "a", "sent", "1.", _mail(body="word   " * 500 + "\n\nmore"))
-    (m,) = list(enron.read_messages(tmp_path))
-    assert len(m.excerpt) <= enron.EXCERPT_CHARS
-    assert "  " not in m.excerpt
+def test_the_excerpt_keeps_a_whole_business_email_and_says_when_it_cut_a_long_one(
+    tmp_path: Path,
+) -> None:
+    """ADR-089: an email is read and extracted from its excerpt, so the excerpt holds nearly every
+    business email whole (4,000 characters) and a longer body is cut with `truncated` set."""
+    assert enron.EXCERPT_CHARS == 4000
+    short = _message_with_body(tmp_path, "short.eml", "A short note.  With  spacing.")
+    assert short.excerpt == "A short note. With spacing."
+    assert short.truncated is False
+    long = _message_with_body(tmp_path, "long.eml", "word " * 2000)
+    assert len(long.excerpt) == enron.EXCERPT_CHARS
+    assert long.truncated is True
 
 
 def test_the_read_order_is_the_same_every_time(tmp_path: Path) -> None:

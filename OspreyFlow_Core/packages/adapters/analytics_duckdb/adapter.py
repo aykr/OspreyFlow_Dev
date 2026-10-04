@@ -14,7 +14,7 @@ import json
 import math
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import cast
+from typing import Any, cast
 
 import duckdb
 
@@ -24,6 +24,8 @@ from schemas.analytics import (
     BaselineResult,
     CrossFilterRequest,
     EventFilter,
+    EventListRequest,
+    EventListResult,
     EventRecord,
     FirstSeenRequest,
     FirstSeenResult,
@@ -64,6 +66,37 @@ def _field_expression(field: str) -> str:
     return f"json_extract_string(properties, '$.{name}')"
 
 
+def _row_to_event(row: tuple[object, ...]) -> EventRecord:
+    (
+        event_id, edge_id, edge_type, source_id, target_id, occurred_at, duration_s, cell_site,
+        lat, lon, direction, properties, investigation_scope, classification, handling_code,
+        owning_unit, originator,
+    ) = row
+    raw = properties
+    parsed = json.loads(raw) if isinstance(raw, str) else (raw or {})
+    return EventRecord(
+        event_id=cast(str, event_id),
+        edge_id=cast(str, edge_id),
+        edge_type=cast(str, edge_type),
+        source_id=cast(str, source_id),
+        target_id=cast(str, target_id),
+        occurred_at=_as_utc(occurred_at),
+        duration_s=cast(float | None, duration_s),
+        cell_site=cast(str | None, cell_site),
+        lat=cast(float | None, lat),
+        lon=cast(float | None, lon),
+        direction=cast(str | None, direction),
+        properties=cast(dict[str, Any], parsed),
+        investigation_scope=cast(str, investigation_scope),
+        handling=Handling(
+            classification=cast(str, classification),
+            handling_code=cast(str, handling_code),
+            owning_unit=cast(str, owning_unit),
+            originator=cast(str, originator),
+        ),
+    )
+
+
 def _as_utc(value: object) -> datetime:
     """DuckDB hands a naive timestamp back for a TIMESTAMP column; events are written in UTC."""
     return cast(datetime, value).replace(tzinfo=UTC)
@@ -94,6 +127,10 @@ class AnalyticsDuckDBAdapter:
             placeholders = ",".join("?" for _ in event_filter.edge_types)
             clauses.append(f"edge_type IN ({placeholders})")
             params.extend(event_filter.edge_types)
+        if event_filter.edge_ids:
+            placeholders = ",".join("?" for _ in event_filter.edge_ids)
+            clauses.append(f"edge_id IN ({placeholders})")
+            params.extend(event_filter.edge_ids)
         # **A7's item-category half — round 13cdc.** Values are parameterised; only the *column*
         # is interpolated, and `_field_expression` validates it as a safe identifier first, which
         # is the same guard `cross_filter`'s own dimensions already rely on.
@@ -413,6 +450,21 @@ class AnalyticsDuckDBAdapter:
                 assert dimension.field is not None
                 result[dimension.name] = self._categorical_histogram(predicate, dimension.field)
         return result
+
+    # --- list_events (ADR-089) -------------------------------------------------
+
+    async def list_events(self, req: EventListRequest, principal: Principal) -> EventListResult:
+        predicate = self._predicate(req.filter, principal)
+        total = self._count(predicate)
+        rows = self._con.execute(
+            "SELECT event_id, edge_id, edge_type, source_id, target_id, occurred_at, duration_s, "
+            "cell_site, lat, lon, direction, properties, investigation_scope, "
+            "handling_classification, handling_code, owning_unit, originator "
+            f"FROM events WHERE {predicate.where} "
+            "ORDER BY occurred_at DESC, event_id DESC LIMIT ? OFFSET ?",
+            [*predicate.params, req.limit, req.offset],
+        ).fetchall()
+        return EventListResult(total=total, events=[_row_to_event(row) for row in rows])
 
     # --- first_seen (ADR-087) --------------------------------------------------
 

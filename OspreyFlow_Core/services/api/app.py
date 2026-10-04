@@ -39,6 +39,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     Request,
     Response,
     UploadFile,
@@ -239,6 +240,7 @@ from .link_changes import (
     LinkHistoryResponse,
     ResolutionLinkError,
 )
+from .link_events import LinkEventListResponse, LinkEventsService
 from .link_notes import (
     InvalidNoteError,
     LinkNoteBody,
@@ -433,6 +435,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.link_changes = LinkChangeService(
         link_changes_store, app.state.working_set, graph, ontology, link_notes_store
     )
+    app.state.link_events = LinkEventsService(app.state.working_set, analytics)
     app.state.suppression_marks = suppression_marks
     app.state.gaps_store = gaps_store
     app.state.assumptions_store = assumptions_store
@@ -703,6 +706,13 @@ MonitorsStoreDep = Annotated[MonitorStore, Depends(get_monitors_store)]
 AlertsStoreDep = Annotated[AlertStore, Depends(get_alerts_store)]
 JudgementsStoreDep = Annotated[JudgementStore, Depends(get_judgements_store)]
 LinkNotesDep = Annotated[LinkNoteService, Depends(get_link_notes)]
+
+
+def get_link_events(request: Request) -> LinkEventsService:
+    return request.app.state.link_events  # type: ignore[no-any-return]
+
+
+LinkEventsDep = Annotated[LinkEventsService, Depends(get_link_events)]
 
 
 def get_link_changes(request: Request) -> LinkChangeService:
@@ -2608,6 +2618,21 @@ async def link_history_route(
     and a link they cannot see answers as one that does not exist. Not audited, like the other
     case reads here."""
     return await link_changes.history(investigation.id, edge_id, principal)
+
+
+@app.get("/v1/investigations/{investigation_id}/links/{edge_id}/events")
+async def list_link_events_route(
+    investigation: InvestigationViewerDep,
+    edge_id: str,
+    principal: PrincipalDep,
+    link_events: LinkEventsDep,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> LinkEventListResponse:
+    """The events behind one link (the emails between two addresses, ADR-089), newest first, a
+    page at a time with the total — only to someone who can see the link, and a link they cannot
+    see answers as one that does not exist. Not audited, like the other case reads here."""
+    return await link_events.list(investigation.id, edge_id, principal, offset=offset, limit=limit)
 
 
 @app.get("/v1/investigations/{investigation_id}/links/{edge_id}/notes")

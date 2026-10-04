@@ -64,6 +64,7 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     # Changing a link (ADR-080) changes the case; reading a link's history is a read of it.
     ("POST", P + "/links/{edge_id}/change"): E,
     ("GET", P + "/links/{edge_id}/history"): V,
+    ("GET", P + "/links/{edge_id}/events"): V,
     ("POST", P + "/export"): E,
     ("POST", P + "/sites"): E,
     ("GET", P + "/sites/{site_id}"): V,

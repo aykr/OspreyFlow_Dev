@@ -27,6 +27,7 @@ from schemas.analytics import (
     CrossFilterDimension,
     CrossFilterRequest,
     EventFilter,
+    EventListRequest,
     EventRecord,
     FirstSeenRequest,
     GeoBinRequest,
@@ -620,6 +621,78 @@ async def test_cross_filter_returns_every_dimension_against_the_same_filter(
         assert set(result) == {"temporal", "direction"}
         assert result["temporal"].total == 2
         assert result["direction"].total == 2
+
+
+# --- the events behind one link (ADR-089): a filter by link, and a paged listing ------------
+
+
+async def test_event_filter_edge_ids_restricts_to_events_on_those_links(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    events = [
+        _event(occurred_at=now, edge_id="ab"),
+        _event(occurred_at=now, edge_id="ab"),
+        _event(occurred_at=now, edge_id="bc", source_id="b", target_id="c"),
+    ]
+    async with factory.context(events) as adapter:
+        req = HistogramRequest(filter=_filter(edge_ids=["ab"]), interval_seconds=3600)
+        assert (await adapter.histogram(req, CLEARED)).total == 2
+        both = HistogramRequest(filter=_filter(edge_ids=["ab", "bc"]), interval_seconds=3600)
+        assert (await adapter.histogram(both, CLEARED)).total == 3
+        none = HistogramRequest(filter=_filter(edge_ids=["zz"]), interval_seconds=3600)
+        assert (await adapter.histogram(none, CLEARED)).total == 0
+
+
+async def test_list_events_is_newest_first_paged_and_says_how_many_there_are(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """The emails behind a link are read newest first, fifty at a time, and the total is said so
+    the list can page; the properties ride along whole (an email's subject and excerpt live
+    there)."""
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    events = [
+        _event(
+            occurred_at=base.replace(hour=hour),
+            edge_id="ab",
+            properties={"subject": f"Subject {hour}", "excerpt": f"Body {hour}"},
+        )
+        for hour in range(5)
+    ]
+    async with factory.context(events) as adapter:
+        page = await adapter.list_events(
+            EventListRequest(filter=_filter(edge_ids=["ab"]), offset=0, limit=2), CLEARED
+        )
+        assert page.total == 5
+        assert [e.occurred_at.hour for e in page.events] == [4, 3]
+        assert page.events[0].properties == {"subject": "Subject 4", "excerpt": "Body 4"}
+        assert page.events[0].edge_id == "ab"
+        last = await adapter.list_events(
+            EventListRequest(filter=_filter(edge_ids=["ab"]), offset=4, limit=2), CLEARED
+        )
+        assert [e.occurred_at.hour for e in last.events] == [0]
+        beyond = await adapter.list_events(
+            EventListRequest(filter=_filter(edge_ids=["ab"]), offset=10, limit=2), CLEARED
+        )
+        assert beyond.events == [] and beyond.total == 5
+
+
+async def test_unauthorised_list_events_matches_a_corpus_without_the_hidden_event(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    req = EventListRequest(filter=_filter(edge_ids=["e1"]), offset=0, limit=50)
+    visible = [_event(occurred_at=now, classification="OFFICIAL")]
+    async with factory.context(visible) as adapter:
+        before = await adapter.list_events(req, OFFICIAL)
+        assert before.total == 1
+
+    with_hidden = [*visible, _event(occurred_at=now, classification="SECRET")]
+    async with factory.context(with_hidden) as adapter:
+        after = await adapter.list_events(req, OFFICIAL)
+        assert after.total == before.total
+        assert [e.event_id for e in after.events] == [e.event_id for e in before.events]
+        assert (await adapter.list_events(req, CLEARED)).total == 2
 
 
 # --- first_seen (ADR-087): when each node and link first appears in a window ----------------

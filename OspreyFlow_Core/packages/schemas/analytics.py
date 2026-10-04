@@ -164,6 +164,8 @@ class EventFilter(BaseModel):
     window: Interval | None = None
     node_ids: list[NodeId] = Field(default_factory=list)
     edge_types: list[str] = Field(default_factory=list)
+    #: Only events on these links (ADR-089: the emails behind one link). Empty does not restrict.
+    edge_ids: list[EdgeId] = Field(default_factory=list)
     #: **Restrict by a field's value, not merely aggregate over it — round 13cdc.**
     #:
     #: `08_ACCEPTANCE_SCENARIOS.md` A7 filters reports "to one residential sub-unit and one item
@@ -324,6 +326,20 @@ class FirstSeenResult(BaseModel):
     edges: dict[EdgeId, datetime] = Field(default_factory=dict)
 
 
+class EventListRequest(BaseModel):
+    """A page of the events a filter describes, newest first (ADR-089): the emails behind one
+    link, read fifty at a time with the total said so the list can page."""
+
+    filter: EventFilter
+    offset: int = Field(default=0, ge=0)
+    limit: int = Field(default=50, ge=1, le=200)
+
+
+class EventListResult(BaseModel):
+    total: int = Field(ge=0)
+    events: list[EventRecord] = Field(default_factory=list)
+
+
 class BaselineRequest(BaseModel):
     """Compares a comparison window against a baseline window over the
     same filter and bucketing. The HMP finding — four cells at ~52% of
@@ -388,4 +404,6 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     CrossFilterRequest,
     FirstSeenRequest,
     FirstSeenResult,
+    EventListRequest,
+    EventListResult,
 )

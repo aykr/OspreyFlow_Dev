@@ -54,6 +54,8 @@ export type { CrossFilterDimension } from "./CrossFilterDimension";
 export type { CrossFilterRequest } from "./CrossFilterRequest";
 export type { FirstSeenRequest } from "./FirstSeenRequest";
 export type { FirstSeenResult } from "./FirstSeenResult";
+export type { EventListRequest } from "./EventListRequest";
+export type { EventListResult } from "./EventListResult";
 export type { ConnectorCatalogueEntry } from "./ConnectorCatalogueEntry";
 export type { ConnectDraftInput } from "./ConnectDraftInput";
 export type { StudioRecipeDraft } from "./StudioRecipeDraft";

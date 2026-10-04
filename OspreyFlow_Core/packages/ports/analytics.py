@@ -17,6 +17,8 @@ from schemas.analytics import (
     BaselineRequest,
     BaselineResult,
     CrossFilterRequest,
+    EventListRequest,
+    EventListResult,
     EventRecord,
     FirstSeenRequest,
     FirstSeenResult,
@@ -60,6 +62,11 @@ class AnalyticsPort(Protocol):
     ) -> dict[str, Histogram]: ...
 
     async def baseline(self, req: BaselineRequest, principal: Principal) -> BaselineResult: ...
+
+    async def list_events(self, req: EventListRequest, principal: Principal) -> EventListResult:
+        """A page of the events the filter describes, newest first, with the total (ADR-089).
+        Access control is in the query: a hidden event is neither listed nor counted."""
+        ...
 
     async def first_seen(self, req: FirstSeenRequest, principal: Principal) -> FirstSeenResult:
         """The earliest event in `req.filter` per node (either end) and per link (ADR-087). Access

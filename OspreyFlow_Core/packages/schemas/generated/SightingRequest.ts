@@ -6,6 +6,8 @@ export type ValidTo = string | null;
 export type NodeId = string;
 export type NodeIds = NodeId[];
 export type EdgeTypes = string[];
+export type EdgeId = string;
+export type EdgeIds = EdgeId[];
 
 /**
  * B18's own backend dependency, found genuinely missing while building it, not assumed to
@@ -34,6 +36,7 @@ export interface EventFilter {
   window?: Interval | null;
   node_ids?: NodeIds;
   edge_types?: EdgeTypes;
+  edge_ids?: EdgeIds;
   value_filters?: ValueFilters;
   [k: string]: unknown;
 }

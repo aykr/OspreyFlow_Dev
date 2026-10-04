@@ -43,8 +43,10 @@ from schemas.domain import (
     SourceRef,
 )
 
-#: How much of a message body rides on its event. The whole corpus is over a gigabyte of text.
-EXCERPT_CHARS = 300
+#: How much of a message body rides on its event (ADR-089: enough for nearly every business email
+#: to be read and extracted from whole; the whole corpus is over a gigabyte of text, so a longer
+#: body is cut and says so with `truncated`).
+EXCERPT_CHARS = 4000
 #: The company's own addresses are the graph; everything else is events only.
 GRAPH_DOMAIN = "@enron.com"
 
@@ -92,6 +94,7 @@ class Message:
     recipients: tuple[Recipient, ...]
     subject: str
     excerpt: str
+    truncated: bool = False
 
 
 @dataclass
@@ -110,10 +113,19 @@ def _addresses(header: object) -> list[str]:
     return found
 
 
-def _excerpt(message: EmailMessage) -> str:
+def _body_text(message: EmailMessage) -> str:
     payload = message.get_payload(decode=False)
     text = payload if isinstance(payload, str) else ""
-    return " ".join(text.split())[:EXCERPT_CHARS]
+    return " ".join(text.split())
+
+
+def _excerpt(message: EmailMessage) -> str:
+    return _body_text(message)[:EXCERPT_CHARS]
+
+
+def _is_truncated(message: EmailMessage) -> bool:
+    """Whether the body ran past `EXCERPT_CHARS`, so a reader knows the excerpt is not the whole."""
+    return len(_body_text(message)) > EXCERPT_CHARS
 
 
 def _content_key(message: EmailMessage) -> str:
@@ -187,6 +199,7 @@ def read_messages(root: Path, *, tally: Tally | None = None) -> Iterator[Message
             recipients=tuple(recipients),
             subject=" ".join(str(message.get("Subject", "")).split()),
             excerpt=_excerpt(message),
+            truncated=_is_truncated(message),
         )
 
 
@@ -220,6 +233,7 @@ def to_events(
                 "folder": message.folder,
                 "kind": recipient.kind,
                 "excerpt": message.excerpt,
+                "truncated": message.truncated,
             },
             investigation_scope=investigation_scope,
             handling=handling,
