@@ -100,7 +100,7 @@ export function Inspector({ node, link, linkEditing, assessment }: InspectorProp
             bearerToken={assessment.bearerToken}
             investigationId={assessment.investigationId}
             edgeId={link.edge.id}
-            noun={eventsNoun(link.edge.type, link.source?.properties?.kind as string | undefined)}
+            noun={eventsNoun(link.edge.type, link.source)}
             sourceLabel={link.source ? displayValue(link.source) : link.edge.source}
             targetLabel={link.target ? displayValue(link.target) : link.edge.target}
             focusSignal={linkEditing?.openEventsSignal}

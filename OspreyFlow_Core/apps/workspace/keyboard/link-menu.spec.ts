@@ -15,7 +15,10 @@ declare global {
       linkAction: { edgeId: string; action: string } | null;
     };
     __GROUPED__?: number;
-    __CANVAS__?: { reproject: (clusterIds: Record<string, string>) => void };
+    __CANVAS__?: {
+      reproject: (clusterIds: Record<string, string>) => void;
+      hasNode: (nodeId: string) => boolean;
+    };
   }
 }
 
@@ -291,6 +294,56 @@ test("A link of another type offers Change and the history, and each hands over 
     .poll(() => page.evaluate(() => window.__KEYBOARD__?.linkAction))
     .toEqual({ edgeId: "ln0", action: "history" });
   registerCovered(REGISTRY, "other-links-offer-change-and-history-and-hand-over");
+});
+
+function emailDocument(id: string) {
+  return {
+    id,
+    type: "Document",
+    properties: { title: `Email ${id}` },
+    provenance: {
+      state: "asserted",
+      sources: [{ document_id: "m", locator: `event:${id}`, excerpt_hash: "" }],
+      first_seen: "2001-05-14T10:00:00Z",
+    },
+    handling: { classification: "OFFICIAL", handling_code: "P", originator: "unit-1", owning_unit: "unit-1" },
+    audit: { created_at: "2026-10-04T00:00:00Z", created_by: "analyst-1" },
+  };
+}
+
+test("Show emails puts the emails in the timeline's window on the canvas as Documents (ADR-092)", async ({
+  page,
+}) => {
+  let sent: unknown = null;
+  await page.route("**/v1/investigations/keyboard-fixture/links/em0/events/documents", async (route) => {
+    sent = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        written: 2,
+        without_text: 0,
+        delta: { seq: 2, op: "add", nodes: [emailDocument("email:ev-1"), emailDocument("email:ev-2")], edges: [] },
+      }),
+    });
+  });
+  await page.goto("/keyboard/harness.html?fixture=emails");
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  await page.keyboard.press("l");
+  await expect.poll(() => selectedEdge(page)).toBe("em0");
+  await page.keyboard.press("\\");
+  await expect(menu(page)).toBeVisible();
+  // Named emails because the addresses carry the loader's own `endpoint_kind: "email"`.
+  await expect(page.getByRole("menuitem").first()).toHaveText("Show emails (2)");
+  await page.keyboard.press("Enter");
+  await expect
+    .poll(() => page.evaluate(() => window.__CANVAS__?.hasNode("email:ev-2")))
+    .toBe(true);
+  expect(sent).toEqual({
+    window: { valid_from: "2001-05-01T00:00:00Z", valid_to: "2001-05-31T00:00:00Z" },
+  });
+  await expect(page.getByText("2 emails put on the canvas.")).toBeVisible();
+  registerCovered(REGISTRY, "show-emails-puts-the-windows-emails-on-the-canvas-as-documents");
 });
 
 test("every registered link-menu action has its own proving test case above", () => {

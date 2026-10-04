@@ -433,7 +433,12 @@ matching section.
 for, newest first, fifty at a time with *Show more*, each with its date, direction, subject and the
 first words of its text. Choosing one opens it to read, with its sender, recipient, date and text, and a
 note when the text is the first 4,000 characters of a longer message. Reachable by keyboard
-(`keyboard/link-events.spec.ts`).
+(`keyboard/link-events.spec.ts`). On a link between two email addresses (`Endpoint.endpoint_kind` is `email` at the source)
+*Show emails (n)* also puts the emails inside the timeline's brushed window (all of them when nothing
+is brushed) on the canvas as Documents, linked to both addresses, and says how many (ADR-092); past
+the working set's cap nothing is added and the message says by how much and to narrow the timeline.
+A link whose events carry no text (a PaySim transaction, an HMP incident) keeps the Inspector list
+only. Proved by keyboard in `keyboard/link-menu.spec.ts`.
 
 An opened email offers **Extract entities** (ADR-089 step 3). The email becomes a `Document` node linked
 to its sender and recipient by `MENTIONED_IN`, both appear on the canvas at once, and the model's findings

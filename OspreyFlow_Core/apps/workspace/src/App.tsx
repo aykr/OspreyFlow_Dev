@@ -934,6 +934,7 @@ export function App() {
                 judgementCounts={judgementCounts}
                 communityHulls={communityHulls}
                 onEdgeSelect={setSelectedLink}
+                getEventsWindow={() => crossFilterRef.current?.store.getState().window ?? null}
                 onLinkAction={(_edge, action) => {
                   if (action === "note") setLinkNoteSignal((n) => n + 1);
                   if (action === "change") setLinkChangeSignal((n) => n + 1);

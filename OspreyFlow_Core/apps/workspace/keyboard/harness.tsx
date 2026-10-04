@@ -41,6 +41,8 @@ declare global {
       setTheme: (theme: "dark" | "light") => void;
       /** The picture stored on a node now (a data address of its shape and icon), which is what the canvas draws. */
       nodeImage: (nodeId: string) => string | null;
+      /** Whether the working set holds this node now (ADR-092: an email put on the canvas). */
+      hasNode: (nodeId: string) => boolean;
       /** Land a `reproject` delta, as the server sends when the resolution slider moves: each node
        * named takes the cluster id given. */
       reproject: (clusterIds: Record<string, string>) => void;
@@ -127,6 +129,7 @@ window.__CANVAS__ = {
   nodeColour: (id) => (workingSet.graph.hasNode(id) ? (workingSet.graph.getNodeAttribute(id, "color") as string) : null),
   setTheme: (theme) => applyTheme(theme),
   nodeImage: (id) => (workingSet.graph.hasNode(id) ? (workingSet.graph.getNodeAttribute(id, "image") as string) : null),
+  hasNode: (id) => workingSet.graph.hasNode(id),
   reproject: (clusterIds) =>
     workingSet.store.getState().applyDelta({
       seq: workingSet.store.getState().seq + 1,
@@ -242,6 +245,22 @@ if (wantsSameAs) {
   edges.push(edge("sa1", "s1", "s2", "SAME_AS"));
   edges.push(edge("ln0", "s2", "p0"));
 }
+// `?fixture=emails` is ADR-092's: two email addresses, shaped as the Enron loader writes them
+// (`endpoint_kind: "email"`), joined by one `COMMUNICATED_WITH` link `em0` that stands for two emails.
+const wantsEmails = new URLSearchParams(window.location.search).get("fixture") === "emails";
+if (wantsEmails) {
+  nodes.length = 0;
+  edges.length = 0;
+  for (const id of ["ea", "eb"]) {
+    nodes.push(
+      node(id, {
+        type: "Endpoint",
+        properties: { value_raw: `${id}@enron.com`, value_normalised: `${id}@enron.com`, endpoint_kind: "email" },
+      }),
+    );
+  }
+  edges.push({ ...edge("em0", "ea", "eb", "COMMUNICATED_WITH"), occurrences: 2 });
+}
 if (wantsLinkStyle) {
   nodes.length = 0;
   edges.length = 0;
@@ -305,6 +324,9 @@ createRoot(container).render(
       onEdgeSelect={(edge) => {
         window.__KEYBOARD__!.selectedEdge = edge ? edge.id : null;
       }}
+      getEventsWindow={() =>
+        wantsEmails ? { validFrom: "2001-05-01T00:00:00Z", validTo: "2001-05-31T00:00:00Z" } : null
+      }
       onLinkAction={(edge, action) => {
         window.__KEYBOARD__!.linkAction = { edgeId: edge.id, action };
       }}

@@ -9667,3 +9667,14 @@ Decision.
 Not decided here. Paging the emails onto the canvas in smaller batches; a reader for a document with no text at all (it says so); placing the Documents in a ring around their link rather than by the layout.
 
 Consequences. Built in three commits: (1) the server route that writes the emails in the window as Documents, with the cap checked first; (2) the Glass: *Show emails* sends the brushed window and draws the delta, and the reader route and overlay; (3) double-click on a Document opens the reader, with a keyboard case (rule 13). Tests that would fail if an invariant were broken: the window narrows what is written; showing twice writes nothing new; past the cap nothing is written and the answer is `limit_exceeded`; a Viewer cannot write; a hidden link and a missing one refuse alike and write nothing; the reader refuses a Document the caller cannot see as a missing one; an email's text comes from its event when nothing was extracted; Escape closes the reader and the view is unchanged.
+
+### ADR-092, Amendment 1 (4 October 2026) — only an event with text becomes a Document; which links are email was misread
+
+Context. The owner asked, while step 2 was being built, whether every demo dataset's linked events are picked up, PaySim's transactions included. Each loader ties its events to their graph link by the link's own id (Enron `pair_edge_id`, PaySim `paysim-tx-{id}`, HMP's incidents substituted with the real graph ids), so *Show events* finds them on every dataset; Fixture Corp has no events. But ADR-092 decision 1, as step 1 built it, would have written a PaySim transaction or an HMP incident as a "(no subject)" Document.
+
+Decision.
+
+1. **Only an event that carries text is written as a Document** (an email's `excerpt`). Events on the link without text are counted and said (`without_text`), never dropped silently; a link none of whose events carries text is refused, `422 not_documents`, and nothing is written. In the Glass only a link between email addresses puts its events on the canvas; any other keeps the Inspector list.
+2. **Which links are email: `Endpoint.endpoint_kind`.** The Glass decided "emails" from the source node's `properties.kind`, a field nothing carries (the ontology and the Enron loader use `endpoint_kind`), so every Enron link said *Show events* and its count said records. `eventsNoun` now takes the node and reads `endpoint_kind` itself, the one place that decides it; its test uses the node the Enron loader writes, and the earlier test, which passed the string `"email"` and so agreed with the defect, was replaced.
+
+Tests, each shown red first: `test_a_link_whose_events_have_no_text_is_refused_and_writes_nothing`, `test_events_without_text_are_counted_not_written`, `linkEventsApi.test.ts` (red: a real Enron address read as events), and the keyboard case in `link-menu.spec.ts` that *Show emails* sends the brushed window and draws the Documents (red with the call unwired).

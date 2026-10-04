@@ -1,7 +1,7 @@
 // The events behind one link (ADR-089): the emails between two addresses, newest first, a page at
 // a time. `GET .../links/{edge}/events` answers only to someone who can see the link, with the one
 // `link_not_found` refusal for a hidden and a missing link alike.
-import type { EventRecord } from "../../../../packages/schemas/generated";
+import type { EventRecord, Node } from "../../../../packages/schemas/generated";
 
 export const EVENTS_PAGE_SIZE = 50;
 
@@ -52,9 +52,13 @@ export async function fetchLinkEvents(
   return (await response.json()) as LinkEventPage;
 }
 
-/** What the section is called for this link: emails between two addresses, events otherwise. */
-export function eventsNoun(edgeType: string, sourceKind: string | undefined): "emails" | "events" {
-  return edgeType === "COMMUNICATED_WITH" && sourceKind === "email" ? "emails" : "events";
+/** What the section is called for this link: emails between two addresses, events otherwise.
+ * Reads the ontology's own `Endpoint.endpoint_kind` from the link's source node, here and only
+ * here, so no caller can read a different field (it read `kind`, which nothing carries). */
+export function eventsNoun(edgeType: string, source: Node | undefined): "emails" | "events" {
+  return edgeType === "COMMUNICATED_WITH" && source?.properties?.endpoint_kind === "email"
+    ? "emails"
+    : "events";
 }
 
 /** The menu entry's label: "Show emails (12)". */

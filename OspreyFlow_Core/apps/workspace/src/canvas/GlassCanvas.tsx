@@ -75,6 +75,7 @@ import {
   type RadialMenuItem,
 } from "../design/primitives/RadialMenu";
 import { redrawWhenCameraStops } from "./cameraMoves";
+import { emailsOutcomeText, showEmailsAsDocuments } from "../inspector/emailDocuments";
 import { eventsEntryLabel, eventsNoun } from "../inspector/linkEventsApi";
 import { edgeTypesOfferedFor } from "./edgeTypeMenu";
 import { DottedArrowProgram, DottedEdgeProgram } from "./dottedEdgePrograms";
@@ -225,6 +226,9 @@ export interface GlassCanvasProps {
   /** ADR-080: the link menu's *Add a note*, *Change link…* and *Show change history* select the
    * link and then ask the caller to bring that part of the Inspector forward. */
   onLinkAction?: (edge: Edge, action: "note" | "change" | "history" | "events") => void;
+  /** ADR-092: the timeline's brushed window, read when *Show emails* puts a link's emails on the
+   * canvas; `null` (nothing brushed) means every email on the link. */
+  getEventsWindow?: () => { validFrom: string; validTo: string | null } | null;
 }
 
 /** Phase 7 Stage 3: what the metrics panel needs from outside the canvas's own event handlers —
@@ -326,6 +330,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       onGroupedCountChange,
       judgementCounts,
       onLinkAction,
+      getEventsWindow,
     }: GlassCanvasProps,
     ref,
   ) {
@@ -1135,13 +1140,13 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           const hoveredNode = hoveredRef.current;
           const caption = () => {
             const source = graph.source(edgeId);
-            const sourceKind = graph.hasNode(source)
-              ? (graph.getNodeAttribute(source, "data").properties?.kind as string | undefined)
-              : undefined;
             return linkCaption(
               typeNameOf(data.data.type),
               data.data.occurrences ?? 1,
-              eventsNoun(data.data.type, sourceKind),
+              eventsNoun(
+                data.data.type,
+                graph.hasNode(source) ? graph.getNodeAttribute(source, "data") : undefined,
+              ),
             );
           };
           const attrs = computeEdgeAttributes(data.data, {
@@ -2217,6 +2222,29 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
 
     // The entries of the right-click menu on a link (ADR-080). Each is a view change or a call that
     // writes with the analyst's name and a reason; nothing here edits a link in place.
+    // ADR-092: the emails on a link inside the brushed window, written as Documents and drawn.
+    async function emailsOntoCanvas(edgeId: string, x: number, y: number): Promise<void> {
+      if (!apiBaseUrl || !bearerToken || !investigationId) return;
+      try {
+        const result = await showEmailsAsDocuments(
+          apiBaseUrl,
+          bearerToken,
+          investigationId,
+          edgeId,
+          getEventsWindow?.() ?? null,
+        );
+        store.getState().applyDelta(result.delta);
+        setActionError({
+          x,
+          y,
+          message: emailsOutcomeText(result.written, result.without_text),
+          tone: "notice",
+        });
+      } catch (err) {
+        setActionError({ x, y, message: err instanceof Error ? err.message : String(err) });
+      }
+    }
+
     function linkMenuEntries(edgeId: string, x: number, y: number): RadialMenuItem[] {
       if (!graph.hasEdge(edgeId)) return [];
       const edge = graph.getEdgeAttribute(edgeId, "data");
@@ -2233,10 +2261,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         onLinkAction?.(edge, action);
       };
       // ADR-089: the events behind the link, named for what they are (emails between two addresses).
-      const sourceKind = graph.hasNode(edge.source)
-        ? (graph.getNodeAttribute(edge.source, "data").properties?.kind as string | undefined)
+      const sourceNode = graph.hasNode(edge.source)
+        ? graph.getNodeAttribute(edge.source, "data")
         : undefined;
-      const eventsLabel = eventsEntryLabel(eventsNoun(edge.type, sourceKind), edge.occurrences ?? 1);
+      const noun = eventsNoun(edge.type, sourceNode);
+      const eventsLabel = eventsEntryLabel(noun, edge.occurrences ?? 1);
       return linkMenuItems(edge, collapsed.has(group.id), {
         onCollapse: () => {
           const view = foldedViewRef.current;
@@ -2280,7 +2309,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         },
         onChange: () => reach("change"),
         onHistory: () => reach("history"),
-        onEvents: onLinkAction ? () => reach("events") : undefined,
+        onEvents: onLinkAction
+          ? () => {
+              reach("events");
+              if (noun === "emails") void emailsOntoCanvas(edge.id, x, y);
+            }
+          : undefined,
         eventsLabel,
       });
     }

@@ -193,6 +193,7 @@ from .compute_routes import (
     run_compute_metric_job,
 )
 from .config import ApiConfig
+from .document_reader import DocumentReaderService, DocumentReaderView
 from .dossier import DocumentView
 from .email_extraction import (
     EmailAcceptResult,
@@ -201,6 +202,7 @@ from .email_extraction import (
     EmailExtractionService,
     EmailNotFoundError,
     ExtractEmailRequest,
+    NotDocumentsError,
 )
 from .evaluation import evaluate_hotlists_for_entry, evaluate_monitors_for_entry
 from .event_scope import visible_ancestors, with_inherited
@@ -445,6 +447,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         link_changes_store, app.state.working_set, graph, ontology, link_notes_store
     )
     app.state.link_events = LinkEventsService(app.state.working_set, analytics, investigations)
+    app.state.document_reader = DocumentReaderService(
+        app.state.working_set, analytics, graph, extraction_candidates, investigations
+    )
     app.state.email_extraction = EmailExtractionService(
         app.state.working_set,
         analytics,
@@ -725,6 +730,13 @@ MonitorsStoreDep = Annotated[MonitorStore, Depends(get_monitors_store)]
 AlertsStoreDep = Annotated[AlertStore, Depends(get_alerts_store)]
 JudgementsStoreDep = Annotated[JudgementStore, Depends(get_judgements_store)]
 LinkNotesDep = Annotated[LinkNoteService, Depends(get_link_notes)]
+
+
+def get_document_reader(request: Request) -> DocumentReaderService:
+    return request.app.state.document_reader  # type: ignore[no-any-return]
+
+
+DocumentReaderDep = Annotated[DocumentReaderService, Depends(get_document_reader)]
 
 
 def get_link_events(request: Request) -> LinkEventsService:
@@ -1040,6 +1052,12 @@ async def _judgement_not_found_handler(
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND, content={"error": "judgement_not_found"}
     )
+
+
+@app.exception_handler(NotDocumentsError)
+async def _not_documents_handler(request: Request, exc: NotDocumentsError) -> JSONResponse:
+    """ADR-092 Amendment 1: the events on this link carry no text, so none is a document."""
+    return JSONResponse(status_code=422, content={"error": "not_documents"})
 
 
 @app.exception_handler(EmailNotFoundError)
@@ -2704,6 +2722,28 @@ async def extract_email_route(
         result_cardinality=len(result.candidates),
     )
     return result
+
+
+@app.get("/v1/investigations/{investigation_id}/documents/{document_id}/reader")
+async def read_document_route(
+    investigation: InvestigationViewerDep,
+    document_id: str,
+    principal: PrincipalDep,
+    document_reader: DocumentReaderDep,
+    audit: AuditDep,
+) -> DocumentReaderView:
+    """A Document's full text to read, with the entities accepted from it marked (ADR-092): only
+    to someone who can see the Document in the case; one that cannot be seen answers as one that
+    does not exist. Audited, as the Dossier's document read is."""
+    view = await document_reader.read(investigation.id, document_id, principal)
+    await audit.record(
+        principal=principal,
+        action="read_document",
+        investigation_id=investigation.id,
+        resolved_query={"document_id": document_id},
+        result_cardinality=len(view.spans),
+    )
+    return view
 
 
 class EmailDocumentsRequest(BaseModel):

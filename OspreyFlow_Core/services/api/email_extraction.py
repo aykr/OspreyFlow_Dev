@@ -63,6 +63,11 @@ MENTIONED_IN = "MENTIONED_IN"
 DOCUMENT_TYPE = "Document"
 
 
+class NotDocumentsError(Exception):
+    """None of the events on the link carries text (ADR-092 Amendment 1): a transaction or an
+    incident is an event, not a document, so there is nothing to put on the canvas as one."""
+
+
 class EmailNotFoundError(Exception):
     """The event is not on this link, or the candidate is not from this email."""
 
@@ -80,6 +85,12 @@ class ExtractEmailRequest(BaseModel):
     """`model` is the caller's choice (ADR-005); left out, the deployment's local model is used."""
 
     model: str | None = None
+
+
+def _has_text(event: EventRecord) -> bool:
+    """An event that is a document: it carries text to read (an email's excerpt)."""
+    excerpt = event.properties.get("excerpt")
+    return isinstance(excerpt, str) and bool(excerpt.strip())
 
 
 #: The largest page `AnalyticsPort.list_events` serves (`EventListRequest.limit`).
@@ -102,6 +113,9 @@ class EmailDocumentsResult(BaseModel):
     them and their links to both addresses on the canvas."""
 
     written: int
+    #: Events on the link inside the window that carry no text and so were not written
+    #: (ADR-092 Amendment 1); said, never dropped silently.
+    without_text: int = 0
     delta: DeltaAdd
 
 
@@ -295,10 +309,14 @@ class EmailExtractionService:
             if not page.events or len(events) >= page.total:
                 break
 
+        documents = [e for e in events if _has_text(e)]
+        if events and not documents:
+            raise NotDocumentsError(edge_id)
+
         now = datetime.now(UTC)
         nodes: list[NodeWrite] = []
         edges: list[EdgeWrite] = []
-        for event in events:
+        for event in documents:
             node, mentions = self._document_writes(event, principal, now)
             nodes.append(node)
             edges.extend(mentions)
@@ -319,7 +337,9 @@ class EmailExtractionService:
             [_node_from_write(n) for n in nodes],
             [_edge_from_write(e) for e in edges],
         )
-        return EmailDocumentsResult(written=len(nodes), delta=delta)
+        return EmailDocumentsResult(
+            written=len(nodes), without_text=len(events) - len(documents), delta=delta
+        )
 
     async def accept(
         self,

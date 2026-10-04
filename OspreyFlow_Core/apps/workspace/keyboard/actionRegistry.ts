@@ -335,6 +335,7 @@ export const LINK_MENU_ACTIONS = defineActionRegistry("LINK_MENU_ACTIONS", [
   "other-links-offer-change-and-history-and-hand-over",
   "moving-the-resolution-slider-opens-a-same-as-fold",
   "show-events-hands-over-to-the-inspector",
+  "show-emails-puts-the-windows-emails-on-the-canvas-as-documents",
 ] as const);
 
 /**

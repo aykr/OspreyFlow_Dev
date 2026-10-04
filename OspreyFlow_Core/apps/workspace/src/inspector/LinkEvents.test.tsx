@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LinkEvents } from "./LinkEvents";
-import { eventsEntryLabel, eventsNoun } from "./linkEventsApi";
+import { eventsEntryLabel } from "./linkEventsApi";
 
 // ADR-089. The emails behind a link: newest first as the server orders them, fifty at a time with
 // Show more, one opened to read with its cut-off said.
@@ -102,11 +102,10 @@ describe("LinkEvents", () => {
 });
 
 describe("the entry's words", () => {
-  it("says emails for a message link between email addresses, events otherwise", () => {
-    expect(eventsNoun("COMMUNICATED_WITH", "email")).toBe("emails");
-    expect(eventsNoun("COMMUNICATED_WITH", "phone")).toBe("events");
-    expect(eventsNoun("PRESENT_AT", "email")).toBe("events");
+  // Which links are email is `linkEventsApi.test.ts`'s, against the node the loader writes.
+  it("names the entry by what the events are", () => {
     expect(eventsEntryLabel("emails", 12)).toBe("Show emails (12)");
+    expect(eventsEntryLabel("events", 1)).toBe("Show events (1)");
   });
 });
 

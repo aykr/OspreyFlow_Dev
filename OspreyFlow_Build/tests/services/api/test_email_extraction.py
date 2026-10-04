@@ -25,12 +25,14 @@ import pytest
 from services.api.email_extraction import (
     EmailExtractionService,
     EmailNotFoundError,
+    NotDocumentsError,
     email_document_id,
 )
 from services.api.link_notes import LinkNotFoundError
 from services.api.review import (
     CandidateNotPendingError,
     CandidateStatus,
+    DocumentNotFoundError,
     ExtractionCandidate,
     ExtractionCandidateRecord,
 )
@@ -184,6 +186,21 @@ class InMemoryCandidates:
 
     async def store_document_text(self, document_id: str, text: str, principal: Principal) -> None:
         self.texts[document_id] = (text, principal.org_unit)
+
+    async def get_document_text(self, document_id: str, principal: Principal) -> str:
+        found = self.texts.get(document_id)
+        if found is None or found[1] != principal.org_unit:
+            raise DocumentNotFoundError(document_id)
+        return found[0]
+
+    async def list_for_document(
+        self, document_id: str, principal: Principal
+    ) -> list[ExtractionCandidateRecord]:
+        return [
+            r
+            for r in self.records.values()
+            if r.document_id == document_id and r.owning_unit == principal.org_unit
+        ]
 
     async def get_authorized(
         self, candidate_id: str, principal: Principal
@@ -439,3 +456,24 @@ async def test_extraction_past_the_cap_writes_nothing_to_the_graph(
     with pytest.raises(LimitExceededError):
         await service.extract("inv-1", "e1", "ev-1", ANALYST)
     assert graph.nodes == {} and graph.committed_edges == []
+
+
+def _transaction(event_id: str) -> EventRecord:
+    """The shape a PaySim event has: an amount on the link, no text."""
+    return _event(event_id).model_copy(update={"properties": {"amount": 181.0, "kind": "TRANSFER"}})
+
+
+async def test_a_link_whose_events_have_no_text_is_refused_and_writes_nothing() -> None:
+    """ADR-092 Amendment 1: a PaySim transaction or an HMP incident is an event, not a document;
+    writing it as a "(no subject)" Document would put empty pages on the canvas."""
+    service, graph, _, _, _ = await _build([_transaction("tx-1"), _transaction("tx-2")])
+    with pytest.raises(NotDocumentsError):
+        await service.show_as_documents("inv-1", "e1", ANALYST, window=None)
+    assert graph.nodes == {}
+
+
+async def test_events_without_text_are_counted_not_written() -> None:
+    service, graph, _, _, _ = await _build([_at("ev-1", 1), _transaction("tx-1")])
+    result = await service.show_as_documents("inv-1", "e1", ANALYST, window=None)
+    assert (result.written, result.without_text) == (1, 1)
+    assert set(graph.nodes) == {email_document_id("ev-1")}

@@ -718,6 +718,17 @@ class WorkingSetService:
         edges = await self._store.source_fidelity_edges(investigation_id)
         return list(nodes.values()), list(edges.values())
 
+    async def visible_node(
+        self, investigation_id: str, node_id: NodeId, principal: Principal
+    ) -> Node | None:
+        """The node `node_id` as `principal` may see it in this case, or `None`: not in the working
+        set and above `principal` read the same, as `visible_edge` has it (ADR-092's reader)."""
+        found = await self._store.get_node(investigation_id, node_id)
+        if found is None:
+            return None
+        visible, _, _ = self._project([found], [], principal)
+        return visible[0] if visible else None
+
     async def visible_edge(
         self, investigation_id: str, edge_id: EdgeId, principal: Principal
     ) -> Edge | None:
