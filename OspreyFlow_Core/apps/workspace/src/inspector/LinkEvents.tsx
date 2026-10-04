@@ -6,7 +6,16 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { EventRecord } from "../../../../packages/schemas/generated";
-import { EVENTS_PAGE_SIZE, LinkEventsError, fetchLinkEvents, type LinkEventPage } from "./linkEventsApi";
+import {
+  EVENTS_PAGE_SIZE,
+  LinkEventsError,
+  acceptEmailCandidate,
+  candidateLabel,
+  extractEmail,
+  fetchLinkEvents,
+  type EmailCandidate,
+  type LinkEventPage,
+} from "./linkEventsApi";
 
 export interface LinkEventsProps {
   apiBaseUrl: string;
@@ -20,6 +29,9 @@ export interface LinkEventsProps {
   targetLabel: string;
   /** Each time this counts up, the section opens and takes focus (the link menu's own hand-over). */
   focusSignal?: number;
+  /** Told of what the working set gained (the email's Document node, an accepted entity), so the
+   * canvas shows it at once (ADR-089 step 3). Omitted, extraction is not offered. */
+  onDelta?: (delta: unknown) => void;
 }
 
 type Load =
@@ -56,10 +68,20 @@ export function LinkEvents({
   sourceLabel,
   targetLabel,
   focusSignal = 0,
+  onDelta,
 }: LinkEventsProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [open, setOpen] = useState<EventRecord | null>(null);
   const [more, setMore] = useState(false);
+  // ADR-089 step 3: the model's findings for the open email, pending until accepted.
+  const [findings, setFindings] = useState<
+    | { state: "idle" }
+    | { state: "running" }
+    | { state: "ready"; candidates: EmailCandidate[] }
+    | { state: "failed"; message: string }
+  >({ state: "idle" });
+  const [accepting, setAccepting] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const backRef = useRef<HTMLButtonElement>(null);
   // Opening an email removes the row that had focus, so focus moves into the email (its Back
@@ -69,7 +91,56 @@ export function LinkEvents({
   }, [open]);
   const closeEmail = () => {
     setOpen(null);
+    setFindings({ state: "idle" });
+    setProblem(null);
     requestAnimationFrame(() => headingRef.current?.focus());
+  };
+
+  const extract = async () => {
+    if (open === null || findings.state === "running") return;
+    setFindings({ state: "running" });
+    setProblem(null);
+    try {
+      const result = await extractEmail(apiBaseUrl, bearerToken, investigationId, edgeId, open.event_id);
+      onDelta?.(result.delta);
+      setFindings({ state: "ready", candidates: result.candidates });
+    } catch (error) {
+      setFindings({
+        state: "failed",
+        message: error instanceof Error ? error.message : "The extraction could not be run.",
+      });
+    }
+  };
+
+  const accept = async (candidate: EmailCandidate) => {
+    if (open === null || accepting !== null) return;
+    setAccepting(candidate.id);
+    setProblem(null);
+    try {
+      const result = await acceptEmailCandidate(
+        apiBaseUrl,
+        bearerToken,
+        investigationId,
+        edgeId,
+        open.event_id,
+        candidate.id,
+      );
+      onDelta?.(result.delta);
+      setFindings((current) =>
+        current.state === "ready"
+          ? {
+              state: "ready",
+              candidates: current.candidates.map((c) =>
+                c.id === candidate.id ? { ...c, status: "accepted", node_id: result.node_id } : c,
+              ),
+            }
+          : current,
+      );
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : "The finding could not be accepted.");
+    } finally {
+      setAccepting(null);
+    }
   };
   const Noun = noun === "emails" ? "Emails" : "Events";
 
@@ -196,6 +267,66 @@ export function LinkEvents({
             <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
               This is the first 4,000 characters; the message runs on.
             </p>
+          )}
+          {onDelta && (
+            <section aria-label="Entities in this email" style={{ display: "grid", gap: "var(--sp-8)" }}>
+              {findings.state !== "ready" && (
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={findings.state === "running"}
+                  onClick={() => void extract()}
+                  style={{ justifySelf: "start" }}
+                >
+                  {findings.state === "running" ? "Extracting…" : "Extract entities"}
+                </button>
+              )}
+              {findings.state === "failed" && (
+                <p role="alert" style={{ color: "var(--text-secondary)", margin: 0 }}>
+                  {findings.message}
+                </p>
+              )}
+              {findings.state === "ready" && findings.candidates.length === 0 && (
+                <p style={{ color: "var(--text-tertiary)", margin: 0 }}>The model found no entities in this email.</p>
+              )}
+              {findings.state === "ready" && findings.candidates.length > 0 && (
+                <>
+                  <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
+                    {findings.candidates.length} found. Each is a suggestion until you accept it; an accepted
+                    entity joins the canvas as inferred, linked to this email, and is confirmed from the
+                    Inspector as any inferred node is.
+                  </p>
+                  <ul role="list" aria-label="Entities found" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "var(--sp-4)" }}>
+                    {findings.candidates.map((candidate) => (
+                      <li key={candidate.id} style={{ display: "flex", justifyContent: "space-between", gap: "var(--sp-8)", alignItems: "center" }}>
+                        <span className="value">
+                          {candidateLabel(candidate)}
+                          <span style={{ color: "var(--text-tertiary)" }}> · {Math.round(candidate.confidence * 100)}%</span>
+                        </span>
+                        {candidate.status === "accepted" ? (
+                          <span style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>Accepted</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn"
+                            disabled={accepting !== null}
+                            aria-label={`Accept ${candidateLabel(candidate)}`}
+                            onClick={() => void accept(candidate)}
+                          >
+                            Accept
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {problem && (
+                <p role="alert" style={{ color: "var(--text-secondary)", margin: 0 }}>
+                  {problem}
+                </p>
+              )}
+            </section>
           )}
         </article>
       )}

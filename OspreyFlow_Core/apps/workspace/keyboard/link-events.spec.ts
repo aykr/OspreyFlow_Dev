@@ -81,6 +81,67 @@ test("Enter on an email opens it with its text and its cut-off said, and Back re
   registerCovered(REGISTRY, "enter-on-an-email-opens-it-and-back-returns");
 });
 
+async function serveExtraction(page: Page) {
+  const accepted: string[] = [];
+  await page.route("**/*/v1/investigations/inv-1/links/e1/events/ev-3/extract", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        document_id: "email:ev-3",
+        candidates: [
+          { id: "c1", document_id: "email:ev-3", entity_type: "Person", properties: { family_name: "MERCER", given_names: "Dana" }, confidence: 0.9, status: "pending" },
+        ],
+        delta: { seq: 2, op: "add", nodes: [], edges: [] },
+      }),
+    });
+  });
+  await page.route("**/*/v1/investigations/inv-1/links/e1/events/ev-3/candidates/*/accept", async (route) => {
+    accepted.push(route.request().url());
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ node_id: "n-mercer", delta: { seq: 3, op: "add", nodes: [], edges: [] } }),
+    });
+  });
+  return accepted;
+}
+
+test("Extract entities, reached and pressed by keyboard, lists the model's findings and hands the delta on", async ({ page }) => {
+  await serve(page);
+  await serveExtraction(page);
+  await page.goto("/keyboard/link-events-harness.html");
+  await expect(page.getByRole("heading", { name: "Emails (3)" })).toBeVisible();
+  await tabTo(page, /Subject 3/);
+  await page.keyboard.press("Enter");
+  await tabTo(page, /Extract entities/);
+  await page.keyboard.press("Enter");
+  const list = page.getByRole("list", { name: "Entities found" });
+  await expect(list).toBeVisible();
+  await expect(list).toContainText("Person · MERCER, Dana");
+  await expect.poll(() => page.evaluate(() => window.__LINK_EVENTS__?.deltas.length)).toBe(1);
+  registerCovered(REGISTRY, "extract-entities-by-keyboard-lists-the-findings");
+});
+
+test("Accept on a finding, by keyboard, sends the accept and marks it accepted", async ({ page }) => {
+  await serve(page);
+  const accepted = await serveExtraction(page);
+  await page.goto("/keyboard/link-events-harness.html");
+  await expect(page.getByRole("heading", { name: "Emails (3)" })).toBeVisible();
+  await tabTo(page, /Subject 3/);
+  await page.keyboard.press("Enter");
+  await tabTo(page, /Extract entities/);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("list", { name: "Entities found" })).toBeVisible();
+  await tabTo(page, /^Accept Person · MERCER, Dana$/);
+  await page.keyboard.press("Enter");
+  await expect.poll(() => accepted.length).toBe(1);
+  expect(accepted[0]).toMatch(/\/candidates\/c1\/accept$/);
+  await expect(page.getByRole("list", { name: "Entities found" })).toContainText("Accepted");
+  await expect.poll(() => page.evaluate(() => window.__LINK_EVENTS__?.deltas.length)).toBe(2);
+  registerCovered(REGISTRY, "accept-a-finding-by-keyboard");
+});
+
 test("every registered link-events action has its own proving test case above", () => {
   assertAllCovered("LINK_EVENTS_ACTIONS", LINK_EVENTS_ACTIONS);
 });

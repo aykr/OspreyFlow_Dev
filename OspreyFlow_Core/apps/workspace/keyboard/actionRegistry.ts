@@ -346,6 +346,8 @@ export const LINK_MENU_ACTIONS = defineActionRegistry("LINK_MENU_ACTIONS", [
 export const LINK_EVENTS_ACTIONS = defineActionRegistry("LINK_EVENTS_ACTIONS", [
   "events-list-newest-first-and-show-more-by-keyboard",
   "enter-on-an-email-opens-it-and-back-returns",
+  "extract-entities-by-keyboard-lists-the-findings",
+  "accept-a-finding-by-keyboard",
 ] as const);
 
 export const LINK_CHANGE_ACTIONS = defineActionRegistry("LINK_CHANGE_ACTIONS", [

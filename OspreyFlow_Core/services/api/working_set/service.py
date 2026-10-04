@@ -584,6 +584,16 @@ class WorkingSetService:
             would_breach=would_breach,
         )
 
+    async def add_written(
+        self, investigation_id: str, nodes: Sequence[Node], edges: Sequence[Edge]
+    ) -> DeltaAdd:
+        """Puts nodes and links this Conduit has just written into the case's working set and
+        returns the delta that says so (ADR-089: the Document an email becomes, and an entity
+        accepted from it). Nothing is filtered here: the caller wrote them under a handling it
+        could itself see, and the cap check and the sequence are `_add`'s own."""
+        outcome = await self._add(investigation_id, nodes, edges, filtered_count=0)
+        return outcome.delta
+
     async def _add(
         self,
         investigation_id: str,

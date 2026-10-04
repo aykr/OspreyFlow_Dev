@@ -109,3 +109,59 @@ describe("the entry's words", () => {
     expect(eventsEntryLabel("emails", 12)).toBe("Show emails (12)");
   });
 });
+
+// ADR-089 step 3: Extract entities on an open email, and accepting one finding at a time.
+describe("LinkEvents and extraction", () => {
+  function serveWithExtraction() {
+    const calls: string[] = [];
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? "GET"} ${url}`);
+      if (url.includes("/extract")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            document_id: "email:ev-1",
+            candidates: [
+              { id: "c1", document_id: "email:ev-1", entity_type: "Person", properties: { family_name: "MERCER", given_names: "Dana" }, confidence: 0.9, status: "pending" },
+              { id: "c2", document_id: "email:ev-1", entity_type: "Organisation", properties: { name: "FERC" }, confidence: 0.6, status: "pending" },
+            ],
+            delta: { seq: 2, op: "add", nodes: [{ id: "email:ev-1" }], edges: [] },
+          }),
+        };
+      }
+      if (url.includes("/accept")) {
+        return { ok: true, status: 200, json: async () => ({ node_id: "n-mercer", delta: { seq: 3, op: "add", nodes: [{ id: "n-mercer" }], edges: [] } }) };
+      }
+      return { ok: true, status: 200, json: async () => ({ total: 1, offset: 0, limit: 50, events: [event(1)] }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return { fetchMock, calls };
+  }
+
+  it("offers Extract entities only when the view can take the delta, lists the findings, and accepts one", async () => {
+    const { calls } = serveWithExtraction();
+    const onDelta = vi.fn();
+    mount({ onDelta });
+    fireEvent.click(await screen.findByRole("button", { name: /Subject 1/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Extract entities" }));
+    const list = await screen.findByRole("list", { name: "Entities found" });
+    expect(list.textContent).toContain("Person · MERCER, Dana");
+    expect(list.textContent).toContain("90%");
+    expect(onDelta).toHaveBeenCalledTimes(1);
+    expect(calls.some((c) => c.startsWith("POST") && c.endsWith("/links/e1/events/ev-1/extract"))).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Accept Person · MERCER, Dana" }));
+    await waitFor(() => expect(onDelta).toHaveBeenCalledTimes(2));
+    expect(calls.some((c) => c.endsWith("/events/ev-1/candidates/c1/accept"))).toBe(true);
+    expect(screen.queryByRole("button", { name: "Accept Person · MERCER, Dana" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Accept Organisation · FERC" })).toBeTruthy();
+    expect(list.textContent).toContain("Accepted");
+  });
+
+  it("does not offer extraction where nothing can take the delta", async () => {
+    serveWithExtraction();
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: /Subject 1/ }));
+    expect(screen.queryByRole("button", { name: "Extract entities" })).toBeNull();
+  });
+});

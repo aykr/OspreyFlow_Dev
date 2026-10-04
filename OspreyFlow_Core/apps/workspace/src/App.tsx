@@ -71,6 +71,7 @@ import { openCase } from "./investigation/cases";
 import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
 import { StatusBar } from "./statusbar/StatusBar";
 import { emergence, type FirstSeen } from "./crossfilter/emergence";
+import type { WorkingSetDelta } from "./workingset/models";
 import { NO_FILTER, filterDimming, type MetricFilter } from "./metrics/filters";
 import { BottomPanelFrame, SidePanelFrame } from "./layout/PanelFrames";
 import { SidePanelStack } from "./layout/SidePanelStack";
@@ -1106,6 +1107,9 @@ export function App() {
                         openChangeSignal: linkChangeSignal,
                         openNoteSignal: linkNoteSignal,
                         openEventsSignal: linkEventsSignal,
+                        // ADR-089 step 3: what an email's extraction or an accepted finding added to the case.
+                        onDelta: (delta) =>
+                          workingSetRef.current.store.getState().applyDelta(delta as WorkingSetDelta),
                         onChanged: (result) => {
                           // The old link leaves the view and the new one arrives in one step; the Inspector
                           // is then pointed at the new link, whose id is not the old one's.

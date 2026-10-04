@@ -6,6 +6,13 @@ import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { LinkEvents } from "../src/inspector/LinkEvents";
 
+declare global {
+  interface Window {
+    __LINK_EVENTS__?: { deltas: unknown[] };
+  }
+}
+window.__LINK_EVENTS__ = { deltas: [] };
+
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
 
@@ -18,5 +25,8 @@ createRoot(container).render(
     noun="emails"
     sourceLabel="alice@enron.com"
     targetLabel="bob@enron.com"
+    onDelta={(delta) => {
+      window.__LINK_EVENTS__!.deltas.push(delta);
+    }}
   />,
 );

@@ -65,6 +65,8 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("POST", P + "/links/{edge_id}/change"): E,
     ("GET", P + "/links/{edge_id}/history"): V,
     ("GET", P + "/links/{edge_id}/events"): V,
+    ("POST", P + "/links/{edge_id}/events/{event_id}/extract"): E,
+    ("POST", P + "/links/{edge_id}/events/{event_id}/candidates/{candidate_id}/accept"): E,
     ("POST", P + "/export"): E,
     ("POST", P + "/sites"): E,
     ("GET", P + "/sites/{site_id}"): V,

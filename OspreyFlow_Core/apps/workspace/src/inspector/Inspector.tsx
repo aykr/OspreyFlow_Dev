@@ -29,6 +29,8 @@ export interface InspectorProps {
     openChangeSignal: number;
     openNoteSignal: number;
     openEventsSignal?: number;
+    /** What the working set gained from an email (ADR-089 step 3), to apply to the view. */
+    onDelta?: (delta: unknown) => void;
     /** Told of a saved change so the new link can be put in the view. */
     onChanged: (result: LinkChangeResult) => void;
   };
@@ -102,6 +104,7 @@ export function Inspector({ node, link, linkEditing, assessment }: InspectorProp
             sourceLabel={link.source ? displayValue(link.source) : link.edge.source}
             targetLabel={link.target ? displayValue(link.target) : link.edge.target}
             focusSignal={linkEditing?.openEventsSignal}
+            onDelta={linkEditing?.onDelta}
           />
         )}
         {assessment && !isResolutionLink(link.edge.type) && (

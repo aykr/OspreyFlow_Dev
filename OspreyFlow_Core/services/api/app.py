@@ -71,7 +71,7 @@ from adapters.analytics_duckdb.schema import create_events_table, create_geometr
 from adapters.compute_rustworkx.adapter import ComputeRustworkxAdapter
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
-from adapters.model_litellm import CONFORMANCE_EMBED_MODEL
+from adapters.model_litellm import CONFORMANCE_EMBED_MODEL, CONFORMANCE_MODEL
 from adapters.model_litellm.adapter import ModelLiteLLMAdapter
 from adapters.model_litellm.client import LiteLLMClient, LiteLLMConfig
 from conduit_common.identity import new_edge_id, new_id, now_utc
@@ -194,6 +194,13 @@ from .compute_routes import (
 )
 from .config import ApiConfig
 from .dossier import DocumentView
+from .email_extraction import (
+    EmailAcceptResult,
+    EmailExtractionResult,
+    EmailExtractionService,
+    EmailNotFoundError,
+    ExtractEmailRequest,
+)
 from .evaluation import evaluate_hotlists_for_entry, evaluate_monitors_for_entry
 from .export import (
     ComplianceRoleRequiredError,
@@ -436,6 +443,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         link_changes_store, app.state.working_set, graph, ontology, link_notes_store
     )
     app.state.link_events = LinkEventsService(app.state.working_set, analytics)
+    app.state.email_extraction = EmailExtractionService(
+        app.state.working_set,
+        analytics,
+        graph,
+        ontology,
+        extraction_candidates,
+        model,
+        CONFORMANCE_MODEL,
+    )
     app.state.suppression_marks = suppression_marks
     app.state.gaps_store = gaps_store
     app.state.assumptions_store = assumptions_store
@@ -713,6 +729,13 @@ def get_link_events(request: Request) -> LinkEventsService:
 
 
 LinkEventsDep = Annotated[LinkEventsService, Depends(get_link_events)]
+
+
+def get_email_extraction(request: Request) -> EmailExtractionService:
+    return request.app.state.email_extraction  # type: ignore[no-any-return]
+
+
+EmailExtractionDep = Annotated[EmailExtractionService, Depends(get_email_extraction)]
 
 
 def get_link_changes(request: Request) -> LinkChangeService:
@@ -1002,6 +1025,11 @@ async def _judgement_not_found_handler(
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND, content={"error": "judgement_not_found"}
     )
+
+
+@app.exception_handler(EmailNotFoundError)
+async def _email_not_found_handler(request: Request, exc: EmailNotFoundError) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"error": "email_not_found", "detail": str(exc)})
 
 
 @app.exception_handler(LinkNotFoundError)
@@ -2633,6 +2661,64 @@ async def list_link_events_route(
     page at a time with the total — only to someone who can see the link, and a link they cannot
     see answers as one that does not exist. Not audited, like the other case reads here."""
     return await link_events.list(investigation.id, edge_id, principal, offset=offset, limit=limit)
+
+
+@app.post("/v1/investigations/{investigation_id}/links/{edge_id}/events/{event_id}/extract")
+async def extract_email_route(
+    investigation: InvestigationEditorDep,
+    edge_id: str,
+    event_id: str,
+    body: ExtractEmailRequest,
+    principal: PrincipalDep,
+    email_extraction: EmailExtractionDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+) -> EmailExtractionResult:
+    """Entities from one email behind a link (ADR-089 step 3): the email becomes a Document node
+    linked to both addresses, both go into the working set, and the model's findings are stored
+    pending for a person to accept. Only to someone who can see the link; Editor, since it writes."""
+    result = await email_extraction.extract(
+        investigation.id, edge_id, event_id, principal, model=body.model
+    )
+    await publish_delta(valkey, investigation.id, result.delta)
+    await audit.record(
+        principal=principal,
+        action="extract_email",
+        investigation_id=investigation.id,
+        resolved_query={"edge_id": edge_id, "event_id": event_id, "model": body.model},
+        result_cardinality=len(result.candidates),
+    )
+    return result
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/links/{edge_id}/events/{event_id}/candidates/{candidate_id}/accept"
+)
+async def accept_email_candidate_route(
+    investigation: InvestigationEditorDep,
+    edge_id: str,
+    event_id: str,
+    candidate_id: str,
+    principal: PrincipalDep,
+    email_extraction: EmailExtractionDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+) -> EmailAcceptResult:
+    """Accepts one of an email's candidates (ADR-089 step 3): an inferred node and its
+    MENTIONED_IN link to the email's Document, both into the working set. One candidate per call,
+    as the review queue has it."""
+    result = await email_extraction.accept(
+        investigation.id, edge_id, event_id, candidate_id, principal
+    )
+    await publish_delta(valkey, investigation.id, result.delta)
+    await audit.record(
+        principal=principal,
+        action="accept_email_candidate",
+        investigation_id=investigation.id,
+        resolved_query={"edge_id": edge_id, "event_id": event_id, "candidate_id": candidate_id},
+        result_cardinality=1,
+    )
+    return result
 
 
 @app.get("/v1/investigations/{investigation_id}/links/{edge_id}/notes")

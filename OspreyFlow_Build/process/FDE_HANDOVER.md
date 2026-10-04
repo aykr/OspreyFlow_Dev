@@ -145,6 +145,15 @@ heights, timeline height), dragged or moved by arrow keys, Home or double-click 
 `ospreyflow.layout-sizes` (`src/layout/layoutSizes.ts`, `src/layout/Sash.tsx`). **Not seen** on the real Glass: the grip
 rows and the sashes.
 
+### 6.1a Built on 4 October 2026 from the owner's live testing (all awaiting his live check)
+
+ADR-086 resizable panels; ADR-087 timeline emergence, dimmed links and the no-events state; ADR-088 the
+social-network filters in the Metrics panel; ADR-089 the emails behind an Enron link in three steps (list,
+open, extract and accept); ADR-084 Amendment 1 (Shift+click, Branch from a selected node's menu); ADR-060
+Amendment 2 (the view never moves by itself). **Enron needs a re-seed** (`make seed-enron`) for the
+4,000-character excerpts before the emails can be read or extracted from. The extraction routes use the
+deployment's local model (`CONFORMANCE_MODEL`) unless the caller names one; the Glass names none.
+
 ### 6.2 ADR-081 steps B, C and D (each its own commit; B built, C and D not started)
 
 The decision and the owner's answers to its open questions are in `spec/06_DECISIONS.md` (ADR-081 and

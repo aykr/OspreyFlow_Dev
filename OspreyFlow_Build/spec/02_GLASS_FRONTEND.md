@@ -435,6 +435,14 @@ first words of its text. Choosing one opens it to read, with its sender, recipie
 note when the text is the first 4,000 characters of a longer message. Reachable by keyboard
 (`keyboard/link-events.spec.ts`).
 
+An opened email offers **Extract entities** (ADR-089 step 3). The email becomes a `Document` node linked
+to its sender and recipient by `MENTIONED_IN`, both appear on the canvas at once, and the model's findings
+are listed as suggestions with a confidence each. Nothing a model finds reaches the graph until a person
+accepts it (rule 5): *Accept* on one finding writes it as an inferred node with a `MENTIONED_IN` link to the
+email, both onto the canvas, where it is confirmed from the Inspector as any inferred node is. The model is
+the deployment's local one unless the caller names another. Reachable by keyboard
+(`keyboard/link-events.spec.ts`).
+
 The change form asks **what stands behind the link** each time, with no default (ADR-081 Amendment
 1 item 6, Amendment 2): *Direct* is offered only where the link's type is Direct and the link is not
 already probabilistic; *Probabilistic* is always offered; where only one answer is possible the form

@@ -38,7 +38,13 @@ function stubNotes() {
     ok: true,
     status: 200,
     json: async () =>
-      url.includes("/notes") ? { notes: [] } : url.includes("/history") ? { changes: [], truncated: false } : {},
+      url.includes("/notes")
+        ? { notes: [] }
+        : url.includes("/history")
+          ? { changes: [], truncated: false }
+          : url.includes("/events")
+            ? { total: 0, offset: 0, limit: 50, events: [] } // ADR-089: a link with no events
+            : {},
   }));
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
