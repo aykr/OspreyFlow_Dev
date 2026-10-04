@@ -202,7 +202,13 @@ export function Timeline({
     if (!containerRef.current) return;
     const chart = echarts.init(containerRef.current);
     chartRef.current = chart;
+    // ADR-086: the strip's own box changes when the timeline's sash is dragged, with no window
+    // resize to tell the chart; the observer does.
+    const observer =
+      typeof ResizeObserver === "function" ? new ResizeObserver(() => chart.resize()) : null;
+    observer?.observe(containerRef.current);
     return () => {
+      observer?.disconnect();
       chart.dispose();
       chartRef.current = null;
     };

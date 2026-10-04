@@ -19,7 +19,7 @@ evidence and this file is wrong; say so and fix the file.
 - **Design questions.** Ask with multiple-choice questions (at most four at a time) and then wait. Multiple
   choice is easier for him than free text. Do not build a design he has not answered.
 - **ADRs.** Never edit an existing ADR. Append an amendment or write a new ADR. The last ADR used is
-  **ADR-085**; the next free number is **086**. Check `spec/06_DECISIONS.md` before relying on that.
+  **ADR-087**; the next free number is **088**. Check `spec/06_DECISIONS.md` before relying on that.
 - **Style.** British English in code comments, documentation and all user-facing copy. Always give full,
   complete commands to run, never "add this line" fragments. Keep replies short; one or two sentences on an
   outcome, not a recap.
@@ -134,13 +134,16 @@ From the friction log, the owner's live checks still to do or report:
 
 ## 6. Open work, in the order the owner raised it
 
-### 6.1 Panel drag and reorder (built 4 October 2026, ADR-085; owner's live check to do)
+### 6.1 Panel drag, reorder and resize (built 4 October 2026, ADR-085 and ADR-086; owner's live check to do)
 
 Decided by the owner's four answers and built: the Inspector, Metrics and Query builder can be reordered within the
 right-hand column by Move up / Move down buttons or by dragging a grip handle; the order is kept per analyst in
 localStorage (`ospreyflow.side-panel-order`); the timeline does not move and nothing floats; ADR-082's width handle
 stays open. Code: `src/layout/panelOrder.ts`, `src/layout/SidePanelStack.tsx`, `App.tsx`; keyboard case in
-`keyboard/panel-frames.spec.ts`. **Not seen** on the real Glass: the grip rows above the three panels.
+`keyboard/panel-frames.spec.ts`. Then, the same day, ADR-086: every panel edge is a sash (column width, stacked panel
+heights, timeline height), dragged or moved by arrow keys, Home or double-click to reset, sizes kept in
+`ospreyflow.layout-sizes` (`src/layout/layoutSizes.ts`, `src/layout/Sash.tsx`). **Not seen** on the real Glass: the grip
+rows and the sashes.
 
 ### 6.2 ADR-081 steps B, C and D (each its own commit; B built, C and D not started)
 

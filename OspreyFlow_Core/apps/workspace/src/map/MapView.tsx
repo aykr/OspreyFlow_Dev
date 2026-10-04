@@ -378,7 +378,19 @@ export function MapView({
         }
       });
 
+      // ADR-086: a sash changes the map's box without a window resize; the observer tells both
+      // the map and the graph layer drawn over it.
+      const observer =
+        typeof ResizeObserver === "function" && containerRef.current
+          ? new ResizeObserver(() => {
+              layer.map.resize();
+              sigma.resize();
+            })
+          : null;
+      if (containerRef.current) observer?.observe(containerRef.current);
+
       cleanupRef.current = () => {
+        observer?.disconnect();
         mapRef.current = null;
         layer.clean();
         sigma.kill();

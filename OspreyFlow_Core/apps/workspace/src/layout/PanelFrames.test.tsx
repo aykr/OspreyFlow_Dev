@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { forgetLayoutSizesForTest, getLayoutSizes } from "./layoutSizes";
 
 import { BottomPanelFrame, SidePanelFrame } from "./PanelFrames";
 
@@ -73,5 +75,58 @@ describe("BottomPanelFrame", () => {
     expect(getByText("Brush")).toBeTruthy();
     fireEvent.click(getByLabelText("Show the timeline"));
     expect(getByLabelText("Hide the timeline").getAttribute("aria-expanded")).toBe("true");
+  });
+});
+
+// ADR-086: a sash on the column's edge sets its width, and one above the timeline sets its height.
+// Each is a keyboard-reachable separator; Home resets it. The sizes are kept in `layoutSizes`.
+describe("the sashes (ADR-086)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    forgetLayoutSizesForTest();
+  });
+
+  it("the side panel has a sash in its normal mode, and none when collapsed or full", () => {
+    const { getByRole, getByLabelText, queryByRole } = render(
+      <SidePanelFrame name="Inspector">
+        <p>Contents</p>
+      </SidePanelFrame>,
+    );
+    expect(getByRole("separator", { name: "Resize the side panel" })).toBeTruthy();
+    fireEvent.click(getByLabelText("Hide the inspector"));
+    expect(queryByRole("separator", { name: "Resize the side panel" })).toBeNull();
+    fireEvent.click(getByLabelText("Show the inspector"));
+    fireEvent.click(getByLabelText("Open the inspector to the full width"));
+    expect(queryByRole("separator", { name: "Resize the side panel" })).toBeNull();
+  });
+
+  it("ArrowLeft on the side sash widens the column by a step, and Home returns it to 320", () => {
+    const { container, getByRole } = render(
+      <SidePanelFrame name="Inspector">
+        <p>Contents</p>
+      </SidePanelFrame>,
+    );
+    const frame = container.querySelector("[data-panel-mode]") as HTMLElement;
+    expect(frame.style.width).toBe("320px");
+    fireEvent.keyDown(getByRole("separator", { name: "Resize the side panel" }), { key: "ArrowLeft" });
+    expect(frame.style.width).toBe("336px");
+    expect(getLayoutSizes().sideWidth).toBe(336);
+    fireEvent.keyDown(getByRole("separator", { name: "Resize the side panel" }), { key: "Home" });
+    expect(frame.style.width).toBe("320px");
+  });
+
+  it("the timeline has a sash while shown; ArrowUp raises its height and hiding removes the sash", () => {
+    const { getByRole, getByLabelText, queryByRole, getByText } = render(
+      <BottomPanelFrame title="Timeline" height={252}>
+        <p>Brush</p>
+      </BottomPanelFrame>,
+    );
+    const body = getByText("Brush").parentElement as HTMLElement;
+    expect(body.style.height).toBe("252px");
+    fireEvent.keyDown(getByRole("separator", { name: "Resize the timeline" }), { key: "ArrowUp" });
+    expect(body.style.height).toBe("268px");
+    expect(getLayoutSizes().timelineHeight).toBe(268);
+    fireEvent.click(getByLabelText("Hide the timeline"));
+    expect(queryByRole("separator", { name: "Resize the timeline" })).toBeNull();
   });
 });

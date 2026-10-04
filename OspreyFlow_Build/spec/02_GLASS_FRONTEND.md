@@ -231,6 +231,16 @@ the server and is not part of the case; a panel the current view does not draw k
 returns, and a stored order can never lose or duplicate a panel. The timeline is not part of the set and
 nothing floats. The buttons are reachable by keyboard (`keyboard/panel-frames.spec.ts`).
 
+**Resizing panels (ADR-086).** Every panel edge is a sash, as in VS Code: the edge between the canvas
+and the right-hand column sets the column's width, the edge below each stacked panel but the last sets
+that panel's height (the last takes what is left), and the edge above the timeline sets its height. A
+sash is dragged with the pointer or, by keyboard, reached with Tab and moved with the arrow keys (16
+pixels, 64 with Shift); Home or a double-click resets it. The column stays at least 240 pixels wide and
+the canvas at least 320; a stacked panel at least 48 pixels tall; the timeline between 96 pixels and
+seven tenths of the window. The sizes are kept in this browser for this analyst (localStorage, beside
+the panel order), never sent and not part of the case. The canvas, the timeline and the map redraw to
+their new box at once. Reachable by keyboard (`keyboard/panel-frames.spec.ts`).
+
 ### 2.0 The top bar (ADR-065)
 
 One line at ordinary widths; whole items wrap to a second line in a narrow window, and a label is

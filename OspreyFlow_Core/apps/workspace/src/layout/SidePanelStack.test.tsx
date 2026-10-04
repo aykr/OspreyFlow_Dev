@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { SidePanelStack } from "./SidePanelStack";
+import { forgetLayoutSizesForTest, getLayoutSizes } from "./layoutSizes";
 import { forgetSidePanelOrderForTest, getSidePanelOrder, moveSidePanel } from "./panelOrder";
 
 // ADR-085. The three panels of the right-hand column, each in a slot with a grip row: a drag handle
@@ -11,6 +12,7 @@ import { forgetSidePanelOrderForTest, getSidePanelOrder, moveSidePanel } from ".
 beforeEach(() => {
   localStorage.clear();
   forgetSidePanelOrderForTest();
+  forgetLayoutSizesForTest();
 });
 afterEach(cleanup);
 
@@ -84,5 +86,34 @@ describe("SidePanelStack", () => {
     expect(getByLabelText("Move the inspector up").getAttribute("aria-disabled")).toBe("true");
     expect(getByLabelText("Move the inspector down").getAttribute("aria-disabled")).toBe("true");
     expect(getSidePanelOrder()).toEqual(["metrics", "inspector", "query-builder"]);
+  });
+});
+
+// ADR-086: a sash below each stacked panel but the last sets that panel's height.
+describe("SidePanelStack and its sashes (ADR-086)", () => {
+  it("puts a sash between consecutive panels and none after the last", () => {
+    const { getAllByRole, queryByRole } = render(<SidePanelStack panels={panels} />);
+    const names = getAllByRole("separator").map((el) => el.getAttribute("aria-label"));
+    expect(names).toEqual(["Resize the inspector", "Resize the metrics"]);
+    expect(queryByRole("separator", { name: "Resize the query builder" })).toBeNull();
+  });
+
+  it("ArrowDown on a panel's sash gives it a height of its own, and Home lets it share again", () => {
+    const { container, getByRole } = render(<SidePanelStack panels={panels} />);
+    const slot = container.querySelector('[data-panel-slot="inspector"]') as HTMLElement;
+    expect(slot.style.height).toBe("");
+    fireEvent.keyDown(getByRole("separator", { name: "Resize the inspector" }), { key: "ArrowDown" });
+    // Nothing is measured in this environment, so the height grows from the minimum.
+    expect(slot.style.height).toBe("64px");
+    expect(getLayoutSizes().panelHeights.inspector).toBe(64);
+    fireEvent.keyDown(getByRole("separator", { name: "Resize the inspector" }), { key: "Home" });
+    expect(slot.style.height).toBe("");
+    expect(getLayoutSizes().panelHeights).toEqual({});
+  });
+
+  it("a stored height is applied on first draw", () => {
+    localStorage.setItem("ospreyflow.layout-sizes", JSON.stringify({ panelHeights: { metrics: 180 } }));
+    const { container } = render(<SidePanelStack panels={panels} />);
+    expect((container.querySelector('[data-panel-slot="metrics"]') as HTMLElement).style.height).toBe("180px");
   });
 });

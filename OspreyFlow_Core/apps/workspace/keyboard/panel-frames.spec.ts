@@ -78,6 +78,65 @@ test("Move up and Move down reorder the panels with Enter alone, and the order s
   registerCovered(REGISTRY, "move-a-side-panel-up-and-down-by-keyboard");
 });
 
+async function focusSash(page: Page, name: string) {
+  const sash = page.getByRole("separator", { name });
+  await sash.focus();
+  await expect(sash).toBeFocused();
+  return sash;
+}
+
+test("the side panel's sash widens and narrows the column with the arrow keys, Home resets it, and the width survives a reload", async ({
+  page,
+}) => {
+  await page.goto(URL);
+  expect(await widthOf(page, "[data-panel-mode]")).toBeCloseTo(320, -1);
+  const sash = await focusSash(page, "Resize the side panel");
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowLeft");
+  await expect.poll(() => widthOf(page, "[data-panel-mode]")).toBeCloseTo(352, -1);
+  await expect(sash).toHaveAttribute("aria-valuenow", "352");
+  // The canvas gave the room up: the two share the work area.
+  const work = (await page.locator("#work-area").boundingBox())!;
+  const canvas = (await page.locator("#canvas-stand-in").boundingBox())!;
+  expect(Math.round(canvas.width + 352)).toBe(Math.round(work.width));
+  await page.keyboard.press("Shift+ArrowRight"); // a large step back
+  await expect(sash).toHaveAttribute("aria-valuenow", "288");
+  await page.reload();
+  await expect.poll(() => widthOf(page, "[data-panel-mode]")).toBeCloseTo(288, -1);
+  await focusSash(page, "Resize the side panel");
+  await page.keyboard.press("Home");
+  await expect.poll(() => widthOf(page, "[data-panel-mode]")).toBeCloseTo(320, -1);
+  registerCovered(REGISTRY, "resize-the-side-panel-by-keyboard");
+});
+
+test("a stacked panel's sash gives it a height of its own, and Home lets it share again", async ({ page }) => {
+  await page.goto(URL);
+  const slot = page.locator('[data-panel-slot="inspector"]');
+  const before = (await slot.boundingBox())!.height;
+  await focusSash(page, "Resize the inspector");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await expect.poll(async () => Math.round((await slot.boundingBox())!.height)).toBe(Math.round(before) + 32);
+  await page.keyboard.press("Home");
+  await expect.poll(async () => Math.round((await slot.boundingBox())!.height)).toBe(Math.round(before));
+  registerCovered(REGISTRY, "resize-a-stacked-panel-by-keyboard");
+});
+
+test("the timeline's sash raises and lowers it with the arrow keys, and the height survives a reload", async ({ page }) => {
+  await page.goto(URL);
+  const body = page.locator("#timeline-body");
+  expect(Math.round((await body.boundingBox())!.height)).toBe(252);
+  await focusSash(page, "Resize the timeline");
+  await page.keyboard.press("ArrowUp");
+  await expect.poll(async () => Math.round((await body.boundingBox())!.height)).toBe(268);
+  await page.reload();
+  await expect.poll(async () => Math.round((await body.boundingBox())!.height)).toBe(268);
+  await focusSash(page, "Resize the timeline");
+  await page.keyboard.press("Home");
+  await expect.poll(async () => Math.round((await body.boundingBox())!.height)).toBe(252);
+  registerCovered(REGISTRY, "resize-the-timeline-by-keyboard");
+});
+
 test("every registered panel-frame action has its own proving test case above", () => {
   assertAllCovered("PANEL_FRAME_ACTIONS", PANEL_FRAME_ACTIONS);
 });

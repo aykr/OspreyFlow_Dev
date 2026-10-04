@@ -329,6 +329,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
     const modifierListenersRef = useRef<(() => void) | null>(null);
+    const resizeObserverRef = useRef<ResizeObserver | null>(null);
     const dimmedEdgeIdsRef = useRef<ReadonlySet<string>>(EMPTY_DIMMED_SET);
     const sigmaRef = useRef<Sigma<
       WorkingSetNodeAttributes,
@@ -1226,6 +1227,16 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         window.removeEventListener("keyup", onModifier, true);
         window.removeEventListener("blur", onBlur);
       };
+      // ADR-086: the canvas's container changes size when a sash is dragged, not only when the
+      // window does, and the renderer resizes itself only on the window's event.
+      if (typeof ResizeObserver === "function" && containerRef.current) {
+        const observer = new ResizeObserver(() => {
+          sigma.resize();
+          sigma.refresh();
+        });
+        observer.observe(containerRef.current);
+        resizeObserverRef.current = observer;
+      }
       sigma.on("clickNode", ({ node, event }) => {
         // Shift, Ctrl or Cmd with the click adds the node to the selection, or takes it out again
         // (ADR-084 Amendment 1: Shift is the key most people reach for; the other two stay).
@@ -1308,6 +1319,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       return () => {
         modifierListenersRef.current?.();
         modifierListenersRef.current = null;
+        resizeObserverRef.current?.disconnect();
+        resizeObserverRef.current = null;
         sigma.kill();
         sigmaRef.current = null;
       };
