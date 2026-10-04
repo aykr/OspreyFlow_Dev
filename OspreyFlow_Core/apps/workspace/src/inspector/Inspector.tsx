@@ -7,6 +7,9 @@ import { LinkDetails, type LinkDetailsProps } from "./LinkDetails";
 import { LinkChange } from "./LinkChange";
 import type { LinkChangeResult } from "./linkChangeApi";
 import { LinkHistory } from "./LinkHistory";
+import { LinkEvents } from "./LinkEvents";
+import { eventsNoun } from "./linkEventsApi";
+import { displayValue } from "../search/searchOptions";
 import { LinkNotes } from "./LinkNotes";
 import { useState } from "react";
 
@@ -25,6 +28,7 @@ export interface InspectorProps {
     /** Each time one of these counts up, the matching part of the link view opens or takes focus. */
     openChangeSignal: number;
     openNoteSignal: number;
+    openEventsSignal?: number;
     /** Told of a saved change so the new link can be put in the view. */
     onChanged: (result: LinkChangeResult) => void;
   };
@@ -85,6 +89,19 @@ export function Inspector({ node, link, linkEditing, assessment }: InspectorProp
             investigationId={assessment.investigationId}
             edgeId={link.edge.id}
             focusSignal={linkEditing?.openNoteSignal}
+          />
+        )}
+        {/* ADR-089: the events behind the link (the emails between two addresses). */}
+        {assessment && !isResolutionLink(link.edge.type) && (
+          <LinkEvents
+            apiBaseUrl={assessment.apiBaseUrl}
+            bearerToken={assessment.bearerToken}
+            investigationId={assessment.investigationId}
+            edgeId={link.edge.id}
+            noun={eventsNoun(link.edge.type, link.source?.properties?.kind as string | undefined)}
+            sourceLabel={link.source ? displayValue(link.source) : link.edge.source}
+            targetLabel={link.target ? displayValue(link.target) : link.edge.target}
+            focusSignal={linkEditing?.openEventsSignal}
           />
         )}
         {assessment && !isResolutionLink(link.edge.type) && (

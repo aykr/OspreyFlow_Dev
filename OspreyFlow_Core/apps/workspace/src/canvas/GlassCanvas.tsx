@@ -75,6 +75,7 @@ import {
   type RadialMenuItem,
 } from "../design/primitives/RadialMenu";
 import { redrawWhenCameraStops } from "./cameraMoves";
+import { eventsEntryLabel, eventsNoun } from "../inspector/linkEventsApi";
 import { edgeTypesOfferedFor } from "./edgeTypeMenu";
 import { DottedArrowProgram, DottedEdgeProgram } from "./dottedEdgePrograms";
 import {
@@ -222,7 +223,7 @@ export interface GlassCanvasProps {
   judgementCounts?: ReadonlyMap<string, number>;
   /** ADR-080: the link menu's *Add a note*, *Change link…* and *Show change history* select the
    * link and then ask the caller to bring that part of the Inspector forward. */
-  onLinkAction?: (edge: Edge, action: "note" | "change" | "history") => void;
+  onLinkAction?: (edge: Edge, action: "note" | "change" | "history" | "events") => void;
 }
 
 /** Phase 7 Stage 3: what the metrics panel needs from outside the canvas's own event handlers —
@@ -2202,10 +2203,15 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       const notice = (message: string) => setActionError({ x, y, message, tone: "notice" });
       const askWhy = (title: string, confirmLabel: string, run: (reason: string) => void) =>
         setReasonPrompt({ x, y, title, confirmLabel, run });
-      const reach = (action: "note" | "change" | "history") => {
+      const reach = (action: "note" | "change" | "history" | "events") => {
         selectLink(edgeId);
         onLinkAction?.(edge, action);
       };
+      // ADR-089: the events behind the link, named for what they are (emails between two addresses).
+      const sourceKind = graph.hasNode(edge.source)
+        ? (graph.getNodeAttribute(edge.source, "data").properties?.kind as string | undefined)
+        : undefined;
+      const eventsLabel = eventsEntryLabel(eventsNoun(edge.type, sourceKind), edge.occurrences ?? 1);
       return linkMenuItems(edge, collapsed.has(group.id), {
         onCollapse: () => {
           const view = foldedViewRef.current;
@@ -2249,6 +2255,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         },
         onChange: () => reach("change"),
         onHistory: () => reach("history"),
+        onEvents: onLinkAction ? () => reach("events") : undefined,
+        eventsLabel,
       });
     }
 

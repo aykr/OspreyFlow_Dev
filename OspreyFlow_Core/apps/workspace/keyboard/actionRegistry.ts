@@ -334,6 +334,7 @@ export const LINK_MENU_ACTIONS = defineActionRegistry("LINK_MENU_ACTIONS", [
   "add-a-note-hands-over-to-the-inspector",
   "other-links-offer-change-and-history-and-hand-over",
   "moving-the-resolution-slider-opens-a-same-as-fold",
+  "show-events-hands-over-to-the-inspector",
 ] as const);
 
 /**
@@ -341,6 +342,12 @@ export const LINK_MENU_ACTIONS = defineActionRegistry("LINK_MENU_ACTIONS", [
  * (`keyboard/link-change-harness.tsx`). Saving writes through a real network call with a required
  * reason, so each way in, the save, the refusal without a reason and the cancel each need a case.
  */
+/** The Inspector's Emails section (ADR-089): the events behind a link, paged, one opened to read. */
+export const LINK_EVENTS_ACTIONS = defineActionRegistry("LINK_EVENTS_ACTIONS", [
+  "events-list-newest-first-and-show-more-by-keyboard",
+  "enter-on-an-email-opens-it-and-back-returns",
+] as const);
+
 export const LINK_CHANGE_ACTIONS = defineActionRegistry("LINK_CHANGE_ACTIONS", [
   "enter-on-change-this-link-opens-the-form-at-the-type",
   "change-the-type-and-save-with-ctrl-enter",

@@ -412,7 +412,8 @@ Right-click on a drawn link (the click finds the nearest link within 6 pixels), 
 steps through a focused node's links) and press `\`, to open a list titled `TYPE: A ↔ B`. A
 **same-as** link offers *Collapse into one node* (*Expand* once folded), *Confirm as the same*, *Mark as
 not the same*, *Explain this link*, *Add a note* and *Hide link*. A **not-the-same** link offers *Add a
-note* and *Hide link* only. **Any other** link offers *Change link…*, *Show change history*, *Add a
+note* and *Hide link* only. **Any other** link offers *Show emails (n)* (or *Show events (n)*, by what the link's events are;
+ADR-089), *Change link…*, *Show change history*, *Add a
 note* and *Hide link*.
 
 *Collapse into one node* is a view, not a change: the matched nodes (the whole resolution cluster when
@@ -427,6 +428,12 @@ cancels) and is kept in the audit trail with the analyst's name. *Explain this l
 explanation for the cluster the two are in, or says they are not in one at the current threshold.
 *Add a note*, *Change link…* and *Show change history* select the link and take the Inspector to the
 matching section.
+
+*Show emails (n)* takes the Inspector to its **Emails** section (ADR-089): the events the link stands
+for, newest first, fifty at a time with *Show more*, each with its date, direction, subject and the
+first words of its text. Choosing one opens it to read, with its sender, recipient, date and text, and a
+note when the text is the first 4,000 characters of a longer message. Reachable by keyboard
+(`keyboard/link-events.spec.ts`).
 
 The change form asks **what stands behind the link** each time, with no default (ADR-081 Amendment
 1 item 6, Amendment 2): *Direct* is offered only where the link's type is Direct and the link is not

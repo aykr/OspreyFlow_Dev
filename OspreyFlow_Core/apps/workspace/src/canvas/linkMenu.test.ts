@@ -102,3 +102,47 @@ describe("linkMenuTitle", () => {
     );
   });
 });
+
+// ADR-089: an ordinary link offers the events behind it first, named for what they are.
+describe("the events entry (ADR-089)", () => {
+  it("is offered first on an ordinary link when a label is given, and not without one", () => {
+    const calls: string[] = [];
+    const actions = {
+      onCollapse: () => calls.push("collapse"),
+      onExpand: () => calls.push("expand"),
+      onConfirm: () => calls.push("confirm"),
+      onNotSame: () => calls.push("not-same"),
+      onExplain: () => calls.push("explain"),
+      onNote: () => calls.push("note"),
+      onHide: () => calls.push("hide"),
+      onChange: () => calls.push("change"),
+      onHistory: () => calls.push("history"),
+    };
+    const edge = makeEdge("ln0", "a", "b", { type: "COMMUNICATED_WITH", occurrences: 12 });
+    const withEvents = linkMenuItems(edge, false, {
+      ...actions,
+      onEvents: () => calls.push("events"),
+      eventsLabel: "Show emails (12)",
+    });
+    expect(withEvents.map((i) => i.id)[0]).toBe("link-events");
+    expect(withEvents[0]!.label).toBe("Show emails (12)");
+    withEvents[0]!.onSelect();
+    expect(calls).toEqual(["events"]);
+    expect(linkMenuItems(edge, false, actions).map((i) => i.id)).toEqual([
+      "link-change",
+      "link-history",
+      "link-note",
+      "link-hide",
+    ]);
+  });
+
+  it("is never offered on a same-as or a not-the-same link", () => {
+    const quiet = () => undefined;
+    const actions = {
+      onCollapse: quiet, onExpand: quiet, onConfirm: quiet, onNotSame: quiet, onExplain: quiet,
+      onNote: quiet, onHide: quiet, onChange: quiet, onHistory: quiet, onEvents: quiet, eventsLabel: "Show events (1)",
+    };
+    expect(linkMenuItems(makeEdge("sa", "a", "b", { type: "SAME_AS" }), false, actions).map((i) => i.id)).not.toContain("link-events");
+    expect(linkMenuItems(makeEdge("ns", "a", "b", { type: "NOT_SAME_AS" }), false, actions).map((i) => i.id)).not.toContain("link-events");
+  });
+});

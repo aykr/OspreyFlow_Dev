@@ -16,6 +16,10 @@ export interface LinkMenuActions {
   onHide: () => void;
   onChange: () => void;
   onHistory: () => void;
+  /** ADR-089: the events behind the link (the emails between two addresses). Offered on any link
+   * other than the resolution engine's when `eventsLabel` is given. */
+  onEvents?: () => void;
+  eventsLabel?: string;
 }
 
 /** "SAME_AS: Person: Ada ↔ Person: A. Lovelace" — which link this menu belongs to. */
@@ -64,6 +68,9 @@ export function linkMenuItems(edge: Edge, folded: boolean, a: LinkMenuActions): 
     ];
   }
   return [
+    ...(a.onEvents && a.eventsLabel
+      ? [entry("link-events", a.eventsLabel, "This link", a.onEvents)]
+      : []),
     entry("link-change", "Change link…", "This link", a.onChange),
     entry("link-history", "Show change history", "This link", a.onHistory),
     entry("link-note", "Add a note", "Notes and view", a.onNote),

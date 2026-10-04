@@ -264,11 +264,20 @@ test("A link of another type offers Change and the history, and each hands over 
   await openOrdinaryMenu(page);
   const labels = await page.getByRole("menuitem").allTextContents();
   expect(labels.map((l) => l.trim())).toEqual([
+    "Show events (1)",
     "Change link…",
     "Show change history",
     "Add a note",
     "Hide link",
   ]);
+  await page.keyboard.press("Enter"); // Show events (1), the first entry (ADR-089)
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.linkAction))
+    .toEqual({ edgeId: "ln0", action: "events" });
+  registerCovered(REGISTRY, "show-events-hands-over-to-the-inspector");
+
+  await openOrdinaryMenu(page);
+  await tabToEntry(page, "Change link…");
   await page.keyboard.press("Enter"); // Change link…
   await expect
     .poll(() => page.evaluate(() => window.__KEYBOARD__?.linkAction))

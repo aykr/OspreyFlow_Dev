@@ -341,6 +341,7 @@ export function App() {
   // the Inspector forward.
   const [linkNoteSignal, setLinkNoteSignal] = useState(0);
   const [linkChangeSignal, setLinkChangeSignal] = useState(0);
+  const [linkEventsSignal, setLinkEventsSignal] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   // B16's own cross-case overlay — the second investigation's own scope,
@@ -934,6 +935,7 @@ export function App() {
                 onLinkAction={(_edge, action) => {
                   if (action === "note") setLinkNoteSignal((n) => n + 1);
                   if (action === "change") setLinkChangeSignal((n) => n + 1);
+                  if (action === "events") setLinkEventsSignal((n) => n + 1);
                 }}
                 onBranchCreated={(id) => openCase(id)}
                 onSelectionChange={(nodeIds) => {
@@ -1103,6 +1105,7 @@ export function App() {
                         edgeTypes,
                         openChangeSignal: linkChangeSignal,
                         openNoteSignal: linkNoteSignal,
+                        openEventsSignal: linkEventsSignal,
                         onChanged: (result) => {
                           // The old link leaves the view and the new one arrives in one step; the Inspector
                           // is then pointed at the new link, whose id is not the old one's.
