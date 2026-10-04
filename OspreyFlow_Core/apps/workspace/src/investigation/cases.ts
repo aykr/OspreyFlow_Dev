@@ -158,6 +158,28 @@ export function branchFamily(cases: readonly CaseListing[], currentId: string): 
   return { root, branches };
 }
 
+/** The picker's rows (ADR-084 Amendment 3): each original case in `orderCases`' order, followed by
+ * every branch in its family (as `branchFamily` groups them) oldest first, marked as a branch. A
+ * branch whose original this account cannot see sits under its oldest visible ancestor, which then
+ * heads the family. No case is left out. */
+export function nestCases(
+  cases: readonly CaseListing[],
+): Array<{ entry: CaseListing; branch: boolean }> {
+  const byId = new Map(cases.map((entry) => [entry.id, entry]));
+  const families = new Map<string, CaseListing[]>();
+  for (const entry of cases) {
+    const root = rootOf(byId, entry);
+    if (root.id !== entry.id) families.set(root.id, [...(families.get(root.id) ?? []), entry]);
+  }
+  const roots = orderCases(cases.filter((entry) => rootOf(byId, entry).id === entry.id));
+  return roots.flatMap((root) => [
+    { entry: root, branch: false },
+    ...(families.get(root.id) ?? [])
+      .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
+      .map((entry) => ({ entry, branch: true })),
+  ]);
+}
+
 /** The branches shown as tabs: those this account has not closed, and always the one on screen. */
 export function openTabs(family: BranchFamily, currentId: string): CaseListing[] {
   return family.branches.filter((entry) => !entry.tab_hidden || entry.id === currentId);

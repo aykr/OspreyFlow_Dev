@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { INVESTIGATION_ID_SESSION_KEY } from "./investigationId";
-import { caseUrl, createCase, listCases, openCase, removeCase } from "./cases";
+import { type CaseListing, caseUrl, createCase, listCases, nestCases, openCase, removeCase } from "./cases";
 
 const fetchMock = vi.fn();
 
@@ -195,5 +195,44 @@ describe("branch tabs (ADR-084)", () => {
     const { setTabHidden } = await import("./cases");
     fetchMock.mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({}) });
     await expect(setTabHidden("http://api", "tok", "b1", true)).rejects.toThrow(/not found/i);
+  });
+});
+
+// The case picker lists each original case once with its branches indented beneath it (ADR-084
+// Amendment 3). The owner, 4 October 2026: three "Enron corpus · n selected" rows sat in the main
+// list beside the cases they came from, with nothing saying they were branches.
+describe("nestCases", () => {
+  function listing(id: string, created: string, branchedFrom: string | null = null, name = id): CaseListing {
+    return { id, name, level: "author", created_at: created, created_by: "a", branched_from: branchedFrom };
+  }
+
+  it("puts each case's branches beneath it, oldest branch first, roots in the usual order", () => {
+    const cases = [
+      listing("enron", "2026-10-01T00:00:00Z"),
+      listing("b4", "2026-10-04T12:00:00Z", "enron"),
+      listing("b2", "2026-10-04T10:00:00Z", "enron"),
+      listing("fixture", "2026-10-02T00:00:00Z"),
+      listing("b2-of-b2", "2026-10-04T11:00:00Z", "b2"),
+    ];
+    expect(nestCases(cases).map(({ entry, branch }) => [entry.id, branch])).toEqual([
+      ["fixture", false],
+      ["enron", false],
+      ["b2", true],
+      ["b2-of-b2", true],
+      ["b4", true],
+    ]);
+  });
+
+  it("lists a branch whose original the account cannot see under its oldest visible ancestor", () => {
+    const cases = [listing("b2", "2026-10-04T10:00:00Z", "not-visible"), listing("b3", "2026-10-04T11:00:00Z", "b2")];
+    expect(nestCases(cases).map(({ entry, branch }) => [entry.id, branch])).toEqual([
+      ["b2", false],
+      ["b3", true],
+    ]);
+  });
+
+  it("drops no case", () => {
+    const cases = [listing("a", "2026-01-01T00:00:00Z"), listing("b", "2026-01-02T00:00:00Z", "a")];
+    expect(nestCases(cases)).toHaveLength(2);
   });
 });

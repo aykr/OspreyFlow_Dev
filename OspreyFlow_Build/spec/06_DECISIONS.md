@@ -9680,3 +9680,11 @@ Decision.
 Tests, each shown red first: `test_a_link_whose_events_have_no_text_is_refused_and_writes_nothing`, `test_events_without_text_are_counted_not_written`, `linkEventsApi.test.ts` (red: a real Enron address read as events), and the keyboard case in `link-menu.spec.ts` that *Show emails* sends the brushed window and draws the Documents (red with the call unwired).
 
 Build note (4 October 2026). All three steps of ADR-092 are built: step 1 `0c0e3d4`, step 2 `0e0b597` (with Amendment 1), step 3 in the commit that adds this note: `reader/DocumentReader.tsx` and `reader/readerApi.ts`, an overlay over the work area in `App.tsx`, and in `GlassCanvas.tsx` a double-click or Enter on a Document calls `onOpenDocument` rather than expanding. Tests shown red first: `DocumentReader.test.tsx` (before the component existed) and `keyboard/reader.spec.ts` (the canvas case red with the Document rule turned off); registry `READER_ACTIONS`. **Not seen:** the reader on the live Enron case.
+
+### ADR-084, Amendment 3 (4 October 2026) — the case picker lists each case once, with its branches beneath it
+
+Context. The owner, looking at *Choose a case*, asked why three "Enron corpus (real data, this machine only) · n selected" rows sat in the list beside the case they came from. They were branches made while testing *Branch selected*: each is a case of its own (decision 1), named after its parent. ADR-084 designed the tab strip and the Branches menu but said nothing about the picker, which listed every case flat and ignored `branched_from`. Owner's choice, from three: nested under the parent.
+
+Decision. The picker lists each original case once, in its usual order, followed by every branch in its family, indented, oldest first, each labelled "branch" beside the caller's level. A family is grouped by the rule the tab strip already uses (`branchFamily`: a branch of a branch belongs to the original; if the original is not visible to the caller, the oldest listed ancestor heads the family, decision 4). No case is left out, and every row still opens and removes as before.
+
+Tests, shown red first: `nestCases` in `cases.test.ts` (order, a branch of a branch, an unseen original, nothing dropped) and the picker case in `CasePicker.test.tsx` (red: the branch was listed apart from its case).

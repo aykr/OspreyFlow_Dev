@@ -314,7 +314,10 @@ for the owner to accept, amend or reject as real spec.
 **Superseded in part by ADR-052 Amendment 5 (29 September 2026).** Step 3 above (create a case on
 every load with no id) is gone. With no case resolved, and the analyst signed in, the Glass shows a
 **case picker**: the cases the caller holds a level on, each with the caller's own level, and a
-"New case" form. The header carries a case switcher, and the Ingest Studio shows the same switcher
+"New case" form. Each original case is listed once, with its branches (ADR-084) indented beneath it,
+oldest first, each said to be a branch beside its level; a branch whose original the caller cannot
+see sits under its oldest visible ancestor (ADR-084 Amendment 3; `nestCases` in
+`investigation/cases.ts`). The header carries a case switcher, and the Ingest Studio shows the same switcher
 above its tabs ("Data loaded from this studio goes into"), with "New case" in it. Choosing a case
 sets the sessionStorage key and reloads the page, because the working set, cross-filter store and
 delta stream are built once per case, and it signs back in by itself (`from=case`, ADR-052 Amendment 6). Steps 1 and 2 (query parameter, then session) are unchanged.
