@@ -84,6 +84,7 @@ import {
 } from "./expansionGate";
 import { fetchWouldAdd } from "./expansionPreview";
 import { LargeExpansionPrompt } from "./LargeExpansionPrompt";
+import { branchSelection } from "./branchNodes";
 import { removeFromWorkingSet } from "./removeNodes";
 import { ViewActions } from "./ViewActions";
 import { settleLayout, type LayoutNode } from "./forceLayout";
@@ -186,6 +187,9 @@ export interface GlassCanvasProps {
    * that hasn't wired cross-filtering (e.g. an existing test harness). */
   dimmedNodeIds?: ReadonlySet<string>;
   onSelectionChange?: (nodeIds: string[]) => void;
+  /** A branch of the selected nodes was made (ADR-084): the new case's id and name. The caller
+   * opens it. Absent: this canvas offers no "Branch selected" button. */
+  onBranchCreated?: (id: string, name: string) => void;
   /** The link now selected, or `null` when none is. Selecting a link clears the node selection,
    * and selecting a node clears the link, so the Inspector shows one thing at a time. */
   onEdgeSelect?: (edge: Edge | null) => void;
@@ -306,6 +310,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       bearerToken,
       dimmedNodeIds = EMPTY_DIMMED_SET,
       onSelectionChange,
+      onBranchCreated,
       onEdgeSelect,
       onFocusChange,
       onViewMessages,
@@ -2209,6 +2214,38 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       selectLink(null);
     }
 
+    // Sends the selected nodes to a case of their own (ADR-084). A Group Node stands for every
+    // member of its group, so choosing one chooses all of them; the stand-in's own id is not a
+    // real node and is never sent. The view is not changed: the original case stays as it was.
+    async function branchSelected(): Promise<void> {
+      const chosen = new Set<string>();
+      for (const id of selected) {
+        const group = foldedViewRef.current?.groups.get(id);
+        if (!group) {
+          chosen.add(id);
+          continue;
+        }
+        const owner = allGroups.find((c) => c.id === group.communityId);
+        for (const member of owner?.members ?? []) chosen.add(member);
+      }
+      const result = await branchSelection(fetch, {
+        apiBaseUrl,
+        bearerToken,
+        investigationId,
+        nodeIds: Array.from(chosen),
+      });
+      if (!result.ok) {
+        const rect = containerRef.current?.getBoundingClientRect();
+        setActionError({
+          x: (rect?.left ?? 0) + 40,
+          y: (rect?.top ?? 0) + 40,
+          message: result.message,
+        });
+        return;
+      }
+      onBranchCreated?.(result.id, result.name);
+    }
+
     return (
       <div
         ref={containerRef}
@@ -2466,6 +2503,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           selectedCount={selected.size}
           onRemoveSelected={() => void removeNodeIds(Array.from(selected))}
           onClearAll={() => void removeNodeIds(graph.nodes())}
+          onBranchSelected={onBranchCreated ? () => void branchSelected() : undefined}
           selectedLink={selectedEdge !== null}
           hiddenLinkCount={hiddenEdges.size}
           onHideLink={hideSelectedLink}

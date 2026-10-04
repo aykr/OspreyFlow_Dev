@@ -64,6 +64,17 @@ CREATE TABLE IF NOT EXISTS investigation_access_history (
 );
 """
 
+#: ADR-084. Which case tabs an account has closed: a row means hidden, and no row means open. One
+#: row per account and case, so closing a tab says nothing about anyone else's strip of tabs.
+_TAB_SQL = """
+CREATE TABLE IF NOT EXISTS investigation_tab_state (
+    investigation_id TEXT NOT NULL REFERENCES investigations (id),
+    account_id TEXT NOT NULL,
+    hidden_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (investigation_id, account_id)
+);
+"""
+
 _MIGRATE_EXISTING_SQL = """
 UPDATE investigations SET unit_level = 'viewer';
 INSERT INTO investigation_grants (investigation_id, account_id, level)
@@ -146,6 +157,7 @@ class InvestigationStore:
                     await conn.fetchval("SELECT to_regclass('investigation_grants')") is None
                 )
                 await conn.execute(_ACCESS_SQL)
+                await conn.execute(_TAB_SQL)
                 if first_time:
                     await conn.execute(_MIGRATE_EXISTING_SQL)
         return cls(pool)
@@ -370,6 +382,42 @@ class InvestigationStore:
             if found is not None and found[1] is not None:
                 listed.append((found[0], found[1]))
         return listed
+
+    # --- ADR-084: which tabs an account has closed -------------------------------------------
+
+    async def hidden_tab_ids(self, principal: Principal) -> set[str]:
+        """The cases whose tab `principal` has closed. Only this account's own rows: the account
+        is in the `WHERE`, not applied afterwards, so one account can never read another's."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT investigation_id FROM investigation_tab_state WHERE account_id = $1",
+                principal.id,
+            )
+        return {row["investigation_id"] for row in rows}
+
+    async def set_tab_hidden(
+        self, principal: Principal, investigation_id: str, hidden: bool
+    ) -> None:
+        """Closes (`hidden`) or reopens `investigation_id`'s tab for `principal` alone. Whether the
+        account may see the case at all is the caller's job (the route's level dependency, which
+        answers 404 for a case it cannot see); this writes only the caller's own row."""
+        async with self._pool.acquire() as conn:
+            if hidden:
+                await conn.execute(
+                    "INSERT INTO investigation_tab_state "
+                    "(investigation_id, account_id, hidden_at) VALUES ($1, $2, $3) "
+                    "ON CONFLICT (investigation_id, account_id) DO UPDATE SET hidden_at = $3",
+                    investigation_id,
+                    principal.id,
+                    datetime.now(UTC),
+                )
+            else:
+                await conn.execute(
+                    "DELETE FROM investigation_tab_state "
+                    "WHERE investigation_id = $1 AND account_id = $2",
+                    investigation_id,
+                    principal.id,
+                )
 
     async def rename(self, investigation_id: str, name: str, *, by: Principal) -> None:
         clean_name = name.strip()

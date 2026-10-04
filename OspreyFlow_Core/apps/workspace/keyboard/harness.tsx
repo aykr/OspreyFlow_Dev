@@ -27,6 +27,8 @@ declare global {
       selectedEdge: string | null;
       /** The last link-menu entry that hands over to the Inspector (ADR-080): which link and what. */
       linkAction: { edgeId: string; action: string } | null;
+      /** The case the canvas was told a branch of the selection was made as (ADR-084). */
+      branchedTo: string | null;
     };
     __CANVAS__?: {
       viewportPositionOf: (nodeId: string) => { x: number; y: number } | null;
@@ -141,6 +143,7 @@ window.__KEYBOARD__ = {
   viewMessagesNodeId: null,
   selectedEdge: null,
   linkAction: null,
+  branchedTo: null,
 };
 
 // `?fixture=same-as` is the link menu's fixture (ADR-080); every other fixture leaves `SAME_AS` out
@@ -301,6 +304,9 @@ createRoot(container).render(
       }}
       onViewMessages={(nodeId) => {
         window.__KEYBOARD__!.viewMessagesNodeId = nodeId;
+      }}
+      onBranchCreated={(id) => {
+        window.__KEYBOARD__!.branchedTo = id;
       }}
       onGroupedCountChange={(count) => {
         window.__GROUPED__ = count;

@@ -278,3 +278,22 @@
 .menu-panel__list { display: flex; flex-direction: column; gap: var(--sp-2, 2px); max-height: 280px; overflow-y: auto; }
 .menu-panel__term { color: var(--text-secondary); font-size: var(--fs-12, var(--fs-13)); }
 .menu-panel__value { overflow-wrap: anywhere; }
+
+/* The strip of case tabs above the workspace (ADR-084): the original case first, then its open
+   branches, then the Branches menu. Tokens only. */
+.case-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-8);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
+  overflow-x: auto;
+}
+.case-tabs__item { display: inline-flex; align-items: stretch; }
+.case-tabs__tab { white-space: nowrap; }
+.case-tabs__tab[aria-current="page"] { border-color: var(--brass); color: var(--brass); }
+.case-tabs__close { padding-left: var(--sp-6); padding-right: var(--sp-6); }
+.case-tabs__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-4); }
+.case-tabs__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); }
+.case-tabs__name { overflow-wrap: anywhere; font-weight: 600; }

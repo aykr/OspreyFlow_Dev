@@ -13,6 +13,8 @@ export interface CaseListing {
   created_at: string;
   created_by: string;
   branched_from?: string | null;
+  /** This account has closed the case's tab (ADR-084). Says nothing about anyone else's view. */
+  tab_hidden?: boolean;
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -123,4 +125,60 @@ export function openCase(
 ): void {
   sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, id);
   navigate(caseUrl(id, view));
+}
+
+/** A case and the branches made from it, for the strip of tabs (ADR-084). A branch of a branch
+ * belongs to the original case's family too, so every tab leads back to the same place. The root is
+ * the topmost case this account can see: if the original was removed or never shared, the oldest
+ * ancestor that is listed stands in for it. */
+export interface BranchFamily {
+  root: CaseListing;
+  branches: CaseListing[];
+}
+
+function rootOf(byId: Map<string, CaseListing>, start: CaseListing): CaseListing {
+  let top = start;
+  const seen = new Set<string>([start.id]);
+  for (;;) {
+    const parent = top.branched_from ? byId.get(top.branched_from) : undefined;
+    if (!parent || seen.has(parent.id)) return top;
+    seen.add(parent.id);
+    top = parent;
+  }
+}
+
+export function branchFamily(cases: readonly CaseListing[], currentId: string): BranchFamily | null {
+  const byId = new Map(cases.map((entry) => [entry.id, entry]));
+  const current = byId.get(currentId);
+  if (!current) return null;
+  const root = rootOf(byId, current);
+  const branches = cases
+    .filter((entry) => entry.id !== root.id && rootOf(byId, entry).id === root.id)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+  return { root, branches };
+}
+
+/** The branches shown as tabs: those this account has not closed, and always the one on screen. */
+export function openTabs(family: BranchFamily, currentId: string): CaseListing[] {
+  return family.branches.filter((entry) => !entry.tab_hidden || entry.id === currentId);
+}
+
+/** Closes (`hidden`) or reopens a case's tab for this account only. */
+export async function setTabHidden(
+  apiBaseUrl: string,
+  bearerToken: string,
+  id: string,
+  hidden: boolean,
+): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/v1/investigations/${encodeURIComponent(id)}/tab`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ hidden }),
+  });
+  if (response.status === 404) {
+    throw new Error("That case was not found. It may have been removed.");
+  }
+  if (!response.ok) {
+    throw new Error(`The tab could not be ${hidden ? "closed" : "shown"} (${response.status}).`);
+  }
 }

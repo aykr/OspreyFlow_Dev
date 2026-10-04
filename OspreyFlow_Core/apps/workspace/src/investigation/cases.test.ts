@@ -117,3 +117,83 @@ describe("removing a case", () => {
     expect(sessionStorage.getItem(INVESTIGATION_ID_SESSION_KEY)).toBe("other");
   });
 });
+
+describe("branch tabs (ADR-084)", () => {
+  const made = (id: string, branchedFrom: string | null, at: string, extra = {}) => ({
+    id,
+    name: id,
+    level: "author" as const,
+    created_at: at,
+    created_by: "a",
+    branched_from: branchedFrom,
+    ...extra,
+  });
+
+  it("puts a case's own branches in one family, root first, oldest branch first", async () => {
+    const { branchFamily } = await import("./cases");
+    const cases = [
+      made("b2", "root", "2026-10-03T00:00:00Z"),
+      made("other", null, "2026-10-01T00:00:00Z"),
+      made("root", null, "2026-10-01T00:00:00Z"),
+      made("b1", "root", "2026-10-02T00:00:00Z"),
+    ];
+    const family = branchFamily(cases, "b2");
+    expect(family?.root.id).toBe("root");
+    expect(family?.branches.map((c) => c.id)).toEqual(["b1", "b2"]);
+  });
+
+  it("follows a branch of a branch up to the original case", async () => {
+    const { branchFamily } = await import("./cases");
+    const cases = [
+      made("root", null, "2026-10-01T00:00:00Z"),
+      made("b1", "root", "2026-10-02T00:00:00Z"),
+      made("b1a", "b1", "2026-10-03T00:00:00Z"),
+    ];
+    const family = branchFamily(cases, "b1a");
+    expect(family?.root.id).toBe("root");
+    expect(family?.branches.map((c) => c.id)).toEqual(["b1", "b1a"]);
+  });
+
+  it("treats the topmost case this account can see as the root when the original is not listed", async () => {
+    const { branchFamily } = await import("./cases");
+    const cases = [made("b1", "gone", "2026-10-02T00:00:00Z")];
+    const family = branchFamily(cases, "b1");
+    expect(family?.root.id).toBe("b1");
+    expect(family?.branches).toEqual([]);
+  });
+
+  it("has no family for a case that is not in the list", async () => {
+    const { branchFamily } = await import("./cases");
+    expect(branchFamily([], "nope")).toBeNull();
+  });
+
+  it("shows the open branches and the current one, and holds the closed ones back", async () => {
+    const { branchFamily, openTabs } = await import("./cases");
+    const cases = [
+      made("root", null, "2026-10-01T00:00:00Z"),
+      made("b1", "root", "2026-10-02T00:00:00Z", { tab_hidden: true }),
+      made("b2", "root", "2026-10-03T00:00:00Z"),
+      made("b3", "root", "2026-10-04T00:00:00Z", { tab_hidden: true }),
+    ];
+    const family = branchFamily(cases, "b3")!;
+    // b3 is hidden but it is the one on screen, so it stays in the strip.
+    expect(openTabs(family, "b3").map((c) => c.id)).toEqual(["b2", "b3"]);
+    expect(openTabs(family, "root").map((c) => c.id)).toEqual(["b2"]);
+  });
+
+  it("asks the tab route for exactly the case and the yes or no", async () => {
+    const { setTabHidden } = await import("./cases");
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 204, json: async () => ({}) });
+    await setTabHidden("http://api", "tok", "b1", true);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://api/v1/investigations/b1/tab");
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(init.body as string)).toEqual({ hidden: true });
+  });
+
+  it("says so when the tab could not be closed, and does not pretend", async () => {
+    const { setTabHidden } = await import("./cases");
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({}) });
+    await expect(setTabHidden("http://api", "tok", "b1", true)).rejects.toThrow(/not found/i);
+  });
+});

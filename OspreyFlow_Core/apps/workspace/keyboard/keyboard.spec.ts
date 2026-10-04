@@ -885,6 +885,61 @@ test("Clear view asks first, and clears only after Enter on the confirmation", a
   registerCovered("CANVAS_ACTIONS", "clear-view-by-keyboard");
 });
 
+test("Branch selected sends the selected nodes to a new case, by keyboard, and says which", async ({
+  page,
+}) => {
+  await page.goto("/keyboard/harness.html");
+  let body: unknown = null;
+  await page.route("**/*/investigations/*/branch", async (route) => {
+    body = route.request().postDataJSON();
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({ id: "branch-1", name: "Keyboard fixture · 1 selected" }),
+    });
+  });
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus(); // n0 selected
+  await tabTo(page, page.getByRole("button", { name: /^Branch selected \(1\)/ }));
+  await page.keyboard.press("Enter");
+
+  await expect.poll(() => body).toEqual({ node_ids: ["n0"] });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as unknown as { __KEYBOARD__?: { branchedTo?: string | null } }).__KEYBOARD__
+            ?.branchedTo,
+      ),
+    )
+    .toBe("branch-1");
+  registerCovered("CANVAS_ACTIONS", "branch-selected-opens-a-new-tab");
+});
+
+test("Branch selected says so when nothing could be branched, and opens no tab", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  await page.route("**/*/investigations/*/branch", async (route) => {
+    await route.fulfill({
+      status: 422,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "nothing_to_branch" }),
+    });
+  });
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  await tabTo(page, page.getByRole("button", { name: /^Branch selected \(1\)/ }));
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByRole("dialog")).toContainText("None of the selected nodes could be branched.");
+  expect(
+    await page.evaluate(
+      () =>
+        (window as unknown as { __KEYBOARD__?: { branchedTo?: string | null } }).__KEYBOARD__
+          ?.branchedTo,
+    ),
+  ).toBeNull();
+});
+
 test("the Layout menu is reached by Tab and changed by the arrow keys", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });
@@ -1304,6 +1359,14 @@ test("a folded group is drawn as one node: its members are drawn where the group
 
 test("a double-click inside a box folds the group, and a double-click on the Group Node opens it", async ({ page }) => {
   await communitiesOn(page);
+  // The buttons over the canvas are right-aligned in a strip along its top, and every button added
+  // to it pushes the rest left. A folded group can sit right under the strip, and the double-click
+  // then lands on a button instead of on the Group Node. This case is about the gesture on the
+  // canvas, not about the strip, so the strip is made to pass the pointer through for its length.
+  await page.getByRole("button", { name: "Clear view" }).evaluate((button) => {
+    const strip = button.parentElement?.parentElement;
+    if (strip) strip.style.pointerEvents = "none";
+  });
   const members = await Promise.all(["a0", "a1", "a2", "a3", "a4"].map((id) => settle(page, id)));
   const centre = {
     x: members.reduce((n, p) => n + p!.x, 0) / members.length,

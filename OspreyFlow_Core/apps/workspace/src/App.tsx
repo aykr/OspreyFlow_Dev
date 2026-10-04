@@ -66,6 +66,7 @@ import { BoundaryFilterTool } from "./map/BoundaryFilterTool";
 import { IngestStudio } from "./ingest/IngestStudio";
 import { CasePicker } from "./investigation/CasePicker";
 import { CaseSwitcher } from "./investigation/CaseSwitcher";
+import { CaseTabs } from "./investigation/CaseTabs";
 import { openCase } from "./investigation/cases";
 import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
 import { StatusBar } from "./statusbar/StatusBar";
@@ -790,6 +791,17 @@ export function App() {
           )}
         </div>
       </header>
+      {app === "glass" && (
+        // The branches made from this case, as tabs (ADR-084). Renders nothing until the case has
+        // one, so a case that has never been branched looks exactly as it did.
+        <CaseTabs
+          apiBaseUrl={API_BASE_URL}
+          bearerToken={bearerToken}
+          currentId={investigationId}
+          isAdministrator={principal?.roles?.includes("osprey-admin") ?? false}
+          onOpen={(id) => openCase(id)}
+        />
+      )}
       <div style={{ flex: 1, display: "flex", minHeight: 0, position: "relative" }}>
         {view === "ingest" && (
           <IngestStudio
@@ -871,6 +883,7 @@ export function App() {
                   if (action === "note") setLinkNoteSignal((n) => n + 1);
                   if (action === "change") setLinkChangeSignal((n) => n + 1);
                 }}
+                onBranchCreated={(id) => openCase(id)}
                 onSelectionChange={(nodeIds) => {
                   const first = nodeIds[0];
                   const graph = workingSetRef.current.graph;

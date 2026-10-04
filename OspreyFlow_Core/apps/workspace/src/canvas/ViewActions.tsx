@@ -5,6 +5,8 @@ export interface ViewActionsProps {
   selectedCount: number;
   onRemoveSelected: () => void;
   onClearAll: () => void;
+  /** Send the selected nodes to a new tab (ADR-084). Absent: this surface cannot branch. */
+  onBranchSelected?: () => void;
   /** A link is selected, so it can be hidden from this view. */
   selectedLink?: boolean;
   /** How many links are hidden in this browser tab. */
@@ -22,6 +24,7 @@ export function ViewActions({
   selectedCount,
   onRemoveSelected,
   onClearAll,
+  onBranchSelected,
   selectedLink = false,
   hiddenLinkCount = 0,
   onHideLink,
@@ -53,6 +56,16 @@ export function ViewActions({
         >
           Remove selected ({selectedCount})
         </button>
+        {onBranchSelected && (
+          <button
+            type="button"
+            className="radial-menu__item"
+            disabled={selectedCount === 0}
+            onClick={onBranchSelected}
+          >
+            Branch selected ({selectedCount})
+          </button>
+        )}
         {selectedLink && (
           <button type="button" className="radial-menu__item" onClick={onHideLink}>
             Hide selected link

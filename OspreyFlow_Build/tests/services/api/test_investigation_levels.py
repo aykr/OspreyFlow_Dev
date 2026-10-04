@@ -31,6 +31,8 @@ P = "/v1/investigations/{investigation_id}"
 NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("GET", P): V,
     ("POST", P + "/branch"): E,
+    # Closing or reopening a tab (ADR-084) changes only the caller's own strip, so Viewer suffices.
+    ("PUT", P + "/tab"): V,
     ("POST", P + "/seed"): E,
     ("POST", P + "/expand"): E,
     ("POST", P + "/expand/preview"): V,

@@ -137,6 +137,9 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   // was run against it, which is what these entries and their test cases close.
   "delete-removes-selected-nodes",
   "clear-view-by-keyboard",
+  // 4 October 2026 (ADR-084): the selected nodes can be sent to a new tab. A button in the same
+  // row as Remove selected and Clear view, so it is reached by Tab like them.
+  "branch-selected-opens-a-new-tab",
   "layout-menu-chooses-layout",
   "layout-menu-chooses-force-directed-tree",
   "layout-menu-chooses-clustered-bubbles-and-what-they-group-by",

@@ -61,6 +61,13 @@ class LimitExceededError(Exception):
         self.detail = detail
 
 
+class NothingToBranchError(Exception):
+    """A branch of a chosen set of nodes (ADR-084) found nothing to copy: every id asked for is
+    absent, hidden from the branching principal, or the choice was empty. One error for all three,
+    on purpose, so the answer cannot be used to tell a hidden node from one that does not exist
+    (`CLAUDE.md` rules 3 and 4). Raised before any case is created, so none is left behind empty."""
+
+
 class NodePropertyUpdate(BaseModel):
     id: NodeId
     properties: dict[str, Any]

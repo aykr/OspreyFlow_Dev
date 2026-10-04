@@ -324,7 +324,7 @@ on return) is shown and is never retried automatically. Only the Ingest tab can 
 | Expand a node's relationships | Context menu on right-click, headed with the node's type and name and closed by a click elsewhere or Escape (a list, so long edge-type names stay readable; the browser's own menu is suppressed); items generated from the ontology's edge types valid for the node's type, each with a live count, or `count unavailable` if the preview failed; actions with no count show none. A double-click on a node expands its neighbours across every edge type |
 | Search Around | Multi-step, filtered traversal builder — `Person → uses → Endpoint → communicated with (≥5 events, in brush window) → Endpoint → used by → Person`. Preview count before committing to the canvas |
 | Pathfinder | Select two nodes, get k-shortest paths; paths render with the on-path node state (2px primary stroke, edges thickened), everything else dims to 32% |
-| Subgraph isolation | Lasso or bounding box, then "Branch to new tab" — the selection opens as a new working set with its own filter state; the parent is untouched |
+| Subgraph isolation | Select nodes (by lasso or by clicking), then **Branch selected** — the selection opens as a new case in a tab of its own (§3.1h, ADR-084), with its own filter state; the parent is untouched. A bounding-box selection has no implementation yet |
 | Undo | Every canvas mutation is a step in an addressable history; the history panel is a list of named steps, not a stack of arrows |
 
 **Expansion budget.** Every expansion previews its cardinality before executing. Above 500 new
@@ -428,6 +428,16 @@ bubbles draws one circle for each group, with its name and size, the group's nod
 the circles packed against one another; a second choice, **Bubbles by**, picks *Entity type* (the
 default) or *Community*. Both only move nodes: nothing is stored or removed, and both are reachable by
 keyboard through the Layout choice (`keyboard/keyboard.spec.ts`).
+
+### 3.1h Branch selected, and the strip of tabs (ADR-084)
+
+Selecting nodes enables **Branch selected (n)**, beside Remove selected and Clear view (reachable by Tab; `keyboard/keyboard.spec.ts`). It sends the nodes to a **new case of their own**, holding those nodes and the links between them, and opens it. The case you branched from is left exactly as it was. A branch is a **copy** made at that moment: later changes to either never touch the other. A selected Group Node stands for every member of its group, so choosing one chooses them all. What the new case holds is re-checked against the branching analyst's own clearance, as every read is: a node they may not see is not copied, and a request that leaves nothing to copy says only "None of the selected nodes could be branched", whatever the reason.
+
+Each branch is a case saved for the analyst who made it (they are its Author, and it is visible to nobody else until they share it). It starts with the resolution threshold, layout and timeline brush of its own, not shared with the case it came from.
+
+A **strip of tabs** sits under the top bar once a case has a branch. The original case is always the first tab; its open branches follow, each with a close button; the one on screen is marked. **Closing a tab only hides it** from this analyst's strip (a flag kept for them alone, which says nothing about anyone else's view). The **Branches** menu at the end of the strip lists every branch, open or hidden, as "Branches (n open of m)", so the analyst always sees the whole set they are working across; from it a branch is opened, brought back into the strip, or **discarded**. Discarding asks first and is the same soft remove as for any case: it leaves every list and nothing is deleted. Only an Author of the branch (or an administrator of the unit) is offered it, and never for the branch on screen.
+
+Switching tab opens that case, which reloads the page, as every case switch does (§1): the working set, timeline and delta stream are each built once per case. The expansions and filters of a case are kept on the server, so they are still there; where nodes sit on screen and what was selected are not. Having several canvases live in one page, so that switching is instant and keeps the layout, is a later step (ADR-084).
 
 ### 3.2 Social network analysis
 

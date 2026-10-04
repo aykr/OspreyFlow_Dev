@@ -81,4 +81,22 @@ describe("ViewActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show hidden links (3)" }));
     expect(h.onShowHiddenLinks).toHaveBeenCalledOnce();
   });
+
+  it("branches the selected nodes into a new tab, and says how many", () => {
+    const onBranchSelected = vi.fn();
+    setup({ onBranchSelected });
+    fireEvent.click(screen.getByRole("button", { name: /Branch selected \(2\)/ }));
+    expect(onBranchSelected).toHaveBeenCalledOnce();
+  });
+
+  it("offers no branch when nothing is selected", () => {
+    setup({ selectedCount: 0, onBranchSelected: vi.fn() });
+    const button = screen.getByRole("button", { name: /Branch selected/ });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("shows no branch button on a surface that cannot branch", () => {
+    setup();
+    expect(screen.queryByRole("button", { name: /Branch selected/ })).toBeNull();
+  });
 });

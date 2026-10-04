@@ -49,7 +49,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from scripts.build_local_basemap import GEOFABRIK_REGIONS, BasemapBuildResult, build_local_basemap
 from scripts.verify_map import verify_map
 from services.extract.writer import (
@@ -345,6 +345,7 @@ from .working_set.models import (
     ExpansionOutcome,
     LimitExceededError,
     NodeNotInWorkingSetError,
+    NothingToBranchError,
     SameNodeAssertionError,
     WorkingSetDelta,
     decode_delta,
@@ -927,6 +928,12 @@ async def _limit_exceeded_handler(request: Request, exc: LimitExceededError) -> 
     return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=exc.detail.model_dump())
 
 
+@app.exception_handler(NothingToBranchError)
+async def _nothing_to_branch_handler(request: Request, exc: NothingToBranchError) -> JSONResponse:
+    """One answer whether the chosen nodes are hidden from the caller or do not exist (ADR-084)."""
+    return JSONResponse(status_code=422, content={"error": "nothing_to_branch"})
+
+
 @app.exception_handler(AuditWriteError)
 async def _audit_write_error_handler(request: Request, exc: AuditWriteError) -> JSONResponse:
     # `03_CONDUIT_MIDDLEWARE.md` §8: "The audit stream is unavailable.
@@ -1396,12 +1403,16 @@ class InvestigationListing(BaseModel):
     created_at: datetime
     created_by: str
     branched_from: str | None = None
+    #: ADR-084: this account has closed the case's tab. A flag per account, so it says nothing about
+    #: anyone else's view of the same case.
+    tab_hidden: bool = False
 
 
 @app.get("/v1/investigations")
 async def list_investigations(
     principal: PrincipalDep, investigations: InvestigationsDep
 ) -> list[InvestigationListing]:
+    hidden = await investigations.hidden_tab_ids(principal)
     return [
         InvestigationListing(
             id=case.id,
@@ -1410,9 +1421,35 @@ async def list_investigations(
             created_at=case.created_at,
             created_by=case.created_by,
             branched_from=case.branched_from,
+            tab_hidden=case.id in hidden,
         )
         for case, level in await investigations.list_for(principal)
     ]
+
+
+class TabStateInput(BaseModel):
+    hidden: bool
+
+
+@app.put("/v1/investigations/{investigation_id}/tab", status_code=status.HTTP_204_NO_CONTENT)
+async def set_tab_state(
+    investigation: InvestigationViewerDep,
+    body: TabStateInput,
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+    audit: AuditDep,
+) -> None:
+    """Open or close this case's tab for the caller only (ADR-084). Any account that can see the
+    case may set it: it changes nothing about the case, only the caller's own strip of tabs, and
+    the dependency has already answered 404 for a case the caller cannot see."""
+    await investigations.set_tab_hidden(principal, investigation.id, body.hidden)
+    await audit.record(
+        principal=principal,
+        action="set_tab_state",
+        investigation_id=investigation.id,
+        resolved_query={"hidden": body.hidden},
+        result_cardinality=1,
+    )
 
 
 class RenameInput(BaseModel):
@@ -1600,6 +1637,15 @@ async def get_investigation(
     return investigation
 
 
+class BranchRequest(BaseModel):
+    """ADR-084. `node_ids` absent: fork the whole working set, as the cap breach's "branch" option
+    always did. Present: fork only those nodes and the links between them (an empty list is a
+    choice of nothing, and is refused). `name` is the new case's name; blank means a default."""
+
+    node_ids: list[NodeId] | None = Field(default=None, max_length=50_000)
+    name: str | None = None
+
+
 @app.post("/v1/investigations/{investigation_id}/branch", status_code=status.HTTP_201_CREATED)
 async def branch_investigation(
     investigation: InvestigationEditorDep,
@@ -1609,18 +1655,29 @@ async def branch_investigation(
     history: HistoryDep,
     audit: AuditDep,
     valkey: Annotated[Valkey, Depends(get_valkey)],
+    body: BranchRequest | None = None,
 ) -> Investigation:
     # `03_CONDUIT_MIDDLEWARE.md` §3.1: "fork the working set into a new
     # investigation" — one of the cap breach's three options, made real.
     # `AuthorizedInvestigationDep` has already checked the branching
     # principal against the *source* investigation's `owning_unit`; the
     # new investigation gets its own, from this principal, not inherited.
+    node_ids = body.node_ids if body is not None else None
+    source_name = investigation.name or DEFAULT_CASE_NAME
+    name = f"{source_name} (branch)"
+    if node_ids is not None:
+        # Asked first, and before the case exists, so that a choice with nothing visible in it
+        # (`NothingToBranchError`, a 422) leaves no empty case behind.
+        chosen, _, _ = await working_set.branch_contents(investigation.id, principal, node_ids)
+        name = f"{source_name} · {len(chosen)} selected"
+    if body is not None and body.name is not None and body.name.strip():
+        name = body.name.strip()
     new_investigation = await investigations.create(
-        principal,
-        name=f"{investigation.name or DEFAULT_CASE_NAME} (branch)",
-        branched_from=investigation.id,
+        principal, name=name, branched_from=investigation.id
     )
-    outcome = await working_set.branch(investigation.id, new_investigation.id, principal)
+    outcome = await working_set.branch(
+        investigation.id, new_investigation.id, principal, node_ids=node_ids
+    )
     await publish_delta(valkey, new_investigation.id, outcome.delta)
     await _record_history_step(
         working_set,
@@ -1634,7 +1691,10 @@ async def branch_investigation(
         principal=principal,
         action="branch",
         investigation_id=investigation.id,
-        resolved_query={"new_investigation_id": new_investigation.id},
+        resolved_query={
+            "new_investigation_id": new_investigation.id,
+            **({"node_ids": list(node_ids)} if node_ids is not None else {}),
+        },
         result_cardinality=len(outcome.delta.nodes) + len(outcome.delta.edges),
     )
     return new_investigation

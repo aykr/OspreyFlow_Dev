@@ -352,3 +352,57 @@ async def test_a_case_branched_from_a_removed_case_keeps_working(
     await store.remove(source.id, by=AUTHOR)
 
     assert (await store.get_authorized(branch.id, AUTHOR, need=AccessLevel.AUTHOR)).id == branch.id
+
+
+# --- ADR-084: which case tabs an account has closed -----------------------------------------------
+# The route tests (`test_branch_tabs_routes.py`) use a stand-in store, so they cannot show that the
+# database keeps one row per account and case, or that one account's rows are invisible to another.
+# These do, against real Postgres.
+
+
+async def test_a_new_case_has_an_open_tab(store: InvestigationStore) -> None:
+    await store.create(AUTHOR, name="Fixture Corp")
+
+    assert await store.hidden_tab_ids(AUTHOR) == set()
+
+
+async def test_hiding_a_tab_is_remembered_and_reopening_it_forgets_it(
+    store: InvestigationStore,
+) -> None:
+    case = await store.create(AUTHOR, name="Fixture Corp")
+
+    await store.set_tab_hidden(AUTHOR, case.id, True)
+    assert await store.hidden_tab_ids(AUTHOR) == {case.id}
+
+    await store.set_tab_hidden(AUTHOR, case.id, False)
+    assert await store.hidden_tab_ids(AUTHOR) == set()
+
+
+async def test_hiding_a_tab_twice_is_one_row_not_an_error(store: InvestigationStore) -> None:
+    case = await store.create(AUTHOR, name="Fixture Corp")
+
+    await store.set_tab_hidden(AUTHOR, case.id, True)
+    await store.set_tab_hidden(AUTHOR, case.id, True)
+
+    assert await store.hidden_tab_ids(AUTHOR) == {case.id}
+
+
+async def test_one_accounts_closed_tabs_are_not_another_accounts(
+    store: InvestigationStore,
+) -> None:
+    """The database, not the route, keeps the flags apart: the account is in the `WHERE`."""
+    case = await store.create(AUTHOR, name="Fixture Corp")
+
+    await store.set_tab_hidden(AUTHOR, case.id, True)
+
+    assert await store.hidden_tab_ids(COLLEAGUE) == set()
+    await store.set_tab_hidden(COLLEAGUE, case.id, False)  # Bob reopening his own (absent) flag...
+    assert await store.hidden_tab_ids(AUTHOR) == {case.id}  # ...never touches Alice's.
+
+
+async def test_a_flag_cannot_be_written_for_a_case_that_does_not_exist(
+    store: InvestigationStore,
+) -> None:
+    """The row references the case, so the database refuses a flag on an id with no case."""
+    with pytest.raises(asyncpg.ForeignKeyViolationError):
+        await store.set_tab_hidden(AUTHOR, "no-such-case", True)

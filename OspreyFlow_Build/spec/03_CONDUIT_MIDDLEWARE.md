@@ -73,7 +73,8 @@ unauthenticated one is the one an attacker gets.
 ```
 POST   /v1/investigations                      create
 GET    /v1/investigations/{id}                 metadata, not the working set
-POST   /v1/investigations/{id}/branch          fork the working set into a new investigation
+POST   /v1/investigations/{id}/branch          fork the working set (or a chosen set of its nodes) into a new investigation
+PUT    /v1/investigations/{id}/tab             open or close this case's tab, for the caller only
 GET    /v1/investigations/{id}/history         addressable step history
 POST   /v1/investigations/{id}/history/{step}  restore to a step
 ```
@@ -100,12 +101,17 @@ Author; a new case is visible to nobody else until shared; cases that existed be
 
 | Level | Routes under `/v1/investigations/{id}` |
 |---|---|
-| Viewer | `GET` the case; `expand/preview`; `resolution/threshold` (GET); `resolution/explain/{cluster}`; `compute/{metric}`; `ingest/candidates` (GET); `dossier/documents/{doc}`; `history` (GET); `judgements`, `gaps`, `assumptions` (GET); `links/{edge}/notes` (GET), `links/{edge}/history` (GET); `sites/{site}` and its `image` (GET); the delta stream |
+| Viewer | `GET` the case; `tab` (PUT: the caller's own flag, ADR-084); `expand/preview`; `resolution/threshold` (GET); `resolution/explain/{cluster}`; `compute/{metric}`; `ingest/candidates` (GET); `dossier/documents/{doc}`; `history` (GET); `judgements`, `gaps`, `assumptions` (GET); `links/{edge}/notes` (GET), `links/{edge}/history` (GET); `sites/{site}` and its `image` (GET); the delta stream |
 | Editor | `branch`; `seed`; `expand`; `nodes` (DELETE); `resolution/threshold` (PUT), `link`, `split`; `ingest/extract`, candidate `accept` and `reject`; `history/{step}` (restore); `judgements`, `gaps`, `assumptions` (POST); `links/{edge}/notes` (POST), `links/{edge}/notes/{note}` (PUT, DELETE), `links/{edge}/change` (POST); `export`; `sites` (POST), `control-points`, `grid`; `ingest/recipes/{recipe}/run` |
 | Author | `PATCH` the case (rename); `DELETE` the case (a soft remove: it then reads as not found to everyone, nothing is deleted, ADR-052 Amendment 7; the unit's `osprey-admin` may too, through the same safety net); `access` (PUT: the unit-wide level, which is none, Viewer or Editor, never Author); `access/grants/{account}` (PUT, DELETE); `access/history`. An `osprey-admin` in the case's own unit may also use these without holding a level (the safety net, audited as `access_admin_override`); that gives no other access. |
 
 `GET /v1/investigations` lists the cases the caller holds a level on (id, name, their level, created,
-created by, branched from). `GET .../access` shows anyone their own level, and shows an Author the
+created by, branched from, and whether the caller has closed the case's tab). `POST .../branch` takes
+an optional body (ADR-084): `node_ids` forks only those nodes and the links whose two ends are both
+among them, `name` names the new case. Without a body it forks the whole working set, as before. The
+copy is filtered for the branching principal like any read, and a choice with nothing left to copy
+(every id absent, hidden from the caller, or the list empty) is one `422 nothing_to_branch`, raised
+before any case is created and the same whatever the reason (rules 3 and 4). `GET .../access` shows anyone their own level, and shows an Author the
 unit-wide level and every grant. A grantee is named by the account name the identity provider knows
 them by; a mistyped name grants nothing to anyone (ADR-052 P3).
 

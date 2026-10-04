@@ -79,6 +79,7 @@ from .models import (
     LimitExceeded,
     LimitExceededError,
     NodeNotInWorkingSetError,
+    NothingToBranchError,
     PairwiseExplanation,
     SameNodeAssertionError,
     WorkingSetDelta,
@@ -617,8 +618,43 @@ class WorkingSetService:
 
         return ExpansionOutcome(delta=delta, filtered_count=filtered_count)
 
+    async def branch_contents(
+        self,
+        source_investigation_id: str,
+        principal: Principal,
+        node_ids: Sequence[NodeId] | None = None,
+    ) -> tuple[list[Node], list[Edge], int]:
+        """What a branch of `source_investigation_id` would hold for `principal`: the nodes and
+        links, and the hidden count. Without `node_ids` that is the whole working set, as before.
+        With them (ADR-084) it is the chosen nodes and only the links whose two ends are both
+        chosen. Either way it is read from the source-fidelity set and then projected for the
+        branching principal, so a node they may not see is never copied, and asking for one reads
+        exactly as asking for an id that does not exist: it is simply absent, the hidden count is 0
+        and, if nothing is left, `NothingToBranchError` is the same whatever the reason. Nothing is
+        written, so a route can call this before it creates the new case."""
+        nodes = await self._store.source_fidelity_nodes(source_investigation_id)
+        edges = await self._store.source_fidelity_edges(source_investigation_id)
+        if node_ids is None:
+            visible_nodes, visible_edges, hidden = self._project(
+                list(nodes.values()), list(edges.values()), principal
+            )
+            return visible_nodes, visible_edges, hidden
+        chosen = set(node_ids)
+        picked = [n for n in nodes.values() if n.id in chosen]
+        between = [e for e in edges.values() if e.source in chosen and e.target in chosen]
+        visible_nodes, visible_edges, _ = self._project(picked, between, principal)
+        if not visible_nodes:
+            raise NothingToBranchError
+        # The hidden count is 0 on purpose: a figure here would tell the asker how many of the
+        # ids they named exist but are hidden from them.
+        return visible_nodes, visible_edges, 0
+
     async def branch(
-        self, source_investigation_id: str, new_investigation_id: str, principal: Principal
+        self,
+        source_investigation_id: str,
+        new_investigation_id: str,
+        principal: Principal,
+        node_ids: Sequence[NodeId] | None = None,
     ) -> ExpansionOutcome:
         """`POST /investigations/{id}/branch` — one of the cap breach's
         three options made real: "fork the working set into a new
@@ -627,14 +663,13 @@ class WorkingSetService:
         source's source-fidelity set into `new_investigation_id`, filtered
         the same way any other read is — you cannot fork what you cannot
         see, and the source may hold content only a *different*,
-        more-privileged principal ever contributed. A branch is a
+        more-privileged principal ever contributed. With `node_ids` it copies only those nodes
+        and the links between them (ADR-084; `branch_contents` has the rules). A branch is a
         snapshot at the moment it forks, not a live link back to the
         source, so later expansion of either side never touches the
         other."""
-        nodes = await self._store.source_fidelity_nodes(source_investigation_id)
-        edges = await self._store.source_fidelity_edges(source_investigation_id)
-        visible_nodes, visible_edges, hidden = self._project(
-            list(nodes.values()), list(edges.values()), principal
+        visible_nodes, visible_edges, hidden = await self.branch_contents(
+            source_investigation_id, principal, node_ids
         )
         return await self._add(
             new_investigation_id, visible_nodes, visible_edges, filtered_count=hidden
