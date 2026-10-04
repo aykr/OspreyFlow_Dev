@@ -76,7 +76,11 @@ before ADR-054 split the tree; its paths are all wrong and it is dead weight (20
 | Bring the running deployment up to date | `make refresh` (theme, images, Keycloak restart, sign-in accounts) |
 | Live-service tests | `make dev-up` then the test target in the Makefile (shared containers: rule 14) |
 
-Glass is served at `localhost:8081`. The earlier cloud sessions could not run Postgres, Valkey, Docker or the
+The Glass is served at **`localhost:8080`** (`OSPREY_WORKSPACE_PORT`) and Keycloak at `localhost:8081`
+(`OSPREY_KEYCLOAK_PORT`); `make launch` opens the right door. Opening `localhost:8081` by hand lands on
+Keycloak's own `master`-realm administration console, which neither carries the OspreyFlow theme nor knows the
+demo accounts (they live in the `osprey` realm). The demo passwords are in
+`deploy/generated/local-lite/deployment.env` and `make refresh` sets them again from there. The earlier cloud sessions could not run Postgres, Valkey, Docker or the
 live specs; you can, and **the "Not seen" notes in the friction log say which things were never seen against
 the real stack** (see section 5).
 
@@ -122,7 +126,7 @@ From the friction log, the owner's live checks still to do or report:
    and `test_investigation_access_store.py` (it now holds five tab-flag tests against Postgres).
 1. The panel grip rows (ADR-085): Move up / Move down, dragging, and the order surviving a reload, on a real case.
 1. A link marked probabilistic from the change form (ADR-081 step B): the question in the form, the dotted line, the Basis row.
-2. The sign-in page at `localhost:8081`.
+2. The sign-in page (reached from the Glass at `localhost:8080`, which sends the browser to the `osprey` realm on 8081).
 3. The dotted and thick links on a real case (the dot is a fixed 3 pixels on and 4 off, which may look blocky
    at thickness 4 or 5), and `make glass-perf` with the new edge programs.
 4. Friction-log rows from earlier rounds that still say "Hash: recorded by the follow-up commit." Ask the
