@@ -353,4 +353,5 @@ export const PANEL_FRAME_ACTIONS = defineActionRegistry("PANEL_FRAME_ACTIONS", [
   "hide-and-show-the-side-panel-by-keyboard",
   "open-the-side-panel-to-the-full-width-and-return-by-keyboard",
   "hide-and-show-the-timeline-by-keyboard",
+  "move-a-side-panel-up-and-down-by-keyboard",
 ] as const);

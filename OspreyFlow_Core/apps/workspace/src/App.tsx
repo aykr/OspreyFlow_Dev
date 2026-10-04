@@ -71,6 +71,7 @@ import { openCase } from "./investigation/cases";
 import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
 import { StatusBar } from "./statusbar/StatusBar";
 import { BottomPanelFrame, SidePanelFrame } from "./layout/PanelFrames";
+import { SidePanelStack } from "./layout/SidePanelStack";
 import { Timeline } from "./timeline/Timeline";
 import { AlertInbox } from "./watches/AlertInbox";
 import { HotlistPanel } from "./watches/HotlistPanel";
@@ -1022,64 +1023,90 @@ export function App() {
         )}
         {view !== "ingest" && view !== "dossier" && view !== "watches" && (
           <SidePanelFrame name="Inspector">
-            <Inspector
-              node={selectedNode}
-              link={
-                selectedLink
-                  ? {
-                      edge: selectedLink,
-                      source: workingSetRef.current.graph.hasNode(selectedLink.source)
-                        ? workingSetRef.current.graph.getNodeAttribute(selectedLink.source, "data")
-                        : undefined,
-                      target: workingSetRef.current.graph.hasNode(selectedLink.target)
-                        ? workingSetRef.current.graph.getNodeAttribute(selectedLink.target, "data")
-                        : undefined,
-                      directed:
-                        edgeTypes.find((t) => t.name === selectedLink.type)?.directed ?? true,
-                    }
-                  : null
-              }
-              linkEditing={{
-                edgeTypes,
-                openChangeSignal: linkChangeSignal,
-                openNoteSignal: linkNoteSignal,
-                onChanged: (result) => {
-                  // The old link leaves the view and the new one arrives in one step; the Inspector
-                  // is then pointed at the new link, whose id is not the old one's.
-                  workingSetRef.current.store.getState().applyDelta(result.delta);
-                  glassCanvasRef.current?.selectLink(result.edge.id);
+            <SidePanelStack
+              panels={[
+                {
+                  id: "inspector" as const,
+                  name: "Inspector",
+                  content: (
+                    <Inspector
+                      node={selectedNode}
+                      link={
+                        selectedLink
+                          ? {
+                              edge: selectedLink,
+                              source: workingSetRef.current.graph.hasNode(selectedLink.source)
+                                ? workingSetRef.current.graph.getNodeAttribute(selectedLink.source, "data")
+                                : undefined,
+                              target: workingSetRef.current.graph.hasNode(selectedLink.target)
+                                ? workingSetRef.current.graph.getNodeAttribute(selectedLink.target, "data")
+                                : undefined,
+                              directed:
+                                edgeTypes.find((t) => t.name === selectedLink.type)?.directed ?? true,
+                            }
+                          : null
+                      }
+                      linkEditing={{
+                        edgeTypes,
+                        openChangeSignal: linkChangeSignal,
+                        openNoteSignal: linkNoteSignal,
+                        onChanged: (result) => {
+                          // The old link leaves the view and the new one arrives in one step; the Inspector
+                          // is then pointed at the new link, whose id is not the old one's.
+                          workingSetRef.current.store.getState().applyDelta(result.delta);
+                          glassCanvasRef.current?.selectLink(result.edge.id);
+                        },
+                      }}
+                      assessment={{
+                        apiBaseUrl: API_BASE_URL,
+                        bearerToken: bearerToken,
+                        investigationId,
+                        workingSetGraph: workingSetRef.current.graph,
+                        onHighlightNodes: (nodeIds) =>
+                          glassCanvasRef.current?.highlightNodes(nodeIds),
+                        onJudgementsChange: (judgements) =>
+                          setJudgementCounts(judgementCountsByNode(judgements)),
+                      }}
+                    />
+                  ),
                 },
-              }}
-              assessment={{
-                apiBaseUrl: API_BASE_URL,
-                bearerToken: bearerToken,
-                investigationId,
-                workingSetGraph: workingSetRef.current.graph,
-                onHighlightNodes: (nodeIds) =>
-                  glassCanvasRef.current?.highlightNodes(nodeIds),
-                onJudgementsChange: (judgements) =>
-                  setJudgementCounts(judgementCountsByNode(judgements)),
-              }}
+                ...(view === "graph"
+                  ? [
+                      {
+                        id: "metrics" as const,
+                        name: "Metrics",
+                        content: (
+                          <MetricsPanel
+                            apiBaseUrl={API_BASE_URL}
+                            bearerToken={bearerToken}
+                            investigationId={investigationId}
+                            graph={workingSetRef.current.graph}
+                            onFocusNode={(nodeId) =>
+                              glassCanvasRef.current?.focusOnNode(nodeId)
+                            }
+                            onCommunitiesChange={setCommunities}
+                          />
+                        ),
+                      },
+                    ]
+                  : []),
+                ...(view === "graph" && ontologySchema
+                  ? [
+                      {
+                        id: "query-builder" as const,
+                        name: "Query builder",
+                        content: (
+                          <QueryBuilderPanel
+                            apiBaseUrl={API_BASE_URL}
+                            bearerToken={bearerToken}
+                            schema={ontologySchema}
+                          />
+                        ),
+                      },
+                    ]
+                  : []),
+              ]}
             />
-            {view === "graph" && (
-              <MetricsPanel
-                apiBaseUrl={API_BASE_URL}
-                bearerToken={bearerToken}
-                investigationId={investigationId}
-                graph={workingSetRef.current.graph}
-                onFocusNode={(nodeId) =>
-                  glassCanvasRef.current?.focusOnNode(nodeId)
-                }
-                onCommunitiesChange={setCommunities}
-              />
-            )}
-            {view === "graph" && ontologySchema && (
-              <QueryBuilderPanel
-                apiBaseUrl={API_BASE_URL}
-                bearerToken={bearerToken}
-                schema={ontologySchema}
-              />
-            )}
           </SidePanelFrame>
         )}
       </div>

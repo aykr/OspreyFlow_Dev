@@ -1,6 +1,6 @@
 # OspreyFlow — Handover to a Claude Code session working directly in the repository
 
-Written 4 October 2026, for Ayan. This file supersedes `SESSION_HANDOVER.md` (18 September 2026, written for
+Written 4 October 2026, for Ayan; last corrected 4 October 2026 (ADR-085, graphify, tsc casing). This file supersedes `SESSION_HANDOVER.md` (18 September 2026, written for
 the maker–checker arrangement) as the place a new session starts. It adds to `process/CLAUDE.md`
 (rules 1 to 15, which bind) and does not repeat it. Where this file and the code disagree, the code is the
 evidence and this file is wrong; say so and fix the file.
@@ -19,7 +19,7 @@ evidence and this file is wrong; say so and fix the file.
 - **Design questions.** Ask with multiple-choice questions (at most four at a time) and then wait. Multiple
   choice is easier for him than free text. Do not build a design he has not answered.
 - **ADRs.** Never edit an existing ADR. Append an amendment or write a new ADR. The last ADR used is
-  **ADR-084**; the next free number is **085**. Check `spec/06_DECISIONS.md` before relying on that.
+  **ADR-085**; the next free number is **086**. Check `spec/06_DECISIONS.md` before relying on that.
 - **Style.** British English in code comments, documentation and all user-facing copy. Always give full,
   complete commands to run, never "add this line" fragments. Keep replies short; one or two sentences on an
   outcome, not a recap.
@@ -59,6 +59,11 @@ and a `phase` command) and the three sibling trees: `OspreyFlow_Core` (product),
 
 Run from `OspreyFlow_Core` unless stated. The Python environment is `.venv`.
 
+The knowledge graph (`graphify`) lives at the repository root, `graphify-out/` (gitignored), and is what the
+hook guard and `graphify query` read; rebuild it with `graphify update .` from the root after a change (AST only,
+no API cost). The older `OspreyFlow_Build/graphify-out/` was built on 29 September 2026 against the layout
+before ADR-054 split the tree; its paths are all wrong and it is dead weight (204 MB) to delete when you choose.
+
 | What | Command |
 | --- | --- |
 | Python tests | `PYTHONPATH=.:packages:../OspreyFlow_Build .venv/bin/python -m pytest -c ../OspreyFlow_Build/pytest.ini <paths>` |
@@ -95,6 +100,9 @@ the real stack** (see section 5).
 ### Known failures that are not caused by recent work
 
 - `ruff` E501 in `services/api/app.py` near the ADR-068 docstring.
+- `npx tsc --noEmit` fails on this Mac on `main`: `src/inspector/LinkHistory.tsx` and `src/inspector/linkHistory.ts`
+  differ only in case, and the filesystem is case-insensitive (TS1149 and a TS2305 that follows from it). The cloud
+  mirror's case-sensitive disk never saw it. The fix is a rename of one module, in its own commit.
 - `tests/harness/test_apply_env.py` (needs Docker) and `test_deployment_schema.py` (reads the uncommitted
   `osprey.yaml`).
 - The five `graph_arcadedb[gremlin]` working-set tests fail with "connection refused" unless the dev stack
@@ -109,6 +117,7 @@ From the friction log, the owner's live checks still to do or report:
 
 1. Branch tabs: the strip, the Branches menu, close and reopen, Discard with confirmation, on a real case;
    and `test_investigation_access_store.py` (it now holds five tab-flag tests against Postgres).
+1. The panel grip rows (ADR-085): Move up / Move down, dragging, and the order surviving a reload, on a real case.
 2. The sign-in page at `localhost:8081`.
 3. The dotted and thick links on a real case (the dot is a fixed 3 pixels on and 4 off, which may look blocky
    at thickness 4 or 5), and `make glass-perf` with the new edge programs.
@@ -117,16 +126,13 @@ From the friction log, the owner's live checks still to do or report:
 
 ## 6. Open work, in the order the owner raised it
 
-### 6.1 Panel drag and reorder (not scoped)
+### 6.1 Panel drag and reorder (built 4 October 2026, ADR-085; owner's live check to do)
 
-The owner has panel re-framing (resize and collapse) working and now wants to **drag panels and reorder
-them**. Nothing is designed. Ask first (multiple choice): where a dragged panel may go (reorder within its
-dock only, move between docks, or float), whether the arrangement is remembered and per analyst or per case,
-and what the keyboard route is (rule 13 needs a keyboard case and a registry id, so drag cannot be
-mouse-only). Then write an ADR (085) before building. Facts from the Glass that bear on it: there are no
-global Zustand singletons; `App.tsx` creates the one working set, the one cross-filter store and the one
-delta WebSocket; labels, icons and theme are localStorage singletons; panel state belongs with the design
-primitives (`src/design/`).
+Decided by the owner's four answers and built: the Inspector, Metrics and Query builder can be reordered within the
+right-hand column by Move up / Move down buttons or by dragging a grip handle; the order is kept per analyst in
+localStorage (`ospreyflow.side-panel-order`); the timeline does not move and nothing floats; ADR-082's width handle
+stays open. Code: `src/layout/panelOrder.ts`, `src/layout/SidePanelStack.tsx`, `App.tsx`; keyboard case in
+`keyboard/panel-frames.spec.ts`. **Not seen** on the real Glass: the grip rows above the three panels.
 
 ### 6.2 ADR-081 steps B, C and D (each its own commit; the owner has not said go)
 

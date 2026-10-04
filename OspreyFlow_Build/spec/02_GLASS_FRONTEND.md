@@ -222,6 +222,15 @@ analyst typed or brushed. The choice belongs to the browser tab: it is not store
 opens in its normal state on reload. Every one of these buttons is reachable by keyboard
 (`keyboard/panel-frames.spec.ts`).
 
+**Reordering panels (ADR-085).** The three panels of the right-hand column (the Inspector, the Metrics
+panel and the Query builder) can be put in any order. Each has a slim grip row with a drag handle and two
+buttons, *Move up* and *Move down*; dragging the handle onto another panel's place does the same as the
+buttons. The top panel's *Move up* and the bottom panel's *Move down* are shown as unavailable but keep
+focus. The order is kept in this browser for this analyst (localStorage, as the theme is), is never sent to
+the server and is not part of the case; a panel the current view does not draw keeps its place for when it
+returns, and a stored order can never lose or duplicate a panel. The timeline is not part of the set and
+nothing floats. The buttons are reachable by keyboard (`keyboard/panel-frames.spec.ts`).
+
 ### 2.0 The top bar (ADR-065)
 
 One line at ordinary widths; whole items wrap to a second line in a narrow window, and a label is

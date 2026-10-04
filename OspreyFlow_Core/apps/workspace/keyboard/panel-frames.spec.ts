@@ -21,13 +21,13 @@ async function press(page: Page, name: string | RegExp) {
 test("Hide leaves a strip with the contents kept, and Show brings the panel back", async ({ page }) => {
   await page.goto(URL);
   expect(await widthOf(page, "[data-panel-mode]")).toBeCloseTo(320, -1); // 320 and a 1px border
-  await page.getByLabel("Query").fill("person where family_name = Volkov");
+  await page.getByLabel("Query", { exact: true }).fill("person where family_name = Volkov");
   await press(page, "Hide the inspector");
   await expect(panel(page)).toHaveAttribute("data-panel-mode", "collapsed");
   expect(await widthOf(page, "[data-panel-mode]")).toBeLessThan(60);
   await press(page, "Show the inspector");
   await expect(panel(page)).toHaveAttribute("data-panel-mode", "normal");
-  await expect(page.getByLabel("Query")).toHaveValue("person where family_name = Volkov");
+  await expect(page.getByLabel("Query", { exact: true })).toHaveValue("person where family_name = Volkov");
   registerCovered(REGISTRY, "hide-and-show-the-side-panel-by-keyboard");
 });
 
@@ -54,6 +54,28 @@ test("Hide the timeline gives its height back, and Show restores it", async ({ p
   await press(page, "Show the timeline");
   await expect.poll(async () => Math.round((await page.locator("#work-area").boundingBox())!.height)).toBe(Math.round(before));
   registerCovered(REGISTRY, "hide-and-show-the-timeline-by-keyboard");
+});
+
+const slotOrder = (page: Page) =>
+  page.locator("[data-panel-slot]").evaluateAll((els) => els.map((el) => el.getAttribute("data-panel-slot")));
+
+test("Move up and Move down reorder the panels with Enter alone, and the order survives a reload", async ({ page }) => {
+  await page.goto(URL);
+  expect(await slotOrder(page)).toEqual(["inspector", "metrics", "query-builder"]);
+  await press(page, "Move the metrics up");
+  expect(await slotOrder(page)).toEqual(["metrics", "inspector", "query-builder"]);
+  // Now at the top: the same button is unavailable, does nothing, and still has focus (ADR-085).
+  const up = page.getByRole("button", { name: "Move the metrics up" });
+  await expect(up).toHaveAttribute("aria-disabled", "true");
+  await expect(up).toBeFocused();
+  await page.keyboard.press("Enter");
+  expect(await slotOrder(page)).toEqual(["metrics", "inspector", "query-builder"]);
+  await expect(up).toBeFocused();
+  await press(page, "Move the query builder up");
+  expect(await slotOrder(page)).toEqual(["metrics", "query-builder", "inspector"]);
+  await page.reload();
+  expect(await slotOrder(page)).toEqual(["metrics", "query-builder", "inspector"]);
+  registerCovered(REGISTRY, "move-a-side-panel-up-and-down-by-keyboard");
 });
 
 test("every registered panel-frame action has its own proving test case above", () => {
