@@ -56,6 +56,42 @@ test's `TIME_WAIT`. Do not exclude `ports` from the comparison.
 | `make -k ci` | **20/20 targets ran and passed**, 2 m 21 s |
 | `make test-all` (Floor B) | **326 passed, 0 skipped, 0 failed**; all five token-exchange tests PASSED |
 
+**Status on 4 October 2026, a week after the milestone (added at the owner's request; the
+closing-pass record above is unchanged).** No plan stage has opened or closed since 28 September:
+Phases 0 to 8 stay closed against their exit criteria and Phase 8a stays unstarted. The week's work,
+about one hundred commits, falls into four groups, each with its ADR, its red-first tests and its
+friction-log row:
+
+- **The tree.** ADR-054 split the repository into `OspreyFlow_Core`, `OspreyFlow_Build` and
+  `OspreyFlow_Data` (29 September, steps 1 to 6). The remote moved to the owner's private
+  repository on 4 October. The knowledge graph was rebuilt at the repository root the same day,
+  since the old one carried the pre-split paths.
+- **Starting and signing in.** ADR-049 to ADR-051 and their amendments: the launcher, the realm's
+  demo accounts, `make refresh`, and the sign-in page carrying the brand lockup (ADR-051 Amendment 5,
+  `e1a7572`; not yet seen live).
+- **Data at scale.** ADR-055 to ADR-058: PaySim and Enron as internal demo datasets, a vault per
+  dataset, the bulk edge loader with the PaySim twin and vault comparison, the lookup-cost probe,
+  and the stray-edge-record hunt (seven repairs on 30 September and 1 October, each one recorded).
+- **The Glass, from the owner's own testing.** ADR-059 to ADR-085, thirty rounds between 2 and
+  4 October: search suggestions and filters, five layouts plus tree and bubbles, link selection and
+  the link menu, communities, declutter, one light and dark choice, labels and icons by type, link
+  change with history and notes, relationship basis and style (ADR-081 steps A and B), panel hiding,
+  branch tabs (ADR-084, stage 1), and panel reorder (ADR-085).
+
+**Two platform findings, 4 October, from running the Glass checks on the owner's Mac for the first
+time.** A module pair differing only in case (`LinkHistory.tsx` and `linkHistory.ts`) failed `tsc` and
+six unit cases on a case-insensitive disk; fixed by a rename, with `tools/case_collision_check.py`
+and its test so Linux CI fails the same way. And `keyboard/link-change.spec.ts` pressed ArrowDown on a
+closed `<select>`, which opens the menu on macOS rather than moving the choice, so those ADR-080
+cases had never passed on the owner's machine; the spec now types a letter. Other specs built in the
+cloud mirror may hide the same platform difference until they are run here.
+
+**Open, in the order the owner raised it** (`process/FDE_HANDOVER.md` §6 is the working list): the
+owner's live checks of the branch tabs, the dotted and thick links with `make glass-perf`, the sign-in
+page, the panel grip rows and a link marked probabilistic; ADR-081 steps C and D and stage 2 of branch
+tabs, each awaiting the owner's go; the items "Remains after the milestone" lists below, none of which
+has moved; and the friction rows still awaiting a hash.
+
 **Remains after the milestone, from this pass** (in addition to the list further down):
 - the harness-image test's ordering sensitivity (R11, next round);
 - GitHub Actions has never completed a run on this repository (round 13cg), and `release.yml`'s
@@ -521,7 +557,7 @@ this table exists to stop.
 classes, tester/alpha/beta material, and Trigger B's own downstream distribution questions. Not a
 build step, a stage, or a precondition of anything above; a different question, answered there.
 
-**Last updated:** 28 September 2026 (closing pass 13ce — the milestone line at the top; the sections below it keep their own dates).
+**Last updated:** 4 October 2026 (the week-after paragraph; the milestone line is from closing pass 13ce, 28 September 2026, and the sections below keep their own dates).
 
 ---
 
