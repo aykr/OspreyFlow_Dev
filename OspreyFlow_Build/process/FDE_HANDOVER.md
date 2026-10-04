@@ -170,8 +170,8 @@ Amendment 1 — read both before touching anything).
   Probabilistic type is always probabilistic; a person never promotes a link to Direct. The Glass draws by
   the link's own basis. The ADR-080 change form asks for the basis each time, with no default, and offers
   Direct only where the type allows it. Confirming a `SAME_AS` link leaves it probabilistic.
-- **C, analyst proposals and promotion — designed 4 October 2026 as ADR-090 (owner's eight answers), not built;
-  read ADR-090 before building, it widens ADR-081 decision 5 and settles the promotion screen (the Glass).** An Editor proposes a type from the change form (name, the entity
+- **C, analyst proposals and promotion — designed 4 October 2026 as ADR-090 and its Amendment 1, not built;
+  read ADR-090 and its Amendment 1 before building; ADR-090 widens ADR-081 decision 5 and settles the promotion screen (the Glass).** An Editor proposes a type from the change form (name, the entity
   types at each end, directed or not, basis, colour, thickness). It works at once in that case only, is
   labelled analyst-defined, is kept in the control-plane store, never in the shared ontology or the graph,
   is audited with a reason, and is always probabilistic until an administrator reclassifies it. An
