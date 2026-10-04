@@ -67,6 +67,7 @@ import {
   computeNodeFrameAttributes,
   nodeLabel,
   computeNodeGraphAttributes,
+  SELECTED_SCALE,
   declaredFor,
   edgeProgramFor,
 } from "./nodeAttributes";
@@ -157,6 +158,16 @@ const NODE_PROGRAM = createNodeCompoundProgram<
       {
         color: { attribute: "borderColor" },
         size: { attribute: "borderSize", defaultValue: 0, mode: "pixels" },
+      },
+      // A selected node's own rings (owner, 4 October 2026: selection was not seen): a brass ring
+      // and a dark gap, shares of the node's radius, on a node the reducer draws larger.
+      {
+        color: { attribute: "selectionRingColor" },
+        size: { attribute: "selectionRingSize", defaultValue: 0, mode: "relative" },
+      },
+      {
+        color: { attribute: "selectionGapColor" },
+        size: { attribute: "selectionGapSize", defaultValue: 0, mode: "relative" },
       },
     ],
   }),
@@ -1049,10 +1060,14 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       graph.forEachNode((key) => {
         const wasSelected = selected.has(key);
         const isHovered = hovered === key;
+        // A node drawn as selected or ringed a moment ago is refreshed too, or it keeps its rings
+        // after leaving the selection (the selection's rings are their own attributes, not
+        // `borderSize`, since the owner could not see the old 2-pixel ring).
         if (
           wasSelected ||
           isHovered ||
-          graph.getNodeAttribute(key, "borderSize")
+          graph.getNodeAttribute(key, "borderSize") ||
+          graph.getNodeAttribute(key, "selected")
         ) {
           refreshNodeVisualState(key);
         }
@@ -1125,6 +1140,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             ...data,
             ...frame,
             ...(data.emphasised === true ? { forceLabel: true } : {}),
+            ...(data.selected === true ? { size: frame.size * SELECTED_SCALE } : {}),
             type: "glass-node",
           };
           const folded = foldedViewRef.current;

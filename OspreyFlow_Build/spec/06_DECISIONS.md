@@ -9696,3 +9696,17 @@ Seen by the owner on the live Enron case: *Show emails* put nothing on the canva
 Cause. Every test of those writes used a graph stand-in that kept whatever it was given: the third stand-in this week that accepted what the real dependency refuses (`CLAUDE.md` rule 15, after ADR-089 Amendment 1's lookup and ADR-084 Amendment 2's case filter).
 
 Decision. `Document` declares `sent_at` (datetime), `message_id` (string) and `event_id` (string), all optional; the ontology version stays 11 for the reason ADR-079 gives (nothing a recipe writes, an index or an adapter reads changes for an existing load). An email without a message id is written without the property, never with a null the `string` type refuses. The stand-in now calls the adapter's own `validate_properties` on every node and link, so the two cannot disagree again. Tests: with the corrected stand-in, nine extraction and Show-emails cases failed with the owner's message before the ontology change and pass after; `test_an_email_without_a_message_id_is_written_without_one`. The API must restart to apply the schema (`make refresh`).
+
+## ADR-093 — A selected node is seen: drawn larger with a bold ring, listed in the Inspector, and counted on the canvas
+
+Status: accepted 4 October 2026 (owner's choices, put as two multiple-choice questions after the owner said "the nodes do not get highlighted when I select them" and asked for the selection to be easier to navigate).
+
+Context. Spec 02 §4 gave a selected node a "2px brass stroke, 1px surface gap". The code drew the 2 pixels and no gap, and the `@sigma/node-border` ring is drawn inside the node's disc, on nodes a few pixels across, so in the browser a selected node looked like any other: a screenshot of the keyboard harness with `n0` selected shows no brass at all. Nothing said "selected" anywhere else on screen except the strip's *Branch selected (n)*.
+
+Decision.
+
+1. **A selected node is drawn 1.6 times its size, with a brass ring (24% of its radius) and a surface-coloured gap (8%) inside it**, two border layers of its own (`selectionRing*`, `selectionGap*`), so the picture in the middle stays about its ordinary size; it is always named. Hover and a found path keep the interaction ring. Fill colour is never changed by selection (hue is entity type only).
+2. **The Inspector lists the selection** when more than one node is selected: each by name; choosing one centres the canvas on it; each has a remove (×) that takes it out of the selection.
+3. **A chip in the canvas corner says "n selected" with *Clear***, shown while anything is selected.
+
+Consequences. Step 1 (this commit): `nodeAttributes.ts`, the two layers and the scale in `GlassCanvas.tsx`, `workingset/store.ts`'s attribute types; spec 02 §4's table. Found while proving it: the effect that redraws nodes whose selection or hover changed chose them by `borderSize`, so once selection had rings of its own a deselected node kept its rings; it now also redraws a node marked `selected`. Tests that would fail, shown red first: `nodeAttributes.test.ts` (the rings and their absence), and `keyboard/selection-look.spec.ts`, which counts brass pixels painted round a node (red at 0 with the ring shrunk to the old faint width, and red at 42 after deselecting before the redraw fix). Steps 2 and 3 follow with keyboard cases (rule 13).

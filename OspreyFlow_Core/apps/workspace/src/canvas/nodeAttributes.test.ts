@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { activePalette } from "../color/palette";
 import { makeEdge, makeNode } from "../testing/fixtures";
 import {
   computeClusterGraphAttributes,
@@ -58,7 +59,8 @@ describe("computeNodeGraphAttributes", () => {
     // border ring changes (spec/design/tokens.css: hue is entity type
     // only, never a state or metric).
     expect(selected.color).toBe(asserted.color);
-    expect(selected.borderColor).not.toBe(asserted.borderColor);
+    // Selection's ring is a layer of its own (`selectionRing*`), not the interaction ring.
+    expect(selected.selectionRingColor).not.toBe(asserted.selectionRingColor);
   });
 
   it("dimmed mixes 32% channel toward the panel surface", () => {
@@ -109,6 +111,24 @@ describe("computeNodeGraphAttributes", () => {
     expect(decodeSvg(attrs.image)).toContain("stroke-dasharray");
   });
 
+  // The owner, 4 October 2026: "the nodes do not get highlighted when I select them". The brass
+  // ring was 2 pixels drawn inside a node a few pixels wide, so it was not seen. A selected node now
+  // has a ring and a dark gap of its own, sized by the node's radius, and is drawn larger.
+  it("a selected node has a brass ring and a dark gap, sized by its radius; others have none", () => {
+    const selected = computeNodeGraphAttributes(makeNode("n1"), PERSON_VISUAL, baseState({ selected: true }));
+    expect(selected.selectionRingColor).toBe(activePalette().brass);
+    expect(selected.selectionRingSize).toBeGreaterThanOrEqual(0.2);
+    expect(selected.selectionGapColor).toBe(activePalette().surfaceApp);
+    expect(selected.selectionGapSize).toBeGreaterThan(0);
+    expect(selected.selected).toBe(true);
+    expect(selected.emphasised).toBe(true);
+
+    const plain = computeNodeGraphAttributes(makeNode("n1"), PERSON_VISUAL, baseState());
+    expect(plain.selectionRingSize).toBe(0);
+    expect(plain.selectionGapSize).toBe(0);
+    expect(plain.selected).toBe(false);
+  });
+
   it("on-path takes priority over selected, which takes priority over hover", () => {
     const onPath = computeNodeGraphAttributes(
       makeNode("n1"),
@@ -117,12 +137,13 @@ describe("computeNodeGraphAttributes", () => {
     );
     expect(onPath.borderSize).toBe(2);
 
+    // Selection has rings of its own now (below); the interaction ring is hover's.
     const selected = computeNodeGraphAttributes(
       makeNode("n1"),
       PERSON_VISUAL,
       baseState({ selected: true, hovered: true }),
     );
-    expect(selected.borderSize).toBe(2);
+    expect(selected.borderSize).toBe(1.5);
 
     const hovered = computeNodeGraphAttributes(
       makeNode("n1"),

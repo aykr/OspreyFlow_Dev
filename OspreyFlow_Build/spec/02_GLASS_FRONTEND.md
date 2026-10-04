@@ -680,7 +680,7 @@ Node state vocabulary, implemented once in the Sigma node program:
 | --- | --- |
 | Default | channel fill, 1px subtle stroke |
 | Hovered | 1.5px primary stroke |
-| Selected | 2px brass stroke, 1px surface gap |
+| Selected | Drawn 1.6 times its size, with a brass ring (24% of its radius) and a surface gap (8%) inside it, and always named (ADR-093) |
 | On path | 2px primary stroke, incident edges thickened |
 | Dimmed | 32% channel toward panel |
 | Filtered out | 12% channel, label dropped |

@@ -27,7 +27,6 @@
 import type { Edge, Node } from "../../../../packages/schemas/generated";
 import { cachedNodeSvgDataUri, type StrokeStyle } from "../color/nodeVisual";
 import { mixOklab } from "../color/oklab";
-import { BRASS_HEX } from "../color/tokens";
 import { activePalette } from "../color/palette";
 import type { EntityVisual } from "../ontology/schema";
 import { resolveNodeIcon } from "./iconChoices";
@@ -128,7 +127,19 @@ export interface NodeGraphAttributes {
   borderSize: number;
   /** Selected, under the pointer or on a found path: the canvas names it at any zoom. */
   emphasised: boolean;
+  /** Selected (owner, 4 October 2026): drawn larger, with a brass ring and a dark gap inside it,
+   * each a share of the node's radius, so the selection shows on a node a few pixels wide. */
+  selected: boolean;
+  selectionRingColor: string;
+  selectionRingSize: number;
+  selectionGapColor: string;
+  selectionGapSize: number;
 }
+
+/** How much larger a selected node is drawn, and its two rings as shares of its radius. */
+export const SELECTED_SCALE = 1.6;
+const SELECTION_RING = 0.24;
+const SELECTION_GAP = 0.08;
 
 function provenanceStroke(
   node: Node,
@@ -170,13 +181,12 @@ export function computeNodeGraphAttributes(
   // Interaction-state ring — `@sigma/node-border`'s own layer, never
   // baked into `image`: on-path first (path highlighting takes priority
   // over a merely-hovered node on that path), then selected, then hover.
+  // Selection has rings of its own (below), so the interaction ring is the path's or hover's.
   const { borderColor, borderSize } = state.onPath
     ? { borderColor: palette.textPrimary, borderSize: 2 }
-    : state.selected
-      ? { borderColor: BRASS_HEX, borderSize: 2 }
-      : state.hovered
-        ? { borderColor: palette.textPrimary, borderSize: 1.5 }
-        : { borderColor: "transparent", borderSize: 0 };
+    : state.hovered
+      ? { borderColor: palette.textPrimary, borderSize: 1.5 }
+      : { borderColor: "transparent", borderSize: 0 };
 
   return {
     image,
@@ -184,6 +194,11 @@ export function computeNodeGraphAttributes(
     borderColor,
     borderSize,
     emphasised: state.selected || state.hovered || state.onPath,
+    selected: state.selected,
+    selectionRingColor: state.selected ? palette.brass : "transparent",
+    selectionRingSize: state.selected ? SELECTION_RING : 0,
+    selectionGapColor: state.selected ? palette.surfaceApp : "transparent",
+    selectionGapSize: state.selected ? SELECTION_GAP : 0,
   };
 }
 

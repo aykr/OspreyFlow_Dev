@@ -55,6 +55,13 @@ export type WorkingSetNodeAttributes = {
    * the other. */
   clusterBorderColor?: string;
   clusterBorderSize?: number;
+  /** Selected: drawn larger, with a brass ring and a dark gap of its own (sizes relative to the
+   * node's radius), `canvas/nodeAttributes.ts`. */
+  selected?: boolean;
+  selectionRingColor?: string;
+  selectionRingSize?: number;
+  selectionGapColor?: string;
+  selectionGapSize?: number;
 };
 export type WorkingSetEdgeAttributes = {
   data: Edge;
