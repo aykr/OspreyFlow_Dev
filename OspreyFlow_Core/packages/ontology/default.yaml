@@ -81,6 +81,13 @@
 # puts inside its shape. The version does not move: nothing a recipe writes, an index or an
 # adapter reads has changed, and moving it would flag every published recipe as stale for a
 # change that only affects how a node looks. The names are a closed list in `ontology.schema.json`.
+# ADR-081 (no version change): every relationship type declares its `basis`, `direct` or
+# `probabilistic`, and may carry a `colour` (one of the nine data-channel names) and a `thickness`
+# (1 to 5). All the types below are `direct`; the loader injects `SAME_AS` as `probabilistic` and
+# `NOT_SAME_AS` with none. The version does not move, for the reason ADR-079 gives: nothing a recipe
+# writes, an index or an adapter reads has changed in this step, and moving it would flag every
+# published recipe as stale. (The Ingest Studio's refusal of a Probabilistic type, build step D,
+# is a recipe rule and may revisit that.)
 version: 11
 entity_types:
   - name: Person
@@ -174,25 +181,28 @@ edge_types:
     from: [Endpoint]
     to: [Endpoint]
     directed: true
+    basis: direct
     temporal: true
     properties:
       - {name: duration_s, type: float}
       - {name: direction, type: enum, values: [inbound, outbound]}
-  - {name: USES,              from: [Person], to: [Endpoint, Device], directed: true}
-  - {name: PRESENT_AT,        from: [Person, Device, Vehicle], to: [Location], directed: true, temporal: true}
-  - {name: MENTIONED_IN,      from: ["*"], to: [Document], directed: true}
-  - {name: ASSOCIATE_OF,      from: [Person], to: [Person], directed: false}
+  - {name: USES,              from: [Person], to: [Endpoint, Device], directed: true, basis: direct}
+  - {name: PRESENT_AT,        from: [Person, Device, Vehicle], to: [Location], directed: true, temporal: true, basis: direct}
+  - {name: MENTIONED_IN,      from: ["*"], to: [Document], directed: true, basis: direct}
+  - {name: ASSOCIATE_OF,      from: [Person], to: [Person], directed: false, basis: direct}
   - name: FAMILY_OF
     from: [Person]
     to: [Person]
     directed: false
+    basis: direct
     properties:
       - {name: relation, type: string}
-  - {name: MEMBER_OF,         from: [Person], to: [Organisation], directed: true}
+  - {name: MEMBER_OF,         from: [Person], to: [Organisation], directed: true, basis: direct}
   - name: TRANSACTED
     from: [Asset, Endpoint]
     to: [Asset, Endpoint]
     directed: true
+    basis: direct
     temporal: true
     properties:
       - {name: amount, type: float}
@@ -201,4 +211,4 @@ edge_types:
   # reaches the same Device via SAME_AS to its IMSI Endpoint first, never
   # directly (06_DECISIONS.md ADR-023). `from`/`to` check entity type, not
   # `endpoint_kind`, so this is not schema-enforced.
-  - {name: PAIRED_WITH,       from: [Endpoint], to: [Device], directed: true, temporal: true}
+  - {name: PAIRED_WITH,       from: [Endpoint], to: [Device], directed: true, temporal: true, basis: direct}

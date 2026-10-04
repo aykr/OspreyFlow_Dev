@@ -226,6 +226,10 @@ export interface EdgeRenderContext {
   touchesHoveredNode?: boolean;
   /** How many links are in the view. A crowded view draws them thinner; omitted, full width. */
   viewEdgeCount?: number;
+  /** What this link's type declares about how it is drawn (ADR-081): a colour, one of the nine
+   * data-channel names, and a thickness from 1 to 5. Omitted or empty, the ordinary colour and the
+   * weight-only width apply. A name that is not a channel is ignored rather than drawn. */
+  declared?: { colour?: string | null; thickness?: number | null };
 }
 
 export interface ResolvedEdgeAttributes {
@@ -264,10 +268,11 @@ export function computeEdgeAttributes(
   }
 
   const crowd = crowdingScale(context.viewEdgeCount);
+  const colour = declaredColour(context.declared?.colour, palette);
   if (band === "overview") {
     return {
       size: Math.max(0.5, crowd),
-      color: palette.borderStrong,
+      color: colour,
       label:
         context.touchesHoveredNode && !belowStrengthFilter
           ? `${edge.type} (${edge.occurrences ?? 1})`
@@ -275,10 +280,17 @@ export function computeEdgeAttributes(
       hidden: belowStrengthFilter,
     };
   }
-  const size = Math.max(0.5, Math.max(1, Math.min(4, weight * 2)) * crowd);
+  const thickness = context.declared?.thickness;
+  // A declared thickness is the base and the weight scales it, between half and one and a half
+  // times (ADR-081, Amendment 1); with none declared, today's weight-only width stands.
+  const base =
+    typeof thickness === "number" && thickness >= 1 && thickness <= 5
+      ? thickness * Math.min(1.5, Math.max(0.5, weight))
+      : Math.max(1, Math.min(4, weight * 2));
+  const size = Math.max(0.5, base * crowd);
   return {
     size,
-    color: palette.borderStrong,
+    color: colour,
     label:
       band === "link-detail" || context.touchesHoveredNode
         ? `${edge.type} (${edge.occurrences ?? 1})`
@@ -287,15 +299,66 @@ export function computeEdgeAttributes(
   };
 }
 
-/** Which Sigma edge program draws this edge type: an arrowhead only where the ontology says the
- * relationship has a direction (`EdgeTypeDef.directed`), a plain line otherwise. A symmetric type
- * such as `SAME_AS` must not look as if it points one way, and a type the ontology does not know
- * claims no direction. */
+/** The line colour a type declares, as a hex for the current theme. Only the nine data-channel
+ * names are accepted (the closed list in `design/tokens.css`); anything else, or nothing, is the
+ * ordinary border colour, so no colour outside the tokens can reach the canvas. */
+function declaredColour(name: string | null | undefined, palette: ReturnType<typeof activePalette>): string {
+  if (typeof name === "string" && DATA_CHANNEL_NAMES.has(name)) return palette.channel(name);
+  return palette.borderStrong;
+}
+
+const DATA_CHANNEL_NAMES: ReadonlySet<string> = new Set([
+  "ochre",
+  "rose",
+  "plum",
+  "violet",
+  "indigo",
+  "azure",
+  "cyan",
+  "jade",
+  "moss",
+]);
+
+/** The parts of an ontology relationship type that decide how a link of it is drawn. */
+export interface EdgeTypeStyle {
+  name: string;
+  directed?: boolean;
+  basis?: "direct" | "probabilistic" | null;
+  colour?: string | null;
+  thickness?: number | null;
+}
+
+/** What a link's type declares about colour and thickness, for `computeEdgeAttributes`. */
+export function declaredFor(
+  edgeType: string,
+  edgeTypes: readonly EdgeTypeStyle[],
+): { colour?: string | null; thickness?: number | null } {
+  const def = edgeTypes.find((t) => t.name === edgeType);
+  return { colour: def?.colour ?? null, thickness: def?.thickness ?? null };
+}
+
+/** The names the Glass registers its edge programs under (`GlassCanvas`). */
+export type EdgeProgramName =
+  | "glass-edge"
+  | "glass-arrow"
+  | "glass-edge-thick"
+  | "glass-edge-dotted"
+  | "glass-arrow-dotted";
+
+/** Which Sigma edge program draws this edge type. An arrowhead only where the ontology says the
+ * relationship has a direction (`EdgeTypeDef.directed`): a symmetric type such as `SAME_AS` must
+ * not look as if it points one way, and a type the ontology does not know claims no direction.
+ * The line style follows the type's basis and is never authored (ADR-081): Probabilistic is always
+ * dotted, Direct is always solid, and a type with no basis (`NOT_SAME_AS`, or one the ontology does
+ * not know) is drawn as it always was. A solid undirected type that declares a thickness uses the
+ * program that honours width, since the plain line program is one pixel wide whatever its size. */
 export function edgeProgramFor(
   edgeType: string,
-  edgeTypes: readonly { name: string; directed?: boolean }[],
-): "glass-arrow" | "glass-edge" {
-  return edgeTypes.find((t) => t.name === edgeType)?.directed === true
-    ? "glass-arrow"
-    : "glass-edge";
+  edgeTypes: readonly EdgeTypeStyle[],
+): EdgeProgramName {
+  const def = edgeTypes.find((t) => t.name === edgeType);
+  const directed = def?.directed === true;
+  if (def?.basis === "probabilistic") return directed ? "glass-arrow-dotted" : "glass-edge-dotted";
+  if (directed) return "glass-arrow";
+  return typeof def?.thickness === "number" ? "glass-edge-thick" : "glass-edge";
 }

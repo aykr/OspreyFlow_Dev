@@ -27,6 +27,9 @@ export type To = string[];
 export type Directed = boolean;
 export type Temporal = boolean;
 export type System = boolean;
+export type Basis = ("direct" | "probabilistic") | null;
+export type Colour = string | null;
+export type Thickness = number | null;
 export type Properties1 = PropertyDef[];
 export type EdgeTypes = EdgeTypeDef[];
 
@@ -78,6 +81,9 @@ export interface EdgeTypeDef {
   directed?: Directed;
   temporal?: Temporal;
   system?: System;
+  basis?: Basis;
+  colour?: Colour;
+  thickness?: Thickness;
   properties?: Properties1;
   [k: string]: unknown;
 }

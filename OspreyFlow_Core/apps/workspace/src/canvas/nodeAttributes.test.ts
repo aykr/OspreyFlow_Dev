@@ -308,6 +308,106 @@ describe("edgeProgramFor", () => {
   });
 });
 
+// ADR-081: the line style follows the type's basis and is never authored. A Direct link is solid, a
+// Probabilistic one is dotted, whatever colour or thickness its type declares.
+describe("edgeProgramFor and the basis of a type (ADR-081)", () => {
+  const types = [
+    { name: "OWNS", directed: true, basis: "direct" as const },
+    { name: "KNOWS", directed: false, basis: "direct" as const },
+    { name: "LIKELY_OWNS", directed: true, basis: "probabilistic" as const },
+    { name: "SAME_AS", directed: false, basis: "probabilistic" as const },
+    { name: "NOT_SAME_AS", directed: false, basis: null },
+    { name: "THICK", directed: false, basis: "direct" as const, thickness: 3 },
+    { name: "THICK_DOTTED", directed: false, basis: "probabilistic" as const, thickness: 3, colour: "jade" },
+  ];
+
+  it("draws a probabilistic type dotted, with an arrowhead only where it is directed", () => {
+    expect(edgeProgramFor("SAME_AS", types)).toBe("glass-edge-dotted");
+    expect(edgeProgramFor("LIKELY_OWNS", types)).toBe("glass-arrow-dotted");
+  });
+
+  it("draws a direct type solid, never dotted", () => {
+    expect(edgeProgramFor("OWNS", types)).toBe("glass-arrow");
+    expect(edgeProgramFor("KNOWS", types)).toBe("glass-edge");
+  });
+
+  it("draws a type with no basis (NOT_SAME_AS) as it always was", () => {
+    expect(edgeProgramFor("NOT_SAME_AS", types)).toBe("glass-edge");
+  });
+
+  it("uses a program that honours width for a solid type that declares a thickness", () => {
+    expect(edgeProgramFor("THICK", types)).toBe("glass-edge-thick");
+  });
+
+  it("is dotted whatever colour and thickness a probabilistic type declares", () => {
+    expect(edgeProgramFor("THICK_DOTTED", types)).toBe("glass-edge-dotted");
+  });
+});
+
+// ADR-081, Amendment 1: a declared colour is one of the nine channel names; a declared thickness is
+// the base width and the link's weight scales it, between half and one and a half times.
+describe("computeEdgeAttributes with a declaration (ADR-081)", () => {
+  const ctx = { cameraRatio: 1, strengthFilterFloor: 0, onPath: false };
+
+  it("keeps today's colour and weight-based width when the type declares nothing", () => {
+    const edge = makeEdge("e1", "a", "b", { weight: 1 });
+    const plain = computeEdgeAttributes(edge, ctx);
+    const none = computeEdgeAttributes(edge, { ...ctx, declared: {} });
+    expect(none).toEqual(plain);
+  });
+
+  it("draws in the declared channel colour", () => {
+    const edge = makeEdge("e1", "a", "b");
+    const drawn = computeEdgeAttributes(edge, { ...ctx, declared: { colour: "jade" } });
+    expect(drawn.color.toLowerCase()).toBe("#72b99a");
+    expect(drawn.color).not.toBe(computeEdgeAttributes(edge, ctx).color);
+  });
+
+  it("falls back to the ordinary colour for a name that is not a channel", () => {
+    const edge = makeEdge("e1", "a", "b");
+    const drawn = computeEdgeAttributes(edge, { ...ctx, declared: { colour: "chartreuse" } });
+    expect(drawn.color).toBe(computeEdgeAttributes(edge, ctx).color);
+  });
+
+  it("draws the declared thickness at the default weight", () => {
+    for (const thickness of [1, 2, 3, 4, 5]) {
+      const edge = makeEdge("e1", "a", "b", { weight: 1 });
+      expect(computeEdgeAttributes(edge, { ...ctx, declared: { thickness } }).size).toBe(thickness);
+    }
+  });
+
+  it("lets the weight scale the declared thickness, between half and one and a half times", () => {
+    const at = (weight: number) =>
+      computeEdgeAttributes(makeEdge("e1", "a", "b", { weight }), {
+        ...ctx,
+        declared: { thickness: 3 },
+      }).size;
+    expect(at(0.5)).toBe(1.5);
+    expect(at(1.5)).toBe(4.5);
+    expect(at(1.5)).toBeGreaterThan(at(0.5));
+    expect(at(0.01)).toBe(1.5); // held at half
+    expect(at(9)).toBe(4.5); // held at one and a half times
+  });
+
+  it("still scales a declared thickness down in a crowded view", () => {
+    const edge = makeEdge("e1", "a", "b", { weight: 1 });
+    const open = computeEdgeAttributes(edge, { ...ctx, declared: { thickness: 5 } });
+    const crowded = computeEdgeAttributes(edge, { ...ctx, viewEdgeCount: 100000, declared: { thickness: 5 } });
+    expect(crowded.size).toBeLessThan(open.size);
+  });
+
+  it("a found path is still thickened and still the ordinary colour, whatever is declared", () => {
+    const edge = makeEdge("e1", "a", "b");
+    const onPath = computeEdgeAttributes(edge, {
+      ...ctx,
+      onPath: true,
+      declared: { colour: "jade", thickness: 1 },
+    });
+    expect(onPath.size).toBeGreaterThan(4);
+    expect(onPath.color).not.toBe("#72b99a");
+  });
+});
+
 // Seen 3 October 2026 in the running Glass, on the Enron case: two addresses found by search were
 // drawn as two unlabelled squares, and the node menu did not say whose it was, so the analyst could
 // not tell which node was which. The zoom rule labelled a node only above a degree of 10 (or when

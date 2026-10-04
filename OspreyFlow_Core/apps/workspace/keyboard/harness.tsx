@@ -146,6 +146,16 @@ window.__KEYBOARD__ = {
 // `?fixture=same-as` is the link menu's fixture (ADR-080); every other fixture leaves `SAME_AS` out
 // of the schema, so the node menu's items — and the Tab counts the walkthroughs rely on — stay put.
 const wantsSameAs = new URLSearchParams(window.location.search).get("fixture") === "same-as";
+// `?fixture=link-style` is how links are drawn by basis (ADR-081): five pairs of people, each pair
+// joined by one link of a type that is drawn a different way.
+const wantsLinkStyle = new URLSearchParams(window.location.search).get("fixture") === "link-style";
+const LINK_STYLE_TYPES: OntologySchema["edge_types"] = [
+  { name: "KNOWS", from: ["Person"], to: ["Person"], directed: false, basis: "direct" },
+  { name: "OWNS", from: ["Person"], to: ["Person"], directed: true, basis: "direct" },
+  { name: "LIKELY_KNOWS", from: ["Person"], to: ["Person"], directed: false, basis: "probabilistic", colour: "jade" },
+  { name: "LIKELY_OWNS", from: ["Person"], to: ["Person"], directed: true, basis: "probabilistic" },
+  { name: "KNOWS_WELL", from: ["Person"], to: ["Person"], directed: false, basis: "direct", thickness: 5, colour: "rose" },
+];
 const SCHEMA: OntologySchema = wantsSameAs
   ? {
       ...BASE_SCHEMA,
@@ -154,7 +164,9 @@ const SCHEMA: OntologySchema = wantsSameAs
         { name: "SAME_AS", from: ["Person"], to: ["Person"], directed: false },
       ],
     }
-  : BASE_SCHEMA;
+  : wantsLinkStyle
+    ? { ...BASE_SCHEMA, edge_types: [...BASE_SCHEMA.edge_types, ...LINK_STYLE_TYPES] }
+    : BASE_SCHEMA;
 
 const workingSet = createWorkingSet();
 const ontology = new OntologyRegistry(SCHEMA);
@@ -224,6 +236,26 @@ if (wantsSameAs) {
   edges.push(edge("sa0", "s0", "s1", "SAME_AS"));
   edges.push(edge("sa1", "s1", "s2", "SAME_AS"));
   edges.push(edge("ln0", "s2", "p0"));
+}
+if (wantsLinkStyle) {
+  nodes.length = 0;
+  edges.length = 0;
+  // One pair for each way a link is drawn; each pair is a link `<kind>-link` between `<kind>-a` and `<kind>-b`.
+  const kinds: Array<[string, string]> = [
+    ["solid", "KNOWS"],
+    ["arrow", "OWNS"],
+    ["dotted", "LIKELY_KNOWS"],
+    ["dotted-arrow", "LIKELY_OWNS"],
+    ["thick", "KNOWS_WELL"],
+  ];
+  // `&kind=dotted` loads that pair alone, which the canvas then fits to the whole screen, so its link is
+  // long enough to read pixel by pixel.
+  const only = new URLSearchParams(window.location.search).get("kind");
+  for (const [kind, type] of kinds) {
+    if (only && only !== kind) continue;
+    nodes.push(node(`${kind}-a`), node(`${kind}-b`));
+    edges.push(edge(`${kind}-link`, `${kind}-a`, `${kind}-b`, type));
+  }
 }
 workingSet.store.getState().applyDelta({ seq: 1, op: "snapshot", nodes, edges, filtered_count: 0 });
 

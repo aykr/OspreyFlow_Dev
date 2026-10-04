@@ -126,7 +126,15 @@ def test_loader_allows_a_tenth_entity_type_sharing_a_channel_with_a_new_shape(
 
 def test_loader_rejects_redefined_same_as(tmp_path: Path) -> None:
     doc = _minimal_doc(
-        edge_types=[{"name": "SAME_AS", "from": ["Person"], "to": ["Person"], "directed": True}]
+        edge_types=[
+            {
+                "name": "SAME_AS",
+                "from": ["Person"],
+                "to": ["Person"],
+                "directed": True,
+                "basis": "direct",
+            }
+        ]
     )
     with pytest.raises(OntologyError, match="system edge type"):
         load_ontology(_write(tmp_path, doc))
@@ -134,7 +142,9 @@ def test_loader_rejects_redefined_same_as(tmp_path: Path) -> None:
 
 def test_loader_rejects_edge_type_with_unknown_endpoint(tmp_path: Path) -> None:
     doc = _minimal_doc(
-        edge_types=[{"name": "OWNS", "from": ["Person"], "to": ["Spaceship"]}],
+        edge_types=[
+            {"name": "OWNS", "from": ["Person"], "to": ["Spaceship"], "basis": "direct"}
+        ],
     )
     with pytest.raises(OntologyError, match="Spaceship"):
         load_ontology(_write(tmp_path, doc))
@@ -160,7 +170,9 @@ def test_loader_rejects_malformed_yaml_against_json_schema(tmp_path: Path) -> No
 
 def test_edge_type_wildcard_endpoint_is_allowed(tmp_path: Path) -> None:
     doc = _minimal_doc(
-        edge_types=[{"name": "MENTIONED_IN", "from": ["*"], "to": ["Person"]}],
+        edge_types=[
+            {"name": "MENTIONED_IN", "from": ["*"], "to": ["Person"], "basis": "direct"}
+        ],
     )
     schema = load_ontology(_write(tmp_path, doc))
     assert schema.edge_type("MENTIONED_IN") is not None

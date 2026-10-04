@@ -30,6 +30,7 @@ import { useStore } from "zustand/react";
 import {
   EdgeArrowProgram,
   EdgeLineProgram,
+  EdgeRectangleProgram,
   createNodeCompoundProgram,
 } from "sigma/rendering";
 import { animateNodes } from "sigma/utils";
@@ -66,6 +67,7 @@ import {
   computeNodeFrameAttributes,
   nodeLabel,
   computeNodeGraphAttributes,
+  declaredFor,
   edgeProgramFor,
 } from "./nodeAttributes";
 import {
@@ -74,6 +76,7 @@ import {
 } from "../design/primitives/RadialMenu";
 import { redrawWhenCameraStops } from "./cameraMoves";
 import { edgeTypesOfferedFor } from "./edgeTypeMenu";
+import { DottedArrowProgram, DottedEdgeProgram } from "./dottedEdgePrograms";
 import {
   gateExpansion,
   narrowingOptions,
@@ -1016,6 +1019,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         edgeProgramClasses: {
           "glass-edge": EdgeLineProgram,
           "glass-arrow": EdgeArrowProgram,
+          // ADR-081: a solid type that declares a thickness (the line program is one pixel wide
+          // whatever the size), and the two dotted lines a probabilistic type is always drawn with.
+          "glass-edge-thick": EdgeRectangleProgram,
+          "glass-edge-dotted": DottedEdgeProgram,
+          "glass-arrow-dotted": DottedArrowProgram,
         },
         // Sigma's own `addNode`/`updateNode`: "this function must return a
         // total object and won't be merged" with the raw graph attributes —
@@ -1069,6 +1077,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             strengthFilterFloor: 0,
             onPath: data.onPath ?? false,
             viewEdgeCount: graph.size,
+            declared: declaredFor(data.data.type, edgeTypesRef.current),
             touchesHoveredNode:
               hoveredNode !== null &&
               (graph.source(edgeId) === hoveredNode ||

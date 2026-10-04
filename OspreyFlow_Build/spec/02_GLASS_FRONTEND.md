@@ -615,6 +615,23 @@ signal distinguishing it from a selected-but-off-path node. Binding on both stat
 between them — the "which state owns the non-colour channel" question the disclosed gap left open
 is answered: both, via the channel each already had.
 
+**Links are drawn by basis (ADR-081).** The line style follows the relationship type's `basis` and is
+never authored: a Direct link is solid, a Probabilistic link is dotted (a dot three pixels long and
+a gap four, in screen pixels, so the pattern does not change with zoom). A dotted link keeps an
+arrowhead where its type is directed; `SAME_AS` is probabilistic and undirected, so it is a plain
+dotted line. A type with no basis (`NOT_SAME_AS`, or a type the ontology does not know) is drawn as
+it always was. A type may declare a `colour` (one of the nine data channels, so no colour outside
+the tokens) and a `thickness` from 1 to 5: the thickness is the width at the default weight and the
+link's weight scales it between half and one and a half times, so a heavy link reads thicker than a
+light one of the same type. A type that declares nothing keeps the ordinary colour and the
+weight-only width. A found path and the selected link keep their own treatment over any declaration.
+Sigma's stock plain line is one pixel wide whatever its size, so a solid undirected type that declares
+a thickness, and both dotted lines, are drawn by programs of the Glass's own
+(`canvas/dottedEdgePrograms.ts`); picking still treats a dotted link as one continuous line, so a
+gap can be pointed at. Tests: `src/canvas/nodeAttributes.test.ts` (which program, what colour and
+width) and `keyboard/link-style.spec.ts`, which reads the painted pixels along a link and fails if a
+probabilistic link is not dotted or a direct one is.
+
 Dark is the working default. Light is a separately tuned ramp, not an inversion, and exists for
 screenshots pasted into reports and for print. Both meet the same contrast floor. An exported
 chart destined for an intelligence product should default to light. The top bar's theme button

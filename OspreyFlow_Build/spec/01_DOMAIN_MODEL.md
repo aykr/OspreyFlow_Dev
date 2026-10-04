@@ -71,19 +71,22 @@ entity_types:
     shape: diamond
 
 edge_types:
-  - {name: COMMUNICATED_WITH, from: [Endpoint], to: [Endpoint], directed: true, temporal: true}
-  - {name: USES,              from: [Person], to: [Endpoint, Device], directed: true}
-  - {name: PRESENT_AT,        from: [Person, Device, Vehicle], to: [Location], temporal: true}
-  - {name: MENTIONED_IN,      from: ["*"], to: [Document], directed: true}
-  - {name: ASSOCIATE_OF,      from: [Person], to: [Person], directed: false}
-  - {name: FAMILY_OF,         from: [Person], to: [Person], directed: false, properties: [relation]}
-  - {name: MEMBER_OF,         from: [Person], to: [Organisation]}
-  - {name: TRANSACTED,        from: [Asset, Endpoint], to: [Asset, Endpoint], temporal: true}
+  - {name: COMMUNICATED_WITH, from: [Endpoint], to: [Endpoint], directed: true, temporal: true, basis: direct}
+  - {name: USES,              from: [Person], to: [Endpoint, Device], directed: true, basis: direct}
+  - {name: PRESENT_AT,        from: [Person, Device, Vehicle], to: [Location], temporal: true, basis: direct}
+  - {name: MENTIONED_IN,      from: ["*"], to: [Document], directed: true, basis: direct}
+  - {name: ASSOCIATE_OF,      from: [Person], to: [Person], directed: false, basis: direct}
+  - {name: FAMILY_OF,         from: [Person], to: [Person], directed: false, properties: [relation], basis: direct}
+  - {name: MEMBER_OF,         from: [Person], to: [Organisation], basis: direct}
+  - {name: TRANSACTED,        from: [Asset, Endpoint], to: [Asset, Endpoint], temporal: true, basis: direct}
   # By convention the source is an Endpoint of kind `imsi` only — see the
   # prose below. Not schema-enforced: `from`/`to` check entity type, not
   # `endpoint_kind`.
-  - {name: PAIRED_WITH,       from: [Endpoint], to: [Device], directed: true, temporal: true}
-  - {name: SAME_AS,           from: ["*"], to: ["*"], directed: false, system: true}
+  - {name: PAIRED_WITH,       from: [Endpoint], to: [Device], directed: true, temporal: true, basis: direct}
+  # `basis` is required on every authored type (ADR-081); `colour` (a data-channel name) and
+  # `thickness` (1 to 5) are optional. The loader injects the two system types itself: `SAME_AS` is
+  # `probabilistic`, `NOT_SAME_AS` has no basis.
+  - {name: SAME_AS,           from: ["*"], to: ["*"], directed: false, system: true, basis: probabilistic}
 ```
 
 ### 1.1 POLE is the upper ontology, not the schema
@@ -180,6 +183,9 @@ class EdgeTypeDef(BaseModel):
     directed: bool = True
     temporal: bool = False
     system: bool = False
+    basis: Literal["direct", "probabilistic"] | None = None   # ADR-081; required in YAML, None only for NOT_SAME_AS
+    colour: str | None = None      # one of the nine data-channel names; None keeps the ordinary line colour
+    thickness: int | None = None   # 1 to 5; None keeps the weight-only width
     properties: list[PropertyDef] = []
 
 class OntologySchema(BaseModel):
@@ -196,6 +202,21 @@ the ontology declares no blocking/comparison rules for (`Location`, `Device`, an
 with no `resolution:` block in the example above) rather than an empty `ResolutionConfig` standing
 in for "not configured." `OntologySchema` is the whole loaded, validated document — the object
 `apply_schema` and `revert_schema` (§2.4) both operate on.
+
+**A relationship type says what stands behind a link of it, and how it is drawn (ADR-081).** `basis`
+is `direct` (a loaded, established record stands behind the link: a device paired with a call
+record, an ownership an evidential record states) or `probabilistic` (statistically derived, or an
+analyst's declaration). It is required on every authored type: an ontology that omits it, or names
+anything but those two, is refused at load, so there is no unclassified type. The loader injects
+`SAME_AS` as `probabilistic`; `NOT_SAME_AS` is an analyst's judgement that two nodes are different,
+not a claim that a link exists, so it sits outside the rule and has no basis (Amendment 1). The line
+style is not authored: the Glass draws a Direct link solid and a Probabilistic one dotted
+(`02_GLASS_FRONTEND.md` §4). A declaration may also carry a `colour`, one of the nine data-channel
+names that an entity type's `channel` already uses, and a `thickness`, a whole number from 1 to 5;
+the loader refuses anything else. The test that would fail if any of this were broken is
+`tests/ontology/test_relationship_basis.py`. A per-link basis (a link of a Direct type marked
+probabilistic), analyst-proposed types and the Ingest Studio's refusal of a probabilistic type are
+decided in ADR-081 and not yet built.
 
 Applying a schema returns a report, not a bare success flag:
 

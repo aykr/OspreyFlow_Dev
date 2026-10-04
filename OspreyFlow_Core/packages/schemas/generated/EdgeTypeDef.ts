@@ -6,6 +6,9 @@ export type To = string[];
 export type Directed = boolean;
 export type Temporal = boolean;
 export type System = boolean;
+export type Basis = ("direct" | "probabilistic") | null;
+export type Colour = string | null;
+export type Thickness = number | null;
 export type Name1 = string;
 export type PropertyType = "string" | "string[]" | "date" | "datetime" | "integer" | "float" | "boolean" | "enum";
 export type Indexed = boolean;
@@ -21,6 +24,9 @@ export interface EdgeTypeDef {
   directed?: Directed;
   temporal?: Temporal;
   system?: System;
+  basis?: Basis;
+  colour?: Colour;
+  thickness?: Thickness;
   properties?: Properties;
   [k: string]: unknown;
 }

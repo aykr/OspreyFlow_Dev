@@ -133,6 +133,20 @@ class EdgeTypeDef(BaseModel):
     directed: bool = True
     temporal: bool = False
     system: bool = False
+    #: ADR-081. `direct` means a loaded, established record stands behind a link of this type;
+    #: `probabilistic` means it is statistically derived or an analyst's declaration. The ontology
+    #: JSON Schema requires it on every authored type (an ontology that omits it is refused at
+    #: load). It is `None` only for `NOT_SAME_AS`, an analyst's judgement that two nodes are
+    #: different, which is outside the rule (ADR-081 Amendment 1); `SAME_AS` is `probabilistic`.
+    #: The Glass draws a Direct link solid and a Probabilistic one dotted; the style is not
+    #: authored.
+    basis: Literal["direct", "probabilistic"] | None = None
+    #: One of the nine data-channel names (`DATA_CHANNELS`), checked at load by the JSON Schema;
+    #: `None` keeps the Glass's ordinary line colour.
+    colour: str | None = None
+    #: A whole number from 1 to 5 drawn as the line's width at the default weight; a link's weight
+    #: scales it (ADR-081 Amendment 1). `None` keeps the weight-only width.
+    thickness: int | None = Field(default=None, ge=1, le=5)
     properties: list[PropertyDef] = Field(default_factory=list)
 
     model_config = {"populate_by_name": True}

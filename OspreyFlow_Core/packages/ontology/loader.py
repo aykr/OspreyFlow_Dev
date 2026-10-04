@@ -72,6 +72,12 @@ _SYSTEM_EDGE_PROPERTIES: dict[str, list[dict[str, object]]] = {
     ],
 }
 
+#: ADR-081 and Amendment 1: `SAME_AS` is written by the resolution engine, a statistical match,
+#: so it is `probabilistic` (confirming one leaves it so). `NOT_SAME_AS` is an analyst's judgement
+#: that two nodes are different, not a claim that a link exists, so it sits outside the rule and
+#: has no basis.
+_SYSTEM_EDGE_BASIS: dict[str, str | None] = {SAME_AS: "probabilistic", NOT_SAME_AS: None}
+
 _SYSTEM_EDGE_DEFS: dict[str, EdgeTypeDef] = {
     name: EdgeTypeDef.model_validate(
         {
@@ -80,6 +86,7 @@ _SYSTEM_EDGE_DEFS: dict[str, EdgeTypeDef] = {
             "to": ["*"],
             "directed": False,
             "system": True,
+            "basis": _SYSTEM_EDGE_BASIS[name],
             "properties": _SYSTEM_EDGE_PROPERTIES[name],
         }
     )
