@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { LinkChangeRecord, LinkSnapshot } from "./linkChangeApi";
-import { describeChange } from "./linkHistory";
+import { describeChange } from "./describeChange";
 
 const base: LinkSnapshot = { type: "ASSOCIATE_OF", properties: {}, interval: null, occurrences: 3 };
 

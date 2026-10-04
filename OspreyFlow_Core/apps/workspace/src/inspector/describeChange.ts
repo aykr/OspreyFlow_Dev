@@ -1,5 +1,10 @@
 // How a recorded change reads in the link's history (ADR-080): one line for each thing that moved,
 // old value then new. Pure, so the wording can be tested without a screen.
+//
+// Named for its one export rather than `linkHistory`, which differed from `LinkHistory.tsx` only in
+// case: on a case-insensitive disk (macOS, Windows) `./LinkHistory` resolved to this file, so the
+// component import came back undefined and `tsc` refused the pair (TS1149). Two modules in one folder
+// must never differ only in case.
 import type { LinkChangeRecord, LinkSnapshot } from "./linkChangeApi";
 
 function show(value: unknown): string {

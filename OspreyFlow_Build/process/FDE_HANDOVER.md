@@ -100,10 +100,9 @@ the real stack** (see section 5).
 ### Known failures that are not caused by recent work
 
 - `ruff` E501 in `services/api/app.py` near the ADR-068 docstring.
-- `npx tsc --noEmit` fails on this Mac on `main`: `src/inspector/LinkHistory.tsx` and `src/inspector/linkHistory.ts`
-  differ only in case, and the filesystem is case-insensitive (TS1149 and a TS2305 that follows from it). The cloud
-  mirror's case-sensitive disk never saw it. The fix is a rename of one module, in its own commit.
-  The same defect fails six unit cases in `Inspector.test.tsx` and `LinkHistory.test.tsx` under `npx vitest run src`.
+- (Fixed 4 October 2026.) `src/inspector/linkHistory.ts` differed from `LinkHistory.tsx` only in case, which on this
+  Mac failed `tsc` and six unit cases; it is now `describeChange.ts`, and `tests/test_case_collision_check.py` fails
+  if any two tracked files under the product tree differ only in case.
 - Keyboard specs built in the cloud mirror may use keys that behave differently on macOS: ArrowDown on a closed
   `<select>` opens the menu here instead of moving the choice. `link-change.spec.ts` was corrected on 4 October 2026;
   any other spec that presses an arrow on a `<select>` will fail the same way until it types a letter instead.

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { LinkChangeError, fetchLinkHistory, type LinkHistory as History } from "./linkChangeApi";
-import { describeChange } from "./linkHistory";
+import { describeChange } from "./describeChange";
 
 export interface LinkHistoryProps {
   apiBaseUrl: string;
