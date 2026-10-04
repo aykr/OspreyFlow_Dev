@@ -8,6 +8,7 @@ export type NodeIds = NodeId[];
 export type EdgeTypes = string[];
 export type EdgeId = string;
 export type EdgeIds = EdgeId[];
+export type EventIds = string[];
 export type Scopes = string[];
 export type EdgeIds1 = EdgeId[];
 export type Offset = number;
@@ -37,6 +38,7 @@ export interface EventFilter {
   node_ids?: NodeIds;
   edge_types?: EdgeTypes;
   edge_ids?: EdgeIds;
+  event_ids?: EventIds;
   value_filters?: ValueFilters;
   inherited?: InheritedEvents | null;
   [k: string]: unknown;

@@ -180,6 +180,10 @@ class EventFilter(BaseModel):
     edge_types: list[str] = Field(default_factory=list)
     #: Only events on these links (ADR-089: the emails behind one link). Empty does not restrict.
     edge_ids: list[EdgeId] = Field(default_factory=list)
+    #: Only these events, by `event_id` (ADR-089: the one email being extracted from). Empty does
+    #: not restrict. A column of its own, not a `value_filters` entry: `value_filters` reads an
+    #: unrecognised name as a key inside `properties`, where no event carries its own id.
+    event_ids: list[str] = Field(default_factory=list)
     #: **Restrict by a field's value, not merely aggregate over it — round 13cdc.**
     #:
     #: `08_ACCEPTANCE_SCENARIOS.md` A7 filters reports "to one residential sub-unit and one item

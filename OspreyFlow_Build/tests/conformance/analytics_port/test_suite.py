@@ -645,6 +645,31 @@ async def test_event_filter_edge_ids_restricts_to_events_on_those_links(
         assert (await adapter.histogram(none, CLEARED)).total == 0
 
 
+async def test_event_filter_event_ids_restricts_to_those_events(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """The one email an analyst opened and asked to extract from (ADR-089 step 3). The defect this
+    pins: the lookup was a `value_filters` entry on `event_id`, which the adapter reads as a key
+    inside `properties`, so it matched nothing and every extraction answered "email not found"."""
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    wanted = _event(occurred_at=now, edge_id="ab")
+    events = [wanted, _event(occurred_at=now, edge_id="ab"), _event(occurred_at=now, edge_id="cd")]
+    async with factory.context(events) as adapter:
+        page = await adapter.list_events(
+            EventListRequest(
+                filter=_filter(edge_ids=["ab"], event_ids=[wanted.event_id]), offset=0, limit=5
+            ),
+            CLEARED,
+        )
+        assert [e.event_id for e in page.events] == [wanted.event_id]
+        assert page.total == 1
+        none = await adapter.list_events(
+            EventListRequest(filter=_filter(event_ids=["no-such-event"]), offset=0, limit=5),
+            CLEARED,
+        )
+        assert none.total == 0
+
+
 async def test_list_events_is_newest_first_paged_and_says_how_many_there_are(
     factory: AnalyticsAdapterFactory,
 ) -> None:

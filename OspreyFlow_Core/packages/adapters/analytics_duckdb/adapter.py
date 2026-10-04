@@ -142,6 +142,10 @@ class AnalyticsDuckDBAdapter:
             placeholders = ",".join("?" for _ in event_filter.edge_ids)
             clauses.append(f"edge_id IN ({placeholders})")
             params.extend(event_filter.edge_ids)
+        if event_filter.event_ids:
+            placeholders = ",".join("?" for _ in event_filter.event_ids)
+            clauses.append(f"event_id IN ({placeholders})")
+            params.extend(event_filter.event_ids)
         # **A7's item-category half — round 13cdc.** Values are parameterised; only the *column*
         # is interpolated, and `_field_expression` validates it as a safe identifier first, which
         # is the same guard `cross_filter`'s own dimensions already rely on.

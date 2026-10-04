@@ -80,18 +80,29 @@ def _event(event_id: str, edge_id: str = "e1") -> EventRecord:
     )
 
 
+#: The DuckDB adapter's `_TOP_LEVEL_FIELDS`: any other `value_filters` name is read from
+#: `properties`. Restated so this stand-in refuses what the real store refuses (rule 15): a
+#: `value_filters` entry on `event_id` matches nothing, which hid ADR-089 step 3's defect.
+_TOP_LEVEL = {"edge_type", "source_id", "target_id", "cell_site", "direction"}
+
+
+def _field(e: EventRecord, name: str) -> object:
+    return getattr(e, name) if name in _TOP_LEVEL else e.properties.get(name)
+
+
 class RecordingAnalytics:
     def __init__(self, events: list[EventRecord]) -> None:
         self.events = events
 
     async def list_events(self, req: EventListRequest, principal: Principal) -> EventListResult:
-        wanted = req.filter.value_filters.get("event_id", [])
+        f = req.filter
         matching = [
             e
             for e in self.events
-            if _in_scope(e, req.filter)
-            and (not req.filter.edge_ids or e.edge_id in req.filter.edge_ids)
-            and (not wanted or e.event_id in wanted)
+            if _in_scope(e, f)
+            and (not f.edge_ids or e.edge_id in f.edge_ids)
+            and (not f.event_ids or e.event_id in f.event_ids)
+            and all(_field(e, name) in values for name, values in f.value_filters.items() if values)
         ]
         return EventListResult(total=len(matching), events=matching[: req.limit])
 

@@ -148,7 +148,7 @@ class EmailExtractionService:
         own = EventFilter(
             investigation_scope=investigation_id,
             edge_ids=[edge.id],
-            value_filters={"event_id": [event_id]},
+            event_ids=[event_id],
         )
         page = await self._analytics.list_events(
             EventListRequest(
