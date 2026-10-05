@@ -305,6 +305,51 @@ export function ElementInspector({
             }
           />
 
+          {/* ADR-094: content this entity holds (a phone's saved note, photo or video), kept in the
+              media store and linked to it by HOLDS. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4, 4px)" }}>
+            <label htmlFor="entity-content-kind">Content this holds</label>
+            <Select
+              id="entity-content-kind"
+              value={entity.content?.kind ?? ""}
+              onChange={(e) => {
+                const kind = e.target.value;
+                onChangeEntity({
+                  ...entity,
+                  content:
+                    kind === "document_text" || kind === "image_file" || kind === "video_file"
+                      ? { kind, field: entity.content?.field ?? sourceFieldNames[0] ?? "" }
+                      : null,
+                });
+              }}
+            >
+              <option value="">None</option>
+              <option value="document_text">Document text</option>
+              <option value="image_file">Image file</option>
+              <option value="video_file">Video file</option>
+            </Select>
+            <span style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>
+              An image or a video is named by a path relative to the export's own folder.
+            </span>
+            {entity.content && (
+              <>
+                <label htmlFor="entity-content-field">Column holding it</label>
+                <Select
+                  id="entity-content-field"
+                  value={entity.content.field}
+                  onChange={(e) =>
+                    onChangeEntity({ ...entity, content: { kind: entity.content!.kind, field: e.target.value } })
+                  }
+                >
+                  {sourceFieldNames.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </Select>
+              </>
+            )}
+          </div>
           <Button onClick={onDelete}>Delete element</Button>
         </div>
       </Panel>

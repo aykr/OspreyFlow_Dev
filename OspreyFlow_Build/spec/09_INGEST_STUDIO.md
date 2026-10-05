@@ -301,6 +301,18 @@ text is refused (`recipe_rule`). The marked column counts as mapped. The synthet
 (`tests/scenarios/fixtures/sms_recipe.yaml`) are the demo of it. Tests:
 `tests/ingest/test_message_content.py`, `ElementInspector.content.test.tsx`, `rowTemplate.test.ts`.
 
+### Content an entity holds (ADR-094 step 2)
+
+An entity row can name a column as *Content this holds*: **document text**, an **image file** or a
+**video file**, the file named by a path relative to the export's own folder. A path that is absolute
+or steps outside that folder, or a file of the wrong kind for what it is marked as, rejects the row;
+a file that is not there is reported in the load report and the entity is loaded without it. The
+text or file is kept in the deployment's media store (`ports/media.py`, `adapters/media_objectstore`),
+never in the graph; a `Document` is written naming it (`media_kind`, `object_ref`, a title: the file's
+name or the text's first words), one per file however many entities hold it, and each holder is
+linked to it by `HOLDS`. A recipe that marks held content is refused at run if the run has no media
+store. Tests: `tests/ingest/test_held_content.py`, `tests/conformance/media_store`.
+
 ### A run stores its events
 
 A recipe run from the studio writes its nodes and links to the graph and, once that commits, its

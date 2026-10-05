@@ -737,7 +737,11 @@ characters. An email offers *Extract entities* and each finding's *Accept*, as t
 view does, and the text is read again after an acceptance so the new entity is marked. Focus starts
 on *Close*; Close or Escape returns to the canvas with nothing moved behind it. The text comes from
 `GET .../documents/{id}/reader`. Tests: `src/reader/DocumentReader.test.tsx` and
-`keyboard/reader.spec.ts` (Enter opens it, Escape closes it, Extract and Accept by keyboard). An email opened in the Inspector's Emails section offers *Read full screen* beside *Back to the list*; the reader opens on that email even before it has been written as a Document, and reads it as one from then on (ADR-092 Amendment 3).
+`keyboard/reader.spec.ts` (Enter opens it, Escape closes it, Extract and Accept by keyboard). A Document written from held content (ADR-094) shows in the reader as what it is: an image as a
+picture, a video as a player, both fetched with the analyst's token from `GET .../documents/{id}/file`;
+*Extract entities* describes and reads an image, or transcribes a video, then extracts from that
+text, which the reader then shows with the accepted entities marked (`POST .../documents/{id}/extract`
+and `.../candidates/{id}/accept`). An email opened in the Inspector's Emails section offers *Read full screen* beside *Back to the list*; the reader opens on that email even before it has been written as a Document, and reads it as one from then on (ADR-092 Amendment 3).
 
 **What a link reads as (ADR-091).** A link is labelled by its type's display name and a named count,
 "Communicated with · 3 emails": the type's `label` where the ontology declares one, otherwise its

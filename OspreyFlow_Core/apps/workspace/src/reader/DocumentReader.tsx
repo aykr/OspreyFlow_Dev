@@ -12,7 +12,13 @@ import {
   type EmailCandidate,
 } from "../inspector/linkEventsApi";
 import type { OntologyRegistry } from "../ontology/schema";
-import { fetchDocumentReader, type DocumentReaderView } from "./readerApi";
+import {
+  acceptDocumentFinding,
+  extractDocument,
+  fetchDocumentFile,
+  fetchDocumentReader,
+  type DocumentReaderView,
+} from "./readerApi";
 
 export interface DocumentReaderProps {
   apiBaseUrl: string;
@@ -65,6 +71,28 @@ export function DocumentReader({
   const [findings, setFindings] = useState<Findings>({ state: "idle" });
   const [accepting, setAccepting] = useState<string | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  // ADR-094: an image's or a video's file, as a URL the element can show.
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const heldMedia =
+    load.state === "ready" &&
+    load.view.has_file === true &&
+    (load.view.media_kind === "image" || load.view.media_kind === "video");
+
+  useEffect(() => {
+    if (!heldMedia) return;
+    let url: string | null = null;
+    let cancelled = false;
+    fetchDocumentFile(apiBaseUrl, bearerToken, investigationId, documentId)
+      .then((made) => {
+        url = made;
+        if (!cancelled) setFileUrl(made);
+      })
+      .catch(() => setFileUrl(null));
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [heldMedia, apiBaseUrl, bearerToken, investigationId, documentId]);
 
   const read = useCallback(async () => {
     try {
@@ -85,29 +113,38 @@ export function DocumentReader({
   }, [load.state]);
 
   async function extract(view: DocumentReaderView) {
-    if (!view.edge_id || !view.event_id) return;
     setFindings({ state: "running" });
     try {
-      const result = await extractEmail(apiBaseUrl, bearerToken, investigationId, view.edge_id, view.event_id);
-      onDelta?.(result.delta);
-      setFindings({ state: "ready", candidates: result.candidates });
+      if (view.edge_id && view.event_id) {
+        const result = await extractEmail(apiBaseUrl, bearerToken, investigationId, view.edge_id, view.event_id);
+        onDelta?.(result.delta);
+        setFindings({ state: "ready", candidates: result.candidates });
+        return;
+      }
+      // A held Document (ADR-094): by its kind, through the Document routes.
+      const result = await extractDocument(apiBaseUrl, bearerToken, investigationId, view.document_id);
+      setFindings({ state: "ready", candidates: result.candidates as EmailCandidate[] });
+      await read(); // the text it was extracted from (a description, a transcript) is shown
     } catch (err) {
       setFindings({ state: "failed", message: err instanceof Error ? err.message : String(err) });
     }
   }
 
   async function accept(view: DocumentReaderView, candidate: EmailCandidate) {
-    if (!view.edge_id || !view.event_id || findings.state !== "ready") return;
+    if (findings.state !== "ready") return;
     setAccepting(candidate.id);
     try {
-      const result = await acceptEmailCandidate(
-        apiBaseUrl,
-        bearerToken,
-        investigationId,
-        view.edge_id,
-        view.event_id,
-        candidate.id,
-      );
+      const result =
+        view.edge_id && view.event_id
+          ? await acceptEmailCandidate(
+              apiBaseUrl,
+              bearerToken,
+              investigationId,
+              view.edge_id,
+              view.event_id,
+              candidate.id,
+            )
+          : await acceptDocumentFinding(apiBaseUrl, bearerToken, investigationId, view.document_id, candidate.id);
       onDelta?.(result.delta);
       setFindings({
         state: "ready",
@@ -183,6 +220,16 @@ export function DocumentReader({
               </dl>
             )}
 
+            {heldMedia && fileUrl && load.view.media_kind === "image" && (
+              <img
+                src={fileUrl}
+                alt={title}
+                style={{ maxWidth: "100%", maxHeight: "60vh", objectFit: "contain", alignSelf: "start" }}
+              />
+            )}
+            {heldMedia && fileUrl && load.view.media_kind === "video" && (
+              <video src={fileUrl} controls aria-label={title} style={{ maxWidth: "100%", maxHeight: "60vh" }} />
+            )}
             <div style={{ fontSize: "var(--fs-16)", lineHeight: 1.6, color: "var(--text-primary)", whiteSpace: "pre-wrap" }}>
               {load.view.text ? (
                 <HighlightedMessage
@@ -190,7 +237,11 @@ export function DocumentReader({
                   ontology={ontology}
                 />
               ) : (
-                <p style={{ color: "var(--text-tertiary)", margin: 0 }}>This document has no text to show.</p>
+                <p style={{ color: "var(--text-tertiary)", margin: 0 }}>
+                  {heldMedia
+                    ? "No text yet: Extract entities describes it and reads it first."
+                    : "This document has no text to show."}
+                </p>
               )}
             </div>
             {load.view.truncated && (
@@ -199,7 +250,7 @@ export function DocumentReader({
               </p>
             )}
 
-            {load.view.edge_id && load.view.event_id && (
+            {((load.view.edge_id && load.view.event_id) || load.view.has_file) && (
               <section aria-label="Entities in this email" style={{ display: "grid", gap: "var(--sp-8)" }}>
                 {findings.state !== "ready" && (
                   <button

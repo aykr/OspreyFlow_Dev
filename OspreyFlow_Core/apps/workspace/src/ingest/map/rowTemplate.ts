@@ -62,6 +62,8 @@ function bindingsOf(template: RowTemplate): FieldBinding[] {
   const bindings: FieldBinding[] = [];
   for (const entity of template.entities) {
     bindings.push(...Object.values(entity.properties ?? {}));
+    // ADR-094: the column holding the content an entity holds is mapped too.
+    if (entity.content) bindings.push({ field: entity.content.field });
   }
   for (const edge of template.edges ?? []) {
     bindings.push(...Object.values(edge.properties ?? {}));

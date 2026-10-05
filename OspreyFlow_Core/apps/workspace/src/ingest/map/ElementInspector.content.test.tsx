@@ -65,3 +65,37 @@ describe("ElementInspector: a link's text", () => {
     expect(screen.queryByLabelText("Text the model can read")).toBeNull();
   });
 });
+
+describe("ElementInspector: content an entity holds (ADR-094 step 2)", () => {
+  function mountEntity(onChangeEntity = vi.fn()) {
+    render(
+      <ElementInspector
+        selection={
+          {
+            kind: "entity",
+            entity: { ref: "phone", pole_class: "object", type: "Endpoint", properties: {} },
+          } as never
+        }
+        ontology={ONTOLOGY}
+        transforms={[]}
+        sourceFieldNames={["phone", "photo_path"]}
+        baselineClassification="OFFICIAL"
+        classificationOrder={["OFFICIAL"]}
+        onChangeEntity={onChangeEntity}
+        onChangeEdge={vi.fn()}
+        onDelete={vi.fn()}
+        onPreviewHandling={vi.fn()}
+      />,
+    );
+    return onChangeEntity;
+  }
+
+  it("marks a column as an image file the entity holds, and says where the path is from", () => {
+    const onChangeEntity = mountEntity();
+    fireEvent.change(screen.getByLabelText("Content this holds"), { target: { value: "image_file" } });
+    expect(onChangeEntity).toHaveBeenLastCalledWith(
+      expect.objectContaining({ content: { kind: "image_file", field: "phone" } }),
+    );
+    expect(screen.getByText(/relative to the export's own folder/)).toBeTruthy();
+  });
+});
