@@ -26,6 +26,7 @@ import yaml
 from services.ingest.engine import run_recipe
 from services.ingest.recipe_loader import load_recipe
 
+from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from schemas.domain import OntologySchema, Principal
 from schemas.ingest import (
@@ -234,6 +235,7 @@ async def run_published_recipe(
     investigation_scope: str,
     source_location: str | None = None,
     repo_root: Path = _REPO_ROOT,
+    analytics: AnalyticsPort | None = None,
 ) -> LoadReport:
     """§8: "Loader: run a published recipe against a file at or below their
     own clearance" — "a file", not necessarily the one Connect originally
@@ -260,7 +262,7 @@ async def run_published_recipe(
     rows = _read_recipe_rows(read_from)
     tx = await graph.begin_transaction()
     try:
-        report, _events = await run_recipe(
+        report, events = await run_recipe(
             recipe,
             rows,
             graph=graph,
@@ -275,4 +277,9 @@ async def run_published_recipe(
         await graph.rollback_transaction(tx)
         raise
     await graph.commit_transaction(tx)
+    # The run's events (a call's time, a message's text) go to the analytics store, as every seed's
+    # do; they were dropped here, so nothing loaded through the Studio reached the timeline,
+    # *Show messages* or extraction (found building ADR-094 step 2).
+    if analytics is not None and events:
+        await analytics.load_events(events)
     return report

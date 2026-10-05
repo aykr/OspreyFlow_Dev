@@ -7,7 +7,7 @@ version: 1
 label: "HMP fixture — yard Locations"
 connector:
   profile: hmp-fixture-generic
-ontology_version: 11
+ontology_version: 12
 
 defaults:
   provenance: {state: asserted}

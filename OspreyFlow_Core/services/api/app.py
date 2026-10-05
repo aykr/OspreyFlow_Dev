@@ -4578,6 +4578,7 @@ async def run_studio_recipe(
     principal: Annotated[Principal, Depends(require_studio_role(StudioRole.LOADER))],
     graph: GraphDep,
     ontology: OntologyDep,
+    analytics: AnalyticsDep,
     repo_root: RecipesRepoRootDep,
     audit: AuditDep,
     jobs: JobsDep,
@@ -4639,6 +4640,7 @@ async def run_studio_recipe(
         investigation_scope=investigation.id,
         source_location=body.source_location,
         repo_root=repo_root,
+        analytics=analytics,
     )
     await resolution_trigger_module.submit_post_ingest_resolution_jobs(
         report, recipe.row_template, ontology=ontology, jobs=jobs

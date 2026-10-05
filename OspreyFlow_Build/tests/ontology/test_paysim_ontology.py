@@ -8,8 +8,10 @@ from ontology.loader import load_default_ontology
 _TRANSACTION_TYPES = {"CASH_IN", "CASH_OUT", "DEBIT", "PAYMENT", "TRANSFER"}
 
 
-def test_the_ontology_is_at_version_eleven() -> None:
-    assert load_default_ontology().version == 11
+def test_the_ontology_carries_the_paysim_types_since_version_ten() -> None:
+    """PaySim's types arrived in version 10 (ADR-055); the current version is pinned once, in
+    `test_content_ontology.py`, so a later bump does not have to edit this file too."""
+    assert load_default_ontology().version >= 10
 
 
 def test_an_account_is_an_endpoint_kind() -> None:

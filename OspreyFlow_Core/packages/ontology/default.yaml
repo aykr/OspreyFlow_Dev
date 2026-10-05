@@ -77,6 +77,11 @@
 # property is never marked, since a prefix match against a masked value would let a reader who
 # may not see it guess it (`tests/ontology/test_searchable_names.py`). Every recipe fixture pinned
 # to `ontology_version: 10` is bumped to 11 alongside this.
+# v12 (ADR-094): content the model can read. `Document` gained `media_kind` (text, image, video)
+# and `object_ref` (the file's name in the object store; a file is never kept in the graph), and
+# `HOLDS` links a device, endpoint, person or organisation to the Document it holds. A recipe may now
+# write both, so the version moves; every recipe fixture pinned to 11 is bumped to 12 alongside this,
+# and a published recipe is flagged once to be reopened and published again.
 # ADR-079 (no version change): each entity type gained an optional `icon`, the drawing the Glass
 # puts inside its shape. The version does not move: nothing a recipe writes, an index or an
 # adapter reads has changed, and moving it would flag every published recipe as stale for a
@@ -88,7 +93,7 @@
 # writes, an index or an adapter reads has changed in this step, and moving it would flag every
 # published recipe as stale. (The Ingest Studio's refusal of a Probabilistic type, build step D,
 # is a recipe rule and may revisit that.)
-version: 11
+version: 12
 entity_types:
   - name: Person
     pole_class: person
@@ -169,6 +174,10 @@ entity_types:
       - {name: sent_at, type: datetime}
       - {name: message_id, type: string}
       - {name: event_id, type: string}
+      # ADR-094 step 2: what the content is, and where its file is kept. A file is never stored in
+      # the graph: `object_ref` names it in the deployment's object store.
+      - {name: media_kind, type: enum, values: [text, image, video]}
+      - {name: object_ref, type: string}
 
   - name: Vehicle
     pole_class: object
@@ -195,6 +204,9 @@ edge_types:
   - {name: USES,              from: [Person], to: [Endpoint, Device], directed: true, basis: direct}
   - {name: PRESENT_AT,        from: [Person, Device, Vehicle], to: [Location], directed: true, temporal: true, basis: direct}
   - {name: MENTIONED_IN,      from: ["*"], to: [Document], directed: true, basis: direct}
+  # ADR-094 step 2: content held by an entity (a phone's photos, videos and saved files), recorded
+  # by the source that holds it, so Direct.
+  - {name: HOLDS,             from: [Device, Endpoint, Person, Organisation], to: [Document], directed: true, basis: direct}
   - {name: ASSOCIATE_OF,      from: [Person], to: [Person], directed: false, basis: direct}
   - name: FAMILY_OF
     from: [Person]

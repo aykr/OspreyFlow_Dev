@@ -301,6 +301,13 @@ text is refused (`recipe_rule`). The marked column counts as mapped. The synthet
 (`tests/scenarios/fixtures/sms_recipe.yaml`) are the demo of it. Tests:
 `tests/ingest/test_message_content.py`, `ElementInspector.content.test.tsx`, `rowTemplate.test.ts`.
 
+### A run stores its events
+
+A recipe run from the studio writes its nodes and links to the graph and, once that commits, its
+events (each timed link's occurrence, with any text it carries) to the analytics store, as every
+seed's do. Until 5 October 2026 the run dropped them, so nothing loaded through the studio reached
+the timeline, *Show messages* or extraction. Test: `tests/ingest/test_studio_run_events.py`.
+
 ### Which relationship types a recipe may write (ADR-081 step D)
 
 A relationship the studio writes from the source's own records is **Direct**: a loaded record
