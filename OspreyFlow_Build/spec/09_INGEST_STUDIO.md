@@ -289,6 +289,16 @@ the recipe-level default unconditionally as it does today.
 recipe handles a file whose rows are not homogeneous — a device extraction where a row is a call,
 a message or a contact depending on a type column.
 
+### Which relationship types a recipe may write (ADR-081 step D)
+
+A relationship the studio writes from the source's own records is **Direct**: a loaded record
+stands behind it. Map refuses to save a recipe whose link names a Probabilistic type, `SAME_AS`
+(the resolution engine's alone), `NOT_SAME_AS` (an analyst's judgement) or a type the ontology does
+not have, with `422 recipe_rule` naming each problem, which Map shows in those words; the engine
+refuses the same recipe again when it runs, before anything is written
+(`services/ingest/recipe_rules.py`). Tests: `tests/ingest/test_recipe_rules.py` and the Map save case
+in `test_studio_map_routes.py`.
+
 ### The unstructured path is a different screen
 
 Column mapping makes no sense for a PDF. For unstructured sources, stage 3 is an **extraction

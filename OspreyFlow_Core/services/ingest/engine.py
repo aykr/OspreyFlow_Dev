@@ -77,6 +77,7 @@ from schemas.ingest import (
     RejectionRecord,
 )
 
+from .recipe_rules import check_recipe_rules
 from .staging import ObjectStorageConfig, StagedEdge, StagedEntity, StagedRow
 from .staging import read_staged_rows as _read_staged_rows
 from .staging import stage_raw_rows as _stage_raw_rows
@@ -971,6 +972,8 @@ async def run_recipe(
             "before running it again"
         )
 
+    # ADR-081 step D: refused again at run, before anything is written (Amendment 1 item 7).
+    check_recipe_rules(recipe.row_template, ontology)
     # Materialised once, immediately, so `stage_raw_rows` sees every field
     # exactly as the connector produced it — before `resolve_rows` (the
     # pipeline's "normalise" step) touches any of it.

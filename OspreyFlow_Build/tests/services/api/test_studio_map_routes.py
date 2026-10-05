@@ -80,6 +80,26 @@ def test_put_row_template_as_source_author_succeeds(client: TestClient, tmp_path
     assert response.json()["row_template"]["entities"][0]["ref"] == "a"
 
 
+def test_put_row_template_naming_a_probabilistic_type_is_refused_and_saves_nothing(
+    client: TestClient, tmp_path: Path
+) -> None:
+    """ADR-081 step D: a recipe writes what the source records, which is Direct. Refused at save,
+    with the type named and the reason; the draft is left as it was."""
+    client.studio_recipes.draft = _ready_draft(tmp_path)  # type: ignore[attr-defined]
+    body = _row_template_body()
+    body["row_template"]["entities"].append(  # type: ignore[index]
+        {"ref": "b", "pole_class": "object", "type": "Endpoint", "properties": {}}
+    )
+    body["row_template"]["edges"] = [{"type": "SAME_AS", "from": "a", "to": "b"}]  # type: ignore[index]
+
+    response = client.put("/v1/ingest/recipes/recipe-1/row-template", json=body)
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "recipe_rule"
+    assert any("SAME_AS" in p for p in response.json()["problems"])
+    assert client.studio_recipes.update_calls == []  # type: ignore[attr-defined]
+
+
 def test_put_row_template_before_profile_has_run_is_a_conflict(client: TestClient) -> None:
     """§3: "the studio does not let you map until it has run" — a draft
     that hasn't cleared Connect's own gates yet (`ready_for_profile`) can't

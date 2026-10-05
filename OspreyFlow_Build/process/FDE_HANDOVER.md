@@ -181,7 +181,7 @@ Amendment 1 — read both before touching anything).
   step, or rejects it. Routes to propose, list and promote, each with an access-control test: a Viewer
   cannot propose, an Editor cannot promote, a proposal in one case is invisible in another. Step C decides
   whether the promotion screen is in the Glass or the Admin console.
-- **D, the Ingest Studio rule.** A relationship written by the Studio from the source's own schema is always
+- **D, the Ingest Studio rule — built 5 October 2026 (ADR-081 Amendment 3).** A relationship written by the Studio from the source's own schema is always
   Direct, and a recipe that names a Probabilistic type is refused at validation. No expression language
   (rule 8). The smallest of the three.
 

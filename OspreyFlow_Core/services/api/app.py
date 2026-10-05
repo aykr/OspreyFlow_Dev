@@ -62,6 +62,7 @@ from services.extract.writer import (
 from services.ingest.connectors.geo.site_grid import site_grid_rows
 from services.ingest.engine import run_recipe
 from services.ingest.recipe_loader import load_recipe
+from services.ingest.recipe_rules import RecipeRuleError, check_recipe_rules
 from services.ingest.staging import ObjectStorageConfig
 from services.resolve.trigger import JOB_TYPE_RESOLVE_ENTITY_TYPE, run_resolve_entity_type_job
 from valkey.asyncio import Valkey
@@ -1051,6 +1052,14 @@ async def _judgement_not_found_handler(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND, content={"error": "judgement_not_found"}
+    )
+
+
+@app.exception_handler(RecipeRuleError)
+async def _recipe_rule_handler(request: Request, exc: RecipeRuleError) -> JSONResponse:
+    """A recipe declares what the ingest rules refuse (ADR-081 step D); each problem is named."""
+    return JSONResponse(
+        status_code=422, content={"error": "recipe_rule", "problems": exc.problems}
     )
 
 
@@ -4314,6 +4323,7 @@ async def update_studio_recipe_row_template(
     scheme: HandlingSchemeDep,
     audit: AuditDep,
     body: RowTemplateUpdateInput,
+    ontology: OntologyDep,
 ) -> StudioRecipeDraft:
     """Map's save (§4). Every element's own `handling` override is checked
     against the draft's source-level marking before anything is written —
@@ -4330,6 +4340,8 @@ async def update_studio_recipe_row_template(
         validate_handling_tightens(baseline, entity.handling, scheme)
     for edge in body.row_template.edges:
         validate_handling_tightens(baseline, edge.handling, scheme)
+    # ADR-081 step D: refused at save, naming each problem; refused again when it runs.
+    check_recipe_rules(body.row_template, ontology)
     updated = await studio_recipes.update_row_template(
         recipe.recipe_id,
         principal,

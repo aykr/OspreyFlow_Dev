@@ -317,17 +317,23 @@ export async function updateRowTemplate(
     throw new RowTemplateSaveError("forbidden", "principal lacks the required studio role");
   }
   if (!response.ok) {
-    let body: { error?: unknown; detail?: unknown } = {};
+    let body: { error?: unknown; detail?: unknown; problems?: unknown } = {};
     try {
       body = await response.json();
     } catch {
       // Not a JSON error body — fall through with the generic detail below.
     }
     const code = typeof body.error === "string" ? body.error : "unknown_error";
+    // ADR-081 step D: the recipe rules name each problem; the analyst reads those words.
+    const problems = Array.isArray(body.problems)
+      ? body.problems.filter((p): p is string => typeof p === "string")
+      : [];
     const detail =
-      typeof body.detail === "string"
-        ? body.detail
-        : `PUT /v1/ingest/recipes/{id}/row-template: ${response.status}`;
+      problems.length > 0
+        ? problems.join(" ")
+        : typeof body.detail === "string"
+          ? body.detail
+          : `PUT /v1/ingest/recipes/{id}/row-template: ${response.status}`;
     throw new RowTemplateSaveError(code, detail);
   }
   return (await response.json()) as StudioRecipeDraft;

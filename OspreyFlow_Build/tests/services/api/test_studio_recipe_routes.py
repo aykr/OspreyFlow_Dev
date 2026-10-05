@@ -14,7 +14,14 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from services.api.app import app, get_audit, get_handling_scheme, get_principal, get_studio_recipes
+from services.api.app import (
+    app,
+    get_audit,
+    get_handling_scheme,
+    get_ontology,
+    get_principal,
+    get_studio_recipes,
+)
 from services.api.studio_recipes import (
     StudioRecipeCannotVersionError,
     StudioRecipeNotADraftError,
@@ -23,6 +30,7 @@ from services.api.studio_recipes import (
 )
 
 from ontology.handling import load_uk_le_scheme
+from ontology.loader import load_default_ontology
 from schemas.domain import Principal
 from schemas.ingest import CONNECTOR_CATALOGUE, StudioRecipeDraft, StudioRecipeStatus
 from tests.services.api.test_app import _FakeAudit
@@ -175,6 +183,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     # `HandlingScheme.clears`/`.handling_codes` (via `principal_may_view`),
     # unlike every route above it which never touches the scheme at all.
     app.dependency_overrides[get_handling_scheme] = lambda: load_uk_le_scheme()
+    app.dependency_overrides[get_ontology] = lambda: load_default_ontology()
 
     test_client = TestClient(app)
     test_client.studio_recipes = studio_recipes  # type: ignore[attr-defined]
