@@ -23,9 +23,11 @@ evidence and this file is wrong; say so and fix the file.
 - **Style.** British English in code comments, documentation and all user-facing copy. Always give full,
   complete commands to run, never "add this line" fragments. Keep replies short; one or two sentences on an
   outcome, not a recap.
-- **Git.** The owner commits and pushes. Do not push. Leave changes in the working tree, list the files, and
-  give him a complete `git add … && git commit -m "…"` command with a Conventional Commits message. **No
-  `Co-Authored-By` or `Claude-Session` lines in commit messages.**
+- **Git.** Since 4 October 2026 the owner lets the session commit directly ("can you start running the commit
+  commands"), naming each file; the owner pushes and you never do. Never stage `OspreyFlow_Core/osprey.yaml`
+  or `OspreyFlow_Core/data/`. Conventional Commits; each commit's message ends "record <previous hash>" and
+  fills the previous friction-log row's hash. **No `Co-Authored-By` or `Claude-Session` lines in commit
+  messages.**
 - **Owner runs** the things that need his judgement or his stack: seeds, the live specs, and any step that
   needs a download (downloads need an explicit yes). Docker and the Postgres/Valkey-backed tests may be run
   by you from this machine, one agent at a time (rule 14), and only after you have said what you are about to
@@ -84,7 +86,19 @@ demo accounts (they live in the `osprey` realm). The demo passwords are in
 live specs; you can, and **the "Not seen" notes in the friction log say which things were never seen against
 the real stack** (see section 5).
 
-## 4. State on 4 October 2026
+## 4. State on 5 October 2026
+
+- **Committed on 4 and 5 October 2026, to `439e664`:** ADR-090 and its Amendments 1 to 3 (analyst-proposed
+  relationship types, built: C1 `0021c3e`, C2 and C3 `439e664`); ADR-091 (link display names), ADR-092 and its
+  Amendments (emails as Documents, the full-screen reader), ADR-093 (selection), ADR-094 steps 1 to 3 (messages,
+  held media, file uploads), ADR-081 step D, ADR-084 Amendments 2 and 3, ADR-089 Amendment 1. None pushed.
+- **After ontology v12 (ADR-094 Amendment 1)** every published Studio recipe is flagged once: reopen it and
+  publish it again before it runs.
+- **Throwaway test containers** the session may start for live tests, all on 127.0.0.1 and none part of the
+  deployment: `fde-test-minio` (9000), `fde-test-postgres` (5433), `fde-test-arcadedb` (2480). Stop them with
+  `docker stop fde-test-minio fde-test-postgres fde-test-arcadedb` when done; they clash with `make dev-up`.
+
+### Earlier state (4 October 2026)
 
 - **Committed:** ADR-081 step A, `346c987` (basis, colour and thickness on relationship types; dotted and
   thick link drawing). Branch tabs, ADR-084, `42d87f6` (branch selected nodes into a new case; the strip of
@@ -115,7 +129,18 @@ the real stack** (see section 5).
   `osprey.yaml`).
 - The five `graph_arcadedb[gremlin]` working-set tests fail with "connection refused" unless the dev stack
   is up.
-- `route_coverage_check` lists many existing case routes.
+- `route_coverage_check` lists many existing case routes (the access, rename and delete routes, and `GET
+  /v1/investigations`).
+- `tests/extract/test_profile.py` expects `endpoint_kind` without `account` (added in ontology v10).
+- `decision_log_publication_check`: ADR-055 cites ADR-049. `doc_citations_check`: `scripts/probe_write_cost.py`
+  (twice in the decision log) and `inspector/linkHistory.ts` (in `tools/case_collision_check.py`).
+  `provenance_annotation_check`: spec 03 lines 92 and 118.
+- `tests/harness/test_apply_env.py` **really starts a deployment** (`osprey-local-lite`) through Docker when the
+  unit suite is run; it fails at `up` while the throwaway test containers hold their ports, and tears down.
+- **A live-service test file not yet wired** into `Makefile`'s `test` ignore list and a ci.yml live-service job
+  (the owner's edit; `test_file_coverage_check` fails until then): `tests/services/api/test_link_type_store.py`
+  (Postgres). The MinIO- and ArcadeDB-backed files from ADR-094 and ADR-090 sit under directories the `test`
+  target already ignores (`tests/ingest`, `tests/conformance/graph_port`).
 - `make glass-perf` fails two cases (the 50k/250k first frame and the pan/zoom sweep both time out at 60 seconds), at `b10f801` as well as after ADR-091, so the failure predates both; first seen 4 October 2026, not yet investigated.
 - `link-selection.spec.ts` ("a click a few pixels off a link selects it", "a click on the link itself") fails on a single worker and passes in the full keyboard run, at `b10f801` as well as later; not investigated.
 - One flaky browser case: "a failed expand announces an error" failed once under load and passed four
@@ -134,6 +159,9 @@ From the friction log, the owner's live checks still to do or report:
    at thickness 4 or 5), and `make glass-perf` with the new edge programs.
 6. Friction-log rows from earlier rounds that still say "Hash: recorded by the follow-up commit." Ask the
    owner for the hashes; do not guess.
+7. Everything built on 4 and 5 October 2026 after `4b4a6ba` (section 4): each friction-log row says what was
+   not seen. In particular, ADR-090 in the live Glass, signed in once as an Editor (*Define a new type…*) and
+   once as `osprey-admin` (*Proposed types*), and the media and upload work against the deployment's MinIO.
 
 ## 6. Open work, in the order the owner raised it
 
@@ -162,7 +190,7 @@ scripts.seed_internal enron --stop-api --replace-events` (the `Makefile` target 
 the flag to it, or a `seed-enron-events` target, is the owner's edit). The extraction routes use the
 deployment's local model (`CONFORMANCE_MODEL`) unless the caller names one; the Glass names none.
 
-### 6.2 ADR-081 steps B, C and D (each its own commit; B built, C designed as ADR-090, D not started)
+### 6.2 ADR-081 steps B, C and D (all built; the owner's live checks to do)
 
 The decision and the owner's answers to its open questions are in `spec/06_DECISIONS.md` (ADR-081 and
 Amendment 1 — read both before touching anything).
@@ -172,8 +200,10 @@ Amendment 1 — read both before touching anything).
   Probabilistic type is always probabilistic; a person never promotes a link to Direct. The Glass draws by
   the link's own basis. The ADR-080 change form asks for the basis each time, with no default, and offers
   Direct only where the type allows it. Confirming a `SAME_AS` link leaves it probabilistic.
-- **C, analyst proposals and promotion — designed 4 October 2026 as ADR-090 and its Amendment 1, not built;
-  read ADR-090 and its Amendment 1 before building; ADR-090 widens ADR-081 decision 5 and settles the promotion screen (the Glass).** An Editor proposes a type from the change form (name, the entity
+- **C, analyst proposals and promotion — built 5 October 2026 (ADR-090 and Amendments 1 to 3; Amendment 2
+  replaces the rewrite with labels read by alias, the owner's "rename by alias"). Open: the owner may overrule
+  a branch reading its parent's proposals rather than copying them (Amendment 2 decision 3); withdrawing from
+  the Glass is not offered (the route is built).** The original design, for reference: An Editor proposes a type from the change form (name, the entity
   types at each end, directed or not, basis, colour, thickness). It works at once in that case only, is
   labelled analyst-defined, is kept in the control-plane store, never in the shared ontology or the graph,
   is audited with a reason, and is always probabilistic until an administrator reclassifies it. An
