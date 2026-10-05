@@ -58,6 +58,7 @@ from schemas.domain import (
     SAME_AS,
     AuditStub,
     Edge,
+    EdgeTypeDef,
     EdgeWrite,
     Interval,
     OntologySchema,
@@ -69,6 +70,7 @@ from schemas.domain import (
 )
 
 from .link_notes import LinkNotFoundError
+from .link_types import LinkTypeService
 from .working_set.models import DeltaReplaceEdge
 from .working_set.service import WorkingSetService
 
@@ -231,13 +233,13 @@ class LinkChangeStore:
         return _row(row) if row else None
 
 
-def _snapshot(edge: Edge, ontology: OntologySchema) -> dict[str, Any]:
+def _snapshot(edge: Edge, type_def: EdgeTypeDef | None) -> dict[str, Any]:
     return {
         "type": edge.type,
         "properties": dict(edge.properties),
         "interval": edge.interval.model_dump(mode="json") if edge.interval else None,
         "occurrences": edge.occurrences,
-        "basis": effective_basis(edge.basis, ontology.edge_type(edge.type)),
+        "basis": effective_basis(edge.basis, type_def, written_at=edge.audit.created_at),
     }
 
 
@@ -249,12 +251,34 @@ class LinkChangeService:
         graph: GraphPort,
         ontology: OntologySchema,
         notes: _Rekey,
+        types: LinkTypeService | None = None,
     ) -> None:
         self._store = store
         self._working_set = working_set
         self._graph = graph
         self._ontology = ontology
         self._notes = notes
+        self._types = types
+
+    def _type_of(self, name: str) -> EdgeTypeDef | None:
+        """The type an existing link reads as, offered in the case or not (ADR-090)."""
+        if self._types is not None:
+            found = self._types.type_named(name)
+            return found.definition if found is not None else None
+        return self._ontology.edge_type(name)
+
+    async def _wanted_type(
+        self, investigation_id: str, principal: Principal, name: str, old_type: str
+    ) -> tuple[EdgeTypeDef, str] | None:
+        """The type a link is changed to and the label it is written under: one the case is
+        offered (a pending proposal's own label, ADR-090 Amendment 1), or the type it already has."""
+        if self._types is None:
+            found = self._ontology.edge_type(name)
+            return (found, name) if found is not None else None
+        entry = (await self._types.case_types(investigation_id, principal)).get(name)
+        if entry is None and name == old_type:
+            entry = self._types.type_named(name)
+        return (entry.definition, entry.storage_name) if entry is not None else None
 
     async def _visible(self, investigation_id: str, edge_id: str, principal: Principal) -> Edge:
         edge = await self._working_set.visible_edge(investigation_id, edge_id, principal)
@@ -289,9 +313,11 @@ class LinkChangeService:
         if new_occurrences < 1:
             raise InvalidChangeError("occurrences must be at least 1.")
 
-        type_def = self._ontology.edge_type(new_type)
-        if type_def is None:
-            raise InvalidChangeError(f"{new_type!r} is not a link type in this ontology.")
+        wanted_type = await self._wanted_type(investigation_id, principal, new_type, old.type)
+        if wanted_type is None:
+            raise InvalidChangeError(f"{new_type!r} is not a link type offered in this case.")
+        type_def, write_type = wanted_type
+        old_def = self._type_of(old.type)
         ends = await self._working_set.end_types(investigation_id, old)
         if ends is None:
             raise LinkNotFoundError(edge_id)
@@ -304,8 +330,10 @@ class LinkChangeService:
         # What stands behind the link (ADR-081 step B). Asked for or kept, it is never Direct
         # over anything probabilistic: not over a Probabilistic type, and not over a link that
         # was already probabilistic, because a person never promotes a link to Direct.
-        old_basis = effective_basis(old.basis, self._ontology.edge_type(old.type))
-        wanted = request.basis if request.basis is not None else old_basis
+        old_basis = effective_basis(old.basis, old_def, written_at=old.audit.created_at)
+        # Kept rather than asked for, a basis follows the new type where that type is probabilistic.
+        kept = "probabilistic" if type_def.basis == "probabilistic" else old_basis
+        wanted = request.basis if request.basis is not None else kept
         if wanted == "direct":
             if type_def.basis == "probabilistic":
                 raise InvalidChangeError(
@@ -330,7 +358,7 @@ class LinkChangeService:
                 "basis": new_basis,
             }
         )
-        if _snapshot(candidate, self._ontology) == _snapshot(old, self._ontology):
+        if _snapshot(candidate, type_def) == _snapshot(old, old_def):
             raise ChangeNotMadeError("Nothing about the link would change.")
 
         now = datetime.now(UTC)
@@ -347,7 +375,7 @@ class LinkChangeService:
         )
         write = EdgeWrite(
             id=replacement_id,
-            type=new_type,
+            type=write_type,
             source=old.source,
             target=old.target,
             properties=dict(new_properties),
@@ -391,8 +419,8 @@ class LinkChangeService:
             changed_by=principal.id,
             changed_at=now,
             reason=reason,
-            before=_snapshot(old, self._ontology),
-            after=_snapshot(new, self._ontology),
+            before=_snapshot(old, old_def),
+            after=_snapshot(new, type_def),
         )
         await self._store.add(change)
         await self._notes.rekey(investigation_id, old.id, replacement_id)

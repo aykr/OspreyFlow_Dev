@@ -187,12 +187,18 @@ class EdgeTypeDef(BaseModel):
     colour: str | None = None      # one of the nine data-channel names; None keeps the ordinary line colour
     thickness: int | None = None   # 1 to 5; None keeps the weight-only width
     label: str | None = None       # ADR-091: display name in sentence case; None derives it from name
+    aliases: list[str] = []        # ADR-090 Am1: other stored labels that read as this type
+    direct_since: datetime | None = None   # ADR-090: promoted as Direct; links written before stay probabilistic
+    analyst_defined: bool = False  # ADR-090: proposed by an analyst, never authored in YAML
+    hidden: bool = False           # ADR-090: a proposal's own storage label; never offered or sent to the Glass
     properties: list[PropertyDef] = []
 
 class OntologySchema(BaseModel):
     version: int
     entity_types: list[EntityTypeDef]
     edge_types: list[EdgeTypeDef]
+    storage_aliases: dict[str, str] = {}   # ADR-090: a proposal's storage label -> the name its links read as
+    overlay_revision: int = 0              # ADR-090: rises at each promotion and retirement; `version` does not
 ```
 
 `PropertyDef` is one property line from the YAML above (`{name: family_name, type: string,
@@ -222,8 +228,23 @@ Direct type marked `probabilistic`, statistically derived or declared by an anal
 is kept in the link's change history. A link written without one takes its type's basis, which every
 loader and the resolution engine write; `effective_basis` reads the two together, and a link of a
 Probabilistic type is probabilistic whatever is stored on it. A person never promotes a link to Direct.
-Analyst-proposed types and the Ingest Studio's refusal of a probabilistic type are decided in ADR-081
-and not yet built.
+The Ingest Studio's refusal of a probabilistic type is built (ADR-081 step D, `recipe_rules.py`).
+
+**Analysts may propose a relationship type (ADR-090 and its Amendments).** The ontology in force is
+`default.yaml` plus every proposal, composed by one function (`services/api/link_types.py`'s
+`compose_ontology`) at start-up and after each proposal and decision. A pending proposal is usable at
+once in its own case, the cases branched from it, and any case where the caller can see one of its
+links; it is probabilistic. Each proposal's links are stored under a label of their own,
+`<name>__<proposal id>`, declared as a `hidden` type so the graph store accepts them, and
+`storage_aliases` makes that label read as the name the links answer to: the proposal's own while
+pending, rejected, withdrawn or retired, the promoted name once promoted, merged or renamed. So no
+link is ever rewritten, restricted ones included: renaming, merging and retiring change one mapping.
+A type promoted as Direct is Direct only for links written from `direct_since`. The tests that would
+fail are `tests/services/api/test_link_type_overlay.py` (the composition),
+`test_link_type_service.py` (who may do what, and what each case is offered),
+`test_link_type_routes.py` (levels, roles, and that `/v1/ontology` never sends a storage label),
+`test_link_type_store.py` (an administrator reads only their own unit's, on real Postgres) and
+`tests/conformance/graph_port/test_type_aliases.py` (labels written and read on real ArcadeDB).
 
 Applying a schema returns a report, not a bare success flag:
 

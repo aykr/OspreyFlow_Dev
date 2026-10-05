@@ -83,6 +83,9 @@ class _Store:
         level = self._level(principal) if principal.org_unit == "unit-1" else None
         return [] if level is None else [(self.case, level)]
 
+    async def hidden_tab_ids(self, principal: Principal) -> set[str]:
+        return set()
+
     async def list_grants(self, investigation_id: str) -> dict[str, AccessLevel]:
         return dict(self.grants)
 

@@ -31,8 +31,13 @@ export type Basis = ("direct" | "probabilistic") | null;
 export type Colour = string | null;
 export type Thickness = number | null;
 export type Label = string | null;
+export type Aliases = string[];
+export type DirectSince = string | null;
+export type AnalystDefined = boolean;
+export type Hidden = boolean;
 export type Properties1 = PropertyDef[];
 export type EdgeTypes = EdgeTypeDef[];
+export type OverlayRevision = number;
 
 /**
  * The loaded, validated ontology — what `GraphPort.apply_schema` takes
@@ -43,6 +48,8 @@ export interface OntologySchema {
   version: Version;
   entity_types: EntityTypes;
   edge_types: EdgeTypes;
+  storage_aliases?: StorageAliases;
+  overlay_revision?: OverlayRevision;
   [k: string]: unknown;
 }
 export interface EntityTypeDef {
@@ -86,6 +93,13 @@ export interface EdgeTypeDef {
   colour?: Colour;
   thickness?: Thickness;
   label?: Label;
+  aliases?: Aliases;
+  direct_since?: DirectSince;
+  analyst_defined?: AnalystDefined;
+  hidden?: Hidden;
   properties?: Properties1;
   [k: string]: unknown;
+}
+export interface StorageAliases {
+  [k: string]: string;
 }

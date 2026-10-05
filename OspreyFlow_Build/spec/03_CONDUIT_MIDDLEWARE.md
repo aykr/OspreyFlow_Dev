@@ -101,8 +101,8 @@ Author; a new case is visible to nobody else until shared; cases that existed be
 
 | Level | Routes under `/v1/investigations/{id}` |
 |---|---|
-| Viewer | `GET` the case; `tab` (PUT: the caller's own flag, ADR-084); `expand/preview`; `resolution/threshold` (GET); `resolution/explain/{cluster}`; `compute/{metric}`; `ingest/candidates` (GET); `dossier/documents/{doc}`; `history` (GET); `judgements`, `gaps`, `assumptions` (GET); `links/{edge}/notes` (GET), `links/{edge}/history` (GET); `sites/{site}` and its `image` (GET); the delta stream |
-| Editor | `branch`; `seed`; `expand`; `nodes` (DELETE); `resolution/threshold` (PUT), `link`, `split`; `ingest/extract`, candidate `accept` and `reject`; `history/{step}` (restore); `judgements`, `gaps`, `assumptions` (POST); `links/{edge}/notes` (POST), `links/{edge}/notes/{note}` (PUT, DELETE), `links/{edge}/change` (POST); `export`; `sites` (POST), `control-points`, `grid`; `ingest/recipes/{recipe}/run` |
+| Viewer | `GET` the case; `tab` (PUT: the caller's own flag, ADR-084); `expand/preview`; `resolution/threshold` (GET); `resolution/explain/{cluster}`; `compute/{metric}`; `ingest/candidates` (GET); `dossier/documents/{doc}`; `history` (GET); `judgements`, `gaps`, `assumptions` (GET); `links/{edge}/notes` (GET), `links/{edge}/history` (GET); `link-types` (GET, ADR-090); `sites/{site}` and its `image` (GET); the delta stream |
+| Editor | `branch`; `seed`; `expand`; `nodes` (DELETE); `resolution/threshold` (PUT), `link`, `split`; `ingest/extract`, candidate `accept` and `reject`; `history/{step}` (restore); `judgements`, `gaps`, `assumptions` (POST); `links/{edge}/notes` (POST), `links/{edge}/notes/{note}` (PUT, DELETE), `links/{edge}/change` (POST); `link-types` (POST), `link-types/{proposal}/withdraw` (the proposer or an Author, ADR-090); `export`; `sites` (POST), `control-points`, `grid`; `ingest/recipes/{recipe}/run` |
 | Author | `PATCH` the case (rename); `DELETE` the case (a soft remove: it then reads as not found to everyone, nothing is deleted, ADR-052 Amendment 7; the unit's `osprey-admin` may too, through the same safety net); `access` (PUT: the unit-wide level, which is none, Viewer or Editor, never Author); `access/grants/{account}` (PUT, DELETE); `access/history`. An `osprey-admin` in the case's own unit may also use these without holding a level (the safety net, audited as `access_admin_override`); that gives no other access. |
 
 `GET /v1/investigations` lists the cases the caller holds a level on (id, name, their level, created,
@@ -182,6 +182,7 @@ POST   /v1/analytics/first-seen         when each node and link first appears in
 GET    /v1/investigations/{investigation_id}/links/{edge_id}/events   the events behind one link (the emails between two addresses), newest first, paged, Viewer (ADR-089)
 POST   /v1/investigations/{investigation_id}/links/{edge_id}/events/documents   the emails on the link inside a window written as Documents and put on the canvas, or limit_exceeded, or not_documents (422) when no event carries text, Editor (ADR-092)
 GET    /v1/investigations/{investigation_id}/documents/{document_id}/reader   a Document's full text with its accepted entities marked, for the full-screen reader, Viewer (ADR-092)
+POST   /v1/investigations/{investigation_id}/documents   a file (image, video, text) added to the case as a Document, held by a node if one is named, with a marking and a legal basis, Editor (ADR-094)
 GET    /v1/investigations/{investigation_id}/documents/{document_id}/file   a held Document's file (image, video, kept text) from the media store, Viewer (ADR-094)
 POST   /v1/investigations/{investigation_id}/documents/{document_id}/extract   entities from a held Document by kind: text, an image described and read, a video transcribed, Editor (ADR-094)
 POST   /v1/investigations/{investigation_id}/documents/{document_id}/candidates/{candidate_id}/accept   accept one finding from a held Document as an inferred node, Editor (ADR-094)
@@ -240,6 +241,9 @@ POST   /v1/investigations/{id}/links/{edge}/notes   add a note (`{"body": "..."}
 PUT    /v1/investigations/{id}/links/{edge}/notes/{note}      change the caller's own note; 403 `note_not_yours` for anyone else's
 DELETE /v1/investigations/{id}/links/{edge}/notes/{note}      remove the caller's own note, 204; 403 `note_not_yours` for anyone else's
 POST   /v1/investigations/{id}/links/{edge}/change   change a link's type and/or details (`{"reason": "...", "type"?, "properties"?, "interval"?, "occurrences"?}`) by superseding it; 200 with the new link, the `replace_edge` step and the change record; 404 `link_not_found` as for notes; 422 `invalid_link_change` (no reason, over 1,000 characters, or the ontology refuses), `nothing_changed`, `resolution_link` for a same-as or not-the-same link, either way round (ADR-080)
+GET    /v1/investigations/{investigation_id}/link-types   the relationship types a link in the case may take: the ontology's, and those analysts proposed in the case, the cases it was branched from, or on a link the caller can see in it (`proposal_id` set), Viewer (ADR-090)
+POST   /v1/investigations/{investigation_id}/link-types   propose a type when none fits (`{"name", "from_types", "to_types", "directed"?, "label"?, "colour"?, "thickness"?, "reason"}`): usable at once in the case, probabilistic; 422 `proposal_refused` for a name the ontology has or the case already offers, or one that is not a type name, Editor (ADR-090)
+POST   /v1/investigations/{investigation_id}/link-types/{proposal_id}/withdraw   withdraw a pending proposal of the case (`{"reason"}`), its proposer or an Author; 404 `proposal_not_found`, Editor (ADR-090)
 GET    /v1/investigations/{id}/links/{edge}/history  every earlier version of one link and the changes between them, newest first, at most 100 steps (`truncated` says so) — 404 `link_not_found` unless the caller may see the link (ADR-080)
 POST   /v1/investigations/{id}/export    runs the handling gate; may return 409 with blockers
 GET    /v1/exports                       the compliance-facing export ledger (ADR-047's own Gap 2) — role-gated, not per-investigation
@@ -484,6 +488,10 @@ own recipe) rather than creating duplicate location entities.
 
 ```
 GET    /v1/ontology                              entity/edge type names, channels, shapes, identifiers
+GET    /v1/admin/link-types                      the proposed relationship types of the administrator's own unit, newest first, `osprey-admin` (ADR-090)
+POST   /v1/admin/link-types/{proposal_id}/promote   into the ontology for every case (`{"basis", "reason", "rename_to"?}`): Direct only from now on; merged into a promoted type of its name whose links it fits, or 422 `proposal_refused` (rename it); another unit's is 404 `proposal_not_found`, `osprey-admin` (ADR-090)
+POST   /v1/admin/link-types/{proposal_id}/reject    no longer offered; its links stay and keep its name (`{"reason"}`), `osprey-admin` (ADR-090)
+POST   /v1/admin/link-types/retire                  a promoted type of the unit no longer offered anywhere (`{"name", "reason"}`); its links stay, `osprey-admin` (ADR-090)
 GET    /v1/map/providers                        the deployment's declared map providers, for the layer control
 GET    /v1/map/tiles/{provider_id}/{z}/{x}/{y}   the tile proxy for a tier-3/4 provider
 GET    /v1/map/local-source/{provider_id}        a tier-1/2 provider's local PMTiles file, over HTTP
@@ -494,6 +502,15 @@ is entity type; shape is entity type too") reads, rather than a hardcoded copy o
 ontology/default.yaml` in the frontend — the ontology already carries `EntityTypeDef.channel`/
 `.shape` per type, and duplicating that mapping client-side would drift the moment a deployment's
 ontology changes.
+
+**It is the ontology in force, not `default.yaml` alone** (ADR-090): the types analysts proposed and
+an administrator promoted are in it, with the `overlay_revision` that rose at each promotion and
+retirement, while `version` is still the authored one. A pending proposal is not: it is offered only
+by `.../link-types` in the cases it belongs to. The label each proposal's links are stored under
+(`<name>__<proposal id>`) and the aliases that make those labels read as a name are the Vault's
+business, and this route strips both, as a source-system identifier is kept from the Glass (rule 7).
+Every proposal and decision is audited (`link_type_propose`, `_withdraw`, `_promote`, `_reject`,
+`_retire`) with its reason.
 
 **The map routes are a real spec silence, not an oversight in this table alone** — `02_
 GLASS_FRONTEND.md` requires the layer control this section documents but never named the endpoint

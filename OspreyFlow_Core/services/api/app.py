@@ -280,6 +280,21 @@ from .link_notes import (
     NoteNotFoundError,
     NoteNotYoursError,
 )
+from .link_type_store import LinkTypeProposalStore
+from .link_types import (
+    CaseLinkTypesResponse,
+    LinkTypeDecisionRequest,
+    LinkTypeOption,
+    LinkTypeProposal,
+    LinkTypeProposalList,
+    LinkTypeService,
+    PromoteLinkTypeRequest,
+    ProposalNotFoundError,
+    ProposalRefusedError,
+    ProposeLinkTypeRequest,
+    RetireLinkTypeRequest,
+    public_ontology,
+)
 from .mapconfig_loader import load_map_config, public_view
 from .monitors import MonitorNotFoundError, MonitorStore
 from .notify import notify_channel, publish_delta
@@ -412,6 +427,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     judgements_store = await JudgementStore.connect(config.postgres.dsn)
     link_notes_store = await LinkNoteStore.connect(config.postgres.dsn)
     link_changes_store = await LinkChangeStore.connect(config.postgres.dsn)
+    link_type_store = await LinkTypeProposalStore.connect(config.postgres.dsn)
     suppression_marks = await SuppressionMarkStore.connect(config.postgres.dsn)
     gaps_store = await IntelligenceGapStore.connect(config.postgres.dsn)
     assumptions_store = await AssumptionStore.connect(config.postgres.dsn)
@@ -461,8 +477,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.alerts_store = alerts_store
     app.state.judgements_store = judgements_store
     app.state.link_notes = LinkNoteService(link_notes_store, app.state.working_set)
+    # ADR-090: the ontology in force is `default.yaml` plus every proposal, composed here and after
+    # each proposal and decision, in place, so every service holding `ontology` sees it.
+    app.state.link_types = LinkTypeService(
+        link_type_store, ontology, graph, app.state.working_set, investigations
+    )
+    await app.state.link_types.refresh()
     app.state.link_changes = LinkChangeService(
-        link_changes_store, app.state.working_set, graph, ontology, link_notes_store
+        link_changes_store,
+        app.state.working_set,
+        graph,
+        ontology,
+        link_notes_store,
+        app.state.link_types,
     )
     app.state.link_events = LinkEventsService(app.state.working_set, analytics, investigations)
     # ADR-094: where a content item's file is kept; never the graph.
@@ -558,6 +585,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await judgements_store.close()
         await link_notes_store.close()
         await link_changes_store.close()
+        await link_type_store.close()
         await gaps_store.close()
         await assumptions_store.close()
         await export_ledger.close()
@@ -805,6 +833,13 @@ def get_link_changes(request: Request) -> LinkChangeService:
 
 
 LinkChangesDep = Annotated[LinkChangeService, Depends(get_link_changes)]
+
+
+def get_link_types(request: Request) -> LinkTypeService:
+    return request.app.state.link_types  # type: ignore[no-any-return]
+
+
+LinkTypesDep = Annotated[LinkTypeService, Depends(get_link_types)]
 
 
 def get_suppression_marks(request: Request) -> SuppressionMarkStore:
@@ -1136,6 +1171,17 @@ async def _link_not_found_handler(request: Request, exc: LinkNotFoundError) -> J
     """A link that is not in the working set and a link this principal may not see give this one
     answer (`services/api/link_notes.py`)."""
     return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "link_not_found"})
+
+
+@app.exception_handler(ProposalNotFoundError)
+async def _proposal_not_found_handler(request: Request, exc: ProposalNotFoundError) -> JSONResponse:
+    """No such proposal and one of another unit give this one answer (ADR-090)."""
+    return JSONResponse(status_code=404, content={"error": "proposal_not_found"})
+
+
+@app.exception_handler(ProposalRefusedError)
+async def _proposal_refused_handler(request: Request, exc: ProposalRefusedError) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"error": "proposal_refused", "detail": str(exc)})
 
 
 @app.exception_handler(InvalidChangeError)
@@ -2734,6 +2780,162 @@ async def change_link_route(
     return result
 
 
+# --- relationship types proposed by analysts (ADR-090) ------------------------------------
+
+
+@app.get("/v1/investigations/{investigation_id}/link-types")
+async def case_link_types_route(
+    investigation: InvestigationViewerDep, principal: PrincipalDep, link_types: LinkTypesDep
+) -> CaseLinkTypesResponse:
+    """The types a link in this case may take: the ontology's, and those proposed in the case,
+    the cases it was branched from, or for a link the caller can see in it. Not audited, like the
+    ontology itself."""
+    offered = await link_types.case_types(investigation.id, principal)
+    return CaseLinkTypesResponse(
+        types=[
+            LinkTypeOption(definition=t.definition, proposal_id=t.proposal_id)
+            for t in offered.values()
+        ]
+    )
+
+
+@app.post("/v1/investigations/{investigation_id}/link-types")
+async def propose_link_type_route(
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    body: ProposeLinkTypeRequest,
+    link_types: LinkTypesDep,
+    audit: AuditDep,
+) -> LinkTypeProposal:
+    """Propose a type when none fits (ADR-090): usable at once in this case, probabilistic, until an
+    administrator of the unit decides."""
+    proposal = await link_types.propose(
+        investigation.id,
+        principal,
+        name=body.name,
+        from_types=body.from_types,
+        to_types=body.to_types,
+        directed=body.directed,
+        colour=body.colour,
+        thickness=body.thickness,
+        label=body.label,
+        reason=body.reason,
+    )
+    await audit.record(
+        principal=principal,
+        action="link_type_propose",
+        investigation_id=investigation.id,
+        resolved_query={"proposal_id": proposal.id, "name": proposal.name},
+        result_cardinality=1,
+        justification=proposal.reason,
+    )
+    return proposal
+
+
+@app.post("/v1/investigations/{investigation_id}/link-types/{proposal_id}/withdraw")
+async def withdraw_link_type_route(
+    investigation: InvestigationEditorDep,
+    proposal_id: str,
+    principal: PrincipalDep,
+    body: LinkTypeDecisionRequest,
+    investigations: InvestigationsDep,
+    link_types: LinkTypesDep,
+    audit: AuditDep,
+) -> LinkTypeProposal:
+    """Its proposer, or an Author of the case, withdraws a pending proposal of this case."""
+    try:
+        await investigations.get_authorized(investigation.id, principal, need=AccessLevel.AUTHOR)
+        is_author = True
+    except (InvestigationNotFoundError, InsufficientAccessError):
+        is_author = False
+    proposal = await link_types.withdraw(
+        investigation.id, proposal_id, principal, reason=body.reason, is_author=is_author
+    )
+    await audit.record(
+        principal=principal,
+        action="link_type_withdraw",
+        investigation_id=investigation.id,
+        resolved_query={"proposal_id": proposal.id, "name": proposal.name},
+        result_cardinality=1,
+        justification=body.reason,
+    )
+    return proposal
+
+
+@app.get("/v1/admin/link-types")
+async def list_link_type_proposals_route(
+    principal: Annotated[Principal, Depends(require_admin_role)], link_types: LinkTypesDep
+) -> LinkTypeProposalList:
+    """The administrator's list: every proposal of their own unit, newest first."""
+    return LinkTypeProposalList(proposals=await link_types.proposals(principal))
+
+
+@app.post("/v1/admin/link-types/{proposal_id}/promote")
+async def promote_link_type_route(
+    proposal_id: str,
+    principal: Annotated[Principal, Depends(require_admin_role)],
+    body: PromoteLinkTypeRequest,
+    link_types: LinkTypesDep,
+    audit: AuditDep,
+) -> LinkTypeProposal:
+    proposal = await link_types.promote(
+        proposal_id, principal, basis=body.basis, reason=body.reason, rename_to=body.rename_to
+    )
+    await audit.record(
+        principal=principal,
+        action="link_type_promote",
+        investigation_id=proposal.investigation_id,
+        resolved_query={
+            "proposal_id": proposal.id,
+            "name": proposal.reads_as,
+            "status": proposal.status.value,
+            "basis": body.basis,
+        },
+        result_cardinality=1,
+        justification=body.reason,
+    )
+    return proposal
+
+
+@app.post("/v1/admin/link-types/{proposal_id}/reject")
+async def reject_link_type_route(
+    proposal_id: str,
+    principal: Annotated[Principal, Depends(require_admin_role)],
+    body: LinkTypeDecisionRequest,
+    link_types: LinkTypesDep,
+    audit: AuditDep,
+) -> LinkTypeProposal:
+    proposal = await link_types.reject(proposal_id, principal, reason=body.reason)
+    await audit.record(
+        principal=principal,
+        action="link_type_reject",
+        investigation_id=proposal.investigation_id,
+        resolved_query={"proposal_id": proposal.id, "name": proposal.name},
+        result_cardinality=1,
+        justification=body.reason,
+    )
+    return proposal
+
+
+@app.post("/v1/admin/link-types/retire")
+async def retire_link_type_route(
+    principal: Annotated[Principal, Depends(require_admin_role)],
+    body: RetireLinkTypeRequest,
+    link_types: LinkTypesDep,
+    audit: AuditDep,
+) -> LinkTypeProposalList:
+    """A promoted type no longer offered anywhere; its links stay and read as it."""
+    retired = await link_types.retire(body.name, principal, reason=body.reason)
+    await audit.record(
+        principal=principal,
+        action="link_type_retire",
+        resolved_query={"name": body.name, "proposal_ids": [p.id for p in retired]},
+        result_cardinality=len(retired),
+        justification=body.reason,
+    )
+    return LinkTypeProposalList(proposals=retired)
+
+
 @app.get("/v1/investigations/{investigation_id}/links/{edge_id}/history")
 async def link_history_route(
     investigation: InvestigationViewerDep,
@@ -3412,8 +3614,11 @@ async def get_ontology_route(principal: PrincipalDep, ontology: OntologyDep) -> 
     but not investigation-scoped and not audited: this is deployment-wide
     schema *metadata* (entity/edge type names, channels, shapes,
     identifiers) — never a node, a property value or a count — the same
-    category of thing `principal_may_view` was never meant to gate."""
-    return ontology
+    category of thing `principal_may_view` was never meant to gate.
+
+    The types proposed and promoted by analysts are in it once promoted (ADR-090); the labels a
+    proposal's links are stored under, and their aliases, are not (`public_ontology`)."""
+    return public_ontology(ontology)
 
 
 @app.get("/v1/map/providers")

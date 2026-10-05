@@ -27,7 +27,7 @@ from .gremlin_literals import (
     groovy_string_list_literal,
     groovy_string_literal,
 )
-from .naming import physical_type_name
+from .naming import physical_edge_labels, physical_type_name
 
 _EDGE_STEP = {"out": "outE", "in": "inE", "both": "bothE"}
 _OTHER_VERTEX_STEP = {"out": "inV", "in": "outV", "both": "otherV"}
@@ -240,7 +240,7 @@ class ExpandBuilder:
     def _edge_label_filter(self) -> str:
         if not self.request.edge_types:
             return ""
-        physical = [physical_type_name(t) for t in self.request.edge_types]
+        physical = [label for t in self.request.edge_types for label in physical_edge_labels(t)]
         # `hasLabel(...)` is a varargs step (`hasLabel('a','b')`), not a
         # list-argument one — `.hasLabel(['a'])` (a single Groovy List)
         # fails against ArcadeDB's Gremlin engine with a bare
@@ -380,7 +380,7 @@ class PathBuilder:
         target_lit = groovy_string_literal(self.request.target)
         edge_filter = ""
         if self.request.edge_types:
-            physical = [physical_type_name(t) for t in self.request.edge_types]
+            physical = [label for t in self.request.edge_types for label in physical_edge_labels(t)]
             # See `ExpandBuilder._edge_label_filter`'s comment — the same
             # varargs-not-list bug, same fix.
             edge_filter = f".hasLabel({groovy_args_literal(physical)})"
@@ -523,9 +523,9 @@ class MatchBuilder:
             if edge.from_var not in bound:
                 return None
             to_node = node_by_var.get(edge.to_var)
-            physical_edge_type = physical_type_name(edge.edge_type)
+            edge_labels = physical_edge_labels(edge.edge_type)
             steps.append(f".select({groovy_string_literal(edge.from_var)})")
-            steps.append(f".outE({groovy_string_literal(physical_edge_type)})")
+            steps.append(f".outE({groovy_args_literal(edge_labels)})")
             steps.append(f".{has_access}")
             steps.append(".inV()")
             steps.append(f".{has_access}")
@@ -659,9 +659,9 @@ class MatchBuilder:
         steps.append(f".as({groovy_string_literal(primary.var)})")
         for edge in primary_chain:
             to_node = node_by_var.get(edge.to_var)
-            physical_edge_type = physical_type_name(edge.edge_type)
+            edge_labels = physical_edge_labels(edge.edge_type)
             steps.append(f".select({groovy_string_literal(edge.from_var)})")
-            steps.append(f".outE({groovy_string_literal(physical_edge_type)})")
+            steps.append(f".outE({groovy_args_literal(edge_labels)})")
             steps.append(f".{has_access}")
             steps.append(".inV()")
             steps.append(f".{has_access}")
@@ -688,8 +688,9 @@ class MatchBuilder:
             assert root.node_id is not None  # guaranteed by the secondary_roots check above
             reverse_steps = []
             for edge in reversed(secondary_chain):
-                physical_edge_type = physical_type_name(edge.edge_type)
-                reverse_steps.append(f".in({groovy_string_literal(physical_edge_type)})")
+                reverse_steps.append(
+                    f".in({groovy_args_literal(physical_edge_labels(edge.edge_type))})"
+                )
                 reverse_steps.append(f".{has_access}")
             reverse_steps.append(f'.has("id",{groovy_string_literal(root.node_id)})')
             steps.append(f".select({groovy_string_literal(join_var)})")

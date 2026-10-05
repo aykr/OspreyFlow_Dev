@@ -15,7 +15,6 @@ sent in it is discarded, so a request body cannot name another case's events int
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Protocol
 
 from schemas.analytics import EventFilter, InheritedEvents
 from schemas.domain import Principal
@@ -25,18 +24,17 @@ from .investigations import (
     InsufficientAccessError,
     Investigation,
     InvestigationNotFoundError,
+    InvestigationStore,
 )
 
 #: A branch family deeper than this is a loop in the data, not a real lineage.
 MAX_LINEAGE = 64
 
 
-class CaseRecords(Protocol):
-    async def get(self, investigation_id: str) -> Investigation: ...
-
-    async def get_authorized(
-        self, investigation_id: str, principal: Principal, *, need: AccessLevel
-    ) -> Investigation: ...
+#: The case store this reads lineage from. An alias rather than a `Protocol` restating
+#: `get_authorized`: a body-less `*authorized*` method in `services/api` reads, to
+#: `tools/authorized_query_check.py`, as a fetch-then-check, and the gate is right to ask.
+CaseRecords = InvestigationStore
 
 
 async def visible_ancestors(

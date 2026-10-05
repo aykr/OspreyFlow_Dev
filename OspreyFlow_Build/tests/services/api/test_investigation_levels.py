@@ -63,6 +63,11 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("DELETE", P + "/links/{edge_id}/notes/{note_id}"): E,
     # Changing a link (ADR-080) changes the case; reading a link's history is a read of it.
     ("POST", P + "/links/{edge_id}/change"): E,
+    # ADR-090: the types a link may take here is a read; proposing one and withdrawing it change
+    # what the case offers. Withdrawing is the proposer's or an Author's, checked in the service.
+    ("GET", P + "/link-types"): V,
+    ("POST", P + "/link-types"): E,
+    ("POST", P + "/link-types/{proposal_id}/withdraw"): E,
     ("GET", P + "/links/{edge_id}/history"): V,
     ("GET", P + "/links/{edge_id}/events"): V,
     ("POST", P + "/links/{edge_id}/events/{event_id}/extract"): E,

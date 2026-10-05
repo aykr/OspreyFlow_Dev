@@ -163,3 +163,25 @@ def test_a_label_is_optional(tmp_path: Path) -> None:
 def test_a_blank_or_non_text_label_is_refused(tmp_path: Path, bad: object) -> None:
     with pytest.raises(OntologyError):
         load_ontology(_write(tmp_path, _doc(basis="direct", label=bad)))
+
+
+# --- promoted as Direct: Direct only from then (ADR-090 decision 6) --------------------------
+
+
+def test_a_link_written_before_its_type_was_promoted_as_direct_stays_probabilistic() -> None:
+    from datetime import UTC, datetime
+
+    promoted = EdgeTypeDef.model_validate(
+        {
+            "name": "KNOWN_TO",
+            "from": ["Person"],
+            "to": ["Person"],
+            "basis": "direct",
+            "direct_since": datetime(2026, 10, 5, 12, tzinfo=UTC),
+        }
+    )
+    before = datetime(2026, 10, 5, 11, tzinfo=UTC)
+    after = datetime(2026, 10, 5, 13, tzinfo=UTC)
+    assert effective_basis(None, promoted, written_at=before) == "probabilistic"
+    assert effective_basis(None, promoted, written_at=after) == "direct"
+    assert effective_basis("probabilistic", promoted, written_at=after) == "probabilistic"

@@ -77,7 +77,7 @@ from .gremlin_literals import (
     groovy_string_list_literal,
     groovy_string_literal,
 )
-from .naming import logical_type_name, physical_type_name
+from .naming import logical_type_name, physical_type_name, set_edge_aliases
 from .schema import apply_schema as _apply_schema_ddl
 from .schema import drop_schema as _drop_schema_ddl
 from .serialization import (
@@ -702,6 +702,12 @@ class GraphArcadeDBAdapter:
 
     async def apply_schema(self, schema: OntologySchema) -> SchemaReport:
         report = await _apply_schema_ddl(self._client, schema)
+        # ADR-090 Amendment 1: the old names a type answers to, and each proposal's own storage
+        # label (its links read as the name it is an alias of).
+        aliases: dict[str, list[str]] = {t.name: list(t.aliases) for t in schema.edge_types}
+        for storage, logical in schema.storage_aliases.items():
+            aliases.setdefault(logical, []).append(storage)
+        set_edge_aliases(aliases)
         self._schema = schema
         self._schema_history[schema.version] = schema
         return report

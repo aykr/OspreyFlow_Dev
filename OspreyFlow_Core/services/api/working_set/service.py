@@ -718,6 +718,15 @@ class WorkingSetService:
         edges = await self._store.source_fidelity_edges(investigation_id)
         return list(nodes.values()), list(edges.values())
 
+    async def visible_membership(
+        self, investigation_id: str, principal: Principal
+    ) -> tuple[list[Node], list[Edge]]:
+        """The working set as `principal` may see it, with the same `_project` every list read
+        runs: what the change form's offered types are read from (ADR-090)."""
+        nodes, edges = await self.current_membership(investigation_id)
+        visible_nodes, visible_edges, _ = self._project(nodes, edges, principal)
+        return visible_nodes, visible_edges
+
     async def visible_node(
         self, investigation_id: str, node_id: NodeId, principal: Principal
     ) -> Node | None:

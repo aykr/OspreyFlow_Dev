@@ -150,6 +150,19 @@ class EdgeTypeDef(BaseModel):
     #: ADR-091. The name shown to a person, in sentence case ("Communicated with"); `name` stays
     #: the key stored on every link. `None` lets the Glass derive it from `name`.
     label: str | None = Field(default=None, pattern=r"\S")
+    #: ADR-090 Amendment 1, by alias (owner, 5 October 2026): names this type also answers to in
+    #: the graph store. A proposal renamed at promotion keeps its links under its old name, which
+    #: becomes an alias of the promoted type, so every link, restricted ones included, reads and
+    #: is found as the new type with nothing rewritten. New links are written under `name` only.
+    aliases: list[str] = Field(default_factory=list)
+    #: ADR-090 decision 6: an analyst-proposed type an administrator promoted as Direct is Direct
+    #: only from this moment; a link of it written before stays probabilistic (ADR-081 decision 2).
+    direct_since: datetime | None = None
+    #: ADR-090 decision 4: proposed by an analyst, not authored in `default.yaml`.
+    analyst_defined: bool = False
+    #: ADR-090: a proposal's own storage label, declared so its links can be written, never
+    #: offered or shown; its links read as the name it is an alias of (`OntologySchema.storage_aliases`).
+    hidden: bool = False
     properties: list[PropertyDef] = Field(default_factory=list)
 
     model_config = {"populate_by_name": True}
@@ -163,6 +176,12 @@ class OntologySchema(BaseModel):
     version: int
     entity_types: list[EntityTypeDef]
     edge_types: list[EdgeTypeDef]
+    #: ADR-090: each proposal's storage label -> the link-type name its links read as (the
+    #: proposal's name while pending, rejected, withdrawn or retired; the promoted name once promoted,
+    #: merged or renamed). Applied by the graph store, so nothing is ever rewritten.
+    storage_aliases: dict[str, str] = Field(default_factory=dict)
+    #: ADR-090 decision 2: rises by one at every promotion and retirement; the version does not.
+    overlay_revision: int = 0
 
     def entity_type(self, name: str) -> EntityTypeDef | None:
         return next((e for e in self.entity_types if e.name == name), None)
@@ -353,16 +372,23 @@ class Edge(BaseModel):
 def effective_basis(
     link_basis: Literal["direct", "probabilistic"] | None,
     edge_type: EdgeTypeDef | None,
+    *,
+    written_at: datetime | None = None,
 ) -> Literal["direct", "probabilistic"] | None:
     """What stands behind a link, read from the link and its type together (ADR-081 decision 2).
 
     A link of a Probabilistic type is always probabilistic, whatever is stored on it; a link of a
-    Direct type is direct unless it carries its own probabilistic mark; a type with no basis
-    (`NOT_SAME_AS`, or one the ontology does not know) gives none."""
+    Direct type is direct unless it carries its own probabilistic mark, or was written before the
+    type was promoted as Direct (`direct_since`, ADR-090 decision 6: a person never promotes a
+    link to Direct); a type with no basis (`NOT_SAME_AS`, or one the ontology does not know) gives
+    none."""
     type_basis = edge_type.basis if edge_type is not None else None
     if type_basis == "probabilistic":
         return "probabilistic"
     if link_basis == "probabilistic":
+        return "probabilistic"
+    since = edge_type.direct_since if edge_type is not None else None
+    if type_basis == "direct" and since is not None and (written_at is None or written_at < since):
         return "probabilistic"
     return type_basis
 

@@ -559,3 +559,14 @@ async def test_asking_for_the_basis_a_link_already_has_changes_nothing() -> None
             "inv-1", "marked", ANALYST, LinkChangeRequest(basis="probabilistic", reason="Told so")
         )
     assert graph.superseded == []
+
+
+async def test_retyping_a_direct_link_to_a_probabilistic_type_makes_it_probabilistic() -> None:
+    """Found building ADR-090: with no basis asked for, the kept one was Direct, and the change was
+    refused as marking a probabilistic type Direct, though the analyst asked for no such thing."""
+    service, _, _, _, _ = await _build()
+    result = await service.change(
+        "inv-1", "e1", ANALYST, LinkChangeRequest(type="LIKELY_ASSOCIATE_OF", reason="Less sure")
+    )
+    assert result.edge.type == "LIKELY_ASSOCIATE_OF"
+    assert result.change.after["basis"] == "probabilistic"
