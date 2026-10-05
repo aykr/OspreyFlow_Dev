@@ -11,7 +11,7 @@ export type Transform = string | null;
 export type Map = {
   [k: string]: string;
 } | null;
-export type Kind = "message_text" | "document_text";
+export type Kind = "message_text" | "document_text" | "image_file" | "video_file";
 export type Field2 = string;
 export type Handling = {
   [k: string]: unknown;

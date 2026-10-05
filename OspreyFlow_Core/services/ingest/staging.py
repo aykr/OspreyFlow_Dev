@@ -141,6 +141,8 @@ class StagedEntity:
     ref: str
     type: str
     properties: dict[str, Any]
+    #: ADR-094: `{"kind": ..., "value": ...}` (the text, or the file's path) when it holds content.
+    content: dict[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -225,7 +227,9 @@ def read_staged_rows(path: str, *, storage: ObjectStorageConfig) -> list[StagedR
     rows: list[StagedRow] = []
     for record in table.to_pylist():
         entities = [
-            StagedEntity(ref=e["ref"], type=e["type"], properties=e["properties"])
+            StagedEntity(
+                ref=e["ref"], type=e["type"], properties=e["properties"], content=e.get("content")
+            )
             for e in json.loads(record["entities_json"])
         ]
         edges = [

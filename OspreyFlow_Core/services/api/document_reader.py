@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
+from ports.media import MediaNotFoundError, MediaStore
 from schemas.analytics import EventFilter, EventListRequest, EventRecord
 from schemas.domain import Principal
 
@@ -43,6 +44,10 @@ class DocumentReaderView(BaseModel):
     #: For an email: what *Extract entities* names (`POST .../links/{edge}/events/{event}/extract`).
     edge_id: str | None = None
     event_id: str | None = None
+    #: ADR-094: `text`, `image` or `video` for a Document written from held content; the reader
+    #: shows an image or a video from `GET .../documents/{id}/file` when `has_file`.
+    media_kind: str | None = None
+    has_file: bool = False
 
 
 class DocumentReaderService:
@@ -53,12 +58,14 @@ class DocumentReaderService:
         graph: GraphPort,
         candidates: ExtractionCandidateStore,
         investigations: CaseRecords | None = None,
+        media: MediaStore | None = None,
     ) -> None:
         self._working_set = working_set
         self._analytics = analytics
         self._graph = graph
         self._candidates = candidates
         self._investigations = investigations
+        self._media = media
 
     async def read(
         self, investigation_id: str, document_id: str, principal: Principal
@@ -70,6 +77,17 @@ class DocumentReaderService:
         view = DocumentReaderView(
             document_id=node.id, title=title if isinstance(title, str) else None, text=""
         )
+
+        kind = node.properties.get("media_kind")
+        ref = node.properties.get("object_ref")
+        view.media_kind = kind if isinstance(kind, str) else None
+        view.has_file = isinstance(ref, str)
+        if view.has_file and kind == "text" and self._media is not None:
+            # A held text Document keeps its text in the media store (ADR-094).
+            try:
+                view.text = (await self._media.get(str(ref))).decode("utf-8", errors="replace")
+            except MediaNotFoundError:
+                view.text = ""
 
         event_id = node.properties.get("event_id")
         if isinstance(event_id, str):

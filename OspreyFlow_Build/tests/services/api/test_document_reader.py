@@ -122,3 +122,29 @@ async def test_an_inbound_email_is_from_the_far_end_as_the_inspector_says() -> N
     ]
     view = await reader.read("inv-1", doc.id, ANALYST)
     assert (view.sender_id, view.recipient_id) == ("b", "a")
+
+
+async def test_a_held_text_document_reads_its_kept_text_and_says_its_kind() -> None:
+    """ADR-094: a Document written from content an entity holds keeps its text in the media
+    store."""
+    from adapters.media_objectstore.testing import InMemoryMediaStore
+
+    media = InMemoryMediaStore()
+    ref = await media.put(b"Shopping list: tape, ten bags.", "text/plain")
+    doc = _document("content:1", media_kind="text", object_ref=ref)
+    reader = await _reader([doc])
+    reader._media = media  # type: ignore[attr-defined]
+    view = await reader.read("inv-1", "content:1", ANALYST)
+    assert view.text == "Shopping list: tape, ten bags."
+    assert (view.media_kind, view.has_file) == ("text", True)
+
+
+async def test_an_image_document_says_it_has_a_file_and_no_text_until_extracted() -> None:
+    from adapters.media_objectstore.testing import InMemoryMediaStore
+
+    media = InMemoryMediaStore()
+    ref = await media.put(b"\x89PNG", "image/png")
+    reader = await _reader([_document("content:2", media_kind="image", object_ref=ref)])
+    reader._media = media  # type: ignore[attr-defined]
+    view = await reader.read("inv-1", "content:2", ANALYST)
+    assert (view.media_kind, view.has_file, view.text) == ("image", True, "")

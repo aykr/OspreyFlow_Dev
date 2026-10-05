@@ -28,6 +28,7 @@ from services.ingest.recipe_loader import load_recipe
 
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
+from ports.media import MediaStore
 from schemas.domain import OntologySchema, Principal
 from schemas.ingest import (
     LoadReport,
@@ -236,6 +237,7 @@ async def run_published_recipe(
     source_location: str | None = None,
     repo_root: Path = _REPO_ROOT,
     analytics: AnalyticsPort | None = None,
+    media: MediaStore | None = None,
 ) -> LoadReport:
     """§8: "Loader: run a published recipe against a file at or below their
     own clearance" — "a file", not necessarily the one Connect originally
@@ -272,6 +274,7 @@ async def run_published_recipe(
             load_id=load_id,
             investigation_scope=investigation_scope,
             source=read_from.source_location or draft.recipe_id,
+            media=media,
         )
     except Exception:
         await graph.rollback_transaction(tx)

@@ -1,5 +1,6 @@
 """ADR-055 point 2, ruled by the owner on 29 September 2026: an account is an `Endpoint`, and
-`TRANSACTED` carries the amount and the kind of transaction (ontology version 10, still true at 11)."""
+`TRANSACTED` carries the amount and the kind of transaction (ontology version 10, still true
+since)."""
 
 from __future__ import annotations
 

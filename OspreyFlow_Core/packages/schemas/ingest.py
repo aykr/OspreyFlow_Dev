@@ -417,6 +417,19 @@ class RecipeCondition(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class ContentBinding(BaseModel):
+    """ADR-094: a source column whose value the model can read. On a link it is the link's message
+    or document text, written to the link's event (never the graph link), where the reader and
+    extraction read it, as they read an Enron email's excerpt. A column named outright, never an
+    expression (rule 8)."""
+
+    #: On a link: `message_text` or `document_text`. On an entity (content it holds, linked by
+    #: `HOLDS`): `document_text`, or a file named by a path relative to the export's own folder,
+    #: `image_file` or `video_file`.
+    kind: Literal["message_text", "document_text", "image_file", "video_file"]
+    field: str
+
+
 class RecipeEntity(BaseModel):
     ref: str
     pole_class: str
@@ -435,20 +448,13 @@ class RecipeEntity(BaseModel):
     #: `validate_handling_tightens`), not re-checked per row at run time.
     handling: dict[str, Any] | None = None
     provenance: dict[str, Any] | None = None
+    #: ADR-094: content this entity holds (a phone's saved note, photo or video), kept in the media
+    #: store and linked to the entity by `HOLDS`.
+    content: ContentBinding | None = None
 
 
 class TemporalBinding(BaseModel):
     at: FieldBinding
-
-
-class ContentBinding(BaseModel):
-    """ADR-094: a source column whose value the model can read. On a link it is the link's message
-    or document text, written to the link's event (never the graph link), where the reader and
-    extraction read it, as they read an Enron email's excerpt. A column named outright, never an
-    expression (rule 8)."""
-
-    kind: Literal["message_text", "document_text"]
-    field: str
 
 
 class RecipeEdge(BaseModel):

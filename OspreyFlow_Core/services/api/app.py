@@ -72,7 +72,13 @@ from adapters.analytics_duckdb.schema import create_events_table, create_geometr
 from adapters.compute_rustworkx.adapter import ComputeRustworkxAdapter
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
-from adapters.model_litellm import CONFORMANCE_EMBED_MODEL, CONFORMANCE_MODEL
+from adapters.media_objectstore import MediaStoreConfig, ObjectStoreMediaStore
+from adapters.model_litellm import (
+    CONFORMANCE_EMBED_MODEL,
+    CONFORMANCE_MODEL,
+    CONFORMANCE_TRANSCRIBE_MODEL,
+    CONFORMANCE_VISION_MODEL,
+)
 from adapters.model_litellm.adapter import ModelLiteLLMAdapter
 from adapters.model_litellm.client import LiteLLMClient, LiteLLMConfig
 from conduit_common.identity import new_edge_id, new_id, now_utc
@@ -91,6 +97,7 @@ from ontology.yardstick import Yardstick, load_phia_yardstick
 from ports.analytics import AnalyticsPort
 from ports.compute import ComputePort
 from ports.graph import GraphPort
+from ports.media import MediaStore
 from ports.model import ModelPort
 from schemas.analytics import (
     CrossFilterRequest,
@@ -194,6 +201,11 @@ from .compute_routes import (
     run_compute_metric_job,
 )
 from .config import ApiConfig
+from .document_content import (
+    DocumentAcceptResult,
+    DocumentContentService,
+    DocumentExtractionResult,
+)
 from .document_reader import DocumentReaderService, DocumentReaderView
 from .dossier import DocumentView
 from .email_extraction import (
@@ -448,8 +460,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         link_changes_store, app.state.working_set, graph, ontology, link_notes_store
     )
     app.state.link_events = LinkEventsService(app.state.working_set, analytics, investigations)
+    # ADR-094: where a content item's file is kept; never the graph.
+    media = ObjectStoreMediaStore(MediaStoreConfig.from_env())
+    app.state.media = media
     app.state.document_reader = DocumentReaderService(
-        app.state.working_set, analytics, graph, extraction_candidates, investigations
+        app.state.working_set, analytics, graph, extraction_candidates, investigations, media
+    )
+    app.state.document_content = DocumentContentService(
+        app.state.working_set,
+        graph,
+        media,
+        model,
+        ontology,
+        extraction_candidates,
+        text_model=CONFORMANCE_MODEL,
+        vision_model=CONFORMANCE_VISION_MODEL,
+        transcribe_model=CONFORMANCE_TRANSCRIBE_MODEL,
     )
     app.state.email_extraction = EmailExtractionService(
         app.state.working_set,
@@ -731,6 +757,20 @@ MonitorsStoreDep = Annotated[MonitorStore, Depends(get_monitors_store)]
 AlertsStoreDep = Annotated[AlertStore, Depends(get_alerts_store)]
 JudgementsStoreDep = Annotated[JudgementStore, Depends(get_judgements_store)]
 LinkNotesDep = Annotated[LinkNoteService, Depends(get_link_notes)]
+
+
+def get_document_content(request: Request) -> DocumentContentService:
+    return request.app.state.document_content  # type: ignore[no-any-return]
+
+
+DocumentContentDep = Annotated[DocumentContentService, Depends(get_document_content)]
+
+
+def get_media(request: Request) -> MediaStore:
+    return request.app.state.media  # type: ignore[no-any-return]
+
+
+MediaDep = Annotated[MediaStore, Depends(get_media)]
 
 
 def get_document_reader(request: Request) -> DocumentReaderService:
@@ -2755,6 +2795,73 @@ async def read_document_route(
     return view
 
 
+@app.get("/v1/investigations/{investigation_id}/documents/{document_id}/file")
+async def document_file_route(
+    investigation: InvestigationViewerDep,
+    document_id: str,
+    principal: PrincipalDep,
+    document_content: DocumentContentDep,
+    audit: AuditDep,
+) -> Response:
+    """A held Document's file (an image, a video, kept text), for the reader (ADR-094): only to
+    someone who can see the Document in the case; one that cannot be seen answers as missing."""
+    data, content_type = await document_content.file(investigation.id, document_id, principal)
+    await audit.record(
+        principal=principal,
+        action="read_document_file",
+        investigation_id=investigation.id,
+        resolved_query={"document_id": document_id},
+        result_cardinality=1,
+    )
+    return Response(content=data, media_type=content_type)
+
+
+@app.post("/v1/investigations/{investigation_id}/documents/{document_id}/extract")
+async def extract_document_route(
+    investigation: InvestigationEditorDep,
+    document_id: str,
+    principal: PrincipalDep,
+    document_content: DocumentContentDep,
+    audit: AuditDep,
+) -> DocumentExtractionResult:
+    """Entities from a held Document by its kind (ADR-094): kept text as it is, an image described
+    and its text read, a video transcribed. Findings are pending until a person accepts one."""
+    result = await document_content.extract(investigation.id, document_id, principal)
+    await audit.record(
+        principal=principal,
+        action="extract_document",
+        investigation_id=investigation.id,
+        resolved_query={"document_id": document_id},
+        result_cardinality=len(result.candidates),
+    )
+    return result
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/documents/{document_id}/candidates/{candidate_id}/accept"
+)
+async def accept_document_candidate_route(
+    investigation: InvestigationEditorDep,
+    document_id: str,
+    candidate_id: str,
+    principal: PrincipalDep,
+    document_content: DocumentContentDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+) -> DocumentAcceptResult:
+    """Accepts one finding from a held Document: an inferred node linked to it (ADR-094)."""
+    result = await document_content.accept(investigation.id, document_id, candidate_id, principal)
+    await publish_delta(valkey, investigation.id, result.delta)
+    await audit.record(
+        principal=principal,
+        action="accept_document_candidate",
+        investigation_id=investigation.id,
+        resolved_query={"document_id": document_id, "candidate_id": candidate_id},
+        result_cardinality=1,
+    )
+    return result
+
+
 class EmailDocumentsRequest(BaseModel):
     """The timeline's brushed window (ADR-092); left out, every email on the link."""
 
@@ -4579,6 +4686,7 @@ async def run_studio_recipe(
     graph: GraphDep,
     ontology: OntologyDep,
     analytics: AnalyticsDep,
+    media: MediaDep,
     repo_root: RecipesRepoRootDep,
     audit: AuditDep,
     jobs: JobsDep,
@@ -4641,6 +4749,7 @@ async def run_studio_recipe(
         source_location=body.source_location,
         repo_root=repo_root,
         analytics=analytics,
+        media=media,
     )
     await resolution_trigger_module.submit_post_ingest_resolution_jobs(
         report, recipe.row_template, ontology=ontology, jobs=jobs

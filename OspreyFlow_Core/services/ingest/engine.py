@@ -34,6 +34,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from hashlib import sha256
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from ulid import ULID
@@ -45,6 +46,7 @@ from knowledge_adapters.errors import NormalisationError
 from ontology.errors import OntologyError
 from ontology.validation import validate_edge_endpoints, validate_properties
 from ports.graph import GraphPort
+from ports.media import MediaStore
 from schemas.analytics import EventRecord
 from schemas.domain import (
     AuditStub,
@@ -77,7 +79,7 @@ from schemas.ingest import (
     RejectionRecord,
 )
 
-from .recipe_rules import check_recipe_rules
+from .recipe_rules import RecipeRuleError, check_recipe_rules, holds_content
 from .staging import ObjectStorageConfig, StagedEdge, StagedEntity, StagedRow
 from .staging import read_staged_rows as _read_staged_rows
 from .staging import stage_raw_rows as _stage_raw_rows
@@ -352,12 +354,23 @@ class _RunState:
     #: load resolves to one node without depending on read-your-own-write
     #: visibility from a query issued inside the same open transaction.
     local_index: dict[tuple[str, str], NodeId] = field(default_factory=dict)
+    #: ADR-094: a row whose entity was loaded but whose file was not found; said in the report.
+    content_rejections: list[RejectionRecord] = field(default_factory=list)
+    #: Documents already written this load, so one file held twice is written once.
+    documents_written: set[NodeId] = field(default_factory=set)
 
 
 class _ResolvedEntity:
-    __slots__ = ("entity", "properties")
+    __slots__ = ("entity", "properties", "content")
 
-    def __init__(self, entity: RecipeEntity, properties: dict[str, Any] | None) -> None:
+    def __init__(
+        self,
+        entity: RecipeEntity,
+        properties: dict[str, Any] | None,
+        content: dict[str, str] | None = None,
+    ) -> None:
+        #: ADR-094: `{"kind", "value"}` when this entity holds content this row.
+        self.content = content
         self.entity = entity
         self.properties = properties  # None means the entity's `when` did not hold this row
 
@@ -395,7 +408,7 @@ def _resolve_row(
         properties = _resolve_properties(
             entity.properties, row, connector_defaults=connector_defaults
         )
-        entities.append(_ResolvedEntity(entity, properties))
+        entities.append(_ResolvedEntity(entity, properties, _held_content(entity, row)))
 
     edges = []
     for edge in recipe.row_template.edges:
@@ -443,7 +456,9 @@ def _to_staged_row(
         row_index=row_index,
         duplicate_row_indices=duplicate_row_indices,
         entities=[
-            StagedEntity(ref=e.entity.ref, type=e.entity.type, properties=e.properties)
+            StagedEntity(
+                ref=e.entity.ref, type=e.entity.type, properties=e.properties, content=e.content
+            )
             for e in resolved_entities
             if e.properties is not None
         ],
@@ -586,6 +601,132 @@ async def _write_entity(
         match_value = str(properties.get(entity.match_on))
         state.local_index[(entity.type, match_value)] = node_id
     return node_id
+
+
+#: The file extensions each content kind accepts, and the content type each is kept under.
+_FILE_TYPES = {
+    "image_file": {
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "gif": "image/gif",
+        "webp": "image/webp",
+        "tif": "image/tiff",
+        "tiff": "image/tiff",
+        "heic": "image/heic",
+    },
+    "video_file": {"mp4": "video/mp4", "mov": "video/quicktime", "webm": "video/webm"},
+}
+_MEDIA_KIND = {"document_text": "text", "image_file": "image", "video_file": "video"}
+
+
+def _held_content(entity: RecipeEntity, row: Mapping[str, str]) -> dict[str, str] | None:
+    """Pure checks on the content an entity holds this row (ADR-094); the file itself is read when
+    it is written. Rejects the row for a path outside the export's folder or of the wrong kind."""
+    if entity.content is None:
+        return None
+    value = (row.get(entity.content.field) or "").strip()
+    if not value:
+        return None
+    kind = entity.content.kind
+    if kind in _FILE_TYPES:
+        path = PurePosixPath(value.replace("\\", "/"))
+        if path.is_absolute() or ".." in path.parts:
+            raise RowRejected(
+                f"{entity.content.field} {value!r} is outside the export's own folder; a file "
+                "is named by a path below the folder the export is in"
+            )
+        if path.suffix.lower().lstrip(".") not in _FILE_TYPES[kind]:
+            noun = "an image" if kind == "image_file" else "a video"
+            raise RowRejected(
+                f"{entity.content.field} {value!r} is not {noun} file "
+                f"({', '.join(sorted(_FILE_TYPES[kind]))})"
+            )
+    return {"kind": kind, "value": value}
+
+
+def _first_words(text: str) -> str:
+    words = " ".join(text.split())
+    return words if len(words) <= 60 else f"{words[:57]}…"
+
+
+async def _write_held_content(
+    resolved: _ResolvedEntity,
+    holder_id: NodeId,
+    media: MediaStore,
+    *,
+    row_index: int,
+    now: datetime,
+    state: _RunState,
+) -> None:
+    """The content `resolved` holds, kept in the media store; a `Document` naming it (one per
+    file however many hold it); and a `HOLDS` link from the holder (ADR-094)."""
+    assert resolved.content is not None
+    kind, value = resolved.content["kind"], resolved.content["value"]
+    entity = resolved.entity
+    if kind == "document_text":
+        data, content_type, title = value.encode("utf-8"), "text/plain", _first_words(value)
+    else:
+        base = Path(state.source).parent.resolve()
+        path = (base / value).resolve()
+        if not path.is_relative_to(base) or not path.is_file():
+            field_name = entity.content.field if entity.content else "content"
+            state.content_rejections.append(
+                RejectionRecord(
+                    row_index=row_index,
+                    reason=(
+                        f"{field_name} {value!r} not found next to the export; the "
+                        f"{entity.type} was loaded without it"
+                    ),
+                    sample="",
+                )
+            )
+            return
+        data = path.read_bytes()
+        content_type = _FILE_TYPES[kind][path.suffix.lower().lstrip(".")]
+        title = path.name
+    ref = await media.put(data, content_type)
+    document_id = f"content:{sha256(ref.encode()).hexdigest()[:32]}"
+    handling = _handling(_merge_override(state.recipe.defaults.handling, entity.handling))
+    provenance = _provenance(
+        _merge_override(state.recipe.defaults.provenance, entity.provenance),
+        source=state.source,
+        row_index=row_index,
+        now=now,
+    )
+    if document_id not in state.documents_written:
+        document = NodeWrite(
+            id=document_id,
+            type="Document",
+            properties={"title": title, "media_kind": _MEDIA_KIND[kind], "object_ref": ref},
+            provenance=provenance,
+            handling=handling,
+            created_by=state.principal.id,
+            created_at=now,
+            load_id=state.load_id,
+            recipe_id=state.recipe.id,
+            recipe_version=state.recipe.version,
+        )
+        await state.graph.upsert_nodes([document], state.tx)
+        state.documents_written.add(document_id)
+        state.created_node_ids.append(document_id)
+        state.nodes_created += 1
+    holds = EdgeWrite(
+        id=f"{document_id}:held-by:{holder_id}",
+        type="HOLDS",
+        source=holder_id,
+        target=document_id,
+        provenance=provenance,
+        handling=handling,
+        created_by=state.principal.id,
+        created_at=now,
+        load_id=state.load_id,
+        recipe_id=state.recipe.id,
+        recipe_version=state.recipe.version,
+    )
+    (edge_id,) = await state.graph.upsert_edges([holds], state.tx)
+    state.touched_edge_ids.append(edge_id)
+    state.edges_written += 1
 
 
 async def _write_edge(
@@ -965,7 +1106,7 @@ async def dry_run_recipe(
 def _staged_entity_to_resolved(staged: StagedEntity, recipe: Recipe) -> _ResolvedEntity:
     entities_by_ref = {e.ref: e for e in recipe.row_template.entities}
     recipe_entity = entities_by_ref[staged.ref]
-    return _ResolvedEntity(recipe_entity, staged.properties)
+    return _ResolvedEntity(recipe_entity, staged.properties, staged.content)
 
 
 def _staged_edge_to_resolved(staged: StagedEdge) -> _ResolvedEdge:
@@ -993,6 +1134,7 @@ async def run_recipe(
     investigation_scope: str,
     source: str,
     storage: ObjectStorageConfig | None = None,
+    media: MediaStore | None = None,
 ) -> tuple[LoadReport, list[EventRecord]]:
     if recipe.ontology_version != ontology.version:
         raise StaleRecipeError(
@@ -1003,6 +1145,13 @@ async def run_recipe(
 
     # ADR-081 step D: refused again at run, before anything is written (Amendment 1 item 7).
     check_recipe_rules(recipe.row_template, ontology)
+    if holds_content(recipe.row_template) and media is None:
+        raise RecipeRuleError(
+            [
+                "This recipe marks content an entity holds, which is kept in the deployment's "
+                "media store, and this run has no media store (ADR-094)."
+            ]
+        )
     # Materialised once, immediately, so `stage_raw_rows` sees every field
     # exactly as the connector produced it — before `resolve_rows` (the
     # pipeline's "normalise" step) touches any of it.
@@ -1047,6 +1196,15 @@ async def run_recipe(
             )
             if node_id is not None:
                 refs[staged_entity.ref] = node_id
+                if resolved_entity.content and media is not None:
+                    await _write_held_content(
+                        resolved_entity,
+                        node_id,
+                        media,
+                        row_index=staged_row.row_index,
+                        now=now,
+                        state=state,
+                    )
         for staged_edge in staged_row.edges:
             resolved_edge = _staged_edge_to_resolved(staged_edge)
             await _write_edge(
@@ -1068,7 +1226,7 @@ async def run_recipe(
         nodes_created=state.nodes_created,
         nodes_referenced=state.nodes_referenced,
         edges_created=state.edges_written,
-        rejections=rejections,
+        rejections=[*rejections, *state.content_rejections],
         created_node_ids=state.created_node_ids,
         touched_edge_ids=state.touched_edge_ids,
     )

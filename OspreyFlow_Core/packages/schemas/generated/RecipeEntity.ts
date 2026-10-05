@@ -19,6 +19,8 @@ export type Handling = {
 export type Provenance = {
   [k: string]: unknown;
 } | null;
+export type Kind = "message_text" | "document_text" | "image_file" | "video_file";
+export type Field2 = string;
 
 export interface RecipeEntity {
   ref: Ref;
@@ -30,6 +32,7 @@ export interface RecipeEntity {
   properties?: Properties;
   handling?: Handling;
   provenance?: Provenance;
+  content?: ContentBinding | null;
   [k: string]: unknown;
 }
 /**
@@ -65,5 +68,16 @@ export interface FieldBinding {
   literal?: unknown;
   transform?: Transform;
   map?: Map;
+  [k: string]: unknown;
+}
+/**
+ * ADR-094: a source column whose value the model can read. On a link it is the link's message
+ * or document text, written to the link's event (never the graph link), where the reader and
+ * extraction read it, as they read an Enron email's excerpt. A column named outright, never an
+ * expression (rule 8).
+ */
+export interface ContentBinding {
+  kind: Kind;
+  field: Field2;
   [k: string]: unknown;
 }

@@ -12,6 +12,8 @@ from __future__ import annotations
 from schemas.domain import NOT_SAME_AS, OntologySchema
 from schemas.ingest import RowTemplate
 
+FILE_KINDS = frozenset({"image_file", "video_file"})
+
 
 class RecipeRuleError(Exception):
     """A recipe declares something the rules above refuse; the message names each problem."""
@@ -40,12 +42,22 @@ def recipe_rule_violations(template: RowTemplate, ontology: OntologySchema) -> l
                 f"{edge.type!r} is a Probabilistic relationship type. A recipe writes what the "
                 "source records, which is Direct (ADR-081); choose a Direct type."
             )
+        if edge.content is not None and edge.content.kind in FILE_KINDS:
+            problems.append(
+                f"{edge.type!r} marks {edge.content.field!r} as a file. A link carries text; a "
+                "file is held by an entity (ADR-094): mark it on the entity that holds it."
+            )
         if edge.content is not None and edge.temporal is None:
             problems.append(
                 f"{edge.type!r} marks {edge.content.field!r} as its text but has no time: a link's "
                 "text is kept on its events, and only a link with a time has events (ADR-094)."
             )
     return problems
+
+
+def holds_content(template: RowTemplate) -> bool:
+    """Whether any entity in `template` holds content, which needs the media store."""
+    return any(entity.content is not None for entity in template.entities)
 
 
 def check_recipe_rules(template: RowTemplate, ontology: OntologySchema) -> None:

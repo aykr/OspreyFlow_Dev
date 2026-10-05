@@ -81,5 +81,7 @@ async def test_a_studio_run_stores_its_events_with_their_text(tmp_path: Path) ->
 
     assert report.rejections == []
     assert len(analytics.loaded) == len(generate_sms_rows())
-    assert {e.properties["excerpt"] for e in analytics.loaded} == {r["text"] for r in generate_sms_rows()}
+    assert {e.properties["excerpt"] for e in analytics.loaded} == {
+        r["text"] for r in generate_sms_rows()
+    }
     assert {e.investigation_scope for e in analytics.loaded} == {"case-1"}

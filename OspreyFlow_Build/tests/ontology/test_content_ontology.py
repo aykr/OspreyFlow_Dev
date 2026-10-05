@@ -1,7 +1,7 @@
 """ADR-094 step 2: the ontology that holds content. Every content item is a `Document` with a
-`media_kind`; a file is kept in the object store and the Document carries only its reference; content
-held by an entity is linked to it by `HOLDS`, which is Direct. Version 12: every recipe pinned to 11
-is flagged once to be re-pinned (spec 09 §4)."""
+`media_kind`; a file is kept in the object store and the Document carries only its reference;
+content held by an entity is linked to it by `HOLDS`, which is Direct. Version 12: every recipe
+pinned to 11 is flagged once to be re-pinned (spec 09 §4)."""
 
 from __future__ import annotations
 
@@ -21,7 +21,9 @@ def test_the_ontology_is_version_12() -> None:
 def test_a_document_declares_its_media_kind_and_its_file_reference() -> None:
     document = ONTOLOGY.entity_type("Document")
     assert document is not None
-    validate_properties(document, {"title": "Photo", "media_kind": "image", "object_ref": "media/ab12.jpg"})
+    validate_properties(
+        document, {"title": "Photo", "media_kind": "image", "object_ref": "media/ab12.jpg"}
+    )
     with pytest.raises(OntologyError):
         validate_properties(document, {"media_kind": "hologram"})
 

@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from ports.analytics import AnalyticsPort
     from ports.compute import ComputePort
     from ports.graph import GraphPort
+    from ports.media import MediaStore
     from ports.model import ModelPort
     from schemas.analytics import EventRecord
 
@@ -145,9 +146,30 @@ def _compute_graphology_tier1_factories() -> list[ComputeAdapterFactory]:
 
 
 GRAPH_PORT_ADAPTERS: list[GraphAdapterFactory] = _graph_arcadedb_factories()
+@dataclass(frozen=True)
+class MediaStoreFactory:
+    """One conformance-testable `MediaStore` adapter (ADR-094): an empty store per test."""
+
+    label: str
+    context: Callable[[], AbstractAsyncContextManager[MediaStore]]
+
+    def __str__(self) -> str:  # pytest parametrize id
+        return self.label
+
+
+def _media_store_factories() -> list[MediaStoreFactory]:
+    from adapters.media_objectstore.testing import in_memory_media_store, object_store_media_store
+
+    return [
+        MediaStoreFactory(label="media_in_memory", context=in_memory_media_store),
+        MediaStoreFactory(label="media_objectstore", context=object_store_media_store),
+    ]
+
+
 ANALYTICS_PORT_ADAPTERS: list[AnalyticsAdapterFactory] = _analytics_duckdb_factories()
 COMPUTE_PORT_ADAPTERS: list[ComputeAdapterFactory] = [
     *_compute_rustworkx_factories(),
     *_compute_graphology_tier1_factories(),
 ]
 MODEL_PORT_ADAPTERS: list[ModelAdapterFactory] = _model_litellm_factories()
+MEDIA_STORE_ADAPTERS: list[MediaStoreFactory] = _media_store_factories()
