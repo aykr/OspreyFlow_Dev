@@ -42,6 +42,7 @@ import pytest
 from fastapi.testclient import TestClient
 from harness.webapp import create_app
 
+from tests.harness.deployment_guard import refuse_to_touch_a_real_deployment
 from tools.layout import CORE
 from tools.layout import REPO as REPO_ROOT
 
@@ -101,6 +102,7 @@ def _events(response_text: str) -> list[dict[str, Any]]:
 def test_launch_from_the_six_screens_reaches_a_verified_local_lite_deployment(
     tmp_path: Path,
 ) -> None:
+    refuse_to_touch_a_real_deployment(COMPOSE_PROJECT)
     if shutil.which("docker") is None:
         pytest.skip("no docker binary on PATH")
 

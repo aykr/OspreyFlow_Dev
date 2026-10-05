@@ -106,6 +106,7 @@ from harness.backup import _env_value
 from harness.compare import _query as arcadedb_query
 from harness.realm import CONDUIT_CLIENT_ID, DEMO_ANALYST_SUBJECT
 
+from tests.harness.deployment_guard import refuse_to_touch_a_real_deployment
 from tools.layout import REPO as REPO_ROOT
 
 pytestmark = pytest.mark.skipif(
@@ -348,6 +349,7 @@ def _run_query_sample(token: str, investigation_id: str) -> float:
 
 
 def test_arcadedb_memory_and_query_latency_under_sustained_ingest_cycles() -> None:
+    refuse_to_touch_a_real_deployment(LOCAL_LITE_PROJECT)
     # No `--out-root` override: `harness/render.py`'s own `BUILD_CONTEXT_FROM_OUTPUT_DIR`
     # ("../../../") assumes the rendered output sits at `--out-root`'s own default depth beneath
     # this repository (`deploy/generated/<profile>/`) — real, not a convention this file can skip,

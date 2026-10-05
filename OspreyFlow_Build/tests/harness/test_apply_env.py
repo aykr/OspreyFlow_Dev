@@ -33,6 +33,8 @@ from pathlib import Path
 import pytest
 from harness.apply import main
 
+from tests.harness.deployment_guard import refuse_to_touch_a_real_deployment
+
 #: The two host ports a `local-lite` render publishes (`harness.render.PORT_OVERRIDES`'s own
 #: defaults for `workspace`/`keycloak`) — waited on after teardown, below, for the same reason the
 #: teardown itself exists: `docker compose down` returns as soon as the containers are gone, but
@@ -70,7 +72,12 @@ def _teardown_local_lite_deployment():
     docstring). Also waits for this host to actually release the two ports the render publishes —
     `docker compose down` returning is not the same event as the OS freeing the bind, and the next
     test's own preflight port check runs within moments of this one.
+
+    **It first refuses to start where a deployment of that name already exists** (5 October 2026:
+    run through `make test` on the owner's machine, this file's `up` and `down -v` deleted the
+    owner's deployment and every volume it had; `deployment_guard.py`).
     """
+    refuse_to_touch_a_real_deployment(LOCAL_LITE_PROJECT)
     yield
     subprocess.run(
         ["docker", "compose", "-p", LOCAL_LITE_PROJECT, "down", "-v", "--remove-orphans"],

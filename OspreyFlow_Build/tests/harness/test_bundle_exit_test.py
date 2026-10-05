@@ -35,6 +35,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.harness.deployment_guard import refuse_to_touch_a_real_deployment
 from tools.layout import CORE
 
 pytestmark = pytest.mark.skipif(
@@ -84,6 +85,7 @@ def _build_the_owned_images() -> None:
 
 
 def test_the_real_bundle_installs_and_deploys_from_itself_alone(tmp_path: Path) -> None:
+    refuse_to_touch_a_real_deployment("osprey-local-lite")  # its local-lite render's project
     _build_the_owned_images()
     dist_dir = tmp_path / "dist"
     build = _run(

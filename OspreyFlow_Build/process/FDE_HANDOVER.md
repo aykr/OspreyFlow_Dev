@@ -135,8 +135,11 @@ the real stack** (see section 5).
 - `decision_log_publication_check`: ADR-055 cites ADR-049. `doc_citations_check`: `scripts/probe_write_cost.py`
   (twice in the decision log) and `inspector/linkHistory.ts` (in `tools/case_collision_check.py`).
   `provenance_annotation_check`: spec 03 lines 92 and 118.
-- `tests/harness/test_apply_env.py` **really starts a deployment** (`osprey-local-lite`) through Docker when the
-  unit suite is run; it fails at `up` while the throwaway test containers hold their ports, and tears down.
+- **5 October 2026: a test deleted the owner's deployment.** `tests/harness/test_apply_env.py` runs under `make
+  test`, brings up `osprey-local-lite` (the real deployment's project name too) and tears it down with `down -v`;
+  run by this session, it deleted every case, the graph and the analytics store. It and the other live harness
+  tests now skip when any container or volume of that project exists (`tests/harness/deployment_guard.py`).
+  **Still: never run the whole test tree on the owner's machine; run the touched paths.**
 - **A live-service test file not yet wired** into `Makefile`'s `test` ignore list and a ci.yml live-service job
   (the owner's edit; `test_file_coverage_check` fails until then): `tests/services/api/test_link_type_store.py`
   (Postgres). The MinIO- and ArcadeDB-backed files from ADR-094 and ADR-090 sit under directories the `test`
