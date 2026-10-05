@@ -193,3 +193,84 @@ describe("LinkChange and the basis", () => {
     expect(document.body.textContent).toMatch(/only basis/i);
   });
 });
+
+describe("LinkChange: defining a new type (ADR-090 C2)", () => {
+  const proposal = {
+    id: "p1",
+    name: "KNOWN_TO",
+    label: "Known to",
+    from_types: ["Person"],
+    to_types: ["Person"],
+    directed: true,
+    investigation_id: "inv-1",
+    owning_unit: "unit-1",
+    proposed_by: "analyst-1",
+    proposed_at: "2026-10-05T10:00:00Z",
+    reason: "By sight",
+    status: "pending",
+  };
+
+  it("proposes a type from the form, then offers it chosen and marked as proposed", async () => {
+    const fetchMock = stubFetch(200, proposal);
+    const onTypeProposed = vi.fn();
+    render(
+      <LinkChange
+        apiBaseUrl="http://api.test"
+        bearerToken="tok"
+        investigationId="inv-1"
+        edge={edge}
+        sourceType="Person"
+        targetType="Person"
+        edgeTypes={EDGE_TYPES}
+        openSignal={1}
+        onChanged={vi.fn()}
+        onTypeProposed={onTypeProposed}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Define a new type…" }));
+    fireEvent.change(screen.getByLabelText("Name (required)"), { target: { value: "Known to" } });
+    expect((screen.getByLabelText("Type ID") as HTMLInputElement).value).toBe("KNOWN_TO");
+    fireEvent.change(screen.getByLabelText("Why does no type fit? (required)"), { target: { value: "By sight" } });
+    fireEvent.click(screen.getByRole("button", { name: "Propose type" }));
+
+    await waitFor(() => expect((screen.getByLabelText("Link type") as HTMLSelectElement).value).toBe("KNOWN_TO"));
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("http://api.test/v1/investigations/inv-1/link-types");
+    expect(JSON.parse(String(init.body))).toMatchObject({ name: "KNOWN_TO", label: "Known to", reason: "By sight" });
+    const chosen = screen.getByLabelText("Link type").querySelector("option:checked");
+    expect(chosen?.textContent).toBe("Known to (proposed)");
+    expect(onTypeProposed).toHaveBeenCalledWith(expect.objectContaining({ name: "KNOWN_TO", basis: "probabilistic" }));
+    // A proposed type is probabilistic: the basis is stated, not asked.
+    expect(screen.getByText(/the only basis this link may have/)).toBeTruthy();
+  });
+
+  it("shows the server's sentence when it refuses the name, and proposes nothing", async () => {
+    stubFetch(422, { error: "proposal_refused", detail: "KNOWN_TO is already offered in this case: use it instead." });
+    mount(vi.fn(), 1);
+    fireEvent.click(screen.getByRole("button", { name: "Define a new type…" }));
+    fireEvent.change(screen.getByLabelText("Name (required)"), { target: { value: "Known to" } });
+    fireEvent.change(screen.getByLabelText("Why does no type fit? (required)"), { target: { value: "By sight" } });
+    fireEvent.click(screen.getByRole("button", { name: "Propose type" }));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("already offered"));
+    expect((screen.getByLabelText("Link type") as HTMLSelectElement).value).toBe("ASSOCIATE_OF");
+  });
+
+  it("marks a type the case has proposed in the list", () => {
+    render(
+      <LinkChange
+        apiBaseUrl="http://api.test"
+        bearerToken="tok"
+        investigationId="inv-1"
+        edge={edge}
+        sourceType="Person"
+        targetType="Person"
+        edgeTypes={[...EDGE_TYPES, { name: "KNOWN_TO", from: ["Person"], to: ["Person"], basis: "probabilistic" }]}
+        proposedTypes={new Set(["KNOWN_TO"])}
+        openSignal={1}
+        onChanged={vi.fn()}
+      />,
+    );
+    const options = Array.from(screen.getByLabelText("Link type").querySelectorAll("option")).map((o) => o.textContent);
+    expect(options).toContain("Known to (proposed)");
+  });
+});

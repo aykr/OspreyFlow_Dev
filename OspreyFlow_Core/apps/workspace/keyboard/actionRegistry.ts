@@ -375,6 +375,17 @@ export const READER_ACTIONS = defineActionRegistry("READER_ACTIONS", [
   "extract-and-accept-from-the-reader-by-keyboard",
 ] as const);
 
+/** The administrator's *Proposed types* list (ADR-090 C3): opened from the top bar, each proposal
+ * promoted (with its basis, and a new ID when its name is taken), rejected, or retired.
+ * `keyboard/proposed-types.spec.ts`. */
+export const PROPOSED_TYPES_ACTIONS = defineActionRegistry("PROPOSED_TYPES_ACTIONS", [
+  "open-the-list-from-the-top-bar-and-escape-closes-it",
+  "promote-by-keyboard-choosing-the-basis",
+  "rename-at-promotion-by-keyboard",
+  "reject-by-keyboard",
+  "retire-by-keyboard",
+] as const);
+
 export const LINK_CHANGE_ACTIONS = defineActionRegistry("LINK_CHANGE_ACTIONS", [
   "enter-on-change-this-link-opens-the-form-at-the-type",
   "change-the-type-and-save-with-ctrl-enter",
@@ -382,6 +393,8 @@ export const LINK_CHANGE_ACTIONS = defineActionRegistry("LINK_CHANGE_ACTIONS", [
   "escape-closes-the-form-and-changes-nothing",
   "opened-by-the-link-menu-lands-on-the-type",
   "choose-what-stands-behind-the-link-before-saving",
+  // ADR-090 C2: *Define a new type…*, proposed by keyboard and chosen in the form.
+  "define-a-new-type-by-keyboard-and-it-is-chosen",
 ] as const);
 
 /**

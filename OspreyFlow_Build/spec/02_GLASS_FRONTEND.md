@@ -471,6 +471,22 @@ after. Notes follow the link to its new version. Every write from the menu is re
 trail attributed to the analyst. Reachable by keyboard throughout (rule 13: `keyboard/link-menu.spec.ts`,
 `keyboard/link-change.spec.ts`). A menu or box that closes returns focus to the canvas.
 
+**When no type fits, an Editor defines one there (ADR-090).** The types the form offers are the case's
+own (`GET .../link-types`): the ontology's, and those proposed in the case, the cases it was branched
+from, or for a link the analyst can see in it, each proposed one marked "(proposed)". **Define a new
+type…** asks for a name in sentence case ("Known to"), from which its ID is made (`KNOWN_TO`, which may
+be edited), whether it goes either way round, a colour and a thickness (both optional), and why no
+type fits; the ends are the link's own. Proposed, it is chosen at once in the form and, being
+probabilistic until an administrator decides, its basis is stated, not asked; on the canvas its links
+are drawn dotted in its own colour and thickness, named by its label. The Glass reads the case's types
+when a case opens and again after a proposal or a decision. A refused name is said in the server's
+words. **An `osprey-admin` holder** also has **Proposed types** in the top bar: their own unit's
+proposals, each with its name, ID, ends, proposer, case and reason, to **Promote…** (Direct or
+Probabilistic, no default, and a new ID when the server says the name is taken by a type its links do
+not fit), **Reject…**, or once promoted **Retire…**, each with a reason. Reachable by keyboard
+throughout (`keyboard/link-change.spec.ts`, `keyboard/proposed-types.spec.ts`). A proposal is not yet
+withdrawn from the Glass: the route exists (spec 03 §3.4) and the form does not offer it.
+
 ### 3.1g Two more layouts: a force-directed tree and clustered bubbles (ADR-083)
 
 The Layout menu also offers **Force-directed tree** and **Clustered bubbles**. The tree grows from the

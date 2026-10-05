@@ -65,6 +65,8 @@ import {
   fetchOntologyRegistry,
   type OntologyRegistry,
 } from "./ontology/schema";
+import { fetchCaseLinkTypes, type CaseLinkTypes } from "./linktypes/linkTypesApi";
+import { ProposedTypes } from "./linktypes/ProposedTypes";
 import { GlobalSearch } from "./search/GlobalSearch";
 import { drawSearchResult } from "./search/drawSearchResult";
 import { BoundaryFilterTool } from "./map/BoundaryFilterTool";
@@ -333,7 +335,16 @@ export function App() {
     null,
   );
   const [ontology, setOntology] = useState<OntologyRegistry | null>(null);
-  const [edgeTypes, setEdgeTypes] = useState<EdgeTypeDef[]>([]);
+  const [ontologyEdgeTypes, setEdgeTypes] = useState<EdgeTypeDef[]>([]);
+  // ADR-090: the types a link in this case may take, read from the case: the ontology's, and those
+  // analysts proposed in it, its parents or on a link in view, so a proposed type is named and drawn
+  // in its own colour, dotted. `null` until read, or when the read fails: the ontology's alone.
+  const [caseLinkTypes, setCaseLinkTypes] = useState<CaseLinkTypes | null>(null);
+  const [linkTypesRead, setLinkTypesRead] = useState(0);
+  const edgeTypes = useMemo(
+    () => caseLinkTypes?.definitions ?? ontologyEdgeTypes,
+    [caseLinkTypes, ontologyEdgeTypes],
+  );
   // The full schema, not only `OntologyRegistry`'s own channel/shape lookup — Phase 7 Stage 4's
   // `QueryBuilderPanel` needs the entity/edge type *names* to populate its own palette and connect
   // controls, which `OntologyRegistry` was never built to expose. Captured from the same `/v1
@@ -349,6 +360,7 @@ export function App() {
   const [linkChangeSignal, setLinkChangeSignal] = useState(0);
   const [linkEventsSignal, setLinkEventsSignal] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [proposedTypesOpen, setProposedTypesOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   // B16's own cross-case overlay — the second investigation's own scope,
   // analyst-entered (this build has no cross-investigation picker anywhere
@@ -447,6 +459,21 @@ export function App() {
       });
     void fetchMapConfig(API_BASE_URL, bearerToken).then(setMapConfig);
   }, [bearerToken, handleUnauthenticatedResponse]);
+
+  useEffect(() => {
+    if (!bearerToken || !investigationId) return;
+    let current = true;
+    fetchCaseLinkTypes(API_BASE_URL, bearerToken, investigationId)
+      .then((types) => {
+        if (current) setCaseLinkTypes(types);
+      })
+      .catch(() => {
+        if (current) setCaseLinkTypes(null);
+      });
+    return () => {
+      current = false;
+    };
+  }, [bearerToken, investigationId, linkTypesRead]);
 
   useEffect(() => {
     // Persisting an already-resolved id makes no network call and must run regardless of auth
@@ -842,6 +869,12 @@ export function App() {
           </Button>
         )}
         {app === "glass" && <Button onClick={() => setHistoryOpen(true)}>History</Button>}
+        {app === "glass" && (principal?.roles?.includes("osprey-admin") ?? false) && (
+          // ADR-090 C3: the relationship types analysts of the administrator's unit proposed.
+          <Button aria-pressed={proposedTypesOpen} onClick={() => setProposedTypesOpen(true)}>
+            Proposed types
+          </Button>
+        )}
         <div
           className="app-header__account"
           style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}
@@ -1152,6 +1185,8 @@ export function App() {
                       }
                       linkEditing={{
                         edgeTypes,
+                        proposedTypes: caseLinkTypes?.proposed,
+                        onTypeProposed: () => setLinkTypesRead((n) => n + 1),
                         onReadFullScreen: (view) => {
                           setReaderFallback(view);
                           setReaderDocumentId(view.document_id);
@@ -1250,6 +1285,13 @@ export function App() {
           groupedCount={groupedCount}
         />
       )}
+      <ProposedTypes
+        apiBaseUrl={API_BASE_URL}
+        bearerToken={bearerToken}
+        open={proposedTypesOpen}
+        onClose={() => setProposedTypesOpen(false)}
+        onDecided={() => setLinkTypesRead((n) => n + 1)}
+      />
       <HistoryPanel
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}

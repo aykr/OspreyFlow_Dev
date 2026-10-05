@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { Edge, EdgeTypeDef } from "../../../../packages/schemas/generated";
 import { linkTypeName } from "../canvas/linkLabel";
+import { DefineLinkType, definitionOf } from "../linktypes/DefineLinkType";
 import { LinkChangeError, changeLink, type LinkChangeResult } from "./linkChangeApi";
 import {
   MAX_REASON_CHARS,
@@ -26,6 +27,10 @@ export interface LinkChangeProps {
   openSignal?: number;
   /** Told of the result so the caller can put the new link in the view. */
   onChanged: (result: LinkChangeResult) => void;
+  /** The names in `edgeTypes` proposed in or for this case and not yet decided (ADR-090). */
+  proposedTypes?: ReadonlySet<string>;
+  /** Told of a type proposed here, so the caller reads the case's types again. */
+  onTypeProposed?: (definition: EdgeTypeDef) => void;
 }
 
 function sentence(error: unknown): string {
@@ -52,9 +57,11 @@ export function LinkChange({
   edge,
   sourceType,
   targetType,
-  edgeTypes,
+  edgeTypes: givenTypes,
   openSignal = 0,
   onChanged,
+  proposedTypes,
+  onTypeProposed,
 }: LinkChangeProps) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<LinkDraft>(() => initialDraft(edge));
@@ -62,12 +69,22 @@ export function LinkChange({
   const [problem, setProblem] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const typeRef = useRef<HTMLSelectElement>(null);
+  const [defining, setDefining] = useState(false);
+  // A type proposed here, offered at once, before the caller has read the case's types again.
+  const [proposedHere, setProposedHere] = useState<EdgeTypeDef[]>([]);
+  const edgeTypes = [
+    ...givenTypes,
+    ...proposedHere.filter((t) => !givenTypes.some((g) => g.name === t.name)),
+  ];
+  const isProposed = (name: string) =>
+    (proposedTypes?.has(name) ?? false) || proposedHere.some((t) => t.name === name);
 
   // A different link (or the new one after a change) starts from itself, closed.
   useEffect(() => {
     setDraft(initialDraft(edge));
     setProblem(null);
     setOpen(false);
+    setDefining(false);
   }, [edge]);
 
   useEffect(() => {
@@ -161,10 +178,42 @@ export function LinkChange({
           {choices.map((t) => (
             <option key={t.name} value={t.name}>
               {linkTypeName(t.name, edgeTypes)}
+              {isProposed(t.name) ? " (proposed)" : ""}
             </option>
           ))}
         </select>
       </label>
+
+      {defining ? (
+        <DefineLinkType
+          apiBaseUrl={apiBaseUrl}
+          bearerToken={bearerToken}
+          investigationId={investigationId}
+          sourceType={sourceType}
+          targetType={targetType}
+          offered={edgeTypes}
+          onCancel={() => setDefining(false)}
+          onProposed={(proposal) => {
+            const definition = definitionOf(proposal);
+            const withNew = [...edgeTypes.filter((t) => t.name !== definition.name), definition];
+            setProposedHere((before) => [...before.filter((t) => t.name !== definition.name), definition]);
+            setDraft(retypeDraft(draft, definition.name, withNew));
+            setDefining(false);
+            onTypeProposed?.(definition);
+            typeRef.current?.focus();
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          className="btn"
+          disabled={busy}
+          style={{ justifySelf: "start" }}
+          onClick={() => setDefining(true)}
+        >
+          Define a new type…
+        </button>
+      )}
 
       {(typeDef?.properties ?? []).map((def) => (
         <label key={def.name} style={{ display: "grid", gap: "var(--sp-4)" }}>

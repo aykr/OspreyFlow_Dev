@@ -165,6 +165,46 @@ test("Saving asks what stands behind the link; choosing Probabilistic by keyboar
   registerCovered(REGISTRY, "choose-what-stands-behind-the-link-before-saving");
 });
 
+test("Define a new type… by keyboard proposes it, and the form lands on it chosen", async ({ page }) => {
+  const changes = await serve(page);
+  const proposals: Record<string, unknown>[] = [];
+  await page.route("**/*/v1/investigations/inv-1/link-types", async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    proposals.push(body);
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...body,
+        id: "p1",
+        investigation_id: "inv-1",
+        owning_unit: "unit-1",
+        proposed_by: "analyst-1",
+        proposed_at: "2026-10-05T10:00:00Z",
+        status: "pending",
+      }),
+    });
+  });
+  await openByKeyboard(page);
+  await page.keyboard.press("Tab");
+  expect((await focusedName(page)).trim()).toBe("Define a new type…");
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Name (required)")).toBeFocused();
+  await page.keyboard.type("Known to");
+  await expect(page.getByLabel("Type ID")).toHaveValue("KNOWN_TO");
+  await tabTo(page, /Why does no type fit/);
+  await page.keyboard.type("They know each other by sight only.");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await expect.poll(() => proposals.length).toBe(1);
+  expect(proposals[0]).toMatchObject({ name: "KNOWN_TO", label: "Known to", from_types: ["Person"], to_types: ["Person"] });
+  // The proposal's Ctrl+Enter is its own: the link was not saved with it.
+  expect(changes).toHaveLength(0);
+  await expect(page.getByLabel("Link type")).toBeFocused();
+  await expect(page.getByLabel("Link type")).toHaveValue("KNOWN_TO");
+  await expect(page.getByLabel("Link type").locator("option:checked")).toHaveText("Known to (proposed)");
+  registerCovered(REGISTRY, "define-a-new-type-by-keyboard-and-it-is-chosen");
+});
+
 test("every registered link-change action has its own proving test case above", () => {
   assertAllCovered("LINK_CHANGE_ACTIONS", LINK_CHANGE_ACTIONS);
 });

@@ -36,6 +36,9 @@ export interface InspectorProps {
     onReadFullScreen?: (view: DocumentReaderView) => void;
     /** Told of a saved change so the new link can be put in the view. */
     onChanged: (result: LinkChangeResult) => void;
+    /** The proposed types among `edgeTypes`, and what to do when one is proposed (ADR-090). */
+    proposedTypes?: ReadonlySet<string>;
+    onTypeProposed?: (definition: EdgeTypeDef) => void;
   };
   /** Phase 8 Stage 4c: the Judgements tab, `02_GLASS_FRONTEND.md` §9. `undefined` when the
    * caller has not wired assessment production up yet (an existing test harness) — the tab is
@@ -84,6 +87,8 @@ export function Inspector({ node, link, linkEditing, assessment }: InspectorProp
             edgeTypes={linkEditing.edgeTypes}
             openSignal={linkEditing.openChangeSignal}
             onChanged={linkEditing.onChanged}
+            proposedTypes={linkEditing.proposedTypes}
+            onTypeProposed={linkEditing.onTypeProposed}
           />
         )}
         {/* ADR-075: notes belong to a case, so they are offered only where one is open. */}
