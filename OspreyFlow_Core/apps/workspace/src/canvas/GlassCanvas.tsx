@@ -77,7 +77,7 @@ import {
 } from "../design/primitives/RadialMenu";
 import { redrawWhenCameraStops } from "./cameraMoves";
 import { emailsOutcomeText, showEmailsAsDocuments } from "../inspector/emailDocuments";
-import { eventsEntryLabel, eventsNoun } from "../inspector/linkEventsApi";
+import { eventsEntryLabel, eventsNoun, mayCarryText } from "../inspector/linkEventsApi";
 import { edgeTypesOfferedFor } from "./edgeTypeMenu";
 import { DottedArrowProgram, DottedEdgeProgram } from "./dottedEdgePrograms";
 import {
@@ -2282,7 +2282,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // The entries of the right-click menu on a link (ADR-080). Each is a view change or a call that
     // writes with the analyst's name and a reason; nothing here edits a link in place.
     // ADR-092: the emails on a link inside the brushed window, written as Documents and drawn.
-    async function emailsOntoCanvas(edgeId: string, x: number, y: number): Promise<void> {
+    async function emailsOntoCanvas(
+      edgeId: string,
+      x: number,
+      y: number,
+      noun: "emails" | "messages",
+    ): Promise<void> {
       if (!apiBaseUrl || !bearerToken || !investigationId) return;
       try {
         const result = await showEmailsAsDocuments(
@@ -2292,11 +2297,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           edgeId,
           getEventsWindow?.() ?? null,
         );
-        store.getState().applyDelta(result.delta);
+        if (result.delta) store.getState().applyDelta(result.delta);
         setActionError({
           x,
           y,
-          message: emailsOutcomeText(result.written, result.without_text),
+          message: emailsOutcomeText(result.written, result.without_text, noun),
           tone: "notice",
         });
       } catch (err) {
@@ -2371,7 +2376,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         onEvents: onLinkAction
           ? () => {
               reach("events");
-              if (noun === "emails") void emailsOntoCanvas(edge.id, x, y);
+              if (mayCarryText(noun)) void emailsOntoCanvas(edge.id, x, y, noun as "emails" | "messages");
             }
           : undefined,
         eventsLabel,

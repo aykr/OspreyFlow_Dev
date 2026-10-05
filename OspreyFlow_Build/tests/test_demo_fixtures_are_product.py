@@ -25,6 +25,7 @@ GENERATORS = (
     "fixture_corp",
     "fixture_corp_resolution",
     "cdr",
+    "sms",
     "seizure_record",
     "scenario_cohorts",
 )

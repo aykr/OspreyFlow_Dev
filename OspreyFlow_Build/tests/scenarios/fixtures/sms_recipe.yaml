@@ -1,0 +1,48 @@
+# Hand-written recipe for the synthetic SMS fixture (ADR-094 step 1): each message is an event on
+# the COMMUNICATED_WITH link between its two phones, and its text is marked as the link's message
+# text, kept on the event where the reader and extraction read it.
+id: sms-fixture
+version: 1
+label: "Fixture — synthetic SMS"
+connector:
+  profile: csv
+  delimiter: ","
+  encoding: utf-8
+  header_rows: 1
+ontology_version: 11
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-1, owning_unit: unit-1}
+
+row_template:
+  entities:
+    - ref: a
+      pole_class: object
+      type: Endpoint
+      match_on: value_normalised
+      on_match: reference
+      properties:
+        value_raw: {field: sender}
+        value_normalised: {field: sender, transform: msisdn}
+        endpoint_kind: {literal: msisdn}
+    - ref: b
+      pole_class: object
+      type: Endpoint
+      match_on: value_normalised
+      on_match: reference
+      properties:
+        value_raw: {field: recipient}
+        value_normalised: {field: recipient, transform: msisdn}
+        endpoint_kind: {literal: msisdn}
+  edges:
+    - type: COMMUNICATED_WITH
+      from: a
+      to: b
+      temporal: {at: {field: sent_at, transform: "datetime(tz=UTC)"}}
+      properties:
+        direction: {literal: outbound}
+      content: {kind: message_text, field: text}
+
+unmapped_fields:
+  - {field: message_id, action: ignore, note: "The carrier's own message reference; not loaded"}

@@ -441,7 +441,11 @@ note when the text is the first 4,000 characters of a longer message. Reachable 
 is brushed) on the canvas as Documents, linked to both addresses, and says how many (ADR-092); past
 the working set's cap nothing is added and the message says by how much and to narrow the timeline.
 A link whose events carry no text (a PaySim transaction, an HMP incident) keeps the Inspector list
-only. Proved by keyboard in `keyboard/link-menu.spec.ts`.
+only. A link between two phones (`endpoint_kind` `msisdn`, `imsi` or `handle`) is named for its
+**messages** (ADR-094): *Show messages (n)*, "· 3 messages", the Inspector's **Messages** list,
+where a message is named by its first words and a call by its length; *Show messages* puts the
+messages with text on the canvas as Documents titled by their first words, and says how many events
+had none (a link of calls only is said to have none, as a notice). Proved by keyboard in `keyboard/link-menu.spec.ts`.
 
 An opened email offers **Extract entities** (ADR-089 step 3). The email becomes a `Document` node linked
 to its sender and recipient by `MENTIONED_IN`, both appear on the canvas at once, and the model's findings

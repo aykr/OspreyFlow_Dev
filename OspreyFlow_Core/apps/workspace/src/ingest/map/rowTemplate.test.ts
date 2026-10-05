@@ -7,6 +7,7 @@ import type {
 } from "../../../../../packages/schemas/generated";
 import {
   arityForTransform,
+  boundFieldNames,
   classificationWouldLoosen,
   edgeTypesForEndpoints,
   entityTypesForPole,
@@ -128,5 +129,25 @@ describe("classificationWouldLoosen", () => {
 
   it("is false for an override equal to the baseline", () => {
     expect(classificationWouldLoosen(order, "OFFICIAL-SENSITIVE", "OFFICIAL-SENSITIVE")).toBe(false);
+  });
+});
+
+// ADR-094: a link's text column is mapped, so it is never listed as unmapped.
+describe("a link's text column", () => {
+  it("counts as mapped", () => {
+    const template: RowTemplate = {
+      entities: [entity({ ref: "a" }), entity({ ref: "b" })],
+      edges: [
+        {
+          type: "COMMUNICATED_WITH",
+          from: "a",
+          to: "b",
+          temporal: { at: { field: "sent_at" } },
+          content: { kind: "message_text", field: "text" },
+        },
+      ],
+    };
+    expect(boundFieldNames(template).has("text")).toBe(true);
+    expect(unmappedFieldNames(["sent_at", "text"], template, new Set())).not.toContain("text");
   });
 });

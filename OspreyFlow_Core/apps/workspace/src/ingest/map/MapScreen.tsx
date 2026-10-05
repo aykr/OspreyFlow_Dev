@@ -43,7 +43,7 @@ import {
 import { ElementInspector, type ElementSelection } from "./ElementInspector";
 import { MapCanvas, type MapSelection } from "./MapCanvas";
 import { SourceFieldsPanel } from "./SourceFieldsPanel";
-import { edgeTypesForEndpoints, entityTypesForPole, findEdge, findEntity, nextEntityRef, unmappedFieldNames } from "./rowTemplate";
+import { edgeTypesForEndpoints, entityTypesForPole, findEdge, findEntity, nextEntityRef, unmappedFieldNames, boundFieldNames as boundFieldNamesOf } from "./rowTemplate";
 
 export interface MapScreenProps {
   apiBaseUrl: string;
@@ -165,18 +165,8 @@ export function MapScreen({
     );
   }
 
-  const boundFieldNames = new Set<string>();
-  for (const entity of template.entities) for (const b of Object.values(entity.properties ?? {})) {
-    if (b.field) boundFieldNames.add(b.field);
-    for (const f of b.fields ?? []) boundFieldNames.add(f);
-  }
-  for (const edge of template.edges ?? []) {
-    for (const b of Object.values(edge.properties ?? {})) {
-      if (b.field) boundFieldNames.add(b.field);
-      for (const f of b.fields ?? []) boundFieldNames.add(f);
-    }
-    if (edge.temporal?.at.field) boundFieldNames.add(edge.temporal.at.field);
-  }
+  // One rule for which columns are mapped, shared with the unmapped list (it was a second copy).
+  const boundFieldNames = boundFieldNamesOf(template);
   const unmapped = unmappedFieldNames(
     columns.map((c) => c.name),
     template,

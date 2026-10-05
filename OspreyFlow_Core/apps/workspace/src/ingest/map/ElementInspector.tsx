@@ -351,6 +351,50 @@ export function ElementInspector({
           </div>
         )}
 
+        {edgeTypeDef?.temporal && (
+          // ADR-094: the column holding this link's message or document text, kept on its events
+          // where the reader and extraction read it. Only a link with a time has events.
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4, 4px)" }}>
+            <label htmlFor="edge-content-kind">Text the model can read</label>
+            <Select
+              id="edge-content-kind"
+              value={edge.content?.kind ?? ""}
+              onChange={(e) => {
+                const kind = e.target.value;
+                onChangeEdge({
+                  ...edge,
+                  content:
+                    kind === "message_text" || kind === "document_text"
+                      ? { kind, field: edge.content?.field ?? sourceFieldNames[0] ?? "" }
+                      : null,
+                });
+              }}
+            >
+              <option value="">None</option>
+              <option value="message_text">Message text</option>
+              <option value="document_text">Document text</option>
+            </Select>
+            {edge.content && (
+              <>
+                <label htmlFor="edge-content-field">Column holding the text</label>
+                <Select
+                  id="edge-content-field"
+                  value={edge.content.field}
+                  onChange={(e) =>
+                    onChangeEdge({ ...edge, content: { kind: edge.content!.kind, field: e.target.value } })
+                  }
+                >
+                  {sourceFieldNames.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </Select>
+              </>
+            )}
+          </div>
+        )}
+
         <Panel title="Properties">
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-8, 8px)" }}>
             {Object.entries(properties).map(([name, binding]) => (

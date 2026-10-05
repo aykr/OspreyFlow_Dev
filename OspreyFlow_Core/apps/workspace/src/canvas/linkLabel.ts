@@ -22,7 +22,11 @@ export function linkTypeName(type: string, types: readonly NamedType[]): string 
 const COUNT = new Intl.NumberFormat("en-GB");
 
 /** "Communicated with · 3 emails", "Owns · 1 record". */
-export function linkCaption(typeName: string, count: number, noun: "emails" | "events"): string {
-  const unit = noun === "emails" ? "email" : "record";
+export function linkCaption(
+  typeName: string,
+  count: number,
+  noun: "emails" | "messages" | "events",
+): string {
+  const unit = noun === "emails" ? "email" : noun === "messages" ? "message" : "record";
   return `${typeName} · ${COUNT.format(count)} ${count === 1 ? unit : `${unit}s`}`;
 }

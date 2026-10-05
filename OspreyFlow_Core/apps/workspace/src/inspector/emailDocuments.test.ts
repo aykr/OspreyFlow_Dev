@@ -39,11 +39,14 @@ describe("showEmailsAsDocuments", () => {
     );
   });
 
-  it("says when the link's events are not documents", async () => {
+  it("says, without failing, when none of the link's events has text (a phone link of calls)", async () => {
     answer(422, { error: "not_documents" });
-    await expect(showEmailsAsDocuments("http://api", "t", "inv", "e", null)).rejects.toThrow(
-      "These events have no text, so none can be shown as a document.",
-    );
+    await expect(showEmailsAsDocuments("http://api", "t", "inv", "e", null)).resolves.toEqual({
+      written: 0,
+      without_text: -1,
+      delta: null,
+    });
+    expect(emailsOutcomeText(0, -1, "messages")).toBe("None of these has text to show as a document.");
   });
 });
 
@@ -52,5 +55,6 @@ describe("emailsOutcomeText", () => {
     expect(emailsOutcomeText(3, 0)).toBe("3 emails put on the canvas.");
     expect(emailsOutcomeText(1, 2)).toBe("1 email put on the canvas; 2 events had no text.");
     expect(emailsOutcomeText(0, 0)).toBe("No emails in the timeline's window.");
+    expect(emailsOutcomeText(2, 3, "messages")).toBe("2 messages put on the canvas; 3 events had no text.");
   });
 });

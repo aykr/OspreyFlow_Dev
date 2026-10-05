@@ -45,11 +45,15 @@ import yaml
 
 from demo_fixtures.cdr import generate_cdr_rows
 from demo_fixtures.seizure_record import SEIZURE_CSV_COLUMNS, generate_seizure_rows
+from demo_fixtures.sms import FIELDS as SMS_FIELDS
+from demo_fixtures.sms import generate_sms_rows
 
 #: The name `08_ACCEPTANCE_SCENARIOS.md`'s B1-B3 and the over-the-wire test both expect. Changing
 #: it breaks `test_b1_…`/`test_b2_…`/`test_b3_…`, which look the file up by name — that coupling
 #: is deliberate and is what makes this module's output load-bearing rather than decorative.
 CDR_FIXTURE_NAME = "carrier-a-cdr.csv"
+#: ADR-094 step 1: the same carrier's messages, with their text.
+SMS_FIXTURE_NAME = "carrier-a-sms.csv"
 
 #: The exhibit schedule B13 ingests to fire a hotlist alert — round 13cdb. Named here for the same
 #: reason the CDR file is: the over-the-wire cases select it from the Studio's own listing by name.
@@ -57,6 +61,17 @@ SEIZURE_FIXTURE_NAME = "seizure-record.csv"
 
 #: The default in `packages/schemas/deployment.py` and `05_DEPLOYMENT.md` §3.
 DEFAULT_INGEST_ROOT = "/var/lib/osprey/ingest"
+
+
+def write_sms_fixture(ingest_root: Path) -> Path:
+    """Write the synthetic SMS export (ADR-094 step 1), returning the path written."""
+    ingest_root.mkdir(parents=True, exist_ok=True)
+    destination = ingest_root / SMS_FIXTURE_NAME
+    with destination.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(SMS_FIELDS))
+        writer.writeheader()
+        writer.writerows(generate_sms_rows())
+    return destination
 
 
 def write_cdr_fixture(ingest_root: Path) -> Path:
@@ -139,7 +154,11 @@ def _run(args: argparse.Namespace) -> int:
         ingest_root = args.ingest_root or Path(DEFAULT_INGEST_ROOT)
 
     try:
-        written = [write_cdr_fixture(ingest_root), write_seizure_fixture(ingest_root)]
+        written = [
+            write_cdr_fixture(ingest_root),
+            write_sms_fixture(ingest_root),
+            write_seizure_fixture(ingest_root),
+        ]
     except PermissionError:
         # The documented default lives under /var, which an ordinary user cannot create. Say so
         # by name rather than letting a traceback stand in for an instruction.
@@ -155,7 +174,8 @@ def _run(args: argparse.Namespace) -> int:
     print(
         "The Ingest Studio's Connect stage will now list them. Map the CDR with the "
         "`cdr-generic-csv` connector — it declares `date_order: dmy`, which that file's own dates "
-        "need — and the seizure record with `seizure-record-csv`."
+        "need — the SMS export with the `csv` connector, marking its `text` column as the "
+        "message's text, and the seizure record with `seizure-record-csv`."
     )
     return 0
 

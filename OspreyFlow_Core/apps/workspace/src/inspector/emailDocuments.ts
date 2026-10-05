@@ -5,8 +5,10 @@ import type { WorkingSetDelta } from "../workingset/models";
 
 export interface EmailDocumentsResult {
   written: number;
+  /** -1 when none of the link's events had text (`not_documents`), which is not a failure. */
   without_text: number;
-  delta: WorkingSetDelta;
+  /** `null` when nothing was written. */
+  delta: WorkingSetDelta | null;
 }
 
 const COUNT = new Intl.NumberFormat("en-GB");
@@ -46,18 +48,24 @@ export async function showEmailsAsDocuments(
         `against a limit of ${COUNT.format(body.cap)}. Narrow the timeline and try again.`,
     );
   }
-  if (body.error === "not_documents") {
-    throw new Error("These events have no text, so none can be shown as a document.");
-  }
+  // A phone link of calls has events but no text: said as a notice, not raised as a failure.
+  if (body.error === "not_documents") return { written: 0, without_text: -1, delta: null };
   if (body.error === "link_not_found") throw new Error("This link is no longer in the view.");
   if (response.status === 403) throw new Error("Changing this case needs Editor access.");
   throw new Error(`Showing the emails failed (${response.status}). Try again.`);
 }
 
-/** What the analyst is told once the emails are on the canvas. */
-export function emailsOutcomeText(written: number, withoutText: number): string {
-  if (written === 0 && withoutText === 0) return "No emails in the timeline's window.";
-  const emails = `${COUNT.format(written)} ${written === 1 ? "email" : "emails"} put on the canvas`;
-  if (withoutText === 0) return `${emails}.`;
-  return `${emails}; ${COUNT.format(withoutText)} ${withoutText === 1 ? "event" : "events"} had no text.`;
+/** What the analyst is told once the emails or messages are on the canvas. `withoutText` of -1
+ * means none of the link's events had text (the server's `not_documents`). */
+export function emailsOutcomeText(
+  written: number,
+  withoutText: number,
+  noun: "emails" | "messages" = "emails",
+): string {
+  if (withoutText < 0) return "None of these has text to show as a document.";
+  const one = noun === "emails" ? "email" : "message";
+  if (written === 0 && withoutText === 0) return `No ${noun} in the timeline's window.`;
+  const shown = `${COUNT.format(written)} ${written === 1 ? one : noun} put on the canvas`;
+  if (withoutText === 0) return `${shown}.`;
+  return `${shown}; ${COUNT.format(withoutText)} ${withoutText === 1 ? "event" : "events"} had no text.`;
 }

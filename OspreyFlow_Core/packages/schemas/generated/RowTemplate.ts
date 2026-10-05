@@ -23,6 +23,8 @@ export type Entities = RecipeEntity[];
 export type Type1 = string;
 export type From = string;
 export type To = string;
+export type Kind = "message_text" | "document_text";
+export type Field2 = string;
 export type Handling1 = {
   [k: string]: unknown;
 } | null;
@@ -90,6 +92,7 @@ export interface RecipeEdge {
   when?: RecipeCondition | null;
   temporal?: TemporalBinding | null;
   properties?: Properties1;
+  content?: ContentBinding | null;
   handling?: Handling1;
   provenance?: Provenance1;
   [k: string]: unknown;
@@ -100,4 +103,15 @@ export interface TemporalBinding {
 }
 export interface Properties1 {
   [k: string]: FieldBinding;
+}
+/**
+ * ADR-094: a source column whose value the model can read. On a link it is the link's message
+ * or document text, written to the link's event (never the graph link), where the reader and
+ * extraction read it, as they read an Enron email's excerpt. A column named outright, never an
+ * expression (rule 8).
+ */
+export interface ContentBinding {
+  kind: Kind;
+  field: Field2;
+  [k: string]: unknown;
 }

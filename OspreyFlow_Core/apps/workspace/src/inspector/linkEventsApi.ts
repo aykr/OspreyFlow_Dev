@@ -55,14 +55,31 @@ export async function fetchLinkEvents(
 /** What the section is called for this link: emails between two addresses, events otherwise.
  * Reads the ontology's own `Endpoint.endpoint_kind` from the link's source node, here and only
  * here, so no caller can read a different field (it read `kind`, which nothing carries). */
-export function eventsNoun(edgeType: string, source: Node | undefined): "emails" | "events" {
-  return edgeType === "COMMUNICATED_WITH" && source?.properties?.endpoint_kind === "email"
-    ? "emails"
-    : "events";
+export type EventsNoun = "emails" | "messages" | "events";
+
+/** Ends whose events are messages (ADR-094): a phone (number or SIM) or a messaging handle. */
+const MESSAGE_ENDS = new Set(["msisdn", "imsi", "handle"]);
+
+export function eventsNoun(edgeType: string, source: Node | undefined): EventsNoun {
+  if (edgeType !== "COMMUNICATED_WITH") return "events";
+  const kind = source?.properties?.endpoint_kind;
+  if (kind === "email") return "emails";
+  return typeof kind === "string" && MESSAGE_ENDS.has(kind) ? "messages" : "events";
+}
+
+/** The words for a noun: "Emails", "email". */
+export function nounWords(noun: EventsNoun): { title: string; one: string; titleOne: string } {
+  const one = noun === "emails" ? "email" : noun === "messages" ? "message" : "event";
+  return { title: noun.charAt(0).toUpperCase() + noun.slice(1), one, titleOne: one.charAt(0).toUpperCase() + one.slice(1) };
+}
+
+/** Whether a link's events may carry text the canvas can show as Documents (ADR-092, ADR-094). */
+export function mayCarryText(noun: EventsNoun): boolean {
+  return noun === "emails" || noun === "messages";
 }
 
 /** The menu entry's label: "Show emails (12)". */
-export function eventsEntryLabel(noun: "emails" | "events", count: number): string {
+export function eventsEntryLabel(noun: EventsNoun, count: number): string {
   return `Show ${noun} (${count})`;
 }
 

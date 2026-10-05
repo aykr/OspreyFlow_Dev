@@ -441,6 +441,16 @@ class TemporalBinding(BaseModel):
     at: FieldBinding
 
 
+class ContentBinding(BaseModel):
+    """ADR-094: a source column whose value the model can read. On a link it is the link's message
+    or document text, written to the link's event (never the graph link), where the reader and
+    extraction read it, as they read an Enron email's excerpt. A column named outright, never an
+    expression (rule 8)."""
+
+    kind: Literal["message_text", "document_text"]
+    field: str
+
+
 class RecipeEdge(BaseModel):
     type: str
     from_ref: str = Field(alias="from")
@@ -448,6 +458,8 @@ class RecipeEdge(BaseModel):
     when: RecipeCondition | None = None
     temporal: TemporalBinding | None = None
     properties: dict[str, FieldBinding] = Field(default_factory=dict)
+    #: ADR-094: the column holding this link's message or document text, if it has one.
+    content: ContentBinding | None = None
     #: Same per-element override as `RecipeEntity.handling`/`.provenance` above.
     handling: dict[str, Any] | None = None
     provenance: dict[str, Any] | None = None

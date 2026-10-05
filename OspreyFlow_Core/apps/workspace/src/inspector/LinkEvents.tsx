@@ -9,6 +9,8 @@ import type { EventRecord } from "../../../../packages/schemas/generated";
 import {
   EVENTS_PAGE_SIZE,
   LinkEventsError,
+  nounWords,
+  type EventsNoun,
   acceptEmailCandidate,
   candidateLabel,
   extractEmail,
@@ -23,8 +25,8 @@ export interface LinkEventsProps {
   bearerToken: string;
   investigationId: string;
   edgeId: string;
-  /** "emails" between two addresses, or "events" for any other link. */
-  noun: "emails" | "events";
+  /** "emails" between two addresses, "messages" between two phones (ADR-094), else "events". */
+  noun: EventsNoun;
   /** How the two ends read, for "From" and "To". */
   sourceLabel: string;
   targetLabel: string;
@@ -50,7 +52,16 @@ function when(iso: string): string {
 
 function subjectOf(event: EventRecord): string {
   const subject = event.properties?.subject;
-  return typeof subject === "string" && subject.trim() !== "" ? subject : "(no subject)";
+  if (typeof subject === "string" && subject.trim() !== "") return subject;
+  // A message has no subject: its first words stand for it (ADR-094). A call has no text: its
+  // length does.
+  const text = event.properties?.excerpt;
+  if (typeof text === "string" && text.trim() !== "") {
+    const words = text.trim();
+    return words.length > 60 ? `${words.slice(0, 57)}…` : words;
+  }
+  if (typeof event.duration_s === "number") return `Call · ${Math.round(event.duration_s)} s`;
+  return "(no subject)";
 }
 
 function excerptOf(event: EventRecord): string {
@@ -163,7 +174,7 @@ export function LinkEvents({
       setAccepting(null);
     }
   };
-  const Noun = noun === "emails" ? "Emails" : "Events";
+  const Noun = nounWords(noun).title;
 
   useEffect(() => {
     let current = true;
@@ -261,7 +272,7 @@ export function LinkEvents({
         </>
       )}
       {load.state === "ready" && open !== null && (
-        <article aria-label={`${noun === "emails" ? "Email" : "Event"}: ${subjectOf(open)}`} style={{ display: "grid", gap: "var(--sp-8)" }}>
+        <article aria-label={`${nounWords(noun).titleOne}: ${subjectOf(open)}`} style={{ display: "grid", gap: "var(--sp-8)" }}>
           <span style={{ display: "flex", gap: "var(--sp-8)" }}>
             <button ref={backRef} type="button" className="btn" onClick={closeEmail}>
               Back to the list

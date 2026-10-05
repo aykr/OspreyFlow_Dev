@@ -33,6 +33,7 @@ describe("linkCaption", () => {
     expect(linkCaption("Communicated with", 1, "emails")).toBe("Communicated with · 1 email");
     expect(linkCaption("Owns", 2, "events")).toBe("Owns · 2 records");
     expect(linkCaption("Owns", 1, "events")).toBe("Owns · 1 record");
+    expect(linkCaption("Communicated with", 4, "messages")).toBe("Communicated with · 4 messages");
   });
 
   it("writes a large count with a thousands separator", () => {

@@ -363,14 +363,20 @@ class _ResolvedEntity:
 
 
 class _ResolvedEdge:
-    __slots__ = ("edge", "properties", "instant")
+    __slots__ = ("edge", "properties", "instant", "content")
 
     def __init__(
-        self, edge: RecipeEdge, properties: dict[str, Any] | None, instant: datetime | None
+        self,
+        edge: RecipeEdge,
+        properties: dict[str, Any] | None,
+        instant: datetime | None,
+        content: dict[str, str] | None = None,
     ) -> None:
         self.edge = edge
         self.properties = properties  # None means the edge's `when` did not hold this row
         self.instant = instant
+        #: ADR-094: `{"kind", "text"}` when the recipe marks this link's text and the row has some.
+        self.content = content
 
 
 def _resolve_row(
@@ -404,7 +410,11 @@ def _resolve_row(
             if edge.temporal
             else None
         )
-        edges.append(_ResolvedEdge(edge, properties, instant))
+        text = row.get(edge.content.field, "") if edge.content else ""
+        content = (
+            {"kind": edge.content.kind, "text": text} if edge.content and text.strip() else None
+        )
+        edges.append(_ResolvedEdge(edge, properties, instant, content))
 
     return entities, edges
 
@@ -444,6 +454,7 @@ def _to_staged_row(
                 to_ref=e.edge.to_ref,
                 properties=e.properties,
                 instant=e.instant,
+                content=e.content,
             )
             for e in resolved_edges
             if e.properties is not None
@@ -645,6 +656,8 @@ async def _write_edge(
         event_properties = {
             **properties,
             "source_rows": [row_index, *duplicate_row_indices],
+            # ADR-094: the link's text, where the reader and extraction read an email's.
+            **_content_properties(resolved.content),
         }
         events.append(
             EventRecord(
@@ -664,6 +677,22 @@ async def _write_edge(
                 handling=handling,
             )
         )
+
+
+#: The length of text kept on an event, as the Enron loader keeps (ADR-089 decision 1).
+EXCERPT_CHARS = 4000
+
+
+def _content_properties(content: dict[str, str] | None) -> dict[str, Any]:
+    """The event properties a link's text becomes: cut at `EXCERPT_CHARS`, said when cut."""
+    if not content:
+        return {}
+    text = content["text"]
+    return {
+        "excerpt": text[:EXCERPT_CHARS],
+        "truncated": len(text) > EXCERPT_CHARS,
+        "content_kind": content["kind"],
+    }
 
 
 def _as_float(value: object) -> float | None:
@@ -949,7 +978,7 @@ def _staged_edge_to_resolved(staged: StagedEdge) -> _ResolvedEdge:
     recipe_edge = RecipeEdge.model_validate(
         {"type": staged.type, "from": staged.from_ref, "to": staged.to_ref}
     )
-    return _ResolvedEdge(recipe_edge, staged.properties, staged.instant)
+    return _ResolvedEdge(recipe_edge, staged.properties, staged.instant, staged.content)
 
 
 async def run_recipe(

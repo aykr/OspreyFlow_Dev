@@ -142,6 +142,21 @@ def test_it_creates_the_folder_when_it_is_not_there(tmp_path: Path, subdirectory
     assert write_cdr_fixture(target).exists()
 
 
+def test_the_sms_export_is_written_with_its_text_for_the_studio(tmp_path: Path) -> None:
+    """ADR-094 step 1: a phone export whose messages carry text, for the Studio to load with the
+    text column marked as message text (`tests/scenarios/fixtures/sms_recipe.yaml`)."""
+    from scripts.seed_ingest_folder import SMS_FIXTURE_NAME, write_sms_fixture
+
+    from demo_fixtures.sms import FIELDS, generate_sms_rows
+
+    written = write_sms_fixture(tmp_path)
+
+    assert written.name == SMS_FIXTURE_NAME == "carrier-a-sms.csv"
+    rows = list(csv.DictReader(written.read_text(encoding="utf-8").splitlines()))
+    assert [tuple(r) for r in rows][0] == FIELDS
+    assert [r["text"] for r in rows] == [r["text"] for r in generate_sms_rows()]
+
+
 def test_the_seizure_record_is_written_for_b13(tmp_path: Path) -> None:
     """**B13 ingests this file**, so it has to be in the ingest root before an analyst opens the
     Studio — round 13cdb. Same reasoning as the CDR fixture above: the row is worded "ingest …",

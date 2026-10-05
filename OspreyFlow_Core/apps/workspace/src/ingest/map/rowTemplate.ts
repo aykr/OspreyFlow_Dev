@@ -66,6 +66,8 @@ function bindingsOf(template: RowTemplate): FieldBinding[] {
   for (const edge of template.edges ?? []) {
     bindings.push(...Object.values(edge.properties ?? {}));
     if (edge.temporal) bindings.push(edge.temporal.at);
+    // ADR-094: the column holding the link's text is mapped too.
+    if (edge.content) bindings.push({ field: edge.content.field });
   }
   return bindings;
 }

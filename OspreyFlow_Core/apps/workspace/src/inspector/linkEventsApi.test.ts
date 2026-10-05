@@ -11,6 +11,10 @@ const enronAddress = makeNode("enron-ep-1", {
   type: "Endpoint",
   properties: { value_raw: "a@enron.com", value_normalised: "a@enron.com", endpoint_kind: "email" },
 });
+const phone = makeNode("cdr-ep-1", {
+  type: "Endpoint",
+  properties: { value_raw: "07911123456", value_normalised: "+447911123456", endpoint_kind: "msisdn" },
+});
 const paysimAccount = makeNode("paysim-acct-1", {
   type: "Endpoint",
   properties: { value_normalised: "C1305486145", endpoint_kind: "account" },
@@ -19,6 +23,10 @@ const paysimAccount = makeNode("paysim-acct-1", {
 describe("eventsNoun", () => {
   it("calls the events between two email addresses emails", () => {
     expect(eventsNoun("COMMUNICATED_WITH", enronAddress)).toBe("emails");
+  });
+
+  it("calls the events between two phones messages (ADR-094)", () => {
+    expect(eventsNoun("COMMUNICATED_WITH", phone)).toBe("messages");
   });
 
   it("calls anything else events", () => {

@@ -40,6 +40,11 @@ def recipe_rule_violations(template: RowTemplate, ontology: OntologySchema) -> l
                 f"{edge.type!r} is a Probabilistic relationship type. A recipe writes what the "
                 "source records, which is Direct (ADR-081); choose a Direct type."
             )
+        if edge.content is not None and edge.temporal is None:
+            problems.append(
+                f"{edge.type!r} marks {edge.content.field!r} as its text but has no time: a link's "
+                "text is kept on its events, and only a link with a time has events (ADR-094)."
+            )
     return problems
 
 

@@ -150,6 +150,8 @@ class StagedEdge:
     to_ref: str
     properties: dict[str, Any]
     instant: datetime | None = None
+    #: ADR-094: `{"kind": ..., "text": ...}` when the recipe marks this link's text.
+    content: dict[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -235,6 +237,7 @@ def read_staged_rows(path: str, *, storage: ObjectStorageConfig) -> list[StagedR
                 instant=datetime.fromisoformat(e["instant"]).astimezone(UTC)
                 if e["instant"]
                 else None,
+                content=e.get("content"),
             )
             for e in json.loads(record["edges_json"])
         ]

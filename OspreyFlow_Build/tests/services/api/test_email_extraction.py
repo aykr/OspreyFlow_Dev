@@ -502,3 +502,20 @@ async def test_an_email_without_a_message_id_is_written_without_one() -> None:
     service, graph, _, _, _ = await _build([bare])
     await service.show_as_documents("inv-1", "e1", ANALYST, window=None)
     assert "message_id" not in graph.nodes[email_document_id("ev-1")].properties
+
+
+async def test_a_message_with_no_subject_is_titled_by_its_first_words() -> None:
+    """ADR-094: an SMS has no subject; its Document is named by what it says, not "(no subject)"."""
+    sms = _event("ev-1").model_copy(
+        update={
+            "properties": {
+                "excerpt": "Callum, the van is booked for Friday. "
+                "Pick it up from Unit 4, Marsh Lane."
+            }
+        }
+    )
+    service, graph, _, _, _ = await _build([sms])
+    await service.show_as_documents("inv-1", "e1", ANALYST, window=None)
+    title = graph.nodes[email_document_id("ev-1")].properties["title"]
+    assert title.startswith("Callum, the van is booked for Friday.")
+    assert len(title) <= 60

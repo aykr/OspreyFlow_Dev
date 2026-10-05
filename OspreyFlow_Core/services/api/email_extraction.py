@@ -87,6 +87,16 @@ class ExtractEmailRequest(BaseModel):
     model: str | None = None
 
 
+def _title_of(subject: object, excerpt: object) -> str:
+    """An email's subject; a message has none, so its first words (ADR-094)."""
+    if isinstance(subject, str) and subject.strip():
+        return subject
+    if isinstance(excerpt, str) and excerpt.strip():
+        words = " ".join(excerpt.split())
+        return words if len(words) <= 60 else f"{words[:57]}…"
+    return "(no subject)"
+
+
 def _has_text(event: EventRecord) -> bool:
     """An event that is a document: it carries text to read (an email's excerpt)."""
     excerpt = event.properties.get("excerpt")
@@ -213,12 +223,16 @@ class EmailExtractionService:
             id=document_id,
             type=DOCUMENT_TYPE,
             properties={
-                "title": title if isinstance(title, str) and title else "(no subject)",
+                "title": _title_of(title, props.get("excerpt")),
                 "sent_at": event.occurred_at.isoformat(),
                 "event_id": event.event_id,
                 # Only what the email has: a missing id is left out, never written as null, which
                 # the ontology's `string` would refuse.
-                **({"message_id": message_id} if isinstance(message_id, str) and message_id else {}),
+                **(
+                    {"message_id": message_id}
+                    if isinstance(message_id, str) and message_id
+                    else {}
+                ),
             },
             provenance=provenance,
             handling=event.handling,
