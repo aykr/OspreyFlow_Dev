@@ -194,9 +194,10 @@ class UploadRefused(Exception):
         self.message = message
 
 
-def validate_upload_name(name: str) -> str:
+def validate_upload_name(name: str, extensions: frozenset[str] = UPLOAD_EXTENSIONS) -> str:
     """The name the file will be stored under, or `UploadRefused`. A name is a single plain file
-    name: no directory part, nothing hidden, no control characters, a known extension."""
+    name: no directory part, nothing hidden, no control characters, one of `extensions` (the
+    studio's source formats by default; a content upload passes its own, ADR-094)."""
     if not name or not name.strip():
         raise UploadRefused("bad_name", "The file needs a name.")
     if (
@@ -212,7 +213,7 @@ def validate_upload_name(name: str) -> str:
             "That file name cannot be used. Use a plain name of up to 200 characters, with no "
             "folders, and not starting with a dot.",
         )
-    if Path(name).suffix.lower() not in UPLOAD_EXTENSIONS:
+    if Path(name).suffix.lower() not in extensions:
         raise UploadRefused("type_not_allowed", "That type of file cannot be uploaded.")
     return name
 

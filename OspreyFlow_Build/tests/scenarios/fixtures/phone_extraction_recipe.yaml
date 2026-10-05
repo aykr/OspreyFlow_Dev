@@ -1,0 +1,45 @@
+# Hand-written recipe for the synthetic phone extraction (ADR-094 step 3): each row's phone holds a
+# photo, a video and a saved note. The phone is named three times (one ref per kind of content, each
+# matched to the same Endpoint), since an entity row marks one content column.
+id: phone-extraction-fixture
+version: 1
+label: "Fixture — synthetic phone extraction"
+connector:
+  profile: csv
+  delimiter: ","
+  encoding: utf-8
+  header_rows: 1
+ontology_version: 12
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-1, owning_unit: unit-1}
+
+row_template:
+  entities:
+    - ref: photo_holder
+      pole_class: object
+      type: Endpoint
+      match_on: value_normalised
+      on_match: reference
+      when: {field: photo, is: not_null}
+      properties: &phone
+        value_raw: {field: phone}
+        value_normalised: {field: phone, transform: msisdn}
+        endpoint_kind: {literal: msisdn}
+      content: {kind: image_file, field: photo}
+    - ref: video_holder
+      pole_class: object
+      type: Endpoint
+      match_on: value_normalised
+      on_match: reference
+      when: {field: video, is: not_null}
+      properties: *phone
+      content: {kind: video_file, field: video}
+    - ref: note_holder
+      pole_class: object
+      type: Endpoint
+      match_on: value_normalised
+      on_match: reference
+      properties: *phone
+      content: {kind: document_text, field: note}

@@ -313,6 +313,24 @@ name or the text's first words), one per file however many entities hold it, and
 linked to it by `HOLDS`. A recipe that marks held content is refused at run if the run has no media
 store. Tests: `tests/ingest/test_held_content.py`, `tests/conformance/media_store`.
 
+### Files: the unstructured path, built for images, videos and text (ADR-094 step 3)
+
+The studio's **Files** stage (shown once the studio has a case to load into) adds images, videos
+and text files straight to that case, each a Document in the media store, read and extracted from
+by its kind; the same dialog is reached from the canvas, standing alone (*Add files* under the strip
+over the canvas) or held by a node (*Add files held by this…* in the menu of a node `HOLDS` allows).
+Each upload needs a handling marking, offered from the deployment's own scheme and one the uploader
+could read, and a legal basis, kept in the audit (§2: neither can be answered later). A file of
+another kind, a holder `HOLDS` does not allow and a holder not in the view are refused before
+anything is kept. `POST /v1/investigations/{id}/documents`. **Not built from §7's description:** the
+extraction profile (which POLE classes, confidence floors, audio options) — extraction reads every
+non-Document type at the deployment's local models — and PDF, DOCX and the other document formats,
+which need a text reader this build does not have. Tests: `test_document_content.py`,
+`test_document_upload_route.py`, `AddFiles.test.tsx`, `IngestStudioFiles.test.tsx`,
+`keyboard/add-files.spec.ts`. The synthetic phone extraction (`demo_fixtures/phone_extraction.py`,
+written by `scripts.seed_ingest_folder` with pictures drawn by ffmpeg and speech by macOS `say`) and
+its recipe (`tests/scenarios/fixtures/phone_extraction_recipe.yaml`) are the demo of held content.
+
 ### A run stores its events
 
 A recipe run from the studio writes its nodes and links to the graph and, once that commits, its

@@ -202,9 +202,13 @@ from .compute_routes import (
 )
 from .config import ApiConfig
 from .document_content import (
+    UPLOAD_CONTENT_EXTENSIONS,
     DocumentAcceptResult,
     DocumentContentService,
     DocumentExtractionResult,
+    DocumentUploadResult,
+    HolderNotFoundError,
+    UploadRefusedError,
 )
 from .document_reader import DocumentReaderService, DocumentReaderView
 from .dossier import DocumentView
@@ -244,6 +248,7 @@ from .ingest_sources import (
     list_source_files,
     max_upload_bytes,
     save_upload,
+    validate_upload_name,
 )
 from .investigations import (
     AccessHistoryEntry,
@@ -476,6 +481,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         text_model=CONFORMANCE_MODEL,
         vision_model=CONFORMANCE_VISION_MODEL,
         transcribe_model=CONFORMANCE_TRANSCRIBE_MODEL,
+        scheme=handling_scheme,
     )
     app.state.email_extraction = EmailExtractionService(
         app.state.working_set,
@@ -1093,6 +1099,17 @@ async def _judgement_not_found_handler(
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND, content={"error": "judgement_not_found"}
     )
+
+
+@app.exception_handler(HolderNotFoundError)
+async def _holder_not_found_handler(request: Request, exc: HolderNotFoundError) -> JSONResponse:
+    """A holder not in the view and one the caller may not see give this one answer (ADR-094)."""
+    return JSONResponse(status_code=404, content={"error": "holder_not_found"})
+
+
+@app.exception_handler(UploadRefusedError)
+async def _upload_refused_handler(request: Request, exc: UploadRefusedError) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"error": "upload_refused", "detail": str(exc)})
 
 
 @app.exception_handler(RecipeRuleError)
@@ -2793,6 +2810,73 @@ async def read_document_route(
         result_cardinality=len(view.spans),
     )
     return view
+
+
+@app.post("/v1/investigations/{investigation_id}/documents")
+async def upload_document_route(
+    investigation: InvestigationEditorDep,
+    request: Request,
+    principal: PrincipalDep,
+    document_content: DocumentContentDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+    name: str = Query(min_length=1),
+    classification: str = Query(min_length=1),
+    legal_basis: str = Query(min_length=1),
+    handling_code: str = Query(default="P", min_length=1),
+    holder: str | None = Query(default=None),
+) -> DocumentUploadResult:
+    """A file added straight to the case (ADR-094 step 3, spec 09 §7): an image, a video or a text
+    file, kept in the media store as a Document, held by `holder` if one is named. Like every
+    source, it needs a handling marking and a legal basis (spec 09 §2); the marking must be one the
+    uploader could read. Audited with the name, size, marking and legal basis, never the
+    contents."""
+    limit = max_upload_bytes()
+    declared = request.headers.get("content-length")
+    if declared is not None and declared.isdigit() and int(declared) > limit:
+        raise HTTPException(status_code=413, detail="That file is larger than the upload limit.")
+    try:
+        filename = validate_upload_name(name, UPLOAD_CONTENT_EXTENSIONS)
+    except UploadRefused as refusal:
+        raise HTTPException(
+            status_code=_UPLOAD_REFUSAL_STATUS[refusal.code], detail=refusal.message
+        ) from refusal
+    data = bytearray()
+    async for chunk in request.stream():
+        data.extend(chunk)
+        if len(data) > limit:
+            raise HTTPException(
+                status_code=413, detail="That file is larger than the upload limit."
+            )
+    handling = Handling(
+        classification=classification,
+        handling_code=handling_code,
+        originator=principal.org_unit,
+        owning_unit=principal.org_unit,
+    )
+    result = await document_content.upload(
+        investigation.id,
+        principal,
+        name=filename,
+        data=bytes(data),
+        holder_id=holder,
+        handling=handling,
+    )
+    await publish_delta(valkey, investigation.id, result.delta)
+    await audit.record(
+        principal=principal,
+        action="upload_document",
+        investigation_id=investigation.id,
+        resolved_query={
+            "name": filename,
+            "size": len(data),
+            "holder": holder,
+            "classification": classification,
+            "legal_basis": legal_basis,
+        },
+        result_cardinality=1,
+    )
+    return result
 
 
 @app.get("/v1/investigations/{investigation_id}/documents/{document_id}/file")

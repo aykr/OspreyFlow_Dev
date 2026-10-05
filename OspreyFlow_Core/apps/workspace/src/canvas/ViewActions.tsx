@@ -13,6 +13,8 @@ export interface ViewActionsProps {
   hiddenLinkCount?: number;
   onHideLink?: () => void;
   onShowHiddenLinks?: () => void;
+  /** ADR-094: add files to the case, standing alone. Absent: not offered. */
+  onAddFiles?: () => void;
 }
 
 /**
@@ -29,6 +31,7 @@ export function ViewActions({
   hiddenLinkCount = 0,
   onHideLink,
   onShowHiddenLinks,
+  onAddFiles,
 }: ViewActionsProps) {
   const [confirming, setConfirming] = useState(false);
   const total = nodeCount.toLocaleString("en-GB");
@@ -85,6 +88,12 @@ export function ViewActions({
           Clear view
         </button>
       </div>
+      {onAddFiles && (
+        // A row of its own, so the row above keeps its place (buttons there are right-aligned).
+        <button type="button" className="radial-menu__item" onClick={onAddFiles}>
+          Add files
+        </button>
+      )}
       {confirming && nodeCount > 0 && (
         <div
           role="alertdialog"

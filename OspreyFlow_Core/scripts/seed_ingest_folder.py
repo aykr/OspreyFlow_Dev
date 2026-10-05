@@ -44,6 +44,7 @@ from pathlib import Path
 import yaml
 
 from demo_fixtures.cdr import generate_cdr_rows
+from demo_fixtures.phone_extraction import write_phone_extraction
 from demo_fixtures.seizure_record import SEIZURE_CSV_COLUMNS, generate_seizure_rows
 from demo_fixtures.sms import FIELDS as SMS_FIELDS
 from demo_fixtures.sms import generate_sms_rows
@@ -159,6 +160,9 @@ def _run(args: argparse.Namespace) -> int:
             write_sms_fixture(ingest_root),
             write_seizure_fixture(ingest_root),
         ]
+        # ADR-094 step 3: a phone extraction whose photos, video and notes the phones hold.
+        extraction, left_out = write_phone_extraction(ingest_root)
+        written.append(extraction)
     except PermissionError:
         # The documented default lives under /var, which an ordinary user cannot create. Say so
         # by name rather than letting a traceback stand in for an instruction.
@@ -171,11 +175,14 @@ def _run(args: argparse.Namespace) -> int:
 
     for path in written:
         print(f"wrote {path} ({path.stat().st_size} bytes)")
+    for note in left_out:
+        print(f"not made: {note}")
     print(
         "The Ingest Studio's Connect stage will now list them. Map the CDR with the "
         "`cdr-generic-csv` connector — it declares `date_order: dmy`, which that file's own dates "
         "need — the SMS export with the `csv` connector, marking its `text` column as the "
-        "message's text, and the seizure record with `seizure-record-csv`."
+        "message's text, the phone extraction (in its own folder) marking photo, video and note "
+        "as content the phone holds, and the seizure record with `seizure-record-csv`."
     )
     return 0
 

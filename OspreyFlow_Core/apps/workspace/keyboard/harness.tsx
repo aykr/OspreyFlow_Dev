@@ -178,7 +178,16 @@ const SCHEMA: OntologySchema = wantsSameAs
     }
   : wantsLinkStyle
     ? { ...BASE_SCHEMA, edge_types: [...BASE_SCHEMA.edge_types, ...LINK_STYLE_TYPES] }
-    : BASE_SCHEMA;
+    : new URLSearchParams(window.location.search).get("fixture") === "emails"
+      ? {
+          // ADR-094: an address can hold content, so its menu offers Add files held by this….
+          ...BASE_SCHEMA,
+          edge_types: [
+            ...BASE_SCHEMA.edge_types,
+            { name: "HOLDS", from: ["Endpoint"], to: ["Document"], directed: true, basis: "direct" },
+          ],
+        }
+      : BASE_SCHEMA;
 
 const workingSet = createWorkingSet();
 const ontology = new OntologyRegistry(SCHEMA);

@@ -22,18 +22,22 @@ checked by the routes.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from hashlib import sha256
 
 from pydantic import BaseModel
 from services.extract.profile import ExtractionProfile
 
-from adapters.media_objectstore import content_type_of
+from adapters.media_objectstore import content_type_of, reference_for
 from conduit_common.identity import new_edge_id
+from ontology.handling import HandlingScheme, principal_may_view
 from ports.graph import GraphPort
 from ports.media import MediaNotFoundError, MediaStore
 from ports.model import ModelPort
 from schemas.domain import (
     EdgeWrite,
+    Handling,
     Node,
+    NodeWrite,
     OntologySchema,
     Principal,
     Provenance,
@@ -42,7 +46,7 @@ from schemas.domain import (
 )
 from schemas.model import TranscribeRequest, VisionRequest
 
-from .email_extraction import MENTIONED_IN, _edge_from_write
+from .email_extraction import MENTIONED_IN, _edge_from_write, _node_from_write
 from .review import (
     DocumentNotFoundError,
     ExtractionCandidateRecord,
@@ -54,6 +58,7 @@ from .working_set.models import DeltaAdd
 from .working_set.service import WorkingSetService
 
 DOCUMENT_TYPE = "Document"
+HOLDS = "HOLDS"
 
 #: What the vision model is asked of an image, and the shape of its answer.
 VISION_PROMPT = (
@@ -81,6 +86,42 @@ class DocumentAcceptResult(BaseModel):
     delta: DeltaAdd
 
 
+class HolderNotFoundError(Exception):
+    """The node named to hold an upload is not in the case, or not visible to the caller: one
+    refusal for both (rules 3 and 4)."""
+
+
+class UploadRefusedError(Exception):
+    """An upload the rules refuse: a file of a kind the reader cannot show, a holder `HOLDS` does
+    not allow, or a marking the uploader could not read themselves."""
+
+
+class DocumentUploadResult(BaseModel):
+    document_id: str
+    delta: DeltaAdd
+
+
+#: What an uploaded file may be, by its extension, and the content type it is kept under.
+_UPLOAD_TYPES: dict[str, tuple[str, str]] = {
+    "png": ("image", "image/png"),
+    "jpg": ("image", "image/jpeg"),
+    "jpeg": ("image", "image/jpeg"),
+    "gif": ("image", "image/gif"),
+    "webp": ("image", "image/webp"),
+    "tif": ("image", "image/tiff"),
+    "tiff": ("image", "image/tiff"),
+    "heic": ("image", "image/heic"),
+    "mp4": ("video", "video/mp4"),
+    "mov": ("video", "video/quicktime"),
+    "webm": ("video", "video/webm"),
+    "txt": ("text", "text/plain"),
+}
+
+
+#: The extensions a content upload's name may carry, for the shared name check.
+UPLOAD_CONTENT_EXTENSIONS = frozenset(f".{ext}" for ext in _UPLOAD_TYPES)
+
+
 class DocumentContentService:
     def __init__(
         self,
@@ -94,6 +135,7 @@ class DocumentContentService:
         text_model: str,
         vision_model: str,
         transcribe_model: str,
+        scheme: HandlingScheme | None = None,
     ) -> None:
         self._working_set = working_set
         self._graph = graph
@@ -104,6 +146,7 @@ class DocumentContentService:
         self._text_model = text_model
         self._vision_model = vision_model
         self._transcribe_model = transcribe_model
+        self._scheme = scheme
 
     async def _held_document(
         self, investigation_id: str, document_id: str, principal: Principal
@@ -170,6 +213,91 @@ class DocumentContentService:
             extraction_model=self._text_model,
         )
         return DocumentExtractionResult(document_id=node.id, text=text, candidates=candidates)
+
+    async def upload(
+        self,
+        investigation_id: str,
+        principal: Principal,
+        *,
+        name: str,
+        data: bytes,
+        holder_id: str | None,
+        handling: Handling,
+    ) -> DocumentUploadResult:
+        """A file added straight to a case (ADR-094 step 3, spec 09 §7): kept in the media store, a
+        `Document` naming it, and, given a holder, a `HOLDS` link from it; all into the view, or
+        nothing. Every refusal comes before any write."""
+        extension = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+        if extension not in _UPLOAD_TYPES:
+            raise UploadRefusedError(
+                f"{name!r} is not a kind of file the reader can show (images, videos, .txt)"
+            )
+        media_kind, content_type = _UPLOAD_TYPES[extension]
+        if self._scheme is not None and not principal_may_view(handling, principal, self._scheme):
+            raise UploadRefusedError(
+                f"the marking {handling.classification} is one you could not read yourself"
+            )
+        holder: Node | None = None
+        if holder_id is not None:
+            holder = await self._working_set.visible_node(investigation_id, holder_id, principal)
+            if holder is None:
+                raise HolderNotFoundError(holder_id)
+            holds = self._ontology.edge_type(HOLDS)
+            if holds is None or holder.type not in holds.from_types:
+                raise UploadRefusedError(f"a {holder.type} cannot hold a file ({HOLDS})")
+
+        ref = reference_for(data, content_type)
+        document_id = f"content:{sha256(ref.encode()).hexdigest()[:32]}"
+        edge_ids = [f"{document_id}:held-by:{holder.id}"] if holder else []
+        await self._working_set.ensure_room(investigation_id, [document_id], edge_ids)
+
+        await self._media.put(data, content_type)
+        now = datetime.now(UTC)
+        provenance = Provenance(
+            state=ProvenanceState.ASSERTED,
+            sources=[
+                SourceRef(document_id=f"upload:{name}", locator="whole file", excerpt_hash="")
+            ],
+            first_seen=now,
+        )
+        document = NodeWrite(
+            id=document_id,
+            type=DOCUMENT_TYPE,
+            properties={"title": name, "media_kind": media_kind, "object_ref": ref},
+            provenance=provenance,
+            handling=handling,
+            created_by=principal.id,
+            created_at=now,
+        )
+        edges = (
+            [
+                EdgeWrite(
+                    id=edge_ids[0],
+                    type=HOLDS,
+                    source=holder.id,
+                    target=document_id,
+                    provenance=provenance,
+                    handling=handling,
+                    created_by=principal.id,
+                    created_at=now,
+                )
+            ]
+            if holder
+            else []
+        )
+        tx = await self._graph.begin_transaction()
+        try:
+            await self._graph.upsert_nodes([document], tx)
+            if edges:
+                await self._graph.upsert_edges(edges, tx)
+        except Exception:
+            await self._graph.rollback_transaction(tx)
+            raise
+        await self._graph.commit_transaction(tx)
+        delta = await self._working_set.add_written(
+            investigation_id, [_node_from_write(document)], [_edge_from_write(e) for e in edges]
+        )
+        return DocumentUploadResult(document_id=document_id, delta=delta)
 
     async def accept(
         self, investigation_id: str, document_id: str, candidate_id: str, principal: Principal

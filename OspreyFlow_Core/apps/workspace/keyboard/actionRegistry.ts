@@ -360,6 +360,13 @@ export const SELECTION_ACTIONS = defineActionRegistry("SELECTION_ACTIONS", [
   "remove-a-node-from-the-selection-from-the-list",
 ] as const);
 
+/** Files added straight to a case (ADR-094 step 3): from the strip over the canvas, standing alone,
+ * or from a node's menu, held by it. `keyboard/add-files.spec.ts`. */
+export const ADD_FILES_ACTIONS = defineActionRegistry("ADD_FILES_ACTIONS", [
+  "add-files-to-the-case-from-the-strip",
+  "add-files-held-by-a-node-from-its-menu",
+] as const);
+
 /** The full-screen reader (ADR-092): opened from a Document on the canvas, read, extracted from,
  * closed. `keyboard/reader.spec.ts`. */
 export const READER_ACTIONS = defineActionRegistry("READER_ACTIONS", [

@@ -7,6 +7,7 @@
 import { useState } from "react";
 
 import type { StudioRecipeDraft } from "../../../../packages/schemas/generated";
+import { AddFiles } from "../content/AddFiles";
 import { Tabs } from "../design/primitives/Tabs";
 import { CaseSwitcher } from "../investigation/CaseSwitcher";
 import { ConnectScreen } from "./ConnectScreen";
@@ -27,7 +28,7 @@ export interface IngestStudioProps {
   onOpenCase: (id: string) => void;
 }
 
-type Stage = "connect" | "profile" | "map" | "verify" | "publish";
+type Stage = "connect" | "profile" | "map" | "verify" | "publish" | "files";
 
 export function IngestStudio({
   apiBaseUrl,
@@ -97,6 +98,8 @@ export function IngestStudio({
           { id: "map", label: "Map" },
           { id: "verify", label: "Verify" },
           { id: "publish", label: "Publish" },
+          // ADR-094 step 3, spec 09 §7: the unstructured path, a screen of its own.
+          ...(investigationId ? [{ id: "files", label: "Files" }] : []),
         ]}
         activeId={stage}
         onChange={(id) => {
@@ -109,6 +112,8 @@ export function IngestStudio({
             goToVerify();
           } else if (id === "publish") {
             goToPublish();
+          } else if (id === "files") {
+            setStage("files");
           } else {
             setStage("connect");
           }
@@ -127,6 +132,18 @@ export function IngestStudio({
             onContinueToProfile={goToProfile}
           />
         </div>
+        {stage === "files" && investigationId && (
+          <div style={{ padding: "var(--sp-16)", maxWidth: 560 }}>
+            <AddFiles
+              apiBaseUrl={apiBaseUrl}
+              bearerToken={bearerToken}
+              investigationId={investigationId}
+              // The canvas is not open here; the case's view gains each Document when it opens.
+              onDelta={() => undefined}
+              onClose={() => setStage("connect")}
+            />
+          </div>
+        )}
         {stage === "profile" && activeDraft && (
           <ProfileScreen
             apiBaseUrl={apiBaseUrl}

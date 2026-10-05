@@ -116,6 +116,7 @@ import {
 } from "./communities";
 import { linkCaption, linkTypeName } from "./linkLabel";
 import { SelectionChip } from "./SelectionChip";
+import { AddFiles } from "../content/AddFiles";
 import { linkMenuItems, linkMenuTitle } from "./linkMenu";
 import { sameAsGroup } from "./linkCollapse";
 import { ReasonPrompt } from "./ReasonPrompt";
@@ -132,7 +133,7 @@ import { PathfinderOverlay } from "./PathfinderOverlay";
 import { PathfinderErrorOverlay } from "./PathfinderErrorOverlay";
 import { ActionErrorOverlay } from "./ActionErrorOverlay";
 import { describeEmptyExpansion } from "./expansionOutcome";
-import type { ClusterExplanation } from "../workingset/models";
+import type { ClusterExplanation, WorkingSetDelta } from "../workingset/models";
 
 const NODE_PROGRAM = createNodeCompoundProgram<
   WorkingSetNodeAttributes,
@@ -363,6 +364,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       WorkingSetEdgeAttributes
     > | null>(null);
     const [selected, setSelected] = useState<Set<string>>(new Set());
+    // ADR-094 step 3: the Add files dialog, for the case or for one holder.
+    const [addingFiles, setAddingFiles] = useState<{ holder?: { id: string; label: string } } | null>(null);
     const [hovered, setHovered] = useState<string | null>(null);
     const [focused, setFocused] = useState<string | null>(null);
     useEffect(() => {
@@ -2239,6 +2242,18 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         });
       }
 
+      // ADR-094 step 3: a node that can hold content offers to add files it holds.
+      const holds = edgeTypes.find((t) => t.name === "HOLDS");
+      if (apiBaseUrl && bearerToken && investigationId && holds?.from.includes(node.type)) {
+        items.push({
+          id: "add-files-held",
+          label: "Add files held by this…",
+          count: undefined,
+          group: "Actions",
+          onSelect: () => setAddingFiles({ holder: { id: nodeId, label: nodeLabel(node) } }),
+        });
+      }
+
       // ADR-084 Amendment 1: a node that is part of the selection offers to branch the whole
       // selection from its own menu, so the analyst need not find the button over the canvas.
       // The count is the selection's, Group Nodes included (each stands for its members).
@@ -2749,7 +2764,20 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           hiddenLinkCount={hiddenEdges.size}
           onHideLink={hideSelectedLink}
           onShowHiddenLinks={() => setHiddenEdges(new Set())}
+          onAddFiles={apiBaseUrl && bearerToken && investigationId ? () => setAddingFiles({}) : undefined}
         />
+        {addingFiles && apiBaseUrl && bearerToken && investigationId && (
+          <div style={{ position: "absolute", zIndex: 20, top: "var(--sp-40)", right: "var(--sp-8)" }}>
+            <AddFiles
+              apiBaseUrl={apiBaseUrl}
+              bearerToken={bearerToken}
+              investigationId={investigationId}
+              holder={addingFiles.holder}
+              onDelta={(delta) => store.getState().applyDelta(delta as WorkingSetDelta)}
+              onClose={() => setAddingFiles(null)}
+            />
+          </div>
+        )}
         {actionError && (
           <ActionErrorOverlay
             x={actionError.x}

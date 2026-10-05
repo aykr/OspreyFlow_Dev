@@ -125,6 +125,7 @@ async def _service() -> tuple[
         text_model="text-model",
         vision_model="vision-model",
         transcribe_model="speech-model",
+        scheme=SCHEME,
     )
     return service, media, model, candidates, graph, working
 
@@ -184,3 +185,63 @@ async def test_a_finding_is_inferred_until_accepted() -> None:
     (mention,) = [e for e in graph.committed_edges if e.source == accepted.node_id]
     assert (mention.type, mention.target) == ("MENTIONED_IN", "image-1")
     assert await working.get_node("inv-1", accepted.node_id) is not None
+
+
+# --- files added straight to a case (ADR-094 step 3) ------------------------------------------
+
+from services.api.document_content import HolderNotFoundError, UploadRefusedError  # noqa: E402
+
+from schemas.domain import Handling  # noqa: E402
+
+OFFICIAL = Handling(classification="OFFICIAL", handling_code="P", originator="unit-1", owning_unit="unit-1")
+
+
+async def test_an_uploaded_image_becomes_a_document_on_the_canvas() -> None:
+    service, media, _, _, graph, working = await _service()
+    result = await service.upload(
+        "inv-1", ANALYST, name="IMG_0042.jpg", data=b"\xff\xd8jpeg", holder_id=None, handling=OFFICIAL
+    )
+    written = graph.nodes[result.document_id]
+    assert (written.properties["media_kind"], written.properties["title"]) == ("image", "IMG_0042.jpg")
+    assert await media.get(written.properties["object_ref"]) == b"\xff\xd8jpeg"
+    assert await working.get_node("inv-1", result.document_id) is not None
+    assert [n.id for n in result.delta.nodes] == [result.document_id]
+
+
+async def test_an_upload_held_by_a_node_is_linked_to_it_by_holds() -> None:
+    service, _, _, _, graph, _ = await _service()
+    result = await service.upload(
+        "inv-1", ANALYST, name="note.txt", data=b"Gate 3, 7am.", holder_id="phone", handling=OFFICIAL
+    )
+    (holds,) = [e for e in graph.committed_edges if e.type == "HOLDS"]
+    assert (holds.source, holds.target) == ("phone", result.document_id)
+
+
+@pytest.mark.parametrize("holder", ["secret-1", "no-such"])
+async def test_a_holder_not_visible_and_one_missing_refuse_alike_and_write_nothing(holder: str) -> None:
+    service, media, _, _, graph, _ = await _service()
+    before = dict(media.files)
+    with pytest.raises(HolderNotFoundError) as refused:
+        await service.upload("inv-1", ANALYST, name="a.png", data=PNG, holder_id=holder, handling=OFFICIAL)
+    assert str(refused.value) == str(HolderNotFoundError(holder))
+    assert graph.nodes == {} and media.files == before
+
+
+@pytest.mark.parametrize(
+    ("name", "holder", "handling", "reason"),
+    [
+        ("tool.exe", None, OFFICIAL, "kind"),
+        ("a.png", "image-1", OFFICIAL, "hold"),
+        ("a.png", None, OFFICIAL.model_copy(update={"classification": "SECRET"}), "marking"),
+    ],
+)
+async def test_an_upload_the_rules_refuse_writes_nothing(
+    name: str, holder: str | None, handling: Handling, reason: str
+) -> None:
+    """A file of a kind the reader cannot show; a holder whose type `HOLDS` does not allow (a
+    Document cannot hold one); a marking the uploader could not read themselves."""
+    service, media, _, _, graph, _ = await _service()
+    before = dict(media.files)
+    with pytest.raises(UploadRefusedError, match=reason):
+        await service.upload("inv-1", ANALYST, name=name, data=PNG, holder_id=holder, handling=handling)
+    assert graph.nodes == {} and media.files == before

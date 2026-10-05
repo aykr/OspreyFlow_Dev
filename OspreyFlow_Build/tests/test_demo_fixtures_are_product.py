@@ -26,6 +26,7 @@ GENERATORS = (
     "fixture_corp_resolution",
     "cdr",
     "sms",
+    "phone_extraction",
     "seizure_record",
     "scenario_cohorts",
 )
