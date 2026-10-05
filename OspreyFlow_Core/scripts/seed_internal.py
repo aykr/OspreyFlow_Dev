@@ -60,6 +60,9 @@ class Dataset:
     real_dataset: str | None = None
     #: Whether the seed takes `--graph-fraud-rows` (a sample of the graph; PaySim's is huge).
     sampled: bool = False
+    #: Whether the seed writes its edges through the bulk loader, its default since ADR-058
+    #: Amendment 5 (`--method upsert` still takes the older path).
+    bulk: bool = False
 
 
 #: The PaySim graph sample: the first fraud transactions and everything touching their accounts.
@@ -79,12 +82,14 @@ DATASETS: dict[str, Dataset] = {
         case_name="Enron corpus (real data, this machine only)",
         data_folder="Enron_Mails",
         real_dataset="enron",
+        bulk=True,
     ),
     "paysim": Dataset(
         script="scripts.seed_paysim",
         case_name="PaySim mobile money (internal)",
         data_folder="PaySIM_Dataset",
         sampled=True,
+        bulk=True,
     ),
 }
 
@@ -177,7 +182,7 @@ def seed_internal(
     reset_graph_database: bool = False,
     vault: str | None = None,
     graph_fraud_rows: int | None = None,
-    method: str = "upsert",
+    method: str | None = None,
     compare_vaults: tuple[str, str] | None = None,
     spike_bulk_transport: bool = False,
     spike_edges: int | None = None,
@@ -216,6 +221,8 @@ def seed_internal(
         raise SeedRefused("--repair-strays and --restore-missing are only built for paysim so far")
     if reset_graph_database and not spec.sampled:
         raise SeedRefused("--reset-graph-database is only built for paysim so far")
+    if method is None:
+        method = "bulk" if spec.bulk else "upsert"
     if method not in ("upsert", "bulk"):
         raise SeedRefused(f"unknown --method {method!r}; use upsert or bulk")
     if compare_vaults is not None:
@@ -239,8 +246,8 @@ def seed_internal(
         )
     if probe_lookup_cost and not spec.sampled:
         raise SeedRefused("--probe-lookup-cost is only built for paysim so far")
-    if method != "upsert" and not spec.sampled:
-        raise SeedRefused("--method bulk is only built for paysim so far")
+    if method != "upsert" and not spec.bulk:
+        raise SeedRefused("--method bulk is only built for enron and paysim so far")
     if vault is not None:
         if not spec.sampled:
             raise SeedRefused("--vault is only built for paysim so far")
@@ -345,7 +352,8 @@ def seed_internal(
         argv.append("--reset-graph-database")
     if vault is not None:
         argv += ["--vault", vault]
-    if method != "upsert":
+    if spec.bulk:
+        # Always said, so the script's own default never decides (ADR-058 Amendment 5).
         argv += ["--method", method]
     if spec.sampled:
         sample = DEFAULT_GRAPH_SAMPLE if graph_fraud_rows is None else graph_fraud_rows
@@ -652,7 +660,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 2
         probe_sizes = value[0]
-    method = "upsert"
+    method: str | None = None
     if "--method" in args:
         value = args[args.index("--method") + 1 :][:1]
         if not value or value[0] not in ("upsert", "bulk"):

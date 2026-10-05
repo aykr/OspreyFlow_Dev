@@ -158,12 +158,11 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--method",
         choices=("upsert", "bulk"),
-        default="upsert",
+        default="bulk",
         help=(
-            "How the graph edges are written (ADR-058). 'upsert' is the long-standing path, one "
-            "round trip set per edge. 'bulk' writes them in chunks through the adapter's bulk "
-            "loader and weighs them once against the whole load. Default upsert until the bulk "
-            "path is proved on a twin vault."
+            "How the graph edges are written (ADR-058). 'bulk' (the default since Amendment 5) "
+            "writes them in chunks through the adapter's bulk loader and weighs them once against "
+            "the whole load; 'upsert' is the older path, one round trip set per edge."
         ),
     )
     parser.add_argument(

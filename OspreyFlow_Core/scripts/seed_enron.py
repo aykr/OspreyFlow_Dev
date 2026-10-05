@@ -131,6 +131,16 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--method",
+        choices=("upsert", "bulk"),
+        default="bulk",
+        help=(
+            "How the graph links are written (ADR-058 Amendment 5): 'bulk', the default, in chunks "
+            "through the adapter's bulk loader; 'upsert', the older path, one round trip set per "
+            "link."
+        ),
+    )
+    parser.add_argument(
         "--attested-permission",
         action="store_true",
         help="The host checked the exceptions list (a container cannot see it).",
@@ -231,7 +241,14 @@ async def _run(args: argparse.Namespace) -> int:
             )
             return 1
         else:
-            await write_graph(graph, nodes, edges, chunk=_GRAPH_CHUNK, nouns=("addresses", "links"))
+            await write_graph(
+                graph,
+                nodes,
+                edges,
+                chunk=_GRAPH_CHUNK,
+                nouns=("addresses", "links"),
+                method=args.method,
+            )
         await report_ids_stored_twice(
             client,
             edge_types=[groovy_identifier(physical_type_name("COMMUNICATED_WITH"))],

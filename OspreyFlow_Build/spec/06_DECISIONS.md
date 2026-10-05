@@ -8854,6 +8854,16 @@ doubles every node write, and whether it has any bearing on the stray copies, is
 **Consequence.** The cost is in the adapter's read and write paths alike, not only in bulk loading. What fixes it is not yet
 decided (the label is known on some paths and not on others); see the design choice put to the owner.
 
+### ADR-058, Amendment 10 (5 October 2026) — the Enron and PaySim seeds load in bulk by default
+
+Status: accepted 5 October 2026 (owner, in chat, re-seeding overnight after the deployment was lost: "can you enable to bulk load for Enron and Paysim").
+
+Decision. `make seed-enron` and `make seed-paysim` (and `scripts.seed_enron`, `scripts.seed_paysim` run directly) write their edges through the bulk loader unless `--method upsert` is given. `seed_internal` always sends the method to the container for the two, so the script's own default never decides. The synthetic seeds (HMP, Fixture Corp) are unchanged and are refused `--method bulk`. `seed_support.write_graph` still defaults to upsert for its other callers.
+
+Grounds. For PaySim, D5 (same graph) and D7 (no more stray copies than upsert) were met on the twin (Amendments 6 to 8: no node or edge differences; 6 ids stored twice against 8). **Enron has had no twin comparison**: its links go through the same loader at the same chunk size (`BULK_CHUNK`, 100), and the load's own stray check (`report_ids_stored_twice`) still runs after it, so a stray copy is reported, not hidden. The stray defect itself (ADR-056 Amendment 19) is unrepaired on either path.
+
+Tests: `tests/test_seed_bulk_method.py` (`test_enron_and_paysim_load_in_bulk_unless_upsert_is_asked_for`, `test_the_synthetic_seeds_are_not_sent_a_method`, `test_method_is_refused_for_a_dataset_that_cannot_take_it` for HMP, `test_run_directly_the_enron_and_paysim_seeds_default_to_bulk`), red before the change. **Not run:** either seed with the new default against a real store.
+
 ## ADR-059 — The search box suggests as the analyst types: a separate prefix read, not a change to the exact search
 
 **Status.** Accepted 2 October 2026, by the owner's choice of option B from the written options below. Built tests

@@ -150,8 +150,9 @@ def test_an_unknown_method_is_refused_before_anything_is_written() -> None:
     assert graph.calls == []
 
 
-def test_the_default_is_still_the_upsert_path() -> None:
-    """Catches the default changing before the bulk path is proved (ADR-058 D9)."""
+def test_the_library_default_is_still_the_upsert_path() -> None:
+    """`write_graph` itself still defaults to upsert for its other callers; the Enron and PaySim
+    seeds ask for bulk (ADR-058 Amendment 5, below)."""
     graph = BulkGraph()
     _write(graph)
     assert graph.calls == [("upsert_nodes", 3), ("upsert_edges", 7)]
@@ -160,43 +161,52 @@ def test_the_default_is_still_the_upsert_path() -> None:
 # --- the seed command ---
 
 
-def _go(repo: Path, **kw: Any) -> Runner:
+def _go(repo: Path, dataset: str = "paysim", **kw: Any) -> Runner:
     runner = Runner()
     seed_internal.seed_internal(
-        "paysim",
+        dataset,
         repo,
         run=runner,
         lookup_subs=lambda directory: SUBS,
         api_running=lambda compose: False,
+        permitted=lambda name, use: True,
         **kw,
     )
     return runner
 
 
-def test_method_reaches_the_container_only_when_it_is_not_the_default(
-    repo: Path,
-) -> None:
-    """Catches the flag never arriving (a 'bulk' run that is an upsert run), or being sent on every
-    run."""
-    assert "--method" not in _seed_call(_go(repo))
+def _method_sent(runner: Runner) -> str | None:
+    call = _seed_call(runner)
+    return call[call.index("--method") + 1] if "--method" in call else None
+
+
+@pytest.mark.parametrize("dataset", ["paysim", "enron"])
+def test_enron_and_paysim_load_in_bulk_unless_upsert_is_asked_for(repo: Path, dataset: str) -> None:
+    """ADR-058 Amendment 5 (owner, 5 October 2026): `make seed-enron` and `make seed-paysim` load
+    in bulk. Catches the flag not arriving (a 'bulk' run that is an upsert run), and the way back
+    to upsert being lost. The method is always sent, so the script's own default cannot decide."""
+    (repo.parent / "OspreyFlow_Data" / "Enron_Mails" / "a").mkdir(parents=True, exist_ok=True)
+    assert _method_sent(_go(repo, dataset)) == "bulk"
+    assert _method_sent(_go(repo, dataset, method="upsert")) == "upsert"
     call = _seed_call(_go(repo, method="bulk", vault="paysim-perftst"))
-    assert call[call.index("--method") + 1] == "bulk"
     assert call[call.index("--vault") + 1] == "paysim-perftst"
+
+
+def test_the_synthetic_seeds_are_not_sent_a_method(repo: Path) -> None:
+    assert _method_sent(_go(repo, "hmp")) is None
 
 
 def test_method_is_refused_for_a_dataset_that_cannot_take_it(repo: Path) -> None:
     """Catches `--method bulk` on a seed that would ignore it, and so run slowly while saying it
     did not."""
-    (repo.parent / "OspreyFlow_Data" / "Enron_Mails" / "a").mkdir(parents=True)
     runner = Runner()
-    with pytest.raises(seed_internal.SeedRefused, match="only built for paysim"):
+    with pytest.raises(seed_internal.SeedRefused, match="only built for enron and paysim"):
         seed_internal.seed_internal(
-            "enron",
+            "hmp",
             repo,
             run=runner,
             lookup_subs=lambda directory: SUBS,
             api_running=lambda compose: False,
-            permitted=lambda name, use: True,
             method="bulk",
         )
     assert runner.calls == []
@@ -462,3 +472,14 @@ def test_the_lookup_probe_runs_in_the_deployment_and_takes_its_sizes(
     )
     assert seen["probe_lookup_cost"] is True and seen["probe_sizes"] == "1000,5000"
     assert seed_internal.main(["paysim", "--probe-lookup-cost", "--probe-sizes"]) == 2
+
+
+@pytest.mark.parametrize("module", ["scripts.seed_enron", "scripts.seed_paysim"])
+def test_run_directly_the_enron_and_paysim_seeds_default_to_bulk(module: str) -> None:
+    """A direct run of either script defaults as `seed_internal` does, so it is not slower."""
+    import importlib
+
+    parse = importlib.import_module(module)._parse_args
+    required = ["--case-name", "A case"]
+    assert parse(required).method == "bulk"
+    assert parse([*required, "--method", "upsert"]).method == "upsert"
