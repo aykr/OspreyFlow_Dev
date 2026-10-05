@@ -12,6 +12,7 @@ import { eventsNoun } from "./linkEventsApi";
 import { displayValue } from "../search/searchOptions";
 import { LinkNotes } from "./LinkNotes";
 import { useState } from "react";
+import type { DocumentReaderView } from "../reader/readerApi";
 
 function isResolutionLink(type: string): boolean {
   return type === "SAME_AS" || type === "NOT_SAME_AS";
@@ -31,6 +32,8 @@ export interface InspectorProps {
     openEventsSignal?: number;
     /** What the working set gained from an email (ADR-089 step 3), to apply to the view. */
     onDelta?: (delta: unknown) => void;
+    /** Opens an email in the full-screen reader (ADR-092 Amendment 3). */
+    onReadFullScreen?: (view: DocumentReaderView) => void;
     /** Told of a saved change so the new link can be put in the view. */
     onChanged: (result: LinkChangeResult) => void;
   };
@@ -105,6 +108,7 @@ export function Inspector({ node, link, linkEditing, assessment }: InspectorProp
             targetLabel={link.target ? displayValue(link.target) : link.edge.target}
             focusSignal={linkEditing?.openEventsSignal}
             onDelta={linkEditing?.onDelta}
+            onReadFullScreen={linkEditing?.onReadFullScreen}
           />
         )}
         {assessment && !isResolutionLink(link.edge.type) && (

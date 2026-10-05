@@ -79,7 +79,12 @@ class DocumentReaderService:
                 view.text = excerpt if isinstance(excerpt, str) else ""
                 view.truncated = event.properties.get("truncated") is True
                 view.sent_at = event.occurred_at
-                view.sender_id, view.recipient_id = event.source_id, event.target_id
+                # By the email's direction, as the Inspector's From and To read it: an inbound
+                # email on an a→b link was sent by b.
+                ends = (event.source_id, event.target_id)
+                view.sender_id, view.recipient_id = (
+                    ends[::-1] if event.direction == "inbound" else ends
+                )
                 view.edge_id, view.event_id = event.edge_id, event.event_id
 
         try:

@@ -16,6 +16,7 @@ import {
   type EmailCandidate,
   type LinkEventPage,
 } from "./linkEventsApi";
+import { emailDocumentId, type DocumentReaderView } from "../reader/readerApi";
 
 export interface LinkEventsProps {
   apiBaseUrl: string;
@@ -32,6 +33,8 @@ export interface LinkEventsProps {
   /** Told of what the working set gained (the email's Document node, an accepted entity), so the
    * canvas shows it at once (ADR-089 step 3). Omitted, extraction is not offered. */
   onDelta?: (delta: unknown) => void;
+  /** ADR-092 Amendment 3: open the email in the full-screen reader. Left out, not offered. */
+  onReadFullScreen?: (view: DocumentReaderView) => void;
 }
 
 type Load =
@@ -59,6 +62,23 @@ function wasTruncated(event: EventRecord): boolean {
   return event.properties?.truncated === true;
 }
 
+/** The reader's view of an email still to be written as a Document (ADR-092 Amendment 3). */
+export function readerViewOf(event: EventRecord): DocumentReaderView {
+  const inbound = event.direction === "inbound";
+  return {
+    document_id: emailDocumentId(event.event_id),
+    title: subjectOf(event),
+    text: excerptOf(event),
+    truncated: wasTruncated(event),
+    spans: [],
+    sent_at: event.occurred_at,
+    sender_id: inbound ? event.target_id : event.source_id,
+    recipient_id: inbound ? event.source_id : event.target_id,
+    edge_id: event.edge_id,
+    event_id: event.event_id,
+  };
+}
+
 export function LinkEvents({
   apiBaseUrl,
   bearerToken,
@@ -69,6 +89,7 @@ export function LinkEvents({
   targetLabel,
   focusSignal = 0,
   onDelta,
+  onReadFullScreen,
 }: LinkEventsProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [open, setOpen] = useState<EventRecord | null>(null);
@@ -241,9 +262,16 @@ export function LinkEvents({
       )}
       {load.state === "ready" && open !== null && (
         <article aria-label={`${noun === "emails" ? "Email" : "Event"}: ${subjectOf(open)}`} style={{ display: "grid", gap: "var(--sp-8)" }}>
-          <button ref={backRef} type="button" className="btn" onClick={closeEmail} style={{ justifySelf: "start" }}>
-            Back to the list
-          </button>
+          <span style={{ display: "flex", gap: "var(--sp-8)" }}>
+            <button ref={backRef} type="button" className="btn" onClick={closeEmail}>
+              Back to the list
+            </button>
+            {onReadFullScreen && (
+              <button type="button" className="btn" onClick={() => onReadFullScreen(readerViewOf(open))}>
+                Read full screen
+              </button>
+            )}
+          </span>
           <dl style={{ margin: 0 }}>
             <div>
               <dt style={{ color: "var(--text-secondary)" }}>Subject</dt>

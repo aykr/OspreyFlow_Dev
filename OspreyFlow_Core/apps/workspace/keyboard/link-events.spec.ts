@@ -142,6 +142,20 @@ test("Accept on a finding, by keyboard, sends the accept and marks it accepted",
   registerCovered(REGISTRY, "accept-a-finding-by-keyboard");
 });
 
+test("Read full screen on an opened email hands it to the reader, by keyboard (ADR-092 Amendment 3)", async ({ page }) => {
+  await serve(page);
+  await page.goto("/keyboard/link-events-harness.html");
+  await expect(page.getByRole("heading", { name: "Emails (3)" })).toBeVisible();
+  await tabTo(page, /Subject 3/);
+  await page.keyboard.press("Enter");
+  await tabTo(page, /^Read full screen$/);
+  await page.keyboard.press("Enter");
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __LINK_EVENTS__: { readFullScreen: string[] } }).__LINK_EVENTS__.readFullScreen))
+    .toEqual(["email:ev-3"]);
+  registerCovered(REGISTRY, "read-full-screen-from-an-opened-email");
+});
+
 test("every registered link-events action has its own proving test case above", () => {
   assertAllCovered("LINK_EVENTS_ACTIONS", LINK_EVENTS_ACTIONS);
 });

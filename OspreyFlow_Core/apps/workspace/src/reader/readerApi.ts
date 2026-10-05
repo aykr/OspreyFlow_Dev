@@ -16,6 +16,11 @@ export interface DocumentReaderView {
   event_id: string | null;
 }
 
+/** The id an email's Document is written under: the server's `email_document_id`. */
+export function emailDocumentId(eventId: string): string {
+  return `email:${eventId}`;
+}
+
 export async function fetchDocumentReader(
   apiBaseUrl: string,
   bearerToken: string,

@@ -110,3 +110,15 @@ async def test_another_units_stored_text_is_not_read() -> None:
     candidates.texts[doc.id] = ("Another unit's copy.", "unit-9")
     reader = await _reader([doc], candidates)
     assert (await reader.read("inv-1", doc.id, ANALYST)).text == TEXT
+
+
+async def test_an_inbound_email_is_from_the_far_end_as_the_inspector_says() -> None:
+    """The event's link runs a→b; an inbound email on it was sent by b, as the Inspector's From
+    reads it, so the reader must not say a."""
+    doc = _document(email_document_id("ev-1"), event_id="ev-1")
+    reader = await _reader([doc])
+    reader._analytics.events = [  # type: ignore[attr-defined]
+        _event("ev-1").model_copy(update={"direction": "inbound"})
+    ]
+    view = await reader.read("inv-1", doc.id, ANALYST)
+    assert (view.sender_id, view.recipient_id) == ("b", "a")

@@ -8,10 +8,10 @@ import { LinkEvents } from "../src/inspector/LinkEvents";
 
 declare global {
   interface Window {
-    __LINK_EVENTS__?: { deltas: unknown[] };
+    __LINK_EVENTS__?: { deltas: unknown[]; readFullScreen: string[] };
   }
 }
-window.__LINK_EVENTS__ = { deltas: [] };
+window.__LINK_EVENTS__ = { deltas: [], readFullScreen: [] };
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
@@ -27,6 +27,9 @@ createRoot(container).render(
     targetLabel="bob@enron.com"
     onDelta={(delta) => {
       window.__LINK_EVENTS__!.deltas.push(delta);
+    }}
+    onReadFullScreen={(view) => {
+      window.__LINK_EVENTS__!.readFullScreen.push(view.document_id);
     }}
   />,
 );

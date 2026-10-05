@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { OntologyRegistry } from "../ontology/schema";
 import { DocumentReader } from "./DocumentReader";
+import type { DocumentReaderView } from "./readerApi";
 
 afterEach(() => {
   cleanup();
@@ -15,7 +16,7 @@ afterEach(() => {
 
 const ONTOLOGY = new OntologyRegistry({ version: 1, entity_types: [], edge_types: [] } as never);
 
-const EMAIL = {
+const EMAIL: DocumentReaderView = {
   document_id: "email:ev-1",
   title: "Dabhol",
   text: "Dana MERCER wrote about the plant.",
@@ -110,6 +111,25 @@ describe("DocumentReader", () => {
     await waitFor(() =>
       expect(fetchMock.mock.calls.filter(([u]) => String(u).endsWith("/reader"))).toHaveLength(2),
     );
+  });
+
+  it("opens on the email it was handed when no Document has been written for it yet", async () => {
+    serve({});
+    render(
+      <DocumentReader
+        apiBaseUrl="http://api.test"
+        bearerToken="tok"
+        investigationId="inv-1"
+        documentId="email:ev-1"
+        fallback={EMAIL}
+        ontology={ONTOLOGY}
+        labelOf={(id) => id}
+        onClose={vi.fn()}
+      />,
+    );
+    const dialog = await screen.findByRole("dialog", { name: "Reading: Dabhol" });
+    expect(dialog.textContent).toContain("Dana MERCER wrote about the plant.");
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("says when the document is not in the view", async () => {

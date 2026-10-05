@@ -90,6 +90,41 @@ describe("LinkEvents", () => {
     expect(screen.getByRole("list", { name: "Emails" })).toBeTruthy();
   });
 
+  it("hands an opened email to the full-screen reader, with what the reader needs (ADR-092 Amendment 3)", async () => {
+    serve({
+      "0": {
+        total: 1,
+        offset: 0,
+        limit: 50,
+        events: [{ ...event(1, { truncated: true, excerpt: "A long body" }), direction: "inbound" }],
+      },
+    });
+    const onReadFullScreen = vi.fn();
+    mount({ onReadFullScreen });
+    fireEvent.click(await screen.findByRole("button", { name: /Subject 1/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Read full screen" }));
+    expect(onReadFullScreen).toHaveBeenCalledWith({
+      document_id: "email:ev-1",
+      title: "Subject 1",
+      text: "A long body",
+      truncated: true,
+      spans: [],
+      sent_at: "2001-05-11T10:00:00Z",
+      // Inbound: the far end sent it, as the Inspector's own From says.
+      sender_id: "b",
+      recipient_id: "a",
+      edge_id: "e1",
+      event_id: "ev-1",
+    });
+  });
+
+  it("offers no full-screen reading where nothing can show it", async () => {
+    serve({ "0": { total: 1, offset: 0, limit: 50, events: [event(1)] } });
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: /Subject 1/ }));
+    expect(screen.queryByRole("button", { name: "Read full screen" })).toBeNull();
+  });
+
   it("says so for a link with no events, and for a link not in the view", async () => {
     serve({ "0": { total: 0, offset: 0, limit: 50, events: [] } });
     mount();

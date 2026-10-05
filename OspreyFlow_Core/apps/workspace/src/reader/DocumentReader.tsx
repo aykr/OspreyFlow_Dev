@@ -23,6 +23,9 @@ export interface DocumentReaderProps {
   /** The name an end of the email is drawn with on the canvas, or its id. */
   labelOf: (nodeId: string) => string;
   onClose: () => void;
+  /** What to show if the Document is not there yet: an email opened from the Inspector before
+   * anything wrote it as one (ADR-092 Amendment 3). Read again after an extraction, it is. */
+  fallback?: DocumentReaderView;
   /** What the working set gained from an extraction or an acceptance. */
   onDelta?: (delta: unknown) => void;
 }
@@ -56,6 +59,7 @@ export function DocumentReader({
   labelOf,
   onClose,
   onDelta,
+  fallback,
 }: DocumentReaderProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [findings, setFindings] = useState<Findings>({ state: "idle" });
@@ -67,9 +71,10 @@ export function DocumentReader({
       const view = await fetchDocumentReader(apiBaseUrl, bearerToken, investigationId, documentId);
       setLoad({ state: "ready", view });
     } catch (err) {
-      setLoad({ state: "failed", message: err instanceof Error ? err.message : String(err) });
+      if (fallback) setLoad({ state: "ready", view: fallback });
+      else setLoad({ state: "failed", message: err instanceof Error ? err.message : String(err) });
     }
-  }, [apiBaseUrl, bearerToken, investigationId, documentId]);
+  }, [apiBaseUrl, bearerToken, investigationId, documentId, fallback]);
 
   useEffect(() => {
     void read();

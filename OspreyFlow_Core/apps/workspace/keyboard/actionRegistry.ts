@@ -349,6 +349,7 @@ export const LINK_EVENTS_ACTIONS = defineActionRegistry("LINK_EVENTS_ACTIONS", [
   "enter-on-an-email-opens-it-and-back-returns",
   "extract-entities-by-keyboard-lists-the-findings",
   "accept-a-finding-by-keyboard",
+  "read-full-screen-from-an-opened-email",
 ] as const);
 
 /** The selection made easy to see and work with (ADR-093): the canvas chip and the Inspector's list.

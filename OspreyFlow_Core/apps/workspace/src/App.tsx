@@ -27,6 +27,7 @@ import { SignInScreen } from "./auth/SignInScreen";
 import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
 import { linkTypeName } from "./canvas/linkLabel";
 import { DocumentReader } from "./reader/DocumentReader";
+import type { DocumentReaderView } from "./reader/readerApi";
 import { SelectionList } from "./inspector/SelectionList";
 import { displayValue } from "./search/searchOptions";
 import { listJudgements } from "./assessment/api";
@@ -375,6 +376,8 @@ export function App() {
   const [dossierNodeId, setDossierNodeId] = useState<string | null>(null);
   // ADR-092: the Document open in the full-screen reader, if any.
   const [readerDocumentId, setReaderDocumentId] = useState<string | null>(null);
+  // ADR-092 Amendment 3: an email opened from the Inspector, shown until its Document exists.
+  const [readerFallback, setReaderFallback] = useState<DocumentReaderView | undefined>(undefined);
   // ADR-093: every node selected on the canvas, for the Inspector's list.
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [mapConfig, setMapConfig] = useState<PublicMapConfig | null>(null);
@@ -870,6 +873,7 @@ export function App() {
             bearerToken={bearerToken}
             investigationId={investigationId}
             documentId={readerDocumentId}
+            fallback={readerFallback}
             ontology={ontology}
             labelOf={(id) => {
               const graph = workingSetRef.current.graph;
@@ -877,6 +881,7 @@ export function App() {
             }}
             onClose={() => {
               setReaderDocumentId(null);
+              setReaderFallback(undefined);
               // Back where the analyst was: the canvas, with its focused node, untouched behind.
               document.querySelector<HTMLElement>('[role="application"][aria-label="Network canvas"]')?.focus();
             }}
@@ -961,7 +966,10 @@ export function App() {
                 communityHulls={communityHulls}
                 onEdgeSelect={setSelectedLink}
                 getEventsWindow={() => crossFilterRef.current?.store.getState().window ?? null}
-                onOpenDocument={setReaderDocumentId}
+                onOpenDocument={(id) => {
+                  setReaderFallback(undefined);
+                  setReaderDocumentId(id);
+                }}
                 onLinkAction={(_edge, action) => {
                   if (action === "note") setLinkNoteSignal((n) => n + 1);
                   if (action === "change") setLinkChangeSignal((n) => n + 1);
@@ -1144,6 +1152,10 @@ export function App() {
                       }
                       linkEditing={{
                         edgeTypes,
+                        onReadFullScreen: (view) => {
+                          setReaderFallback(view);
+                          setReaderDocumentId(view.document_id);
+                        },
                         openChangeSignal: linkChangeSignal,
                         openNoteSignal: linkNoteSignal,
                         openEventsSignal: linkEventsSignal,
