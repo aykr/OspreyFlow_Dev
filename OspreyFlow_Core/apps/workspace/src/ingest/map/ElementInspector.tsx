@@ -152,7 +152,7 @@ function HandlingOverrideEditor({
             ))}
           </Select>
           {wouldLoosen && (
-            <div role="alert" style={{ color: "var(--warning, #b04a2f)" }}>
+            <div role="alert" style={{ color: "var(--warning)" }}>
               This loosens the source's own {baselineClassification} marking — an override may
               only tighten it. Saving will be rejected.
             </div>

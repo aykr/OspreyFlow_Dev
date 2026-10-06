@@ -14,7 +14,12 @@ import Sigma from "sigma";
 import { useEffect, useRef } from "react";
 
 import type { OntologySchema, RowTemplate } from "../../../../../packages/schemas/generated";
-import { resolveChannelHex } from "../../color/tokens";
+import {
+  BORDER_STRONG_DARK_HEX,
+  BRASS_HEX,
+  TEXT_PRIMARY_DARK_HEX,
+  resolveChannelHex,
+} from "../../color/tokens";
 
 export type MapSelection = { kind: "entity"; ref: string } | { kind: "edge"; index: number } | null;
 
@@ -31,9 +36,11 @@ export interface MapCanvasProps {
 }
 
 const NODE_SIZE = 14;
-const SELECTED_COLOR = "#c08a34"; // --brass, the same selection accent used elsewhere
-const LINK_FROM_COLOR = "#5b9bd5";
-const UNKNOWN_TYPE_COLOR = "#8a8f90";
+// DESIGN.md §3.7, from the canvas's own mirror of the tokens: selected is brass, the link's chosen
+// end is drawn as a path end (`--text-primary`), and a type the ontology does not know is neutral.
+const SELECTED_COLOR = BRASS_HEX;
+const LINK_FROM_COLOR = TEXT_PRIMARY_DARK_HEX;
+const UNKNOWN_TYPE_COLOR = BORDER_STRONG_DARK_HEX;
 
 function layoutPosition(index: number): { x: number; y: number } {
   // Left-to-right in creation order — matches §4's own mockup, which draws
@@ -75,7 +82,7 @@ export function MapCanvas({
     const sigma = new Sigma(graphRef.current, containerRef.current, {
       renderLabels: true,
       defaultNodeColor: UNKNOWN_TYPE_COLOR,
-      defaultEdgeColor: "#8a8f90",
+      defaultEdgeColor: UNKNOWN_TYPE_COLOR,
     });
     sigmaRef.current = sigma;
     sigma.on("clickNode", ({ node }) => onSelectRef.current({ kind: "entity", ref: node }));
@@ -124,7 +131,7 @@ export function MapCanvas({
       graph.addEdgeWithKey(`edge-${index}`, edge.from, edge.to, {
         label: edge.type,
         size: isSelected ? 4 : 2,
-        color: isSelected ? SELECTED_COLOR : "#8a8f90",
+        color: isSelected ? SELECTED_COLOR : UNKNOWN_TYPE_COLOR,
         templateIndex: index,
       });
     });

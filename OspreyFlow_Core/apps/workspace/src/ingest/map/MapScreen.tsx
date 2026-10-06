@@ -290,7 +290,7 @@ export function MapScreen({
         <h1 style={{ fontSize: "1.1em", margin: 0 }}>Map — {draft.label}</h1>
         <div style={{ flex: 1 }} />
         {saveError && (
-          <span role="alert" style={{ color: "var(--warning, #b04a2f)" }}>
+          <span role="alert" style={{ color: "var(--warning)" }}>
             {saveError}
           </span>
         )}

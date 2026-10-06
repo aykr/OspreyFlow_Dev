@@ -1,0 +1,13 @@
+# Colour literals in the Glass that DESIGN.md does not hold, known when tools/colour_drift_check.py
+# was built (ADR-097), each with why it stays for now. Tab-separated: path under apps/workspace/src,
+# then the literal. Remove a line when its literal is fixed; a new literal anywhere fails the gate.
+#
+# Readable text on a node fill: a dark tuned for contrast against the nine channels; its tests pin
+# it. To move to `--text-primary` (light) with the node-label work of ADR-097 step 2.
+color/oklab.ts	#10131a
+# A chart image's caption plate, drawn on a 2D canvas for export (no CSS there).
+export/chartExport.ts	rgba(0, 0, 0, 0.75)
+# MapLibre paint values: a transparent fill (MapLibre takes a colour, not `none`) and the
+# sites-loading scrim over the map.
+map/MapView.tsx	rgba(0,0,0,0)
+map/MapView.tsx	rgba(0,0,0,0.4)

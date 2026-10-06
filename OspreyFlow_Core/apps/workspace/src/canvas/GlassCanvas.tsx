@@ -2594,7 +2594,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           >
             <polyline
               points={lassoPoints.map((p) => `${p.x},${p.y}`).join(" ")}
-              fill="rgba(192,138,52,0.15)"
+              fill="none"
               stroke="var(--brass)"
               strokeWidth={1.5}
               strokeDasharray="4 2"
