@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { HistogramBucket } from "../../../../packages/schemas/generated";
-import { allOnOneDay, bucketLabel, windowFromZoomPercent } from "./math";
+import { allOnOneDay, bucketLabel, bucketRangeOfWindow, windowFromBucketRange, windowFromZoomPercent } from "./math";
 
 const BUCKETS: HistogramBucket[] = [
   { start: "2026-01-01T00:00:00Z", end: "2026-01-02T00:00:00Z", count: 3 },
@@ -65,5 +65,24 @@ describe("allOnOneDay and bucketLabel", () => {
     expect(bucketLabel("2026-01-02T00:00:00Z", 86_400)).toBe("2026-01-02");
     expect(bucketLabel("2026-01-02T14:00:00Z", 3_600)).toBe("14:00");
     expect(bucketLabel(undefined, 3_600)).toBe("");
+  });
+});
+
+describe("windowFromBucketRange (a drag across the bars)", () => {
+  it("is from the first bar's start to the last bar's end, whichever way the drag went", () => {
+    expect(windowFromBucketRange(BUCKETS, 1, 3)).toEqual({ validFrom: "2026-01-02T00:00:00Z", validTo: "2026-01-05T00:00:00Z" });
+    expect(windowFromBucketRange(BUCKETS, 3, 1)).toEqual({ validFrom: "2026-01-02T00:00:00Z", validTo: "2026-01-05T00:00:00Z" });
+  });
+
+  it("holds a drag past either end to the bars there are", () => {
+    expect(windowFromBucketRange(BUCKETS, -2, 99)).toEqual({ validFrom: "2026-01-01T00:00:00Z", validTo: "2026-01-06T00:00:00Z" });
+    expect(windowFromBucketRange([], 0, 1)).toBeNull();
+  });
+});
+
+describe("bucketRangeOfWindow (drawing a window set another way)", () => {
+  it("is the bars the window covers", () => {
+    expect(bucketRangeOfWindow(BUCKETS, { validFrom: "2026-01-02T00:00:00Z", validTo: "2026-01-05T00:00:00Z" })).toEqual([1, 3]);
+    expect(bucketRangeOfWindow(BUCKETS, { validFrom: "2030-01-01T00:00:00Z", validTo: null })).toBeNull();
   });
 });

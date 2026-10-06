@@ -44,3 +44,33 @@ export function bucketLabel(start: string | null | undefined, intervalSeconds: n
   if (!start) return "";
   return intervalSeconds < 86_400 ? `${start.slice(11, 13)}:00` : start.slice(0, 10);
 }
+
+/** The window a drag across the bars selects: from the first bar's start to the last bar's end,
+ * either way round, held to the bars there are (`02_GLASS_FRONTEND.md` §3.4). */
+export function windowFromBucketRange(
+  buckets: readonly HistogramBucket[],
+  from: number,
+  to: number,
+): TimeWindow | null {
+  if (buckets.length === 0) return null;
+  const clamp = (i: number) => Math.min(buckets.length - 1, Math.max(0, Math.round(i)));
+  const start = buckets[clamp(Math.min(from, to))];
+  const end = buckets[clamp(Math.max(from, to))];
+  if (!start?.start || !end?.end) return null;
+  return { validFrom: start.start, validTo: end.end };
+}
+
+/** The bars a window covers, `[first, last]`, so a window set another way (Set exact dates,
+ * playback) is drawn on the chart too; `null` when it covers none. */
+export function bucketRangeOfWindow(
+  buckets: readonly HistogramBucket[],
+  window: TimeWindow,
+): [number, number] | null {
+  const from = Date.parse(window.validFrom);
+  const to = window.validTo ? Date.parse(window.validTo) : Number.POSITIVE_INFINITY;
+  const inside = buckets
+    .map((b, i) => ({ i, s: Date.parse(b.start ?? ""), e: Date.parse(b.end ?? "") }))
+    .filter((b) => b.s < to && b.e > from)
+    .map((b) => b.i);
+  return inside.length === 0 ? null : [inside[0]!, inside[inside.length - 1]!];
+}

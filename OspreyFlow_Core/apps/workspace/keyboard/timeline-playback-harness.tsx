@@ -29,7 +29,7 @@ import { Timeline } from "../src/timeline/Timeline";
 
 declare global {
   interface Window {
-    __TIMELINE_PLAYBACK_HARNESS__?: { fraction: number };
+    __TIMELINE_PLAYBACK_HARNESS__?: { fraction: number; window?: { validFrom: string; validTo: string | null } | null };
   }
 }
 
@@ -40,9 +40,15 @@ const crossFilterStore = createCrossFilterStore(
   "unused",
   "inv-1",
 );
-crossFilterStore.store.getState().setWindow({
-  validFrom: "2026-01-01T00:00:00Z",
-  validTo: "2026-01-05T00:00:00Z",
+// `?nowindow` starts with no window, for `timeline-brush.spec.ts`, which sets one by dragging.
+if (!new URLSearchParams(window.location.search).has("nowindow")) {
+  crossFilterStore.store.getState().setWindow({
+    validFrom: "2026-01-01T00:00:00Z",
+    validTo: "2026-01-05T00:00:00Z",
+  });
+}
+crossFilterStore.store.subscribe((state) => {
+  window.__TIMELINE_PLAYBACK_HARNESS__!.window = state.window;
 });
 
 function Harness() {

@@ -718,6 +718,14 @@ pressed while on), which marks each moved node's last place with a hollow ring a
 where it is now; the camera's fit and zoom are instant too. Without reduced motion there is no such
 control, as the move itself shows what moved (`keyboard/keyboard.spec.ts`).
 
+**Selecting a window (corrected 6 October 2026).** A drag across the density strip's bars is the brush:
+its range of bars is the window, which dims the graph, and it stays drawn as a shaded band that can be
+moved or resized; a window set another way (*Set exact dates*) is drawn the same way. The slider under the
+strip zooms the axis only and never filters: a stray early date can squeeze every other bar into a
+corner, and zooming past it must not change what is dimmed. Until this correction a drag across the bars
+went to the chart's own pan-and-zoom, which at full range has nothing to pan, so only the slider's end
+handles set a window (`keyboard/timeline-brush.spec.ts`).
+
 **The timeline's header and axis (ADR-097 step 3, design review item 13).** *Density* and *Cyclical*
 are one segmented control, *Timeline view*, in the timeline's header. Setting exact dates and
 overlaying another case are in its overflow menu, *More timeline options*; *Clear filter* and playback

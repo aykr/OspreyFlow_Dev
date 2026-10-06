@@ -23,6 +23,7 @@
 import * as echarts from "echarts/core";
 import { BarChart, HeatmapChart } from "echarts/charts";
 import {
+  BrushComponent,
   DataZoomComponent,
   GridComponent,
   TooltipComponent,
@@ -42,10 +43,11 @@ import { buildEventFilter, type CrossFilterStore } from "../crossfilter/store";
 import { Button } from "../design/primitives/Button";
 import { Select } from "../design/primitives/Select";
 import { PLAYBACK_SPEEDS, usePlayback } from "../playback/usePlayback";
-import { allOnOneDay, bucketLabel, windowFromZoomPercent } from "./math";
+import { allOnOneDay, bucketLabel, bucketRangeOfWindow, windowFromBucketRange } from "./math";
 
 echarts.use([
   BarChart,
+  BrushComponent,
   HeatmapChart,
   DataZoomComponent,
   GridComponent,
@@ -350,12 +352,22 @@ export function Timeline({
                 axisLabel: tick,
                 splitLine: { lineStyle: { color: borderSubtleHex } },
               },
+          // The slider zooms the axis (a stray early date can squeeze the rest); it does not filter.
+          // The window is selected by dragging across the bars: the brush below (§3.4).
           dataZoom: overlayActive
-            ? [
-                { type: "slider", height: 16, bottom: 4, xAxisIndex: [0, 1], ...brush },
-                { type: "inside", xAxisIndex: [0, 1] },
-              ]
-            : [{ type: "slider", height: 20, bottom: 4, ...brush }, { type: "inside" }],
+            ? [{ type: "slider", height: 16, bottom: 4, xAxisIndex: [0, 1], ...brush }]
+            : [{ type: "slider", height: 20, bottom: 4, ...brush }],
+          brush: {
+            xAxisIndex: 0,
+            brushType: "lineX",
+            brushMode: "single",
+            transformable: true,
+            throttleType: "debounce",
+            throttleDelay: 200,
+            brushStyle: { borderWidth: 1, color: palette.surfaceHover, borderColor: palette.textSecondary },
+            outOfBrush: { colorAlpha: 0.35 },
+          },
+          toolbox: { show: false },
           series: overlayActive
             ? [
                 {
@@ -396,20 +408,30 @@ export function Timeline({
         true,
       );
 
-      // Reading the range back off `getOption()` after the event, as a
-      // start/end *percentage* pair, sidesteps whether ECharts reports a
-      // category axis's own dataZoom range as indices or as matching data
-      // values (it is not consistent between the two) — a percentage is
-      // unambiguous regardless of axis type. `windowFromZoomPercent`
-      // (`./math.ts`) does the actual (tested) conversion.
-      chart.on("datazoom", () => {
+      // `02_GLASS_FRONTEND.md` §3.4: "drag to select a window". A drag across the bars is the
+      // brush; its range of bars becomes the window, which dims the graph. Found 6 October 2026: a
+      // drag went to the chart's pan-and-zoom instead, which has nothing to pan at full range.
+      chart.off("brushEnd");
+      chart.dispatchAction({
+        type: "takeGlobalCursor",
+        key: "brush",
+        brushOption: { brushType: "lineX", brushMode: "single" },
+      });
+      // A window set another way (Set exact dates, the overlay's case) is drawn as the brush too.
+      const current = crossFilterStore.store.getState().window;
+      const shown = current ? bucketRangeOfWindow(buckets, current) : null;
+      if (shown) {
+        chart.dispatchAction({
+          type: "brush",
+          areas: [{ brushType: "lineX", xAxisIndex: 0, coordRange: shown }],
+        });
+      }
+      chart.on("brushEnd", (params: unknown) => {
         if (histogram.total === 0) return; // ADR-087: no brush where there are no dated events
-        const option = chart.getOption() as {
-          dataZoom?: Array<{ start?: number; end?: number }>;
-        };
-        const zoom = option.dataZoom?.[0];
-        if (zoom?.start == null || zoom.end == null) return;
-        const window = windowFromZoomPercent(buckets, zoom.start, zoom.end);
+        const areas = (params as { areas?: Array<{ coordRange?: [number, number] }> }).areas ?? [];
+        const range = areas[0]?.coordRange;
+        if (!range) return;
+        const window = windowFromBucketRange(buckets, range[0], range[1]);
         if (!window) return;
         crossFilterStore.store.getState().setWindow(window);
         void crossFilterStore.refresh(getNodeIds(), getEdgeIds?.());
