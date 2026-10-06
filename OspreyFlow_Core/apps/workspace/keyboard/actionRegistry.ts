@@ -95,6 +95,7 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   "show-previous-positions-by-keyboard",
   "grid-toggles-by-keyboard",
   "show-links-among-all-by-keyboard",
+  "move-the-selection-with-shift-and-arrows",
   "focus-establishes-ring",
   "tab-leaves-the-canvas",
   "ctrl-arrow-cycles-ring",

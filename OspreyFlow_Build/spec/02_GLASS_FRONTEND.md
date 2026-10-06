@@ -461,6 +461,14 @@ button, as overlays with a shadow. The toolbar's controls are quiet buttons at `
 open one is primary text with a 2px underline. Checked in the browser (`keyboard/canvas-look.spec.ts`:
 the groups, one row, no shadow); each control keeps its own keyboard case.
 
+**Moving nodes by hand (owner, 6 October 2026; the spec was silent).** Dragging a node moves it, and moves
+the whole selection when the node is in it; the camera does not pan while a node is held, and the click
+that ends a drag does not change the selection. A node is moved with its resolution cluster, which is drawn
+as one place. Shift with an arrow key moves the selection 8 pixels on screen, 32 with Alt too (the
+keyboard route, rule 13). A node placed by hand stays where it was put when a layout runs for nodes added
+later, in every layout; *Arrange* lays everything out afresh and forgets the placements. Positions belong
+to the view and are not sent to the server (`keyboard/node-drag.spec.ts`, `keyboard/keyboard.spec.ts`).
+
 **Links among what is on screen (ADR-098 decision 1).** An expansion of at most 100 new nodes into a view
 of at most 2,000 also draws the links among its nodes and the rest of the view, so expanding a person shows
 who among their correspondents wrote to each other, not only a star; when those links would pass the working

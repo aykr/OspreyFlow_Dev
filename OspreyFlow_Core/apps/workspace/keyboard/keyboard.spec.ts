@@ -1776,6 +1776,25 @@ test("Show links among all, in the canvas toolbar, asks for the links among ever
   registerCovered("CANVAS_ACTIONS", "show-links-among-all-by-keyboard");
 });
 
+test("Shift with an arrow key moves the selected node by keyboard, further with Alt (owner, 6 October 2026)", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual(["n0"]);
+  const before = (await layoutSettled(page, ["n0"]))["n0"]!;
+  await page.keyboard.press("Shift+ArrowRight");
+  await page.keyboard.press("Shift+ArrowRight");
+  const moved = (await page.evaluate(() => window.__CANVAS__?.viewportPositionOf("n0")))!;
+  expect(moved.x - before.x).toBeGreaterThan(12);
+  expect(Math.abs(moved.y - before.y)).toBeLessThan(2);
+  await page.keyboard.press("Shift+Alt+ArrowDown");
+  const down = (await page.evaluate(() => window.__CANVAS__?.viewportPositionOf("n0")))!;
+  expect(down.y - moved.y).toBeGreaterThan(24);
+  // Focus and selection are unchanged: the nudge moved the node, it did not walk to a neighbour.
+  expect(await page.evaluate(() => window.__KEYBOARD__?.focused)).toBe("n0");
+  registerCovered("CANVAS_ACTIONS", "move-the-selection-with-shift-and-arrows");
+});
+
 test("every registered keyboard action has its own proving test case above", () => {
   assertAllCovered("CANVAS_ACTIONS", CANVAS_ACTIONS);
 });

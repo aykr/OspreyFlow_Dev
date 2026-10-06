@@ -82,6 +82,7 @@ import {
   SolidArrowProgram,
 } from "./dottedEdgePrograms";
 import { settledAnchors } from "./settledAnchor";
+import { dragTargets, keepPinned, nudgeFor } from "./nodeDrag";
 import { expansionLinksNotice, linksAmongNotice, showLinksAmong } from "./linksAmong";
 import { CanvasLegend } from "./CanvasLegend";
 import { ZoomControls } from "./ZoomControls";
@@ -433,6 +434,27 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     const treeLinksRef = useRef<Set<string> | null>(null);
     const selectedRef = useRef<Set<string>>(new Set());
     selectedRef.current = selected;
+    // Moving nodes by hand (owner, 6 October 2026): what is being dragged and from where, the nodes
+    // the analyst has placed (a layout for added nodes leaves them; Arrange clears them), and the
+    // click that ends a drag, which must not also change the selection.
+    const dragRef = useRef<{ from: { x: number; y: number }; start: Map<string, { x: number; y: number }>; moved: boolean } | null>(null);
+    const pinnedRef = useRef<Set<string>>(new Set());
+    const swallowClickRef = useRef(false);
+    /** The nodes to move with `ids`: each one's resolution cluster too, since a cluster is drawn as
+     * one place and the layout positions only its representative (found moving one member alone:
+     * the next layout put it back with the rest). */
+    const withClusterMates = (ids: readonly string[]): string[] => {
+      const clusterOf = (id: string) => graph.getNodeAttribute(id, "data").resolution?.cluster_id ?? id;
+      const clusters = new Set(ids.filter((id) => graph.hasNode(id)).map(clusterOf));
+      return graph.filterNodes((id) => clusters.has(clusterOf(id)) && !isHiddenInGroup(id));
+    };
+    /** Pins what the layout positions for these nodes: their clusters' representatives. */
+    const pinPlaced = (ids: Iterable<string>) => {
+      for (const id of ids) {
+        if (!graph.hasNode(id)) continue;
+        pinnedRef.current.add(graph.getNodeAttribute(id, "data").resolution?.cluster_id ?? id);
+      }
+    };
     const arrangeNowRef = useRef<() => void>(() => undefined);
     const selectLinkRef = useRef<(edgeId: string | null) => void>(() => undefined);
     const requestExpansionRef = useRef<
@@ -525,6 +547,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // `pathResult`.
     const pathNodeIdsRef = useRef<Set<string>>(new Set());
     const [lassoActive, setLassoActive] = useState(false);
+    const lassoActiveRef = useRef(false);
+    lassoActiveRef.current = lassoActive;
     const [lassoPoints, setLassoPoints] = useState<{ x: number; y: number }[]>(
       [],
     );
@@ -985,7 +1009,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             id,
             x: at.x,
             y: at.y,
-            pinned: keepSettled && settledRef.current.has(id),
+            pinned:
+              (keepSettled && settledRef.current.has(id)) ||
+              (reason === "added" && pinnedRef.current.has(id)),
           });
         });
         const present = new Set(nodes.map((n) => n.id));
@@ -1039,10 +1065,16 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             groupLabels = new Map(arrangeInput.nodes.map((n) => [n.type, n.type]));
           }
         }
-        const settled =
+        // Arrange lays everything out afresh; a layout for added nodes leaves placed ones put.
+        if (reason === "arrange") pinnedRef.current.clear();
+        const laidOut =
           mode === "organic"
             ? settleLayout(nodes, edges)
             : arrange(mode, arrangeInput, { centre, groupOf });
+        const settled =
+          laidOut && pinnedRef.current.size > 0
+            ? keepPinned(laidOut, pinnedRef.current, realPositionOf)
+            : laidOut;
         treeLinksRef.current = mode === "tree" && settled ? treeLinkKeys(arrangeInput, centre) : null;
         if (mode === "bubbles" && settled && groupOf) {
           const byGroup = new Map<string, string[]>();
@@ -1399,7 +1431,48 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         observer.observe(containerRef.current);
         resizeObserverRef.current = observer;
       }
+      // Dragging a node moves it, or the whole selection when it is in it (owner, 6 October 2026).
+      // The camera does not pan while a node is held; a folded group's node and the lasso do not drag.
+      sigma.on("downNode", ({ node, event }) => {
+        swallowClickRef.current = false;
+        if (lassoActiveRef.current || foldedViewRef.current?.groups.has(node)) return;
+        const ids = withClusterMates(selectedRef.current.has(node) ? Array.from(selectedRef.current) : [node]);
+        dragRef.current = {
+          from: sigma.viewportToGraph({ x: event.x, y: event.y }),
+          start: new Map(ids.map((id) => [id, realPositionOf(id)])),
+          moved: false,
+        };
+      });
+      const captor = sigma.getMouseCaptor();
+      captor.on("mousemovebody", (event) => {
+        const drag = dragRef.current;
+        if (!drag) return;
+        const now = sigma.viewportToGraph({ x: event.x, y: event.y });
+        for (const [id, at] of dragTargets(drag.start, drag.from, now)) {
+          graph.mergeNodeAttributes(id, { x: at.x, y: at.y });
+        }
+        drag.moved = true;
+        event.preventSigmaDefault();
+        event.original.preventDefault();
+        event.original.stopPropagation();
+      });
+      const endDrag = () => {
+        const drag = dragRef.current;
+        dragRef.current = null;
+        if (!drag?.moved) return;
+        pinPlaced(drag.start.keys());
+        swallowClickRef.current = true;
+      };
+      // Released anywhere, even past the canvas's edge: the renderer follows a held mouse across
+      // the window, so ending the drag when the pointer left the canvas turned the rest of it
+      // into a pan (found by `node-drag.spec.ts`'s drag to the canvas's bottom edge).
+      captor.on("mouseup", endDrag);
       sigma.on("clickNode", ({ node, event }) => {
+        // The click that ends a drag is the drag, not a click: the selection stays as it was.
+        if (swallowClickRef.current) {
+          swallowClickRef.current = false;
+          return;
+        }
         // Shift, Ctrl or Cmd with the click adds the node to the selection, or takes it out again
         // (ADR-084 Amendment 1: Shift is the key most people reach for; the other two stay).
         const flags = event.original instanceof MouseEvent ? event.original : null;
@@ -1418,6 +1491,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         setFocused(node);
       });
       sigma.on("clickStage", ({ event }) => {
+        // A drag that ended off its node is not a click on empty space.
+        if (swallowClickRef.current) {
+          swallowClickRef.current = false;
+          return;
+        }
         // The renderer picks a link only where its thin line is drawn, which is hard to hit. A
         // click that found neither node nor link is checked against every visible link with a
         // wider reach before it counts as a click on empty space.
@@ -1653,6 +1731,26 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         // ADR-097 step 2: F fits everything in view, as the zoom cluster's Fit does.
         e.preventDefault();
         fitToView();
+      } else if (
+        e.shiftKey &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        nudgeFor(e.key, e.altKey) !== null &&
+        selected.size > 0 &&
+        sigmaRef.current
+      ) {
+        // Owner, 6 October 2026: Shift with an arrow key moves the selection by a few pixels on
+        // screen (Alt for a larger step), the keyboard route to dragging; the node stays placed.
+        e.preventDefault();
+        const sigma = sigmaRef.current;
+        const step = nudgeFor(e.key, e.altKey)!;
+        const origin = sigma.viewportToGraph({ x: 0, y: 0 });
+        const moved = sigma.viewportToGraph({ x: step.dx, y: step.dy });
+        const start = new Map(withClusterMates(Array.from(selected)).map((id) => [id, realPositionOf(id)] as const));
+        for (const [id, at] of dragTargets(start, origin, moved)) {
+          graph.mergeNodeAttributes(id, { x: at.x, y: at.y });
+        }
+        pinPlaced(start.keys());
       } else if (
         (e.key === "ArrowRight" || e.key === "ArrowLeft") &&
         (e.ctrlKey || e.metaKey) &&
