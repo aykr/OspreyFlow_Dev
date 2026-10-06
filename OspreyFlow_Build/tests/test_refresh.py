@@ -285,3 +285,42 @@ def test_a_service_added_since_the_deployment_was_rendered_is_brought_in_and_not
     assert [
         line for line in (out / "deployment.env").read_text().splitlines() if "_MODEL=" not in line
     ] == [line for line in secrets_before.splitlines() if "_MODEL=" not in line]
+
+
+def test_a_new_owned_service_is_built_like_the_deployments_others_when_it_was_rendered_to_build(
+    repo: Path,
+) -> None:
+    """Found running it on the owner's deployment: `apply --build` builds the owned images from
+    the checkout but leaves the copied `osprey.yaml` without `source_path`, so refresh rendered the
+    recogniser in pull mode, a registry image that does not exist (`denied`). A deployment whose
+    owned services build from source gets the new one built from source too."""
+    import yaml
+    from harness.render import render
+
+    from schemas.deployment import OspreyConfig
+
+    out = _rendered(repo)
+    for dockerfile in (
+        "apps/workspace/Dockerfile",
+        "services/api/Dockerfile",
+        "services/ingest/Dockerfile",
+        "services/ner/Dockerfile",
+    ):
+        (repo / dockerfile).parent.mkdir(parents=True, exist_ok=True)
+        (repo / dockerfile).write_text("FROM scratch\n", encoding="utf-8")
+    building = OspreyConfig().model_copy(
+        update={
+            "components": OspreyConfig().components.model_copy(update={"source_path": str(repo)})
+        }
+    )
+    document = yaml.safe_load(render(building, allow_unpinned=True).artefacts["compose.yaml"])
+    document["services"].pop("ner")
+    text = (out / "compose.yaml").read_text()
+    banner = text[: text.index("\nname:") + 1]
+    (out / "compose.yaml").write_text(banner + yaml.safe_dump(document, sort_keys=False))
+
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+
+    ner = yaml.safe_load((out / "compose.yaml").read_text())["services"]["ner"]
+    assert ner["image"] == "osprey/ner:local"
+    assert ner["build"]["dockerfile"] == "services/ner/Dockerfile"

@@ -176,12 +176,22 @@ def _new_services_added(directory: Path) -> None:
     if not config_path.is_file():
         return
     config = load_config(config_path)
-    rendered = yaml.safe_load(_render_compose(config, service_images(config)))["services"]
     compose_path = directory / "compose.yaml"
     text = compose_path.read_text(encoding="utf-8")
     header_end = text.find("\nname:") + 1
     document = yaml.safe_load(text)
     services = document.setdefault("services", {})
+    # Build or pull as the deployment does: `apply --build` builds the owned images from the
+    # checkout but leaves the copied `osprey.yaml` without `source_path`, so the mode is read from
+    # the deployment itself (found on the owner's: the recogniser was added in pull mode, a registry
+    # image that does not exist).
+    api = services.get("api")
+    if isinstance(api, dict) and "build" in api and config.components.source_path is None:
+        root = directory.parent.parent.parent
+        config = config.model_copy(
+            update={"components": config.components.model_copy(update={"source_path": str(root)})}
+        )
+    rendered = yaml.safe_load(_render_compose(config, service_images(config)))["services"]
     changed = False
     for name, service in rendered.items():
         if name not in services:
