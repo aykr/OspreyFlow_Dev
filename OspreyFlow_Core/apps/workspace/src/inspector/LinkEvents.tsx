@@ -1,14 +1,18 @@
 // The Inspector's **Emails** (or **Events**) section for a selected link (ADR-089): every event the
 // link stands for, newest first, fifty at a time, and one of them opened to read. For an Enron link
-// each event is one email, with its subject and an excerpt of up to 4,000 characters; an excerpt
-// that was cut says so. Reached from the link menu's *Show emails (n)*; the list and the opened
-// email are reachable by keyboard (`keyboard/link-events.spec.ts`).
+// each event is one email, with its subject and its whole text (ADR-095; one loaded before then
+// may have been cut at 4,000 characters, and says so). *Put on the canvas* writes the emails or
+// messages in the timeline's window as Documents, as the link menu's *Show emails (n)* does
+// (ADR-095 decision 4). Reachable by keyboard (`keyboard/link-events.spec.ts`).
 import { useEffect, useRef, useState } from "react";
+
+import { emailsOutcomeText, showEmailsAsDocuments } from "./emailDocuments";
 
 import type { EventRecord } from "../../../../packages/schemas/generated";
 import {
   EVENTS_PAGE_SIZE,
   LinkEventsError,
+  mayCarryText,
   nounWords,
   type EventsNoun,
   acceptEmailCandidate,
@@ -37,6 +41,9 @@ export interface LinkEventsProps {
   onDelta?: (delta: unknown) => void;
   /** ADR-092 Amendment 3: open the email in the full-screen reader. Left out, not offered. */
   onReadFullScreen?: (view: DocumentReaderView) => void;
+  /** The timeline's brushed window, for *Put on the canvas* (ADR-095 decision 4); `null` when
+   * nothing is brushed, which means every email on the link. */
+  getEventsWindow?: () => { validFrom: string; validTo: string | null } | null;
 }
 
 type Load =
@@ -101,6 +108,7 @@ export function LinkEvents({
   focusSignal = 0,
   onDelta,
   onReadFullScreen,
+  getEventsWindow,
 }: LinkEventsProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [open, setOpen] = useState<EventRecord | null>(null);
@@ -114,6 +122,32 @@ export function LinkEvents({
   >({ state: "idle" });
   const [accepting, setAccepting] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const [placing, setPlacing] = useState(false);
+  const [placed, setPlaced] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const putOnCanvas = async () => {
+    if (placing || !onDelta || !mayCarryText(noun)) return;
+    setPlacing(true);
+    setPlaced(null);
+    try {
+      const result = await showEmailsAsDocuments(
+        apiBaseUrl,
+        bearerToken,
+        investigationId,
+        edgeId,
+        getEventsWindow?.() ?? null,
+      );
+      if (result.delta) onDelta(result.delta);
+      setPlaced({
+        ok: true,
+        text: emailsOutcomeText(result.written, result.without_text, noun as "emails" | "messages"),
+      });
+    } catch (err) {
+      setPlaced({ ok: false, text: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setPlacing(false);
+    }
+  };
   const headingRef = useRef<HTMLHeadingElement>(null);
   const backRef = useRef<HTMLButtonElement>(null);
   // Opening an email removes the row that had focus, so focus moves into the email (its Back
@@ -240,6 +274,24 @@ export function LinkEvents({
       )}
       {load.state === "ready" && load.page.total === 0 && (
         <p style={{ color: "var(--text-tertiary)" }}>This link has no dated {noun} behind it.</p>
+      )}
+      {load.state === "ready" && open === null && load.events.length > 0 && onDelta && mayCarryText(noun) && (
+        <div style={{ display: "grid", gap: "var(--sp-4)", margin: "var(--sp-8) 0" }}>
+          <button
+            type="button"
+            className="btn"
+            style={{ justifySelf: "start" }}
+            disabled={placing}
+            onClick={() => void putOnCanvas()}
+          >
+            {placing ? "Putting them on the canvas…" : "Put on the canvas"}
+          </button>
+          {placed && (
+            <p role={placed.ok ? "status" : "alert"} style={{ margin: 0, color: "var(--text-secondary)" }}>
+              {placed.text}
+            </p>
+          )}
+        </div>
       )}
       {load.state === "ready" && open === null && load.events.length > 0 && (
         <>

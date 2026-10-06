@@ -34,6 +34,8 @@ export interface InspectorProps {
     onDelta?: (delta: unknown) => void;
     /** Opens an email in the full-screen reader (ADR-092 Amendment 3). */
     onReadFullScreen?: (view: DocumentReaderView) => void;
+    /** The timeline's brushed window, for the Emails list's *Put on the canvas* (ADR-095). */
+    getEventsWindow?: () => { validFrom: string; validTo: string | null } | null;
     /** Told of a saved change so the new link can be put in the view. */
     onChanged: (result: LinkChangeResult) => void;
     /** The proposed types among `edgeTypes`, and what to do when one is proposed (ADR-090). */
@@ -114,6 +116,7 @@ export function Inspector({ node, link, linkEditing, assessment }: InspectorProp
             focusSignal={linkEditing?.openEventsSignal}
             onDelta={linkEditing?.onDelta}
             onReadFullScreen={linkEditing?.onReadFullScreen}
+            getEventsWindow={linkEditing?.getEventsWindow}
           />
         )}
         {assessment && !isResolutionLink(link.edge.type) && (

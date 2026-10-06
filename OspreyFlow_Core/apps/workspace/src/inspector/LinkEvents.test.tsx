@@ -199,3 +199,53 @@ describe("LinkEvents and extraction", () => {
     expect(screen.queryByRole("button", { name: "Extract entities" })).toBeNull();
   });
 });
+
+describe("LinkEvents: Put on the canvas (ADR-095 decision 4)", () => {
+  /** Answers the list, and the documents write the link menu also sends. */
+  function serveWithWrite(write: { status: number; body: unknown }) {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        calls.push({ url, init });
+        if (url.includes("/events/documents")) {
+          return { ok: write.status === 200, status: write.status, json: async () => write.body };
+        }
+        return { ok: true, status: 200, json: async () => ({ total: 2, offset: 0, limit: 50, events: [event(2), event(1)] }) };
+      }),
+    );
+    return calls;
+  }
+
+  it("writes the emails in the timeline's window as the menu does, and says how many", async () => {
+    const delta = { op: "add", seq: 4, nodes: [], edges: [] };
+    const calls = serveWithWrite({ status: 200, body: { written: 2, without_text: 0, delta } });
+    const onDelta = vi.fn();
+    mount({ onDelta, getEventsWindow: () => ({ validFrom: "2001-05-01T00:00:00Z", validTo: null }) });
+    fireEvent.click(await screen.findByRole("button", { name: "Put on the canvas" }));
+    expect((await screen.findByRole("status")).textContent).toBe("2 emails put on the canvas.");
+    const write = calls.find((c) => c.url.includes("/events/documents"))!;
+    expect(write.url).toBe("http://api.test/v1/investigations/inv-1/links/e1/events/documents");
+    expect(JSON.parse(String(write.init?.body))).toEqual({ window: { valid_from: "2001-05-01T00:00:00Z", valid_to: null } });
+    expect(onDelta).toHaveBeenCalledWith(delta);
+  });
+
+  it("says when the view would be too full, and adds nothing", async () => {
+    serveWithWrite({ status: 413, body: { error: "limit_exceeded", cap_kind: "nodes", cap: 50000, would_be: 50120 } });
+    const onDelta = vi.fn();
+    mount({ onDelta });
+    fireEvent.click(await screen.findByRole("button", { name: "Put on the canvas" }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/Too many for the canvas/);
+    expect(onDelta).not.toHaveBeenCalled();
+  });
+
+  it("is offered for phone messages too, and not for events without text", async () => {
+    serveWithWrite({ status: 200, body: { written: 0, without_text: 0, delta: null } });
+    mount({ noun: "messages", onDelta: vi.fn() });
+    expect(await screen.findByRole("button", { name: "Put on the canvas" })).toBeTruthy();
+    cleanup();
+    mount({ noun: "events", onDelta: vi.fn() });
+    await screen.findByText("Events (2)");
+    expect(screen.queryByRole("button", { name: "Put on the canvas" })).toBeNull();
+  });
+});

@@ -350,6 +350,8 @@ export const LINK_EVENTS_ACTIONS = defineActionRegistry("LINK_EVENTS_ACTIONS", [
   "extract-entities-by-keyboard-lists-the-findings",
   "accept-a-finding-by-keyboard",
   "read-full-screen-from-an-opened-email",
+  // ADR-095 decision 4: the list puts the emails on the canvas, as the link menu does.
+  "put-the-emails-on-the-canvas-from-the-list",
 ] as const);
 
 /** The selection made easy to see and work with (ADR-093): the canvas chip and the Inspector's list.

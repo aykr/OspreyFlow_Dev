@@ -156,6 +156,28 @@ test("Read full screen on an opened email hands it to the reader, by keyboard (A
   registerCovered(REGISTRY, "read-full-screen-from-an-opened-email");
 });
 
+test("Put on the canvas, reached and pressed by keyboard, writes the emails and hands the delta on (ADR-095)", async ({ page }) => {
+  await serve(page);
+  const writes: unknown[] = [];
+  // Registered after `serve`, so it answers the documents write (a later route wins).
+  await page.route("**/*/v1/investigations/inv-1/links/e1/events/documents", async (route) => {
+    writes.push(route.request().postDataJSON());
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ written: 3, without_text: 0, delta: { op: "add", seq: 9, nodes: [], edges: [] } }),
+    });
+  });
+  await page.goto("/keyboard/link-events-harness.html");
+  await expect(page.getByRole("heading", { name: "Emails (3)" })).toBeVisible();
+  await tabTo(page, /^Put on the canvas$/);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("status")).toHaveText("3 emails put on the canvas.");
+  expect(writes).toHaveLength(1);
+  expect(await page.evaluate(() => window.__LINK_EVENTS__!.deltas.length)).toBe(1);
+  registerCovered(REGISTRY, "put-the-emails-on-the-canvas-from-the-list");
+});
+
 test("every registered link-events action has its own proving test case above", () => {
   assertAllCovered("LINK_EVENTS_ACTIONS", LINK_EVENTS_ACTIONS);
 });

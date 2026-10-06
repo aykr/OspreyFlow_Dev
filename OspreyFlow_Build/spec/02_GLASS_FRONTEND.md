@@ -436,7 +436,9 @@ matching section.
 for, newest first, fifty at a time with *Show more*, each with its date, direction, subject and the
 first words of its text. Choosing one opens it to read, with its sender, recipient, date and whole
 text (ADR-095; a note says so only for an event loaded before then, when the text was cut at 4,000
-characters). Reachable by keyboard
+characters). *Put on the canvas* in the list writes the emails (or a phone link's messages) inside the
+timeline's window as Documents and draws them, exactly as the link menu's *Show emails (n)* does,
+or says the view would be too full (ADR-095 decision 4). Reachable by keyboard
 (`keyboard/link-events.spec.ts`). On a link between two email addresses (`Endpoint.endpoint_kind` is `email` at the source)
 *Show emails (n)* also puts the emails inside the timeline's brushed window (all of them when nothing
 is brushed) on the canvas as Documents, linked to both addresses, and says how many (ADR-092); past

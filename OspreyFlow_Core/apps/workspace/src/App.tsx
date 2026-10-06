@@ -1186,6 +1186,7 @@ export function App() {
                       linkEditing={{
                         edgeTypes,
                         proposedTypes: caseLinkTypes?.proposed,
+                        getEventsWindow: () => crossFilterRef.current?.store.getState().window ?? null,
                         onTypeProposed: () => setLinkTypesRead((n) => n + 1),
                         onReadFullScreen: (view) => {
                           setReaderFallback(view);
