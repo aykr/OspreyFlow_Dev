@@ -30,8 +30,11 @@ async function readLink(page: Page, kind: string): Promise<Reading> {
   const a = await page.evaluate((id) => window.__CANVAS__?.viewportPositionOf(id), `${kind}-a`);
   const b = await page.evaluate((id) => window.__CANVAS__?.viewportPositionOf(id), `${kind}-b`);
   if (!a || !b) throw new Error(`no position for the ${kind} pair`);
-  // The harness's own buttons sit over part of the canvas; hide them so only the canvas is read.
-  await page.addStyleTag({ content: "button, select, label { visibility: hidden !important; }" });
+  // The harness's own buttons sit over part of the canvas, and the canvas's grid (ADR-097, tested in
+  // canvas-look.spec.ts) would read as ink: hide both so only the link is read.
+  await page.addStyleTag({
+    content: "button, select, label { visibility: hidden !important; } .network-canvas { background-image: none !important; }",
+  });
   const png = (await page.screenshot()).toString("base64");
   return page.evaluate(
     async ({ png, a, b, trim }) => {

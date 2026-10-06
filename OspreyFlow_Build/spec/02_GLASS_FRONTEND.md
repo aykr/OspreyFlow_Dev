@@ -425,6 +425,15 @@ the left edge. At 100% (a camera ratio of 1) a node is 20 pixels across in an un
 from the painted pixels (`keyboard/canvas-look.spec.ts`); the far overview keeps nodes small, and
 a crowded view still shrinks them as before.
 
+**Zoom, the legend and the grid (ADR-097 step 2).** A zoom cluster at the canvas's lower right, a group
+named *Zoom*: *Zoom in*, *Zoom out* and *Fit to view*; F with the canvas focused fits too (the whole graph
+framed, as an arrangement frames it). A legend at the lower left lists each type in view as the canvas
+draws it (shape in its channel's colour), with how many, most first; *Legend* folds it to its title. The
+graph canvas, and no other surface, has DESIGN.md §9 exception 4's measurement grid: 1px `--border-subtle`
+lines on an 8px lattice, fixed to the screen. All of them come after the view's own controls in Tab order.
+Reachable by keyboard (`keyboard/keyboard.spec.ts`); the painted grid is read from the pixels
+(`keyboard/canvas-look.spec.ts`).
+
 ### 3.1c An expansion that adds nothing says so (ADR-077)
 
 Choosing a relationship from a node's menu (or pressing `Enter`, or opening a search result) asks the

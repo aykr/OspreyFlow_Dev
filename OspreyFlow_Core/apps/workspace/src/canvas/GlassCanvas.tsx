@@ -81,6 +81,8 @@ import { eventsEntryLabel, eventsNoun, mayCarryText } from "../inspector/linkEve
 import { edgeTypesOfferedFor } from "./edgeTypeMenu";
 import { DottedArrowProgram, DottedEdgeProgram } from "./dottedEdgePrograms";
 import { settledAnchors } from "./settledAnchor";
+import { CanvasLegend } from "./CanvasLegend";
+import { ZoomControls } from "./ZoomControls";
 import {
   gateExpansion,
   narrowingOptions,
@@ -739,6 +741,32 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     }, [collapsed, allGroups]);
 
     // The types that have a node in view now, for the Labels and Icons controls.
+    // ADR-097 step 2: the zoom cluster and F. Fitting frames the graph's own extent, as an arrangement
+    // does, and releases nothing else.
+    const fitToView = () => {
+      const sigma = sigmaRef.current;
+      if (!sigma || graph.order === 0) return;
+      sigma.setCustomBBox(graphExtent(graph));
+      sigma.refresh();
+      redrawWhenCameraStops(sigma, sigma.getCamera().animatedReset({ duration: 300 }));
+    };
+    const zoomBy = (direction: "in" | "out") => {
+      const sigma = sigmaRef.current;
+      if (!sigma) return;
+      const camera = sigma.getCamera();
+      redrawWhenCameraStops(
+        sigma,
+        direction === "in" ? camera.animatedZoom({ duration: 200 }) : camera.animatedUnzoom({ duration: 200 }),
+      );
+    };
+    // The legend's rows: each type in view and how many. Worked out again when the working set changes.
+    const legendTypes = useMemo(() => {
+      const counts = new Map<string, number>();
+      graph.forEachNode((_id, attrs) => counts.set(attrs.data.type, (counts.get(attrs.data.type) ?? 0) + 1));
+      return [...counts].map(([type, count]) => ({ type, count, visual: ontology.visualFor(type) }));
+      // `workingSetSeq` changes whenever nodes or links are added or removed.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [graph, ontology, workingSetSeq]);
     const typesInView = (): string[] => {
       const types = new Set<string>();
       graph.forEachNode((_id, attrs) => types.add(attrs.data.type));
@@ -1567,7 +1595,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // family: without Shift, cycle the selection; with it, cycle everything. The order is
       // `graph.nodes()`' own, which is insertion order and therefore stable within a session —
       // enough for "walk to the other one", which is all this is for.
-      if (
+      if ((e.key === "f" || e.key === "F") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        // ADR-097 step 2: F fits everything in view, as the zoom cluster's Fit does.
+        e.preventDefault();
+        fitToView();
+      } else if (
         (e.key === "ArrowRight" || e.key === "ArrowLeft") &&
         (e.ctrlKey || e.metaKey) &&
         e.shiftKey
@@ -2551,6 +2583,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           setFocused(first);
           onSelectionChange?.([first]);
         }}
+        className="network-canvas"
         style={{
           width: "100%",
           height: "100%",
@@ -2805,6 +2838,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           onShowHiddenLinks={() => setHiddenEdges(new Set())}
           onAddFiles={apiBaseUrl && bearerToken && investigationId ? () => setAddingFiles({}) : undefined}
         />
+        {/* ADR-097 step 2: the zoom cluster and the legend, after the view's own controls in Tab order. */}
+        <ZoomControls onZoomIn={() => zoomBy("in")} onZoomOut={() => zoomBy("out")} onFit={fitToView} />
+        <CanvasLegend types={legendTypes} />
         {addingFiles && apiBaseUrl && bearerToken && investigationId && (
           <div style={{ position: "absolute", zIndex: 20, top: "var(--sp-40)", right: "var(--sp-8)" }}>
             <AddFiles

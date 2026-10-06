@@ -46,3 +46,28 @@ test("a node is 20 pixels across at 100%", async ({ page }) => {
   expect(diameter).toBeGreaterThanOrEqual(18);
   expect(diameter).toBeLessThanOrEqual(23);
 });
+
+test("the canvas shows its 8px measurement grid behind the graph", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  await page.waitForTimeout(600);
+  const box = (await page.getByRole("application", { name: "Network canvas" }).boundingBox())!;
+  const pixels = readPng(await page.screenshot());
+  const scale = pixels.width / page.viewportSize()!.width;
+  // A strip of empty canvas below the top-left controls: find a row inside the cells (the vertical
+  // lines only), then the columns that differ from that row's commonest colour.
+  const x0 = Math.round((box.x + 200) * scale);
+  let found: number[] = [];
+  for (let dy = 0; dy < 8 && found.length === 0; dy++) {
+    const y = Math.round((box.y + 140 + dy) * scale);
+    const row = Array.from({ length: Math.round(64 * scale) }, (_, i) => pixels.at(x0 + i, y));
+    const key = (p: number[]) => p.slice(0, 3).join(",");
+    const counts = new Map<string, number>();
+    for (const p of row) counts.set(key(p), (counts.get(key(p)) ?? 0) + 1);
+    const commonest = [...counts].sort((a, b) => b[1] - a[1])[0]![0];
+    const lines = row.map((p, i) => (key(p) === commonest ? -1 : i)).filter((i) => i >= 0);
+    if (lines.length >= 6 && lines.length <= 10) found = lines;
+  }
+  expect(found.length).toBeGreaterThanOrEqual(6);
+  const gaps = found.slice(1).map((x, i) => (x - found[i]!) / scale);
+  for (const gap of gaps) expect(gap).toBeCloseTo(8, 0);
+});

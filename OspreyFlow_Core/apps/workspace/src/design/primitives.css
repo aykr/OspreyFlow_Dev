@@ -425,3 +425,37 @@
 .side-panel-header__moves { display: flex; gap: var(--sp-2); width: 100%; justify-content: flex-end; padding-bottom: var(--sp-4); }
 .side-panel-header__moves[hidden] { display: none; }
 [data-panel-slot] .panel > .panel__title { display: none; }
+/* The graph canvas (ADR-097 step 2, design review item 10). The measurement grid of DESIGN.md §9
+   exception 4: 1px `--border-subtle` lines on an 8px lattice, on this surface and no other. */
+.network-canvas {
+  background-color: var(--surface-sunken);
+  background-image:
+    linear-gradient(var(--border-subtle) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
+  background-size: 8px 8px;
+}
+/* The zoom cluster and the legend: docked overlays on the canvas, a hairline and no shadow. */
+.canvas-zoom {
+  position: absolute; z-index: 10; right: var(--sp-8); bottom: var(--sp-8);
+  display: flex; flex-direction: column; background: var(--surface-panel);
+  border: 1px solid var(--border-subtle); border-radius: var(--r-control);
+}
+.canvas-zoom__button {
+  min-width: 28px; min-height: 28px; display: grid; place-items: center; padding: 0;
+  background: transparent; border: 0; color: var(--text-secondary); font: inherit; font-size: var(--fs-13); cursor: pointer;
+}
+.canvas-zoom__button + .canvas-zoom__button { border-top: 1px solid var(--border-subtle); }
+.canvas-zoom__button:hover, .canvas-zoom__button:focus-visible { background: var(--surface-hover); color: var(--text-primary); }
+.canvas-legend {
+  position: absolute; z-index: 10; left: var(--sp-8); bottom: var(--sp-8); max-width: 220px;
+  background: var(--surface-panel); border: 1px solid var(--border-subtle); border-radius: var(--r-control);
+  font-size: var(--fs-12); line-height: var(--lh-12); color: var(--text-secondary);
+}
+.canvas-legend__toggle {
+  width: 100%; min-height: 24px; text-align: left; padding: var(--sp-4) var(--sp-8);
+  background: transparent; border: 0; color: inherit; font: inherit; font-weight: 600; cursor: pointer;
+}
+.canvas-legend__toggle:hover, .canvas-legend__toggle:focus-visible { color: var(--text-primary); }
+.canvas-legend__list { list-style: none; margin: 0; padding: 0 var(--sp-8) var(--sp-6); display: grid; gap: var(--sp-2); }
+.canvas-legend__list[hidden] { display: none; }
+.canvas-legend__list li { display: flex; justify-content: space-between; gap: var(--sp-8); color: var(--text-primary); }

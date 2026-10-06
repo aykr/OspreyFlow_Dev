@@ -89,6 +89,9 @@ export function assertAllCovered(registryName: string, actions: readonly string[
  * that state, so it does not claim to test leaving it either.
  */
 export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
+  "zoom-in-and-out-by-keyboard",
+  "fit-to-view-by-keyboard",
+  "legend-folds-by-keyboard",
   "focus-establishes-ring",
   "tab-leaves-the-canvas",
   "ctrl-arrow-cycles-ring",

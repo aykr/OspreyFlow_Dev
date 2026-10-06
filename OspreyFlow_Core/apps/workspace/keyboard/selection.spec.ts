@@ -14,7 +14,7 @@ declare global {
 const selection = (page: Page) => page.evaluate(() => window.__KEYBOARD__?.selection ?? []);
 const focused = (page: Page) => page.evaluate(() => window.__KEYBOARD__?.focused ?? null);
 
-async function tabTo(page: Page, name: RegExp, max = 20) {
+async function tabTo(page: Page, name: RegExp, max = 30) {
   for (let i = 0; i < max; i++) {
     await page.keyboard.press("Tab");
     const text = await page.evaluate(

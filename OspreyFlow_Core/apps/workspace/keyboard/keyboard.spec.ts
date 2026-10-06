@@ -94,9 +94,9 @@ test("Tab leaves the canvas and reaches the next real focusable element on the p
   await page.keyboard.press("Tab");
   await expect(page.getByTitle("Lasso select")).toBeFocused();
   // The canvas region holds several real tab-stops of its own (the lasso toggle, the Layout menu
-  // and its Arrange button, Remove selected, Clear view), so the way out is "keep pressing Tab and
+  // and its Arrange button, the selection bar, Clear view, the zoom cluster and the legend), so the way out is "keep pressing Tab and
   // arrive", not an exact count that every new control would break. Bounded, so a real trap fails.
-  for (let presses = 0; presses < 12; presses++) {
+  for (let presses = 0; presses < 24; presses++) {
     if (await page.locator("#after-canvas").evaluate((el) => el === document.activeElement)) break;
     await page.keyboard.press("Tab");
   }
@@ -938,7 +938,7 @@ async function chooseOption(
   await expect(select).toHaveValue(value);
 }
 
-async function tabTo(page: Page, control: ReturnType<Page["getByRole"]>, limit = 14): Promise<void> {
+async function tabTo(page: Page, control: ReturnType<Page["getByRole"]>, limit = 24): Promise<void> {
   for (let presses = 0; presses < limit; presses++) {
     if (await control.evaluate((el) => el === document.activeElement).catch(() => false)) return;
     await page.keyboard.press("Tab");
@@ -1638,6 +1638,59 @@ test("an expansion that adds nothing says so, and Escape dismisses the message",
   await page.keyboard.press("Escape");
   await expect(nothingNew).toBeHidden();
   registerCovered("CANVAS_ACTIONS", "expand-with-nothing-new-says-so");
+});
+
+// --- The zoom cluster, Fit and the legend (ADR-097 step 2) ---------------------------------------
+
+test("Zoom in and Zoom out move the camera by keyboard alone", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  await layoutSettled(page, ["n0"]);
+  const ratio = async () => (await page.evaluate(() => window.__CANVAS__?.cameraState()))!.ratio;
+  const before = await ratio();
+  const zoomIn = page.getByRole("button", { name: "Zoom in" });
+  await zoomIn.focus();
+  await expect(zoomIn).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect.poll(ratio).toBeLessThan(before);
+  const zoomed = await ratio();
+  const zoomOut = page.getByRole("button", { name: "Zoom out" });
+  await zoomOut.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(ratio).toBeGreaterThan(zoomed);
+  registerCovered("CANVAS_ACTIONS", "zoom-in-and-out-by-keyboard");
+});
+
+test("F on the canvas, and Fit to view by Enter, bring the whole graph back into view", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  await layoutSettled(page, ["n0"]);
+  const ratio = async () => (await page.evaluate(() => window.__CANVAS__?.cameraState()))!.ratio;
+  await page.evaluate(() => window.__CANVAS__?.zoomTo(0.1));
+  await expect.poll(ratio).toBeCloseTo(0.1);
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  await page.keyboard.press("f");
+  await expect.poll(ratio).toBeCloseTo(1);
+  await page.evaluate(() => window.__CANVAS__?.zoomTo(0.1));
+  const fit = page.getByRole("button", { name: "Fit to view" });
+  await fit.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(ratio).toBeCloseTo(1);
+  registerCovered("CANVAS_ACTIONS", "fit-to-view-by-keyboard");
+});
+
+test("the legend folds and opens by keyboard, and names the types in view", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  const list = page.locator('ul[aria-label="Types in view"]');
+  await expect(list).toBeVisible();
+  await expect(list.locator("li").first()).toContainText(/\d/);
+  const toggle = page.getByRole("button", { name: "Legend" });
+  await toggle.focus();
+  await page.keyboard.press("Enter");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(list).toBeHidden();
+  await page.keyboard.press("Enter");
+  await expect(list).toBeVisible();
+  registerCovered("CANVAS_ACTIONS", "legend-folds-by-keyboard");
 });
 
 test("every registered keyboard action has its own proving test case above", () => {
