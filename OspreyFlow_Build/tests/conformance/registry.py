@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from ports.graph import GraphPort
     from ports.media import MediaStore
     from ports.model import ModelPort
+    from ports.recognise import RecognisePort
     from schemas.analytics import EventRecord
 
 
@@ -114,6 +115,27 @@ def _model_litellm_factories() -> list[ModelAdapterFactory]:
     from adapters.model_litellm.testing import model_litellm_adapter
 
     return [ModelAdapterFactory(label="model_litellm", context=model_litellm_adapter)]
+
+
+@dataclass(frozen=True)
+class RecogniseAdapterFactory:
+    """One conformance-testable `RecognisePort` adapter (ADR-098 decision 2): a client of a live
+    recogniser sidecar, as `ModelAdapterFactory` is of a live model proxy."""
+
+    label: str
+    context: Callable[[], AbstractAsyncContextManager[RecognisePort]]
+
+    def __str__(self) -> str:  # pytest parametrize id
+        return self.label
+
+
+def _recognise_stanza_factories() -> list[RecogniseAdapterFactory]:
+    from adapters.recognise_stanza.testing import recognise_stanza_adapter
+
+    return [RecogniseAdapterFactory(label="recognise_stanza", context=recognise_stanza_adapter)]
+
+
+RECOGNISE_PORT_ADAPTERS: list[RecogniseAdapterFactory] = _recognise_stanza_factories()
 
 
 @dataclass(frozen=True)

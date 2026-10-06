@@ -363,6 +363,9 @@ export const LINK_EVENTS_ACTIONS = defineActionRegistry("LINK_EVENTS_ACTIONS", [
   "read-full-screen-from-an-opened-email",
   // ADR-095 decision 4: the list puts the emails on the canvas, as the link menu does.
   "put-the-emails-on-the-canvas-from-the-list",
+  // ADR-098: the model on request, and a finding rejected.
+  "ask-the-model-to-extract-by-keyboard",
+  "reject-a-finding-by-keyboard",
 ] as const);
 
 /** The selection made easy to see and work with (ADR-093): the canvas chip and the Inspector's list.
@@ -397,6 +400,8 @@ export const READER_ACTIONS = defineActionRegistry("READER_ACTIONS", [
   "reject-a-finding-in-the-reader-by-keyboard",
   // ADR-098 decision 5: an entity marked by hand.
   "mark-an-entity-in-the-reader-by-keyboard",
+  // ADR-098 decision 3: the language model on request.
+  "ask-the-model-to-extract-in-the-reader-by-keyboard",
 ] as const);
 
 /** The administrator's *Proposed types* list (ADR-090 C3): opened from the top bar, each proposal

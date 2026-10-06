@@ -320,3 +320,55 @@ describe("DocumentReader: marking an entity", () => {
     expect(fetchMock.mock.calls.some(([u]) => String(u).endsWith("/designations"))).toBe(false);
   });
 });
+
+// ADR-098 decisions 2 and 3: the fast recogniser first, the language model on request.
+describe("DocumentReader: Stanza first, the model on request", () => {
+  const finding = (id: string, model: string, confidence: number) => ({
+    id,
+    document_id: "email:ev-1",
+    entity_type: "Person",
+    properties: { family_name: id === "s1" ? "MERCER" : "PLANT" },
+    confidence,
+    model,
+    status: "pending",
+  });
+
+  it("Extract entities asks the recogniser and says each finding is Stanza's", async () => {
+    const fetchMock = serve({
+      "/documents/email%3Aev-1/reader": { status: 200, body: EMAIL },
+      "/links/e1/events/ev-1/extract": {
+        status: 200,
+        body: { document_id: "email:ev-1", delta: { seq: 2, op: "add", nodes: [], edges: [] }, candidates: [finding("s1", "stanza:1.10.1", 1)] },
+      },
+    });
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: "Extract entities" }));
+    expect(await screen.findByText(/found by Stanza/)).toBeTruthy();
+    const call = fetchMock.mock.calls.find(([u]) => String(u).endsWith("/extract"))!;
+    expect(JSON.parse(String(((call as unknown[])[1] as RequestInit).body))).toEqual({ using: "recogniser" });
+  });
+
+  it("Ask the model to extract asks the model, after a fast pass too, and adds its findings", async () => {
+    let calls = 0;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/reader")) return { ok: true, status: 200, json: async () => EMAIL };
+      if (url.endsWith("/extract")) {
+        calls += 1;
+        const using = JSON.parse(String(init?.body)).using;
+        const candidates = using === "model" ? [finding("m1", "qwen2.5:7b-instruct", 0.9)] : [finding("s1", "stanza:1.10.1", 1)];
+        return { ok: true, status: 200, json: async () => ({ document_id: "email:ev-1", delta: { seq: 2, op: "add", nodes: [], edges: [] }, candidates }) };
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: "Extract entities" }));
+    await screen.findByText(/found by Stanza/);
+    fireEvent.click(screen.getByRole("button", { name: "Ask the model to extract" }));
+    expect(await screen.findByText(/90%/)).toBeTruthy();
+    expect(screen.getByText(/found by Stanza/)).toBeTruthy(); // the fast pass's finding stays
+    expect(calls).toBe(2);
+    const bodies = fetchMock.mock.calls.filter(([u]) => String(u).endsWith("/extract")).map(([, i]) => JSON.parse(String(i?.body)));
+    expect(bodies).toEqual([{ using: "recogniser" }, { using: "model" }]);
+  });
+});

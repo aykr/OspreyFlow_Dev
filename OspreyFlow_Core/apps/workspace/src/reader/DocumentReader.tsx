@@ -8,7 +8,10 @@ import { HighlightedMessage } from "../dossier/HighlightedMessage";
 import {
   acceptEmailCandidate,
   candidateLabel,
+  candidateSource,
   rejectEmailCandidate,
+  withNewFindings,
+  type ExtractUsing,
   extractEmail,
   type EmailCandidate,
 } from "../inspector/linkEventsApi";
@@ -59,7 +62,7 @@ type Load =
 
 type Findings =
   | { state: "idle" }
-  | { state: "running" }
+  | { state: "running"; listed?: EmailCandidate[] }
   | { state: "failed"; message: string }
   | { state: "ready"; candidates: EmailCandidate[] };
 
@@ -125,18 +128,21 @@ export function DocumentReader({
     closeRef.current?.focus();
   }, [load.state]);
 
-  async function extract(view: DocumentReaderView) {
-    setFindings({ state: "running" });
+  // ADR-098: the fast recogniser first (Extract entities), the language model on request (Ask the
+  // model to extract); a second pass adds its findings to those already listed.
+  async function extract(view: DocumentReaderView, using: ExtractUsing = "recogniser") {
+    const listed = findings.state === "ready" ? findings.candidates : [];
+    setFindings({ state: "running", listed });
     try {
       if (view.edge_id && view.event_id) {
-        const result = await extractEmail(apiBaseUrl, bearerToken, investigationId, view.edge_id, view.event_id);
+        const result = await extractEmail(apiBaseUrl, bearerToken, investigationId, view.edge_id, view.event_id, using);
         onDelta?.(result.delta);
-        setFindings({ state: "ready", candidates: result.candidates });
+        setFindings({ state: "ready", candidates: withNewFindings(listed, result.candidates) });
         return;
       }
       // A held Document (ADR-094): by its kind, through the Document routes.
-      const result = await extractDocument(apiBaseUrl, bearerToken, investigationId, view.document_id);
-      setFindings({ state: "ready", candidates: result.candidates as EmailCandidate[] });
+      const result = await extractDocument(apiBaseUrl, bearerToken, investigationId, view.document_id, using);
+      setFindings({ state: "ready", candidates: withNewFindings(listed, result.candidates as EmailCandidate[]) });
       await read(); // the text it was extracted from (a description, a transcript) is shown
     } catch (err) {
       setFindings({ state: "failed", message: err instanceof Error ? err.message : String(err) });
@@ -216,6 +222,9 @@ export function DocumentReader({
   }
 
   const title = load.state === "ready" ? load.view.title ?? "(no title)" : "Document";
+  // What is listed: the findings, and while a second pass runs, those it will add to.
+  const shownFindings =
+    findings.state === "ready" ? findings.candidates : findings.state === "running" ? findings.listed ?? [] : [];
 
   return (
     <div
@@ -357,32 +366,43 @@ export function DocumentReader({
 
             {((load.view.edge_id && load.view.event_id) || load.view.has_file) && (
               <section aria-label="Entities in this email" style={{ display: "grid", gap: "var(--sp-8)" }}>
-                {findings.state !== "ready" && (
+                <span style={{ display: "flex", gap: "var(--sp-8)", flexWrap: "wrap" }}>
+                  {findings.state !== "ready" && (
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={findings.state === "running"}
+                      title="People, organisations, places, emails and phone numbers, in seconds"
+                      onClick={() => void extract(load.view, "recogniser")}
+                    >
+                      {findings.state === "running" ? "Extracting…" : "Extract entities"}
+                    </button>
+                  )}
                   <button
                     type="button"
-                    className="btn"
+                    className="btn btn--quiet"
                     disabled={findings.state === "running"}
-                    onClick={() => void extract(load.view)}
-                    style={{ justifySelf: "start" }}
+                    title="A deeper, slower read by the language model; its findings are added"
+                    onClick={() => void extract(load.view, "model")}
                   >
-                    {findings.state === "running" ? "Extracting…" : "Extract entities"}
+                    Ask the model to extract
                   </button>
-                )}
+                </span>
                 {findings.state === "failed" && (
                   <p role="alert" style={{ color: "var(--text-secondary)", margin: 0 }}>
                     {findings.message}
                   </p>
                 )}
                 {findings.state === "ready" && findings.candidates.length === 0 && (
-                  <p style={{ color: "var(--text-tertiary)", margin: 0 }}>The model found no entities in this email.</p>
+                  <p style={{ color: "var(--text-tertiary)", margin: 0 }}>No entities were found in this document.</p>
                 )}
-                {findings.state === "ready" && findings.candidates.length > 0 && (
+                {shownFindings.length > 0 && (
                   <ul role="list" aria-label="Entities found" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "var(--sp-4)" }}>
-                    {findings.candidates.map((candidate) => (
+                    {shownFindings.map((candidate) => (
                       <li key={candidate.id} style={{ display: "flex", justifyContent: "space-between", gap: "var(--sp-8)", alignItems: "center" }}>
                         <span className="value">
                           {candidateLabel(candidate)}
-                          <span style={{ color: "var(--text-tertiary)" }}> · {Math.round(candidate.confidence * 100)}%</span>
+                          <span style={{ color: "var(--text-tertiary)" }}> · {candidateSource(candidate)}</span>
                         </span>
                         {candidate.status === "accepted" || candidate.status === "rejected" ? (
                           <span style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>
@@ -393,7 +413,7 @@ export function DocumentReader({
                             <button
                               type="button"
                               className="btn"
-                              disabled={accepting !== null}
+                              disabled={accepting !== null || findings.state === "running"}
                               aria-label={`Accept ${candidateLabel(candidate)}`}
                               onClick={() => void accept(load.view, candidate)}
                             >
@@ -402,7 +422,7 @@ export function DocumentReader({
                             <button
                               type="button"
                               className="btn btn--quiet"
-                              disabled={accepting !== null}
+                              disabled={accepting !== null || findings.state === "running"}
                               aria-label={`Reject ${candidateLabel(candidate)}`}
                               onClick={() => void reject(load.view, candidate)}
                             >

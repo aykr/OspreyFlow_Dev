@@ -245,3 +245,43 @@ def test_bringing_the_models_up_to_date_twice_changes_nothing_the_second_time(re
     refresh.refresh(repo, run=run, register=Registrar())
     assert {p.name: p.read_bytes() for p in out.iterdir() if p.is_file()} == before
     assert _subcommands(run.calls) == ["build", "up"]
+
+
+# --- services a later render adds reach an existing deployment (ADR-098 decision 2) -------------
+
+
+def test_a_service_added_since_the_deployment_was_rendered_is_brought_in_and_nothing_else_moves(
+    repo: Path,
+) -> None:
+    """Catches the gap found adding the recogniser: refresh never renders, so a deployment made
+    before `ner` existed would never run it, and the Conduit would never be told where it is. The
+    new service and the Conduit's new setting are added; every existing service and every secret
+    stays byte for byte."""
+    import yaml
+
+    out = _rendered(repo)
+    document = yaml.safe_load((out / "compose.yaml").read_text())
+    document["services"].pop("ner")
+    document["services"]["api"]["environment"].pop("OSPREY_RECOGNISER_URL")
+    document["services"]["api"]["environment"]["OSPREY_LOCAL_SETTING"] = "kept"
+    text = (out / "compose.yaml").read_text()
+    banner = text[: text.index("\nname:") + 1]
+    (out / "compose.yaml").write_text(banner + yaml.safe_dump(document, sort_keys=False))
+    before = yaml.safe_load((out / "compose.yaml").read_text())
+    secrets_before = (out / "deployment.env").read_text()
+
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+
+    after = yaml.safe_load((out / "compose.yaml").read_text())
+    assert "ner" in after["services"]
+    assert after["services"]["api"]["environment"]["OSPREY_RECOGNISER_URL"] == "http://ner:8000"
+    # What the deployment already had is left exactly as it was, including a local setting.
+    assert after["services"]["api"]["environment"]["OSPREY_LOCAL_SETTING"] == "kept"
+    for name, service in before["services"].items():
+        if name in {"api", "ollama"}:  # ollama: the model step brings its pull up to date
+            continue
+        assert after["services"][name] == service
+    assert (out / "deployment.env").read_text().splitlines()[: len(secrets_before.splitlines())]
+    assert [
+        line for line in (out / "deployment.env").read_text().splitlines() if "_MODEL=" not in line
+    ] == [line for line in secrets_before.splitlines() if "_MODEL=" not in line]

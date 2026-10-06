@@ -408,6 +408,8 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
         _owned("workspace", "apps/workspace/Dockerfile"),
         _owned("api", "services/api/Dockerfile"),
         _owned("ingest", "services/ingest/Dockerfile"),
+        # ADR-098 decision 2: the fast recogniser (Stanza), its model inside the image.
+        _owned("ner", "services/ner/Dockerfile"),
     ]
     if config.components.graph_store.value == "arcadedb":
         images.append(ServiceImage("arcadedb", "arcadedata/arcadedb:25.5.1"))
@@ -690,6 +692,24 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
 }
 
 
+_SERVICE_EXTRAS["ner"] = {
+    # The image is Python and nothing else; its own interpreter asks the recogniser it is ready,
+    # which loads the model, so a healthy `ner` answers at once.
+    "healthcheck": {
+        "test": [
+            "CMD",
+            "python",
+            "-c",
+            "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/healthz', timeout=5)",
+        ],
+        "interval": "15s",
+        "timeout": "10s",
+        "retries": 20,
+        "start_period": "60s",
+    },
+}
+
+
 def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str:
     services: dict[str, object] = {}
     for entry in images:
@@ -745,6 +765,9 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
             api_environment["LITELLM_HOST"] = "litellm"
             api_environment["LITELLM_PORT"] = "4000"
             api_environment["LITELLM_API_KEY"] = LITELLM_KEY
+            # ADR-098 decision 2: the fast recogniser. Not in `depends_on` below: without it the
+            # rest of the Glass still works, and Extract entities says so and offers the model.
+            api_environment["OSPREY_RECOGNISER_URL"] = "http://ner:8000"
             service["environment"] = api_environment
             # The Conduit reads `osprey.yaml` at startup for its map-provider registry, and the
             # image does not contain it — the Dockerfile copies `packages/` and `services/` only,

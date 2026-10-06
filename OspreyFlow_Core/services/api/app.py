@@ -205,6 +205,9 @@ from .document_content import (
     HolderNotFoundError,
     UploadRefusedError,
 )
+from adapters.recognise_stanza import RecogniserConfig, RecogniseStanzaAdapter
+from ports.recognise import RecogniserRefusedError, RecogniserUnavailableError
+
 from .document_reader import (
     Designation,
     DesignationRefusedError,
@@ -498,6 +501,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.link_events = LinkEventsService(app.state.working_set, analytics, investigations)
     # ADR-094: where a content item's file is kept; never the graph.
     media = ObjectStoreMediaStore(MediaStoreConfig.from_env())
+    # ADR-098 decision 2: the fast recogniser, the `ner` sidecar.
+    recogniser = RecogniseStanzaAdapter(RecogniserConfig.from_env())
     app.state.media = media
     app.state.document_reader = DocumentReaderService(
         app.state.working_set, analytics, graph, extraction_candidates, investigations, media
@@ -513,6 +518,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         vision_model=models.vision,
         transcribe_model=models.transcription,
         scheme=handling_scheme,
+        recogniser=recogniser,
     )
     app.state.email_extraction = EmailExtractionService(
         app.state.working_set,
@@ -523,6 +529,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         model,
         models.extraction,
         investigations=investigations,
+        recogniser=recogniser,
     )
     app.state.suppression_marks = suppression_marks
     app.state.gaps_store = gaps_store
@@ -1406,6 +1413,30 @@ async def _extraction_candidate_not_found_handler(
 async def _document_not_found_handler(request: Request, exc: DocumentNotFoundError) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND, content={"error": "document_not_found"}
+    )
+
+
+@app.exception_handler(RecogniserUnavailableError)
+async def _recogniser_unavailable_handler(
+    request: Request, exc: RecogniserUnavailableError
+) -> JSONResponse:
+    """ADR-098: the fast recogniser is not running; the reader offers the model instead."""
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "error": "recogniser_unavailable",
+            "detail": "The fast recogniser is not running. Use Ask the model to extract instead.",
+        },
+    )
+
+
+@app.exception_handler(RecogniserRefusedError)
+async def _recogniser_refused_handler(
+    request: Request, exc: RecogniserRefusedError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": "recogniser_refused", "detail": "The text is too long to recognise."},
     )
 
 
@@ -3059,14 +3090,19 @@ async def extract_email_route(
     linked to both addresses, both go into the working set, and the model's findings are stored
     pending for a person to accept. Only to someone who can see the link; Editor, since it writes."""
     result = await email_extraction.extract(
-        investigation.id, edge_id, event_id, principal, model=body.model
+        investigation.id, edge_id, event_id, principal, model=body.model, using=body.using
     )
     await publish_delta(valkey, investigation.id, result.delta)
     await audit.record(
         principal=principal,
         action="extract_email",
         investigation_id=investigation.id,
-        resolved_query={"edge_id": edge_id, "event_id": event_id, "model": body.model},
+        resolved_query={
+            "edge_id": edge_id,
+            "event_id": event_id,
+            "using": body.using,
+            "model": body.model,
+        },
         result_cardinality=len(result.candidates),
     )
     return result
@@ -3207,6 +3243,12 @@ async def document_file_route(
     return Response(content=data, media_type=content_type)
 
 
+class ExtractDocumentRequest(BaseModel):
+    """ADR-098: the fast recogniser, the default, or the language model on request."""
+
+    using: Literal["recogniser", "model"] = "recogniser"
+
+
 @app.post("/v1/investigations/{investigation_id}/documents/{document_id}/extract")
 async def extract_document_route(
     investigation: InvestigationEditorDep,
@@ -3214,10 +3256,12 @@ async def extract_document_route(
     principal: PrincipalDep,
     document_content: DocumentContentDep,
     audit: AuditDep,
+    body: ExtractDocumentRequest | None = None,
 ) -> DocumentExtractionResult:
     """Entities from a held Document by its kind (ADR-094): kept text as it is, an image described
     and its text read, a video transcribed. Findings are pending until a person accepts one."""
-    result = await document_content.extract(investigation.id, document_id, principal)
+    using = body.using if body is not None else "recogniser"
+    result = await document_content.extract(investigation.id, document_id, principal, using=using)
     await audit.record(
         principal=principal,
         action="extract_document",

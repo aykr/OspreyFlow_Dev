@@ -43,10 +43,12 @@ import asyncpg
 from pydantic import BaseModel, Field
 from services.extract.candidates import ExtractionCandidate, extract_candidates
 from services.extract.profile import DEFAULT_CONFIDENCE_FLOOR, ExtractionProfile, build_schema
+from services.extract.recognised import recognised_candidates
 from services.extract.writer import write_candidate
 
 from ports.graph import GraphPort
 from ports.model import ModelPort
+from ports.recognise import RecognisePort
 from schemas.domain import Handling, NodeId, OntologySchema, Principal
 from schemas.model import ExtractionRequest
 
@@ -380,6 +382,40 @@ async def run_extraction(
     return await store.store(candidates, principal)
 
 
+#: ADR-098 decision 2: how much text one call to the recogniser reads (its sidecar refuses past
+#: 200,000 characters) and how much two windows share, so a name across a boundary is whole in one.
+RECOGNISE_WINDOW_CHARS = 100_000
+RECOGNISE_OVERLAP_CHARS = 1_000
+
+
+async def run_recognition(
+    recogniser: RecognisePort,
+    ontology: OntologySchema,
+    store: ExtractionCandidateStore,
+    *,
+    document_id: str,
+    text: str,
+    handling: Handling,
+    principal: Principal,
+) -> list[ExtractionCandidateRecord]:
+    """The fast pass (ADR-098 decision 2): the recogniser's findings as pending candidates, the
+    same review queue the model's go to, and the text kept for the reader's marks. A long text is
+    read window by window and each finding located in the whole; a mention in the overlap counts
+    once. Nothing reaches the graph here (rule 5)."""
+    found: list[ExtractionCandidate] = []
+    seen: set[tuple[str, str]] = set()
+    for offset, window in text_windows(text, RECOGNISE_WINDOW_CHARS, RECOGNISE_OVERLAP_CHARS):
+        result = await recogniser.recognise(window)
+        for candidate in recognised_candidates(result, window, document_id, handling, ontology):
+            located = _shifted(candidate, offset)
+            key = (located.entity_type, located.locator)
+            if key not in seen:
+                seen.add(key)
+                found.append(located)
+    await store.store_document_text(document_id, text, principal)
+    return await store.store(found, principal)
+
+
 #: ADR-095 decision 2: how much text one extraction call reads, and how much two neighbouring
 #: windows share, so a name across a boundary is whole in one of them. About 11,000 tokens of
 #: English, well inside the 32,768-token context the extraction model is served with, which also
@@ -477,4 +513,5 @@ __all__ = [
     "accept_candidate",
     "reject_candidate",
     "run_extraction",
+    "run_recognition",
 ]

@@ -17,7 +17,11 @@ import {
   type EventsNoun,
   acceptEmailCandidate,
   candidateLabel,
+  candidateSource,
   extractEmail,
+  rejectEmailCandidate,
+  withNewFindings,
+  type ExtractUsing,
   fetchLinkEvents,
   type EmailCandidate,
   type LinkEventPage,
@@ -116,7 +120,7 @@ export function LinkEvents({
   // ADR-089 step 3: the model's findings for the open email, pending until accepted.
   const [findings, setFindings] = useState<
     | { state: "idle" }
-    | { state: "running" }
+    | { state: "running"; listed?: EmailCandidate[] }
     | { state: "ready"; candidates: EmailCandidate[] }
     | { state: "failed"; message: string }
   >({ state: "idle" });
@@ -162,14 +166,16 @@ export function LinkEvents({
     requestAnimationFrame(() => headingRef.current?.focus());
   };
 
-  const extract = async () => {
+  // ADR-098: the fast recogniser first, the language model on request; a second pass adds.
+  const extract = async (using: ExtractUsing = "recogniser") => {
     if (open === null || findings.state === "running") return;
-    setFindings({ state: "running" });
+    const listed = findings.state === "ready" ? findings.candidates : [];
+    setFindings({ state: "running", listed });
     setProblem(null);
     try {
-      const result = await extractEmail(apiBaseUrl, bearerToken, investigationId, edgeId, open.event_id);
+      const result = await extractEmail(apiBaseUrl, bearerToken, investigationId, edgeId, open.event_id, using);
       onDelta?.(result.delta);
-      setFindings({ state: "ready", candidates: result.candidates });
+      setFindings({ state: "ready", candidates: withNewFindings(listed, result.candidates) });
     } catch (error) {
       setFindings({
         state: "failed",
@@ -208,7 +214,30 @@ export function LinkEvents({
       setAccepting(null);
     }
   };
+  // Owner, 6 October 2026: a finding can be rejected; nothing is written.
+  const reject = async (candidate: EmailCandidate) => {
+    if (open === null || accepting !== null) return;
+    setAccepting(candidate.id);
+    setProblem(null);
+    try {
+      await rejectEmailCandidate(apiBaseUrl, bearerToken, investigationId, edgeId, open.event_id, candidate.id);
+      setFindings((current) =>
+        current.state === "ready"
+          ? {
+              state: "ready",
+              candidates: current.candidates.map((c) => (c.id === candidate.id ? { ...c, status: "rejected" } : c)),
+            }
+          : current,
+      );
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : "The finding could not be rejected.");
+    } finally {
+      setAccepting(null);
+    }
+  };
   const Noun = nounWords(noun).title;
+  const shownFindings =
+    findings.state === "ready" ? findings.candidates : findings.state === "running" ? findings.listed ?? [] : [];
 
   useEffect(() => {
     let current = true;
@@ -361,17 +390,28 @@ export function LinkEvents({
           )}
           {onDelta && (
             <section aria-label="Entities in this email" style={{ display: "grid", gap: "var(--sp-8)" }}>
-              {findings.state !== "ready" && (
+              <span style={{ display: "flex", gap: "var(--sp-8)", flexWrap: "wrap" }}>
+                {findings.state !== "ready" && (
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={findings.state === "running"}
+                    title="People, organisations, places, emails and phone numbers, in seconds"
+                    onClick={() => void extract("recogniser")}
+                  >
+                    {findings.state === "running" ? "Extracting…" : "Extract entities"}
+                  </button>
+                )}
                 <button
                   type="button"
-                  className="btn"
+                  className="btn btn--quiet"
                   disabled={findings.state === "running"}
-                  onClick={() => void extract()}
-                  style={{ justifySelf: "start" }}
+                  title="A deeper, slower read by the language model; its findings are added"
+                  onClick={() => void extract("model")}
                 >
-                  {findings.state === "running" ? "Extracting…" : "Extract entities"}
+                  Ask the model to extract
                 </button>
-              )}
+              </span>
               {findings.state === "failed" && (
                 <p role="alert" style={{ color: "var(--text-secondary)", margin: 0 }}>
                   {findings.message}
@@ -380,32 +420,45 @@ export function LinkEvents({
               {findings.state === "ready" && findings.candidates.length === 0 && (
                 <p style={{ color: "var(--text-tertiary)", margin: 0 }}>The model found no entities in this email.</p>
               )}
-              {findings.state === "ready" && findings.candidates.length > 0 && (
+              {shownFindings.length > 0 && (
                 <>
                   <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
-                    {findings.candidates.length} found. Each is a suggestion until you accept it; an accepted
+                    {shownFindings.length} found. Each is a suggestion until you accept it; an accepted
                     entity joins the canvas as inferred, linked to this email, and is confirmed from the
                     Inspector as any inferred node is.
                   </p>
                   <ul role="list" aria-label="Entities found" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "var(--sp-4)" }}>
-                    {findings.candidates.map((candidate) => (
+                    {shownFindings.map((candidate) => (
                       <li key={candidate.id} style={{ display: "flex", justifyContent: "space-between", gap: "var(--sp-8)", alignItems: "center" }}>
                         <span className="value">
                           {candidateLabel(candidate)}
-                          <span style={{ color: "var(--text-tertiary)" }}> · {Math.round(candidate.confidence * 100)}%</span>
+                          <span style={{ color: "var(--text-tertiary)" }}> · {candidateSource(candidate)}</span>
                         </span>
-                        {candidate.status === "accepted" ? (
-                          <span style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>Accepted</span>
+                        {candidate.status === "accepted" || candidate.status === "rejected" ? (
+                          <span style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>
+                            {candidate.status === "accepted" ? "Accepted" : "Rejected"}
+                          </span>
                         ) : (
-                          <button
-                            type="button"
-                            className="btn"
-                            disabled={accepting !== null}
-                            aria-label={`Accept ${candidateLabel(candidate)}`}
-                            onClick={() => void accept(candidate)}
-                          >
-                            Accept
-                          </button>
+                          <span style={{ display: "flex", gap: "var(--sp-4)" }}>
+                            <button
+                              type="button"
+                              className="btn"
+                              disabled={accepting !== null || findings.state === "running"}
+                              aria-label={`Accept ${candidateLabel(candidate)}`}
+                              onClick={() => void accept(candidate)}
+                            >
+                              Accept
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn--quiet"
+                              disabled={accepting !== null || findings.state === "running"}
+                              aria-label={`Reject ${candidateLabel(candidate)}`}
+                              onClick={() => void reject(candidate)}
+                            >
+                              Reject
+                            </button>
+                          </span>
                         )}
                       </li>
                     ))}

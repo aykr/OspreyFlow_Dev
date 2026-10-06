@@ -23,6 +23,8 @@ import hashlib
 from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
+from services.extract.candidates import ExtractionCandidate
+from services.extract.recognised import properties_for
 
 from conduit_common.identity import new_id, new_node_id
 from ports.analytics import AnalyticsPort
@@ -41,8 +43,6 @@ from schemas.domain import (
 from .dossier import MessageSpan, get_document_view
 from .email_extraction import _edge_from_write, _node_from_write
 from .event_scope import CaseRecords, visible_ancestors, with_inherited
-from services.extract.candidates import ExtractionCandidate
-
 from .review import CandidateStatus, DocumentNotFoundError, ExtractionCandidateStore
 from .working_set.models import DeltaAdd
 from .working_set.service import WorkingSetService
@@ -91,18 +91,6 @@ class DesignationResult(BaseModel):
 
 class DesignationRefusedError(Exception):
     """The words are not at that place in the text, or the type cannot be marked by hand."""
-
-
-def designation_properties(entity_type: str, words: str) -> dict[str, str]:
-    """The node's properties from the marked words: a person's last word is the family name and the
-    rest the given names; anything else is named by the words, an endpoint by its value."""
-    words = " ".join(words.split())
-    if entity_type == "Person":
-        *given, family = words.split(" ")
-        return {"family_name": family, **({"given_names": " ".join(given)} if given else {})}
-    if entity_type == "Endpoint":
-        return {"value_raw": words, "value_normalised": words.lower()}
-    return {"name": words}
 
 
 class DocumentReaderService:
@@ -196,7 +184,7 @@ class DocumentReaderService:
         node = NodeWrite(
             id=new_node_id(),
             type=designation.entity_type,
-            properties=designation_properties(designation.entity_type, designation.text),
+            properties=properties_for(designation.entity_type, designation.text),
             provenance=provenance,
             handling=document.handling,
             created_by=principal.id,

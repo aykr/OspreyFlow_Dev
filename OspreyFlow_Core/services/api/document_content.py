@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from hashlib import sha256
+from typing import Literal
 
 from pydantic import BaseModel
 from services.extract.profile import ExtractionProfile
@@ -33,6 +34,7 @@ from ontology.handling import HandlingScheme, principal_may_view
 from ports.graph import GraphPort
 from ports.media import MediaNotFoundError, MediaStore
 from ports.model import ModelPort
+from ports.recognise import RecognisePort, RecogniserUnavailableError
 from schemas.domain import (
     EdgeWrite,
     Handling,
@@ -54,6 +56,7 @@ from .review import (
     accept_candidate,
     reject_candidate,
     run_extraction,
+    run_recognition,
 )
 from .working_set.models import DeltaAdd
 from .working_set.service import WorkingSetService
@@ -137,7 +140,9 @@ class DocumentContentService:
         vision_model: str,
         transcribe_model: str,
         scheme: HandlingScheme | None = None,
+        recogniser: RecognisePort | None = None,
     ) -> None:
+        self._recogniser = recogniser
         self._working_set = working_set
         self._graph = graph
         self._media = media
@@ -191,7 +196,12 @@ class DocumentContentService:
         return data.decode("utf-8", errors="replace")
 
     async def extract(
-        self, investigation_id: str, document_id: str, principal: Principal
+        self,
+        investigation_id: str,
+        document_id: str,
+        principal: Principal,
+        *,
+        using: Literal["recogniser", "model"] = "model",
     ) -> DocumentExtractionResult:
         node, ref = await self._held_document(investigation_id, document_id, principal)
         try:
@@ -199,6 +209,21 @@ class DocumentContentService:
         except MediaNotFoundError as error:
             raise DocumentNotFoundError(document_id) from error
         text = await self._text_of(node, data)
+        if using == "recogniser":
+            # ADR-098 decision 2: the fast pass over the Document's text (an image's description
+            # and visible text, a video's transcript); the language model only when asked for.
+            if self._recogniser is None:
+                raise RecogniserUnavailableError("no recogniser is configured")
+            candidates = await run_recognition(
+                self._recogniser,
+                self._ontology,
+                self._candidates,
+                document_id=node.id,
+                text=text,
+                handling=node.handling,
+                principal=principal,
+            )
+            return DocumentExtractionResult(document_id=node.id, text=text, candidates=candidates)
         profile = ExtractionProfile(
             [t.name for t in self._ontology.entity_types if t.name != DOCUMENT_TYPE]
         )

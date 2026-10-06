@@ -29,12 +29,12 @@ from services.api.email_extraction import (
     email_document_id,
 )
 from services.api.link_notes import LinkNotFoundError
-from services.api.review import ExtractionCandidateNotFoundError
 from services.api.review import (
     CandidateNotPendingError,
     CandidateStatus,
     DocumentNotFoundError,
     ExtractionCandidate,
+    ExtractionCandidateNotFoundError,
     ExtractionCandidateRecord,
 )
 from services.api.working_set.models import DeltaAdd, LimitExceededError
@@ -42,6 +42,7 @@ from services.api.working_set.service import WorkingSetService
 
 from ontology.loader import load_default_ontology
 from ontology.validation import validate_properties
+from ports.recognise import RecognisedEntity, RecogniseResult, RecogniserRefusedError
 from schemas.analytics import EventListRequest, EventListResult, EventRecord
 from schemas.domain import (
     AuditStub,
@@ -262,6 +263,32 @@ class FixedModel:
         return ExtractionResult(document_id=req.document_id, model=req.model, data=self.data)
 
 
+class FakeRecogniser:
+    """Finds the fixture's two people at their places, as the `ner` sidecar would, and refuses a
+    text past the sidecar's limit as it does (rule 15), so a caller that sent one whole would fail
+    here too. Records every text it was sent."""
+
+    LIMIT = 200_000
+
+    def __init__(self) -> None:
+        self.texts: list[str] = []
+
+    async def recognise(self, text: str) -> RecogniseResult:
+        if len(text) > self.LIMIT:
+            raise RecogniserRefusedError("past the limit")
+        self.texts.append(text)
+        found = []
+        for words in ("Dana MERCER", "Callum PRICE"):
+            start = text.find(words)
+            if start >= 0:
+                found.append(
+                    RecognisedEntity(
+                        label="PERSON", text=words, start=start, end=start + len(words)
+                    )
+                )
+        return RecogniseResult(recogniser="stanza:1.10.1", entities=found)
+
+
 async def _build(
     events: list[EventRecord] | None = None, investigations: object | None = None
 ) -> tuple[
@@ -294,6 +321,7 @@ async def _build(
         model,  # type: ignore[arg-type]
         "local-model",
         investigations=investigations,  # type: ignore[arg-type]
+        recogniser=FakeRecogniser(),
     )
     await working.add_nodes("branch-1", [node("a"), node("b")])
     await working.add_edges("branch-1", [edge("e1", "a", "b")])
@@ -558,3 +586,52 @@ async def test_a_message_with_no_subject_is_titled_by_its_first_words() -> None:
     title = graph.nodes[email_document_id("ev-1")].properties["title"]
     assert title.startswith("Callum, the van is booked for Friday.")
     assert len(title) <= 60
+
+
+# --- the fast recogniser first, the model on request (ADR-098 decisions 2 and 3) --------------
+
+
+async def test_extracting_with_the_recogniser_proposes_its_people_and_never_calls_the_model() -> (
+    None
+):
+    service, graph, _, candidates, model = await _build()
+    result = await service.extract("inv-1", "e1", "ev-1", ANALYST, using="recogniser")
+    assert model.requests == []
+    names = sorted(c.properties["family_name"] for c in result.candidates)
+    assert names == ["MERCER", "PRICE"]
+    assert {c.model for c in result.candidates} == {"stanza:1.10.1"}
+    assert all(c.status is CandidateStatus.PENDING for c in result.candidates)  # rule 5
+    # The Document is written as with the model, and nothing of the recogniser's reached the graph.
+    assert all(w.type == "Document" for w in graph.nodes.values())
+    assert candidates.texts[email_document_id("ev-1")] == (TEXT, "unit-1")
+
+
+async def test_extracting_with_the_model_on_request_still_asks_the_model() -> None:
+    service, _, _, _, model = await _build()
+    await service.extract("inv-1", "e1", "ev-1", ANALYST, using="model")
+    assert [r.text for r in model.requests] == [TEXT]
+
+
+async def test_a_text_past_the_recognisers_limit_is_read_in_windows_located_in_the_whole() -> (
+    None
+):
+    from services.api.review import run_recognition
+
+    padding = "x " * 150_000
+    text = f"{padding}Dana MERCER met{padding}Callum PRICE."
+    recogniser = FakeRecogniser()
+    store = InMemoryCandidates()
+    records = await run_recognition(
+        recogniser,  # type: ignore[arg-type]
+        ONTOLOGY,
+        store,  # type: ignore[arg-type]
+        document_id="doc-1",
+        text=text,
+        handling=HANDLING,
+        principal=ANALYST,
+    )
+    assert all(len(t) <= FakeRecogniser.LIMIT for t in recogniser.texts)
+    for record in records:
+        start, end = (int(x) for x in record.locator.removeprefix("char span ").split("-"))
+        assert text[start:end] in {"Dana MERCER", "Callum PRICE"}
+    assert sorted(r.properties["family_name"] for r in records) == ["MERCER", "PRICE"]

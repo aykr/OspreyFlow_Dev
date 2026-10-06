@@ -51,13 +51,13 @@ export interface DocumentFinding {
   status: "pending" | "accepted" | "rejected";
 }
 
-async function postJson<T>(url: string, bearerToken: string): Promise<T> {
+async function postJson<T>(url: string, bearerToken: string, body: unknown = {}): Promise<T> {
   let response: Response;
   try {
     response = await fetch(url, {
       method: "POST",
       headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
-      body: "{}",
+      body: JSON.stringify(body),
     });
   } catch {
     throw new Error("The server could not be reached.");
@@ -85,8 +85,9 @@ export function extractDocument(
   bearerToken: string,
   investigationId: string,
   documentId: string,
+  using: "recogniser" | "model" = "recogniser",
 ): Promise<{ document_id: string; text: string; candidates: DocumentFinding[] }> {
-  return postJson(`${documentUrl(apiBaseUrl, investigationId, documentId)}/extract`, bearerToken);
+  return postJson(`${documentUrl(apiBaseUrl, investigationId, documentId)}/extract`, bearerToken, { using });
 }
 
 export function acceptDocumentFinding(

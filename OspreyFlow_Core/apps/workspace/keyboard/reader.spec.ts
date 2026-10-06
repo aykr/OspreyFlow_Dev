@@ -162,6 +162,20 @@ test("words are marked as an entity by keyboard: typed, a type chosen, and Mark 
   registerCovered(REGISTRY, "mark-an-entity-in-the-reader-by-keyboard");
 });
 
+test("Ask the model to extract is reached and pressed by keyboard in the reader (ADR-098)", async ({ page }) => {
+  await serveReader(page);
+  const usings: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().endsWith("/extract")) usings.push((request.postDataJSON() as { using?: string }).using ?? "");
+  });
+  await page.goto("/keyboard/reader-harness.html");
+  await expect(page.getByRole("button", { name: "Close" })).toBeFocused();
+  await tabTo(page, /^Ask the model to extract$/, 20);
+  await page.keyboard.press("Enter");
+  await expect.poll(() => usings).toEqual(["model"]);
+  registerCovered(REGISTRY, "ask-the-model-to-extract-in-the-reader-by-keyboard");
+});
+
 test("every registered reader action has its own proving test case above", () => {
   assertAllCovered("READER_ACTIONS", READER_ACTIONS);
 });

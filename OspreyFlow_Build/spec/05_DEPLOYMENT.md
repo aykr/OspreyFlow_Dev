@@ -578,7 +578,12 @@ checkout with no release yet, never the customer-facing remedy (§5, §7).
 
 What is running afterwards: the workspace, one Conduit, three workers, ArcadeDB, DuckDB
 in-process, Valkey, MinIO, OpenSearch single-node, PostgreSQL, Keycloak, Ollama, and a
-faster-whisper container. Twelve containers, roughly 11 GB of RAM at rest.
+faster-whisper container. Twelve containers, roughly 11 GB of RAM at rest. Since 6 October 2026 also `ner`,
+the fast named-entity recogniser (ADR-098 decision 2): Stanza 1.10.1 on the CPU with its English model in
+the image (about 1.2 GB on disk, under 1 GB of RAM), on the internal network only; the Conduit is told
+`OSPREY_RECOGNISER_URL` and does not wait on it, so without it only *Extract entities* is unavailable.
+`make refresh` brings it, and any service a later render adds, into an existing deployment without
+re-rendering it.
 
 **Correction, 24 September 2026 — the model gateway is missing from this list, but it is *not* why
 the Conduit would not start.** An earlier version of this paragraph said the Conduit fail-fasts

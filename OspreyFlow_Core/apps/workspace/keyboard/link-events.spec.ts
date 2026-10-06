@@ -83,7 +83,14 @@ test("Enter on an email opens it with its text and its cut-off said, and Back re
 
 async function serveExtraction(page: Page) {
   const accepted: string[] = [];
+  const usings: string[] = [];
+  const rejected: string[] = [];
+  await page.route("**/*/v1/investigations/inv-1/links/e1/events/ev-3/candidates/*/reject", async (route) => {
+    rejected.push(route.request().url());
+    await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+  });
   await page.route("**/*/v1/investigations/inv-1/links/e1/events/ev-3/extract", async (route) => {
+    usings.push((route.request().postDataJSON() as { using?: string }).using ?? "");
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -104,7 +111,7 @@ async function serveExtraction(page: Page) {
       body: JSON.stringify({ node_id: "n-mercer", delta: { seq: 3, op: "add", nodes: [], edges: [] } }),
     });
   });
-  return accepted;
+  return Object.assign(accepted, { usings, rejected });
 }
 
 test("Extract entities, reached and pressed by keyboard, lists the model's findings and hands the delta on", async ({ page }) => {
@@ -176,6 +183,38 @@ test("Put on the canvas, reached and pressed by keyboard, writes the emails and 
   expect(writes).toHaveLength(1);
   expect(await page.evaluate(() => window.__LINK_EVENTS__!.deltas.length)).toBe(1);
   registerCovered(REGISTRY, "put-the-emails-on-the-canvas-from-the-list");
+});
+
+test("Ask the model to extract, by keyboard, asks the model after the fast pass (ADR-098)", async ({ page }) => {
+  await serve(page);
+  const asked = await serveExtraction(page);
+  await page.goto("/keyboard/link-events-harness.html");
+  await expect(page.getByRole("heading", { name: "Emails (3)" })).toBeVisible();
+  await tabTo(page, /Subject 3/);
+  await page.keyboard.press("Enter");
+  await tabTo(page, /^Extract entities$/);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("list", { name: "Entities found" })).toBeVisible();
+  await tabTo(page, /^Ask the model to extract$/);
+  await page.keyboard.press("Enter");
+  await expect.poll(() => asked.usings).toEqual(["recogniser", "model"]);
+  registerCovered(REGISTRY, "ask-the-model-to-extract-by-keyboard");
+});
+
+test("Reject on a finding, by keyboard, sends the reject and marks it rejected", async ({ page }) => {
+  await serve(page);
+  const asked = await serveExtraction(page);
+  await page.goto("/keyboard/link-events-harness.html");
+  await expect(page.getByRole("heading", { name: "Emails (3)" })).toBeVisible();
+  await tabTo(page, /Subject 3/);
+  await page.keyboard.press("Enter");
+  await tabTo(page, /^Extract entities$/);
+  await page.keyboard.press("Enter");
+  await tabTo(page, /^Reject Person · MERCER, Dana$/);
+  await page.keyboard.press("Enter");
+  await expect.poll(() => asked.rejected.length).toBe(1);
+  await expect(page.getByRole("list", { name: "Entities found" })).toContainText("Rejected");
+  registerCovered(REGISTRY, "reject-a-finding-by-keyboard");
 });
 
 test("every registered link-events action has its own proving test case above", () => {

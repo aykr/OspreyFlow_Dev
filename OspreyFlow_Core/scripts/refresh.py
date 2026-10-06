@@ -42,7 +42,13 @@ from harness.keycloak_theme import (
     render_login_theme,
     write_login_theme,
 )
-from harness.render import load_config, render_litellm_config, render_ollama_pull_script
+from harness.render import (
+    _render_compose,
+    load_config,
+    render_litellm_config,
+    render_ollama_pull_script,
+    service_images,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROFILE = "local-lite"
@@ -161,6 +167,39 @@ def _models_up_to_date(directory: Path) -> bool:
     return False
 
 
+def _new_services_added(directory: Path) -> None:
+    """Brings in what a render of this checkout has and the deployment does not (ADR-098: the
+    recogniser): each new service, and each new setting of the Conduit's. Nothing the deployment
+    already has is changed, so an operator's own edit stays, and no secret is involved: the
+    compose file names its secrets as `${...}`, kept in `deployment.env`, which is not touched."""
+    config_path = directory / "osprey.yaml"
+    if not config_path.is_file():
+        return
+    config = load_config(config_path)
+    rendered = yaml.safe_load(_render_compose(config, service_images(config)))["services"]
+    compose_path = directory / "compose.yaml"
+    text = compose_path.read_text(encoding="utf-8")
+    header_end = text.find("\nname:") + 1
+    document = yaml.safe_load(text)
+    services = document.setdefault("services", {})
+    changed = False
+    for name, service in rendered.items():
+        if name not in services:
+            services[name] = service
+            changed = True
+    api = services.get("api")
+    wanted = rendered.get("api", {}).get("environment", {})
+    if isinstance(api, dict) and isinstance(wanted, dict):
+        environment = api.setdefault("environment", {})
+        for key, value in wanted.items():
+            if key not in environment:
+                environment[key] = value
+                changed = True
+    if changed:
+        body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
+        compose_path.write_text(text[:header_end] + body, encoding="utf-8")
+
+
 def refresh(
     repo_root: Path = REPO_ROOT,
     *,
@@ -171,6 +210,7 @@ def refresh(
     compose = _compose(directory / "compose.yaml")
     theme_changed = _theme_changed(directory, repo_root)
     proxy_changed = _models_up_to_date(directory)
+    _new_services_added(directory)
     run([*compose, "build"])
     run([*compose, "up", "-d", "--wait"])
     if proxy_changed:

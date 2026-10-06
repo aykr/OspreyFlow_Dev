@@ -9893,3 +9893,13 @@ Decision.
 Order of building: 1, then 5, then 2 and 3 together, then 4.
 
 Consequences. A sidecar image with Stanza and a CPU build of its runtime, about 1.5 GB, and an English model of about 200 MB downloaded once; licence register entries for each. Tests that would fail if an invariant were broken, each shown red first: a hidden edge between two visible nodes, and an edge to a hidden node, are absent from `edges_among` for an unauthorised principal and present for a cleared one; `links-among` past the cap adds nothing and answers `limit_exceeded`; a small expansion brings the links among its new nodes and the view, and a large one does not; the recogniser's conformance suite proves its type mapping and that it proposes nothing as accepted; a branch's conversation is refused to an analyst who cannot see the branch; a designation by hand is written with the selection's locator and attributed to the analyst.
+
+### ADR-098, Amendment 1 (6 October 2026) — what building decision 2 found
+
+Status: accepted 6 October 2026 (mine, within the owner's "go ahead with the builds"; recorded so they can be overruled). ADR-098 is unchanged except where this says so.
+
+1. **Stanza is held at 1.10.1.** Every release from 1.11.0 to 1.15.0 requires `udtools` (GPL-2.0-or-later), and with it `udapi` (GPL-3.0-or-later); the licence register rejects both (`00_ARCHITECTURE.md` §7). 1.10.1 is the last release without them and its English recogniser does the work decision 2 asks for. Moving past it needs those two packages gone from Stanza's requirements, or a recorded exception, not a version bump.
+2. **The recogniser image checks its own licences at build.** `make licence-check` reads the Conduit's Python environment and cannot see a sidecar's, so `services/ner/licence_gate.py` applies the same rule inside the image and fails the build on any GPL licence and on any it cannot read. The first version used a list of licences to refuse and passed both GPL packages: pip-licenses 5.0.0 reports their `License-Expression` metadata as `UNKNOWN`, which no refusal list matches. It is default-deny now, on pip-licenses 5.5.5, which reads them; `tests/test_ner_licence_gate.py` keeps its allowlist identical to the repository's.
+3. **A recogniser finding carries no score.** Stanza gives none; the finding's `confidence` is 1.0 and means only "found", and the reader and the Inspector say *found by Stanza* in place of a percentage. A hand-marking (decision 5) says *marked by hand*.
+4. **The routes default to the recogniser; the services to the model.** A caller that names nothing (`using` left out) gets the fast pass, as decision 2 says; the services' own default stays the model so a caller inside the Conduit that predates this keeps its behaviour.
+

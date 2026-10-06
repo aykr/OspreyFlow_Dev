@@ -895,7 +895,10 @@ painted dash, dot, arrowhead and the heavier link's width are each read from the
 full screen: an overlay over the whole work area (canvas, side column and timeline) with its title,
 for an email its sender, recipient and date, and its full text with the entities already accepted
 marked in place (the Dossier's marking); the text is the whole message (ADR-095), and a note says
-so only for one loaded before then, cut at 4,000 characters. An email offers *Extract entities* and each finding's *Accept*, as the Inspector's email
+so only for one loaded before then, cut at 4,000 characters. An email offers *Extract entities* (since ADR-098 the fast recogniser, Stanza: people, organisations,
+places, emails and phone numbers in about a second, each finding saying *found by Stanza*), *Ask the model
+to extract* (the language model, slower and deeper, its findings added to the list, each with its
+confidence), and each finding's *Accept* and *Reject*, as the Inspector's email
 view does, and the text is read again after an acceptance so the new entity is marked. Focus starts
 on *Close*; Close or Escape returns to the canvas with nothing moved behind it. The text comes from
 `GET .../documents/{id}/reader`. Tests: `src/reader/DocumentReader.test.tsx` and

@@ -24,7 +24,7 @@ as not found. The model is the caller's choice (ADR-005); left out, the deployme
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel
 from services.extract.profile import ExtractionProfile
@@ -33,6 +33,7 @@ from conduit_common.identity import new_edge_id
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from ports.model import ModelPort
+from ports.recognise import RecognisePort, RecogniserUnavailableError
 from schemas.analytics import EventFilter, EventListRequest, EventRecord
 from schemas.domain import (
     AuditStub,
@@ -56,6 +57,7 @@ from .review import (
     accept_candidate,
     reject_candidate,
     run_extraction,
+    run_recognition,
 )
 from .working_set.models import DeltaAdd
 from .working_set.service import WorkingSetService
@@ -83,8 +85,10 @@ def email_document_id(event_id: str) -> str:
 
 
 class ExtractEmailRequest(BaseModel):
-    """`model` is the caller's choice (ADR-005); left out, the deployment's local model is used."""
+    """`using` (ADR-098): the fast recogniser, the default, or the language model on request.
+    `model` is the caller's choice of language model (ADR-005); left out, the deployment's own."""
 
+    using: Literal["recogniser", "model"] = "recogniser"
     model: str | None = None
 
 
@@ -167,7 +171,9 @@ class EmailExtractionService:
         default_model: str,
         *,
         investigations: CaseRecords | None = None,
+        recogniser: RecognisePort | None = None,
     ) -> None:
+        self._recogniser = recogniser
         self._working_set = working_set
         self._analytics = analytics
         self._graph = graph
@@ -265,6 +271,7 @@ class EmailExtractionService:
         principal: Principal,
         *,
         model: str | None = None,
+        using: Literal["recogniser", "model"] = "model",
     ) -> EmailExtractionResult:
         event = await self._event_on_link(investigation_id, edge_id, event_id, principal)
         now = datetime.now(UTC)
@@ -285,6 +292,20 @@ class EmailExtractionService:
         )
 
         text = event.properties.get("excerpt")
+        if using == "recogniser":
+            # ADR-098 decision 2: the fast pass; the model only when asked for.
+            if self._recogniser is None:
+                raise RecogniserUnavailableError("no recogniser is configured")
+            candidates = await run_recognition(
+                self._recogniser,
+                self._ontology,
+                self._candidates,
+                document_id=node.id,
+                text=text if isinstance(text, str) else "",
+                handling=event.handling,
+                principal=principal,
+            )
+            return EmailExtractionResult(document_id=node.id, candidates=candidates, delta=delta)
         profile = ExtractionProfile(
             [t.name for t in self._ontology.entity_types if t.name != DOCUMENT_TYPE]
         )

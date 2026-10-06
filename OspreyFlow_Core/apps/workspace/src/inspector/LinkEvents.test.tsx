@@ -192,6 +192,22 @@ describe("LinkEvents and extraction", () => {
     expect(list.textContent).toContain("Accepted");
   });
 
+  it("Extract entities asks the recogniser; Ask the model to extract asks the model (ADR-098)", async () => {
+    const { fetchMock } = serveWithExtraction();
+    mount({ onDelta: vi.fn() });
+    fireEvent.click(await screen.findByRole("button", { name: /Subject 1/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Extract entities" }));
+    await screen.findByRole("list", { name: "Entities found" });
+    fireEvent.click(screen.getByRole("button", { name: "Ask the model to extract" }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.filter(([u]) => String(u).endsWith("/extract"))).toHaveLength(2),
+    );
+    const bodies = fetchMock.mock.calls
+      .filter(([u]) => String(u).endsWith("/extract"))
+      .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
+    expect(bodies).toEqual([{ using: "recogniser" }, { using: "model" }]);
+  });
+
   it("does not offer extraction where nothing can take the delta", async () => {
     serveWithExtraction();
     mount();

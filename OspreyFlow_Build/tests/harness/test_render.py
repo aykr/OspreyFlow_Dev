@@ -200,7 +200,7 @@ def test_pull_mode_renders_owned_images_with_no_build_stanza_and_a_locked_digest
         update={"components": config.components.model_copy(update={"source_path": None})}
     )
     owned_services = {i.service for i in service_images(pull_config) if i.owned}
-    assert owned_services == {"workspace", "api", "ingest"}
+    assert owned_services == {"workspace", "api", "ingest", "ner"}  # ner: ADR-098 decision 2
 
     with pytest.raises(UnpinnedImagesError) as excinfo:
         render(pull_config, resolver=lambda _image: None)
@@ -746,7 +746,8 @@ def test_the_build_context_resolves_to_the_repository_root_from_the_output_direc
             f"{name}'s build context resolves to {context}, not the repository root — compose "
             "resolves it relative to the compose file"
         )
-        assert (context / spec["build"]["dockerfile"]).parent.name in {"api", "ingest", "workspace"}
+        owned = {"api", "ingest", "workspace", "ner"}
+        assert (context / spec["build"]["dockerfile"]).parent.name in owned
 
 
 def test_the_rendered_realm_carries_only_fields_keycloak_defines() -> None:
@@ -1359,3 +1360,30 @@ def test_the_writable_folder_is_the_one_the_conduit_writes_uploads_to() -> None:
     from harness.render import INGEST_UPLOAD_SUBDIR
 
     assert INGEST_UPLOAD_SUBDIR == UPLOAD_SUBDIR
+
+
+# --- the fast recogniser (ADR-098 decision 2) ----------------------------------------------------
+
+
+def test_the_recogniser_is_rendered_built_from_its_own_dockerfile_with_a_health_check(
+    config: OspreyConfig,
+) -> None:
+    compose = yaml.safe_load(render(config, allow_unpinned=True).artefacts["compose.yaml"])
+    ner = compose["services"]["ner"]
+    assert ner["healthcheck"]["test"]
+    image = next(i for i in service_images(config) if i.service == "ner")
+    assert image.dockerfile == "services/ner/Dockerfile"
+    # Not published: only the Conduit talks to it, on the internal network.
+    assert "ports" not in ner
+
+
+def test_the_conduit_is_told_where_the_recogniser_is_and_does_not_wait_on_it(
+    config: OspreyConfig,
+) -> None:
+    """The Conduit is told the sidecar's address (its adapter's default is the same, but a
+    rendered value is what an operator reads). It does not wait on it: without the recogniser
+    the rest of the Glass still works, and Extract entities says so and offers the model."""
+    compose = yaml.safe_load(render(config, allow_unpinned=True).artefacts["compose.yaml"])
+    api = compose["services"]["api"]
+    assert api["environment"]["OSPREY_RECOGNISER_URL"] == "http://ner:8000"
+    assert "ner" not in api["depends_on"]
