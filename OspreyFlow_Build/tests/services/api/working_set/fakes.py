@@ -167,8 +167,13 @@ class FakeGraphPort:
         candidate_count: int,
         *,
         hidden_node_ids: frozenset[NodeId] = frozenset(),
+        graph_edges: Sequence[Edge] = (),
     ) -> None:
         self.expand_result = expand_result
+        #: The graph's links for `edges_among` (ADR-098), which returns those with both ends in
+        #: the set and neither end hidden, as the real adapter refuses an edge to a hidden node.
+        self._graph_edges = list(graph_edges)
+        self.edges_among_requests: list[tuple[list[NodeId], Principal]] = []
         self.candidate_count = candidate_count
         self.expand_requests: list[ExpandRequest] = []
         self.candidate_count_requests: list[ExpandRequest] = []
@@ -194,6 +199,20 @@ class FakeGraphPort:
     async def expand(self, req: ExpandRequest, principal: Principal) -> Subgraph:
         self.expand_requests.append(req)
         return self.expand_result
+
+    async def edges_among(
+        self,
+        node_ids: Sequence[NodeId],
+        principal: Principal,
+        edge_types: list[str] | None = None,
+    ) -> list[Edge]:
+        self.edges_among_requests.append((list(node_ids), principal))
+        ids = set(node_ids) - self._hidden_node_ids
+        return [
+            e
+            for e in self._graph_edges
+            if e.source in ids and e.target in ids and (not edge_types or e.type in edge_types)
+        ]
 
     async def expand_candidate_count(self, req: ExpandRequest) -> int:
         self.candidate_count_requests.append(req)

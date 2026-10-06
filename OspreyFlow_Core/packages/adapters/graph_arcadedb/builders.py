@@ -8,6 +8,7 @@ added later, with no change to the callers in `adapter.py`.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -231,6 +232,29 @@ def _local_date_time(moment: datetime) -> str:
     25.5.1."""
     utc_naive = moment.astimezone(UTC).replace(tzinfo=None)
     return f'java.time.LocalDateTime.parse("{utc_naive.isoformat(timespec="milliseconds")}")'
+
+
+def render_edges_among_gremlin(
+    node_ids: Sequence[str],
+    access: AccessFilter,
+    principal: Principal,
+    edge_types: list[str] | None = None,
+) -> str:
+    """Every edge with both ends in `node_ids` (ADR-098 decision 1), each once: from each node in
+    the set, its outgoing edges, kept when their head is in the set too. The access step is on the
+    tail, the edge and the head, so a hidden edge, or an edge to a hidden node, leaves no trace."""
+    has_access = access.gremlin_has_step(principal)
+    ids = groovy_string_list_literal(list(node_ids))
+    label_filter = ""
+    if edge_types:
+        physical = [label for t in edge_types for label in physical_edge_labels(t)]
+        label_filter = f".hasLabel({groovy_args_literal(physical)})"
+    return (
+        f'g.V().has("id",within({ids})).{has_access}'
+        f".outE(){label_filter}.{has_access}"
+        f'.where(inV().has("id",within({ids})).{has_access})'
+        ".dedup().elementMap()"
+    )
 
 
 @dataclass(frozen=True)

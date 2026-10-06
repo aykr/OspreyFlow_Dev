@@ -68,6 +68,7 @@ from .builders import (
     SearchNodesBuilder,
     SuggestLocationsBuilder,
     SuggestNodesBuilder,
+    render_edges_among_gremlin,
     suggestion_scope,
 )
 from .bulk import BulkEdgeLoader, BulkTransport, GremlinBulkTransport
@@ -619,6 +620,19 @@ class GraphArcadeDBAdapter:
             nodes=list(nodes_by_id.values()),
             edges=[edge_from_element_map(r) for r in edge_records],
         )
+
+    async def edges_among(
+        self,
+        node_ids: Sequence[str],
+        principal: Principal,
+        edge_types: list[str] | None = None,
+    ) -> list[Edge]:
+        if len(set(node_ids)) < 2:
+            return []
+        records = await self._client.gremlin(
+            render_edges_among_gremlin(sorted(set(node_ids)), self._access, principal, edge_types)
+        )
+        return [edge_from_element_map(r) for r in records]
 
     async def expand_candidate_count(self, req: ExpandRequest) -> int:
         structural_step = self._access.gremlin_structural_step()

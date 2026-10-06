@@ -184,6 +184,17 @@ class ExpansionOutcome(BaseModel):
 
     delta: DeltaAdd
     filtered_count: int
+    #: ADR-098: whether the links among the expansion's nodes and the view were brought too.
+    #: `not_asked` past the automatic limits; `view_full` when they would have passed the cap, so
+    #: none was added (never some of them) and the canvas says so.
+    links_among: Literal["added", "not_asked", "view_full"] = "not_asked"
+
+
+class LinksAmongOutcome(BaseModel):
+    """`POST .../links-among` (ADR-098): the delta that draws the new links, and how many."""
+
+    delta: DeltaAdd
+    added: int
 
 
 class NodeNotInWorkingSetError(Exception):

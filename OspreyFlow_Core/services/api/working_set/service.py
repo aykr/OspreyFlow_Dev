@@ -78,6 +78,7 @@ from .models import (
     ExpansionOutcome,
     LimitExceeded,
     LimitExceededError,
+    LinksAmongOutcome,
     NodeNotInWorkingSetError,
     NothingToBranchError,
     PairwiseExplanation,
@@ -102,6 +103,13 @@ def _filtered_count(candidate_count: int, delivered_count: int) -> int:
     an adapter bug inverting that invariant becoming a *negative* reported
     count instead of a wrong-but-visible one."""
     return max(candidate_count - delivered_count, 0)
+
+
+#: ADR-098 decision 1: an expansion that adds at most this many new nodes, into a view of at most
+#: `AUTO_LINKS_MAX_VIEW_NODES`, also brings the links among its nodes and the view. Beyond either,
+#: the canvas offers *Show links among these*.
+AUTO_LINKS_MAX_NEW_NODES = 100
+AUTO_LINKS_MAX_VIEW_NODES = 2_000
 
 
 class WorkingSetService:
@@ -552,9 +560,51 @@ class WorkingSetService:
         subgraph = await self._graph.expand(req, principal)
         candidate_count = await self._graph.expand_candidate_count(req)
         filtered_count = _filtered_count(candidate_count, len(subgraph.nodes))
-        return await self._add(
+        # ADR-098: the links the expansion did not walk along, among its nodes and the view, when
+        # it is small enough to ask; all of them or, if they would pass the cap, none.
+        existing = await self._store.node_ids(investigation_id)
+        new_count = len({n.id for n in subgraph.nodes} - existing)
+        view = existing | {n.id for n in subgraph.nodes}
+        if new_count > AUTO_LINKS_MAX_NEW_NODES or len(view) > AUTO_LINKS_MAX_VIEW_NODES:
+            outcome = await self._add(
+                investigation_id, subgraph.nodes, subgraph.edges, filtered_count=filtered_count
+            )
+            return outcome.model_copy(update={"links_among": "not_asked"})
+        among = await self._graph.edges_among(sorted(view), principal)
+        walked = {e.id for e in subgraph.edges}
+        extra = [e for e in among if e.id not in walked]
+        try:
+            outcome = await self._add(
+                investigation_id,
+                subgraph.nodes,
+                [*subgraph.edges, *extra],
+                filtered_count=filtered_count,
+            )
+            return outcome.model_copy(update={"links_among": "added"})
+        except LimitExceededError:
+            if not extra:
+                raise
+        outcome = await self._add(
             investigation_id, subgraph.nodes, subgraph.edges, filtered_count=filtered_count
         )
+        return outcome.model_copy(update={"links_among": "view_full"})
+
+    async def links_among(
+        self,
+        investigation_id: str,
+        principal: Principal,
+        node_ids: Sequence[NodeId] | None = None,
+    ) -> LinksAmongOutcome:
+        """`POST .../links-among` (ADR-098): the links among the named nodes that are in the view,
+        or among the whole view, added all or none against the cap (rule 2). The graph read is
+        access-filtered for `principal` in the adapter (rule 3)."""
+        view = await self._store.node_ids(investigation_id)
+        ids = view if node_ids is None else view & set(node_ids)
+        among = await self._graph.edges_among(sorted(ids), principal)
+        existing_edges = await self._store.edge_ids(investigation_id)
+        new = [e for e in among if e.id not in existing_edges]
+        outcome = await self._add(investigation_id, [], new, filtered_count=0)
+        return LinksAmongOutcome(delta=outcome.delta, added=len(new))
 
     async def expand_preview(
         self, investigation_id: str, req: ExpandRequest, principal: Principal

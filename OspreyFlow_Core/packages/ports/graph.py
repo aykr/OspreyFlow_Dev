@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Literal, Protocol, runtime_checkable
 
 from schemas.domain import (
+    Edge,
     EdgeId,
     EdgeWrite,
     ExpandRequest,
@@ -217,6 +218,19 @@ class GraphPort(Protocol):
         ...
 
     async def expand(self, req: ExpandRequest, principal: Principal) -> Subgraph: ...
+
+    async def edges_among(
+        self,
+        node_ids: Sequence[NodeId],
+        principal: Principal,
+        edge_types: list[str] | None = None,
+    ) -> list[Edge]:
+        """Every edge whose two ends are both in `node_ids` (ADR-098 decision 1): the links among
+        what is on screen, which an expansion (the seed's own links only) leaves out. Each edge
+        once. Access-filtered in the adapter (rule 3): an edge the principal may not see, or one
+        whose other end they may not see, is absent and counted nowhere. `edge_types` narrows to
+        those logical types. An empty or one-node set has none."""
+        ...
 
     async def expand_candidate_count(self, req: ExpandRequest) -> int:
         """The unfiltered half of `Subgraph.filtered_count`'s comparison

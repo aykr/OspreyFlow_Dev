@@ -74,8 +74,8 @@ from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from adapters.media_objectstore import MediaStoreConfig, ObjectStoreMediaStore
 from adapters.model_litellm.adapter import ModelLiteLLMAdapter
-from adapters.model_litellm.errors import ExtractionFailedError, ModelUnavailableError
 from adapters.model_litellm.client import LiteLLMClient, LiteLLMConfig
+from adapters.model_litellm.errors import ExtractionFailedError, ModelUnavailableError
 from conduit_common.identity import new_edge_id, new_id, now_utc
 from geo.bilinear import ControlPoint
 from geo.image_dimensions import (
@@ -387,6 +387,7 @@ from .working_set.models import (
     DeltaSnapshot,
     ExpansionOutcome,
     LimitExceededError,
+    LinksAmongOutcome,
     NodeNotInWorkingSetError,
     NothingToBranchError,
     SameNodeAssertionError,
@@ -2004,6 +2005,45 @@ async def expand(
         resolved_query=body.request.model_dump(mode="json"),
         result_cardinality=len(outcome.delta.nodes) + len(outcome.delta.edges),
         justification=body.justification,
+    )
+    return outcome
+
+
+class LinksAmongBody(BaseModel):
+    """ADR-098: the nodes whose links among each other to add; left out, every node in the view."""
+
+    node_ids: list[NodeId] | None = None
+
+
+@app.post("/v1/investigations/{investigation_id}/links-among")
+async def links_among_route(
+    investigation: InvestigationEditorDep,
+    body: LinksAmongBody,
+    principal: PrincipalDep,
+    working_set: WorkingSetDep,
+    history: HistoryDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+) -> LinksAmongOutcome:
+    """The links among nodes already in the view (ADR-098 decision 1), which an expansion leaves
+    out: all of them, or none and `limit_exceeded` past the cap (rule 2). Access-filtered in the
+    adapter for this analyst (rule 3); Editor, since it adds to the case's working set."""
+    outcome = await working_set.links_among(investigation.id, principal, node_ids=body.node_ids)
+    await publish_delta(valkey, investigation.id, outcome.delta)
+    await _record_history_step(
+        working_set,
+        history,
+        investigation.id,
+        seq=outcome.delta.seq,
+        label=f"Showed {outcome.added} link(s) among the nodes in view",
+        principal=principal,
+    )
+    await audit.record(
+        principal=principal,
+        action="links_among",
+        investigation_id=investigation.id,
+        resolved_query=body.model_dump(mode="json"),
+        result_cardinality=outcome.added,
     )
     return outcome
 

@@ -2566,3 +2566,91 @@ async def test_a_hub_receiving_many_edges_across_batches_stores_each_edge_once(
             assert len(stored) == len(set(stored)), "an edge id is stored more than once"
             assert sorted(stored) == sorted(e.id for e in expected)
             assert (await adapter.neighbourhood_stats(hub, CLEARED)).degree == len(expected)
+
+
+# --- edges_among: the links among a set of nodes (ADR-098 decision 1) -------------------------
+
+
+async def test_edges_among_gives_the_links_between_leaves_that_an_expansion_leaves_out(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The owner's star (ADR-098): expanding a hub returns the hub's own links only, so the link
+    between two of its leaves is never drawn. `edges_among` over the hub and its leaves returns it,
+    and returns no link that leaves the set."""
+    async with factory.context() as adapter:
+        (hub, a, b, outside), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL") for _ in range(4)], []
+        )
+        _, (hub_a, hub_b, a_b, b_out) = await _write(
+            adapter,
+            [],
+            [
+                _edge("ASSOCIATE_OF", hub, a, classification="OFFICIAL"),
+                _edge("ASSOCIATE_OF", hub, b, classification="OFFICIAL"),
+                _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL"),
+                _edge("ASSOCIATE_OF", b, outside, classification="OFFICIAL"),
+            ],
+        )
+        expanded = await adapter.expand(ExpandRequest(node_ids=[hub], depth=1), CLEARED)
+        assert a_b not in {e.id for e in expanded.edges}
+
+        among = await adapter.edges_among([hub, a, b], CLEARED)
+        assert {e.id for e in among} == {hub_a, hub_b, a_b}
+        assert b_out not in {e.id for e in among}
+
+
+async def test_unauthorised_edges_among_shows_no_hidden_link_and_no_link_to_a_hidden_node(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Rule 3: a SECRET link between two OFFICIAL nodes, and an OFFICIAL link to a SECRET node,
+    leave no trace for an OFFICIAL analyst; a SECRET-cleared one sees both."""
+    async with factory.context() as adapter:
+        (a, b, secret_node), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL"),
+                _node("Person", classification="OFFICIAL"),
+                _node("Person", classification="SECRET"),
+            ],
+            [],
+        )
+        _, (visible, hidden_link, to_hidden) = await _write(
+            adapter,
+            [],
+            [
+                _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL"),
+                _edge("FAMILY_OF", a, b, classification="SECRET"),
+                _edge("ASSOCIATE_OF", b, secret_node, classification="OFFICIAL"),
+            ],
+        )
+        seen = {e.id for e in await adapter.edges_among([a, b, secret_node], OFFICIAL)}
+        assert seen == {visible}
+        cleared = {e.id for e in await adapter.edges_among([a, b, secret_node], CLEARED)}
+        assert cleared == {visible, hidden_link, to_hidden}
+
+
+async def test_edges_among_filters_to_the_declared_edge_types(factory: GraphAdapterFactory) -> None:
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL") for _ in range(2)], []
+        )
+        _, (assoc, family) = await _write(
+            adapter,
+            [],
+            [
+                _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL"),
+                _edge("FAMILY_OF", a, b, classification="OFFICIAL"),
+            ],
+        )
+        only = await adapter.edges_among([a, b], CLEARED, edge_types=["FAMILY_OF"])
+        assert {e.id for e in only} == {family}
+        assert assoc not in {e.id for e in only}
+
+
+async def test_edges_among_an_empty_or_single_node_set_is_empty(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (a,), _ = await _write(adapter, [_node("Person", classification="OFFICIAL")], [])
+        assert await adapter.edges_among([], CLEARED) == []
+        assert await adapter.edges_among([a], CLEARED) == []

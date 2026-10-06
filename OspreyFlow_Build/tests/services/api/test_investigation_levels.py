@@ -78,6 +78,11 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("POST", P + "/documents/{document_id}/extract"): E,
     ("POST", P + "/documents/{document_id}/candidates/{candidate_id}/accept"): E,
     ("POST", P + "/links/{edge_id}/events/{event_id}/candidates/{candidate_id}/accept"): E,
+    # Owner, 6 October 2026: a finding rejected writes nothing, but changes the case's review list.
+    ("POST", P + "/documents/{document_id}/candidates/{candidate_id}/reject"): E,
+    ("POST", P + "/links/{edge_id}/events/{event_id}/candidates/{candidate_id}/reject"): E,
+    # ADR-098: adds links to the case's working set.
+    ("POST", P + "/links-among"): E,
     ("POST", P + "/export"): E,
     ("POST", P + "/sites"): E,
     ("GET", P + "/sites/{site_id}"): V,
