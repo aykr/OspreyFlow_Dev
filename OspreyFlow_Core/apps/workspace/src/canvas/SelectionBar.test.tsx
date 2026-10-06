@@ -51,3 +51,18 @@ describe("SelectionBar", () => {
     expect(screen.queryByRole("button", { name: "Expand" })).toBeNull();
   });
 });
+
+// ADR-098 decision 1: the links among the selected nodes, on demand.
+describe("SelectionBar: Show links among these", () => {
+  it("is offered for two or more selected nodes and calls back", () => {
+    const onLinksAmong = vi.fn();
+    render(<SelectionBar count={3} onLinksAmong={onLinksAmong} onRemove={() => {}} onClear={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Show links among these" }));
+    expect(onLinksAmong).toHaveBeenCalledTimes(1);
+  });
+
+  it("is not offered for one node, which has no links among itself", () => {
+    render(<SelectionBar count={1} onLinksAmong={() => {}} onRemove={() => {}} onClear={() => {}} />);
+    expect(screen.queryByRole("button", { name: "Show links among these" })).toBeNull();
+  });
+});

@@ -49,7 +49,7 @@ describe("LayoutMenu", () => {
 
   it("can arrange again with the layout in use, without changing it", () => {
     const h = setup("radial");
-    fireEvent.click(screen.getByRole("button", { name: "Arrange again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Arrange" }));
     expect(h.onArrange).toHaveBeenCalledOnce();
     expect(h.onChange).not.toHaveBeenCalled();
   });

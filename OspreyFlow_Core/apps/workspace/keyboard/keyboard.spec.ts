@@ -1222,7 +1222,7 @@ test("a very large expansion can be accepted by keyboard, and only then does it 
 });
 
 // Seen 3 October 2026 while testing Communities: with a node focused on the canvas, pressing Enter on
-// a button inside the canvas (Communities, Arrange again, Collapse all, any other toolbar button)
+// a button inside the canvas (Communities, Arrange, Collapse all, any other toolbar button)
 // also reached the canvas's own key handler, which read it as "expand the focused node" and asked
 // the Conduit. A key pressed on a control belongs to that control. Not a registry action: it proves
 // that keys on a button do *not* act on the canvas.
@@ -1754,6 +1754,26 @@ test("Grid in the Show group turns the canvas grid off and on by keyboard, and t
   await expect(page.getByRole("button", { name: "Grid" })).toHaveAttribute("aria-pressed", "true");
   expect(await gridImage()).toContain("linear-gradient");
   registerCovered("CANVAS_ACTIONS", "grid-toggles-by-keyboard");
+});
+
+test("Show links among all, in the canvas toolbar, asks for the links among every node in the view (ADR-098)", async ({ page }) => {
+  let body: { node_ids: string[] | null } | undefined;
+  await page.route("**/*/investigations/*/links-among", async (route) => {
+    body = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ added: 1, delta: { seq: 8, op: "add", nodes: [], edges: [] } }),
+    });
+  });
+  await page.goto("/keyboard/harness.html");
+  const button = page.getByRole("button", { name: "Show links among all" });
+  await button.focus();
+  await expect(button).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => body).toEqual({ node_ids: null });
+  await expect(page.getByText("1 link added among these.")).toBeVisible();
+  registerCovered("CANVAS_ACTIONS", "show-links-among-all-by-keyboard");
 });
 
 test("every registered keyboard action has its own proving test case above", () => {

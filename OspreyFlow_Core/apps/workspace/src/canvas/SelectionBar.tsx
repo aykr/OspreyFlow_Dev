@@ -8,13 +8,15 @@ export interface SelectionBarProps {
   onExpand?: () => void;
   /** Send the selection to a new case (ADR-084). Absent: this surface cannot branch. */
   onBranch?: () => void;
+  /** ADR-098: draw the links among the selected nodes. Offered for two or more. */
+  onLinksAmong?: () => void;
   onRemove: () => void;
   onClear: () => void;
 }
 
 const COUNT = new Intl.NumberFormat("en-GB");
 
-export function SelectionBar({ count, onExpand, onBranch, onRemove, onClear }: SelectionBarProps) {
+export function SelectionBar({ count, onExpand, onBranch, onLinksAmong, onRemove, onClear }: SelectionBarProps) {
   if (count === 0) return null;
   return (
     <div
@@ -34,6 +36,11 @@ export function SelectionBar({ count, onExpand, onBranch, onRemove, onClear }: S
       {onExpand && (
         <button type="button" className="btn btn--quiet" onClick={onExpand}>
           Expand
+        </button>
+      )}
+      {onLinksAmong && count > 1 && (
+        <button type="button" className="btn btn--quiet" onClick={onLinksAmong}>
+          Show links among these
         </button>
       )}
       {onBranch && (

@@ -94,6 +94,7 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   "legend-folds-by-keyboard",
   "show-previous-positions-by-keyboard",
   "grid-toggles-by-keyboard",
+  "show-links-among-all-by-keyboard",
   "focus-establishes-ring",
   "tab-leaves-the-canvas",
   "ctrl-arrow-cycles-ring",
@@ -372,6 +373,8 @@ export const SELECTION_ACTIONS = defineActionRegistry("SELECTION_ACTIONS", [
   "expand-the-selection-from-the-selection-bar",
   "centre-on-a-selected-node-from-the-list",
   "remove-a-node-from-the-selection-from-the-list",
+  // ADR-098 decision 1.
+  "show-links-among-the-selection-from-the-selection-bar",
 ] as const);
 
 /** Files added straight to a case (ADR-094 step 3): from the strip over the canvas, standing alone,

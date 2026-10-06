@@ -48,8 +48,8 @@ export function LayoutMenu({ mode, onChange, bubbleKey = "type", onBubbleKeyChan
           ))}
         </select>
       )}
-      <button type="button" className="radial-menu__item" onClick={onArrange}>
-        Arrange again
+      <button type="button" className="radial-menu__item" title="Arrange again with this layout" onClick={onArrange}>
+        Arrange
       </button>
     </span>
   );

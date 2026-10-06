@@ -453,13 +453,20 @@ Reachable by keyboard (`keyboard/keyboard.spec.ts`); the painted grid is read fr
 **The canvas toolbar (ADR-097 step 2, design review item 12).** The canvas's own tools are one docked
 row along its top edge, *Canvas tools* (32px, `--surface-panel`, a hairline below and no shadow:
 DESIGN.md §6), in labelled groups: **Select** (the lasso), **Layout** (the layout, *Bubbles by* for
-Clustered bubbles, *Arrange again*), **Show** — one segmented control of *Communities* (pressed while on),
+Clustered bubbles, *Arrange*, which arranges again with the layout chosen), **Show** — one segmented control of *Communities* (pressed while on),
 *Labels* and *Icons*, followed while Communities is on by what it found and *Collapse all* / *Expand
-all* — and, at the right-hand end, **View** (*Hide selected link*, *Show hidden links (n)*, *Clear view*,
+all* — and, at the right-hand end, **View** (*Hide selected link*, *Show hidden links (n)*, *Show links among all*, *Clear view*,
 *Add files*). A menu's panel and *Clear view*'s confirmation are laid over the canvas under their
 button, as overlays with a shadow. The toolbar's controls are quiet buttons at `--fs-12`; a pressed or
 open one is primary text with a 2px underline. Checked in the browser (`keyboard/canvas-look.spec.ts`:
 the groups, one row, no shadow); each control keeps its own keyboard case.
+
+**Links among what is on screen (ADR-098 decision 1).** An expansion of at most 100 new nodes into a view
+of at most 2,000 also draws the links among its nodes and the rest of the view, so expanding a person shows
+who among their correspondents wrote to each other, not only a star; when those links would pass the working
+set's cap none of them is drawn and the canvas says so. For larger views, *Show links among these* on the
+selection bar (two or more selected) and *Show links among all* in the View group draw them on demand, all
+or none, and say how many (`keyboard/selection.spec.ts`, `keyboard/keyboard.spec.ts`).
 
 ### 3.1c An expansion that adds nothing says so (ADR-077)
 

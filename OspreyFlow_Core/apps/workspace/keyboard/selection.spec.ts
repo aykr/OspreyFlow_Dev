@@ -63,6 +63,24 @@ test("the selection bar's Remove from view takes the selected nodes out, through
   registerCovered("SELECTION_ACTIONS", "remove-the-selection-from-the-selection-bar");
 });
 
+test("the selection bar's Show links among these asks for the links among the selected nodes (ADR-098)", async ({ page }) => {
+  let body: { node_ids: string[] | null } | null = null;
+  await page.route("**/*/investigations/*/links-among", async (route) => {
+    body = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ added: 0, delta: { seq: 8, op: "add", nodes: [], edges: [] } }),
+    });
+  });
+  const second = await selectTwo(page);
+  await page.getByRole("toolbar", { name: "Selection" }).getByRole("button", { name: "Show links among these" }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => body?.node_ids?.slice().sort()).toEqual(["n0", second].sort());
+  await expect(page.getByText("No more links among these.")).toBeVisible();
+  registerCovered("SELECTION_ACTIONS", "show-links-among-the-selection-from-the-selection-bar");
+});
+
 test("the selection bar's Expand asks to expand each selected node", async ({ page }) => {
   const asked: string[] = [];
   page.on("request", (request) => {

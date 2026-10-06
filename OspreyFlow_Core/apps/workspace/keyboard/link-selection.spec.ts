@@ -67,7 +67,7 @@ test("the buttons over the canvas can be clicked with the mouse", async ({ page 
 
   await page.getByRole("combobox", { name: "Layout" }).selectOption("circular", { timeout: 3000 });
   await expect(page.getByRole("combobox", { name: "Layout" })).toHaveValue("circular");
-  await page.getByRole("button", { name: "Arrange again" }).click({ timeout: 3000 });
+  await page.getByRole("button", { name: "Arrange", exact: true }).click({ timeout: 3000 });
 });
 
 test("the large-expansion prompt's buttons can be clicked with the mouse", async ({ page }) => {

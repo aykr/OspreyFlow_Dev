@@ -11,6 +11,8 @@ export interface ViewActionsProps {
   onShowHiddenLinks?: () => void;
   /** ADR-094: add files to the case, standing alone. Absent: not offered. */
   onAddFiles?: () => void;
+  /** ADR-098: draw the links among every node in the view. Absent: not offered. */
+  onLinksAmongAll?: () => void;
 }
 
 /**
@@ -26,6 +28,7 @@ export function ViewActions({
   onHideLink,
   onShowHiddenLinks,
   onAddFiles,
+  onLinksAmongAll,
 }: ViewActionsProps) {
   const [confirming, setConfirming] = useState(false);
   const total = nodeCount.toLocaleString("en-GB");
@@ -40,6 +43,11 @@ export function ViewActions({
         {hiddenLinkCount > 0 && (
           <button type="button" className="radial-menu__item" onClick={onShowHiddenLinks}>
             Show hidden links ({hiddenLinkCount})
+          </button>
+        )}
+        {onLinksAmongAll && nodeCount > 1 && (
+          <button type="button" className="radial-menu__item" onClick={onLinksAmongAll}>
+            Show links among all
           </button>
         )}
         <button

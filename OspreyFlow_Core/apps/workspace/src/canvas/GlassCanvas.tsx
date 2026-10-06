@@ -82,6 +82,7 @@ import {
   SolidArrowProgram,
 } from "./dottedEdgePrograms";
 import { settledAnchors } from "./settledAnchor";
+import { expansionLinksNotice, linksAmongNotice, showLinksAmong } from "./linksAmong";
 import { CanvasLegend } from "./CanvasLegend";
 import { ZoomControls } from "./ZoomControls";
 
@@ -1897,6 +1898,24 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       });
       store.getState().applyDelta(outcome.delta);
       if (emptyNotice !== null) setActionError({ x, y, message: emptyNotice, tone: "notice" });
+      // ADR-098: an expansion small enough brings the links among its nodes and the view; when
+      // they would have passed the cap, none of them is added and the analyst is told.
+      const linksNotice = expansionLinksNotice(outcome.links_among as string | undefined);
+      if (emptyNotice === null && linksNotice !== null) setActionError({ x, y, message: linksNotice, tone: "notice" });
+    }
+
+    // ADR-098: the links among the given nodes in the view, or among all of it.
+    async function linksAmongOnCanvas(nodeIds: readonly string[] | null): Promise<void> {
+      if (!apiBaseUrl || !bearerToken || !investigationId) return;
+      const box = containerRef.current?.getBoundingClientRect();
+      const [x, y] = box ? [box.width / 2, box.height / 2] : [0, 0];
+      try {
+        const result = await showLinksAmong(apiBaseUrl, bearerToken, investigationId, nodeIds);
+        store.getState().applyDelta(result.delta);
+        setActionError({ x, y, message: linksAmongNotice(result.added), tone: "notice" });
+      } catch (err) {
+        setActionError({ x, y, message: err instanceof Error ? err.message : String(err) });
+      }
     }
 
     // `08_ACCEPTANCE_SCENARIOS.md` B11: "a SAME_AS with
@@ -2761,6 +2780,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               onHideLink={hideSelectedLink}
               onShowHiddenLinks={() => setHiddenEdges(new Set())}
               onAddFiles={apiBaseUrl && bearerToken && investigationId ? () => setAddingFiles({}) : undefined}
+              onLinksAmongAll={apiBaseUrl && bearerToken && investigationId ? () => void linksAmongOnCanvas(null) : undefined}
             />
           </div>
         </div>
@@ -2923,6 +2943,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             })();
           }}
           onBranch={onBranchCreated ? () => void branchSelected() : undefined}
+          onLinksAmong={() => void linksAmongOnCanvas(Array.from(selected))}
           onRemove={() => void removeNodeIds(Array.from(selected))}
           onClear={() => {
             setSelected(new Set());
