@@ -144,3 +144,39 @@ describe("SidePanelStack headers (ADR-097 step 1, design review item 8)", () => 
     expect(slotsOf(container)).toEqual(["inspector", "metrics", "query-builder"]);
   });
 });
+
+// Owner, 6 October 2026: "because the sections, Query Builder, Inspector and Metrics have fixed the
+// navigation is still cumbersome, can the section themselves collapse?"
+describe("SidePanelStack folding a whole panel", () => {
+  const slot = (container: HTMLElement, id: string) => container.querySelector<HTMLElement>(`[data-panel-slot="${id}"]`)!;
+
+  it("folds a panel from its name in the header, keeping its contents in the page, and gives its room to the rest", () => {
+    const { container, getByRole, getByText } = render(<SidePanelStack panels={panels} />);
+    const toggle = getByRole("button", { name: "Metrics" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    // Still mounted, so nothing half-done in it is lost; not shown.
+    expect(getByText("Metrics body").closest("[data-panel-body]")!.hasAttribute("hidden")).toBe(true);
+    // A folded panel is its header's height; an open one shares what is left.
+    expect(slot(container, "metrics").style.flex).toBe("0 0 auto");
+    expect(slot(container, "inspector").style.flex).toBe("1 1 0px");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(getByText("Metrics body").closest("[data-panel-body]")!.hasAttribute("hidden")).toBe(false);
+  });
+
+  it("remembers what is folded in this browser", () => {
+    const first = render(<SidePanelStack panels={panels} />);
+    fireEvent.click(first.getByRole("button", { name: "Inspector" }));
+    first.unmount();
+    const again = render(<SidePanelStack panels={panels} />);
+    expect(again.getByRole("button", { name: "Inspector" }).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("with the bottom panel folded, the last open one takes the remaining height", () => {
+    const { container, getByRole } = render(<SidePanelStack panels={panels} />);
+    fireEvent.click(getByRole("button", { name: "Query builder" }));
+    expect(slot(container, "metrics").style.flex).toBe("1 1 0px");
+  });
+});

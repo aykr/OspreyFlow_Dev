@@ -100,6 +100,26 @@ test("Alt+Up and Alt+Down on a panel's header move it, with no menu opened", asy
   registerCovered(REGISTRY, "move-a-side-panel-with-alt-arrows-by-keyboard");
 });
 
+test("a panel folds and opens from its name in the header by Enter, and the others take its room", async ({ page }) => {
+  await page.goto(URL);
+  const metrics = page.locator('[data-panel-slot="metrics"]');
+  const toggle = () => page.locator('[data-panel-slot="metrics"] .side-panel-header').getByRole("button", { name: "Metrics", exact: true });
+  const before = (await metrics.boundingBox())!.height;
+  await toggle().focus();
+  await expect(toggle()).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(toggle()).toHaveAttribute("aria-expanded", "false");
+  const folded = (await metrics.boundingBox())!.height;
+  expect(folded).toBeLessThan(40); // the header alone
+  expect(folded).toBeLessThan(before);
+  await page.reload();
+  await expect(toggle()).toHaveAttribute("aria-expanded", "false");
+  await toggle().focus();
+  await page.keyboard.press("Enter");
+  await expect(toggle()).toHaveAttribute("aria-expanded", "true");
+  registerCovered(REGISTRY, "fold-a-side-panel-by-keyboard");
+});
+
 async function focusSash(page: Page, name: string) {
   const sash = page.getByRole("separator", { name });
   await sash.focus();

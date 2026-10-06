@@ -1733,6 +1733,29 @@ test("without reduced motion there is no Show previous positions control: the mo
   await expect(page.getByRole("button", { name: "Show previous positions" })).toHaveCount(0);
 });
 
+// --- The grid switch (owner, 6 October 2026: "I need the ability to turn the grid lines off") -----
+
+test("Grid in the Show group turns the canvas grid off and on by keyboard, and the choice survives a reload", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  const gridImage = () => canvas.evaluate((el) => getComputedStyle(el).backgroundImage);
+  const grid = page.getByRole("button", { name: "Grid" });
+  await expect(grid).toHaveAttribute("aria-pressed", "true");
+  expect(await gridImage()).toContain("linear-gradient");
+  await tabTo(page, grid);
+  await page.keyboard.press("Enter");
+  await expect(grid).toHaveAttribute("aria-pressed", "false");
+  expect(await gridImage()).toBe("none");
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Grid" })).toHaveAttribute("aria-pressed", "false");
+  expect(await gridImage()).toBe("none");
+  await tabTo(page, page.getByRole("button", { name: "Grid" }));
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "Grid" })).toHaveAttribute("aria-pressed", "true");
+  expect(await gridImage()).toContain("linear-gradient");
+  registerCovered("CANVAS_ACTIONS", "grid-toggles-by-keyboard");
+});
+
 test("every registered keyboard action has its own proving test case above", () => {
   assertAllCovered("CANVAS_ACTIONS", CANVAS_ACTIONS);
 });

@@ -84,6 +84,9 @@ import {
 import { settledAnchors } from "./settledAnchor";
 import { CanvasLegend } from "./CanvasLegend";
 import { ZoomControls } from "./ZoomControls";
+
+/** Where the canvas grid's on or off is kept, in this browser only. */
+const GRID_KEY = "ospreyflow.canvas-grid";
 import { PreviousPositionsOverlay, type PreviousPosition } from "./PreviousPositionsOverlay";
 import { prefersReducedMotion } from "../motion/reducedMotion";
 import {
@@ -528,6 +531,24 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // Under reduced motion, where the nodes were before the last re-layout, and whether that is shown.
     const [previousPositions, setPreviousPositions] = useState<readonly PreviousPosition[] | null>(null);
     const [showPrevious, setShowPrevious] = useState(false);
+    // The measurement grid (DESIGN.md §9 exception 4) can be switched off (owner, 6 October 2026);
+    // the choice is this browser's, like the theme.
+    const [gridOn, setGridOn] = useState<boolean>(() => {
+      try {
+        return localStorage.getItem(GRID_KEY) !== "off";
+      } catch {
+        return true;
+      }
+    });
+    const toggleGrid = () =>
+      setGridOn((on) => {
+        try {
+          localStorage.setItem(GRID_KEY, on ? "off" : "on");
+        } catch {
+          // Private window or blocked storage: the choice lasts for this page.
+        }
+        return !on;
+      });
     // Re-render when the working set changes, so the view's node count stays current.
     const workingSetSeq = useStore(store, (s) => s.seq);
 
@@ -2615,7 +2636,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           setFocused(first);
           onSelectionChange?.([first]);
         }}
-        className="network-canvas"
+        className={gridOn ? "network-canvas" : "network-canvas network-canvas--no-grid"}
         style={{
           width: "100%",
           height: "100%",
@@ -2692,6 +2713,15 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             <span className="canvas-toolbar__label" aria-hidden="true">Show</span>
             <div role="group" aria-label="Show" className="segmented canvas-toolbar__show">
               <CommunitiesToggle on={communitiesOn} onToggle={() => setCommunitiesOn((v) => !v)} />
+              <button
+                type="button"
+                className="radial-menu__item"
+                aria-pressed={gridOn}
+                title={gridOn ? "Hide the grid" : "Show the grid"}
+                onClick={toggleGrid}
+              >
+                Grid
+              </button>
               {previousPositions && (
                 // `02_GLASS_FRONTEND.md` §3.4: present under reduced motion once something has moved.
                 <button

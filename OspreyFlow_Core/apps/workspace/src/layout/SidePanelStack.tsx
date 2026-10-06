@@ -4,6 +4,9 @@
 // move the panel too. Those are the keyboard routes (rule 13). Dropping a dragged handle on another
 // slot puts the dragged panel at that slot's place.
 //
+// A panel folds whole from its name in the header (owner, 6 October 2026): its contents stay
+// mounted, its height goes to the panels still open, and what is folded is kept in this browser.
+//
 // A button that cannot act (the top panel's Move up, the bottom panel's Move down) is marked
 // `aria-disabled` rather than `disabled`, so it keeps focus: the button an analyst has just pressed
 // to move a panel to the top must not throw their focus away as its own result.
@@ -21,8 +24,32 @@ export interface SidePanelSlot {
 }
 
 
+const FOLDED_KEY = "ospreyflow.side-panels-folded";
+
+function loadFolded(): Set<SidePanelId> {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(FOLDED_KEY) ?? "[]");
+    return new Set(Array.isArray(raw) ? (raw.filter((v) => typeof v === "string") as SidePanelId[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+
 export function SidePanelStack({ panels }: { panels: SidePanelSlot[] }) {
   const order = useSidePanelOrder();
+  const [folded, setFolded] = useState<Set<SidePanelId>>(loadFolded);
+  const toggleFolded = (id: SidePanelId) =>
+    setFolded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      try {
+        localStorage.setItem(FOLDED_KEY, JSON.stringify([...next]));
+      } catch {
+        // Private window or blocked storage: kept for this page only.
+      }
+      return next;
+    });
   const { panelHeights } = useLayoutSizes();
   const dragging = useRef<SidePanelId | null>(null);
   const [arranging, setArranging] = useState<SidePanelId | null>(null);
@@ -42,7 +69,7 @@ export function SidePanelStack({ panels }: { panels: SidePanelSlot[] }) {
         ? prev
         : next,
     );
-  }, [order, panelHeights, panels]);
+  }, [order, panelHeights, panels, folded]);
   const shown = order.flatMap((id) => {
     const panel = panels.find((p) => p.id === id);
     return panel ? [panel] : [];
@@ -70,8 +97,11 @@ export function SidePanelStack({ panels }: { panels: SidePanelSlot[] }) {
         const lower = panel.name.toLowerCase();
         const first = index === 0;
         const last = index === shown.length - 1;
+        const isFolded = folded.has(panel.id);
+        // The last panel still open takes what is left, whatever height it was given.
+        const lastOpen = shown.filter((p) => !folded.has(p.id)).at(-1)?.id === panel.id;
         const own = panelHeights[panel.id];
-        const sized = own !== undefined && !last;
+        const sized = own !== undefined && !lastOpen;
         return (
           <div
             key={panel.id}
@@ -84,10 +114,10 @@ export function SidePanelStack({ panels }: { panels: SidePanelSlot[] }) {
             style={{
               display: "flex",
               flexDirection: "column",
-              height: sized ? own : undefined,
-              flex: sized ? "0 0 auto" : "1 1 0",
-              minHeight: MIN_PANEL_HEIGHT,
-              overflow: "auto",
+              height: !isFolded && sized ? own : undefined,
+              flex: isFolded || sized ? "0 0 auto" : "1 1 0",
+              minHeight: isFolded ? undefined : MIN_PANEL_HEIGHT,
+              overflow: isFolded ? "hidden" : "auto",
             }}
           >
             <div
@@ -117,7 +147,18 @@ export function SidePanelStack({ panels }: { panels: SidePanelSlot[] }) {
               >
                 ⠿
               </span>
-              <span className="side-panel-header__name">{panel.name}</span>
+              <button
+                type="button"
+                className="side-panel-header__name side-panel-header__toggle"
+                aria-expanded={!isFolded}
+                title={isFolded ? `Show the ${lower}` : `Fold the ${lower}`}
+                onClick={() => toggleFolded(panel.id)}
+              >
+                <svg className="side-panel-header__chevron" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+                  <path d="M3 2l4 3-4 3" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                </svg>
+                {panel.name}
+              </button>
               <button
                 type="button"
                 className="side-panel-header__menu"
@@ -153,8 +194,10 @@ export function SidePanelStack({ panels }: { panels: SidePanelSlot[] }) {
                 </button>
               </span>
             </div>
-            {panel.content}
-            {!last && (
+            <div data-panel-body="" hidden={isFolded} style={{ display: isFolded ? "none" : "contents" }}>
+              {panel.content}
+            </div>
+            {!last && !isFolded && (
               <Sash
                 label={`Resize the ${lower}`}
                 orientation="horizontal"

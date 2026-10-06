@@ -246,6 +246,12 @@ server and is not part of the case; a panel the current view does not draw keeps
 returns, and a stored order can never lose or duplicate a panel. The timeline is not part of the set and
 nothing floats. Both routes are reachable by keyboard (`keyboard/panel-frames.spec.ts`).
 
+**Folding a whole panel (owner, 6 October 2026).** The panel's name in its header is a disclosure button
+(a chevron, `aria-expanded`): pressed, the panel folds to its header and its height goes to the panels still
+open; the last panel still open takes what is left. A folded panel's contents stay mounted, so nothing
+half-written in it is lost. What is folded is kept in this browser, beside the order. Reachable by keyboard
+(`keyboard/panel-frames.spec.ts`).
+
 **Each panel folds into parts (ADR-096).** The Inspector, the Query builder and the Metrics panel each
 have their own accordion: every part sits in a hairline box (`--border-subtle`, `--r-control`) under a
 header row (`--fs-12` 600, a chevron on the left that turns when open), and a part folds within its own
@@ -438,7 +444,8 @@ named *Zoom*: *Zoom in*, *Zoom out* and *Fit to view*; F with the canvas focused
 framed, as an arrangement frames it). A legend at the lower left lists each type in view as the canvas
 draws it (shape in its channel's colour), with how many, most first; *Legend* folds it to its title. The
 graph canvas, and no other surface, has DESIGN.md §9 exception 4's measurement grid: 1px `--border-subtle`
-lines on an 8px lattice, fixed to the screen. All of them come after the view's own controls in Tab order.
+lines on an 8px lattice, fixed to the screen. *Grid* in the toolbar's Show group switches it off and on
+(pressed while it shows); the choice is kept in this browser (owner, 6 October 2026). All of them come after the view's own controls in Tab order.
 Reachable by keyboard (`keyboard/keyboard.spec.ts`); the painted grid is read from the pixels
 (`keyboard/canvas-look.spec.ts`).
 

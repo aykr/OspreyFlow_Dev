@@ -529,3 +529,14 @@
 .status-pair { display: inline-flex; align-items: baseline; gap: var(--sp-4); white-space: nowrap; }
 .status-pair .value { color: var(--text-primary); }
 .status-pair__sep { color: var(--text-tertiary); }
+/* The grid switched off from the canvas toolbar's Show group (owner, 6 October 2026). */
+.network-canvas--no-grid { background-image: none; }
+/* A side panel's name folds the whole panel (owner, 6 October 2026). */
+.side-panel-header__toggle {
+  display: inline-flex; align-items: center; gap: var(--sp-4); min-height: 24px; padding: 0 var(--sp-4);
+  background: transparent; border: 0; border-radius: var(--r-control); color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.side-panel-header__toggle:hover, .side-panel-header__toggle:focus-visible { color: var(--text-primary); background: var(--surface-hover); }
+.side-panel-header__chevron { transition: transform var(--dur-fast) var(--ease); transform: rotate(90deg); }
+.side-panel-header__toggle[aria-expanded="false"] .side-panel-header__chevron { transform: none; }
+@media (prefers-reduced-motion: reduce) { .side-panel-header__chevron { transition: none; } }
