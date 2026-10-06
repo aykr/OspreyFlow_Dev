@@ -5,6 +5,7 @@
 // canvas. Not a keyboard test, so it sits outside the `CANVAS_ACTIONS` registry.
 import { expect, test, type Page } from "@playwright/test";
 
+import { layoutSettled } from "./layoutSettled";
 import { readPng } from "./pngPixels";
 
 declare global {
@@ -15,19 +16,8 @@ declare global {
 }
 
 async function settledPositions(page: Page, a: string, b: string) {
-  const read = () =>
-    page.evaluate(
-      ([x, y]) => ({ a: window.__CANVAS__?.viewportPositionOf(x!), b: window.__CANVAS__?.viewportPositionOf(y!) }),
-      [a, b],
-    );
-  let last = await read();
-  for (let i = 0; i < 40; i++) {
-    await page.waitForTimeout(250);
-    const now = await read();
-    if (JSON.stringify(now) === JSON.stringify(last) && now.a && now.b) return now as { a: { x: number; y: number }; b: { x: number; y: number } };
-    last = now;
-  }
-  throw new Error("the layout never settled");
+  const at = await layoutSettled(page, [a, b]);
+  return { a: at[a]!, b: at[b]! };
 }
 
 async function clickBeside(page: Page, offset: number) {

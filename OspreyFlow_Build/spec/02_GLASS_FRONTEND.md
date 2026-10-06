@@ -415,6 +415,16 @@ case, and is not shared with other analysts, as with the light and dark theme. T
 Reachable by keyboard (`Tab` to the button, `Enter` to open, arrow keys to choose, `Escape` to
 close), and `keyboard/keyboard.spec.ts` proves it.
 
+**How a label and a node are drawn (ADR-097 step 2).** A label is set at `--fs-12` in the theme's
+primary text: in mono (`--mono`) when it is a literal value — the chosen property is one of the type's
+identifiers, or with no choice the node is named by its normalised value or its id — and in `--ui`
+otherwise (a person's name). A label longer than 24 characters is cut in the middle with an ellipsis, so
+both ends of an address or an account number stay readable; the full text is in the Inspector. A label
+that would run past the canvas's right-hand edge is drawn on the node's left instead, and never before
+the left edge. At 100% (a camera ratio of 1) a node is 20 pixels across in an uncrowded view, measured
+from the painted pixels (`keyboard/canvas-look.spec.ts`); the far overview keeps nodes small, and
+a crowded view still shrinks them as before.
+
 ### 3.1c An expansion that adds nothing says so (ADR-077)
 
 Choosing a relationship from a node's menu (or pressing `Enter`, or opening a search result) asks the

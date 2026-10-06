@@ -213,6 +213,13 @@ describe("computeNodeFrameAttributes", () => {
   });
 });
 
+describe("node size at 100% (ADR-097 step 2, design review item 9)", () => {
+  it("is 20px across (a radius of 10) at a camera ratio of 1 in an uncrowded view", () => {
+    const frame = computeNodeFrameAttributes(makeNode("n1"), { cameraRatio: 1, degree: 1, viewNodeCount: 20 });
+    expect(frame.size).toBe(10);
+  });
+});
+
 describe("computeEdgeAttributes", () => {
   it("hides only edges below the strength filter, only at the overview band", () => {
     const weak = makeEdge("e1", "a", "b", { weight: 0.1 });

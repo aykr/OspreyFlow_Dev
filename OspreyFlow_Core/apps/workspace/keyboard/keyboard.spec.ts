@@ -31,6 +31,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { assertAllCovered, CANVAS_ACTIONS, registerCovered } from "./actionRegistry";
+import { layoutSettled } from "./layoutSettled";
 import { readPng } from "./pngPixels";
 
 // An expansion now asks the Conduit how big it would be before it goes ahead
@@ -1377,15 +1378,7 @@ test("a picture given from a file is drawn in the shape, and is still there afte
 // Two groups of five (a0–a4, b0–b4), each a hub with four round it, joined by one link a0—b0.
 
 async function settle(page: Page, id: string) {
-  const read = () => page.evaluate((n) => window.__CANVAS__?.viewportPositionOf(n), id);
-  let last = await read();
-  for (let i = 0; i < 40; i++) {
-    await page.waitForTimeout(250);
-    const now = await read();
-    if (JSON.stringify(now) === JSON.stringify(last) && now) return now;
-    last = now;
-  }
-  throw new Error("the layout never settled");
+  return (await layoutSettled(page, [id]))[id]!;
 }
 
 const settleOnce = (page: Page, id: string) => page.evaluate((n) => window.__CANVAS__?.viewportPositionOf(n), id);

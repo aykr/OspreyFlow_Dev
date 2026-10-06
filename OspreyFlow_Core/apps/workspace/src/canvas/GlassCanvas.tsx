@@ -100,8 +100,9 @@ import { CommunityBoxOverlay } from "./CommunityBoxOverlay";
 import { JudgementBadgeOverlay } from "./JudgementBadgeOverlay";
 import { activePalette } from "../color/palette";
 import { onThemeChange } from "../theme/theme";
-import { drawHoveredNode, labelColoursFor } from "./labelStyle";
-import { onLabelChoicesChange } from "./labelChoices";
+import { drawHoveredNode, drawNodeLabel, labelColoursFor } from "./labelStyle";
+import { labelIsLiteral, NODE_LABEL_FONT, NODE_LABEL_SIZE } from "./nodeLabel";
+import { getLabelChoices, onLabelChoicesChange } from "./labelChoices";
 import { LabelsMenu } from "./LabelsMenu";
 import { IconsMenu } from "./IconsMenu";
 import { onIconChoicesChange } from "./iconChoices";
@@ -281,6 +282,8 @@ export interface GlassCanvasHandle {
   /** The camera's position and zoom ratio, so a browser test can assert the view did not move by
    * itself (ADR-060 Amendment 2); `null` while nothing is mounted. */
   cameraState: () => { x: number; y: number; ratio: number } | null;
+  /** Sets the zoom to `ratio` at once (1 is 100%), keeping the camera's centre. */
+  zoomTo: (ratio: number) => void;
   /** The name the canvas draws beside `nodeId` right now (empty when it draws none), or `null` if
    * the node is not in `graph` or nothing is mounted. Labels are painted to a canvas, so a browser
    * test cannot read them from the page; this asks the renderer what it was given. */
@@ -851,6 +854,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       sigmaRef.current?.setSettings({
         ...labelColoursFor(palette),
         defaultDrawNodeHover: drawHoveredNode(palette),
+        defaultDrawNodeLabel: drawNodeLabel(palette),
       });
       sigmaRef.current?.refresh();
     };
@@ -1152,6 +1156,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             ...frame,
             ...(data.emphasised === true ? { forceLabel: true } : {}),
             ...(data.selected === true ? { size: frame.size * SELECTED_SCALE } : {}),
+            labelLiteral:
+              frame.label !== "" &&
+              labelIsLiteral(data.data, (type) => ontology.identifiersFor(type), getLabelChoices()),
             type: "glass-node",
           };
           const folded = foldedViewRef.current;
@@ -1239,6 +1246,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         // `redrawForThemeRef` sets these again when the theme changes.
         ...labelColoursFor(activePalette()),
         defaultDrawNodeHover: drawHoveredNode(activePalette()),
+        // ADR-097 step 2: `--fs-12`, mono for a literal value, cut in the middle, kept on the canvas.
+        defaultDrawNodeLabel: drawNodeLabel(activePalette()),
+        labelSize: NODE_LABEL_SIZE,
+        labelFont: NODE_LABEL_FONT,
         // Edge labels were worked out (`computeEdgeAttributes`) but never drawn until this was
         // switched on. They appear only at the closest zoom, or beside the node under the pointer.
         renderEdgeLabels: true,
@@ -1463,6 +1474,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           if (!sigma) return null;
           const { x, y, ratio } = sigma.getCamera().getState();
           return { x, y, ratio };
+        },
+        zoomTo: (ratio: number) => {
+          sigmaRef.current?.getCamera().setState({ ratio });
         },
         viewportPositionOf: (nodeId: string) => {
           const sigma = sigmaRef.current;

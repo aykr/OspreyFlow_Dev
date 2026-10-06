@@ -71,11 +71,14 @@ export interface NodeFrameAttributes {
   hidden: false;
 }
 
+// A node's radius in screen pixels. At 100% (a camera ratio of 1, the structure band) a node is 20px
+// across (ADR-097 step 2, design review item 9), big enough to hold its icon and to be hit; the far
+// overview stays small so 50,000 nodes do not merge into one blot.
 const BAND_SIZE: Record<ZoomBand, number> = {
   overview: 3,
-  structure: 5,
-  neighbourhood: 6,
-  "link-detail": 8,
+  structure: 10,
+  neighbourhood: 12,
+  "link-detail": 16,
 };
 
 /** Exported for reuse outside the per-frame reducer — `ClusterExplainOverlay` (Phase 6a Stage 3)

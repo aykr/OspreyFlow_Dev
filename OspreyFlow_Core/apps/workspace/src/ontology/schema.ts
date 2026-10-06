@@ -38,15 +38,22 @@ function toEntityVisual(entity: EntityTypeDef): EntityVisual {
 
 export class OntologyRegistry {
   private readonly byType = new Map<string, EntityVisual>();
+  private readonly identifiers = new Map<string, readonly string[]>();
 
   constructor(schema: OntologySchema) {
     for (const entity of schema.entity_types) {
       this.byType.set(entity.name, toEntityVisual(entity));
+      this.identifiers.set(entity.name, entity.identifiers ?? []);
     }
   }
 
   visualFor(entityType: string): EntityVisual | undefined {
     return this.byType.get(entityType);
+  }
+
+  /** The type's identifying properties; a label drawn from one is a literal value (ADR-097). */
+  identifiersFor(entityType: string): readonly string[] {
+    return this.identifiers.get(entityType) ?? [];
   }
 }
 
