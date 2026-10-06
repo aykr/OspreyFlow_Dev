@@ -46,7 +46,9 @@ describe("the default label", () => {
 
   it("is the normalised value for a thing that has one, and the id when there is nothing", () => {
     expect(nodeLabel(node("Endpoint", { value_normalised: "a@b.test" }))).toBe("a@b.test");
-    expect(nodeLabel(node("Organisation", { name: "Ring 0 Holdings" }, "org-1"))).toBe("org-1");
+    // A named thing is called by its name (owner, 6 October 2026); only a thing with nothing is its id.
+    expect(nodeLabel(node("Organisation", { name: "Ring 0 Holdings" }, "org-1"))).toBe("Ring 0 Holdings");
+    expect(nodeLabel(node("Organisation", {}, "org-1"))).toBe("org-1");
   });
 });
 
@@ -161,5 +163,29 @@ describe("the properties offered for a type", () => {
 
   it("are empty for a type with none", () => {
     expect(labelPropertiesFor({ ...person, identifiers: [], properties: [] })).toEqual([]);
+  });
+});
+
+// Owner, 6 October 2026: an extracted organisation was drawn as its id ("01M48S26W58A…") although it
+// is called BPA, and an email Document as "email:enron-…". A thing with a name or a title is called by it.
+describe("defaultLabel names a thing by its name or title before its identifiers", () => {
+  const n = (type: string, properties: Record<string, unknown>) =>
+    ({ id: "01M48S26W58AM0WCX9AE3BG0VQ", type, properties }) as unknown as Node;
+
+  it("an organisation or a place by its name", () => {
+    expect(defaultLabel(n("Organisation", { name: "BPA" }))).toBe("BPA");
+    expect(defaultLabel(n("Location", { name: "Houston" }))).toBe("Houston");
+  });
+
+  it("a document by its title, before its normalised value", () => {
+    expect(defaultLabel(n("Document", { title: "Urgent - Drugs Test Reminder", value_normalised: "email:enron-1" }))).toBe(
+      "Urgent - Drugs Test Reminder",
+    );
+  });
+
+  it("still a person by family and given names, an address by its value, and the id as the last resort", () => {
+    expect(defaultLabel(n("Person", { family_name: "Lay", given_names: "Kenneth", name: "Ken" }))).toBe("Lay, Kenneth");
+    expect(defaultLabel(n("Endpoint", { value_normalised: "richard.ring@enron.com" }))).toBe("richard.ring@enron.com");
+    expect(defaultLabel(n("Vehicle", {}))).toBe("01M48S26W58AM0WCX9AE3BG0VQ");
   });
 });

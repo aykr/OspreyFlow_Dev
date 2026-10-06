@@ -24,7 +24,7 @@ export function middleTruncate(text: string, max = NODE_LABEL_MAX_CHARS): string
 
 /** Whether the node's label is a literal value: the analyst's chosen property when it is one of the
  * type's identifiers, otherwise whether the default label is the normalised value or the id (a
- * person's family and given names are not). */
+ * person's names, a thing's name and a document's title are not). */
 export function labelIsLiteral(
   node: Node,
   identifiersOf: (type: string) => readonly string[],
@@ -35,7 +35,9 @@ export function labelIsLiteral(
   if (chosen !== undefined && properties[chosen] !== undefined && properties[chosen] !== "") {
     return identifiersOf(node.type).includes(chosen);
   }
-  return typeof properties["family_name"] !== "string" || properties["family_name"] === "";
+  const has = (key: string) => typeof properties[key] === "string" && properties[key] !== "";
+  // A person's names, a thing's name or a document's title are words, not literal values.
+  return !(has("family_name") || has("name") || has("title"));
 }
 
 /** Where a label starts: right of the node when it fits inside the canvas, else left of it, and

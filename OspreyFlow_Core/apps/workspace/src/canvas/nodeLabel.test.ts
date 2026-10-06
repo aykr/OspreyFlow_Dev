@@ -33,6 +33,11 @@ describe("labelIsLiteral", () => {
     expect(labelIsLiteral(node("Thing", {}), identifiersOf, {})).toBe(true);
   });
 
+  it("is false for a thing named by its name or a document by its title", () => {
+    expect(labelIsLiteral(node("Organisation", { name: "BPA" }), identifiersOf, {})).toBe(false);
+    expect(labelIsLiteral(node("Document", { title: "Urgent", value_normalised: "email:1" }), identifiersOf, {})).toBe(false);
+  });
+
   it("is false for a person named by family and given names", () => {
     expect(labelIsLiteral(node("Person", { family_name: "Volkov", given_names: "Anna" }), identifiersOf, {})).toBe(false);
   });

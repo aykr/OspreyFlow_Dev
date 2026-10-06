@@ -92,8 +92,9 @@ export function chosenLabel(node: Node): string | null {
   return asText(node.properties?.[property]);
 }
 
-/** What a node is called when nothing was chosen: a person by family name and given names, a thing
- * by its normalised value, anything else by its id. */
+/** What a node is called when nothing was chosen: a person by family name and given names; a thing
+ * with a name or a title (an organisation, a place, a document) by it; else by its normalised value
+ * (an address, a number); and only failing all of those by its id. */
 export function defaultLabel(node: Node): string {
   const properties = (node.properties ?? {}) as Record<string, unknown>;
   const family = asText(properties["family_name"]);
@@ -101,7 +102,12 @@ export function defaultLabel(node: Node): string {
     const given = asText(properties["given_names"]);
     return given !== null ? `${family}, ${given}` : family;
   }
-  return asText(properties["value_normalised"]) ?? node.id;
+  return (
+    asText(properties["name"]) ??
+    asText(properties["title"]) ??
+    asText(properties["value_normalised"]) ??
+    node.id
+  );
 }
 
 /** The properties an analyst can choose from for a type: its identifiers, then its other

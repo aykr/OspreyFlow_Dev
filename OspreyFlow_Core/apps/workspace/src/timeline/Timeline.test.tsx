@@ -8,7 +8,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const setOption = vi.fn();
 vi.mock("echarts/core", () => ({
   use: () => undefined,
-  init: () => ({ setOption, on: () => undefined, off: () => undefined, resize: () => undefined, dispose: () => undefined, getOption: () => ({}) }),
+  init: () => ({
+    setOption,
+    on: () => undefined,
+    off: () => undefined,
+    dispatchAction: () => undefined,
+    resize: () => undefined,
+    dispose: () => undefined,
+    getOption: () => ({}),
+  }),
 }));
 vi.mock("../analytics/api", () => ({
   fetchHistogram: async () => ({

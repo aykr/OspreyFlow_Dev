@@ -423,8 +423,9 @@ type's own properties (its identifiers, then its other properties; a sensitive p
 are never offered) and `Default`. The property chosen names every node of that type on the canvas,
 in the search list and wherever else a node is named; a node that lacks the chosen property keeps
 its default name rather than going blank. With nothing chosen a person is named "Family, Given"
-(family name alone when there are no given names), a thing by its normalised value, anything else
-by its id. The choice is kept in this browser only: it is not sent to the server, is not part of the
+(family name alone when there are no given names), a thing with a `name` (an organisation, a place) or a
+`title` (a document) by it, a thing by its normalised value, and anything else by its id (corrected 6
+October 2026: an extracted organisation called BPA was drawn as its id). The choice is kept in this browser only: it is not sent to the server, is not part of the
 case, and is not shared with other analysts, as with the light and dark theme. The panel says so.
 Reachable by keyboard (`Tab` to the button, `Enter` to open, arrow keys to choose, `Escape` to
 close), and `keyboard/keyboard.spec.ts` proves it.
@@ -432,7 +433,7 @@ close), and `keyboard/keyboard.spec.ts` proves it.
 **How a label and a node are drawn (ADR-097 step 2).** A label is set at `--fs-12` in the theme's
 primary text: in mono (`--mono`) when it is a literal value — the chosen property is one of the type's
 identifiers, or with no choice the node is named by its normalised value or its id — and in `--ui`
-otherwise (a person's name). A label longer than 24 characters is cut in the middle with an ellipsis, so
+otherwise (a person's name, a thing's name, a document's title). A label longer than 24 characters is cut in the middle with an ellipsis, so
 both ends of an address or an account number stay readable; the full text is in the Inspector. A label
 that would run past the canvas's right-hand edge is drawn on the node's left instead, and never before
 the left edge. At 100% (a camera ratio of 1) a node is 20 pixels across in an uncrowded view, measured
