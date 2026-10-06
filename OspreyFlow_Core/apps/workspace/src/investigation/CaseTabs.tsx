@@ -26,6 +26,8 @@ export interface CaseTabsProps {
   /** An administrator of the unit may discard any branch in it; the Conduit decides. */
   isAdministrator?: boolean;
   onOpen: (id: string) => void;
+  /** As a list, each branch indented beneath its case (ADR-097 Amendment 1), in the rail's Cases. */
+  layout?: "strip" | "list";
 }
 
 export function CaseTabs({
@@ -34,6 +36,7 @@ export function CaseTabs({
   currentId,
   isAdministrator = false,
   onOpen,
+  layout = "strip",
 }: CaseTabsProps) {
   const [cases, setCases] = useState<CaseListing[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
@@ -97,7 +100,7 @@ export function CaseTabs({
   }
 
   return (
-    <nav aria-label="Case tabs" className="case-tabs">
+    <nav aria-label="Case tabs" className={layout === "list" ? "case-tabs case-tabs--list" : "case-tabs"}>
       <button
         type="button"
         className="btn case-tabs__tab"

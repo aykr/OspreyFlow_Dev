@@ -363,3 +363,65 @@
 }
 .selection-bar__count { margin-right: var(--sp-8); color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
 .selection-bar .btn { font-size: var(--fs-12); line-height: var(--lh-12); padding: var(--sp-4) var(--sp-8); }
+
+/* The workspace shell (ADR-097 step 1, design review items 1 and 16). */
+.classification-strip {
+  box-sizing: border-box; height: 20px; flex: none; display: flex; align-items: center; justify-content: center;
+  background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary); font-size: var(--fs-11); line-height: var(--lh-11); font-weight: 600;
+}
+.top-bar { box-sizing: border-box; height: 40px; flex: none; flex-wrap: nowrap; padding-top: 0; padding-bottom: 0; }
+.top-bar__search { flex: 1 1 280px; min-width: 280px; max-width: 480px; }
+.brand-mark { display: inline-flex; align-items: center; gap: var(--sp-6); flex: none; }
+.brand-mark__name { font-weight: 700; font-size: var(--fs-14); color: var(--text-primary); }
+/* A segmented control: one choice of several, current shown as current (ADR-097, review item 7). */
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: var(--r-control); overflow: hidden; flex: none; }
+.segmented__item {
+  font: inherit; font-size: var(--fs-12); line-height: var(--lh-12); padding: var(--sp-4) var(--sp-8);
+  background: transparent; border: 0; color: var(--text-secondary); cursor: pointer; min-height: 24px;
+}
+.segmented__item + .segmented__item { border-left: 1px solid var(--border-subtle); }
+.segmented__item:hover { background: var(--surface-hover); color: var(--text-primary); }
+.segmented__item[aria-pressed="true"] { background: var(--surface-raised); color: var(--text-primary); box-shadow: inset 0 -2px 0 var(--text-primary); }
+.left-rail {
+  box-sizing: border-box; width: 44px; flex: none; display: flex; flex-direction: column; gap: var(--sp-4);
+  padding: var(--sp-6) var(--sp-6); border-right: 1px solid var(--border-subtle); background: var(--surface-panel);
+}
+.left-rail[data-expanded="true"] { width: 180px; }
+.left-rail__item {
+  display: flex; align-items: center; gap: var(--sp-8); height: 32px; min-width: 32px; padding: 0 var(--sp-8);
+  background: transparent; border: 0; border-radius: var(--r-control); color: var(--text-secondary);
+  font: inherit; font-size: var(--fs-12); cursor: pointer; text-align: left;
+}
+.left-rail__item:hover, .left-rail__item:focus-visible { background: var(--surface-hover); color: var(--text-primary); }
+.left-rail__item[aria-pressed="true"] { background: var(--surface-raised); color: var(--text-primary); box-shadow: inset 2px 0 0 var(--text-primary); }
+.left-rail__toggle { margin-top: auto; }
+.left-rail__name { white-space: nowrap; }
+/* A view's own toolbar (ADR-097 step 1): what belongs to one view, docked above it, 32px. */
+.view-toolbar {
+  box-sizing: border-box; height: 32px; flex: none; display: flex; align-items: center; gap: var(--sp-8); padding: 0 var(--sp-8);
+  border-bottom: 1px solid var(--border-subtle); background: var(--surface-panel); font-size: var(--fs-12);
+}
+/* The case tabs in the rail's Cases panel (Amendment 1): a list, each branch indented beneath its case. */
+.case-tabs--list { flex-direction: column; align-items: stretch; border-bottom: 0; background: transparent; padding: 0; overflow: visible; }
+.case-tabs--list > .case-tabs__tab { justify-content: flex-start; }
+.case-tabs--list .case-tabs__item { padding-left: var(--sp-16); }
+.case-tabs--list .case-tabs__item .case-tabs__tab { flex: 1; text-align: left; }
+/* A side panel's one header row (ADR-097 step 1, design review item 8): 28px, the name at `--fs-12`
+   600 in secondary text, a hairline below; the handle and the arranging menu quiet. The panel's own
+   title is not drawn again inside it. */
+.side-panel-header {
+  box-sizing: border-box; min-height: 28px; flex: none; display: flex; align-items: center; flex-wrap: wrap;
+  gap: var(--sp-4); padding: 0 var(--sp-4) 0 var(--sp-2); border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary); font-size: var(--fs-12); line-height: var(--lh-12); font-weight: 600;
+}
+.side-panel-header__handle { cursor: grab; padding: var(--sp-4) var(--sp-6); color: var(--text-tertiary); user-select: none; font-weight: 400; }
+.side-panel-header__name { flex: 1; }
+.side-panel-header__menu {
+  min-width: 24px; min-height: 24px; background: transparent; border: 0; border-radius: var(--r-control);
+  color: var(--text-secondary); font: inherit; cursor: pointer;
+}
+.side-panel-header__menu:hover, .side-panel-header__menu:focus-visible, .side-panel-header__menu[aria-expanded="true"] { background: var(--surface-hover); color: var(--text-primary); }
+.side-panel-header__moves { display: flex; gap: var(--sp-2); width: 100%; justify-content: flex-end; padding-bottom: var(--sp-4); }
+.side-panel-header__moves[hidden] { display: none; }
+[data-panel-slot] .panel > .panel__title { display: none; }

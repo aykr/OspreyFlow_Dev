@@ -407,6 +407,8 @@ export const INSPECTOR_ACTIONS = defineActionRegistry("INSPECTOR_ACTIONS", [
  * `keyboard/shell.spec.ts`. */
 export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
   "slash-moves-focus-to-search",
+  "rail-entries-by-keyboard",
+  "rail-shows-and-hides-names-by-keyboard",
 ] as const);
 
 export const LINK_CHANGE_ACTIONS = defineActionRegistry("LINK_CHANGE_ACTIONS", [
@@ -430,6 +432,7 @@ export const PANEL_FRAME_ACTIONS = defineActionRegistry("PANEL_FRAME_ACTIONS", [
   "open-the-side-panel-to-the-full-width-and-return-by-keyboard",
   "hide-and-show-the-timeline-by-keyboard",
   "move-a-side-panel-up-and-down-by-keyboard",
+  "move-a-side-panel-with-alt-arrows-by-keyboard",
   "resize-the-side-panel-by-keyboard",
   "resize-a-stacked-panel-by-keyboard",
   "resize-the-timeline-by-keyboard",

@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test";
 
 declare global {
   interface Window {
-    __TOPBAR__?: { opened: string | null; browsed: boolean; signedOut: boolean };
+    __TOPBAR__?: { opened: string | null; browsed: boolean; signedOut: boolean; rail: string[] };
   }
 }
 

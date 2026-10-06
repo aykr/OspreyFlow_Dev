@@ -62,6 +62,9 @@ const slotOrder = (page: Page) =>
 test("Move up and Move down reorder the panels with Enter alone, and the order survives a reload", async ({ page }) => {
   await page.goto(URL);
   expect(await slotOrder(page)).toEqual(["inspector", "metrics", "query-builder"]);
+  // The moves sit in each header's menu (ADR-097 step 1): opened with Enter first.
+  await press(page, "Arrange the metrics");
+  await expect(page.getByRole("button", { name: "Arrange the metrics" })).toHaveAttribute("aria-expanded", "true");
   await press(page, "Move the metrics up");
   expect(await slotOrder(page)).toEqual(["metrics", "inspector", "query-builder"]);
   // Now at the top: the same button is unavailable, does nothing, and still has focus (ADR-085).
@@ -71,11 +74,30 @@ test("Move up and Move down reorder the panels with Enter alone, and the order s
   await page.keyboard.press("Enter");
   expect(await slotOrder(page)).toEqual(["metrics", "inspector", "query-builder"]);
   await expect(up).toBeFocused();
+  await press(page, "Arrange the query builder");
   await press(page, "Move the query builder up");
   expect(await slotOrder(page)).toEqual(["metrics", "query-builder", "inspector"]);
   await page.reload();
   expect(await slotOrder(page)).toEqual(["metrics", "query-builder", "inspector"]);
   registerCovered(REGISTRY, "move-a-side-panel-up-and-down-by-keyboard");
+});
+
+test("Alt+Up and Alt+Down on a panel's header move it, with no menu opened", async ({ page }) => {
+  await page.goto(URL);
+  const header = page.getByRole("button", { name: "Arrange the query builder" });
+  await header.focus();
+  await page.keyboard.press("Alt+ArrowUp");
+  expect(await slotOrder(page)).toEqual(["inspector", "query-builder", "metrics"]);
+  await expect(header).toBeFocused();
+  await page.keyboard.press("Alt+ArrowUp");
+  expect(await slotOrder(page)).toEqual(["query-builder", "inspector", "metrics"]);
+  // At the top Alt+Up does nothing; Alt+Down takes it back.
+  await page.keyboard.press("Alt+ArrowUp");
+  expect(await slotOrder(page)).toEqual(["query-builder", "inspector", "metrics"]);
+  await page.keyboard.press("Alt+ArrowDown");
+  expect(await slotOrder(page)).toEqual(["inspector", "query-builder", "metrics"]);
+  await expect(header).toHaveAttribute("aria-expanded", "false");
+  registerCovered(REGISTRY, "move-a-side-panel-with-alt-arrows-by-keyboard");
 });
 
 async function focusSash(page: Page, name: string) {

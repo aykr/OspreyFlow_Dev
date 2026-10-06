@@ -39,7 +39,11 @@ import {
 } from "./crossfilter/store";
 import { AccountMenu } from "./auth/AccountMenu";
 import { ThemeToggle } from "./theme/ThemeToggle";
-import { AppSwitcher } from "./AppSwitcher";
+import { ClassificationStrip, highestMarking } from "./shell/ClassificationStrip";
+import { LeftRail } from "./shell/LeftRail";
+import { Drawer } from "./design/primitives/Drawer";
+import { TopBar } from "./shell/TopBar";
+import { fetchHandlingScheme } from "./ingest/api";
 import { Button } from "./design/primitives/Button";
 import { Toast } from "./design/primitives/Toast";
 import { Dossier } from "./dossier/Dossier";
@@ -360,6 +364,10 @@ export function App() {
   const [linkEventsSignal, setLinkEventsSignal] = useState(0);
   const [linkHistorySignal, setLinkHistorySignal] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // ADR-097 Amendment 1: the case and its branches, reached from the rail.
+  const [casesOpen, setCasesOpen] = useState(false);
+  // ADR-097 step 1 (review item 16): the deployment's classifications, lowest first, for the strip.
+  const [classificationOrder, setClassificationOrder] = useState<readonly string[]>([]);
   const [proposedTypesOpen, setProposedTypesOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   // B16's own cross-case overlay — the second investigation's own scope,
@@ -378,6 +386,23 @@ export function App() {
     edges: 0,
     filteredCount: 0,
   });
+  // The highest classification among the nodes and links in the view (ADR-097 Amendment 1), read
+  // again whenever the view's counts change.
+  const marking = useMemo(() => {
+    const graph = workingSetRef.current?.graph;
+    const found: string[] = [];
+    graph?.forEachNode((_id, attributes) => {
+      const c = (attributes as { data?: { handling?: { classification?: string } } }).data?.handling?.classification;
+      if (c) found.push(c);
+    });
+    graph?.forEachEdge((_id, attributes) => {
+      const c = (attributes as { data?: { handling?: { classification?: string } } }).data?.handling?.classification;
+      if (c) found.push(c);
+    });
+    return highestMarking(found, classificationOrder);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [counts, classificationOrder]);
+
   const [view, setView] = useState<
     "graph" | "map" | "ingest" | "dossier" | "watches"
   >(handoff.view ?? "graph");
@@ -458,6 +483,9 @@ export function App() {
         setOntologySchema(schema);
       });
     void fetchMapConfig(API_BASE_URL, bearerToken).then(setMapConfig);
+    fetchHandlingScheme(API_BASE_URL, bearerToken)
+      .then((scheme) => setClassificationOrder(scheme.classification ?? []))
+      .catch(() => setClassificationOrder([]));
   }, [bearerToken, handleUnauthenticatedResponse]);
 
   useEffect(() => {
@@ -775,129 +803,115 @@ export function App() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-      <header className="app-header" data-app={app}>
-        <AppSwitcher
-          app={app}
-          onChange={(next) => setView(next === "ingest" ? "ingest" : lastGlassView.current)}
-        />
-        <CaseSwitcher
-          apiBaseUrl={API_BASE_URL}
-          bearerToken={bearerToken}
-          currentId={investigationId}
-          onBrowse={() => setBrowsingCases(true)}
-          onOpen={(id) => openCase(id, view === "ingest" ? "ingest" : undefined)}
-        />
-        {app === "glass" && (
-          <>
-            <div style={{ flex: "1 1 120px", minWidth: 0, maxWidth: 420 }}>
-              <GlobalSearch
-                apiBaseUrl={API_BASE_URL}
-                bearerToken={bearerToken}
-                entityTypes={ontologySchema?.entity_types.map((e) => e.name) ?? []}
-                screenNodes={() => {
-                  const graph = workingSetRef.current.graph;
-                  return graph.nodes().map((id) => graph.getNodeAttribute(id, "data"));
-                }}
-                onSelect={(node) => {
-                  drawSearchResult(
-                    workingSetRef.current.store,
-                    node,
-                    glassCanvasRef.current,
-                  );
-                  setSelectedNode(node);
-                }}
-              />
-            </div>
-            <Button
-              aria-pressed={view === "graph"}
-              onClick={() => setView("graph")}
-            >
-              Graph
-            </Button>
-            <Button aria-pressed={view === "map"} onClick={() => setView("map")}>
-              Map
-            </Button>
-            <Button
-              aria-pressed={view === "watches"}
-              onClick={() => setView("watches")}
-            >
-              Watches
-            </Button>
-            {dossierNodeId && (
-              <Button
-                aria-pressed={view === "dossier"}
-                onClick={() => setView("dossier")}
-              >
-                Messages
-              </Button>
-            )}
-          </>
-        )}
-        {view === "graph" && (
-          <ResolutionThresholdControl
+      {/* ADR-097 step 1 (design review item 16): the protective marking of what is on screen. */}
+      <ClassificationStrip marking={marking} />
+      <TopBar
+        app={app}
+        caseSwitcher={
+          <CaseSwitcher
             apiBaseUrl={API_BASE_URL}
             bearerToken={bearerToken}
-            investigationId={investigationId}
-            store={workingSetRef.current.store}
-            onChangeSummary={setToast}
+            currentId={investigationId}
+            onBrowse={() => setBrowsingCases(true)}
+            onOpen={(id) => openCase(id, view === "ingest" ? "ingest" : undefined)}
           />
-        )}
-        {view === "graph" && (
-          // `02_GLASS_FRONTEND.md` §2's own workspace-layout mockup: "Resolution: ●Balanced
-          // Export ⚙" — the top-bar trigger for the export drawer (§10).
-          <Button
-            aria-pressed={exportOpen}
-            onClick={() => setExportOpen((open) => !open)}
-          >
-            Export ⚙
-          </Button>
-        )}
-        {view === "map" && (
-          <Button
-            aria-pressed={siteWizardOpen}
-            onClick={() => setSiteWizardOpen((open) => !open)}
-          >
-            Add site
-          </Button>
-        )}
-        {view === "map" && (
-          <Button
-            aria-pressed={boundaryToolOpen}
-            onClick={() => setBoundaryToolOpen((open) => !open)}
-          >
-            Draw boundary
-          </Button>
-        )}
-        {app === "glass" && <Button onClick={() => setHistoryOpen(true)}>History</Button>}
-        {app === "glass" && (principal?.roles?.includes("osprey-admin") ?? false) && (
-          // ADR-090 C3: the relationship types analysts of the administrator's unit proposed.
-          <Button aria-pressed={proposedTypesOpen} onClick={() => setProposedTypesOpen(true)}>
-            Proposed types
-          </Button>
-        )}
-        <div
-          className="app-header__account"
-          style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}
-        >
-          <ThemeToggle />
-          {!isDevBypass && principal && (
-            // `06_DECISIONS.md` ADR-050: the principal's identity and clearance are shown in the
-            // chrome, informationally only. ADR-065 folds the subject, unit and Sign out behind one
-            // button that keeps the clearance in view. The Glass derives nothing from any of it.
-            <AccountMenu principal={principal} onSignOut={() => void signOut()} />
+        }
+        search={
+          app === "glass" ? (
+            <GlobalSearch
+              apiBaseUrl={API_BASE_URL}
+              bearerToken={bearerToken}
+              entityTypes={ontologySchema?.entity_types.map((e) => e.name) ?? []}
+              screenNodes={() => {
+                const graph = workingSetRef.current.graph;
+                return graph.nodes().map((id) => graph.getNodeAttribute(id, "data"));
+              }}
+              onSelect={(node) => {
+                drawSearchResult(
+                  workingSetRef.current.store,
+                  node,
+                  glassCanvasRef.current,
+                );
+                setSelectedNode(node);
+              }}
+            />
+          ) : undefined
+        }
+        views={
+          app === "glass"
+            ? [
+                { id: "graph", label: "Graph", pressed: view === "graph", onSelect: () => setView("graph") },
+                { id: "map", label: "Map", pressed: view === "map", onSelect: () => setView("map") },
+                ...(dossierNodeId
+                  ? [{ id: "dossier", label: "Messages", pressed: view === "dossier", onSelect: () => setView("dossier") }]
+                  : []),
+              ]
+            : []
+        }
+        actions={
+          view === "graph" ? (
+            // `02_GLASS_FRONTEND.md` §10: the export drawer, for the whole case.
+            <Button aria-pressed={exportOpen} onClick={() => setExportOpen((open) => !open)}>
+              Export ⚙
+            </Button>
+          ) : undefined
+        }
+        account={
+          <>
+            <ThemeToggle />
+            {!isDevBypass && principal && (
+              // `06_DECISIONS.md` ADR-050: the principal's identity and clearance are shown in the
+              // chrome, informationally only. ADR-065 folds the subject, unit and Sign out behind one
+              // button that keeps the clearance in view. The Glass derives nothing from any of it.
+              <AccountMenu principal={principal} onSignOut={() => void signOut()} />
+            )}
+          </>
+        }
+      />
+      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+      {/* ADR-097 step 1: the places the analyst goes to, on the left rail. */}
+      <LeftRail
+        items={[
+          ...(app === "glass"
+            ? [
+                { id: "cases", label: "Cases", icon: "cases" as const, onSelect: () => setCasesOpen(true), pressed: casesOpen },
+                { id: "watches", label: "Watches", icon: "watches" as const, onSelect: () => setView("watches"), pressed: view === "watches" },
+                { id: "history", label: "History", icon: "history" as const, onSelect: () => setHistoryOpen(true), pressed: historyOpen },
+                ...((principal?.roles?.includes("osprey-admin") ?? false)
+                  ? // ADR-090 C3: the relationship types analysts of the administrator's unit proposed.
+                    [{ id: "types", label: "Proposed types", icon: "types" as const, onSelect: () => setProposedTypesOpen(true), pressed: proposedTypesOpen }]
+                  : []),
+                { id: "ingest", label: "Ingest Studio", icon: "ingest" as const, onSelect: () => setView("ingest") },
+              ]
+            : [
+                { id: "investigation", label: "Back to the investigation", icon: "glass" as const, onSelect: () => setView(lastGlassView.current) },
+              ]),
+        ]}
+      />
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+      {(view === "graph" || view === "map") && (
+        // ADR-097 step 1: what belongs to this view alone, docked above it.
+        <div role="toolbar" aria-label={view === "graph" ? "Graph view" : "Map view"} className="view-toolbar">
+          {view === "graph" && (
+            <ResolutionThresholdControl
+              apiBaseUrl={API_BASE_URL}
+              bearerToken={bearerToken}
+              investigationId={investigationId}
+              store={workingSetRef.current.store}
+              onChangeSummary={setToast}
+            />
+          )}
+          {view === "map" && (
+            <>
+              <Button aria-pressed={siteWizardOpen} onClick={() => setSiteWizardOpen((open) => !open)}>
+                Add site
+              </Button>
+              <Button aria-pressed={boundaryToolOpen} onClick={() => setBoundaryToolOpen((open) => !open)}>
+                Draw boundary
+              </Button>
+            </>
           )}
         </div>
-      </header>
-      {app === "glass" && (
-        // The branches made from this case, as tabs (ADR-084). Renders nothing until the case has
-        // one, so a case that has never been branched looks exactly as it did.
-        <CaseTabs
-          apiBaseUrl={API_BASE_URL}
-          bearerToken={bearerToken}
-          currentId={investigationId}
-          isAdministrator={principal?.roles?.includes("osprey-admin") ?? false}
-          onOpen={(id) => openCase(id)}
-        />
       )}
       <div style={{ flex: 1, display: "flex", minHeight: 0, position: "relative" }}>
         {readerDocumentId !== null && investigationId && bearerToken && ontology && (
@@ -1265,7 +1279,9 @@ export function App() {
         )}
       </div>
       {view !== "ingest" && view !== "dossier" && view !== "watches" && (
-        <BottomPanelFrame title="Timeline" height={252}>
+        // ADR-097 step 1: folded to its header by default, so the canvas has the room; opened and
+        // sized as before (ADR-086).
+        <BottomPanelFrame title="Timeline" height={252} initiallyOpen={false}>
           <div style={{ height: "100%" }}>
             <Timeline
               apiBaseUrl={API_BASE_URL}
@@ -1281,6 +1297,8 @@ export function App() {
           </div>
         </BottomPanelFrame>
       )}
+      </div>
+      </div>
       {view !== "ingest" && view !== "dossier" && view !== "watches" && (
         <StatusBar
           nodeCount={counts.nodes}
@@ -1297,6 +1315,30 @@ export function App() {
         onClose={() => setProposedTypesOpen(false)}
         onDecided={() => setLinkTypesRead((n) => n + 1)}
       />
+      {/* ADR-097 Amendment 1: the case's tabs, as a list in a panel from the rail. */}
+      <Drawer open={casesOpen} onClose={() => setCasesOpen(false)} title="Cases">
+        <div style={{ display: "grid", gap: "var(--sp-8)" }}>
+          <CaseTabs
+            apiBaseUrl={API_BASE_URL}
+            bearerToken={bearerToken}
+            currentId={investigationId}
+            isAdministrator={principal?.roles?.includes("osprey-admin") ?? false}
+            layout="list"
+            onOpen={(id) => {
+              setCasesOpen(false);
+              openCase(id);
+            }}
+          />
+          <Button
+            onClick={() => {
+              setCasesOpen(false);
+              setBrowsingCases(true);
+            }}
+          >
+            Browse all cases
+          </Button>
+        </div>
+      </Drawer>
       <HistoryPanel
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}

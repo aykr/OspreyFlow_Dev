@@ -117,3 +117,30 @@ describe("SidePanelStack and its sashes (ADR-086)", () => {
     expect((container.querySelector('[data-panel-slot="metrics"]') as HTMLElement).style.height).toBe("180px");
   });
 });
+
+describe("SidePanelStack headers (ADR-097 step 1, design review item 8)", () => {
+  it("each panel has one header row with its name, and no arrows in view", () => {
+    const { container, getAllByRole } = render(<SidePanelStack panels={panels} />);
+    const headers = getAllByRole("toolbar").map((t) => t.textContent ?? "");
+    expect(headers.some((h) => h.includes("Inspector"))).toBe(true);
+    expect(container.textContent).not.toMatch(/[▲▼]/);
+  });
+
+  it("the moves are in a menu on the header", () => {
+    const { getByRole } = render(<SidePanelStack panels={panels} />);
+    const menu = getByRole("button", { name: "Arrange the metrics" });
+    expect(menu.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(menu);
+    expect(menu.getAttribute("aria-expanded")).toBe("true");
+    expect(getByRole("button", { name: "Move the metrics up" })).toBeTruthy();
+  });
+
+  it("Alt+Up and Alt+Down on a panel's header move it", () => {
+    const { container, getByRole } = render(<SidePanelStack panels={panels} />);
+    const menu = getByRole("button", { name: "Arrange the metrics" });
+    fireEvent.keyDown(menu, { key: "ArrowUp", altKey: true });
+    expect(slotsOf(container)).toEqual(["metrics", "inspector", "query-builder"]);
+    fireEvent.keyDown(getByRole("button", { name: "Arrange the metrics" }), { key: "ArrowDown", altKey: true });
+    expect(slotsOf(container)).toEqual(["inspector", "metrics", "query-builder"]);
+  });
+});

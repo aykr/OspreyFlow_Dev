@@ -270,7 +270,12 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     });
   });
 
-  test("after the Ingest Studio tile, the Ingest tab is the one showing", async () => {
+  // ADR-097 step 1 replaces ADR-065's two-part switch with the left rail: the Ingest Studio is one of
+  // the places on it, and inside the Studio the rail leads back to the investigation. Each case below
+  // keeps the point of the one it replaces.
+  const rail = () => screen.getByRole("navigation", { name: "Workspace" });
+
+  test("after the Ingest Studio tile, the Ingest Studio is the one showing", async () => {
     sessionStorage.setItem(
       "ospreyflow.launcherHandoff",
       JSON.stringify({ view: "ingest", at: Date.now() }),
@@ -278,8 +283,8 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
 
     render(<App />);
 
-    const ingest = await screen.findByRole("button", { name: "Ingest Studio" });
-    expect(ingest.getAttribute("aria-pressed")).toBe("true");
+    expect(await screen.findByRole("button", { name: "Back to the investigation" })).toBeTruthy();
+    expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("ingest");
   });
 
   // The switch tests only look at the bar, so no request is answered: an answer of the wrong shape
@@ -288,17 +293,15 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     vi.mocked(globalThis.fetch).mockImplementation(() => new Promise<Response>(() => undefined));
   };
 
-  test("the two apps are named in one switch at the far left, the open one pressed", async () => {
+  test("the rail is at the far left and offers the Ingest Studio; the bar begins with the mark", async () => {
     holdAllRequests();
     render(<App />);
 
-    const group = await screen.findByRole("group", { name: "Application" });
-    const glass = within(group).getByRole("button", { name: "Glass" });
-    const ingest = within(group).getByRole("button", { name: "Ingest Studio" });
-    expect(glass.getAttribute("aria-pressed")).toBe("true");
-    expect(ingest.getAttribute("aria-pressed")).toBe("false");
+    await screen.findByRole("navigation", { name: "Workspace" });
+    expect(within(rail()).getByRole("button", { name: "Ingest Studio" })).toBeTruthy();
     const header = document.querySelector("header.app-header")!;
-    expect(header.firstElementChild).toBe(group);
+    expect(header.firstElementChild?.className).toBe("brand-mark");
+    expect(header.textContent).toContain("Osprey");
     expect(header.getAttribute("data-app")).toBe("glass");
   });
 
@@ -307,8 +310,7 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     sessionStorage.setItem("ospreyflow.launcherHandoff", JSON.stringify({ view: "ingest", at: Date.now() }));
     render(<App />);
 
-    const group = await screen.findByRole("group", { name: "Application" });
-    expect(within(group).getByRole("button", { name: "Ingest Studio" }).getAttribute("aria-pressed")).toBe("true");
+    await screen.findByRole("button", { name: "Back to the investigation" });
     expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("ingest");
     for (const gone of ["Graph", "Map", "Watches", "Export ⚙", "History"]) {
       expect(screen.queryByRole("button", { name: gone })).toBeNull();
@@ -318,24 +320,25 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     expect(within(document.querySelector("header.app-header") as HTMLElement).getByRole("button", { name: /^Case:/ })).toBeTruthy();
   });
 
-  test("the switch moves between the apps, and Glass returns to the view that was open", async () => {
+  test("the rail moves between the apps, and coming back returns to the view that was open", async () => {
     holdAllRequests();
     render(<App />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Watches" }));
     fireEvent.click(screen.getByRole("button", { name: "Ingest Studio" }));
     expect(screen.queryByRole("button", { name: "Watches" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Glass" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back to the investigation" }));
     expect(screen.getByRole("button", { name: "Watches" }).getAttribute("aria-pressed")).toBe("true");
     expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("glass");
   });
 
-  test("after the Glass tile, the graph is the one showing and Ingest is not", async () => {
+  test("after the Glass tile, the graph is the one showing and the Studio is not", async () => {
     holdAllRequests();
     render(<App />);
 
-    const ingest = await screen.findByRole("button", { name: "Ingest Studio" });
-    expect(ingest.getAttribute("aria-pressed")).toBe("false");
+    const graph = await screen.findByRole("button", { name: "Graph" });
+    expect(graph.getAttribute("aria-pressed")).toBe("true");
+    expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("glass");
   });
 });
 

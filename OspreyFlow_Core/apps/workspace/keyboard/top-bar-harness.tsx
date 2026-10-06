@@ -1,11 +1,14 @@
-// The Glass's top bar on its own (ADR-065): the case menu, the search box with its Filters icon,
-// the view buttons, and the account menu, in the same `app-header` the real `App.tsx` renders.
-// `fetch` answers the case list; the outcomes are exposed on `window.__TOPBAR__` for the spec.
+// The workspace shell's top (ADR-065, ADR-097 step 1): the classification strip, the real `TopBar`
+// `App.tsx` renders (the mark, the case menu, the search box with its Filters icon, the view switch,
+// Export and the account menu), and the left rail beside it. `fetch` answers the case list; the
+// outcomes are exposed on `window.__TOPBAR__` for the specs.
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
-import { AppSwitcher } from "../src/AppSwitcher";
+import { ClassificationStrip } from "../src/shell/ClassificationStrip";
+import { LeftRail } from "../src/shell/LeftRail";
+import { TopBar } from "../src/shell/TopBar";
 import { AccountMenu } from "../src/auth/AccountMenu";
 import { ThemeToggle } from "../src/theme/ThemeToggle";
 import { Button } from "../src/design/primitives/Button";
@@ -14,11 +17,11 @@ import { GlobalSearch } from "../src/search/GlobalSearch";
 
 declare global {
   interface Window {
-    __TOPBAR__?: { opened: string | null; browsed: boolean; signedOut: boolean };
+    __TOPBAR__?: { opened: string | null; browsed: boolean; signedOut: boolean; rail: string[] };
   }
 }
 
-window.__TOPBAR__ = { opened: null, browsed: false, signedOut: false };
+window.__TOPBAR__ = { opened: null, browsed: false, signedOut: false, rail: [] };
 
 const CASES = [
   { id: "c1", name: "Enron corpus (real data, this machine only)", level: "author", created_at: "2026-09-29T09:00:00Z", created_by: "a" },
@@ -38,45 +41,63 @@ window.fetch = (async (url: string) => {
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
 
+const rail = (id: string) => () => window.__TOPBAR__!.rail.push(id);
+
 createRoot(container).render(
-  <header className="app-header">
-    <AppSwitcher app="glass" onChange={() => undefined} />
-    <CaseSwitcher
-      apiBaseUrl="http://top-bar.invalid"
-      bearerToken="unused"
-      currentId="c1"
-      onOpen={(id) => {
-        window.__TOPBAR__!.opened = id;
-      }}
-      onBrowse={() => {
-        window.__TOPBAR__!.browsed = true;
-      }}
+  <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+    <ClassificationStrip marking="OFFICIAL" />
+    <TopBar
+      app="glass"
+      caseSwitcher={
+        <CaseSwitcher
+          apiBaseUrl="http://top-bar.invalid"
+          bearerToken="unused"
+          currentId="c1"
+          onOpen={(id) => {
+            window.__TOPBAR__!.opened = id;
+          }}
+          onBrowse={() => {
+            window.__TOPBAR__!.browsed = true;
+          }}
+        />
+      }
+      search={
+        <GlobalSearch apiBaseUrl="http://top-bar.invalid" bearerToken="unused" entityTypes={["Person", "Endpoint"]} onSelect={() => undefined} />
+      }
+      views={[
+        { id: "graph", label: "Graph", pressed: true, onSelect: () => undefined },
+        { id: "map", label: "Map", pressed: false, onSelect: () => undefined },
+      ]}
+      actions={<Button>Export ⚙</Button>}
+      account={
+        <>
+          <ThemeToggle />
+          <AccountMenu
+            principal={{
+              sub: "2a0683a4-5a9c-40cb-94b9-e9c502084449",
+              username: "osprey-demo-analyst",
+              clearance: "OFFICIAL",
+              orgUnit: "unit-1",
+              roles: [],
+              receivableHandlingCodes: [],
+            }}
+            onSignOut={() => {
+              window.__TOPBAR__!.signedOut = true;
+            }}
+          />
+        </>
+      }
     />
-    <div style={{ flex: "1 1 120px", minWidth: 0, maxWidth: 420 }}>
-      <GlobalSearch apiBaseUrl="http://top-bar.invalid" bearerToken="unused" entityTypes={["Person", "Endpoint"]} onSelect={() => undefined} />
-    </div>
-    <Button aria-pressed>Graph</Button>
-    <Button>Map</Button>
-    <Button>Watches</Button>
-    {/* Stands in for the resolution slider ("Balanced"), which needs a server. About its width. */}
-    <span style={{ width: 170 }} aria-hidden="true" />
-    <Button>Export ⚙</Button>
-    <Button>History</Button>
-    <div className="app-header__account" style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}>
-      <ThemeToggle />
-      <AccountMenu
-        principal={{
-          sub: "2a0683a4-5a9c-40cb-94b9-e9c502084449",
-          username: "osprey-demo-analyst",
-          clearance: "OFFICIAL",
-          orgUnit: "unit-1",
-          roles: [],
-          receivableHandlingCodes: [],
-        }}
-        onSignOut={() => {
-          window.__TOPBAR__!.signedOut = true;
-        }}
+    <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+      <LeftRail
+        items={[
+          { id: "cases", label: "Cases", icon: "cases", onSelect: rail("cases") },
+          { id: "watches", label: "Watches", icon: "watches", onSelect: rail("watches") },
+          { id: "history", label: "History", icon: "history", onSelect: rail("history") },
+          { id: "ingest", label: "Ingest Studio", icon: "ingest", onSelect: rail("ingest") },
+        ]}
       />
+      <main style={{ flex: 1 }} aria-label="Canvas stand-in" />
     </div>
-  </header>,
+  </div>,
 );

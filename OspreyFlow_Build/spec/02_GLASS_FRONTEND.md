@@ -165,28 +165,38 @@ narrowed.
 ## 2. Workspace layout
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│ ⬛ Case 4471 — layering            [ Search entities, identifiers, documents  ⌘K ] │
-│                                              Resolution: ●Balanced   Export  ⚙   │
-├──────────┬────────────────────────────────────────────────┬──────────────────────┤
-│ FILTERS  │  CANVAS                              [⊞ ⊙ ⌖ ⧉] │ INSPECTOR            │
-│          │                                                │                      │
-│ Entity   │   The working set, one view at a time:          │ ▸ Properties         │
-│  type ▤  │   Graph · Map · Matrix                          │ ▸ Provenance         │
-│ Time  ▤  │                                                │ ▸ Relationships      │
-│ Source▤  │   Selection drives the inspector.               │ ▸ Judgements         │
-│ Strength │   Every filter on the left dims, never removes. │ ▸ Source document    │
-│  ▬▬●▬▬   │                                                │                      │
-│ Degree   │                                                │ [Confirm] [Split]    │
-│  ▬●▬▬▬   │                                                │                      │
-│          ├────────────────────────────────────────────────┤                      │
-│ Handling │  TIMELINE  ▏▁▃▅█▇▃▁▁▂▅█▆▂▁▁▁▃▇█▅▂▁              │                      │
-│  ▤       │  ├────[═══ brush ═══]──────────────────────┤    │                      │
-│          │  Mon Tue Wed Thu Fri Sat Sun   ◂ play ▸ 1×      │                      │
-├──────────┴────────────────────────────────────────────────┴──────────────────────┤
-│ 12,481 nodes · 38,902 edges · 214 dimmed by filter · 6 hidden by handling ⓘ       │
-└──────────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│                     OFFICIAL — the highest marking in view                         │ strip, 20px
+├────────────────────────────────────────────────────────────────────────────────────┤
+│ ◆ Osprey  Case 4471 — layering ▾  [ Search…  / ]  [Graph|Map]  Export ⚙  Dark  👤  │ top bar, 40px
+├──┬───────────────────────────────────────────────────┬─────────────────────────────┤
+│▣ │ Resolution: ●Balanced            (view toolbar)   │ ⠿ Inspector              ⋯  │ header, 28px
+│◷ ├───────────────────────────────────────────────────┤ ▸ Properties                │
+│↺ │  CANVAS — Graph · Map · Messages                  │ ▸ Relationships             │
+│⇪ │                                                   │ ▸ Provenance                │
+│  │  Selection drives the inspector.                  ├─────────────────────────────┤
+│  │  Every filter dims, never removes.                │ ⠿ Metrics                ⋯  │
+│  │                                                   ├─────────────────────────────┤
+│  │ [3 selected  Expand  Branch…  Remove  Clear]      │ ⠿ Query builder          ⋯  │
+│  ├───────────────────────────────────────────────────┤                             │
+│  │ ▸ Timeline (folded until opened)                  │                             │
+├──┴───────────────────────────────────────────────────┴─────────────────────────────┤
+│ 12,481 nodes · 38,902 edges · 214 dimmed by filter · 6 hidden by handling ⓘ         │
+└────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+The rail on the left (44px; ADR-097 step 1) holds the places the analyst goes to: *Cases*, *Watches*,
+*History*, *Proposed types* (administrators only, ADR-090 C3) and the *Ingest Studio*; in the Ingest
+Studio it holds *Back to the investigation*. Each is an icon button whose accessible name is its label;
+*Show names* widens the rail to show the labels and *Hide names* narrows it again. *Cases* opens a
+drawer listing the open cases (the strip of tabs of ADR-084, as a list) with *Browse all cases*. The
+**view toolbar** above the canvas holds what belongs to that view alone: the resolution threshold on
+the Graph, *Add site* and *Draw boundary* on the Map. The **selection bar** at the foot of the canvas
+appears when anything is selected (ADR-097 step 1; `keyboard/selection.spec.ts`). The timeline opens
+folded. Above the bar, the **classification strip** names the highest protective marking among what is
+on screen, by the deployment's handling scheme's order, and is never hidden (`role="note"`, "Protective
+marking"). Chrome is these three rows — strip, bar, view toolbar — and no more (ADR-097 Amendment 1);
+their heights are checked (`keyboard/shell.spec.ts`).
 
 Four rules govern this layout, and they are what make it an analytical workspace rather than a
 set of widgets:
@@ -222,14 +232,17 @@ analyst typed or brushed. The choice belongs to the browser tab: it is not store
 opens in its normal state on reload. Every one of these buttons is reachable by keyboard
 (`keyboard/panel-frames.spec.ts`).
 
-**Reordering panels (ADR-085).** The three panels of the right-hand column (the Inspector, the Metrics
-panel and the Query builder) can be put in any order. Each has a slim grip row with a drag handle and two
-buttons, *Move up* and *Move down*; dragging the handle onto another panel's place does the same as the
-buttons. The top panel's *Move up* and the bottom panel's *Move down* are shown as unavailable but keep
-focus. The order is kept in this browser for this analyst (localStorage, as the theme is), is never sent to
-the server and is not part of the case; a panel the current view does not draw keeps its place for when it
+**Reordering panels (ADR-085; header from ADR-097 step 1).** The three panels of the right-hand column
+(the Inspector, the Metrics panel and the Query builder) can be put in any order. Each has one header row
+(28px, a hairline below): a drag handle, the panel's name at `--fs-12` 600 in secondary text, and a menu
+button, *Arrange the {panel}*, whose menu holds *Move up* and *Move down*. The panel's own title is not
+drawn a second time inside it. Dragging the handle onto another panel's place does the same as the
+buttons, and Alt+Up and Alt+Down with focus on the header move the panel without opening the menu. The
+top panel's *Move up* and the bottom panel's *Move down* are shown as unavailable but keep focus. The
+order is kept in this browser for this analyst (localStorage, as the theme is), is never sent to the
+server and is not part of the case; a panel the current view does not draw keeps its place for when it
 returns, and a stored order can never lose or duplicate a panel. The timeline is not part of the set and
-nothing floats. The buttons are reachable by keyboard (`keyboard/panel-frames.spec.ts`).
+nothing floats. Both routes are reachable by keyboard (`keyboard/panel-frames.spec.ts`).
 
 **Each panel folds into parts (ADR-096).** The Inspector, the Query builder and the Metrics panel each
 have their own accordion: every part sits in a hairline box (`--border-subtle`, `--r-control`) under a
@@ -263,15 +276,12 @@ seven tenths of the window. The sizes are kept in this browser for this analyst 
 the panel order), never sent and not part of the case. The canvas, the timeline and the map redraw to
 their new box at once. Reachable by keyboard (`keyboard/panel-frames.spec.ts`).
 
-### 2.0 The top bar (ADR-065)
+### 2.0 The top bar (ADR-065; rebuilt by ADR-097 step 1)
 
-One line at ordinary widths; whole items wrap to a second line in a narrow window, and a label is
-never broken in two. From the left:
+One row, 40px. From the left:
 
-- **The application switch**, `[Glass | Ingest Studio]`: the two applications that share the page.
-  The open one is filled in brass. While the Ingest Studio is open the bar shows a brass line under
-  it and drops what belongs only to the Glass (search, Graph, Map, Watches, Messages, the
-  Balanced slider, Export, History). Choosing Glass returns to the Glass view that was last open.
+- **The mark**: the solid-cut osprey in brass and the word *Osprey* (`spec/design/`). It is not a
+  button.
 - **The case menu**, `Case: <name> ▾`: opens the cases the account can reach (the open one marked),
   `All cases`, and `New case`. The name may be cut short with an ellipsis; its full text is the
   button's title. The Ingest Studio's own "Data loaded from this studio goes into" row uses the
@@ -279,21 +289,28 @@ never broken in two. From the left:
 - **Search**, with its **Filters** control as an icon inside the box at its right-hand end (a small
   count beside it when filters are on). Its accessible name is still `Filters`, or `Filters (n)`.
   Choosing a result draws it with everything within three links, counted first and asked about
-  when large (ADR-070).
+  when large (ADR-070). `/` anywhere outside a text field moves focus to it (ADR-097 step 1).
   The "more match" hint is laid over the page under the box and fades after four seconds; the Filters
   panel is laid over the page too, so neither makes the bar taller (ADR-071).
   The box looks at each type's identifiers and its names and titles (a person's family and given
   names, an organisation's name, a place's name, a document's title) and never at a sensitive
   property; it starts after two characters and says `Type at least 2 characters to search.` while
   there is one (ADR-074).
-- Graph, Map, Watches (and Messages when a dossier is open); the Balanced slider; Export; History.
+- **The view switch**, a segmented group named *View*: Graph, Map, and Messages when a dossier is
+  open. The pressed one is drawn in primary text with a 2px underline, not in brass (ADR-097: brass is
+  for the primary action, focus and the selection).
+- **Export**, for the whole case, on the Graph.
 - **The theme button** (a worded button, just left of the account, that names the theme a press
   switches to: `Light` while the page is dark, `Dark` once it is light; ADR-073): switches between the
-  dark default and the light theme, per browser, never sent to the server (ADR-070). It carries no pressed
-  state; the view buttons, which do, are drawn with a brass border and text when pressed (ADR-071).
-  The choice is also kept in a cookie shared by every page of the deployment (the launcher, the sign-in
-  page and the setup harness follow it and carry the same button; ADR-072).
+  dark default and the light theme, per browser, never sent to the server (ADR-070). The choice is
+  also kept in a cookie shared by every page of the deployment (the launcher, the sign-in page and the
+  setup harness follow it and carry the same button; ADR-072).
 - **The account**, at the right-hand end (item 5 above).
+
+There is no application switch: the Ingest Studio is reached from the rail, and while it is open the
+bar shows a brass line under it and drops what belongs only to the Glass (search, the view switch,
+Export). *Back to the investigation* on the rail returns to the Glass view that was last open. Watches,
+History and Proposed types are on the rail; the resolution threshold is on the Graph's view toolbar.
 
 Every menu opens on Enter or Space, closes on Escape (focus returns to its button), on a click
 outside it, and when keyboard focus moves outside it, so it never traps a keyboard user.
