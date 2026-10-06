@@ -440,6 +440,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     const dragRef = useRef<{ from: { x: number; y: number }; start: Map<string, { x: number; y: number }>; moved: boolean } | null>(null);
     const pinnedRef = useRef<Set<string>>(new Set());
     const swallowClickRef = useRef(false);
+    const endDragRef = useRef<() => void>(() => undefined);
     /** The nodes to move with `ids`: each one's resolution cluster too, since a cluster is drawn as
      * one place and the layout positions only its representative (found moving one member alone:
      * the next layout put it back with the rest). */
@@ -1435,6 +1436,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // The camera does not pan while a node is held; a folded group's node and the lasso do not drag.
       sigma.on("downNode", ({ node, event }) => {
         swallowClickRef.current = false;
+        // Only the main button drags. A right-click opens the node's menu; it used to start a drag
+        // too, so the selection followed the pointer to the menu and nothing in it could be chosen
+        // (owner, 6 October 2026).
+        const press = event.original as MouseEvent;
+        if (typeof press.button === "number" && press.button !== 0) return;
         if (lassoActiveRef.current || foldedViewRef.current?.groups.has(node)) return;
         const ids = withClusterMates(selectedRef.current.has(node) ? Array.from(selectedRef.current) : [node]);
         dragRef.current = {
@@ -1447,6 +1453,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       captor.on("mousemovebody", (event) => {
         const drag = dragRef.current;
         if (!drag) return;
+        // No button held any more (released over a menu or outside the page): the drag is over.
+        const move = event.original as MouseEvent;
+        if (typeof move.buttons === "number" && move.buttons === 0) {
+          endDragRef.current();
+          return;
+        }
         const now = sigma.viewportToGraph({ x: event.x, y: event.y });
         for (const [id, at] of dragTargets(drag.start, drag.from, now)) {
           graph.mergeNodeAttributes(id, { x: at.x, y: at.y });
@@ -1466,6 +1478,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // Released anywhere, even past the canvas's edge: the renderer follows a held mouse across
       // the window, so ending the drag when the pointer left the canvas turned the rest of it
       // into a pan (found by `node-drag.spec.ts`'s drag to the canvas's bottom edge).
+      endDragRef.current = endDrag;
       captor.on("mouseup", endDrag);
       sigma.on("clickNode", ({ node, event }) => {
         // The click that ends a drag is the drag, not a click: the selection stays as it was.
@@ -1512,6 +1525,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       sigma.on("leaveNode", () => setHovered(null));
       sigma.on("rightClickNode", ({ node, event }) => {
         event.preventSigmaDefault();
+        dragRef.current = null; // a menu is opening: nothing is being dragged
         setLinkMenu(null);
         setFocused(node);
         setRadialMenu(

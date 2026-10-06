@@ -463,7 +463,8 @@ the groups, one row, no shadow); each control keeps its own keyboard case.
 
 **Moving nodes by hand (owner, 6 October 2026; the spec was silent).** Dragging a node moves it, and moves
 the whole selection when the node is in it; the camera does not pan while a node is held, and the click
-that ends a drag does not change the selection. A node is moved with its resolution cluster, which is drawn
+that ends a drag does not change the selection. Only the main button drags: a right-click opens the menu and moves
+nothing, and a drag ends when no button is held any more, wherever it was released. A node is moved with its resolution cluster, which is drawn
 as one place. Shift with an arrow key moves the selection 8 pixels on screen, 32 with Alt too (the
 keyboard route, rule 13). A node placed by hand stays where it was put when a layout runs for nodes added
 later, in every layout; *Arrange* lays everything out afresh and forgets the placements. Positions belong

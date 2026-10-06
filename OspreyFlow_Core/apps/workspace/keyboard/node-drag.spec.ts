@@ -108,3 +108,31 @@ test("a node moved by hand stays where it was put when an expansion re-arranges 
   expect(Math.abs(after.x - placed.x)).toBeLessThan(2);
   expect(Math.abs(after.y - placed.y)).toBeLessThan(2);
 });
+
+test("a right-click on a selection opens its menu without dragging, and the menu can be used (owner, 6 October 2026)", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual(["n0"]);
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press(" ");
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selection.length)).toBe(2);
+  const [first, second] = (await page.evaluate(() => window.__KEYBOARD__!.selection)) as [string, string];
+  await layoutSettled(page, [first, second]);
+  const a = (await at(page, first))!;
+  const b = (await at(page, second))!;
+  const box = (await page.getByRole("application", { name: "Network canvas" }).boundingBox())!;
+  await page.mouse.click(box.x + a.x, box.y + a.y, { button: "right" });
+  const item = page.getByRole("menuitem").first();
+  await expect(item).toBeVisible();
+  // Travel to the menu: nothing on the canvas follows the pointer.
+  const target = (await item.boundingBox())!;
+  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 8 });
+  const a2 = (await at(page, first))!;
+  const b2 = (await at(page, second))!;
+  expect(Math.abs(a2.x - a.x) + Math.abs(a2.y - a.y)).toBeLessThan(2);
+  expect(Math.abs(b2.x - b.x) + Math.abs(b2.y - b.y)).toBeLessThan(2);
+  // And the item takes the click.
+  await expect(item).toBeEnabled();
+  await page.mouse.click(target.x + target.width / 2, target.y + target.height / 2);
+  await expect(page.getByRole("menuitem")).toHaveCount(0);
+});
