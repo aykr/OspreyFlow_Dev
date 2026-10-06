@@ -459,3 +459,37 @@
 .canvas-legend__list { list-style: none; margin: 0; padding: 0 var(--sp-8) var(--sp-6); display: grid; gap: var(--sp-2); }
 .canvas-legend__list[hidden] { display: none; }
 .canvas-legend__list li { display: flex; justify-content: space-between; gap: var(--sp-8); color: var(--text-primary); }
+/* The canvas toolbar (ADR-097 step 2, design review item 12): one docked row along the canvas's top
+   edge, a hairline below and no shadow (DESIGN.md §6); labelled groups, the Show group one segmented
+   control. Its controls are quiet buttons here, not the floating overlay buttons they are elsewhere. */
+.canvas-toolbar {
+  box-sizing: border-box; position: absolute; z-index: 10; top: 0; left: 0; right: 0; min-height: 32px;
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-4) var(--sp-16); padding: var(--sp-2) var(--sp-8);
+  background: var(--surface-panel); border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--fs-12); line-height: var(--lh-12);
+}
+.canvas-toolbar__group { display: flex; align-items: center; gap: var(--sp-4); }
+.canvas-toolbar__group--end { margin-left: auto; }
+.canvas-toolbar__label { color: var(--text-tertiary); font-weight: 600; }
+.canvas-toolbar__status { display: inline-flex; align-items: center; gap: var(--sp-4); position: relative; }
+.canvas-toolbar__note { color: var(--text-secondary); }
+.canvas-toolbar .radial-menu__item {
+  box-shadow: none; background: transparent; padding: var(--sp-2) var(--sp-8); min-height: 24px;
+  font-size: var(--fs-12); color: var(--text-secondary);
+}
+.canvas-toolbar .radial-menu__item:hover, .canvas-toolbar .radial-menu__item:focus-visible { background: var(--surface-hover); color: var(--text-primary); }
+.canvas-toolbar .radial-menu__item[aria-pressed="true"], .canvas-toolbar .radial-menu__item[aria-expanded="true"] {
+  background: var(--surface-raised); color: var(--text-primary); box-shadow: inset 0 -2px 0 var(--text-primary);
+}
+.canvas-toolbar .radial-menu__item:disabled { color: var(--text-disabled); cursor: default; }
+.canvas-toolbar select { font-size: var(--fs-12); min-height: 24px; }
+.canvas-toolbar__show { border-color: var(--border-subtle); overflow: visible; }
+.canvas-toolbar__show > * + * { border-left: 1px solid var(--border-subtle); }
+.canvas-toolbar__show .radial-menu__item { border-radius: 0; }
+/* A toolbar menu's panel, laid over the canvas under its button: an overlay, so a shadow. */
+.canvas-menu { position: relative; display: flex; }
+.canvas-menu-panel {
+  position: absolute; top: calc(100% + var(--sp-4)); left: 0; z-index: 30; min-width: 240px;
+  box-shadow: var(--overlay-shadow);
+}
+.canvas-menu-panel--end { left: auto; right: 0; }

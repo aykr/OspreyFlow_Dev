@@ -71,6 +71,28 @@ def find_drift(
     return drift
 
 
+def stale_allowlist(
+    root: Path, palette: frozenset[str], allowed: set[tuple[str, str]]
+) -> list[tuple[str, str]]:
+    """Allowlist entries that excuse nothing now: the file no longer holds the literal, or the
+    literal is on the palette. A stale entry would let the literal back in without a word."""
+    stale: list[tuple[str, str]] = []
+    for rel, literal in sorted(allowed):
+        path = root / rel
+        found = (
+            path.exists()
+            and literal not in palette
+            and any(
+                _normal(c) == literal
+                for line in path.read_text(encoding="utf-8").splitlines()
+                for c in _HEX.findall(line) + _FUNCTION.findall(line)
+            )
+        )
+        if not found:
+            stale.append((rel, literal))
+    return stale
+
+
 def _load_allowlist() -> set[tuple[str, str]]:
     allowed: set[tuple[str, str]] = set()
     if not ALLOWLIST_PATH.exists():
@@ -86,11 +108,18 @@ def _load_allowlist() -> set[tuple[str, str]]:
 
 def main() -> int:
     palette = palette_from(DESIGN_PATH.read_text(encoding="utf-8"))
-    drift = find_drift(GLASS_SRC, palette, allowed=_load_allowlist())
+    allowed = _load_allowlist()
+    drift = find_drift(GLASS_SRC, palette, allowed=allowed)
     for path, number, literal in drift:
         print(f"apps/workspace/src/{path}:{number}: {literal} is not in DESIGN.md")
-    if drift:
-        print(f"colour-drift-check: {len(drift)} colour(s) outside DESIGN.md", file=sys.stderr)
+    stale = stale_allowlist(GLASS_SRC, palette, allowed)
+    for path, literal in stale:
+        print(f"{ALLOWLIST_PATH.name}: {path} {literal} excuses nothing now; remove the line")
+    if drift or stale:
+        print(
+            f"colour-drift-check: {len(drift)} colour(s) outside DESIGN.md, {len(stale)} stale allowlist line(s)",
+            file=sys.stderr,
+        )
         return 1
     print("colour-drift-check: every colour in the Glass is one DESIGN.md holds")
     return 0

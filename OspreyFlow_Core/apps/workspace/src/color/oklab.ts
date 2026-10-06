@@ -114,7 +114,11 @@ export function oklabLightness(hex: string): number {
   return toOklab(hex).L;
 }
 
-/** White or near-black, whichever reads better drawn on `fillHex` (an icon on a node's fill). */
-export function readableTextOn(fillHex: string): "#ffffff" | "#10131a" {
-  return oklabLightness(fillHex) > (1 + oklabLightness("#10131a")) / 2 ? "#10131a" : "#ffffff";
+/** The near-black an icon is drawn in on a light fill: DESIGN.md's dark `n1` (ADR-097 step 2). */
+const ICON_DARK_HEX = "#101314";
+
+/** White or near-black, whichever reads better drawn on `fillHex` (an icon on a node's fill). Both
+ * are DESIGN.md neutrals: the light theme's `n0` and the dark theme's `n1`. */
+export function readableTextOn(fillHex: string): "#ffffff" | "#101314" {
+  return oklabLightness(fillHex) > (1 + oklabLightness(ICON_DARK_HEX)) / 2 ? ICON_DARK_HEX : "#ffffff";
 }

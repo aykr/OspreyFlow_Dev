@@ -71,3 +71,27 @@ test("the canvas shows its 8px measurement grid behind the graph", async ({ page
   const gaps = found.slice(1).map((x, i) => (x - found[i]!) / scale);
   for (const gap of gaps) expect(gap).toBeCloseTo(8, 0);
 });
+
+test("the canvas's tools are one docked toolbar of labelled groups, with Show as one segmented control and no shadows", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/keyboard/harness.html");
+  const toolbar = page.getByRole("toolbar", { name: "Canvas tools" });
+  await expect(toolbar).toBeVisible();
+  for (const name of ["Select", "Layout", "Show", "View"]) {
+    await expect(toolbar.getByRole("group", { name })).toBeVisible();
+  }
+  const show = toolbar.getByRole("group", { name: "Show" });
+  await expect(show).toHaveClass(/segmented/);
+  await expect(show.getByRole("button", { name: "Communities" })).toBeVisible();
+  await expect(show.getByRole("button", { name: /^Labels/ })).toBeVisible();
+  await expect(show.getByRole("button", { name: /^Icons/ })).toBeVisible();
+  // One row: every group's top within a few pixels of the first's.
+  const tops = await toolbar.getByRole("group").evaluateAll((els) => els.map((el) => el.getBoundingClientRect().top));
+  for (const top of tops) expect(Math.abs(top - tops[0]!)).toBeLessThan(4);
+  // Docked, so a hairline and no shadow (DESIGN.md §6), on the bar and every control in it. (A pressed
+  // segment's underline is an inset stroke, not a shadow.)
+  const shadows = await toolbar.evaluate((bar) =>
+    [bar, ...Array.from(bar.querySelectorAll("button, select"))].map((el) => getComputedStyle(el).boxShadow),
+  );
+  expect(shadows.filter((s) => s !== "none" && !s.includes("inset"))).toEqual([]);
+});

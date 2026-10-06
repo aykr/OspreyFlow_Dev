@@ -27,7 +27,7 @@ afterEach(() => vi.restoreAllMocks());
 describe("which icon a type is drawn with", () => {
   it("is the ontology's, in a colour that reads on the fill, when nothing was chosen", () => {
     expect(resolveNodeIcon("Person", "person", DARK_FILL)).toEqual({ kind: "glyph", name: "person", colourHex: "#ffffff" });
-    expect(resolveNodeIcon("Person", "person", LIGHT_FILL)).toEqual({ kind: "glyph", name: "person", colourHex: "#10131a" });
+    expect(resolveNodeIcon("Person", "person", LIGHT_FILL)).toEqual({ kind: "glyph", name: "person", colourHex: "#101314" });
   });
 
   it("is none when the ontology names none, or names one the Glass cannot draw", () => {

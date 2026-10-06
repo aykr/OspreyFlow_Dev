@@ -46,14 +46,14 @@ describe("mixOklab", () => {
 describe("readableTextOn", () => {
   it("is white on a dark fill and near-black on a light one", () => {
     expect(readableTextOn("#1b2a6b")).toBe("#ffffff");
-    expect(readableTextOn("#e8d9a0")).toBe("#10131a");
+    expect(readableTextOn("#e8d9a0")).toBe("#101314");
   });
 
   it("chooses the colour that is further from the fill, for every channel in either theme", () => {
     // Not a contrast standard, only that the choice is never the worse of the two.
     for (const hex of ["#677bd6", "#5367cb", "#35b9c0", "#c08a34", "#d96b8a", "#7b5fd0", "#3f9d6a"]) {
       const text = readableTextOn(hex);
-      const other = text === "#ffffff" ? "#10131a" : "#ffffff";
+      const other = text === "#ffffff" ? "#101314" : "#ffffff";
       expect(lightnessGap(hex, text)).toBeGreaterThanOrEqual(lightnessGap(hex, other));
     }
   });

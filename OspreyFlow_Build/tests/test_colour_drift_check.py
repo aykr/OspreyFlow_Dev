@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tools import colour_drift_check
 from tools.colour_drift_check import find_drift, palette_from
 
 
@@ -59,3 +60,31 @@ def test_the_real_glass_has_no_new_drift() -> None:
     from tools.colour_drift_check import main
 
     assert main() == 0
+
+
+# --- a stale allowlist entry (found 6 October 2026: `#10131a` was fixed in `oklab.ts` and its line
+# stayed, so the gate would have let the literal back in without a word) ---------------------------
+
+
+def test_an_allowlist_entry_whose_literal_is_gone_is_reported(tmp_path: Path) -> None:
+    (tmp_path / "color").mkdir()
+    (tmp_path / "color" / "oklab.ts").write_text('const DARK = "#101314";\n', encoding="utf-8")
+    palette = frozenset({"#101314"})
+    allowed = {("color/oklab.ts", "#10131a"), ("missing/file.ts", "#123456")}
+    assert colour_drift_check.stale_allowlist(tmp_path, palette, allowed) == [
+        ("color/oklab.ts", "#10131a"),
+        ("missing/file.ts", "#123456"),
+    ]
+
+
+def test_an_allowlist_entry_still_in_use_is_not_stale(tmp_path: Path) -> None:
+    (tmp_path / "map").mkdir()
+    (tmp_path / "map" / "MapView.tsx").write_text('paint: "rgba(0,0,0,0.4)"\n', encoding="utf-8")
+    assert colour_drift_check.stale_allowlist(tmp_path, frozenset(), {("map/MapView.tsx", "rgba(0,0,0,0.4)")}) == []
+
+
+def test_an_allowlisted_literal_that_is_now_on_the_palette_is_stale(tmp_path: Path) -> None:
+    (tmp_path / "a.ts").write_text('"#101314"\n', encoding="utf-8")
+    assert colour_drift_check.stale_allowlist(tmp_path, frozenset({"#101314"}), {("a.ts", "#101314")}) == [
+        ("a.ts", "#101314")
+    ]

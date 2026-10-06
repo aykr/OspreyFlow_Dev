@@ -60,7 +60,8 @@ export function IconsMenu({ entityTypes, getTypesInView, makeThumbnail = thumbna
 
   return (
     <div
-      style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)", alignItems: "flex-start" }}
+      // A segment of the canvas toolbar's Show group, its panel laid over the canvas below it.
+      className="canvas-menu"
       onKeyDown={(event) => {
         if (event.key === "Escape" && open) {
           event.stopPropagation();
@@ -83,6 +84,7 @@ export function IconsMenu({ entityTypes, getTypesInView, makeThumbnail = thumbna
       {open && (
         <div
           id={panelId}
+          className="canvas-menu-panel"
           style={{
             display: "flex",
             flexDirection: "column",

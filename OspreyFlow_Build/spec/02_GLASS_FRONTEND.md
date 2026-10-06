@@ -434,6 +434,17 @@ lines on an 8px lattice, fixed to the screen. All of them come after the view's 
 Reachable by keyboard (`keyboard/keyboard.spec.ts`); the painted grid is read from the pixels
 (`keyboard/canvas-look.spec.ts`).
 
+**The canvas toolbar (ADR-097 step 2, design review item 12).** The canvas's own tools are one docked
+row along its top edge, *Canvas tools* (32px, `--surface-panel`, a hairline below and no shadow:
+DESIGN.md §6), in labelled groups: **Select** (the lasso), **Layout** (the layout, *Bubbles by* for
+Clustered bubbles, *Arrange again*), **Show** — one segmented control of *Communities* (pressed while on),
+*Labels* and *Icons*, followed while Communities is on by what it found and *Collapse all* / *Expand
+all* — and, at the right-hand end, **View** (*Hide selected link*, *Show hidden links (n)*, *Clear view*,
+*Add files*). A menu's panel and *Clear view*'s confirmation are laid over the canvas under their
+button, as overlays with a shadow. The toolbar's controls are quiet buttons at `--fs-12`; a pressed or
+open one is primary text with a 2px underline. Checked in the browser (`keyboard/canvas-look.spec.ts`:
+the groups, one row, no shadow); each control keeps its own keyboard case.
+
 ### 3.1c An expansion that adds nothing says so (ADR-077)
 
 Choosing a relationship from a node's menu (or pressing `Enter`, or opening a search result) asks the

@@ -30,21 +30,8 @@ export function ViewActions({
   const [confirming, setConfirming] = useState(false);
   const total = nodeCount.toLocaleString("en-GB");
   return (
-    <div
-      style={{
-        position: "absolute",
-        // Above the renderer's canvas layers, which are added to the same container after this
-        // and would otherwise take every click meant for these buttons.
-        zIndex: 10,
-        top: "var(--sp-8)",
-        right: "var(--sp-8)",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "flex-end",
-        gap: "var(--sp-4)",
-      }}
-    >
-      <div style={{ display: "flex", gap: "var(--sp-4)" }}>
+    // The canvas toolbar's View group (ADR-097 step 2); the confirmation is laid over the canvas below.
+    <span className="canvas-toolbar__status canvas-toolbar__view">
         {selectedLink && (
           <button type="button" className="radial-menu__item" onClick={onHideLink}>
             Hide selected link
@@ -63,9 +50,7 @@ export function ViewActions({
         >
           Clear view
         </button>
-      </div>
       {onAddFiles && (
-        // A row of its own, so the row above keeps its place (buttons there are right-aligned).
         <button type="button" className="radial-menu__item" onClick={onAddFiles}>
           Add files
         </button>
@@ -74,6 +59,7 @@ export function ViewActions({
         <div
           role="alertdialog"
           aria-label="Clear the view"
+          className="canvas-menu-panel canvas-menu-panel--end"
           style={{
             display: "flex",
             flexDirection: "column",
@@ -109,6 +95,6 @@ export function ViewActions({
           </button>
         </div>
       )}
-    </div>
+    </span>
   );
 }

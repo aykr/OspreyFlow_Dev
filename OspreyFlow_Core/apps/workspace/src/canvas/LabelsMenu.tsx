@@ -36,13 +36,8 @@ export function LabelsMenu({ entityTypes, getTypesInView }: LabelsMenuProps) {
 
   return (
     <div
-      style={{
-        // Placed, with the Icons control beside it, by `GlassCanvas`.
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--sp-4)",
-        alignItems: "flex-start",
-      }}
+      // A segment of the canvas toolbar's Show group, its panel laid over the canvas below it.
+      className="canvas-menu"
       onKeyDown={(event) => {
         if (event.key === "Escape" && open) {
           event.stopPropagation();
@@ -65,6 +60,7 @@ export function LabelsMenu({ entityTypes, getTypesInView }: LabelsMenuProps) {
       {open && (
         <div
           id={panelId}
+          className="canvas-menu-panel"
           style={{
             display: "flex",
             flexDirection: "column",

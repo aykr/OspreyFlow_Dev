@@ -22,16 +22,8 @@ export interface LayoutMenuProps {
  * applies to nodes added later, until another is chosen. */
 export function LayoutMenu({ mode, onChange, bubbleKey = "type", onBubbleKeyChange, onArrange }: LayoutMenuProps) {
   return (
-    <div
-      style={{
-        position: "absolute",
-        top: 8,
-        left: 48,
-        zIndex: 10,
-        display: "flex",
-        gap: "var(--sp-4)",
-      }}
-    >
+    // Placed in the canvas toolbar's Layout group by `GlassCanvas` (ADR-097 step 2).
+    <span className="canvas-toolbar__status">
       <select
         aria-label="Layout"
         value={mode}
@@ -59,6 +51,6 @@ export function LayoutMenu({ mode, onChange, bubbleKey = "type", onBubbleKeyChan
       <button type="button" className="radial-menu__item" onClick={onArrange}>
         Arrange again
       </button>
-    </div>
+    </span>
   );
 }

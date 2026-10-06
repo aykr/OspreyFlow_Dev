@@ -98,7 +98,7 @@ import { settleLayout, type LayoutNode } from "./forceLayout";
 import { BubbleOverlay, type Bubble } from "./BubbleOverlay";
 import { arrange, enclosingCircle, linkKey, treeLinkKeys, type LayoutMode } from "./layoutModes";
 import { LayoutMenu, type BubbleKey } from "./LayoutMenu";
-import { CommunitiesControls } from "./CommunitiesControls";
+import { CommunitiesStatus, CommunitiesToggle } from "./CommunitiesControls";
 import { CommunityBoxOverlay } from "./CommunityBoxOverlay";
 import { JudgementBadgeOverlay } from "./JudgementBadgeOverlay";
 import { activePalette } from "../color/palette";
@@ -2635,16 +2635,69 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           setLassoPoints([]);
         }}
       >
-        <button
-          type="button"
-          className="icon-btn"
-          aria-pressed={lassoActive}
-          title="Lasso select"
-          style={{ position: "absolute", top: 8, left: 8, zIndex: 10 }}
-          onClick={() => setLassoActive((v) => !v)}
-        >
-          ⬚
-        </button>
+        {/* ADR-097 step 2 (design review item 12): the canvas's tools, one docked row of labelled
+            groups; Show is one segmented control. */}
+        <div role="toolbar" aria-label="Canvas tools" className="canvas-toolbar">
+          <div role="group" aria-label="Select" className="canvas-toolbar__group">
+            <button
+              type="button"
+              className="icon-btn"
+              aria-pressed={lassoActive}
+              title="Lasso select"
+              onClick={() => setLassoActive((v) => !v)}
+            >
+              ⬚
+            </button>
+          </div>
+          <div role="group" aria-label="Layout" className="canvas-toolbar__group">
+            <span className="canvas-toolbar__label" aria-hidden="true">Layout</span>
+            <LayoutMenu
+              mode={layoutMode}
+              onChange={(mode) => {
+                layoutModeRef.current = mode;
+                setLayoutMode(mode);
+                arrangeNowRef.current();
+              }}
+              bubbleKey={bubbleKey}
+              onBubbleKeyChange={(key) => {
+                bubbleKeyRef.current = key;
+                setBubbleKey(key);
+                arrangeNowRef.current();
+              }}
+              onArrange={() => arrangeNowRef.current()}
+            />
+          </div>
+          <div className="canvas-toolbar__group">
+            <span className="canvas-toolbar__label" aria-hidden="true">Show</span>
+            <div role="group" aria-label="Show" className="segmented canvas-toolbar__show">
+              <CommunitiesToggle on={communitiesOn} onToggle={() => setCommunitiesOn((v) => !v)} />
+              {entityTypes !== undefined && (
+                <>
+                  <LabelsMenu entityTypes={entityTypes} getTypesInView={typesInView} />
+                  <IconsMenu entityTypes={entityTypes} getTypesInView={typesInView} />
+                </>
+              )}
+            </div>
+            <CommunitiesStatus
+              on={communitiesOn}
+              groupCount={communities.length}
+              foldedCount={collapsed.size}
+              onCollapseAll={() => setCollapsed(new Set(communities.map((c) => c.id)))}
+              onExpandAll={() => setCollapsed(new Set())}
+            />
+          </div>
+          <div role="group" aria-label="View" className="canvas-toolbar__group canvas-toolbar__group--end">
+            <ViewActions
+              nodeCount={graph.order}
+              onClearAll={() => void removeNodeIds(graph.nodes())}
+              selectedLink={selectedEdge !== null}
+              hiddenLinkCount={hiddenEdges.size}
+              onHideLink={hideSelectedLink}
+              onShowHiddenLinks={() => setHiddenEdges(new Set())}
+              onAddFiles={apiBaseUrl && bearerToken && investigationId ? () => setAddingFiles({}) : undefined}
+            />
+          </div>
+        </div>
         {lassoActive && lassoPoints.length > 1 && (
           <svg
             style={{
@@ -2766,47 +2819,6 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             onFold={foldGroup}
           />
         )}
-        <CommunitiesControls
-          on={communitiesOn}
-          groupCount={communities.length}
-          foldedCount={collapsed.size}
-          onToggle={() => setCommunitiesOn((v) => !v)}
-          onCollapseAll={() => setCollapsed(new Set(communities.map((c) => c.id)))}
-          onExpandAll={() => setCollapsed(new Set())}
-        />
-        {entityTypes !== undefined && (
-          <div
-            style={{
-              // Below Communities (top 44) and above the renderer's canvas layers, which are added to
-              // the same container after this and would otherwise take every click meant for it.
-              position: "absolute",
-              top: 80,
-              left: 48,
-              zIndex: 10,
-              display: "flex",
-              gap: "var(--sp-8)",
-              alignItems: "flex-start",
-            }}
-          >
-            <LabelsMenu entityTypes={entityTypes} getTypesInView={typesInView} />
-            <IconsMenu entityTypes={entityTypes} getTypesInView={typesInView} />
-          </div>
-        )}
-        <LayoutMenu
-          mode={layoutMode}
-          onChange={(mode) => {
-            layoutModeRef.current = mode;
-            setLayoutMode(mode);
-            arrangeNowRef.current();
-          }}
-          bubbleKey={bubbleKey}
-          onBubbleKeyChange={(key) => {
-            bubbleKeyRef.current = key;
-            setBubbleKey(key);
-            arrangeNowRef.current();
-          }}
-          onArrange={() => arrangeNowRef.current()}
-        />
         {layoutMode === "bubbles" && (
           <BubbleOverlay
             sigmaRef={sigmaRef}
@@ -2839,15 +2851,6 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             setSelected(new Set());
             onSelectionChange?.([]);
           }}
-        />
-        <ViewActions
-          nodeCount={graph.order}
-          onClearAll={() => void removeNodeIds(graph.nodes())}
-          selectedLink={selectedEdge !== null}
-          hiddenLinkCount={hiddenEdges.size}
-          onHideLink={hideSelectedLink}
-          onShowHiddenLinks={() => setHiddenEdges(new Set())}
-          onAddFiles={apiBaseUrl && bearerToken && investigationId ? () => setAddingFiles({}) : undefined}
         />
         {/* ADR-097 step 2: the zoom cluster and the legend, after the view's own controls in Tab order. */}
         <ZoomControls onZoomIn={() => zoomBy("in")} onZoomOut={() => zoomBy("out")} onFit={fitToView} />

@@ -13,6 +13,10 @@ declare global {
 }
 
 const FIXTURE = (kind: string) => `/keyboard/harness.html?fixture=link-style&kind=${kind}`;
+/** The harness's controls, the canvas toolbar (ADR-097 step 2) and the canvas's grid, hidden so the
+ * reader sees only links on the bare canvas: its background is read from the top-left corner. */
+const HIDE_ALL_BUT_THE_LINKS =
+  "button, select, label, .canvas-toolbar { visibility: hidden !important; } .network-canvas { background-image: none !important; }";
 /** Pixels kept clear at each end of a link: the node, and the arrowhead where there is one. */
 const TRIM = 30;
 
@@ -30,10 +34,10 @@ async function readLink(page: Page, kind: string): Promise<Reading> {
   const a = await page.evaluate((id) => window.__CANVAS__?.viewportPositionOf(id), `${kind}-a`);
   const b = await page.evaluate((id) => window.__CANVAS__?.viewportPositionOf(id), `${kind}-b`);
   if (!a || !b) throw new Error(`no position for the ${kind} pair`);
-  // The harness's own buttons sit over part of the canvas, and the canvas's grid (ADR-097, tested in
-  // canvas-look.spec.ts) would read as ink: hide both so only the link is read.
+  // The harness's own buttons and the canvas toolbar sit over part of the canvas, and its grid
+  // (ADR-097, tested in canvas-look.spec.ts) would read as ink: hide them so only the link is read.
   await page.addStyleTag({
-    content: "button, select, label { visibility: hidden !important; } .network-canvas { background-image: none !important; }",
+    content: HIDE_ALL_BUT_THE_LINKS,
   });
   const png = (await page.screenshot()).toString("base64");
   return page.evaluate(
@@ -193,7 +197,7 @@ async function headWidth(page: Page, kind: string): Promise<number> {
   const a = (await page.evaluate((id) => window.__CANVAS__?.viewportPositionOf(id), `${kind}-a`))!;
   const b = (await page.evaluate((id) => window.__CANVAS__?.viewportPositionOf(id), `${kind}-b`))!;
   await page.addStyleTag({
-    content: "button, select, label { visibility: hidden !important; } .network-canvas { background-image: none !important; }",
+    content: HIDE_ALL_BUT_THE_LINKS,
   });
   const png = (await page.screenshot()).toString("base64");
   return page.evaluate(
