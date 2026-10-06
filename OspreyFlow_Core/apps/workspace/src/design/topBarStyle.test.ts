@@ -58,15 +58,18 @@ describe("the top bar", () => {
 });
 
 describe("telling the two apps apart (owner, 3 October 2026)", () => {
-  it("draws the open app filled in brass in the switch, and the other plain", () => {
-    expect(css).toMatch(/\.app-switcher \.btn\[aria-pressed="true"\]/);
-    expect(plainDeclarations(".app-switcher")["border"]).toMatch(/var\(--brass/);
+  // ADR-097 (design review item 5) replaces ADR-065's brass switch: which app is open is a current
+  // state, drawn as one, and brass is kept for the primary action, focus and the selection.
+  it("marks the open app as current in the switch, not in brass", () => {
+    const open = plainDeclarations('.app-switcher .btn[aria-pressed="true"]');
+    expect(open["box-shadow"]).toMatch(/var\(--text-primary\)/);
+    expect(JSON.stringify(plainDeclarations(".app-switcher"))).not.toMatch(/--brass/);
   });
 
-  it("puts a brass line under the bar while the Ingest Studio is open", () => {
+  it("puts a line under the bar while the Ingest Studio is open", () => {
     const rule = css.match(/\.app-header\[data-app="ingest"\]\s*\{([^}]*)\}/);
     expect(rule).not.toBeNull();
-    expect(rule![1]).toMatch(/border-bottom:[^;]*var\(--brass/);
+    expect(rule![1]).toMatch(/border-bottom:[^;]*var\(--text-primary/);
   });
 
   it("pushes the account to the right-hand end", () => {
@@ -131,9 +134,10 @@ describe("a pressed button", () => {
   it("looks pressed: the theme button and the view buttons show which is on", () => {
     // Seen 3 October 2026: the light/dark switch was found "almost by mistake", and Graph, Map and
     // Watches gave no sign of which view was showing. `.btn` had no pressed rule at all.
+    // ADR-097: shown as current (primary text, a 2px underline), not in brass.
     const pressed = plainDeclarations('.btn[aria-pressed="true"]');
-    expect(pressed["border-color"]).toBe("var(--brass)");
-    expect(pressed["color"]).toBe("var(--brass)");
+    expect(pressed["color"]).toBe("var(--text-primary)");
+    expect(pressed["box-shadow"]).toMatch(/var\(--text-primary\)/);
     expect(pressed["background"]).toBeDefined();
   });
 });

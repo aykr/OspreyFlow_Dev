@@ -8,7 +8,7 @@
 // enough to actually enclose an area.
 import type { GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
 
-import { BRASS_HEX } from "../color/tokens";
+import { BORDER_STRONG_DARK_HEX, BRASS_HEX } from "../color/tokens";
 
 const BOUNDARY_SOURCE_ID = "ospreyflow-boundary-draw";
 const BOUNDARY_FILL_LAYER_ID = "ospreyflow-boundary-draw-fill";
@@ -48,7 +48,9 @@ export function setBoundaryDrawLayer(map: MapLibreMap, points: readonly LngLat[]
     type: "fill",
     source: BOUNDARY_SOURCE_ID,
     filter: ["==", ["geometry-type"], "Polygon"],
-    paint: { "fill-color": BRASS_HEX, "fill-opacity": 0.15 },
+    // The drawn area is the analyst's selection: its line is brass, its inside a faint neutral,
+    // not a brass tint (ADR-097, DESIGN.md §3.2).
+    paint: { "fill-color": BORDER_STRONG_DARK_HEX, "fill-opacity": 0.12 },
   });
   map.addLayer({
     id: BOUNDARY_LINE_LAYER_ID,

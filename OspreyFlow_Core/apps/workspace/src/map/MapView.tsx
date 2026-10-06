@@ -42,7 +42,7 @@ import type {
   PublicMapProvider,
   Sighting,
 } from "../../../../packages/schemas/generated";
-import { BRASS_HEX, SEQ_HEX } from "../color/tokens";
+import { SEQ_HEX } from "../color/tokens";
 import type { WorkingSetGraph } from "../workingset/store";
 import { BasemapUnavailableError, checkBasemapAvailable } from "./basemapAvailability";
 import { registerAuthorisedPmtilesSource } from "./pmtilesAuth";
@@ -361,7 +361,8 @@ export function MapView({
             type: "line",
             source: SNAIL_TRAIL_SOURCE_ID,
             filter: ["==", ["geometry-type"], "LineString"],
-            paint: { "line-color": BRASS_HEX, "line-width": 2, "line-opacity": 0.85 },
+            // A sighting trail is data: the sequential ramp, not brass (ADR-097).
+            paint: { "line-color": SEQ_HEX[4], "line-width": 2, "line-opacity": 0.85 },
           });
           layer.map.addLayer({
             id: SNAIL_TRAIL_POINT_LAYER_ID,
@@ -369,7 +370,7 @@ export function MapView({
             source: SNAIL_TRAIL_SOURCE_ID,
             filter: ["==", ["geometry-type"], "Point"],
             paint: {
-              "circle-color": BRASS_HEX,
+              "circle-color": SEQ_HEX[5],
               "circle-radius": 6,
               "circle-stroke-color": "#ffffff",
               "circle-stroke-width": 1.5,

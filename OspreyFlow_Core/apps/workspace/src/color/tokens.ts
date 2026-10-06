@@ -64,3 +64,4 @@ export const SURFACE_PANEL_DARK_HEX = "#161a1b";
 export const SURFACE_SUNKEN_DARK_HEX = "#090d0e";
 export const SURFACE_APP_DARK_HEX = "#101314";
 export const SURFACE_RAISED_DARK_HEX = "#202425";
+export const SURFACE_HOVER_DARK_HEX = "#2b2f30";

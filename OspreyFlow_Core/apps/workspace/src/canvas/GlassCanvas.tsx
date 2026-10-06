@@ -1153,7 +1153,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           };
           const folded = foldedViewRef.current;
           if (!folded) return drawn;
-          // A folded group is drawn as one larger, brass-ringed node labelled with what it holds.
+          // A folded group is drawn as one larger, ringed node labelled with what it holds; the ring
+          // is neutral, since brass is the selection's (ADR-097).
           const group = folded.groups.get(nodeId);
           if (group) {
             return {
@@ -1161,7 +1162,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               size: Math.min(40, (frame.size || 6) * (1 + Math.log2(group.count) / 1.5)),
               label: group.label,
               forceLabel: true,
-              borderColor: activePalette().brass,
+              borderColor: activePalette().borderStrong,
               borderSize: 0.3,
             };
           }

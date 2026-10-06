@@ -225,8 +225,20 @@ export function Timeline({
     const palette = activePalette();
     const borderSubtleHex = palette.borderSubtle;
     const textSecondaryHex = palette.textSecondary;
-    const brassHex = palette.brass;
+    // The bars are data, so the data ramp's step 4, not brass (ADR-097, DESIGN.md §3.5).
+    const barHex = palette.seq[3];
     const seqHex = palette.seq;
+    // The range brush, from the tokens rather than the chart library's own blue (review item 6).
+    const brush = {
+      backgroundColor: palette.surfaceRaised,
+      fillerColor: palette.surfaceHover,
+      borderColor: palette.borderSubtle,
+      handleStyle: { color: palette.borderStrong, borderColor: palette.borderStrong },
+      moveHandleStyle: { color: palette.borderStrong },
+      dataBackground: { lineStyle: { color: palette.borderStrong }, areaStyle: { color: palette.borderSubtle } },
+      selectedDataBackground: { lineStyle: { color: palette.textSecondary }, areaStyle: { color: palette.borderStrong } },
+      textStyle: { color: palette.textSecondary },
+    };
 
     if (mode === "density") {
       const buckets = histogram.buckets;
@@ -314,10 +326,10 @@ export function Timeline({
               },
           dataZoom: overlayActive
             ? [
-                { type: "slider", height: 16, bottom: 4, xAxisIndex: [0, 1] },
+                { type: "slider", height: 16, bottom: 4, xAxisIndex: [0, 1], ...brush },
                 { type: "inside", xAxisIndex: [0, 1] },
               ]
-            : [{ type: "slider", height: 20, bottom: 4 }, { type: "inside" }],
+            : [{ type: "slider", height: 20, bottom: 4, ...brush }, { type: "inside" }],
           series: overlayActive
             ? [
                 {
@@ -325,7 +337,7 @@ export function Timeline({
                   xAxisIndex: 0,
                   yAxisIndex: 0,
                   data: buckets.map((b) => b.count),
-                  itemStyle: { color: brassHex },
+                  itemStyle: { color: barHex },
                   barMinWidth: 1,
                   name: "this investigation",
                 },
@@ -339,7 +351,8 @@ export function Timeline({
                     );
                     return match?.count ?? 0;
                   }),
-                  itemStyle: { color: seqHex[2] },
+                  // The overlaid case, two steps lighter than this one's, so the two read apart.
+                  itemStyle: { color: seqHex[1] },
                   barMinWidth: 1,
                   name: crossCaseInvestigationScope,
                 },
@@ -348,7 +361,7 @@ export function Timeline({
                 {
                   type: "bar",
                   data: buckets.map((b) => b.count),
-                  itemStyle: { color: brassHex },
+                  itemStyle: { color: barHex },
                   barMinWidth: 1,
                 },
               ],

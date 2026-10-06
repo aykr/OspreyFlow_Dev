@@ -56,10 +56,9 @@ export function BubbleOverlay({ sigmaRef, getBubbles }: BubbleOverlayProps) {
                 cx={centre.x}
                 cy={centre.y}
                 r={radius}
-                fill="var(--brass)"
-                fillOpacity={0.06}
-                stroke="var(--brass)"
-                strokeOpacity={0.5}
+                // A group is data, not the selection: a quiet hairline, no tint (ADR-097).
+                fill="none"
+                stroke="var(--border-strong)"
                 strokeWidth={1.25}
               />
               <text

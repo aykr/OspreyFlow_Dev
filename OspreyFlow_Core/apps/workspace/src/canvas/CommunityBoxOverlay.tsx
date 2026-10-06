@@ -48,10 +48,9 @@ export function CommunityBoxOverlay({ sigmaRef, getBoxes, onFold }: CommunityBox
               width={Math.abs(b.x - a.x)}
               height={Math.abs(b.y - a.y)}
               rx={6}
-              fill="var(--brass)"
-              fillOpacity={0.07}
-              stroke="var(--brass)"
-              strokeOpacity={0.55}
+              // A community is data, not the selection: a quiet hairline, no tint (ADR-097).
+              fill="none"
+              stroke="var(--border-strong)"
               strokeWidth={1.25}
               strokeDasharray="5 3"
             />

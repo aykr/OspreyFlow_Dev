@@ -10,6 +10,7 @@ import {
   SEQ_HEX,
   SURFACE_APP_DARK_HEX,
   SURFACE_PANEL_DARK_HEX,
+  SURFACE_HOVER_DARK_HEX,
   SURFACE_RAISED_DARK_HEX,
   SURFACE_SUNKEN_DARK_HEX,
   TEXT_PRIMARY_DARK_HEX,
@@ -65,6 +66,10 @@ describe("CHANNEL_HEX matches spec/design/tokens.css (dark theme)", () => {
     expect(SURFACE_APP_DARK_HEX.toLowerCase()).toBe(cssVar(css, "n1"));
   });
 
+  it("surface-hover (n4, dark) matches", () => {
+    expect(SURFACE_HOVER_DARK_HEX.toLowerCase()).toBe(cssVar(css, "n4"));
+  });
+
   it("surface-raised (n3, dark) matches", () => {
     expect(SURFACE_RAISED_DARK_HEX.toLowerCase()).toBe(cssVar(css, "n3"));
   });
@@ -113,6 +118,8 @@ describe("the light palette matches tokens.css ([data-theme=light])", () => {
     expect(light.borderSubtle.toLowerCase()).toBe(lightVar("n5"));
     expect(light.surfacePanel.toLowerCase()).toBe(lightVar("n2"));
     expect(light.surfaceApp.toLowerCase()).toBe(lightVar("n1"));
+    expect(light.surfaceRaised.toLowerCase()).toBe(lightVar("n3"));
+    expect(light.surfaceHover.toLowerCase()).toBe(lightVar("n4"));
     expect(light.brass.toLowerCase()).toBe(lightVar("brass"));
   });
 

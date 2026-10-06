@@ -9,6 +9,7 @@ import {
   SEQ_HEX,
   SURFACE_APP_DARK_HEX,
   SURFACE_PANEL_DARK_HEX,
+  SURFACE_HOVER_DARK_HEX,
   SURFACE_RAISED_DARK_HEX,
   SURFACE_SUNKEN_DARK_HEX,
   TEXT_PRIMARY_DARK_HEX,
@@ -26,6 +27,7 @@ export interface Palette {
   surfaceApp: string;
   surfacePanel: string;
   surfaceRaised: string;
+  surfaceHover: string;
   brass: string;
   seq: readonly [string, string, string, string, string, string];
 }
@@ -52,6 +54,7 @@ const DARK: Palette = {
   surfaceApp: SURFACE_APP_DARK_HEX,
   surfacePanel: SURFACE_PANEL_DARK_HEX,
   surfaceRaised: SURFACE_RAISED_DARK_HEX,
+  surfaceHover: SURFACE_HOVER_DARK_HEX,
   brass: BRASS_HEX,
   seq: SEQ_HEX,
 };
@@ -66,6 +69,7 @@ const LIGHT: Palette = {
   surfaceApp: "#f7fbfc",
   surfacePanel: "#f1f4f5",
   surfaceRaised: "#e8eced",
+  surfaceHover: "#dde0e1",
   brass: "#8a6318",
   seq: ["#cfebec", "#a0ced0", "#6eaeb2", "#358f94", "#007177", "#00535b"],
 };

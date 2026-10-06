@@ -66,36 +66,40 @@
 .combobox__option:hover, .combobox__option[aria-selected="true"] { background: var(--surface-hover); }
 
 .slider { -webkit-appearance: none; width: 100%; height: 4px; border-radius: var(--r-chip); background: var(--border); }
-.slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--brass); cursor: pointer; }
+/* A control at rest is neutral; brass only while it has focus (ADR-097, DESIGN.md §3.2). */
+.slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--text-secondary); cursor: pointer; }
+.slider:focus-visible::-webkit-slider-thumb { background: var(--brass); }
 
 .range-slider { position: relative; height: 20px; }
 .range-slider__track { position: absolute; top: 8px; left: 0; right: 0; height: 4px; border-radius: var(--r-chip); background: var(--border); }
-.range-slider__fill { position: absolute; top: 8px; height: 4px; border-radius: var(--r-chip); background: var(--brass); }
+.range-slider__fill { position: absolute; top: 8px; height: 4px; border-radius: var(--r-chip); background: var(--text-secondary); }
 .range-slider__handle {
   position: absolute; top: 3px; width: 14px; height: 14px; margin-left: -7px;
-  border-radius: 50%; background: var(--brass); border: 2px solid var(--surface-app); cursor: pointer;
+  border-radius: 50%; background: var(--text-secondary); border: 2px solid var(--surface-app); cursor: pointer;
 }
+.range-slider__handle:focus-visible { background: var(--brass); }
 
 .resolution-threshold-control { display: flex; align-items: center; gap: var(--sp-8); width: 160px; }
 .resolution-threshold-control__label {
   font-size: var(--fs-12); color: var(--text-secondary); white-space: nowrap; min-width: 64px;
 }
 
-.checkbox { width: 16px; height: 16px; accent-color: var(--brass); }
+.checkbox { width: 16px; height: 16px; accent-color: var(--text-primary); }
 
 .radio-group { display: flex; flex-direction: column; gap: var(--sp-6); }
 .radio-group__option { display: flex; align-items: center; gap: var(--sp-6); color: var(--text-primary); }
-.radio-group__option input { accent-color: var(--brass); }
+.radio-group__option input { accent-color: var(--text-primary); }
 
 .toggle {
   position: relative; width: 32px; height: 18px; border-radius: var(--r-chip);
   background: var(--border); border: none; cursor: pointer; flex-shrink: 0;
 }
-.toggle[aria-checked="true"] { background: var(--brass); }
+.toggle[aria-checked="true"] { background: var(--text-primary); }
 .toggle__thumb {
   position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
   background: var(--n11); transition: transform var(--dur-fast) var(--ease);
 }
+.toggle[aria-checked="true"] .toggle__thumb { background: var(--surface-app); }
 .toggle[aria-checked="true"] .toggle__thumb { transform: translateX(14px); }
 
 .tabs { display: flex; border-bottom: 1px solid var(--border-subtle); gap: var(--sp-16); }
@@ -103,7 +107,7 @@
   background: none; border: none; color: var(--text-secondary); font: inherit; font-size: var(--fs-13);
   padding: var(--sp-8) 0; cursor: pointer; border-bottom: 2px solid transparent;
 }
-.tabs__tab[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--brass); }
+.tabs__tab[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--text-primary); }
 
 /* Docked panels: hairline, no shadow. */
 .panel {
@@ -185,7 +189,9 @@
 
 .histogram { display: flex; align-items: flex-end; gap: 1px; height: 48px; }
 .histogram__bar { flex: 1; background: var(--seq-4); border-radius: var(--r-control) var(--r-control) 0 0; cursor: pointer; }
-.histogram__bar:hover, .histogram__bar[aria-pressed="true"] { background: var(--brass); }
+/* Data, so the data ramp, deeper on hover and when pressed (ADR-097, DESIGN.md §3.5). */
+.histogram__bar:hover { background: var(--seq-5); }
+.histogram__bar[aria-pressed="true"] { background: var(--seq-6); }
 
 .toast {
   background: var(--surface-raised); box-shadow: var(--overlay-shadow);
@@ -209,13 +215,13 @@
 /* The account, at the right-hand end. */
 .app-header__account { margin-left: auto; }
 
-/* Which application is open (ADR-065): a two-part switch, the open one filled in brass, and a
-   brass line under the bar while the Ingest Studio is open. */
-.app-switcher { display: inline-flex; border: 1px solid var(--brass); border-radius: var(--r-control); overflow: hidden; }
-.app-switcher .btn { border: 0; border-radius: 0; background: transparent; color: var(--brass); }
+/* Which application is open (ADR-065): a two-part switch, the open one marked as current is, and a
+   line under the bar while the Ingest Studio is open; neutral, since current is not brass (ADR-097). */
+.app-switcher { display: inline-flex; border: 1px solid var(--border); border-radius: var(--r-control); overflow: hidden; }
+.app-switcher .btn { border: 0; border-radius: 0; background: transparent; color: var(--text-secondary); }
 .app-switcher .btn:hover { background: var(--surface-hover); }
-.app-switcher .btn[aria-pressed="true"] { background: var(--brass); color: var(--brass-ink); }
-.app-header[data-app="ingest"] { border-bottom: 3px solid var(--brass); }
+.app-switcher .btn[aria-pressed="true"] { background: var(--surface-raised); color: var(--text-primary); box-shadow: inset 0 -2px 0 var(--text-primary); }
+.app-header[data-app="ingest"] { border-bottom: 2px solid var(--text-primary); }
 
 /* The search box carries its Filters button inside its own right-hand end. */
 .global-search { position: relative; }
@@ -253,7 +259,7 @@
 }
 .global-search__filters:hover { background: var(--surface-hover); color: var(--text-primary); }
 .global-search__filters[aria-expanded="true"],
-.global-search__filters[data-active="true"] { color: var(--brass); }
+.global-search__filters[data-active="true"] { color: var(--text-primary); box-shadow: inset 0 -2px 0 var(--text-primary); }
 .global-search__count { font-size: var(--fs-12, var(--fs-13)); line-height: 1; }
 
 /* A button that opens a small panel (case choice, account). */
@@ -282,7 +288,7 @@
   background: transparent; color: var(--text-primary); cursor: pointer;
 }
 .menu-panel__item:hover { background: var(--surface-hover); }
-.menu-panel__item[aria-current="true"] { border-color: var(--border); color: var(--brass); }
+.menu-panel__item[aria-current="true"] { border-color: var(--border); color: var(--text-primary); font-weight: 600; }
 .menu-panel__rule { border: 0; border-top: 1px solid var(--border-subtle); margin: var(--sp-2, 2px) 0; width: 100%; }
 .menu-panel__list { display: flex; flex-direction: column; gap: var(--sp-2, 2px); max-height: 280px; overflow-y: auto; }
 .menu-panel__term { color: var(--text-secondary); font-size: var(--fs-12, var(--fs-13)); }
@@ -301,7 +307,7 @@
 }
 .case-tabs__item { display: inline-flex; align-items: stretch; }
 .case-tabs__tab { white-space: nowrap; }
-.case-tabs__tab[aria-current="page"] { border-color: var(--brass); color: var(--brass); }
+.case-tabs__tab[aria-current="page"] { background: var(--surface-raised); color: var(--text-primary); box-shadow: inset 0 -2px 0 var(--text-primary); }
 .case-tabs__close { padding-left: var(--sp-6); padding-right: var(--sp-6); }
 .case-tabs__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-4); }
 .case-tabs__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); }

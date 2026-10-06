@@ -64,8 +64,10 @@ export function JudgementBadgeOverlay({ sigmaRef, counts, positionOf }: Judgemen
             minWidth: 14,
             padding: "0 4px",
             borderRadius: 999,
-            background: "var(--brass)",
-            color: "var(--surface-sunken)",
+            // A count, not an action: neutral, with a hairline (ADR-097, DESIGN.md §3.2).
+            background: "var(--surface-raised)",
+            color: "var(--text-primary)",
+            border: "1px solid var(--border)",
             fontSize: 10,
             lineHeight: "14px",
             textAlign: "center",
