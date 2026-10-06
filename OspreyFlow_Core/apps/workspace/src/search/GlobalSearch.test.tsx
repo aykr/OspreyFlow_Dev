@@ -216,3 +216,24 @@ describe("GlobalSearch as the analyst types", () => {
     expect(screen.queryByRole("status")).toBeNull();
   });
 });
+
+describe("GlobalSearch: / to search (ADR-097 step 1)", () => {
+  it("/ anywhere outside a text field moves focus to the search box", () => {
+    render(<GlobalSearch apiBaseUrl="http://api.test" bearerToken="tok" onSelect={() => undefined} />);
+    fireEvent.keyDown(document.body, { key: "/" });
+    expect(document.activeElement).toBe(screen.getByRole("combobox", { name: /Search entities/ }));
+  });
+
+  it("/ typed into another field stays there", () => {
+    render(
+      <>
+        <input aria-label="Note" />
+        <GlobalSearch apiBaseUrl="http://api.test" bearerToken="tok" onSelect={() => undefined} />
+      </>,
+    );
+    const note = screen.getByRole("textbox", { name: "Note" });
+    note.focus();
+    fireEvent.keyDown(note, { key: "/" });
+    expect(document.activeElement).toBe(note);
+  });
+});

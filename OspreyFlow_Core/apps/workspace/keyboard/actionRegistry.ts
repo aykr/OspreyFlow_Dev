@@ -403,6 +403,12 @@ export const INSPECTOR_ACTIONS = defineActionRegistry("INSPECTOR_ACTIONS", [
   "a-menu-hand-over-opens-its-part",
 ] as const);
 
+/** The workspace shell (ADR-097 step 1): the top bar, the left rail, the classification strip.
+ * `keyboard/shell.spec.ts`. */
+export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
+  "slash-moves-focus-to-search",
+] as const);
+
 export const LINK_CHANGE_ACTIONS = defineActionRegistry("LINK_CHANGE_ACTIONS", [
   "enter-on-change-this-link-opens-the-form-at-the-type",
   "change-the-type-and-save-with-ctrl-enter",

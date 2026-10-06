@@ -28,7 +28,6 @@ import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
 import { linkTypeName } from "./canvas/linkLabel";
 import { DocumentReader } from "./reader/DocumentReader";
 import type { DocumentReaderView } from "./reader/readerApi";
-import { SelectionList } from "./inspector/SelectionList";
 import { displayValue } from "./search/searchOptions";
 import { listJudgements } from "./assessment/api";
 import { judgementCountsByNode } from "./assessment/judgementCounts";
@@ -1157,16 +1156,18 @@ export function App() {
                   name: "Inspector",
                   content: (
                     <>
-                    {/* ADR-093: the selection, listed, when more than one node is selected. */}
-                    <SelectionList
-                      nodes={selectedNodeIds
-                        .filter((id) => workingSetRef.current.graph.hasNode(id))
-                        .map((id) => workingSetRef.current.graph.getNodeAttribute(id, "data"))}
-                      onCentre={(id) => glassCanvasRef.current?.centreOn(id)}
-                      onRemove={(id) => glassCanvasRef.current?.deselect(id)}
-                    />
                     <Inspector
                       node={selectedNode}
+                      // ADR-097 step 1: several selected are shown together (the list of ADR-093
+                      // is one of their parts), not the first alone.
+                      selection={{
+                        nodes: selectedNodeIds
+                          .filter((id) => workingSetRef.current.graph.hasNode(id))
+                          .map((id) => workingSetRef.current.graph.getNodeAttribute(id, "data")),
+                        onCentre: (id) => glassCanvasRef.current?.centreOn(id),
+                        onRemove: (id) => glassCanvasRef.current?.deselect(id),
+                      }}
+                      visualFor={(type) => ontology.visualFor(type)}
                       link={
                         selectedLink
                           ? {

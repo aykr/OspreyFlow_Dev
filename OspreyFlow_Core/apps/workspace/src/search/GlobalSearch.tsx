@@ -138,8 +138,30 @@ export function GlobalSearch({ apiBaseUrl, bearerToken, onSelect, entityTypes = 
     return () => clearTimeout(timeout);
   }, [nudge, status, results]);
 
+  // ADR-097 step 1: / anywhere but a text field takes the analyst to search, as the Inspector's
+  // empty state says. Typed into a field, it stays a slash.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      const editing =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        target?.isContentEditable === true;
+      if (editing) return;
+      const input = rootRef.current?.querySelector<HTMLInputElement>('[role="combobox"]');
+      if (!input) return;
+      e.preventDefault();
+      input.focus();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   return (
-    <div className="global-search">
+    <div className="global-search" ref={rootRef}>
       <div className="global-search__field">
         <Combobox
           aria-label="Search entities, identifiers, documents"

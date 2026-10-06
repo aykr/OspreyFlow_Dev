@@ -13,6 +13,10 @@ import { displayValue } from "../search/searchOptions";
 import { LinkNotes } from "./LinkNotes";
 import { useEffect, useRef, useState } from "react";
 import type { DocumentReaderView } from "../reader/readerApi";
+import { linkTypeName } from "../canvas/linkLabel";
+import type { EntityVisual } from "../ontology/schema";
+import { SelectionList } from "./SelectionList";
+import { TypeChip } from "./TypeChip";
 
 function isResolutionLink(type: string): boolean {
   return type === "SAME_AS" || type === "NOT_SAME_AS";
@@ -20,6 +24,15 @@ function isResolutionLink(type: string): boolean {
 
 export interface InspectorProps {
   node: Node | null;
+  /** More than one node selected (ADR-097 step 1): the Inspector shows them together, not the
+   * first alone. With fewer than two, the single node above is shown. */
+  selection?: {
+    nodes: readonly Node[];
+    onCentre: (nodeId: string) => void;
+    onRemove: (nodeId: string) => void;
+  };
+  /** How the canvas draws each entity type, for the type chip. Absent: the type is named only. */
+  visualFor?: (entityType: string) => EntityVisual | undefined;
   /** A selected link. While one is, the Inspector shows it instead of a node. */
   link?: LinkDetailsProps | null;
   /** What the link view needs to change a link and react to the link menu (ADR-080). Omitted, the
@@ -61,7 +74,7 @@ export interface InspectorProps {
 }
 
 type LinkPart = "details" | "change" | "notes" | "events" | "history";
-type NodePart = "properties" | "provenance" | "source" | "judgements";
+type NodePart = "properties" | "relationships" | "provenance" | "source" | "judgements";
 
 /** Which parts of a panel are open, starting from `initial`; `toggle` opens or closes one. */
 function useOpenParts<T extends string>(initial: readonly T[]) {
@@ -92,7 +105,7 @@ interface PartRequest {
  *
  * **Judgements does not require a selected node**: assessment production is investigation-scoped,
  * not node-scoped (`02_GLASS_FRONTEND.md` §9). */
-export function Inspector({ node, link, linkEditing, assessment }: InspectorProps) {
+export function Inspector({ node, link, linkEditing, assessment, selection, visualFor }: InspectorProps) {
   // The link menu's counters only ever rise; a part opens when one rises, never on a later
   // selection just because a counter is above zero.
   const seen = useRef({ note: 0, change: 0, events: 0, history: 0 });
@@ -128,18 +141,135 @@ export function Inspector({ node, link, linkEditing, assessment }: InspectorProp
     );
   }
 
+  if (selection && selection.nodes.length >= 2) {
+    return (
+      <Panel title="Inspector" className="inspector">
+        <SelectionView
+          key={selection.nodes.map((n) => n.id).join("|")}
+          selection={selection}
+          graph={assessment?.workingSetGraph}
+          visualFor={visualFor}
+        />
+      </Panel>
+    );
+  }
+
   if (!node && !assessment) {
     return (
       <Panel title="Inspector" className="inspector">
-        <p style={{ color: "var(--text-tertiary)", margin: 0 }}>Select a node to inspect it.</p>
+        <p style={{ color: "var(--text-tertiary)", margin: 0 }}>{EMPTY_STATE}</p>
       </Panel>
     );
   }
 
   return (
     <Panel title="Inspector" className="inspector">
-      <NodeView key={node?.id ?? "no-node"} node={node} assessment={assessment} />
+      <NodeView key={node?.id ?? "no-node"} node={node} assessment={assessment} visualFor={visualFor} />
     </Panel>
+  );
+}
+
+/** What the Inspector says with nothing selected: how to begin, with one action (review item 4). */
+const EMPTY_STATE = "Select a node, or press / to search.";
+
+/** The links of `nodeId` in view, by type, in display names, most first. */
+function linksByType(graph: Graph | undefined, keep: (source: string, target: string) => boolean, edges: string[]) {
+  const counts = new Map<string, number>();
+  for (const key of edges) {
+    const data = graph?.getEdgeAttribute(key, "data") as { type: string; source: string; target: string } | undefined;
+    if (!data || !keep(data.source, data.target)) continue;
+    counts.set(data.type, (counts.get(data.type) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
+function CountList({ rows }: { rows: [string, number][] }) {
+  return (
+    <ul role="list" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "var(--sp-2)" }}>
+      {rows.map(([type, count]) => (
+        <li key={type} style={{ display: "flex", justifyContent: "space-between", gap: "var(--sp-8)" }}>
+          <span>{linkTypeName(type, [])}</span>
+          <span className="value">{count}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function SelectionView({
+  selection,
+  graph,
+  visualFor,
+}: {
+  selection: NonNullable<InspectorProps["selection"]>;
+  graph: Graph | undefined;
+  visualFor?: InspectorProps["visualFor"];
+}) {
+  type Part = "summary" | "selected" | "between";
+  const parts = useOpenParts<Part>(["summary"]);
+  const nodes = selection.nodes;
+  const ids = new Set(nodes.map((n) => n.id));
+  const byType = new Map<string, number>();
+  for (const n of nodes) byType.set(n.type, (byType.get(n.type) ?? 0) + 1);
+  // Properties every selected node has, with one value among them.
+  const shared = Object.entries(nodes[0]?.properties ?? {}).filter(([key, value]) =>
+    nodes.every((n) => n.properties?.[key] !== undefined && String(n.properties[key]) === String(value)),
+  );
+  const between = graph
+    ? linksByType(graph, (s, t) => ids.has(s) && ids.has(t), graph.edges().filter((k) => {
+        const [s, t] = graph.extremities(k);
+        return ids.has(s) && ids.has(t);
+      }))
+    : [];
+  const betweenCount = between.reduce((sum, [, n]) => sum + n, 0);
+  const section = (part: Part, title: string, content: React.ReactNode) => (
+    <AccordionSection title={title} open={parts.isOpen(part)} onToggle={() => parts.toggle(part)}>
+      {content}
+    </AccordionSection>
+  );
+  return (
+    <>
+      <p style={{ margin: "0 0 var(--sp-8)", fontWeight: 600 }}>{nodes.length.toLocaleString("en-GB")} nodes</p>
+      {section(
+        "summary",
+        "Summary",
+        <div style={{ display: "grid", gap: "var(--sp-8)" }}>
+          <ul role="list" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "var(--sp-2)" }}>
+            {[...byType.entries()].map(([type, count]) => (
+              <li key={type} style={{ display: "flex", alignItems: "center", gap: "var(--sp-6)" }}>
+                <TypeChip type={`${count} ${type}`} visual={visualFor?.(type)} />
+              </li>
+            ))}
+          </ul>
+          {shared.length > 0 ? (
+            <dl style={{ margin: 0 }}>
+              {shared.map(([key, value]) => (
+                <div key={key}>
+                  <dt style={{ color: "var(--text-secondary)" }}>{key}, shared</dt>
+                  <dd className="value">{String(value)}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p style={{ margin: 0, color: "var(--text-tertiary)" }}>No property has one value across them all.</p>
+          )}
+        </div>,
+      )}
+      {section(
+        "selected",
+        `Selected (${nodes.length})`,
+        <SelectionList nodes={nodes} onCentre={selection.onCentre} onRemove={selection.onRemove} />,
+      )}
+      {section(
+        "between",
+        `Links between them (${betweenCount})`,
+        between.length > 0 ? (
+          <CountList rows={between} />
+        ) : (
+          <p style={{ margin: 0, color: "var(--text-tertiary)" }}>No link joins two of them in this view.</p>
+        ),
+      )}
+    </>
   );
 }
 
@@ -253,7 +383,15 @@ function LinkView({
   );
 }
 
-function NodeView({ node, assessment }: { node: Node | null; assessment: InspectorProps["assessment"] }) {
+function NodeView({
+  node,
+  assessment,
+  visualFor,
+}: {
+  node: Node | null;
+  assessment: InspectorProps["assessment"];
+  visualFor?: InspectorProps["visualFor"];
+}) {
   const parts = useOpenParts<NodePart>(node ? ["properties"] : ["judgements"]);
   // Judgements fetches the case's whole list, so it is built the first time its part is opened
   // and kept from then on, not built hidden for every node selected.
@@ -272,7 +410,16 @@ function NodeView({ node, assessment }: { node: Node | null; assessment: Inspect
   );
   return (
     <>
-      {!node && <p style={{ color: "var(--text-tertiary)", margin: 0 }}>Select a node to inspect it.</p>}
+      {!node && <p style={{ color: "var(--text-tertiary)", margin: 0 }}>{EMPTY_STATE}</p>}
+      {node && (
+        // The node as the canvas draws it, then its name as a literal value (review item 4).
+        <h3 style={{ margin: "0 0 var(--sp-8)", display: "flex", alignItems: "center", gap: "var(--sp-8)", fontSize: "var(--fs-13)" }}>
+          <TypeChip type={node.type} visual={visualFor?.(node.type)} />
+          <span className="value" style={{ fontWeight: 400, overflowWrap: "anywhere" }}>
+            {displayValue(node)}
+          </span>
+        </h3>
+      )}
       {node &&
         section(
           "properties",
@@ -293,6 +440,22 @@ function NodeView({ node, assessment }: { node: Node | null; assessment: Inspect
               </div>
             ))}
           </dl>,
+        )}
+      {node &&
+        section(
+          "relationships",
+          "Relationships",
+          (() => {
+            const graph = assessment?.workingSetGraph;
+            const rows = graph?.hasNode(node.id)
+              ? linksByType(graph, () => true, graph.edges(node.id))
+              : [];
+            return rows.length > 0 ? (
+              <CountList rows={rows} />
+            ) : (
+              <p style={{ margin: 0, color: "var(--text-tertiary)" }}>No links in this view.</p>
+            );
+          })(),
         )}
       {node &&
         section(

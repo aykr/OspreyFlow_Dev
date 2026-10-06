@@ -191,8 +191,8 @@ describe("Inspector sections (ADR-096)", () => {
     render(<Inspector node={person} assessment={assessment} />);
     expect(screen.queryByRole("tab")).toBeNull();
     expect(header("Properties").getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByText("Lay")).toBeTruthy();
-    for (const name of ["Provenance", "Source", "Judgements"]) {
+    expect(screen.getAllByText("Lay")).toHaveLength(2); // the header's name and the property
+    for (const name of ["Relationships", "Provenance", "Source", "Judgements"]) {
       expect(header(name).getAttribute("aria-expanded")).toBe("false");
     }
     fireEvent.click(header("Source"));
@@ -203,5 +203,64 @@ describe("Inspector sections (ADR-096)", () => {
     stubNotes();
     render(<Inspector node={null} assessment={assessment} />);
     expect(header("Judgements").getAttribute("aria-expanded")).toBe("true");
+  });
+});
+
+describe("Inspector states (ADR-097 step 1, design review item 4)", () => {
+  const node = (id: string, type: string, properties: Record<string, unknown>) =>
+    ({ id, type, properties, provenance: { state: "asserted", sources: [], first_seen: "x" } }) as unknown as Node;
+  const lay = node("p1", "Person", { family_name: "Lay", employer: "Enron" });
+  const skilling = node("p2", "Person", { family_name: "Skilling", employer: "Enron" });
+  const phone = node("e1", "Endpoint", { value_normalised: "07911123456" });
+
+  function graphOf(nodes: Node[], edges: [string, string, string, string][]) {
+    const graph = new Graph({ multi: true });
+    for (const n of nodes) graph.addNode(n.id, { data: n });
+    for (const [id, type, source, target] of edges) {
+      graph.addEdgeWithKey(id, source, target, { data: { id, type, source, target } });
+    }
+    return graph;
+  }
+
+  it("one node: its type and name head the panel, and its links in view are counted by type", () => {
+    stubNotes();
+    const graph = graphOf([lay, skilling, phone], [
+      ["k1", "ASSOCIATE_OF", "p1", "p2"],
+      ["k2", "USES", "p1", "e1"],
+      ["k3", "ASSOCIATE_OF", "p1", "e1"],
+    ]);
+    render(<Inspector node={lay} assessment={{ ...assessment, workingSetGraph: graph }} />);
+    expect(screen.getByRole("heading", { name: /Person.*p1|Lay/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Relationships" }));
+    const rows = screen.getAllByRole("listitem").map((li) => li.textContent);
+    expect(rows).toContain("Associate of2"); // the display name (ADR-091)
+    expect(rows).toContain("Uses1");
+  });
+
+  it("several nodes: a summary by type, what they share, and the links between them", () => {
+    stubNotes();
+    const graph = graphOf([lay, skilling, phone], [
+      ["k1", "ASSOCIATE_OF", "p1", "p2"],
+      ["k2", "USES", "p1", "e1"],
+    ]);
+    render(
+      <Inspector
+        node={lay}
+        selection={{ nodes: [lay, skilling], onCentre: vi.fn(), onRemove: vi.fn() }}
+        assessment={{ ...assessment, workingSetGraph: graph }}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Summary" }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("2 Person")).toBeTruthy();
+    expect(screen.getByText(/employer/)).toBeTruthy(); // shared by both, with one value
+    expect(screen.queryByText(/family_name/)).toBeNull(); // different values: not shared
+    fireEvent.click(screen.getByRole("button", { name: "Links between them (1)" }));
+    expect(screen.getByText("Associate of")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Properties" })).toBeNull(); // not one node's view
+  });
+
+  it("nothing selected: says how to begin, with one action", () => {
+    render(<Inspector node={null} />);
+    expect(screen.getByText("Select a node, or press / to search.")).toBeTruthy();
   });
 });

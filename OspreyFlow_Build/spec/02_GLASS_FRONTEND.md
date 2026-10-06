@@ -244,6 +244,15 @@ is half-written in it. The three panels are denser than the rest of the Glass: b
 `--fs-12`, titles at `--fs-13`, padding at `--sp-8` and `--sp-4`. Reachable by keyboard
 (`keyboard/inspector.spec.ts`, `keyboard/query-builder.spec.ts`, `keyboard/metrics-panel.spec.ts`).
 
+**What the Inspector shows (ADR-097 step 1).** With **one node** selected, its header is the node as
+the canvas draws it (shape in its channel's colour, then the type) and its name as a literal value in
+mono; its parts are *Properties* (open), *Relationships* (its links in view, by type, most first),
+*Provenance*, *Source* and *Judgements*. With **several**, they are shown together, not the first
+alone: *Summary* (open: counts by type, and every property they all share with one value), *Selected
+(n)* (ADR-093's list: centre on one, take one out) and *Links between them (n)*, by type. With
+**nothing** selected: "Select a node, or press / to search." — and `/` anywhere outside a text field
+moves focus to search (`keyboard/shell.spec.ts`).
+
 **Resizing panels (ADR-086).** Every panel edge is a sash, as in VS Code: the edge between the canvas
 and the right-hand column sets the column's width, the edge below each stacked panel but the last sets
 that panel's height (the last takes what is left), and the edge above the timeline sets its height. A
