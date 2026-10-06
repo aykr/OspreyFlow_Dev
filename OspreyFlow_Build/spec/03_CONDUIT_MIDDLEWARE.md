@@ -186,8 +186,10 @@ POST   /v1/investigations/{investigation_id}/documents   a file (image, video, t
 GET    /v1/investigations/{investigation_id}/documents/{document_id}/file   a held Document's file (image, video, kept text) from the media store, Viewer (ADR-094)
 POST   /v1/investigations/{investigation_id}/documents/{document_id}/extract   entities from a held Document by kind: text, an image described and read, a video transcribed, Editor (ADR-094)
 POST   /v1/investigations/{investigation_id}/documents/{document_id}/candidates/{candidate_id}/accept   accept one finding from a held Document as an inferred node, Editor (ADR-094)
+POST   /v1/investigations/{investigation_id}/documents/{document_id}/candidates/{candidate_id}/reject   reject one finding from a held Document; nothing is written, Editor (6 October 2026)
 POST   /v1/investigations/{investigation_id}/links/{edge_id}/events/{event_id}/extract   entities from one email, pending for a person to accept, Editor (ADR-089)
 POST   /v1/investigations/{investigation_id}/links/{edge_id}/events/{event_id}/candidates/{candidate_id}/accept   accept one of an email's findings as an inferred node, Editor (ADR-089)
+POST   /v1/investigations/{investigation_id}/links/{edge_id}/events/{event_id}/candidates/{candidate_id}/reject   reject one of an email's findings; nothing is written, Editor (6 October 2026)
 POST   /v1/analytics/geobins            server-side spatial binning
 POST   /v1/analytics/sightings          the "snail trail" — device/location sightings over time (B18)
 POST   /v1/analytics/geometries         batched geometry lookup — a Location's geometry_ref resolved to WGS84, one round trip for a whole working set

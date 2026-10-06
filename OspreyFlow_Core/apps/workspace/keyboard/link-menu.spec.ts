@@ -311,7 +311,7 @@ function emailDocument(id: string) {
   };
 }
 
-test("Show emails puts the emails in the timeline's window on the canvas as Documents (ADR-092)", async ({
+test("Put the emails on the canvas, from the link menu, writes the window's emails as Documents (ADR-092)", async ({
   page,
 }) => {
   let sent: unknown = null;
@@ -335,6 +335,9 @@ test("Show emails puts the emails in the timeline's window on the canvas as Docu
   await expect(menu(page)).toBeVisible();
   // Named emails because the addresses carry the loader's own `endpoint_kind: "email"`.
   await expect(page.getByRole("menuitem").first()).toHaveText("Show emails (2)");
+  // Its own entry, next after Show emails (owner, 6 October 2026).
+  await expect(page.getByRole("menuitem").nth(1)).toHaveText("Put the emails on the canvas");
+  await tabToEntry(page, "Put the emails on the canvas");
   await page.keyboard.press("Enter");
   await expect
     .poll(() => page.evaluate(() => window.__CANVAS__?.hasNode("email:ev-2")))
@@ -344,6 +347,7 @@ test("Show emails puts the emails in the timeline's window on the canvas as Docu
   });
   await expect(page.getByText("2 emails put on the canvas.")).toBeVisible();
   registerCovered(REGISTRY, "show-emails-puts-the-windows-emails-on-the-canvas-as-documents");
+  registerCovered(REGISTRY, "put-the-emails-on-the-canvas-from-the-link-menu");
 });
 
 test("every registered link-menu action has its own proving test case above", () => {

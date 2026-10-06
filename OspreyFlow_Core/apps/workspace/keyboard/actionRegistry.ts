@@ -344,6 +344,7 @@ export const LINK_MENU_ACTIONS = defineActionRegistry("LINK_MENU_ACTIONS", [
   "moving-the-resolution-slider-opens-a-same-as-fold",
   "show-events-hands-over-to-the-inspector",
   "show-emails-puts-the-windows-emails-on-the-canvas-as-documents",
+  "put-the-emails-on-the-canvas-from-the-link-menu",
 ] as const);
 
 /**
@@ -388,6 +389,8 @@ export const READER_ACTIONS = defineActionRegistry("READER_ACTIONS", [
   "extract-and-accept-from-the-reader-by-keyboard",
   // The owner's ask, 6 October 2026: a Document's right-click menu opens it full screen.
   "read-full-screen-from-a-documents-menu",
+  // The owner's ask, 6 October 2026: a Reject beside each Accept.
+  "reject-a-finding-in-the-reader-by-keyboard",
 ] as const);
 
 /** The administrator's *Proposed types* list (ADR-090 C3): opened from the top bar, each proposal

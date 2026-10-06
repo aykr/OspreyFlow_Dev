@@ -29,6 +29,7 @@ from services.api.email_extraction import (
     email_document_id,
 )
 from services.api.link_notes import LinkNotFoundError
+from services.api.review import ExtractionCandidateNotFoundError
 from services.api.review import (
     CandidateNotPendingError,
     CandidateStatus,
@@ -224,7 +225,8 @@ class InMemoryCandidates:
     ) -> ExtractionCandidateRecord:
         record = self.records.get(candidate_id)
         if record is None or record.owning_unit != principal.org_unit:
-            raise KeyError(candidate_id)
+            # As the real store refuses (rule 15): not found, whether absent or another unit's.
+            raise ExtractionCandidateNotFoundError(candidate_id)
         return record
 
     async def mark_reviewed(
@@ -375,6 +377,36 @@ async def test_a_candidate_from_another_email_cannot_be_accepted_through_this_on
     with pytest.raises(EmailNotFoundError):
         await service.accept("inv-1", "e1", "ev-2", first.candidates[0].id, ANALYST)
     assert len(graph.committed_edges) == before
+
+
+# --- rejecting a finding (owner, 6 October 2026: "allow for a reject button too") --------------
+
+
+async def test_rejecting_marks_the_finding_rejected_and_writes_nothing() -> None:
+    service, graph, _, candidates, _ = await _build()
+    extracted = await service.extract("inv-1", "e1", "ev-1", ANALYST)
+    before_nodes, before_edges = dict(graph.nodes), list(graph.committed_edges)
+    await service.reject("inv-1", "e1", "ev-1", extracted.candidates[0].id, ANALYST)
+    assert candidates.records[extracted.candidates[0].id].status is CandidateStatus.REJECTED
+    assert graph.nodes == before_nodes and graph.committed_edges == before_edges
+
+
+async def test_a_finding_from_another_email_cannot_be_rejected_through_this_one() -> None:
+    service, _, _, candidates, _ = await _build([_event("ev-1"), _event("ev-2")])
+    first = await service.extract("inv-1", "e1", "ev-1", ANALYST)
+    with pytest.raises(EmailNotFoundError):
+        await service.reject("inv-1", "e1", "ev-2", first.candidates[0].id, ANALYST)
+    assert candidates.records[first.candidates[0].id].status is CandidateStatus.PENDING
+
+
+async def test_an_analyst_of_another_unit_cannot_reject_a_finding_they_cannot_see() -> None:
+    """Rule 4: the link is the other unit's, so they are refused as if it did not exist, and the
+    finding is left as it was."""
+    service, _, _, candidates, _ = await _build()
+    extracted = await service.extract("inv-1", "e1", "ev-1", ANALYST)
+    with pytest.raises((LinkNotFoundError, EmailNotFoundError, ExtractionCandidateNotFoundError)):
+        await service.reject("inv-1", "e1", "ev-1", extracted.candidates[0].id, OTHER_UNIT)
+    assert candidates.records[extracted.candidates[0].id].status is CandidateStatus.PENDING
 
 
 async def test_an_email_loaded_under_the_original_case_can_be_extracted_from_a_branch() -> None:

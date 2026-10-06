@@ -8,6 +8,7 @@ import { HighlightedMessage } from "../dossier/HighlightedMessage";
 import {
   acceptEmailCandidate,
   candidateLabel,
+  rejectEmailCandidate,
   extractEmail,
   type EmailCandidate,
 } from "../inspector/linkEventsApi";
@@ -15,6 +16,7 @@ import type { OntologyRegistry } from "../ontology/schema";
 import {
   acceptDocumentFinding,
   extractDocument,
+  rejectDocumentFinding,
   fetchDocumentFile,
   fetchDocumentReader,
   type DocumentReaderView,
@@ -158,6 +160,27 @@ export function DocumentReader({
     }
   }
 
+  // Owner, 6 October 2026: a finding can be rejected beside Accept; nothing is written.
+  async function reject(view: DocumentReaderView, candidate: EmailCandidate) {
+    if (findings.state !== "ready") return;
+    setAccepting(candidate.id);
+    try {
+      if (view.edge_id && view.event_id) {
+        await rejectEmailCandidate(apiBaseUrl, bearerToken, investigationId, view.edge_id, view.event_id, candidate.id);
+      } else {
+        await rejectDocumentFinding(apiBaseUrl, bearerToken, investigationId, view.document_id, candidate.id);
+      }
+      setFindings({
+        state: "ready",
+        candidates: findings.candidates.map((c) => (c.id === candidate.id ? { ...c, status: "rejected" } : c)),
+      });
+    } catch (err) {
+      setFindings({ state: "failed", message: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setAccepting(null);
+    }
+  }
+
   const title = load.state === "ready" ? load.view.title ?? "(no title)" : "Document";
 
   return (
@@ -279,18 +302,31 @@ export function DocumentReader({
                           {candidateLabel(candidate)}
                           <span style={{ color: "var(--text-tertiary)" }}> · {Math.round(candidate.confidence * 100)}%</span>
                         </span>
-                        {candidate.status === "accepted" ? (
-                          <span style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>Accepted</span>
+                        {candidate.status === "accepted" || candidate.status === "rejected" ? (
+                          <span style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>
+                            {candidate.status === "accepted" ? "Accepted" : "Rejected"}
+                          </span>
                         ) : (
-                          <button
-                            type="button"
-                            className="btn"
-                            disabled={accepting !== null}
-                            aria-label={`Accept ${candidateLabel(candidate)}`}
-                            onClick={() => void accept(load.view, candidate)}
-                          >
-                            Accept
-                          </button>
+                          <span style={{ display: "flex", gap: "var(--sp-4)" }}>
+                            <button
+                              type="button"
+                              className="btn"
+                              disabled={accepting !== null}
+                              aria-label={`Accept ${candidateLabel(candidate)}`}
+                              onClick={() => void accept(load.view, candidate)}
+                            >
+                              Accept
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn--quiet"
+                              disabled={accepting !== null}
+                              aria-label={`Reject ${candidateLabel(candidate)}`}
+                              onClick={() => void reject(load.view, candidate)}
+                            >
+                              Reject
+                            </button>
+                          </span>
                         )}
                       </li>
                     ))}

@@ -187,6 +187,26 @@ async def test_a_finding_is_inferred_until_accepted() -> None:
     assert await working.get_node("inv-1", accepted.node_id) is not None
 
 
+async def test_a_finding_can_be_rejected_and_nothing_is_written() -> None:
+    """Owner, 6 October 2026: a Reject beside each Accept in the Reader."""
+    service, _, _, candidates, graph, _ = await _service()
+    result = await service.extract("inv-1", "image-1", ANALYST)
+    before = dict(graph.nodes)
+    await service.reject("inv-1", "image-1", result.candidates[0].id, ANALYST)
+    assert candidates.records[result.candidates[0].id].status.value == "rejected"
+    assert graph.nodes == before
+
+
+async def test_a_finding_of_another_document_cannot_be_rejected_through_this_one() -> None:
+    from services.api.document_content import DocumentNotFoundError
+
+    service, _, _, candidates, _, _ = await _service()
+    result = await service.extract("inv-1", "image-1", ANALYST)
+    with pytest.raises(DocumentNotFoundError):
+        await service.reject("inv-1", "text-1", result.candidates[0].id, ANALYST)
+    assert candidates.records[result.candidates[0].id].status.value == "pending"
+
+
 # --- files added straight to a case (ADR-094 step 3) ------------------------------------------
 
 from services.api.document_content import HolderNotFoundError, UploadRefusedError  # noqa: E402

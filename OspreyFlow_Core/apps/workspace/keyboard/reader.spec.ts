@@ -51,6 +51,9 @@ async function serveReader(page: Page) {
   await page.route("**/v1/investigations/inv-1/links/e1/events/ev-1/candidates/c1/accept", (route) =>
     route.fulfill(json({ node_id: "p1", delta: { seq: 3, op: "add", nodes: [], edges: [] } })),
   );
+  await page.route("**/v1/investigations/inv-1/links/e1/events/ev-1/candidates/c1/reject", (route) =>
+    route.fulfill(json({})),
+  );
 }
 
 async function tabTo(page: Page, name: RegExp, max = 10) {
@@ -116,6 +119,21 @@ test("Extract entities and Accept are reached and pressed by keyboard in the rea
   await expect(page.getByText("Accepted")).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__READER__?.deltas.length)).toBe(2);
   registerCovered(REGISTRY, "extract-and-accept-from-the-reader-by-keyboard");
+});
+
+test("Reject beside Accept is reached and pressed by keyboard, and draws nothing (owner, 6 October 2026)", async ({ page }) => {
+  await serveReader(page);
+  await page.goto("/keyboard/reader-harness.html");
+  await expect(page.getByRole("button", { name: "Close" })).toBeFocused();
+  await tabTo(page, /^Extract entities$/);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("list", { name: "Entities found" })).toBeVisible();
+  await tabTo(page, /Reject Person · MERCER, Dana/);
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Rejected")).toBeVisible();
+  // The extraction's own delta only; a rejection writes nothing.
+  await expect.poll(() => page.evaluate(() => window.__READER__?.deltas.length)).toBe(1);
+  registerCovered(REGISTRY, "reject-a-finding-in-the-reader-by-keyboard");
 });
 
 test("every registered reader action has its own proving test case above", () => {

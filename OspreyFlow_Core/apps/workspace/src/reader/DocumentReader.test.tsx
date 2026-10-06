@@ -113,6 +113,38 @@ describe("DocumentReader", () => {
     );
   });
 
+  it("rejects a finding beside Accept, writing nothing to the view (owner, 6 October 2026)", async () => {
+    const fetchMock = serve({
+      "/documents/email%3Aev-1/reader": { status: 200, body: EMAIL },
+      "/links/e1/events/ev-1/extract": {
+        status: 200,
+        body: {
+          document_id: "email:ev-1",
+          delta: { seq: 2, op: "add", nodes: [], edges: [] },
+          candidates: [
+            {
+              id: "c1",
+              document_id: "email:ev-1",
+              entity_type: "Endpoint",
+              properties: { value_normalised: "Houston" },
+              confidence: 0.9,
+              status: "pending",
+            },
+          ],
+        },
+      },
+      "/links/e1/events/ev-1/candidates/c1/reject": { status: 200, body: {} },
+    });
+    const { onDelta } = mount();
+    fireEvent.click(await screen.findByRole("button", { name: "Extract entities" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Reject Endpoint · Houston/ }));
+    expect(await screen.findByText("Rejected")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Accept Endpoint · Houston/ })).toBeNull();
+    expect(fetchMock.mock.calls.some(([u]) => String(u).endsWith("/candidates/c1/reject"))).toBe(true);
+    // Only the extraction's own delta (the email's Document); a rejection draws nothing.
+    expect(onDelta).toHaveBeenCalledTimes(1);
+  });
+
   it("opens on the email it was handed when no Document has been written for it yet", async () => {
     serve({});
     render(

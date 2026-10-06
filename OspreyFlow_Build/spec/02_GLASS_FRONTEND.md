@@ -525,8 +525,10 @@ characters). *Put on the canvas* in the list writes the emails (or a phone link'
 timeline's window as Documents and draws them, exactly as the link menu's *Show emails (n)* does,
 or says the view would be too full (ADR-095 decision 4). Reachable by keyboard
 (`keyboard/link-events.spec.ts`). On a link between two email addresses (`Endpoint.endpoint_kind` is `email` at the source)
-*Show emails (n)* also puts the emails inside the timeline's brushed window (all of them when nothing
-is brushed) on the canvas as Documents, linked to both addresses, and says how many (ADR-092); past
+the menu's next entry, *Put the emails on the canvas* (*Put the messages on the canvas* for phones), puts the
+emails inside the timeline's brushed window (all of them when nothing is brushed) on the canvas as
+Documents, linked to both addresses, and says how many (ADR-092; split from *Show emails (n)*, which now
+only lists them, on the owner's ask of 6 October 2026, since one entry doing both was named for one); past
 the working set's cap nothing is added and the message says by how much and to narrow the timeline.
 A link whose events carry no text (a PaySim transaction, an HMP incident) keeps the Inspector list
 only. A link between two phones (`endpoint_kind` `msisdn`, `imsi` or `handle`) is named for its
@@ -539,7 +541,9 @@ An opened email offers **Extract entities** (ADR-089 step 3). The email becomes 
 to its sender and recipient by `MENTIONED_IN`, both appear on the canvas at once, and the model's findings
 are listed as suggestions with a confidence each. Nothing a model finds reaches the graph until a person
 accepts it (rule 5): *Accept* on one finding writes it as an inferred node with a `MENTIONED_IN` link to the
-email, both onto the canvas, where it is confirmed from the Inspector as any inferred node is. The model is
+email, both onto the canvas, where it is confirmed from the Inspector as any inferred node is. *Reject*,
+beside it, marks the finding rejected and writes nothing (owner, 6 October 2026), in the Inspector's list
+and in the reader alike. The model is
 the deployment's local one unless the caller names another. Reachable by keyboard
 (`keyboard/link-events.spec.ts`).
 
@@ -879,7 +883,7 @@ so only for one loaded before then, cut at 4,000 characters. An email offers *Ex
 view does, and the text is read again after an acceptance so the new entity is marked. Focus starts
 on *Close*; Close or Escape returns to the canvas with nothing moved behind it. The text comes from
 `GET .../documents/{id}/reader`. Tests: `src/reader/DocumentReader.test.tsx` and
-`keyboard/reader.spec.ts` (Enter opens it, Escape closes it, Extract and Accept by keyboard). A Document written from held content (ADR-094) shows in the reader as what it is: an image as a
+`keyboard/reader.spec.ts` (Enter opens it, Escape closes it, Extract, Accept and Reject by keyboard). A Document written from held content (ADR-094) shows in the reader as what it is: an image as a
 picture, a video as a player, both fetched with the analyst's token from `GET .../documents/{id}/file`;
 *Extract entities* describes and reads an image, or transcribes a video, then extracts from that
 text, which the reader then shows with the accepted entities marked (`POST .../documents/{id}/extract`

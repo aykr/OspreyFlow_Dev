@@ -2504,13 +2504,15 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         },
         onChange: () => reach("change"),
         onHistory: () => reach("history"),
-        onEvents: onLinkAction
-          ? () => {
-              reach("events");
-              if (mayCarryText(noun)) void emailsOntoCanvas(edge.id, x, y, noun as "emails" | "messages");
-            }
-          : undefined,
+        // Show lists them in the Inspector; putting them on the canvas is its own entry, named so
+        // (owner, 6 October 2026: the one entry did both, and its name said only the first).
+        onEvents: onLinkAction ? () => reach("events") : undefined,
         eventsLabel,
+        onEventsToCanvas:
+          eventsLabel && mayCarryText(noun)
+            ? () => void emailsOntoCanvas(edge.id, x, y, noun as "emails" | "messages")
+            : undefined,
+        eventsToCanvasLabel: mayCarryText(noun) ? `Put the ${noun} on the canvas` : undefined,
       });
     }
 

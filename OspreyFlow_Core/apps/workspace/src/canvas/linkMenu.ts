@@ -20,6 +20,10 @@ export interface LinkMenuActions {
    * other than the resolution engine's when `eventsLabel` is given. */
   onEvents?: () => void;
   eventsLabel?: string;
+  /** Owner, 6 October 2026: the link's emails or messages written onto the canvas as Documents, as
+   * an entry of its own (ADR-092 decisions 1 and 2), offered with `eventsToCanvasLabel`. */
+  onEventsToCanvas?: () => void;
+  eventsToCanvasLabel?: string;
 }
 
 /** "Same as: Person: Ada ↔ Person: A. Lovelace" — which link this menu belongs to; the caller passes the type's display name (ADR-091). */
@@ -70,6 +74,9 @@ export function linkMenuItems(edge: Edge, folded: boolean, a: LinkMenuActions): 
   return [
     ...(a.onEvents && a.eventsLabel
       ? [entry("link-events", a.eventsLabel, "This link", a.onEvents)]
+      : []),
+    ...(a.onEventsToCanvas && a.eventsToCanvasLabel
+      ? [entry("link-events-canvas", a.eventsToCanvasLabel, "This link", a.onEventsToCanvas)]
       : []),
     entry("link-change", "Change link…", "This link", a.onChange),
     entry("link-history", "Show change history", "This link", a.onHistory),

@@ -136,6 +136,27 @@ describe("the events entry (ADR-089)", () => {
     ]);
   });
 
+  it("offers Put the emails on the canvas as its own entry, after Show emails (owner, 6 October 2026)", () => {
+    const calls: string[] = [];
+    const quiet = () => undefined;
+    const edge = makeEdge("ln0", "a", "b", { type: "COMMUNICATED_WITH", occurrences: 12 });
+    const items = linkMenuItems(edge, false, {
+      onCollapse: quiet, onExpand: quiet, onConfirm: quiet, onNotSame: quiet, onExplain: quiet,
+      onNote: quiet, onHide: quiet, onChange: quiet, onHistory: quiet,
+      onEvents: () => calls.push("list"),
+      eventsLabel: "Show emails (12)",
+      onEventsToCanvas: () => calls.push("canvas"),
+      eventsToCanvasLabel: "Put the emails on the canvas",
+    });
+    expect(items.slice(0, 2).map((i) => [i.id, i.label])).toEqual([
+      ["link-events", "Show emails (12)"],
+      ["link-events-canvas", "Put the emails on the canvas"],
+    ]);
+    items[0]!.onSelect();
+    items[1]!.onSelect();
+    expect(calls).toEqual(["list", "canvas"]);
+  });
+
   it("is never offered on a same-as or a not-the-same link", () => {
     const quiet = () => undefined;
     const actions = {

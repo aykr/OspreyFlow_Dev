@@ -54,6 +54,7 @@ from .review import (
     ExtractionCandidateRecord,
     ExtractionCandidateStore,
     accept_candidate,
+    reject_candidate,
     run_extraction,
 )
 from .working_set.models import DeltaAdd
@@ -357,6 +358,23 @@ class EmailExtractionService:
         return EmailDocumentsResult(
             written=len(nodes), without_text=len(events) - len(documents), delta=delta
         )
+
+    async def reject(
+        self,
+        investigation_id: str,
+        edge_id: str,
+        event_id: str,
+        candidate_id: str,
+        principal: Principal,
+    ) -> None:
+        """Rejects one of an email's findings (owner, 6 October 2026): it is marked rejected and
+        nothing is written. Only through the email it was found in, by someone who can see the
+        link."""
+        await self._event_on_link(investigation_id, edge_id, event_id, principal)
+        record = await self._candidates.get_authorized(candidate_id, principal)
+        if record.document_id != email_document_id(event_id):
+            raise EmailNotFoundError("candidate")
+        await reject_candidate(self._candidates, candidate_id, principal)
 
     async def accept(
         self,

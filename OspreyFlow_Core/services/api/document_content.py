@@ -52,6 +52,7 @@ from .review import (
     ExtractionCandidateRecord,
     ExtractionCandidateStore,
     accept_candidate,
+    reject_candidate,
     run_extraction,
 )
 from .working_set.models import DeltaAdd
@@ -298,6 +299,16 @@ class DocumentContentService:
             investigation_id, [_node_from_write(document)], [_edge_from_write(e) for e in edges]
         )
         return DocumentUploadResult(document_id=document_id, delta=delta)
+
+    async def reject(
+        self, investigation_id: str, document_id: str, candidate_id: str, principal: Principal
+    ) -> None:
+        """One finding rejected (owner, 6 October 2026): marked so, and nothing written."""
+        await self._held_document(investigation_id, document_id, principal)
+        record = await self._candidates.get_authorized(candidate_id, principal)
+        if record.document_id != document_id:
+            raise DocumentNotFoundError(document_id)
+        await reject_candidate(self._candidates, candidate_id, principal)
 
     async def accept(
         self, investigation_id: str, document_id: str, candidate_id: str, principal: Principal

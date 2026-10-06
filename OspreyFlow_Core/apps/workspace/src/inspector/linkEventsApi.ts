@@ -161,6 +161,22 @@ export async function acceptEmailCandidate(
   return post<EmailAccept>(url, bearerToken, {});
 }
 
+/** Rejects one finding (owner, 6 October 2026): marked rejected, nothing written. */
+export async function rejectEmailCandidate(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  edgeId: string,
+  eventId: string,
+  candidateId: string,
+): Promise<void> {
+  const url =
+    `${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}/links/` +
+    `${encodeURIComponent(edgeId)}/events/${encodeURIComponent(eventId)}/candidates/` +
+    `${encodeURIComponent(candidateId)}/reject`;
+  await post<unknown>(url, bearerToken, {});
+}
+
 /** How a finding reads in the list: "Person · MERCER, Dana". */
 export function candidateLabel(candidate: EmailCandidate): string {
   const p = candidate.properties;

@@ -3172,6 +3172,29 @@ async def accept_document_candidate_route(
     return result
 
 
+@app.post(
+    "/v1/investigations/{investigation_id}/documents/{document_id}/candidates/{candidate_id}/reject"
+)
+async def reject_document_candidate_route(
+    investigation: InvestigationEditorDep,
+    document_id: str,
+    candidate_id: str,
+    principal: PrincipalDep,
+    document_content: DocumentContentDep,
+    audit: AuditDep,
+) -> RejectedResponse:
+    """Rejects one finding from a held Document (owner, 6 October 2026): nothing is written."""
+    await document_content.reject(investigation.id, document_id, candidate_id, principal)
+    await audit.record(
+        principal=principal,
+        action="reject_document_candidate",
+        investigation_id=investigation.id,
+        resolved_query={"document_id": document_id, "candidate_id": candidate_id},
+        result_cardinality=1,
+    )
+    return RejectedResponse()
+
+
 class EmailDocumentsRequest(BaseModel):
     """The timeline's brushed window (ADR-092); left out, every email on the link."""
 
@@ -3233,6 +3256,31 @@ async def accept_email_candidate_route(
         result_cardinality=1,
     )
     return result
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/links/{edge_id}/events/{event_id}/candidates/{candidate_id}/reject"
+)
+async def reject_email_candidate_route(
+    investigation: InvestigationEditorDep,
+    edge_id: str,
+    event_id: str,
+    candidate_id: str,
+    principal: PrincipalDep,
+    email_extraction: EmailExtractionDep,
+    audit: AuditDep,
+) -> RejectedResponse:
+    """Rejects one of an email's findings (owner, 6 October 2026): marked rejected, nothing is
+    written. Only through the email it was found in, by someone who can see the link."""
+    await email_extraction.reject(investigation.id, edge_id, event_id, candidate_id, principal)
+    await audit.record(
+        principal=principal,
+        action="reject_email_candidate",
+        investigation_id=investigation.id,
+        resolved_query={"edge_id": edge_id, "event_id": event_id, "candidate_id": candidate_id},
+        result_cardinality=1,
+    )
+    return RejectedResponse()
 
 
 @app.get("/v1/investigations/{investigation_id}/links/{edge_id}/notes")

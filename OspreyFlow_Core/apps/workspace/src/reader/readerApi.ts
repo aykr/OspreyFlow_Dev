@@ -102,6 +102,20 @@ export function acceptDocumentFinding(
   );
 }
 
+/** Rejects one finding from a held Document (owner, 6 October 2026): nothing is written. */
+export async function rejectDocumentFinding(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  documentId: string,
+  candidateId: string,
+): Promise<void> {
+  await postJson(
+    `${documentUrl(apiBaseUrl, investigationId, documentId)}/candidates/${encodeURIComponent(candidateId)}/reject`,
+    bearerToken,
+  );
+}
+
 /** The id an email's Document is written under: the server's `email_document_id`. */
 export function emailDocumentId(eventId: string): string {
   return `email:${eventId}`;
