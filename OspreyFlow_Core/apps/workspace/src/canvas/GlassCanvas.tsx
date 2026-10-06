@@ -80,6 +80,7 @@ import { emailsOutcomeText, showEmailsAsDocuments } from "../inspector/emailDocu
 import { eventsEntryLabel, eventsNoun, mayCarryText } from "../inspector/linkEventsApi";
 import { edgeTypesOfferedFor } from "./edgeTypeMenu";
 import { DottedArrowProgram, DottedEdgeProgram } from "./dottedEdgePrograms";
+import { settledAnchors } from "./settledAnchor";
 import {
   gateExpansion,
   narrowingOptions,
@@ -935,11 +936,13 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         // A node arriving beside an already-settled neighbour starts next to it, so an
         // expansion grows outwards from where the analyst is looking, not from a random spot.
         const positionOf = new Map(nodes.map((n) => [n.id, n]));
+        const anchors = settledAnchors(
+          nodes.map((n) => n.id),
+          edges,
+          settledRef.current,
+        );
         for (const node of nodes) {
-          if (settledRef.current.has(node.id)) continue;
-          const anchor = edges
-            .map(([a, b]) => (a === node.id ? b : b === node.id ? a : null))
-            .find((other) => other !== null && settledRef.current.has(other));
+          const anchor = anchors.get(node.id);
           const at = anchor ? positionOf.get(anchor) : undefined;
           if (at) {
             const near = seededScatter(node.id);
