@@ -64,7 +64,17 @@ async function postJson<T>(url: string, bearerToken: string): Promise<T> {
   }
   if (response.status === 403) throw new Error("This needs Editor access to the case.");
   if (response.status === 404) throw new Error("This document is not in your view.");
-  if (!response.ok) throw new Error(`The request failed (${response.status}).`);
+  if (!response.ok) {
+    // The server's own sentence where it gives one: a model still downloading, or one that
+    // answered badly (ADR-095), says so rather than a status number.
+    let detail: unknown;
+    try {
+      detail = ((await response.json()) as { detail?: unknown }).detail;
+    } catch {
+      // no body
+    }
+    throw new Error(typeof detail === "string" ? detail : `The request failed (${response.status}).`);
+  }
   return (await response.json()) as T;
 }
 

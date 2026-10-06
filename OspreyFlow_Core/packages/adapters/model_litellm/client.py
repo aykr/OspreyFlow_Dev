@@ -51,6 +51,7 @@ from .errors import (
     EmbeddingFailedError,
     ExtractionFailedError,
     InvalidExtractionSchemaError,
+    ModelUnavailableError,
     TranscriptionFailedError,
 )
 
@@ -66,6 +67,9 @@ class LiteLLMConfig:
     #: production secret, and never read from anywhere but the environment in a real deployment
     #: (`05_DEPLOYMENT.md` §7).
     api_key: str = "sk-ospreyflow-dev"
+    #: How long one model call may take (ADR-095): a 7B model on a CPU-only Docker host reads a
+    #: long email and writes its answer in minutes, not seconds. A deployment may set it.
+    timeout_seconds: float = 900.0
 
     @property
     def base_url(self) -> str:
@@ -77,15 +81,19 @@ class LiteLLMConfig:
             host=os.environ.get("LITELLM_HOST", "localhost"),
             port=int(os.environ.get("LITELLM_PORT", "4000")),
             api_key=os.environ.get("LITELLM_API_KEY", "sk-ospreyflow-dev"),
+            timeout_seconds=float(os.environ.get("OSPREY_MODEL_TIMEOUT_SECONDS", "900")),
         )
 
 
 class LiteLLMClient:
-    def __init__(self, config: LiteLLMConfig) -> None:
+    def __init__(
+        self, config: LiteLLMConfig, *, transport: httpx.AsyncBaseTransport | None = None
+    ) -> None:
         self._http = httpx.AsyncClient(
             base_url=config.base_url,
             headers={"Authorization": f"Bearer {config.api_key}"},
-            timeout=120.0,  # a small local model's first call pays Ollama's own load time
+            timeout=config.timeout_seconds,
+            transport=transport,
         )
 
     async def aclose(self) -> None:
@@ -107,7 +115,9 @@ class LiteLLMClient:
         self._check_schema(response_schema)
 
         last_error: Exception | None = None
+        attempts = 0
         for _ in range(_MAX_ATTEMPTS):
+            attempts += 1
             try:
                 content = await self._chat_completion(
                     model, text, response_schema, image, image_mime_type
@@ -120,13 +130,18 @@ class LiteLLMClient:
                 continue
             except httpx.HTTPStatusError as exc:
                 last_error = exc
+                if exc.response.status_code == 404:
+                    raise ModelUnavailableError(
+                        f"model {model!r} is not available from the model proxy: not routed, "
+                        "or not yet downloaded"
+                    ) from exc
                 if exc.response.status_code < 500:
                     break  # a 4xx from the proxy will not succeed on retry
                 continue
 
         raise ExtractionFailedError(
             f"model {model!r} did not return a response conforming to the given schema "
-            f"after {_MAX_ATTEMPTS} attempt(s): {last_error}"
+            f"after {attempts} attempt(s): {last_error}"
         ) from last_error
 
     async def _chat_completion(

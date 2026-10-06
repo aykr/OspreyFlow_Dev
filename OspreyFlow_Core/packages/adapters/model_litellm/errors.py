@@ -21,6 +21,13 @@ class ExtractionFailedError(ModelPortError):
     non-2xx unrelated to the schema)."""
 
 
+class ModelUnavailableError(ExtractionFailedError):
+    """The proxy cannot serve the model named: not routed, or not (yet) pulled — the proxy answers
+    `404` for both. Seen while a deployment's chosen extraction model was still downloading
+    (ADR-095). A subclass of `ExtractionFailedError`, so every caller that already handles a
+    failed extraction still does; the Conduit tells an analyst which it was."""
+
+
 class EmbeddingFailedError(ModelPortError):
     """The proxy returned a different number of embedding vectors than inputs given to `embed()`
     — a shape violation `embed()` has no schema to catch the way `extract()` does, so this is the

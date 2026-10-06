@@ -74,6 +74,7 @@ from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from adapters.media_objectstore import MediaStoreConfig, ObjectStoreMediaStore
 from adapters.model_litellm.adapter import ModelLiteLLMAdapter
+from adapters.model_litellm.errors import ExtractionFailedError, ModelUnavailableError
 from adapters.model_litellm.client import LiteLLMClient, LiteLLMConfig
 from conduit_common.identity import new_edge_id, new_id, now_utc
 from geo.bilinear import ControlPoint
@@ -1167,6 +1168,32 @@ async def _link_not_found_handler(request: Request, exc: LinkNotFoundError) -> J
     """A link that is not in the working set and a link this principal may not see give this one
     answer (`services/api/link_notes.py`)."""
     return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "link_not_found"})
+
+
+@app.exception_handler(ModelUnavailableError)
+async def _model_unavailable_handler(request: Request, exc: ModelUnavailableError) -> JSONResponse:
+    """The deployment's model cannot answer yet (ADR-095): said in words, not as a server fault.
+    Seen while the chosen extraction model was still downloading."""
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": "model_unavailable",
+            "detail": f"{exc} If the model was chosen recently it may still be downloading; "
+            "try again once it is in.",
+        },
+    )
+
+
+@app.exception_handler(ExtractionFailedError)
+async def _extraction_failed_handler(request: Request, exc: ExtractionFailedError) -> JSONResponse:
+    return JSONResponse(
+        status_code=502,
+        content={
+            "error": "extraction_failed",
+            "detail": "The model answered, but not in the shape asked for. Nothing was recorded; "
+            "try again.",
+        },
+    )
 
 
 @app.exception_handler(ProposalNotFoundError)
