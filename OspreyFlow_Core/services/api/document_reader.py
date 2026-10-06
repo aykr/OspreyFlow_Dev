@@ -24,7 +24,7 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
-from conduit_common.identity import new_node_id
+from conduit_common.identity import new_id, new_node_id
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from ports.media import MediaNotFoundError, MediaStore
@@ -41,7 +41,9 @@ from schemas.domain import (
 from .dossier import MessageSpan, get_document_view
 from .email_extraction import _edge_from_write, _node_from_write
 from .event_scope import CaseRecords, visible_ancestors, with_inherited
-from .review import DocumentNotFoundError, ExtractionCandidateStore
+from services.extract.candidates import ExtractionCandidate
+
+from .review import CandidateStatus, DocumentNotFoundError, ExtractionCandidateStore
 from .working_set.models import DeltaAdd
 from .working_set.service import WorkingSetService
 
@@ -186,7 +188,8 @@ class DocumentReaderService:
         now = datetime.now(UTC)
         source = SourceRef(
             document_id=document_id,
-            locator=f"chars:{designation.start}-{designation.end}",
+            # The Dossier's locator form (`dossier._CHAR_SPAN`), so the reader marks the words.
+            locator=f"char span {designation.start}-{designation.end}",
             excerpt_hash=hashlib.sha256(designation.text.encode("utf-8")).hexdigest(),
         )
         provenance = Provenance(state=ProvenanceState.ASSERTED, sources=[source], first_seen=now)
@@ -219,6 +222,31 @@ class DocumentReaderService:
             await self._graph.rollback_transaction(tx)
             raise
         await self._graph.commit_transaction(tx)
+        # The reader's marks come from accepted findings, so the marking is kept as one, the
+        # analyst's, with the text it points into (an email never extracted has none stored yet).
+        try:
+            await self._candidates.get_document_text(document_id, principal)
+        except DocumentNotFoundError:
+            await self._candidates.store_document_text(document_id, view.text, principal)
+        (record,) = await self._candidates.store(
+            [
+                ExtractionCandidate(
+                    id=new_id(),
+                    document_id=document_id,
+                    entity_type=designation.entity_type,
+                    properties=node.properties,
+                    confidence=1.0,
+                    model=f"analyst:{principal.id}",
+                    locator=source.locator,
+                    excerpt_hash=source.excerpt_hash,
+                    handling=document.handling,
+                )
+            ],
+            principal,
+        )
+        await self._candidates.mark_reviewed(
+            record.id, principal, status=CandidateStatus.ACCEPTED, node_id=node.id
+        )
         delta = await self._working_set.add_written(
             investigation_id, [_node_from_write(node)], [_edge_from_write(mention)]
         )

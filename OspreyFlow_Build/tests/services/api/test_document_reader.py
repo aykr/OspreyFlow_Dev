@@ -182,7 +182,8 @@ async def test_marking_a_person_writes_an_asserted_node_of_the_analyst_linked_to
     assert person.created_by == ANALYST.id
     (source,) = person.provenance.sources
     assert source.document_id == doc.id
-    assert source.locator == f"chars:{start}-{start + 11}"
+    # The locator form the Dossier reads, so the reader can mark the words in place.
+    assert source.locator == f"char span {start}-{start + 11}"
     assert source.excerpt_hash == hashlib.sha256(b"Dana MERCER").hexdigest()
     assert person.handling == doc.handling
     (mention,) = [e for e in graph.committed_edges if e.source == result.node_id]
@@ -250,3 +251,23 @@ async def test_a_hidden_document_cannot_be_marked_and_refuses_as_one_that_does_n
             ANALYST,
         )
     assert graph.nodes == {}
+
+
+async def test_marked_words_are_marked_in_the_text_when_the_document_is_read_again() -> None:
+    """Found building ADR-098 decision 2: the reader's marks come from accepted findings, so a
+    marking with no record behind it, on an email never extracted, would never be shown."""
+    doc = _document(email_document_id("ev-1"), event_id="ev-1")
+    candidates = InMemoryCandidates()
+    reader = await _reader([doc], candidates)
+    start = TEXT.index("Callum PRICE")
+    result = await reader.designate(
+        "inv-1",
+        doc.id,
+        Designation(entity_type="Person", text="Callum PRICE", start=start, end=start + 12),
+        ANALYST,
+    )
+    view = await reader.read("inv-1", doc.id, ANALYST)
+    assert view.text == TEXT
+    assert [(s.start, s.end, s.node_id, s.provenance_state) for s in view.spans] == [
+        (start, start + 12, result.node_id, ProvenanceState.ASSERTED)
+    ]

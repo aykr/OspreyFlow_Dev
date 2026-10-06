@@ -47,6 +47,7 @@ from schemas.domain import (
     AuditStub,
     EdgeId,
     EdgeWrite,
+    ExpandRequest,
     Handling,
     Interval,
     Node,
@@ -163,6 +164,12 @@ class WritingGraph(FakeGraphPort):
     async def rollback_transaction(self, tx: TxId) -> None:
         self._pending_nodes.pop(tx, None)
         await super().rollback_transaction(tx)
+
+    async def expand(self, req: ExpandRequest, principal: Principal) -> Subgraph:
+        """The written nodes asked for, as the real adapter returns the requested nodes it can
+        show (rule 15): answering nothing hid the reader's marks for an entity marked by hand."""
+        nodes = [n for n in [await self.get_node(i, principal) for i in req.node_ids] if n]
+        return Subgraph(nodes=nodes, edges=[])
 
     async def get_node(self, node_id: NodeId, principal: Principal, **_: Any) -> Node | None:
         w = self.nodes.get(node_id)
