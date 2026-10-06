@@ -218,7 +218,8 @@ def test_a_branch_of_a_choice_passes_the_choice_to_the_service(client: TestClien
     body = response.json()
     assert body["branched_from"] == "inv-1"
     assert body["created_by"] == "alice"
-    assert body["name"] == "Fixture Corp · 2 selected"
+    # ADR-097: a fact about the branch, not a selection count, and no middle dot (review item 3).
+    assert body["name"] == "Branch of Fixture Corp (2 nodes)"
     assert client.working_set.branch_calls == [("inv-1", body["id"], ["a", "b"])]  # type: ignore[attr-defined]
 
 
@@ -227,7 +228,7 @@ def test_a_branch_with_no_body_still_forks_the_whole_working_set(client: TestCli
     response = client.post("/v1/investigations/inv-1/branch")
 
     assert response.status_code == 201
-    assert response.json()["name"] == "Fixture Corp (branch)"
+    assert response.json()["name"] == "Branch of Fixture Corp"
     assert client.working_set.branch_calls[0][2] is None  # type: ignore[attr-defined]
 
 

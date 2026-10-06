@@ -115,7 +115,7 @@ import {
   type Community,
 } from "./communities";
 import { linkCaption, linkTypeName } from "./linkLabel";
-import { SelectionChip } from "./SelectionChip";
+import { SelectionBar } from "./SelectionBar";
 import { AddFiles } from "../content/AddFiles";
 import { linkMenuItems, linkMenuTitle } from "./linkMenu";
 import { sameAsGroup } from "./linkCollapse";
@@ -2760,8 +2760,19 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             }
           />
         )}
-        <SelectionChip
+        {/* ADR-097 step 1: the selection's one count, and what can be done to all of it. */}
+        <SelectionBar
           count={selected.size}
+          onExpand={() => {
+            const box = containerRef.current?.getBoundingClientRect();
+            const [x, y] = box ? [box.width / 2, box.height / 2] : [0, 0];
+            // One at a time, each through its own preview and the working set's cap (rule 2).
+            void (async () => {
+              for (const id of Array.from(selected)) await requestExpansion(id, null, x, y);
+            })();
+          }}
+          onBranch={onBranchCreated ? () => void branchSelected() : undefined}
+          onRemove={() => void removeNodeIds(Array.from(selected))}
           onClear={() => {
             setSelected(new Set());
             onSelectionChange?.([]);
@@ -2769,10 +2780,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         />
         <ViewActions
           nodeCount={graph.order}
-          selectedCount={selected.size}
-          onRemoveSelected={() => void removeNodeIds(Array.from(selected))}
           onClearAll={() => void removeNodeIds(graph.nodes())}
-          onBranchSelected={onBranchCreated ? () => void branchSelected() : undefined}
           selectedLink={selectedEdge !== null}
           hiddenLinkCount={hiddenEdges.size}
           onHideLink={hideSelectedLink}

@@ -8,25 +8,18 @@ afterEach(cleanup);
 function setup(
   overrides: Partial<Parameters<typeof ViewActions>[0]> = {},
 ) {
-  const handlers = { onRemoveSelected: vi.fn(), onClearAll: vi.fn() };
-  render(
-    <ViewActions nodeCount={1091} selectedCount={2} {...handlers} {...overrides} />,
-  );
+  const handlers = { onClearAll: vi.fn() };
+  render(<ViewActions nodeCount={1091} {...handlers} {...overrides} />);
   return handlers;
 }
 
 describe("ViewActions", () => {
-  it("removes the selected nodes at once, and says how many", () => {
-    const h = setup();
-    fireEvent.click(screen.getByRole("button", { name: /Remove selected \(2\)/ }));
-    expect(h.onRemoveSelected).toHaveBeenCalledOnce();
+  it("offers nothing to do to selected nodes: that is the selection bar's (ADR-097 step 1)", () => {
+    setup();
+    expect(screen.queryByRole("button", { name: /Remove selected|Branch selected/ })).toBeNull();
   });
 
-  it("offers no removal when nothing is selected", () => {
-    setup({ selectedCount: 0 });
-    const button = screen.getByRole("button", { name: /Remove selected/ });
-    expect((button as HTMLButtonElement).disabled).toBe(true);
-  });
+
 
   it("does not clear the view on the first click; it asks, with the number", () => {
     const h = setup();
@@ -57,7 +50,7 @@ describe("ViewActions", () => {
   });
 
   it("offers no clearing from an empty view", () => {
-    setup({ nodeCount: 0, selectedCount: 0 });
+    setup({ nodeCount: 0 });
     const button = screen.getByRole("button", { name: "Clear view" });
     expect((button as HTMLButtonElement).disabled).toBe(true);
   });
@@ -82,21 +75,6 @@ describe("ViewActions", () => {
     expect(h.onShowHiddenLinks).toHaveBeenCalledOnce();
   });
 
-  it("branches the selected nodes into a new tab, and says how many", () => {
-    const onBranchSelected = vi.fn();
-    setup({ onBranchSelected });
-    fireEvent.click(screen.getByRole("button", { name: /Branch selected \(2\)/ }));
-    expect(onBranchSelected).toHaveBeenCalledOnce();
-  });
 
-  it("offers no branch when nothing is selected", () => {
-    setup({ selectedCount: 0, onBranchSelected: vi.fn() });
-    const button = screen.getByRole("button", { name: /Branch selected/ });
-    expect((button as HTMLButtonElement).disabled).toBe(true);
-  });
 
-  it("shows no branch button on a surface that cannot branch", () => {
-    setup();
-    expect(screen.queryByRole("button", { name: /Branch selected/ })).toBeNull();
-  });
 });

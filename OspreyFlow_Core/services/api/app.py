@@ -1872,12 +1872,13 @@ async def branch_investigation(
     # new investigation gets its own, from this principal, not inherited.
     node_ids = body.node_ids if body is not None else None
     source_name = investigation.name or DEFAULT_CASE_NAME
-    name = f"{source_name} (branch)"
+    # ADR-097 (design review item 3): a branch is named for what it is, not for a selection.
+    name = f"Branch of {source_name}"
     if node_ids is not None:
         # Asked first, and before the case exists, so that a choice with nothing visible in it
         # (`NothingToBranchError`, a 422) leaves no empty case behind.
         chosen, _, _ = await working_set.branch_contents(investigation.id, principal, node_ids)
-        name = f"{source_name} · {len(chosen)} selected"
+        name = f"Branch of {source_name} ({len(chosen)} {'node' if len(chosen) == 1 else 'nodes'})"
     if body is not None and body.name is not None and body.name.strip():
         name = body.name.strip()
     new_investigation = await investigations.create(

@@ -1,5 +1,6 @@
-// The selection, by keyboard alone (ADR-093, rule 13): the canvas chip's Clear, and the Inspector
-// list's Centre and Remove, each against the real canvas. No `page.mouse`, no `.click()`.
+// The selection, by keyboard alone (ADR-093, ADR-097, rule 13): the selection bar's Clear, Remove
+// from view and Expand, and the Inspector list's Centre and Remove, each against the real canvas.
+// No `page.mouse`, no `.click()`.
 import { expect, test, type Page } from "@playwright/test";
 
 import { SELECTION_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
@@ -37,14 +38,41 @@ async function selectTwo(page: Page) {
   return second as string;
 }
 
-test("the chip says how many are selected, and its Clear empties the selection", async ({ page }) => {
+test("the selection bar says how many once, and its Clear empties the selection", async ({ page }) => {
   await selectTwo(page);
-  await expect(page.getByRole("status").filter({ hasText: "2 selected" })).toBeVisible();
-  await tabTo(page, /^Clear the selection$/);
+  const bar = page.getByRole("toolbar", { name: "Selection" });
+  await expect(bar.getByRole("status")).toHaveText("2 selected");
+  await expect(page.getByText(/\d+ selected/)).toHaveCount(1); // one live count in the page
+  await bar.getByRole("button", { name: "Clear", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => selection(page)).toEqual([]);
-  await expect(page.getByRole("status").filter({ hasText: "selected" })).toHaveCount(0);
-  registerCovered("SELECTION_ACTIONS", "clear-the-selection-from-the-canvas-chip");
+  await expect(page.getByRole("toolbar", { name: "Selection" })).toHaveCount(0);
+  registerCovered("SELECTION_ACTIONS", "clear-the-selection-from-the-selection-bar");
+});
+
+test("the selection bar's Remove from view takes the selected nodes out, through a real DELETE", async ({ page }) => {
+  let body: { node_ids: string[] } | null = null;
+  await page.route("**/*/investigations/*/nodes", async (route) => {
+    body = route.request().postDataJSON();
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ seq: 7 }) });
+  });
+  const second = await selectTwo(page);
+  await page.getByRole("toolbar", { name: "Selection" }).getByRole("button", { name: "Remove from view" }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => body?.node_ids.slice().sort()).toEqual(["n0", second].sort());
+  registerCovered("SELECTION_ACTIONS", "remove-the-selection-from-the-selection-bar");
+});
+
+test("the selection bar's Expand asks to expand each selected node", async ({ page }) => {
+  const asked: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/expand")) asked.push(request.url());
+  });
+  await selectTwo(page);
+  await page.getByRole("toolbar", { name: "Selection" }).getByRole("button", { name: "Expand" }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => asked.length).toBeGreaterThan(0);
+  registerCovered("SELECTION_ACTIONS", "expand-the-selection-from-the-selection-bar");
 });
 
 test("the list's name centres on that node and leaves the selection as it was", async ({ page }) => {

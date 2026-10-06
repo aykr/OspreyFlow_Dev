@@ -524,16 +524,20 @@ the settled nodes where they were.
 
 ### 3.1h Branch selected, and the strip of tabs (ADR-084)
 
-Selecting nodes enables **Branch selected (n)**, beside Remove selected and Clear view (reachable by Tab; `keyboard/keyboard.spec.ts`). It sends the nodes to a **new case of their own**, holding those nodes and the links between them, and opens it. The case you branched from is left exactly as it was. A branch is a **copy** made at that moment: later changes to either never touch the other. A selected Group Node stands for every member of its group, so choosing one chooses them all. What the new case holds is re-checked against the branching analyst's own clearance, as every read is: a node they may not see is not copied, and a request that leaves nothing to copy says only "None of the selected nodes could be branched", whatever the reason.
+Selecting nodes shows the **selection bar** (ADR-097 step 1, below), whose **Branch to a new case** sends the nodes to a **new case of their own**, holding those nodes and the links between them, and opens it. The case you branched from is left exactly as it was. A branch is a **copy** made at that moment: later changes to either never touch the other. A selected Group Node stands for every member of its group, so choosing one chooses them all. What the new case holds is re-checked against the branching analyst's own clearance, as every read is: a node they may not see is not copied, and a request that leaves nothing to copy says only "None of the selected nodes could be branched", whatever the reason.
 
-**Seeing and working the selection (ADR-093).** A selected node is drawn larger with a bold brass
-ring (§4's table). While anything is selected, a chip in the canvas's bottom-left corner says "n
-selected" with *Clear the selection*. When more than one node is selected, the Inspector lists them
+**Seeing and working the selection (ADR-093, ADR-097).** A selected node is drawn larger with a bold
+brass ring (§4's table). While anything is selected, the **selection bar** floats at the bottom centre
+of the canvas (an overlay: a shadow, no hairline): "n selected", the only live count of the selection
+in the page, then *Expand* (each selected node in turn, each through its own preview and the working
+set's cap), *Branch to a new case*, *Remove from view* and *Clear*; Escape clears. It replaces the
+corner chip and the toolbar's *Remove selected* and *Branch selected*. A branch is named "Branch of
+<case> (n nodes)", or "Branch of <case>" for the whole view; never a selection count with a middle dot. When more than one node is selected, the Inspector lists them
 by name under "Selected (n)": choosing a name centres the canvas on that node and leaves the
 selection as it was, and × takes it out. Proved by keyboard in `keyboard/selection.spec.ts`
 (registry `SELECTION_ACTIONS`); the ring by painted pixels in `keyboard/selection-look.spec.ts`.
 
-The selection is built with the lasso, or by clicking nodes with Shift, Ctrl or Cmd held (each adds the node, or takes it out again). *Branch selected (n)* is the button in the strip over the canvas and, for any node that is in the selection, an entry in that node's own right-click menu (ADR-084 Amendment 1); a node outside the selection does not offer it. Both reach the same route; `keyboard/keyboard.spec.ts` proves each by keyboard.
+The selection is built with the lasso, or by clicking nodes with Shift, Ctrl or Cmd held (each adds the node, or takes it out again). *Branch to a new case* is on the selection bar and, for any node that is in the selection, *Branch selected (n)* is an entry in that node's own right-click menu (ADR-084 Amendment 1); a node outside the selection does not offer it. Both reach the same route; `keyboard/keyboard.spec.ts` proves each by keyboard.
 
 Each branch is a case saved for the analyst who made it (they are its Author, and it is visible to nobody else until they share it). It starts with the resolution threshold, layout and timeline brush of its own, not shared with the case it came from. The events behind the links it copied (the timeline's counts, *Show emails*, an email to extract from) are read from the case they were loaded into, for the links the branch holds, wherever the analyst can see that case; nothing is copied (ADR-084 Amendment 2).
 

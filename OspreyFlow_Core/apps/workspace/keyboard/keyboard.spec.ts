@@ -997,7 +997,7 @@ test("Branch selected sends the selected nodes to a new case, by keyboard, and s
   });
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus(); // n0 selected
-  await tabTo(page, page.getByRole("button", { name: /^Branch selected \(1\)/ }));
+  await tabTo(page, page.getByRole("button", { name: "Branch to a new case" }));
   await page.keyboard.press("Enter");
 
   await expect.poll(() => body).toEqual({ node_ids: ["n0"] });
@@ -1052,7 +1052,7 @@ test("Branch selected says so when nothing could be branched, and opens no tab",
   });
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus();
-  await tabTo(page, page.getByRole("button", { name: /^Branch selected \(1\)/ }));
+  await tabTo(page, page.getByRole("button", { name: "Branch to a new case" }));
   await page.keyboard.press("Enter");
 
   await expect(page.getByRole("dialog")).toContainText("None of the selected nodes could be branched.");

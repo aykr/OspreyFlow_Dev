@@ -2,11 +2,7 @@ import { useState } from "react";
 
 export interface ViewActionsProps {
   nodeCount: number;
-  selectedCount: number;
-  onRemoveSelected: () => void;
   onClearAll: () => void;
-  /** Send the selected nodes to a new tab (ADR-084). Absent: this surface cannot branch. */
-  onBranchSelected?: () => void;
   /** A link is selected, so it can be hidden from this view. */
   selectedLink?: boolean;
   /** How many links are hidden in this browser tab. */
@@ -18,15 +14,13 @@ export interface ViewActionsProps {
 }
 
 /**
- * Two ways to tidy the view: remove the selected nodes, or clear everything. Clearing asks first
- * and says what it does and does not do: the records stay in the store and History can undo it.
+ * Tidying the view: hide a selected link, show hidden links again, or clear everything. Clearing
+ * asks first and says what it does and does not do: the records stay in the store and History can
+ * undo it. What is done to selected nodes is on the selection bar (ADR-097 step 1).
  */
 export function ViewActions({
   nodeCount,
-  selectedCount,
-  onRemoveSelected,
   onClearAll,
-  onBranchSelected,
   selectedLink = false,
   hiddenLinkCount = 0,
   onHideLink,
@@ -51,24 +45,6 @@ export function ViewActions({
       }}
     >
       <div style={{ display: "flex", gap: "var(--sp-4)" }}>
-        <button
-          type="button"
-          className="radial-menu__item"
-          disabled={selectedCount === 0}
-          onClick={onRemoveSelected}
-        >
-          Remove selected ({selectedCount})
-        </button>
-        {onBranchSelected && (
-          <button
-            type="button"
-            className="radial-menu__item"
-            disabled={selectedCount === 0}
-            onClick={onBranchSelected}
-          >
-            Branch selected ({selectedCount})
-          </button>
-        )}
         {selectedLink && (
           <button type="button" className="radial-menu__item" onClick={onHideLink}>
             Hide selected link
