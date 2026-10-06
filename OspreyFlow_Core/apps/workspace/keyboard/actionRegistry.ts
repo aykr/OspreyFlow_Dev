@@ -375,6 +375,8 @@ export const READER_ACTIONS = defineActionRegistry("READER_ACTIONS", [
   "enter-on-a-document-opens-it-to-read",
   "escape-closes-the-reader",
   "extract-and-accept-from-the-reader-by-keyboard",
+  // The owner's ask, 6 October 2026: a Document's right-click menu opens it full screen.
+  "read-full-screen-from-a-documents-menu",
 ] as const);
 
 /** The administrator's *Proposed types* list (ADR-090 C3): opened from the top bar, each proposal

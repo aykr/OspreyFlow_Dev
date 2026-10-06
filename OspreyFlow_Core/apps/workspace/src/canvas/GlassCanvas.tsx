@@ -2242,6 +2242,19 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         });
       }
 
+      // A Document opens to read full screen from its own menu too, as a double-click opens it
+      // (ADR-092 decision 4; the owner, 6 October 2026: "the right click to give me an option to
+      // see the content full screen").
+      if (opensToRead(nodeId)) {
+        items.unshift({
+          id: "read-full-screen",
+          label: "Read full screen",
+          count: undefined,
+          group: "Actions",
+          onSelect: () => onOpenDocumentRef.current?.(nodeId),
+        });
+      }
+
       // ADR-094 step 3: a node that can hold content offers to add files it holds.
       const holds = edgeTypes.find((t) => t.name === "HOLDS");
       if (apiBaseUrl && bearerToken && investigationId && holds?.from.includes(node.type)) {

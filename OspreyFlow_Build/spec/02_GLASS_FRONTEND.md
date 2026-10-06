@@ -748,7 +748,7 @@ gap can be pointed at. Tests: `src/canvas/nodeAttributes.test.ts` (which program
 width) and `keyboard/link-style.spec.ts`, which reads the painted pixels along a link and fails if a
 probabilistic link is not dotted or a direct one is.
 
-**Reading a Document (ADR-092).** A double-click on a Document, or Enter on a focused one, opens it
+**Reading a Document (ADR-092).** A double-click on a Document, Enter on a focused one, or *Read full screen* at the head of its right-click menu, opens it
 full screen: an overlay over the whole work area (canvas, side column and timeline) with its title,
 for an email its sender, recipient and date, and its full text with the entities already accepted
 marked in place (the Dossier's marking); the text is the whole message (ADR-095), and a note says
