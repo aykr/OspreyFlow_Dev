@@ -540,3 +540,9 @@
 .side-panel-header__chevron { transition: transform var(--dur-fast) var(--ease); transform: rotate(90deg); }
 .side-panel-header__toggle[aria-expanded="false"] .side-panel-header__chevron { transform: none; }
 @media (prefers-reduced-motion: reduce) { .side-panel-header__chevron { transition: none; } }
+/* Marking an entity by hand in the reader (ADR-098 decision 5). */
+.reader-mark { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); padding: var(--sp-8) 0; border-top: 1px solid var(--border-subtle); font-size: var(--fs-13); }
+.reader-mark__title { font-weight: 600; color: var(--text-secondary); }
+.reader-mark input { min-width: 240px; min-height: 24px; }
+.reader-mark select { min-height: 24px; }
+.reader-mark__message { color: var(--text-secondary); }

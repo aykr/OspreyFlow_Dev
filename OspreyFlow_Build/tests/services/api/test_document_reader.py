@@ -148,3 +148,105 @@ async def test_an_image_document_says_it_has_a_file_and_no_text_until_extracted(
     reader._media = media  # type: ignore[attr-defined]
     view = await reader.read("inv-1", "content:2", ANALYST)
     assert (view.media_kind, view.has_file, view.text) == ("image", True, "")
+
+
+# --- an entity marked by hand from a document's text (ADR-098 decision 5) ----------------------
+
+import hashlib  # noqa: E402
+
+from services.api.document_reader import Designation, DesignationRefusedError  # noqa: E402
+
+
+async def _with_writes(documents: list[Node]) -> tuple[DocumentReaderService, WritingGraph]:
+    reader = await _reader(documents)
+    return reader, reader._graph  # type: ignore[attr-defined, return-value]
+
+
+async def test_marking_a_person_writes_an_asserted_node_of_the_analyst_linked_to_it() -> None:
+    doc = _document(email_document_id("ev-1"), event_id="ev-1")
+    reader, graph = await _with_writes([doc])
+    start = TEXT.index("Dana MERCER")
+    result = await reader.designate(
+        "inv-1",
+        doc.id,
+        Designation(
+            entity_type="Person", text="Dana MERCER", start=start, end=start + len("Dana MERCER")
+        ),
+        ANALYST,
+    )
+    person = graph.nodes[result.node_id]
+    assert person.type == "Person"
+    assert person.properties == {"family_name": "MERCER", "given_names": "Dana"}
+    # A person made it, so it is asserted, and theirs.
+    assert person.provenance.state is ProvenanceState.ASSERTED
+    assert person.created_by == ANALYST.id
+    (source,) = person.provenance.sources
+    assert source.document_id == doc.id
+    assert source.locator == f"chars:{start}-{start + 11}"
+    assert source.excerpt_hash == hashlib.sha256(b"Dana MERCER").hexdigest()
+    assert person.handling == doc.handling
+    (mention,) = [e for e in graph.committed_edges if e.source == result.node_id]
+    assert (mention.type, mention.target) == ("MENTIONED_IN", doc.id)
+    assert {n.id for n in result.delta.nodes} == {result.node_id}
+
+
+@pytest.mark.parametrize(
+    ("entity_type", "words", "expected"),
+    [
+        ("Organisation", "Dabhol", {"name": "Dabhol"}),
+        ("Location", "Dabhol", {"name": "Dabhol"}),
+        ("Person", "PRICE", {"family_name": "PRICE"}),
+    ],
+)
+async def test_each_type_takes_the_words_as_its_name(
+    entity_type: str, words: str, expected: dict[str, str]
+) -> None:
+    doc = _document(email_document_id("ev-1"), event_id="ev-1")
+    reader, graph = await _with_writes([doc])
+    start = TEXT.index(words)
+    result = await reader.designate(
+        "inv-1",
+        doc.id,
+        Designation(entity_type=entity_type, text=words, start=start, end=start + len(words)),
+        ANALYST,
+    )
+    assert graph.nodes[result.node_id].properties == expected
+
+
+async def test_words_not_at_that_place_in_the_text_are_refused_and_nothing_written() -> None:
+    doc = _document(email_document_id("ev-1"), event_id="ev-1")
+    reader, graph = await _with_writes([doc])
+    with pytest.raises(DesignationRefusedError):
+        await reader.designate(
+            "inv-1",
+            doc.id,
+            Designation(entity_type="Person", text="Ken LAY", start=0, end=7),
+            ANALYST,
+        )
+    assert graph.nodes == {} and graph.committed_edges == []
+
+
+async def test_a_type_that_is_not_offered_is_refused() -> None:
+    doc = _document(email_document_id("ev-1"), event_id="ev-1")
+    reader, graph = await _with_writes([doc])
+    with pytest.raises(DesignationRefusedError):
+        await reader.designate(
+            "inv-1",
+            doc.id,
+            Designation(entity_type="Document", text="Dana", start=0, end=4),
+            ANALYST,
+        )
+    assert graph.nodes == {}
+
+
+async def test_a_hidden_document_cannot_be_marked_and_refuses_as_one_that_does_not_exist() -> None:
+    """Rule 4: the same refusal as reading it, and nothing written."""
+    reader, graph = await _with_writes([_document("secret-doc", "SECRET", event_id="ev-1")])
+    with pytest.raises(DocumentNotFoundError):
+        await reader.designate(
+            "inv-1",
+            "secret-doc",
+            Designation(entity_type="Person", text="Dana", start=0, end=4),
+            ANALYST,
+        )
+    assert graph.nodes == {}

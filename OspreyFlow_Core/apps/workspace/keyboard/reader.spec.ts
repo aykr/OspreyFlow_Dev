@@ -136,6 +136,32 @@ test("Reject beside Accept is reached and pressed by keyboard, and draws nothing
   registerCovered(REGISTRY, "reject-a-finding-in-the-reader-by-keyboard");
 });
 
+test("words are marked as an entity by keyboard: typed, a type chosen, and Mark pressed (ADR-098)", async ({ page }) => {
+  await serveReader(page);
+  let sent: { entity_type: string; text: string; start: number; end: number } | null = null;
+  await page.route("**/v1/investigations/inv-1/documents/*/designations", async (route) => {
+    sent = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ node_id: "m1", delta: { seq: 4, op: "add", nodes: [], edges: [] } }),
+    });
+  });
+  await page.goto("/keyboard/reader-harness.html");
+  await expect(page.getByRole("button", { name: "Close" })).toBeFocused();
+  await tabTo(page, /^Words to mark$/, 20);
+  await page.keyboard.type("MERCER");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("combobox", { name: "Mark as" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => sent?.text).toBe("MERCER");
+  expect(sent!.entity_type).toBe("Person");
+  await expect(page.getByText("Marked “MERCER” as a Person.")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__READER__?.deltas.length)).toBe(1);
+  registerCovered(REGISTRY, "mark-an-entity-in-the-reader-by-keyboard");
+});
+
 test("every registered reader action has its own proving test case above", () => {
   assertAllCovered("READER_ACTIONS", READER_ACTIONS);
 });

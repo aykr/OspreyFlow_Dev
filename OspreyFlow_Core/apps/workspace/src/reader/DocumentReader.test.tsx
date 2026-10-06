@@ -284,3 +284,39 @@ describe("DocumentReader: held media (ADR-094)", () => {
     );
   });
 });
+
+// ADR-098 decision 5: the analyst marks words in the text as an entity.
+describe("DocumentReader: marking an entity", () => {
+  it("marks typed words as the chosen type, sending where they are in the text, and draws the result", async () => {
+    const fetchMock = serve({
+      "/documents/email%3Aev-1/reader": { status: 200, body: EMAIL },
+      "/documents/email%3Aev-1/designations": {
+        status: 200,
+        body: { node_id: "o1", delta: { seq: 5, op: "add", nodes: [], edges: [] } },
+      },
+    });
+    const { onDelta } = mount();
+    const words = await screen.findByRole("textbox", { name: "Words to mark" });
+    fireEvent.change(words, { target: { value: "the plant" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Mark as" }), { target: { value: "Location" } });
+    fireEvent.click(screen.getByRole("button", { name: "Mark" }));
+    expect(await screen.findByText("Marked “the plant” as a Location.")).toBeTruthy();
+    const call = fetchMock.mock.calls.find(([u]) => String(u).endsWith("/designations"))!;
+    expect(JSON.parse(String(((call as unknown[])[1] as RequestInit).body))).toEqual({
+      entity_type: "Location",
+      text: "the plant",
+      start: 24,
+      end: 33,
+    });
+    expect(onDelta).toHaveBeenCalledWith({ seq: 5, op: "add", nodes: [], edges: [] });
+  });
+
+  it("says when the words are not in the text, and sends nothing", async () => {
+    const fetchMock = serve({ "/documents/email%3Aev-1/reader": { status: 200, body: EMAIL } });
+    mount();
+    fireEvent.change(await screen.findByRole("textbox", { name: "Words to mark" }), { target: { value: "Ken Lay" } });
+    fireEvent.click(screen.getByRole("button", { name: "Mark" }));
+    expect(await screen.findByText("Those words are not in this document.")).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([u]) => String(u).endsWith("/designations"))).toBe(false);
+  });
+});

@@ -9,23 +9,40 @@ an email, the event it was made from, read through the analytics port under the 
 **Who may read it: whoever can see the Document in the case.** A Document above the caller, one not
 in the case, and a node that is not a Document all answer `DocumentNotFoundError`, one refusal for
 all three (rules 3 and 4).
+
+**Marking an entity by hand (ADR-098 decision 5).** Words selected in the text the reader shows can
+be marked as a Person, an Organisation, a Location or an Endpoint: written as a node of that type,
+asserted (a person made it) and attributed to them, its source the Document with the selection's
+character locator and the words' hash, and linked to the Document by `MENTIONED_IN`. The words are
+checked against the text at that place, so a locator never points at something else.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+import hashlib
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
+from conduit_common.identity import new_node_id
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from ports.media import MediaNotFoundError, MediaStore
 from schemas.analytics import EventFilter, EventListRequest, EventRecord
-from schemas.domain import Principal
+from schemas.domain import (
+    EdgeWrite,
+    NodeWrite,
+    Principal,
+    Provenance,
+    ProvenanceState,
+    SourceRef,
+)
 
 from .dossier import MessageSpan, get_document_view
+from .email_extraction import _edge_from_write, _node_from_write
 from .event_scope import CaseRecords, visible_ancestors, with_inherited
 from .review import DocumentNotFoundError, ExtractionCandidateStore
+from .working_set.models import DeltaAdd
 from .working_set.service import WorkingSetService
 
 DOCUMENT_TYPE = "Document"
@@ -48,6 +65,42 @@ class DocumentReaderView(BaseModel):
     #: shows an image or a video from `GET .../documents/{id}/file` when `has_file`.
     media_kind: str | None = None
     has_file: bool = False
+
+
+MENTIONED_IN = "MENTIONED_IN"
+
+#: The types an analyst can mark words as, and which property the words become (ADR-098).
+DESIGNATABLE_TYPES = ("Person", "Organisation", "Location", "Endpoint")
+
+
+class Designation(BaseModel):
+    """Words selected in a Document's text and the type they are marked as."""
+
+    entity_type: str
+    text: str = Field(min_length=1, max_length=500)
+    start: int = Field(ge=0)
+    end: int = Field(gt=0)
+
+
+class DesignationResult(BaseModel):
+    node_id: str
+    delta: DeltaAdd
+
+
+class DesignationRefusedError(Exception):
+    """The words are not at that place in the text, or the type cannot be marked by hand."""
+
+
+def designation_properties(entity_type: str, words: str) -> dict[str, str]:
+    """The node's properties from the marked words: a person's last word is the family name and the
+    rest the given names; anything else is named by the words, an endpoint by its value."""
+    words = " ".join(words.split())
+    if entity_type == "Person":
+        *given, family = words.split(" ")
+        return {"family_name": family, **({"given_names": " ".join(given)} if given else {})}
+    if entity_type == "Endpoint":
+        return {"value_raw": words, "value_normalised": words.lower()}
+    return {"name": words}
 
 
 class DocumentReaderService:
@@ -111,6 +164,65 @@ class DocumentReaderService:
             return view
         view.text, view.spans = stored.text, stored.spans
         return view
+
+    async def designate(
+        self,
+        investigation_id: str,
+        document_id: str,
+        designation: Designation,
+        principal: Principal,
+    ) -> DesignationResult:
+        """Writes the marked words as an asserted node linked to the Document (ADR-098 decision 5).
+        Only on a Document the analyst can read here (rule 4: one they cannot see refuses as one
+        that does not exist), and only for words that are at that place in the text it shows."""
+        if designation.entity_type not in DESIGNATABLE_TYPES:
+            raise DesignationRefusedError(f"{designation.entity_type} cannot be marked by hand")
+        view = await self.read(investigation_id, document_id, principal)
+        if view.text[designation.start : designation.end] != designation.text:
+            raise DesignationRefusedError("the words are not at that place in the text")
+        document = await self._working_set.visible_node(investigation_id, document_id, principal)
+        if document is None:
+            raise DocumentNotFoundError(document_id)
+        now = datetime.now(UTC)
+        source = SourceRef(
+            document_id=document_id,
+            locator=f"chars:{designation.start}-{designation.end}",
+            excerpt_hash=hashlib.sha256(designation.text.encode("utf-8")).hexdigest(),
+        )
+        provenance = Provenance(state=ProvenanceState.ASSERTED, sources=[source], first_seen=now)
+        node = NodeWrite(
+            id=new_node_id(),
+            type=designation.entity_type,
+            properties=designation_properties(designation.entity_type, designation.text),
+            provenance=provenance,
+            handling=document.handling,
+            created_by=principal.id,
+            created_at=now,
+        )
+        mention = EdgeWrite(
+            id=f"{node.id}:mentioned-in:{document_id}",
+            type=MENTIONED_IN,
+            source=node.id,
+            target=document_id,
+            provenance=provenance,
+            handling=document.handling,
+            created_by=principal.id,
+            created_at=now,
+        )
+        # Asked before the graph is written, so a full working set leaves nothing behind (rule 2).
+        await self._working_set.ensure_room(investigation_id, [node.id], [mention.id])
+        tx = await self._graph.begin_transaction()
+        try:
+            await self._graph.upsert_nodes([node], tx)
+            await self._graph.upsert_edges([mention], tx)
+        except Exception:
+            await self._graph.rollback_transaction(tx)
+            raise
+        await self._graph.commit_transaction(tx)
+        delta = await self._working_set.add_written(
+            investigation_id, [_node_from_write(node)], [_edge_from_write(mention)]
+        )
+        return DesignationResult(node_id=node.id, delta=delta)
 
     async def _event(
         self, investigation_id: str, event_id: str, principal: Principal

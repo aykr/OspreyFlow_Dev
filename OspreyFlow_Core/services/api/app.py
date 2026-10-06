@@ -205,7 +205,13 @@ from .document_content import (
     HolderNotFoundError,
     UploadRefusedError,
 )
-from .document_reader import DocumentReaderService, DocumentReaderView
+from .document_reader import (
+    Designation,
+    DesignationRefusedError,
+    DesignationResult,
+    DocumentReaderService,
+    DocumentReaderView,
+)
 from .dossier import DocumentView
 from .email_extraction import (
     EmailAcceptResult,
@@ -1400,6 +1406,16 @@ async def _extraction_candidate_not_found_handler(
 async def _document_not_found_handler(request: Request, exc: DocumentNotFoundError) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND, content={"error": "document_not_found"}
+    )
+
+
+@app.exception_handler(DesignationRefusedError)
+async def _designation_refused_handler(
+    request: Request, exc: DesignationRefusedError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": "designation_refused", "detail": str(exc)},
     )
 
 
@@ -3076,6 +3092,31 @@ async def read_document_route(
         result_cardinality=len(view.spans),
     )
     return view
+
+
+@app.post("/v1/investigations/{investigation_id}/documents/{document_id}/designations")
+async def designate_in_document_route(
+    investigation: InvestigationEditorDep,
+    document_id: str,
+    body: Designation,
+    principal: PrincipalDep,
+    document_reader: DocumentReaderDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+) -> DesignationResult:
+    """Words in a Document marked as an entity by the analyst (ADR-098 decision 5): an asserted
+    node of theirs, linked to the Document, onto the canvas. Only on a Document they can read here;
+    words not at that place in its text are refused. Editor, since it writes."""
+    result = await document_reader.designate(investigation.id, document_id, body, principal)
+    await publish_delta(valkey, investigation.id, result.delta)
+    await audit.record(
+        principal=principal,
+        action="designate_in_document",
+        investigation_id=investigation.id,
+        resolved_query={"document_id": document_id, "entity_type": body.entity_type},
+        result_cardinality=1,
+    )
+    return result
 
 
 @app.post("/v1/investigations/{investigation_id}/documents")

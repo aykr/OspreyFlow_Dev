@@ -899,7 +899,12 @@ so only for one loaded before then, cut at 4,000 characters. An email offers *Ex
 view does, and the text is read again after an acceptance so the new entity is marked. Focus starts
 on *Close*; Close or Escape returns to the canvas with nothing moved behind it. The text comes from
 `GET .../documents/{id}/reader`. Tests: `src/reader/DocumentReader.test.tsx` and
-`keyboard/reader.spec.ts` (Enter opens it, Escape closes it, Extract, Accept and Reject by keyboard). A Document written from held content (ADR-094) shows in the reader as what it is: an image as a
+`keyboard/reader.spec.ts` (Enter opens it, Escape closes it, Extract, Accept and Reject by keyboard). **Marking an
+entity by hand (ADR-098 decision 5):** under the text, *Mark an entity* takes *Words to mark* (filled by
+selecting words in the text, or typed, when their first place is used), a type (*Person*, *Organisation*,
+*Location*, *Endpoint*) and *Mark*: the words become an asserted node of the analyst's, linked to the
+Document and drawn on the canvas; words not in the text are refused before anything is sent, and the
+server refuses words not at the place given (`keyboard/reader.spec.ts`, `keyboard/reader-select.spec.ts`). A Document written from held content (ADR-094) shows in the reader as what it is: an image as a
 picture, a video as a player, both fetched with the analyst's token from `GET .../documents/{id}/file`;
 *Extract entities* describes and reads an image, or transcribes a video, then extracts from that
 text, which the reader then shows with the accepted entities marked (`POST .../documents/{id}/extract`

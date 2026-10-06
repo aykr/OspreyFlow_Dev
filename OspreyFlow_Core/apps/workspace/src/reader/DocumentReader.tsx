@@ -13,14 +13,19 @@ import {
   type EmailCandidate,
 } from "../inspector/linkEventsApi";
 import type { OntologyRegistry } from "../ontology/schema";
+import { placeOf, selectionIn, type SelectedWords } from "./designation";
 import {
   acceptDocumentFinding,
+  designateInDocument,
   extractDocument,
   rejectDocumentFinding,
   fetchDocumentFile,
   fetchDocumentReader,
   type DocumentReaderView,
 } from "./readerApi";
+
+/** What words can be marked as by hand (the server's `DESIGNATABLE_TYPES`). */
+const MARK_TYPES = ["Person", "Organisation", "Location", "Endpoint"] as const;
 
 export interface DocumentReaderProps {
   apiBaseUrl: string;
@@ -73,6 +78,12 @@ export function DocumentReader({
   const [findings, setFindings] = useState<Findings>({ state: "idle" });
   const [accepting, setAccepting] = useState<string | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  // ADR-098 decision 5: words marked as an entity by the analyst.
+  const textRef = useRef<HTMLDivElement>(null);
+  const [words, setWords] = useState("");
+  const [selectedWords, setSelectedWords] = useState<SelectedWords | null>(null);
+  const [markType, setMarkType] = useState<(typeof MARK_TYPES)[number]>("Person");
+  const [marking, setMarking] = useState<{ busy: boolean; message: string | null }>({ busy: false, message: null });
   // ADR-094: an image's or a video's file, as a URL the element can show.
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const heldMedia =
@@ -181,6 +192,29 @@ export function DocumentReader({
     }
   }
 
+  async function mark(view: DocumentReaderView) {
+    const place = placeOf(view.text, words, selectedWords);
+    if (!place) {
+      setMarking({ busy: false, message: "Those words are not in this document." });
+      return;
+    }
+    const text = view.text.slice(place.start, place.end);
+    setMarking({ busy: true, message: null });
+    try {
+      const result = await designateInDocument(apiBaseUrl, bearerToken, investigationId, view.document_id, {
+        entity_type: markType,
+        text,
+        ...place,
+      });
+      onDelta?.(result.delta);
+      setMarking({ busy: false, message: `Marked “${text}” as ${markType === "Organisation" ? "an" : "a"} ${markType}.` });
+      setWords("");
+      setSelectedWords(null);
+    } catch (err) {
+      setMarking({ busy: false, message: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
   const title = load.state === "ready" ? load.view.title ?? "(no title)" : "Document";
 
   return (
@@ -253,7 +287,18 @@ export function DocumentReader({
             {heldMedia && fileUrl && load.view.media_kind === "video" && (
               <video src={fileUrl} controls aria-label={title} style={{ maxWidth: "100%", maxHeight: "60vh" }} />
             )}
-            <div style={{ fontSize: "var(--fs-16)", lineHeight: 1.6, color: "var(--text-primary)", whiteSpace: "pre-wrap" }}>
+            <div
+              ref={textRef}
+              style={{ fontSize: "var(--fs-16)", lineHeight: 1.6, color: "var(--text-primary)", whiteSpace: "pre-wrap" }}
+              onMouseUp={() => {
+                // Words selected in the text fill the marking form (ADR-098 decision 5).
+                const chosen = textRef.current ? selectionIn(textRef.current) : null;
+                if (chosen) {
+                  setSelectedWords(chosen);
+                  setWords(chosen.text);
+                }
+              }}
+            >
               {load.view.text ? (
                 <HighlightedMessage
                   document={{ document_id: load.view.document_id, text: load.view.text, spans: load.view.spans }}
@@ -271,6 +316,43 @@ export function DocumentReader({
               <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
                 This is the first 4,000 characters; the message runs on.
               </p>
+            )}
+            {load.view.text && (
+              <form
+                className="reader-mark"
+                aria-label="Mark an entity"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void mark(load.view);
+                }}
+              >
+                <span className="reader-mark__title">Mark an entity</span>
+                <input
+                  type="text"
+                  aria-label="Words to mark"
+                  placeholder="Select words above, or type them"
+                  value={words}
+                  onChange={(event) => {
+                    setWords(event.target.value);
+                    setMarking({ busy: false, message: null });
+                  }}
+                />
+                <select aria-label="Mark as" value={markType} onChange={(event) => setMarkType(event.target.value as (typeof MARK_TYPES)[number])}>
+                  {MARK_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit" className="btn" disabled={marking.busy || words.trim() === ""}>
+                  Mark
+                </button>
+                {marking.message && (
+                  <span role="status" className="reader-mark__message">
+                    {marking.message}
+                  </span>
+                )}
+              </form>
             )}
 
             {((load.view.edge_id && load.view.event_id) || load.view.has_file) && (

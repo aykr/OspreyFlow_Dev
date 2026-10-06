@@ -395,6 +395,8 @@ export const READER_ACTIONS = defineActionRegistry("READER_ACTIONS", [
   "read-full-screen-from-a-documents-menu",
   // The owner's ask, 6 October 2026: a Reject beside each Accept.
   "reject-a-finding-in-the-reader-by-keyboard",
+  // ADR-098 decision 5: an entity marked by hand.
+  "mark-an-entity-in-the-reader-by-keyboard",
 ] as const);
 
 /** The administrator's *Proposed types* list (ADR-090 C3): opened from the top bar, each proposal

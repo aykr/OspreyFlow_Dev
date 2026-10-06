@@ -116,6 +116,33 @@ export async function rejectDocumentFinding(
   );
 }
 
+/** Words in the Document marked as an entity by the analyst (ADR-098 decision 5): an asserted node
+ * linked to it. The server checks the words are at that place in the text it showed. */
+export async function designateInDocument(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  documentId: string,
+  designation: { entity_type: string; text: string; start: number; end: number },
+): Promise<{ node_id: string; delta: unknown }> {
+  let response: Response;
+  try {
+    response = await fetch(`${documentUrl(apiBaseUrl, investigationId, documentId)}/designations`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify(designation),
+    });
+  } catch {
+    throw new Error("The server could not be reached.");
+  }
+  if (response.ok) return (await response.json()) as { node_id: string; delta: unknown };
+  if (response.status === 403) throw new Error("This needs Editor access to the case.");
+  if (response.status === 404) throw new Error("This document is not in your view.");
+  if (response.status === 422) throw new Error("Those words are not at that place in the text. Select them again.");
+  if (response.status === 409) throw new Error("The view is full: remove some nodes and try again.");
+  throw new Error(`Marking failed (${response.status}). Try again.`);
+}
+
 /** The id an email's Document is written under: the server's `email_document_id`. */
 export function emailDocumentId(eventId: string): string {
   return `email:${eventId}`;
