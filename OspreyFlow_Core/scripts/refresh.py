@@ -15,6 +15,11 @@ which. This is that sequence, in order:
    the demo administrator while `deployment.env` still names their password; registering is safe to
    repeat and makes the file true again.
 
+It also brings the deployment's models up to date with its own `osprey.yaml` (ADR-095): the chosen
+extraction model's pull line in `compose.yaml`, the proxy's routing table `litellm.yaml`, and the
+model lines of `deployment.env`, each exactly as `harness.render` writes them, and restarts the
+proxy when its table changed. Nothing else in those files is touched, and no secret changes.
+
 What it never does, on purpose: render the deployment again (that mints new secrets for stores that
 keep the old ones), remove a volume, force a container to be recreated, or seed. First-time set-up
 is still `python -m harness.apply`. Every compose call reads the deployment's own `--env-file`.
@@ -27,6 +32,7 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
+import yaml
 from harness import register_sign_in
 from harness.apply import _compose
 from harness.keycloak_theme import (
@@ -36,6 +42,7 @@ from harness.keycloak_theme import (
     render_login_theme,
     write_login_theme,
 )
+from harness.render import load_config, render_litellm_config, render_ollama_pull_script
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROFILE = "local-lite"
@@ -100,6 +107,60 @@ def _theme_changed(directory: Path, repo_root: Path) -> bool:
     return changed
 
 
+#: The `deployment.env` lines that name the deployment's models (ADR-095), and the line rendered
+#: just before them.
+_MODEL_LINES = (
+    "OSPREY_EXTRACTION_MODEL",
+    "OSPREY_VISION_MODEL",
+    "OSPREY_TRANSCRIPTION_MODEL",
+    "OSPREY_EMBEDDING_MODEL",
+)
+_BEFORE_MODELS = "OSPREY_MODELS_LOCAL_ONLY="
+
+
+def _models_up_to_date(directory: Path) -> bool:
+    """Write the model parts of the deployment's files from its `osprey.yaml`, as `render` would;
+    return whether the proxy's routing table changed. A deployment with no `osprey.yaml` beside it
+    is left alone."""
+    config_path = directory / "osprey.yaml"
+    if not config_path.is_file():
+        return False
+    config = load_config(config_path)
+
+    compose_path = directory / "compose.yaml"
+    text = compose_path.read_text(encoding="utf-8")
+    header_end = text.find("\nname:") + 1
+    document = yaml.safe_load(text)
+    ollama = document.get("services", {}).get("ollama")
+    wanted_command = [render_ollama_pull_script(config)]
+    if ollama is not None and ollama.get("command") != wanted_command:
+        ollama["command"] = wanted_command
+        body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
+        compose_path.write_text(text[:header_end] + body, encoding="utf-8")
+
+    env_path = directory / "deployment.env"
+    lines = env_path.read_text(encoding="utf-8").splitlines()
+    models = config.models
+    wanted = [
+        f"OSPREY_EXTRACTION_MODEL={models.extraction}",
+        f"OSPREY_VISION_MODEL={models.vision}",
+        f"OSPREY_TRANSCRIPTION_MODEL={models.transcription}",
+        f"OSPREY_EMBEDDING_MODEL={models.embedding}",
+    ]
+    kept = [line for line in lines if line.split("=", 1)[0] not in _MODEL_LINES]
+    at = next((i + 1 for i, line in enumerate(kept) if line.startswith(_BEFORE_MODELS)), len(kept))
+    updated = kept[:at] + wanted + kept[at:]
+    if updated != lines:
+        env_path.write_text("\n".join(updated) + "\n", encoding="utf-8")
+
+    proxy_path = directory / "litellm.yaml"
+    routing = render_litellm_config(config)
+    if not proxy_path.is_file() or proxy_path.read_text(encoding="utf-8") != routing:
+        proxy_path.write_text(routing, encoding="utf-8")
+        return True
+    return False
+
+
 def refresh(
     repo_root: Path = REPO_ROOT,
     *,
@@ -109,8 +170,14 @@ def refresh(
     directory = _deployment_dir(repo_root)
     compose = _compose(directory / "compose.yaml")
     theme_changed = _theme_changed(directory, repo_root)
+    proxy_changed = _models_up_to_date(directory)
     run([*compose, "build"])
     run([*compose, "up", "-d", "--wait"])
+    if proxy_changed:
+        # The proxy reads its routing table at start; `up` recreates the Ollama and API
+        # containers itself, since their command and environment file changed.
+        run([*compose, "restart", "litellm"])
+        run([*compose, "up", "-d", "--wait"])
     if theme_changed:
         run([*compose, "restart", "keycloak"])
         run([*compose, "up", "-d", "--wait"])

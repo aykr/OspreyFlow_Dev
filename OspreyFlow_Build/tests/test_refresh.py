@@ -170,3 +170,78 @@ def test_with_no_rendered_deployment_it_says_what_to_run_instead_of_guessing(
     with pytest.raises(refresh.NothingToRefresh, match="harness.apply"):
         refresh.refresh(tmp_path, run=run, register=Registrar())
     assert run.calls == []
+
+
+# --- ADR-095: the deployment's own models brought up to date, nothing else re-rendered ---------
+
+
+def _rendered(repo: Path, extraction: str = "qwen2.5:7b-instruct") -> Path:
+    """A deployment rendered before ADR-095: the developer stack's pull script, no route for the
+    chosen model, no model lines in `deployment.env`, and secrets that must survive."""
+    import yaml
+    from harness.render import _OLLAMA_PULL_SCRIPT, render
+
+    from schemas.deployment import ModelsConfig, OspreyConfig
+
+    out = repo / "deploy" / "generated" / "local-lite"
+    config = OspreyConfig(models=ModelsConfig(extraction=extraction))  # type: ignore[arg-type]
+    artefacts = render(config, allow_unpinned=True).artefacts
+    compose = artefacts["compose.yaml"]
+    banner = compose[: compose.index("\nname:") + 1]
+    document = yaml.safe_load(compose)
+    document["services"]["ollama"]["command"] = [_OLLAMA_PULL_SCRIPT]
+    old = banner + yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
+    assert old != compose  # the old file really lacks the line
+    (out / "compose.yaml").write_text(old, encoding="utf-8")
+    env = "\n".join(
+        line for line in artefacts["deployment.env"].splitlines() if "_MODEL=" not in line
+    )
+    (out / "deployment.env").write_text(env + "\n" + SECRETS, encoding="utf-8")
+    (out / "litellm.yaml").write_text("model_list: []\n", encoding="utf-8")
+    (out / "osprey.yaml").write_text(
+        yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False), encoding="utf-8"
+    )
+    return out
+
+
+def test_the_chosen_models_are_brought_up_to_date_and_no_secret_changes(repo: Path) -> None:
+    """Catches the gap found building ADR-095: refresh never renders, so a running deployment
+    never learnt its extraction model, and the Conduit asked the proxy for a model it had no route
+    to. Only the model parts change; every secret line stays byte for byte."""
+    import yaml
+    from harness.render import render, render_litellm_config
+
+    from schemas.deployment import ModelsConfig, OspreyConfig
+
+    out = _rendered(repo, "qwen2.5:14b-instruct")
+    secrets_before = [
+        line for line in (out / "deployment.env").read_text().splitlines() if "_MODEL=" not in line
+    ]
+    run = Recorder()
+    refresh.refresh(repo, run=run, register=Registrar())
+
+    config = OspreyConfig(models=ModelsConfig(extraction="qwen2.5:14b-instruct"))
+    assert (out / "compose.yaml").read_text() == render(config, allow_unpinned=True).artefacts[
+        "compose.yaml"
+    ]
+    assert (out / "litellm.yaml").read_text() == render_litellm_config(config)
+    env = (out / "deployment.env").read_text().splitlines()
+    assert [line for line in env if "_MODEL=" not in line] == secrets_before
+    assert "OSPREY_EXTRACTION_MODEL=qwen2.5:14b-instruct" in env
+    assert (
+        "pull_and_verify qwen2.5:14b-instruct"
+        in yaml.safe_load((out / "compose.yaml").read_text())["services"]["ollama"]["command"][0]
+    )
+    # The proxy reads its routing table at start: restarted after `up`, and waited on.
+    assert _subcommands(run.calls) == ["build", "up", "restart", "up"]
+    assert run.calls[2][-1] == "litellm"
+
+
+def test_bringing_the_models_up_to_date_twice_changes_nothing_the_second_time(repo: Path) -> None:
+    out = _rendered(repo)
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+    before = {p.name: p.read_bytes() for p in out.iterdir() if p.is_file()}
+    run = Recorder()
+    refresh.refresh(repo, run=run, register=Registrar())
+    assert {p.name: p.read_bytes() for p in out.iterdir() if p.is_file()} == before
+    assert _subcommands(run.calls) == ["build", "up"]
