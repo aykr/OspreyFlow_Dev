@@ -297,3 +297,42 @@
 .case-tabs__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-4); }
 .case-tabs__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); }
 .case-tabs__name { overflow-wrap: anywhere; font-weight: 600; }
+
+/* ADR-096: the three side panels (Inspector, Query builder, Metrics), denser, so more fits and is
+   easier to scan and move through. Tokens only; the rest of the Glass is unchanged. */
+.inspector, .metrics-panel, .query-builder-panel { font-size: var(--fs-12); line-height: var(--lh-12); }
+.inspector .panel__title, .metrics-panel .panel__title, .query-builder-panel .panel__title {
+  font-size: var(--fs-13); line-height: var(--lh-13); padding: var(--sp-6) var(--sp-12);
+}
+.inspector .panel__body, .metrics-panel .panel__body, .query-builder-panel .panel__body { padding: var(--sp-8); }
+.inspector .btn, .metrics-panel .btn, .query-builder-panel .btn {
+  font-size: var(--fs-12); line-height: var(--lh-12); padding: var(--sp-4) var(--sp-8);
+}
+.inspector .input, .inspector .select, .metrics-panel .input, .metrics-panel .select,
+.query-builder-panel .input, .query-builder-panel .select {
+  font-size: var(--fs-12); padding: var(--sp-4) var(--sp-6);
+}
+.inspector dl, .inspector dd, .inspector p { margin-top: 0; margin-bottom: var(--sp-4); }
+
+/* A part of a panel that folds away (ADR-096): minimalist and bordered, the owner's choice of style.
+   One hairline box per part, a little space between them, the header a full-width quiet row. */
+.accordion-section {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-control);
+  background: var(--surface-panel);
+}
+.accordion-section + .accordion-section { margin-top: var(--sp-4); }
+.accordion-section__heading { margin: 0; font-size: inherit; font-weight: inherit; }
+.accordion-section__header {
+  display: flex; align-items: center; gap: var(--sp-6); width: 100%;
+  padding: var(--sp-6) var(--sp-8);
+  background: none; border: none; border-radius: var(--r-control);
+  color: var(--text-primary); font: inherit; font-size: var(--fs-12); font-weight: 600;
+  line-height: var(--lh-12); text-align: left; cursor: pointer;
+}
+.accordion-section__header:hover, .accordion-section__header:focus-visible { background: var(--surface-hover); }
+.accordion-section__header[aria-expanded="true"] { border-bottom: 1px solid var(--border-subtle); border-radius: var(--r-control) var(--r-control) 0 0; }
+.accordion-section__chevron { color: var(--text-tertiary); flex: none; transition: transform var(--dur-fast) var(--ease); }
+.accordion-section__header[aria-expanded="true"] .accordion-section__chevron { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .accordion-section__chevron { transition: none; } }
+.accordion-section__content { padding: var(--sp-8); }

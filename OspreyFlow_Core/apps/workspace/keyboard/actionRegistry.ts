@@ -180,7 +180,7 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
  * via `GlassCanvasHandle.focusOnNode`), which is why it alone is listed here.
  */
 export const METRICS_PANEL_ACTIONS = defineActionRegistry("METRICS_PANEL_ACTIONS", [
-  "ranking-section-opens-by-keyboard-and-loads-the-list",
+  "ranking-opens-loaded-and-folds-by-keyboard",
   "row-select-and-centre",
   "filter-section-sets-a-strength-floor-by-keyboard",
   "filter-section-dims-below-a-metric-value-by-keyboard",
@@ -210,6 +210,8 @@ export const QUERY_BUILDER_ACTIONS = defineActionRegistry("QUERY_BUILDER_ACTIONS
   "submit-run",
   "save-pattern",
   "load-saved-pattern",
+  // ADR-096: the panel's parts fold; a folded one opens by Enter on its header.
+  "open-a-folded-part-by-keyboard",
 ] as const);
 
 /**
@@ -388,6 +390,14 @@ export const PROPOSED_TYPES_ACTIONS = defineActionRegistry("PROPOSED_TYPES_ACTIO
   "rename-at-promotion-by-keyboard",
   "reject-by-keyboard",
   "retire-by-keyboard",
+] as const);
+
+/** The Inspector's parts (ADR-096): each folds under its header, opening *Change this link* lands in
+ * the form, and a link-menu hand-over opens its part. `keyboard/inspector.spec.ts`. */
+export const INSPECTOR_ACTIONS = defineActionRegistry("INSPECTOR_ACTIONS", [
+  "a-part-opens-and-folds-by-keyboard",
+  "opening-change-this-link-opens-the-form",
+  "a-menu-hand-over-opens-its-part",
 ] as const);
 
 export const LINK_CHANGE_ACTIONS = defineActionRegistry("LINK_CHANGE_ACTIONS", [

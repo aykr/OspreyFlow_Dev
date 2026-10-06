@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import Graph from "graphology";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Edge, Node } from "../../../../packages/schemas/generated";
@@ -44,7 +44,15 @@ function stubNotes() {
           ? { changes: [], truncated: false }
           : url.includes("/events")
             ? { total: 0, offset: 0, limit: 50, events: [] } // ADR-089: a link with no events
-            : {},
+            : url.includes("/yardstick")
+              ? { bands: [{ label: "Likely", lower: 0.55, upper: 0.75 }] } // the real answer's shape
+              : url.includes("/judgements")
+                ? { judgements: [] }
+                : url.includes("/gaps")
+                  ? { gaps: [] }
+                  : url.includes("/assumptions")
+                    ? { assumptions: [] }
+                    : {},
   }));
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -55,6 +63,7 @@ describe("Inspector — a selected link", () => {
     const fetchMock = stubNotes();
     render(<Inspector node={null} link={link} assessment={assessment} />);
     expect(screen.getByText("ASSOCIATED_WITH")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Notes" })); // ADR-096: folded at first
     expect(screen.getByRole("region", { name: "Notes" })).toBeTruthy();
     await waitFor(() =>
       expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(
@@ -89,7 +98,9 @@ describe("Inspector — a selected link", () => {
         linkEditing={{ edgeTypes: [], openChangeSignal: 0, openNoteSignal: 0, onChanged: () => undefined }}
       />,
     );
-    expect(screen.getByRole("button", { name: "Change this link…" })).toBeTruthy();
+    // ADR-096: each part folds under its own header.
+    expect(screen.getByRole("button", { name: "Change this link" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Change history" }));
     expect(await screen.findByRole("region", { name: "Change history" })).toBeTruthy();
   });
 
@@ -104,8 +115,93 @@ describe("Inspector — a selected link", () => {
         linkEditing={{ edgeTypes: [], openChangeSignal: 0, openNoteSignal: 0, onChanged: () => undefined }}
       />,
     );
-    expect(screen.queryByRole("button", { name: "Change this link…" })).toBeNull();
-    expect(screen.queryByRole("region", { name: "Change history" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Change this link" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Change history" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Notes" })).toBeTruthy();
+  });
+});
+
+describe("Inspector sections (ADR-096)", () => {
+  const person = { id: "a", type: "Person", properties: { family_name: "Lay" }, provenance: { state: "asserted", sources: [{ document_id: "d1", locator: "p.1" }], first_seen: "x" } } as unknown as Node;
+  const editing = { edgeTypes: [], openChangeSignal: 0, openNoteSignal: 0, openEventsSignal: 0, onChanged: () => undefined };
+  const header = (name: RegExp | string) => screen.getByRole("button", { name });
+
+  function mountLink(over: Partial<NonNullable<InspectorProps["linkEditing"]>> = {}) {
+    stubNotes();
+    return render(
+      <Inspector
+        node={null}
+        link={{ ...link, source: person, target: { ...person, id: "b" } }}
+        assessment={assessment}
+        linkEditing={{ ...editing, ...over }}
+      />,
+    );
+  }
+
+  it("a link shows its details open and every other part folded", () => {
+    mountLink();
+    expect(header("Details").getAttribute("aria-expanded")).toBe("true");
+    for (const name of ["Change this link", "Notes", /^Events/, "Change history"]) {
+      expect(header(name).getAttribute("aria-expanded")).toBe("false");
+    }
+    expect(screen.getByText("ASSOCIATED_WITH")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Notes" })).toBeNull(); // hidden while folded
+  });
+
+  it("a header opens and closes its part", () => {
+    mountLink();
+    fireEvent.click(header("Notes"));
+    expect(header("Notes").getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByRole("region", { name: "Notes" })).toBeTruthy();
+    fireEvent.click(header("Notes"));
+    expect(screen.queryByRole("region", { name: "Notes" })).toBeNull();
+  });
+
+  it("opening Change this link opens the form itself", () => {
+    mountLink();
+    fireEvent.click(header("Change this link"));
+    expect(screen.getByLabelText("Link type")).toBeTruthy();
+  });
+
+  it("a link-menu hand-over opens its part", () => {
+    const view = mountLink();
+    view.rerender(
+      <Inspector
+        node={null}
+        link={{ ...link, source: person, target: { ...person, id: "b" } }}
+        assessment={assessment}
+        linkEditing={{ ...editing, openNoteSignal: 1 }}
+      />,
+    );
+    expect(header("Notes").getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("a half-written note survives its part being folded", async () => {
+    mountLink();
+    fireEvent.click(header("Notes"));
+    const box = (await screen.findByRole("textbox", { name: /note/i })) as HTMLTextAreaElement;
+    fireEvent.change(box, { target: { value: "Half a thought" } });
+    fireEvent.click(header("Notes"));
+    fireEvent.click(header("Notes"));
+    expect((screen.getByRole("textbox", { name: /note/i }) as HTMLTextAreaElement).value).toBe("Half a thought");
+  });
+
+  it("a node's parts replace the tabs, Properties open", () => {
+    stubNotes();
+    render(<Inspector node={person} assessment={assessment} />);
+    expect(screen.queryByRole("tab")).toBeNull();
+    expect(header("Properties").getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("Lay")).toBeTruthy();
+    for (const name of ["Provenance", "Source", "Judgements"]) {
+      expect(header(name).getAttribute("aria-expanded")).toBe("false");
+    }
+    fireEvent.click(header("Source"));
+    expect(screen.getByText("d1 · p.1")).toBeTruthy();
+  });
+
+  it("with no node selected, Judgements is open", () => {
+    stubNotes();
+    render(<Inspector node={null} assessment={assessment} />);
+    expect(header("Judgements").getAttribute("aria-expanded")).toBe("true");
   });
 });

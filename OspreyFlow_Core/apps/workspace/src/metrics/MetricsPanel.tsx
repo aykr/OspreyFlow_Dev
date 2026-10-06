@@ -17,6 +17,7 @@
 // same distinction `ThresholdControl.tsx`'s own docstring already draws for its native `<input>`.
 import { useEffect, useState } from "react";
 
+import { AccordionSection } from "../design/primitives/AccordionSection";
 import { Panel } from "../design/primitives/Panel";
 import { Select } from "../design/primitives/Select";
 import { Toggle } from "../design/primitives/Toggle";
@@ -42,33 +43,6 @@ const MAX_ROWS = 20;
 
 type Section = "ranking" | "communities" | "filter";
 
-function SectionButton({
-  label,
-  open,
-  onPress,
-}: {
-  label: string;
-  open: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className="metrics-panel__section"
-      aria-expanded={open}
-      onClick={onPress}
-      style={{
-        width: "100%",
-        display: "flex",
-        justifyContent: "space-between",
-        gap: "var(--sp-8)",
-      }}
-    >
-      <span>{label}</span>
-      <span aria-hidden="true">{open ? "▾" : "▸"}</span>
-    </button>
-  );
-}
 
 export interface MetricsPanelProps {
   apiBaseUrl: string;
@@ -109,9 +83,10 @@ export function MetricsPanel({
   const [valuesA, setValuesA] = useState<Record<string, number> | null>(null);
   const [valuesB, setValuesB] = useState<Record<string, number> | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // The panel starts as a strip of section names and opens one at a time (ADR-070). The ranking is
-  // only fetched once its section has been opened, and is kept when it is closed again.
-  const [openSection, setOpenSection] = useState<Section | null>(null);
+  // ADR-096 (replacing ADR-070's closed strip, one at a time): the panel opens on its preview, the
+  // ranking, and the other sections fold; any number may be open. The ranking is kept when its
+  // section is closed again.
+  const [openSections, setOpenSections] = useState<ReadonlySet<Section>>(() => new Set(["ranking"]));
   // ADR-088: the filters belong to the view, so they live here and nowhere else.
   const [filter, setFilter] = useState<MetricFilter>(NO_FILTER);
   const updateFilter = (change: Partial<MetricFilter>) => {
@@ -121,9 +96,14 @@ export function MetricsPanel({
       return next;
     });
   };
-  const [rankingWanted, setRankingWanted] = useState(false);
+  const [rankingWanted, setRankingWanted] = useState(true);
   const toggleSection = (section: Section) => {
-    setOpenSection((current) => (current === section ? null : section));
+    setOpenSections((current) => {
+      const next = new Set(current);
+      if (next.has(section)) next.delete(section);
+      else next.add(section);
+      return next;
+    });
     if (section === "ranking") setRankingWanted(true);
   };
 
@@ -216,14 +196,10 @@ export function MetricsPanel({
 
   return (
     <Panel title="Metrics" className="metrics-panel">
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-8)" }}>
-        <SectionButton
-          label="Ranking"
-          open={openSection === "ranking"}
-          onPress={() => toggleSection("ranking")}
-        />
-        {openSection === "ranking" && (
-          <>
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        <AccordionSection title="Ranking" open={openSections.has("ranking")} onToggle={() => toggleSection("ranking")}>
+        {openSections.has("ranking") && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-6)" }}>
             <Select
               aria-label="Primary metric"
               value={metricA}
@@ -279,22 +255,24 @@ export function MetricsPanel({
                 </li>
               ))}
             </ul>
-          </>
+          </div>
         )}
-        <SectionButton
-          label="Communities"
-          open={openSection === "communities"}
-          onPress={() => toggleSection("communities")}
-        />
-        {openSection === "communities" && (
-          <>
+        </AccordionSection>
+        <AccordionSection
+          title="Communities"
+          open={openSections.has("communities")}
+          onToggle={() => toggleSection("communities")}
+        >
+        {openSections.has("communities") && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-6)" }}>
             <Toggle checked={showHulls} onChange={setShowHulls} label="Show community hulls" />
             {error && <p style={{ color: "var(--error)" }}>{error}</p>}
-          </>
+          </div>
         )}
-        <SectionButton label="Filter" open={openSection === "filter"} onPress={() => toggleSection("filter")} />
-        {openSection === "filter" && (
-          <>
+        </AccordionSection>
+        <AccordionSection title="Filter" open={openSections.has("filter")} onToggle={() => toggleSection("filter")}>
+        {openSections.has("filter") && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-6)" }}>
             <label style={{ display: "grid", gap: "var(--sp-4)" }}>
               <span style={{ fontSize: "var(--fs-12)", color: "var(--text-secondary)" }}>
                 Relationship strength at least {filter.strengthFloor.toFixed(2)}
@@ -348,8 +326,9 @@ export function MetricsPanel({
               cleared. Nothing is stored.
             </p>
             {error && <p style={{ color: "var(--error)" }}>{error}</p>}
-          </>
+          </div>
         )}
+        </AccordionSection>
       </div>
     </Panel>
   );

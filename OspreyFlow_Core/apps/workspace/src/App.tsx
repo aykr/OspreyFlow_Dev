@@ -359,6 +359,7 @@ export function App() {
   const [linkNoteSignal, setLinkNoteSignal] = useState(0);
   const [linkChangeSignal, setLinkChangeSignal] = useState(0);
   const [linkEventsSignal, setLinkEventsSignal] = useState(0);
+  const [linkHistorySignal, setLinkHistorySignal] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [proposedTypesOpen, setProposedTypesOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -1007,6 +1008,7 @@ export function App() {
                   if (action === "note") setLinkNoteSignal((n) => n + 1);
                   if (action === "change") setLinkChangeSignal((n) => n + 1);
                   if (action === "events") setLinkEventsSignal((n) => n + 1);
+                  if (action === "history") setLinkHistorySignal((n) => n + 1);
                 }}
                 onBranchCreated={(id) => openCase(id)}
                 onSelectionChange={(nodeIds) => {
@@ -1195,6 +1197,7 @@ export function App() {
                         openChangeSignal: linkChangeSignal,
                         openNoteSignal: linkNoteSignal,
                         openEventsSignal: linkEventsSignal,
+                        openHistorySignal: linkHistorySignal,
                         // ADR-089 step 3: what an email's extraction or an accepted finding added to the case.
                         onDelta: (delta) =>
                           workingSetRef.current.store.getState().applyDelta(delta as WorkingSetDelta),

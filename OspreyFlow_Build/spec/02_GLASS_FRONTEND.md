@@ -231,6 +231,19 @@ the server and is not part of the case; a panel the current view does not draw k
 returns, and a stored order can never lose or duplicate a panel. The timeline is not part of the set and
 nothing floats. The buttons are reachable by keyboard (`keyboard/panel-frames.spec.ts`).
 
+**Each panel folds into parts (ADR-096).** The Inspector, the Query builder and the Metrics panel each
+have their own accordion: every part sits in a hairline box (`--border-subtle`, `--r-control`) under a
+header row (`--fs-12` 600, a chevron on the left that turns when open), and a part folds within its own
+panel only. Each panel opens on its preview and folds the rest: the Inspector a link's *Details* (then
+*Change this link*, *Notes*, the link's *Emails*, *Messages* or *Events*, *Change history*) or a node's
+*Properties* (then *Provenance*, *Source*, *Judgements*; with no node, *Judgements* open); the Query
+builder its *Pattern* with *Preview* and *Run* (then *Add to the pattern*, *Connect* once there are two
+nodes, *Save and load*); Metrics its *Ranking* (then *Communities*, *Filter*). Parts open independently.
+A link-menu choice opens its part; opening *Change this link* opens the form. A folded part keeps what
+is half-written in it. The three panels are denser than the rest of the Glass: body and controls at
+`--fs-12`, titles at `--fs-13`, padding at `--sp-8` and `--sp-4`. Reachable by keyboard
+(`keyboard/inspector.spec.ts`, `keyboard/query-builder.spec.ts`, `keyboard/metrics-panel.spec.ts`).
+
 **Resizing panels (ADR-086).** Every panel edge is a sash, as in VS Code: the edge between the canvas
 and the right-hand column sets the column's width, the edge below each stacked panel but the last sets
 that panel's height (the last takes what is left), and the edge above the timeline sets its height. A

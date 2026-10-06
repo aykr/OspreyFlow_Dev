@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 //
-// The Metrics panel starts as a slim strip of section names and opens one section at a time, so
-// it stops taking a column's worth of controls the analyst has not asked for (ADR-070). What is
-// proved here: nothing is shown or fetched until a section is opened; opening one closes the other;
-// the community-hull choice survives its section being closed; the ranked list still centres the
-// canvas on a node.
+// The Metrics panel opens on its preview, the ranking, with its other sections folded (ADR-096,
+// replacing ADR-070's closed strip and one-at-a-time rule). What is proved here: the ranking shows
+// and loads at once while the others are folded and fetch nothing; sections open and close
+// independently; the community-hull choice survives its section being closed; the ranked list still
+// centres the canvas on a node.
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createWorkingSet } from "../workingset/store";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -51,43 +51,27 @@ const ranking = () => screen.getByRole("button", { name: /^Ranking/ });
 const communities = () => screen.getByRole("button", { name: /^Communities/ });
 
 describe("MetricsPanel sections", () => {
-  it("starts closed: only the section names show, and nothing is fetched", () => {
+  it("opens on the ranking, loaded, with the other sections folded and nothing else fetched", async () => {
     const calls = stubCompute();
     setup();
-    expect(ranking().getAttribute("aria-expanded")).toBe("false");
-    expect(communities().getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByLabelText("Primary metric")).toBeNull();
-    expect(screen.queryByRole("list", { name: "Ranked nodes" })).toBeNull();
-    expect(calls).toEqual([]);
-  });
-
-  it("opening Ranking shows its controls and loads the ranking", async () => {
-    const calls = stubCompute();
-    setup();
-    fireEvent.click(ranking());
     expect(ranking().getAttribute("aria-expanded")).toBe("true");
+    expect(communities().getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByRole("button", { name: /^Filter/ }).getAttribute("aria-expanded")).toBe("false");
     expect(screen.getByLabelText("Primary metric")).toBeTruthy();
-    await waitFor(() => expect(calls).toContain("degree"));
     await screen.findByRole("button", { name: /n1/ });
+    expect(calls).toEqual(["degree"]);
   });
 
-  it("opening Communities closes Ranking: one section is open at a time", () => {
+  it("sections open and close independently", () => {
     stubCompute();
     setup();
-    fireEvent.click(ranking());
     fireEvent.click(communities());
     expect(communities().getAttribute("aria-expanded")).toBe("true");
+    expect(ranking().getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("switch", { name: /Show community hulls/ })).toBeTruthy();
+    fireEvent.click(ranking());
     expect(ranking().getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByLabelText("Primary metric")).toBeNull();
-    expect(screen.getByRole("switch", { name: /Show community hulls/ })).toBeTruthy();
-  });
-
-  it("pressing the open section's name closes it", () => {
-    stubCompute();
-    setup();
-    fireEvent.click(ranking());
-    fireEvent.click(ranking());
-    expect(ranking().getAttribute("aria-expanded")).toBe("false");
   });
 
   it("the hull choice is kept when its section is closed, so the hulls stay drawn", async () => {

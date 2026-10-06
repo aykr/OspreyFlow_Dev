@@ -27,6 +27,7 @@ import type { KeyboardEvent } from "react";
 import type { Node, OntologySchema, SavedPattern } from "../../../../packages/schemas/generated";
 import { Button } from "../design/primitives/Button";
 import { Input } from "../design/primitives/Input";
+import { AccordionSection } from "../design/primitives/AccordionSection";
 import { Panel } from "../design/primitives/Panel";
 import { Select } from "../design/primitives/Select";
 import { GlobalSearch } from "../search/GlobalSearch";
@@ -57,6 +58,9 @@ export interface QueryBuilderPanelProps {
   bearerToken: string;
   schema: OntologySchema;
 }
+
+/** The parts the Query builder folds into (ADR-096). */
+type QueryBuilderPart = "pattern" | "add" | "connect" | "save";
 
 export function QueryBuilderPanel({ apiBaseUrl, bearerToken, schema }: QueryBuilderPanelProps) {
   const [pattern, setPattern] = useState<PatternBuilderState>(createEmptyPattern());
@@ -174,36 +178,27 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, schema }: QueryBuil
     }
   }
 
+  const [parts, setParts] = useState<ReadonlySet<QueryBuilderPart>>(() => new Set(["pattern"]));
+  const togglePart = (part: QueryBuilderPart) =>
+    setParts((current) => {
+      const next = new Set(current);
+      if (next.has(part)) next.delete(part);
+      else next.add(part);
+      return next;
+    });
+
   return (
     <Panel title="Query builder" className="query-builder-panel">
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-8)" }}>
-        <div
-          role="group"
-          aria-label="Add a pattern variable"
-          style={{ display: "flex", gap: "var(--sp-4)" }}
-        >
-          <Select
-            aria-label="Entity type"
-            value={paletteType}
-            onChange={(e) => setPaletteType(e.target.value)}
-          >
-            {schema.entity_types.map((t) => (
-              <option key={t.name} value={t.name}>
-                {t.name}
-              </option>
-            ))}
-          </Select>
-          <Button type="button" onClick={handleAddVariable}>
-            Add variable
-          </Button>
-        </div>
-
-        <GlobalSearch
-          apiBaseUrl={apiBaseUrl}
-          bearerToken={bearerToken}
-          onSelect={handlePinFromSearch}
-        />
-
+      {/* ADR-096: the panel opens on its preview, the pattern with Preview and Run and what they
+          answer; adding, connecting, saving and loading fold away under their own headers. */}
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        <AccordionSection title="Pattern" open={parts.has("pattern")} onToggle={() => togglePart("pattern")}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-6)" }}>
+        {pattern.nodes.length === 0 && (
+          <p style={{ margin: 0, color: "var(--text-tertiary)" }}>
+            No pattern yet: open Add to the pattern to start one.
+          </p>
+        )}
         <ul
           role="list"
           aria-label="Pattern nodes"
@@ -245,7 +240,67 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, schema }: QueryBuil
           })}
         </ul>
 
+        {error && <p style={{ color: "var(--error)" }}>{error}</p>}
+
+        <div style={{ display: "flex", gap: "var(--sp-8)" }}>
+          <Button type="button" onClick={() => void handlePreview()} disabled={!runnable}>
+            Preview
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            onClick={() => void handleRun()}
+            disabled={!runnable}
+          >
+            Run
+          </Button>
+        </div>
+
+        {preview && (
+          <p aria-live="polite">
+            {preview.is_floor ? `${preview.estimated_count}+ matches` : `~${preview.estimated_count} matches`}
+          </p>
+        )}
+        {runResult?.mode === "sync" && <p aria-live="polite">{runResult.matched_count} node(s) matched.</p>}
+        {runResult?.mode === "job" && (
+          <p aria-live="polite">Large result — running as job {runResult.job_id}.</p>
+        )}
+        </div>
+        </AccordionSection>
+        <AccordionSection title="Add to the pattern" open={parts.has("add")} onToggle={() => togglePart("add")}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-6)" }}>
+        <div
+          role="group"
+          aria-label="Add a pattern variable"
+          style={{ display: "flex", gap: "var(--sp-4)" }}
+        >
+          <Select
+            aria-label="Entity type"
+            value={paletteType}
+            onChange={(e) => setPaletteType(e.target.value)}
+          >
+            {schema.entity_types.map((t) => (
+              <option key={t.name} value={t.name}>
+                {t.name}
+              </option>
+            ))}
+          </Select>
+          <Button type="button" onClick={handleAddVariable}>
+            Add variable
+          </Button>
+        </div>
+
+        <GlobalSearch
+          apiBaseUrl={apiBaseUrl}
+          bearerToken={bearerToken}
+          onSelect={handlePinFromSearch}
+        />
+
+        </div>
+        </AccordionSection>
         {pattern.nodes.length >= 2 && (
+        <AccordionSection title="Connect" open={parts.has("connect")} onToggle={() => togglePart("connect")}>
+
           <div
             role="group"
             aria-label="Connect two pattern nodes"
@@ -282,8 +337,11 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, schema }: QueryBuil
               Connect
             </Button>
           </div>
+        
+        </AccordionSection>
         )}
-
+        <AccordionSection title="Save and load" open={parts.has("save")} onToggle={() => togglePart("save")}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-6)" }}>
         <div
           role="group"
           aria-label="Save this pattern"
@@ -323,31 +381,8 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, schema }: QueryBuil
           </Button>
         </div>
 
-        {error && <p style={{ color: "var(--error)" }}>{error}</p>}
-
-        <div style={{ display: "flex", gap: "var(--sp-8)" }}>
-          <Button type="button" onClick={() => void handlePreview()} disabled={!runnable}>
-            Preview
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            onClick={() => void handleRun()}
-            disabled={!runnable}
-          >
-            Run
-          </Button>
         </div>
-
-        {preview && (
-          <p aria-live="polite">
-            {preview.is_floor ? `${preview.estimated_count}+ matches` : `~${preview.estimated_count} matches`}
-          </p>
-        )}
-        {runResult?.mode === "sync" && <p aria-live="polite">{runResult.matched_count} node(s) matched.</p>}
-        {runResult?.mode === "job" && (
-          <p aria-live="polite">Large result — running as job {runResult.job_id}.</p>
-        )}
+        </AccordionSection>
       </div>
     </Panel>
   );

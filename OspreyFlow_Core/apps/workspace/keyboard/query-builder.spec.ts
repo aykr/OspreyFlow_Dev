@@ -50,13 +50,25 @@ async function tabToButtonNamed(page: Page, name: string, maxTabs = 20): Promise
   );
 }
 
+/** ADR-096: the Query builder folds into parts; a folded part's controls are hidden, so Tab never
+ * reaches them until the part is opened. Opens one by keyboard (Enter on its header) if folded. */
+async function openPart(page: Page, name: string): Promise<void> {
+  const header = page.getByRole("button", { name, exact: true });
+  if ((await header.getAttribute("aria-expanded")) === "true") return;
+  await header.focus();
+  await page.keyboard.press("Enter");
+  await expect(header).toHaveAttribute("aria-expanded", "true");
+}
+
 test("Add variable places a new, unpinned pattern node", async ({ page }) => {
   await page.goto("/keyboard/query-builder-harness.html");
+  await openPart(page, "Add to the pattern");
   await tabToButtonNamed(page, "Add variable");
   await page.keyboard.press("Enter");
 
   await expect(page.getByRole("group", { name: /Pattern node a: Person/ })).toBeVisible();
   registerCovered("QUERY_BUILDER_ACTIONS", "palette-add-variable-node");
+  registerCovered("QUERY_BUILDER_ACTIONS", "open-a-folded-part-by-keyboard");
 });
 
 test("selecting a search result via the keyboard pins it as a new pattern node", async ({ page }) => {
@@ -71,6 +83,7 @@ test("selecting a search result via the keyboard pins it as a new pattern node",
   });
 
   await page.goto("/keyboard/query-builder-harness.html");
+  await openPart(page, "Add to the pattern");
   const search = page.getByRole("combobox", { name: "Search entities, identifiers, documents" });
   await search.focus();
   await search.fill("search");
@@ -85,6 +98,7 @@ test("selecting a search result via the keyboard pins it as a new pattern node",
 
 test("a second, unpinned root is announced live, not only disclosed at Run", async ({ page }) => {
   await page.goto("/keyboard/query-builder-harness.html");
+  await openPart(page, "Add to the pattern");
   await tabToButtonNamed(page, "Add variable");
   await page.keyboard.press("Enter"); // var a — the primary root
   await tabToButtonNamed(page, "Add variable");
@@ -98,6 +112,7 @@ test("a second, unpinned root is announced live, not only disclosed at Run", asy
 
 test("Delete on a focused pattern node removes it", async ({ page }) => {
   await page.goto("/keyboard/query-builder-harness.html");
+  await openPart(page, "Add to the pattern");
   await tabToButtonNamed(page, "Add variable");
   await page.keyboard.press("Enter");
 
@@ -120,6 +135,7 @@ test("Preview reports the principal-filtered estimate before Run is ever pressed
   });
 
   await page.goto("/keyboard/query-builder-harness.html");
+  await openPart(page, "Add to the pattern");
   await tabToButtonNamed(page, "Add variable");
   await page.keyboard.press("Enter");
   await tabToButtonNamed(page, "Preview");
@@ -139,6 +155,7 @@ test("Run executes the pattern and reports the matched count", async ({ page }) 
   });
 
   await page.goto("/keyboard/query-builder-harness.html");
+  await openPart(page, "Add to the pattern");
   await tabToButtonNamed(page, "Add variable");
   await page.keyboard.press("Enter");
   await tabToButtonNamed(page, "Run");
@@ -171,9 +188,11 @@ test("Save writes the pattern and reports its new version, reachable by keyboard
   });
 
   await page.goto("/keyboard/query-builder-harness.html");
+  await openPart(page, "Add to the pattern");
   await tabToButtonNamed(page, "Add variable");
   await page.keyboard.press("Enter");
 
+  await openPart(page, "Save and load");
   const nameField = page.getByRole("textbox", { name: "Pattern name" });
   await nameField.focus();
   await page.keyboard.type("Common contacts");
@@ -227,6 +246,7 @@ test("Load replaces the builder's own pattern with a previously saved one, reach
   });
 
   await page.goto("/keyboard/query-builder-harness.html");
+  await openPart(page, "Save and load");
   const savedSelect = page.getByRole("combobox", { name: "Saved patterns" });
   await savedSelect.focus();
   await savedSelect.selectOption("pattern-1");
