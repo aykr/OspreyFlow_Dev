@@ -285,21 +285,27 @@ if (wantsLinkStyle) {
   // One pair for each way a link is drawn; each pair is a link `<kind>-link` between `<kind>-a` and `<kind>-b`.
   // `marked` is a link of a Direct type (KNOWS) that carries its own probabilistic basis (ADR-081
   // step B): the link, not its type, decides that it is dotted.
-  const kinds: Array<[string, string, "probabilistic" | undefined]> = [
+  // ADR-097 step 2: `inferred` and `unresolved` are links of a Direct type whose provenance says so
+  // (dashed, dotted); `light` and `heavy` differ only in weight.
+  const kinds: Array<[string, string, "probabilistic" | undefined, Partial<Edge>?]> = [
     ["solid", "KNOWS", undefined],
     ["arrow", "OWNS", undefined],
     ["dotted", "LIKELY_KNOWS", undefined],
     ["dotted-arrow", "LIKELY_OWNS", undefined],
     ["thick", "KNOWS_WELL", undefined],
     ["marked", "KNOWS", "probabilistic"],
+    ["inferred", "KNOWS", undefined, { provenance: { state: "inferred", sources: [], first_seen: "2026-01-01T00:00:00Z" } }],
+    ["unresolved", "KNOWS", undefined, { provenance: { state: "unresolved", sources: [], first_seen: "2026-01-01T00:00:00Z" } }],
+    ["light", "KNOWS", undefined, { weight: 0.05 }],
+    ["heavy", "KNOWS", undefined, { weight: 0.95 }],
   ];
   // `&kind=dotted` loads that pair alone, which the canvas then fits to the whole screen, so its link is
   // long enough to read pixel by pixel.
   const only = new URLSearchParams(window.location.search).get("kind");
-  for (const [kind, type, basis] of kinds) {
+  for (const [kind, type, basis, extra] of kinds) {
     if (only && only !== kind) continue;
     nodes.push(node(`${kind}-a`), node(`${kind}-b`));
-    const link = edge(`${kind}-link`, `${kind}-a`, `${kind}-b`, type);
+    const link = { ...edge(`${kind}-link`, `${kind}-a`, `${kind}-b`, type), ...extra };
     edges.push(basis ? { ...link, basis } : link);
   }
 }

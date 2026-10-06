@@ -810,6 +810,18 @@ gap can be pointed at. Tests: `src/canvas/nodeAttributes.test.ts` (which program
 width) and `keyboard/link-style.spec.ts`, which reads the painted pixels along a link and fails if a
 probabilistic link is not dotted or a direct one is.
 
+**Provenance first, then basis; widths and arrowheads (ADR-097 step 2, Amendment 2).** Before the basis,
+a link's stroke says where it came from (DESIGN.md §3.8): an **inferred** link — model-derived and not
+yet confirmed by a person (rule 5) — is dashed (eight pixels on, four off: §3.8's `4 2` doubled so the
+gap survives rasterising), and an **unresolved** one is dotted; an asserted link is drawn by its basis as
+above. A link that declares no thickness is as wide as its weight on the six steps of the sequential
+scale: 1, 1.25, 1.5, 2, 2.5 and 3 pixels across the normalised weight (`01_DOMAIN_MODEL.md` §6.1), so
+weight shows; in a view of more than 10,000 links every such link is one pixel, where widths under a
+pixel apart cannot be told apart and would cost the frame budget (§5). The arrowhead is six times the
+line's width long and five times as wide, so at one pixel it can be seen beside a 20-pixel node. The
+painted dash, dot, arrowhead and the heavier link's width are each read from the pixels
+(`keyboard/link-style.spec.ts`).
+
 **Reading a Document (ADR-092).** A double-click on a Document, Enter on a focused one, or *Read full screen* at the head of its right-click menu, opens it
 full screen: an overlay over the whole work area (canvas, side column and timeline) with its title,
 for an email its sender, recipient and date, and its full text with the entities already accepted

@@ -11,8 +11,8 @@
 // docstring explains why that is not the `nodeReducer`'s job.
 //
 // **Known simplifications, disclosed rather than silent:**
-// - Edges render as straight lines (`EdgeLineProgram`), with an arrowhead
-//   (`EdgeArrowProgram`) only for an edge type the ontology declares directed.
+// - Edges render as straight lines (`EdgeLineProgram` at a pixel, `EdgeRectangleProgram` wider), with an arrowhead
+//   (`dottedEdgePrograms.ts`) only for an edge type the ontology declares directed.
 //   `@sigma/edge-curve`'s curved-parallel-edges at the Neighbourhood/
 //   Link-detail bands (§1.1's table) is installed but not yet wired — a
 //   visual refinement, not a correctness requirement this phase's exit
@@ -27,12 +27,7 @@ import { createNodeBorderProgram } from "@sigma/node-border";
 import { createNodeImageProgram } from "@sigma/node-image";
 import type { StoreApi } from "zustand/vanilla";
 import { useStore } from "zustand/react";
-import {
-  EdgeArrowProgram,
-  EdgeLineProgram,
-  EdgeRectangleProgram,
-  createNodeCompoundProgram,
-} from "sigma/rendering";
+import { EdgeLineProgram, EdgeRectangleProgram, createNodeCompoundProgram } from "sigma/rendering";
 import { animateNodes, graphExtent } from "sigma/utils";
 import Sigma from "sigma";
 import {
@@ -79,7 +74,13 @@ import { redrawWhenCameraStops } from "./cameraMoves";
 import { emailsOutcomeText, showEmailsAsDocuments } from "../inspector/emailDocuments";
 import { eventsEntryLabel, eventsNoun, mayCarryText } from "../inspector/linkEventsApi";
 import { edgeTypesOfferedFor } from "./edgeTypeMenu";
-import { DottedArrowProgram, DottedEdgeProgram } from "./dottedEdgePrograms";
+import {
+  DashedArrowProgram,
+  DashedEdgeProgram,
+  DottedArrowProgram,
+  DottedEdgeProgram,
+  SolidArrowProgram,
+} from "./dottedEdgePrograms";
 import { settledAnchors } from "./settledAnchor";
 import { CanvasLegend } from "./CanvasLegend";
 import { ZoomControls } from "./ZoomControls";
@@ -1152,13 +1153,17 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         nodeProgramClasses: { "glass-node": NODE_PROGRAM },
         defaultEdgeType: "glass-edge",
         edgeProgramClasses: {
+          // ADR-097 step 2: a plain link wider than a pixel is drawn by the program that honours width
+          // (`edgeProgramFor`), so its weight shows; arrowheads are larger.
           "glass-edge": EdgeLineProgram,
-          "glass-arrow": EdgeArrowProgram,
+          "glass-arrow": SolidArrowProgram,
           // ADR-081: a solid type that declares a thickness (the line program is one pixel wide
           // whatever the size), and the two dotted lines a probabilistic type is always drawn with.
           "glass-edge-thick": EdgeRectangleProgram,
           "glass-edge-dotted": DottedEdgeProgram,
           "glass-arrow-dotted": DottedArrowProgram,
+          "glass-edge-dashed": DashedEdgeProgram,
+          "glass-arrow-dashed": DashedArrowProgram,
         },
         // Sigma's own `addNode`/`updateNode`: "this function must return a
         // total object and won't be merged" with the raw graph attributes —
@@ -1265,7 +1270,13 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
                   label: caption(),
                 }
               : {}),
-            type: edgeProgramFor(data.data.type, edgeTypesRef.current, data.data.basis),
+            type: edgeProgramFor(
+              data.data.type,
+              edgeTypesRef.current,
+              data.data.basis,
+              data.data.provenance?.state,
+              isSelected ? Math.max(attrs.size * 2, 4) : attrs.size,
+            ),
           };
         },
         hideEdgesOnMove: true, // §1.1: "buys the frame budget at 250,000 edges"

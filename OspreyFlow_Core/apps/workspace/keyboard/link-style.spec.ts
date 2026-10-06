@@ -169,3 +169,73 @@ test("a dotted link is drawn in the colour its type declares, and a solid thick 
   const plain = await read(page, "solid"); // declares nothing: the ordinary line
   expect(plain.across).toBeLessThan(thick.across);
 });
+
+// --- ADR-097 step 2 (design review item 11): provenance strokes, arrowheads and widths -------------
+
+test("an inferred link is dashed: longer stretches than a dotted one, with gaps between", async ({ page }) => {
+  const dashed = await read(page, "inferred"); // KNOWS is Direct; the link's provenance is inferred
+  expect(dashed.runs, "inferred link runs").toBeGreaterThanOrEqual(4);
+  expect(dashed.duty, "inferred link duty").toBeLessThan(0.85);
+  const dotted = await read(page, "dotted");
+  expect(dashed.duty, "a dash covers more of the link than a dot").toBeGreaterThan(dotted.duty + 0.1);
+});
+
+test("an unresolved link is dotted, whatever its type's basis", async ({ page }) => {
+  const unresolved = await read(page, "unresolved"); // KNOWS is Direct
+  expect(unresolved.runs).toBeGreaterThanOrEqual(4);
+  expect(unresolved.duty).toBeLessThan(0.7);
+});
+
+/** The widest ink across the link in the stretch just short of the target node, where the
+ * arrowhead is drawn: from 11 to 26 pixels from the target's centre. */
+async function headWidth(page: Page, kind: string): Promise<number> {
+  await open(page, kind);
+  const a = (await page.evaluate((id) => window.__CANVAS__?.viewportPositionOf(id), `${kind}-a`))!;
+  const b = (await page.evaluate((id) => window.__CANVAS__?.viewportPositionOf(id), `${kind}-b`))!;
+  await page.addStyleTag({
+    content: "button, select, label { visibility: hidden !important; } .network-canvas { background-image: none !important; }",
+  });
+  const png = (await page.screenshot()).toString("base64");
+  return page.evaluate(
+    async ({ png, a, b }) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${png}`;
+      await img.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+      const px = (x: number, y: number) => ctx.getImageData(Math.round(x), Math.round(y), 1, 1).data;
+      const back = px(2, 2);
+      const inked = (x: number, y: number) => {
+        const d = px(x, y);
+        return Math.max(Math.abs(d[0]! - back[0]!), Math.abs(d[1]! - back[1]!), Math.abs(d[2]! - back[2]!)) > 8;
+      };
+      const length = Math.hypot(b.x - a.x, b.y - a.y);
+      const ux = (b.x - a.x) / length;
+      const uy = (b.y - a.y) / length;
+      let widest = 0;
+      for (let t = 11; t <= 26; t += 1) {
+        let width = 0;
+        for (let o = -10; o <= 10; o += 1) if (inked(b.x - ux * t - uy * o, b.y - uy * t + ux * o)) width += 1;
+        widest = Math.max(widest, width);
+      }
+      return widest;
+    },
+    { png, a, b },
+  );
+}
+
+test("a directed link's arrowhead can be seen beside its node", async ({ page }) => {
+  const arrow = await headWidth(page, "arrow");
+  const plain = await headWidth(page, "solid");
+  expect(arrow).toBeGreaterThanOrEqual(6);
+  expect(arrow).toBeGreaterThan(plain + 2);
+});
+
+test("a heavier link is drawn wider than a lighter one of the same type", async ({ page }) => {
+  const light = await read(page, "light");
+  const heavy = await read(page, "heavy");
+  expect(heavy.across).toBeGreaterThan(light.across);
+});

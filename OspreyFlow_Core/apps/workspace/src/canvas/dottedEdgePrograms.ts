@@ -15,6 +15,7 @@
 // dotted link can still be pointed at and selected.
 import {
   createEdgeArrowHeadProgram,
+  createEdgeArrowProgram,
   createEdgeClampedProgram,
   createEdgeCompoundProgram,
   type EdgeArrowProgram,
@@ -25,6 +26,14 @@ import type { RenderParams } from "sigma/types";
 /** The pattern, in screen pixels: a dot this long, then a gap, repeating. One place to tune it. */
 export const DOT_LENGTH_PX = 3;
 export const DOT_PERIOD_PX = 7;
+/** An inferred link's dash (ADR-097 step 2): DESIGN.md §3.8's `4 2`, doubled so the gap survives the
+ * canvas's rasterising at one or two pixels wide (a 2px gap reads as a solid line on screen). */
+export const DASH_LENGTH_PX = 8;
+export const DASH_PERIOD_PX = 12;
+
+/** Sigma's own arrowhead is 2.5 times the line's width long and twice as wide, which at one pixel is
+ * smaller than a 20px node's edge can show (ADR-097 step 2). These make it 6 by 5 at one pixel. */
+export const ARROW_HEAD_OPTIONS = { lengthToThicknessRatio: 6, widenessToThicknessRatio: 5 } as const;
 
 // language=GLSL
 const VERTEX_SHADER = /*glsl*/ `
@@ -99,7 +108,7 @@ void main() {
 `;
 
 // language=GLSL
-const FRAGMENT_SHADER = /*glsl*/ `
+const fragmentShader = (on: number, period: number) => /*glsl*/ `
 precision highp float;
 
 varying vec4 v_color;
@@ -109,8 +118,8 @@ varying float v_feather;
 varying float v_along;
 
 const vec4 transparent = vec4(0.0, 0.0, 0.0, 0.0);
-const float DOT = ${DOT_LENGTH_PX.toFixed(1)};
-const float PERIOD = ${DOT_PERIOD_PX.toFixed(1)};
+const float DOT = ${on.toFixed(1)};
+const float PERIOD = ${period.toFixed(1)};
 
 void main(void) {
   #ifdef PICKING_MODE
@@ -136,7 +145,11 @@ interface ShaftContext {
   uniformLocations: Record<string, WebGLUniformLocation | null>;
 }
 
-function dottedShaft(options: { lengthToThicknessRatio: number }, noArrowRoom: boolean) {
+function dottedShaft(
+  options: { lengthToThicknessRatio: number },
+  noArrowRoom: boolean,
+  pattern: { on: number; period: number } = { on: DOT_LENGTH_PX, period: DOT_PERIOD_PX },
+) {
   const Base = createEdgeClampedProgram(options) as unknown as new (...args: unknown[]) => {
     getDefinition(): ShaftDefinition;
     setUniforms(params: RenderParams, context: ShaftContext): void;
@@ -155,7 +168,7 @@ function dottedShaft(options: { lengthToThicknessRatio: number }, noArrowRoom: b
       return {
         ...definition,
         VERTEX_SHADER_SOURCE: VERTEX_SHADER,
-        FRAGMENT_SHADER_SOURCE: FRAGMENT_SHADER,
+        FRAGMENT_SHADER_SOURCE: fragmentShader(pattern.on, pattern.period),
         UNIFORMS: [...definition.UNIFORMS, "u_resolution"],
       };
     }
@@ -182,8 +195,22 @@ function dottedShaft(options: { lengthToThicknessRatio: number }, noArrowRoom: b
 // Typed as the stock programs they stand beside, which is the type Sigma's settings accept.
 export const DottedEdgeProgram = dottedShaft({ lengthToThicknessRatio: 0 }, true) as unknown as typeof EdgeLineProgram;
 
-/** A dotted line with Sigma's own arrowhead: for a directed probabilistic type. */
+/** A dotted line with the arrowhead: for a directed probabilistic type. */
 export const DottedArrowProgram = createEdgeCompoundProgram([
-  dottedShaft({ lengthToThicknessRatio: 2.5 }, false) as never,
-  createEdgeArrowHeadProgram() as never,
+  dottedShaft({ lengthToThicknessRatio: ARROW_HEAD_OPTIONS.lengthToThicknessRatio }, false) as never,
+  createEdgeArrowHeadProgram(ARROW_HEAD_OPTIONS) as never,
 ]) as unknown as typeof EdgeArrowProgram;
+
+const DASH = { on: DASH_LENGTH_PX, period: DASH_PERIOD_PX };
+
+/** A dashed line with no arrowhead: an inferred link of an undirected type (ADR-097 step 2). */
+export const DashedEdgeProgram = dottedShaft({ lengthToThicknessRatio: 0 }, true, DASH) as unknown as typeof EdgeLineProgram;
+
+/** A dashed line with the arrowhead: an inferred link of a directed type. */
+export const DashedArrowProgram = createEdgeCompoundProgram([
+  dottedShaft({ lengthToThicknessRatio: ARROW_HEAD_OPTIONS.lengthToThicknessRatio }, false, DASH) as never,
+  createEdgeArrowHeadProgram(ARROW_HEAD_OPTIONS) as never,
+]) as unknown as typeof EdgeArrowProgram;
+
+/** A solid line with the arrowhead, at the size above. */
+export const SolidArrowProgram = createEdgeArrowProgram(ARROW_HEAD_OPTIONS) as unknown as typeof EdgeArrowProgram;

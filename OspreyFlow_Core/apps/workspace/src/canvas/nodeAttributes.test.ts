@@ -8,6 +8,8 @@ import {
   computeNodeFrameAttributes,
   computeNodeGraphAttributes,
   edgeProgramFor,
+  edgeWidthForWeight,
+  WEIGHT_WIDTH_VIEW_LIMIT,
   effectiveBasis,
   type NodeVisualState,
   SMALL_VIEW_LABEL_LIMIT,
@@ -571,5 +573,78 @@ describe("telling nodes apart", () => {
     expect(emphasised({ hovered: true })).toBe(true);
     expect(emphasised({ onPath: true })).toBe(true);
     expect(emphasised({})).toBe(false);
+  });
+});
+
+// ADR-097 step 2 (design review item 11, DESIGN.md §3.8): a link's stroke says where it came from.
+// Inferred (model-derived, not yet confirmed: rule 5) is dashed, unresolved is dotted, and an asserted
+// link keeps ADR-081's rule (Probabilistic dotted, Direct solid).
+describe("edgeProgramFor and the link's provenance (ADR-097 step 2)", () => {
+  const types = [
+    { name: "OWNS", directed: true, basis: "direct" as const },
+    { name: "KNOWS", directed: false, basis: "direct" as const },
+    { name: "LIKELY_KNOWS", directed: false, basis: "probabilistic" as const },
+  ];
+
+  it("draws an inferred link dashed, with its arrowhead where the type is directed", () => {
+    expect(edgeProgramFor("KNOWS", types, null, "inferred")).toBe("glass-edge-dashed");
+    expect(edgeProgramFor("OWNS", types, null, "inferred")).toBe("glass-arrow-dashed");
+    expect(edgeProgramFor("LIKELY_KNOWS", types, null, "inferred")).toBe("glass-edge-dashed");
+  });
+
+  it("draws an unresolved link dotted, whatever its type's basis", () => {
+    expect(edgeProgramFor("KNOWS", types, null, "unresolved")).toBe("glass-edge-dotted");
+    expect(edgeProgramFor("OWNS", types, null, "unresolved")).toBe("glass-arrow-dotted");
+  });
+
+  it("leaves an asserted link to its basis", () => {
+    expect(edgeProgramFor("KNOWS", types, null, "asserted")).toBe("glass-edge");
+    expect(edgeProgramFor("LIKELY_KNOWS", types, null, "asserted")).toBe("glass-edge-dotted");
+  });
+});
+
+// ADR-097 step 2 (design review item 11): a link's width is its weight on the six steps of the
+// sequential scale (DESIGN.md §3.5), from 1px for the weakest to 3px for the strongest.
+describe("edgeWidthForWeight", () => {
+  it("has six steps from 1px to 3px across the normalised weight", () => {
+    const widths = [0, 0.1, 0.2, 0.4, 0.6, 0.8, 0.99, 1].map(edgeWidthForWeight);
+    expect(new Set(widths).size).toBe(6);
+    expect(widths[0]).toBe(1);
+    expect(widths.at(-1)).toBe(3);
+    for (let i = 1; i < widths.length; i++) expect(widths[i]!).toBeGreaterThanOrEqual(widths[i - 1]!);
+  });
+
+  it("is what an undeclared link is drawn at, outside the overview", () => {
+    const at = (weight: number) =>
+      computeEdgeAttributes(makeEdge("e", "a", "b", { weight }), {
+        cameraRatio: 1,
+        strengthFilterFloor: 0,
+        onPath: false,
+      }).size;
+    expect(at(0.05)).toBe(1);
+    expect(at(0.95)).toBe(3);
+  });
+
+  it("is one pixel for every undeclared link in a view of more than 10,000 links", () => {
+    const at = (weight: number, viewEdgeCount: number) =>
+      computeEdgeAttributes(makeEdge("e", "a", "b", { weight }), {
+        cameraRatio: 1,
+        strengthFilterFloor: 0,
+        onPath: false,
+        viewEdgeCount,
+      }).size;
+    expect(at(0.95, WEIGHT_WIDTH_VIEW_LIMIT)).toBeGreaterThan(1);
+    expect(at(0.95, WEIGHT_WIDTH_VIEW_LIMIT + 1)).toBe(1);
+    expect(WEIGHT_WIDTH_VIEW_LIMIT).toBe(10_000);
+  });
+});
+
+describe("edgeProgramFor and the drawn width (ADR-097 step 2)", () => {
+  const types = [{ name: "KNOWS", directed: false, basis: "direct" as const }];
+
+  it("draws a plain link wider than a pixel with the program that honours width, and a 1px one with the line", () => {
+    expect(edgeProgramFor("KNOWS", types, null, "asserted", 2.5)).toBe("glass-edge-thick");
+    expect(edgeProgramFor("KNOWS", types, null, "asserted", 1)).toBe("glass-edge");
+    expect(edgeProgramFor("KNOWS", types, null, "asserted")).toBe("glass-edge");
   });
 });

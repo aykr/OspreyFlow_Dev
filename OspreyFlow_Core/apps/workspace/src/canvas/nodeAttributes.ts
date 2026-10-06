@@ -277,6 +277,19 @@ export interface ResolvedEdgeAttributes {
 //: overlap-prone one.
 const ON_PATH_EDGE_SIZE = 5;
 
+/** Above this many links in view, an undeclared link's weight is not drawn as width. */
+export const WEIGHT_WIDTH_VIEW_LIMIT = 10_000;
+
+/** The six widths of the sequential scale (DESIGN.md §3.5's six steps), in pixels. */
+const WEIGHT_WIDTHS = [1, 1.25, 1.5, 2, 2.5, 3] as const;
+
+/** A link's width for its normalised weight (`01_DOMAIN_MODEL.md` §6.1, 0 to 1): six steps, the
+ * weakest 1px and the strongest 3px (ADR-097 step 2). A weight outside 0..1 is held at the ends. */
+export function edgeWidthForWeight(weight: number): number {
+  const w = Number.isFinite(weight) ? Math.min(1, Math.max(0, weight)) : 1;
+  return WEIGHT_WIDTHS[Math.min(WEIGHT_WIDTHS.length - 1, Math.floor(w * WEIGHT_WIDTHS.length))]!;
+}
+
 export function computeEdgeAttributes(
   edge: Edge,
   context: EdgeRenderContext,
@@ -315,12 +328,17 @@ export function computeEdgeAttributes(
   }
   const thickness = context.declared?.thickness;
   // A declared thickness is the base and the weight scales it, between half and one and a half
-  // times (ADR-081, Amendment 1); with none declared, today's weight-only width stands.
+  // times (ADR-081, Amendment 1); with none declared, the weight on the sequential scale (ADR-097).
   const base =
     typeof thickness === "number" && thickness >= 1 && thickness <= 5
       ? thickness * Math.min(1.5, Math.max(0.5, weight))
-      : Math.max(1, Math.min(4, weight * 2));
-  const size = Math.max(0.5, base * crowd);
+      : edgeWidthForWeight(weight);
+  // In a view of more than 10,000 links an undeclared link is one pixel, on the cheaper line program:
+  // widths under a pixel apart cannot be told apart there, and 250,000 of them on the program that
+  // honours width cost the perf fixture eight seconds (ADR-097 Amendment 2).
+  const crowdedOut =
+    (context.viewEdgeCount ?? 0) > WEIGHT_WIDTH_VIEW_LIMIT && !(typeof thickness === "number" && thickness >= 1 && thickness <= 5);
+  const size = crowdedOut ? 1 : Math.max(0.5, base * crowd);
   return {
     size,
     color: colour,
@@ -378,7 +396,9 @@ export type EdgeProgramName =
   | "glass-arrow"
   | "glass-edge-thick"
   | "glass-edge-dotted"
-  | "glass-arrow-dotted";
+  | "glass-arrow-dotted"
+  | "glass-edge-dashed"
+  | "glass-arrow-dashed";
 
 export type LinkBasis = "direct" | "probabilistic";
 
@@ -404,17 +424,25 @@ export function effectiveBasis(
  * does not know) is drawn as it always was. The link's own mark counts (step B): a link of a Direct
  * type an analyst marked probabilistic is dotted. A solid undirected type that declares a thickness
  * uses the program that honours width, since the plain line program is one pixel wide whatever its
- * size. */
+ * size. ADR-097 step 2 puts the link's provenance first: inferred is dashed, unresolved dotted. */
 export function edgeProgramFor(
   edgeType: string,
   edgeTypes: readonly EdgeTypeStyle[],
   linkBasis?: LinkBasis | null,
+  provenance?: "asserted" | "inferred" | "unresolved" | null,
+  /** The width it is drawn at: above one pixel a plain link needs the program that honours width;
+   * at one pixel or less the cheaper line program draws it exactly (250,000 links at the overview). */
+  size?: number,
 ): EdgeProgramName {
   const def = edgeTypes.find((t) => t.name === edgeType);
   const directed = def?.directed === true;
-  if (effectiveBasis(linkBasis, def) === "probabilistic") {
+  // ADR-097 step 2, DESIGN.md §3.8: an inferred link (model-derived, not yet confirmed by a person:
+  // rule 5) is dashed and an unresolved one dotted, before the basis is considered; an asserted
+  // link is drawn by its basis as ADR-081 says.
+  if (provenance === "inferred") return directed ? "glass-arrow-dashed" : "glass-edge-dashed";
+  if (provenance === "unresolved" || effectiveBasis(linkBasis, def) === "probabilistic") {
     return directed ? "glass-arrow-dotted" : "glass-edge-dotted";
   }
   if (directed) return "glass-arrow";
-  return typeof def?.thickness === "number" ? "glass-edge-thick" : "glass-edge";
+  return typeof def?.thickness === "number" || (size ?? 0) > 1 ? "glass-edge-thick" : "glass-edge";
 }
