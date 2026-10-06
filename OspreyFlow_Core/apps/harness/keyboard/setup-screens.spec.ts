@@ -79,6 +79,8 @@ test("a keyboard-activated screen switch reaches Models and a real Enter saves i
   await page.getByRole("button", { name: "Models", exact: true }).focus();
   await page.keyboard.press("Enter");
   await page.getByRole("checkbox", { name: /Local only/ }).waitFor();
+  // The model choices are read from the harness after the screen opens (ADR-095).
+  await page.getByRole("combobox", { name: "Entity extraction model" }).waitFor();
 
   // Models is no longer the last nav button (Governance, Geospatial, Preflight follow it in the
   // DOM) — the same "Enter leaves focus on the activated button itself" finding as Components
@@ -86,6 +88,17 @@ test("a keyboard-activated screen switch reaches Models and a real Enter saves i
   await page.keyboard.press("Tab"); // Governance nav button
   await page.keyboard.press("Tab"); // Geospatial nav button
   await page.keyboard.press("Tab"); // Preflight nav button
+  // ADR-095: the four model choices come first, the extraction model on its shipped default.
+  await page.keyboard.press("Tab");
+  const extraction = page.getByRole("combobox", { name: "Entity extraction model" });
+  await expect(extraction).toBeFocused();
+  await expect(extraction).toHaveValue("qwen2.5:7b-instruct");
+  // Typing chooses an option on every platform (an arrow key opens the menu on macOS).
+  await page.keyboard.type("qwen2.5:14");
+  await expect(extraction).toHaveValue("qwen2.5:14b-instruct");
+  await page.keyboard.press("Tab"); // image description model
+  await page.keyboard.press("Tab"); // transcription model
+  await page.keyboard.press("Tab"); // embedding model
   await page.keyboard.press("Tab"); // the "local only" checkbox
   await expect(page.getByRole("checkbox", { name: /Local only/ })).toBeFocused();
   await page.keyboard.press("Tab"); // Save models button (hosted-fallback fields hidden while local only)
@@ -96,6 +109,9 @@ test("a keyboard-activated screen switch reaches Models and a real Enter saves i
     page.keyboard.press("Enter"),
   ]);
   expect(response.ok()).toBe(true);
+  expect(((await response.json()) as { models: { extraction: string } }).models.extraction).toBe(
+    "qwen2.5:14b-instruct",
+  );
 
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-save-models");
 });

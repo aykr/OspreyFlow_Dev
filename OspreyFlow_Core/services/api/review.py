@@ -348,6 +348,8 @@ async def run_extraction(
     handling: Handling,
     principal: Principal,
     extraction_model: str,
+    window_chars: int = 40_000,
+    overlap_chars: int = 2_000,
 ) -> list[ExtractionCandidateRecord]:
     """`09_INGEST_STUDIO.md` §4 end to end: builds the schema from the profile, calls
     `ModelPort.extract()`, turns the result into candidates, and persists them `pending` — no
@@ -355,16 +357,54 @@ async def run_extraction(
 
     Also persists `text` itself (`store_document_text`, Phase 6a Stage 4) — previously discarded
     the moment candidates were built, leaving nothing for the Dossier's own "message content
-    renders... in place" to render against."""
+    renders... in place" to render against.
+
+    A text longer than one window (`WINDOW_CHARS`) is read window by window, overlapping, and the
+    findings joined, each located in the whole text (ADR-095 decision 2): nothing is cut unread."""
     schema = build_schema(profile, ontology)
-    result = await model.extract(
-        ExtractionRequest(
-            document_id=document_id, text=text, json_schema=schema, model=extraction_model
+    candidates: list[ExtractionCandidate] = []
+    seen: set[tuple[str, str]] = set()
+    for offset, window in text_windows(text, window_chars, overlap_chars):
+        result = await model.extract(
+            ExtractionRequest(
+                document_id=document_id, text=window, json_schema=schema, model=extraction_model
+            )
         )
-    )
-    candidates = extract_candidates(result, profile, ontology, text, handling)
+        for found in extract_candidates(result, profile, ontology, window, handling):
+            located = _shifted(found, offset)
+            key = (located.entity_type, located.locator)
+            if key not in seen:  # a mention inside the overlap is seen by both windows
+                seen.add(key)
+                candidates.append(located)
     await store.store_document_text(document_id, text, principal)
     return await store.store(candidates, principal)
+
+
+#: ADR-095 decision 2: how much text one extraction call reads, and how much two neighbouring
+#: windows share, so a name across a boundary is whole in one of them. About 11,000 tokens of
+#: English, well inside the 32,768-token context the extraction model is served with, which also
+#: holds the schema and the answer. `run_extraction`'s defaults are these.
+WINDOW_CHARS = 40_000
+OVERLAP_CHARS = 2_000
+
+
+def text_windows(text: str, window_chars: int, overlap_chars: int) -> list[tuple[int, str]]:
+    """`text` as overlapping windows, each with its offset; every character is in one of them."""
+    if len(text) <= window_chars:
+        return [(0, text)]
+    step = window_chars - overlap_chars
+    starts = range(0, len(text) - overlap_chars, step)
+    return [(start, text[start : start + window_chars]) for start in starts]
+
+
+def _shifted(candidate: ExtractionCandidate, offset: int) -> ExtractionCandidate:
+    """A candidate found in a window, its character span made a span of the whole text."""
+    if offset == 0:
+        return candidate
+    start, end = candidate.locator.removeprefix("char span ").split("-")
+    return candidate.model_copy(
+        update={"locator": f"char span {int(start) + offset}-{int(end) + offset}"}
+    )
 
 
 async def accept_candidate(

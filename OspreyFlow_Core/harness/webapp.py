@@ -13,6 +13,7 @@ The map, current as of this round:
 | `PUT /api/config` | Hand-editing `osprey.yaml`, re-validated — `OspreyConfig.model_validate` |
 | `GET /api/profile-options/{profile}` | `harness.screens.profile_options` — a §1 table lookup |
 | `POST /api/consequences` | `harness.screens.consequences_for` — a pure computation |
+| `GET /api/model-choices` | the config's own lists of pinned models (ADR-095) |
 | `GET /api/real-data-exceptions` | `scripts.real_data_exceptions.load_exceptions` |
 | `POST /api/real-data-exceptions` | `scripts.real_data_exceptions.add_exception` (CLI's `add`) |
 | `DELETE /api/real-data-exceptions/{dataset}` | `scripts.real_data_exceptions.remove_exception` |
@@ -175,7 +176,15 @@ from harness.webapp_signin import (
     rendered_realm_exists,
 )
 from harness.webapp_signin import install as install_sign_in
-from schemas.deployment import OspreyConfig, Profile
+from schemas.deployment import (
+    EMBEDDING_MODELS,
+    EXTRACTION_MODELS,
+    TRANSCRIPTION_MODELS,
+    VISION_MODELS,
+    ModelsConfig,
+    OspreyConfig,
+    Profile,
+)
 
 #: The built frontend's own output directory — `apps/harness/dist`, present once `npm run build`
 #: has run. Absent on a bare checkout (e.g. every Python-only test in this file), and that is a
@@ -352,6 +361,24 @@ def create_app(
     @app.get("/api/profile-options/{profile}")
     def get_profile_options(profile: Profile) -> dict[str, Any]:
         return _footprint_json(profile_options(profile))
+
+    @app.get("/api/model-choices")
+    def get_model_choices() -> dict[str, Any]:
+        """The Models screen's choices (ADR-095 decision 1): the config's own lists of pinned
+        models, never a second copy, and the defaults the product ships with."""
+        shipped = ModelsConfig()
+        return {
+            "extraction": [{"name": n} for n in EXTRACTION_MODELS],
+            "vision": [{"name": n} for n in VISION_MODELS],
+            "transcription": [{"name": n} for n in TRANSCRIPTION_MODELS],
+            "embedding": [{"name": n} for n in EMBEDDING_MODELS],
+            "defaults": {
+                "extraction": shipped.extraction,
+                "vision": shipped.vision,
+                "transcription": shipped.transcription,
+                "embedding": shipped.embedding,
+            },
+        }
 
     @app.post("/api/consequences")
     def post_consequences(body: dict[str, Any] = Body(...)) -> dict[str, Any]:

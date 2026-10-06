@@ -18,6 +18,13 @@ export type {
 // models — `generate_ts.py` only reads `schemas.deployment.ALL_MODELS`, so these are hand-written,
 // kept intentionally small and matched field-for-field against `harness/webapp.py`'s own
 // `_footprint_json`/`_consequences_json`.
+/** `GET /api/model-choices` (`harness/webapp.py`, ADR-095): the config's own lists of pinned
+ * models for each job, and the defaults the product ships with. */
+export type ModelJob = "extraction" | "vision" | "transcription" | "embedding";
+export type ModelChoices = Record<ModelJob, { name: string }[]> & {
+  defaults: Record<ModelJob, string>;
+};
+
 export interface ProfileOptions {
   label: string;
   machines: string;

@@ -79,7 +79,7 @@ showing what has been decided and what is outstanding.
 | --- | --- |
 | **Profile** | Laptop, small or cluster. Every later screen filters its options to what is valid here |
 | **Components** | Graph store, analytics engine, and the storage roots for data, staging and backups |
-| **Models** | Local only, or local with a named hosted fallback — and if hosted, which handling codes may be sent to it. Defaults to none |
+| **Models** | The deployment's own model for each job, from the list of pinned models (ADR-095): entity extraction (default `qwen2.5:7b-instruct`, a 4.68 GB download on the first Launch; `qwen2.5:14b-instruct` is the other choice, 8.99 GB), image description, transcription and embedding (each with today's one model). Then local only, or local with a named hosted fallback — and if hosted, which handling codes may be sent to it. Defaults to none |
 | **Governance** | Identity provider, handling scheme, ontology. Ships with a UK law-enforcement scheme, a US criminal-intelligence scheme, and the default ontology |
 | **Geospatial** | Provider tier and basemap registry; gazetteers and boundary sets to load |
 | **Preflight** | Environment checks, then generate, review and launch |

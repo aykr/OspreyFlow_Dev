@@ -14,6 +14,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+from schemas.deployment import ModelsConfig
+
 from .alerts import DisclosurePolicy, disclosure_policy_from_value
 from .export import ExportManifestPolicy, export_manifest_policy_from_value
 
@@ -182,4 +184,27 @@ class ApiConfig:
             export_manifest_policy=export_manifest_policy_from_value(
                 os.environ.get("EXPORT_MANIFEST_POLICY")
             ),
+        )
+
+
+@dataclass(frozen=True)
+class DeploymentModels:
+    """The models the Conduit uses for analysts' work — `06_DECISIONS.md` ADR-095. Chosen on the
+    setup harness's Models screen, written to `osprey.yaml` and rendered into the deployment's
+    environment; a Conduit started without them (a developer's own run) uses the models the product
+    ships with. Never the conformance suite's: `test_deployment_models.py` scans for that."""
+
+    extraction: str
+    vision: str
+    transcription: str
+    embedding: str
+
+    @classmethod
+    def from_env(cls) -> DeploymentModels:
+        shipped = ModelsConfig()
+        return cls(
+            extraction=os.environ.get("OSPREY_EXTRACTION_MODEL", shipped.extraction),
+            vision=os.environ.get("OSPREY_VISION_MODEL", shipped.vision),
+            transcription=os.environ.get("OSPREY_TRANSCRIPTION_MODEL", shipped.transcription),
+            embedding=os.environ.get("OSPREY_EMBEDDING_MODEL", shipped.embedding),
         )

@@ -7,6 +7,7 @@ import type {
   Consequences,
   LaunchTarget,
   MapConfig,
+  ModelChoices,
   NewRealDataException,
   OspreyConfig,
   PreflightCheckResult,
@@ -43,6 +44,10 @@ export async function putConfig(patch: Partial<OspreyConfig>): Promise<OspreyCon
       body: JSON.stringify(patch),
     }),
   );
+}
+
+export async function getModelChoices(): Promise<ModelChoices> {
+  return asJson(await fetch("/api/model-choices"));
 }
 
 export async function getProfileOptions(profile: string): Promise<ProfileOptions> {

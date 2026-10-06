@@ -29,6 +29,7 @@ build (`tools/schemas_check.py`), per `CLAUDE.md`'s own Conventions.
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -160,6 +161,28 @@ class ComponentsConfig(BaseModel):
     )
 
 
+#: `06_DECISIONS.md` ADR-095: the models a deployment may choose for analysts' work, each pinned to
+#: its Ollama manifest id (the first 12 hex characters `ollama list` shows), so the pull can
+#: verify it (ADR-020). A model is added by adding it here, with its pin, and to ADR-095's table.
+EXTRACTION_MODELS: dict[str, str] = {
+    "qwen2.5:7b-instruct": "845dbda0ea48",
+    "qwen2.5:14b-instruct": "7cdf5a0187d5",
+}
+VISION_MODELS: dict[str, str] = {"moondream:1.8b-v2-q4_K_M": "c865c80afc38"}
+EMBEDDING_MODELS: dict[str, str] = {"all-minilm:22m-l6-v2-fp16": "1b226e2802db"}
+#: Served by the whisper container, pinned by its image, not by Ollama.
+TRANSCRIPTION_MODELS: tuple[str, ...] = ("Systran/faster-whisper-tiny.en",)
+
+ExtractionModel = Literal["qwen2.5:7b-instruct", "qwen2.5:14b-instruct"]
+VisionModel = Literal["moondream:1.8b-v2-q4_K_M"]
+EmbeddingModel = Literal["all-minilm:22m-l6-v2-fp16"]
+TranscriptionModel = Literal["Systran/faster-whisper-tiny.en"]
+
+#: The context an extraction model is served with (ADR-095 decision 2), in tokens: room for a long
+#: email whole; a longer text is read in windows rather than cut inside the model.
+EXTRACTION_CONTEXT_TOKENS = 32768
+
+
 class ModelsConfig(BaseModel):
     """`05_DEPLOYMENT.md` §2.1's Models screen: "Local only, or local with a named hosted fallback
     — and if hosted, which handling codes may be sent to it. **Defaults to none**."
@@ -177,6 +200,23 @@ class ModelsConfig(BaseModel):
     sendable_handling_codes: list[str] = Field(
         default_factory=list,
         description="Default: empty. Which handling codes may leave for a hosted model.",
+    )
+    extraction: ExtractionModel = Field(
+        default="qwen2.5:7b-instruct",
+        description="ADR-095: the local model that extracts entities from text. Default: "
+        "qwen2.5:7b-instruct, the model the product ships with.",
+    )
+    vision: VisionModel = Field(
+        default="moondream:1.8b-v2-q4_K_M",
+        description="ADR-095: the local model that describes an image and reads its text.",
+    )
+    transcription: TranscriptionModel = Field(
+        default="Systran/faster-whisper-tiny.en",
+        description="ADR-095: the local model that transcribes a video's speech.",
+    )
+    embedding: EmbeddingModel = Field(
+        default="all-minilm:22m-l6-v2-fp16",
+        description="ADR-095: the local model that turns text into vectors.",
     )
 
     @model_validator(mode="after")

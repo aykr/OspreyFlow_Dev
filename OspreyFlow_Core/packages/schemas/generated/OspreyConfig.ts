@@ -53,6 +53,22 @@ export type HostedFallback = string | null;
  */
 export type SendableHandlingCodes = string[];
 /**
+ * ADR-095: the local model that extracts entities from text. Default: qwen2.5:7b-instruct, the model the product ships with.
+ */
+export type Extraction = "qwen2.5:7b-instruct" | "qwen2.5:14b-instruct";
+/**
+ * ADR-095: the local model that describes an image and reads its text.
+ */
+export type Vision = "moondream:1.8b-v2-q4_K_M";
+/**
+ * ADR-095: the local model that transcribes a video's speech.
+ */
+export type Transcription = "Systran/faster-whisper-tiny.en";
+/**
+ * ADR-095: the local model that turns text into vectors.
+ */
+export type Embedding = "all-minilm:22m-l6-v2-fp16";
+/**
  * Default: keycloak (03_CONDUIT_MIDDLEWARE.md §6)
  */
 export type IdentityProvider = string;
@@ -175,6 +191,10 @@ export interface ModelsConfig {
   local_only?: LocalOnly;
   hosted_fallback?: HostedFallback;
   sendable_handling_codes?: SendableHandlingCodes;
+  extraction?: Extraction;
+  vision?: Vision;
+  transcription?: Transcription;
+  embedding?: Embedding;
 }
 /**
  * `05_DEPLOYMENT.md` §2.1's Governance screen: "Identity provider, handling scheme, ontology.

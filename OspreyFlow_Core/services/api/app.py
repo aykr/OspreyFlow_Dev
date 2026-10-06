@@ -73,12 +73,6 @@ from adapters.compute_rustworkx.adapter import ComputeRustworkxAdapter
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from adapters.media_objectstore import MediaStoreConfig, ObjectStoreMediaStore
-from adapters.model_litellm import (
-    CONFORMANCE_EMBED_MODEL,
-    CONFORMANCE_MODEL,
-    CONFORMANCE_TRANSCRIBE_MODEL,
-    CONFORMANCE_VISION_MODEL,
-)
 from adapters.model_litellm.adapter import ModelLiteLLMAdapter
 from adapters.model_litellm.client import LiteLLMClient, LiteLLMConfig
 from conduit_common.identity import new_edge_id, new_id, now_utc
@@ -200,7 +194,7 @@ from .compute_routes import (
     ComputeMetricRequest,
     run_compute_metric_job,
 )
-from .config import ApiConfig
+from .config import ApiConfig, DeploymentModels
 from .document_content import (
     UPLOAD_CONTENT_EXTENSIONS,
     DocumentAcceptResult,
@@ -438,7 +432,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # `embed_model` is the only model this adapter needs fixed at construction — `extract()`'s own
     # model is caller-supplied per call (`ExtractionRequest.model`, ADR-005), never this adapter's
     # own opinion (`services/api/review.py`'s own docstring on `RunExtractionRequest.model`).
-    model: ModelPort = ModelLiteLLMAdapter(litellm_client, embed_model=CONFORMANCE_EMBED_MODEL)
+    # ADR-095: the deployment's own models, never the conformance suite's.
+    models = DeploymentModels.from_env()
+    model: ModelPort = ModelLiteLLMAdapter(litellm_client, embed_model=models.embedding)
     # `spec/09_INGEST_STUDIO.md` §6's reverse index: "an ontology edit flags
     # every recipe that depends on the changed version". This deployment's
     # only "ontology reload" trigger today is a process restart after a new
@@ -505,9 +501,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         model,
         ontology,
         extraction_candidates,
-        text_model=CONFORMANCE_MODEL,
-        vision_model=CONFORMANCE_VISION_MODEL,
-        transcribe_model=CONFORMANCE_TRANSCRIBE_MODEL,
+        text_model=models.extraction,
+        vision_model=models.vision,
+        transcribe_model=models.transcription,
         scheme=handling_scheme,
     )
     app.state.email_extraction = EmailExtractionService(
@@ -517,7 +513,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         ontology,
         extraction_candidates,
         model,
-        CONFORMANCE_MODEL,
+        models.extraction,
         investigations=investigations,
     )
     app.state.suppression_marks = suppression_marks

@@ -63,7 +63,14 @@ from harness.images import (
 )
 from harness.profiles import arcadedb_java_memory_opts
 from harness.realm import CONDUIT_CLIENT_ID, HARNESS_PORT
-from schemas.deployment import TILES_CONTAINER_PATH, OspreyConfig, Profile, SearchBackend
+from schemas.deployment import (
+    EXTRACTION_CONTEXT_TOKENS,
+    EXTRACTION_MODELS,
+    TILES_CONTAINER_PATH,
+    OspreyConfig,
+    Profile,
+    SearchBackend,
+)
 
 #: **Where the ingest root is mounted inside the Conduit — fixed, not configurable** (owner ruling
 #: R6, 27 September 2026). The *host* side is `components.storage.ingest` and an operator moves it
@@ -114,6 +121,16 @@ _OLLAMA_PULL_SCRIPT = (
     "pull_and_verify moondream:1.8b-v2-q4_K_M c865c80afc38\n"
     "wait\n"
 )
+
+def render_ollama_pull_script(config: OspreyConfig) -> str:
+    """The developer stack's pull script plus one line: the deployment's own extraction model,
+    pulled and digest-verified the same way (`06_DECISIONS.md` ADR-095 decision 1). The developer
+    stack and CI keep pulling the small pinned models only; `test_deployment_models.py` holds the
+    rendered script to exactly that."""
+    model = config.models.extraction
+    line = f"pull_and_verify {model} {EXTRACTION_MODELS[model]}\n"
+    return _OLLAMA_PULL_SCRIPT.replace("wait\n", line + "wait\n")
+
 
 #: **Healthy once the two models the Conduit actually serves with are present — not all three.**
 #:
@@ -219,9 +236,21 @@ def render_litellm_config(config: OspreyConfig) -> str:
     ADR-020 pins the model weights themselves, verified at the `ollama` service's own startup.
     This file only wires names to backends, so the pin stays in one place.
     """
+    extraction = config.models.extraction
     return yaml.safe_dump(
         {
             "model_list": [
+                {
+                    # ADR-095: the deployment's own extraction model, with room for a long email
+                    # whole: Ollama's own default context is a few thousand tokens and it cuts a
+                    # longer prompt without saying so.
+                    "model_name": extraction,
+                    "litellm_params": {
+                        "model": f"ollama_chat/{extraction}",
+                        "api_base": "http://ollama:11434",
+                        "num_ctx": EXTRACTION_CONTEXT_TOKENS,
+                    },
+                },
                 {
                     "model_name": "qwen2.5:0.5b-instruct",
                     "litellm_params": {
@@ -784,6 +813,8 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
         if entry.service == "ingest":
             service["volumes"] = [f"osprey-staging:{config.components.storage.staging}"]
         service.update(_SERVICE_EXTRAS.get(entry.service, {}))
+        if entry.service == "ollama":
+            service["command"] = [render_ollama_pull_script(config)]
         services[entry.service] = service
     document = {
         "name": f"osprey-{config.profile.value}",
@@ -824,6 +855,11 @@ def _render_env(config: OspreyConfig) -> str:
         f"OSPREY_ONTOLOGY={config.governance.ontology}",
         f"OSPREY_REAL_DATA_EXCEPTIONS={config.governance.real_data_exceptions}",
         f"OSPREY_MODELS_LOCAL_ONLY={'true' if config.models.local_only else 'false'}",
+        # ADR-095: the models the Conduit uses for analysts' work, chosen on the Models screen.
+        f"OSPREY_EXTRACTION_MODEL={config.models.extraction}",
+        f"OSPREY_VISION_MODEL={config.models.vision}",
+        f"OSPREY_TRANSCRIPTION_MODEL={config.models.transcription}",
+        f"OSPREY_EMBEDDING_MODEL={config.models.embedding}",
         # `06_DECISIONS.md` ADR-050 objection 1's resolution: every rendered deployment verifies
         # audience, not only the two confidential clients this codebase controls. Not a secret —
         # the Conduit's own client id, which `harness/realm.py`'s audience mapper on the Glass
