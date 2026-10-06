@@ -131,11 +131,12 @@ async def test_the_text_is_on_the_event_and_never_on_the_link() -> None:
     assert all("excerpt" not in e.properties and "text" not in e.properties for e in graph.edges)
 
 
-async def test_a_long_message_is_cut_at_the_excerpt_length_and_says_so() -> None:
-    _, events = await _run([row("x" * 4100)])
+async def test_a_long_message_is_kept_whole() -> None:
+    """ADR-095 decision 5: a recipe's text is kept whole, as an email is; no 4,000-character cut."""
+    _, events = await _run([row("x" * 41_000)])
     (event,) = events
-    assert len(event.properties["excerpt"]) == 4000
-    assert event.properties["truncated"] is True
+    assert len(event.properties["excerpt"]) == 41_000
+    assert event.properties["truncated"] is False
 
 
 async def test_an_empty_message_carries_no_text() -> None:

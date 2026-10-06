@@ -820,18 +820,15 @@ async def _write_edge(
         )
 
 
-#: The length of text kept on an event, as the Enron loader keeps (ADR-089 decision 1).
-EXCERPT_CHARS = 4000
-
-
 def _content_properties(content: dict[str, str] | None) -> dict[str, Any]:
-    """The event properties a link's text becomes: cut at `EXCERPT_CHARS`, said when cut."""
+    """The event properties a link's text becomes: the whole text, as an email's body is kept
+    (ADR-095 decisions 3 and 5). `excerpt` keeps its name; `truncated` stays, always false."""
     if not content:
         return {}
     text = content["text"]
     return {
-        "excerpt": text[:EXCERPT_CHARS],
-        "truncated": len(text) > EXCERPT_CHARS,
+        "excerpt": text,
+        "truncated": False,
         "content_kind": content["kind"],
     }
 

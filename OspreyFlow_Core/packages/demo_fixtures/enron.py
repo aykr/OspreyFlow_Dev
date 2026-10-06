@@ -32,6 +32,7 @@ from email.message import Message as EmailMessage
 from email.utils import getaddresses, parsedate_to_datetime
 from pathlib import Path
 
+from conduit_common.message_text import body_text
 from schemas.analytics import EventRecord
 from schemas.domain import (
     EdgeWrite,
@@ -43,10 +44,6 @@ from schemas.domain import (
     SourceRef,
 )
 
-#: How much of a message body rides on its event (ADR-089: enough for nearly every business email
-#: to be read and extracted from whole; the whole corpus is over a gigabyte of text, so a longer
-#: body is cut and says so with `truncated`).
-EXCERPT_CHARS = 4000
 #: The company's own addresses are the graph; everything else is events only.
 GRAPH_DOMAIN = "@enron.com"
 
@@ -113,19 +110,11 @@ def _addresses(header: object) -> list[str]:
     return found
 
 
-def _body_text(message: EmailMessage) -> str:
-    payload = message.get_payload(decode=False)
-    text = payload if isinstance(payload, str) else ""
-    return " ".join(text.split())
-
-
 def _excerpt(message: EmailMessage) -> str:
-    return _body_text(message)[:EXCERPT_CHARS]
-
-
-def _is_truncated(message: EmailMessage) -> bool:
-    """Whether the body ran past `EXCERPT_CHARS`, so a reader knows the excerpt is not the whole."""
-    return len(_body_text(message)) > EXCERPT_CHARS
+    """The whole body, decoded by the product's one message reader (ADR-095 decisions 3 and 5),
+    its runs of white space made single as before. `excerpt` keeps its name and now holds it all;
+    nothing is cut, so `truncated` is always false for a new load."""
+    return " ".join(body_text(message).split())
 
 
 def _content_key(message: EmailMessage) -> str:
@@ -199,7 +188,7 @@ def read_messages(root: Path, *, tally: Tally | None = None) -> Iterator[Message
             recipients=tuple(recipients),
             subject=" ".join(str(message.get("Subject", "")).split()),
             excerpt=_excerpt(message),
-            truncated=_is_truncated(message),
+            truncated=False,
         )
 
 
@@ -313,7 +302,6 @@ def build_graph_writes(
 
 
 __all__ = [
-    "EXCERPT_CHARS",
     "EnronFolderError",
     "Message",
     "PairSummary",

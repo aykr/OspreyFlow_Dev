@@ -294,8 +294,8 @@ a message or a contact depending on a type column.
 A link with a time can name the column holding its text: *Text the model can read* (none,
 **message text** or **document text**) and *Column holding the text*, in the link's panel in Map.
 The recipe records `content: {kind, field}` on the link. Each row's text is kept on that link's
-event, never on the graph link, as the `excerpt` an Enron email carries: cut at 4,000 characters and
-said when cut (`truncated`), with `content_kind`. A link with no time has no events, so marking its
+event, never on the graph link, as the `excerpt` an Enron email carries: the whole text (ADR-095
+decision 5; `truncated` stays on the event and is false), with `content_kind`. A link with no time has no events, so marking its
 text is refused (`recipe_rule`). The marked column counts as mapped. The synthetic SMS export
 (`carrier-a-sms.csv`, written by `scripts.seed_ingest_folder`) and its recipe
 (`tests/scenarios/fixtures/sms_recipe.yaml`) are the demo of it. Tests:

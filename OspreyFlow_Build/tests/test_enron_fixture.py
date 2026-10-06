@@ -144,18 +144,31 @@ def test_a_file_that_is_not_mail_is_counted_and_skipped(tmp_path: Path) -> None:
     assert tally.unreadable + tally.undated + tally.senderless >= 1
 
 
-def test_the_excerpt_keeps_a_whole_business_email_and_says_when_it_cut_a_long_one(
-    tmp_path: Path,
-) -> None:
-    """ADR-089: an email is read and extracted from its excerpt, so the excerpt holds nearly every
-    business email whole (4,000 characters) and a longer body is cut with `truncated` set."""
-    assert enron.EXCERPT_CHARS == 4000
+def test_the_excerpt_is_the_whole_body_however_long(tmp_path: Path) -> None:
+    """ADR-095 decision 3 (replacing ADR-089's 4,000-character cut): the reader shows and
+    extraction reads the whole email."""
     short = _message_with_body(tmp_path, "short.eml", "A short note.  With  spacing.")
     assert short.excerpt == "A short note. With spacing."
     assert short.truncated is False
     long = _message_with_body(tmp_path, "long.eml", "word " * 2000)
-    assert len(long.excerpt) == enron.EXCERPT_CHARS
-    assert long.truncated is True
+    assert len(long.excerpt) == len(("word " * 2000).strip())
+    assert long.truncated is False
+
+
+def test_a_quoted_printable_body_is_decoded(tmp_path: Path) -> None:
+    """ADR-095 context 2: the owner's email showed `=20` and `Ken La= y`, because the body was
+    never decoded. The header shape is that email's own."""
+    body = "the Board and Ken La=\ny personally reinvest.=20 Portland."
+    raw = _mail(message_id="<qp@thyme>", body=body)
+    raw = raw.replace(
+        "Subject: Hello",
+        "Subject: Hello\nMime-Version: 1.0\nContent-Type: text/plain; charset=us-ascii\n"
+        "Content-Transfer-Encoding: quoted-printable",
+    )
+    _put(tmp_path, "smith-a", "sent", "qp.", raw)
+    (message,) = list(enron.read_messages(tmp_path))
+    assert "Ken Lay personally reinvest. Portland." in message.excerpt
+    assert "=20" not in message.excerpt
 
 
 def test_the_read_order_is_the_same_every_time(tmp_path: Path) -> None:

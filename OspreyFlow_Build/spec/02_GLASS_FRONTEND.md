@@ -434,8 +434,9 @@ matching section.
 
 *Show emails (n)* takes the Inspector to its **Emails** section (ADR-089): the events the link stands
 for, newest first, fifty at a time with *Show more*, each with its date, direction, subject and the
-first words of its text. Choosing one opens it to read, with its sender, recipient, date and text, and a
-note when the text is the first 4,000 characters of a longer message. Reachable by keyboard
+first words of its text. Choosing one opens it to read, with its sender, recipient, date and whole
+text (ADR-095; a note says so only for an event loaded before then, when the text was cut at 4,000
+characters). Reachable by keyboard
 (`keyboard/link-events.spec.ts`). On a link between two email addresses (`Endpoint.endpoint_kind` is `email` at the source)
 *Show emails (n)* also puts the emails inside the timeline's brushed window (all of them when nothing
 is brushed) on the canvas as Documents, linked to both addresses, and says how many (ADR-092); past
@@ -748,8 +749,8 @@ probabilistic link is not dotted or a direct one is.
 **Reading a Document (ADR-092).** A double-click on a Document, or Enter on a focused one, opens it
 full screen: an overlay over the whole work area (canvas, side column and timeline) with its title,
 for an email its sender, recipient and date, and its full text with the entities already accepted
-marked in place (the Dossier's marking); a note says when an email's text is its first 4,000
-characters. An email offers *Extract entities* and each finding's *Accept*, as the Inspector's email
+marked in place (the Dossier's marking); the text is the whole message (ADR-095), and a note says
+so only for one loaded before then, cut at 4,000 characters. An email offers *Extract entities* and each finding's *Accept*, as the Inspector's email
 view does, and the text is read again after an acceptance so the new entity is marked. Focus starts
 on *Close*; Close or Escape returns to the canvas with nothing moved behind it. The text comes from
 `GET .../documents/{id}/reader`. Tests: `src/reader/DocumentReader.test.tsx` and
