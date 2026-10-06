@@ -22,3 +22,21 @@ describe("StatusBar", () => {
     expect(screen.getByRole("status").textContent).toContain("1,234 folded into groups");
   });
 });
+
+// ADR-097 step 3: each count is a pair, its number a literal value in mono and its words in the UI
+// face, with a quiet separator between pairs; the bar itself is not set in mono.
+describe("StatusBar pairs", () => {
+  it("draws each count as a number in mono beside its words, separated", () => {
+    render(<StatusBar nodeCount={12481} edgeCount={38902} dimmedCount={214} filteredCount={6} />);
+    const bar = screen.getByRole("status");
+    expect(bar.classList.contains("value")).toBe(false);
+    const pairs = Array.from(bar.querySelectorAll(".status-pair"));
+    expect(pairs.map((p) => [p.querySelector(".value")?.textContent, p.textContent])).toEqual([
+      ["12,481", "12,481 nodes"],
+      ["38,902", "38,902 edges"],
+      ["214", "214 dimmed by filter"],
+      ["6", "6 hidden by handling"],
+    ]);
+    expect(bar.querySelectorAll(".status-pair__sep")).toHaveLength(3);
+  });
+});

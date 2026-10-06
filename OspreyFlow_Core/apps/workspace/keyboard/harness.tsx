@@ -390,7 +390,7 @@ createRoot(container).render(
     {/* The Tab-trap fix's own proof needs a real next tab-stop after the canvas — nothing here
         before Phase 7 Stage 4, since the canvas's own onKeyDown used to intercept every Tab
         press regardless. */}
-    <button id="after-canvas">After canvas</button>
+    <button id="after-canvas" data-harness-only="">After canvas</button>
     <HarnessSelectionList />
   </>,
 );

@@ -44,7 +44,18 @@ export function CaseSwitcher({
   const current = cases.find((entry) => entry.id === currentId);
   const currentName = current ? caseLabel(current) : "Current case";
   return (
-    <DropdownPanel label={`Case: ${currentName}`} title={currentName} panelLabel="Case menu">
+    // ADR-097 step 3: the bar shows the case's name alone; "Case:" stays for a screen reader.
+    <DropdownPanel
+      label={
+        <>
+          <span className="visually-hidden">Case: </span>
+          <span>{currentName}</span>
+        </>
+      }
+      title={currentName}
+      panelLabel="Case menu"
+      buttonClassName="menu-button--case"
+    >
       {(close) => (
         <>
           <div className="menu-panel__list">

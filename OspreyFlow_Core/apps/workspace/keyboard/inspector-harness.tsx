@@ -37,7 +37,7 @@ function Harness() {
   const [noteSignal, setNoteSignal] = useState(0);
   return (
     <>
-      <button type="button" onClick={() => setNoteSignal((n) => n + 1)}>
+      <button type="button" data-harness-only="" onClick={() => setNoteSignal((n) => n + 1)}>
         Hand over: Add a note
       </button>
       <Inspector

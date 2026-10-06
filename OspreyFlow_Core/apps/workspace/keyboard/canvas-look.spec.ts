@@ -2,6 +2,7 @@
 // is a number handed to Sigma; this checks the number becomes 20 painted pixels across at 100%.
 import { expect, test, type Page } from "@playwright/test";
 
+import { layoutSettled } from "./layoutSettled";
 import { readPng } from "./pngPixels";
 
 declare global {
@@ -14,34 +15,47 @@ declare global {
 }
 
 /** The painted width of `nodeId` along a row and down a column through its centre, in CSS pixels:
- * the run of pixels that differ from the canvas behind it. The smaller of the two, since a link
- * leaving the node lengthens the run along its own direction. */
+ * from its edge on one side to its edge on the other against the bare canvas. The smaller of the
+ * two, since a link leaving the node lengthens the run along its own direction. */
 async function paintedDiameter(page: Page, nodeId: string): Promise<number> {
   const canvas = page.getByRole("application", { name: "Network canvas" });
   const box = (await canvas.boundingBox())!;
   const at = await page.evaluate((id) => window.__CANVAS__?.viewportPositionOf(id) ?? null, nodeId);
   if (!at) throw new Error("the node is not drawn");
+  // The node alone on the bare canvas: the toolbar, the controls and the grid would otherwise be read
+  // as the node's edge, or as its background, wherever the layout put it.
+  await page.addStyleTag({
+    content:
+      "button, select, label, .canvas-toolbar, .canvas-legend, .canvas-zoom { visibility: hidden !important; } .network-canvas { background-image: none !important; }",
+  });
   const pixels = readPng(await page.screenshot());
   const scale = pixels.width / page.viewportSize()!.width;
   const cx = Math.round((box.x + at.x) * scale);
   const cy = Math.round((box.y + at.y) * scale);
   const near = (a: number[], b: number[]) => Math.abs(a[0]! - b[0]!) + Math.abs(a[1]! - b[1]!) + Math.abs(a[2]! - b[2]!) < 24;
-  const run = (dx: number, dy: number) => {
-    const background = pixels.at(cx + dx * Math.round(40 * scale), cy + dy * Math.round(40 * scale));
-    let out = 0;
-    while (out < 60 * scale && !near(pixels.at(cx + dx * out, cy + dy * out), background)) out++;
-    return out;
+  // The bare canvas's colour, from a corner nothing is drawn in (the toolbar and grid are hidden); a
+  // point beside the node can fall on one of its links.
+  const background = pixels.at(Math.round((box.x + 4) * scale), Math.round((box.y + 40) * scale));
+  // From 30px out, towards the centre, to the first pixel unlike the canvas: the node's edge. Coming
+  // in from outside, so whatever is drawn inside the node (its icon) cannot end the run early.
+  const edge = (dx: number, dy: number) => {
+    const reach = Math.round(30 * scale);
+    for (let out = reach; out > 0; out--) {
+      if (!near(pixels.at(cx + dx * out, cy + dy * out), background)) return out;
+    }
+    return 0;
   };
-  const across = run(1, 0) + run(-1, 0);
-  const down = run(0, 1) + run(0, -1);
+  const across = edge(1, 0) + edge(-1, 0) + 1;
+  const down = edge(0, 1) + edge(0, -1) + 1;
   return Math.min(across, down) / scale;
 }
 
 test("a node is 20 pixels across at 100%", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
-  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.viewportPositionOf("n3") ?? null)).not.toBeNull();
+  // Measured once the layout has stopped moving the node (`layoutSettled.ts`), at 100%.
+  await layoutSettled(page, ["n3"]);
   await page.evaluate(() => window.__CANVAS__?.zoomTo(1));
-  await page.waitForTimeout(400);
+  await layoutSettled(page, ["n3"]);
   const diameter = await paintedDiameter(page, "n3");
   expect(diameter).toBeGreaterThanOrEqual(18);
   expect(diameter).toBeLessThanOrEqual(23);

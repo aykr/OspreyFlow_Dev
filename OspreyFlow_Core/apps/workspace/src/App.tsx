@@ -851,14 +851,16 @@ export function App() {
         actions={
           view === "graph" ? (
             // `02_GLASS_FRONTEND.md` §10: the export drawer, for the whole case.
-            <Button aria-pressed={exportOpen} onClick={() => setExportOpen((open) => !open)}>
-              Export ⚙
+            // ADR-097 step 3: one menu button that opens the export panel, not a pressed toggle.
+            <Button aria-haspopup="dialog" aria-expanded={exportOpen} onClick={() => setExportOpen((open) => !open)}>
+              Export <span aria-hidden="true">▾</span>
             </Button>
           ) : undefined
         }
         account={
           <>
-            <ThemeToggle />
+            {/* ADR-097 step 3: the theme is in the account menu; a button of its own only without one. */}
+            {(isDevBypass || !principal) && <ThemeToggle />}
             {!isDevBypass && principal && (
               // `06_DECISIONS.md` ADR-050: the principal's identity and clearance are shown in the
               // chrome, informationally only. ADR-065 folds the subject, unit and Sign out behind one

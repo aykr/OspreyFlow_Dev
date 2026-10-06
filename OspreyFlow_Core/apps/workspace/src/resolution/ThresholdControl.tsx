@@ -94,12 +94,15 @@ export function ResolutionThresholdControl({
     store.getState().applyDelta(delta);
     setThreshold(detent.value);
     onChangeSummary?.(
-      `Resolution threshold: ${detent.label} — ${delta.merged} merged, ${delta.split} split, ${delta.affected} affected`,
+      `Match strictness: ${detent.label} — ${delta.merged} merged, ${delta.split} split, ${delta.affected} affected`,
     );
   }
 
   return (
+    // ADR-097 step 3 (design review item 15): named for what the analyst sets, how strictly two
+    // records must match to be drawn as one entity.
     <div className="resolution-threshold-control">
+      <span className="resolution-threshold-control__name">Match strictness</span>
       <span className="resolution-threshold-control__label">{label}</span>
       <Slider
         min={0}
@@ -108,7 +111,7 @@ export function ResolutionThresholdControl({
         value={sliderIndex}
         onChange={setPendingIndex}
         onCommit={(index) => void commit(index)}
-        aria-label="Resolution threshold"
+        aria-label="Match strictness"
       />
     </div>
   );

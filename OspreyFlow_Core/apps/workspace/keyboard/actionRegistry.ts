@@ -92,6 +92,7 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   "zoom-in-and-out-by-keyboard",
   "fit-to-view-by-keyboard",
   "legend-folds-by-keyboard",
+  "show-previous-positions-by-keyboard",
   "focus-establishes-ring",
   "tab-leaves-the-canvas",
   "ctrl-arrow-cycles-ring",
@@ -283,6 +284,7 @@ export const EXPORT_PANEL_ACTIONS = defineActionRegistry("EXPORT_PANEL_ACTIONS",
  * real cross-case histogram fetch and renders the second track.
  */
 export const TIMELINE_PLAYBACK_ACTIONS = defineActionRegistry("TIMELINE_PLAYBACK_ACTIONS", [
+  "timeline-mode-switch-by-keyboard",
   "toggle-playback-advances-the-clock",
   "set-exact-dates-reveals-the-date-boxes",
   "overlay-another-case-reveals-its-box",

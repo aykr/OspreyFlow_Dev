@@ -35,10 +35,21 @@ const seededWorkspace = () => workspaceUrl();
 
 async function openTimeline(page: Page): Promise<void> {
   await page.goto(seededWorkspace());
-  await expect(
-    page.getByRole("button", { name: /^Overlay another case/ }),
-    "the timeline's own controls never appeared — is the Glass pointed at a seeded investigation?",
-  ).toBeVisible({ timeout: 30_000 });
+  // ADR-097 step 1: the timeline opens folded; ADR-097 step 3: its set-up controls are in the
+  // header's overflow menu.
+  const show = page.getByRole("button", { name: "Show the timeline" });
+  await expect(show, "the timeline never appeared — is the Glass pointed at a seeded investigation?").toBeVisible({
+    timeout: 30_000,
+  });
+  await show.click();
+  await openMore(page);
+  await expect(page.getByRole("button", { name: /^Overlay another case/ })).toBeVisible();
+}
+
+/** Opens the timeline header's overflow menu, if it is not open already. */
+async function openMore(page: Page): Promise<void> {
+  const more = page.getByRole("button", { name: "More timeline options" });
+  if ((await more.getAttribute("aria-expanded")) !== "true") await more.click();
 }
 
 /** How many tracks the timeline is drawing, read off its own published state.
@@ -134,6 +145,7 @@ test("B18 — the sightings track advances under playback", async ({ page }) => 
   // fixes.
   await page.getByRole("button", { name: "Map", exact: true }).click();
 
+  await openMore(page);
   await page.getByRole("button", { name: "Set exact dates" }).click();
   await page.getByLabel("Brush window start").fill(SIGHTINGS_WINDOW_START);
   await page.getByLabel("Brush window end").fill(SIGHTINGS_WINDOW_END);

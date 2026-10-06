@@ -10,7 +10,6 @@ import { ClassificationStrip } from "../src/shell/ClassificationStrip";
 import { LeftRail } from "../src/shell/LeftRail";
 import { TopBar } from "../src/shell/TopBar";
 import { AccountMenu } from "../src/auth/AccountMenu";
-import { ThemeToggle } from "../src/theme/ThemeToggle";
 import { Button } from "../src/design/primitives/Button";
 import { CaseSwitcher } from "../src/investigation/CaseSwitcher";
 import { GlobalSearch } from "../src/search/GlobalSearch";
@@ -71,7 +70,7 @@ createRoot(container).render(
       actions={<Button>Export ⚙</Button>}
       account={
         <>
-          <ThemeToggle />
+          {/* ADR-097 step 3: the theme is in the account menu, as in `App.tsx`. */}
           <AccountMenu
             principal={{
               sub: "2a0683a4-5a9c-40cb-94b9-e9c502084449",

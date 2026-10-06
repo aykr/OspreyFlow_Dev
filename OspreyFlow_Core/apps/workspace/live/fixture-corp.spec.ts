@@ -164,7 +164,7 @@ test("moving the resolution threshold live reports what merged and what split", 
   // never an interpolated value, and reports the delta each move produced.
   await page.goto(await freshWorkspaceUrl(request));
 
-  const slider = page.getByRole("slider", { name: "Resolution threshold" });
+  const slider = page.getByRole("slider", { name: "Match strictness" });
   await expect(slider).toBeVisible();
 
   await slider.focus();
@@ -257,11 +257,11 @@ test("explain on a merged cluster names the pair's real resolution score", async
   // carry no `cluster_id` and the menu item never appears, which looks exactly like the
   // projection being broken. Measured that way against the route before changing this.
   // The identical pair scores 0.999991, so it is merged at Strict as at every other detent.
-  const slider = page.getByRole("slider", { name: "Resolution threshold" });
+  const slider = page.getByRole("slider", { name: "Match strictness" });
   await slider.focus();
   await slider.press("Home");
   await expect(
-    page.getByText(/Resolution threshold: .* — \d+ merged, \d+ split, \d+ affected/),
+    page.getByText(/Match strictness: .* — \d+ merged, \d+ split, \d+ affected/),
   ).toBeVisible();
 
   // Now the item is there, on a single focused node — `explain` takes one cluster id, not a pair.

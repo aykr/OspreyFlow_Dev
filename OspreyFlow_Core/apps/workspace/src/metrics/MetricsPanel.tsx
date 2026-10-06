@@ -259,7 +259,7 @@ export function MetricsPanel({
         )}
         </AccordionSection>
         <AccordionSection
-          title="Communities"
+          title="Community detection"
           open={openSections.has("communities")}
           onToggle={() => toggleSection("communities")}
         >

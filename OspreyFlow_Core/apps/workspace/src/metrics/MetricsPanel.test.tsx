@@ -48,7 +48,8 @@ function setup(extra: Partial<React.ComponentProps<typeof MetricsPanel>> = {}) {
 }
 
 const ranking = () => screen.getByRole("button", { name: /^Ranking/ });
-const communities = () => screen.getByRole("button", { name: /^Communities/ });
+// ADR-097 step 3 (design review item 15): the analysis is named for what it does.
+const communities = () => screen.getByRole("button", { name: /^Community detection/ });
 
 describe("MetricsPanel sections", () => {
   it("opens on the ranking, loaded, with the other sections folded and nothing else fetched", async () => {

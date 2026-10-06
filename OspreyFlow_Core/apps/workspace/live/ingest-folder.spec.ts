@@ -46,7 +46,8 @@ test("the Ingest Studio offers a file from the deployment's ingest folder", asyn
   ).toBeGreaterThan(0);
 
   await page.goto(await freshWorkspaceUrl(request));
-  await page.getByRole("button", { name: "Ingest" }).click();
+  // ADR-097 step 1: the Ingest Studio is on the left rail.
+  await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "Ingest Studio" }).click();
 
   // The picker is the whole point of R6: the analyst never types a path, because in a rendered
   // deployment there is no path they could type that the Conduit can open.

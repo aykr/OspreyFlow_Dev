@@ -84,6 +84,8 @@ import {
 import { settledAnchors } from "./settledAnchor";
 import { CanvasLegend } from "./CanvasLegend";
 import { ZoomControls } from "./ZoomControls";
+import { PreviousPositionsOverlay, type PreviousPosition } from "./PreviousPositionsOverlay";
+import { prefersReducedMotion } from "../motion/reducedMotion";
 import {
   gateExpansion,
   narrowingOptions,
@@ -523,6 +525,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       [],
     );
     const lastReproject = useStore(store, (s) => s.lastReproject);
+    // Under reduced motion, where the nodes were before the last re-layout, and whether that is shown.
+    const [previousPositions, setPreviousPositions] = useState<readonly PreviousPosition[] | null>(null);
+    const [showPrevious, setShowPrevious] = useState(false);
     // Re-render when the working set changes, so the view's node count stays current.
     const workingSetSeq = useStore(store, (s) => s.seq);
 
@@ -749,7 +754,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       if (!sigma || graph.order === 0) return;
       sigma.setCustomBBox(graphExtent(graph));
       sigma.refresh();
-      redrawWhenCameraStops(sigma, sigma.getCamera().animatedReset({ duration: 300 }));
+      redrawWhenCameraStops(sigma, sigma.getCamera().animatedReset({ duration: prefersReducedMotion() ? 0 : 300 }));
     };
     const zoomBy = (direction: "in" | "out") => {
       const sigma = sigmaRef.current;
@@ -757,7 +762,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       const camera = sigma.getCamera();
       redrawWhenCameraStops(
         sigma,
-        direction === "in" ? camera.animatedZoom({ duration: 200 }) : camera.animatedUnzoom({ duration: 200 }),
+        direction === "in"
+          ? camera.animatedZoom({ duration: prefersReducedMotion() ? 0 : 200 })
+          : camera.animatedUnzoom({ duration: prefersReducedMotion() ? 0 : 200 }),
       );
     };
     // The legend's rows: each type in view and how many. Worked out again when the working set changes.
@@ -1058,14 +1065,28 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           if (fitView) {
             sigma.setCustomBBox(graphExtent(graph));
             sigma.refresh();
-            redrawWhenCameraStops(sigma, sigma.getCamera().animatedReset({ duration: 420 }));
+            redrawWhenCameraStops(sigma, sigma.getCamera().animatedReset({ duration: prefersReducedMotion() ? 0 : 420 }));
           } else if (sigma.getCustomBBox() === null) {
             sigma.setCustomBBox(graphExtent(graph));
             sigma.refresh();
           }
         };
         if (Object.keys(targets).length === 0) finish();
-        else animateNodes(graph, targets, { duration: 420 }, finish);
+        else if (prefersReducedMotion()) {
+          // `02_GLASS_FRONTEND.md` §3.4: an instant move, and where each node was is kept so the
+          // toolbar's Show previous positions can mark it (the animation was the only cue).
+          const was: PreviousPosition[] = [];
+          for (const [id, at] of Object.entries(targets)) {
+            const from = realPositionOf(id);
+            if (!firstFill) {
+              const data = graph.getNodeAttribute(id, "data");
+              was.push({ id, label: data ? nodeLabel(data) : id, from });
+            }
+            graph.mergeNodeAttributes(id, { x: at.x, y: at.y });
+          }
+          if (was.length > 0) setPreviousPositions(was);
+          finish();
+        } else animateNodes(graph, targets, { duration: 420 }, finish);
       };
       const schedule = () => {
         clearTimeout(timer);
@@ -2671,6 +2692,19 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             <span className="canvas-toolbar__label" aria-hidden="true">Show</span>
             <div role="group" aria-label="Show" className="segmented canvas-toolbar__show">
               <CommunitiesToggle on={communitiesOn} onToggle={() => setCommunitiesOn((v) => !v)} />
+              {previousPositions && (
+                // `02_GLASS_FRONTEND.md` §3.4: present under reduced motion once something has moved.
+                <button
+                  type="button"
+                  className="radial-menu__item"
+                  aria-label="Show previous positions"
+                  aria-pressed={showPrevious}
+                  title="Mark where each node was before the last arrangement"
+                  onClick={() => setShowPrevious((v) => !v)}
+                >
+                  Previous positions
+                </button>
+              )}
               {entityTypes !== undefined && (
                 <>
                   <LabelsMenu entityTypes={entityTypes} getTypesInView={typesInView} />
@@ -2775,6 +2809,17 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             explanation={clusterExplain.explanation}
             graph={graph}
             onClose={() => setClusterExplain(null)}
+          />
+        )}
+        {showPrevious && previousPositions && (
+          <PreviousPositionsOverlay
+            sigmaRef={sigmaRef}
+            marks={previousPositions}
+            currentOf={(id) =>
+              graph.hasNode(id) && !isHiddenInGroup(id)
+                ? { x: graph.getNodeAttribute(id, "x") ?? 0, y: graph.getNodeAttribute(id, "y") ?? 0 }
+                : null
+            }
           />
         )}
         {communityHulls && communityHulls.size > 0 && (

@@ -209,7 +209,9 @@ set of widgets:
 3. **Everything cross-filters.** A brush on the timeline dims the graph, restricts the map and
    recomputes the histograms. A lasso on the canvas filters the timeline. A histogram bar click
    filters everything. This is the Gotham pattern and it is the core interaction of the product.
-4. **The status bar never lies.** Counts of dimmed and handling-hidden items are always visible.
+4. **The status bar never lies.** Counts of dimmed and handling-hidden items are always visible. Each
+   count is a pair, its number in mono beside its words in the UI face, with a quiet separator between
+   pairs (ADR-097 step 3).
    An analyst must never be able to mistake a filtered picture for a complete one.
 5. **The signed-in principal's own identity is always visible, informationally only.** A button
    at the right-hand end of the top bar reading `<user name> · <clearance>` (e.g.
@@ -251,7 +253,7 @@ panel only. Each panel opens on its preview and folds the rest: the Inspector a 
 *Change this link*, *Notes*, the link's *Emails*, *Messages* or *Events*, *Change history*) or a node's
 *Properties* (then *Provenance*, *Source*, *Judgements*; with no node, *Judgements* open); the Query
 builder its *Pattern* with *Preview* and *Run* (then *Add to the pattern*, *Connect* once there are two
-nodes, *Save and load*); Metrics its *Ranking* (then *Communities*, *Filter*). Parts open independently.
+nodes, *Save and load*); Metrics its *Ranking* (then *Community detection*, *Filter*). Parts open independently.
 A link-menu choice opens its part; opening *Change this link* opens the form. A folded part keeps what
 is half-written in it. The three panels are denser than the rest of the Glass: body and controls at
 `--fs-12`, titles at `--fs-13`, padding at `--sp-8` and `--sp-4`. Reachable by keyboard
@@ -282,7 +284,8 @@ One row, 40px. From the left:
 
 - **The mark**: the solid-cut osprey in brass and the word *Osprey* (`spec/design/`). It is not a
   button.
-- **The case menu**, `Case: <name> ▾`: opens the cases the account can reach (the open one marked),
+- **The case menu**, `<name> ▾` (its accessible name keeps `Case: <name>`; at least 240px wide, ADR-097
+  step 3): opens the cases the account can reach (the open one marked),
   `All cases`, and `New case`. The name may be cut short with an ellipsis; its full text is the
   button's title. The Ingest Studio's own "Data loaded from this studio goes into" row uses the
   same menu.
@@ -299,8 +302,11 @@ One row, 40px. From the left:
 - **The view switch**, a segmented group named *View*: Graph, Map, and Messages when a dossier is
   open. The pressed one is drawn in primary text with a 2px underline, not in brass (ADR-097: brass is
   for the primary action, focus and the selection).
-- **Export**, for the whole case, on the Graph.
-- **The theme button** (a worded button, just left of the account, that names the theme a press
+- **Export**, for the whole case, on the Graph: one menu button, `Export ▾`, that opens the export panel
+  (`aria-expanded`, not a pressed state; ADR-097 step 3).
+- **The theme** is an item of the account menu (ADR-097 step 3); a button of its own stands just left
+  of the account only where there is no account menu (the local development bypass). Either is
+  **the theme button** (a worded button that names the theme a press
   switches to: `Light` while the page is dark, `Dark` once it is light; ADR-073): switches between the
   dark default and the light theme, per browser, never sent to the server (ADR-070). The choice is
   also kept in a cookie shared by every page of the deployment (the launcher, the sign-in page and the
@@ -310,7 +316,9 @@ One row, 40px. From the left:
 There is no application switch: the Ingest Studio is reached from the rail, and while it is open the
 bar shows a brass line under it and drops what belongs only to the Glass (search, the view switch,
 Export). *Back to the investigation* on the rail returns to the Glass view that was last open. Watches,
-History and Proposed types are on the rail; the resolution threshold is on the Graph's view toolbar.
+History and Proposed types are on the rail; the resolution threshold, named **Match strictness** for what
+the analyst sets with it (ADR-097 step 3), is on the Graph's view toolbar. Search is at least 280px
+wide.
 
 Every menu opens on Enter or Space, closes on Escape (focus returns to its button), on a click
 outside it, and when keyboard focus moves outside it, so it never traps a keyboard user.
@@ -622,7 +630,8 @@ Two metrics can be shown side by side, which is how the Clique Metric earns its 
 insight is "high clique score, low degree centrality", and that comparison has to be visible in
 one glance.
 
-The panel opens closed. It has three sections, **Ranking**, **Communities** and **Filter**, one open at a
+The panel opens closed. It has three sections, **Ranking**, **Community detection** (named so since ADR-097
+step 3, apart from the canvas's *Communities* view) and **Filter**, one open at a
 time, and a closed section fetches nothing (ADR-070).
 
 **Filter (ADR-088).** Two social-network filters, both of which dim and never remove (§2 rule 2). A
@@ -703,7 +712,20 @@ The timeline is the second most important control in the product after the canva
 
 Under `prefers-reduced-motion`, playback becomes stepped and re-layout becomes an instant move
 with a persistent control that shows previous positions. Removing the animation removes the only
-cue for what moved, so something must replace it.
+cue for what moved, so something must replace it. Built (ADR-097 step 3): once an arrangement has
+moved nodes, the canvas toolbar's Show group gains *Previous positions* (*Show previous positions*,
+pressed while on), which marks each moved node's last place with a hollow ring and a dashed line to
+where it is now; the camera's fit and zoom are instant too. Without reduced motion there is no such
+control, as the move itself shows what moved (`keyboard/keyboard.spec.ts`).
+
+**The timeline's header and axis (ADR-097 step 3, design review item 13).** *Density* and *Cyclical*
+are one segmented control, *Timeline view*, in the timeline's header. Setting exact dates and
+overlaying another case are in its overflow menu, *More timeline options*; *Clear filter* and playback
+stay in the header, since they appear only when there is something to act on. The count axis has whole
+numbers only, and every tick is set in mono. A case whose dated events all fall on one day (UTC) is
+drawn by the hour (`HH:00`), with a note saying so, since one bar says nothing; not while another case
+is overlaid, whose daily buckets must line up (`keyboard/timeline-playback.spec.ts`,
+`src/timeline/Timeline.test.tsx`).
 
 ### 3.5 Geospatial analysis
 
@@ -942,6 +964,9 @@ Not negotiable and cheaper to build in than to retrofit.
 - Focus is a 2px brass outline at 2px offset, everywhere, never suppressed.
 - All nine channels paired with shape; colour never sole carrier.
 - `prefers-reduced-motion` honoured as described in §3.4.
+- Every control is at least 24 by 24 pixels to press (WCAG 2.2 target size, ADR-097 step 3); a control
+  may draw something smaller inside that box (the switch's 18px track). Checked across the harnesses
+  by `keyboard/hit-targets.spec.ts`.
 - Contrast floor met in both themes; verify with automated checks in CI, not by eye.
 
 ## 7. Copy rules

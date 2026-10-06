@@ -30,3 +30,17 @@ export function windowFromZoomPercent(
   if (!start?.start || !end?.end) return null;
   return { validFrom: start.start, validTo: end.end };
 }
+
+/** Whether every bucket that holds an event starts on one calendar day (UTC): such a case is shown
+ * by the hour instead (ADR-097 step 3). False when there are no events, so an empty case keeps its
+ * own message (ADR-087). */
+export function allOnOneDay(buckets: readonly HistogramBucket[]): boolean {
+  const days = new Set(buckets.filter((b) => b.count > 0 && b.start).map((b) => b.start!.slice(0, 10)));
+  return days.size === 1;
+}
+
+/** A bucket's axis label: its date for a day or longer, its hour (`HH:00`) for shorter. */
+export function bucketLabel(start: string | null | undefined, intervalSeconds: number): string {
+  if (!start) return "";
+  return intervalSeconds < 86_400 ? `${start.slice(11, 13)}:00` : start.slice(0, 10);
+}

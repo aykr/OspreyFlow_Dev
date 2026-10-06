@@ -42,7 +42,7 @@ import { buildEventFilter, type CrossFilterStore } from "../crossfilter/store";
 import { Button } from "../design/primitives/Button";
 import { Select } from "../design/primitives/Select";
 import { PLAYBACK_SPEEDS, usePlayback } from "../playback/usePlayback";
-import { windowFromZoomPercent } from "./math";
+import { allOnOneDay, bucketLabel, windowFromZoomPercent } from "./math";
 
 echarts.use([
   BarChart,
@@ -63,6 +63,10 @@ const HOUR_LABELS = Array.from({ length: 24 }, (_, h) => String(h));
 // fixed daily bucket is this checkpoint's deliberate scope reduction,
 // flagged rather than silently assumed.
 const DAILY_INTERVAL_SECONDS = 24 * 60 * 60;
+/** A case whose dated events all fall on one day is drawn by the hour (ADR-097 step 3). */
+const HOURLY_INTERVAL_SECONDS = 60 * 60;
+/** `--mono`, mirrored for the chart's canvas: tick values are literal numbers and dates. */
+const MONO_FONT = "'IBM Plex Mono', ui-monospace, monospace";
 
 type TimelineMode = "density" | "cyclical";
 
@@ -119,6 +123,8 @@ export function Timeline({
   const [datesOpen, setDatesOpen] = useState(false);
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [histogram, setHistogram] = useState<Histogram | null>(null);
+  const [bucketSeconds, setBucketSeconds] = useState(DAILY_INTERVAL_SECONDS);
+  const [moreOpen, setMoreOpen] = useState(false);
   // `null` until the first answer: the strip is not declared empty before it has been asked.
   const hasEvents = histogram === null || histogram.total > 0;
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[] | null>(
@@ -190,13 +196,28 @@ export function Timeline({
           }
         : { filter, bucketing: "weekday_hour" };
     let cancelled = false;
-    void fetchHistogram(apiBaseUrl, bearerToken, request).then((result) => {
-      if (!cancelled) setHistogram(result);
-    });
+    void (async () => {
+      const daily = await fetchHistogram(apiBaseUrl, bearerToken, request);
+      // One day of events reads as one bar: ask again by the hour (not with an overlay, whose daily
+      // buckets must line up with these).
+      if (mode === "density" && !crossCaseInvestigationScope && allOnOneDay(daily.buckets)) {
+        const hourly = await fetchHistogram(apiBaseUrl, bearerToken, {
+          ...request,
+          interval_seconds: HOURLY_INTERVAL_SECONDS,
+        });
+        if (cancelled) return;
+        setBucketSeconds(HOURLY_INTERVAL_SECONDS);
+        setHistogram(hourly);
+        return;
+      }
+      if (cancelled) return;
+      setBucketSeconds(DAILY_INTERVAL_SECONDS);
+      setHistogram(daily);
+    })();
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, bearerToken, investigationScope, selectedNodeIds, mode]);
+  }, [apiBaseUrl, bearerToken, investigationScope, selectedNodeIds, mode, crossCaseInvestigationScope]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -255,7 +276,9 @@ export function Timeline({
       // axis rather than two competing label rows.
       const overlayActive = crossCaseHistogram != null;
       const primaryHeight = overlayActive ? "38%" : undefined;
-      const categoryData = buckets.map((b) => (b.start ?? "").slice(0, 10));
+      const categoryData = buckets.map((b) => bucketLabel(b.start, bucketSeconds));
+      // ADR-097 step 3: tick labels are literal values, in mono; counts are whole numbers.
+      const tick = { color: textSecondaryHex, fontSize: 11, fontFamily: MONO_FONT };
 
       chart.setOption(
         {
@@ -292,36 +315,39 @@ export function Timeline({
                   gridIndex: 1,
                   data: categoryData,
                   axisLine: { lineStyle: { color: borderSubtleHex } },
-                  axisLabel: { color: textSecondaryHex, fontSize: 11 },
+                  axisLabel: tick,
                 },
               ]
             : {
                 type: "category",
                 data: categoryData,
                 axisLine: { lineStyle: { color: borderSubtleHex } },
-                axisLabel: { color: textSecondaryHex, fontSize: 11 },
+                axisLabel: tick,
               },
           yAxis: overlayActive
             ? [
                 {
                   type: "value",
+                minInterval: 1,
                   gridIndex: 0,
                   axisLine: { lineStyle: { color: borderSubtleHex } },
-                  axisLabel: { color: textSecondaryHex, fontSize: 11 },
+                  axisLabel: tick,
                   splitLine: { lineStyle: { color: borderSubtleHex } },
                 },
                 {
                   type: "value",
+                minInterval: 1,
                   gridIndex: 1,
                   axisLine: { lineStyle: { color: borderSubtleHex } },
-                  axisLabel: { color: textSecondaryHex, fontSize: 11 },
+                  axisLabel: tick,
                   splitLine: { lineStyle: { color: borderSubtleHex } },
                 },
               ]
             : {
                 type: "value",
+                minInterval: 1,
                 axisLine: { lineStyle: { color: borderSubtleHex } },
-                axisLabel: { color: textSecondaryHex, fontSize: 11 },
+                axisLabel: tick,
                 splitLine: { lineStyle: { color: borderSubtleHex } },
               },
           dataZoom: overlayActive
@@ -347,7 +373,7 @@ export function Timeline({
                   yAxisIndex: 1,
                   data: categoryData.map((label) => {
                     const match = crossCaseHistogram?.buckets.find(
-                      (b) => (b.start ?? "").slice(0, 10) === label,
+                      (b) => bucketLabel(b.start, DAILY_INTERVAL_SECONDS) === label,
                     );
                     return match?.count ?? 0;
                   }),
@@ -433,6 +459,7 @@ export function Timeline({
     crossCaseHistogram,
     crossCaseInvestigationScope,
     theme,
+    bucketSeconds,
   ]);
 
   useEffect(() => {
@@ -482,70 +509,30 @@ export function Timeline({
           padding: "var(--sp-4) var(--sp-8)",
         }}
       >
-        <Button
-          aria-pressed={mode === "density"}
-          onClick={() => setMode("density")}
-        >
-          Density
-        </Button>
-        <Button
-          aria-pressed={mode === "cyclical"}
-          onClick={() => setMode("cyclical")}
-        >
-          Cyclical
-        </Button>
-        {hasEvents && mode === "density" && (
-          <Button
-            aria-expanded={datesOpen}
-            onClick={() => setDatesOpen((open) => !open)}
+        {/* ADR-097 step 3 (design review item 13): the mode switch is one segmented control in the
+            header; setting exact dates and overlaying another case are in its overflow menu. */}
+        <div role="group" aria-label="Timeline view" className="segmented">
+          <button
+            type="button"
+            className="segmented__item"
+            aria-pressed={mode === "density"}
+            onClick={() => setMode("density")}
           >
-            Set exact dates
-          </Button>
-        )}
-        {mode === "density" && datesOpen && (
-          <>
-            {/* `02_GLASS_FRONTEND.md` §3.4: "Brush endpoints are editable
-                as text." Editing a field updates the active filter
-                immediately; the slider's own handles move on the next
-                histogram refetch rather than live-tracking a keystroke. */}
-            <input
-              type="text"
-              aria-label="Brush window start"
-              placeholder="from (ISO)"
-              defaultValue={activeWindow?.validFrom ?? ""}
-              onBlur={(e) => commitWindowInput("validFrom", e.target.value)}
-              style={{ width: 180 }}
-            />
-            <input
-              type="text"
-              aria-label="Brush window end"
-              placeholder="to (ISO)"
-              defaultValue={activeWindow?.validTo ?? ""}
-              onBlur={(e) => commitWindowInput("validTo", e.target.value)}
-              style={{ width: 180 }}
-            />
-          </>
-        )}
-        {onCrossCaseScopeChange && (
-          <Button
-            aria-expanded={overlayOpen}
-            onClick={() => setOverlayOpen((open) => !open)}
+            Density
+          </button>
+          <button
+            type="button"
+            className="segmented__item"
+            aria-pressed={mode === "cyclical"}
+            onClick={() => setMode("cyclical")}
           >
-            Overlay another case
-            {crossCaseInvestigationScope ? `: ${crossCaseInvestigationScope}` : ""}
-          </Button>
+            Cyclical
+          </button>
+        </div>
+        {bucketSeconds < DAILY_INTERVAL_SECONDS && mode === "density" && (
+          <span className="timeline__note">By the hour: every dated event is on one day</span>
         )}
-        {onCrossCaseScopeChange && overlayOpen && (
-          <input
-            id="cross-case-scope"
-            type="text"
-            aria-label="Cross-case overlay investigation id"
-            placeholder="investigation id"
-            value={crossCaseInvestigationScope ?? ""}
-            onChange={(e) => onCrossCaseScopeChange(e.target.value)}
-            style={{ width: 200 }}
-          />
-        )}
+        <span style={{ flex: 1 }} />
         {(activeWindow || selectedNodeIds) && (
           <Button
             onClick={() => {
@@ -591,6 +578,69 @@ export function Timeline({
             </Select>
           </>
         )}
+        {(hasEvents && mode === "density") || onCrossCaseScopeChange ? (
+          <span className="timeline__more">
+            <button
+              type="button"
+              className="btn btn--quiet"
+              aria-label="More timeline options"
+              aria-expanded={moreOpen}
+              title="More timeline options"
+              onClick={() => setMoreOpen((open) => !open)}
+            >
+              ⋯
+            </button>
+            {moreOpen && (
+              <div className="timeline__menu" role="group" aria-label="More timeline options">
+                {hasEvents && mode === "density" && (
+                  <Button aria-expanded={datesOpen} onClick={() => setDatesOpen((open) => !open)}>
+                    Set exact dates
+                  </Button>
+                )}
+                {mode === "density" && datesOpen && (
+                  <span style={{ display: "flex", gap: "var(--sp-4)" }}>
+                    {/* `02_GLASS_FRONTEND.md` §3.4: "Brush endpoints are editable as text." Editing a
+                        field updates the active filter immediately; the slider's own handles move on
+                        the next histogram refetch rather than live-tracking a keystroke. */}
+                    <input
+                      type="text"
+                      aria-label="Brush window start"
+                      placeholder="from (ISO)"
+                      defaultValue={activeWindow?.validFrom ?? ""}
+                      onBlur={(e) => commitWindowInput("validFrom", e.target.value)}
+                      style={{ width: 180 }}
+                    />
+                    <input
+                      type="text"
+                      aria-label="Brush window end"
+                      placeholder="to (ISO)"
+                      defaultValue={activeWindow?.validTo ?? ""}
+                      onBlur={(e) => commitWindowInput("validTo", e.target.value)}
+                      style={{ width: 180 }}
+                    />
+                  </span>
+                )}
+                {onCrossCaseScopeChange && (
+                  <Button aria-expanded={overlayOpen} onClick={() => setOverlayOpen((open) => !open)}>
+                    Overlay another case
+                    {crossCaseInvestigationScope ? `: ${crossCaseInvestigationScope}` : ""}
+                  </Button>
+                )}
+                {onCrossCaseScopeChange && overlayOpen && (
+                  <input
+                    id="cross-case-scope"
+                    type="text"
+                    aria-label="Cross-case overlay investigation id"
+                    placeholder="investigation id"
+                    value={crossCaseInvestigationScope ?? ""}
+                    onChange={(e) => onCrossCaseScopeChange(e.target.value)}
+                    style={{ width: 200 }}
+                  />
+                )}
+              </div>
+            )}
+          </span>
+        ) : null}
       </div>
       {/* ADR-087: a case with no dated events says so, and offers no brush and no playback, so the
           graph is never dimmed for a reason the analyst cannot see. The chart stays mounted but

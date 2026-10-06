@@ -139,6 +139,15 @@ describe("CaseSwitcher (the header, and the Ingest Studio)", () => {
     expect(screen.queryByRole("button", { name: /PaySim/ })).toBeNull();
   });
 
+  it("shows the case's name alone, while its accessible name still says it is the case (ADR-097 step 3)", async () => {
+    stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: CASES }) });
+    render(<CaseSwitcher apiBaseUrl="http://api" bearerToken="t" currentId="c1" onOpen={() => undefined} onBrowse={() => undefined} />);
+    const trigger = await screen.findByRole("button", { name: /^Case: Fixture Corp/ });
+    const visible = trigger.querySelector(".menu-button__label > :not(.visually-hidden)")?.textContent ?? "";
+    expect(visible).toBe("Fixture Corp");
+    expect(trigger.classList.contains("menu-button--case")).toBe(true);
+  });
+
   it("names the case as 'Current case' until the list arrives, and when it fails", async () => {
     stubFetch({ "GET /v1/investigations": () => ({ status: 500, body: {} }) });
     render(<CaseSwitcher apiBaseUrl="http://api" bearerToken="t" currentId="c1" onOpen={() => undefined} />);

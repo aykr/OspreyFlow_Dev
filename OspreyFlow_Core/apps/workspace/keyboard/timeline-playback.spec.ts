@@ -69,6 +69,14 @@ test("pressing Play actually advances the playback clock forward, reachable by k
   registerCovered("TIMELINE_PLAYBACK_ACTIONS", "toggle-playback-advances-the-clock");
 });
 
+/** Opens the timeline header's overflow menu by keyboard (ADR-097 step 3), where setting exact dates
+ * and overlaying another case now are. */
+async function openMore(page: Page): Promise<void> {
+  await tabToElementNamed(page, (active) => active.tag === "BUTTON" && active.ariaLabel === "More timeline options");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "More timeline options" })).toHaveAttribute("aria-expanded", "true");
+}
+
 test("the exact-date boxes stay out of sight until Set exact dates is pressed, by keyboard alone", async ({
   page,
 }) => {
@@ -83,6 +91,7 @@ test("the exact-date boxes stay out of sight until Set exact dates is pressed, b
   await expect(page.getByLabel("Brush window start")).toHaveCount(0);
   await expect(page.getByLabel("Brush window end")).toHaveCount(0);
 
+  await openMore(page);
   await tabToElementNamed(page, (active) => active.tag === "BUTTON" && active.text.includes("Set exact dates"));
   expect(await page.evaluate(() => document.activeElement?.getAttribute("aria-expanded"))).toBe("false");
   await page.keyboard.press("Enter");
@@ -108,6 +117,7 @@ test("the overlay box stays out of sight until Overlay another case is pressed, 
   });
   await page.goto("/keyboard/timeline-playback-harness.html");
   await expect(page.getByLabel("Cross-case overlay investigation id")).toHaveCount(0);
+  await openMore(page);
   await tabToElementNamed(page, (active) => active.tag === "BUTTON" && active.text.includes("Overlay another case"));
   await page.keyboard.press("Enter");
   await expect(page.getByLabel("Cross-case overlay investigation id")).toBeVisible();
@@ -131,6 +141,7 @@ test("entering a second investigation's id loads its own cross-case track, reach
 
   await page.goto("/keyboard/timeline-playback-harness.html");
 
+  await openMore(page);
   await tabToElementNamed(page, (active) => active.tag === "BUTTON" && active.text.includes("Overlay another case"));
   await page.keyboard.press("Enter");
   await tabToElementNamed(page, (active) => active.ariaLabel === "Cross-case overlay investigation id");
@@ -158,6 +169,12 @@ test("a case with no dated events says so, and offers neither a brush nor playba
   await expect(page.getByRole("status")).toHaveText(/No dated events in this case/);
   await expect(page.getByRole("button", { name: /Play/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Set exact dates" })).toHaveCount(0);
+  // Inside the overflow menu too (ADR-097 step 3): opened, it offers no way to set a window.
+  if ((await page.getByRole("button", { name: "More timeline options" }).count()) > 0) {
+    await openMore(page);
+    await expect(page.getByRole("group", { name: "More timeline options" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Set exact dates" })).toHaveCount(0);
+  }
   // Tab through the whole bar: nothing reachable can set a window or start a clock.
   for (let i = 0; i < 8; i++) {
     await page.keyboard.press("Tab");
@@ -165,6 +182,32 @@ test("a case with no dated events says so, and offers neither a brush nor playba
     expect(text).not.toMatch(/Play|exact dates/);
   }
   registerCovered("TIMELINE_PLAYBACK_ACTIONS", "no-dated-events-says-so-and-offers-no-brush-or-playback");
+});
+
+test("Density and Cyclical are one segmented switch in the header, changed by keyboard (ADR-097 step 3)", async ({ page }) => {
+  await page.route("**/*/v1/analytics/histogram", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(ONE_EVENT_HISTOGRAM) });
+  });
+  await page.goto("/keyboard/timeline-playback-harness.html");
+  const view = page.getByRole("group", { name: "Timeline view" });
+  await expect(view).toHaveClass(/segmented/);
+  await expect(view.getByRole("button", { name: "Density" })).toHaveAttribute("aria-pressed", "true");
+  await tabToElementNamed(page, (active) => active.tag === "BUTTON" && active.text === "Cyclical");
+  await page.keyboard.press("Enter");
+  await expect(view.getByRole("button", { name: "Cyclical" })).toHaveAttribute("aria-pressed", "true");
+  await expect(view.getByRole("button", { name: "Density" })).toHaveAttribute("aria-pressed", "false");
+  registerCovered("TIMELINE_PLAYBACK_ACTIONS", "timeline-mode-switch-by-keyboard");
+});
+
+test("a case whose events are all on one day is shown by the hour, and asks for hourly buckets", async ({ page }) => {
+  const intervals: (number | null | undefined)[] = [];
+  await page.route("**/*/v1/analytics/histogram", async (route) => {
+    intervals.push((route.request().postDataJSON() as { interval_seconds?: number | null }).interval_seconds);
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(ONE_EVENT_HISTOGRAM) });
+  });
+  await page.goto("/keyboard/timeline-playback-harness.html");
+  await expect(page.getByText("By the hour: every dated event is on one day")).toBeVisible();
+  expect(intervals).toContain(3600);
 });
 
 test("every registered timeline-playback action has its own proving test case above", () => {

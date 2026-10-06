@@ -187,7 +187,8 @@ test("A13–A15 — a judgement is recorded against the investigation", async ({
     .poll(() => nodeCount(page), { timeout: 30_000 })
     .toBeGreaterThan(0);
 
-  await page.getByRole("tab", { name: "Judgements" }).click();
+  // ADR-096: the Inspector's parts are accordion sections, not tabs; Judgements opens from its header.
+  await page.getByRole("button", { name: /^Judgements/ }).click();
   const add = page.getByRole("button", {
     name: "Add judgement, gap or assumption",
   });

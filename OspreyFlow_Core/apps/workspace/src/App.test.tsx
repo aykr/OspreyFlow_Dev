@@ -312,7 +312,7 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
 
     await screen.findByRole("button", { name: "Back to the investigation" });
     expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("ingest");
-    for (const gone of ["Graph", "Map", "Watches", "Export ⚙", "History"]) {
+    for (const gone of ["Graph", "Map", "Watches", "Export", "History"]) {
       expect(screen.queryByRole("button", { name: gone })).toBeNull();
     }
     expect(screen.queryByRole("combobox", { name: /search entities/i })).toBeNull();

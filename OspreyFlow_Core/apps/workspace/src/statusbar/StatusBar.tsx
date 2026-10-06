@@ -1,3 +1,5 @@
+import { Fragment } from "react";
+
 export interface StatusBarProps {
   nodeCount: number;
   edgeCount: number;
@@ -25,24 +27,29 @@ export function StatusBar({
   filteredCount,
   groupedCount = 0,
 }: StatusBarProps) {
+  const pairs: [number, string][] = [
+    [nodeCount, "nodes"],
+    [edgeCount, "edges"],
+    [dimmedCount, "dimmed by filter"],
+    [filteredCount, "hidden by handling"],
+    ...(groupedCount > 0 ? ([[groupedCount, "folded into groups"]] as [number, string][]) : []),
+  ];
+  // ADR-097 step 3: each count a pair, the number a literal value in mono beside its words, with a
+  // quiet separator between pairs.
   return (
-    <div
-      role="status"
-      className="value"
-      style={{
-        display: "flex",
-        gap: "var(--sp-12)",
-        padding: "var(--sp-8) var(--sp-16)",
-        borderTop: "1px solid var(--border-subtle)",
-        color: "var(--text-secondary)",
-        fontSize: "var(--fs-13)",
-      }}
-    >
-      <span>{nodeCount.toLocaleString()} nodes</span>
-      <span>{edgeCount.toLocaleString()} edges</span>
-      <span>{dimmedCount.toLocaleString()} dimmed by filter</span>
-      <span>{filteredCount.toLocaleString()} hidden by handling</span>
-      {groupedCount > 0 && <span>{groupedCount.toLocaleString()} folded into groups</span>}
+    <div role="status" className="status-bar">
+      {pairs.map(([count, words], i) => (
+        <Fragment key={words}>
+          {i > 0 && (
+            <span className="status-pair__sep" aria-hidden="true">
+              ·
+            </span>
+          )}
+          <span className="status-pair">
+            <span className="value">{count.toLocaleString("en-GB")}</span> {words}
+          </span>
+        </Fragment>
+      ))}
     </div>
   );
 }

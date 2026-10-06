@@ -1693,6 +1693,46 @@ test("the legend folds and opens by keyboard, and names the types in view", asyn
   registerCovered("CANVAS_ACTIONS", "legend-folds-by-keyboard");
 });
 
+// --- Reduced motion (02_GLASS_FRONTEND.md §3.4, ADR-097 step 3) ----------------------------------
+
+test("under reduced motion a new layout moves the nodes at once, and Show previous positions marks where they were", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/keyboard/harness.html");
+  const before = await layoutSettled(page, ["n0", "n1", "n2", "n3"]);
+  // No control until something has moved.
+  await expect(page.getByRole("button", { name: "Show previous positions" })).toHaveCount(0);
+  const layout = page.getByRole("combobox", { name: "Layout" });
+  await tabTo(page, layout);
+  await chooseOption(page, layout, "circular");
+  // An instant move: the nodes are at their new places within one frame or two, not 420ms later.
+  await page.waitForTimeout(80);
+  const soon = await page.evaluate((ids) => ids.map((id) => window.__CANVAS__?.viewportPositionOf(id)), ["n0", "n1", "n2", "n3"]);
+  const settled = await layoutSettled(page, ["n0", "n1", "n2", "n3"]);
+  expect(soon).toEqual(["n0", "n1", "n2", "n3"].map((id) => settled[id]));
+  expect(JSON.stringify(settled)).not.toEqual(JSON.stringify(before));
+
+  const show = page.getByRole("button", { name: "Show previous positions" });
+  await show.focus();
+  await expect(show).toBeFocused();
+  await expect(show).toHaveAttribute("aria-pressed", "false");
+  await page.keyboard.press("Enter");
+  await expect(show).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("img", { name: /^Where n0 was/ })).toHaveCount(1);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("img", { name: /^Where n0 was/ })).toHaveCount(0);
+  registerCovered("CANVAS_ACTIONS", "show-previous-positions-by-keyboard");
+});
+
+test("without reduced motion there is no Show previous positions control: the move itself shows what moved", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  await layoutSettled(page, ["n0"]);
+  const layout = page.getByRole("combobox", { name: "Layout" });
+  await tabTo(page, layout);
+  await chooseOption(page, layout, "circular");
+  await layoutSettled(page, ["n0"]);
+  await expect(page.getByRole("button", { name: "Show previous positions" })).toHaveCount(0);
+});
+
 test("every registered keyboard action has its own proving test case above", () => {
   assertAllCovered("CANVAS_ACTIONS", CANVAS_ACTIONS);
 });
