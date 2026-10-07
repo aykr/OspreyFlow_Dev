@@ -984,7 +984,7 @@ def test_scenario_b_over_the_wire(analyst: httpx.Client) -> None:
     assert ran.json()["mode"] == "sync"
 
     # === B20: save the pattern as a monitor.
-    saved = analyst.post("/v1/patterns/save", json={"name": "over-the-wire", "definition": pattern})
+    saved = analyst.post(_in_case("/v1/patterns/save"), json={"name": "over-the-wire", "definition": pattern})
     assert saved.status_code == 201, saved.text
     # `pattern_id` is the stable identity across saves; `id` identifies this one save
     # (ADR-032/036/040). A monitor watches the pattern, not one version of it.

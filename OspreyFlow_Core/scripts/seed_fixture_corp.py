@@ -32,7 +32,7 @@ from typing import cast
 
 from scripts.case_seed import add_case_arguments, check_case_arguments, scope_for
 from scripts.seed_support import KNOWN_STRAY_ADVICE, report_ids_stored_twice
-from services.api.dataset_scope import DatasetStampingGraph
+from services.api.dataset_scope import stamping
 from services.resolve.same_as_writer import write_same_as_edges
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
@@ -141,7 +141,7 @@ async def _run(args: argparse.Namespace) -> int:
     await client.create_database_if_absent()
     graph = cast(
         GraphPort,
-        DatasetStampingGraph(GraphArcadeDBAdapter(client, scheme), dataset=FIXTURE_CORP.id),
+        stamping(GraphArcadeDBAdapter(client, scheme), dataset=FIXTURE_CORP.id),
     )
     await graph.apply_schema(ontology)
 

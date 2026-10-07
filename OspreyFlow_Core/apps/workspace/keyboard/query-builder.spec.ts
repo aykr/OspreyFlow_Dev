@@ -168,10 +168,10 @@ test("Run executes the pattern and reports the matched count", async ({ page }) 
 test("Save writes the pattern and reports its new version, reachable by keyboard alone", async ({
   page,
 }) => {
-  await page.route("**/*/v1/patterns", async (route) => {
+  await page.route("**/*/v1/investigations/*/patterns", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ patterns: [] }) });
   });
-  await page.route("**/*/v1/patterns/save", async (route) => {
+  await page.route("**/*/v1/investigations/*/patterns/save", async (route) => {
     await route.fulfill({
       status: 201,
       contentType: "application/json",
@@ -206,7 +206,7 @@ test("Save writes the pattern and reports its new version, reachable by keyboard
 test("Load replaces the builder's own pattern with a previously saved one, reachable by keyboard alone", async ({
   page,
 }) => {
-  await page.route("**/*/v1/patterns", async (route) => {
+  await page.route("**/*/v1/investigations/*/patterns", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -225,7 +225,7 @@ test("Load replaces the builder's own pattern with a previously saved one, reach
       }),
     });
   });
-  await page.route("**/*/v1/patterns/pattern-1*", async (route) => {
+  await page.route("**/*/v1/investigations/*/patterns/pattern-1*", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",

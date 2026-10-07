@@ -175,9 +175,9 @@ POST   /v1/investigations/{id}/suggest     type-ahead: nodes whose identifiers s
 POST   /v1/investigations/{id}/paths       k-shortest paths between two entities, within the case's datasets (ADR-099)
 POST   /v1/investigations/{id}/patterns/preview   cardinality estimate for a visual query, within the case's datasets (ADR-099)
 POST   /v1/investigations/{id}/patterns/run   execute; large results return a job id, which keeps the case's datasets (ADR-099)
-POST   /v1/patterns/save                persist the calling principal's own pattern (a version bump if it exists)
-GET    /v1/patterns                     the calling principal's own saved patterns
-GET    /v1/patterns/{pattern_id}        load a saved pattern (?version= for an older one)
+POST   /v1/investigations/{id}/patterns/save   persist the calling principal's own pattern, in the case's first dataset (a version bump if it exists, in its own dataset), Editor (ADR-099 Amendment 3)
+GET    /v1/investigations/{id}/patterns   the calling principal's own saved patterns of the case's datasets (and any saved before ADR-099 Amendment 3, until placed), Viewer
+GET    /v1/investigations/{id}/patterns/{pattern_id}   load one of them (?version= for an older one); another dataset's is 404, as a missing one, Viewer
 POST   /v1/analytics/histogram          cross-filter histogram set
 POST   /v1/analytics/cross-filter       the same cross-filter, one histogram per requested dimension
 POST   /v1/analytics/first-seen         when each node and link first appears in the window, for the timeline's playback (ADR-087)
@@ -219,8 +219,8 @@ extracted from one. `inherited` is always set by the Conduit; a value sent by a 
 **Saved patterns are private to the principal who saved them.** `GET /v1/patterns` lists only the
 calling principal's own — `PatternStore.list_authorized` filters by owner in the query itself, not
 after fetching everything, and `GET /v1/patterns/{id}` applies the same authorization to a single
-load. Not investigation-scoped: a saved pattern is a reusable query shape, not part of any one
-investigation's own working set. `POST /v1/patterns/save` raises the identical
+load. Since ADR-099 Amendment 3 a saved pattern belongs to the dataset of the case it was saved in
+and is found only in a case reading that dataset, the dataset clause in the same query. `POST /v1/patterns/save` raises the identical
 `PatternNotFoundError` (404) when `pattern_id` names a pattern the caller does not own — the same
 existence-leak collapse every other route in this surface uses, enforced inside the save itself
 rather than a separate ownership check beforehand.

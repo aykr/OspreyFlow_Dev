@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS saved_patterns (
 );
 CREATE INDEX IF NOT EXISTS saved_patterns_pattern_id_idx ON saved_patterns (pattern_id);
 CREATE INDEX IF NOT EXISTS saved_patterns_owner_id_idx ON saved_patterns (owner_id);
+-- ADR-099 Amendment 3: the dataset a pattern belongs to; none for one saved before it.
+ALTER TABLE saved_patterns ADD COLUMN IF NOT EXISTS dataset_id TEXT;
 """
 
 
@@ -65,6 +67,19 @@ def _row_to_model(row: asyncpg.Record) -> SavedPattern:
         owner_id=row["owner_id"],
         created_at=row["created_at"],
         definition=PatternQuery.model_validate(json.loads(row["definition"])),
+        dataset_id=row["dataset_id"],
+    )
+
+
+def _in_reach(principal: Principal, position: int) -> tuple[str, list[object]]:
+    """ADR-099 Amendment 3, in the query itself: a pattern of one of the case's datasets, or one
+    saved before that names none. The Conduit's own unlimited work (`datasets is None`) reads
+    all."""
+    if principal.datasets is None:
+        return "", []
+    return (
+        f" AND (dataset_id = ANY(${position}::text[]) OR dataset_id IS NULL)",
+        [list(principal.datasets)],
     )
 
 
@@ -99,10 +114,13 @@ class PatternStore:
         if pattern_id is None:
             new_pattern_id = new_id()
             version = 1
+            dataset_id = principal.datasets[0] if principal.datasets else None
         else:
             existing = await self.get_authorized(pattern_id, principal)
             new_pattern_id = existing.pattern_id
             version = existing.version + 1
+            # A new version stays in its pattern's dataset (one saved before keeps none).
+            dataset_id = existing.dataset_id
 
         saved = SavedPattern(
             id=new_id(),
@@ -112,12 +130,13 @@ class PatternStore:
             owner_id=principal.id,
             created_at=datetime.now(UTC),
             definition=definition,
+            dataset_id=dataset_id,
         )
         async with self._pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO saved_patterns "
-                "(id, pattern_id, version, name, owner_id, created_at, definition) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                "(id, pattern_id, version, name, owner_id, created_at, definition, dataset_id) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
                 saved.id,
                 saved.pattern_id,
                 saved.version,
@@ -125,6 +144,7 @@ class PatternStore:
                 saved.owner_id,
                 saved.created_at,
                 json.dumps(saved.definition.model_dump(mode="json")),
+                saved.dataset_id,
             )
         return saved
 
@@ -134,15 +154,15 @@ class PatternStore:
         async with self._pool.acquire() as conn:
             if version is None:
                 row = await conn.fetchrow(
-                    "SELECT id, pattern_id, version, name, owner_id, created_at, definition "
-                    "FROM saved_patterns WHERE pattern_id = $1 "
+                    "SELECT id, pattern_id, version, name, owner_id, created_at, definition, "
+                    "dataset_id FROM saved_patterns WHERE pattern_id = $1 "
                     "ORDER BY version DESC LIMIT 1",
                     pattern_id,
                 )
             else:
                 row = await conn.fetchrow(
-                    "SELECT id, pattern_id, version, name, owner_id, created_at, definition "
-                    "FROM saved_patterns WHERE pattern_id = $1 AND version = $2",
+                    "SELECT id, pattern_id, version, name, owner_id, created_at, definition, "
+                    "dataset_id FROM saved_patterns WHERE pattern_id = $1 AND version = $2",
                     pattern_id,
                     version,
                 )
@@ -164,20 +184,25 @@ class PatternStore:
         and fixed once elsewhere in this codebase — not reintroduced here."""
         async with self._pool.acquire() as conn:
             if version is None:
+                reach, extra = _in_reach(principal, 3)
                 row = await conn.fetchrow(
-                    "SELECT id, pattern_id, version, name, owner_id, created_at, definition "
-                    "FROM saved_patterns WHERE pattern_id = $1 AND owner_id = $2 "
-                    "ORDER BY version DESC LIMIT 1",
+                    "SELECT id, pattern_id, version, name, owner_id, created_at, definition, "
+                    "dataset_id FROM saved_patterns WHERE pattern_id = $1 AND owner_id = $2"
+                    f"{reach} ORDER BY version DESC LIMIT 1",
                     pattern_id,
                     principal.id,
+                    *extra,
                 )
             else:
+                reach, extra = _in_reach(principal, 4)
                 row = await conn.fetchrow(
-                    "SELECT id, pattern_id, version, name, owner_id, created_at, definition "
-                    "FROM saved_patterns WHERE pattern_id = $1 AND owner_id = $2 AND version = $3",
+                    "SELECT id, pattern_id, version, name, owner_id, created_at, definition, "
+                    "dataset_id FROM saved_patterns WHERE pattern_id = $1 AND owner_id = $2 "
+                    f"AND version = $3{reach}",
                     pattern_id,
                     principal.id,
                     version,
+                    *extra,
                 )
         if row is None:
             raise PatternNotFoundError(pattern_id)
@@ -186,13 +211,15 @@ class PatternStore:
     async def list_authorized(self, principal: Principal) -> list[SavedPattern]:
         """The latest version of every pattern `principal` owns — never another principal's
         patterns, since sharing does not exist yet (ADR-040). Ordered most-recently-saved first."""
+        reach, extra = _in_reach(principal, 2)
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, pattern_id, version, name, owner_id, created_at, definition FROM ("
-                "  SELECT DISTINCT ON (pattern_id) * FROM saved_patterns"
-                "  WHERE owner_id = $1 ORDER BY pattern_id, version DESC"
+                "SELECT id, pattern_id, version, name, owner_id, created_at, definition, "
+                "dataset_id FROM (SELECT DISTINCT ON (pattern_id) * FROM saved_patterns"
+                f"  WHERE owner_id = $1{reach} ORDER BY pattern_id, version DESC"
                 ") latest ORDER BY created_at DESC",
                 principal.id,
+                *extra,
             )
         return [_row_to_model(row) for row in rows]
 

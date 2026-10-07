@@ -954,7 +954,7 @@ def test_phase8_exit_criterion_end_to_end(
             # === the common-contacts pattern's own definition as a monitor, then re-ingest a
             # === fresh matching Person/Endpoint pair and confirm it fires with the same shape.
             saved_pattern = client.post(
-                "/v1/patterns/save",
+                f"/v1/investigations/{inv_b_id}/patterns/save",
                 headers=headers,
                 json={
                     "pattern_id": None,

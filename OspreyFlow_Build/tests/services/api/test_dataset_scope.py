@@ -246,3 +246,40 @@ async def test_what_the_conduit_writes_onto_a_canvas_is_in_the_cases_dataset_the
     in_enron = ANALYST.model_copy(update={"datasets": ["enron"]})
     visible, _ = await service.visible_membership("case-e", in_enron)
     assert "email:1" in {n.id for n in visible}
+
+
+async def test_the_stamping_graph_is_a_bulk_loader_exactly_when_what_it_wraps_is() -> None:
+    """Seen on the owner's deployment: the Enron seed deleted its links to rewrite them and then
+    refused, "this graph adapter does not offer bulk loading", because a wrapper passing the method
+    on dynamically is not a `BulkGraphLoader` to Python's protocol check, which looks attributes up
+    statically. Checked with that same `isinstance`, as `seed_support.write_graph` asks it."""
+    from services.api.dataset_scope import stamping
+
+    from ports.graph import BulkGraphLoader
+
+    class _Bulk(_RecordingGraph):
+        def __init__(self) -> None:
+            super().__init__()
+            self.bulk: list[EdgeWrite] = []
+
+        async def bulk_load_edges(self, edges: list[EdgeWrite], **kwargs: Any) -> str:
+            self.bulk.extend(edges)
+            return "loaded"
+
+    plain = stamping(_RecordingGraph(), dataset="enron")  # type: ignore[arg-type]
+    assert not isinstance(plain, BulkGraphLoader)
+    inner = _Bulk()
+    bulky = stamping(inner, dataset="enron")  # type: ignore[arg-type]
+    assert isinstance(bulky, BulkGraphLoader)
+    link = EdgeWrite(
+        id="l1",
+        type="ASSOCIATE_OF",
+        source="a",
+        target="b",
+        provenance=PROVENANCE,
+        handling=HANDLING,  # type: ignore[arg-type]
+        created_by="x",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    assert await bulky.bulk_load_edges([link], chunk_size=10) == "loaded"
+    assert inner.bulk[0].datasets == ["enron"]

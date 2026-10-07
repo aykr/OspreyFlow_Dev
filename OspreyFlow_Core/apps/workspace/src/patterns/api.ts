@@ -58,15 +58,17 @@ export async function runPattern(
 export async function savePattern(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
   request: { pattern_id: string | null; name: string; definition: PatternQuery },
 ): Promise<SavedPattern> {
-  const response = await fetch(`${apiBaseUrl}/v1/patterns/save`, {
+  // ADR-099 Amendment 3: a saved pattern is the dataset's, saved and found within the case.
+  const response = await fetch(`${caseUrl(apiBaseUrl, investigationId)}/patterns/save`, {
     method: "POST",
     headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
     body: JSON.stringify(request),
   });
   if (!response.ok) {
-    throw new Error(`POST /v1/patterns/save failed: ${response.status}`);
+    throw new Error(`POST .../patterns/save failed: ${response.status}`);
   }
   return (await response.json()) as SavedPattern;
 }
@@ -74,12 +76,13 @@ export async function savePattern(
 export async function listPatterns(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
 ): Promise<SavedPattern[]> {
-  const response = await fetch(`${apiBaseUrl}/v1/patterns`, {
+  const response = await fetch(`${caseUrl(apiBaseUrl, investigationId)}/patterns`, {
     headers: { Authorization: `Bearer ${bearerToken}` },
   });
   if (!response.ok) {
-    throw new Error(`GET /v1/patterns failed: ${response.status}`);
+    throw new Error(`GET .../patterns failed: ${response.status}`);
   }
   const body = (await response.json()) as { patterns: SavedPattern[] };
   return body.patterns;
@@ -88,13 +91,17 @@ export async function listPatterns(
 export async function loadPattern(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
   patternId: string,
 ): Promise<SavedPattern> {
-  const response = await fetch(`${apiBaseUrl}/v1/patterns/${patternId}`, {
-    headers: { Authorization: `Bearer ${bearerToken}` },
-  });
+  const response = await fetch(
+    `${caseUrl(apiBaseUrl, investigationId)}/patterns/${encodeURIComponent(patternId)}`,
+    {
+      headers: { Authorization: `Bearer ${bearerToken}` },
+    },
+  );
   if (!response.ok) {
-    throw new Error(`GET /v1/patterns/${patternId} failed: ${response.status}`);
+    throw new Error(`GET .../patterns/${patternId} failed: ${response.status}`);
   }
   return (await response.json()) as SavedPattern;
 }

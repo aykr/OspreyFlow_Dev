@@ -35,7 +35,7 @@ from scripts.seed_support import (
     report_ids_stored_twice,
     write_graph,
 )
-from services.api.dataset_scope import DatasetStampingGraph
+from services.api.dataset_scope import stamping
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
@@ -238,7 +238,7 @@ async def _run(args: argparse.Namespace) -> int:
     try:
         await client.create_database_if_absent()
         graph = cast(
-            GraphPort, DatasetStampingGraph(GraphArcadeDBAdapter(client, scheme), dataset=ENRON.id)
+            GraphPort, stamping(GraphArcadeDBAdapter(client, scheme), dataset=ENRON.id)
         )
         await graph.apply_schema(ontology)
         if args.replace_graph:

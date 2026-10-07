@@ -100,12 +100,17 @@ def _checkout_mounts(repo_root: Path) -> list[str]:
     refreshed, so a script that imports something added since (ADR-058's `BulkGraphLoader`, which
     `seed_support` imports) fails with an ImportError unless the packages come from the checkout
     too, as the scripts do. One list for every container run, so no run can be left with the
-    image's older copy."""
+    image's older copy. `services` too, since ADR-099: the seeds write through
+    `services.api.dataset_scope` and make their case's datasets with `services.api.datasets`, and
+    the image's older copy of the stamping graph refused the Enron seed's bulk write after it had
+    deleted its links (7 October 2026)."""
     return [
         "-v",
         f"{repo_root}/scripts:/app/scripts:ro",
         "-v",
         f"{repo_root}/packages:/app/packages:ro",
+        "-v",
+        f"{repo_root}/services:/app/services:ro",
     ]
 
 

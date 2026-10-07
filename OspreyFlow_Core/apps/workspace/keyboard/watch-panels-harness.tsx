@@ -34,7 +34,7 @@ function Harness() {
   return (
     <div style={{ width: 480, display: "flex", flexDirection: "column", gap: 16 }}>
       <HotlistPanel apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" />
-      <MonitorPanel apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" />
+      <MonitorPanel apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" investigationId="inv-1" />
       <AlertInbox
         apiBaseUrl="http://keyboard-test.invalid"
         bearerToken="unused"

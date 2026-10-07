@@ -15,6 +15,7 @@ export type FromVar = string;
 export type ToVar = string;
 export type Edges = PatternEdge[];
 export type Limit = number;
+export type DatasetId = string | null;
 
 /**
  * A persisted `PatternQuery` — Phase 7 Stage 4's own "saveable ... and versioned" promise
@@ -33,6 +34,7 @@ export interface SavedPattern {
   owner_id: OwnerId;
   created_at: CreatedAt;
   definition: PatternQuery;
+  dataset_id?: DatasetId;
   [k: string]: unknown;
 }
 /**

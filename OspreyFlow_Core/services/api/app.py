@@ -199,7 +199,7 @@ from .compute_routes import (
     run_compute_metric_job,
 )
 from .config import ApiConfig, DeploymentModels
-from .dataset_scope import DatasetStampingGraph, outside_any_case, scope_to_case
+from .dataset_scope import outside_any_case, scope_to_case, stamping
 from .datasets import (
     CaseDatasetsRequest,
     CreateDatasetRequest,
@@ -439,7 +439,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # ADR-099: the services write through `DatasetStampingGraph`, so whatever the Conduit writes
     # for a case belongs to the case's dataset (`dataset_scope.py`).
     graph: GraphPort = cast(
-        GraphPort, DatasetStampingGraph(GraphArcadeDBAdapter(arcadedb_client, handling_scheme))
+        GraphPort, stamping(GraphArcadeDBAdapter(arcadedb_client, handling_scheme))
     )
     await graph.apply_schema(ontology)
 
@@ -2905,8 +2905,11 @@ async def patterns_run_route(
 # is nothing here for a share endpoint to do yet.
 
 
-@app.post("/v1/patterns/save", status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/v1/investigations/{investigation_id}/patterns/save", status_code=status.HTTP_201_CREATED
+)
 async def patterns_save_route(
+    investigation: InvestigationEditorDep,
     body: SavePatternRequest,
     principal: PrincipalDep,
     patterns_store: PatternsStoreDep,
@@ -2931,8 +2934,9 @@ async def patterns_save_route(
     return saved
 
 
-@app.get("/v1/patterns")
+@app.get("/v1/investigations/{investigation_id}/patterns")
 async def patterns_list_route(
+    investigation: InvestigationViewerDep,
     principal: PrincipalDep,
     patterns_store: PatternsStoreDep,
 ) -> SavedPatternList:
@@ -2941,8 +2945,9 @@ async def patterns_list_route(
     return SavedPatternList(patterns=await patterns_store.list_authorized(principal))
 
 
-@app.get("/v1/patterns/{pattern_id}")
+@app.get("/v1/investigations/{investigation_id}/patterns/{pattern_id}")
 async def patterns_load_route(
+    investigation: InvestigationViewerDep,
     pattern_id: str,
     principal: PrincipalDep,
     patterns_store: PatternsStoreDep,

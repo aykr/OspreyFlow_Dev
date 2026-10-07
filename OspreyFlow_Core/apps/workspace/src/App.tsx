@@ -986,7 +986,7 @@ export function App() {
             }}
           >
             <HotlistPanel apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} />
-            <MonitorPanel apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} />
+            <MonitorPanel apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} investigationId={investigationId} />
             <AlertInbox
               apiBaseUrl={API_BASE_URL}
               bearerToken={bearerToken}

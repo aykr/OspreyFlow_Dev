@@ -84,7 +84,7 @@ test("submitting the hotlist form creates a hotlist and it appears in the list, 
   await page.route("**/*/v1/monitors", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ monitors: [] }) });
   });
-  await page.route("**/*/v1/patterns", async (route) => {
+  await page.route("**/*/v1/investigations/*/patterns", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ patterns: [] }) });
   });
   await page.route("**/*/v1/alerts", async (route) => {
@@ -115,7 +115,7 @@ test("submitting the monitor form turns a saved pattern into a monitor, reachabl
   await page.route("**/*/v1/hotlists", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ hotlists: [] }) });
   });
-  await page.route("**/*/v1/patterns", async (route) => {
+  await page.route("**/*/v1/investigations/*/patterns", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -196,7 +196,7 @@ test("jumping from an alert calls the real jump route and shows the result, reac
   await page.route("**/*/v1/monitors", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ monitors: [] }) });
   });
-  await page.route("**/*/v1/patterns", async (route) => {
+  await page.route("**/*/v1/investigations/*/patterns", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ patterns: [] }) });
   });
   await page.route("**/*/v1/alerts", async (route) => {

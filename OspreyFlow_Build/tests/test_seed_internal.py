@@ -97,6 +97,10 @@ def test_scripts_and_data_are_mounted_read_only(repo: Path) -> None:
     call = _seed_call(_run_and_return(repo))
     mounts = [call[i + 1] for i, a in enumerate(call) if a == "-v"]
     assert f"{repo}/scripts:/app/scripts:ro" in mounts
+    # The code the seeds import, so no run takes the image's older copy (ADR-099: the stamping
+    # graph lives in `services`, and its older copy refused the Enron seed's bulk write).
+    assert f"{repo}/packages:/app/packages:ro" in mounts
+    assert f"{repo}/services:/app/services:ro" in mounts
     assert f"{repo.parent}/OspreyFlow_Data:/internal-data:ro" in mounts
     assert all(m.endswith(":ro") for m in mounts)
 

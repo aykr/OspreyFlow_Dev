@@ -45,7 +45,7 @@ from typing import cast
 import duckdb
 from scripts.case_seed import add_case_arguments, check_case_arguments, scope_for
 from scripts.seed_support import KNOWN_STRAY_ADVICE, report_ids_stored_twice
-from services.api.dataset_scope import DatasetStampingGraph
+from services.api.dataset_scope import stamping
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
@@ -97,7 +97,7 @@ async def _run(args: argparse.Namespace) -> int:
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database))
     await client.create_database_if_absent()
     graph = cast(
-        GraphPort, DatasetStampingGraph(GraphArcadeDBAdapter(client, scheme), dataset=HMP.id)
+        GraphPort, stamping(GraphArcadeDBAdapter(client, scheme), dataset=HMP.id)
     )
     await graph.apply_schema(ontology)
 

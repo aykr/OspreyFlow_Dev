@@ -61,7 +61,7 @@ from pathlib import Path
 from typing import cast
 
 import duckdb
-from services.api.dataset_scope import DatasetStampingGraph
+from services.api.dataset_scope import stamping
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
@@ -428,7 +428,7 @@ async def _run(args: argparse.Namespace) -> int:
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database))
     await client.create_database_if_absent()
     graph = cast(
-        GraphPort, DatasetStampingGraph(GraphArcadeDBAdapter(client, scheme), dataset=SCENARIOS.id)
+        GraphPort, stamping(GraphArcadeDBAdapter(client, scheme), dataset=SCENARIOS.id)
     )
     await graph.apply_schema(ontology)
     # ADR-099: the case these scenarios are written under reads their dataset.

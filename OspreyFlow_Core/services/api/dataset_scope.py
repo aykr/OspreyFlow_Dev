@@ -23,7 +23,7 @@ from collections.abc import Sequence
 from contextvars import ContextVar
 from typing import Any
 
-from ports.graph import GraphPort
+from ports.graph import BulkGraphLoader, GraphPort
 from schemas.domain import EdgeWrite, NodeId, NodeWrite, Principal
 
 from .datasets import DatasetStore
@@ -91,14 +91,9 @@ class DatasetStampingGraph:
         return self._inner
 
     def __getattr__(self, name: str) -> Any:
-        attribute = getattr(self._inner, name)
-        if name == "bulk_load_edges":
-
-            async def bulk_load_edges(edges: Sequence[EdgeWrite], **kwargs: Any) -> Any:
-                return await attribute(_stamp_edges(edges, self._into()), **kwargs)
-
-            return bulk_load_edges
-        return attribute
+        if name == "bulk_load_edges":  # only `BulkDatasetStampingGraph` has it: see `stamping`
+            raise AttributeError(name)
+        return getattr(self._inner, name)
 
     async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: Any) -> list[NodeId]:
         return await self._inner.upsert_nodes(_stamp_nodes(nodes, self._into()), tx)
@@ -107,8 +102,28 @@ class DatasetStampingGraph:
         return await self._inner.upsert_edges(_stamp_edges(edges, self._into()), tx)
 
 
+class BulkDatasetStampingGraph(DatasetStampingGraph):
+    """The same, over an adapter that is a `BulkGraphLoader`, and so one itself. The method is
+    declared here, not passed on by `__getattr__`: Python's runtime protocol check looks attributes
+    up statically, so a passed-on method does not make the wrapper a `BulkGraphLoader`, and the
+    Enron seed, asking that question, refused to write after deleting its links (7 October 2026)."""
+
+    async def bulk_load_edges(self, edges: Sequence[EdgeWrite], **kwargs: Any) -> Any:
+        inner: Any = self.inner
+        return await inner.bulk_load_edges(_stamp_edges(edges, self._into()), **kwargs)
+
+
+def stamping(inner: GraphPort, *, dataset: str | None = None) -> DatasetStampingGraph:
+    """The stamping graph over `inner`: a `BulkGraphLoader` exactly when `inner` is one."""
+    if isinstance(inner, BulkGraphLoader):
+        return BulkDatasetStampingGraph(inner, dataset=dataset)
+    return DatasetStampingGraph(inner, dataset=dataset)
+
+
 __all__: Sequence[str] = (
+    "BulkDatasetStampingGraph",
     "DatasetStampingGraph",
+    "stamping",
     "case_datasets",
     "outside_any_case",
     "scope_to_case",

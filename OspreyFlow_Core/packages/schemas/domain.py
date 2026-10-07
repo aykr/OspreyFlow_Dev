@@ -540,6 +540,9 @@ class SavedPattern(BaseModel):
     owner_id: str
     created_at: datetime
     definition: PatternQuery
+    #: ADR-099 Amendment 3: the dataset of the case it was saved in; its owner finds it only in a
+    #: case reading that dataset. `None` for one saved before, until `stamp_datasets` places it.
+    dataset_id: str | None = None
 
 
 class AlertMode(StrEnum):

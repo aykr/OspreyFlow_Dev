@@ -19,16 +19,18 @@ import { StatusBadge } from "./StatusBadge";
 export interface MonitorPanelProps {
   apiBaseUrl: string;
   bearerToken: string;
+  /** ADR-099 Amendment 3: the patterns offered are those of the case's datasets. */
+  investigationId: string;
 }
 
-export function MonitorPanel({ apiBaseUrl, bearerToken }: MonitorPanelProps) {
+export function MonitorPanel({ apiBaseUrl, bearerToken, investigationId }: MonitorPanelProps) {
   const [patterns, setPatterns] = useState<SavedPattern[]>([]);
   const [selectedPatternId, setSelectedPatternId] = useState("");
   const [monitors, setMonitors] = useState<Monitor[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    listPatterns(apiBaseUrl, bearerToken)
+    listPatterns(apiBaseUrl, bearerToken, investigationId)
       .then(setPatterns)
       .catch(() => undefined);
     listMonitors(apiBaseUrl, bearerToken)

@@ -85,7 +85,7 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, investigationId, sc
     // whose session can't reach `/v1/patterns` yet, sees an empty "Load" select rather than an
     // error banner before they have done anything. `handleSave`/`handleLoad` surface a real
     // `error` state for a failure the analyst actually triggered.
-    listPatterns(apiBaseUrl, bearerToken)
+    listPatterns(apiBaseUrl, bearerToken, investigationId)
       .then(setSavedPatterns)
       .catch(() => undefined);
     // Only ever needs to run once, on mount — `handleSave` and `handleLoad` each refresh the list
@@ -152,14 +152,14 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, investigationId, sc
     setError(null);
     setSaveStatus(null);
     try {
-      const saved = await savePattern(apiBaseUrl, bearerToken, {
+      const saved = await savePattern(apiBaseUrl, bearerToken, investigationId, {
         pattern_id: currentPatternId,
         name: patternName || "Untitled pattern",
         definition: toPatternQuery(pattern),
       });
       setCurrentPatternId(saved.pattern_id);
       setSaveStatus(`Saved as version ${saved.version}.`);
-      setSavedPatterns(await listPatterns(apiBaseUrl, bearerToken));
+      setSavedPatterns(await listPatterns(apiBaseUrl, bearerToken, investigationId));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -170,7 +170,7 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, investigationId, sc
     setError(null);
     setSaveStatus(null);
     try {
-      const saved = await loadPattern(apiBaseUrl, bearerToken, selectedPatternId);
+      const saved = await loadPattern(apiBaseUrl, bearerToken, investigationId, selectedPatternId);
       setPattern(fromPatternQuery(saved.definition));
       setCurrentPatternId(saved.pattern_id);
       setPatternName(saved.name);

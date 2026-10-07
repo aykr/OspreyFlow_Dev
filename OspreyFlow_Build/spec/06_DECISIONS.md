@@ -9973,3 +9973,25 @@ Status: accepted 7 October 2026 (the owner's ruling: "the scope of Glass feature
 4. **What already exists keeps working, inside the limit.** A record made before this amendment names no case. It is given the dataset of the case it was made in where that is recorded (an alert's case, a recipe's loads); otherwise a copy of it is given to each dataset its owner's cases read, which widens nothing, since a pattern, a hotlist identifier or a recipe holds no data of its own, and each copy is then evaluated only within its dataset.
 5. **Steps.** (a) link-type proposals by dataset; (b) saved patterns; (c) watches; (d) Studio recipes and source files; (e) the existing records, by `scripts.stamp_datasets`. Each with its conformance or store test first and an access test on every read path (rules 1, 4).
 
+## ADR-100 — Starting points for an analyst new to a dataset: an Explore panel
+
+Status: accepted 7 October 2026 (the owner: "if the analyst does not have background about a dataset this causes a challenge since they would not know what to start searching for. Can you propose some ideas"; eight ideas put to them, all four groups chosen, *empty canvas and rail* for where). Built after ADR-099 Amendment 3. ADR-099 is unchanged.
+
+### Decision
+
+1. **An *Explore* panel**, shown in the canvas while the view is empty and always reachable as *Explore* on the left rail, for the case it is opened in. Everything in it is read within the case's datasets and the analyst's clearance, and anything in it puts what it names on the canvas (or, for a time, the timeline's window) with one action.
+2. **What the dataset holds:** the count of each entity type and each link type, and the time its events span (first and last).
+3. **Most connected:** the 10 nodes with the most links. Broadcast addresses (a mailing list writing to hundreds) can be left out, by a threshold of recipients per message shown with the list.
+4. **Browse by entity type:** each type with its count and its 5 most connected members, opening to every member, paged and sorted by connections.
+5. **Busiest links and moments:** the pairs with the most messages between them, and the days with the most events.
+6. **Groups and bridges:** the largest communities with each one's most central member, and the nodes joining otherwise separate groups.
+7. **What is new:** the latest loads into the dataset, and entities colleagues confirmed or marked in it recently.
+8. **Starter questions:** a short list of query-builder patterns that suit the dataset's types (people who wrote to two of the same people; addresses sharing a name), each run with one action.
+
+### Constraints it is built to
+
+- **Every count and ranking is the analyst's own** (rules 3 and 7). Counts, degrees and rankings are computed in the store with the access step every read uses, so a node the analyst cannot see is never counted, ranked or named. Where a ranking is precomputed for speed it is kept per dataset and per handling class, never once for everyone and filtered afterwards.
+- **Cost.** Ranking 234,000 Enron links on each opening is too slow, so the rankings are computed after each load into a dataset and kept; the panel says when they were computed.
+- **Nothing is truncated silently** (rule 2): a "top 10" says it is the top 10 of how many, and the browse list pages rather than stops.
+- **Keyboard** (rule 13): every item is reachable and actionable by keyboard, with its own case in a keyboard spec.
+

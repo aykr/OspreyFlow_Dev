@@ -38,7 +38,7 @@ from scripts.seed_support import (
     vault_locations,
     write_graph,
 )
-from services.api.dataset_scope import DatasetStampingGraph
+from services.api.dataset_scope import stamping
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
@@ -343,7 +343,7 @@ async def _repair(args: argparse.Namespace) -> int:
     try:
         graph = cast(
             GraphPort,
-            DatasetStampingGraph(
+            stamping(
                 GraphArcadeDBAdapter(client, load_uk_le_scheme()), dataset=PAYSIM.id
             ),
         )
@@ -442,7 +442,7 @@ async def _run(args: argparse.Namespace) -> int:
             await reset_graph_database(client, database=database)
         await client.create_database_if_absent()
         graph = cast(
-            GraphPort, DatasetStampingGraph(GraphArcadeDBAdapter(client, scheme), dataset=PAYSIM.id)
+            GraphPort, stamping(GraphArcadeDBAdapter(client, scheme), dataset=PAYSIM.id)
         )
         await graph.apply_schema(ontology)
         if args.replace_graph and not args.reset_graph_database:
