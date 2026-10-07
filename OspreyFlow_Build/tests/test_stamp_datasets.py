@@ -245,3 +245,48 @@ def test_the_seeds_unit_is_the_one_every_case_is_in_unless_told() -> None:
     with pytest.raises(SystemExit, match="more than one unit"):
         unit_for(None, [*verify, CaseRow("c", "C", "unit-2", None)])
 
+
+async def test_what_was_derived_from_a_datasets_data_joins_that_dataset(store: _Store) -> None:
+    """Seen on the owner's deployment after the first run: email Documents and an entity found in
+    one, each taken off the canvas before ADR-099, and `SAME_AS` links written by resolution, were
+    left in no dataset. Each follows what it was made from: a Document the datasets shared by what
+    it is linked to, an entity the Document it was found in, a link the datasets its ends share."""
+    a, b = store.ids["enron_a"], store.ids["enron_b"]
+    email = _person("email:enron-ev-1").model_copy(
+        update={"id": "email:enron-ev-1", "type": "Document", "properties": {"title": "Re: plant"}}
+    )
+    found = _person("email:enron-ev-1")  # an entity extracted from that email
+    fixture_twin = _person("fixture-corp", load_id=f"fixture-corp:{FIXTURE_CASE.id}")
+    tx = await store.graph.begin_transaction()
+    await store.graph.upsert_nodes([email, found, fixture_twin], tx)
+    await store.graph.upsert_edges(
+        [
+            _link(a, email.id, "email:enron-ev-1").model_copy(update={"type": "MENTIONED_IN"}),
+            _link(b, email.id, "email:enron-ev-1").model_copy(update={"type": "MENTIONED_IN"}),
+            _link(store.ids["fixture"], fixture_twin.id, "splink").model_copy(
+                update={"type": "SAME_AS"}
+            ),
+            _link(a, store.ids["fixture"], "splink").model_copy(update={"type": "SAME_AS"}),
+        ],
+        tx,
+    )
+    await store.graph.commit_transaction(tx)
+
+    await store.run()
+
+    everything = EVERYONE  # unlimited, to read what each element was given
+    email_now = await store.graph.get_node(email.id, everything)
+    found_now = await store.graph.get_node(found.id, everything)
+    assert email_now is not None and email_now.datasets == ["enron"]
+    assert found_now is not None and found_now.datasets == ["enron"]
+    mentions = await store.graph.edges_among([a, b, email.id], everything, ["MENTIONED_IN"])
+    assert {tuple(e.datasets) for e in mentions} == {("enron",)}
+    same = {
+        frozenset((e.source, e.target)): e.datasets
+        for e in await store.graph.edges_among(
+            [a, store.ids["fixture"], fixture_twin.id], everything, ["SAME_AS"]
+        )
+    }
+    assert same[frozenset((store.ids["fixture"], fixture_twin.id))] == ["fixture-corp"]
+    # Across two datasets: in none, as resolution now writes it.
+    assert same[frozenset((a, store.ids["fixture"]))] == []

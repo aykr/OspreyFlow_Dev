@@ -73,6 +73,7 @@ class StampReport:
     case_datasets: dict[str, list[str]] = field(default_factory=dict)
     own_datasets_made: list[str] = field(default_factory=list)
     canvas_stamped: int = 0
+    derived: int = 0
     refused: list[str] = field(default_factory=list)
     unstamped: dict[str, int] = field(default_factory=dict)
 
@@ -86,9 +87,102 @@ class _Sql:
     async def query(self, command: str, params: dict[str, Any] | None = None) -> list[Any]:
         return list(await self._client.sql(command, params=params or {}))
 
+    async def gremlin(self, command: str) -> list[Any]:
+        return list(await self._client.gremlin(command))
+
     async def count(self, command: str, params: dict[str, Any] | None = None) -> int:
         rows = await self.query(command, params)
         return int(rows[0].get("count", 0)) if rows else 0
+
+
+def _shared(lists: Sequence[Sequence[str]]) -> list[str]:
+    """The datasets every one of `lists` holds; none if any holds none."""
+    if not lists:
+        return []
+    common = set(lists[0])
+    for more in lists[1:]:
+        common &= set(more)
+    return sorted(common)
+
+
+def _flat(value: Any) -> list[str]:
+    """A `values("datasets").fold()` of one element: `[[a, b]]`, or `[]` when it has none."""
+    out: list[str] = []
+    for item in value or []:
+        out.extend(item if isinstance(item, list) else [item])
+    return out
+
+
+async def _set_datasets(
+    sql: _Sql, type_name: str, placed: dict[str, list[str]], *, write: bool
+) -> int:
+    if not write:
+        return len(placed)
+    by_datasets: dict[tuple[str, ...], list[str]] = {}
+    for element_id, datasets in placed.items():
+        by_datasets.setdefault(tuple(datasets), []).append(element_id)
+    for held, ids in by_datasets.items():
+        for start in range(0, len(ids), LOOKUP_BATCH):
+            await sql.query(
+                f"UPDATE {type_name} SET datasets = :ds WHERE id IN :ids AND {_IN_NO_DATASET}",
+                {"ds": list(held), "ids": ids[start : start + LOOKUP_BATCH]},
+            )
+    return len(placed)
+
+
+async def _derive(sql: _Sql, ontology: OntologySchema, *, write: bool) -> int:
+    count = 0
+    unplaced = 'filter(or(hasNot("datasets"), values("datasets").unfold().count().is(0)))'
+    # A Document: the datasets shared by everything linked to it.
+    document = physical_type_name("Document")
+    if any(t.name == "Document" for t in ontology.entity_types):
+        rows = await sql.gremlin(
+            f'g.V().hasLabel("{document}").{unplaced}.project("id","n")'
+            '.by(values("id")).by(both().values("datasets").fold())'
+        )
+        placed = {}
+        for row in rows:
+            # A projection comes back as the map itself, each neighbour's list one item of `n`.
+            r = row.get("result", row)
+            neighbours = [list(n) for n in r["n"] if n]
+            shared = _shared(neighbours)
+            if shared:
+                placed[r["id"]] = shared
+        count += await _set_datasets(sql, document, placed, write=write)
+    # An entity found in a Document: that Document's datasets.
+    node_types = [physical_type_name(t.name) for t in ontology.entity_types]
+    holders: dict[str, list[str]] = {}
+    for type_name in node_types:
+        rows = await sql.query(
+            f"SELECT id, provenance.sources.document_id AS d FROM {type_name} "
+            f"WHERE {_IN_NO_DATASET}"
+        )
+        cited = {str(r["id"]): [str(d) for d in (r.get("d") or [])] for r in rows}
+        wanted = sorted({d for ds in cited.values() for d in ds} - set(holders))
+        if wanted:
+            holders.update(await _datasets_by_id(sql, node_types, wanted))
+        placed = {}
+        for element_id, sources in cited.items():
+            found = [holders[d] for d in sources if holders.get(d)]
+            if found:
+                placed[element_id] = sorted({d for ds in found for d in ds})
+        count += await _set_datasets(sql, type_name, placed, write=write)
+    # A link: the datasets its two ends share.
+    for edge in ontology.edge_types:
+        label = physical_type_name(edge.name)
+        rows = await sql.gremlin(
+            f'g.E().hasLabel("{label}").{unplaced}.project("id","a","b")'
+            '.by(values("id")).by(outV().values("datasets").fold())'
+            '.by(inV().values("datasets").fold())'
+        )
+        placed = {}
+        for row in rows:
+            r = row.get("result", row)
+            shared = _shared([_flat(r["a"]), _flat(r["b"])])
+            if shared:
+                placed[r["id"]] = shared
+        count += await _set_datasets(sql, label, placed, write=write)
+    return count
 
 
 def _type_names(ontology: OntologySchema) -> list[str]:
@@ -211,6 +305,16 @@ async def stamp(
         report.stamped_by_source[seed.id] = total
         say(f"  {seed.name}: {total:,} elements {'stamped' if write else 'to stamp'}")
 
+    # 2a. What was derived from data joins the data it was derived from (as resolution now writes
+    # a `SAME_AS`): a Document the datasets shared by what it is linked to, an entity the Document
+    # it was found in, a link the datasets its two ends share. In that order, since each reads
+    # what the one before it placed.
+    report.derived = await _derive(sql, ontology, write=write)
+    say(
+        f"  derived from stamped data: {report.derived:,} elements "
+        f"{'stamped' if write else 'to stamp'}"
+    )
+
     # 3 to 5, per case, parents first.
     for case in _parents_first(cases):
         held = await datasets.ids_of_case(case.id)
@@ -306,9 +410,7 @@ async def stamp(
 
     # What is left in no dataset, named as such.
     for type_name in types:
-        left = await sql.count(
-            f"SELECT count(*) AS count FROM {type_name} WHERE {_IN_NO_DATASET}"
-        )
+        left = await sql.count(f"SELECT count(*) AS count FROM {type_name} WHERE {_IN_NO_DATASET}")
         if left:
             report.unstamped[logical_type_name(type_name)] = left
     if report.unstamped:
