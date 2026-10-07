@@ -56,7 +56,10 @@ ENRON_CASE = CaseRow("case-enron", "Enron corpus (real data, this machine only)"
 FIXTURE_CASE = CaseRow("case-fixture", "Fixture Corp (synthetic demo)", "unit-1", None)
 BRANCH = CaseRow("case-branch", "Branch of Fixture Corp", "unit-1", "case-fixture")
 SCRATCH = CaseRow("case-scratch", "Scratch", "unit-1", None)
-CASES = [BRANCH, ENRON_CASE, FIXTURE_CASE, SCRATCH]  # a branch listed before its parent
+#: Seen on the owner's deployment: the HMP seed's load ids do not name its case, so with an empty
+#: canvas only its case name says what it holds.
+HMP_CASE = CaseRow("case-hmp", "HMP fixture (synthetic demo)", "unit-1", None)
+CASES = [BRANCH, ENRON_CASE, FIXTURE_CASE, SCRATCH, HMP_CASE]  # a branch before its parent
 
 
 def _person(source: str, *, load_id: str | None = None) -> NodeWrite:
@@ -174,6 +177,7 @@ async def test_a_store_loaded_before_adr_099_is_given_its_datasets(store: _Store
     assert await store.datasets.ids_of_case(ENRON_CASE.id) == ["enron"]
     assert await store.datasets.ids_of_case(FIXTURE_CASE.id) == ["fixture-corp"]
     assert await store.datasets.ids_of_case(BRANCH.id) == ["fixture-corp"]
+    assert await store.datasets.ids_of_case(HMP_CASE.id) == ["hmp"]
     (own,) = await store.datasets.of_case(SCRATCH.id)
     assert own.name == "Scratch" and own.owning_unit == "unit-1"
 
@@ -207,3 +211,26 @@ async def test_running_it_again_changes_nothing(store: _Store) -> None:
     assert again.stamped_by_source == {d: 0 for d in again.stamped_by_source}
     assert await store.datasets_of("enron_a") == ["enron"]
     assert again.own_datasets_made == []
+
+
+def test_every_seeds_case_name_is_known_to_the_stamping() -> None:
+    """The case each seed makes (`seed_internal.DATASETS`, host-side) is recognised by name by the
+    stamping (`demo_fixtures.datasets`, in the image), so a seed whose load ids do not name its
+    case is still read by it, and the two lists cannot drift apart."""
+    from scripts.seed_internal import DATASETS
+    from scripts.stamp_datasets import SEED_CASE_NAMES
+
+    assert {
+        name: SEED_CASE_NAMES.get(name) for name in (d.case_name for d in DATASETS.values())
+    } == {d.case_name: key for key, d in DATASETS.items()}
+
+
+def test_the_seeds_unit_is_the_one_every_case_is_in_unless_told() -> None:
+    from scripts.stamp_datasets import unit_for
+
+    verify = [CaseRow("a", "A", "verify", None), CaseRow("b", "B", "verify", None)]
+    assert unit_for(None, verify) == "verify"
+    assert unit_for("unit-1", verify) == "unit-1"
+    with pytest.raises(SystemExit, match="more than one unit"):
+        unit_for(None, [*verify, CaseRow("c", "C", "unit-2", None)])
+

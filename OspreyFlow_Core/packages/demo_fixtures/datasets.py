@@ -15,12 +15,31 @@ class SeedDataset:
     id: str
     name: str
     source: str
+    #: The case the seed makes (`scripts/seed_internal.py`'s `DATASETS`), if it makes one.
+    case_name: str | None = None
 
 
-ENRON = SeedDataset(id="enron", name="Enron corpus", source="enron-corpus")
-FIXTURE_CORP = SeedDataset(id="fixture-corp", name="Fixture Corp", source="fixture-corp")
-HMP = SeedDataset(id="hmp", name="HMP fixture", source="hmp-fixture")
-PAYSIM = SeedDataset(id="paysim", name="PaySim", source="paysim-dataset")
+ENRON = SeedDataset(
+    id="enron",
+    name="Enron corpus",
+    source="enron-corpus",
+    case_name="Enron corpus (real data, this machine only)",
+)
+FIXTURE_CORP = SeedDataset(
+    id="fixture-corp",
+    name="Fixture Corp",
+    source="fixture-corp",
+    case_name="Fixture Corp (synthetic demo)",
+)
+HMP = SeedDataset(
+    id="hmp", name="HMP fixture", source="hmp-fixture", case_name="HMP fixture (synthetic demo)"
+)
+PAYSIM = SeedDataset(
+    id="paysim",
+    name="PaySim",
+    source="paysim-dataset",
+    case_name="PaySim mobile money (internal)",
+)
 SCENARIOS = SeedDataset(id="scenarios", name="Acceptance scenarios", source="fixture")
 
 SEED_DATASETS: tuple[SeedDataset, ...] = (ENRON, FIXTURE_CORP, HMP, PAYSIM, SCENARIOS)

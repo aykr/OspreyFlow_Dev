@@ -48,11 +48,9 @@ from demo_fixtures.datasets import SEED_DATASETS, SeedDataset
 from ontology.loader import load_default_ontology
 from schemas.domain import OntologySchema, Principal
 
-#: The case names the seeds that make their own case use (`seed_enron`, `seed_paysim`).
-SEED_CASE_NAMES: dict[str, str] = {
-    "Enron corpus (real data, this machine only)": "enron",
-    "PaySim mobile money (internal)": "paysim",
-}
+#: The case each seed makes, by name: with an empty canvas and load ids that do not name the case
+#: (the HMP seed's), the name is all that says what it holds.
+SEED_CASE_NAMES: dict[str, str] = {d.case_name: d.id for d in SEED_DATASETS if d.case_name}
 #: Seeds whose load id names the case they loaded into: `<prefix>:<investigation id>`.
 SEED_LOAD_PREFIXES: dict[str, str] = {"fixture-corp": "fixture-corp", "scenarios": "scenarios"}
 LOOKUP_BATCH = 500
@@ -321,12 +319,31 @@ async def stamp(
     return report
 
 
+def unit_for(given: str | None, cases: Sequence[CaseRow]) -> str:
+    """The unit the seeds' datasets are registered under. Seen on the owner's deployment: the
+    cases were the `verify` unit's while the old default was `unit-1`, so every seed dataset would
+    have been refused to them. With no unit given, the one unit all cases share; never a guess."""
+    if given:
+        return given
+    units = sorted({c.owning_unit for c in cases})
+    if len(units) == 1:
+        return units[0]
+    raise SystemExit(
+        "The cases are in more than one unit (" + ", ".join(units) + "): say which owns the "
+        "seeds' datasets with --org-unit."
+    )
+
+
 def _parse(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="python -m scripts.stamp_datasets", description=__doc__)
     parser.add_argument(
         "--dry-run", action="store_true", help="Say what it would do; write nothing."
     )
-    parser.add_argument("--org-unit", default=os.environ.get("OSPREY_ORG_UNIT", "unit-1"))
+    parser.add_argument(
+        "--org-unit",
+        default=os.environ.get("OSPREY_ORG_UNIT"),
+        help="The unit the seeds' datasets belong to. Left out: the one unit every case is in.",
+    )
     return parser.parse_args(argv)
 
 
@@ -340,14 +357,15 @@ async def _main(argv: list[str] | None = None) -> int:
     datasets = await PostgresDatasetStore.connect(dsn)
     valkey_config = ValkeyConfig.from_env()
     valkey = Valkey(host=valkey_config.host, port=valkey_config.port, db=valkey_config.db)
+    cases = await _cases(dsn)
     try:
         await stamp(
             sql=_Sql(client),
             ontology=load_default_ontology(),
             datasets=datasets,
             working_sets=ValkeyWorkingSetStore(valkey),
-            cases=await _cases(dsn),
-            org_unit=args.org_unit,
+            cases=cases,
+            org_unit=unit_for(args.org_unit, cases),
             write=write,
         )
     finally:
