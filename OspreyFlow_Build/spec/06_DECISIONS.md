@@ -10015,3 +10015,29 @@ Status: accepted 7 October 2026 (mine, within the owner's "go ahead with all fiv
 2. **A saved pattern, hotlist, monitor or Studio recipe made before Amendment 3 is not copied.** None of them records a case, so a copy per dataset would be a guess multiplied: a monitor copied into every dataset raises alerts in each, and a recipe copied twice would publish into a dataset it was never meant for. Each stays, naming no dataset, readable in every case of its owner (`reach_clause`'s legacy branch), and the script counts them per table so the owner can see what is left. Copying, if wanted, is a choice an analyst makes in the case, not one a script makes for them.
 3. **What it rests on, measured:** the owner's deployment held none of these records when this was written (link_type_proposals, saved_patterns, hotlists, monitors, alerts and studio_recipes all 0), so nothing is lost by not copying there. A deployment whose tables do not yet have the `dataset_id` column (the Conduit adds it at start-up) is told so per table, not failed.
 4. **Tests:** `tests/test_stamp_records.py`, against real Postgres: the case's first dataset is taken (red with the last planted instead), a record with no case is counted and not placed, a dry run writes nothing (red with the write guard removed), a second run moves nothing.
+
+## ADR-101 — ArcadeDB 26.10.1: an update no longer hides other records from an index
+
+Status: accepted 7 October 2026 (the owner, offered a workaround on 25.5.1 or the upgrade, chose "Upgrade to 26.10.1 now"). Supersedes the pin of `05_DEPLOYMENT.md` §8 ("ArcadeDB 25.5.1, now the pinned version"); nothing else there changes.
+
+### Context
+
+Found building ADR-100's conformance cases: a read of one entity type found none of its nodes once one of them had been reverted. Measured in plain SQL over HTTP, with none of this repository's code: on ArcadeDB 25.5.1, three records share a value under a `NOTUNIQUE` index, one record's value changes, and a lookup of that value finds **0** of the other 2; a scan finds 2, and `REBUILD INDEX` restores the lookup. The same three steps on 26.10.1 find 2. Every in-place change of an indexed value triggers it: a revert (`reverted`), a re-write with new handling, an edited property. Every read whose entry point is a type and an indexed value is affected: `list_nodes` (resolution's corpus read), search and suggestions, the type-filtered Explore reads, and `scripts.stamp_datasets`' SQL. The owner's deployment already disagreed with itself with no revert ever made, read-only and measured: `PRESENT_AT` 610 links by scan, 606 by index; `COMMUNICATED_WITH` 49,501 and 49,500.
+
+### Decision
+
+1. **The pin is `arcadedata/arcadedb:26.10.1`** in `harness/render.py` (the rendered deployment) and `deploy/compose/dev.yaml`. The owner's `Makefile` and `.github/workflows/ci.yml` carry the old tag and are changed by the owner (lines named in the friction log).
+2. **Gremlin runs on 26.10.1's Groovy engine** (`-Darcadedb.gremlin.engine=groovy`). Its default parser, TinkerPop's grammar, refuses bound variables (`within(ids)`) and closures, which the edge writes and the bulk loader are built from; 25.5.1 was already running them as Groovy, so the posture does not change. 26.10.1 runs Groovy over HTTP only for `root` (security advisory GHSA-h2j4-28h8-cj5v), which is the user the adapter connects as. Rewriting the adapter's Gremlin for the grammar parser, so the setting can go, is recorded as future work, not done.
+3. **The client reads 26's map results as 25.5.1's** (`client._gremlin_row`): a map arrives as `{"result": [{"key", "value"}, ...]}`, and `elementMap()` lists the record id before the `id` property, so a later entry wins, as it did.
+4. **A store moved from 25.5.1 is upgraded in place and its indexes rebuilt.** ArcadeDB converts the files on first open; `REBUILD INDEX *` then repairs what 25.5.1 lost. A backup is taken first: a minor-version downgrade needs an export and re-import, not the old image.
+
+### Tests
+
+- `tests/conformance/graph_port/test_suite.py`: reverting, correcting and re-writing one of three nodes leaves the others listed (the revert case red on 25.5.1, all green on 26.10.1). The whole graph conformance suite on 26.10.1: 116 of 117 pass, the one failure the golden-text case that fails on 25.5.1 too.
+- `tests/adapters/graph_arcadedb/test_client_map_results.py`: the entry shape, nested maps, scalars left alone, the `id` property over the record id (red with the first entry winning).
+- `tests/harness/test_render.py::test_arcadedb_is_a_version_whose_indexes_survive_an_update_and_runs_our_gremlin` (red on the old render).
+- The ArcadeDB-backed adapter, seed, stamping, resolution and ingest tests on 26.10.1: 205 pass; 8 fail for want of MinIO, as they do on 25.5.1.
+
+### Not measured
+
+26.10.1's memory over a sustained load (`05_DEPLOYMENT.md` §8 was measured on 25.5.1); its refusal of a write computed from a stale read (a retryable `ConcurrentModificationException`, new in 26.10.1), which no case here exercises under concurrent writers; the upgrade of the owner's deployment itself, done after the Enron reload with their agreement.

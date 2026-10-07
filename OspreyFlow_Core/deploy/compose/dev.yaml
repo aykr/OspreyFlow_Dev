@@ -19,11 +19,12 @@
 # defaults to 5433 to match, so no env configuration is still needed.
 services:
   arcadedb:
-    image: arcadedata/arcadedb:25.5.1
+    # ADR-101: 26.10.1, with Gremlin on its Groovy engine (see `harness/render.py`).
+    image: arcadedata/arcadedb:26.10.1
     ports:
       - "2480:2480"
     environment:
-      JAVA_OPTS: "-Darcadedb.server.rootPassword=playwithdata123"
+      JAVA_OPTS: "-Darcadedb.server.rootPassword=playwithdata123 -Darcadedb.gremlin.engine=groovy"
       # Unset, the image's own default heap is ~25% of the memory Docker
       # exposes to the container (JVM ergonomics, not a value this image
       # hardcodes) — around 2GB on this machine's ~7.6GB Docker VM, which

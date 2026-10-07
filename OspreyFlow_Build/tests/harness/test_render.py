@@ -1189,6 +1189,21 @@ def test_arcadedb_gets_an_explicit_heap_rather_than_jvm_ergonomics(rendered: Ren
     )
 
 
+def test_arcadedb_is_a_version_whose_indexes_survive_an_update_and_runs_our_gremlin(
+    rendered: RenderResult,
+) -> None:
+    """ADR-101: ArcadeDB 25.5.1 lost every other record from a NOTUNIQUE index key when one
+    record's value under it changed, so a revert hid every node of its type from a typed read. The
+    rendered store is 26.10.1, where that was measured fixed, and runs Gremlin on its Groovy engine:
+    26.10.1's default grammar parser refuses the adapter's bound variables and closures, so without
+    the setting every write fails. The planted violations are the real shapes: the old tag, and the
+    setting absent from `JAVA_OPTS`."""
+    document = yaml.safe_load(rendered.artefacts["compose.yaml"])
+    service = document["services"]["arcadedb"]
+    assert service["image"] == "arcadedata/arcadedb:26.10.1"
+    assert "-Darcadedb.gremlin.engine=groovy" in service["environment"]["JAVA_OPTS"].split()
+
+
 def test_the_conduits_config_mount_is_relative_to_the_compose_file_not_the_repository(
     rendered: RenderResult,
 ) -> None:

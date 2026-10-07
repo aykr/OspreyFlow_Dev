@@ -2930,3 +2930,57 @@ async def test_a_changed_link_keeps_its_datasets(factory: GraphAdapterFactory) -
         await adapter.commit_transaction(tx)
         (seen,) = await adapter.edges_among([a, b], IN_FIXTURE)
         assert seen.id == changed and seen.datasets == ["fixture"]
+
+
+# --- A value changed in place leaves every other record findable ---------------
+#
+# ArcadeDB 25.5.1 lost every other record from a NOTUNIQUE index key when one record's value under
+# that key changed (measured in plain SQL: three records share a key, one changes, a lookup finds 0
+# of the other 2). Every write that changes an indexed value in place is a trigger: a revert, a
+# correction (the old revision's `superseded_by`), a re-write with new handling. Each case below
+# changes one of three and reads the type back by a read whose entry point is that type.
+
+
+async def _three_people(adapter: GraphPort) -> list[NodeWrite]:
+    people = [_node("Person", classification="OFFICIAL") for _ in range(3)]
+    await _write(adapter, people, [])
+    return people
+
+
+async def _listed(adapter: GraphPort) -> set[str]:
+    page = await adapter.list_nodes("Person", CLEARED, limit=100)
+    return {n.id for n in page.nodes}
+
+
+async def test_reverting_one_node_leaves_the_others_of_its_type_listed(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        people = await _three_people(adapter)
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([people[0].id], [], tx)
+        await adapter.commit_transaction(tx)
+        assert await _listed(adapter) == {people[1].id, people[2].id}
+
+
+async def test_correcting_one_node_leaves_the_others_of_its_type_listed(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        people = await _three_people(adapter)
+        replacement = _node("Person", classification="OFFICIAL")
+        tx = await adapter.begin_transaction()
+        await adapter.supersede_node(people[0].id, replacement, tx)
+        await adapter.commit_transaction(tx)
+        assert await _listed(adapter) == {people[1].id, people[2].id, replacement.id}
+
+
+async def test_rewriting_one_node_with_new_handling_leaves_the_others_listed(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        people = await _three_people(adapter)
+        handling = people[0].handling.model_copy(update={"handling_code": "C"})
+        changed = people[0].model_copy(update={"handling": handling})
+        await _write(adapter, [changed], [])
+        assert await _listed(adapter) == {p.id for p in people}

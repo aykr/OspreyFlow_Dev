@@ -412,7 +412,8 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
         _owned("ner", "services/ner/Dockerfile"),
     ]
     if config.components.graph_store.value == "arcadedb":
-        images.append(ServiceImage("arcadedb", "arcadedata/arcadedb:25.5.1"))
+        # ADR-101: 26.10.1, where an update no longer drops other records from an index key.
+        images.append(ServiceImage("arcadedb", "arcadedata/arcadedb:26.10.1"))
     else:
         images.append(ServiceImage("janusgraph", "janusgraph/janusgraph:1.0.0"))
     images.extend(
@@ -534,7 +535,10 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
     },
     "arcadedb": {
         "environment": {
-            "JAVA_OPTS": "-Darcadedb.server.rootPassword=${OSPREY_ARCADEDB_PASSWORD:?}",
+            # ADR-101: the adapter's Gremlin is Groovy (bound variables, closures); 26.10.1's
+            # default grammar parser refuses it, and runs Groovy only for `root`, as we connect.
+            "JAVA_OPTS": "-Darcadedb.server.rootPassword=${OSPREY_ARCADEDB_PASSWORD:?} "
+            "-Darcadedb.gremlin.engine=groovy",
             # **An explicit heap, not JVM ergonomics.** Unset, this image's heap is ~25% of the
             # memory Docker exposes to the container — about 2GiB on a 10GiB VM — and the HMP
             # fixture's graph side does not fit in it: the seeded golden path died on

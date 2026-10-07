@@ -259,7 +259,8 @@ class ArcadeDBClient:
         params: Mapping[str, Any] | None = None,
         session_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        return await self.command("gremlin", command, params=params, session_id=session_id)
+        rows = await self.command("gremlin", command, params=params, session_id=session_id)
+        return [_gremlin_row(row) for row in rows]
 
     async def command(
         self,
@@ -302,3 +303,28 @@ class ArcadeDBClient:
                 status_code=resp.status_code,
                 exception_class=exception_class,
             )
+
+
+def _is_entries(value: Any) -> bool:
+    return (
+        isinstance(value, list)
+        and bool(value)
+        and all(isinstance(e, dict) and e.keys() == {"key", "value"} for e in value)
+    )
+
+
+def _gremlin_value(value: Any) -> Any:
+    """A Gremlin map as ArcadeDB 26 sends it, a list of `{"key", "value"}` entries, as the dict
+    ArcadeDB 25.5.1 sent. A later entry wins, as it did there: `elementMap()` lists the record id
+    (`T.id`, `#1:0`) before the `id` property, and the property is the element's id here."""
+    if _is_entries(value):
+        return {e["key"]: _gremlin_value(e["value"]) for e in value}
+    return value
+
+
+def _gremlin_row(row: Any) -> Any:
+    """ArcadeDB 26 wraps a map result in `{"result": [entries]}`; 25.5.1 returned the map itself.
+    A scalar (`{"result": 6}`) is left as it is."""
+    if isinstance(row, dict) and row.keys() == {"result"} and _is_entries(row["result"]):
+        return _gremlin_value(row["result"])
+    return row

@@ -798,7 +798,7 @@ server from **141.7 MiB to 8.2 GiB**, and dropping the database returned none of
 JVM heap was measured **not** to help (the live set simply grew with it), and neither did bounding
 `arcadedb.dbPageCacheSize`.
 
-**Fixed upstream in ArcadeDB 25.5.1**, now the pinned version. The identical reproduction
+**Fixed upstream in ArcadeDB 25.5.1**, the pinned version until ADR-101 moved the pin to 26.10.1 (an index defect of 25.5.1's); the figures below are of 25.5.1 and have not been repeated on 26.10.1. The identical reproduction
 plateaus at ~1.5 GiB and stays flat (1.499 GiB at five cycles, 1.516 GiB at twenty), and the
 six-cycle sustained-load curve improves accordingly, measured on the same host with the same
 workload:
