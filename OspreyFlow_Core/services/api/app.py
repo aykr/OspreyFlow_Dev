@@ -198,6 +198,15 @@ from .compute_routes import (
     run_compute_metric_job,
 )
 from .config import ApiConfig, DeploymentModels
+from .datasets import (
+    CaseDatasetsRequest,
+    CreateDatasetRequest,
+    Dataset,
+    DatasetRefusedError,
+    DatasetStore,
+    InMemoryDatasetStore,
+    PostgresDatasetStore,
+)
 from .document_content import (
     UPLOAD_CONTENT_EXTENSIONS,
     DocumentAcceptResult,
@@ -448,6 +457,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     studio_recipes = await StudioRecipeStore.connect(config.postgres.dsn)
     extraction_candidates = await ExtractionCandidateStore.connect(config.postgres.dsn)
     questions_store = await PostgresQuestionStore.connect(config.postgres.dsn)
+    # ADR-099: the datasets of each unit and of each case.
+    datasets_store = await PostgresDatasetStore.connect(config.postgres.dsn)
+    app.state.datasets = datasets_store
     litellm_client = LiteLLMClient(LiteLLMConfig.from_env())
     # `embed_model` is the only model this adapter needs fixed at construction — `extract()`'s own
     # model is caller-supplied per call (`ExtractionRequest.model`, ADR-005), never this adapter's
@@ -623,6 +635,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await studio_recipes.close()
         await extraction_candidates.close()
         await questions_store.close()
+        await datasets_store.close()
         await litellm_client.aclose()
         await app.state.principal_resolver.aclose()
         analytics_con.close()
@@ -686,6 +699,19 @@ def get_history(request: Request) -> InvestigationHistoryStore:
 
 def get_graph(request: Request) -> GraphPort:
     return request.app.state.graph  # type: ignore[no-any-return]
+
+
+def get_datasets(request: Request) -> DatasetStore:
+    """ADR-099. The lifespan always sets the Postgres store; a test app with no lifespan gets an
+    empty in-memory one, so a case made there reads no dataset rather than every one."""
+    store = getattr(request.app.state, "datasets", None)
+    if store is None:
+        store = InMemoryDatasetStore()
+        request.app.state.datasets = store
+    return store
+
+
+DatasetsDep = Annotated[DatasetStore, Depends(get_datasets)]
 
 
 def get_ontology(request: Request) -> OntologySchema:
@@ -1444,6 +1470,14 @@ async def _document_not_found_handler(request: Request, exc: DocumentNotFoundErr
     )
 
 
+@app.exception_handler(DatasetRefusedError)
+async def _dataset_refused_handler(request: Request, exc: DatasetRefusedError) -> JSONResponse:
+    """ADR-099: no dataset, or one not of the caller's unit; one answer for both."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content={"error": "dataset_refused"}
+    )
+
+
 @app.exception_handler(NoDocumentsError)
 async def _no_documents_handler(request: Request, exc: NoDocumentsError) -> JSONResponse:
     """ADR-098 decision 4: the case holds no Document the analyst can see to ask about."""
@@ -1672,27 +1706,91 @@ DEFAULT_CASE_NAME = "Untitled case"
 
 class CreateInvestigationInput(BaseModel):
     name: str | None = None
+    #: ADR-099: the datasets the case reads, all of the creator's unit. Left out, the case gets a
+    #: new dataset of its own, named after it, for the data that will be added to it.
+    dataset_ids: list[str] | None = None
 
 
 @app.post("/v1/investigations", status_code=status.HTTP_201_CREATED)
 async def create_investigation(
     principal: PrincipalDep,
     investigations: InvestigationsDep,
+    datasets: DatasetsDep,
     audit: AuditDep,
     body: CreateInvestigationInput | None = None,
 ) -> Investigation:
     """Needs no grant: whoever creates a case is its first Author (ADR-052 §4). The name is
-    optional here only until the Glass proposes one (stage 3), after which it is required."""
+    optional here only until the Glass proposes one (stage 3), after which it is required.
+    ADR-099: the datasets named are checked before the case exists, so a refusal leaves none."""
     name = (body.name if body is not None else None) or DEFAULT_CASE_NAME
+    named = body.dataset_ids if body is not None else None
+    if named:
+        own = {d.id for d in await datasets.list_for_unit(principal.org_unit)}
+        if not set(named) <= own:
+            raise DatasetRefusedError("not every dataset is one of this unit's")
     investigation = await investigations.create(principal, name=name)
+    if not named:
+        named = [(await datasets.create(principal, investigation.name)).id]
+    await datasets.set_for_case(investigation.id, named, principal)
     await audit.record(
         principal=principal,
         action="create_investigation",
         investigation_id=investigation.id,
-        resolved_query={},
+        resolved_query={"dataset_ids": list(named)},
         result_cardinality=1,
     )
     return investigation
+
+
+@app.get("/v1/datasets")
+async def list_datasets_route(principal: PrincipalDep, datasets: DatasetsDep) -> list[Dataset]:
+    """The datasets of the caller's unit, for a new case to name (ADR-099)."""
+    return await datasets.list_for_unit(principal.org_unit)
+
+
+@app.post("/v1/datasets", status_code=status.HTTP_201_CREATED)
+async def create_dataset_route(
+    body: CreateDatasetRequest, principal: PrincipalDep, datasets: DatasetsDep, audit: AuditDep
+) -> Dataset:
+    """A new, empty dataset of the caller's unit (ADR-099)."""
+    dataset = await datasets.create(principal, body.name)
+    await audit.record(
+        principal=principal,
+        action="create_dataset",
+        resolved_query={"dataset_id": dataset.id},
+        result_cardinality=1,
+    )
+    return dataset
+
+
+@app.get("/v1/investigations/{investigation_id}/datasets")
+async def case_datasets_route(
+    investigation: InvestigationViewerDep, datasets: DatasetsDep
+) -> list[Dataset]:
+    """The datasets this case reads (ADR-099)."""
+    return await datasets.of_case(investigation.id)
+
+
+@app.put("/v1/investigations/{investigation_id}/datasets")
+async def set_case_datasets_route(
+    investigation: InvestigationAuthorDep,
+    body: CaseDatasetsRequest,
+    principal: PrincipalDep,
+    datasets: DatasetsDep,
+    audit: AuditDep,
+) -> list[Dataset]:
+    """Changes what the case reads: its Author's, audited, every dataset of the Author's unit
+    (ADR-099). Nothing else widens a case's datasets."""
+    before = await datasets.ids_of_case(investigation.id)
+    changed = await datasets.set_for_case(investigation.id, body.dataset_ids, principal)
+    await audit.record(
+        principal=principal,
+        action="set_case_datasets",
+        investigation_id=investigation.id,
+        resolved_query={"before": before, "after": [d.id for d in changed]},
+        result_cardinality=len(changed),
+    )
+    return changed
 
 
 class InvestigationListing(BaseModel):
@@ -1958,6 +2056,7 @@ async def branch_investigation(
     history: HistoryDep,
     audit: AuditDep,
     valkey: Annotated[Valkey, Depends(get_valkey)],
+    datasets: DatasetsDep,
     body: BranchRequest | None = None,
 ) -> Investigation:
     # `03_CONDUIT_MIDDLEWARE.md` §3.1: "fork the working set into a new
@@ -1979,6 +2078,8 @@ async def branch_investigation(
     new_investigation = await investigations.create(
         principal, name=name, branched_from=investigation.id
     )
+    # ADR-099: a branch reads what its parent reads.
+    await datasets.copy_case(investigation.id, new_investigation.id)
     outcome = await working_set.branch(
         investigation.id, new_investigation.id, principal, node_ids=node_ids
     )

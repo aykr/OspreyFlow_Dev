@@ -169,6 +169,8 @@ carries the withheld content, not even its identifiers.
 
 ```
 POST   /v1/search                       federated search across graph, documents, index
+GET    /v1/datasets                     the datasets of the caller's unit, for a new case to name (ADR-099)
+POST   /v1/datasets                     a new, empty dataset of the caller's unit (`{"name": ...}`), audited (ADR-099); `POST /v1/investigations` takes `dataset_ids`, and with none makes the case a dataset of its own named after it
 POST   /v1/suggest                      type-ahead: nodes whose identifiers start with what is typed (ADR-059)
 POST   /v1/paths                        k-shortest paths between two entities
 POST   /v1/patterns/preview             cardinality estimate for a visual query
@@ -188,6 +190,8 @@ POST   /v1/investigations/{investigation_id}/documents/{document_id}/extract   e
 POST   /v1/investigations/{investigation_id}/documents/{document_id}/candidates/{candidate_id}/accept   accept one finding from a held Document as an inferred node, Editor (ADR-094)
 POST   /v1/investigations/{investigation_id}/documents/{document_id}/designations   words in a Document marked as an entity by the analyst: an asserted node linked to it, Editor (ADR-098)
 POST   /v1/investigations/{investigation_id}/links-among   the links among nodes already in the view (all, or the named ones), all or `limit_exceeded`, Editor (ADR-098)
+GET    /v1/investigations/{investigation_id}/datasets   the datasets the case reads, in order, Viewer (ADR-099)
+PUT    /v1/investigations/{investigation_id}/datasets   what the case reads (`{"dataset_ids": [...]}`, at least one, all of the Author's unit; else 422 `dataset_refused`, one answer for another unit's and a missing one), audited before and after, Author (ADR-099)
 POST   /v1/investigations/{investigation_id}/questions   a question to the model about every Document in the case's view the analyst can see, whole; the answer cites them and its proposals are pending findings; past 80,000 characters refused `documents_too_large` (413), none `no_documents` (422), Editor (ADR-098 decision 4)
 GET    /v1/investigations/{investigation_id}/questions   the case's questions and answers: citations of Documents the reader can see, proposals of their unit in their present state, Viewer (ADR-098 decision 4)
 POST   /v1/investigations/{investigation_id}/questions/candidates/{candidate_id}/accept   one proposal accepted: an inferred node and its `MENTIONED_IN` link onto the canvas, Editor (ADR-098 decision 4)
