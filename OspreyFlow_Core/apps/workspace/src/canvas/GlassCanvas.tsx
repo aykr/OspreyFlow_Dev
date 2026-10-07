@@ -2051,7 +2051,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       const reason = marked ? "" : "Marked from the canvas";
       try {
         const response = await fetch(
-          `${apiBaseUrl}/v1/nodes/${nodeId}/suppression-mark`,
+          `${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}/nodes/${nodeId}/suppression-mark`,
           marked
             ? {
                 method: "DELETE",
@@ -2174,9 +2174,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       setClusterExplain({ x, y, explanation });
     }
 
-    // Phase 7 Stage 5 (the pathfinder) — `06_DECISIONS.md` ADR-033. `POST /v1/paths` is a bare,
-    // non-investigation-scoped query (the same reasoning `/v1/search` already has: it searches the
-    // whole access-filtered corpus, not this investigation's own working set), so the result must be
+    // Phase 7 Stage 5 (the pathfinder) — `06_DECISIONS.md` ADR-033. `POST .../paths` searches the
+    // case's datasets (ADR-099), not only this investigation's own working set, so the result must be
     // seeded into this working set before it can be drawn on-path at all — reusing the existing
     // `/seed` endpoint exactly, not a new working-set-service method. Only nodes/edges not already
     // present are sent; `/seed` itself is idempotent-by-id on the store side regardless.
@@ -2188,7 +2187,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     ): Promise<void> {
       let response: Response;
       try {
-        response = await fetch(`${apiBaseUrl}/v1/paths`, {
+        response = await fetch(`${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}/paths`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${bearerToken}`,

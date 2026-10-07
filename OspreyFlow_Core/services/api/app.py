@@ -30,7 +30,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any, Final, Literal
+from typing import Annotated, Any, Final, Literal, cast
 
 import duckdb
 from fastapi import (
@@ -112,6 +112,7 @@ from schemas.analytics import (
     SightingRequest,
 )
 from schemas.domain import (
+    Alert,
     Assumption,
     Edge,
     EdgeWrite,
@@ -198,6 +199,7 @@ from .compute_routes import (
     run_compute_metric_job,
 )
 from .config import ApiConfig, DeploymentModels
+from .dataset_scope import DatasetStampingGraph, outside_any_case, scope_to_case
 from .datasets import (
     CaseDatasetsRequest,
     CreateDatasetRequest,
@@ -434,7 +436,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     handling_scheme = load_uk_le_scheme()
     yardstick = load_phia_yardstick()
     ontology = load_default_ontology()
-    graph: GraphPort = GraphArcadeDBAdapter(arcadedb_client, handling_scheme)
+    # ADR-099: the services write through `DatasetStampingGraph`, so whatever the Conduit writes
+    # for a case belongs to the case's dataset (`dataset_scope.py`).
+    graph: GraphPort = cast(
+        GraphPort, DatasetStampingGraph(GraphArcadeDBAdapter(arcadedb_client, handling_scheme))
+    )
     await graph.apply_schema(ontology)
 
     valkey = Valkey(host=config.valkey.host, port=config.valkey.port, db=config.valkey.db)
@@ -636,6 +642,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await extraction_candidates.close()
         await questions_store.close()
         await datasets_store.close()
+        # A closed store must not outlive the app that held it (a test app is started again).
+        app.state.datasets = None
         await litellm_client.aclose()
         await app.state.principal_resolver.aclose()
         analytics_con.close()
@@ -814,11 +822,18 @@ async def get_principal(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
 ) -> Principal:
+    """Who is asking, and (ADR-099) what they may read: the datasets of the case the path names,
+    or none outside a case. Every principal a route is given comes through here, the Studio's
+    role checks included, so no request reads unlimited (`dataset_scope.py`)."""
     resolver: PrincipalResolver = request.app.state.principal_resolver
     try:
-        return resolver.resolve(credentials.credentials)
+        identity = resolver.resolve(credentials.credentials)
     except PrincipalResolutionError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    investigation_id = request.path_params.get("investigation_id")
+    if investigation_id is None:
+        return outside_any_case(identity)
+    return await scope_to_case(identity, investigation_id, get_datasets(request))
 
 
 def get_principal_resolver(request: Request) -> PrincipalResolver:
@@ -2620,8 +2635,9 @@ async def get_dossier_document_route(
 # — there is no second, investigation-shaped gate to add.
 
 
-@app.post("/v1/nodes/{node_id}/confirm")
+@app.post("/v1/investigations/{investigation_id}/nodes/{node_id}/confirm")
 async def confirm_node_route(
+    investigation: InvestigationEditorDep,
     node_id: str,
     principal: PrincipalDep,
     graph: GraphDep,
@@ -2658,8 +2674,9 @@ class SuppressionMarkInput(BaseModel):
     reason: str
 
 
-@app.post("/v1/nodes/{node_id}/suppression-mark")
+@app.post("/v1/investigations/{investigation_id}/nodes/{node_id}/suppression-mark")
 async def mark_node_for_suppression(
+    investigation: InvestigationEditorDep,
     node_id: str,
     body: SuppressionMarkInput,
     principal: PrincipalDep,
@@ -2689,8 +2706,9 @@ async def mark_node_for_suppression(
     return mark
 
 
-@app.delete("/v1/nodes/{node_id}/suppression-mark")
+@app.delete("/v1/investigations/{investigation_id}/nodes/{node_id}/suppression-mark")
 async def unmark_node_for_suppression(
+    investigation: InvestigationEditorDep,
     node_id: str,
     principal: PrincipalDep,
     graph: GraphDep,
@@ -2715,8 +2733,9 @@ async def _node_not_visible_handler(request: Request, exc: NodeNotVisibleError) 
     return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "node_not_found"})
 
 
-@app.post("/v1/nodes/{node_id}/retract")
+@app.post("/v1/investigations/{investigation_id}/nodes/{node_id}/retract")
 async def retract_node_route(
+    investigation: InvestigationEditorDep,
     node_id: str,
     principal: PrincipalDep,
     graph: GraphDep,
@@ -2792,8 +2811,9 @@ async def restore_history_step(
 # --- search -------------------------------------------------------------------
 
 
-@app.post("/v1/search")
+@app.post("/v1/investigations/{investigation_id}/search")
 async def search_route(
+    investigation: InvestigationViewerDep,
     body: SearchRequest,
     principal: PrincipalDep,
     graph: GraphDep,
@@ -2809,8 +2829,9 @@ async def search_route(
     return result
 
 
-@app.post("/v1/suggest")
+@app.post("/v1/investigations/{investigation_id}/suggest")
 async def suggest_route(
+    investigation: InvestigationViewerDep,
     body: SuggestRequest,
     principal: PrincipalDep,
     graph: GraphDep,
@@ -2837,8 +2858,9 @@ async def suggest_route(
 # same one `/v1/search` above already gives for its own lack of an `owning_unit` check.
 
 
-@app.post("/v1/patterns/preview")
+@app.post("/v1/investigations/{investigation_id}/patterns/preview")
 async def patterns_preview_route(
+    investigation: InvestigationViewerDep,
     pattern: PatternQuery,
     principal: PrincipalDep,
     graph: GraphDep,
@@ -2854,8 +2876,9 @@ async def patterns_preview_route(
     return preview
 
 
-@app.post("/v1/patterns/run")
+@app.post("/v1/investigations/{investigation_id}/patterns/run")
 async def patterns_run_route(
+    investigation: InvestigationViewerDep,
     pattern: PatternQuery,
     principal: PrincipalDep,
     graph: GraphDep,
@@ -3867,18 +3890,35 @@ async def list_monitors_route(
 
 @app.get("/v1/alerts")
 async def list_alerts_route(
-    principal: PrincipalDep, alerts_store: AlertsStoreDep, graph: GraphDep
+    principal: PrincipalDep, alerts_store: AlertsStoreDep, graph: GraphDep, datasets: DatasetsDep
 ) -> AlertList:
     rows = await alerts_store.list_authorized(principal)
-    return AlertList(alerts=[await alert_to_view(a, principal, graph) for a in rows])
+    return AlertList(
+        alerts=[
+            await alert_to_view(a, await _alert_principal(a, principal, datasets), graph)
+            for a in rows
+        ]
+    )
+
+
+async def _alert_principal(alert: Alert, principal: Principal, datasets: DatasetStore) -> Principal:
+    """ADR-099: an alert's entities are read as the case it arose in reads them; an alert with no
+    case (the resolution trigger's) reads none of them."""
+    if alert.investigation_id is None:
+        return principal
+    return await scope_to_case(principal, alert.investigation_id, datasets)
 
 
 @app.get("/v1/alerts/{alert_id}")
 async def get_alert_route(
-    alert_id: str, principal: PrincipalDep, alerts_store: AlertsStoreDep, graph: GraphDep
+    alert_id: str,
+    principal: PrincipalDep,
+    alerts_store: AlertsStoreDep,
+    graph: GraphDep,
+    datasets: DatasetsDep,
 ) -> AlertView:
     alert = await alerts_store.get_authorized(alert_id, principal)
-    return await alert_to_view(alert, principal, graph)
+    return await alert_to_view(alert, await _alert_principal(alert, principal, datasets), graph)
 
 
 @app.post("/v1/alerts/{alert_id}/jump", status_code=status.HTTP_201_CREATED)
@@ -3892,6 +3932,7 @@ async def jump_alert_route(
     history: HistoryDep,
     audit: AuditDep,
     valkey: ValkeyDep,
+    datasets: DatasetsDep,
 ) -> AlertJumpResult:
     """`08_ACCEPTANCE_SCENARIOS.md` B14: "The new working set contains the alert's entities and a
     link to the originating investigation." The link is `branch.branched_from` — the identical
@@ -3904,6 +3945,13 @@ async def jump_alert_route(
     branch = await investigations.create(
         principal, name=f"Opened from alert {alert.id}", branched_from=alert.investigation_id
     )
+    # ADR-099: the new case reads what the alert's case reads; with no case, a dataset of its own.
+    if alert.investigation_id is not None:
+        await datasets.copy_case(alert.investigation_id, branch.id)
+    if not await datasets.ids_of_case(branch.id):
+        own = await datasets.create(principal, branch.name)
+        await datasets.set_for_case(branch.id, [own.id], principal)
+    principal = await scope_to_case(principal, branch.id, datasets)
     nodes, unreadable = await fetch_jumpable_referents(alert, principal=principal, graph=graph)
     outcome = await working_set.seed(branch.id, nodes, [], principal)
     await publish_delta(valkey, branch.id, outcome.delta)
@@ -3942,8 +3990,9 @@ async def jump_alert_route(
 # `ComputePort.shortest_paths` (unclaimed, `ports/compute.py`'s own disclosed stub).
 
 
-@app.post("/v1/paths")
+@app.post("/v1/investigations/{investigation_id}/paths")
 async def paths_route(
+    investigation: InvestigationViewerDep,
     req: PathRequest,
     principal: PrincipalDep,
     graph: GraphDep,

@@ -607,7 +607,7 @@ test("the radial list reaches Mark for suppression, and the mark toggles", async
   // Both directions are asserted, because "reversible" is R7's own word for it and a mark that
   // cannot be taken off is a different feature from the one that was ruled.
   const calls: { method: string; body: unknown }[] = [];
-  await page.route("**/v1/nodes/*/suppression-mark", async (route) => {
+  await page.route("**/v1/investigations/*/nodes/*/suppression-mark", async (route) => {
     calls.push({
       method: route.request().method(),
       body: route.request().postDataJSON?.() ?? null,
@@ -726,7 +726,7 @@ test("the radial list reaches Find paths, and a real found path renders in its o
   await page.goto("/keyboard/harness.html");
 
   let pathsRequestBody: unknown = null;
-  await page.route("**/*/v1/paths", async (route) => {
+  await page.route("**/*/v1/investigations/*/paths", async (route) => {
     pathsRequestBody = route.request().postDataJSON();
     await route.fulfill({
       status: 200,
@@ -756,7 +756,7 @@ test("the pathfinder result's own selector cycles which of several found paths i
 }) => {
   await page.goto("/keyboard/harness.html");
 
-  await page.route("**/*/v1/paths", async (route) => {
+  await page.route("**/*/v1/investigations/*/paths", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -791,7 +791,7 @@ test("Escape dismisses the pathfinder result overlay, reachable by keyboard alon
 }) => {
   await page.goto("/keyboard/harness.html");
 
-  await page.route("**/*/v1/paths", async (route) => {
+  await page.route("**/*/v1/investigations/*/paths", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -820,7 +820,7 @@ test("a failed path search announces an error, distinguishable from 'No path fou
 }) => {
   await page.goto("/keyboard/harness.html");
 
-  await page.route("**/*/v1/paths", async (route) => {
+  await page.route("**/*/v1/investigations/*/paths", async (route) => {
     await route.fulfill({ status: 500, contentType: "text/plain", body: "internal error" });
   });
 

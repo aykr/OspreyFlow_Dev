@@ -171,11 +171,16 @@ def test_a_second_process_continues_an_investigation_the_first_was_killed_mid(
     created = httpx.post(f"{instance_a.base_url}/v1/investigations", headers=headers)
     assert created.status_code == 201, created.text
     investigation_id = created.json()["id"]
+    # ADR-099: the case reads only its own dataset, made with it; what is seeded into it belongs
+    # there, as a search result from the case would.
+    (own,) = httpx.get(
+        f"{instance_a.base_url}/v1/investigations/{investigation_id}/datasets", headers=headers
+    ).json()
 
     seeded_a = httpx.post(
         f"{instance_a.base_url}/v1/investigations/{investigation_id}/seed",
         headers=headers,
-        json={"nodes": [_seed_node("from-a")], "edges": []},
+        json={"nodes": [_seed_node("from-a", own["id"])], "edges": []},
     )
     assert seeded_a.status_code == 200, seeded_a.text
     assert seeded_a.json()["delta"]["seq"] == 1
@@ -195,7 +200,7 @@ def test_a_second_process_continues_an_investigation_the_first_was_killed_mid(
     seeded_b = httpx.post(
         f"{instance_b.base_url}/v1/investigations/{investigation_id}/seed",
         headers=headers,
-        json={"nodes": [_seed_node("from-b")], "edges": []},
+        json={"nodes": [_seed_node("from-b", own["id"])], "edges": []},
     )
     assert seeded_b.status_code == 200, seeded_b.text
     # The sequence counter lives in Valkey, not in either process's
@@ -267,9 +272,10 @@ def test_a_failed_second_instance_does_not_orphan_the_first(
     )
 
 
-def _seed_node(node_id: str) -> dict[str, object]:
+def _seed_node(node_id: str, dataset_id: str) -> dict[str, object]:
     return {
         "id": node_id,
+        "datasets": [dataset_id],
         "type": "Person",
         "properties": {},
         "provenance": {

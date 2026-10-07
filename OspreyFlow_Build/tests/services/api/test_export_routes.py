@@ -39,6 +39,7 @@ from schemas.domain import (
     SourceRef,
 )
 from tests.conftest import default_claims, sign_token
+from tests.services.api.case_dataset import dataset_for, give_case_its_dataset
 
 PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
 
@@ -103,6 +104,8 @@ def _node_write(
         ),
         created_by="test",
         created_at=now,
+        # ADR-099: the case below reads this dataset, as a case reads the data loaded into it.
+        datasets=[dataset_for(PRINCIPAL)],
     )
 
 
@@ -125,6 +128,7 @@ async def _write_investigation(principal: Principal) -> str:
     store = await InvestigationStore.connect(PostgresConfig.from_env().dsn)
     try:
         investigation = await store.create(principal, name="Test case")
+        await give_case_its_dataset(investigation.id, principal)
         return investigation.id
     finally:
         await store.close()
@@ -147,6 +151,7 @@ def _membership_node(*, owning_unit: str, classification: str = "OFFICIAL") -> N
             owning_unit=owning_unit,
         ),
         audit=AuditStub(created_at=now, created_by="test"),
+        datasets=[dataset_for(PRINCIPAL)],
     )
 
 

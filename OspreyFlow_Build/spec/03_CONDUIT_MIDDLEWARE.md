@@ -168,13 +168,13 @@ carries the withheld content, not even its identifiers.
 ### 3.3 Query and analytics
 
 ```
-POST   /v1/search                       federated search across graph, documents, index
+POST   /v1/investigations/{id}/search      federated search across graph, documents, index, within the case's datasets (ADR-099)
 GET    /v1/datasets                     the datasets of the caller's unit, for a new case to name (ADR-099)
 POST   /v1/datasets                     a new, empty dataset of the caller's unit (`{"name": ...}`), audited (ADR-099); `POST /v1/investigations` takes `dataset_ids`, and with none makes the case a dataset of its own named after it
-POST   /v1/suggest                      type-ahead: nodes whose identifiers start with what is typed (ADR-059)
-POST   /v1/paths                        k-shortest paths between two entities
-POST   /v1/patterns/preview             cardinality estimate for a visual query
-POST   /v1/patterns/run                 execute; large results return a job id
+POST   /v1/investigations/{id}/suggest     type-ahead: nodes whose identifiers start with what is typed (ADR-059), within the case's datasets (ADR-099)
+POST   /v1/investigations/{id}/paths       k-shortest paths between two entities, within the case's datasets (ADR-099)
+POST   /v1/investigations/{id}/patterns/preview   cardinality estimate for a visual query, within the case's datasets (ADR-099)
+POST   /v1/investigations/{id}/patterns/run   execute; large results return a job id, which keeps the case's datasets (ADR-099)
 POST   /v1/patterns/save                persist the calling principal's own pattern (a version bump if it exists)
 GET    /v1/patterns                     the calling principal's own saved patterns
 GET    /v1/patterns/{pattern_id}        load a saved pattern (?version= for an older one)
@@ -542,8 +542,10 @@ blank map.
 ### 3.11 Node provenance actions
 
 ```
-POST   /v1/nodes/{node_id}/confirm   inferred/unresolved → asserted, human-attested
-POST   /v1/nodes/{node_id}/retract   asserted → inferred, the mirror of confirm
+POST   /v1/investigations/{id}/nodes/{node_id}/confirm   inferred/unresolved → asserted, human-attested; Editor, within the case's datasets (ADR-099)
+POST   /v1/investigations/{id}/nodes/{node_id}/retract   asserted → inferred, the mirror of confirm; Editor (ADR-099)
+POST   /v1/investigations/{id}/nodes/{node_id}/suppression-mark   propose a suppression (R7 step one); `DELETE` withdraws it; Editor (ADR-099 moved both under the case)
+DELETE /v1/investigations/{id}/nodes/{node_id}/suppression-mark   withdraw that proposal; Editor (ADR-099)
 POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/run   run a published recipe against a file
 ```
 

@@ -44,7 +44,7 @@ from services.resolve.projection import DEFAULT_THRESHOLD, compute_clusters, dif
 from valkey.asyncio import Valkey
 
 from conduit_common.identity import new_edge_id, now_utc
-from ontology.handling import HandlingScheme, principal_may_view
+from ontology.handling import HandlingScheme, principal_may_read
 from ports.graph import GraphPort
 from schemas.domain import (
     NOT_SAME_AS,
@@ -142,13 +142,13 @@ class WorkingSetService:
         existence, exactly the leak `principal_may_view` exists to
         prevent at node level."""
         visible_nodes = [
-            n for n in nodes if principal_may_view(n.handling, principal, self._scheme)
+            n for n in nodes if principal_may_read(n.handling, n.datasets, principal, self._scheme)
         ]
         visible_node_ids = {n.id for n in visible_nodes}
         visible_edges = [
             e
             for e in edges
-            if principal_may_view(e.handling, principal, self._scheme)
+            if principal_may_read(e.handling, e.datasets, principal, self._scheme)
             and e.source in visible_node_ids
             and e.target in visible_node_ids
         ]
@@ -182,7 +182,9 @@ class WorkingSetService:
             # cannot see the new one: for them the step is nothing, counted as one withheld item,
             # and the new link's content does not leave. Judged on the link's own marking because a
             # delta carries no ends to judge it by, which is the safe side of that gap.
-            if principal_may_view(delta.edge.handling, principal, self._scheme):
+            if principal_may_read(
+                delta.edge.handling, delta.edge.datasets, principal, self._scheme
+            ):
                 return delta, 0
             return DeltaRemove(seq=delta.seq, node_ids=[]), 1
         return delta, 0
@@ -558,7 +560,9 @@ class WorkingSetService:
         candidate count this service is the first authority able to
         compare it against (`01_DOMAIN_MODEL.md` §8.2)."""
         subgraph = await self._graph.expand(req, principal)
-        candidate_count = await self._graph.expand_candidate_count(req)
+        candidate_count = await self._graph.expand_candidate_count(
+            req, datasets=principal.datasets
+        )
         filtered_count = _filtered_count(candidate_count, len(subgraph.nodes))
         # ADR-098: the links the expansion did not walk along, among its nodes and the view, when
         # it is small enough to ask; all of them or, if they would pass the cap, none.
@@ -615,7 +619,9 @@ class WorkingSetService:
         `_add` — nothing is written to the store or appended to the delta
         stream."""
         subgraph = await self._graph.expand(req, principal)
-        candidate_count = await self._graph.expand_candidate_count(req)
+        candidate_count = await self._graph.expand_candidate_count(
+            req, datasets=principal.datasets
+        )
         filtered_count = _filtered_count(candidate_count, len(subgraph.nodes))
 
         existing_node_ids = await self._store.node_ids(investigation_id)

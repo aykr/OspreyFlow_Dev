@@ -74,7 +74,7 @@ test("Add variable places a new, unpinned pattern node", async ({ page }) => {
 test("selecting a search result via the keyboard pins it as a new pattern node", async ({ page }) => {
   // The search box asks `/v1/suggest` as the analyst types (ADR-059), not `/v1/search`; this
   // case still routed the old endpoint and had failed since that change.
-  await page.route("**/*/v1/suggest", async (route) => {
+  await page.route("**/*/v1/investigations/*/suggest", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -126,7 +126,7 @@ test("Delete on a focused pattern node removes it", async ({ page }) => {
 });
 
 test("Preview reports the principal-filtered estimate before Run is ever pressed", async ({ page }) => {
-  await page.route("**/*/v1/patterns/preview", async (route) => {
+  await page.route("**/*/v1/investigations/*/patterns/preview", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -146,7 +146,7 @@ test("Preview reports the principal-filtered estimate before Run is ever pressed
 });
 
 test("Run executes the pattern and reports the matched count", async ({ page }) => {
-  await page.route("**/*/v1/patterns/run", async (route) => {
+  await page.route("**/*/v1/investigations/*/patterns/run", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",

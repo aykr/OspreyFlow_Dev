@@ -35,6 +35,7 @@ from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from schemas.domain import Handling, NodeWrite, Principal, Provenance, ProvenanceState, SourceRef
 from tests.conftest import default_claims, sign_token
+from tests.services.api.case_dataset import dataset_for, give_case_its_dataset
 
 PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
 
@@ -89,6 +90,9 @@ def _node_write(*, owning_unit: str, classification: str = "OFFICIAL") -> NodeWr
         ),
         created_by="test",
         created_at=now,
+        # ADR-099: in the case's dataset, as a load into the case would be; the hidden node's
+        # handling, not its dataset, is what hides it.
+        datasets=[dataset_for(PRINCIPAL)],
     )
 
 
@@ -114,6 +118,7 @@ async def _write_investigation(principal: Principal) -> str:
     store = await InvestigationStore.connect(PostgresConfig.from_env().dsn)
     try:
         investigation = await store.create(principal, name="Test case")
+        await give_case_its_dataset(investigation.id, principal)
         return investigation.id
     finally:
         await store.close()

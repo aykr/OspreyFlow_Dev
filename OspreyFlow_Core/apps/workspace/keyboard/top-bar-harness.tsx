@@ -33,7 +33,7 @@ const SUGGESTIONS = Array.from({ length: 10 }, (_, i) => ({
   properties: { value_normalised: `person${i}@enron.com` },
 }));
 window.fetch = (async (url: string) => {
-  const body = String(url).endsWith("/v1/suggest") ? { nodes: SUGGESTIONS, more: true } : CASES;
+  const body = String(url).endsWith("/suggest") ? { nodes: SUGGESTIONS, more: true } : CASES;
   return { ok: true, status: 200, json: async () => body };
 }) as unknown as typeof fetch;
 
@@ -61,7 +61,7 @@ createRoot(container).render(
         />
       }
       search={
-        <GlobalSearch apiBaseUrl="http://top-bar.invalid" bearerToken="unused" entityTypes={["Person", "Endpoint"]} onSelect={() => undefined} />
+        <GlobalSearch apiBaseUrl="http://top-bar.invalid" bearerToken="unused" investigationId="inv-1" entityTypes={["Person", "Endpoint"]} onSelect={() => undefined} />
       }
       views={[
         { id: "graph", label: "Graph", pressed: true, onSelect: () => undefined },

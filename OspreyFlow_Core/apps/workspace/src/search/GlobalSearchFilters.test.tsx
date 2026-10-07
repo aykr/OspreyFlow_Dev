@@ -30,7 +30,7 @@ async function pause(ms = SUGGEST_PAUSE_MS): Promise<void> {
 
 function mount(extra: Partial<Parameters<typeof GlobalSearch>[0]> = {}): void {
   render(
-    <GlobalSearch
+    <GlobalSearch investigationId="inv-1"
       apiBaseUrl="http://api"
       bearerToken="t"
       onSelect={vi.fn()}

@@ -1,7 +1,7 @@
 // Fetch wrappers for `POST /v1/patterns/preview`, `POST /v1/patterns/run` and the saved-pattern
 // routes (`services/api/patterns.py`, `services/api/pattern_store.py`) — mirrors `metrics/api.ts`'s
-// own conventions. Not investigation-scoped, the same reasoning `search.py`/`GlobalSearch.tsx`
-// already give for `POST /v1/search`. `06_DECISIONS.md` ADR-032/036/040: save/load/list only —
+// own conventions. Preview and run are asked of the case, since a case reads only its own datasets
+// (ADR-099); saved patterns are the analyst's, not a case's. `06_DECISIONS.md` ADR-032/036/040: save/load/list only —
 // no share endpoint exists, since ADR-040 (pattern sharing) is Proposed, not accepted.
 import type { PatternQuery, SavedPattern, Subgraph } from "../../../../packages/schemas/generated";
 
@@ -17,12 +17,17 @@ export interface PatternRunAccepted {
   job_id?: string | null;
 }
 
+function caseUrl(apiBaseUrl: string, investigationId: string): string {
+  return `${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}`;
+}
+
 export async function fetchPatternPreview(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
   pattern: PatternQuery,
 ): Promise<PatternPreview> {
-  const response = await fetch(`${apiBaseUrl}/v1/patterns/preview`, {
+  const response = await fetch(`${caseUrl(apiBaseUrl, investigationId)}/patterns/preview`, {
     method: "POST",
     headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
     body: JSON.stringify(pattern),
@@ -36,9 +41,10 @@ export async function fetchPatternPreview(
 export async function runPattern(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
   pattern: PatternQuery,
 ): Promise<PatternRunAccepted> {
-  const response = await fetch(`${apiBaseUrl}/v1/patterns/run`, {
+  const response = await fetch(`${caseUrl(apiBaseUrl, investigationId)}/patterns/run`, {
     method: "POST",
     headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
     body: JSON.stringify(pattern),

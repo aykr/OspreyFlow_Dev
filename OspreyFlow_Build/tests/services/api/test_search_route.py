@@ -13,9 +13,10 @@ from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
-from services.api.app import app, get_audit, get_graph, get_principal
+from services.api.app import app, get_audit, get_graph, get_investigations, get_principal
 
 from schemas.domain import AuditStub, Node, Principal, Provenance, ProvenanceState, SourceRef
+from tests.services.api.any_case import AnyCase
 
 PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
 
@@ -64,6 +65,7 @@ def client() -> TestClient:
     audit = _FakeAudit()
     app.dependency_overrides[get_principal] = lambda: PRINCIPAL
     app.dependency_overrides[get_graph] = lambda: graph
+    app.dependency_overrides[get_investigations] = AnyCase
     app.dependency_overrides[get_audit] = lambda: audit
 
     test_client = TestClient(app)
@@ -76,7 +78,7 @@ def client() -> TestClient:
 
 
 def test_search_returns_hits_from_the_graph_port(client: TestClient) -> None:
-    response = client.post("/v1/search", json={"query": "AB123456C"})
+    response = client.post("/v1/investigations/inv-1/search", json={"query": "AB123456C"})
 
     assert response.status_code == 200
     assert [n["id"] for n in response.json()["nodes"]] == ["hit-1"]
@@ -85,7 +87,7 @@ def test_search_returns_hits_from_the_graph_port(client: TestClient) -> None:
 
 
 def test_search_with_no_match_returns_an_empty_list_not_an_error(client: TestClient) -> None:
-    response = client.post("/v1/search", json={"query": "no-such-value"})
+    response = client.post("/v1/investigations/inv-1/search", json={"query": "no-such-value"})
 
     assert response.status_code == 200
     assert response.json()["nodes"] == []

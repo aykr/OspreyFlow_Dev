@@ -15,6 +15,8 @@ import {
 export interface GlobalSearchProps {
   apiBaseUrl: string;
   bearerToken: string;
+  /** ADR-099: search reads only the case's datasets, so it is asked of the case. */
+  investigationId: string;
   onSelect: (node: Node) => void;
   /** The entity types the Filters panel offers (from the ontology). Empty hides that choice. */
   entityTypes?: readonly string[];
@@ -38,7 +40,7 @@ type Outcome = "idle" | "short" | "found" | "none" | "unavailable";
  * `POST /v1/suggest` for nodes whose identifiers *start with* what is typed (`/v1/search` stays an
  * exact match). An answer to a question the analyst has already moved past is dropped, a list cut
  * off at ten says so, and an unanswered question says so instead of leaving the last list standing. */
-export function GlobalSearch({ apiBaseUrl, bearerToken, onSelect, entityTypes = [], screenNodes }: GlobalSearchProps) {
+export function GlobalSearch({ apiBaseUrl, bearerToken, investigationId, onSelect, entityTypes = [], screenNodes }: GlobalSearchProps) {
   const [results, setResults] = useState<Node[]>([]);
   const [query, setQuery] = useState("");
   const [more, setMore] = useState(false);
@@ -60,7 +62,7 @@ export function GlobalSearch({ apiBaseUrl, bearerToken, onSelect, entityTypes = 
 
   async function ask(value: string, mine: number, using: SearchOptions): Promise<void> {
     try {
-      const response = await fetch(`${apiBaseUrl}/v1/suggest`, {
+      const response = await fetch(`${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}/suggest`, {
         method: "POST",
         headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
         body: JSON.stringify(suggestBody(value, SUGGEST_LIMIT, using)),

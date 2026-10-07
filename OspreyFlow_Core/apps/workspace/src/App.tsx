@@ -824,6 +824,7 @@ export function App() {
             <GlobalSearch
               apiBaseUrl={API_BASE_URL}
               bearerToken={bearerToken}
+              investigationId={investigationId}
               entityTypes={ontologySchema?.entity_types.map((e) => e.name) ?? []}
               screenNodes={() => {
                 const graph = workingSetRef.current.graph;
@@ -1274,6 +1275,7 @@ export function App() {
                           <QueryBuilderPanel
                             apiBaseUrl={API_BASE_URL}
                             bearerToken={bearerToken}
+                            investigationId={investigationId}
                             schema={ontologySchema}
                           />
                         ),

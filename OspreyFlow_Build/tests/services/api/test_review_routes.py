@@ -404,7 +404,7 @@ def test_confirm_node_route_flips_state_and_audits(fakes) -> None:
     client, _model, _candidates, graph, audit = fakes
     graph.nodes["n1"] = _node("n1", ProvenanceState.INFERRED)
 
-    response = client.post("/v1/nodes/n1/confirm")
+    response = client.post("/v1/investigations/inv-1/nodes/n1/confirm")
 
     assert response.status_code == 200
     assert graph.superseded[0][1].provenance.state == ProvenanceState.ASSERTED
@@ -417,7 +417,7 @@ def test_confirm_node_route_404_for_a_node_in_a_different_org_unit(fakes) -> Non
     client, _model, _candidates, graph, _audit = fakes
     graph.nodes["n1"] = _node("n1", ProvenanceState.INFERRED, owning_unit="unit-2")
 
-    response = client.post("/v1/nodes/n1/confirm")
+    response = client.post("/v1/investigations/inv-1/nodes/n1/confirm")
 
     assert response.status_code == 404
     assert response.json()["error"] == "node_not_found"
@@ -428,7 +428,7 @@ def test_confirm_node_route_409_when_already_asserted(fakes) -> None:
     client, _model, _candidates, graph, _audit = fakes
     graph.nodes["n1"] = _node("n1", ProvenanceState.ASSERTED)
 
-    response = client.post("/v1/nodes/n1/confirm")
+    response = client.post("/v1/investigations/inv-1/nodes/n1/confirm")
 
     assert response.status_code == 409
     assert response.json()["error"] == "provenance_transition_invalid"
@@ -438,7 +438,7 @@ def test_retract_node_route_flips_state_back_and_audits(fakes) -> None:
     client, _model, _candidates, graph, audit = fakes
     graph.nodes["n1"] = _node("n1", ProvenanceState.ASSERTED)
 
-    response = client.post("/v1/nodes/n1/retract")
+    response = client.post("/v1/investigations/inv-1/nodes/n1/retract")
 
     assert response.status_code == 200
     assert graph.superseded[0][1].provenance.state == ProvenanceState.INFERRED
@@ -449,7 +449,7 @@ def test_retract_node_route_404_for_a_node_in_a_different_org_unit(fakes) -> Non
     client, _model, _candidates, graph, _audit = fakes
     graph.nodes["n1"] = _node("n1", ProvenanceState.ASSERTED, owning_unit="unit-2")
 
-    response = client.post("/v1/nodes/n1/retract")
+    response = client.post("/v1/investigations/inv-1/nodes/n1/retract")
 
     assert response.status_code == 404
 
@@ -466,7 +466,7 @@ def test_confirming_a_node_does_not_touch_an_unrelated_conflict_flagged_edge(fak
     client, _model, _candidates, graph, _audit = fakes
     graph.nodes["n1"] = _node("n1", ProvenanceState.INFERRED)
 
-    response = client.post("/v1/nodes/n1/confirm")
+    response = client.post("/v1/investigations/inv-1/nodes/n1/confirm")
 
     assert response.status_code == 200
     # The only write this call could have made was to `n1` itself, via `supersede_node` — no

@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
-from services.api.app import app, get_audit, get_graph, get_principal
+from services.api.app import app, get_audit, get_graph, get_investigations, get_principal
 
 from schemas.domain import (
     AuditStub,
@@ -25,6 +25,7 @@ from schemas.domain import (
     ProvenanceState,
     SourceRef,
 )
+from tests.services.api.any_case import AnyCase
 
 PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
 
@@ -100,6 +101,7 @@ def client() -> TestClient:
     audit = _FakeAudit()
     app.dependency_overrides[get_principal] = lambda: PRINCIPAL
     app.dependency_overrides[get_graph] = lambda: graph
+    app.dependency_overrides[get_investigations] = AnyCase
     app.dependency_overrides[get_audit] = lambda: audit
 
     test_client = TestClient(app)
@@ -115,7 +117,7 @@ def test_paths_route_passes_the_request_through_and_returns_the_hydrated_result(
     client: TestClient,
 ) -> None:
     response = client.post(
-        "/v1/paths", json={"source": "a", "target": "b", "max_hops": 3, "k": 1}
+        "/v1/investigations/inv-1/paths", json={"source": "a", "target": "b", "max_hops": 3, "k": 1}
     )
 
     assert response.status_code == 200
@@ -134,7 +136,8 @@ def test_paths_route_passes_the_request_through_and_returns_the_hydrated_result(
 
 def test_paths_route_rejects_a_max_hops_above_the_schema_ceiling(client: TestClient) -> None:
     response = client.post(
-        "/v1/paths", json={"source": "a", "target": "b", "max_hops": 20, "k": 1}
+        "/v1/investigations/inv-1/paths",
+        json={"source": "a", "target": "b", "max_hops": 20, "k": 1},
     )
 
     assert response.status_code == 422
@@ -144,7 +147,7 @@ def test_paths_route_rejects_a_max_hops_above_the_schema_ceiling(client: TestCli
 def test_paths_route_with_no_match_returns_an_empty_list_not_an_error(client: TestClient) -> None:
     client.graph._found = []  # type: ignore[attr-defined]
     response = client.post(
-        "/v1/paths", json={"source": "a", "target": "z", "max_hops": 3, "k": 1}
+        "/v1/investigations/inv-1/paths", json={"source": "a", "target": "z", "max_hops": 3, "k": 1}
     )
 
     assert response.status_code == 200

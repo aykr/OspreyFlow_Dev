@@ -11,7 +11,7 @@ afterEach(cleanup);
 
 describe("the search box", () => {
   it("holds the Filters button in the same field as the text box", () => {
-    render(<GlobalSearch apiBaseUrl="http://api" bearerToken="t" onSelect={vi.fn()} entityTypes={["Person"]} />);
+    render(<GlobalSearch investigationId="inv-1" apiBaseUrl="http://api" bearerToken="t" onSelect={vi.fn()} entityTypes={["Person"]} />);
     const field = screen.getByRole("combobox").closest(".global-search__field");
     expect(field).not.toBeNull();
     expect(field!.contains(screen.getByRole("button", { name: "Filters" }))).toBe(true);
@@ -20,7 +20,7 @@ describe("the search box", () => {
 
 describe("the Filters button, as an icon (owner, 3 October 2026: a text button inside the box 'looks strange')", () => {
   it("is an icon with the name Filters, and no visible word", () => {
-    render(<GlobalSearch apiBaseUrl="http://api" bearerToken="t" onSelect={vi.fn()} entityTypes={["Person"]} />);
+    render(<GlobalSearch investigationId="inv-1" apiBaseUrl="http://api" bearerToken="t" onSelect={vi.fn()} entityTypes={["Person"]} />);
     const button = screen.getByRole("button", { name: "Filters" });
     expect(button.querySelector("svg")).not.toBeNull();
     expect((button.textContent ?? "").trim()).toBe("");
@@ -28,7 +28,7 @@ describe("the Filters button, as an icon (owner, 3 October 2026: a text button i
   });
 
   it("shows how many filters are on as a small count, and says so in its name", () => {
-    render(<GlobalSearch apiBaseUrl="http://api" bearerToken="t" onSelect={vi.fn()} entityTypes={["Person"]} />);
+    render(<GlobalSearch investigationId="inv-1" apiBaseUrl="http://api" bearerToken="t" onSelect={vi.fn()} entityTypes={["Person"]} />);
     fireEvent.click(screen.getByRole("button", { name: "Filters" }));
     fireEvent.click(screen.getByRole("checkbox", { name: /ignore case/i }));
     const button = screen.getByRole("button", { name: /^Filters \(/ });

@@ -56,13 +56,15 @@ import {
 export interface QueryBuilderPanelProps {
   apiBaseUrl: string;
   bearerToken: string;
+  /** ADR-099: the case the pattern is matched in. */
+  investigationId: string;
   schema: OntologySchema;
 }
 
 /** The parts the Query builder folds into (ADR-096). */
 type QueryBuilderPart = "pattern" | "add" | "connect" | "save";
 
-export function QueryBuilderPanel({ apiBaseUrl, bearerToken, schema }: QueryBuilderPanelProps) {
+export function QueryBuilderPanel({ apiBaseUrl, bearerToken, investigationId, schema }: QueryBuilderPanelProps) {
   const [pattern, setPattern] = useState<PatternBuilderState>(createEmptyPattern());
   const [paletteType, setPaletteType] = useState(schema.entity_types[0]?.name ?? "");
   const [connectFrom, setConnectFrom] = useState("");
@@ -131,7 +133,7 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, schema }: QueryBuil
   async function handlePreview(): Promise<void> {
     setError(null);
     try {
-      setPreview(await fetchPatternPreview(apiBaseUrl, bearerToken, toPatternQuery(pattern)));
+      setPreview(await fetchPatternPreview(apiBaseUrl, bearerToken, investigationId, toPatternQuery(pattern)));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -140,7 +142,7 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, schema }: QueryBuil
   async function handleRun(): Promise<void> {
     setError(null);
     try {
-      setRunResult(await runPattern(apiBaseUrl, bearerToken, toPatternQuery(pattern)));
+      setRunResult(await runPattern(apiBaseUrl, bearerToken, investigationId, toPatternQuery(pattern)));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -293,6 +295,7 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, schema }: QueryBuil
         <GlobalSearch
           apiBaseUrl={apiBaseUrl}
           bearerToken={bearerToken}
+          investigationId={investigationId}
           onSelect={handlePinFromSearch}
         />
 

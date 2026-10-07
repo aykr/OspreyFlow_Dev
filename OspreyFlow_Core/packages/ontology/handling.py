@@ -8,6 +8,7 @@ configuration change with nothing above this module to touch.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal
 
@@ -163,3 +164,21 @@ def principal_may_view(handling: Handling, principal: Principal, scheme: Handlin
         handling.owning_unit,
         handling.originator,
     )
+
+
+def in_case_datasets(datasets: Sequence[str], principal: Principal) -> bool:
+    """ADR-099's third axis for one element: it belongs to one of the case's datasets, or the
+    principal is the Conduit's own unlimited background work (`datasets is None`). The same rule
+    `AccessFilter.gremlin_dataset_step` compiles into a traversal."""
+    if principal.datasets is None:
+        return True
+    return not set(datasets).isdisjoint(principal.datasets)
+
+
+def principal_may_read(
+    handling: Handling, datasets: Sequence[str], principal: Principal, scheme: HandlingScheme
+) -> bool:
+    """All three axes for one stored element, for a caller holding its body already (the working
+    set's projection, export): its handling and its datasets."""
+    return in_case_datasets(datasets, principal) and principal_may_view(handling, principal, scheme)
+

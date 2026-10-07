@@ -20,7 +20,7 @@ const SCHEMA = {
 
 function mount() {
   vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ patterns: [] }) })));
-  render(<QueryBuilderPanel apiBaseUrl="http://api.test" bearerToken="tok" schema={SCHEMA} />);
+  render(<QueryBuilderPanel investigationId="inv-1" apiBaseUrl="http://api.test" bearerToken="tok" schema={SCHEMA} />);
 }
 
 const header = (name: string) => screen.getByRole("button", { name });

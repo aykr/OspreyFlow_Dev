@@ -214,7 +214,9 @@ class FakeGraphPort:
             if e.source in ids and e.target in ids and (not edge_types or e.type in edge_types)
         ]
 
-    async def expand_candidate_count(self, req: ExpandRequest) -> int:
+    async def expand_candidate_count(
+        self, req: ExpandRequest, *, datasets: list[str] | None = None
+    ) -> int:
         self.candidate_count_requests.append(req)
         return self.candidate_count
 

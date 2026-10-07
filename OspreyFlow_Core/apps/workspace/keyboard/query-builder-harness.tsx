@@ -30,6 +30,7 @@ function Harness() {
       <QueryBuilderPanel
         apiBaseUrl="http://keyboard-test.invalid"
         bearerToken="unused"
+        investigationId="inv-1"
         schema={SCHEMA}
       />
     </div>

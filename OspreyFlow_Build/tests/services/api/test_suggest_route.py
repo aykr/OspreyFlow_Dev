@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
+from services.api.app import app, get_audit, get_graph, get_investigations, get_principal
+
 from ports.graph import NodeSuggestions, SuggestOptions
 from schemas.domain import Principal
-from services.api.app import app, get_audit, get_graph, get_principal
-
+from tests.services.api.any_case import AnyCase
 from tests.services.api.test_search_route import PRINCIPAL, _FakeAudit, _node
 
 
@@ -43,6 +44,7 @@ def _client(graph: _FakeGraph) -> tuple[TestClient, _FakeAudit]:
     audit = _FakeAudit()
     app.dependency_overrides[get_principal] = lambda: PRINCIPAL
     app.dependency_overrides[get_graph] = lambda: graph
+    app.dependency_overrides[get_investigations] = AnyCase
     app.dependency_overrides[get_audit] = lambda: audit
     return TestClient(app), audit
 
@@ -56,7 +58,7 @@ def _clear() -> None:
 def test_suggest_forwards_the_prefix_the_principal_and_the_default_limit() -> None:
     graph = _FakeGraph()
     client, audit = _client(graph)
-    response = client.post("/v1/suggest", json={"query": "C13"})
+    response = client.post("/v1/investigations/inv-1/suggest", json={"query": "C13"})
     assert response.status_code == 200
     assert [n["id"] for n in response.json()["nodes"]] == ["hit-1", "hit-2"]
     assert response.json()["more"] is False
@@ -68,24 +70,28 @@ def test_suggest_forwards_the_prefix_the_principal_and_the_default_limit() -> No
 def test_suggest_says_when_more_matched() -> None:
     """Rule 2: the Glass must be able to say 'more not shown'; the route never drops the flag."""
     client, _ = _client(_FakeGraph(more=True))
-    assert client.post("/v1/suggest", json={"query": "C13"}).json()["more"] is True
+    assert (
+        client.post("/v1/investigations/inv-1/suggest", json={"query": "C13"}).json()["more"]
+        is True
+    )
 
 
-def test_a_prefix_shorter_than_two_characters_is_refused_and_asks_the_graph_nothing() -> (
-    None
-):
+def test_a_prefix_shorter_than_two_characters_is_refused_and_asks_the_graph_nothing() -> None:
     """Two characters, the owner's ruling of 3 October 2026 (it had been three, ADR-059)."""
     graph = _FakeGraph()
     client, audit = _client(graph)
     for short in ("", "C"):
-        assert client.post("/v1/suggest", json={"query": short}).status_code == 422
+        assert (
+            client.post("/v1/investigations/inv-1/suggest", json={"query": short}).status_code
+            == 422
+        )
     assert graph.calls == [] and audit.records == []
 
 
 def test_a_two_character_prefix_is_answered() -> None:
     graph = _FakeGraph()
     client, _ = _client(graph)
-    assert client.post("/v1/suggest", json={"query": "QQ"}).status_code == 200
+    assert client.post("/v1/investigations/inv-1/suggest", json={"query": "QQ"}).status_code == 200
     assert graph.calls == [("QQ", PRINCIPAL, 10)]
 
 
@@ -94,11 +100,15 @@ def test_the_limit_is_bounded() -> None:
     client, _ = _client(graph)
     for bad in (0, 26):
         assert (
-            client.post("/v1/suggest", json={"query": "C13", "limit": bad}).status_code
+            client.post(
+                "/v1/investigations/inv-1/suggest", json={"query": "C13", "limit": bad}
+            ).status_code
             == 422
         )
     assert (
-        client.post("/v1/suggest", json={"query": "C13", "limit": 25}).status_code
+        client.post(
+            "/v1/investigations/inv-1/suggest", json={"query": "C13", "limit": 25}
+        ).status_code
         == 200
     )
     assert graph.calls[-1][2] == 25
@@ -109,8 +119,9 @@ def test_the_route_needs_a_principal() -> None:
     not answer; the filtering itself is the adapter's and is proven there."""
     graph = _FakeGraph()
     app.dependency_overrides[get_graph] = lambda: graph
+    app.dependency_overrides[get_investigations] = AnyCase
     app.dependency_overrides[get_audit] = lambda: _FakeAudit()
-    response = TestClient(app).post("/v1/suggest", json={"query": "C13"})
+    response = TestClient(app).post("/v1/investigations/inv-1/suggest", json={"query": "C13"})
     assert response.status_code in (401, 403)
     assert graph.calls == []
 
@@ -118,7 +129,7 @@ def test_the_route_needs_a_principal() -> None:
 def test_the_options_default_to_the_plain_prefix_match() -> None:
     graph = _FakeGraph()
     client, _ = _client(graph)
-    client.post("/v1/suggest", json={"query": "C13"})
+    client.post("/v1/investigations/inv-1/suggest", json={"query": "C13"})
     assert graph.options == [SuggestOptions()]
 
 
@@ -126,7 +137,7 @@ def test_the_options_are_passed_to_the_graph() -> None:
     graph = _FakeGraph()
     client, audit = _client(graph)
     response = client.post(
-        "/v1/suggest",
+        "/v1/investigations/inv-1/suggest",
         json={
             "query": "jef",
             "mode": "contains",
@@ -149,7 +160,9 @@ def test_the_options_are_passed_to_the_graph() -> None:
 def test_an_unknown_mode_is_refused_before_the_graph_is_asked() -> None:
     graph = _FakeGraph()
     client, _ = _client(graph)
-    response = client.post("/v1/suggest", json={"query": "jef", "mode": "regex"})
+    response = client.post(
+        "/v1/investigations/inv-1/suggest", json={"query": "jef", "mode": "regex"}
+    )
     assert response.status_code == 422
     assert graph.calls == []
 
@@ -158,7 +171,8 @@ def test_too_many_types_are_refused() -> None:
     graph = _FakeGraph()
     client, _ = _client(graph)
     response = client.post(
-        "/v1/suggest", json={"query": "jef", "types": [f"T{n}" for n in range(51)]}
+        "/v1/investigations/inv-1/suggest",
+        json={"query": "jef", "types": [f"T{n}" for n in range(51)]},
     )
     assert response.status_code == 422
     assert graph.calls == []
@@ -168,7 +182,9 @@ def test_a_type_the_ontology_does_not_have_is_a_client_error_not_a_crash() -> No
     graph = _FakeGraph()
     graph.refuse = "unknown entity type(s): Nonsense"
     client, audit = _client(graph)
-    response = client.post("/v1/suggest", json={"query": "jef", "types": ["Nonsense"]})
+    response = client.post(
+        "/v1/investigations/inv-1/suggest", json={"query": "jef", "types": ["Nonsense"]}
+    )
     assert response.status_code == 422
     assert "Nonsense" in response.text
     assert audit.records == []

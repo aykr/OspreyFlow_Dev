@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 //
 // The search box as the analyst types (ADR-059). Seen, 2 October 2026: typing `C` or part of an
-// account id found nothing, because the box asked for an exact match. It now asks `/v1/suggest`
+// account id found nothing, because the box asked for an exact match. It now asks `/v1/investigations/inv-1/suggest`
 // from the third character, after a pause, ignores an answer to a question already superseded,
 // says when more matched than are shown, and says when the Conduit could not answer.
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -18,7 +18,7 @@ type Reply = { status?: number; body?: unknown; delayMs?: number };
 
 function stubFetch(reply: (query: string) => Reply): ReturnType<typeof vi.fn> {
   const mock = vi.fn(async (url: string, init?: RequestInit) => {
-    if (!url.endsWith("/v1/suggest") || init?.method !== "POST") throw new Error(`unexpected request ${url}`);
+    if (!url.endsWith("/v1/investigations/inv-1/suggest") || init?.method !== "POST") throw new Error(`unexpected request ${url}`);
     const { query } = JSON.parse(String(init.body)) as { query: string };
     const { status = 200, body = { nodes: [], more: false }, delayMs = 0 } = reply(query);
     if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -49,7 +49,7 @@ afterEach(() => {
 });
 
 function mount(onSelect = vi.fn()): ReturnType<typeof vi.fn> {
-  render(<GlobalSearch apiBaseUrl="http://api" bearerToken="t" onSelect={onSelect} />);
+  render(<GlobalSearch investigationId="inv-1" apiBaseUrl="http://api" bearerToken="t" onSelect={onSelect} />);
   return onSelect;
 }
 
@@ -219,7 +219,7 @@ describe("GlobalSearch as the analyst types", () => {
 
 describe("GlobalSearch: / to search (ADR-097 step 1)", () => {
   it("/ anywhere outside a text field moves focus to the search box", () => {
-    render(<GlobalSearch apiBaseUrl="http://api.test" bearerToken="tok" onSelect={() => undefined} />);
+    render(<GlobalSearch investigationId="inv-1" apiBaseUrl="http://api.test" bearerToken="tok" onSelect={() => undefined} />);
     fireEvent.keyDown(document.body, { key: "/" });
     expect(document.activeElement).toBe(screen.getByRole("combobox", { name: /Search entities/ }));
   });
@@ -228,7 +228,7 @@ describe("GlobalSearch: / to search (ADR-097 step 1)", () => {
     render(
       <>
         <input aria-label="Note" />
-        <GlobalSearch apiBaseUrl="http://api.test" bearerToken="tok" onSelect={() => undefined} />
+        <GlobalSearch investigationId="inv-1" apiBaseUrl="http://api.test" bearerToken="tok" onSelect={() => undefined} />
       </>,
     );
     const note = screen.getByRole("textbox", { name: "Note" });
