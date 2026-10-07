@@ -379,6 +379,18 @@ export const SELECTION_ACTIONS = defineActionRegistry("SELECTION_ACTIONS", [
   "remove-a-node-from-the-selection-from-the-list",
   // ADR-098 decision 1.
   "show-links-among-the-selection-from-the-selection-bar",
+  // ADR-098 decision 4.
+  "ask-the-model-about-the-selected-documents-from-the-selection-bar",
+] as const);
+
+/** The case's questions to the model (ADR-098 decision 4): asked, answered with what it draws on,
+ * and its proposals accepted or rejected. `keyboard/questions.spec.ts`. */
+export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [
+  "ask-a-question-with-ctrl-enter",
+  "ask-a-question-with-the-ask-button",
+  "open-a-cited-document-by-keyboard",
+  "accept-a-proposal-by-keyboard",
+  "reject-a-proposal-by-keyboard",
 ] as const);
 
 /** Files added straight to a case (ADR-094 step 3): from the strip over the canvas, standing alone,

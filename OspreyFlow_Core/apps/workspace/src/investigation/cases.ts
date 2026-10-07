@@ -108,7 +108,7 @@ export async function removeCase(
 }
 
 /** The URL the Glass already reads on load (`initialInvestigationId`). */
-export function caseUrl(id: string, view?: "ingest"): string {
+export function caseUrl(id: string, view?: "ingest" | "questions"): string {
   // `from=case` makes the Glass sign back in by itself: the reload drops the in-memory sign-in
   // (`auth/launcherHandoff.ts`), and without it the person met the sign-in screen after every switch.
   const base = `/?investigation=${encodeURIComponent(id)}&from=case`;
@@ -120,7 +120,7 @@ export function caseUrl(id: string, view?: "ingest"): string {
  * of the previous case's state is left behind. */
 export function openCase(
   id: string,
-  view?: "ingest",
+  view?: "ingest" | "questions",
   navigate: (url: string) => void = (url) => window.location.assign(url),
 ): void {
   sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, id);

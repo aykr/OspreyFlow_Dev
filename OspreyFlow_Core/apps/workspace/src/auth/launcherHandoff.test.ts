@@ -30,6 +30,14 @@ describe("reading the launcher's hand-off", () => {
     });
   });
 
+  test("a case branched to ask the model opens on its questions (ADR-098 decision 4)", () => {
+    expect(readHandoff("?investigation=b1&from=case&view=questions", sessionStorage, NOW)).toEqual({
+      autoSignIn: true,
+      view: "questions",
+    });
+    expect(readHandoff("?investigation=b1&from=case&view=question", sessionStorage, NOW).view).toBeNull();
+  });
+
   test("only the exact value `case` counts as a case switch", () => {
     expect(readHandoff("?from=Case", sessionStorage, NOW).autoSignIn).toBe(false);
     expect(readHandoff("?from=cases", sessionStorage, NOW).autoSignIn).toBe(false);

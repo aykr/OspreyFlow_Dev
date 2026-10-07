@@ -76,6 +76,10 @@ describe("opening a case", () => {
     expect(caseUrl("c1", "ingest")).toBe("/?investigation=c1&from=case&view=ingest");
   });
 
+  it("opens a case branched for questions on its Questions panel (ADR-098 decision 4)", () => {
+    expect(caseUrl("b1", "questions")).toBe("/?investigation=b1&from=case&view=questions");
+  });
+
   it("remembers it for the sign-in round trip before navigating", () => {
     const navigate = vi.fn();
 

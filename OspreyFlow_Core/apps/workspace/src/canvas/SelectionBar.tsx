@@ -10,13 +10,26 @@ export interface SelectionBarProps {
   onBranch?: () => void;
   /** ADR-098: draw the links among the selected nodes. Offered for two or more. */
   onLinksAmong?: () => void;
+  /** ADR-098 decision 4: branch the selection and ask the model about its Documents. Offered while
+   * the selection holds at least one Document (`documentCount`). */
+  onAsk?: () => void;
+  documentCount?: number;
   onRemove: () => void;
   onClear: () => void;
 }
 
 const COUNT = new Intl.NumberFormat("en-GB");
 
-export function SelectionBar({ count, onExpand, onBranch, onLinksAmong, onRemove, onClear }: SelectionBarProps) {
+export function SelectionBar({
+  count,
+  onExpand,
+  onBranch,
+  onLinksAmong,
+  onAsk,
+  documentCount = 0,
+  onRemove,
+  onClear,
+}: SelectionBarProps) {
   if (count === 0) return null;
   return (
     <div
@@ -41,6 +54,11 @@ export function SelectionBar({ count, onExpand, onBranch, onLinksAmong, onRemove
       {onLinksAmong && count > 1 && (
         <button type="button" className="btn btn--quiet" onClick={onLinksAmong}>
           Show links among these
+        </button>
+      )}
+      {onAsk && documentCount > 0 && (
+        <button type="button" className="btn btn--quiet" onClick={onAsk}>
+          Ask the model about these…
         </button>
       )}
       {onBranch && (

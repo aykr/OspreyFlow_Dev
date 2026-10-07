@@ -3,6 +3,8 @@ export interface BranchRequest {
   bearerToken: string;
   investigationId: string;
   nodeIds: string[];
+  /** The new case's name (ADR-098 decision 4); absent, the Conduit's default. */
+  name?: string;
 }
 
 export type BranchResult =
@@ -32,7 +34,9 @@ export async function branchSelection(
           Authorization: `Bearer ${req.bearerToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ node_ids: req.nodeIds }),
+        body: JSON.stringify(
+          req.name ? { node_ids: req.nodeIds, name: req.name } : { node_ids: req.nodeIds },
+        ),
       },
     );
     if (response.status === 422) {

@@ -477,6 +477,17 @@ set's cap none of them is drawn and the canvas says so. For larger views, *Show 
 selection bar (two or more selected) and *Show links among all* in the View group draw them on demand, all
 or none, and say how many (`keyboard/selection.spec.ts`, `keyboard/keyboard.spec.ts`).
 
+**Questions to the model, in a branch (ADR-098 decision 4).** While the selection holds a Document, the
+selection bar offers *Ask the model about these…*: it branches the selection into a new case named
+"Questions on <n> documents" and opens that case with its *Questions* panel open (the case address carries
+`view=questions`, kept through the sign-in round trip as the Ingest tab is). The panel is also on the left
+rail as *Questions*, for any case. It lists the case's questions in order, each with its answer, *Draws on*
+buttons for the Documents it cites (each opens the reader), and the model's proposals with *Accept* and
+*Reject*; a proposal whose words are not in the Document the model named is left out and counted. The
+question box asks on *Ask* or `Ctrl+Enter`. Documents together longer than 80,000 characters are refused
+with both figures in words, and the question is kept (`keyboard/questions.spec.ts`,
+`keyboard/selection.spec.ts`).
+
 ### 3.1c An expansion that adds nothing says so (ADR-077)
 
 Choosing a relationship from a node's menu (or pressing `Enter`, or opening a search result) asks the

@@ -18,6 +18,13 @@ describe("branchSelection", () => {
     expect(JSON.parse(init.body)).toEqual({ node_ids: ["a", "b"] });
   });
 
+  it("names the new case when asked to, and only then (ADR-098 decision 4)", async () => {
+    const fetcher = reply(201, { id: "b-1", name: "Questions on 2 documents" });
+    await branchSelection(fetcher, { ...base, nodeIds: ["d1", "d2"], name: "Questions on 2 documents" });
+    const [, init] = (fetcher as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(JSON.parse(init.body)).toEqual({ node_ids: ["d1", "d2"], name: "Questions on 2 documents" });
+  });
+
   it("returns the new case so the caller can open it", async () => {
     const result = await branchSelection(reply(201, { id: "b-1", name: "Tab" }), {
       ...base,

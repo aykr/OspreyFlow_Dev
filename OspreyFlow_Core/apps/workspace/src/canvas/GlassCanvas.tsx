@@ -220,6 +220,9 @@ export interface GlassCanvasProps {
   /** A branch of the selected nodes was made (ADR-084): the new case's id and name. The caller
    * opens it. Absent: this canvas offers no "Branch selected" button. */
   onBranchCreated?: (id: string, name: string) => void;
+  /** ADR-098 decision 4: the selection was branched to ask the model about its Documents; open
+   * the new case on its questions. Absent: not offered. */
+  onAskAboutDocuments?: (id: string, name: string) => void;
   /** The link now selected, or `null` when none is. Selecting a link clears the node selection,
    * and selecting a node clears the link, so the Inspector shows one thing at a time. */
   onEdgeSelect?: (edge: Edge | null) => void;
@@ -357,6 +360,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       dimmedEdgeIds = EMPTY_DIMMED_SET,
       onSelectionChange,
       onBranchCreated,
+      onAskAboutDocuments,
       onEdgeSelect,
       onFocusChange,
       onViewMessages,
@@ -2510,7 +2514,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           label: `Branch selected (${selected.size}) to a new tab`,
           count: undefined,
           group: "Actions",
-          onSelect: () => void branchSelected(),
+          onSelect: () => void branchSelected().then((made) => made && onBranchCreated?.(made.id, made.name)),
         });
       }
 
@@ -2715,7 +2719,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // Sends the selected nodes to a case of their own (ADR-084). A Group Node stands for every
     // member of its group, so choosing one chooses all of them; the stand-in's own id is not a
     // real node and is never sent. The view is not changed: the original case stays as it was.
-    async function branchSelected(): Promise<void> {
+    function chosenForBranch(): string[] {
       const chosen = new Set<string>();
       for (const id of selected) {
         const group = foldedViewRef.current?.groups.get(id);
@@ -2726,11 +2730,16 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         const owner = allGroups.find((c) => c.id === group.communityId);
         for (const member of owner?.members ?? []) chosen.add(member);
       }
+      return Array.from(chosen);
+    }
+
+    async function branchSelected(name?: string): Promise<{ id: string; name: string } | null> {
       const result = await branchSelection(fetch, {
         apiBaseUrl,
         bearerToken,
         investigationId,
-        nodeIds: Array.from(chosen),
+        nodeIds: chosenForBranch(),
+        name,
       });
       if (!result.ok) {
         const rect = containerRef.current?.getBoundingClientRect();
@@ -2739,9 +2748,28 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           y: (rect?.top ?? 0) + 40,
           message: result.message,
         });
-        return;
+        return null;
       }
-      onBranchCreated?.(result.id, result.name);
+      return { id: result.id, name: result.name };
+    }
+
+    // ADR-098 decision 4: the selection's Documents, Group Nodes' members included.
+    const selectedDocumentCount = (() => {
+      let count = 0;
+      for (const id of new Set(Array.from(selected).flatMap((s) => {
+        const group = foldedViewRef.current?.groups.get(s);
+        if (!group) return [s];
+        return allGroups.find((c) => c.id === group.communityId)?.members ?? [];
+      }))) {
+        if (graph.hasNode(id) && graph.getNodeAttribute(id, "data")?.type === "Document") count += 1;
+      }
+      return count;
+    })();
+
+    async function askAboutSelected(): Promise<void> {
+      const n = selectedDocumentCount;
+      const made = await branchSelected(`Questions on ${n} document${n === 1 ? "" : "s"}`);
+      if (made) onAskAboutDocuments?.(made.id, made.name);
     }
 
     return (
@@ -3054,7 +3082,13 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               for (const id of Array.from(selected)) await requestExpansion(id, null, x, y);
             })();
           }}
-          onBranch={onBranchCreated ? () => void branchSelected() : undefined}
+          onBranch={
+            onBranchCreated
+              ? () => void branchSelected().then((made) => made && onBranchCreated(made.id, made.name))
+              : undefined
+          }
+          onAsk={onAskAboutDocuments ? () => void askAboutSelected() : undefined}
+          documentCount={selectedDocumentCount}
           onLinksAmong={() => void linksAmongOnCanvas(Array.from(selected))}
           onRemove={() => void removeNodeIds(Array.from(selected))}
           onClear={() => {

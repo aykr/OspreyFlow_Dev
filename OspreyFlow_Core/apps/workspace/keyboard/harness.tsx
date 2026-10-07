@@ -30,6 +30,8 @@ declare global {
       linkAction: { edgeId: string; action: string } | null;
       /** The case the canvas was told a branch of the selection was made as (ADR-084). */
       branchedTo: string | null;
+      /** The case the selection was branched to so the model could be asked about it (ADR-098). */
+      askedIn: string | null;
       /** The Document the canvas asked to open to read (ADR-092). */
       openedDocument: string | null;
     };
@@ -154,6 +156,7 @@ window.__KEYBOARD__ = {
   selectedEdge: null,
   linkAction: null,
   branchedTo: null,
+  askedIn: null,
   openedDocument: null,
 };
 
@@ -382,6 +385,9 @@ createRoot(container).render(
       }}
       onBranchCreated={(id) => {
         window.__KEYBOARD__!.branchedTo = id;
+      }}
+      onAskAboutDocuments={(id) => {
+        window.__KEYBOARD__!.askedIn = id;
       }}
       onGroupedCountChange={(count) => {
         window.__GROUPED__ = count;

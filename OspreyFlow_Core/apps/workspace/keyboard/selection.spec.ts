@@ -81,6 +81,39 @@ test("the selection bar's Show links among these asks for the links among the se
   registerCovered("SELECTION_ACTIONS", "show-links-among-the-selection-from-the-selection-bar");
 });
 
+test("the selection bar's Ask the model about these… branches the selection, named for its documents, and opens it (ADR-098)", async ({ page }) => {
+  let body: { node_ids: string[]; name?: string } | null = null;
+  await page.route("**/*/investigations/*/branch", async (route) => {
+    body = route.request().postDataJSON();
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({ id: "branch-q", name: "Questions on 1 document" }),
+    });
+  });
+  await page.goto("/keyboard/harness.html?fixture=emails");
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  const bar = page.getByRole("toolbar", { name: "Selection" });
+  // A selection with no Document is not offered it.
+  await expect.poll(() => selection(page)).not.toEqual([]);
+  await expect(bar.getByRole("button", { name: "Ask the model about these…" })).toHaveCount(0);
+  for (let i = 0; i < 8; i++) {
+    if ((await focused(page)) === "email:ev-1") break;
+    await page.keyboard.press("Control+Shift+ArrowRight"); // every node in turn, linked or not
+  }
+  await expect.poll(() => focused(page)).toBe("email:ev-1");
+  await page.keyboard.press(" ");
+  await expect.poll(() => selection(page)).toContain("email:ev-1");
+  await bar.getByRole("button", { name: "Ask the model about these…" }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => body?.name).toBe("Questions on 1 document");
+  expect(body!.node_ids).toContain("email:ev-1");
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __KEYBOARD__?: { askedIn?: string | null } }).__KEYBOARD__?.askedIn))
+    .toBe("branch-q");
+  registerCovered("SELECTION_ACTIONS", "ask-the-model-about-the-selected-documents-from-the-selection-bar");
+});
+
 test("the selection bar's Expand asks to expand each selected node", async ({ page }) => {
   const asked: string[] = [];
   page.on("request", (request) => {

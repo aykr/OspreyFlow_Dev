@@ -93,6 +93,7 @@ createRoot(container).render(
           { id: "cases", label: "Cases", icon: "cases", onSelect: rail("cases") },
           { id: "watches", label: "Watches", icon: "watches", onSelect: rail("watches") },
           { id: "history", label: "History", icon: "history", onSelect: rail("history") },
+          { id: "questions", label: "Questions", icon: "questions", onSelect: rail("questions") },
           { id: "ingest", label: "Ingest Studio", icon: "ingest", onSelect: rail("ingest") },
         ]}
       />

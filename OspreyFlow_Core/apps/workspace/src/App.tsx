@@ -78,6 +78,7 @@ import { CasePicker } from "./investigation/CasePicker";
 import { CaseSwitcher } from "./investigation/CaseSwitcher";
 import { CaseTabs } from "./investigation/CaseTabs";
 import { openCase } from "./investigation/cases";
+import { QuestionsPanel } from "./questions/QuestionsPanel";
 import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
 import { StatusBar } from "./statusbar/StatusBar";
 import { emergence, type FirstSeen } from "./crossfilter/emergence";
@@ -366,6 +367,8 @@ export function App() {
   const [historyOpen, setHistoryOpen] = useState(false);
   // ADR-097 Amendment 1: the case and its branches, reached from the rail.
   const [casesOpen, setCasesOpen] = useState(false);
+  // ADR-098 decision 4: the case's questions to the model, open at once in a case branched for them.
+  const [questionsOpen, setQuestionsOpen] = useState(handoff.view === "questions");
   // ADR-097 step 1 (review item 16): the deployment's classifications, lowest first, for the strip.
   const [classificationOrder, setClassificationOrder] = useState<readonly string[]>([]);
   const [proposedTypesOpen, setProposedTypesOpen] = useState(false);
@@ -405,7 +408,7 @@ export function App() {
 
   const [view, setView] = useState<
     "graph" | "map" | "ingest" | "dossier" | "watches"
-  >(handoff.view ?? "graph");
+  >(handoff.view === "ingest" ? "ingest" : "graph");
   // Which application is open, and (so the switch can go back to it) the Glass view last open.
   const app = view === "ingest" ? "ingest" : "glass";
   const lastGlassView = useRef<"graph" | "map" | "dossier" | "watches">("graph");
@@ -879,6 +882,7 @@ export function App() {
                 { id: "cases", label: "Cases", icon: "cases" as const, onSelect: () => setCasesOpen(true), pressed: casesOpen },
                 { id: "watches", label: "Watches", icon: "watches" as const, onSelect: () => setView("watches"), pressed: view === "watches" },
                 { id: "history", label: "History", icon: "history" as const, onSelect: () => setHistoryOpen(true), pressed: historyOpen },
+                { id: "questions", label: "Questions", icon: "questions" as const, onSelect: () => setQuestionsOpen(true), pressed: questionsOpen },
                 ...((principal?.roles?.includes("osprey-admin") ?? false)
                   ? // ADR-090 C3: the relationship types analysts of the administrator's unit proposed.
                     [{ id: "types", label: "Proposed types", icon: "types" as const, onSelect: () => setProposedTypesOpen(true), pressed: proposedTypesOpen }]
@@ -1026,6 +1030,7 @@ export function App() {
                   if (action === "history") setLinkHistorySignal((n) => n + 1);
                 }}
                 onBranchCreated={(id) => openCase(id)}
+                onAskAboutDocuments={(id) => openCase(id, "questions")}
                 onSelectionChange={(nodeIds) => {
                   setSelectedNodeIds(nodeIds);
                   const first = nodeIds[0];
@@ -1317,6 +1322,18 @@ export function App() {
         onClose={() => setProposedTypesOpen(false)}
         onDecided={() => setLinkTypesRead((n) => n + 1)}
       />
+      <Drawer open={questionsOpen} onClose={() => setQuestionsOpen(false)} title="Questions">
+        <QuestionsPanel
+          apiBaseUrl={API_BASE_URL}
+          bearerToken={bearerToken}
+          investigationId={investigationId}
+          onDelta={(delta) => workingSetRef.current.store.getState().applyDelta(delta as WorkingSetDelta)}
+          onOpenDocument={(id) => {
+            setReaderFallback(undefined);
+            setReaderDocumentId(id);
+          }}
+        />
+      </Drawer>
       {/* ADR-097 Amendment 1: the case's tabs, as a list in a panel from the rail. */}
       <Drawer open={casesOpen} onClose={() => setCasesOpen(false)} title="Cases">
         <div style={{ display: "grid", gap: "var(--sp-8)" }}>

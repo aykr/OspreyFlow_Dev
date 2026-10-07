@@ -14,7 +14,9 @@
 // not state that matters: unreadable, expired or foreign values are ignored, and storage that
 // refuses to work degrades to "start the sign-in, open the default tab".
 
-export type HandoffView = "ingest";
+/** `questions`: a case just branched to ask the model about its documents (ADR-098 decision 4),
+ * opened on its Questions panel. */
+export type HandoffView = "ingest" | "questions";
 
 export interface Handoff {
   /** Start the sign-in without waiting for a click. */
@@ -32,7 +34,7 @@ interface Stash {
 }
 
 function viewFrom(value: unknown): HandoffView | null {
-  return value === "ingest" ? "ingest" : null;
+  return value === "ingest" || value === "questions" ? value : null;
 }
 
 function stash(storage: Storage, value: Stash): void {

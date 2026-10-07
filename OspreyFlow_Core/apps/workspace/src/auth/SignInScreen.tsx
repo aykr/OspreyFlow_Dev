@@ -14,7 +14,7 @@ export interface SignInScreenProps {
   reason?: string | null;
   /** The launcher's Ingest Studio tile opens the Glass on its Ingest tab. If the sign-in has to be
    * done by hand, the screen says which of the two the person is signing in to. */
-  intent?: "ingest" | null;
+  intent?: "ingest" | "questions" | null;
   onSignIn: () => void;
 }
 

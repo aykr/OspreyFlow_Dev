@@ -65,4 +65,15 @@ describe("SelectionBar: Show links among these", () => {
     render(<SelectionBar count={1} onLinksAmong={() => {}} onRemove={() => {}} onClear={() => {}} />);
     expect(screen.queryByRole("button", { name: "Show links among these" })).toBeNull();
   });
+
+  it("offers Ask the model about these… only while the selection holds a Document (ADR-098 decision 4)", () => {
+    const ask = vi.fn();
+    const { rerender } = render(
+      <SelectionBar count={2} onAsk={ask} documentCount={0} onRemove={() => {}} onClear={() => {}} />,
+    );
+    expect(screen.queryByRole("button", { name: "Ask the model about these…" })).toBeNull();
+    rerender(<SelectionBar count={2} onAsk={ask} documentCount={1} onRemove={() => {}} onClear={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Ask the model about these…" }));
+    expect(ask).toHaveBeenCalledTimes(1);
+  });
 });

@@ -85,6 +85,11 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("POST", P + "/links-among"): E,
     # ADR-098 decision 5: writes the marked entity into the case.
     ("POST", P + "/documents/{document_id}/designations"): E,
+    # ADR-098 decision 4: a question writes pending findings; its conversation is the case's.
+    ("POST", P + "/questions"): E,
+    ("GET", P + "/questions"): V,
+    ("POST", P + "/questions/candidates/{candidate_id}/accept"): E,
+    ("POST", P + "/questions/candidates/{candidate_id}/reject"): E,
     ("POST", P + "/export"): E,
     ("POST", P + "/sites"): E,
     ("GET", P + "/sites/{site_id}"): V,

@@ -76,6 +76,7 @@ from adapters.media_objectstore import MediaStoreConfig, ObjectStoreMediaStore
 from adapters.model_litellm.adapter import ModelLiteLLMAdapter
 from adapters.model_litellm.client import LiteLLMClient, LiteLLMConfig
 from adapters.model_litellm.errors import ExtractionFailedError, ModelUnavailableError
+from adapters.recognise_stanza import RecogniserConfig, RecogniseStanzaAdapter
 from conduit_common.identity import new_edge_id, new_id, now_utc
 from geo.bilinear import ControlPoint
 from geo.image_dimensions import (
@@ -94,6 +95,7 @@ from ports.compute import ComputePort
 from ports.graph import GraphPort
 from ports.media import MediaStore
 from ports.model import ModelPort
+from ports.recognise import RecogniserRefusedError, RecogniserUnavailableError
 from schemas.analytics import (
     CrossFilterRequest,
     EventFilter,
@@ -205,9 +207,6 @@ from .document_content import (
     HolderNotFoundError,
     UploadRefusedError,
 )
-from adapters.recognise_stanza import RecogniserConfig, RecogniseStanzaAdapter
-from ports.recognise import RecogniserRefusedError, RecogniserUnavailableError
-
 from .document_reader import (
     Designation,
     DesignationRefusedError,
@@ -312,6 +311,15 @@ from .patterns import (
     preview_pattern,
     run_pattern,
     run_pattern_match_job,
+)
+from .questions import (
+    AskRequest,
+    NoDocumentsError,
+    PostgresQuestionStore,
+    QuestionAccepted,
+    QuestionAnswer,
+    QuestionsService,
+    QuestionsTooLargeError,
 )
 from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
 from .resolution_trigger import ResolveNowAccepted
@@ -439,6 +447,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     export_ledger = await ExportLedgerStore.connect(config.postgres.dsn)
     studio_recipes = await StudioRecipeStore.connect(config.postgres.dsn)
     extraction_candidates = await ExtractionCandidateStore.connect(config.postgres.dsn)
+    questions_store = await PostgresQuestionStore.connect(config.postgres.dsn)
     litellm_client = LiteLLMClient(LiteLLMConfig.from_env())
     # `embed_model` is the only model this adapter needs fixed at construction — `extract()`'s own
     # model is caller-supplied per call (`ExtractionRequest.model`, ADR-005), never this adapter's
@@ -531,6 +540,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         investigations=investigations,
         recogniser=recogniser,
     )
+    # ADR-098 decision 4: questions to the model about a case's documents.
+    app.state.questions = QuestionsService(
+        app.state.working_set,
+        app.state.document_reader,
+        graph,
+        model,
+        ontology,
+        extraction_candidates,
+        questions_store,
+        default_model=models.extraction,
+    )
     app.state.suppression_marks = suppression_marks
     app.state.gaps_store = gaps_store
     app.state.assumptions_store = assumptions_store
@@ -602,6 +622,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await export_ledger.close()
         await studio_recipes.close()
         await extraction_candidates.close()
+        await questions_store.close()
         await litellm_client.aclose()
         await app.state.principal_resolver.aclose()
         analytics_con.close()
@@ -837,6 +858,13 @@ def get_email_extraction(request: Request) -> EmailExtractionService:
 
 
 EmailExtractionDep = Annotated[EmailExtractionService, Depends(get_email_extraction)]
+
+
+def get_questions(request: Request) -> QuestionsService:
+    return request.app.state.questions  # type: ignore[no-any-return]
+
+
+QuestionsDep = Annotated[QuestionsService, Depends(get_questions)]
 
 
 def get_link_changes(request: Request) -> LinkChangeService:
@@ -1413,6 +1441,25 @@ async def _extraction_candidate_not_found_handler(
 async def _document_not_found_handler(request: Request, exc: DocumentNotFoundError) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND, content={"error": "document_not_found"}
+    )
+
+
+@app.exception_handler(NoDocumentsError)
+async def _no_documents_handler(request: Request, exc: NoDocumentsError) -> JSONResponse:
+    """ADR-098 decision 4: the case holds no Document the analyst can see to ask about."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content={"error": "no_documents"}
+    )
+
+
+@app.exception_handler(QuestionsTooLargeError)
+async def _questions_too_large_handler(
+    request: Request, exc: QuestionsTooLargeError
+) -> JSONResponse:
+    """Rule 2: documents longer than the model reads at once are refused, never cut."""
+    return JSONResponse(
+        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+        content={"error": "documents_too_large", "would_be": exc.would_be, "limit": exc.limit},
     )
 
 
@@ -3315,6 +3362,79 @@ async def reject_document_candidate_route(
         action="reject_document_candidate",
         investigation_id=investigation.id,
         resolved_query={"document_id": document_id, "candidate_id": candidate_id},
+        result_cardinality=1,
+    )
+    return RejectedResponse()
+
+
+@app.post("/v1/investigations/{investigation_id}/questions")
+async def ask_question_route(
+    investigation: InvestigationEditorDep,
+    body: AskRequest,
+    principal: PrincipalDep,
+    questions: QuestionsDep,
+    audit: AuditDep,
+) -> QuestionAnswer:
+    """Asks the model about the case's Documents the analyst can see (ADR-098 decision 4). What it
+    proposes is pending until a person accepts it."""
+    answer = await questions.ask(investigation.id, body.question, principal)
+    await audit.record(
+        principal=principal,
+        action="ask_question",
+        investigation_id=investigation.id,
+        resolved_query={"question_id": answer.id},
+        result_cardinality=len(answer.candidates),
+    )
+    return answer
+
+
+@app.get("/v1/investigations/{investigation_id}/questions")
+async def list_questions_route(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    questions: QuestionsDep,
+) -> list[QuestionAnswer]:
+    """The case's questions and answers, as this reader may see them (ADR-098 decision 4)."""
+    return await questions.history(investigation.id, principal)
+
+
+@app.post("/v1/investigations/{investigation_id}/questions/candidates/{candidate_id}/accept")
+async def accept_question_candidate_route(
+    investigation: InvestigationEditorDep,
+    candidate_id: str,
+    principal: PrincipalDep,
+    questions: QuestionsDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+) -> QuestionAccepted:
+    """Accepts one of the model's proposals: an inferred node linked to its Document."""
+    result = await questions.accept(investigation.id, candidate_id, principal)
+    await publish_delta(valkey, investigation.id, result.delta)
+    await audit.record(
+        principal=principal,
+        action="accept_question_candidate",
+        investigation_id=investigation.id,
+        resolved_query={"candidate_id": candidate_id},
+        result_cardinality=1,
+    )
+    return result
+
+
+@app.post("/v1/investigations/{investigation_id}/questions/candidates/{candidate_id}/reject")
+async def reject_question_candidate_route(
+    investigation: InvestigationEditorDep,
+    candidate_id: str,
+    principal: PrincipalDep,
+    questions: QuestionsDep,
+    audit: AuditDep,
+) -> RejectedResponse:
+    """Rejects one of the model's proposals: nothing is written."""
+    await questions.reject(investigation.id, candidate_id, principal)
+    await audit.record(
+        principal=principal,
+        action="reject_question_candidate",
+        investigation_id=investigation.id,
+        resolved_query={"candidate_id": candidate_id},
         result_cardinality=1,
     )
     return RejectedResponse()
