@@ -10006,3 +10006,12 @@ Status: accepted 7 October 2026 (mine, within the owner's "go ahead with all fiv
 5. **The Ingest Studio works only within a case**: with none open it says so rather than calling routes that now belong to one. The connector and transform catalogues stay global; they describe the system, not data.
 6. **The authorised-query gate reads a query built as an f-string**, which joining a dataset clause onto a query makes it, by its literal parts; a query that binds no principal is still flagged (shown both ways).
 
+
+### ADR-099, Amendment 5 (7 October 2026) — part (e): records made before Amendment 3 are placed where their case says, and otherwise left as they were
+
+Status: accepted 7 October 2026 (mine, within the owner's "go ahead with all five parts of Amendment 3"; recorded so it can be overruled). It departs from Amendment 3 decision 4's "a copy of it is given to each dataset its owner's cases read".
+
+1. **A link-type proposal or an alert takes the first dataset of the case it records** (`scripts.stamp_datasets` step 6, `place_records`); one whose case reads no dataset yet is left and counted.
+2. **A saved pattern, hotlist, monitor or Studio recipe made before Amendment 3 is not copied.** None of them records a case, so a copy per dataset would be a guess multiplied: a monitor copied into every dataset raises alerts in each, and a recipe copied twice would publish into a dataset it was never meant for. Each stays, naming no dataset, readable in every case of its owner (`reach_clause`'s legacy branch), and the script counts them per table so the owner can see what is left. Copying, if wanted, is a choice an analyst makes in the case, not one a script makes for them.
+3. **What it rests on, measured:** the owner's deployment held none of these records when this was written (link_type_proposals, saved_patterns, hotlists, monitors, alerts and studio_recipes all 0), so nothing is lost by not copying there. A deployment whose tables do not yet have the `dataset_id` column (the Conduit adds it at start-up) is told so per table, not failed.
+4. **Tests:** `tests/test_stamp_records.py`, against real Postgres: the case's first dataset is taken (red with the last planted instead), a record with no case is counted and not placed, a dry run writes nothing (red with the write guard removed), a second run moves nothing.

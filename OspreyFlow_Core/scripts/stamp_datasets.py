@@ -21,6 +21,11 @@ What it does, in order, each step safe to run again:
    accepted before ADR-099) with the case's first dataset.
 5. Rewrites each case's working-set copies of its nodes and links with their datasets, since the
    canvas is projected from those copies (`WorkingSetService._project`).
+6. Places the Conduit's own records made before ADR-099 Amendment 3 (`place_records`): a link-type
+   proposal or an alert records the case it was made in, and takes that case's first dataset. A
+   saved pattern, watch, monitor or Studio recipe records no case, so nothing says which dataset it
+   was meant for; those are counted, not guessed, and stay readable in every case of their owner,
+   as they were (ADR-099 Amendment 5).
 
 It ends by counting the elements still in no dataset, per type, and names them as such: they are
 in no case's world until something claims them. Nothing is deleted.
@@ -445,6 +450,68 @@ async def stamp(
     return report
 
 
+#: Records that name the case they were made in: placed in its first dataset.
+_PLACED_BY_CASE = ("link_type_proposals", "alerts")
+#: Records that name no case: counted only.
+_NO_CASE = ("saved_patterns", "hotlists", "monitors", "studio_recipes")
+
+
+@dataclass
+class RecordsReport:
+    placed: dict[str, int] = field(default_factory=dict)
+    unplaced: dict[str, int] = field(default_factory=dict)
+    #: Tables whose `dataset_id` column does not exist yet: the Conduit adds it when it starts.
+    not_ready: list[str] = field(default_factory=list)
+
+
+async def _has_dataset_column(conn: asyncpg.Connection, table: str) -> bool:
+    return bool(
+        await conn.fetchval(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = $1 AND column_name = 'dataset_id'",
+            table,
+        )
+    )
+
+
+async def place_records(
+    conn: asyncpg.Connection, *, write: bool, say: Callable[[str], None] = print
+) -> RecordsReport:
+    """Step 6. A record whose case reads no dataset yet is left as it is, and counted with the
+    unplaced; one that already has a dataset is never moved, so a second run changes nothing."""
+    report = RecordsReport()
+    first_dataset = (
+        "(SELECT d.dataset_id FROM investigation_datasets d "
+        "WHERE d.investigation_id = r.investigation_id ORDER BY d.position LIMIT 1)"
+    )
+    for table in (*_PLACED_BY_CASE, *_NO_CASE):
+        if not await _has_dataset_column(conn, table):
+            report.not_ready.append(table)
+            continue
+        if table in _PLACED_BY_CASE:
+            placeable = f"FROM {table} r WHERE r.dataset_id IS NULL AND {first_dataset} IS NOT NULL"
+            report.placed[table] = await conn.fetchval(f"SELECT count(*) {placeable}")
+            if write and report.placed[table]:
+                await conn.execute(
+                    f"UPDATE {table} r SET dataset_id = {first_dataset} "
+                    f"WHERE r.dataset_id IS NULL AND {first_dataset} IS NOT NULL"
+                )
+        left = await conn.fetchval(f"SELECT count(*) FROM {table} WHERE dataset_id IS NULL")
+        if write or table not in _PLACED_BY_CASE:
+            report.unplaced[table] = left
+        else:
+            report.unplaced[table] = left - report.placed[table]
+    for table, count in report.placed.items():
+        if count:
+            say(f"  {table}: {count:,} placed in their case's dataset")
+    for table, count in report.unplaced.items():
+        if count:
+            say(f"  {table}: {count:,} in no dataset (readable in every case of their owner)")
+    for table in report.not_ready:
+        say(f"  {table}: no dataset column yet; start the Conduit once, then run this again")
+    return report
+
+
 def unit_for(given: str | None, cases: Sequence[CaseRow]) -> str:
     """The unit the seeds' datasets are registered under. Seen on the owner's deployment: the
     cases were the `verify` unit's while the old default was `unit-1`, so every seed dataset would
@@ -494,6 +561,11 @@ async def _main(argv: list[str] | None = None) -> int:
             org_unit=unit_for(args.org_unit, cases),
             write=write,
         )
+        conn = await asyncpg.connect(dsn)
+        try:
+            await place_records(conn, write=write)
+        finally:
+            await conn.close()
     finally:
         await client.aclose()
         await datasets.close()
