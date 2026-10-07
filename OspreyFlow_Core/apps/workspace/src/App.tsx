@@ -985,11 +985,12 @@ export function App() {
               padding: "var(--sp-8)",
             }}
           >
-            <HotlistPanel apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} />
+            <HotlistPanel apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} investigationId={investigationId} />
             <MonitorPanel apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} investigationId={investigationId} />
             <AlertInbox
               apiBaseUrl={API_BASE_URL}
               bearerToken={bearerToken}
+              investigationId={investigationId}
               onOpenInvestigation={(newInvestigationId) => {
                 sessionStorage.setItem(
                   INVESTIGATION_ID_SESSION_KEY,

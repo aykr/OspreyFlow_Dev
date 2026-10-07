@@ -33,7 +33,7 @@ export function MonitorPanel({ apiBaseUrl, bearerToken, investigationId }: Monit
     listPatterns(apiBaseUrl, bearerToken, investigationId)
       .then(setPatterns)
       .catch(() => undefined);
-    listMonitors(apiBaseUrl, bearerToken)
+    listMonitors(apiBaseUrl, bearerToken, investigationId)
       .then(setMonitors)
       .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -43,8 +43,8 @@ export function MonitorPanel({ apiBaseUrl, bearerToken, investigationId }: Monit
     if (!selectedPatternId) return;
     setError(null);
     try {
-      await createMonitor(apiBaseUrl, bearerToken, { pattern_id: selectedPatternId });
-      setMonitors(await listMonitors(apiBaseUrl, bearerToken));
+      await createMonitor(apiBaseUrl, bearerToken, investigationId, { pattern_id: selectedPatternId });
+      setMonitors(await listMonitors(apiBaseUrl, bearerToken, investigationId));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }

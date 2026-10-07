@@ -74,3 +74,39 @@ def test_the_real_services_api_tree_has_no_offenders() -> None:
     for path in sorted(CHECKED_DIR.glob("*.py")):
         violations.extend(check_source(str(path), path.read_text()))
     assert violations == [], f"unexpected authorized-query-check offenders: {violations}"
+
+
+# ADR-099 Amendment 3 joins a dataset clause onto these queries, so the SQL is one f-string, which
+# Python builds from the adjacent literals. The check reads it as a query as it reads a plain one;
+# a query in an f-string that binds no principal is still flagged.
+
+_FSTRING_SCOPED = '''
+class AlertStore:
+    async def list_authorized(self, principal: Principal) -> list[Alert]:
+        reach, extra = reach_clause(principal, 2)
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT id, owner_id "
+                f"FROM alerts WHERE owner_id = $1{reach} ORDER BY created_at DESC",
+                principal.id,
+                *extra,
+            )
+        return rows
+'''
+
+_FSTRING_UNSCOPED = '''
+class AlertStore:
+    async def list_authorized(self, principal: Principal) -> list[Alert]:
+        reach, extra = reach_clause(principal, 1)
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(f"SELECT id FROM alerts WHERE true{reach}", *extra)
+        return [r for r in rows if r["owner_id"] == principal.id]
+'''
+
+
+def test_a_query_built_as_an_f_string_that_binds_the_principal_passes() -> None:
+    assert check_source("alerts.py", _FSTRING_SCOPED) == []
+
+
+def test_a_query_built_as_an_f_string_that_binds_no_principal_is_flagged() -> None:
+    assert len(check_source("alerts.py", _FSTRING_UNSCOPED)) == 1

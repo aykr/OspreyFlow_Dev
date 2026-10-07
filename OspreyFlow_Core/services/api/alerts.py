@@ -43,6 +43,7 @@ from ports.graph import GraphPort
 from schemas.domain import Alert, AlertMode, Principal
 
 from .audit import AuditWriter
+from .dataset_scope import reach_clause
 
 DisclosurePolicy = Literal["strict", "notify"]
 
@@ -69,6 +70,7 @@ CREATE TABLE IF NOT EXISTS alerts (
     created_at TIMESTAMPTZ NOT NULL
 );
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS investigation_id TEXT;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS dataset_id TEXT;
 CREATE INDEX IF NOT EXISTS alerts_owner_id_idx ON alerts (owner_id);
 """
 
@@ -96,6 +98,7 @@ def _row_to_alert(row: asyncpg.Record) -> Alert:
         referent_node_ids=json.loads(row["referent_node_ids"]),
         investigation_id=row["investigation_id"],
         created_at=row["created_at"],
+        dataset_id=row["dataset_id"],
     )
 
 
@@ -119,8 +122,8 @@ class AlertStore:
         async with self._pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO alerts "
-                "(id, rule_id, owner_id, mode, referent_node_ids, investigation_id, created_at) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                "(id, rule_id, owner_id, mode, referent_node_ids, investigation_id, created_at, "
+                "dataset_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
                 alert.id,
                 alert.rule_id,
                 alert.owner_id,
@@ -128,6 +131,7 @@ class AlertStore:
                 json.dumps(alert.referent_node_ids),
                 alert.investigation_id,
                 alert.created_at,
+                alert.dataset_id,
             )
 
     async def get_authorized(self, alert_id: str, principal: Principal) -> Alert:
@@ -135,23 +139,28 @@ class AlertStore:
         merely claimed) by `tools/authorized_query_check.py`, which this store must pass on
         first write. This is the *ownership* check only; a caller reading evidence still needs
         `evidence_available` below for the *referent* recheck ADR-039 separately requires."""
+        reach, extra = reach_clause(principal, 3)
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT id, rule_id, owner_id, mode, referent_node_ids, investigation_id, "
-                "created_at FROM alerts WHERE id = $1 AND owner_id = $2",
+                f"created_at, dataset_id FROM alerts WHERE id = $1 AND owner_id = $2{reach}",
                 alert_id,
                 principal.id,
+                *extra,
             )
         if row is None:
             raise AlertNotFoundError(alert_id)
         return _row_to_alert(row)
 
     async def list_authorized(self, principal: Principal) -> list[Alert]:
+        reach, extra = reach_clause(principal, 2)
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 "SELECT id, rule_id, owner_id, mode, referent_node_ids, investigation_id, "
-                "created_at FROM alerts WHERE owner_id = $1 ORDER BY created_at DESC",
+                f"created_at, dataset_id FROM alerts WHERE owner_id = $1{reach} "
+                "ORDER BY created_at DESC",
                 principal.id,
+                *extra,
             )
         return [_row_to_alert(row) for row in rows]
 
@@ -183,6 +192,7 @@ async def record_match(
     triggering_node_ids: list[str],
     policy: DisclosurePolicy,
     investigation_id: str | None = None,
+    dataset_id: str | None = None,
 ) -> Alert | None:
     """The disclosure mechanism itself — `06_DECISIONS.md` ADR-038. `triggering_node_ids` is
     whatever node(s) the match is actually about (a hotlisted identifier's own node, a saved
@@ -214,6 +224,7 @@ async def record_match(
             referent_node_ids=triggering_node_ids,
             investigation_id=investigation_id,
             created_at=datetime.now(UTC),
+            dataset_id=dataset_id,
         )
         await alert_store.save(alert)
         return alert
@@ -239,6 +250,7 @@ async def record_match(
         mode=AlertMode.NOTIFY_STUB,
         referent_node_ids=[],
         created_at=datetime.now(UTC),
+        dataset_id=dataset_id,
     )
     await alert_store.save(stub)
     return stub

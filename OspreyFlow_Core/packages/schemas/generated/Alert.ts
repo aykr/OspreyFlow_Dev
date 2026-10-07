@@ -8,6 +8,7 @@ export type NodeId = string;
 export type ReferentNodeIds = NodeId[];
 export type InvestigationId = string | null;
 export type CreatedAt = string;
+export type DatasetId = string | null;
 
 /**
  * A persisted alert row — `06_DECISIONS.md` ADR-038/039, Phase 7 Stage 6a's own foundation.
@@ -36,5 +37,6 @@ export interface Alert {
   referent_node_ids?: ReferentNodeIds;
   investigation_id?: InvestigationId;
   created_at: CreatedAt;
+  dataset_id?: DatasetId;
   [k: string]: unknown;
 }

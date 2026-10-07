@@ -112,7 +112,6 @@ from schemas.analytics import (
     SightingRequest,
 )
 from schemas.domain import (
-    Alert,
     Assumption,
     Edge,
     EdgeWrite,
@@ -2964,8 +2963,9 @@ async def patterns_load_route(
 # `POST /v1/alerts/{alert_id}/jump` branches a new investigation from.
 
 
-@app.post("/v1/hotlists", status_code=status.HTTP_201_CREATED)
+@app.post("/v1/investigations/{investigation_id}/hotlists", status_code=status.HTTP_201_CREATED)
 async def create_hotlist_route(
+    investigation: InvestigationEditorDep,
     body: CreateHotlistRequest,
     principal: PrincipalDep,
     hotlists_store: HotlistsStoreDep,
@@ -2983,8 +2983,9 @@ async def create_hotlist_route(
     return hotlist
 
 
-@app.get("/v1/hotlists")
+@app.get("/v1/investigations/{investigation_id}/hotlists")
 async def list_hotlists_route(
+    investigation: InvestigationViewerDep,
     principal: PrincipalDep, hotlists_store: HotlistsStoreDep
 ) -> HotlistList:
     return HotlistList(hotlists=await hotlists_store.list_authorized(principal))
@@ -3866,8 +3867,9 @@ async def list_exports_route(
     return ExportLedgerListResponse(entries=await export_ledger.list_all(principal))
 
 
-@app.post("/v1/monitors", status_code=status.HTTP_201_CREATED)
+@app.post("/v1/investigations/{investigation_id}/monitors", status_code=status.HTTP_201_CREATED)
 async def create_monitor_route(
+    investigation: InvestigationEditorDep,
     body: CreateMonitorRequest,
     principal: PrincipalDep,
     monitors_store: MonitorsStoreDep,
@@ -3878,8 +3880,14 @@ async def create_monitor_route(
     `PatternNotFoundError`-collapse existence-leak discipline every other route in this file
     already uses — `MonitorStore.create`'s own docstring is explicit this is the caller's job, not
     re-derived inside the store from a second, independent ownership check."""
-    await patterns_store.get_authorized(body.pattern_id, principal)
-    monitor = await monitors_store.create(principal, pattern_id=body.pattern_id)
+    saved = await patterns_store.get_authorized(body.pattern_id, principal)
+    # ADR-099 Amendment 3: the monitor watches its pattern's dataset (the case may read several).
+    owner = (
+        principal.model_copy(update={"datasets": [saved.dataset_id]})
+        if saved.dataset_id is not None
+        else principal
+    )
+    monitor = await monitors_store.create(owner, pattern_id=body.pattern_id)
     await audit.record(
         principal=principal,
         action="monitors_create",
@@ -3889,48 +3897,44 @@ async def create_monitor_route(
     return monitor
 
 
-@app.get("/v1/monitors")
+@app.get("/v1/investigations/{investigation_id}/monitors")
 async def list_monitors_route(
+    investigation: InvestigationViewerDep,
     principal: PrincipalDep, monitors_store: MonitorsStoreDep
 ) -> MonitorList:
     return MonitorList(monitors=await monitors_store.list_authorized(principal))
 
 
-@app.get("/v1/alerts")
+@app.get("/v1/investigations/{investigation_id}/alerts")
 async def list_alerts_route(
-    principal: PrincipalDep, alerts_store: AlertsStoreDep, graph: GraphDep, datasets: DatasetsDep
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    alerts_store: AlertsStoreDep,
+    graph: GraphDep,
 ) -> AlertList:
+    """ADR-099 Amendment 3: the alerts of the case's datasets, read as the case reads."""
     rows = await alerts_store.list_authorized(principal)
-    return AlertList(
-        alerts=[
-            await alert_to_view(a, await _alert_principal(a, principal, datasets), graph)
-            for a in rows
-        ]
-    )
+    return AlertList(alerts=[await alert_to_view(a, principal, graph) for a in rows])
 
 
-async def _alert_principal(alert: Alert, principal: Principal, datasets: DatasetStore) -> Principal:
-    """ADR-099: an alert's entities are read as the case it arose in reads them; an alert with no
-    case (the resolution trigger's) reads none of them."""
-    if alert.investigation_id is None:
-        return principal
-    return await scope_to_case(principal, alert.investigation_id, datasets)
-
-
-@app.get("/v1/alerts/{alert_id}")
+@app.get("/v1/investigations/{investigation_id}/alerts/{alert_id}")
 async def get_alert_route(
+    investigation: InvestigationViewerDep,
     alert_id: str,
     principal: PrincipalDep,
     alerts_store: AlertsStoreDep,
     graph: GraphDep,
-    datasets: DatasetsDep,
 ) -> AlertView:
     alert = await alerts_store.get_authorized(alert_id, principal)
-    return await alert_to_view(alert, await _alert_principal(alert, principal, datasets), graph)
+    return await alert_to_view(alert, principal, graph)
 
 
-@app.post("/v1/alerts/{alert_id}/jump", status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/v1/investigations/{investigation_id}/alerts/{alert_id}/jump",
+    status_code=status.HTTP_201_CREATED,
+)
 async def jump_alert_route(
+    investigation: InvestigationEditorDep,
     alert_id: str,
     principal: PrincipalDep,
     alerts_store: AlertsStoreDep,
@@ -3953,8 +3957,11 @@ async def jump_alert_route(
     branch = await investigations.create(
         principal, name=f"Opened from alert {alert.id}", branched_from=alert.investigation_id
     )
-    # ADR-099: the new case reads what the alert's case reads; with no case, a dataset of its own.
-    if alert.investigation_id is not None:
+    # ADR-099: the new case reads the alert's dataset; with none, what the alert's case reads; with
+    # neither, a dataset of its own.
+    if alert.dataset_id is not None:
+        await datasets.set_for_case(branch.id, [alert.dataset_id], principal)
+    elif alert.investigation_id is not None:
         await datasets.copy_case(alert.investigation_id, branch.id)
     if not await datasets.ids_of_case(branch.id):
         own = await datasets.create(principal, branch.name)

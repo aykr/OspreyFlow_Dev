@@ -5,6 +5,7 @@ export type PatternId = string;
 export type OwnerId = string;
 export type Status = "active" | "stopped";
 export type CreatedAt = string;
+export type DatasetId = string | null;
 
 /**
  * A saved pattern being watched — `02_GLASS_FRONTEND.md` §3.3: "A saved visual query run...
@@ -31,5 +32,6 @@ export interface Monitor {
   owner_id: OwnerId;
   status?: Status;
   created_at: CreatedAt;
+  dataset_id?: DatasetId;
   [k: string]: unknown;
 }

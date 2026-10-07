@@ -57,6 +57,7 @@ from tests.conftest import (
     default_claims,
     sign_token,
 )
+from tests.services.api.case_dataset import dataset_for, give_case_its_dataset
 
 PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
 
@@ -89,6 +90,16 @@ def _bearer(private_key: rsa.RSAPrivateKey) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def _case(client: TestClient, headers: dict[str, str]) -> str:
+    """ADR-099 Amendment 3: watches and alerts are asked of a case, and read its datasets; the case
+    reads the dataset the nodes below are written in, as a load into it would put them."""
+    created = client.post("/v1/investigations", headers=headers)
+    assert created.status_code == 201, created.text
+    case_id = str(created.json()["id"])
+    asyncio.run(give_case_its_dataset(case_id, PRINCIPAL))
+    return case_id
+
+
 def _endpoint_write(
     value_normalised: str, *, owning_unit: str, classification: str = "OFFICIAL"
 ) -> NodeWrite:
@@ -110,6 +121,7 @@ def _endpoint_write(
         ),
         created_by="test",
         created_at=now,
+        datasets=[dataset_for(PRINCIPAL)],
     )
 
 
@@ -151,8 +163,9 @@ def test_hotlist_create_and_list_round_trip(
     from services.api.app import app
 
     with TestClient(app) as client:
+        case = _case(client, headers)
         created = client.post(
-            "/v1/hotlists",
+            f"/v1/investigations/{case}/hotlists",
             headers=headers,
             json={"identifier": identifier, "review_date": "2027-01-01"},
         )
@@ -162,7 +175,7 @@ def test_hotlist_create_and_list_round_trip(
         assert body["owner_id"] == PRINCIPAL.id
         assert body["status"] == "active"
 
-        listed = client.get("/v1/hotlists", headers=headers)
+        listed = client.get(f"/v1/investigations/{case}/hotlists", headers=headers)
         assert listed.status_code == 200, listed.text
         assert any(h["id"] == body["id"] for h in listed.json()["hotlists"])
 
@@ -176,8 +189,9 @@ def test_monitor_create_requires_owning_the_pattern_first(
     from services.api.app import app
 
     with TestClient(app) as client:
+        case = _case(client, headers)
         saved = client.post(
-            "/v1/patterns/save",
+            f"/v1/investigations/{case}/patterns/save",
             headers=headers,
             json={
                 "pattern_id": None,
@@ -195,21 +209,25 @@ def test_monitor_create_requires_owning_the_pattern_first(
         pattern_id = saved.json()["pattern_id"]
 
         created = client.post(
-            "/v1/monitors", headers=headers, json={"pattern_id": pattern_id}
+            f"/v1/investigations/{case}/monitors", headers=headers, json={"pattern_id": pattern_id}
         )
         assert created.status_code == 201, created.text
         monitor = created.json()
         assert monitor["pattern_id"] == pattern_id
         assert monitor["status"] == "active"
+        # ADR-099 Amendment 3: the monitor watches its pattern's dataset.
+        assert monitor["dataset_id"] == saved.json()["dataset_id"] == dataset_for(PRINCIPAL)
 
-        listed = client.get("/v1/monitors", headers=headers)
+        listed = client.get(f"/v1/investigations/{case}/monitors", headers=headers)
         assert any(m["id"] == monitor["id"] for m in listed.json()["monitors"])
 
         # A pattern this principal does not own collapses to the same 404 `PatternNotFoundError`
         # every other route in this codebase already gives — existence-leak discipline, not a
         # distinguishable 403.
         rejected = client.post(
-            "/v1/monitors", headers=headers, json={"pattern_id": f"no-such-pattern-{new_id()}"}
+            f"/v1/investigations/{case}/monitors",
+            headers=headers,
+            json={"pattern_id": f"no-such-pattern-{new_id()}"},
         )
         assert rejected.status_code == 404, rejected.text
 
@@ -242,7 +260,8 @@ def test_alert_list_redacts_a_full_alert_whose_evidence_has_since_become_unavail
     from services.api.app import app
 
     with TestClient(app) as client:
-        before = client.get(f"/v1/alerts/{alert.id}", headers=headers)
+        case = _case(client, headers)
+        before = client.get(f"/v1/investigations/{case}/alerts/{alert.id}", headers=headers)
         assert before.status_code == 200, before.text
         assert before.json()["evidence_available"] is True
         assert before.json()["referent_node_ids"] == [node_id]
@@ -268,14 +287,14 @@ def test_alert_list_redacts_a_full_alert_whose_evidence_has_since_become_unavail
     asyncio.run(_revoke())
 
     with TestClient(app) as client:
-        after_list = client.get("/v1/alerts", headers=headers)
+        after_list = client.get(f"/v1/investigations/{case}/alerts", headers=headers)
         assert after_list.status_code == 200, after_list.text
         matching = [a for a in after_list.json()["alerts"] if a["id"] == alert.id]
         assert len(matching) == 1
         assert matching[0]["evidence_available"] is False
         assert matching[0]["referent_node_ids"] == []
 
-        after_get = client.get(f"/v1/alerts/{alert.id}", headers=headers)
+        after_get = client.get(f"/v1/investigations/{case}/alerts/{alert.id}", headers=headers)
         assert after_get.json()["evidence_available"] is False
         assert after_get.json()["referent_node_ids"] == []
 
@@ -304,9 +323,7 @@ def test_jump_branches_a_new_investigation_seeded_with_the_alerts_entities(
         # a synthetic id with no backing row was rejected the first time this test was written) —
         # "the investigation the triggering ingest was in" needs a real `Investigation` row, so one
         # is created here exactly as an ingest route would, not synthesised.
-        origin = client.post("/v1/investigations", headers=headers)
-        assert origin.status_code == 201, origin.text
-        origin_investigation_id = origin.json()["id"]
+        origin_investigation_id = _case(client, headers)
 
         alert = Alert(
             id=new_id(),
@@ -319,7 +336,9 @@ def test_jump_branches_a_new_investigation_seeded_with_the_alerts_entities(
         )
         asyncio.run(_write_alert(alert))
 
-        jumped = client.post(f"/v1/alerts/{alert.id}/jump", headers=headers)
+        jumped = client.post(
+            f"/v1/investigations/{origin_investigation_id}/alerts/{alert.id}/jump", headers=headers
+        )
         assert jumped.status_code == 201, jumped.text
         result = jumped.json()
         assert result["seeded_count"] == 1
@@ -373,7 +392,13 @@ def test_app_lifespan_does_not_reopen_the_unbounded_pool_ceiling(
     # this test to stay green as individual stores' own `min_size` is tuned, while still catching
     # the exact class of regression this stage found: a new store, or a reverted bound, opening
     # ten more connections than budgeted at once.
-    assert during - before < 20, (
+    #
+    # Re-measured 7 October 2026 at 22, every store bounded: the lifespan now opens about twenty
+    # Postgres stores, not ten (ADR-080 to ADR-099 added them), so `< 20` failed on bounded stores
+    # alone and no longer told a regression from growth. 26 keeps the purpose: one store back at
+    # the unbounded default adds about nine (shown failing, the questions store reverted), and the
+    # threshold moves again only on a new measurement, recorded here.
+    assert during - before < 26, (
         f"app.py's lifespan opened {during - before} new Postgres connections (before={before}, "
         f"during={during}) — a bounded-pool regression, the same class this stage's own "
         "TooManyConnectionsError finding fixed"

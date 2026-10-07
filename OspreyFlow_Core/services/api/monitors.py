@@ -15,6 +15,8 @@ import asyncpg
 from conduit_common.identity import new_id
 from schemas.domain import Monitor, Principal, WatchStatus
 
+from .dataset_scope import made_in, reach_clause
+
 #: `ADD COLUMN IF NOT EXISTS` — `alerts.py`'s own `_BOOTSTRAP_SQL` docstring has the full reasoning.
 _BOOTSTRAP_SQL = """
 CREATE TABLE IF NOT EXISTS monitors (
@@ -27,6 +29,7 @@ CREATE TABLE IF NOT EXISTS monitors (
 );
 ALTER TABLE monitors ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
 CREATE INDEX IF NOT EXISTS monitors_owner_id_idx ON monitors (owner_id);
+ALTER TABLE monitors ADD COLUMN IF NOT EXISTS dataset_id TEXT;
 """
 
 
@@ -42,6 +45,7 @@ def _row_to_monitor(row: asyncpg.Record) -> Monitor:
         owner_id=row["owner_id"],
         status=row["status"],
         created_at=row["created_at"],
+        dataset_id=row["dataset_id"],
     )
 
 
@@ -70,38 +74,47 @@ class MonitorStore:
         pattern into a monitor twice an upsert-shaped no-op error, not a duplicate row silently
         doubling every future alert."""
         monitor = Monitor(
-            id=new_id(), pattern_id=pattern_id, owner_id=principal.id, created_at=datetime.now(UTC)
+            id=new_id(),
+            pattern_id=pattern_id,
+            owner_id=principal.id,
+            created_at=datetime.now(UTC),
+            dataset_id=made_in(principal),
         )
         async with self._pool.acquire() as conn:
             await conn.execute(
-                "INSERT INTO monitors (id, pattern_id, owner_id, status, created_at) "
-                "VALUES ($1, $2, $3, $4, $5)",
+                "INSERT INTO monitors (id, pattern_id, owner_id, status, created_at, dataset_id) "
+                "VALUES ($1, $2, $3, $4, $5, $6)",
                 monitor.id,
                 monitor.pattern_id,
                 monitor.owner_id,
                 monitor.status,
                 monitor.created_at,
+                monitor.dataset_id,
             )
         return monitor
 
     async def get_authorized(self, monitor_id: str, principal: Principal) -> Monitor:
+        reach, extra = reach_clause(principal, 3)
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT id, pattern_id, owner_id, status, created_at FROM monitors "
-                "WHERE id = $1 AND owner_id = $2",
+                "SELECT id, pattern_id, owner_id, status, created_at, dataset_id FROM monitors "
+                f"WHERE id = $1 AND owner_id = $2{reach}",
                 monitor_id,
                 principal.id,
+                *extra,
             )
         if row is None:
             raise MonitorNotFoundError(monitor_id)
         return _row_to_monitor(row)
 
     async def list_authorized(self, principal: Principal) -> list[Monitor]:
+        reach, extra = reach_clause(principal, 2)
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, pattern_id, owner_id, status, created_at FROM monitors "
-                "WHERE owner_id = $1 ORDER BY created_at DESC",
+                "SELECT id, pattern_id, owner_id, status, created_at, dataset_id FROM monitors "
+                f"WHERE owner_id = $1{reach} ORDER BY created_at DESC",
                 principal.id,
+                *extra,
             )
         return [_row_to_monitor(row) for row in rows]
 
@@ -111,7 +124,7 @@ class MonitorStore:
         route."""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, pattern_id, owner_id, status, created_at FROM monitors"
+                "SELECT id, pattern_id, owner_id, status, created_at, dataset_id FROM monitors"
             )
         return [_row_to_monitor(row) for row in rows]
 

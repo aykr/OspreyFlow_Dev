@@ -51,6 +51,24 @@ async def scope_to_case(
     return principal.model_copy(update={"datasets": datasets})
 
 
+def reach_clause(principal: Principal, position: int) -> tuple[str, list[object]]:
+    """ADR-099 Amendment 3, for a Postgres store of things made in a case (a saved pattern, a
+    watch, an alert): the SQL that keeps a read to the case's datasets, as `AND (...)` with its
+    parameter at `$position`. A record made before the amendment names no dataset and stays in
+    reach until `scripts.stamp_datasets` places it; the Conduit's own unlimited work reads all."""
+    if principal.datasets is None:
+        return "", []
+    return (
+        f" AND (dataset_id = ANY(${position}::text[]) OR dataset_id IS NULL)",
+        [list(principal.datasets)],
+    )
+
+
+def made_in(principal: Principal) -> str | None:
+    """The dataset a record made by `principal` now belongs to: the first of its case's."""
+    return principal.datasets[0] if principal.datasets else None
+
+
 def outside_any_case(principal: Principal) -> Principal:
     set_case_datasets(None)
     return principal.model_copy(update={"datasets": []})

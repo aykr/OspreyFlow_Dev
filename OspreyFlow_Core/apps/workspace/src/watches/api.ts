@@ -1,4 +1,4 @@
-// Fetch wrappers for `POST`/`GET /v1/hotlists`, `POST`/`GET /v1/monitors`, `GET /v1/alerts` and
+// Fetch wrappers for `POST`/`GET .../hotlists`, `POST`/`GET .../monitors`, `GET /v1/alerts` and
 // `POST /v1/alerts/{alert_id}/jump` (`services/api/watch_routes.py`) — mirrors `patterns/api.ts`'s
 // own conventions (Bearer auth, throw on a non-`ok` response).
 //
@@ -44,6 +44,11 @@ export interface AlertJumpResult {
   unreadable_count: number;
 }
 
+/** ADR-099 Amendment 3: watches and their alerts are the dataset's, asked of the case. */
+function caseUrl(apiBaseUrl: string, investigationId: string): string {
+  return `${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}`;
+}
+
 function authHeaders(bearerToken: string): Record<string, string> {
   return { Authorization: `Bearer ${bearerToken}` };
 }
@@ -51,23 +56,28 @@ function authHeaders(bearerToken: string): Record<string, string> {
 export async function createHotlist(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
   request: { identifier: string; review_date: string },
 ): Promise<Hotlist> {
-  const response = await fetch(`${apiBaseUrl}/v1/hotlists`, {
+  const response = await fetch(`${caseUrl(apiBaseUrl, investigationId)}/hotlists`, {
     method: "POST",
     headers: { ...authHeaders(bearerToken), "Content-Type": "application/json" },
     body: JSON.stringify(request),
   });
   if (!response.ok) {
-    throw new Error(`POST /v1/hotlists failed: ${response.status}`);
+    throw new Error(`POST .../hotlists failed: ${response.status}`);
   }
   return (await response.json()) as Hotlist;
 }
 
-export async function listHotlists(apiBaseUrl: string, bearerToken: string): Promise<Hotlist[]> {
-  const response = await fetch(`${apiBaseUrl}/v1/hotlists`, { headers: authHeaders(bearerToken) });
+export async function listHotlists(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+): Promise<Hotlist[]> {
+  const response = await fetch(`${caseUrl(apiBaseUrl, investigationId)}/hotlists`, { headers: authHeaders(bearerToken) });
   if (!response.ok) {
-    throw new Error(`GET /v1/hotlists failed: ${response.status}`);
+    throw new Error(`GET .../hotlists failed: ${response.status}`);
   }
   const body = (await response.json()) as { hotlists: Hotlist[] };
   return body.hotlists;
@@ -76,32 +86,41 @@ export async function listHotlists(apiBaseUrl: string, bearerToken: string): Pro
 export async function createMonitor(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
   request: { pattern_id: string },
 ): Promise<Monitor> {
-  const response = await fetch(`${apiBaseUrl}/v1/monitors`, {
+  const response = await fetch(`${caseUrl(apiBaseUrl, investigationId)}/monitors`, {
     method: "POST",
     headers: { ...authHeaders(bearerToken), "Content-Type": "application/json" },
     body: JSON.stringify(request),
   });
   if (!response.ok) {
-    throw new Error(`POST /v1/monitors failed: ${response.status}`);
+    throw new Error(`POST .../monitors failed: ${response.status}`);
   }
   return (await response.json()) as Monitor;
 }
 
-export async function listMonitors(apiBaseUrl: string, bearerToken: string): Promise<Monitor[]> {
-  const response = await fetch(`${apiBaseUrl}/v1/monitors`, { headers: authHeaders(bearerToken) });
+export async function listMonitors(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+): Promise<Monitor[]> {
+  const response = await fetch(`${caseUrl(apiBaseUrl, investigationId)}/monitors`, { headers: authHeaders(bearerToken) });
   if (!response.ok) {
-    throw new Error(`GET /v1/monitors failed: ${response.status}`);
+    throw new Error(`GET .../monitors failed: ${response.status}`);
   }
   const body = (await response.json()) as { monitors: Monitor[] };
   return body.monitors;
 }
 
-export async function listAlerts(apiBaseUrl: string, bearerToken: string): Promise<AlertView[]> {
-  const response = await fetch(`${apiBaseUrl}/v1/alerts`, { headers: authHeaders(bearerToken) });
+export async function listAlerts(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+): Promise<AlertView[]> {
+  const response = await fetch(`${caseUrl(apiBaseUrl, investigationId)}/alerts`, { headers: authHeaders(bearerToken) });
   if (!response.ok) {
-    throw new Error(`GET /v1/alerts failed: ${response.status}`);
+    throw new Error(`GET .../alerts failed: ${response.status}`);
   }
   const body = (await response.json()) as { alerts: AlertView[] };
   return body.alerts;
@@ -110,14 +129,15 @@ export async function listAlerts(apiBaseUrl: string, bearerToken: string): Promi
 export async function jumpAlert(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
   alertId: string,
 ): Promise<AlertJumpResult> {
-  const response = await fetch(`${apiBaseUrl}/v1/alerts/${alertId}/jump`, {
+  const response = await fetch(`${caseUrl(apiBaseUrl, investigationId)}/alerts/${encodeURIComponent(alertId)}/jump`, {
     method: "POST",
     headers: authHeaders(bearerToken),
   });
   if (!response.ok) {
-    throw new Error(`POST /v1/alerts/${alertId}/jump failed: ${response.status}`);
+    throw new Error(`POST .../alerts/${alertId}/jump failed: ${response.status}`);
   }
   return (await response.json()) as AlertJumpResult;
 }

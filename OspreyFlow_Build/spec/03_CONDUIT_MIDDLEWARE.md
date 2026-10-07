@@ -453,13 +453,13 @@ Not yet called from any UI — the post-launch console has no screen built yet.
 ### 3.8 Hotlists, monitors, alerts
 
 ```
-POST   /v1/hotlists                     create; identifier plus a review date
-GET    /v1/hotlists                     the calling principal's own hotlists
-POST   /v1/monitors                     create a standing query the evaluator watches
-GET    /v1/monitors                     the calling principal's own monitors
-GET    /v1/alerts                       the calling principal's own alert inbox
-GET    /v1/alerts/{alert_id}            one alert, expanded to its jumpable referents
-POST   /v1/alerts/{alert_id}/jump       branch a new investigation seeded from the alert
+POST   /v1/investigations/{id}/hotlists   create, in the case's first dataset; identifier plus a review date; fires only on that dataset's data, Editor (ADR-099 Amendment 3)
+GET    /v1/investigations/{id}/hotlists   the calling principal's own hotlists of the case's datasets, Viewer
+POST   /v1/investigations/{id}/monitors   create a standing query the evaluator watches, in its saved pattern's dataset and matched only within it, Editor
+GET    /v1/investigations/{id}/monitors   the calling principal's own monitors of the case's datasets, Viewer
+GET    /v1/investigations/{id}/alerts     the calling principal's own alerts of the case's datasets, Viewer
+GET    /v1/investigations/{id}/alerts/{alert_id}   one alert, expanded to its jumpable referents, Viewer
+POST   /v1/investigations/{id}/alerts/{alert_id}/jump   a new case seeded from the alert, reading the alert's dataset, Editor
 ```
 
 **Owner-only, not investigation-scoped** — a hotlist or a monitor is a standing watch that outlives

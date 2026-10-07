@@ -155,6 +155,11 @@ async def evaluate_hotlists_for_entry(
             continue
         await hotlist_store.set_status(hotlist.id, "active")
 
+        # ADR-099 Amendment 3: a hotlist made in a case watches that case's dataset, and its owner
+        # is shown what it finds as that dataset's reader.
+        if hotlist.dataset_id is not None:
+            recipient = recipient.model_copy(update={"datasets": [hotlist.dataset_id]})
+
         async def _run(hotlist: Hotlist = hotlist, recipient: Principal = recipient) -> list[Alert]:
             found: list[Alert] = []
             for node_id in touched:
@@ -163,6 +168,10 @@ async def evaluate_hotlists_for_entry(
                     continue
                 value = node.properties.get("value_normalised")
                 if value != hotlist.identifier:
+                    continue
+                # Another dataset's node is not in the hotlist's world: not even a `notify` stub,
+                # which would say that something matched there.
+                if hotlist.dataset_id is not None and hotlist.dataset_id not in node.datasets:
                     continue
                 alert = await record_match(
                     graph=graph,
@@ -174,6 +183,7 @@ async def evaluate_hotlists_for_entry(
                     triggering_node_ids=[node_id],
                     policy=policy,
                     investigation_id=entry.investigation_id,
+                    dataset_id=hotlist.dataset_id,
                 )
                 if alert is not None:
                     found.append(alert)
@@ -216,6 +226,9 @@ async def evaluate_monitors_for_entry(
         if recipient is None:
             await monitor_store.set_status(monitor.id, "stopped")
             continue
+        # ADR-099 Amendment 3: the pattern is read, and matched, within the monitor's dataset.
+        if monitor.dataset_id is not None:
+            recipient = recipient.model_copy(update={"datasets": [monitor.dataset_id]})
 
         async def _run(monitor: Monitor = monitor, recipient: Principal = recipient) -> list[Alert]:
             try:
@@ -249,6 +262,7 @@ async def evaluate_monitors_for_entry(
                 triggering_node_ids=triggering_ids,
                 policy="strict",  # irrelevant here — see this function's own docstring
                 investigation_id=entry.investigation_id,
+                dataset_id=monitor.dataset_id,
             )
             return [alert] if alert is not None else []
 

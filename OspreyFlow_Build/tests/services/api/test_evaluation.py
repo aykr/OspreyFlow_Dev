@@ -947,3 +947,121 @@ async def test_a_monitor_does_not_fire_on_a_match_created_by_resolution_with_no_
                 )
             )
         assert [a for a in alerts if a.rule_id == f"monitor:{monitor.id}"] == []
+
+
+# --- ADR-099 Amendment 3: a watch raises an alert only on data of its dataset -----------------
+
+
+async def test_a_hotlist_fires_only_on_its_datasets_data_and_the_alert_is_that_datasets(
+    hotlist_store, alert_store, audit, valkey
+) -> None:
+    """The same identifier in two datasets: a hotlist made in a case of one fires on that one's
+    node only, and its alert belongs to that dataset."""
+    ontology, scheme = load_default_ontology(), load_uk_le_scheme()
+    identifier = f"+44-ds-{uuid.uuid4().hex[:10]}"
+    in_fixture = OWNER.model_copy(update={"datasets": ["fixture-corp"]})
+    hotlist = await hotlist_store.create(
+        in_fixture, identifier=identifier, review_date=date(2027, 1, 1)
+    )
+    async with arcadedb_adapter(ontology, scheme) as graph:
+        theirs = _endpoint_write(identifier, owning_unit=OWNER.org_unit).model_copy(
+            update={"datasets": ["enron"]}
+        )
+        mine = _endpoint_write(identifier, owning_unit=OWNER.org_unit).model_copy(
+            update={"datasets": ["fixture-corp"]}
+        )
+        tx = await graph.begin_transaction()
+        await graph.upsert_nodes([theirs, mine], tx)
+        await graph.commit_transaction(tx)
+
+        async def run(node_ids: list[str]) -> list[Alert]:
+            alerts = await evaluate_hotlists_for_entry(
+                _entry(node_ids),
+                graph=graph,
+                scheme=scheme,
+                hotlist_store=hotlist_store,
+                alert_store=alert_store,
+                audit=audit,
+                valkey=valkey,
+                principal_for_owner=_principal_for,
+                policy="strict",
+            )
+            return [a for a in alerts if a.rule_id == f"hotlist:{hotlist.id}"]
+
+        assert await run([theirs.id]) == []
+        (alert,) = await run([mine.id])
+        assert alert.referent_node_ids == [mine.id] and alert.dataset_id == "fixture-corp"
+
+
+async def test_a_monitor_matches_only_within_its_dataset(
+    monitor_store, pattern_store, alert_store, audit, valkey
+) -> None:
+    ontology, scheme = load_default_ontology(), load_uk_le_scheme()
+    in_fixture = OWNER.model_copy(update={"datasets": ["fixture-corp"]})
+    saved = await pattern_store.save(
+        in_fixture, pattern_id=None, name="ds-monitor", definition=_pattern()
+    )
+    monitor = await monitor_store.create(in_fixture, pattern_id=saved.pattern_id)
+    async with arcadedb_adapter(ontology, scheme) as graph:
+        person = _person_write("Elsewhere", owning_unit=OWNER.org_unit).model_copy(
+            update={"datasets": ["enron"]}
+        )
+        phone = _endpoint_write("+44-elsewhere", owning_unit=OWNER.org_unit).model_copy(
+            update={"datasets": ["enron"]}
+        )
+        tx = await graph.begin_transaction()
+        await graph.upsert_nodes([person, phone], tx)
+        await graph.upsert_edges(
+            [
+                _uses_edge(person.id, phone.id, owning_unit=OWNER.org_unit).model_copy(
+                    update={"datasets": ["enron"]}
+                )
+            ],
+            tx,
+        )
+        await graph.commit_transaction(tx)
+
+        alerts = await evaluate_monitors_for_entry(
+            _entry([person.id]),
+            graph=graph,
+            monitor_store=monitor_store,
+            pattern_store=pattern_store,
+            alert_store=alert_store,
+            audit=audit,
+            valkey=valkey,
+            principal_for_owner=_principal_for,
+        )
+        assert [a for a in alerts if a.rule_id == f"monitor:{monitor.id}"] == []
+
+        # The same shape inside the monitor's own dataset: matched, and the alert is that
+        # dataset's, naming only that dataset's nodes.
+        mine_person = _person_write("Inside", owning_unit=OWNER.org_unit).model_copy(
+            update={"datasets": ["fixture-corp"]}
+        )
+        mine_phone = _endpoint_write("+44-inside", owning_unit=OWNER.org_unit).model_copy(
+            update={"datasets": ["fixture-corp"]}
+        )
+        tx = await graph.begin_transaction()
+        await graph.upsert_nodes([mine_person, mine_phone], tx)
+        await graph.upsert_edges(
+            [
+                _uses_edge(mine_person.id, mine_phone.id, owning_unit=OWNER.org_unit).model_copy(
+                    update={"datasets": ["fixture-corp"]}
+                )
+            ],
+            tx,
+        )
+        await graph.commit_transaction(tx)
+        alerts = await evaluate_monitors_for_entry(
+            _entry([mine_person.id]),
+            graph=graph,
+            monitor_store=monitor_store,
+            pattern_store=pattern_store,
+            alert_store=alert_store,
+            audit=audit,
+            valkey=valkey,
+            principal_for_owner=_principal_for,
+        )
+        (alert,) = [a for a in alerts if a.rule_id == f"monitor:{monitor.id}"]
+        assert alert.dataset_id == "fixture-corp"
+        assert set(alert.referent_node_ids) == {mine_person.id, mine_phone.id}

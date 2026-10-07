@@ -53,11 +53,18 @@ def _is_sql_select_call(node: ast.Call) -> bool:
     if not node.args:
         return False
     first = node.args[0]
-    return (
-        isinstance(first, ast.Constant)
-        and isinstance(first.value, str)
-        and "select" in first.value.lower()
-    )
+    if isinstance(first, ast.Constant) and isinstance(first.value, str):
+        return "select" in first.value.lower()
+    # ADR-099 Amendment 3: a dataset clause joined onto a query makes it one f-string, which Python
+    # builds from the adjacent literals; its literal parts are the SQL read here.
+    if isinstance(first, ast.JoinedStr):
+        literal = "".join(
+            part.value
+            for part in first.values
+            if isinstance(part, ast.Constant) and isinstance(part.value, str)
+        )
+        return "select" in literal.lower()
+    return False
 
 
 def _call_has_principal_arg(node: ast.Call) -> bool:

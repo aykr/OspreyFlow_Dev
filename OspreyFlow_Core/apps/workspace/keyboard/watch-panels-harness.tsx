@@ -33,11 +33,12 @@ window.__WATCH_HARNESS__ = { openedInvestigationId: null };
 function Harness() {
   return (
     <div style={{ width: 480, display: "flex", flexDirection: "column", gap: 16 }}>
-      <HotlistPanel apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" />
+      <HotlistPanel apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" investigationId="inv-1" />
       <MonitorPanel apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" investigationId="inv-1" />
       <AlertInbox
         apiBaseUrl="http://keyboard-test.invalid"
         bearerToken="unused"
+        investigationId="inv-1"
         onOpenInvestigation={(investigationId) => {
           window.__WATCH_HARNESS__!.openedInvestigationId = investigationId;
         }}

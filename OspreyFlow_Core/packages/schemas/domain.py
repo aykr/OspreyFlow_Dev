@@ -582,6 +582,9 @@ class Alert(BaseModel):
     referent_node_ids: list[NodeId] = Field(default_factory=list)
     investigation_id: str | None = None
     created_at: datetime
+    #: ADR-099 Amendment 3: the dataset of the case it was made in; read only in a case reading
+    #: it. `None` for one made before, until `stamp_datasets` places it.
+    dataset_id: str | None = None
 
 
 #: `Hotlist.status`/`Monitor.status` — ADR-036's own "the monitor stops" (extended in Stage 6b to
@@ -612,6 +615,9 @@ class Hotlist(BaseModel):
     review_date: date
     status: WatchStatus = "active"
     created_at: datetime
+    #: ADR-099 Amendment 3: the dataset of the case it was made in; read only in a case reading
+    #: it. `None` for one made before, until `stamp_datasets` places it.
+    dataset_id: str | None = None
 
 
 class Monitor(BaseModel):
@@ -638,6 +644,9 @@ class Monitor(BaseModel):
     owner_id: str
     status: WatchStatus = "active"
     created_at: datetime
+    #: ADR-099 Amendment 3: the dataset of the case it was made in; read only in a case reading
+    #: it. `None` for one made before, until `stamp_datasets` places it.
+    dataset_id: str | None = None
 
 
 class Judgement(BaseModel):

@@ -98,17 +98,19 @@ export function JumpResultSummary({ result, onOpen }: JumpResultSummaryProps) {
 export interface AlertInboxProps {
   apiBaseUrl: string;
   bearerToken: string;
+  /** ADR-099 Amendment 3: the case whose datasets these are. */
+  investigationId: string;
   onOpenInvestigation: (investigationId: string) => void;
 }
 
-export function AlertInbox({ apiBaseUrl, bearerToken, onOpenInvestigation }: AlertInboxProps) {
+export function AlertInbox({ apiBaseUrl, bearerToken, investigationId, onOpenInvestigation }: AlertInboxProps) {
   const [alerts, setAlerts] = useState<AlertView[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [jumpingId, setJumpingId] = useState<string | null>(null);
   const [jumpResult, setJumpResult] = useState<AlertJumpResult | null>(null);
 
   useEffect(() => {
-    listAlerts(apiBaseUrl, bearerToken)
+    listAlerts(apiBaseUrl, bearerToken, investigationId)
       .then(setAlerts)
       .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,7 +120,7 @@ export function AlertInbox({ apiBaseUrl, bearerToken, onOpenInvestigation }: Ale
     setError(null);
     setJumpingId(alertId);
     try {
-      setJumpResult(await jumpAlert(apiBaseUrl, bearerToken, alertId));
+      setJumpResult(await jumpAlert(apiBaseUrl, bearerToken, investigationId, alertId));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

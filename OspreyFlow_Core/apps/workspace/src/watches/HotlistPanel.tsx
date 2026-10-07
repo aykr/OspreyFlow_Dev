@@ -22,9 +22,11 @@ import { StatusBadge } from "./StatusBadge";
 export interface HotlistPanelProps {
   apiBaseUrl: string;
   bearerToken: string;
+  /** ADR-099 Amendment 3: the case whose datasets these are. */
+  investigationId: string;
 }
 
-export function HotlistPanel({ apiBaseUrl, bearerToken }: HotlistPanelProps) {
+export function HotlistPanel({ apiBaseUrl, bearerToken, investigationId }: HotlistPanelProps) {
   const [identifier, setIdentifier] = useState("");
   const [reviewDate, setReviewDate] = useState("");
   const [hotlists, setHotlists] = useState<Hotlist[]>([]);
@@ -35,7 +37,7 @@ export function HotlistPanel({ apiBaseUrl, bearerToken }: HotlistPanelProps) {
     // yet, no error banner before the analyst has done anything" shape `QueryBuilderPanel`'s own
     // mount-time `listPatterns` call already establishes. `handleCreate` surfaces a real `error`
     // for a failure the analyst actually triggered.
-    listHotlists(apiBaseUrl, bearerToken)
+    listHotlists(apiBaseUrl, bearerToken, investigationId)
       .then(setHotlists)
       .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -45,10 +47,10 @@ export function HotlistPanel({ apiBaseUrl, bearerToken }: HotlistPanelProps) {
     if (!identifier || !reviewDate) return;
     setError(null);
     try {
-      await createHotlist(apiBaseUrl, bearerToken, { identifier, review_date: reviewDate });
+      await createHotlist(apiBaseUrl, bearerToken, investigationId, { identifier, review_date: reviewDate });
       setIdentifier("");
       setReviewDate("");
-      setHotlists(await listHotlists(apiBaseUrl, bearerToken));
+      setHotlists(await listHotlists(apiBaseUrl, bearerToken, investigationId));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }

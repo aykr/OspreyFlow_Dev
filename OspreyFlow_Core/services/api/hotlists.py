@@ -18,6 +18,8 @@ import asyncpg
 from conduit_common.identity import new_id
 from schemas.domain import Hotlist, Principal, WatchStatus
 
+from .dataset_scope import made_in, reach_clause
+
 #: `ADD COLUMN IF NOT EXISTS` — `alerts.py`'s own `_BOOTSTRAP_SQL` docstring has the full reasoning:
 #: this codebase has no migration tooling, and `CREATE TABLE IF NOT EXISTS` alone is a no-op
 #: against the persistent database Stage 6b's own bootstrap already ran on.
@@ -33,6 +35,7 @@ CREATE TABLE IF NOT EXISTS hotlists (
 ALTER TABLE hotlists ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
 CREATE INDEX IF NOT EXISTS hotlists_owner_id_idx ON hotlists (owner_id);
 CREATE INDEX IF NOT EXISTS hotlists_identifier_idx ON hotlists (identifier);
+ALTER TABLE hotlists ADD COLUMN IF NOT EXISTS dataset_id TEXT;
 """
 
 
@@ -49,6 +52,7 @@ def _row_to_hotlist(row: asyncpg.Record) -> Hotlist:
         review_date=row["review_date"],
         status=row["status"],
         created_at=row["created_at"],
+        dataset_id=row["dataset_id"],
     )
 
 
@@ -85,27 +89,32 @@ class HotlistStore:
             owner_id=principal.id,
             review_date=review_date,
             created_at=datetime.now(UTC),
+            dataset_id=made_in(principal),
         )
         async with self._pool.acquire() as conn:
             await conn.execute(
-                "INSERT INTO hotlists (id, identifier, owner_id, review_date, status, created_at) "
-                "VALUES ($1, $2, $3, $4, $5, $6)",
+                "INSERT INTO hotlists "
+                "(id, identifier, owner_id, review_date, status, created_at, dataset_id) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7)",
                 hotlist.id,
                 hotlist.identifier,
                 hotlist.owner_id,
                 hotlist.review_date,
                 hotlist.status,
                 hotlist.created_at,
+                hotlist.dataset_id,
             )
         return hotlist
 
     async def get_authorized(self, hotlist_id: str, principal: Principal) -> Hotlist:
+        reach, extra = reach_clause(principal, 3)
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT id, identifier, owner_id, review_date, status, created_at "
-                "FROM hotlists WHERE id = $1 AND owner_id = $2",
+                "SELECT id, identifier, owner_id, review_date, status, created_at, dataset_id "
+                f"FROM hotlists WHERE id = $1 AND owner_id = $2{reach}",
                 hotlist_id,
                 principal.id,
+                *extra,
             )
         if row is None:
             raise HotlistNotFoundError(hotlist_id)
@@ -114,11 +123,13 @@ class HotlistStore:
     async def list_authorized(self, principal: Principal) -> list[Hotlist]:
         """Never another principal's hotlists — `06_DECISIONS.md` ADR-038's own settled answer to
         "what does a second analyst observe of a hotlist they do not own": nothing."""
+        reach, extra = reach_clause(principal, 2)
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, identifier, owner_id, review_date, status, created_at "
-                "FROM hotlists WHERE owner_id = $1 ORDER BY created_at DESC",
+                "SELECT id, identifier, owner_id, review_date, status, created_at, dataset_id "
+                f"FROM hotlists WHERE owner_id = $1{reach} ORDER BY created_at DESC",
                 principal.id,
+                *extra,
             )
         return [_row_to_hotlist(row) for row in rows]
 
@@ -149,7 +160,8 @@ class HotlistStore:
         established needs an unscoped population."""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, identifier, owner_id, review_date, status, created_at FROM hotlists"
+                "SELECT id, identifier, owner_id, review_date, status, created_at, dataset_id "
+                "FROM hotlists"
             )
         return [_row_to_hotlist(row) for row in rows]
 
