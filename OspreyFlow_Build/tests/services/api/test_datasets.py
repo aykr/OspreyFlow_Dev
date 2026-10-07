@@ -67,6 +67,12 @@ class _Investigations:
                 return case
         raise InvestigationNotFoundError(investigation_id)
 
+    async def list_for(self, principal: Principal) -> list[tuple[Investigation, AccessLevel]]:
+        return [(c, AccessLevel.AUTHOR) for c in self.made if c.owning_unit == principal.org_unit]
+
+    async def hidden_tab_ids(self, principal: Principal) -> set[str]:
+        return set()
+
 
 class _Audit:
     def __init__(self) -> None:
@@ -170,3 +176,11 @@ async def test_a_branch_reads_what_its_parent_reads(store: InMemoryDatasetStore)
     await store.set_for_case("parent", ["fixture", "enron"], ALICE)
     await store.copy_case("parent", "branch")
     assert await store.ids_of_case("branch") == ["fixture", "enron"]
+
+
+def test_the_case_list_names_what_each_case_reads(setup) -> None:  # type: ignore[no-untyped-def]
+    client, _, _, _ = setup
+    client.post("/v1/investigations", json={"name": "Both", "dataset_ids": ["fixture", "enron"]})
+    (listed,) = client.get("/v1/investigations").json()
+    assert listed["datasets"] == ["Fixture Corp", "Enron corpus"]
+

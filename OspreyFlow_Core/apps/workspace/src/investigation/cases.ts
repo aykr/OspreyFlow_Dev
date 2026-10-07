@@ -15,6 +15,61 @@ export interface CaseListing {
   branched_from?: string | null;
   /** This account has closed the case's tab (ADR-084). Says nothing about anyone else's view. */
   tab_hidden?: boolean;
+  /** ADR-099: the names of the datasets the case reads, in order. */
+  datasets?: string[];
+}
+
+/** A body of data held by the unit (ADR-099): the Enron corpus, Fixture Corp, a Studio load's. */
+export interface Dataset {
+  id: string;
+  name: string;
+  owning_unit: string;
+}
+
+/** The datasets of the caller's unit, for a new case to name. */
+export async function listDatasets(apiBaseUrl: string, bearerToken: string): Promise<Dataset[]> {
+  const response = await fetch(`${apiBaseUrl}/v1/datasets`, {
+    headers: { Authorization: `Bearer ${bearerToken}` },
+  });
+  if (!response.ok) throw new Error(`Could not load the datasets (${response.status}).`);
+  return (await response.json()) as Dataset[];
+}
+
+/** The datasets a case reads, in order. */
+export async function caseDatasets(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+): Promise<Dataset[]> {
+  const response = await fetch(
+    `${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}/datasets`,
+    { headers: { Authorization: `Bearer ${bearerToken}` } },
+  );
+  if (!response.ok) throw new Error(`Could not load what this case reads (${response.status}).`);
+  return (await response.json()) as Dataset[];
+}
+
+/** Changes what a case reads: its Author's. The Conduit refuses none, and any dataset not of the
+ * Author's unit, with one answer. */
+export async function setCaseDatasets(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  datasetIds: string[],
+): Promise<Dataset[]> {
+  if (datasetIds.length === 0) throw new Error("A case reads at least one dataset.");
+  const response = await fetch(
+    `${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}/datasets`,
+    {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ dataset_ids: datasetIds }),
+    },
+  );
+  if (response.status === 403) throw new Error("Only the case's Author can change what it reads.");
+  if (response.status === 422) throw new Error("One of those datasets is not one this case can read.");
+  if (!response.ok) throw new Error(`Could not change what this case reads (${response.status}).`);
+  return (await response.json()) as Dataset[];
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -61,16 +116,21 @@ export async function createCase(
   apiBaseUrl: string,
   bearerToken: string,
   name: string,
+  datasetIds: string[] = [],
 ): Promise<{ id: string; name: string }> {
   const trimmed = name.trim();
   if (!trimmed) {
     throw new Error("A case needs a name.");
   }
+  // ADR-099: with none named, the Conduit gives the case a dataset of its own.
   const response = await fetch(`${apiBaseUrl}/v1/investigations`, {
     method: "POST",
     headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ name: trimmed }),
+    body: JSON.stringify(datasetIds.length > 0 ? { name: trimmed, dataset_ids: datasetIds } : { name: trimmed }),
   });
+  if (response.status === 422) {
+    throw new Error("One of those datasets is not one this case can read.");
+  }
   if (!response.ok) {
     throw new Error(`Could not create the case (${response.status}).`);
   }

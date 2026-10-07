@@ -77,6 +77,7 @@ import { IngestStudio } from "./ingest/IngestStudio";
 import { CasePicker } from "./investigation/CasePicker";
 import { CaseSwitcher } from "./investigation/CaseSwitcher";
 import { CaseTabs } from "./investigation/CaseTabs";
+import { CaseDatasets } from "./investigation/CaseDatasets";
 import { openCase } from "./investigation/cases";
 import { QuestionsPanel } from "./questions/QuestionsPanel";
 import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
@@ -1358,6 +1359,13 @@ export function App() {
           >
             Browse all cases
           </Button>
+          {/* ADR-099: what the open case reads, changed by its Author. */}
+          <CaseDatasets
+            apiBaseUrl={API_BASE_URL}
+            bearerToken={bearerToken}
+            investigationId={investigationId}
+            onChanged={() => window.location.reload()}
+          />
         </div>
       </Drawer>
       <HistoryPanel

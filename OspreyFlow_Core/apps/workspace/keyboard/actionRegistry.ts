@@ -383,6 +383,13 @@ export const SELECTION_ACTIONS = defineActionRegistry("SELECTION_ACTIONS", [
   "ask-the-model-about-the-selected-documents-from-the-selection-bar",
 ] as const);
 
+/** What a case reads (ADR-099): ticked when the case is made, changed by its Author.
+ * `keyboard/case-datasets.spec.ts`. */
+export const CASE_DATASETS_ACTIONS = defineActionRegistry("CASE_DATASETS_ACTIONS", [
+  "tick-datasets-and-create-a-case-by-keyboard",
+  "change-what-a-case-reads-by-keyboard",
+] as const);
+
 /** The case's questions to the model (ADR-098 decision 4): asked, answered with what it draws on,
  * and its proposals accepted or rejected. `keyboard/questions.spec.ts`. */
 export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [

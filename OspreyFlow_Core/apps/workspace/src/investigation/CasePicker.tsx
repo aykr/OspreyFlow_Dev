@@ -110,6 +110,7 @@ export function CasePicker({
                     <span className="label">
                       {entry.id === lastCaseId ? "Last opened · " : ""}
                       {branch ? "branch · " : ""}
+                      {entry.datasets && entry.datasets.length > 0 ? `reads ${entry.datasets.join(", ")} · ` : ""}
                       {entry.level}
                     </span>
                     {(entry.level === "author" || isAdministrator) &&

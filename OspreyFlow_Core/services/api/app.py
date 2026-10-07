@@ -1822,11 +1822,13 @@ class InvestigationListing(BaseModel):
     #: ADR-084: this account has closed the case's tab. A flag per account, so it says nothing about
     #: anyone else's view of the same case.
     tab_hidden: bool = False
+    #: ADR-099: the names of the datasets the case reads, in order, for the picker to show.
+    datasets: list[str] = Field(default_factory=list)
 
 
 @app.get("/v1/investigations")
 async def list_investigations(
-    principal: PrincipalDep, investigations: InvestigationsDep
+    principal: PrincipalDep, investigations: InvestigationsDep, datasets: DatasetsDep
 ) -> list[InvestigationListing]:
     hidden = await investigations.hidden_tab_ids(principal)
     return [
@@ -1838,6 +1840,7 @@ async def list_investigations(
             created_by=case.created_by,
             branched_from=case.branched_from,
             tab_hidden=case.id in hidden,
+            datasets=[d.name for d in await datasets.of_case(case.id)],
         )
         for case, level in await investigations.list_for(principal)
     ]

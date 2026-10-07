@@ -390,6 +390,23 @@ checks every request against the token's roles (ADR-050). A refused sign-in (an 
 on return) is shown and is never retried automatically. Only the Ingest tab can be requested
 (`apps/workspace/src/auth/launcherHandoff.ts`, `App.test.tsx`).
 
+### 2.2 What a case reads (ADR-099)
+
+A case reads only its own datasets, on every read, in the Conduit: search, suggestions, expansion,
+the query builder, paths and the canvas itself. The Glass shows and asks; it enforces nothing.
+
+- **A new case** (the case picker and the case switcher) offers *Data the case reads*: the unit's
+  datasets as boxes to tick, kept in the order ticked. None ticked, the form says the case gets a
+  dataset of its own for the data added to it.
+- **The case picker** says what each case reads beside its level ("reads Enron corpus · author").
+- **The Cases drawer** ends with *Data this case reads*: the open case's datasets, to every reader.
+  Its Author is offered *Change what this case reads*, a list to tick and *Save*, which will not save
+  a case reading nothing; the page reloads after a change, since every read in it has changed.
+- Search, the query builder, paths and the node actions are asked of the case
+  (`/v1/investigations/{id}/...`), so the Glass passes the open case to each.
+
+`keyboard/case-datasets.spec.ts` walks both forms by keyboard; `CaseDatasets.test.tsx` the rest.
+
 ## 3. The five analytical capabilities
 
 ### 3.1 Network analysis
