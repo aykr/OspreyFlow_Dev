@@ -190,6 +190,10 @@ class FakeClient:
         self.record_missing_on: str | None = None
         self.truncate_times_out = False
         self.empties_after_polls = 0
+        #: The real server's refusal of a large delete (seen on the owner's 26.10.1 store: a
+        #: `DELETE FROM` of 73,577 links outlasted the client's 30 s and was rolled back): a
+        #: statement that would delete more than this times out and deletes nothing.
+        self.max_deleted_per_statement: int | None = None
 
     def _maybe_fail(self, command: str) -> None:
         from adapters.graph_arcadedb.client import ArcadeDBError
@@ -209,8 +213,13 @@ class FakeClient:
                 exception_class="com.arcadedb.query.sql.parser.ParseException",
             )
 
-    def _delete(self, name: str, start: str) -> int:
+    def _delete(self, name: str, start: str, limit: int | None = None) -> int:
         matching = [i for i in self.rows.get(name, []) if i.startswith(start)]
+        if limit is not None:
+            matching = matching[:limit]
+        cap = self.max_deleted_per_statement
+        if cap is not None and len(matching) > cap:
+            raise httpx.ReadTimeout("read timed out")  # rolled back: nothing deleted
         if not self.stubborn:
             self.rows[name] = [i for i in self.rows.get(name, []) if i not in matching]
         return len(matching)
@@ -246,7 +255,8 @@ class FakeClient:
             return [
                 {"n": len([i for i in self.rows.get(name, []) if i.startswith(start)])}
             ]
-        return [{"count": self._delete(name, start)}]
+        limit = re.search(r" LIMIT (\d+)$", command)
+        return [{"count": self._delete(name, start, int(limit.group(1)) if limit else None)}]
 
     async def gremlin(self, command: str, **_: object) -> list[dict[str, object]]:
         import re
@@ -312,6 +322,19 @@ def test_a_clean_up_that_leaves_rows_behind_is_an_error_not_a_success() -> None:
     client.stubborn = True
     with pytest.raises(seed_support.CleanUpIncomplete, match="left"):
         _clear(client)
+
+
+def test_a_delete_too_large_for_one_statement_is_done_in_batches_each_within_the_limit() -> None:
+    """Seen on the owner's 26.10.1 store: one `DELETE FROM` of 73,577 Enron links outlasted the
+    client's 30 s, the server rolled it back, and the reload stopped with nothing deleted. The fake
+    refuses as the server did; every delete is a bounded batch, and all of the seed's rows go."""
+    rows = [f"paysim-tx-{i}" for i in range(2 * seed_support.DELETE_BATCH + 7)]
+    client = FakeClient({"Endpoint": ["paysim-acct-1"], "TRANSACTED": [*rows, "other-tx"]})
+    client.max_deleted_per_statement = seed_support.DELETE_BATCH
+    assert _clear(client) == (1, len(rows))
+    assert client.rows == {"Endpoint": [], "TRANSACTED": ["other-tx"]}
+    deletes = [s for s in client.statements if s.startswith("DELETE")]
+    assert all(s.endswith(f" LIMIT {seed_support.DELETE_BATCH}") for s in deletes)
 
 
 def test_an_empty_graph_is_cleared_without_fuss() -> None:

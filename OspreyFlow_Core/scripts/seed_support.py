@@ -326,6 +326,12 @@ async def _truncate_if_only_this_seed(
         )
 
 
+#: Rows one delete statement removes. Seen on the owner's ArcadeDB 26.10.1 store: one
+#: `DELETE FROM` of 73,577 Enron links outlasted the client's 30 s and the server rolled it back,
+#: deleting nothing. Each statement is a bounded batch, repeated until a batch comes back short.
+DELETE_BATCH = 5_000
+
+
 async def _delete_scoped(client: _Sql, *, kind: str, type_name: str, prefix: str) -> None:
     """Delete this type's rows whose id starts with `prefix`, trying the ways ArcadeDB documents.
 
@@ -346,9 +352,19 @@ async def _delete_scoped(client: _Sql, *, kind: str, type_name: str, prefix: str
     for form in forms:
         try:
             if form.startswith("g."):
-                await client.gremlin(form)
+                # `drop()` answers nothing, so the batches run until none of the prefix is left.
+                count = f"SELECT count(*) AS n FROM {type_name} WHERE id LIKE '{prefix}%'"
+                bounded = form.replace(".drop()", f".limit({DELETE_BATCH}).drop()")
+                while True:
+                    await client.gremlin(bounded)
+                    left = await client.sql(count)
+                    if not left or int(left[0].get("n") or 0) == 0:
+                        break
             else:
-                await client.sql(form)
+                while True:
+                    rows = await client.sql(f"{form} LIMIT {DELETE_BATCH}")
+                    if int((rows[0] if rows else {}).get("count") or 0) < DELETE_BATCH:
+                        break
         except ArcadeDBError as error:
             if not _is_parse_error(error):
                 raise
