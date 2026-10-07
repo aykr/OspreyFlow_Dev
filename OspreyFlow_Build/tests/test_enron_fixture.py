@@ -94,11 +94,33 @@ def test_the_same_message_in_several_folders_is_read_once(tmp_path: Path) -> Non
     assert tally.duplicates == 2
 
 
+def test_copies_of_one_email_under_different_message_ids_are_read_once(tmp_path: Path) -> None:
+    """The real corpus, as the owner saw it: one email shown three times. The corpus gives every
+    file its own Message-ID, so the copies of one email in `discussion_threads`, `general_stuff`
+    and `all_documents` (or in two custodians' mailboxes) carry three different ids. The test
+    above gave its copies one id, a corpus that does not exist, and so could not fail for this."""
+    copies = [
+        ("mann-k", "discussion_threads"),
+        ("mann-k", "general_stuff"),
+        ("mann-k", "all_documents"),
+    ]
+    for n, (custodian, folder) in enumerate(copies):
+        _put(tmp_path, custodian, folder, f"{n}.", _mail(message_id=f"<{n}.1075845@thyme>"))
+    _put(tmp_path, "brown-s", "sent", "1.", _mail(message_id="<9.1075999@thyme>"))
+    tally = enron.Tally()
+    assert len(list(enron.read_messages(tmp_path, tally=tally))) == 1
+    assert tally.duplicates == 3
+
+
 def test_two_different_messages_are_both_kept(tmp_path: Path) -> None:
-    """Catches a dedupe that is too greedy (for example keyed on subject)."""
-    _put(tmp_path, "a", "sent", "1.", _mail(message_id="<1@t>", subject="Same"))
-    _put(tmp_path, "a", "sent", "2.", _mail(message_id="<2@t>", subject="Same"))
-    assert len(list(enron.read_messages(tmp_path))) == 2
+    """Catches a dedupe that is too greedy (for example keyed on subject): the same subject from
+    the same sender, at the same time, with a different body, is a different email."""
+    _put(tmp_path, "a", "sent", "1.", _mail(message_id="<1@t>", subject="Same", body="One."))
+    _put(tmp_path, "a", "sent", "2.", _mail(message_id="<2@t>", subject="Same", body="Two."))
+    _put(
+        tmp_path, "a", "sent", "3.", _mail(message_id="<3@t>", subject="Same", to="carol@enron.com")
+    )
+    assert len(list(enron.read_messages(tmp_path))) == 3
 
 
 def test_a_message_without_an_id_is_still_deduplicated_by_its_content(tmp_path: Path) -> None:
@@ -225,8 +247,8 @@ def test_the_graph_holds_enron_addresses_and_links_between_them_only(tmp_path: P
 
 def test_an_edge_summarises_every_message_between_the_pair(tmp_path: Path) -> None:
     """Catches one edge per message (a hairball) or a count that misses duplicates."""
-    for i in range(3):
-        _put(tmp_path, "a", "sent", f"{i}.", _mail(message_id=f"<{i}@t>"))
+    for i in range(3):  # three different emails, not three copies of one
+        _put(tmp_path, "a", "sent", f"{i}.", _mail(message_id=f"<{i}@t>", body=f"Message {i}."))
     pairs = enron.summarise(enron.read_messages(tmp_path))
     ((_, summary),) = pairs.items()
     assert summary.count == 3

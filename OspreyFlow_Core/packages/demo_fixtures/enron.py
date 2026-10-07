@@ -124,6 +124,22 @@ def _content_key(message: EmailMessage) -> str:
     return "hash:" + hashlib.sha1(material.encode("utf-8", "replace")).hexdigest()  # noqa: S324
 
 
+def _identity(
+    sender: str, recipients: list[Recipient], sent_at: datetime, subject: str, body: str
+) -> str:
+    """What one email is, whichever file holds it: the Message-ID cannot say (see the caller)."""
+    material = "\x1f".join(
+        [
+            sender,
+            ",".join(sorted(f"{r.kind}:{r.address}" for r in recipients)),
+            sent_at.isoformat(),
+            subject,
+            " ".join(body.split()),
+        ]
+    )
+    return hashlib.sha1(material.encode("utf-8", "replace")).hexdigest()  # noqa: S324
+
+
 def _files(root: Path) -> Iterator[Path]:
     """Every file, in a fixed order, so the first copy of a duplicate is always the same one."""
     for directory, subdirectories, names in os.walk(root):
@@ -166,9 +182,6 @@ def read_messages(root: Path, *, tally: Tally | None = None) -> Iterator[Message
             continue
         sent_at = sent_at.replace(tzinfo=UTC) if sent_at.tzinfo is None else sent_at.astimezone(UTC)
         message_id = str(message.get("Message-ID", "")).strip() or _content_key(message)
-        if message_id in seen:
-            tally.duplicates += 1
-            continue
         recipients: list[Recipient] = []
         for header, kind in (("To", "to"), ("Cc", "cc"), ("Bcc", "bcc")):
             for address in _addresses(message.get(header)):
@@ -177,7 +190,16 @@ def read_messages(root: Path, *, tally: Tally | None = None) -> Iterator[Message
         if not recipients:
             tally.no_recipients += 1
             continue
-        seen.add(message_id)
+        subject = " ".join(str(message.get("Subject", "")).split())
+        excerpt = _excerpt(message)
+        # One email is one message however many folders or mailboxes hold a copy. The corpus gives
+        # every file its own Message-ID (seen: one email under three ids in one mailbox), so the
+        # copy is known by what it says: who, to whom, when, about what, and its decoded body.
+        identity = _identity(sender, recipients, sent_at, subject, excerpt)
+        if identity in seen:
+            tally.duplicates += 1
+            continue
+        seen.add(identity)
         tally.kept += 1
         yield Message(
             message_id=message_id,
@@ -186,8 +208,8 @@ def read_messages(root: Path, *, tally: Tally | None = None) -> Iterator[Message
             sent_at=sent_at,
             sender=sender,
             recipients=tuple(recipients),
-            subject=" ".join(str(message.get("Subject", "")).split()),
-            excerpt=_excerpt(message),
+            subject=subject,
+            excerpt=excerpt,
             truncated=False,
         )
 

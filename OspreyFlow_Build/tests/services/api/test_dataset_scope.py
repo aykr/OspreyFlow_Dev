@@ -216,3 +216,33 @@ def test_the_working_sets_projection_leaves_out_another_datasets_node_and_link()
     assert hidden == 3
     unlimited, _ = service.project_delta(delta, ANALYST)
     assert isinstance(unlimited, DeltaAdd) and len(unlimited.nodes) == 3
+
+
+async def test_what_the_conduit_writes_onto_a_canvas_is_in_the_cases_dataset_there_too() -> None:
+    """Seen on the owner's deployment: emails put on the canvas were in the Enron dataset in the
+    graph but in none in the working set's copy, which the canvas is drawn from, so a reload or a
+    live push held them back as hidden. `add_written` is the one way a Conduit write reaches a
+    canvas, so it stamps the copy as `DatasetStampingGraph` stamps the write."""
+    from services.api.dataset_scope import set_case_datasets
+
+    store = FakeWorkingSetStore()
+    service = WorkingSetService(None, store, SCHEME)  # type: ignore[arg-type]
+    set_case_datasets(["enron", "fixture"])
+    try:
+        await service.add_written(
+            "case-e",
+            [_node("email:1", []), _node("named", ["fixture"])],
+            [_edge("m1", "email:1", "named", [])],
+        )
+    finally:
+        set_case_datasets(None)
+    nodes = await store.source_fidelity_nodes("case-e")
+    assert {n.id: n.datasets for n in nodes.values()} == {
+        "email:1": ["enron"],
+        "named": ["fixture"],
+    }
+    (link,) = (await store.source_fidelity_edges("case-e")).values()
+    assert link.datasets == ["enron"]
+    in_enron = ANALYST.model_copy(update={"datasets": ["enron"]})
+    visible, _ = await service.visible_membership("case-e", in_enron)
+    assert "email:1" in {n.id for n in visible}

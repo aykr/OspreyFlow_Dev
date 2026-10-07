@@ -646,7 +646,18 @@ class WorkingSetService:
         """Puts nodes and links this Conduit has just written into the case's working set and
         returns the delta that says so (ADR-089: the Document an email becomes, and an entity
         accepted from it). Nothing is filtered here: the caller wrote them under a handling it
-        could itself see, and the cap check and the sequence are `_add`'s own."""
+        could itself see, and the cap check and the sequence are `_add`'s own.
+
+        ADR-099: the copy is stamped as the write was (`DatasetStampingGraph`), each element that
+        names no dataset given the request's case's first; otherwise the canvas, drawn from these
+        copies, would hold back what the case has just written."""
+        from ..dataset_scope import case_datasets
+
+        held = case_datasets()
+        if held:
+            into = [held[0]]
+            nodes = [n if n.datasets else n.model_copy(update={"datasets": into}) for n in nodes]
+            edges = [e if e.datasets else e.model_copy(update={"datasets": into}) for e in edges]
         outcome = await self._add(investigation_id, nodes, edges, filtered_count=0)
         return outcome.delta
 
