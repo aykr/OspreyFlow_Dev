@@ -44,6 +44,7 @@ from valkey.asyncio import Valkey
 
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from adapters.graph_arcadedb.naming import logical_type_name, physical_type_name
+from adapters.graph_arcadedb.serialization import edge_from_element_map, node_from_element_map
 from demo_fixtures.datasets import SEED_DATASETS, SeedDataset
 from ontology.loader import load_default_ontology
 from schemas.domain import OntologySchema, Principal
@@ -183,6 +184,22 @@ async def _derive(sql: _Sql, ontology: OntologySchema, *, write: bool) -> int:
                 placed[r["id"]] = shared
         count += await _set_datasets(sql, label, placed, write=write)
     return count
+
+
+async def _bodies_by_id(
+    sql: _Sql, types: Sequence[str], ids: Sequence[str], parse: Callable[[Any], Any]
+) -> dict[str, Any]:
+    """Each element's current body, read as the adapter reads it (`@type` is its label)."""
+    found: dict[str, Any] = {}
+    for start in range(0, len(ids), LOOKUP_BATCH):
+        chunk = list(ids[start : start + LOOKUP_BATCH])
+        for type_name in types:
+            for row in await sql.query(
+                f"SELECT *, @type AS label FROM {type_name} WHERE id IN :ids", {"ids": chunk}
+            ):
+                body = parse(row)
+                found[body.id] = body
+    return found
 
 
 def _type_names(ontology: OntologySchema) -> list[str]:
@@ -388,22 +405,28 @@ async def stamp(
                         )
                     report.canvas_stamped += unplaced
 
-        # 5. The working set's own copies.
+        # 5. The working set's own copies, which the canvas is drawn from: the graph's current
+        # body where it holds the element (its datasets, and its counts if a load was written
+        # again), else the copy stamped with the case's first dataset.
         if write and (node_ids or edge_ids):
-            stored = await _datasets_by_id(sql, types, [*node_ids, *edge_ids])
+            node_bodies = await _bodies_by_id(sql, node_types, node_ids, node_from_element_map)
+            edge_types = [physical_type_name(t.name) for t in ontology.edge_types]
+            edge_bodies = await _bodies_by_id(sql, edge_types, edge_ids, edge_from_element_map)
             nodes = await working_sets.source_fidelity_nodes(case.id)
             edges = await working_sets.source_fidelity_edges(case.id)
             await working_sets.add_nodes(
                 case.id,
                 [
-                    n.model_copy(update={"datasets": stored.get(n.id) or n.datasets or [first]})
+                    node_bodies.get(n.id)
+                    or n.model_copy(update={"datasets": n.datasets or [first]})
                     for n in nodes.values()
                 ],
             )
             await working_sets.add_edges(
                 case.id,
                 [
-                    e.model_copy(update={"datasets": stored.get(e.id) or e.datasets or [first]})
+                    edge_bodies.get(e.id)
+                    or e.model_copy(update={"datasets": e.datasets or [first]})
                     for e in edges.values()
                 ],
             )

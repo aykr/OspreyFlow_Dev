@@ -179,6 +179,7 @@ def seed_internal(
     permitted: Callable[[str, str], bool] = _permitted,
     replace_graph: bool = False,
     replace_events: bool = False,
+    replace_links: bool = False,
     reset_graph_database: bool = False,
     vault: str | None = None,
     graph_fraud_rows: int | None = None,
@@ -348,6 +349,11 @@ def seed_internal(
         argv.append("--replace-graph")
     if replace_events and spec.data_folder:
         argv.append("--replace-events")
+    if replace_links:
+        # Only the Enron seed keeps its addresses and rewrites its links (7 October 2026).
+        if dataset != "enron":
+            raise SeedRefused(f"--replace-links is the Enron seed's alone, not {dataset}'s")
+        argv.append("--replace-links")
     if reset_graph_database:
         argv.append("--reset-graph-database")
     if vault is not None:
@@ -595,6 +601,7 @@ def main(argv: list[str] | None = None) -> int:
     stop_api = "--stop-api" in args
     replace_graph = "--replace-graph" in args
     replace_events = "--replace-events" in args
+    replace_links = "--replace-links" in args
     reset_database = "--reset-graph-database" in args
     vault: str | None = None
     if "--vault" in args:
@@ -695,7 +702,8 @@ def main(argv: list[str] | None = None) -> int:
     if len(names) != 1:
         print(
             f"usage: seed_internal <{'|'.join(sorted(DATASETS))}> [--stop-api] "
-            "[--replace-graph] [--replace-events] [--reset-graph-database] [--vault ID] "
+            "[--replace-graph] [--replace-events] [--replace-links] [--reset-graph-database] "
+            "[--vault ID] "
             "[--method upsert|bulk] "
             "[--compare-vaults A B] [--spike-bulk-transport [--spike-edges N]] "
             "[--probe-lookup-cost [--probe-sizes A,B,C]] "
@@ -712,6 +720,7 @@ def main(argv: list[str] | None = None) -> int:
             stop_api=stop_api,
             replace_graph=replace_graph,
             replace_events=replace_events,
+            replace_links=replace_links,
             reset_graph_database=reset_database,
             vault=vault,
             graph_fraud_rows=sample,

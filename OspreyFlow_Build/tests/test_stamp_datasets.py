@@ -290,3 +290,20 @@ async def test_what_was_derived_from_a_datasets_data_joins_that_dataset(store: _
     assert same[frozenset((store.ids["fixture"], fixture_twin.id))] == ["fixture-corp"]
     # Across two datasets: in none, as resolution now writes it.
     assert same[frozenset((a, store.ids["fixture"]))] == []
+
+
+async def test_a_cases_copies_are_refreshed_from_the_graph_not_only_stamped(store: _Store) -> None:
+    """After the Enron links were written again with the right counts (7 October 2026), each case's
+    copies of them, which its canvas is drawn from, still held the old ones. The copy is replaced
+    by the graph's current body wherever the graph holds the element."""
+    from schemas.domain import Edge
+
+    a, b = store.ids["enron_a"], store.ids["enron_b"]
+    (current,) = await store.graph.edges_among([a, b], EVERYONE)
+    stale = Edge(**{**current.model_dump(), "occurrences": 9, "datasets": []})
+    await store.working_sets.add_edges(ENRON_CASE.id, [stale])
+    await store.run()
+    (copy,) = (await store.working_sets.source_fidelity_edges(ENRON_CASE.id)).values()
+    assert copy.occurrences == current.occurrences == 1
+    assert copy.datasets == ["enron"]
+

@@ -122,3 +122,21 @@ def test_the_enron_seed_can_replace_a_cases_events_after_the_loader_changed() ->
     assert seed_enron.events_plan(already_loaded=True, replace_events=True) == "replace"
     assert seed_enron.events_plan(already_loaded=False, replace_events=True) == "load"
     assert seed_enron.events_plan(already_loaded=False, replace_events=False) == "load"
+
+
+def test_the_graph_plan_for_each_combination_of_options() -> None:
+    """Which graph phase the Enron seed runs. Catches `--replace-links` taking the "events only"
+    path when the addresses are still there (they are: it keeps them), which would write no link
+    and leave the old counts in place."""
+    from scripts.seed_enron import graph_plan as plan
+
+    assert plan(present=False, replace_graph=False, replace_links=False, events="load") == "write"
+    assert plan(present=True, replace_graph=False, replace_links=False, events="replace") == "keep"
+    assert plan(present=True, replace_graph=False, replace_links=False, events="load") == "refuse"
+    assert plan(present=True, replace_graph=False, replace_links=True, events="replace") == "links"
+    assert plan(present=True, replace_graph=False, replace_links=True, events="load") == "links"
+    # No addresses to keep: links alone would have no ends, so everything is written.
+    assert plan(present=False, replace_graph=False, replace_links=True, events="load") == "write"
+    assert _parse_args(["--case-name", "x", "--replace-links"]).replace_links is True
+    with pytest.raises(SystemExit):
+        _parse_args(["--case-name", "x", "--replace-links", "--replace-graph"])

@@ -29,6 +29,7 @@ from scripts.seed_support import (
     KNOWN_STRAY_ADVICE,
     EventProgress,
     clear_seeded_graph,
+    clear_seeded_links,
     delete_case_events,
     events_already_loaded,
     report_ids_stored_twice,
@@ -125,6 +126,16 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--replace-links",
+        action="store_true",
+        help=(
+            "Delete this seed's own email links (ids starting enron-comm-) and write them again, "
+            "keeping every address and every other link to them (an analyst's Documents and "
+            "marked entities). For a loader whose link counts changed (7 October 2026: copies of "
+            "one email were counted as several); use with --replace-events for the events."
+        ),
+    )
+    parser.add_argument(
         "--replace-events",
         action="store_true",
         help=(
@@ -164,7 +175,12 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--clearance", default=os.environ.get("OSPREY_CLEARANCE", "OFFICIAL"))
     parser.add_argument("--org-unit", default=os.environ.get("OSPREY_ORG_UNIT", "unit-1"))
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.replace_links and args.replace_graph:
+        parser.error(
+            "--replace-links keeps the addresses; --replace-graph deletes them: one, not both"
+        )
+    return args
 
 
 def _batches(items: Iterator[object], size: int) -> Iterator[list[object]]:
@@ -234,11 +250,33 @@ async def _run(args: argparse.Namespace) -> int:
                 edge_prefix="enron-comm-",
             )
             print(f"  graph: removed {removed[0]:,} addresses and {removed[1]:,} links")
+        if args.replace_links:
+            removed_links = await clear_seeded_links(
+                client,
+                edge_type=groovy_identifier(physical_type_name("COMMUNICATED_WITH")),
+                edge_prefix="enron-comm-",
+            )
+            print(f"  graph: removed {removed_links:,} links; every address kept")
         graph_present = bool(nodes) and await graph.get_node(nodes[0].id, principal) is not None
-        if graph_present and plan == "replace":
+        step = graph_plan(
+            present=graph_present,
+            replace_graph=args.replace_graph,
+            replace_links=args.replace_links,
+            events=plan,
+        )
+        if step == "links":
+            await write_graph(
+                graph,
+                [],
+                edges,
+                chunk=_GRAPH_CHUNK,
+                nouns=("addresses", "links"),
+                method=args.method,
+            )
+        elif step == "keep":
             # Only the events are being replaced: the graph stays exactly as it is.
             print("  graph: kept as it is (--replace-events reloads the events only)")
-        elif graph_present:
+        elif step == "refuse":
             print(
                 "The Enron graph is already loaded (or a load was interrupted). Nothing was "
                 "written. To load again, use --replace-graph: it deletes this seed's own rows "
@@ -290,6 +328,19 @@ async def _run(args: argparse.Namespace) -> int:
     print(f"Seeded {len(nodes)} addresses and {len(edges)} links into the graph.")
     print(f"Loaded {loaded:,} events under investigation_scope={scope!r}.")
     return 0
+
+
+def graph_plan(*, present: bool, replace_graph: bool, replace_links: bool, events: str) -> str:
+    """What the graph phase does, once `--replace-graph` has (or has not) cleared the graph:
+    `write` all of it, `links` (the addresses kept, every email link written again), `keep` it as
+    it is (only the events are being replaced), or `refuse` a second load over the first."""
+    if not present:  # nothing to keep: with no addresses, links alone would have no ends
+        return "write"
+    if replace_links:
+        return "links"
+    if events == "replace":
+        return "keep"
+    return "refuse"
 
 
 def events_plan(*, already_loaded: bool, replace_events: bool) -> str:

@@ -406,6 +406,44 @@ async def clear_seeded_graph(
     return accounts, transactions
 
 
+async def clear_seeded_links(
+    client: _Sql,
+    *,
+    edge_type: str,
+    edge_prefix: str,
+    say: Callable[[str], None] = print,
+    wait_seconds: float = 1800.0,
+    poll_seconds: float = 10.0,
+    sleep: Callable[[float], Awaitable[object]] = asyncio.sleep,
+) -> int:
+    """Delete this seed's own links of one type, and only those, keeping every node. For a load
+    whose link counts were wrong while its nodes were right (the Enron seed counted copies of one
+    email as several, fixed 7 October 2026): deleting a vertex deletes every link touching it, so
+    `clear_seeded_graph` would also take the analyst's own links to those nodes (a Document's
+    `MENTIONED_IN`, a marked entity's), which this leaves alone. Returns the links deleted; raises
+    if any are left."""
+    links = await _count(client, edge_type, edge_prefix)
+    say(f"  clean-up: {links:,} links to remove, every node kept")
+    try:
+        await _delete_scoped(client, kind="EDGE", type_name=edge_type, prefix=edge_prefix)
+    except ArcadeDBError as error:
+        if not _is_missing_record(error):
+            raise
+        await _truncate_if_only_this_seed(
+            client,
+            [(edge_type, edge_prefix)],
+            cause=error,
+            say=say,
+            wait_seconds=wait_seconds,
+            poll_seconds=poll_seconds,
+            sleep=sleep,
+        )
+    left = await _count(client, edge_type, edge_prefix)
+    if left:
+        raise CleanUpIncomplete(f"{left:,} of this seed's links are left after deleting")
+    return links
+
+
 def _quoted(value: str) -> str:
     """`value` for inside a single-quoted SQL literal."""
     return value.replace("\\", "\\\\").replace("'", "\\'")

@@ -702,3 +702,24 @@ def test_the_command_line_accepts_clearing_and_does_not_say_a_dataset_is_loaded(
     assert seen["clear_shared_stores"] is True and seen["confirm"] == "1:2:3"
     assert seen["vault"] == "paysim" and seen["stop_api"] is True
     assert "is loaded" not in capsys.readouterr().out
+
+
+def test_replace_links_reaches_the_enron_seed_and_is_refused_for_any_other(repo: Path) -> None:
+    """Catches the repair of the tripled Enron emails never reaching the container, and the flag
+    being handed to a seed that does not take it (which would fail inside the container)."""
+    _with_enron(repo)
+    runner = Runner()
+    seed_internal.seed_internal(
+        "enron",
+        repo,
+        run=runner,
+        lookup_subs=lambda directory: SUBS,
+        api_running=lambda compose: False,
+        permitted=lambda dataset, use: True,
+        replace_links=True,
+        replace_events=True,
+    )
+    call = _seed_call(runner)
+    assert "--replace-links" in call and "--replace-events" in call
+    with pytest.raises(seed_internal.SeedRefused, match="Enron seed's alone"):
+        _with(repo, replace_links=True)
