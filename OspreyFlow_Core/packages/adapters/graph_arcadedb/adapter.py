@@ -54,7 +54,7 @@ from schemas.domain import (
     TxId,
     WeightComponents,
 )
-from schemas.merge import merge_interval, merge_provenance
+from schemas.merge import merge_datasets, merge_interval, merge_provenance
 
 from .access_filter import AccessFilter
 from .builders import (
@@ -191,6 +191,7 @@ class GraphArcadeDBAdapter:
                 merged_provenance = self._merge_provenance(
                     existing.get("provenance"), write.provenance
                 )
+                merged_datasets = merge_datasets(existing.get("datasets"), write.datasets)
             else:
                 audit = AuditStub(
                     created_at=write.created_at,
@@ -200,8 +201,11 @@ class GraphArcadeDBAdapter:
                     recipe_version=write.recipe_version,
                 )
                 merged_provenance = write.provenance
+                merged_datasets = merge_datasets(None, write.datasets)
 
-            merged_write = write.model_copy(update={"provenance": merged_provenance})
+            merged_write = write.model_copy(
+                update={"provenance": merged_provenance, "datasets": merged_datasets}
+            )
             props = node_write_to_properties(
                 merged_write, node_id=node_id, audit=audit, entity_type=entity_type
             )
@@ -346,6 +350,7 @@ class GraphArcadeDBAdapter:
                 merged_provenance = self._merge_provenance(
                     existing.get("provenance"), write.provenance
                 )
+                merged_datasets = merge_datasets(existing.get("datasets"), write.datasets)
                 existing_audit = AuditStub.model_validate(existing["audit"])
                 audit = existing_audit.model_copy(
                     update={
@@ -360,6 +365,7 @@ class GraphArcadeDBAdapter:
                 merged_occurrences = write.occurrences
                 merged_interval = write.interval
                 merged_provenance = write.provenance
+                merged_datasets = merge_datasets(None, write.datasets)
                 audit = AuditStub(
                     created_at=write.created_at,
                     created_by=write.created_by,
@@ -385,6 +391,7 @@ class GraphArcadeDBAdapter:
                     "occurrences": merged_occurrences,
                     "interval": merged_interval,
                     "provenance": merged_provenance,
+                    "datasets": merged_datasets,
                 }
             )
             props = edge_write_to_properties(
@@ -634,8 +641,10 @@ class GraphArcadeDBAdapter:
         )
         return [edge_from_element_map(r) for r in records]
 
-    async def expand_candidate_count(self, req: ExpandRequest) -> int:
-        structural_step = self._access.gremlin_structural_step()
+    async def expand_candidate_count(
+        self, req: ExpandRequest, *, datasets: list[str] | None = None
+    ) -> int:
+        structural_step = self._access.gremlin_structural_step(datasets=datasets)
         query = ExpandBuilder(req).render_candidate_count_gremlin(structural_step)
         results = await self._client.gremlin(query)
         if not results:

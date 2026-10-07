@@ -53,6 +53,12 @@ OFFICIAL = Principal(id="analyst-official", clearance="OFFICIAL", org_unit="unit
 SENSITIVE = Principal(id="analyst-sensitive", clearance="OFFICIAL-SENSITIVE", org_unit="unit-1")
 CLEARED = Principal(id="analyst-secret", clearance="SECRET", org_unit="unit-1")
 UNKNOWN_CLEARANCE = Principal(id="analyst-unknown", clearance="NOT-A-SCHEME-LEVEL", org_unit="u")
+#: ADR-099: a principal reading for a case over one dataset, and one over none.
+IN_ENRON = Principal(id="analyst-enron", clearance="SECRET", org_unit="unit-1", datasets=["enron"])
+IN_FIXTURE = Principal(
+    id="analyst-fixture", clearance="SECRET", org_unit="unit-1", datasets=["fixture"]
+)
+IN_NOTHING = Principal(id="analyst-none", clearance="SECRET", org_unit="unit-1", datasets=[])
 
 
 def _provenance() -> Provenance:
@@ -106,6 +112,7 @@ def _node(
     load_id: str | None = None,
     recipe_id: str | None = None,
     recipe_version: int | None = None,
+    datasets: list[str] | None = None,
     **properties: object,
 ) -> NodeWrite:
     merged_properties = {**_DEFAULT_PROPERTIES.get(node_type, {}), **properties}
@@ -123,6 +130,7 @@ def _node(
         load_id=load_id,
         recipe_id=recipe_id,
         recipe_version=recipe_version,
+        datasets=datasets or [],
     )
 
 
@@ -141,6 +149,7 @@ def _edge(
     recipe_id: str | None = None,
     recipe_version: int | None = None,
     basis: str | None = None,
+    datasets: list[str] | None = None,
 ) -> EdgeWrite:
     return EdgeWrite(
         id=new_edge_id(),
@@ -160,6 +169,7 @@ def _edge(
         load_id=load_id,
         recipe_id=recipe_id,
         recipe_version=recipe_version,
+        datasets=datasets or [],
     )
 
 
@@ -2654,3 +2664,213 @@ async def test_edges_among_an_empty_or_single_node_set_is_empty(
         (a,), _ = await _write(adapter, [_node("Person", classification="OFFICIAL")], [])
         assert await adapter.edges_among([], CLEARED) == []
         assert await adapter.edges_among([a], CLEARED) == []
+
+
+# --- ADR-099: a case sees only its own datasets ------------------------------
+#
+# The third axis, built like the other two: in the traversal, never after it. Each case below is
+# the dataset twin of a handling one above (get_node, degree, path length, match, its count,
+# edges_among), plus what only datasets have: an element in two datasets, the union on a second
+# write, search and suggestions, and the candidate count, which must not count another dataset's
+# neighbours as "hidden" (what lies outside a case's datasets is not in its world).
+
+
+async def test_a_node_of_another_dataset_matches_a_graph_where_it_never_existed(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (enron,), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", datasets=["enron"])], []
+        )
+        assert await adapter.get_node(enron, IN_FIXTURE) is None
+        assert await adapter.get_node("not-a-real-id-at-all", IN_FIXTURE) is None
+        found = await adapter.get_node(enron, IN_ENRON)
+        assert found is not None and found.datasets == ["enron"]  # the filter is real
+        # Unlimited background work (resolution, a load lookup) sees it; a case over none does not.
+        assert await adapter.get_node(enron, CLEARED) is not None
+        assert await adapter.get_node(enron, IN_NOTHING) is None
+
+
+async def test_a_node_written_by_two_datasets_belongs_to_both_and_a_rewrite_never_drops_one(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        first = _node("Person", classification="OFFICIAL", datasets=["enron"])
+        await _write(adapter, [first], [])
+        await _write(adapter, [first.model_copy(update={"datasets": ["fixture"]})], [])
+        await _write(adapter, [first.model_copy(update={"datasets": ["enron"]})], [])
+        node = await adapter.get_node(first.id, IN_FIXTURE)
+        assert node is not None and sorted(node.datasets) == ["enron", "fixture"]
+        assert await adapter.get_node(first.id, IN_ENRON) is not None
+
+
+async def test_a_link_written_by_two_datasets_belongs_to_both(factory: GraphAdapterFactory) -> None:
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL", datasets=["enron", "fixture"])
+                for _ in "ab"
+            ],
+            [],
+        )
+        link = _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL", datasets=["enron"])
+        await _write(adapter, [], [link])
+        assert await adapter.edges_among([a, b], IN_FIXTURE) == []
+        await _write(adapter, [], [link.model_copy(update={"datasets": ["fixture"]})])
+        (seen,) = await adapter.edges_among([a, b], IN_FIXTURE)
+        assert sorted(seen.datasets) == ["enron", "fixture"]
+
+
+async def test_degree_in_one_dataset_matches_a_graph_without_the_other_datasets_neighbour(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        both = ["enron", "fixture"]
+        (hub,), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", datasets=both)], []
+        )
+        (visible,), _ = await _write(
+            adapter, [_node("Endpoint", classification="OFFICIAL", datasets=["fixture"])], []
+        )
+        await _write(
+            adapter,
+            [],
+            [_edge("USES", hub, visible, classification="OFFICIAL", datasets=["fixture"])],
+        )
+        before = await adapter.neighbourhood_stats(hub, IN_FIXTURE)
+
+        (elsewhere,), _ = await _write(
+            adapter, [_node("Endpoint", classification="OFFICIAL", datasets=["enron"])], []
+        )
+        (shared,), _ = await _write(
+            adapter, [_node("Endpoint", classification="OFFICIAL", datasets=both)], []
+        )
+        await _write(
+            adapter,
+            [],
+            [
+                _edge("USES", hub, elsewhere, classification="OFFICIAL", datasets=["enron"]),
+                # A link of the other dataset to a node this case sees is not in its world either.
+                _edge("USES", hub, shared, classification="OFFICIAL", datasets=["enron"]),
+            ],
+        )
+        assert await adapter.neighbourhood_stats(hub, IN_FIXTURE) == before
+        assert (await adapter.neighbourhood_stats(hub, IN_ENRON)).degree == 2
+
+
+async def test_path_length_in_one_dataset_matches_a_graph_without_the_other_datasets_hop(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        both = ["enron", "fixture"]
+        (a, b, target), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", datasets=both) for _ in "abc"], []
+        )
+        await _write(
+            adapter,
+            [],
+            [
+                _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL", datasets=["fixture"]),
+                _edge("ASSOCIATE_OF", b, target, classification="OFFICIAL", datasets=["fixture"]),
+                _edge("ASSOCIATE_OF", a, target, classification="OFFICIAL", datasets=["enron"]),
+            ],
+        )
+        req = PathRequest(source=a, target=target, max_hops=6, k=5)
+        assert {p.length for p in await adapter.paths(req, IN_FIXTURE)} == {2}
+        assert {p.length for p in await adapter.paths(req, IN_ENRON)} == {1}
+
+
+async def test_expansion_and_its_candidate_count_stay_within_the_cases_datasets(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (hub,), _ = await _write(
+            adapter,
+            [_node("Person", classification="OFFICIAL", datasets=["enron", "fixture"])],
+            [],
+        )
+        (mine, theirs), _ = await _write(
+            adapter,
+            [
+                _node("Endpoint", classification="OFFICIAL", datasets=["fixture"]),
+                _node("Endpoint", classification="OFFICIAL", datasets=["enron"]),
+            ],
+            [],
+        )
+        await _write(
+            adapter,
+            [],
+            [
+                _edge("USES", hub, mine, classification="OFFICIAL", datasets=["fixture"]),
+                _edge("USES", hub, theirs, classification="OFFICIAL", datasets=["enron"]),
+            ],
+        )
+        req = ExpandRequest(node_ids=[hub], depth=1)
+        expanded = await adapter.expand(req, IN_FIXTURE)
+        assert {n.id for n in expanded.nodes} == {hub, mine}
+        assert len(expanded.edges) == 1
+        # Nothing is "hidden" from the case: the other dataset's neighbour is not counted at all.
+        assert await adapter.expand_candidate_count(req, datasets=["fixture"]) == 2
+        assert await adapter.expand_candidate_count(req) == 3  # unlimited, as before
+
+
+async def test_match_and_its_count_never_reach_another_dataset(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (person, theirs), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL", datasets=["enron", "fixture"]),
+                _node("Endpoint", classification="OFFICIAL", datasets=["enron"]),
+            ],
+            [],
+        )
+        await _write(
+            adapter,
+            [],
+            [_edge("USES", person, theirs, classification="OFFICIAL", datasets=["enron"])],
+        )
+        pattern = PatternQuery(
+            nodes=[
+                PatternNode(var="p", entity_type="Person"),
+                PatternNode(var="e", entity_type="Endpoint"),
+            ],
+            edges=[PatternEdge(edge_type="USES", from_var="p", to_var="e")],
+        )
+        assert (await adapter.match(pattern, IN_FIXTURE)).nodes == []
+        assert await adapter.match_count(pattern, IN_FIXTURE, ceiling=100) == 0
+        matched = await adapter.match(pattern, IN_ENRON)
+        assert {n.id for n in matched.nodes} == {person, theirs}
+        # The count is the matched subgraph's nodes, as
+        # `test_match_count_agrees_with_the_filtered_results_own_count` has it.
+        assert await adapter.match_count(pattern, IN_ENRON, ceiling=100) == 2
+
+
+async def test_search_suggestions_and_lookups_find_only_the_cases_datasets(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The owner's report: `vol` in Fixture Corp suggested an Enron address."""
+    async with factory.context() as adapter:
+        address = "volume.management@enron.com"
+        (theirs,), _ = await _write(
+            adapter,
+            [
+                _node(
+                    "Endpoint",
+                    classification="OFFICIAL",
+                    datasets=["enron"],
+                    value_normalised=address,
+                )
+            ],
+            [],
+        )
+        assert await adapter.search_nodes(address, IN_FIXTURE) == []
+        assert [n.id for n in await adapter.search_nodes(address, IN_ENRON)] == [theirs]
+        assert (await adapter.suggest_nodes("volume", IN_FIXTURE)).nodes == []
+        assert [n.id for n in (await adapter.suggest_nodes("volume", IN_ENRON)).nodes] == [theirs]
+        assert await adapter.find_node("Endpoint", "value_normalised", address, IN_FIXTURE) is None
+        assert (await adapter.list_nodes("Endpoint", IN_FIXTURE)).nodes == []
+        assert [n.id for n in (await adapter.list_nodes("Endpoint", IN_ENRON)).nodes] == [theirs]
+

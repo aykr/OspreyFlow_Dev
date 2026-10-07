@@ -31,6 +31,7 @@ export type LoadId = string | null;
 export type RecipeId = string | null;
 export type RecipeVersion = number | null;
 export type Reverted = boolean;
+export type Datasets = string[];
 export type Nodes = Node[];
 export type EdgeId = string;
 export type Type1 = string;
@@ -45,6 +46,7 @@ export type CorpusTargetDegree = number;
 export type CorpusTotalOccurrences = number;
 export type ComputedAt = string;
 export type Basis = ("direct" | "probabilistic") | null;
+export type Datasets1 = string[];
 export type Edges = Edge[];
 export type FilteredCount = number;
 export type Metric =
@@ -74,6 +76,7 @@ export interface Node {
   handling: Handling;
   resolution?: ResolutionState;
   audit: AuditStub;
+  datasets?: Datasets;
   [k: string]: unknown;
 }
 export interface Properties {
@@ -139,6 +142,7 @@ export interface Edge {
   provenance: Provenance;
   handling: Handling;
   audit: AuditStub;
+  datasets?: Datasets1;
   [k: string]: unknown;
 }
 export interface Properties1 {

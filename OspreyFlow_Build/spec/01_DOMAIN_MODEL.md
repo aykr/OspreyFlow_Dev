@@ -436,6 +436,17 @@ separate design question this default does not answer.
 proves it against the real adapter: a `handling_code: R` `Person` is invisible to the service
 principal and visible to an ordinarily-cleared-and-entitled one, in the same test.
 
+### 2.2a Datasets (ADR-099)
+
+Every node and link carries `datasets`, the bodies of data that wrote it (the Enron corpus, Fixture
+Corp, a Studio load's dataset). A write names its own; writing the same element again adds to the list
+and never removes from it, through `upsert_nodes`, `upsert_edges` and the bulk loader alike
+(`schemas.merge.merge_datasets`). A case reads only elements of its datasets, enforced in the store
+with the two handling axes above: a node, a link and a link's far end outside them are not returned,
+counted, or found by any path, degree or bucket (`tests/conformance/graph_port/test_suite.py`, the
+ADR-099 section; `test_bulk_loader.py`). `Principal.datasets` carries the case's; `None` is unlimited
+and only the Conduit's own background work reads so; an empty list sees nothing.
+
 ### 2.3 Resolution state
 
 ```python

@@ -38,6 +38,7 @@ export type LoadId = string | null;
 export type RecipeId = string | null;
 export type RecipeVersion = number | null;
 export type Reverted = boolean;
+export type Datasets = string[];
 
 export interface Edge {
   id: EdgeId;
@@ -53,6 +54,7 @@ export interface Edge {
   provenance: Provenance;
   handling: Handling;
   audit: AuditStub;
+  datasets?: Datasets;
   [k: string]: unknown;
 }
 export interface Properties {

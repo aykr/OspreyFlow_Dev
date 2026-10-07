@@ -31,6 +31,7 @@ export type LoadId = string | null;
 export type RecipeId = string | null;
 export type RecipeVersion = number | null;
 export type Reverted = boolean;
+export type Datasets = string[];
 
 export interface Node {
   id: NodeId;
@@ -40,6 +41,7 @@ export interface Node {
   handling: Handling;
   resolution?: ResolutionState;
   audit: AuditStub;
+  datasets?: Datasets;
   [k: string]: unknown;
 }
 export interface Properties {

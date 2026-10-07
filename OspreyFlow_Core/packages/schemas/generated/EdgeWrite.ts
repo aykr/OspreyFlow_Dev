@@ -28,6 +28,7 @@ export type CreatedAt = string;
 export type LoadId = string | null;
 export type RecipeId = string | null;
 export type RecipeVersion = number | null;
+export type Datasets = string[];
 
 /**
  * Pre-persistence `Edge`: `id` and `created_at` are Conduit-assigned,
@@ -49,6 +50,7 @@ export interface EdgeWrite {
   load_id?: LoadId;
   recipe_id?: RecipeId;
   recipe_version?: RecipeVersion;
+  datasets?: Datasets;
   [k: string]: unknown;
 }
 export interface Properties {

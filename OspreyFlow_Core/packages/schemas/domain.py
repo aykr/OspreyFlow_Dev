@@ -304,6 +304,9 @@ class Node(BaseModel):
     handling: Handling
     resolution: ResolutionState = Field(default_factory=ResolutionState)
     audit: AuditStub
+    #: ADR-099: the datasets this element belongs to. A write names its own; a second write of the
+    #: same element adds to them, never replaces them. A case reads only elements of its datasets.
+    datasets: list[str] = Field(default_factory=list)
 
 
 class NodeWrite(BaseModel):
@@ -324,6 +327,9 @@ class NodeWrite(BaseModel):
     load_id: str | None = None
     recipe_id: str | None = None
     recipe_version: int | None = None
+    #: ADR-099: the datasets this element belongs to. A write names its own; a second write of the
+    #: same element adds to them, never replaces them. A case reads only elements of its datasets.
+    datasets: list[str] = Field(default_factory=list)
 
 
 class Interval(BaseModel):
@@ -367,6 +373,9 @@ class Edge(BaseModel):
     provenance: Provenance
     handling: Handling
     audit: AuditStub
+    #: ADR-099: the datasets this element belongs to. A write names its own; a second write of the
+    #: same element adds to them, never replaces them. A case reads only elements of its datasets.
+    datasets: list[str] = Field(default_factory=list)
 
 
 def effective_basis(
@@ -413,6 +422,9 @@ class EdgeWrite(BaseModel):
     load_id: str | None = None
     recipe_id: str | None = None
     recipe_version: int | None = None
+    #: ADR-099: the datasets this element belongs to. A write names its own; a second write of the
+    #: same element adds to them, never replaces them. A case reads only elements of its datasets.
+    datasets: list[str] = Field(default_factory=list)
 
 
 # --- Principal (00_ARCHITECTURE.md §5) ----------------------------------
@@ -436,6 +448,10 @@ class Principal(BaseModel):
     org_unit: OrgUnitId
     receivable_handling_codes: list[str] = Field(default_factory=list)
     roles: list[str] = Field(default_factory=list)
+    #: ADR-099, the third axis: the datasets of the case this principal reads for. `None` is
+    #: unlimited and only the Conduit's own background work reads so; the Conduit's principal for a
+    #: request always carries a list, empty outside a case, and an empty list sees nothing.
+    datasets: list[str] | None = None
 
 
 # --- GraphPort request/response types (00_ARCHITECTURE.md §2.1) --------

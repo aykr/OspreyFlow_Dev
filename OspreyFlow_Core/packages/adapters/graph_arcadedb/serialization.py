@@ -64,6 +64,8 @@ def node_write_to_properties(
         "owning_unit": write.handling.owning_unit,
         "originator": write.handling.originator,
         "reverted": audit.reverted,
+        # ADR-099: top-level, beside the handling fields, for the access step to read.
+        "datasets": sorted(set(write.datasets)),
         **flattened,
         "properties": write.properties,
         "provenance": write.provenance.model_dump(mode="json"),
@@ -103,6 +105,7 @@ def edge_write_to_properties(
         "owning_unit": write.handling.owning_unit,
         "originator": write.handling.originator,
         "reverted": audit.reverted,
+        "datasets": sorted(set(write.datasets)),
         **flattened,
         "properties": write.properties,
         "occurrences": write.occurrences,
@@ -146,6 +149,7 @@ def node_from_element_map(record: Mapping[str, Any]) -> Node:
         handling=Handling.model_validate(record["handling"]),
         resolution=ResolutionState.model_validate(record.get("resolution") or {}),
         audit=AuditStub.model_validate(audit_data),
+        datasets=list(record.get("datasets") or []),
     )
 
 
@@ -170,4 +174,5 @@ def edge_from_element_map(record: Mapping[str, Any]) -> Edge:
         provenance=Provenance.model_validate(record["provenance"]),
         handling=Handling.model_validate(record["handling"]),
         audit=AuditStub.model_validate(record["audit"]),
+        datasets=list(record.get("datasets") or []),
     )

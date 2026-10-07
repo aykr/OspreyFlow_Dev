@@ -5,6 +5,7 @@ export type Clearance = string;
 export type OrgUnitId = string;
 export type ReceivableHandlingCodes = string[];
 export type Roles = string[];
+export type Datasets = string[] | null;
 
 /**
  * Resolved by the Conduit from the session token and passed into every
@@ -25,5 +26,6 @@ export interface Principal {
   org_unit: OrgUnitId;
   receivable_handling_codes?: ReceivableHandlingCodes;
   roles?: Roles;
+  datasets?: Datasets;
   [k: string]: unknown;
 }

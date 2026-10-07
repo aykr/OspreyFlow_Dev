@@ -232,8 +232,13 @@ class GraphPort(Protocol):
         those logical types. An empty or one-node set has none."""
         ...
 
-    async def expand_candidate_count(self, req: ExpandRequest) -> int:
-        """The unfiltered half of `Subgraph.filtered_count`'s comparison
+    async def expand_candidate_count(
+        self, req: ExpandRequest, *, datasets: list[str] | None = None
+    ) -> int:
+        """`datasets` (ADR-099) limits the count to the case's datasets, as its `expand` is: what
+        lies outside them is not "hidden" from the case, so it is not counted.
+
+        The unfiltered half of `Subgraph.filtered_count`'s comparison
         (`01_DOMAIN_MODEL.md` §8.2): how many
         nodes the *same* seed set, depth, edge-type and temporal scope as
         `expand(req, principal)` would reach with neither access axis

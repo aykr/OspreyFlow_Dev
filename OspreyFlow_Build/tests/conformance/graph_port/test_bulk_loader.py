@@ -159,6 +159,39 @@ async def test_repeated_pairs_in_one_call_become_one_edge_with_everything_kept(
         assert edge.audit.revision == 3
 
 
+async def test_a_bulk_link_carries_every_dataset_that_wrote_it(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-099: a pair that recurs in one load across two datasets is one link in both, as two
+    `upsert_edges` calls would leave it; the store reads the list back, and a case of either sees
+    the link while a case of neither does not."""
+    from tests.conformance.graph_port.test_suite import IN_ENRON, IN_FIXTURE
+
+    async with factory.context() as adapter:
+        loader = _loader(adapter)
+        nodes = [
+            _node(
+                "Endpoint",
+                classification="OFFICIAL",
+                datasets=["enron", "fixture"],
+                value_normalised=f"+44200000{n:04d}",
+            )
+            for n in range(2)
+        ]
+        (a, b), _ = await _write(adapter, nodes, [])
+        writes = [
+            _comm(a, b, row="r1").model_copy(update={"datasets": ["fixture"]}),
+            _comm(a, b, row="r2").model_copy(update={"datasets": ["enron"]}),
+        ]
+        await loader.bulk_load_edges(writes)
+        (edge,) = await _edges_of(adapter, a)
+        assert edge.datasets == ["enron", "fixture"]
+        assert len(await adapter.edges_among([a, b], IN_FIXTURE)) == 1
+        assert len(await adapter.edges_among([a, b], IN_ENRON)) == 1
+        elsewhere = IN_ENRON.model_copy(update={"datasets": ["paysim"]})
+        assert await adapter.edges_among([a, b], elsewhere) == []
+
+
 async def test_a_stored_pair_is_handed_back_not_written_or_merged(
     factory: GraphAdapterFactory,
 ) -> None:

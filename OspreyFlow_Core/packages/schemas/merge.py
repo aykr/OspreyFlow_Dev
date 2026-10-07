@@ -36,6 +36,12 @@ def merge_provenance(existing: Provenance | None, incoming: Provenance) -> Prove
     return incoming.model_copy(update={"sources": merged_sources})
 
 
+def merge_datasets(existing: Sequence[str] | None, incoming: Sequence[str]) -> list[str]:
+    """ADR-099: an element belongs to every dataset that wrote it, so a second write adds its
+    datasets and never drops one. Sorted, so the stored list is the same whatever the order."""
+    return sorted(set(existing or ()) | set(incoming))
+
+
 def merge_interval(existing: Interval | None, incoming: Interval | None) -> Interval | None:
     """The union of the two: the earliest start and the latest end. A missing interval never
     erases a present one."""
@@ -72,9 +78,10 @@ def aggregate_edge_writes(
 
     What the aggregate keeps of which write mirrors what `upsert_edges` leaves in the store: the
     first write's id, endpoints (and so orientation), `created_at` and `created_by`, because the
-    stored edge keeps them; the latest write's properties, handling, `load_id` and recipe, because
-    a merge takes those from the incoming write; occurrences summed; provenance and interval
-    merged. `directed(type_name)` says whether a type is directed."""
+    stored edge keeps them; every write's datasets (ADR-099); the latest write's properties,
+    handling, `load_id` and recipe, because a merge takes those from the incoming write;
+    occurrences summed; provenance and interval merged. `directed(type_name)` says whether a
+    type is directed."""
     order: list[tuple[str, str, str]] = []
     grouped: dict[tuple[str, str, str], tuple[EdgeWrite, int]] = {}
     for write in writes:
@@ -96,6 +103,7 @@ def aggregate_edge_writes(
                     "occurrences": accumulated.occurrences + write.occurrences,
                     "interval": merge_interval(accumulated.interval, write.interval),
                     "provenance": merge_provenance(accumulated.provenance, write.provenance),
+                    "datasets": merge_datasets(accumulated.datasets, write.datasets),
                 }
             ),
             count + 1,
