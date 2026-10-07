@@ -17,9 +17,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi.testclient import TestClient
-from services.api.app import app, get_principal
+from services.api.app import app, get_investigations, get_principal
 
 from knowledge_adapters import ARITY, REGISTRY
+from tests.services.api.any_case import AnyCase
 from tests.services.api.test_studio_recipe_routes import (
     _UNCLEARED_HANDLING,
     NO_ROLE_ANALYST,
@@ -28,6 +29,9 @@ from tests.services.api.test_studio_recipe_routes import (
     _write_csv,
     client,
 )
+
+#: ADR-099 Amendment 3: the Studio's routes are the case's.
+CASE = "/v1/investigations/inv-1"
 
 
 def _two_row_source(tmp_path: Path) -> str:
@@ -74,7 +78,7 @@ def _row_template_body(entity_overrides: dict[str, object] | None = None) -> dic
 def test_put_row_template_as_source_author_succeeds(client: TestClient, tmp_path: Path) -> None:
     client.studio_recipes.draft = _ready_draft(tmp_path)  # type: ignore[attr-defined]
 
-    response = client.put("/v1/ingest/recipes/recipe-1/row-template", json=_row_template_body())
+    response = client.put(f"{CASE}/ingest/recipes/recipe-1/row-template", json=_row_template_body())
 
     assert response.status_code == 200
     assert response.json()["row_template"]["entities"][0]["ref"] == "a"
@@ -92,7 +96,7 @@ def test_put_row_template_naming_a_probabilistic_type_is_refused_and_saves_nothi
     )
     body["row_template"]["edges"] = [{"type": "SAME_AS", "from": "a", "to": "b"}]  # type: ignore[index]
 
-    response = client.put("/v1/ingest/recipes/recipe-1/row-template", json=body)
+    response = client.put(f"{CASE}/ingest/recipes/recipe-1/row-template", json=body)
 
     assert response.status_code == 422
     assert response.json()["error"] == "recipe_rule"
@@ -106,7 +110,7 @@ def test_put_row_template_before_profile_has_run_is_a_conflict(client: TestClien
     reach Map's save either."""
     client.studio_recipes.draft = _draft()  # type: ignore[attr-defined]
 
-    response = client.put("/v1/ingest/recipes/recipe-1/row-template", json=_row_template_body())
+    response = client.put(f"{CASE}/ingest/recipes/recipe-1/row-template", json=_row_template_body())
 
     assert response.status_code == 409
     assert response.json()["error"] == "recipe_not_ready_for_profile"
@@ -117,8 +121,9 @@ def test_put_row_template_without_the_source_author_role_is_forbidden(
 ) -> None:
     client.studio_recipes.draft = _ready_draft(tmp_path)  # type: ignore[attr-defined]
     app.dependency_overrides[get_principal] = lambda: NO_ROLE_ANALYST
+    app.dependency_overrides[get_investigations] = AnyCase
 
-    response = client.put("/v1/ingest/recipes/recipe-1/row-template", json=_row_template_body())
+    response = client.put(f"{CASE}/ingest/recipes/recipe-1/row-template", json=_row_template_body())
 
     assert response.status_code == 403
 
@@ -126,7 +131,7 @@ def test_put_row_template_without_the_source_author_role_is_forbidden(
 def test_put_row_template_for_a_recipe_in_a_different_unit_is_not_found(client: TestClient) -> None:
     client.studio_recipes.draft = _draft(owning_unit="unit-2")  # type: ignore[attr-defined]
 
-    response = client.put("/v1/ingest/recipes/recipe-1/row-template", json=_row_template_body())
+    response = client.put(f"{CASE}/ingest/recipes/recipe-1/row-template", json=_row_template_body())
 
     assert response.status_code == 404
     assert response.json()["error"] == "studio_recipe_not_found"
@@ -146,7 +151,7 @@ def test_put_row_template_rejects_an_element_override_that_loosens_classificatio
     )
 
     response = client.put(
-        "/v1/ingest/recipes/recipe-1/row-template",
+        f"{CASE}/ingest/recipes/recipe-1/row-template",
         json=_row_template_body({"handling": {"classification": "OFFICIAL"}}),
     )
 
@@ -168,7 +173,7 @@ def test_put_row_template_allows_an_element_override_that_tightens_classificatio
     )
 
     response = client.put(
-        "/v1/ingest/recipes/recipe-1/row-template",
+        f"{CASE}/ingest/recipes/recipe-1/row-template",
         json=_row_template_body({"handling": {"classification": "SECRET"}}),
     )
 
@@ -185,7 +190,7 @@ def test_get_sample_row_returns_unmasked_values_for_a_cleared_principal(
         tmp_path, source_location=_two_row_source(tmp_path)
     )
 
-    response = client.get("/v1/ingest/recipes/recipe-1/map/sample-rows/1")
+    response = client.get(f"{CASE}/ingest/recipes/recipe-1/map/sample-rows/1")
 
     assert response.status_code == 200
     body = response.json()
@@ -201,7 +206,7 @@ def test_get_sample_row_masks_values_for_a_principal_who_cannot_clear_the_source
         tmp_path, handling=_UNCLEARED_HANDLING, source_location=_two_row_source(tmp_path)
     )
 
-    response = client.get("/v1/ingest/recipes/recipe-1/map/sample-rows/0")
+    response = client.get(f"{CASE}/ingest/recipes/recipe-1/map/sample-rows/0")
 
     assert response.status_code == 200
     body = response.json()
@@ -225,7 +230,7 @@ def test_get_sample_row_masks_a_free_text_column_with_a_summary_not_a_positional
         tmp_path, handling=_UNCLEARED_HANDLING, source_location=source
     )
 
-    response = client.get("/v1/ingest/recipes/recipe-1/map/sample-rows/0")
+    response = client.get(f"{CASE}/ingest/recipes/recipe-1/map/sample-rows/0")
 
     assert response.status_code == 200
     body = response.json()
@@ -236,7 +241,7 @@ def test_get_sample_row_masks_a_free_text_column_with_a_summary_not_a_positional
 def test_get_sample_row_past_the_sample_is_not_found(client: TestClient, tmp_path: Path) -> None:
     client.studio_recipes.draft = _ready_draft(tmp_path)  # type: ignore[attr-defined]
 
-    response = client.get("/v1/ingest/recipes/recipe-1/map/sample-rows/5")
+    response = client.get(f"{CASE}/ingest/recipes/recipe-1/map/sample-rows/5")
 
     assert response.status_code == 404
     assert response.json()["error"] == "row_index_out_of_range"
@@ -249,7 +254,7 @@ def test_get_sample_row_for_a_recipe_in_a_different_unit_is_not_found(
         tmp_path, owning_unit="unit-2"
     )
 
-    response = client.get("/v1/ingest/recipes/recipe-1/map/sample-rows/0")
+    response = client.get(f"{CASE}/ingest/recipes/recipe-1/map/sample-rows/0")
 
     assert response.status_code == 404
     assert response.json()["error"] == "studio_recipe_not_found"
@@ -262,7 +267,7 @@ def test_preview_handling_reflects_an_unsaved_override(client: TestClient, tmp_p
     client.studio_recipes.draft = _ready_draft(tmp_path)  # type: ignore[attr-defined]
 
     response = client.post(
-        "/v1/ingest/recipes/recipe-1/map/handling-preview",
+        f"{CASE}/ingest/recipes/recipe-1/map/handling-preview",
         json={"row_index": 0, "handling_override": {"classification": "SECRET"}},
     )
 
@@ -282,7 +287,7 @@ def test_preview_handling_for_a_recipe_in_a_different_unit_is_not_found(
     )
 
     response = client.post(
-        "/v1/ingest/recipes/recipe-1/map/handling-preview",
+        f"{CASE}/ingest/recipes/recipe-1/map/handling-preview",
         json={"row_index": 0},
     )
 

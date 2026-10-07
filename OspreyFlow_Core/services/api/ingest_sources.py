@@ -46,8 +46,9 @@ basis, source) from the analyst, and that is where they stay.
 from __future__ import annotations
 
 import os
+import re
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -77,6 +78,11 @@ class IngestSourceFile(BaseModel):
         default=False,
         description="True for a file uploaded through the Studio (ADR-067), False for one an "
         "operator placed in the ingest folder",
+    )
+    dataset_id: str | None = Field(
+        default=None,
+        description="ADR-099 Amendment 3: the dataset whose folder holds it; none for a file "
+        "placed before the amendment, offered to every case until an operator moves it into one",
     )
 
 
@@ -117,13 +123,37 @@ def is_inside(root: Path, candidate: Path) -> bool:
         return False
 
 
-def list_source_files(root: Path | None = None) -> IngestSourceListing:
+_PLAIN_DATASET_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+
+
+def plain_dataset_id(dataset_id: str) -> bool:
+    """A dataset id that is safe as one folder name: a dataset's files are kept under it, so an id
+    that could name a parent or a path is never joined onto the root."""
+    return bool(_PLAIN_DATASET_ID.match(dataset_id))
+
+
+def list_source_files(
+    root: Path | None = None, *, datasets: Sequence[str] | None = None
+) -> IngestSourceListing:
     """The files directly in the root (operator-supplied, read-only) and the files directly in its
-    `uploaded/` folder (put there through the Studio, ADR-067). Those two directories and nothing
-    below them: each entry is resolved and must still be inside the directory it was found in."""
+    `uploaded/` folder (put there through the Studio, ADR-067), and (ADR-099 Amendment 3) for each
+    of `datasets`, the files directly in its own folder under the root and under `uploaded/`. Each
+    directory alone and nothing below it: each entry is resolved and must still be inside the
+    directory it was found in. The root's and `uploaded/`'s own files are the ones placed before
+    the amendment, in no dataset, offered to every case until an operator moves them into one."""
     root = root if root is not None else ingest_root()
     files: list[IngestSourceFile] = []
-    for base, uploaded in ((root, False), (root / UPLOAD_SUBDIR, True)):
+    bases: list[tuple[Path, bool, str | None]] = [
+        (root, False, None),
+        (root / UPLOAD_SUBDIR, True, None),
+    ]
+    for named in dict.fromkeys(datasets or []):
+        if plain_dataset_id(named):
+            bases += [
+                (root / named, False, named),
+                (root / UPLOAD_SUBDIR / named, True, named),
+            ]
+    for base, uploaded, dataset_id in bases:
         for candidate in _candidates(base):
             if candidate.name.startswith("."):
                 continue
@@ -147,6 +177,7 @@ def list_source_files(root: Path | None = None) -> IngestSourceListing:
                     size_bytes=stat.st_size,
                     modified_at=stat.st_mtime,
                     uploaded=uploaded,
+                    dataset_id=dataset_id,
                 )
             )
     files.sort(key=lambda f: (-f.modified_at, f.name))
@@ -219,7 +250,12 @@ def validate_upload_name(name: str, extensions: frozenset[str] = UPLOAD_EXTENSIO
 
 
 async def save_upload(
-    root: Path, name: str, chunks: AsyncIterator[bytes], *, max_bytes: int
+    root: Path,
+    name: str,
+    chunks: AsyncIterator[bytes],
+    *,
+    max_bytes: int,
+    dataset_id: str | None = None,
 ) -> IngestSourceFile:
     """Write the streamed body into `<root>/uploaded/<name>`. Never overwrites (a name already in
     the uploaded folder or in the root is refused). The size is counted as it streams, so the limit
@@ -228,8 +264,13 @@ async def save_upload(
     never offered in the picker."""
     name = validate_upload_name(name)
     folder = root / UPLOAD_SUBDIR
+    if dataset_id is not None:
+        # ADR-099 Amendment 3: into the folder of the dataset of the case it is uploaded in.
+        if not plain_dataset_id(dataset_id):
+            raise UploadRefused("bad_name", "This case's dataset cannot hold uploaded files.")
+        folder = folder / dataset_id
     final = folder / name
-    if (root / name).exists() or final.exists():
+    if (root / name).exists() or (root / UPLOAD_SUBDIR / name).exists() or final.exists():
         raise UploadRefused("exists", "A file with that name is already in the ingest folder.")
     folder.mkdir(parents=True, exist_ok=True)
     part = folder / f".upload-{uuid.uuid4().hex}.part"
@@ -263,4 +304,5 @@ async def save_upload(
         size_bytes=stat.st_size,
         modified_at=stat.st_mtime,
         uploaded=True,
+        dataset_id=dataset_id,
     )

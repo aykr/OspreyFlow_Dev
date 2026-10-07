@@ -56,6 +56,7 @@ export type GitPath = string | null;
 export type PublishedAt = string | null;
 export type ScheduleCron = string | null;
 export type ScheduleWatch = string | null;
+export type DatasetId = string | null;
 
 /**
  * The Connect-stage view of one `studio_recipes` row (§6) — not the
@@ -84,6 +85,7 @@ export interface StudioRecipeDraft {
   published_at?: PublishedAt;
   schedule_cron?: ScheduleCron;
   schedule_watch?: ScheduleWatch;
+  dataset_id?: DatasetId;
   [k: string]: unknown;
 }
 export interface Handling {

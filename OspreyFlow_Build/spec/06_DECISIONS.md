@@ -9995,3 +9995,14 @@ Status: accepted 7 October 2026 (the owner: "if the analyst does not have backgr
 - **Nothing is truncated silently** (rule 2): a "top 10" says it is the top 10 of how many, and the browse list pages rather than stops.
 - **Keyboard** (rule 13): every item is reachable and actionable by keyboard, with its own case in a keyboard spec.
 
+### ADR-099, Amendment 4 (7 October 2026) — what building Amendment 3's parts (b) to (d) decided
+
+Status: accepted 7 October 2026 (mine, within the owner's "go ahead with all five parts of Amendment 3"; recorded so they can be overruled). ADR-099 Amendment 3 is unchanged except where this says so.
+
+1. **A monitor watches its saved pattern's dataset**, not only the first of the case's: a case reading two datasets could otherwise make a monitor in one for a pattern in the other, which would stop at its first evaluation.
+2. **A hotlist's match in another dataset writes nothing at all**, not even the `notify` stub ADR-038 writes for a match its owner cannot see: the stub would say that something matched there, which is outside the case's world, not hidden within it.
+3. **A case opened from an alert reads the alert's dataset**, else what the alert's case reads, else a dataset of its own.
+4. **Source files are kept in flat folders named for their dataset**: an upload made in a case lands in `uploaded/<dataset>/`, an operator may drop a dataset's files in `<root>/<dataset>/`, and a case's listing offers its datasets' folders, each still one directory with nothing below it. The files directly in the root and in `uploaded/`, placed before this amendment, are offered to every case and marked as in no dataset, until an operator moves one into a dataset's folder: a raw file is not yet any dataset's data, and everything a load writes from it is stamped with the loading case's dataset. A dataset id that is not a plain folder name is never joined onto a path.
+5. **The Ingest Studio works only within a case**: with none open it says so rather than calling routes that now belong to one. The connector and transform catalogues stay global; they describe the system, not data.
+6. **The authorised-query gate reads a query built as an f-string**, which joining a dataset clause onto a query makes it, by its literal parts; a query that binds no principal is still flagged (shown both ways).
+

@@ -33,7 +33,8 @@ export interface PublishScreenProps {
    * redoing Connect/Profile/Map/Verify. The registry picker below is what
    * finds it. */
   recipeId: string | null;
-  investigationId: string | null;
+  /** ADR-099 Amendment 3: the Studio works within a case, so there always is one. */
+  investigationId: string;
   onBack: () => void;
   /** Fired once a recipe is chosen from the registry picker, so the host
    * (`IngestStudio`) can adopt it as the active draft — the same draft
@@ -49,10 +50,12 @@ export interface PublishScreenProps {
 function RecipeRegistryPicker({
   apiBaseUrl,
   bearerToken,
+  investigationId,
   onSelect,
 }: {
   apiBaseUrl: string;
   bearerToken: string;
+  investigationId: string;
   onSelect: (draft: StudioRecipeDraft) => void;
 }) {
   const [recipes, setRecipes] = useState<StudioRecipeDraft[] | null>(null);
@@ -60,7 +63,7 @@ function RecipeRegistryPicker({
 
   useEffect(() => {
     let cancelled = false;
-    fetchRecipeRegistry(apiBaseUrl, bearerToken)
+    fetchRecipeRegistry(apiBaseUrl, bearerToken, investigationId)
       .then((r) => {
         if (!cancelled) setRecipes(r);
       })
@@ -70,7 +73,7 @@ function RecipeRegistryPicker({
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, bearerToken]);
+  }, [apiBaseUrl, bearerToken, investigationId]);
 
   return (
     <div
@@ -151,7 +154,7 @@ export function PublishScreen({
   useEffect(() => {
     if (!recipeIdOrNull) return;
     let cancelled = false;
-    void fetchDraft(apiBaseUrl, bearerToken, recipeIdOrNull).then((d) => {
+    void fetchDraft(apiBaseUrl, bearerToken, investigationId, recipeIdOrNull).then((d) => {
       if (cancelled) return;
       setDraft(d);
       setScheduleCron(d.schedule_cron ?? "");
@@ -160,11 +163,12 @@ export function PublishScreen({
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, bearerToken, recipeIdOrNull]);
+  }, [apiBaseUrl, bearerToken, recipeIdOrNull, investigationId]);
 
   if (!recipeIdOrNull) {
     return (
       <RecipeRegistryPicker
+        investigationId={investigationId}
         apiBaseUrl={apiBaseUrl}
         bearerToken={bearerToken}
         onSelect={(selected) => {
@@ -180,7 +184,7 @@ export function PublishScreen({
   const recipeId = recipeIdOrNull;
 
   async function refresh() {
-    const fresh = await fetchDraft(apiBaseUrl, bearerToken, recipeId);
+    const fresh = await fetchDraft(apiBaseUrl, bearerToken, investigationId, recipeId);
     setDraft(fresh);
     setScheduleCron(fresh.schedule_cron ?? "");
     setScheduleWatch(fresh.schedule_watch ?? "");
@@ -191,7 +195,7 @@ export function PublishScreen({
     setBusy(true);
     setError(null);
     try {
-      await publishRecipe(apiBaseUrl, bearerToken, recipeId, {
+      await publishRecipe(apiBaseUrl, bearerToken, investigationId, recipeId, {
         schedule_cron: scheduleCron || null,
         schedule_watch: scheduleWatch || null,
       });
@@ -207,7 +211,7 @@ export function PublishScreen({
     setBusy(true);
     setError(null);
     try {
-      await updateSchedule(apiBaseUrl, bearerToken, recipeId, {
+      await updateSchedule(apiBaseUrl, bearerToken, investigationId, recipeId, {
         schedule_cron: scheduleCron || null,
         schedule_watch: scheduleWatch || null,
       });
@@ -223,7 +227,7 @@ export function PublishScreen({
     setBusy(true);
     setError(null);
     try {
-      const reopened = await createNewVersion(apiBaseUrl, bearerToken, recipeId);
+      const reopened = await createNewVersion(apiBaseUrl, bearerToken, investigationId, recipeId);
       setDraft(reopened);
       onReopenedForEditing?.(reopened);
     } catch (err) {

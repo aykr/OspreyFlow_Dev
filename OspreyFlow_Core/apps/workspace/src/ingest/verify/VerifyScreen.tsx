@@ -30,6 +30,8 @@ import { ProfileError, fetchDraft, fetchOntologySchema, runVerify } from "../api
 
 export interface VerifyScreenProps {
   apiBaseUrl: string;
+  /** ADR-099 Amendment 3: the case whose dataset the recipe belongs to. */
+  investigationId: string;
   bearerToken: string;
   recipeId: string;
   onBack: () => void;
@@ -63,7 +65,8 @@ interface EdgeCountRow {
   created: number;
 }
 
-export function VerifyScreen({ apiBaseUrl, bearerToken, recipeId, onBack }: VerifyScreenProps) {
+export function VerifyScreen({ apiBaseUrl,
+  investigationId, bearerToken, recipeId, onBack }: VerifyScreenProps) {
   const [draft, setDraft] = useState<StudioRecipeDraft | null>(null);
   const [registry, setRegistry] = useState<OntologyRegistry | null>(null);
   const [edgeTypes, setEdgeTypes] = useState<EdgeTypeDef[]>([]);
@@ -74,7 +77,7 @@ export function VerifyScreen({ apiBaseUrl, bearerToken, recipeId, onBack }: Veri
 
   useEffect(() => {
     let cancelled = false;
-    void fetchDraft(apiBaseUrl, bearerToken, recipeId).then((d) => {
+    void fetchDraft(apiBaseUrl, bearerToken, investigationId, recipeId).then((d) => {
       if (!cancelled) setDraft(d);
     });
     void fetchOntologySchema(apiBaseUrl, bearerToken).then((schema) => {
@@ -85,13 +88,13 @@ export function VerifyScreen({ apiBaseUrl, bearerToken, recipeId, onBack }: Veri
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, bearerToken, recipeId]);
+  }, [apiBaseUrl, bearerToken, recipeId, investigationId]);
 
   async function handleRunVerify() {
     setRunning(true);
     setError(null);
     try {
-      const result = await runVerify(apiBaseUrl, bearerToken, recipeId);
+      const result = await runVerify(apiBaseUrl, bearerToken, investigationId, recipeId);
       const ws = createWorkingSet();
       for (const node of result.nodes ?? []) {
         ws.graph.addNode(node.id, { data: node });

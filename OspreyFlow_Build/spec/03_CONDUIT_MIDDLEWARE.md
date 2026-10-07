@@ -270,20 +270,21 @@ disclosed historical illustration alongside the real surface.
 
 ```
 GET    /v1/ingest/connectors                               the connector catalogue (09_INGEST_STUDIO.md §2)
-POST   /v1/ingest/recipes                                   Connect: create a draft
-GET    /v1/ingest/recipes                                   Connect: the author's own unit's drafts
-GET    /v1/ingest/recipes/{recipe_id}                        load one draft
-PATCH  /v1/ingest/recipes/{recipe_id}                        Connect: edit a draft still in progress
-GET    /v1/ingest/recipes/{recipe_id}/profile                Profile: run and read the automatic source profile
+POST   /v1/investigations/{id}/ingest/recipes                                   Connect: create a draft
+GET    /v1/investigations/{id}/ingest/recipes                                   Connect: the author's own unit's drafts
+GET    /v1/investigations/{id}/ingest/recipes/{recipe_id}                        load one draft
+PATCH  /v1/investigations/{id}/ingest/recipes/{recipe_id}                        Connect: edit a draft still in progress
+GET    /v1/investigations/{id}/ingest/recipes/{recipe_id}/profile                Profile: run and read the automatic source profile
 GET    /v1/ingest/transforms                                 Map: the Knowledge Adapter catalogue
-GET    /v1/ingest/recipes/{recipe_id}/map/sample-rows/{row_index}   Map: page through a real row bound to the template
-PUT    /v1/ingest/recipes/{recipe_id}/row-template            Map: save the row template
-POST   /v1/ingest/recipes/{recipe_id}/map/handling-preview    Map: preview an element's handling/provenance override
-POST   /v1/ingest/recipes/{recipe_id}/verify                  Verify: the dry run — no write of any kind
-GET    /v1/ingest/recipe-registry                             Publish: every recipe the principal's own unit owns, any status
-POST   /v1/ingest/recipes/{recipe_id}/publish                 Publish: draft → published; the sign-off itself
-POST   /v1/ingest/recipes/{recipe_id}/versions                Publish: reopen a published recipe as a new draft version
-PATCH  /v1/ingest/recipes/{recipe_id}/schedule                Publish: change a published recipe's schedule
+GET    /v1/investigations/{id}/ingest/recipes/{recipe_id}/map/sample-rows/{row_index}   Map: page through a real row bound to the template
+PUT    /v1/investigations/{id}/ingest/recipes/{recipe_id}/row-template            Map: save the row template
+POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/map/handling-preview    Map: preview an element's handling/provenance override
+POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/verify                  Verify: the dry run — no write of any kind
+GET    /v1/investigations/{id}/ingest/recipe-registry                             Publish: every recipe the principal's own unit owns, any status
+POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/publish                 Publish: draft → published; the sign-off itself
+POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/versions                Publish: reopen a published recipe as a new draft version
+PATCH  /v1/investigations/{id}/ingest/recipes/{recipe_id}/schedule                Publish: change a published recipe's schedule
+(ADR-099 Amendment 3: every route above is the case's, a recipe the dataset's of the case it was made in, found, listed, verified, published and run only in a case reading it; reads at Viewer, changes at Editor, each on top of its Studio role. The connector and transform catalogues stay global: they describe the system, not data.)
 ```
 
 **Connect (`POST`/`GET`/`PATCH .../recipes`) is `SOURCE_AUTHOR`-gated**, the studio role that also

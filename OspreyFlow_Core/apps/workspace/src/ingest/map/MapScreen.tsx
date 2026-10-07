@@ -47,6 +47,8 @@ import { edgeTypesForEndpoints, entityTypesForPole, findEdge, findEntity, nextEn
 
 export interface MapScreenProps {
   apiBaseUrl: string;
+  /** ADR-099 Amendment 3: the case whose dataset the recipe belongs to. */
+  investigationId: string;
   bearerToken: string;
   recipeId: string;
   onBack: () => void;
@@ -80,6 +82,7 @@ const EMPTY_TEMPLATE: RowTemplate = { entities: [], edges: [] };
 
 export function MapScreen({
   apiBaseUrl,
+  investigationId,
   bearerToken,
   recipeId,
   onBack,
@@ -109,8 +112,8 @@ export function MapScreen({
     setLoading(true);
     setError(null);
     Promise.all([
-      fetchDraft(apiBaseUrl, bearerToken, recipeId),
-      fetchProfile(apiBaseUrl, bearerToken, recipeId),
+      fetchDraft(apiBaseUrl, bearerToken, investigationId, recipeId),
+      fetchProfile(apiBaseUrl, bearerToken, investigationId, recipeId),
       fetchOntologySchema(apiBaseUrl, bearerToken),
       fetchTransforms(apiBaseUrl, bearerToken),
       fetchHandlingScheme(apiBaseUrl, bearerToken),
@@ -135,12 +138,12 @@ export function MapScreen({
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, bearerToken, recipeId, onDraftChange]);
+  }, [apiBaseUrl, bearerToken, recipeId, onDraftChange, investigationId]);
 
   useEffect(() => {
     if (loading || error) return;
     let cancelled = false;
-    fetchSampleRow(apiBaseUrl, bearerToken, recipeId, rowIndex)
+    fetchSampleRow(apiBaseUrl, bearerToken, investigationId, recipeId, rowIndex)
       .then((row) => {
         if (!cancelled) setSampleRow(row);
       })
@@ -151,7 +154,7 @@ export function MapScreen({
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, bearerToken, recipeId, rowIndex, loading, error]);
+  }, [apiBaseUrl, bearerToken, recipeId, rowIndex, loading, error, investigationId]);
 
   if (loading) return <p style={{ padding: "var(--sp-16)", color: "var(--text-secondary)" }}>Loading…</p>;
   if (error || !draft || !columns || !ontology) {
@@ -273,7 +276,7 @@ export function MapScreen({
         action: "ignore",
         note: note ?? undefined,
       }));
-      const updated = await updateRowTemplate(apiBaseUrl, bearerToken, recipeId, template, unmappedFields);
+      const updated = await updateRowTemplate(apiBaseUrl, bearerToken, investigationId, recipeId, template, unmappedFields);
       setDraft(updated);
       onDraftChange?.(updated);
     } catch (err) {
@@ -357,7 +360,7 @@ export function MapScreen({
               }
               onDelete={deleteSelection}
               onPreviewHandling={(handlingOverride, provenanceOverride) =>
-                previewHandling(apiBaseUrl, bearerToken, recipeId, {
+                previewHandling(apiBaseUrl, bearerToken, investigationId, recipeId, {
                   row_index: rowIndex,
                   handling_override: handlingOverride,
                   provenance_override: provenanceOverride,

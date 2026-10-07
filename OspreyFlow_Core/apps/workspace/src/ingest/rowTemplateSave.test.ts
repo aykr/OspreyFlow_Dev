@@ -19,7 +19,7 @@ describe("updateRowTemplate", () => {
         }),
       })),
     );
-    const failure = await updateRowTemplate("http://api", "t", "r1", { entities: [], edges: [] }, []).catch(
+    const failure = await updateRowTemplate("http://api", "t", "inv-1", "r1", { entities: [], edges: [] }, []).catch(
       (e: unknown) => e,
     );
     expect(failure).toBeInstanceOf(RowTemplateSaveError);

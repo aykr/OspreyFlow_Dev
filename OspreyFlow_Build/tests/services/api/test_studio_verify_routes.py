@@ -1,5 +1,5 @@
 """HTTP route wiring for Verify (`spec/09_INGEST_STUDIO.md` §5) —
-`POST /v1/ingest/recipes/{id}/verify`. Mirrors `test_studio_map_routes.py`'s
+`POST /v1/investigations/{id}/ingest/recipes/{recipe}/verify`. Mirrors `test_studio_map_routes.py`'s
 own discipline: a fake store and a fake `GraphPort`, never a live ArcadeDB —
 `dry_run_recipe`'s own correctness (including the access-control mechanism)
 is proven against a real one in `tests/ingest/test_verify_dry_run.py`; what
@@ -80,7 +80,7 @@ def test_verify_as_source_author_succeeds(graph_client: TestClient, tmp_path: Pa
         tmp_path, row_template=_create_only_row_template()
     )
 
-    response = graph_client.post("/v1/ingest/recipes/recipe-1/verify")
+    response = graph_client.post("/v1/investigations/inv-1/ingest/recipes/recipe-1/verify")
 
     assert response.status_code == 200
     body = response.json()
@@ -94,7 +94,7 @@ def test_verify_before_a_row_template_is_saved_is_a_conflict(
 ) -> None:
     graph_client.studio_recipes.draft = _ready_draft(tmp_path)  # type: ignore[attr-defined]
 
-    response = graph_client.post("/v1/ingest/recipes/recipe-1/verify")
+    response = graph_client.post("/v1/investigations/inv-1/ingest/recipes/recipe-1/verify")
 
     assert response.status_code == 409
     assert response.json()["error"] == "row_template_missing"
@@ -107,7 +107,7 @@ def test_verify_before_profile_has_run_is_a_conflict(graph_client: TestClient) -
         row_template=_create_only_row_template()
     )
 
-    response = graph_client.post("/v1/ingest/recipes/recipe-1/verify")
+    response = graph_client.post("/v1/investigations/inv-1/ingest/recipes/recipe-1/verify")
 
     assert response.status_code == 409
     assert response.json()["error"] == "recipe_not_ready_for_profile"
@@ -120,7 +120,7 @@ def test_verify_for_a_recipe_in_a_different_unit_is_not_found(
         tmp_path, row_template=_create_only_row_template(), owning_unit="unit-2"
     )
 
-    response = graph_client.post("/v1/ingest/recipes/recipe-1/verify")
+    response = graph_client.post("/v1/investigations/inv-1/ingest/recipes/recipe-1/verify")
 
     assert response.status_code == 404
     assert response.json()["error"] == "studio_recipe_not_found"

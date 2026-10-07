@@ -23,6 +23,8 @@ import { fetchDraft, fetchProfile, ProfileError } from "./api";
 
 export interface ProfileScreenProps {
   apiBaseUrl: string;
+  /** ADR-099 Amendment 3: the case whose dataset the recipe belongs to. */
+  investigationId: string;
   bearerToken: string;
   recipeId: string;
   onBack: () => void;
@@ -64,7 +66,8 @@ function typeLabel(column: ColumnProfile): string {
   return `${column.inferred_type} (${pct}%)`;
 }
 
-export function ProfileScreen({ apiBaseUrl, bearerToken, recipeId, onBack }: ProfileScreenProps) {
+export function ProfileScreen({ apiBaseUrl,
+  investigationId, bearerToken, recipeId, onBack }: ProfileScreenProps) {
   const [draft, setDraft] = useState<StudioRecipeDraft | null>(null);
   const [profile, setProfile] = useState<SourceProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +80,7 @@ export function ProfileScreen({ apiBaseUrl, bearerToken, recipeId, onBack }: Pro
     // Independent, not `Promise.all` — a failed profile fetch (source
     // unreadable, connector unavailable, ...) shouldn't also blank out the
     // header's source label, which only needs the draft fetch to succeed.
-    void fetchDraft(apiBaseUrl, bearerToken, recipeId)
+    void fetchDraft(apiBaseUrl, bearerToken, investigationId, recipeId)
       .then((draftResult) => {
         if (!cancelled) setDraft(draftResult);
       })
@@ -86,7 +89,7 @@ export function ProfileScreen({ apiBaseUrl, bearerToken, recipeId, onBack }: Pro
         // is the problem; the label is a nice-to-have, not worth a second
         // error banner.
       });
-    void fetchProfile(apiBaseUrl, bearerToken, recipeId)
+    void fetchProfile(apiBaseUrl, bearerToken, investigationId, recipeId)
       .then((profileResult) => {
         if (!cancelled) setProfile(profileResult);
       })
@@ -100,7 +103,7 @@ export function ProfileScreen({ apiBaseUrl, bearerToken, recipeId, onBack }: Pro
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, bearerToken, recipeId]);
+  }, [apiBaseUrl, bearerToken, recipeId, investigationId]);
 
   const columns: TableColumn<ColumnProfile>[] = [
     { key: "name", header: "Field", render: (c) => <strong>{c.name}</strong> },

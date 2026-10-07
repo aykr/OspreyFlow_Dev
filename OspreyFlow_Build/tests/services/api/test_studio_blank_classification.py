@@ -12,11 +12,22 @@ from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
-from services.api.app import app, get_audit, get_handling_scheme, get_principal, get_studio_recipes
+from services.api.app import (
+    app,
+    get_audit,
+    get_handling_scheme,
+    get_investigations,
+    get_principal,
+    get_studio_recipes,
+)
 
 from ontology.handling import HandlingScheme, load_uk_le_scheme
+from tests.services.api.any_case import AnyCase
 from tests.services.api.test_app import _FakeAudit
 from tests.services.api.test_studio_recipe_routes import SOURCE_AUTHOR, _FakeStudioRecipes
+
+#: ADR-099 Amendment 3: the Studio's routes are the case's.
+CASE = "/v1/investigations/inv-1"
 
 
 def test_public_is_the_lowest_level_of_the_uk_scheme() -> None:
@@ -36,6 +47,7 @@ def test_an_official_reader_clears_public_and_a_public_reader_does_not_clear_off
 def client_and_store() -> Iterator[tuple[TestClient, _FakeStudioRecipes]]:
     store = _FakeStudioRecipes()
     app.dependency_overrides[get_principal] = lambda: SOURCE_AUTHOR
+    app.dependency_overrides[get_investigations] = AnyCase
     app.dependency_overrides[get_audit] = lambda: _FakeAudit()
     app.dependency_overrides[get_studio_recipes] = lambda: store
     app.dependency_overrides[get_handling_scheme] = load_uk_le_scheme
@@ -54,7 +66,7 @@ def test_create_with_nothing_marked_records_public(
     client_and_store: tuple[TestClient, _FakeStudioRecipes],
 ) -> None:
     client, store = client_and_store
-    assert client.post("/v1/ingest/recipes", json=_body({})).status_code == 201
+    assert client.post(f"{CASE}/ingest/recipes", json=_body({})).status_code == 201
     assert store.create_calls[-1]["handling"] == {"classification": "PUBLIC"}
 
 
@@ -63,7 +75,7 @@ def test_create_keeps_the_other_marking_fields_and_adds_public(
 ) -> None:
     client, store = client_and_store
     handling = {"handling_code": "P", "originator": "unit-1", "owning_unit": "unit-1"}
-    assert client.post("/v1/ingest/recipes", json=_body(handling)).status_code == 201
+    assert client.post(f"{CASE}/ingest/recipes", json=_body(handling)).status_code == 201
     assert store.create_calls[-1]["handling"] == {**handling, "classification": "PUBLIC"}
 
 
@@ -72,7 +84,7 @@ def test_an_empty_or_blank_classification_counts_as_left_blank(
     client_and_store: tuple[TestClient, _FakeStudioRecipes], blank: str
 ) -> None:
     client, store = client_and_store
-    client.post("/v1/ingest/recipes", json=_body({"classification": blank}))
+    client.post(f"{CASE}/ingest/recipes", json=_body({"classification": blank}))
     assert store.create_calls[-1]["handling"] == {"classification": "PUBLIC"}
 
 
@@ -80,7 +92,7 @@ def test_a_classification_the_analyst_chose_is_never_replaced(
     client_and_store: tuple[TestClient, _FakeStudioRecipes],
 ) -> None:
     client, store = client_and_store
-    client.post("/v1/ingest/recipes", json=_body({"classification": "SECRET"}))
+    client.post(f"{CASE}/ingest/recipes", json=_body({"classification": "SECRET"}))
     assert store.create_calls[-1]["handling"] == {"classification": "SECRET"}
 
 
@@ -88,8 +100,8 @@ def test_editing_a_draft_also_fills_a_blank_classification(
     client_and_store: tuple[TestClient, _FakeStudioRecipes],
 ) -> None:
     client, store = client_and_store
-    created = client.post("/v1/ingest/recipes", json=_body({"classification": "SECRET"})).json()
-    response = client.patch(f"/v1/ingest/recipes/{created['recipe_id']}", json=_body({}))
+    created = client.post(f"{CASE}/ingest/recipes", json=_body({"classification": "SECRET"})).json()
+    response = client.patch(f"{CASE}/ingest/recipes/{created['recipe_id']}", json=_body({}))
     assert response.status_code == 200, response.text
     assert store.update_calls[-1]["handling"] == {"classification": "PUBLIC"}
 
@@ -99,7 +111,7 @@ def test_a_draft_with_every_other_answer_and_no_classification_is_ready_for_prof
 ) -> None:
     client, _store = client_and_store
     response = client.post(
-        "/v1/ingest/recipes",
+        f"{CASE}/ingest/recipes",
         json={
             "label": "Carrier A",
             "connector_profile": "generic-csv",
@@ -124,5 +136,5 @@ def test_a_scheme_without_public_falls_back_to_its_lowest_level(
         action_codes={},
         sanitisation_codes={},
     )
-    client.post("/v1/ingest/recipes", json=_body({}))
+    client.post(f"{CASE}/ingest/recipes", json=_body({}))
     assert store.create_calls[-1]["handling"] == {"classification": "UNCLASSIFIED"}

@@ -198,7 +198,7 @@ from .compute_routes import (
     run_compute_metric_job,
 )
 from .config import ApiConfig, DeploymentModels
-from .dataset_scope import outside_any_case, scope_to_case, stamping
+from .dataset_scope import made_in, outside_any_case, scope_to_case, stamping
 from .datasets import (
     CaseDatasetsRequest,
     CreateDatasetRequest,
@@ -4976,8 +4976,9 @@ async def get_yardstick_route(principal: PrincipalDep, yardstick: YardstickDep) 
     return yardstick
 
 
-@app.get("/v1/ingest/source-files")
+@app.get("/v1/investigations/{investigation_id}/ingest/source-files")
 async def list_ingest_source_files(
+    investigation: InvestigationViewerDep,
     principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))],
     audit: AuditDep,
 ) -> IngestSourceListing:
@@ -4994,7 +4995,8 @@ async def list_ingest_source_files(
 
     Audited like every other read: the cardinality is the number of files offered, which is also
     the only thing about the mount's contents this route ever records."""
-    listing = list_source_files()
+    # ADR-099 Amendment 3: the files of the case's datasets, and those placed before it.
+    listing = list_source_files(datasets=principal.datasets)
     await audit.record(
         principal=principal,
         action="list_ingest_source_files",
@@ -5013,8 +5015,11 @@ _UPLOAD_REFUSAL_STATUS = {
 }
 
 
-@app.post("/v1/ingest/source-files", status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/v1/investigations/{investigation_id}/ingest/source-files", status_code=status.HTTP_201_CREATED
+)
 async def upload_ingest_source_file(
+    investigation: InvestigationEditorDep,
     principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))],
     audit: AuditDep,
     request: Request,
@@ -5040,7 +5045,13 @@ async def upload_ingest_source_file(
             detail="That file is larger than the upload limit.",
         )
     try:
-        saved = await save_upload(ingest_root(), name, request.stream(), max_bytes=limit)
+        saved = await save_upload(
+            ingest_root(),
+            name,
+            request.stream(),
+            max_bytes=limit,
+            dataset_id=made_in(principal),
+        )
     except UploadRefused as refusal:
         raise HTTPException(
             status_code=_UPLOAD_REFUSAL_STATUS[refusal.code], detail=refusal.message
@@ -5065,8 +5076,11 @@ def _with_default_classification(handling: dict[str, Any], scheme: HandlingSchem
     return {**handling, "classification": lowest}
 
 
-@app.post("/v1/ingest/recipes", status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/v1/investigations/{investigation_id}/ingest/recipes", status_code=status.HTTP_201_CREATED
+)
 async def create_studio_recipe_draft(
+    investigation: InvestigationEditorDep,
     principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))],
     studio_recipes: StudioRecipesDep,
     audit: AuditDep,
@@ -5094,8 +5108,9 @@ async def create_studio_recipe_draft(
     return draft
 
 
-@app.patch("/v1/ingest/recipes/{recipe_id}")
+@app.patch("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}")
 async def update_studio_recipe_draft(
+    investigation: InvestigationEditorDep,
     recipe: AuthorizedStudioRecipeDep,
     principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))],
     studio_recipes: StudioRecipesDep,
@@ -5125,8 +5140,9 @@ async def update_studio_recipe_draft(
     return updated
 
 
-@app.get("/v1/ingest/recipes/{recipe_id}")
+@app.get("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}")
 async def get_studio_recipe_draft(
+    investigation: InvestigationViewerDep,
     recipe: AuthorizedStudioRecipeDep, principal: PrincipalDep, audit: AuditDep
 ) -> StudioRecipeDraft:
     await audit.record(
@@ -5138,8 +5154,9 @@ async def get_studio_recipe_draft(
     return recipe
 
 
-@app.get("/v1/ingest/recipes")
+@app.get("/v1/investigations/{investigation_id}/ingest/recipes")
 async def list_studio_recipe_drafts(
+    investigation: InvestigationViewerDep,
     principal: PrincipalDep, studio_recipes: StudioRecipesDep, audit: AuditDep
 ) -> list[StudioRecipeDraft]:
     """Connect's "resume a draft" list — the author's own unit's drafts
@@ -5157,8 +5174,9 @@ async def list_studio_recipe_drafts(
 # --- ingest studio: profile (09_INGEST_STUDIO.md §3) -------------------------
 
 
-@app.get("/v1/ingest/recipes/{recipe_id}/profile")
+@app.get("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/profile")
 async def get_studio_recipe_profile(
+    investigation: InvestigationViewerDep,
     recipe: AuthorizedStudioRecipeDep,
     principal: PrincipalDep,
     scheme: HandlingSchemeDep,
@@ -5193,8 +5211,9 @@ async def list_transforms(principal: PrincipalDep) -> list[TransformDescriptor]:
     return [TransformDescriptor(name=name, arity=ARITY.get(name, 1)) for name in REGISTRY]
 
 
-@app.put("/v1/ingest/recipes/{recipe_id}/row-template")
+@app.put("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/row-template")
 async def update_studio_recipe_row_template(
+    investigation: InvestigationEditorDep,
     recipe: AuthorizedStudioRecipeDep,
     principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))],
     studio_recipes: StudioRecipesDep,
@@ -5235,8 +5254,11 @@ async def update_studio_recipe_row_template(
     return updated
 
 
-@app.get("/v1/ingest/recipes/{recipe_id}/map/sample-rows/{row_index}")
+@app.get(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/map/sample-rows/{row_index}"
+)
 async def get_studio_recipe_sample_row(
+    investigation: InvestigationViewerDep,
     recipe: AuthorizedStudioRecipeDep,
     row_index: int,
     principal: PrincipalDep,
@@ -5257,8 +5279,9 @@ async def get_studio_recipe_sample_row(
     return row
 
 
-@app.post("/v1/ingest/recipes/{recipe_id}/map/handling-preview")
+@app.post("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/map/handling-preview")
 async def preview_studio_recipe_element_handling(
+    investigation: InvestigationViewerDep,
     recipe: AuthorizedStudioRecipeDep,
     principal: PrincipalDep,
     audit: AuditDep,
@@ -5285,8 +5308,9 @@ async def preview_studio_recipe_element_handling(
 # --- ingest studio: verify (09_INGEST_STUDIO.md §5) ---------------------------
 
 
-@app.post("/v1/ingest/recipes/{recipe_id}/verify")
+@app.post("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/verify")
 async def verify_studio_recipe(
+    investigation: InvestigationEditorDep,
     recipe: AuthorizedStudioRecipeDep,
     principal: PrincipalDep,
     scheme: HandlingSchemeDep,
@@ -5322,8 +5346,9 @@ async def verify_studio_recipe(
 # --- ingest studio: publish (09_INGEST_STUDIO.md §6) --------------------------
 
 
-@app.get("/v1/ingest/recipe-registry")
+@app.get("/v1/investigations/{investigation_id}/ingest/recipe-registry")
 async def list_studio_recipe_registry(
+    investigation: InvestigationViewerDep,
     principal: PrincipalDep, studio_recipes: StudioRecipesDep, audit: AuditDep
 ) -> list[StudioRecipeDraft]:
     """Publish's own listing — every recipe the principal's own unit owns
@@ -5342,8 +5367,9 @@ async def list_studio_recipe_registry(
     return recipes
 
 
-@app.post("/v1/ingest/recipes/{recipe_id}/publish")
+@app.post("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/publish")
 async def publish_studio_recipe(
+    investigation: InvestigationEditorDep,
     recipe: AuthorizedStudioRecipeDep,
     principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_APPROVER))],
     studio_recipes: StudioRecipesDep,
@@ -5387,8 +5413,9 @@ async def publish_studio_recipe(
     return updated
 
 
-@app.patch("/v1/ingest/recipes/{recipe_id}/schedule")
+@app.patch("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/schedule")
 async def update_studio_recipe_schedule(
+    investigation: InvestigationEditorDep,
     recipe: AuthorizedStudioRecipeDep,
     principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_APPROVER))],
     studio_recipes: StudioRecipesDep,
@@ -5425,8 +5452,12 @@ async def update_studio_recipe_schedule(
     return updated
 
 
-@app.post("/v1/ingest/recipes/{recipe_id}/versions", status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/versions",
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_studio_recipe_version(
+    investigation: InvestigationEditorDep,
     recipe: AuthorizedStudioRecipeDep,
     principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))],
     studio_recipes: StudioRecipesDep,

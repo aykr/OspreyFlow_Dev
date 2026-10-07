@@ -37,6 +37,8 @@ from conduit_common.identity import new_id
 from schemas.domain import Principal
 from schemas.ingest import RowTemplate, StudioRecipeDraft, StudioRecipeStatus, UnmappedField
 
+from .dataset_scope import made_in, reach_clause
+
 _BOOTSTRAP_SQL = """
 CREATE TABLE IF NOT EXISTS studio_recipes (
     recipe_id TEXT NOT NULL,
@@ -56,6 +58,8 @@ CREATE TABLE IF NOT EXISTS studio_recipes (
     verified_at TIMESTAMPTZ,
     PRIMARY KEY (recipe_id, version)
 );
+-- ADR-099 Amendment 3: the dataset a recipe belongs to; none for one made before it.
+ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS dataset_id TEXT;
 """
 
 
@@ -125,6 +129,7 @@ def _row_to_draft(row: asyncpg.Record) -> StudioRecipeDraft:
         published_at=data["published_at"],
         schedule_cron=data["schedule_cron"],
         schedule_watch=data["schedule_watch"],
+        dataset_id=data.get("dataset_id"),
     )
 
 
@@ -167,7 +172,8 @@ class StudioRecipeStore:
         async with self._pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO studio_recipes (recipe_id, version, label, status, content, "
-                "owning_unit, created_by, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+                "owning_unit, created_by, created_at, dataset_id) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
                 recipe_id,
                 1,
                 label,
@@ -176,6 +182,7 @@ class StudioRecipeStore:
                 principal.org_unit,
                 principal.id,
                 created_at,
+                made_in(principal),
             )
         return await self.get(recipe_id)
 
@@ -205,12 +212,14 @@ class StudioRecipeStore:
         the Python-side check below it replaced correctly rejected a mismatched principal
         (checked directly — no caller of `get()` elsewhere bypasses it), it just pulled the full
         row into process memory first."""
+        reach, extra = reach_clause(principal, 3)
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT * FROM studio_recipes WHERE recipe_id = $1 AND owning_unit = $2 "
-                "ORDER BY version DESC LIMIT 1",
+                "SELECT * FROM studio_recipes WHERE recipe_id = $1 AND owning_unit = $2"
+                f"{reach} ORDER BY version DESC LIMIT 1",
                 recipe_id,
                 principal.org_unit,
+                *extra,
             )
         if row is None:
             raise StudioRecipeNotFoundError(recipe_id)
@@ -296,12 +305,14 @@ class StudioRecipeStore:
         return await self.get(recipe_id)
 
     async def list_drafts(self, principal: Principal) -> list[StudioRecipeDraft]:
+        reach, extra = reach_clause(principal, 3)
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT * FROM studio_recipes WHERE owning_unit = $1 AND status = $2 "
-                "ORDER BY created_at DESC",
+                "SELECT * FROM studio_recipes WHERE owning_unit = $1 AND status = $2"
+                f"{reach} ORDER BY created_at DESC",
                 principal.org_unit,
                 StudioRecipeStatus.DRAFT.value,
+                *extra,
             )
         return [_row_to_draft(row) for row in rows]
 
@@ -312,11 +323,13 @@ class StudioRecipeStore:
         `get`/`get_authorized` naming its own `recipe_id`, not by this
         list). `list_drafts` above stays draft-only for Connect's "resume a
         draft" list; this is the Publish screen's own broader view."""
+        reach, extra = reach_clause(principal, 2)
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 "SELECT DISTINCT ON (recipe_id) * FROM studio_recipes "
-                "WHERE owning_unit = $1 ORDER BY recipe_id, version DESC",
+                f"WHERE owning_unit = $1{reach} ORDER BY recipe_id, version DESC",
                 principal.org_unit,
+                *extra,
             )
         drafts = [_row_to_draft(row) for row in rows]
         drafts.sort(key=lambda d: d.created_at, reverse=True)
@@ -444,8 +457,8 @@ class StudioRecipeStore:
                 )
                 await conn.execute(
                     "INSERT INTO studio_recipes (recipe_id, version, label, status, content, "
-                    "owning_unit, created_by, created_at) "
-                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+                    "owning_unit, created_by, created_at, dataset_id) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
                     recipe_id,
                     draft.version + 1,
                     draft.label,
@@ -454,6 +467,8 @@ class StudioRecipeStore:
                     principal.org_unit,
                     principal.id,
                     now,
+                    # A new version stays in its recipe's dataset (one made before keeps none).
+                    draft.dataset_id,
                 )
         return await self.get(recipe_id)
 

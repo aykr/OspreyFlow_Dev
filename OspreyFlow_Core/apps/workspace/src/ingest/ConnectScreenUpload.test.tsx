@@ -45,13 +45,13 @@ function stub(upload: () => Reply) {
     let reply: Reply;
     if (path === "/v1/ingest/connectors") reply = { status: 200, body: CATALOGUE };
     else if (path === "/v1/handling-scheme") reply = { status: 200, body: SCHEME };
-    else if (path === "/v1/ingest/recipes") reply = { status: 200, body: [] };
-    else if (path === "/v1/ingest/source-files" && method === "GET") {
+    else if (path === "/v1/investigations/inv-1/ingest/recipes") reply = { status: 200, body: [] };
+    else if (path === "/v1/investigations/inv-1/ingest/source-files" && method === "GET") {
       reply = {
         status: 200,
         body: { root: "/var/lib/osprey/ingest", files: uploaded ? [UPLOADED] : [] },
       };
-    } else if (path.startsWith("/v1/ingest/source-files?name=") && method === "POST") {
+    } else if (path.startsWith("/v1/investigations/inv-1/ingest/source-files?name=") && method === "POST") {
       reply = upload();
       if (reply.status === 201) uploaded = true;
     } else throw new Error(`unexpected request ${method} ${path}`);
@@ -66,7 +66,7 @@ function stub(upload: () => Reply) {
 }
 
 async function open() {
-  render(<ConnectScreen apiBaseUrl="http://api" bearerToken="tok" />);
+  render(<ConnectScreen investigationId="inv-1" apiBaseUrl="http://api" bearerToken="tok" />);
   await screen.findByRole("button", { name: "Choose file…" });
 }
 
@@ -109,7 +109,7 @@ describe("Connect: choose a file from your computer", () => {
     pick(new File(["a,b\n1,2\n"], "carrier.csv", { type: "text/csv" }));
     await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
     const post = calls.find((c) => c.method === "POST")!;
-    expect(post.url).toBe("/v1/ingest/source-files?name=carrier.csv");
+    expect(post.url).toBe("/v1/investigations/inv-1/ingest/source-files?name=carrier.csv");
     expect((post.init?.headers as Record<string, string>).Authorization).toBe("Bearer tok");
     expect(post.init?.body).toBeInstanceOf(File);
   });
@@ -120,7 +120,7 @@ describe("Connect: choose a file from your computer", () => {
     pick(new File(["x"], "Q3 calls & texts.csv"));
     await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
     expect(calls.find((c) => c.method === "POST")!.url).toBe(
-      "/v1/ingest/source-files?name=Q3%20calls%20%26%20texts.csv",
+      "/v1/investigations/inv-1/ingest/source-files?name=Q3%20calls%20%26%20texts.csv",
     );
   });
 

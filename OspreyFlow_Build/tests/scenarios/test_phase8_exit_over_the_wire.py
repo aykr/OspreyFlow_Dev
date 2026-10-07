@@ -984,7 +984,9 @@ def test_scenario_b_over_the_wire(analyst: httpx.Client) -> None:
     assert ran.json()["mode"] == "sync"
 
     # === B20: save the pattern as a monitor.
-    saved = analyst.post(_in_case("/v1/patterns/save"), json={"name": "over-the-wire", "definition": pattern})
+    saved = analyst.post(
+        _in_case("/v1/patterns/save"), json={"name": "over-the-wire", "definition": pattern}
+    )
     assert saved.status_code == 201, saved.text
     # `pattern_id` is the stable identity across saves; `id` identifies this one save
     # (ADR-032/036/040). A monitor watches the pattern, not one version of it.
@@ -1033,7 +1035,7 @@ def test_the_ingest_folder_is_reachable_and_usable_through_the_studio(
     catalogue and refused by the Studio, so the rows stayed at the in-process tier. The paragraph
     that used to be here said so, and the guard below is what noticed when it stopped being true.
     """
-    listing = analyst.get("/v1/ingest/source-files")
+    listing = analyst.get(_in_case("/v1/ingest/source-files"))
     assert listing.status_code == 200, listing.text
     files = listing.json()["files"]
     assert files, (
@@ -1051,7 +1053,7 @@ def test_the_ingest_folder_is_reachable_and_usable_through_the_studio(
     # holds the opposite invariant, that the connector an acceptance row depends on stays
     # available. `09_INGEST_STUDIO.md` §2 derives that from `connectors/cdr-generic-csv.yaml`.
     usable = analyst.post(
-        "/v1/ingest/recipes",
+        _in_case("/v1/ingest/recipes"),
         json={
             "label": "over-the-wire probe — the CDR carrier layout",
             "connector_profile": "cdr-generic-csv",
@@ -1061,7 +1063,7 @@ def test_the_ingest_folder_is_reachable_and_usable_through_the_studio(
         },
     )
     assert usable.status_code == 201, usable.text
-    profiled_cdr = analyst.get(f"/v1/ingest/recipes/{usable.json()['recipe_id']}/profile")
+    profiled_cdr = analyst.get(_in_case(f"/v1/ingest/recipes/{usable.json()['recipe_id']}/profile"))
     assert profiled_cdr.status_code == 200, (
         "`cdr-generic-csv` is no longer usable over the wire, so B1-B3's own cases below cannot "
         f"run: {profiled_cdr.text}"
@@ -1069,7 +1071,7 @@ def test_the_ingest_folder_is_reachable_and_usable_through_the_studio(
 
     # The reachable chain, on the one built connector.
     draft = analyst.post(
-        "/v1/ingest/recipes",
+        _in_case("/v1/ingest/recipes"),
         json={
             "label": "over-the-wire — ingest folder selection",
             "connector_profile": "generic-csv",
@@ -1088,7 +1090,7 @@ def test_the_ingest_folder_is_reachable_and_usable_through_the_studio(
     # **The Conduit actually opened the file.** A `source_location` the container cannot read
     # fails here, so this is what separates "the listing returned a plausible string" from "the
     # mount works".
-    profiled = analyst.get(f"/v1/ingest/recipes/{draft.json()['recipe_id']}/profile")
+    profiled = analyst.get(_in_case(f"/v1/ingest/recipes/{draft.json()['recipe_id']}/profile"))
     assert profiled.status_code == 200, (
         "the Conduit could not profile the file the listing offered — the read-only mount is not "
         f"working, whatever the listing said: {profiled.text}"
@@ -1136,7 +1138,7 @@ def cdr_load() -> dict:
     with httpx.Client(
         base_url=WORKSPACE_ORIGIN, headers={"Authorization": f"Bearer {token}"}, timeout=180
     ) as client:
-        listing = client.get("/v1/ingest/source-files")
+        listing = client.get(_in_case("/v1/ingest/source-files"))
         assert listing.status_code == 200, listing.text
         chosen = next((f for f in listing.json()["files"] if f["name"] == CDR_FIXTURE_NAME), None)
         assert chosen is not None, (
@@ -1148,7 +1150,7 @@ def cdr_load() -> dict:
         )
 
         draft = client.post(
-            "/v1/ingest/recipes",
+            _in_case("/v1/ingest/recipes"),
             json={
                 "label": "B1-B3 over the wire",
                 # **The connector this round made selectable.** Declared in the catalogue and
@@ -1162,22 +1164,22 @@ def cdr_load() -> dict:
         assert draft.status_code == 201, draft.text
         recipe_id = draft.json()["recipe_id"]
 
-        profiled = client.get(f"/v1/ingest/recipes/{recipe_id}/profile")
+        profiled = client.get(_in_case(f"/v1/ingest/recipes/{recipe_id}/profile"))
         assert profiled.status_code == 200, profiled.text
 
         row_template = yaml.safe_load(
             (Path(__file__).parent / "fixtures" / "cdr_recipe.yaml").read_text(encoding="utf-8")
         )["row_template"]
         mapped = client.put(
-            f"/v1/ingest/recipes/{recipe_id}/row-template",
+            _in_case(f"/v1/ingest/recipes/{recipe_id}/row-template"),
             json={"row_template": row_template, "unmapped_fields": []},
         )
         assert mapped.status_code == 200, mapped.text
 
-        verified = client.post(f"/v1/ingest/recipes/{recipe_id}/verify", json={})
+        verified = client.post(_in_case(f"/v1/ingest/recipes/{recipe_id}/verify"), json={})
         assert verified.status_code == 200, verified.text
 
-        published = client.post(f"/v1/ingest/recipes/{recipe_id}/publish", json={})
+        published = client.post(_in_case(f"/v1/ingest/recipes/{recipe_id}/publish"), json={})
         assert published.status_code == 200, (
             "Publish failed over the wire. Until round 13bf this was a bare 500: the image had no "
             f"`git` binary for `studio_publish` to exec. {published.text}"
@@ -1778,7 +1780,7 @@ def seizure_alert() -> dict:
         alerts_before = alerts_for(hotlist["id"])
 
         # 2. The ingest, through the Studio, as an analyst.
-        listing = client.get("/v1/ingest/source-files")
+        listing = client.get(_in_case("/v1/ingest/source-files"))
         assert listing.status_code == 200, listing.text
         chosen = next(
             (f for f in listing.json()["files"] if f["name"] == SEIZURE_FIXTURE_NAME), None
@@ -1790,7 +1792,7 @@ def seizure_alert() -> dict:
         )
 
         draft = client.post(
-            "/v1/ingest/recipes",
+            _in_case("/v1/ingest/recipes"),
             json={
                 "label": "B13 — seizure record",
                 "connector_profile": "seizure-record-csv",
@@ -1802,17 +1804,19 @@ def seizure_alert() -> dict:
         assert draft.status_code == 201, draft.text
         recipe_id = draft.json()["recipe_id"]
 
-        assert client.get(f"/v1/ingest/recipes/{recipe_id}/profile").status_code == 200
+        assert client.get(_in_case(f"/v1/ingest/recipes/{recipe_id}/profile")).status_code == 200
         row_template = yaml.safe_load(
             (Path(__file__).parent / "fixtures" / "seizure_recipe.yaml").read_text("utf-8")
         )["row_template"]
         mapped = client.put(
-            f"/v1/ingest/recipes/{recipe_id}/row-template",
+            _in_case(f"/v1/ingest/recipes/{recipe_id}/row-template"),
             json={"row_template": row_template, "unmapped_fields": []},
         )
         assert mapped.status_code == 200, mapped.text
-        assert client.post(f"/v1/ingest/recipes/{recipe_id}/verify", json={}).status_code == 200
-        assert client.post(f"/v1/ingest/recipes/{recipe_id}/publish", json={}).status_code == 200
+        verified = client.post(_in_case(f"/v1/ingest/recipes/{recipe_id}/verify"), json={})
+        assert verified.status_code == 200
+        published = client.post(_in_case(f"/v1/ingest/recipes/{recipe_id}/publish"), json={})
+        assert published.status_code == 200
 
         run = client.post(f"/v1/investigations/{scope}/ingest/recipes/{recipe_id}/run", json={})
         assert run.status_code == 200, run.text

@@ -323,6 +323,9 @@ class StudioRecipeDraft(BaseModel):
     published_at: datetime | None = None
     schedule_cron: str | None = None
     schedule_watch: str | None = None
+    #: ADR-099 Amendment 3: the dataset of the case it was made in; found, listed and run only in a
+    #: case reading it. `None` for one made before, until `stamp_datasets` places it.
+    dataset_id: str | None = None
 
     @model_validator(mode="before")
     @classmethod

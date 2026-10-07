@@ -37,6 +37,8 @@ import {
 
 export interface ConnectScreenProps {
   apiBaseUrl: string;
+  /** ADR-099 Amendment 3: the case whose dataset the recipe belongs to. */
+  investigationId: string;
   bearerToken: string;
   /** Fired whenever the screen's own idea of "the active draft" changes —
    * a fresh save, resuming a draft from the list, or starting a new one
@@ -113,6 +115,7 @@ export function groupCatalogue(
 
 export function ConnectScreen({
   apiBaseUrl,
+  investigationId,
   bearerToken,
   onDraftChange,
   onContinueToProfile,
@@ -144,7 +147,7 @@ export function ConnectScreen({
     void Promise.all([
       fetchConnectorCatalogue(apiBaseUrl, bearerToken),
       fetchHandlingScheme(apiBaseUrl, bearerToken),
-      listDrafts(apiBaseUrl, bearerToken),
+      listDrafts(apiBaseUrl, bearerToken, investigationId),
     ])
       .then(([catalogueResult, schemeResult, draftsResult]) => {
         if (cancelled) return;
@@ -159,7 +162,7 @@ export function ConnectScreen({
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, bearerToken]);
+  }, [apiBaseUrl, bearerToken, investigationId]);
 
   // The ingest root, loaded separately from the three above on purpose: a deployment whose
   // operator has staged nothing, or an analyst without `source_author`, must still get a working
@@ -167,7 +170,7 @@ export function ConnectScreen({
   // stage, which is the failure mode this screen already avoids for the catalogue.
   useEffect(() => {
     let cancelled = false;
-    void fetchIngestSourceFiles(apiBaseUrl, bearerToken)
+    void fetchIngestSourceFiles(apiBaseUrl, bearerToken, investigationId)
       .then((listing) => {
         if (cancelled) return;
         setSourceFiles(listing);
@@ -187,7 +190,7 @@ export function ConnectScreen({
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, bearerToken]);
+  }, [apiBaseUrl, bearerToken, investigationId]);
 
   const groupedCatalogue = useMemo(
     () => (catalogue ? groupCatalogue(catalogue) : []),
@@ -219,8 +222,8 @@ export function ConnectScreen({
     try {
       const input = formToInput(form);
       const saved = activeRecipeId
-        ? await updateDraft(apiBaseUrl, bearerToken, activeRecipeId, input)
-        : await createDraft(apiBaseUrl, bearerToken, input);
+        ? await updateDraft(apiBaseUrl, bearerToken, investigationId, activeRecipeId, input)
+        : await createDraft(apiBaseUrl, bearerToken, investigationId, input);
       setLastSaved(saved);
       setActiveRecipeId(saved.recipe_id);
       setDrafts((prev) => {
@@ -243,10 +246,10 @@ export function ConnectScreen({
     setUploading(true);
     setUploadError(null);
     try {
-      const saved = await uploadIngestSourceFile(apiBaseUrl, bearerToken, file);
+      const saved = await uploadIngestSourceFile(apiBaseUrl, bearerToken, investigationId, file);
       setForm((current) => ({ ...current, sourceLocation: saved.source_location }));
       try {
-        setSourceFiles(await fetchIngestSourceFiles(apiBaseUrl, bearerToken));
+        setSourceFiles(await fetchIngestSourceFiles(apiBaseUrl, bearerToken, investigationId));
         setSourceFilesError(null);
       } catch {
         // The upload worked and is selected; a failed refresh of the list is not worth an alarm.

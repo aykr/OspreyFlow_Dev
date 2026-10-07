@@ -32,6 +32,7 @@ from services.api.app import (
 
 from ontology.loader import load_default_ontology
 from schemas.ingest import FieldBinding, RecipeEntity, RowTemplate, StudioRecipeStatus
+from tests.services.api.any_case import AnyCase
 from tests.services.api.test_app import _FakeInvestigations
 from tests.services.api.test_studio_recipe_routes import (
     SOURCE_APPROVER,
@@ -40,6 +41,9 @@ from tests.services.api.test_studio_recipe_routes import (
     _ready_draft,
     client,  # noqa: F401  (reused fixture, extended below)
 )
+
+#: ADR-099 Amendment 3: the Studio's routes are the case's.
+CASE = "/v1/investigations/inv-1"
 
 # ruff: noqa: F811  (the imported `client` fixture is shadowed by design — see module docstring)
 
@@ -86,8 +90,9 @@ def publish_client(client: TestClient, git_repo: Path) -> TestClient:
 def test_publish_as_source_approver_succeeds(publish_client: TestClient, tmp_path: Path) -> None:
     publish_client.studio_recipes.draft = _verified_draft(tmp_path)  # type: ignore[attr-defined]
     app.dependency_overrides[get_principal] = lambda: SOURCE_APPROVER
+    app.dependency_overrides[get_investigations] = AnyCase
 
-    response = publish_client.post("/v1/ingest/recipes/recipe-1/publish", json={})
+    response = publish_client.post(f"{CASE}/ingest/recipes/recipe-1/publish", json={})
 
     assert response.status_code == 200
     body = response.json()
@@ -101,8 +106,9 @@ def test_publish_without_approver_role_is_forbidden(
 ) -> None:
     publish_client.studio_recipes.draft = _verified_draft(tmp_path)  # type: ignore[attr-defined]
     app.dependency_overrides[get_principal] = lambda: SOURCE_AUTHOR
+    app.dependency_overrides[get_investigations] = AnyCase
 
-    response = publish_client.post("/v1/ingest/recipes/recipe-1/publish", json={})
+    response = publish_client.post(f"{CASE}/ingest/recipes/recipe-1/publish", json={})
 
     assert response.status_code == 403
 
@@ -114,8 +120,9 @@ def test_publish_an_unverified_draft_is_a_conflict(
         tmp_path, row_template=_row_template()
     )
     app.dependency_overrides[get_principal] = lambda: SOURCE_APPROVER
+    app.dependency_overrides[get_investigations] = AnyCase
 
-    response = publish_client.post("/v1/ingest/recipes/recipe-1/publish", json={})
+    response = publish_client.post(f"{CASE}/ingest/recipes/recipe-1/publish", json={})
 
     assert response.status_code == 409
     assert response.json()["error"] == "studio_recipe_not_verified"
@@ -126,9 +133,10 @@ def test_publish_writes_and_commits_the_recipe_yaml(
 ) -> None:
     publish_client.studio_recipes.draft = _verified_draft(tmp_path)  # type: ignore[attr-defined]
     app.dependency_overrides[get_principal] = lambda: SOURCE_APPROVER
+    app.dependency_overrides[get_investigations] = AnyCase
 
     response = publish_client.post(
-        "/v1/ingest/recipes/recipe-1/publish",
+        f"{CASE}/ingest/recipes/recipe-1/publish",
         json={"schedule_cron": "0 6 * * *"},
     )
 
@@ -154,9 +162,10 @@ def test_schedule_as_source_approver_succeeds(publish_client: TestClient, tmp_pa
     )
     publish_client.studio_recipes.draft = published  # type: ignore[attr-defined]
     app.dependency_overrides[get_principal] = lambda: SOURCE_APPROVER
+    app.dependency_overrides[get_investigations] = AnyCase
 
     response = publish_client.patch(
-        "/v1/ingest/recipes/recipe-1/schedule",
+        f"{CASE}/ingest/recipes/recipe-1/schedule",
         json={"schedule_cron": "0 7 * * *", "schedule_watch": None},
     )
 
@@ -176,9 +185,10 @@ def test_schedule_without_approver_role_is_forbidden(
     )
     publish_client.studio_recipes.draft = published  # type: ignore[attr-defined]
     app.dependency_overrides[get_principal] = lambda: SOURCE_AUTHOR
+    app.dependency_overrides[get_investigations] = AnyCase
 
     response = publish_client.patch(
-        "/v1/ingest/recipes/recipe-1/schedule",
+        f"{CASE}/ingest/recipes/recipe-1/schedule",
         json={"schedule_cron": "0 7 * * *", "schedule_watch": None},
     )
 
@@ -197,8 +207,9 @@ def test_create_new_version_as_source_author_succeeds(
     )
     publish_client.studio_recipes.draft = published  # type: ignore[attr-defined]
     app.dependency_overrides[get_principal] = lambda: SOURCE_AUTHOR
+    app.dependency_overrides[get_investigations] = AnyCase
 
-    response = publish_client.post("/v1/ingest/recipes/recipe-1/versions")
+    response = publish_client.post(f"{CASE}/ingest/recipes/recipe-1/versions")
 
     assert response.status_code == 201
     body = response.json()
@@ -211,8 +222,9 @@ def test_create_new_version_from_a_draft_is_a_conflict(
 ) -> None:
     publish_client.studio_recipes.draft = _draft()  # type: ignore[attr-defined]
     app.dependency_overrides[get_principal] = lambda: SOURCE_AUTHOR
+    app.dependency_overrides[get_investigations] = AnyCase
 
-    response = publish_client.post("/v1/ingest/recipes/recipe-1/versions")
+    response = publish_client.post(f"{CASE}/ingest/recipes/recipe-1/versions")
 
     assert response.status_code == 409
     assert response.json()["error"] == "studio_recipe_cannot_version"
@@ -239,7 +251,8 @@ def test_run_without_loader_role_is_forbidden(run_client: TestClient, tmp_path: 
     )
     run_client.studio_recipes.draft = published  # type: ignore[attr-defined]
     app.dependency_overrides[get_principal] = lambda: SOURCE_AUTHOR
+    app.dependency_overrides[get_investigations] = AnyCase
 
-    response = run_client.post("/v1/investigations/inv-1/ingest/recipes/recipe-1/run")
+    response = run_client.post(f"{CASE}/ingest/recipes/recipe-1/run")
 
     assert response.status_code == 403

@@ -35,6 +35,12 @@ export interface HandlingScheme {
   handling_codes: Record<string, HandlingCode>;
 }
 
+/** ADR-099 Amendment 3: a recipe and a source file are the dataset's, asked of the case. The
+ * connector and transform catalogues stay global. */
+function studioCase(apiBaseUrl: string, investigationId: string): string {
+  return `${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}`;
+}
+
 function authHeaders(bearerToken: string): HeadersInit {
   return { Authorization: `Bearer ${bearerToken}` };
 }
@@ -71,8 +77,9 @@ export interface IngestSourceListing {
 export async function fetchIngestSourceFiles(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
 ): Promise<IngestSourceListing> {
-  const response = await fetch(`${apiBaseUrl}/v1/ingest/source-files`, {
+  const response = await fetch(`${studioCase(apiBaseUrl, investigationId)}/ingest/source-files`, {
     headers: authHeaders(bearerToken),
   });
   return parseOrThrow(response, "GET /v1/ingest/source-files");
@@ -96,10 +103,11 @@ export const UPLOAD_ACCEPT = [
 export async function uploadIngestSourceFile(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
   file: File,
 ): Promise<IngestSourceFile> {
   const response = await fetch(
-    `${apiBaseUrl}/v1/ingest/source-files?name=${encodeURIComponent(file.name)}`,
+    `${studioCase(apiBaseUrl, investigationId)}/ingest/source-files?name=${encodeURIComponent(file.name)}`,
     {
       method: "POST",
       headers: { ...authHeaders(bearerToken), "Content-Type": "application/octet-stream" },
@@ -154,9 +162,10 @@ async function parseDraftOrThrow(response: Response, action: string): Promise<St
 export async function createDraft(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
   input: ConnectDraftInput,
 ): Promise<StudioRecipeDraft> {
-  const response = await fetch(`${apiBaseUrl}/v1/ingest/recipes`, {
+  const response = await fetch(`${studioCase(apiBaseUrl, investigationId)}/ingest/recipes`, {
     method: "POST",
     headers: { ...authHeaders(bearerToken), "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -167,10 +176,11 @@ export async function createDraft(
 export async function updateDraft(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
   recipeId: string,
   input: ConnectDraftInput,
 ): Promise<StudioRecipeDraft> {
-  const response = await fetch(`${apiBaseUrl}/v1/ingest/recipes/${recipeId}`, {
+  const response = await fetch(`${studioCase(apiBaseUrl, investigationId)}/ingest/recipes/${recipeId}`, {
     method: "PATCH",
     headers: { ...authHeaders(bearerToken), "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -181,9 +191,10 @@ export async function updateDraft(
 export async function fetchDraft(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
   recipeId: string,
 ): Promise<StudioRecipeDraft> {
-  const response = await fetch(`${apiBaseUrl}/v1/ingest/recipes/${recipeId}`, {
+  const response = await fetch(`${studioCase(apiBaseUrl, investigationId)}/ingest/recipes/${recipeId}`, {
     headers: authHeaders(bearerToken),
   });
   return parseOrThrow(response, "GET /v1/ingest/recipes/{id}");
@@ -192,8 +203,9 @@ export async function fetchDraft(
 export async function listDrafts(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
 ): Promise<StudioRecipeDraft[]> {
-  const response = await fetch(`${apiBaseUrl}/v1/ingest/recipes`, {
+  const response = await fetch(`${studioCase(apiBaseUrl, investigationId)}/ingest/recipes`, {
     headers: authHeaders(bearerToken),
   });
   return parseOrThrow(response, "GET /v1/ingest/recipes");
@@ -232,9 +244,10 @@ async function parseCodedErrorOrThrow<T>(response: Response, action: string): Pr
 export async function fetchProfile(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
   recipeId: string,
 ): Promise<SourceProfile> {
-  const response = await fetch(`${apiBaseUrl}/v1/ingest/recipes/${recipeId}/profile`, {
+  const response = await fetch(`${studioCase(apiBaseUrl, investigationId)}/ingest/recipes/${recipeId}/profile`, {
     headers: authHeaders(bearerToken),
   });
   return parseCodedErrorOrThrow(response, "GET /v1/ingest/recipes/{id}/profile");
@@ -265,11 +278,12 @@ export async function fetchTransforms(
 export async function fetchSampleRow(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
   recipeId: string,
   rowIndex: number,
 ): Promise<MapSampleRow> {
   const response = await fetch(
-    `${apiBaseUrl}/v1/ingest/recipes/${recipeId}/map/sample-rows/${rowIndex}`,
+    `${studioCase(apiBaseUrl, investigationId)}/ingest/recipes/${recipeId}/map/sample-rows/${rowIndex}`,
     { headers: authHeaders(bearerToken) },
   );
   return parseCodedErrorOrThrow(response, "GET /v1/ingest/recipes/{id}/map/sample-rows/{row_index}");
@@ -278,10 +292,11 @@ export async function fetchSampleRow(
 export async function previewHandling(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
   recipeId: string,
   request: MapHandlingPreviewRequest,
 ): Promise<MapHandlingPreviewResult> {
-  const response = await fetch(`${apiBaseUrl}/v1/ingest/recipes/${recipeId}/map/handling-preview`, {
+  const response = await fetch(`${studioCase(apiBaseUrl, investigationId)}/ingest/recipes/${recipeId}/map/handling-preview`, {
     method: "POST",
     headers: { ...authHeaders(bearerToken), "Content-Type": "application/json" },
     body: JSON.stringify(request),
@@ -304,11 +319,12 @@ export class RowTemplateSaveError extends Error {
 export async function updateRowTemplate(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
   recipeId: string,
   rowTemplate: RowTemplate,
   unmappedFields: UnmappedField[],
 ): Promise<StudioRecipeDraft> {
-  const response = await fetch(`${apiBaseUrl}/v1/ingest/recipes/${recipeId}/row-template`, {
+  const response = await fetch(`${studioCase(apiBaseUrl, investigationId)}/ingest/recipes/${recipeId}/row-template`, {
     method: "PUT",
     headers: { ...authHeaders(bearerToken), "Content-Type": "application/json" },
     body: JSON.stringify({ row_template: rowTemplate, unmapped_fields: unmappedFields }),
@@ -348,9 +364,10 @@ export async function updateRowTemplate(
 export async function runVerify(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
   recipeId: string,
 ): Promise<VerifyReport> {
-  const response = await fetch(`${apiBaseUrl}/v1/ingest/recipes/${recipeId}/verify`, {
+  const response = await fetch(`${studioCase(apiBaseUrl, investigationId)}/ingest/recipes/${recipeId}/verify`, {
     method: "POST",
     headers: authHeaders(bearerToken),
   });
@@ -394,8 +411,9 @@ async function parseActionErrorOrThrow<T>(response: Response, action: string): P
 export async function fetchRecipeRegistry(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
 ): Promise<StudioRecipeDraft[]> {
-  const response = await fetch(`${apiBaseUrl}/v1/ingest/recipe-registry`, {
+  const response = await fetch(`${studioCase(apiBaseUrl, investigationId)}/ingest/recipe-registry`, {
     headers: authHeaders(bearerToken),
   });
   return parseOrThrow(response, "GET /v1/ingest/recipe-registry");
@@ -404,10 +422,11 @@ export async function fetchRecipeRegistry(
 export async function publishRecipe(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
   recipeId: string,
   input: PublishRecipeInput,
 ): Promise<StudioRecipeDraft> {
-  const response = await fetch(`${apiBaseUrl}/v1/ingest/recipes/${recipeId}/publish`, {
+  const response = await fetch(`${studioCase(apiBaseUrl, investigationId)}/ingest/recipes/${recipeId}/publish`, {
     method: "POST",
     headers: { ...authHeaders(bearerToken), "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -418,10 +437,11 @@ export async function publishRecipe(
 export async function updateSchedule(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
   recipeId: string,
   input: ScheduleUpdateInput,
 ): Promise<StudioRecipeDraft> {
-  const response = await fetch(`${apiBaseUrl}/v1/ingest/recipes/${recipeId}/schedule`, {
+  const response = await fetch(`${studioCase(apiBaseUrl, investigationId)}/ingest/recipes/${recipeId}/schedule`, {
     method: "PATCH",
     headers: { ...authHeaders(bearerToken), "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -432,9 +452,10 @@ export async function updateSchedule(
 export async function createNewVersion(
   apiBaseUrl: string,
   bearerToken: string,
+  investigationId: string,
   recipeId: string,
 ): Promise<StudioRecipeDraft> {
-  const response = await fetch(`${apiBaseUrl}/v1/ingest/recipes/${recipeId}/versions`, {
+  const response = await fetch(`${studioCase(apiBaseUrl, investigationId)}/ingest/recipes/${recipeId}/versions`, {
     method: "POST",
     headers: authHeaders(bearerToken),
   });

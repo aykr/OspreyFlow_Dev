@@ -35,9 +35,9 @@ function stub(classification: string[] = ["PUBLIC", "OFFICIAL", "OFFICIAL-SENSIT
           classification,
           handling_codes: { P: { label: "Permissive", dissemination: "permitted" } },
         };
-      } else if (path === "/v1/ingest/recipes" && method === "GET") body = [];
-      else if (path === "/v1/ingest/source-files") body = { root: "/r", files: [] };
-      else if (path === "/v1/ingest/recipes" && method === "POST") {
+      } else if (path === "/v1/investigations/inv-1/ingest/recipes" && method === "GET") body = [];
+      else if (path === "/v1/investigations/inv-1/ingest/source-files") body = { root: "/r", files: [] };
+      else if (path === "/v1/investigations/inv-1/ingest/recipes" && method === "POST") {
         const sent = JSON.parse(String(init?.body)) as Record<string, unknown>;
         posts.push({ url: path, body: sent });
         status = 201;
@@ -54,7 +54,7 @@ function stub(classification: string[] = ["PUBLIC", "OFFICIAL", "OFFICIAL-SENSIT
 }
 
 async function open() {
-  render(<ConnectScreen apiBaseUrl="http://api" bearerToken="tok" />);
+  render(<ConnectScreen investigationId="inv-1" apiBaseUrl="http://api" bearerToken="tok" />);
   await screen.findByRole("button", { name: "Choose file…" });
 }
 

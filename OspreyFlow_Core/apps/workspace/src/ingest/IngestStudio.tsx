@@ -70,6 +70,16 @@ export function IngestStudio({
     setStage("publish");
   }
 
+  // ADR-099 Amendment 3: a recipe and a source file belong to the dataset of the case they are
+  // made in, so the studio works only within a case.
+  if (!investigationId) {
+    return (
+      <p className="label" style={{ padding: "var(--sp-16)" }}>
+        Open a case to use the Ingest Studio: what it loads goes into the case&apos;s data.
+      </p>
+    );
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       {investigationId && (
@@ -128,6 +138,7 @@ export function IngestStudio({
           <ConnectScreen
             apiBaseUrl={apiBaseUrl}
             bearerToken={bearerToken}
+            investigationId={investigationId}
             onDraftChange={setActiveDraft}
             onContinueToProfile={goToProfile}
           />
@@ -148,6 +159,7 @@ export function IngestStudio({
           <ProfileScreen
             apiBaseUrl={apiBaseUrl}
             bearerToken={bearerToken}
+            investigationId={investigationId}
             recipeId={activeDraft.recipe_id}
             onBack={() => setStage("connect")}
           />
@@ -156,6 +168,7 @@ export function IngestStudio({
           <MapScreen
             apiBaseUrl={apiBaseUrl}
             bearerToken={bearerToken}
+            investigationId={investigationId}
             recipeId={activeDraft.recipe_id}
             onBack={() => setStage("connect")}
             onDraftChange={setActiveDraft}
@@ -165,6 +178,7 @@ export function IngestStudio({
           <VerifyScreen
             apiBaseUrl={apiBaseUrl}
             bearerToken={bearerToken}
+            investigationId={investigationId}
             recipeId={activeDraft.recipe_id}
             onBack={() => setStage("connect")}
           />

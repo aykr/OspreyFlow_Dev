@@ -18,6 +18,7 @@ from services.api.app import (
     app,
     get_audit,
     get_handling_scheme,
+    get_investigations,
     get_ontology,
     get_principal,
     get_studio_recipes,
@@ -33,6 +34,7 @@ from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from schemas.domain import Principal
 from schemas.ingest import CONNECTOR_CATALOGUE, StudioRecipeDraft, StudioRecipeStatus
+from tests.services.api.any_case import AnyCase
 from tests.services.api.test_app import _FakeAudit
 
 SOURCE_AUTHOR = Principal(
@@ -177,6 +179,8 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     studio_recipes = _FakeStudioRecipes()
 
     app.dependency_overrides[get_principal] = lambda: SOURCE_AUTHOR
+
+    app.dependency_overrides[get_investigations] = AnyCase
     app.dependency_overrides[get_studio_recipes] = lambda: studio_recipes
     app.dependency_overrides[get_audit] = lambda: _FakeAudit()
     # A real scheme, not `object()`: the profile route below actually calls
@@ -202,7 +206,7 @@ def test_list_connectors_returns_the_whole_catalogue(client: TestClient) -> None
 
 def test_create_draft_as_source_author_succeeds(client: TestClient) -> None:
     response = client.post(
-        "/v1/ingest/recipes",
+        "/v1/investigations/inv-1/ingest/recipes",
         json={"label": "Carrier A — CDR", "connector_profile": "generic-csv"},
     )
 
@@ -213,9 +217,10 @@ def test_create_draft_as_source_author_succeeds(client: TestClient) -> None:
 
 def test_create_draft_without_the_source_author_role_is_forbidden(client: TestClient) -> None:
     app.dependency_overrides[get_principal] = lambda: NO_ROLE_ANALYST
+    app.dependency_overrides[get_investigations] = AnyCase
 
     response = client.post(
-        "/v1/ingest/recipes",
+        "/v1/investigations/inv-1/ingest/recipes",
         json={"label": "Carrier A — CDR", "connector_profile": "generic-csv"},
     )
 
@@ -225,7 +230,7 @@ def test_create_draft_without_the_source_author_role_is_forbidden(client: TestCl
 def test_get_draft_returns_404_for_a_recipe_in_a_different_unit(client: TestClient) -> None:
     client.studio_recipes.draft = _draft(owning_unit="unit-2")  # type: ignore[attr-defined]
 
-    response = client.get("/v1/ingest/recipes/recipe-1")
+    response = client.get("/v1/investigations/inv-1/ingest/recipes/recipe-1")
 
     assert response.status_code == 404
     assert response.json()["error"] == "studio_recipe_not_found"
@@ -237,7 +242,7 @@ def test_patch_draft_updates_and_reports_ready_for_profile_once_complete(
     client.studio_recipes.draft = _draft()  # type: ignore[attr-defined]
 
     response = client.patch(
-        "/v1/ingest/recipes/recipe-1",
+        "/v1/investigations/inv-1/ingest/recipes/recipe-1",
         json={
             "label": "Carrier A — CDR",
             "connector_profile": "generic-csv",
@@ -259,9 +264,10 @@ def test_patch_draft_updates_and_reports_ready_for_profile_once_complete(
 def test_patch_draft_without_the_source_author_role_is_forbidden(client: TestClient) -> None:
     client.studio_recipes.draft = _draft()  # type: ignore[attr-defined]
     app.dependency_overrides[get_principal] = lambda: NO_ROLE_ANALYST
+    app.dependency_overrides[get_investigations] = AnyCase
 
     response = client.patch(
-        "/v1/ingest/recipes/recipe-1",
+        "/v1/investigations/inv-1/ingest/recipes/recipe-1",
         json={"label": "Carrier A — CDR", "connector_profile": "generic-csv"},
     )
 
@@ -273,7 +279,7 @@ def test_patch_draft_that_is_no_longer_a_draft_is_a_conflict(client: TestClient)
     client.studio_recipes.raise_not_a_draft = True  # type: ignore[attr-defined]
 
     response = client.patch(
-        "/v1/ingest/recipes/recipe-1",
+        "/v1/investigations/inv-1/ingest/recipes/recipe-1",
         json={"label": "Carrier A — CDR", "connector_profile": "generic-csv"},
     )
 
@@ -284,7 +290,7 @@ def test_patch_draft_that_is_no_longer_a_draft_is_a_conflict(client: TestClient)
 def test_list_drafts_returns_only_the_principals_own_drafts(client: TestClient) -> None:
     client.studio_recipes.draft = _draft()  # type: ignore[attr-defined]
 
-    response = client.get("/v1/ingest/recipes")
+    response = client.get("/v1/investigations/inv-1/ingest/recipes")
 
     assert response.status_code == 200
     assert len(response.json()) == 1
@@ -328,7 +334,7 @@ def _ready_draft(tmp_path: Path, **overrides: object) -> StudioRecipeDraft:
 def test_get_profile_on_a_draft_missing_a_gate_answer_is_a_conflict(client: TestClient) -> None:
     client.studio_recipes.draft = _draft()  # type: ignore[attr-defined]
 
-    response = client.get("/v1/ingest/recipes/recipe-1/profile")
+    response = client.get("/v1/investigations/inv-1/ingest/recipes/recipe-1/profile")
 
     assert response.status_code == 409
     assert response.json()["error"] == "recipe_not_ready_for_profile"
@@ -339,7 +345,7 @@ def test_get_profile_returns_unmasked_samples_for_a_cleared_principal(
 ) -> None:
     client.studio_recipes.draft = _ready_draft(tmp_path)  # type: ignore[attr-defined]
 
-    response = client.get("/v1/ingest/recipes/recipe-1/profile")
+    response = client.get("/v1/investigations/inv-1/ingest/recipes/recipe-1/profile")
 
     assert response.status_code == 200
     body = response.json()
@@ -356,7 +362,7 @@ def test_get_profile_shape_masks_samples_for_a_principal_who_cannot_clear_the_so
         tmp_path, handling=_UNCLEARED_HANDLING
     )
 
-    response = client.get("/v1/ingest/recipes/recipe-1/profile")
+    response = client.get("/v1/investigations/inv-1/ingest/recipes/recipe-1/profile")
 
     assert response.status_code == 200
     body = response.json()
@@ -398,7 +404,7 @@ def test_get_profile_defends_against_a_bypassed_ready_for_profile_flag(
     draft.ready_for_profile = True
     client.studio_recipes.draft = draft  # type: ignore[attr-defined]
 
-    response = client.get("/v1/ingest/recipes/recipe-1/profile")
+    response = client.get("/v1/investigations/inv-1/ingest/recipes/recipe-1/profile")
 
     assert response.status_code == 409
     assert response.json()["error"] == "source_handling_incomplete"
@@ -411,7 +417,7 @@ def test_get_profile_with_an_unavailable_connector_is_unprocessable(
         tmp_path, connector_profile="mobile-xry"
     )
 
-    response = client.get("/v1/ingest/recipes/recipe-1/profile")
+    response = client.get("/v1/investigations/inv-1/ingest/recipes/recipe-1/profile")
 
     assert response.status_code == 422
     assert response.json()["error"] == "connector_not_available"
@@ -424,7 +430,7 @@ def test_get_profile_for_a_missing_source_file_is_unprocessable(
         tmp_path, source_location=str(tmp_path / "does-not-exist.csv")
     )
 
-    response = client.get("/v1/ingest/recipes/recipe-1/profile")
+    response = client.get("/v1/investigations/inv-1/ingest/recipes/recipe-1/profile")
 
     assert response.status_code == 422
     assert response.json()["error"] == "source_unreadable"

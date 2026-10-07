@@ -81,9 +81,16 @@ read-only into the Conduit for every profile**. Connect's "where the data is" is
 *selection*, not a typed path:
 
 ```
-GET /v1/ingest/source-files
+GET /v1/investigations/{id}/ingest/source-files
 ```
 
+- **Datasets (ADR-099 Amendment 3):** asked of a case. Besides the root and `uploaded/`, it lists the
+  flat folder of each of the case's datasets, under the root (`<root>/<dataset>/`, an operator's
+  drop) and under `uploaded/` (where an upload made in the case lands), each file marked with its
+  dataset. The root's and `uploaded/`'s own files are those placed before the amendment, in no
+  dataset; they are offered to every case, marked so, until an operator moves one into a dataset's
+  folder (a raw file is not yet any dataset's data: what a load writes from it is stamped with the
+  case's dataset). A dataset id that is not a plain folder name is never joined onto the root.
 - **Authorisation:** `StudioRole.SOURCE_AUTHOR` â€” the same role that gates creating the draft the
   file will be attached to. Listing what you are about to point a draft at is that action one step
   earlier, so a principal who cannot create the draft has no use for the list.
@@ -106,7 +113,7 @@ milestone. The owner has since asked for it, so Connect now has a **Choose fileâ
 the system's own file picker and uploads the chosen file:
 
 ```
-POST /v1/ingest/source-files
+POST /v1/investigations/{id}/ingest/source-files
 ```
 
 - **Request:** the file's bytes as the raw request body (`application/octet-stream`), its name in the

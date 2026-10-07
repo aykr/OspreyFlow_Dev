@@ -1,4 +1,5 @@
-"""`GET /v1/ingest/source-files`'s refusals — owner ruling R6, 27 September 2026.
+"""`GET /v1/investigations/{id}/ingest/source-files`'s refusals — owner ruling R6, 27 September
+2026.
 
 This route's whole job is to enumerate one directory and refuse everything else, so the refusals
 are what is tested. Per `CLAUDE.md` rule 4 the access-control case is here rather than deferred,
@@ -13,6 +14,11 @@ from pathlib import Path
 
 import pytest
 from services.api.ingest_sources import ingest_root, is_inside, list_source_files
+
+from tests.services.api.any_case import AnyCase
+
+#: ADR-099 Amendment 3: the Studio's routes are the case's.
+CASE = "/v1/investigations/inv-1"
 
 
 @pytest.fixture
@@ -99,16 +105,17 @@ def test_the_route_lists_the_mounted_root_for_a_source_author(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from fastapi.testclient import TestClient
-    from services.api.app import app, get_audit, get_principal
+    from services.api.app import app, get_audit, get_investigations, get_principal
 
     from tests.services.api.test_studio_recipe_routes import SOURCE_AUTHOR, _FakeAudit
 
     (tmp_path / "cdr.csv").write_text("a\n1\n", encoding="utf-8")
     monkeypatch.setenv("OSPREY_INGEST_ROOT", str(tmp_path))
     app.dependency_overrides[get_principal] = lambda: SOURCE_AUTHOR
+    app.dependency_overrides[get_investigations] = AnyCase
     app.dependency_overrides[get_audit] = lambda: _FakeAudit()
     try:
-        response = TestClient(app).get("/v1/ingest/source-files")
+        response = TestClient(app).get(f"{CASE}/ingest/source-files")
         assert response.status_code == 200, response.text
         assert [f["name"] for f in response.json()["files"]] == ["cdr.csv"]
         assert response.json()["files"][0]["source_location"] == str(tmp_path / "cdr.csv")
@@ -123,16 +130,17 @@ def test_a_principal_without_the_source_author_role_is_refused(
     also not disclose whether the mount has anything in it — an analyst with no Studio role learns
     only that they may not ask, never how many files an operator has staged."""
     from fastapi.testclient import TestClient
-    from services.api.app import app, get_audit, get_principal
+    from services.api.app import app, get_audit, get_investigations, get_principal
 
     from tests.services.api.test_studio_recipe_routes import NO_ROLE_ANALYST, _FakeAudit
 
     (tmp_path / "secret-evidence.csv").write_text("a\n1\n", encoding="utf-8")
     monkeypatch.setenv("OSPREY_INGEST_ROOT", str(tmp_path))
     app.dependency_overrides[get_principal] = lambda: NO_ROLE_ANALYST
+    app.dependency_overrides[get_investigations] = AnyCase
     app.dependency_overrides[get_audit] = lambda: _FakeAudit()
     try:
-        response = TestClient(app).get("/v1/ingest/source-files")
+        response = TestClient(app).get(f"{CASE}/ingest/source-files")
         assert response.status_code == 403, response.text
         assert "secret-evidence" not in response.text, (
             "the refusal named a file in the mount — a principal who may not list it must not "
@@ -166,8 +174,12 @@ async def _chunks(*parts: bytes) -> AsyncIterator[bytes]:
         yield part
 
 
-def _save(root: Path, name: str, *parts: bytes, max_bytes: int = 1024):
-    return asyncio.run(save_upload(root, name, _chunks(*parts), max_bytes=max_bytes))
+def _save(
+    root: Path, name: str, *parts: bytes, max_bytes: int = 1024, dataset_id: str | None = None
+):
+    return asyncio.run(
+        save_upload(root, name, _chunks(*parts), max_bytes=max_bytes, dataset_id=dataset_id)
+    )
 
 
 def _refusal(root: Path, name: str, *parts: bytes, max_bytes: int = 1024) -> UploadRefused:
@@ -290,13 +302,14 @@ def test_the_uploaded_folder_is_not_itself_offered_as_a_file(root: Path) -> None
 
 def _client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, principal_name: str = "SOURCE_AUTHOR"):
     from fastapi.testclient import TestClient
-    from services.api.app import app, get_audit, get_principal
+    from services.api.app import app, get_audit, get_investigations, get_principal
 
     from tests.services.api import test_studio_recipe_routes as fixtures
 
     audit = fixtures._FakeAudit()
     monkeypatch.setenv("OSPREY_INGEST_ROOT", str(tmp_path))
     app.dependency_overrides[get_principal] = lambda: getattr(fixtures, principal_name)
+    app.dependency_overrides[get_investigations] = AnyCase
     app.dependency_overrides[get_audit] = lambda: audit
     return TestClient(app), app, audit
 
@@ -307,7 +320,7 @@ def test_a_source_author_can_upload_and_the_file_is_then_listed(
     client, app, _audit = _client(monkeypatch, tmp_path)
     try:
         response = client.post(
-            "/v1/ingest/source-files",
+            f"{CASE}/ingest/source-files",
             params={"name": "carrier.csv"},
             content=b"a,b\n1,2\n",
             headers={"content-type": "application/octet-stream"},
@@ -316,7 +329,7 @@ def test_a_source_author_can_upload_and_the_file_is_then_listed(
         body = response.json()
         assert body["name"] == "carrier.csv" and body["uploaded"] is True
         assert body["source_location"] == str(tmp_path / UPLOAD_SUBDIR / "carrier.csv")
-        listed = client.get("/v1/ingest/source-files").json()["files"]
+        listed = client.get(f"{CASE}/ingest/source-files").json()["files"]
         assert [f["name"] for f in listed] == ["carrier.csv"]
     finally:
         app.dependency_overrides.clear()
@@ -327,7 +340,7 @@ def test_an_upload_is_audited_with_its_name_and_size(
 ) -> None:
     client, app, audit = _client(monkeypatch, tmp_path)
     try:
-        client.post("/v1/ingest/source-files", params={"name": "c.csv"}, content=b"12345")
+        client.post(f"{CASE}/ingest/source-files", params={"name": "c.csv"}, content=b"12345")
         recorded = [r for r in audit.records if r.get("action") == "upload_ingest_source_file"]
         assert len(recorded) == 1, audit.records
         assert recorded[0]["resolved_query"] == {"name": "c.csv", "size_bytes": 5}
@@ -344,7 +357,7 @@ def test_a_principal_without_the_source_author_role_cannot_upload(
     (tmp_path / "secret-evidence.csv").write_text("a\n1\n", encoding="utf-8")
     try:
         response = client.post(
-            "/v1/ingest/source-files", params={"name": "sneaky.csv"}, content=b"data"
+            f"{CASE}/ingest/source-files", params={"name": "sneaky.csv"}, content=b"data"
         )
         assert response.status_code == 403, response.text
         assert "secret-evidence" not in response.text
@@ -365,7 +378,9 @@ def test_the_route_refuses_unsafe_names_and_writes_nothing_outside_uploaded(
     client, app, _audit = _client(monkeypatch, tmp_path / "ingest")
     (tmp_path / "ingest").mkdir()
     try:
-        response = client.post("/v1/ingest/source-files", params={"name": name}, content=b"data")
+        response = client.post(
+            f"{CASE}/ingest/source-files", params={"name": name}, content=b"data"
+        )
         assert response.status_code == status, (name, response.status_code, response.text)
         written = [p for p in tmp_path.rglob("*") if p.is_file()]
         assert written == [], written
@@ -379,10 +394,50 @@ def test_the_route_says_409_for_an_existing_name_and_413_for_a_file_over_the_lim
     client, app, _audit = _client(monkeypatch, tmp_path)
     monkeypatch.setenv("OSPREY_INGEST_MAX_UPLOAD_BYTES", "10")
     try:
-        assert client.post("/v1/ingest/source-files", params={"name": "a.csv"}, content=b"1234").status_code == 201
-        assert client.post("/v1/ingest/source-files", params={"name": "a.csv"}, content=b"5678").status_code == 409
-        too_big = client.post("/v1/ingest/source-files", params={"name": "b.csv"}, content=b"x" * 11)
+        assert client.post(f"{CASE}/ingest/source-files", params={"name": "a.csv"}, content=b"1234").status_code == 201
+        assert client.post(f"{CASE}/ingest/source-files", params={"name": "a.csv"}, content=b"5678").status_code == 409
+        too_big = client.post(f"{CASE}/ingest/source-files", params={"name": "b.csv"}, content=b"x" * 11)
         assert too_big.status_code == 413, too_big.text
         assert not (tmp_path / UPLOAD_SUBDIR / "b.csv").exists()
     finally:
         app.dependency_overrides.clear()
+
+
+# --- ADR-099 Amendment 3 part (d): a source file belongs to a dataset --------------------------
+
+
+def test_an_upload_made_in_a_case_lands_in_its_datasets_folder(root: Path) -> None:
+    saved = _save(root, "calls.csv", b"a\n", dataset_id="fixture-corp")
+    assert (root / UPLOAD_SUBDIR / "fixture-corp" / "calls.csv").read_bytes() == b"a\n"
+    assert saved.dataset_id == "fixture-corp" and saved.uploaded is True
+
+
+def test_a_case_is_offered_its_datasets_files_and_not_another_datasets(root: Path) -> None:
+    """A case reading Fixture Corp sees Fixture Corp's uploads and its operator drops (a folder of
+    that dataset's id under the root), never Enron's; the files placed in the root before the
+    amendment, in no dataset yet, are offered and marked so (`dataset_id` none)."""
+    _save(root, "mine.csv", b"1", dataset_id="fixture-corp")
+    _save(root, "theirs.csv", b"1", dataset_id="enron")
+    (root / "fixture-corp").mkdir()
+    (root / "fixture-corp" / "dropped.csv").write_text("x", encoding="utf-8")
+    listing = list_source_files(root, datasets=["fixture-corp"])
+    offered = {f.name: f.dataset_id for f in listing.files}
+    assert offered == {
+        "cdr-carrier-a.csv": None,
+        "device-extract.xml": None,
+        "mine.csv": "fixture-corp",
+        "dropped.csv": "fixture-corp",
+    }
+
+
+def test_a_dataset_id_that_is_not_a_plain_folder_name_is_never_made_a_path(root: Path) -> None:
+    """The folder is named for the dataset, so its id must be a plain name: anything that could
+    climb out of the root is refused rather than joined."""
+    from services.api.ingest_sources import UploadRefused
+
+    with pytest.raises(UploadRefused):
+        _save(root, "x.csv", b"1", dataset_id="../escape")
+    assert {f.name for f in list_source_files(root, datasets=["../escape"]).files} == {
+        "cdr-carrier-a.csv",
+        "device-extract.xml",
+    }
