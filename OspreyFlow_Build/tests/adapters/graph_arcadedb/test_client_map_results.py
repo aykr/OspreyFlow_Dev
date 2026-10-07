@@ -31,6 +31,11 @@ def test_a_scalar_and_a_map_already_a_dict_are_left_alone() -> None:
 
 def test_the_id_property_wins_over_the_record_id() -> None:
     # `elementMap()` on 26.10.1: T.id ("#1:0") first, then the `id` property.
-    row = {"result": [{"key": "id", "value": "#1:0"}, {"key": "label", "value": "mx_Person"},
-                      {"key": "id", "value": "01M4BC4VP1CRQEJKHSQEWKDFSP"}]}
+    row = {
+        "result": [
+            {"key": "id", "value": "#1:0"},
+            {"key": "label", "value": "mx_Person"},
+            {"key": "id", "value": "01M4BC4VP1CRQEJKHSQEWKDFSP"},
+        ]
+    }
     assert _gremlin_row(row)["id"] == "01M4BC4VP1CRQEJKHSQEWKDFSP"

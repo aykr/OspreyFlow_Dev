@@ -324,3 +324,80 @@ def test_a_new_owned_service_is_built_like_the_deployments_others_when_it_was_re
     ner = yaml.safe_load((out / "compose.yaml").read_text())["services"]["ner"]
     assert ner["image"] == "osprey/ner:local"
     assert ner["build"]["dockerfile"] == "services/ner/Dockerfile"
+
+
+def _pinned_before(out: Path) -> None:
+    """The deployment as rendered before ADR-101: ArcadeDB 25.5.1, without the Groovy engine, with
+    an operator's own setting beside it and the lock naming the old tag."""
+    import yaml
+
+    text = (out / "compose.yaml").read_text()
+    banner = text[: text.index("\nname:") + 1]
+    document = yaml.safe_load(text)
+    arcadedb = document["services"]["arcadedb"]
+    arcadedb["image"] = "arcadedata/arcadedb:25.5.1"
+    arcadedb["environment"]["JAVA_OPTS"] = (
+        "-Darcadedb.server.rootPassword=${OSPREY_ARCADEDB_PASSWORD:?}"
+    )
+    arcadedb["environment"]["OPERATOR_SETTING"] = "kept"
+    (out / "compose.yaml").write_text(banner + yaml.safe_dump(document, sort_keys=False))
+    lock = (out / "versions.lock").read_text() if (out / "versions.lock").exists() else ""
+    (out / "versions.lock").write_text(
+        lock + "images:\n- service: arcadedb\n  repository: arcadedata/arcadedb\n  tag: 25.5.1\n"
+        "  digest: unresolved\n  source: unresolved\n"
+    )
+
+
+def test_a_third_party_service_moves_to_the_checkouts_pin_with_its_launch_options(
+    repo: Path,
+) -> None:
+    """ADR-101: refresh never renders, so a store the checkout moved to a new version (ArcadeDB
+    26.10.1, whose Gremlin needs `-Darcadedb.gremlin.engine=groovy`) stayed on the old one. The
+    service takes the rendered image and the rendered values of the settings the render names; a
+    setting of the operator's own stays, no secret changes, and the lock names the new tag."""
+    import yaml
+    from harness.render import load_config, render
+
+    out = _rendered(repo)
+    _pinned_before(out)
+    secrets_before = (out / "deployment.env").read_text()
+    before = yaml.safe_load((out / "compose.yaml").read_text())
+
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+
+    wanted = yaml.safe_load(
+        render(load_config(out / "osprey.yaml"), allow_unpinned=True).artefacts["compose.yaml"]
+    )["services"]["arcadedb"]
+    after = yaml.safe_load((out / "compose.yaml").read_text())
+    arcadedb = after["services"]["arcadedb"]
+    assert arcadedb["image"] == wanted["image"] != "arcadedata/arcadedb:25.5.1"
+    assert arcadedb["environment"]["JAVA_OPTS"] == wanted["environment"]["JAVA_OPTS"]
+    assert arcadedb["environment"]["OPERATOR_SETTING"] == "kept"
+    for name, service in before["services"].items():
+        if name in {"arcadedb", "ollama"}:  # ollama: the model step brings its pull up to date
+            continue
+        assert after["services"][name] == service
+    lock = yaml.safe_load((out / "versions.lock").read_text())
+    (entry,) = [i for i in lock["images"] if i["service"] == "arcadedb"]
+    assert entry["tag"] == wanted["image"].rsplit(":", 1)[1]
+    assert [
+        line for line in (out / "deployment.env").read_text().splitlines() if "_MODEL=" not in line
+    ] == [line for line in secrets_before.splitlines() if "_MODEL=" not in line]
+
+
+def test_an_operators_edit_to_a_service_on_the_checkouts_pin_stays(repo: Path) -> None:
+    """The move happens only when the pin changed: an operator's heap or option on a store already
+    at the checkout's version is theirs."""
+    import yaml
+
+    out = _rendered(repo)
+    text = (out / "compose.yaml").read_text()
+    banner = text[: text.index("\nname:") + 1]
+    document = yaml.safe_load(text)
+    document["services"]["arcadedb"]["environment"]["JAVA_OPTS"] = "-Doperator=own"
+    (out / "compose.yaml").write_text(banner + yaml.safe_dump(document, sort_keys=False))
+
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+
+    after = yaml.safe_load((out / "compose.yaml").read_text())
+    assert after["services"]["arcadedb"]["environment"]["JAVA_OPTS"] == "-Doperator=own"

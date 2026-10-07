@@ -15,6 +15,11 @@ which. This is that sequence, in order:
    the demo administrator while `deployment.env` still names their password; registering is safe to
    repeat and makes the file true again.
 
+A third-party store the checkout pins at a new version (ADR-101: ArcadeDB 26.10.1) is moved to it:
+the service takes the rendered image and the rendered value of each setting the render names, and
+`versions.lock` names the new tag. A setting of the operator's own stays, and a service already at
+the checkout's version is not touched, so an operator's edit to it is theirs.
+
 It also brings the deployment's models up to date with its own `osprey.yaml` (ADR-095): the chosen
 extraction model's pull line in `compose.yaml`, the proxy's routing table `litellm.yaml`, and the
 model lines of `deployment.env`, each exactly as `harness.render` writes them, and restarts the
@@ -210,6 +215,50 @@ def _new_services_added(directory: Path) -> None:
         compose_path.write_text(text[:header_end] + body, encoding="utf-8")
 
 
+def _pins_moved(directory: Path) -> None:
+    """A service built from no source here whose rendered image differs from the deployment's is
+    moved to it, with the rendered values of its settings (a new version's launch options). Secrets
+    are `${...}` references in both, so none is written."""
+    config_path = directory / "osprey.yaml"
+    if not config_path.is_file():
+        return
+    config = load_config(config_path)
+    compose_path = directory / "compose.yaml"
+    text = compose_path.read_text(encoding="utf-8")
+    header_end = text.find("\nname:") + 1
+    document = yaml.safe_load(text)
+    services = document.get("services", {})
+    rendered = yaml.safe_load(_render_compose(config, service_images(config)))["services"]
+    moved: dict[str, str] = {}
+    for name, wanted in rendered.items():
+        service = services.get(name)
+        if not isinstance(service, dict) or "build" in wanted or "build" in service:
+            continue
+        if service.get("image") == wanted.get("image") or "image" not in wanted:
+            continue
+        service["image"] = wanted["image"]
+        environment = service.get("environment")
+        wanted_environment = wanted.get("environment")
+        if isinstance(environment, dict) and isinstance(wanted_environment, dict):
+            environment.update(wanted_environment)
+        moved[name] = str(wanted["image"]).rsplit(":", 1)[1]
+    if not moved:
+        return
+    body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
+    compose_path.write_text(text[:header_end] + body, encoding="utf-8")
+    lock_path = directory / "versions.lock"
+    if lock_path.is_file():
+        lock_text = lock_path.read_text(encoding="utf-8")
+        lock_header = "".join(line for line in lock_text.splitlines(True) if line.startswith("#"))
+        lock = yaml.safe_load(lock_text) or {}
+        for entry in lock.get("images", []):
+            if entry.get("service") in moved:
+                entry["tag"] = moved[entry["service"]]
+        lock_path.write_text(
+            lock_header + "\n" + yaml.safe_dump(lock, sort_keys=False), encoding="utf-8"
+        )
+
+
 def refresh(
     repo_root: Path = REPO_ROOT,
     *,
@@ -221,6 +270,7 @@ def refresh(
     theme_changed = _theme_changed(directory, repo_root)
     proxy_changed = _models_up_to_date(directory)
     _new_services_added(directory)
+    _pins_moved(directory)
     run([*compose, "build"])
     run([*compose, "up", "-d", "--wait"])
     if proxy_changed:
