@@ -53,6 +53,13 @@ class MemoryStore:
             if p.investigation_id in ids and p.status is ProposalStatus.PENDING
         ]
 
+    async def pending_for_datasets(self, ids: list[str]) -> list[LinkTypeProposal]:
+        return [
+            p
+            for p in await self.all()
+            if p.dataset_id in ids and p.status is ProposalStatus.PENDING
+        ]
+
     async def pending_named(self, names: list[str]) -> list[LinkTypeProposal]:
         return [
             p for p in await self.all() if p.name in names and p.status is ProposalStatus.PENDING
@@ -389,3 +396,91 @@ async def test_a_link_of_a_rejected_type_can_still_be_corrected_without_retyping
         "inv-1", first.edge.id, EDITOR, LinkChangeRequest(occurrences=2, reason="Seen twice")
     )
     assert again.edge.type == "KNOWN_TO" and again.edge.occurrences == 2
+
+
+# --- ADR-099 Amendment 3: a proposal belongs to its dataset --------------------------------------
+#
+# A type an analyst defines is usable in every case reading the dataset of the case it was defined
+# in, and in no other, until an administrator promotes it. `inv-2` and `inv-3` stand for two other
+# cases: one reading the same dataset, one reading another. A principal scoped to a case carries
+# its datasets (`app.get_principal`), which is all the service reads them from.
+
+
+def _in(*datasets: str) -> Principal:
+    return EDITOR.model_copy(update={"datasets": list(datasets)})
+
+
+async def test_a_proposal_is_offered_in_every_case_reading_its_dataset_and_no_other() -> None:
+    service, _, _, _, _ = await _service()
+    p = await service.propose(
+        "inv-1",
+        _in("fixture-corp"),
+        name="KNOWN_TO",
+        from_types=["Person"],
+        to_types=["Person"],
+        directed=False,
+        colour="jade",
+        thickness=2,
+        label=None,
+        reason="They know each other by sight",
+    )
+    assert p.dataset_id == "fixture-corp"
+    assert "KNOWN_TO" in names(await service.case_types("inv-2", _in("fixture-corp")))
+    assert "KNOWN_TO" in names(await service.case_types("inv-3", _in("enron", "fixture-corp")))
+    assert "KNOWN_TO" not in names(await service.case_types("inv-3", _in("enron")))
+    # Its own branch reads the same datasets, so it has it; not because it is a branch.
+    assert "KNOWN_TO" not in names(await service.case_types("branch-1", _in("enron")))
+
+
+async def test_a_proposal_of_another_dataset_is_not_offered_where_its_link_is_in_view() -> None:
+    """The in-view rule of ADR-090 belonged to case scope; a link in view is the case's dataset's,
+    so a proposal of another dataset is not offered by it."""
+    service, _, _, working, _ = await _service()
+    await service.propose(
+        "inv-1",
+        _in("fixture-corp"),
+        name="KNOWN_TO",
+        from_types=["Person"],
+        to_types=["Person"],
+        directed=False,
+        colour="jade",
+        thickness=2,
+        label=None,
+        reason="x",
+    )
+    store = working._store  # noqa: SLF001
+    in_enron = {"datasets": ["enron"]}
+    await store.add_nodes(
+        "inv-2", [node("a").model_copy(update=in_enron), node("b").model_copy(update=in_enron)]
+    )
+    await store.add_edges(
+        "inv-2",
+        [edge("e1", "a", "b").model_copy(update={"type": "KNOWN_TO", **in_enron})],
+    )
+    # The link is in view to the case: the rule under test, not the projection, decides.
+    _, in_view = await working.visible_membership("inv-2", _in("enron"))
+    assert [e.id for e in in_view] == ["e1"]
+    assert "KNOWN_TO" not in names(await service.case_types("inv-2", _in("enron")))
+
+
+async def test_the_proposer_withdraws_from_any_case_reading_its_dataset() -> None:
+    service, _, _, _, _ = await _service()
+    p = await service.propose(
+        "inv-1",
+        _in("fixture-corp"),
+        name="KNOWN_TO",
+        from_types=["Person"],
+        to_types=["Person"],
+        directed=False,
+        colour="jade",
+        thickness=2,
+        label=None,
+        reason="x",
+    )
+    with pytest.raises(ProposalNotFoundError):
+        await service.withdraw("inv-3", p.id, _in("enron"), reason="no", is_author=False)
+    withdrawn = await service.withdraw(
+        "inv-2", p.id, _in("fixture-corp"), reason="not needed", is_author=False
+    )
+    assert withdrawn.status is ProposalStatus.WITHDRAWN
+

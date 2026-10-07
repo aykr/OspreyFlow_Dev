@@ -100,3 +100,20 @@ async def test_the_revision_rises_by_one_each_time(store: LinkTypeProposalStore)
     before = await store.revision()
     assert await store.bump_revision() == before + 1
     assert await store.revision() == before + 1
+
+
+async def test_a_proposal_keeps_its_dataset_and_is_found_for_it_and_no_other(
+    store: LinkTypeProposalStore,
+) -> None:
+    """ADR-099 Amendment 3, in the database itself: the dataset round-trips, and a dataset's
+    pending proposals are its own (a proposal of no dataset, made before, is not among them)."""
+    mine = new_id()
+    p = _proposal().model_copy(update={"dataset_id": mine})
+    older = _proposal(name="KNOWN_FROM")  # made before the amendment: no dataset
+    other = _proposal(name="SEEN_WITH").model_copy(update={"dataset_id": new_id()})
+    for proposal in (p, older, other):
+        await store.create(proposal)
+    assert (await store.get(p.id)).dataset_id == mine
+    assert [q.id for q in await store.pending_for_datasets([mine])] == [p.id]
+    await store.decide(p.id, status=ProposalStatus.WITHDRAWN, by="x", at=p.proposed_at, reason="r")
+    assert await store.pending_for_datasets([mine]) == []

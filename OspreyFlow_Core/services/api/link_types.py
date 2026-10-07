@@ -75,6 +75,9 @@ class LinkTypeProposal(BaseModel):
     #: The name it was promoted, merged or renamed under.
     promoted_name: str | None = None
     direct_since: datetime | None = None
+    #: ADR-099 Amendment 3: the dataset it belongs to, the first of its case's at proposal; usable
+    #: in every case reading it. `None` for one made before, which keeps ADR-090's case rule.
+    dataset_id: str | None = None
 
     @property
     def storage_name(self) -> str:
@@ -235,22 +238,29 @@ class LinkTypeService:
         return None
 
     async def case_types(self, investigation_id: str, principal: Principal) -> dict[str, CaseType]:
-        """Every type a link in this case may take: the ontology's, then the pending proposals of
-        the case and the cases it was branched from that `principal` may see, then the pending ones
-        one of whose links `principal` can see in the case's view (ADR-090 decision 3)."""
+        """Every type a link in this case may take: the ontology's (the OspreyFlow default
+        dataset's), then the pending proposals of the datasets the case reads (ADR-099 Amendment
+        3). A proposal made before that amendment names no dataset and keeps ADR-090's rule: the
+        case and the cases it was branched from that `principal` may see, then a case where one of
+        its links is in view; `scripts.stamp_datasets` gives it its case's dataset."""
         await self._current()
         offered = {
             t.name: CaseType(definition=t, storage_name=t.name)
             for t in self._ontology.edge_types
             if not t.hidden
         }
+        pending: list[LinkTypeProposal] = []
+        if principal.datasets:
+            pending += await self._store.pending_for_datasets(principal.datasets)
         case = await self._investigations.get(investigation_id)
         lineage = [case.id, *await visible_ancestors(self._investigations, case, principal)]
-        pending = list(await self._store.pending_for_cases(lineage))
+        pending += [p for p in await self._store.pending_for_cases(lineage) if p.dataset_id is None]
         _, edges = await self._working_set.visible_membership(investigation_id, principal)
         in_view = sorted({e.type for e in edges} - set(offered))
         if in_view:
-            pending += await self._store.pending_named(in_view)
+            pending += [
+                p for p in await self._store.pending_named(in_view) if p.dataset_id is None
+            ]
         for proposal in pending:
             if proposal.name not in offered:
                 offered[proposal.name] = CaseType(
@@ -312,6 +322,7 @@ class LinkTypeService:
                 thickness=thickness,
                 investigation_id=case.id,
                 owning_unit=case.owning_unit,
+                dataset_id=principal.datasets[0] if principal.datasets else None,
                 proposed_by=principal.id,
                 proposed_at=datetime.now(UTC),
                 reason=reason,
@@ -332,11 +343,15 @@ class LinkTypeService:
         reason: str,
         is_author: bool,
     ) -> LinkTypeProposal:
-        """The proposer or an Author of the case withdraws a pending proposal of that case."""
+        """The proposer or an Author of a case reading its dataset withdraws a pending proposal."""
         proposal = await self._store.get(proposal_id)
-        if proposal.investigation_id != investigation_id or proposal.status is not (
-            ProposalStatus.PENDING
-        ):
+        # ADR-099 Amendment 3: from any case reading its dataset; one made before, from its case.
+        in_reach = (
+            proposal.dataset_id in (principal.datasets or [])
+            if proposal.dataset_id is not None
+            else proposal.investigation_id == investigation_id
+        )
+        if not in_reach or proposal.status is not ProposalStatus.PENDING:
             raise ProposalNotFoundError(proposal_id)
         if proposal.proposed_by != principal.id and not is_author:
             raise ProposalRefusedError(

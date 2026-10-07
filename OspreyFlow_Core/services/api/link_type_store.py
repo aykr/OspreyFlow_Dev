@@ -54,12 +54,16 @@ CREATE TABLE IF NOT EXISTS link_type_overlay (
     revision INTEGER NOT NULL
 );
 INSERT INTO link_type_overlay (singleton, revision) VALUES (TRUE, 0) ON CONFLICT DO NOTHING;
+-- ADR-099 Amendment 3: the dataset a proposal belongs to; none for one made before it.
+ALTER TABLE link_type_proposals ADD COLUMN IF NOT EXISTS dataset_id TEXT;
+CREATE INDEX IF NOT EXISTS link_type_proposals_dataset_idx
+    ON link_type_proposals (dataset_id, status);
 """
 
 _COLUMNS = (
     "id, name, label, from_types, to_types, directed, colour, thickness, investigation_id, "
     "owning_unit, proposed_by, proposed_at, reason, status, decided_by, decided_at, "
-    "decision_reason, basis, promoted_name, direct_since"
+    "decision_reason, basis, promoted_name, direct_since, dataset_id"
 )
 
 
@@ -89,7 +93,7 @@ class LinkTypeProposalStore:
         async with self._pool.acquire() as conn:
             await conn.execute(
                 f"INSERT INTO link_type_proposals ({_COLUMNS}) VALUES "
-                "($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)",
+                "($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)",
                 *_values(proposal),
             )
 
@@ -109,6 +113,17 @@ class LinkTypeProposalStore:
                 "WHERE investigation_id = ANY($1::text[]) AND status = 'pending' "
                 "ORDER BY proposed_at, id",
                 list(investigation_ids),
+            )
+        return [_row(r) for r in rows]
+
+    async def pending_for_datasets(self, dataset_ids: Sequence[str]) -> list[LinkTypeProposal]:
+        """ADR-099 Amendment 3: the pending proposals of these datasets."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT {_COLUMNS} FROM link_type_proposals "
+                "WHERE dataset_id = ANY($1::text[]) AND status = 'pending' "
+                "ORDER BY proposed_at, id",
+                list(dataset_ids),
             )
         return [_row(r) for r in rows]
 
@@ -136,7 +151,8 @@ class LinkTypeProposalStore:
             row = await conn.fetchrow(
                 "SELECT id, name, label, from_types, to_types, directed, colour, thickness, "
                 "investigation_id, owning_unit, proposed_by, proposed_at, reason, status, "
-                "decided_by, decided_at, decision_reason, basis, promoted_name, direct_since "
+                "decided_by, decided_at, decision_reason, basis, promoted_name, direct_since, "
+                "dataset_id "
                 "FROM link_type_proposals WHERE id = $1 AND owning_unit = $2",
                 proposal_id,
                 principal.org_unit,
@@ -151,7 +167,8 @@ class LinkTypeProposalStore:
             rows = await conn.fetch(
                 "SELECT id, name, label, from_types, to_types, directed, colour, thickness, "
                 "investigation_id, owning_unit, proposed_by, proposed_at, reason, status, "
-                "decided_by, decided_at, decision_reason, basis, promoted_name, direct_since "
+                "decided_by, decided_at, decision_reason, basis, promoted_name, direct_since, "
+                "dataset_id "
                 "FROM link_type_proposals WHERE owning_unit = $1 ORDER BY proposed_at DESC, id",
                 principal.org_unit,
             )
@@ -202,4 +219,5 @@ def _values(p: LinkTypeProposal) -> tuple[object, ...]:
         p.id, p.name, p.label, p.from_types, p.to_types, p.directed, p.colour, p.thickness,
         p.investigation_id, p.owning_unit, p.proposed_by, p.proposed_at, p.reason, p.status.value,
         p.decided_by, p.decided_at, p.decision_reason, p.basis, p.promoted_name, p.direct_since,
+        p.dataset_id,
     )  # fmt: skip
