@@ -28,9 +28,11 @@ import argparse
 import asyncio
 import os
 import sys
+from typing import cast
 
 from scripts.case_seed import add_case_arguments, check_case_arguments, scope_for
 from scripts.seed_support import KNOWN_STRAY_ADVICE, report_ids_stored_twice
+from services.api.dataset_scope import DatasetStampingGraph
 from services.resolve.same_as_writer import write_same_as_edges
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
@@ -38,6 +40,7 @@ from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from adapters.graph_arcadedb.gremlin_literals import groovy_identifier
 from adapters.graph_arcadedb.naming import physical_type_name
 from conduit_common.identity import now_utc
+from demo_fixtures.datasets import FIXTURE_CORP
 from demo_fixtures.fixture_corp import (
     build_path_spokes,
     generate_community_rings,
@@ -136,11 +139,14 @@ async def _run(args: argparse.Namespace) -> int:
     database = os.environ.get("ARCADEDB_DATABASE", "ospreyflow")
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database))
     await client.create_database_if_absent()
-    graph = GraphArcadeDBAdapter(client, scheme)
+    graph = cast(
+        GraphPort,
+        DatasetStampingGraph(GraphArcadeDBAdapter(client, scheme), dataset=FIXTURE_CORP.id),
+    )
     await graph.apply_schema(ontology)
 
     principal = Principal(id=args.principal_id, clearance=args.clearance, org_unit=args.org_unit)
-    scope = await scope_for(args, seeder=principal)
+    scope = await scope_for(args, seeder=principal, dataset=FIXTURE_CORP)
     load_id = f"fixture-corp:{scope}"
     try:
         resolution_nodes, resolution_edges = await _seed_resolution_persons(graph, load_id=load_id)

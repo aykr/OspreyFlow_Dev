@@ -463,6 +463,7 @@ def test_the_adapter_is_given_the_ontology_before_a_repair_writes_an_edge(
             if not self.schema_applied:
                 raise RuntimeError("no ontology schema has been applied")
             self.written += [getattr(e, "id", "?") for e in edges]
+            self.datasets = [getattr(e, "datasets", None) for e in edges]
 
         async def commit_transaction(self, tx: str) -> None: ...
 
@@ -478,7 +479,16 @@ def test_the_adapter_is_given_the_ontology_before_a_repair_writes_an_edge(
         await kw["rewrite"]("paysim-tx-1")  # type: ignore[operator]
         return RepairReport(planned=[("paysim-tx-1", [])], written=["paysim-tx-1"])
 
-    edge = type("E", (), {"source": "paysim-acct-a", "id": "paysim-tx-1"})()
+    class E:
+        """The fields the repair and the dataset stamp (ADR-099) read of an `EdgeWrite`."""
+
+        def __init__(self, datasets: list[str]) -> None:
+            self.source, self.id, self.datasets = "paysim-acct-a", "paysim-tx-1", datasets
+
+        def model_copy(self, *, update: dict[str, list[str]]) -> E:
+            return E(update["datasets"])
+
+    edge = E([])
     _patched(
         monkeypatch,
         GraphArcadeDBAdapter=make_graph,
@@ -489,3 +499,4 @@ def test_the_adapter_is_given_the_ontology_before_a_repair_writes_an_edge(
     args = _parse_args(["--restore-missing", "--apply", "--vault", "paysim"])
     assert asyncio.run(seed_paysim._run(args)) == 0
     assert graphs[0].written == ["paysim-tx-1"]
+    assert graphs[0].datasets == [["paysim"]]  # the repaired link is PaySim's (ADR-099)

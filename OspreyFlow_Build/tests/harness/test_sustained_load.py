@@ -313,7 +313,7 @@ def _run_query_sample(token: str, investigation_id: str) -> float:
         response.raise_for_status()
 
         response = client.post(
-            "/v1/paths",
+            f"/v1/investigations/{investigation_id}/paths",
             headers=headers,
             json={
                 "source": "corp-path-hub",

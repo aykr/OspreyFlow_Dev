@@ -79,6 +79,12 @@ async def write_same_as_edges(
             handling=_handling_for(candidate, nodes_by_id, scheme),
             created_by=created_by,
             created_at=now,
+            # ADR-099: only the datasets both records are in. A match across two datasets is in
+            # none, so no case reads it and neither case's records are joined to the other's.
+            datasets=sorted(
+                set(nodes_by_id[candidate.node_a].datasets)
+                & set(nodes_by_id[candidate.node_b].datasets)
+            ),
         )
         for candidate in candidates
     ]

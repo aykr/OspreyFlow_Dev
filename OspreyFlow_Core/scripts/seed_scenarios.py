@@ -58,14 +58,17 @@ import sys
 from collections.abc import Sequence
 from datetime import timedelta
 from pathlib import Path
+from typing import cast
 
 import duckdb
+from services.api.dataset_scope import DatasetStampingGraph
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from conduit_common.identity import new_edge_id, now_utc
+from demo_fixtures.datasets import SCENARIOS
 from demo_fixtures.scenario_cohorts import (
     Cohort,
     DeviceLegs,
@@ -86,6 +89,7 @@ from schemas.domain import (
     Interval,
     Node,
     NodeWrite,
+    Principal,
     Provenance,
     ProvenanceState,
     SourceRef,
@@ -141,6 +145,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         required=True,
         help="The real investigation id these nodes/edges should be written under.",
     )
+    parser.add_argument("--org-unit", default=os.environ.get("OSPREY_ORG_UNIT", "unit-1"))
     parser.add_argument(
         "--analytics-db-path",
         # The Data folder (ADR-054); the same string as the Conduit's default, kept equal by
@@ -422,8 +427,15 @@ async def _run(args: argparse.Namespace) -> int:
     database = os.environ.get("ARCADEDB_DATABASE", "ospreyflow")
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database))
     await client.create_database_if_absent()
-    graph = GraphArcadeDBAdapter(client, scheme)
+    graph = cast(
+        GraphPort, DatasetStampingGraph(GraphArcadeDBAdapter(client, scheme), dataset=SCENARIOS.id)
+    )
     await graph.apply_schema(ontology)
+    # ADR-099: the case these scenarios are written under reads their dataset.
+    from scripts.case_seed import _reads_from_arguments
+
+    seeder = Principal(id="seed-scenarios", clearance="SECRET", org_unit=args.org_unit)
+    await _reads_from_arguments(args.investigation_scope, SCENARIOS, seeder=seeder)
 
     # A readable load id rather than a fresh ULID, matching `fixture-corp`'s own shape: this is
     # the join key into the load ledger, and "which seed put this here" is the question it gets

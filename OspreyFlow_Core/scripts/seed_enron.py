@@ -22,6 +22,7 @@ import os
 import sys
 from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import cast
 
 import duckdb
 from scripts.seed_support import (
@@ -33,6 +34,7 @@ from scripts.seed_support import (
     report_ids_stored_twice,
     write_graph,
 )
+from services.api.dataset_scope import DatasetStampingGraph
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
@@ -41,9 +43,11 @@ from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from adapters.graph_arcadedb.gremlin_literals import groovy_identifier
 from adapters.graph_arcadedb.naming import physical_type_name
 from demo_fixtures import enron
+from demo_fixtures.datasets import ENRON
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from ports.analytics import AnalyticsPort
+from ports.graph import GraphPort
 from schemas.domain import Handling, Principal
 
 DATASET = "enron"
@@ -188,7 +192,7 @@ async def _run(args: argparse.Namespace) -> int:
     from scripts.case_seed import case_from_arguments
 
     case = await case_from_arguments(
-        name=args.case_name, seeder=principal, grant_texts=list(args.grant)
+        name=args.case_name, seeder=principal, grant_texts=list(args.grant), dataset=ENRON
     )
     scope = case.id
     print(f"Case {args.case_name!r} is {scope}.")
@@ -217,7 +221,9 @@ async def _run(args: argparse.Namespace) -> int:
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database))
     try:
         await client.create_database_if_absent()
-        graph = GraphArcadeDBAdapter(client, scheme)
+        graph = cast(
+            GraphPort, DatasetStampingGraph(GraphArcadeDBAdapter(client, scheme), dataset=ENRON.id)
+        )
         await graph.apply_schema(ontology)
         if args.replace_graph:
             removed = await clear_seeded_graph(

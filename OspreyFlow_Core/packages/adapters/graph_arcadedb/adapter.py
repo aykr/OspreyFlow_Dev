@@ -798,6 +798,15 @@ class GraphArcadeDBAdapter:
         if not existing_results:
             raise OntologyError(f"cannot supersede {node_id!r}: no such node")
         existing_audit = AuditStub.model_validate(existing_results[0]["audit"])
+        # ADR-099: a correction is the same element, so it keeps every dataset the old revision
+        # was in, and any the replacement names besides.
+        replacement = replacement.model_copy(
+            update={
+                "datasets": merge_datasets(
+                    existing_results[0].get("datasets"), replacement.datasets
+                )
+            }
+        )
 
         new_node_id = replacement.id
         new_audit = AuditStub(
@@ -921,6 +930,7 @@ class GraphArcadeDBAdapter:
             handling=Handling.model_validate(edge_record["handling"]),
             created_by=created_by,
             created_at=now,
+            datasets=list(edge_record.get("datasets") or []),
         )
         audit = AuditStub(created_at=now, created_by=created_by, revision=1)
         weight_components = WeightComponents.model_validate(edge_record["weight_components"])
@@ -972,6 +982,14 @@ class GraphArcadeDBAdapter:
         existing_audit = AuditStub.model_validate(existing_results[0]["audit"])
 
         now = now_utc()
+        # ADR-099: as for a node, the changed link keeps its datasets.
+        replacement = replacement.model_copy(
+            update={
+                "datasets": merge_datasets(
+                    existing_results[0].get("datasets"), replacement.datasets
+                )
+            }
+        )
         replacement_edge_id = replacement.id
         new_audit = AuditStub(
             created_at=replacement.created_at,

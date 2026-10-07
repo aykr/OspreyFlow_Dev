@@ -129,3 +129,32 @@ def test_the_hmp_and_fixture_corp_seeds_take_a_case_name_or_a_scope_and_not_neit
         args = module._parse_args(["--case-name", "x", "--grant", "a=author"])
         assert args.case_name == "x" and args.grant == ["a=author"]
         assert module._parse_args(["--investigation-scope", "y"]).investigation_scope == "y"
+
+
+async def test_a_seeds_case_reads_its_dataset_after_what_it_read_and_only_once() -> None:
+    """ADR-099: a seed loaded into a case puts its dataset in the case's reading, after any it
+    had, and running the seed again adds nothing."""
+    from scripts.case_seed import ensure_case_reads
+    from services.api.datasets import InMemoryDatasetStore
+
+    from demo_fixtures.datasets import ENRON, FIXTURE_CORP
+
+    held = InMemoryDatasetStore()
+    await ensure_case_reads(held, "case-1", FIXTURE_CORP, seeder=SEEDER)
+    await ensure_case_reads(held, "case-1", ENRON, seeder=SEEDER)
+    await ensure_case_reads(held, "case-1", ENRON, seeder=SEEDER)
+    assert await held.ids_of_case("case-1") == ["fixture-corp", "enron"]
+    assert held.datasets["enron"].owning_unit == SEEDER.org_unit
+
+
+async def test_a_seed_never_borrows_another_units_dataset_of_the_same_name() -> None:
+    from scripts.case_seed import ensure_case_reads
+    from services.api.datasets import DatasetRefusedError, InMemoryDatasetStore
+
+    from demo_fixtures.datasets import ENRON
+
+    held = InMemoryDatasetStore()
+    await ensure_case_reads(held, "theirs", ENRON, seeder=OTHER_UNIT)
+    with pytest.raises(DatasetRefusedError):
+        await ensure_case_reads(held, "mine", ENRON, seeder=SEEDER)
+    assert await held.ids_of_case("mine") == []

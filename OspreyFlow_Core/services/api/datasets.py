@@ -50,6 +50,7 @@ class DatasetRefusedError(Exception):
 
 class DatasetStore(Protocol):
     async def create(self, principal: Principal, name: str) -> Dataset: ...
+    async def register(self, dataset: Dataset) -> Dataset: ...
     async def list_for_unit(self, unit: str) -> list[Dataset]: ...
     async def of_case(self, investigation_id: str) -> list[Dataset]: ...
     async def ids_of_case(self, investigation_id: str) -> list[str]: ...
@@ -83,6 +84,10 @@ class InMemoryDatasetStore:
     def add(self, dataset: Dataset) -> Dataset:
         self.datasets[dataset.id] = dataset
         return dataset
+
+    async def register(self, dataset: Dataset) -> Dataset:
+        """A dataset with a chosen id; writing the same id again keeps the first record."""
+        return self.datasets.setdefault(dataset.id, dataset)
 
     async def create(self, principal: Principal, name: str) -> Dataset:
         return self.add(
@@ -165,6 +170,9 @@ class PostgresDatasetStore:
         )
         await self.add(dataset)
         return dataset
+
+    async def register(self, dataset: Dataset) -> Dataset:
+        return await self.add(dataset)
 
     async def add(self, dataset: Dataset) -> Dataset:
         """A dataset with a chosen id (`scripts.stamp_datasets` names the seeds' datasets).

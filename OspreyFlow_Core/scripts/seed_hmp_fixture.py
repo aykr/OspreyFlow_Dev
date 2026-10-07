@@ -40,10 +40,12 @@ import asyncio
 import os
 import sys
 from pathlib import Path
+from typing import cast
 
 import duckdb
 from scripts.case_seed import add_case_arguments, check_case_arguments, scope_for
 from scripts.seed_support import KNOWN_STRAY_ADVICE, report_ids_stored_twice
+from services.api.dataset_scope import DatasetStampingGraph
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
@@ -51,10 +53,12 @@ from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from adapters.graph_arcadedb.gremlin_literals import groovy_identifier
 from adapters.graph_arcadedb.naming import physical_type_name
+from demo_fixtures.datasets import HMP
 from demo_fixtures.hmp_graph import build_hmp_graph
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from ports.analytics import AnalyticsPort
+from ports.graph import GraphPort
 from schemas.domain import Principal
 
 
@@ -92,11 +96,13 @@ async def _run(args: argparse.Namespace) -> int:
     database = os.environ.get("ARCADEDB_DATABASE", "ospreyflow")
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database))
     await client.create_database_if_absent()
-    graph = GraphArcadeDBAdapter(client, scheme)
+    graph = cast(
+        GraphPort, DatasetStampingGraph(GraphArcadeDBAdapter(client, scheme), dataset=HMP.id)
+    )
     await graph.apply_schema(ontology)
 
     principal = Principal(id=args.principal_id, clearance=args.clearance, org_unit=args.org_unit)
-    scope = await scope_for(args, seeder=principal)
+    scope = await scope_for(args, seeder=principal, dataset=HMP)
 
     try:
         result = await build_hmp_graph(

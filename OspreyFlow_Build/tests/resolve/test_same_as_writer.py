@@ -121,6 +121,30 @@ async def test_edge_inherits_the_more_restrictive_endpoints_handling() -> None:
     assert graph.writes[-1].handling.classification == "SECRET"
 
 
+async def test_a_same_as_link_belongs_only_to_the_datasets_both_records_are_in() -> None:
+    """ADR-099: two records are resolved together only within a body of data that holds both, so
+    the link is in the datasets they share, and a match across two datasets is in none: no case
+    reads it, and neither case's records are joined to the other's."""
+    graph = _FakeGraphPort()
+    candidate = SameAsCandidate(node_a="n1", node_b="n2", score=0.9, comparison_vector={})
+    shared = {
+        "n1": _person("n1").model_copy(update={"datasets": ["enron", "fixture"]}),
+        "n2": _person("n2").model_copy(update={"datasets": ["fixture"]}),
+    }
+    await write_same_as_edges(
+        graph, [candidate], shared, created_by="resolve-service", tx="tx-1", scheme=_SCHEME
+    )
+    assert graph.writes[-1].datasets == ["fixture"]
+    apart = {
+        "n1": _person("n1").model_copy(update={"datasets": ["enron"]}),
+        "n2": _person("n2").model_copy(update={"datasets": ["fixture"]}),
+    }
+    await write_same_as_edges(
+        graph, [candidate], apart, created_by="resolve-service", tx="tx-1", scheme=_SCHEME
+    )
+    assert graph.writes[-1].datasets == []
+
+
 async def test_no_candidates_writes_nothing() -> None:
     graph = _FakeGraphPort()
     edge_ids = await write_same_as_edges(

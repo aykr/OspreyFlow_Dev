@@ -20,6 +20,7 @@ import os
 import sys
 from collections.abc import Iterator
 from pathlib import Path
+from typing import cast
 
 import duckdb
 from scripts.seed_support import (
@@ -37,6 +38,7 @@ from scripts.seed_support import (
     vault_locations,
     write_graph,
 )
+from services.api.dataset_scope import DatasetStampingGraph
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
@@ -44,6 +46,7 @@ from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from adapters.graph_arcadedb.gremlin_literals import groovy_identifier
 from adapters.graph_arcadedb.naming import physical_type_name
+from demo_fixtures.datasets import PAYSIM
 from demo_fixtures.paysim import (
     build_graph_writes,
     fraud_accounts,
@@ -338,7 +341,12 @@ async def _repair(args: argparse.Namespace) -> int:
     expected = {edge_id: edge.source for edge_id, edge in edges.items()}
     client = ArcadeDBClient(ArcadeDBConfig.from_env(_locations(args)[0]))
     try:
-        graph = GraphArcadeDBAdapter(client, load_uk_le_scheme())
+        graph = cast(
+            GraphPort,
+            DatasetStampingGraph(
+                GraphArcadeDBAdapter(client, load_uk_le_scheme()), dataset=PAYSIM.id
+            ),
+        )
         # The adapter refuses to write until it holds the ontology; the load does the same.
         await graph.apply_schema(load_default_ontology())
 
@@ -412,7 +420,10 @@ async def _run(args: argparse.Namespace) -> int:
         from scripts.case_seed import case_from_arguments
 
         case = await case_from_arguments(
-            name=args.case_name, seeder=principal, grant_texts=list(args.grant)
+            name=args.case_name,
+            seeder=principal,
+            grant_texts=list(args.grant),
+            dataset=PAYSIM,
         )
         scope = case.id
         print(f"Case {args.case_name!r} is {scope}.")
@@ -430,7 +441,9 @@ async def _run(args: argparse.Namespace) -> int:
         if args.reset_graph_database:
             await reset_graph_database(client, database=database)
         await client.create_database_if_absent()
-        graph = GraphArcadeDBAdapter(client, scheme)
+        graph = cast(
+            GraphPort, DatasetStampingGraph(GraphArcadeDBAdapter(client, scheme), dataset=PAYSIM.id)
+        )
         await graph.apply_schema(ontology)
         if args.replace_graph and not args.reset_graph_database:
             removed = await clear_seeded_graph(

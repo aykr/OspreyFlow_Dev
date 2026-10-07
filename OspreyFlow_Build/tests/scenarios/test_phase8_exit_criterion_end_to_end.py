@@ -1068,10 +1068,16 @@ def test_phase8_exit_criterion_end_to_end(
             ],
         }
         preview_b19 = client.post(
-            "/v1/patterns/preview", headers=headers, json=common_contacts_pattern
+            f"/v1/investigations/{inv_b_id}/patterns/preview",
+            headers=headers,
+            json=common_contacts_pattern,
         )
         assert preview_b19.status_code == 200, preview_b19.text
-        run_b19 = client.post("/v1/patterns/run", headers=headers, json=common_contacts_pattern)
+        run_b19 = client.post(
+            f"/v1/investigations/{inv_b_id}/patterns/run",
+            headers=headers,
+            json=common_contacts_pattern,
+        )
         assert run_b19.status_code == 200, run_b19.text
         assert run_b19.json()["mode"] == "sync"
 
@@ -1104,7 +1110,7 @@ def test_phase8_exit_criterion_end_to_end(
         # to prove that never existed as a test anywhere before: too small a `max_hops` cannot
         # reach the real 2-hop bridge, so the real system must return nothing at that ceiling.
         too_short = client.post(
-            "/v1/paths",
+            f"/v1/investigations/{inv_b_id}/paths",
             headers=headers,
             json={
                 "source": cdr_ids["a_party_endpoint_id"],
@@ -1117,7 +1123,7 @@ def test_phase8_exit_criterion_end_to_end(
         assert too_short.json() == []
 
         paths_b21 = client.post(
-            "/v1/paths",
+            f"/v1/investigations/{inv_b_id}/paths",
             headers=headers,
             json={
                 "source": cdr_ids["a_party_endpoint_id"],

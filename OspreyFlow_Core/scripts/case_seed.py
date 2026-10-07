@@ -10,9 +10,12 @@ removed (ADR-052 Amendment 7) is not brought back, a fresh one is made.
 from __future__ import annotations
 
 import argparse
+from datetime import UTC, datetime
 
+from services.api.datasets import Dataset, DatasetStore
 from services.api.investigations import AccessLevel, Investigation, InvestigationStore
 
+from demo_fixtures.datasets import SeedDataset
 from schemas.domain import Principal
 
 
@@ -48,16 +51,50 @@ async def ensure_case(
     return case
 
 
+async def ensure_case_reads(
+    store: DatasetStore, investigation_id: str, dataset: SeedDataset, *, seeder: Principal
+) -> None:
+    """ADR-099: the seed's dataset exists, held by the seeder's unit, and the case reads it, after
+    whatever it read already. Running a seed twice changes nothing. A dataset of that id held by
+    another unit is refused (`DatasetRefusedError`), never borrowed."""
+    await store.register(
+        Dataset(
+            id=dataset.id,
+            name=dataset.name,
+            owning_unit=seeder.org_unit,
+            created_at=datetime.now(UTC),
+            created_by=seeder.id,
+        )
+    )
+    held = await store.ids_of_case(investigation_id)
+    if dataset.id not in held:
+        await store.set_for_case(investigation_id, [*held, dataset.id], seeder)
+
+
+async def _reads_from_arguments(
+    investigation_id: str, dataset: SeedDataset, *, seeder: Principal
+) -> None:
+    from services.api.config import PostgresConfig
+    from services.api.datasets import PostgresDatasetStore
+
+    store = await PostgresDatasetStore.connect(PostgresConfig.from_env().dsn)
+    try:
+        await ensure_case_reads(store, investigation_id, dataset, seeder=seeder)
+    finally:
+        await store.close()
+
+
 async def case_from_arguments(
-    *, name: str, seeder: Principal, grant_texts: list[str]
+    *, name: str, seeder: Principal, grant_texts: list[str], dataset: SeedDataset
 ) -> Investigation:
     """`ensure_case` against the Conduit's own database, as a seed run inside the deployment sees
-    it. Shared by the dataset seeds so each makes its case the same way."""
+    it, reading the seed's `dataset` (ADR-099). Shared by the dataset seeds so each makes its case
+    the same way."""
     from services.api.config import PostgresConfig
 
     store = await InvestigationStore.connect(PostgresConfig.from_env().dsn)
     try:
-        return await ensure_case(
+        case = await ensure_case(
             store,
             name=name,
             seeder=seeder,
@@ -65,6 +102,8 @@ async def case_from_arguments(
         )
     finally:
         await store.close()
+    await _reads_from_arguments(case.id, dataset, seeder=seeder)
+    return case
 
 
 def add_case_arguments(parser: argparse.ArgumentParser) -> None:
@@ -81,12 +120,16 @@ def check_case_arguments(parser: argparse.ArgumentParser, args: argparse.Namespa
         parser.error("give exactly one of --investigation-scope and --case-name")
 
 
-async def scope_for(args: argparse.Namespace, *, seeder: Principal) -> str:
-    """The case id to write under: the one given, or the named case made now."""
+async def scope_for(
+    args: argparse.Namespace, *, seeder: Principal, dataset: SeedDataset
+) -> str:
+    """The case id to write under: the one given, or the named case made now. Either way the case
+    reads `dataset` (ADR-099), since the seed is loading it into the case."""
     if args.investigation_scope:
+        await _reads_from_arguments(str(args.investigation_scope), dataset, seeder=seeder)
         return str(args.investigation_scope)
     case = await case_from_arguments(
-        name=args.case_name, seeder=seeder, grant_texts=list(args.grant)
+        name=args.case_name, seeder=seeder, grant_texts=list(args.grant), dataset=dataset
     )
     print(f"Case {args.case_name!r} is {case.id}.")
     return case.id

@@ -56,27 +56,35 @@ def outside_any_case(principal: Principal) -> Principal:
     return principal.model_copy(update={"datasets": []})
 
 
-def _stamp_nodes(nodes: Sequence[NodeWrite]) -> list[NodeWrite]:
-    held = case_datasets()
-    if not held:
+def _stamp_nodes(nodes: Sequence[NodeWrite], into: str | None) -> list[NodeWrite]:
+    if into is None:
         return list(nodes)
-    return [n if n.datasets else n.model_copy(update={"datasets": [held[0]]}) for n in nodes]
+    return [n if n.datasets else n.model_copy(update={"datasets": [into]}) for n in nodes]
 
 
-def _stamp_edges(edges: Sequence[EdgeWrite]) -> list[EdgeWrite]:
-    held = case_datasets()
-    if not held:
+def _stamp_edges(edges: Sequence[EdgeWrite], into: str | None) -> list[EdgeWrite]:
+    if into is None:
         return list(edges)
-    return [e if e.datasets else e.model_copy(update={"datasets": [held[0]]}) for e in edges]
+    return [e if e.datasets else e.model_copy(update={"datasets": [into]}) for e in edges]
 
 
 class DatasetStampingGraph:
     """The Conduit's `GraphPort`: the adapter itself, with the request's case stamped on every
     write that names no dataset. Every other call goes to the adapter unchanged, and a capability
-    the adapter lacks (`BulkGraphLoader`) is lacking here too."""
+    the adapter lacks (`BulkGraphLoader`) is lacking here too.
 
-    def __init__(self, inner: GraphPort) -> None:
+    `dataset`, when given, is stamped instead of the request's case: a seed or a script, which runs
+    outside any request, names the one dataset everything it writes belongs to."""
+
+    def __init__(self, inner: GraphPort, *, dataset: str | None = None) -> None:
         self._inner = inner
+        self._dataset = dataset
+
+    def _into(self) -> str | None:
+        if self._dataset is not None:
+            return self._dataset
+        held = case_datasets()
+        return held[0] if held else None
 
     @property
     def inner(self) -> GraphPort:
@@ -87,16 +95,16 @@ class DatasetStampingGraph:
         if name == "bulk_load_edges":
 
             async def bulk_load_edges(edges: Sequence[EdgeWrite], **kwargs: Any) -> Any:
-                return await attribute(_stamp_edges(edges), **kwargs)
+                return await attribute(_stamp_edges(edges, self._into()), **kwargs)
 
             return bulk_load_edges
         return attribute
 
     async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: Any) -> list[NodeId]:
-        return await self._inner.upsert_nodes(_stamp_nodes(nodes), tx)
+        return await self._inner.upsert_nodes(_stamp_nodes(nodes, self._into()), tx)
 
     async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: Any) -> list[str]:
-        return await self._inner.upsert_edges(_stamp_edges(edges), tx)
+        return await self._inner.upsert_edges(_stamp_edges(edges, self._into()), tx)
 
 
 __all__: Sequence[str] = (

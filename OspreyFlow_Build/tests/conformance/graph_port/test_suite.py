@@ -2874,3 +2874,59 @@ async def test_search_suggestions_and_lookups_find_only_the_cases_datasets(
         assert (await adapter.list_nodes("Endpoint", IN_FIXTURE)).nodes == []
         assert [n.id for n in (await adapter.list_nodes("Endpoint", IN_ENRON)).nodes] == [theirs]
 
+
+
+async def test_a_correction_keeps_the_nodes_datasets_and_its_links_stay_in_theirs(
+    factory: GraphAdapterFactory,
+) -> None:
+    """A confirmed or corrected node is a new revision, and its links are cloned onto it
+    (`supersede_node`). Neither may lose its datasets: the case that confirmed it would lose the
+    node and its links as it confirmed them. The replacement is written as a caller builds it,
+    naming no dataset, which is what a confirm does."""
+    async with factory.context() as adapter:
+        (old, neighbour), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL", datasets=["fixture"]),
+                _node("Endpoint", classification="OFFICIAL", datasets=["fixture"]),
+            ],
+            [],
+        )
+        await _write(
+            adapter,
+            [],
+            [_edge("USES", old, neighbour, classification="OFFICIAL", datasets=["fixture"])],
+        )
+        tx = await adapter.begin_transaction()
+        new = await adapter.supersede_node(old, _node("Person", classification="OFFICIAL"), tx)
+        await adapter.commit_transaction(tx)
+
+        corrected = await adapter.get_node(new, IN_FIXTURE)
+        assert corrected is not None and corrected.datasets == ["fixture"]
+        expanded = await adapter.expand(ExpandRequest(node_ids=[new], depth=1), IN_FIXTURE)
+        assert {n.id for n in expanded.nodes} == {new, neighbour}
+        (link,) = expanded.edges
+        assert link.datasets == ["fixture"]
+
+
+async def test_a_changed_link_keeps_its_datasets(factory: GraphAdapterFactory) -> None:
+    """A link changed by an analyst (ADR-080) is a new revision written as the caller builds it,
+    naming no dataset; it stays in the case's world."""
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter,
+            [_node("Person", classification="OFFICIAL", datasets=["fixture"]) for _ in "ab"],
+            [],
+        )
+        _, (link,) = await _write(
+            adapter,
+            [],
+            [_edge("ASSOCIATE_OF", a, b, classification="OFFICIAL", datasets=["fixture"])],
+        )
+        tx = await adapter.begin_transaction()
+        changed = await adapter.supersede_edge(
+            link, _edge("FAMILY_OF", a, b, classification="OFFICIAL"), tx
+        )
+        await adapter.commit_transaction(tx)
+        (seen,) = await adapter.edges_among([a, b], IN_FIXTURE)
+        assert seen.id == changed and seen.datasets == ["fixture"]

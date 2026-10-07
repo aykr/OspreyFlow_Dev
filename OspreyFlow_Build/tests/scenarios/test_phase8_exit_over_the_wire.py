@@ -354,10 +354,17 @@ def seeded_scope() -> str:
     return scope
 
 
+def _in_case(path: str) -> str:
+    """ADR-099: search, the query builder, paths and the node actions are asked of a case, and read
+    only its datasets. The seeded case reads every dataset the harness seeded into it."""
+    scope = os.environ.get("OSPREY_LIVE_INVESTIGATION_ID", "")
+    return f"/v1/investigations/{scope}{path.removeprefix('/v1')}"
+
+
 def _find(analyst: httpx.Client, identifier: str) -> dict:
     """The search box, which is how an analyst reaches anything at all: `POST /v1/search` is an
     exact match against a declared identifier (`services/api/search.py`), not free text."""
-    response = analyst.post("/v1/search", json={"query": identifier, "limit": 5})
+    response = analyst.post(_in_case("/v1/search"), json={"query": identifier, "limit": 5})
     assert response.status_code == 200, response.text
     nodes = response.json()["nodes"]
     assert nodes, f"nothing in the deployment's seeded graph carries the identifier {identifier!r}"
@@ -740,7 +747,7 @@ def test_scenario_a_over_the_wire(analyst: httpx.Client, seeded_scope: str) -> N
     _restore_asserted(analyst, PRINCIPAL_SUBJECT_PRISON_NUMBER)
     to_retract = _find(analyst, PRINCIPAL_SUBJECT_PRISON_NUMBER)
     try:
-        retracted = analyst.post(f"/v1/nodes/{to_retract['id']}/retract")
+        retracted = analyst.post(_in_case(f"/v1/nodes/{to_retract['id']}/retract"))
         assert retracted.status_code == 200, retracted.text
         successor = retracted.json()["node_id"]
         assert successor != to_retract["id"], (
@@ -780,7 +787,7 @@ def _restore_asserted(analyst: httpx.Client, identifier: str) -> None:
     node = _find(analyst, identifier)
     if node["provenance"]["state"] == "asserted":
         return
-    confirmed = analyst.post(f"/v1/nodes/{node['id']}/confirm")
+    confirmed = analyst.post(_in_case(f"/v1/nodes/{node['id']}/confirm"))
     assert confirmed.status_code == 200, confirmed.text
 
 
@@ -967,12 +974,12 @@ def test_scenario_b_over_the_wire(analyst: httpx.Client) -> None:
         ],
         "edges": [{"edge_type": "ASSOCIATE_OF", "from_var": "x", "to_var": "y"}],
     }
-    previewed = analyst.post("/v1/patterns/preview", json=pattern)
+    previewed = analyst.post(_in_case("/v1/patterns/preview"), json=pattern)
     assert previewed.status_code == 200, previewed.text
     assert previewed.json()["estimated_count"] > 0, (
         "the estimated count B19 asks to be shown before running came back empty"
     )
-    ran = analyst.post("/v1/patterns/run", json=pattern)
+    ran = analyst.post(_in_case("/v1/patterns/run"), json=pattern)
     assert ran.status_code == 200, ran.text
     assert ran.json()["mode"] == "sync"
 
@@ -996,7 +1003,8 @@ def test_scenario_b_over_the_wire(analyst: httpx.Client) -> None:
     # shortcut, which is `test_fixture_corp_shape.py`'s own access-control assertion.
     spoke = _find(analyst, _synthetic_nino("corp-path-spoke3-3"))
     paths = analyst.post(
-        "/v1/paths", json={"source": hub["id"], "target": spoke["id"], "k": 2, "max_hops": 6}
+        _in_case("/v1/paths"),
+        json={"source": hub["id"], "target": spoke["id"], "k": 2, "max_hops": 6},
     )
     assert paths.status_code == 200, paths.text
     found = paths.json()
@@ -1204,7 +1212,9 @@ def cdr_load() -> dict:
         # /v1/search` could not find an ingested `Endpoint` at all, because `search_nodes` matched
         # the declared identifier *kinds* (`e164`) rather than the `value_normalised` the engine
         # actually writes. With search working there is a stable handle on every run.
-        found = client.post("/v1/search", json={"query": B1_NORMALISED_NUMBER, "limit": 5})
+        found = client.post(
+            _in_case("/v1/search"), json={"query": B1_NORMALISED_NUMBER, "limit": 5}
+        )
         assert found.status_code == 200, found.text
         hits = found.json()["nodes"]
         assert hits, (
@@ -1254,7 +1264,7 @@ def test_what_an_analyst_ingests_an_analyst_can_find_and_open(
     """
     assert cdr_load["report"]["rows_read"] == 10
 
-    found = analyst.post("/v1/search", json={"query": B1_NORMALISED_NUMBER, "limit": 5})
+    found = analyst.post(_in_case("/v1/search"), json={"query": B1_NORMALISED_NUMBER, "limit": 5})
     assert found.status_code == 200, found.text
     nodes = found.json()["nodes"]
     assert nodes, (
@@ -1270,7 +1280,7 @@ def test_what_an_analyst_ingests_an_analyst_can_find_and_open(
     # **The raw rendering stays unsearchable, deliberately.** §7's whole purpose is that
     # `01621926368` and `+44(0)1621926368` collapse onto one canonical value; making the raw
     # forms searchable would reintroduce the fragmentation by the back door.
-    raw = analyst.post("/v1/search", json={"query": "01621926368", "limit": 5})
+    raw = analyst.post(_in_case("/v1/search"), json={"query": "01621926368", "limit": 5})
     assert raw.json()["nodes"] == []
 
     seeded = analyst.post(
@@ -1748,7 +1758,7 @@ def seizure_alert() -> dict:
         # record has not already been ingested. `make exit-over-the-wire` runs against a fresh
         # install, which is that state. Stated here because the alternative — discovering it three
         # assertions later as an empty list — cost this round two applies.
-        already = client.post("/v1/search", json={"query": SIM_B_IMSI, "limit": 5})
+        already = client.post(_in_case("/v1/search"), json={"query": SIM_B_IMSI, "limit": 5})
         assert already.status_code == 200, already.text
         assert not already.json()["nodes"], (
             f"{SIM_B_IMSI} is already in this deployment's graph, so ingesting the seizure record "
@@ -1985,7 +1995,7 @@ def test_a1_a_site_grid_is_placed_and_its_cells_become_location_entities(
     # **The cells are `Location` entities in the graph**, reached the way an analyst reaches
     # anything: by searching for one of them. The recipe gives each cell a
     # `site_ref`, which `Location` declares as an identifier.
-    found = analyst.post("/v1/search", json={"query": f"{site['id']}-r0-c0", "limit": 5})
+    found = analyst.post(_in_case("/v1/search"), json={"query": f"{site['id']}-r0-c0", "limit": 5})
     assert found.status_code == 200, found.text
     hits = found.json()["nodes"]
     assert hits, (
@@ -2031,7 +2041,7 @@ def test_a1_redrawing_the_grid_does_not_duplicate_its_cells(
         == 200
     )
     cell_query = {"query": f"{site_id}-r0-c0", "limit": 10}
-    first = analyst.post("/v1/search", json=cell_query).json()["nodes"]
+    first = analyst.post(_in_case("/v1/search"), json=cell_query).json()["nodes"]
     assert len(first) == 1, f"one cell should carry this site_ref, found {len(first)}"
 
     assert (
@@ -2040,7 +2050,7 @@ def test_a1_redrawing_the_grid_does_not_duplicate_its_cells(
         ).status_code
         == 200
     )
-    second = analyst.post("/v1/search", json=cell_query).json()["nodes"]
+    second = analyst.post(_in_case("/v1/search"), json=cell_query).json()["nodes"]
     assert [n["id"] for n in second] == [n["id"] for n in first], (
         f"redrawing the grid created new cells rather than referencing the existing ones: "
         f"{[n['id'] for n in first]} -> {[n['id'] for n in second]}"
@@ -2121,7 +2131,9 @@ def test_a1_a_cells_geometry_reference_resolves_to_its_centroid(
         == 200
     )
 
-    cells = analyst.post("/v1/search", json={"query": f"{site_id}-r1-c2", "limit": 5}).json()[
+    cells = analyst.post(
+        _in_case("/v1/search"), json={"query": f"{site_id}-r1-c2", "limit": 5}
+    ).json()[
         "nodes"
     ]
     assert len(cells) == 1, f"one cell should carry this site_ref, found {len(cells)}"
@@ -2220,7 +2232,7 @@ def test_a1_incidents_geocode_into_the_cells_that_contain_them(
     col = int((lon - west) / (east - west) * 10)
     row = int((north - lat) / (north - south) * 10)
     found = analyst.post(
-        "/v1/search", json={"query": f"{site_id}-r{row}-c{col}", "limit": 5}
+        _in_case("/v1/search"), json={"query": f"{site_id}-r{row}-c{col}", "limit": 5}
     ).json()["nodes"]
     assert len(found) == 1, f"no single cell r{row}-c{col} for yard A: {found}"
     cell_id = found[0]["id"]
@@ -2390,7 +2402,7 @@ def test_a15_a_consult_originator_item_blocks_the_export_by_name_then_proceeds_w
     3. **It then proceeds, and the artefact carries a withheld-item manifest.**
     """
     marked = analyst.post(
-        "/v1/search", json={"query": SCENARIOS_CONSULT_ORIGINATOR_VALUE, "limit": 5}
+        _in_case("/v1/search"), json={"query": SCENARIOS_CONSULT_ORIGINATOR_VALUE, "limit": 5}
     )
     assert marked.status_code == 200, marked.text
     hits = marked.json()["nodes"]
