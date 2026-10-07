@@ -120,9 +120,15 @@ class _Store:
         fixture = _person("fixture-corp", load_id=f"fixture-corp:{FIXTURE_CASE.id}")
         marked = _person("email:ev-1")  # marked by hand on the Enron canvas, before ADR-099
         stray = _person("somewhere-else")  # in no case at all
+        # Seen on the owner's deployment: the HMP seed loads through the Studio, whose rows name
+        # their file after the seed's source, so an exact match missed 1,600 of its elements.
+        studio_hmp = _person("hmp-fixture:persons.csv")
+        lookalike = _person("hmp-fixturex")  # a different source that merely starts the same
         link = _link(enron_a.id, enron_b.id, "enron-corpus")
         tx = await self.graph.begin_transaction()
-        await self.graph.upsert_nodes([enron_a, enron_b, fixture, marked, stray], tx)
+        await self.graph.upsert_nodes(
+            [enron_a, enron_b, fixture, marked, stray, studio_hmp, lookalike], tx
+        )
         await self.graph.upsert_edges([link], tx)
         await self.graph.commit_transaction(tx)
         self.ids = {
@@ -131,6 +137,8 @@ class _Store:
             "fixture": fixture.id,
             "marked": marked.id,
             "stray": stray.id,
+            "studio_hmp": studio_hmp.id,
+            "lookalike": lookalike.id,
             "link": link.id,
         }
         await self.working_sets.add_nodes(ENRON_CASE.id, [_body(enron_a), _body(marked)])
@@ -190,9 +198,12 @@ async def test_a_store_loaded_before_adr_099_is_given_its_datasets(store: _Store
         store.ids["marked"]: ["enron"],
     }
 
+    assert await store.datasets_of("studio_hmp") == ["hmp"]
+
     # In no case: left in no dataset, and said so.
     assert await store.datasets_of("stray") == []
-    assert report.unstamped == {"Person": 1}
+    assert await store.datasets_of("lookalike") == []
+    assert report.unstamped == {"Person": 2}
 
 
 async def test_a_dry_run_writes_nothing(store: _Store) -> None:

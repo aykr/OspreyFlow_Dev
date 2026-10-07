@@ -202,9 +202,10 @@ async def stamp(
             total += await _add_dataset_where(
                 sql,
                 type_name,
-                "provenance.sources.document_id CONTAINS :src",
+                # The seed's own id, or a Studio row's `<source>:<file>` (the HMP seed's shape).
+                "provenance.sources CONTAINS (document_id = :src OR document_id LIKE :pre)",
                 seed.id,
-                {"src": seed.source},
+                {"src": seed.source, "pre": f"{seed.source}:%"},
                 write=write,
             )
         report.stamped_by_source[seed.id] = total
