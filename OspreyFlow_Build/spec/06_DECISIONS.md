@@ -10041,3 +10041,12 @@ Found building ADR-100's conformance cases: a read of one entity type found none
 ### Not measured
 
 26.10.1's memory over a sustained load (`05_DEPLOYMENT.md` §8 was measured on 25.5.1); its refusal of a write computed from a stale read (a retryable `ConcurrentModificationException`, new in 26.10.1), which no case here exercises under concurrent writers; the upgrade of the owner's deployment itself, done after the Enron reload with their agreement.
+
+### ADR-101, Amendment 1 (7 October 2026) — what upgrading a kept store found
+
+Status: accepted 7 October 2026 (mine, within the owner's "Upgrade first, then reload").
+
+1. **The image's user changed**: 25.5.1 runs as uid 1001, 26.10.1 as 1000. A store moved with its volumes kept has them handed to 1000 first (`chown -R 1000:1000`, in a one-off container), or the server stops at start, before opening a database. Refresh does not do this; a future pin move that changes the user needs the same step.
+2. **The image has no `curl`**: the probe is busybox `wget` (`harness/render.py`, `deploy/compose/dev.yaml`), and refresh carries a moved service's probe with its image.
+3. **The config volume takes the new release's defaults**: of the eight files a 25.5.1 store holds, seven were its untouched defaults and are replaced with 26.10.1's; `server-users.jsonl` (the root user) is kept, as ArcadeDB's upgrade notes say.
+4. **`REBUILD INDEX *` after the move** repaired the owner's indexes: every type agrees with a scan. 26.10.1 also discarded the record counts 25.5.1 cached, which it says could be wrong.

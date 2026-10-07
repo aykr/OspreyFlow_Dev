@@ -340,6 +340,7 @@ def _pinned_before(out: Path) -> None:
         "-Darcadedb.server.rootPassword=${OSPREY_ARCADEDB_PASSWORD:?}"
     )
     arcadedb["environment"]["OPERATOR_SETTING"] = "kept"
+    arcadedb["healthcheck"]["test"] = ["CMD-SHELL", "curl -fsS http://127.0.0.1:2480/api/v1/ready"]
     (out / "compose.yaml").write_text(banner + yaml.safe_dump(document, sort_keys=False))
     lock = (out / "versions.lock").read_text() if (out / "versions.lock").exists() else ""
     (out / "versions.lock").write_text(
@@ -373,6 +374,8 @@ def test_a_third_party_service_moves_to_the_checkouts_pin_with_its_launch_option
     assert arcadedb["image"] == wanted["image"] != "arcadedata/arcadedb:25.5.1"
     assert arcadedb["environment"]["JAVA_OPTS"] == wanted["environment"]["JAVA_OPTS"]
     assert arcadedb["environment"]["OPERATOR_SETTING"] == "kept"
+    # A new version's probe comes with it (26.10.1's image has no `curl`).
+    assert arcadedb["healthcheck"] == wanted["healthcheck"]
     for name, service in before["services"].items():
         if name in {"arcadedb", "ollama"}:  # ollama: the model step brings its pull up to date
             continue

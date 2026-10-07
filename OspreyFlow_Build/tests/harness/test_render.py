@@ -1202,6 +1202,10 @@ def test_arcadedb_is_a_version_whose_indexes_survive_an_update_and_runs_our_grem
     service = document["services"]["arcadedb"]
     assert service["image"] == "arcadedata/arcadedb:26.10.1"
     assert "-Darcadedb.gremlin.engine=groovy" in service["environment"]["JAVA_OPTS"].split()
+    # 26.10.1's image has no `curl` (measured: `curl: not found`, so the store never reported
+    # healthy and everything waiting on it stopped); it has `wget`.
+    probe = " ".join(service["healthcheck"]["test"])
+    assert "curl" not in probe and "wget" in probe
 
 
 def test_the_conduits_config_mount_is_relative_to_the_compose_file_not_the_repository(

@@ -135,7 +135,8 @@ services:
       # down as a puzzle rather than as a dead JVM. Exiting makes it visible.
       ARCADEDB_OPTS_MEMORY: "-Xms1G -Xmx8G -XX:+ExitOnOutOfMemoryError"
     healthcheck:
-      test: ["CMD", "curl", "-sf", "-u", "root:playwithdata123", "http://localhost:2480/api/v1/ready"]
+      # `wget`, not `curl`: ArcadeDB 26.10.1's image has no `curl` (ADR-101).
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:2480/api/v1/ready"]
       interval: 5s
       timeout: 5s
       retries: 20

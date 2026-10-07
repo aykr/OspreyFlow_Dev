@@ -122,6 +122,7 @@ _OLLAMA_PULL_SCRIPT = (
     "wait\n"
 )
 
+
 def render_ollama_pull_script(config: OspreyConfig) -> str:
     """The developer stack's pull script plus one line: the deployment's own extraction model,
     pulled and digest-verified the same way (`06_DECISIONS.md` ADR-095 decision 1). The developer
@@ -559,11 +560,14 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
             ),
         },
         "healthcheck": {
-            # `curl`, not `/dev/tcp`: the latter is a bash builtin and `CMD-SHELL` runs `/bin/sh`,
-            # which on this image is dash — the check failed every time with "cannot create
-            # /dev/tcp/...: Directory nonexistent", which reads like a missing path rather than an
-            # unsupported shell feature. Found running the golden path.
-            "test": ["CMD-SHELL", "curl -fsS http://127.0.0.1:2480/api/v1/ready || exit 1"],
+            # Not `/dev/tcp`: that is a bash builtin and `CMD-SHELL` runs `/bin/sh`, where the check
+            # failed every time with "cannot create /dev/tcp/...: Directory nonexistent". And not
+            # `curl` since ADR-101: 26.10.1's image has none (`curl: not found`, so the store never
+            # reported healthy); it has busybox `wget`.
+            "test": [
+                "CMD-SHELL",
+                "wget -q -O /dev/null http://127.0.0.1:2480/api/v1/ready || exit 1",
+            ],
             "interval": "10s",
             "timeout": "5s",
             "retries": 18,

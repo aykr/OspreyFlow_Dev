@@ -16,7 +16,8 @@ which. This is that sequence, in order:
    repeat and makes the file true again.
 
 A third-party store the checkout pins at a new version (ADR-101: ArcadeDB 26.10.1) is moved to it:
-the service takes the rendered image and the rendered value of each setting the render names, and
+the service takes the rendered image, its probe and the rendered value of each setting the render
+names, and
 `versions.lock` names the new tag. A setting of the operator's own stays, and a service already at
 the checkout's version is not touched, so an operator's edit to it is theirs.
 
@@ -241,6 +242,9 @@ def _pins_moved(directory: Path) -> None:
         wanted_environment = wanted.get("environment")
         if isinstance(environment, dict) and isinstance(wanted_environment, dict):
             environment.update(wanted_environment)
+        # A new version's probe comes with it: 26.10.1's image has no `curl` (ADR-101).
+        if "healthcheck" in wanted:
+            service["healthcheck"] = wanted["healthcheck"]
         moved[name] = str(wanted["image"]).rsplit(":", 1)[1]
     if not moved:
         return
