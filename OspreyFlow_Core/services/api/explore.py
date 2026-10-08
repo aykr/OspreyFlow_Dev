@@ -10,13 +10,19 @@ when it was counted.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
+from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
+from schemas.analytics import EventFilter, HistogramBucketing, HistogramRequest
 from schemas.domain import Principal
-from schemas.explore import RankedNodes, TypeCounts
+from schemas.explore import BusiestDays, BusyDay, RankedLinks, RankedNodes, TypeCounts
+
+#: A day, the busiest days' bucket.
+DAY_SECONDS = 86_400
 
 #: How long a figure is kept when no write the Conduit sees clears it first.
 EXPLORE_TTL_SECONDS = 3600
@@ -76,6 +82,67 @@ class ExploreService:
         if self._cache is not None:
             await self._cache.put(signature, principal, ranked.model_dump(mode="json"))
         return ranked
+
+    async def busiest_links(
+        self,
+        principal: Principal,
+        *,
+        edge_type: str | None = None,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> RankedLinks:
+        signature = f"explore:{_VERSION}:busiest-links:{edge_type or '*'}:{limit}:{offset}"
+        if self._cache is not None and (held := await self._cache.get(signature, principal)):
+            return RankedLinks.model_validate(held)
+        ranked = (
+            await self._graph.busiest_links(
+                principal, edge_type=edge_type, limit=limit, offset=offset
+            )
+        ).model_copy(update={"computed_at": self._now()})
+        if self._cache is not None:
+            await self._cache.put(signature, principal, ranked.model_dump(mode="json"))
+        return ranked
+
+    async def busiest_days(
+        self,
+        principal: Principal,
+        analytics: AnalyticsPort,
+        case_events: EventFilter,
+        *,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> BusiestDays:
+        """The case's days by events (ADR-100 decision 5), from its daily histogram. Events belong
+        to a case, not a dataset (ADR-099 decision 7), so what is kept is keyed by the case's own
+        filter too (its scope and, on a branch, the parents' links it reads)."""
+        scope = hashlib.sha256(case_events.model_dump_json().encode()).hexdigest()[:16]
+        signature = f"explore:{_VERSION}:busiest-days:{scope}:{limit}:{offset}"
+        if self._cache is not None and (held := await self._cache.get(signature, principal)):
+            return BusiestDays.model_validate(held)
+        histogram = await analytics.histogram(
+            HistogramRequest(
+                filter=case_events,
+                bucketing=HistogramBucketing.FIXED_INTERVAL,
+                interval_seconds=DAY_SECONDS,
+            ),
+            principal,
+        )
+        ranked = sorted(
+            (b for b in histogram.buckets if b.start is not None and b.end is not None and b.count),
+            key=lambda b: (-b.count, b.start),
+        )
+        days = BusiestDays(
+            days=[
+                BusyDay(start=b.start, end=b.end, count=b.count)  # type: ignore[arg-type]
+                for b in ranked[offset : offset + limit]
+            ],
+            total=len(ranked),
+            offset=offset,
+            computed_at=self._now(),
+        )
+        if self._cache is not None:
+            await self._cache.put(signature, principal, days.model_dump(mode="json"))
+        return days
 
     async def invalidate(self) -> None:
         if self._cache is not None:

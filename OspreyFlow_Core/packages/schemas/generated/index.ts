@@ -124,3 +124,7 @@ export type { OspreyConfig } from "./OspreyConfig";
 export type { TypeCounts } from "./TypeCounts";
 export type { RankedNode } from "./RankedNode";
 export type { RankedNodes } from "./RankedNodes";
+export type { RankedLink } from "./RankedLink";
+export type { RankedLinks } from "./RankedLinks";
+export type { BusyDay } from "./BusyDay";
+export type { BusiestDays } from "./BusiestDays";

@@ -81,6 +81,7 @@ import { CaseDatasets } from "./investigation/CaseDatasets";
 import { openCase } from "./investigation/cases";
 import { QuestionsPanel } from "./questions/QuestionsPanel";
 import { ExplorePanel } from "./explore/ExplorePanel";
+import type { BusyDay, RankedLink } from "./explore/exploreApi";
 import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
 import { StatusBar } from "./statusbar/StatusBar";
 import { emergence, type FirstSeen } from "./crossfilter/emergence";
@@ -363,6 +364,27 @@ export function App() {
   const pickToStart = (node: Node) => {
     drawSearchResult(workingSetRef.current.store, node, glassCanvasRef.current);
     setSelectedNode(node);
+  };
+  /** ADR-100 decision 5: a busiest link puts the pair and their link on the canvas. */
+  const pickLinkToStart = (link: RankedLink) => {
+    const store = workingSetRef.current.store;
+    store.getState().applyDelta({
+      seq: store.getState().seq,
+      op: "add",
+      nodes: [link.source, link.target],
+      edges: [link.edge],
+    });
+    setSelectedNode(link.source);
+  };
+  const [timelineOpenSignal, setTimelineOpenSignal] = useState(0);
+  /** ADR-100 decision 5: a busiest day becomes the timeline's window, and the timeline opens. */
+  const pickDay = (day: BusyDay) => {
+    const crossFilter = crossFilterRef.current;
+    if (!crossFilter) return;
+    crossFilter.store.getState().setWindow({ validFrom: day.start, validTo: day.end });
+    const graph = workingSetRef.current.graph;
+    void crossFilter.refresh(graph.nodes(), graph.edges());
+    setTimelineOpenSignal((n) => n + 1);
   };
   const [selectedLink, setSelectedLink] = useState<Edge | null>(null);
   // ADR-080: the link menu's *Add a note* and *Change link…* count these up to bring that part of
@@ -1087,6 +1109,8 @@ export function App() {
                   investigationId={investigationId}
                   edgeTypes={edgeTypes}
                   onPick={pickToStart}
+                  onPickLink={pickLinkToStart}
+                  onPickDay={pickDay}
                 />
               </div>
             )}
@@ -1332,7 +1356,7 @@ export function App() {
       {view !== "ingest" && view !== "dossier" && view !== "watches" && (
         // ADR-097 step 1: folded to its header by default, so the canvas has the room; opened and
         // sized as before (ADR-086).
-        <BottomPanelFrame title="Timeline" height={252} initiallyOpen={false}>
+        <BottomPanelFrame title="Timeline" height={252} initiallyOpen={false} openSignal={timelineOpenSignal}>
           <div style={{ height: "100%" }}>
             <Timeline
               apiBaseUrl={API_BASE_URL}
@@ -1375,6 +1399,14 @@ export function App() {
             edgeTypes={edgeTypes}
             onPick={(node) => {
               pickToStart(node);
+              setExploreOpen(false);
+            }}
+            onPickLink={(link) => {
+              pickLinkToStart(link);
+              setExploreOpen(false);
+            }}
+            onPickDay={(day) => {
+              pickDay(day);
               setExploreOpen(false);
             }}
           />

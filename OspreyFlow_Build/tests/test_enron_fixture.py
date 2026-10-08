@@ -254,6 +254,20 @@ def test_an_edge_summarises_every_message_between_the_pair(tmp_path: Path) -> No
     assert summary.count == 3
 
 
+
+def test_the_link_written_carries_the_pairs_message_count(tmp_path: Path) -> None:
+    """`Edge.occurrences` is how many records a link stands for (01 §3): for Enron, the messages
+    between the pair. Found ranking the busiest links (ADR-100 decision 5): every Enron link said 1,
+    since the count was summarised and never written, so the busiest pair read as the quietest and
+    the links' weights (§6) were computed from 1s."""
+    for i in range(3):
+        _put(tmp_path, "a", "sent", f"{i}.", _mail(message_id=f"<{i}@t>", body=f"Message {i}."))
+    pairs = enron.summarise(enron.read_messages(tmp_path))
+    _, edges = enron.build_graph_writes(pairs, created_by="seed", handling=HANDLING)
+    (edge,) = edges
+    assert edge.occurrences == 3
+
+
 def test_a_folder_that_is_not_the_corpus_is_refused(tmp_path: Path) -> None:
     """Catches pointing the loader at the wrong folder and 'succeeding' with nothing."""
     with pytest.raises(enron.EnronFolderError):

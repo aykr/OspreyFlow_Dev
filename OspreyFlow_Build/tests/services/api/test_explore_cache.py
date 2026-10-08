@@ -136,3 +136,68 @@ async def test_a_revert_through_the_conduit_clears_what_was_kept_too() -> None:
     await written.revert_elements(["n1"], [], "tx")
     await service.counts(ENRON)
     assert len(graph.counted) == 2
+
+
+class _Analytics:
+    """`AnalyticsPort.histogram`'s shape: one bucket per day with events, as the DuckDB adapter
+    answers (no empty days)."""
+
+    def __init__(self) -> None:
+        self.asked: list[Any] = []
+
+    async def histogram(self, req: Any, principal: Principal) -> Any:
+        from schemas.analytics import Histogram, HistogramBucket, HistogramBucketing
+
+        self.asked.append(req)
+        day = lambda d: datetime(2001, 5, d, tzinfo=UTC)  # noqa: E731
+        counts = {1: 5, 2: 40, 3: 40, 4: 7}
+        return Histogram(
+            bucketing=HistogramBucketing.FIXED_INTERVAL,
+            buckets=[
+                HistogramBucket(start=day(d), end=day(d + 1), count=c) for d, c in counts.items()
+            ],
+            total=sum(counts.values()),
+        )
+
+
+async def test_the_busiest_days_rank_by_events_ties_by_date_and_page() -> None:
+    from schemas.analytics import EventFilter
+
+    service, _, _ = _service()
+    analytics = _Analytics()
+    case_filter = EventFilter(investigation_scope="case-e")
+    first = await service.busiest_days(ENRON, analytics, case_filter, limit=2)  # type: ignore[arg-type]
+    assert [(d.start.day, d.count) for d in first.days] == [(2, 40), (3, 40)]
+    assert first.total == 4 and first.computed_at == T0
+    rest = await service.busiest_days(ENRON, analytics, case_filter, limit=2, offset=2)  # type: ignore[arg-type]
+    assert [(d.start.day, d.count) for d in rest.days] == [(4, 7), (1, 5)]
+    # One day's buckets, asked of the case's own events.
+    (req, *_) = analytics.asked
+    assert req.interval_seconds == 86_400 and req.filter.investigation_scope == "case-e"
+
+
+async def test_the_busiest_days_are_kept_per_case_as_events_belong_to_a_case() -> None:
+    from schemas.analytics import EventFilter
+
+    service, _, _ = _service()
+    analytics = _Analytics()
+    await service.busiest_days(ENRON, analytics, EventFilter(investigation_scope="case-e"))  # type: ignore[arg-type]
+    await service.busiest_days(ENRON, analytics, EventFilter(investigation_scope="case-e"))  # type: ignore[arg-type]
+    await service.busiest_days(ENRON, analytics, EventFilter(investigation_scope="case-f"))  # type: ignore[arg-type]
+    assert [r.filter.investigation_scope for r in analytics.asked] == ["case-e", "case-f"]
+
+
+async def test_the_busiest_links_are_kept_like_the_rest() -> None:
+    service, graph, _ = _service()
+    calls: list[Any] = []
+
+    async def busiest_links(principal, *, edge_type=None, limit=10, offset=0):  # type: ignore[no-untyped-def]
+        from schemas.explore import RankedLinks
+
+        calls.append((edge_type, limit, offset))
+        return RankedLinks(links=[], total=0, offset=offset)
+
+    graph.busiest_links = busiest_links  # type: ignore[attr-defined]
+    await service.busiest_links(ENRON)
+    again = await service.busiest_links(ENRON)
+    assert calls == [(None, 10, 0)] and again.computed_at == T0

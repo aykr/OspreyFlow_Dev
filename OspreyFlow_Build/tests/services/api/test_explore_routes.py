@@ -47,6 +47,20 @@ class _FakeGraph:
     def __init__(self) -> None:
         self.counts: list[Principal] = []
         self.ranked: list[tuple[Principal, str | None, int, int]] = []
+        self.busiest: list[tuple[Principal, str | None, int, int]] = []
+
+    async def busiest_links(
+        self,
+        principal: Principal,
+        *,
+        edge_type: str | None = None,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> Any:
+        from schemas.explore import RankedLinks
+
+        self.busiest.append((principal, edge_type, limit, offset))
+        return RankedLinks(links=[], total=0, offset=offset)
 
     async def type_counts(self, principal: Principal) -> TypeCounts:
         self.counts.append(principal)
@@ -158,3 +172,58 @@ def test_neither_route_answers_without_a_principal(client) -> None:  # type: ign
         response = anonymous.get(f"/v1/investigations/case-e/explore/{path}")
         assert response.status_code in (401, 403)
     assert graph.counts == [] and graph.ranked == []
+
+
+def test_the_busiest_links_are_asked_with_the_cases_datasets(client) -> None:  # type: ignore[no-untyped-def]
+    http, graph, audit = client
+    response = http.get(
+        "/v1/investigations/case-e/explore/busiest-links", params={"edge_type": "COMMUNICATED_WITH"}
+    )
+    assert response.status_code == 200
+    ((principal, edge_type, limit, offset),) = graph.busiest
+    assert principal.datasets == ["enron"] and (edge_type, limit, offset) == (
+        "COMMUNICATED_WITH",
+        10,
+        0,
+    )
+    assert audit.records[-1]["action"] == "explore_busiest_links"
+    for bad in ({"limit": 0}, {"limit": 51}, {"offset": -1}):
+        assert (
+            http.get("/v1/investigations/case-e/explore/busiest-links", params=bad).status_code
+            == 422
+        )
+
+
+def test_the_busiest_days_are_asked_of_the_cases_own_events(client, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    import services.api.app as app_module
+
+    from schemas.analytics import Histogram, HistogramBucketing
+
+    http, _, audit = client
+    seen: list[Any] = []
+
+    async def case_filter(event_filter, principal, investigations, audit_, working_set):  # type: ignore[no-untyped-def]
+        seen.append((event_filter.investigation_scope, principal.datasets))
+        return event_filter
+
+    class _Analytics:
+        async def histogram(self, req, principal):  # type: ignore[no-untyped-def]
+            seen.append(req.interval_seconds)
+            return Histogram(bucketing=HistogramBucketing.FIXED_INTERVAL, buckets=[], total=0)
+
+    monkeypatch.setattr(app_module, "_case_event_filter", case_filter)
+    app.dependency_overrides[app_module.get_analytics] = _Analytics
+    app.dependency_overrides[app_module.get_working_set] = lambda: None
+    response = http.get("/v1/investigations/case-e/explore/busiest-days")
+    assert response.status_code == 200
+    assert response.json()["days"] == [] and response.json()["total"] == 0
+    assert seen == [("case-e", ["enron"]), 86_400]
+    assert audit.records[-1]["action"] == "explore_busiest_days"
+
+
+def test_the_new_routes_do_not_answer_without_a_principal(client) -> None:  # type: ignore[no-untyped-def]
+    _, graph, _ = client
+    anonymous = TestClient(app)
+    for path in ("busiest-links", "busiest-days"):
+        assert anonymous.get(f"/v1/investigations/case-e/explore/{path}").status_code in (401, 403)
+    assert graph.busiest == []

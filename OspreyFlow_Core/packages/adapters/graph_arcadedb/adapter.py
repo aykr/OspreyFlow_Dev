@@ -54,11 +54,12 @@ from schemas.domain import (
     TxId,
     WeightComponents,
 )
-from schemas.explore import RankedNode, RankedNodes, TypeCounts
+from schemas.explore import RankedLink, RankedLinks, RankedNode, RankedNodes, TypeCounts
 from schemas.merge import merge_datasets, merge_interval, merge_provenance
 
 from .access_filter import AccessFilter
 from .builders import (
+    BusiestLinksBuilder,
     ExpandBuilder,
     FindByIdentifierBuilder,
     GetNodeBuilder,
@@ -745,6 +746,30 @@ class GraphArcadeDBAdapter:
         return RankedNodes(
             nodes=[
                 RankedNode(node=node_from_element_map(r["node"]), degree=int(r["degree"]))
+                for r in rows
+            ],
+            total=int(totals[0].get("result") or 0),
+            offset=offset,
+        )
+
+    async def busiest_links(
+        self,
+        principal: Principal,
+        *,
+        edge_type: str | None = None,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> RankedLinks:
+        builder = BusiestLinksBuilder(edge_type, limit, offset)
+        totals = await self._client.gremlin(builder.render_total_gremlin(self._access, principal))
+        rows = await self._client.gremlin(builder.render_page_gremlin(self._access, principal))
+        return RankedLinks(
+            links=[
+                RankedLink(
+                    edge=edge_from_element_map(r["edge"]),
+                    source=node_from_element_map(r["source"]),
+                    target=node_from_element_map(r["target"]),
+                )
                 for r in rows
             ],
             total=int(totals[0].get("result") or 0),

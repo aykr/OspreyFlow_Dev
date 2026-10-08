@@ -6,7 +6,7 @@
 // The contents stay mounted while hidden, so nothing an analyst has typed or chosen is lost by
 // hiding a panel. Hidden or not is the layout of this browser tab (ADR-082: nothing stored); the
 // sizes are kept per analyst in this browser (`layoutSizes.ts`, ADR-086).
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "../design/primitives/Button";
 import {
@@ -172,14 +172,20 @@ export function BottomPanelFrame({
   height,
   children,
   initiallyOpen = true,
+  openSignal = 0,
 }: {
   title: string;
   /** The height to begin with; the analyst's own setting, once made, takes its place. */
   height: number;
   children: ReactNode;
   initiallyOpen?: boolean;
+  /** Each change opens the panel (Explore's busiest day sets the timeline's window, ADR-100). */
+  openSignal?: number;
 }) {
   const [open, setOpen] = useState(initiallyOpen);
+  useEffect(() => {
+    if (openSignal > 0) setOpen(true);
+  }, [openSignal]);
   const { timelineHeight } = useLayoutSizes();
   const current = timelineHeight ?? height;
   const lower = title.toLowerCase();

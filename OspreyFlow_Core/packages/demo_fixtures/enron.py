@@ -314,6 +314,8 @@ def build_graph_writes(
                 target=endpoint_node_id(recipient),
                 properties={"direction": "outbound"},
                 interval=Interval(valid_from=summary.first, valid_to=summary.last),
+                # How many messages the link stands for (01 §3); weights are computed from it.
+                occurrences=summary.count,
                 provenance=_provenance(),
                 handling=handling,
                 created_by=created_by,

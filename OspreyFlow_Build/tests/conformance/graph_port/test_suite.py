@@ -3114,3 +3114,70 @@ async def test_most_connected_of_one_type_counts_only_that_type(
         phones = await adapter.most_connected(EXPLORER, entity_type="Endpoint", limit=10)
         assert [(r.node.id, r.degree) for r in phones.nodes] == [(ids["phone"], 0)]
         assert phones.total == 1
+
+
+async def _busy_world(adapter: GraphPort) -> dict[str, str]:
+    """Four people in fixture, linked by three links of 9, 4 and 4 records, and one person apart."""
+    fixture = ["fixture"]
+    people = {n: _node("Person", classification="OFFICIAL", datasets=fixture) for n in "abcde"}
+    await _write(adapter, list(people.values()), [])
+    links = {
+        "ab": _edge("ASSOCIATE_OF", people["a"].id, people["b"].id, classification="OFFICIAL",
+                    occurrences=9, datasets=fixture),
+        "bc": _edge("ASSOCIATE_OF", people["b"].id, people["c"].id, classification="OFFICIAL",
+                    occurrences=4, datasets=fixture),
+        "cd": _edge("ASSOCIATE_OF", people["c"].id, people["d"].id, classification="OFFICIAL",
+                    occurrences=4, datasets=fixture),
+    }
+    await _write(adapter, [], list(links.values()))
+    return {**{n: p.id for n, p in people.items()}, **{n: e.id for n, e in links.items()}}
+
+
+async def _add_busy_links_that_must_not_count(adapter: GraphPort, ids: dict[str, str]) -> None:
+    """Busier than any above: a SECRET link, a link of another dataset, a link to a SECRET person,
+    and a reverted link. Ranked, any of them would come first."""
+    secret_person = _node("Person", classification="SECRET", datasets=["fixture"])
+    await _write(adapter, [secret_person], [])
+    reverted = _edge("ASSOCIATE_OF", ids["d"], ids["e"], classification="OFFICIAL", occurrences=99,
+                     datasets=["fixture"])
+    await _write(adapter, [], [
+        _edge("ASSOCIATE_OF", ids["a"], ids["e"], classification="SECRET", occurrences=50,
+              datasets=["fixture"]),
+        _edge("ASSOCIATE_OF", ids["b"], ids["e"], classification="OFFICIAL", occurrences=50,
+              datasets=["enron"]),
+        _edge("ASSOCIATE_OF", ids["c"], secret_person.id, classification="OFFICIAL", occurrences=50,
+              datasets=["fixture"]),
+        reverted,
+    ])
+    tx = await adapter.begin_transaction()
+    await adapter.revert_elements([], [reverted.id], tx)
+    await adapter.commit_transaction(tx)
+
+
+async def test_busiest_links_rank_by_records_and_say_of_how_many(factory: GraphAdapterFactory) -> None:
+    async with factory.context() as adapter:
+        ids = await _busy_world(adapter)
+        first = await adapter.busiest_links(EXPLORER, limit=2)
+        tied = sorted([ids["bc"], ids["cd"]])
+        assert [r.edge.id for r in first.links] == [ids["ab"], tied[0]]
+        assert [r.edge.occurrences for r in first.links] == [9, 4]
+        assert first.total == 3 and first.offset == 0
+        # Each comes with both its ends, so the panel can name the pair.
+        top = first.links[0]
+        assert {top.source.id, top.target.id} == {ids["a"], ids["b"]}
+        await _add_busy_links_that_must_not_count(adapter, ids)
+        again = await adapter.busiest_links(EXPLORER, limit=10)
+        assert [r.edge.id for r in again.links] == [ids["ab"], *tied]
+        assert again.total == 3
+
+
+async def test_busiest_links_page_and_filter_by_type(factory: GraphAdapterFactory) -> None:
+    async with factory.context() as adapter:
+        ids = await _busy_world(adapter)
+        pages = [await adapter.busiest_links(EXPLORER, limit=2, offset=o) for o in (0, 2, 4)]
+        assert [len(p.links) for p in pages] == [2, 1, 0]
+        assert {r.edge.id for p in pages for r in p.links} == {ids["ab"], ids["bc"], ids["cd"]}
+        none = await adapter.busiest_links(EXPLORER, edge_type="FAMILY_OF")
+        assert none.links == [] and none.total == 0
+        some = await adapter.busiest_links(EXPLORER, edge_type="ASSOCIATE_OF")
+        assert some.total == 3

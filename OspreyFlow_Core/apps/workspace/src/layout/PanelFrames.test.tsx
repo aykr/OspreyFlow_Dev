@@ -76,6 +76,21 @@ describe("BottomPanelFrame", () => {
     fireEvent.click(getByLabelText("Show the timeline"));
     expect(getByLabelText("Hide the timeline").getAttribute("aria-expanded")).toBe("true");
   });
+
+  it("opens when told to, as Explore's busiest day does (ADR-100)", () => {
+    const { getByLabelText, rerender } = render(
+      <BottomPanelFrame title="Timeline" height={252} initiallyOpen={false} openSignal={0}>
+        <p>Brush</p>
+      </BottomPanelFrame>,
+    );
+    expect(getByLabelText("Show the timeline").getAttribute("aria-expanded")).toBe("false");
+    rerender(
+      <BottomPanelFrame title="Timeline" height={252} initiallyOpen={false} openSignal={1}>
+        <p>Brush</p>
+      </BottomPanelFrame>,
+    );
+    expect(getByLabelText("Hide the timeline").getAttribute("aria-expanded")).toBe("true");
+  });
 });
 
 // ADR-086: a sash on the column's edge sets its width, and one above the timeline sets its height.

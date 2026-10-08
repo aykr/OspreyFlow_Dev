@@ -791,3 +791,34 @@ def render_type_counts_gremlin(access: AccessFilter, principal: Principal) -> tu
         f"g.E().{has_access}.where(outV().{has_access}).where(inV().{has_access})"
         ".groupCount().by(label())",
     )
+
+
+@dataclass(frozen=True)
+class BusiestLinksBuilder:
+    """`GraphPort.busiest_links` (ADR-100 decision 5): the access step on the link and on each
+    end, then ordered and paged in the store."""
+
+    edge_type: str | None
+    limit: int
+    offset: int
+
+    def _base(self, access: AccessFilter, principal: Principal) -> str:
+        has_access = access.gremlin_has_step(principal)
+        label = ""
+        if self.edge_type is not None:
+            labels = ",".join(
+                groovy_string_literal(x) for x in physical_edge_labels(self.edge_type)
+            )
+            label = f".hasLabel({labels})"
+        return f"g.E(){label}.{has_access}.where(outV().{has_access}).where(inV().{has_access})"
+
+    def render_total_gremlin(self, access: AccessFilter, principal: Principal) -> str:
+        return f"{self._base(access, principal)}.count()"
+
+    def render_page_gremlin(self, access: AccessFilter, principal: Principal) -> str:
+        return (
+            f'{self._base(access, principal)}.order().by("occurrences",desc).by("id")'
+            f".range({self.offset},{self.offset + self.limit})"
+            '.project("edge","source","target")'
+            ".by(elementMap()).by(outV().elementMap()).by(inV().elementMap())"
+        )

@@ -396,6 +396,9 @@ export const EXPLORE_ACTIONS = defineActionRegistry("EXPLORE_ACTIONS", [
   "put-a-most-connected-node-on-the-canvas-by-keyboard",
   "open-an-entity-type-and-put-one-on-the-canvas-by-keyboard",
   "show-more-of-a-ranking-by-keyboard",
+  // ADR-100 decision 5.
+  "put-a-busiest-link-on-the-canvas-by-keyboard",
+  "set-the-timeline-to-a-busiest-day-by-keyboard",
 ] as const);
 
 /** The case's questions to the model (ADR-098 decision 4): asked, answered with what it draws on,

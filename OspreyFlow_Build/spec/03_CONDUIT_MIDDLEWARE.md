@@ -178,6 +178,8 @@ POST   /v1/datasets                     a new, empty dataset of the caller's uni
 POST   /v1/investigations/{id}/suggest     type-ahead: nodes whose identifiers start with what is typed (ADR-059), within the case's datasets (ADR-099)
 GET    /v1/investigations/{id}/explore/counts          nodes per entity type and links per link type the analyst can see, within the case's datasets (ADR-100)
 GET    /v1/investigations/{id}/explore/most-connected  nodes by visible degree, most first, with the total ranked; ?entity_type, ?limit (1-50), ?offset (ADR-100)
+GET    /v1/investigations/{id}/explore/busiest-links   links by the records each stands for, most first, each with both ends; ?edge_type, ?limit, ?offset (ADR-100)
+GET    /v1/investigations/{id}/explore/busiest-days    the case's days by events, most first, from its daily histogram; ?limit, ?offset (ADR-100)
 POST   /v1/investigations/{id}/paths       k-shortest paths between two entities, within the case's datasets (ADR-099)
 POST   /v1/investigations/{id}/patterns/preview   cardinality estimate for a visual query, within the case's datasets (ADR-099)
 POST   /v1/investigations/{id}/patterns/run   execute; large results return a job id, which keeps the case's datasets (ADR-099)

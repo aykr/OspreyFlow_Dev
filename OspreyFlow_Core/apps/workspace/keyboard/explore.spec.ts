@@ -28,6 +28,13 @@ async function serve(page: Page) {
     if (url.pathname.endsWith("/counts")) {
       return json({ nodes: { Person: 3, Organisation: 1 }, edges: { ASSOCIATE_OF: 4 } });
     }
+    if (url.pathname.endsWith("/busiest-links")) {
+      const edge = { id: "l1", type: "ASSOCIATE_OF", source: "hub0", target: "hub1", occurrences: 9, properties: {} };
+      return json({ links: [{ edge, source: node("hub0", "Person"), target: node("hub1", "Person") }], total: 1, offset: 0 });
+    }
+    if (url.pathname.endsWith("/busiest-days")) {
+      return json({ days: [{ start: "2001-05-02T00:00:00Z", end: "2001-05-03T00:00:00Z", count: 40 }], total: 1, offset: 0 });
+    }
     asked.push(url.search);
     const type = url.searchParams.get("entity_type");
     const offset = Number(url.searchParams.get("offset"));
@@ -74,6 +81,24 @@ test("Show more pages a ranking by keyboard, and it says when all are shown", as
   await expect(top.getByText("All 12 shown.")).toBeVisible();
   expect(asked).toContain("?limit=2&offset=10");
   registerCovered(REGISTRY, "show-more-of-a-ranking-by-keyboard");
+});
+
+test("a busiest link goes on the canvas by keyboard", async ({ page }) => {
+  await serve(page);
+  const busy = page.getByRole("region", { name: "Busiest links" });
+  await busy.getByRole("button", { name: "hub0 → hub1 · Associate of · 9 records" }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.links)).toEqual(["l1"]);
+  registerCovered(REGISTRY, "put-a-busiest-link-on-the-canvas-by-keyboard");
+});
+
+test("a busiest day becomes the timeline's window by keyboard", async ({ page }) => {
+  await serve(page);
+  const days = page.getByRole("region", { name: "Busiest days" });
+  await days.getByRole("button", { name: "Wed 2 May 2001 · 40 events" }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.days)).toEqual(["2001-05-02T00:00:00Z"]);
+  registerCovered(REGISTRY, "set-the-timeline-to-a-busiest-day-by-keyboard");
 });
 
 test("every registered explore action has its own proving test case above", () => {

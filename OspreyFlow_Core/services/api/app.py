@@ -139,7 +139,7 @@ from schemas.domain import (
 # `Path` is already `pathlib.Path` in this module — `GraphPath` is the same alias
 # `adapters/compute_graphology_tier1/adapter.py` already uses for the identical collision.
 from schemas.domain import Path as GraphPath
-from schemas.explore import RankedNodes, TypeCounts
+from schemas.explore import BusiestDays, RankedLinks, RankedNodes, TypeCounts
 from schemas.ingest import (
     CONNECTOR_CATALOGUE,
     ConnectDraftInput,
@@ -2945,6 +2945,62 @@ async def explore_most_connected_route(
         result_cardinality=len(ranked.nodes),
     )
     return ranked
+
+
+@app.get("/v1/investigations/{investigation_id}/explore/busiest-links")
+async def explore_busiest_links_route(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    explore: ExploreDep,
+    audit: AuditDep,
+    edge_type: Annotated[str | None, Query(max_length=100)] = None,
+    limit: Annotated[int, Query(ge=1, le=EXPLORE_MAX_PAGE)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> RankedLinks:
+    """ADR-100 decision 5: the links that stand for the most records, within the case's datasets."""
+    ranked = await explore.busiest_links(
+        principal, edge_type=edge_type, limit=limit, offset=offset
+    )
+    await audit.record(
+        principal=principal,
+        action="explore_busiest_links",
+        investigation_id=investigation.id,
+        resolved_query={"edge_type": edge_type, "limit": limit, "offset": offset},
+        result_cardinality=len(ranked.links),
+    )
+    return ranked
+
+
+@app.get("/v1/investigations/{investigation_id}/explore/busiest-days")
+async def explore_busiest_days_route(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    explore: ExploreDep,
+    analytics: AnalyticsDep,
+    audit: AuditDep,
+    investigations: InvestigationsDep,
+    working_set: WorkingSetDep,
+    limit: Annotated[int, Query(ge=1, le=EXPLORE_MAX_PAGE)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> BusiestDays:
+    """ADR-100 decision 5: the case's days with the most events, read through the same case filter
+    as the timeline (a branch reads its parents' events on the links it holds)."""
+    case_events = await _case_event_filter(
+        EventFilter(investigation_scope=investigation.id),
+        principal,
+        investigations,
+        audit,
+        working_set,
+    )
+    days = await explore.busiest_days(principal, analytics, case_events, limit=limit, offset=offset)
+    await audit.record(
+        principal=principal,
+        action="explore_busiest_days",
+        investigation_id=investigation.id,
+        resolved_query={"limit": limit, "offset": offset},
+        result_cardinality=len(days.days),
+    )
+    return days
 
 
 # --- the visual query builder (Phase 7 Stage 4, 06_DECISIONS.md ADR-030) ------

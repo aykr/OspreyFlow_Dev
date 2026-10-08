@@ -1,9 +1,22 @@
 // The Explore panel's reads (ADR-100): what the case's data holds, and its most connected nodes.
 // Both are under `/v1/investigations/{id}/explore/`, so each figure is of the case's datasets and
 // the analyst's clearance, counted in the store; nothing here widens or reckons them again.
-import type { RankedNodes, TypeCounts } from "../../../../packages/schemas/generated";
+import type {
+  BusiestDays,
+  RankedLinks,
+  RankedNodes,
+  TypeCounts,
+} from "../../../../packages/schemas/generated";
 
-export type { RankedNode, RankedNodes, TypeCounts } from "../../../../packages/schemas/generated";
+export type {
+  BusiestDays,
+  BusyDay,
+  RankedLink,
+  RankedLinks,
+  RankedNode,
+  RankedNodes,
+  TypeCounts,
+} from "../../../../packages/schemas/generated";
 
 function exploreUrl(apiBaseUrl: string, investigationId: string, path: string): string {
   return `${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}/explore/${path}`;
@@ -46,5 +59,33 @@ export function loadMostConnected(
     exploreUrl(apiBaseUrl, investigationId, `most-connected?${query.toString()}`),
     bearerToken,
     "The most connected",
+  );
+}
+
+export function loadBusiestLinks(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  { limit = 10, offset = 0 }: RankingPage,
+): Promise<RankedLinks> {
+  const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  return get(
+    exploreUrl(apiBaseUrl, investigationId, `busiest-links?${query.toString()}`),
+    bearerToken,
+    "The busiest links",
+  );
+}
+
+export function loadBusiestDays(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  { limit = 10, offset = 0 }: RankingPage,
+): Promise<BusiestDays> {
+  const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  return get(
+    exploreUrl(apiBaseUrl, investigationId, `busiest-days?${query.toString()}`),
+    bearerToken,
+    "The busiest days",
   );
 }

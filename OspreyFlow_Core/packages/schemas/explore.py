@@ -11,7 +11,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from schemas.domain import Node
+from schemas.domain import Edge, Node
 
 
 class TypeCounts(BaseModel):
@@ -42,4 +42,39 @@ class RankedNodes(BaseModel):
     computed_at: datetime | None = None
 
 
-ALL_MODELS = (TypeCounts, RankedNode, RankedNodes)
+class RankedLink(BaseModel):
+    edge: Edge
+    #: Both ends, so the pair can be named without another read.
+    source: Node
+    target: Node
+
+
+class RankedLinks(BaseModel):
+    """One page of links by how many records each stands for (`Edge.occurrences`: an Enron link's
+    messages), most first, ties by id. `total` is how many are ranked (rule 2)."""
+
+    links: list[RankedLink]
+    total: int
+    offset: int
+    #: When the Conduit ranked them (ADR-100 Amendment 3: they are kept); `None` from the store.
+    computed_at: datetime | None = None
+
+
+class BusyDay(BaseModel):
+    start: datetime
+    end: datetime
+    #: Dated events (an Enron message per recipient) on the day.
+    count: int
+
+
+class BusiestDays(BaseModel):
+    """One page of the case's days by events, most first, ties by date; `total` is how many days
+    have any (rule 2)."""
+
+    days: list[BusyDay]
+    total: int
+    offset: int
+    computed_at: datetime | None = None
+
+
+ALL_MODELS = (TypeCounts, RankedNode, RankedNodes, RankedLink, RankedLinks, BusyDay, BusiestDays)

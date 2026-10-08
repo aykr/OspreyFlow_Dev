@@ -7,8 +7,18 @@ import { useEffect, useState } from "react";
 
 import type { Node } from "../../../../packages/schemas/generated";
 import { nodeLabel } from "../canvas/nodeAttributes";
-import { linkTypeName, type NamedType } from "../canvas/linkLabel";
-import { loadMostConnected, loadTypeCounts, type RankedNode, type TypeCounts } from "./exploreApi";
+import { linkCaption, linkTypeName, type NamedType } from "../canvas/linkLabel";
+import { eventsNoun } from "../inspector/linkEventsApi";
+import {
+  loadBusiestDays,
+  loadBusiestLinks,
+  loadMostConnected,
+  loadTypeCounts,
+  type BusyDay,
+  type RankedLink,
+  type RankedNode,
+  type TypeCounts,
+} from "./exploreApi";
 
 /** How many the overall ranking shows first, and how many each type shows when opened. */
 export const TOP = 10;
@@ -27,7 +37,19 @@ export interface ExplorePanelProps {
   edgeTypes: readonly NamedType[];
   /** Puts the node on the canvas. */
   onPick: (node: Node) => void;
+  /** Puts a link and both its ends on the canvas. */
+  onPickLink?: (link: RankedLink) => void;
+  /** Sets the timeline's window to the day. */
+  onPickDay?: (day: BusyDay) => void;
 }
+
+const DAY = new Intl.DateTimeFormat("en-GB", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
 
 function byCount(counts: Record<string, number>): [string, number][] {
   return Object.entries(counts)
@@ -39,31 +61,41 @@ function plural(n: number, one: string, many: string): string {
   return `${COUNT.format(n)} ${n === 1 ? one : many}`;
 }
 
-interface RankingProps extends Omit<ExplorePanelProps, "edgeTypes"> {
-  entityType?: string;
-  first: number;
+/** One page of something ranked, as the Conduit answers it. */
+interface Page<T> {
+  items: T[];
+  total: number;
 }
 
-/** One ranking: its first page, then more on request, always saying of how many. */
-function Ranking({ apiBaseUrl, bearerToken, investigationId, entityType, first, onPick }: RankingProps) {
-  const [rows, setRows] = useState<RankedNode[]>([]);
+interface PagedProps<T> {
+  /** Asks the Conduit for one page. */
+  load: (offset: number, limit: number) => Promise<Page<T>>;
+  /** Changes when what is ranked changes (another case, another type), starting it again. */
+  resetKey: string;
+  first: number;
+  /** "most connected", "busiest": what the caption says the list is. */
+  what: string;
+  keyOf: (item: T) => string;
+  labelOf: (item: T) => string;
+  onPick: (item: T) => void;
+}
+
+/** A ranking: its first page, then more on request, always saying of how many (rule 2). */
+function Paged<T>({ load, resetKey, first, what, keyOf, labelOf, onPick }: PagedProps<T>) {
+  const [rows, setRows] = useState<T[]>([]);
   const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
-  async function load(offset: number, limit: number) {
+  async function page(offset: number, limit: number) {
     setLoading(true);
     try {
-      const page = await loadMostConnected(apiBaseUrl, bearerToken, investigationId, {
-        entityType,
-        limit,
-        offset,
-      });
-      setRows((shown) => [...shown.slice(0, offset), ...page.nodes]);
-      setTotal(page.total);
+      const answer = await load(offset, limit);
+      setRows((shown) => [...shown.slice(0, offset), ...answer.items]);
+      setTotal(answer.total);
       setProblem(null);
     } catch (err: unknown) {
-      setProblem(err instanceof Error ? err.message : "The most connected could not be read.");
+      setProblem(err instanceof Error ? err.message : "This could not be read.");
     } finally {
       setLoading(false);
     }
@@ -72,26 +104,27 @@ function Ranking({ apiBaseUrl, bearerToken, investigationId, entityType, first, 
   useEffect(() => {
     setRows([]);
     setTotal(null);
-    void load(0, first);
-    // A new case or type starts the ranking again.
+    void page(0, first);
+    // A new case or type starts the ranking again; `load` is rebuilt every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiBaseUrl, bearerToken, investigationId, entityType, first]);
+  }, [resetKey, first]);
 
   if (problem) return <p role="alert">{problem}</p>;
   if (total === null) return <p style={{ color: "var(--text-tertiary)" }}>Counting…</p>;
+  if (total === 0) return <p style={{ color: "var(--text-tertiary)", margin: 0 }}>None you can see.</p>;
   const more = Math.min(PAGE, total - rows.length);
   return (
     <div style={{ display: "grid", gap: "var(--sp-4)" }}>
       <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
         {rows.length < total
-          ? `The ${COUNT.format(rows.length)} most connected of ${COUNT.format(total)}.`
+          ? `The ${COUNT.format(rows.length)} ${what} of ${COUNT.format(total)}.`
           : `All ${COUNT.format(total)} shown.`}
       </p>
       <ol style={{ margin: 0, paddingLeft: "var(--sp-16)", display: "grid", gap: "var(--sp-4)" }}>
-        {rows.map(({ node, degree }) => (
-          <li key={node.id}>
-            <button type="button" className="btn btn--quiet" onClick={() => onPick(node)}>
-              {`${nodeLabel(node)} · ${node.type} · ${plural(degree, "link", "links")}`}
+        {rows.map((item) => (
+          <li key={keyOf(item)}>
+            <button type="button" className="btn btn--quiet" onClick={() => onPick(item)}>
+              {labelOf(item)}
             </button>
           </li>
         ))}
@@ -101,12 +134,39 @@ function Ranking({ apiBaseUrl, bearerToken, investigationId, entityType, first, 
           type="button"
           className="btn btn--quiet"
           disabled={loading}
-          onClick={() => void load(rows.length, more)}
+          onClick={() => void page(rows.length, more)}
         >
           {`Show ${COUNT.format(more)} more`}
         </button>
       )}
     </div>
+  );
+}
+
+interface RankingProps extends Omit<ExplorePanelProps, "edgeTypes" | "onPickLink" | "onPickDay"> {
+  entityType?: string;
+  first: number;
+}
+
+/** Nodes by degree, of one type when named. */
+function Ranking({ apiBaseUrl, bearerToken, investigationId, entityType, first, onPick }: RankingProps) {
+  return (
+    <Paged<RankedNode>
+      load={async (offset, limit) => {
+        const answer = await loadMostConnected(apiBaseUrl, bearerToken, investigationId, {
+          entityType,
+          limit,
+          offset,
+        });
+        return { items: answer.nodes, total: answer.total };
+      }}
+      resetKey={`${apiBaseUrl}|${investigationId}|${entityType ?? ""}`}
+      first={first}
+      what="most connected"
+      keyOf={({ node }) => node.id}
+      labelOf={({ node, degree }) => `${nodeLabel(node)} · ${node.type} · ${plural(degree, "link", "links")}`}
+      onPick={({ node }) => onPick(node)}
+    />
   );
 }
 
@@ -197,6 +257,44 @@ export function ExplorePanel(props: ExplorePanelProps) {
                 <TypeEntry key={name} {...ranking} name={name} count={n} />
               ))}
             </ul>
+          </section>
+          {links.length > 0 && (
+            <section aria-labelledby="explore-links">
+              <h3 id="explore-links" style={heading}>Busiest links</h3>
+              <Paged<RankedLink>
+                load={async (offset, limit) => {
+                  const answer = await loadBusiestLinks(apiBaseUrl, bearerToken, investigationId, { limit, offset });
+                  return { items: answer.links, total: answer.total };
+                }}
+                resetKey={`${apiBaseUrl}|${investigationId}`}
+                first={TOP}
+                what="busiest"
+                keyOf={({ edge }) => edge.id}
+                labelOf={({ edge, source, target }) =>
+                  `${nodeLabel(source)} → ${nodeLabel(target)} · ${linkCaption(
+                    linkTypeName(edge.type, edgeTypes),
+                    edge.occurrences ?? 1,
+                    eventsNoun(edge.type, source),
+                  )}`
+                }
+                onPick={(link) => props.onPickLink?.(link)}
+              />
+            </section>
+          )}
+          <section aria-labelledby="explore-days">
+            <h3 id="explore-days" style={heading}>Busiest days</h3>
+            <Paged<BusyDay>
+              load={async (offset, limit) => {
+                const answer = await loadBusiestDays(apiBaseUrl, bearerToken, investigationId, { limit, offset });
+                return { items: answer.days, total: answer.total };
+              }}
+              resetKey={`${apiBaseUrl}|${investigationId}`}
+              first={TOP}
+              what="busiest"
+              keyOf={(day) => day.start}
+              labelOf={(day) => `${DAY.format(new Date(day.start)).replace(",", "")} · ${plural(day.count, "event", "events")}`}
+              onPick={(day) => props.onPickDay?.(day)}
+            />
           </section>
         </>
       )}

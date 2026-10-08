@@ -94,6 +94,8 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     # The Explore panel (ADR-100): reads.
     ("GET", P + "/explore/counts"): V,
     ("GET", P + "/explore/most-connected"): V,
+    ("GET", P + "/explore/busiest-links"): V,
+    ("GET", P + "/explore/busiest-days"): V,
     ("POST", P + "/patterns/preview"): V,
     ("POST", P + "/patterns/run"): V,
     # ADR-099 Amendment 3: a saved pattern is the dataset's, read and saved in a case reading it.

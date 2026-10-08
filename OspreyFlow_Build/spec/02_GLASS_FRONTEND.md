@@ -517,13 +517,16 @@ start* over the canvas; the same panel opens from the left rail as *Explore* at 
 case's datasets and the analyst's clearance only: *What this case holds* (the count of each entity type and
 each link type, types with none left out); *Most connected* (the 10 nodes with the most visible links, saying
 "The 10 most connected of N", with *Show n more* until "All N shown"); and *By entity type* (each type and its
-count, opening to its 5 most connected and paging the same way). Every node in it is a button that does what
+count, opening to its 5 most connected and paging the same way); *Busiest links* (the links that stand for
+the most records, "alice → bob · Communicated with · 50 emails", picking one puts the pair and their link
+on the canvas); and *Busiest days* (the case's days with the most events, picking one sets the
+timeline's window to that day and opens the timeline). Every node in it is a button that does what
 choosing a search result does: puts it on the canvas, draws outwards from it and selects it. The figures are
 the Conduit's (`/explore/counts`, `/explore/most-connected`), kept once counted and counted again after
 a change, and the panel says when ("Counted at 09:05 UTC", ADR-100 Amendment 3); they are never
 reckoned in the browser
-(`keyboard/explore.spec.ts`, `src/explore/ExplorePanel.test.tsx`). Busiest links and days, groups and
-bridges, what is new and starter questions (ADR-100 decisions 5 to 8) are not built yet.
+(`keyboard/explore.spec.ts`, `src/explore/ExplorePanel.test.tsx`). Groups and bridges, what is new and
+starter questions (ADR-100 decisions 6 to 8) are not built yet.
 
 ### 3.1c An expansion that adds nothing says so (ADR-077)
 

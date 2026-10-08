@@ -32,7 +32,7 @@ from schemas.domain import (
     Subgraph,
     TxId,
 )
-from schemas.explore import RankedNodes, TypeCounts
+from schemas.explore import RankedLinks, RankedNodes, TypeCounts
 
 
 class SubgraphTooLarge(Exception):
@@ -310,6 +310,20 @@ class GraphPort(Protocol):
         when named. A degree counts only links `principal` can see to nodes it can see, so a
         ranking is the same as in a graph where nothing hidden existed (rule 3). `total` is how
         many nodes are ranked; a page past the end is empty, never a slice that looks whole."""
+        ...
+
+    async def busiest_links(
+        self,
+        principal: Principal,
+        *,
+        edge_type: str | None = None,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> RankedLinks:
+        """`06_DECISIONS.md` ADR-100 decision 5: links by how many records each stands for
+        (`occurrences`), most first, ties by id, of one link type when named, each with both its
+        ends. Only links `principal` can see whose two ends it can see are ranked or counted in
+        `total` (rule 3); a page past the end is empty."""
         ...
 
     async def apply_schema(self, schema: OntologySchema) -> SchemaReport: ...

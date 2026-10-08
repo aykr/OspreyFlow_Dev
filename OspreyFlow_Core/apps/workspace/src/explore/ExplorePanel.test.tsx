@@ -58,9 +58,32 @@ function serve(handler: (path: string, query: URLSearchParams) => Response) {
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
 
+function link(id: string, from: Node, to: Node, occurrences: number) {
+  return {
+    edge: { id, type: "COMMUNICATED_WITH", source: from.id, target: to.id, occurrences, properties: {} },
+    source: from,
+    target: to,
+  };
+}
+
+const ALICE = { ...node("alice", "Endpoint", "alice@enron.com"), properties: { name: "alice@enron.com", endpoint_kind: "email" } } as unknown as Node;
+const BOB = node("bob", "Endpoint", "bob@enron.com");
+
 function standard() {
   return serve((path, q) => {
     if (path === "counts") return json(200, COUNTS);
+    if (path === "busiest-links") {
+      const offset = Number(q.get("offset"));
+      const all = Array.from({ length: 12 }, (_, i) => link(`l${i}`, ALICE, BOB, 50 - i));
+      return json(200, { links: all.slice(offset, offset + Number(q.get("limit"))), total: 12, offset });
+    }
+    if (path === "busiest-days") {
+      return json(200, {
+        days: [{ start: "2001-05-02T00:00:00Z", end: "2001-05-03T00:00:00Z", count: 1234 }],
+        total: 1,
+        offset: 0,
+      });
+    }
     const type = q.get("entity_type");
     const offset = Number(q.get("offset"));
     const limit = Number(q.get("limit"));
@@ -70,8 +93,18 @@ function standard() {
   });
 }
 
-function mount(onPick = vi.fn()) {
-  render(<ExplorePanel apiBaseUrl="http://api" bearerToken="t" investigationId="c1" edgeTypes={[]} onPick={onPick} />);
+function mount(onPick = vi.fn(), onPickLink = vi.fn(), onPickDay = vi.fn()) {
+  render(
+    <ExplorePanel
+      apiBaseUrl="http://api"
+      bearerToken="t"
+      investigationId="c1"
+      edgeTypes={[]}
+      onPick={onPick}
+      onPickLink={onPickLink}
+      onPickDay={onPickDay}
+    />,
+  );
   return onPick;
 }
 
@@ -136,6 +169,31 @@ describe("ExplorePanel", () => {
     expect(onPick.mock.calls[0]?.[0].id).toBe("Person11");
     // A type with none is not offered.
     expect(within(byType).queryByRole("button", { name: /^Location/ })).toBeNull();
+  });
+
+  it("ranks the busiest links by what they stand for, names the pair, and pages", async () => {
+    standard();
+    const onPickLink = vi.fn();
+    mount(vi.fn(), onPickLink);
+    const busy = await screen.findByRole("region", { name: "Busiest links" });
+    expect(await within(busy).findByText("The 10 busiest of 12.")).toBeTruthy();
+    const top = within(busy).getByRole("button", {
+      name: "alice@enron.com → bob@enron.com · Communicated with · 50 emails",
+    });
+    fireEvent.click(top);
+    expect(onPickLink.mock.calls[0]?.[0].edge.id).toBe("l0");
+    fireEvent.click(within(busy).getByRole("button", { name: "Show 2 more" }));
+    expect(await within(busy).findByText("All 12 shown.")).toBeTruthy();
+  });
+
+  it("names the busiest days and sets the timeline to one with one action", async () => {
+    standard();
+    const onPickDay = vi.fn();
+    mount(vi.fn(), vi.fn(), onPickDay);
+    const days = await screen.findByRole("region", { name: "Busiest days" });
+    expect(await within(days).findByText("All 1 shown.")).toBeTruthy();
+    fireEvent.click(within(days).getByRole("button", { name: "Wed 2 May 2001 · 1,234 events" }));
+    expect(onPickDay).toHaveBeenCalledWith({ start: "2001-05-02T00:00:00Z", end: "2001-05-03T00:00:00Z", count: 1234 });
   });
 
   it("says a refusal in words, and an empty case plainly", async () => {
