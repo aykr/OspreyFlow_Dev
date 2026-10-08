@@ -175,6 +175,16 @@ test("a starter question runs onto the canvas by keyboard", async ({ page }) => 
   registerCovered(REGISTRY, "run-a-starter-question-by-keyboard");
 });
 
+test("the drawer scrolls, so its last section can be reached and seen", async ({ page }) => {
+  await serve(page);
+  const last = page.getByRole("region", { name: "Starter questions" });
+  await last.getByRole("button", { name: /^Person → Person → Person/ }).focus();
+  await expect(last.getByRole("button", { name: /^Person → Person → Person/ })).toBeInViewport();
+  await page.mouse.move(1000, 400);
+  await page.mouse.wheel(0, -100_000);
+  await expect(page.getByRole("heading", { name: "What this case holds" })).toBeInViewport();
+});
+
 test("every registered explore action has its own proving test case above", () => {
   assertAllCovered("EXPLORE_ACTIONS", EXPLORE_ACTIONS);
 });

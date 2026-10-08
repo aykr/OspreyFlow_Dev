@@ -1120,6 +1120,9 @@ Docked panels get a hairline and no shadow; overlays get a shadow and no hairlin
 A floating control with no panel behind it (a `RadialMenu` entry in its radial layout) carries its own
 raised surface, no border and the overlay shadow; it must never fall back to the browser's button face,
 which drew near-white text on a pale fill. `src/design/radialMenuStyle.test.ts` holds this.
+A `Drawer` keeps its title and scrolls its body, so content taller than the window is never cut off
+(8 October 2026: the Explore panel's later sections could not be reached). `keyboard/explore.spec.ts`
+holds this, with its harness inside the `Drawer` the Glass uses.
 Radii: 0 for canvas and cells, 2px controls, 4px panels, 6px overlays, 999px status chips.
 
 ## 9. Assessment production

@@ -134,7 +134,12 @@
   background: var(--surface-panel); box-shadow: var(--overlay-shadow);
   border-radius: var(--r-overlay) 0 0 var(--r-overlay);
   transition: transform var(--dur-panel) var(--ease);
+  /* The title stays; the body scrolls. Without it a drawer taller than the window was cut off at
+     the window's height, and the Explore panel's later sections could not be reached (8 October
+     2026, `keyboard/explore.spec.ts`). */
+  display: flex; flex-direction: column;
 }
+.drawer > .panel__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 
 .popover {
   background: var(--surface-raised); box-shadow: var(--overlay-shadow);
