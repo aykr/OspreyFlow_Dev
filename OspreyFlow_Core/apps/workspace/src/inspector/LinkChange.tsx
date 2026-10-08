@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { Edge, EdgeTypeDef } from "../../../../packages/schemas/generated";
+import type { Edge, EdgeTypeDef, Handling } from "../../../../packages/schemas/generated";
+import type { HandlingScheme } from "../ingest/api";
 import { linkTypeName } from "../canvas/linkLabel";
 import { DefineLinkType, definitionOf } from "../linktypes/DefineLinkType";
 import { LinkChangeError, changeLink, type LinkChangeResult } from "./linkChangeApi";
@@ -13,6 +14,7 @@ import {
   typesFor,
   type LinkDraft,
 } from "./linkChangeForm";
+import { lowerParts } from "./linkHandling";
 
 export interface LinkChangeProps {
   apiBaseUrl: string;
@@ -31,6 +33,83 @@ export interface LinkChangeProps {
   proposedTypes?: ReadonlySet<string>;
   /** Told of a type proposed here, so the caller reads the case's types again. */
   onTypeProposed?: (definition: EdgeTypeDef) => void;
+  /** The deployment's handling scheme (ADR-102). Absent, the handling is not offered. */
+  handlingScheme?: HandlingScheme;
+}
+
+/** The link's handling (ADR-102): the four codes from the deployment's scheme, never its units. A
+ * choice lower than the link's says so and asks for the analyst's own confirmation. */
+function HandlingFields({
+  scheme,
+  edge,
+  draft,
+  busy,
+  onChange,
+}: {
+  scheme: HandlingScheme;
+  edge: Edge;
+  draft: LinkDraft;
+  busy: boolean;
+  onChange: (handling: Handling, confirmLower: boolean) => void;
+}) {
+  const lower = lowerParts(edge.handling, draft.handling, scheme);
+  const set = (part: Partial<Handling>) => onChange({ ...draft.handling, ...part }, draft.confirmLower);
+  const label = { fontSize: "var(--fs-12)", color: "var(--text-secondary)" };
+  const select = (
+    name: string,
+    value: string,
+    options: [string, string][],
+    change: (value: string) => void,
+  ) => (
+    <label style={{ display: "grid", gap: "var(--sp-4)" }}>
+      <span style={label}>{name}</span>
+      <select className="input" value={value} disabled={busy} onChange={(e) => change(e.target.value)}>
+        {options.map(([code, text]) => (
+          <option key={code} value={code}>
+            {text}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+  const coded = (codes: Record<string, { label: string }> | undefined): [string, string][] =>
+    Object.entries(codes ?? {}).map(([code, c]) => [code, `${code}: ${c.label}`]);
+  return (
+    <fieldset style={{ border: 0, margin: 0, padding: 0, display: "grid", gap: "var(--sp-8)" }}>
+      <legend style={label}>Handling</legend>
+      {select("Classification", draft.handling.classification, scheme.classification.map((c) => [c, c]), (v) =>
+        set({ classification: v }),
+      )}
+      {select("Handling code", draft.handling.handling_code, coded(scheme.handling_codes), (v) =>
+        set({ handling_code: v }),
+      )}
+      {select("Action code", draft.handling.action_code ?? "", [["", "None"], ...coded(scheme.action_codes)], (v) =>
+        set({ action_code: v || null }),
+      )}
+      {select(
+        "Sanitisation code",
+        draft.handling.sanitisation_code ?? "",
+        [["", "None"], ...coded(scheme.sanitisation_codes)],
+        (v) => set({ sanitisation_code: v || null }),
+      )}
+      {lower.length > 0 && (
+        <>
+          <p role="note" style={{ margin: 0, color: "var(--text-primary)" }}>
+            {`This lowers the link's ${lower.join(", ")}: only an Author may, and it is recorded.`}
+          </p>
+          <label style={{ display: "flex", gap: "var(--sp-8)", alignItems: "baseline" }}>
+            <input
+              type="checkbox"
+              checked={draft.confirmLower}
+              disabled={busy}
+              onChange={(e) => onChange(draft.handling, e.target.checked)}
+            />
+            <span>I mean to lower this link&apos;s handling</span>
+          </label>
+        </>
+      )}
+    </fieldset>
+  );
 }
 
 function sentence(error: unknown): string {
@@ -39,6 +118,7 @@ function sentence(error: unknown): string {
       return error.message;
     }
     if (error.kind === "link_not_found") return "This link is no longer in your view, so it was not changed.";
+    if (error.kind === "lowering_needs_author" || error.kind === "confirm_lower") return error.message;
     if (error.kind === "forbidden") {
       return "The link was not changed. You can read this case but not change it.";
     }
@@ -62,6 +142,7 @@ export function LinkChange({
   onChanged,
   proposedTypes,
   onTypeProposed,
+  handlingScheme,
 }: LinkChangeProps) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<LinkDraft>(() => initialDraft(edge));
@@ -107,7 +188,7 @@ export function LinkChange({
 
   const save = async () => {
     if (busy) return;
-    const outcome = toChangeInput(edge, draft, edgeTypes);
+    const outcome = toChangeInput(edge, draft, edgeTypes, handlingScheme);
     if (outcome.kind === "nothing") {
       setProblem("Nothing about the link has been changed yet.");
       return;
@@ -345,6 +426,16 @@ export function LinkChange({
             />
           </label>
         </div>
+      )}
+
+      {handlingScheme && (
+        <HandlingFields
+          scheme={handlingScheme}
+          edge={edge}
+          draft={draft}
+          busy={busy}
+          onChange={(handling, confirmLower) => setDraft({ ...draft, handling, confirmLower })}
+        />
       )}
 
       <label style={{ display: "grid", gap: "var(--sp-4)" }}>

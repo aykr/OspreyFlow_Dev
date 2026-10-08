@@ -18,6 +18,7 @@ import type { EntityVisual } from "../ontology/schema";
 import { SelectionList } from "./SelectionList";
 import { TypeChip } from "./TypeChip";
 import { SharedContacts, type SharedContactsProps } from "./SharedContacts";
+import type { HandlingScheme } from "../ingest/api";
 
 function isResolutionLink(type: string): boolean {
   return type === "SAME_AS" || type === "NOT_SAME_AS";
@@ -57,6 +58,8 @@ export interface InspectorProps {
     /** The proposed types among `edgeTypes`, and what to do when one is proposed (ADR-090). */
     proposedTypes?: ReadonlySet<string>;
     onTypeProposed?: (definition: EdgeTypeDef) => void;
+    /** The deployment's handling scheme, so a link's handling can be changed (ADR-102). */
+    handlingScheme?: HandlingScheme;
   };
   /** ADR-100 Amendment 7: who shares contacts with the selected node. Absent: not offered. */
   sharedContacts?: Omit<SharedContactsProps, "node">;
@@ -348,6 +351,7 @@ function LinkView({
             onChanged={linkEditing.onChanged}
             proposedTypes={linkEditing.proposedTypes}
             onTypeProposed={linkEditing.onTypeProposed}
+            handlingScheme={linkEditing.handlingScheme}
           />,
           () => setChangeOpens((n) => n + 1),
         )}

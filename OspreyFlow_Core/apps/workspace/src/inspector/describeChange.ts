@@ -19,6 +19,10 @@ function dates(interval: LinkSnapshot["interval"]): string {
   return `${interval.valid_from.slice(0, 10)} – ${interval.valid_to ? interval.valid_to.slice(0, 10) : "present"}`;
 }
 
+function marking(h: NonNullable<LinkSnapshot["handling"]>): string {
+  return [h.classification, h.handling_code, h.action_code, h.sanitisation_code].filter(Boolean).join(", ");
+}
+
 export function describeChange(change: LinkChangeRecord): string[] {
   const { before, after } = change;
   const lines: string[] = [];
@@ -34,6 +38,13 @@ export function describeChange(change: LinkChangeRecord): string[] {
   }
   if (dates(before.interval) !== dates(after.interval)) {
     lines.push(`Dates: ${dates(before.interval)} → ${dates(after.interval)}`);
+  }
+  // ADR-102: only where both sides recorded it (a change made before handling could change has
+  // neither, and says nothing about it).
+  if (before.handling && after.handling) {
+    const was = marking(before.handling);
+    const now = marking(after.handling);
+    if (was !== now) lines.push(`Handling: ${was} → ${now}`);
   }
   return lines;
 }

@@ -76,6 +76,38 @@ test("who shares contacts with a node is asked, and a pair put on the canvas, by
   registerCovered(REGISTRY, "ask-who-shares-contacts-and-add-a-pair-by-keyboard");
 });
 
+test("a link's handling is lowered by keyboard, and only once confirmed", async ({ page }) => {
+  await serve(page);
+  const sent: unknown[] = [];
+  await page.route("**/v1/investigations/inv-1/links/e1/change", async (route) => {
+    sent.push(route.request().postDataJSON());
+    await route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ error: "lowering_needs_author" }) });
+  });
+  await page.goto("/keyboard/inspector-harness.html");
+  await header(page, "Change this link").focus();
+  await page.keyboard.press("Enter");
+  await page.getByLabel("Classification").focus();
+  await page.keyboard.press("p"); // type-ahead in the select: PUBLIC
+  await expect(page.getByLabel("Classification")).toHaveValue("PUBLIC");
+  // The harness's type is Direct, so what stands behind the link is asked first (ADR-081).
+  await page.getByRole("radio", { name: /^Direct/ }).focus();
+  await page.keyboard.press("Space");
+  await page.getByLabel("Why is it being changed? (required)").focus();
+  await page.keyboard.type("Released by the originator");
+  await page.getByRole("button", { name: "Save change" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("This lowers the link's classification. Confirm that you mean to lower it.")).toBeVisible();
+  expect(sent).toEqual([]);
+  await page.getByLabel("I mean to lower this link's handling").focus();
+  await page.keyboard.press("Space");
+  await page.getByRole("button", { name: "Save change" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Lowering a link's handling needs Author access.")).toBeVisible();
+  expect(sent).toHaveLength(1);
+  expect(sent[0]).toMatchObject({ handling: { classification: "PUBLIC" }, confirm_lower: true });
+  registerCovered(REGISTRY, "lower-a-links-handling-with-a-confirmation-by-keyboard");
+});
+
 test("every registered Inspector action has its own proving test case above", () => {
   assertAllCovered("INSPECTOR_ACTIONS", INSPECTOR_ACTIONS);
 });

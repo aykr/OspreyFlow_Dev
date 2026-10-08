@@ -29,10 +29,25 @@ export interface HandlingCode {
   dissemination: "permitted" | "conditional" | "restricted";
 }
 
+export interface ActionCode {
+  label: string;
+  direct_action: boolean;
+  originator_permission?: boolean;
+}
+
+export interface SanitisationCode {
+  label: string;
+  consult_originator: boolean;
+}
+
 export interface HandlingScheme {
   name: string;
   classification: string[];
   handling_codes: Record<string, HandlingCode>;
+  /** The route always sends both (ADR-102 reads them); optional so a test's own scheme may omit
+   * what it does not use. */
+  action_codes?: Record<string, ActionCode>;
+  sanitisation_codes?: Record<string, SanitisationCode>;
 }
 
 /** ADR-099 Amendment 3: a recipe and a source file are the dataset's, asked of the case. The

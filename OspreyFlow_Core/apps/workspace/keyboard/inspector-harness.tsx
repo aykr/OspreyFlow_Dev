@@ -80,6 +80,18 @@ function Harness() {
           openNoteSignal: noteSignal,
           openEventsSignal: 0,
           onChanged: () => undefined,
+          // ADR-102: the deployment's scheme, so the handling can be changed.
+          handlingScheme: {
+            name: "uk-le",
+            classification: ["PUBLIC", "OFFICIAL", "OFFICIAL-SENSITIVE", "SECRET"],
+            handling_codes: {
+              P: { label: "Lawful sharing permitted", dissemination: "permitted" },
+              C: { label: "Conditions apply", dissemination: "conditional" },
+              R: { label: "Recipient restricted", dissemination: "restricted" },
+            },
+            action_codes: {},
+            sanitisation_codes: {},
+          },
         }}
       />
     </>

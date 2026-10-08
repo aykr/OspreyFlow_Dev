@@ -570,3 +570,78 @@ async def test_retyping_a_direct_link_to_a_probabilistic_type_makes_it_probabili
     )
     assert result.edge.type == "LIKELY_ASSOCIATE_OF"
     assert result.change.after["basis"] == "probabilistic"
+
+
+# --- ADR-102 decision 4: handling is changed on purpose, and lowered only by an Author --------
+
+from services.api.link_changes import (  # noqa: E402
+    LoweringNeedsAuthorError,
+    LoweringNotConfirmedError,
+)
+
+OFFICIAL_SENSITIVE = Handling(
+    classification="OFFICIAL-SENSITIVE", handling_code="P", originator="unit-1",
+    owning_unit="unit-1",
+)
+
+
+async def _service_with_scheme() -> tuple[LinkChangeService, SupersedingGraph, InMemoryChanges]:
+    service, graph, store, changes, notes = await _build()
+    with_scheme = LinkChangeService(
+        changes, WorkingSetService(graph, store, SCHEME), graph, ONTOLOGY, notes, scheme=SCHEME
+    )
+    return with_scheme, graph, changes
+
+
+async def test_an_editor_may_raise_a_links_handling() -> None:
+    service, graph, changes = await _service_with_scheme()
+    result = await service.change(
+        "inv-1", "e1", CLEARED, LinkChangeRequest(handling=OFFICIAL_SENSITIVE, reason="Sensitive")
+    )
+    assert graph.superseded[0][1].handling == OFFICIAL_SENSITIVE
+    assert result.edge.handling == OFFICIAL_SENSITIVE
+    assert changes.rows[0].before["handling"]["classification"] == "OFFICIAL"
+    assert changes.rows[0].after["handling"]["classification"] == "OFFICIAL-SENSITIVE"
+
+
+@pytest.mark.parametrize(
+    "lower",
+    [
+        _handling("OFFICIAL"),  # the classification
+        _handling("SECRET").model_copy(update={"handling_code": "P"}),  # the handling code
+        _handling("SECRET").model_copy(update={"handling_code": "C"}),  # the action code dropped
+    ],
+)
+async def test_lowering_needs_an_author_and_a_confirmation(lower: Handling) -> None:
+    secret = _handling("SECRET").model_copy(update={"handling_code": "C", "action_code": "A1"})
+    held = _edge("s1", "a", "b").model_copy(update={"handling": secret})
+    _, graph, store, changes, notes = await _build([held])
+    service = LinkChangeService(
+        changes, WorkingSetService(graph, store, SCHEME), graph, ONTOLOGY, notes, scheme=SCHEME
+    )
+    request = LinkChangeRequest(handling=lower, reason="Released by the originator")
+    with pytest.raises(LoweringNeedsAuthorError):
+        await service.change("inv-1", "s1", CLEARED, request)
+    with pytest.raises(LoweringNotConfirmedError):
+        await service.change("inv-1", "s1", CLEARED, request, is_author=True)
+    assert graph.superseded == [] and changes.rows == []
+    confirmed = request.model_copy(update={"confirm_lower": True})
+    result = await service.change("inv-1", "s1", CLEARED, confirmed, is_author=True)
+    assert result.edge.handling == lower
+    assert graph.superseded[0][1].handling == lower
+
+
+async def test_handling_keeps_its_units_and_stays_within_the_analysts_clearance() -> None:
+    service, graph, _ = await _service_with_scheme()
+    moved = _handling().model_copy(update={"owning_unit": "unit-2"})
+    with pytest.raises(InvalidChangeError, match="unit"):
+        await service.change("inv-1", "e1", CLEARED, LinkChangeRequest(handling=moved, reason="x"))
+    above = _handling("SECRET")
+    with pytest.raises(InvalidChangeError, match="clearance"):
+        await service.change("inv-1", "e1", ANALYST, LinkChangeRequest(handling=above, reason="x"))
+    unknown = _handling().model_copy(update={"handling_code": "Z"})
+    with pytest.raises(InvalidChangeError):
+        await service.change(
+            "inv-1", "e1", CLEARED, LinkChangeRequest(handling=unknown, reason="x")
+        )
+    assert graph.superseded == []

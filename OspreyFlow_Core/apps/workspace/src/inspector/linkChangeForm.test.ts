@@ -80,7 +80,10 @@ describe("initialDraft", () => {
       validTo: "2026-03-09",
       reason: "",
       basis: "",
+      handling: d.handling,
+      confirmLower: false,
     });
+    expect(d.handling.classification).toBe("OFFICIAL");
   });
 });
 
@@ -260,5 +263,41 @@ describe("the basis question", () => {
     const chosen = { ...initialDraft(direct), basis: "direct" as const };
     expect(retypeDraft(chosen, "FAMILY_OF", BASIS_TYPES).basis).toBe("direct");
     expect(retypeDraft(chosen, "LIKELY_ASSOCIATE_OF", BASIS_TYPES).basis).toBe("");
+  });
+});
+
+// ADR-102: the handling is changed on purpose; a lower one is sent only once confirmed.
+const SCHEME = {
+  name: "uk-le",
+  classification: ["PUBLIC", "OFFICIAL", "OFFICIAL-SENSITIVE", "SECRET"],
+  handling_codes: {
+    P: { label: "Lawful sharing permitted", dissemination: "permitted" as const },
+    C: { label: "Conditions apply", dissemination: "conditional" as const },
+    R: { label: "Recipient restricted", dissemination: "restricted" as const },
+  },
+};
+
+describe("toChangeInput, handling", () => {
+  it("sends no handling when it is left as it is", () => {
+    const result = toChangeInput(link, draft({ occurrences: "7" }), EDGE_TYPES, SCHEME);
+    expect(result.kind === "change" && "handling" in result.input).toBe(false);
+  });
+
+  it("sends a raised handling with the link's own units", () => {
+    const raised = { ...link.handling, classification: "SECRET" };
+    const result = toChangeInput(link, draft({ handling: raised }), EDGE_TYPES, SCHEME);
+    expect(result).toEqual({ kind: "change", input: { reason: REASON, handling: raised } });
+  });
+
+  it("asks for the confirmation before sending a lower handling, then sends it", () => {
+    const lower = { ...link.handling, classification: "PUBLIC" };
+    expect(toChangeInput(link, draft({ handling: lower }), EDGE_TYPES, SCHEME)).toEqual({
+      kind: "problem",
+      message: "This lowers the link's classification. Confirm that you mean to lower it.",
+    });
+    expect(toChangeInput(link, draft({ handling: lower, confirmLower: true }), EDGE_TYPES, SCHEME)).toEqual({
+      kind: "change",
+      input: { reason: REASON, handling: lower, confirm_lower: true },
+    });
   });
 });

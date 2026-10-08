@@ -461,6 +461,8 @@ export const INSPECTOR_ACTIONS = defineActionRegistry("INSPECTOR_ACTIONS", [
   "a-menu-hand-over-opens-its-part",
   // ADR-100 Amendment 7 decision 4.
   "ask-who-shares-contacts-and-add-a-pair-by-keyboard",
+  // ADR-102 decision 4.
+  "lower-a-links-handling-with-a-confirmation-by-keyboard",
 ] as const);
 
 /** The workspace shell (ADR-097 step 1): the top bar, the left rail, the classification strip.

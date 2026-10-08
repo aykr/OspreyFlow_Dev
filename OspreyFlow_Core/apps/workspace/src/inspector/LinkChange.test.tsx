@@ -274,3 +274,70 @@ describe("LinkChange: defining a new type (ADR-090 C2)", () => {
     expect(options).toContain("Known to (proposed)");
   });
 });
+
+// ADR-102: the link's handling is changed on purpose; lowering it asks for a confirmation.
+describe("LinkChange, handling", () => {
+  const SCHEME = {
+    name: "uk-le",
+    classification: ["PUBLIC", "OFFICIAL", "OFFICIAL-SENSITIVE", "SECRET"],
+    handling_codes: {
+      P: { label: "Lawful sharing permitted", dissemination: "permitted" as const },
+      R: { label: "Recipient restricted", dissemination: "restricted" as const },
+    },
+    action_codes: { A1: { label: "Covert development", direct_action: false, originator_permission: true } },
+    sanitisation_codes: { S2: { label: "Consult originator", consult_originator: true } },
+  };
+
+  function mountWithScheme() {
+    render(
+      <LinkChange
+        apiBaseUrl="http://api.test"
+        bearerToken="tok"
+        investigationId="inv-1"
+        edge={edge}
+        sourceType="Person"
+        targetType="Person"
+        edgeTypes={EDGE_TYPES}
+        openSignal={1}
+        onChanged={vi.fn()}
+        handlingScheme={SCHEME}
+      />,
+    );
+  }
+
+  it("is not offered without the deployment's scheme", () => {
+    mount(vi.fn(), 1);
+    expect(screen.queryByLabelText("Classification")).toBeNull();
+  });
+
+  it("starts at the link's handling and asks for a confirmation before lowering it", async () => {
+    const fetchMock = stubFetch(200, {});
+    mountWithScheme();
+    expect((screen.getByLabelText("Classification") as HTMLSelectElement).value).toBe("OFFICIAL");
+    fireEvent.change(screen.getByLabelText("Classification"), { target: { value: "PUBLIC" } });
+    fireEvent.change(screen.getByLabelText("Why is it being changed? (required)"), { target: { value: "Released" } });
+    expect(screen.getByText("This lowers the link's classification: only an Author may, and it is recorded.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Save change" }));
+    expect(await screen.findByText("This lowers the link's classification. Confirm that you mean to lower it.")).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText("I mean to lower this link's handling"));
+    fireEvent.click(screen.getByRole("button", { name: "Save change" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+    expect(body.handling.classification).toBe("PUBLIC");
+    expect(body.confirm_lower).toBe(true);
+  });
+
+  it("raises without asking", async () => {
+    const fetchMock = stubFetch(200, {});
+    mountWithScheme();
+    fireEvent.change(screen.getByLabelText("Handling code"), { target: { value: "R" } });
+    fireEvent.change(screen.getByLabelText("Why is it being changed? (required)"), { target: { value: "Restricted now" } });
+    expect(screen.queryByLabelText("I mean to lower this link's handling")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Save change" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+    expect(body.handling.handling_code).toBe("R");
+    expect(body.confirm_lower).toBeUndefined();
+  });
+});

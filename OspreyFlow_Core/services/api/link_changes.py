@@ -50,7 +50,8 @@ import asyncpg
 from pydantic import BaseModel, ConfigDict
 
 from conduit_common.identity import new_edge_id, new_id
-from ontology.errors import OntologyError
+from ontology.errors import HandlingSchemeError, OntologyError
+from ontology.handling import HandlingScheme, merge_handling, principal_may_view
 from ontology.validation import validate_edge_endpoints, validate_properties
 from ports.graph import GraphPort
 from schemas.domain import (
@@ -60,6 +61,7 @@ from schemas.domain import (
     Edge,
     EdgeTypeDef,
     EdgeWrite,
+    Handling,
     Interval,
     OntologySchema,
     Principal,
@@ -112,6 +114,15 @@ class ResolutionLinkError(Exception):
     """`SAME_AS` / `NOT_SAME_AS` links are changed by confirming or splitting, not edited."""
 
 
+class LoweringNeedsAuthorError(PermissionError):
+    """ADR-102: lowering a link's handling is an Author's change, not an Editor's."""
+
+
+class LoweringNotConfirmedError(Exception):
+    """ADR-102: a lower handling is written only once the analyst has said, in so many words, that
+    they mean to lower it (`confirm_lower`)."""
+
+
 class LinkChange(BaseModel):
     """One recorded change. `before` and `after` hold the type, properties, validity period and
     times seen, as they were and as they became."""
@@ -141,6 +152,11 @@ class LinkChangeRequest(BaseModel):
     occurrences: int | None = None
     #: What stands behind the link (ADR-081). Left out, the link keeps what stood behind it.
     basis: Literal["direct", "probabilistic"] | None = None
+    #: ADR-102: the link's handling. Left out, it is kept. Raising it is an ordinary change;
+    #: lowering any part of it needs an Author and `confirm_lower`.
+    handling: Handling | None = None
+    #: The analyst's own confirmation that a lower handling is meant (ADR-102).
+    confirm_lower: bool = False
 
 
 class LinkChangeResult(BaseModel):
@@ -240,6 +256,7 @@ def _snapshot(edge: Edge, type_def: EdgeTypeDef | None) -> dict[str, Any]:
         "interval": edge.interval.model_dump(mode="json") if edge.interval else None,
         "occurrences": edge.occurrences,
         "basis": effective_basis(edge.basis, type_def, written_at=edge.audit.created_at),
+        "handling": edge.handling.model_dump(mode="json"),
     }
 
 
@@ -252,7 +269,10 @@ class LinkChangeService:
         ontology: OntologySchema,
         notes: _Rekey,
         types: LinkTypeService | None = None,
+        *,
+        scheme: HandlingScheme | None = None,
     ) -> None:
+        self._scheme = scheme
         self._store = store
         self._working_set = working_set
         self._graph = graph
@@ -292,6 +312,8 @@ class LinkChangeService:
         edge_id: str,
         principal: Principal,
         request: LinkChangeRequest,
+        *,
+        is_author: bool = False,
     ) -> LinkChangeResult:
         old = await self._visible(investigation_id, edge_id, principal)
         reason = request.reason.strip()
@@ -349,8 +371,11 @@ class LinkChangeService:
             "probabilistic" if wanted == "probabilistic" and type_def.basis == "direct" else None
         )
 
+        new_handling = self._wanted_handling(old.handling, request, principal, is_author)
+
         candidate = old.model_copy(
             update={
+                "handling": new_handling,
                 "type": new_type,
                 "properties": dict(new_properties),
                 "interval": new_interval,
@@ -383,7 +408,7 @@ class LinkChangeService:
             occurrences=new_occurrences,
             basis=new_basis,
             provenance=provenance,
-            handling=old.handling,
+            handling=new_handling,
             created_by=principal.id,
             created_at=now,
         )
@@ -398,6 +423,7 @@ class LinkChangeService:
 
         new = old.model_copy(
             update={
+                "handling": new_handling,
                 "id": replacement_id,
                 "type": new_type,
                 "properties": dict(new_properties),
@@ -425,6 +451,39 @@ class LinkChangeService:
         await self._store.add(change)
         await self._notes.rekey(investigation_id, old.id, replacement_id)
         return LinkChangeResult(edge=new, delta=delta, change=change)
+
+    def _wanted_handling(
+        self, old: Handling, request: LinkChangeRequest, principal: Principal, is_author: bool
+    ) -> Handling:
+        """ADR-102 decision 4. Left out, the handling is kept. A handling asked for must be in the
+        scheme, keep the link's units (a change does not move it to another unit), and be one the
+        analyst can see. Lower in any part than the link's (what `merge_handling` would raise
+        back), it is an Author's change and needs `confirm_lower`; refused, nothing is written."""
+        wanted = request.handling
+        if wanted is None:
+            return old
+        if self._scheme is None:
+            raise InvalidChangeError("This deployment does not change a link's handling here.")
+        if (wanted.owning_unit, wanted.originator) != (old.owning_unit, old.originator):
+            raise InvalidChangeError(
+                "A link's owning unit and originator are not changed here, only its marking."
+            )
+        try:
+            lower = merge_handling(wanted, old, self._scheme) != wanted
+        except HandlingSchemeError as exc:
+            raise InvalidChangeError(str(exc)) from exc
+        if not principal_may_view(wanted, principal, self._scheme):
+            raise InvalidChangeError(
+                "A link cannot be marked above your own clearance or handling: you could not see "
+                "it afterwards."
+            )
+        if lower and not is_author:
+            raise LoweringNeedsAuthorError("Lowering a link's handling needs Author access.")
+        if lower and not request.confirm_lower:
+            raise LoweringNotConfirmedError(
+                "This lowers the link's handling: confirm it to go ahead."
+            )
+        return wanted
 
     async def history(
         self, investigation_id: str, edge_id: str, principal: Principal

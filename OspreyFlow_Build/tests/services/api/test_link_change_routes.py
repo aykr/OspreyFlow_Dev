@@ -25,6 +25,8 @@ from services.api.link_changes import (
     LinkChangeRequest,
     LinkChangeResult,
     LinkHistoryResponse,
+    LoweringNeedsAuthorError,
+    LoweringNotConfirmedError,
     ResolutionLinkError,
 )
 from services.api.link_notes import LinkNotFoundError
@@ -81,11 +83,19 @@ class _FakeLinkChanges:
         self.calls: list[tuple[str, str, Principal, LinkChangeRequest]] = []
         self.history_calls: list[tuple[str, str, Principal]] = []
         self.error: Exception | None = None
+        self.is_author: list[bool] = []
 
     async def change(
-        self, investigation_id: str, edge_id: str, principal: Principal, request: LinkChangeRequest
+        self,
+        investigation_id: str,
+        edge_id: str,
+        principal: Principal,
+        request: LinkChangeRequest,
+        *,
+        is_author: bool = False,
     ) -> LinkChangeResult:
         self.calls.append((investigation_id, edge_id, principal, request))
+        self.is_author.append(is_author)
         if self.error is not None:
             raise self.error
         edge = _edge("e2", "FAMILY_OF")
@@ -197,6 +207,9 @@ def test_a_change_is_audited_with_the_reason_and_the_old_and_new_values(
         (InvalidChangeError("Say why."), 422, "invalid_link_change"),
         (ChangeNotMadeError("Nothing about the link would change."), 422, "nothing_changed"),
         (ResolutionLinkError("Same-as links are confirmed or not."), 422, "resolution_link"),
+        # ADR-102.
+        (LoweringNeedsAuthorError("Needs Author."), 403, "lowering_needs_author"),
+        (LoweringNotConfirmedError("Confirm it."), 409, "confirm_lower_handling"),
     ],
 )
 def test_each_refusal_has_its_own_status_and_nothing_is_published_or_audited(
@@ -218,15 +231,48 @@ def test_a_change_without_a_reason_field_is_refused_before_the_service_runs(
     assert client.service.calls == []  # type: ignore[attr-defined]
 
 
-def test_an_unknown_field_is_refused_so_a_marking_cannot_be_smuggled_in(
-    client: TestClient,
-) -> None:
+def test_an_unknown_field_is_refused_so_nothing_is_smuggled_in(client: TestClient) -> None:
+    """A field the request does not declare is refused before the service runs. Not `handling`
+    any more: ADR-102 made it a declared field, governed in the service (lowering needs an Author
+    and a confirmation, `test_link_changes.py`)."""
     response = client.post(
-        f"{URL}/change",
-        json={"type": "FAMILY_OF", "reason": "r", "handling": {"classification": "PUBLIC"}},
+        f"{URL}/change", json={"type": "FAMILY_OF", "reason": "r", "owning_unit": "unit-2"}
     )
     assert response.status_code == 422
     assert client.service.calls == []  # type: ignore[attr-defined]
+
+
+def test_a_handling_reaches_the_service_with_whether_the_analyst_is_an_author(
+    client: TestClient,
+) -> None:
+    handling = {"classification": "OFFICIAL", "handling_code": "P", "originator": "unit-1",
+                "owning_unit": "unit-1"}
+    response = client.post(
+        f"{URL}/change", json={"reason": "Released", "handling": handling, "confirm_lower": True}
+    )
+    assert response.status_code == 200, response.text
+    (_, _, _, request), = client.service.calls  # type: ignore[attr-defined]
+    assert request.handling is not None and request.handling.classification == "OFFICIAL"
+    assert request.confirm_lower is True
+    # `_FakeInvestigations` grants whatever is asked, so the analyst is an Author here.
+    assert client.service.is_author == [True]  # type: ignore[attr-defined]
+
+
+def test_an_editor_who_is_not_an_author_is_told_so(client: TestClient) -> None:
+    from services.api.app import get_investigations
+    from services.api.investigations import InsufficientAccessError
+
+    class _EditorOnly(_FakeInvestigations):
+        async def get_authorized(  # type: ignore[override]
+            self, investigation_id: str, principal: Principal, *, need: object = None
+        ) -> Investigation:
+            if str(need).endswith("AUTHOR") or getattr(need, "name", "") == "AUTHOR":
+                raise InsufficientAccessError(investigation_id)
+            return await super().get_authorized(investigation_id, principal, need=need)
+
+    app.dependency_overrides[get_investigations] = lambda: _EditorOnly()
+    client.post(f"{URL}/change", json={"type": "FAMILY_OF", "reason": "r"})
+    assert client.service.is_author == [False]  # type: ignore[attr-defined]
 
 
 def test_the_history_is_read_through_the_service_with_the_principal(client: TestClient) -> None:

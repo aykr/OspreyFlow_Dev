@@ -2,9 +2,11 @@
 // rule can be tested on its own: which types a link may change to, what the form starts with, and
 // how what the analyst typed becomes the request the server takes — only what changed, with the
 // reason, or a sentence saying what is wrong.
-import type { Edge, EdgeTypeDef, PropertyDef } from "../../../../packages/schemas/generated";
+import type { Edge, EdgeTypeDef, Handling, PropertyDef } from "../../../../packages/schemas/generated";
 import { linkTypeName } from "../canvas/linkLabel";
+import type { HandlingScheme } from "../ingest/api";
 import type { LinkChangeInput } from "./linkChangeApi";
+import { lowerParts } from "./linkHandling";
 
 /** The same limit the server holds (`services/api/link_changes.py::MAX_REASON_CHARS`). */
 export const MAX_REASON_CHARS = 1000;
@@ -21,6 +23,10 @@ export interface LinkDraft {
   reason: string;
   /** What stands behind the link, as chosen; `""` until the analyst says (ADR-081: no default). */
   basis: BasisChoice | "";
+  /** The link's handling as chosen (ADR-102); its units are the link's and are not offered. */
+  handling: Handling;
+  /** The analyst's own confirmation that a lower handling is meant (ADR-102). */
+  confirmLower: boolean;
 }
 
 /** What stands behind a link now: the link's own mark, or its type's basis (ADR-081 decision 2). */
@@ -87,6 +93,8 @@ export function initialDraft(edge: Edge): LinkDraft {
     validTo: edge.interval?.valid_to ? edge.interval.valid_to.slice(0, 10) : "",
     reason: "",
     basis: "",
+    handling: { ...edge.handling },
+    confirmLower: false,
   };
 }
 
@@ -147,6 +155,7 @@ export function toChangeInput(
   edge: Edge,
   draft: LinkDraft,
   edgeTypes: readonly EdgeTypeDef[],
+  scheme?: HandlingScheme,
 ): ChangeOutcome {
   const original = initialDraft(edge);
   const reason = draft.reason.trim();
@@ -209,6 +218,25 @@ export function toChangeInput(
           };
   }
   if (basisChanged && chosen !== null) input.basis = chosen;
+
+  // ADR-102: a handling that differs is sent whole, with the link's own units; a lower one only
+  // once the analyst has confirmed it. The server holds the same rule and decides.
+  const handling: Handling = {
+    ...draft.handling,
+    owning_unit: edge.handling.owning_unit,
+    originator: edge.handling.originator,
+  };
+  if (sorted(handling as unknown as Record<string, unknown>) !== sorted(edge.handling as unknown as Record<string, unknown>)) {
+    const lower = scheme ? lowerParts(edge.handling, handling, scheme) : [];
+    if (lower.length > 0 && !draft.confirmLower) {
+      return {
+        kind: "problem",
+        message: `This lowers the link's ${lower.join(", ")}. Confirm that you mean to lower it.`,
+      };
+    }
+    input.handling = handling;
+    if (lower.length > 0) input.confirm_lower = true;
+  }
 
   const changed = Object.keys(input).length > 1;
   if (!changed) return { kind: "nothing" };

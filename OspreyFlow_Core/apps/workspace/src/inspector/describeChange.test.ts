@@ -60,4 +60,13 @@ describe("describeChange", () => {
   it("says nothing for what did not change", () => {
     expect(describeChange(record(base, base))).toEqual([]);
   });
+
+  it("says the handling it had and was given (ADR-102), and nothing for an older change without it", () => {
+    const secret = { classification: "SECRET", handling_code: "C", action_code: "A1", originator: "u", owning_unit: "u" };
+    const official = { classification: "OFFICIAL", handling_code: "P", originator: "u", owning_unit: "u" };
+    expect(describeChange(record({ ...base, handling: secret }, { ...base, handling: official }))).toEqual([
+      "Handling: SECRET, C, A1 → OFFICIAL, P",
+    ]);
+    expect(describeChange(record(base, { ...base, handling: official }))).toEqual([]);
+  });
 });

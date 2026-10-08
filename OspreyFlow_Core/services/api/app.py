@@ -305,6 +305,8 @@ from .link_changes import (
     LinkChangeService,
     LinkChangeStore,
     LinkHistoryResponse,
+    LoweringNeedsAuthorError,
+    LoweringNotConfirmedError,
     ResolutionLinkError,
 )
 from .link_events import LinkEventListResponse, LinkEventsService
@@ -555,6 +557,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         ontology,
         link_notes_store,
         app.state.link_types,
+        scheme=handling_scheme,
     )
     app.state.link_events = LinkEventsService(app.state.working_set, analytics, investigations)
     # ADR-094: where a content item's file is kept; never the graph.
@@ -1319,6 +1322,26 @@ async def _proposal_not_found_handler(request: Request, exc: ProposalNotFoundErr
 @app.exception_handler(ProposalRefusedError)
 async def _proposal_refused_handler(request: Request, exc: ProposalRefusedError) -> JSONResponse:
     return JSONResponse(status_code=422, content={"error": "proposal_refused", "detail": str(exc)})
+
+
+@app.exception_handler(LoweringNeedsAuthorError)
+async def _lowering_needs_author_handler(
+    request: Request, exc: LoweringNeedsAuthorError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={"error": "lowering_needs_author", "detail": str(exc)},
+    )
+
+
+@app.exception_handler(LoweringNotConfirmedError)
+async def _lowering_not_confirmed_handler(
+    request: Request, exc: LoweringNotConfirmedError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"error": "confirm_lower_handling", "detail": str(exc)},
+    )
 
 
 @app.exception_handler(InvalidChangeError)
@@ -3416,13 +3439,24 @@ async def change_link_route(
     principal: PrincipalDep,
     body: LinkChangeRequest,
     link_changes: LinkChangesDep,
+    investigations: InvestigationsDep,
     audit: AuditDep,
     valkey: Annotated[Valkey, Depends(get_valkey)],
 ) -> LinkChangeResult:
     """Change a link's type or details (ADR-080): a supersede, with a required reason, kept in the
     link's history and in the audit stream with the old and new values. The old link is kept in
-    the store and replaced in the working set; its notes move to the new one."""
-    result = await link_changes.change(investigation.id, edge_id, principal, body)
+    the store and replaced in the working set; its notes move to the new one.
+
+    ADR-102: the handling may be raised by an Editor; lowering any part of it is an Author's
+    change and needs `confirm_lower`, else 403 or 409 and nothing is written."""
+    try:
+        await investigations.get_authorized(investigation.id, principal, need=AccessLevel.AUTHOR)
+        is_author = True
+    except (InvestigationNotFoundError, InsufficientAccessError):
+        is_author = False
+    result = await link_changes.change(
+        investigation.id, edge_id, principal, body, is_author=is_author
+    )
     await publish_delta(valkey, investigation.id, result.delta)
     await audit.record(
         principal=principal,

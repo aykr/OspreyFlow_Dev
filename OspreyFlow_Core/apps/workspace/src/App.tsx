@@ -43,7 +43,7 @@ import { ClassificationStrip, highestMarking } from "./shell/ClassificationStrip
 import { LeftRail } from "./shell/LeftRail";
 import { Drawer } from "./design/primitives/Drawer";
 import { TopBar } from "./shell/TopBar";
-import { fetchHandlingScheme } from "./ingest/api";
+import { fetchHandlingScheme, type HandlingScheme } from "./ingest/api";
 import { Button } from "./design/primitives/Button";
 import { Toast } from "./design/primitives/Toast";
 import { Dossier } from "./dossier/Dossier";
@@ -406,6 +406,8 @@ export function App() {
   const [exploreOpen, setExploreOpen] = useState(false);
   // ADR-097 step 1 (review item 16): the deployment's classifications, lowest first, for the strip.
   const [classificationOrder, setClassificationOrder] = useState<readonly string[]>([]);
+  // ADR-102: the scheme, so a link's handling can be changed on purpose.
+  const [handlingScheme, setHandlingScheme] = useState<HandlingScheme | undefined>(undefined);
   const [proposedTypesOpen, setProposedTypesOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   // B16's own cross-case overlay — the second investigation's own scope,
@@ -522,7 +524,10 @@ export function App() {
       });
     void fetchMapConfig(API_BASE_URL, bearerToken).then(setMapConfig);
     fetchHandlingScheme(API_BASE_URL, bearerToken)
-      .then((scheme) => setClassificationOrder(scheme.classification ?? []))
+      .then((scheme) => {
+        setClassificationOrder(scheme.classification ?? []);
+        setHandlingScheme(scheme);
+      })
       .catch(() => setClassificationOrder([]));
   }, [bearerToken, handleUnauthenticatedResponse]);
 
@@ -1295,6 +1300,7 @@ export function App() {
                         proposedTypes: caseLinkTypes?.proposed,
                         getEventsWindow: () => crossFilterRef.current?.store.getState().window ?? null,
                         onTypeProposed: () => setLinkTypesRead((n) => n + 1),
+                        handlingScheme,
                         onReadFullScreen: (view) => {
                           setReaderFallback(view);
                           setReaderDocumentId(view.document_id);

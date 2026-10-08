@@ -641,6 +641,14 @@ after. Notes follow the link to its new version. Every write from the menu is re
 trail attributed to the analyst. Reachable by keyboard throughout (rule 13: `keyboard/link-menu.spec.ts`,
 `keyboard/link-change.spec.ts`). A menu or box that closes returns focus to the canvas.
 
+**The link's handling is changed there too (ADR-102).** The form offers the classification, handling
+code, action code and sanitisation code from the deployment's scheme, never the units. A raise is an
+ordinary change. A choice lower in any part says so ("This lowers the link's classification: only an
+Author may, and it is recorded") and saves only once *I mean to lower this link's handling* is ticked;
+the Conduit refuses an Editor who is not an Author. The history says "Handling: SECRET, C → OFFICIAL, P".
+A link written again by a load never lowers its handling (ADR-102 decision 1), so this form is the one way
+down (`keyboard/inspector.spec.ts`).
+
 **When no type fits, an Editor defines one there (ADR-090).** The types the form offers are the case's
 own (`GET .../link-types`): the ontology's (the default dataset's), and those proposed in any case
 reading one of this case's datasets (ADR-099 Amendment 3 decision 2), each proposed one marked
