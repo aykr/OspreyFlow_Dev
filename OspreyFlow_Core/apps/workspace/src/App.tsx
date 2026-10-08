@@ -80,6 +80,7 @@ import { CaseTabs } from "./investigation/CaseTabs";
 import { CaseDatasets } from "./investigation/CaseDatasets";
 import { openCase } from "./investigation/cases";
 import { QuestionsPanel } from "./questions/QuestionsPanel";
+import { ExplorePanel } from "./explore/ExplorePanel";
 import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
 import { StatusBar } from "./statusbar/StatusBar";
 import { emergence, type FirstSeen } from "./crossfilter/emergence";
@@ -358,6 +359,11 @@ export function App() {
     null,
   );
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  /** ADR-100: an Explore item does what choosing a search result does: draws it and selects it. */
+  const pickToStart = (node: Node) => {
+    drawSearchResult(workingSetRef.current.store, node, glassCanvasRef.current);
+    setSelectedNode(node);
+  };
   const [selectedLink, setSelectedLink] = useState<Edge | null>(null);
   // ADR-080: the link menu's *Add a note* and *Change link…* count these up to bring that part of
   // the Inspector forward.
@@ -370,6 +376,8 @@ export function App() {
   const [casesOpen, setCasesOpen] = useState(false);
   // ADR-098 decision 4: the case's questions to the model, open at once in a case branched for them.
   const [questionsOpen, setQuestionsOpen] = useState(handoff.view === "questions");
+  // ADR-100: where to start in a case's data, from the rail (and over an empty canvas).
+  const [exploreOpen, setExploreOpen] = useState(false);
   // ADR-097 step 1 (review item 16): the deployment's classifications, lowest first, for the strip.
   const [classificationOrder, setClassificationOrder] = useState<readonly string[]>([]);
   const [proposedTypesOpen, setProposedTypesOpen] = useState(false);
@@ -884,6 +892,7 @@ export function App() {
                 { id: "cases", label: "Cases", icon: "cases" as const, onSelect: () => setCasesOpen(true), pressed: casesOpen },
                 { id: "watches", label: "Watches", icon: "watches" as const, onSelect: () => setView("watches"), pressed: view === "watches" },
                 { id: "history", label: "History", icon: "history" as const, onSelect: () => setHistoryOpen(true), pressed: historyOpen },
+                { id: "explore", label: "Explore", icon: "explore" as const, onSelect: () => setExploreOpen(true), pressed: exploreOpen },
                 { id: "questions", label: "Questions", icon: "questions" as const, onSelect: () => setQuestionsOpen(true), pressed: questionsOpen },
                 ...((principal?.roles?.includes("osprey-admin") ?? false)
                   ? // ADR-090 C3: the relationship types analysts of the administrator's unit proposed.
@@ -1049,6 +1058,37 @@ export function App() {
                   setView("dossier");
                 }}
               />
+            )}
+            {/* ADR-100: an empty canvas offers where to start, until something is drawn. */}
+            {view === "graph" && counts.nodes === 0 && investigationId && (
+              <div
+                className="explore-overlay"
+                style={{
+                  position: "absolute",
+                  top: "var(--sp-40)",
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  width: "min(28rem, calc(100% - var(--sp-32)))",
+                  maxHeight: "calc(100% - var(--sp-56) - var(--sp-24))",
+                  overflowY: "auto",
+                  padding: "var(--sp-16)",
+                  background: "var(--surface-panel)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "var(--r-overlay)",
+                }}
+              >
+                <h2 style={{ fontSize: "var(--fs-14)", margin: "0 0 var(--sp-8)" }}>Where to start</h2>
+                <p style={{ color: "var(--text-secondary)", margin: "0 0 var(--sp-12)", fontSize: "var(--fs-12)" }}>
+                  Search above, or start from what this case holds.
+                </p>
+                <ExplorePanel
+                  apiBaseUrl={API_BASE_URL}
+                  bearerToken={bearerToken}
+                  investigationId={investigationId}
+                  edgeTypes={edgeTypes}
+                  onPick={pickToStart}
+                />
+              </div>
             )}
             {view === "map" &&
               mapConfig &&
@@ -1326,6 +1366,20 @@ export function App() {
         onClose={() => setProposedTypesOpen(false)}
         onDecided={() => setLinkTypesRead((n) => n + 1)}
       />
+      <Drawer open={exploreOpen} onClose={() => setExploreOpen(false)} title="Explore">
+        {investigationId && (
+          <ExplorePanel
+            apiBaseUrl={API_BASE_URL}
+            bearerToken={bearerToken}
+            investigationId={investigationId}
+            edgeTypes={edgeTypes}
+            onPick={(node) => {
+              pickToStart(node);
+              setExploreOpen(false);
+            }}
+          />
+        )}
+      </Drawer>
       <Drawer open={questionsOpen} onClose={() => setQuestionsOpen(false)} title="Questions">
         <QuestionsPanel
           apiBaseUrl={API_BASE_URL}

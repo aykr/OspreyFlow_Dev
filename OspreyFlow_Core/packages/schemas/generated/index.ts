@@ -121,3 +121,6 @@ export type { ClusterHost } from "./ClusterHost";
 export type { ClusterConfig } from "./ClusterConfig";
 export type { NetworkConfig } from "./NetworkConfig";
 export type { OspreyConfig } from "./OspreyConfig";
+export type { TypeCounts } from "./TypeCounts";
+export type { RankedNode } from "./RankedNode";
+export type { RankedNodes } from "./RankedNodes";

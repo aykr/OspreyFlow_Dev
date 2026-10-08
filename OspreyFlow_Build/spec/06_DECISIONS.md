@@ -10060,3 +10060,12 @@ Status: accepted 7 October 2026 (mine, within the owner's "carry on with ADR-100
 2. **Every figure is the principal's own, in the traversal** (rule 3): the access step on each node, each link and each link's other end. A link counts, in a type count and in a degree, only when both its ends can be seen; reverted and superseded elements and other datasets count nowhere. The conformance cases check each twice: right on its own, and unchanged once hidden, other-dataset and reverted neighbours are added beside it.
 3. **A ranking says of how many** (rule 2): `total` is the number of nodes ranked, and a page past the end is empty, never a short page that looks whole.
 4. **Computed live for now.** ADR-100's cost constraint (rankings kept per dataset and handling class, recomputed after a load) is not built: whether a live ranking is fast enough is measured on the reloaded Enron case first, and the store kept only if it is not.
+
+### ADR-100, Amendment 2 (8 October 2026) — stage 3: the panel in the Glass
+
+Status: accepted 8 October 2026 (mine, within the owner's "carry on with stage 3, the Glass panel"; recorded so it can be overruled).
+
+1. **Decisions 2 to 4 are built** (`spec/02_GLASS_FRONTEND.md`, "Where to start in a case's data"): over an empty canvas as *Where to start*, and from the rail as *Explore*. Decisions 5 to 8 (busiest links and days, groups and bridges, what is new, starter questions) are not built; each needs its own store read and conformance cases first.
+2. **A pick is a search result's choice**: drawn, drawn outwards three links (ADR-070, with its large-expansion prompt) and selected, so a hub of thousands asks before it draws, exactly as searching it would.
+3. **Pages ask for what is left**: *Show n more* asks for at most 10 and says how many; the panel never asks for, or shows, more than the ranking holds.
+4. **Not measured yet:** how long `most_connected` takes on the Enron case live (ADR-100 Amendment 1, decision 4). The panel says *Counting…* while it waits; whether the rankings must be kept per dataset is decided on that measurement.

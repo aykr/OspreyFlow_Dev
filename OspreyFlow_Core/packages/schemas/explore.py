@@ -34,3 +34,6 @@ class RankedNodes(BaseModel):
     nodes: list[RankedNode]
     total: int
     offset: int
+
+
+ALL_MODELS = (TypeCounts, RankedNode, RankedNodes)

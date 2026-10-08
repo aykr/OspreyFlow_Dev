@@ -1,6 +1,6 @@
 // The shell's icons (ADR-097 step 1): 16px, one stroke in the current text colour, no fill, so
 // they take the chrome's neutral and never a data colour.
-export type ShellIcon = "cases" | "history" | "watches" | "types" | "ingest" | "glass" | "names" | "questions";
+export type ShellIcon = "cases" | "history" | "watches" | "types" | "ingest" | "glass" | "names" | "questions" | "explore";
 
 const PATHS: Record<ShellIcon, string> = {
   // Two stacked folders: the case and its branches.
@@ -19,6 +19,8 @@ const PATHS: Record<ShellIcon, string> = {
   names: "M2.5 8h11 M10.5 5l3 3l-3 3",
   // A speech bubble: a question put to the model.
   questions: "M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z",
+  // A compass: where to start.
+  explore: "M8 2.5a5.5 5.5 0 1 0 0 11a5.5 5.5 0 0 0 0-11z M10.2 5.8L9 9L5.8 10.2L7 7z",
 };
 
 export function Icon({ name }: { name: ShellIcon }) {

@@ -390,6 +390,14 @@ export const CASE_DATASETS_ACTIONS = defineActionRegistry("CASE_DATASETS_ACTIONS
   "change-what-a-case-reads-by-keyboard",
 ] as const);
 
+/** Where to start in a case's data (ADR-100): a node from the most connected, or from a type's
+ * most connected, put on the canvas; a ranking paged. `keyboard/explore.spec.ts`. */
+export const EXPLORE_ACTIONS = defineActionRegistry("EXPLORE_ACTIONS", [
+  "put-a-most-connected-node-on-the-canvas-by-keyboard",
+  "open-an-entity-type-and-put-one-on-the-canvas-by-keyboard",
+  "show-more-of-a-ranking-by-keyboard",
+] as const);
+
 /** The case's questions to the model (ADR-098 decision 4): asked, answered with what it draws on,
  * and its proposals accepted or rejected. `keyboard/questions.spec.ts`. */
 export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [

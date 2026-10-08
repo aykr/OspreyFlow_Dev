@@ -505,6 +505,17 @@ question box asks on *Ask* or `Ctrl+Enter`. Documents together longer than 80,00
 with both figures in words, and the question is kept (`keyboard/questions.spec.ts`,
 `keyboard/selection.spec.ts`).
 
+**Where to start in a case's data: Explore (ADR-100).** While the canvas holds nothing, it shows *Where to
+start* over the canvas; the same panel opens from the left rail as *Explore* at any time. It shows, for the
+case's datasets and the analyst's clearance only: *What this case holds* (the count of each entity type and
+each link type, types with none left out); *Most connected* (the 10 nodes with the most visible links, saying
+"The 10 most connected of N", with *Show n more* until "All N shown"); and *By entity type* (each type and its
+count, opening to its 5 most connected and paging the same way). Every node in it is a button that does what
+choosing a search result does: puts it on the canvas, draws outwards from it and selects it. The figures are
+the Conduit's (`/explore/counts`, `/explore/most-connected`), never reckoned in the browser
+(`keyboard/explore.spec.ts`, `src/explore/ExplorePanel.test.tsx`). Busiest links and days, groups and
+bridges, what is new and starter questions (ADR-100 decisions 5 to 8) are not built yet.
+
 ### 3.1c An expansion that adds nothing says so (ADR-077)
 
 Choosing a relationship from a node's menu (or pressing `Enter`, or opening a search result) asks the
