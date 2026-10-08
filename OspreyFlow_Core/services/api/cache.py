@@ -38,12 +38,15 @@ def principal_class(principal: Principal) -> str:
     codes without `org_unit` would let them share a cache entry a
     restricted-dissemination rule says they should not. `receivable_
     handling_codes` is sorted so the same set in a different claim order
-    hashes identically."""
+    hashes identically. The case's `datasets` are an access axis like handling (ADR-099), so they
+    are part of the class too, sorted; `None` (unlimited background work) and `[]` (nothing) stay
+    distinct."""
     payload = json.dumps(
         {
             "clearance": principal.clearance,
             "org_unit": principal.org_unit,
             "receivable_handling_codes": sorted(principal.receivable_handling_codes),
+            "datasets": None if principal.datasets is None else sorted(set(principal.datasets)),
         },
         sort_keys=True,
     )
