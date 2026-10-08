@@ -51,6 +51,43 @@ const ranking = () => screen.getByRole("button", { name: /^Ranking/ });
 // ADR-097 step 3 (design review item 15): the analysis is named for what it does.
 const communities = () => screen.getByRole("button", { name: /^Community detection/ });
 
+describe("MetricsPanel ranking rows", () => {
+  // Seen capturing the deck, 8 October 2026: the ranking read "Location · 01M46CSDMQCB3KGJE3FMHVM173"
+  // where the canvas says "Yard E". A row names its node as the canvas does.
+  it("names each node as the canvas labels it, not by its id", async () => {
+    stubCompute();
+    const working = createWorkingSet();
+    working.store.getState().applyDelta({
+      seq: 1,
+      op: "add",
+      nodes: [
+        {
+          id: "n1",
+          type: "Location",
+          properties: { name: "Yard E" },
+          provenance: { state: "asserted", sources: [], first_seen: "2026-01-01T00:00:00Z" },
+          handling: { classification: "OFFICIAL", handling_code: "P", originator: "u", owning_unit: "u" },
+          audit: { created_at: "2026-01-01T00:00:00Z", created_by: "loader" },
+          datasets: [],
+        } as never,
+      ],
+      edges: [],
+    });
+    render(
+      <MetricsPanel
+        apiBaseUrl="http://api"
+        bearerToken="tok"
+        investigationId="inv-1"
+        graph={working.graph}
+        onFocusNode={() => undefined}
+      />,
+    );
+    const row = await screen.findByRole("button", { name: /Yard E/ });
+    expect(row.textContent).toContain("Location · Yard E");
+    expect(row.textContent).not.toContain("n1");
+  });
+});
+
 describe("MetricsPanel sections", () => {
   it("opens on the ranking, loaded, with the other sections folded and nothing else fetched", async () => {
     const calls = stubCompute();

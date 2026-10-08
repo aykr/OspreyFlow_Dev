@@ -17,6 +17,7 @@
 // same distinction `ThresholdControl.tsx`'s own docstring already draws for its native `<input>`.
 import { useEffect, useState } from "react";
 
+import { nodeLabel } from "../canvas/nodeAttributes";
 import { AccordionSection } from "../design/primitives/AccordionSection";
 import { Panel } from "../design/primitives/Panel";
 import { Select } from "../design/primitives/Select";
@@ -61,10 +62,12 @@ export interface MetricsPanelProps {
   onFilterChange?: (filter: MetricFilter) => void;
 }
 
-function nodeLabel(graph: WorkingSetGraph, nodeId: string): string {
+/** A row names its node as the canvas labels it (8 October 2026: it showed the node's id, so the
+ * ranking read "Location · 01M46CSD…" where the canvas said "Yard E"). */
+function rowLabel(graph: WorkingSetGraph, nodeId: string): string {
   if (!graph.hasNode(nodeId)) return nodeId;
   const node = graph.getNodeAttribute(nodeId, "data");
-  return `${node.type} · ${nodeId}`;
+  return `${node.type} · ${nodeLabel(node)}`;
 }
 
 export function MetricsPanel({
@@ -244,7 +247,7 @@ export function MetricsPanel({
                     }}
                     onClick={() => onFocusNode(nodeId)}
                   >
-                    <span>{nodeLabel(graph, nodeId)}</span>
+                    <span>{rowLabel(graph, nodeId)}</span>
                     <span className="value">
                       {value.toFixed(3)}
                       {compareMode && valuesB && valuesB[nodeId] !== undefined
