@@ -41,6 +41,16 @@ async function serve(page: Page) {
         total_bridges: 1,
       });
     }
+    if (url.pathname.endsWith("/whats-new")) {
+      return json({
+        loads: [{ load_id: "load-1", nodes: 4, links: 4, latest: "2026-10-08T09:00:00Z" }],
+        loads_total: 1,
+        confirmed: [{ node: node("hub2", "Person"), confirmed_at: "2026-10-08T10:00:00Z", confirmed_by: "analyst-2" }],
+        confirmed_total: 1,
+        marked: [{ node: node("hub3", "Person"), marked_at: "2026-10-08T11:00:00Z", marked_by: "analyst-3", reason: "a duplicate" }],
+        marked_total: 1,
+      });
+    }
     if (url.pathname.endsWith("/busiest-days")) {
       return json({ days: [{ start: "2001-05-02T00:00:00Z", end: "2001-05-03T00:00:00Z", count: 40 }], total: 1, offset: 0 });
     }
@@ -126,6 +136,24 @@ test("a bridge goes on the canvas by keyboard", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.picked)).toEqual(["hub1"]);
   registerCovered(REGISTRY, "put-a-bridge-on-the-canvas-by-keyboard");
+});
+
+test("a node a colleague confirmed goes on the canvas by keyboard", async ({ page }) => {
+  await serve(page);
+  const news = page.getByRole("region", { name: "What's new" });
+  await news.getByRole("button", { name: /^hub2 · Person · confirmed by analyst-2/ }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.picked)).toEqual(["hub2"]);
+  registerCovered(REGISTRY, "put-a-confirmed-node-on-the-canvas-by-keyboard");
+});
+
+test("a node a colleague marked goes on the canvas by keyboard", async ({ page }) => {
+  await serve(page);
+  const news = page.getByRole("region", { name: "What's new" });
+  await news.getByRole("button", { name: /^hub3 · Person · marked for suppression by analyst-3/ }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.picked)).toEqual(["hub3"]);
+  registerCovered(REGISTRY, "put-a-marked-node-on-the-canvas-by-keyboard");
 });
 
 test("every registered explore action has its own proving test case above", () => {

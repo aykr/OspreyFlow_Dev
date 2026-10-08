@@ -10,6 +10,7 @@ when it was counted.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from collections import Counter, defaultdict
 from collections.abc import Callable
@@ -28,16 +29,25 @@ from schemas.explore import (
     BusyDay,
     Group,
     Groups,
+    MarkedNode,
     RankedLinks,
     RankedNodes,
     TypeCounts,
+    WhatsNew,
 )
 
 from .overview import _breach
+from .suppression import SuppressionMark
 from .working_set.models import MAX_EDGES, MAX_NODES, LimitExceededError
 
 #: How many groups and bridges are named; the rest are counted.
 TOP_GROUPS = 10
+
+#: How many loads, confirmations and marks "what is new" names; the rest are counted.
+WHATS_NEW_SHOWN = 10
+
+#: How many marked nodes are looked up at once.
+_MARK_LOOKUPS = 16
 
 #: A day, the busiest days' bucket.
 DAY_SECONDS = 86_400
@@ -46,6 +56,10 @@ DAY_SECONDS = 86_400
 EXPLORE_TTL_SECONDS = 3600
 #: Bumped when what is kept changes shape, so an older entry is never read as a newer one.
 _VERSION = "v1"
+
+
+class MarkSource(Protocol):
+    async def recent(self) -> list[SuppressionMark]: ...
 
 
 class ExploreCache(Protocol):
@@ -236,6 +250,51 @@ class ExploreService:
         if self._cache is not None:
             await self._cache.put(signature, principal, found.model_dump(mode="json"))
         return found
+
+    async def whats_new(
+        self, principal: Principal, marks: MarkSource, *, shown: int = WHATS_NEW_SHOWN
+    ) -> WhatsNew:
+        """ADR-100 decision 7 (Amendment 6): the latest loads into the case's datasets and the
+        nodes colleagues confirmed there, both counted in the store and kept; and the nodes marked
+        for suppression there, read each time, since a mark writes nothing to the graph that would
+        clear what is kept. A mark is named and counted only when the store gives the reader its
+        node (rule 3): a mark on a node they cannot see is in neither the list nor the total."""
+        signature = f"explore:{_VERSION}:whats-new:{shown}"
+        held = await self._cache.get(signature, principal) if self._cache is not None else None
+        if held:
+            kept = WhatsNew.model_validate(held)
+        else:
+            loads = await self._graph.recent_loads(principal, limit=shown)
+            confirmed = await self._graph.recently_confirmed(principal, limit=shown)
+            kept = WhatsNew(
+                loads=loads.loads,
+                loads_total=loads.total,
+                confirmed=confirmed.nodes,
+                confirmed_total=confirmed.total,
+                marked=[],
+                marked_total=0,
+                computed_at=self._now(),
+            )
+            if self._cache is not None:
+                await self._cache.put(signature, principal, kept.model_dump(mode="json"))
+        marked = await self._visible_marks(principal, marks)
+        return kept.model_copy(update={"marked": marked[:shown], "marked_total": len(marked)})
+
+    async def _visible_marks(self, principal: Principal, marks: MarkSource) -> list[MarkedNode]:
+        every = await marks.recent()
+        lookups = asyncio.Semaphore(_MARK_LOOKUPS)
+
+        async def look(mark: SuppressionMark) -> MarkedNode | None:
+            async with lookups:
+                node = await self._graph.get_node(mark.node_id, principal)
+            if node is None:
+                return None
+            return MarkedNode(
+                node=node, marked_at=mark.marked_at, marked_by=mark.marked_by, reason=mark.reason
+            )
+
+        found = await asyncio.gather(*(look(m) for m in every))
+        return [m for m in found if m is not None]
 
     async def invalidate(self) -> None:
         if self._cache is not None:

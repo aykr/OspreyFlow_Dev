@@ -138,6 +138,28 @@ class SuppressionMarkStore:
         # asyncpg returns the command tag, e.g. `DELETE 1` / `DELETE 0`.
         return str(deleted).endswith("1")
 
+    async def recent(self) -> list[SuppressionMark]:
+        """Every mark, the latest first (ties by node id), for the Explore panel's "what is new"
+        (ADR-100 Amendment 6). Takes no principal and is no answer on its own: its one caller asks
+        the store, as the reader, for each node before naming it, and counts only those it is
+        given (`ExploreService.whats_new`). All of them, not a page: a page cut here and then
+        filtered would hide how many the reader can see (rule 2)."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT node_id, investigation_id, marked_by, marked_at, reason "
+                "FROM suppression_marks ORDER BY marked_at DESC, node_id"
+            )
+        return [
+            SuppressionMark(
+                node_id=row["node_id"],
+                investigation_id=row["investigation_id"],
+                marked_by=row["marked_by"],
+                marked_at=row["marked_at"],
+                reason=row["reason"],
+            )
+            for row in rows
+        ]
+
     async def marked_among(self, node_ids: list[NodeId]) -> dict[NodeId, SuppressionMark]:
         """The marks on a set of nodes the caller has **already** been shown.
 

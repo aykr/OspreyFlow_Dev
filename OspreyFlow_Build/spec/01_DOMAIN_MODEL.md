@@ -1170,6 +1170,13 @@ seen and reverted, superseded and other-dataset elements count nowhere:
 - **`link_structure(principal, *, max_nodes, max_edges) -> LinkStructure`** (ADR-100 Amendment 5).
   Every visible node (id, type) and link (id, ends, weight), for the case's groups; over a cap,
   `SubgraphTooLarge` with the counts of what is seen.
+- **`recent_loads(principal, *, limit=10) -> RecentLoads`** (ADR-100 Amendment 6). What the
+  principal can see, grouped by the load that wrote it (`audit.load_id`; one entry for what no load
+  wrote), with its visible nodes, visible links whose ends are visible, newest `created_at` and
+  recipe, the newest first, with `total`.
+- **`recently_confirmed(principal, *, limit=10) -> RecentlyConfirmed`** (ADR-100 Amendment 6).
+  Visible nodes whose provenance records a confirmation, the latest `last_confirmed` first, ties
+  by id, each with who confirmed it, with `total`.
 
 One more method closes the `filtered_count` gap this section used to describe as outstanding
 (below):

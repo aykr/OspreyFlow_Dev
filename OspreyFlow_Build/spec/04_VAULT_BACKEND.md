@@ -256,7 +256,9 @@ another dataset's node and link match a graph where they never existed, through 
 candidate count. `edges_among` (ADR-098); `type_counts` and `most_connected`, each checked right on
 its own and unchanged once hidden, other-dataset and reverted neighbours are added beside it
 (ADR-100); `busiest_links` and `link_structure`, the same way, the structure refused past its caps
-with only what is seen counted (ADR-100 Amendments 4 and 5); reverting, correcting and re-writing one
+with only what is seen counted (ADR-100 Amendments 4 and 5); `recent_loads` and `recently_confirmed`,
+unchanged once hidden, other-dataset and reverted elements of the same loads, and a corrected
+revision, are added (ADR-100 Amendment 6); reverting, correcting and re-writing one
 of three nodes leaves the others listed (ADR-101).
 
 **AnalyticsPort suite** — identical histogram, geobin and baseline results across adapters,

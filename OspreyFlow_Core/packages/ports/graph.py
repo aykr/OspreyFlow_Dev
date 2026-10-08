@@ -33,7 +33,13 @@ from schemas.domain import (
     Subgraph,
     TxId,
 )
-from schemas.explore import RankedLinks, RankedNodes, TypeCounts
+from schemas.explore import (
+    RankedLinks,
+    RankedNodes,
+    RecentLoads,
+    RecentlyConfirmed,
+    TypeCounts,
+)
 
 
 class SubgraphTooLarge(Exception):
@@ -335,6 +341,22 @@ class GraphPort(Protocol):
         (rule 3): a hidden node is absent and so is every link to it. Over a cap it raises
         `SubgraphTooLarge` with the counts of what the principal can see, never a slice (rule 2);
         the counts are taken first, so a breach is cheap."""
+        ...
+
+    async def recent_loads(self, principal: Principal, *, limit: int = 10) -> RecentLoads:
+        """`06_DECISIONS.md` ADR-100 decision 7, Amendment 6: what `principal` can see, grouped by
+        the load that wrote it (`audit.load_id`; `None` for what no load wrote), the newest first
+        by its newest element, ties by id. Only visible nodes, and visible links whose two ends are
+        visible, are counted, and a load that wrote nothing visible is not listed (rule 3); `total`
+        is how many loads are."""
+        ...
+
+    async def recently_confirmed(
+        self, principal: Principal, *, limit: int = 10
+    ) -> RecentlyConfirmed:
+        """`06_DECISIONS.md` ADR-100 decision 7, Amendment 6: the nodes `principal` can see whose
+        provenance says an analyst confirmed them, the latest first, ties by id; `total` is how
+        many. A superseded revision is not one (rule 3's access step excludes it)."""
         ...
 
     async def apply_schema(self, schema: OntologySchema) -> SchemaReport: ...

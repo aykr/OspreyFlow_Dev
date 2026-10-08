@@ -7,6 +7,7 @@ import type {
   RankedLinks,
   RankedNodes,
   TypeCounts,
+  WhatsNew,
 } from "../../../../packages/schemas/generated";
 
 export type {
@@ -20,6 +21,10 @@ export type {
   RankedNode,
   RankedNodes,
   TypeCounts,
+  ConfirmedNode,
+  LoadSummary,
+  MarkedNode,
+  WhatsNew,
 } from "../../../../packages/schemas/generated";
 
 function exploreUrl(apiBaseUrl: string, investigationId: string, path: string): string {
@@ -126,4 +131,14 @@ export async function loadGroups(
   }
   if (!response.ok) throw new Error(`The groups could not be read (${response.status}).`);
   return (await response.json()) as Groups;
+}
+
+/** The latest loads into the case's datasets, and what colleagues confirmed or marked there
+ * (ADR-100 decision 7), each named only where the analyst can see it. */
+export function loadWhatsNew(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+): Promise<WhatsNew> {
+  return get(exploreUrl(apiBaseUrl, investigationId, "whats-new"), bearerToken, "What is new");
 }

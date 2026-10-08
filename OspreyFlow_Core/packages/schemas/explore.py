@@ -107,6 +107,65 @@ class Groups(BaseModel):
     computed_at: datetime | None = None
 
 
+class LoadSummary(BaseModel):
+    """One load into the case's datasets (ADR-100 decision 7), as far as the reader can see it:
+    only what it wrote that they can see is counted, and `latest` is the newest of those."""
+
+    #: `None` for what was written outside a recipe load (a seed, a hand-made link).
+    load_id: str | None
+    recipe_id: str | None = None
+    recipe_version: int | None = None
+    nodes: int
+    #: Links counted only when both their ends can be seen, the same rule a degree follows.
+    links: int
+    latest: datetime
+
+
+class RecentLoads(BaseModel):
+    """The latest loads first (ties by id); `total` is how many there are (rule 2)."""
+
+    loads: list[LoadSummary]
+    total: int
+
+
+class ConfirmedNode(BaseModel):
+    node: Node
+    confirmed_at: datetime
+    confirmed_by: str
+
+
+class RecentlyConfirmed(BaseModel):
+    """Nodes an analyst has confirmed (`provenance.last_confirmed`), the latest first, ties by id;
+    `total` is how many are confirmed (rule 2)."""
+
+    nodes: list[ConfirmedNode]
+    total: int
+
+
+class MarkedNode(BaseModel):
+    """A node an analyst has marked for suppression (owner ruling R7): a proposal, not a change."""
+
+    node: Node
+    marked_at: datetime
+    marked_by: str
+    reason: str
+
+
+class WhatsNew(BaseModel):
+    """ADR-100 decision 7: the latest loads into the case's datasets, and what colleagues
+    confirmed or marked in them, each the latest first with how many there are in all."""
+
+    loads: list[LoadSummary]
+    loads_total: int
+    confirmed: list[ConfirmedNode]
+    confirmed_total: int
+    marked: list[MarkedNode]
+    marked_total: int
+    #: When the loads and confirmations were counted (they are kept, Amendment 3); the marks are
+    #: read on every request, since marking writes nothing to the graph that would clear them.
+    computed_at: datetime | None = None
+
+
 ALL_MODELS = (
     TypeCounts,
     RankedNode,
@@ -118,4 +177,10 @@ ALL_MODELS = (
     Group,
     Bridge,
     Groups,
+    LoadSummary,
+    RecentLoads,
+    ConfirmedNode,
+    RecentlyConfirmed,
+    MarkedNode,
+    WhatsNew,
 )

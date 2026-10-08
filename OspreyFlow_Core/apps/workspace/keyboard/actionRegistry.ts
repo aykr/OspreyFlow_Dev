@@ -402,6 +402,9 @@ export const EXPLORE_ACTIONS = defineActionRegistry("EXPLORE_ACTIONS", [
   // ADR-100 decision 6.
   "put-a-groups-centre-on-the-canvas-by-keyboard",
   "put-a-bridge-on-the-canvas-by-keyboard",
+  // ADR-100 decision 7 (Amendment 6).
+  "put-a-confirmed-node-on-the-canvas-by-keyboard",
+  "put-a-marked-node-on-the-canvas-by-keyboard",
 ] as const);
 
 /** The case's questions to the model (ADR-098 decision 4): asked, answered with what it draws on,

@@ -55,7 +55,17 @@ from schemas.domain import (
     TxId,
     WeightComponents,
 )
-from schemas.explore import RankedLink, RankedLinks, RankedNode, RankedNodes, TypeCounts
+from schemas.explore import (
+    ConfirmedNode,
+    LoadSummary,
+    RankedLink,
+    RankedLinks,
+    RankedNode,
+    RankedNodes,
+    RecentLoads,
+    RecentlyConfirmed,
+    TypeCounts,
+)
 from schemas.merge import merge_datasets, merge_interval, merge_provenance
 
 from .access_filter import AccessFilter
@@ -74,6 +84,8 @@ from .builders import (
     SuggestNodesBuilder,
     render_edges_among_gremlin,
     render_link_structure_gremlin,
+    render_recent_loads_gremlin,
+    render_recently_confirmed_gremlin,
     render_type_counts_gremlin,
     suggestion_scope,
 )
@@ -776,6 +788,55 @@ class GraphArcadeDBAdapter:
             ],
             total=int(totals[0].get("result") or 0),
             offset=offset,
+        )
+
+    async def recent_loads(self, principal: Principal, *, limit: int = 10) -> RecentLoads:
+        nodes_query, links_query = render_recent_loads_gremlin(self._access, principal)
+        merged: dict[str, dict[str, Any]] = {}
+        for kind, query in (("nodes", nodes_query), ("links", links_query)):
+            rows = await self._client.gremlin(query)
+            for load, held in (rows[0] if rows else {}).items():
+                into = merged.setdefault(
+                    load, {"nodes": 0, "links": 0, "latest": None, "recipe": "", "version": -1}
+                )
+                into[kind] = int(held["n"])
+                latest = datetime.fromisoformat(str(held["latest"]))
+                if into["latest"] is None or latest > into["latest"]:
+                    into["latest"] = latest
+                into["recipe"] = into["recipe"] or held.get("recipe") or ""
+                if into["version"] in (None, -1):
+                    into["version"] = held.get("version")
+        loads = [
+            LoadSummary(
+                load_id=load or None,
+                recipe_id=held["recipe"] or None,
+                recipe_version=None if held["version"] in (None, -1) else int(held["version"]),
+                nodes=held["nodes"],
+                links=held["links"],
+                latest=held["latest"],
+            )
+            for load, held in merged.items()
+        ]
+        loads.sort(key=lambda s: (-s.latest.timestamp(), s.load_id or ""))
+        return RecentLoads(loads=loads[:limit], total=len(loads))
+
+    async def recently_confirmed(
+        self, principal: Principal, *, limit: int = 10
+    ) -> RecentlyConfirmed:
+        count_query, page_query = render_recently_confirmed_gremlin(
+            self._access, principal, limit=limit
+        )
+        (counted,) = await self._client.gremlin(count_query)
+        return RecentlyConfirmed(
+            nodes=[
+                ConfirmedNode(
+                    node=node_from_element_map(r["node"]),
+                    confirmed_at=datetime.fromisoformat(str(r["at"])),
+                    confirmed_by=str(r["by"]),
+                )
+                for r in await self._client.gremlin(page_query)
+            ],
+            total=int(counted.get("result") or 0),
         )
 
     async def link_structure(

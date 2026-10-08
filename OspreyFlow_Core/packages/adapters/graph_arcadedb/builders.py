@@ -839,3 +839,54 @@ def render_link_structure_gremlin(access: AccessFilter, principal: Principal) ->
             '.by(coalesce(values("weight"),constant(1.0)))'
         ),
     }
+
+
+#: An element's load (`audit.load_id`), "" when no load wrote it. Read from the stored map: a
+#: load is shared by thousands of elements, so a top-level copy indexed by it would be the
+#: low-cardinality key that made bulk deletes quadratic (`seed_support.DELETE_BATCH`), and nothing
+#: reads it by value.
+_LOAD_KEY = 'coalesce(values("audit").select("load_id").is(neq(null)),constant(""))'
+
+
+def _audit_field(name: str, missing: str) -> str:
+    return (
+        f'coalesce(unfold().values("audit").select("{name}").is(neq(null)).limit(1),'
+        f"constant({missing}))"
+    )
+
+
+def render_recent_loads_gremlin(access: AccessFilter, principal: Principal) -> tuple[str, str]:
+    """`GraphPort.recent_loads` (ADR-100 Amendment 6): visible nodes, then visible links with both
+    ends visible, each grouped by load with its count, newest `created_at` and recipe. The times are
+    the stored ISO strings, all UTC, so their greatest is the latest to within a second (a time
+    written without its fraction sorts after one written with it)."""
+    has_access = access.gremlin_has_step(principal)
+    summary = (
+        f".group().by({_LOAD_KEY})"
+        '.by(fold().project("n","latest","recipe","version")'
+        ".by(count(local))"
+        '.by(unfold().values("audit").select("created_at").max())'
+        f".by({_audit_field('recipe_id', '""')})"
+        f".by({_audit_field('recipe_version', '-1')}))"
+    )
+    return (
+        f"g.V().{has_access}{summary}",
+        f"g.E().{has_access}.where(outV().{has_access}).where(inV().{has_access}){summary}",
+    )
+
+
+_CONFIRMED_AT = 'values("provenance").select("last_confirmed").is(neq(null))'
+
+
+def render_recently_confirmed_gremlin(
+    access: AccessFilter, principal: Principal, *, limit: int
+) -> tuple[str, str]:
+    """`GraphPort.recently_confirmed` (ADR-100 Amendment 6): the count, then the page, latest
+    first and ties by id, ordered in the store over the stored ISO strings (as above)."""
+    base = f"g.V().{access.gremlin_has_step(principal)}.filter({_CONFIRMED_AT})"
+    return (
+        f"{base}.count()",
+        f'{base}.order().by({_CONFIRMED_AT},desc).by("id").range(0,{limit})'
+        '.project("node","at","by").by(elementMap()).by(' + _CONFIRMED_AT + ")"
+        '.by(coalesce(values("provenance").select("confirmed_by").is(neq(null)),constant("")))',
+    )

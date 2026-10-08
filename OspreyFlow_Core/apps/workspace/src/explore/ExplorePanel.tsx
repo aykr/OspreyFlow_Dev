@@ -16,7 +16,10 @@ import {
   type Groups,
   loadMostConnected,
   loadTypeCounts,
+  loadWhatsNew,
   type BusyDay,
+  type LoadSummary,
+  type WhatsNew,
   type RankedLink,
   type RankedNode,
   type TypeCounts,
@@ -43,6 +46,19 @@ export interface ExplorePanelProps {
   onPickLink?: (link: RankedLink) => void;
   /** Sets the timeline's window to the day. */
   onPickDay?: (day: BusyDay) => void;
+}
+
+const WHEN = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "UTC",
+});
+
+function when(iso: string): string {
+  return `${WHEN.format(new Date(iso))} UTC`;
 }
 
 const DAY = new Intl.DateTimeFormat("en-GB", {
@@ -240,6 +256,97 @@ function GroupsAndBridges({ apiBaseUrl, bearerToken, investigationId, onPick }: 
   );
 }
 
+function loadLabel(load: LoadSummary): string {
+  const recipe = load.recipe_id
+    ? ` · ${load.recipe_id}${load.recipe_version != null ? ` v${load.recipe_version}` : ""}`
+    : "";
+  return (
+    `${load.load_id ?? "Written outside a load"}${recipe} · ` +
+    `${plural(load.nodes, "entity", "entities")} and ${plural(load.links, "link", "links")} · ` +
+    `latest ${when(load.latest)}`
+  );
+}
+
+/** "The latest 10 of 14 loads." or "All 3 confirmed shown.", or `none` when there are none. */
+function Shown({ shown, total, what, none }: { shown: number; total: number; what: string; none: string }) {
+  const caption = { color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 };
+  if (total === 0) return <p style={caption}>{none}</p>;
+  return (
+    <p style={caption}>
+      {shown < total
+        ? `The latest ${COUNT.format(shown)} of ${COUNT.format(total)} ${what}.`
+        : `All ${COUNT.format(total)} ${what} shown.`}
+    </p>
+  );
+}
+
+/** ADR-100 decision 7 (Amendment 6): the latest loads, and the nodes colleagues confirmed or
+ * marked, read once per opening. A load is named, not picked: it can hold the whole case. */
+function WhatIsNew({ apiBaseUrl, bearerToken, investigationId, onPick }: Omit<ExplorePanelProps, "edgeTypes">) {
+  const [news, setNews] = useState<WhatsNew | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setNews(null);
+    setProblem(null);
+    loadWhatsNew(apiBaseUrl, bearerToken, investigationId)
+      .then((answer) => !cancelled && setNews(answer))
+      .catch((err: unknown) => {
+        if (!cancelled) setProblem(err instanceof Error ? err.message : "What is new could not be read.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, bearerToken, investigationId]);
+  if (problem) return <p role="alert">{problem}</p>;
+  if (!news) return <p style={{ color: "var(--text-tertiary)" }}>Looking…</p>;
+  const loads = news.loads ?? [];
+  const confirmed = news.confirmed ?? [];
+  const marked = news.marked ?? [];
+  const list = { margin: 0, paddingLeft: "var(--sp-16)", display: "grid", gap: "var(--sp-4)" };
+  return (
+    <div style={{ display: "grid", gap: "var(--sp-8)" }}>
+      <Shown shown={loads.length} total={news.loads_total ?? 0} what="loads" none="No loads you can see." />
+      {loads.length > 0 && (
+        <ol aria-label="Latest loads" style={{ ...list, fontSize: "var(--fs-12)" }}>
+          {loads.map((load) => (
+            <li key={load.load_id ?? ""}>{loadLabel(load)}</li>
+          ))}
+        </ol>
+      )}
+      <Shown
+        shown={confirmed.length}
+        total={news.confirmed_total ?? 0}
+        what="confirmed"
+        none="Nothing confirmed you can see."
+      />
+      {confirmed.length > 0 && (
+        <ol aria-label="Recently confirmed" style={list}>
+          {confirmed.map((c) => (
+            <li key={c.node.id}>
+              <button type="button" className="btn btn--quiet" onClick={() => onPick(c.node)}>
+                {`${nodeLabel(c.node)} · ${c.node.type} · confirmed by ${c.confirmed_by} · ${when(c.confirmed_at)}`}
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+      <Shown shown={marked.length} total={news.marked_total ?? 0} what="marked" none="Nothing marked you can see." />
+      {marked.length > 0 && (
+        <ol aria-label="Recently marked" style={list}>
+          {marked.map((m) => (
+            <li key={m.node.id}>
+              <button type="button" className="btn btn--quiet" onClick={() => onPick(m.node)}>
+                {`${nodeLabel(m.node)} · ${m.node.type} · marked for suppression by ${m.marked_by} · ${when(m.marked_at)} · “${m.reason}”`}
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
 export function ExplorePanel(props: ExplorePanelProps) {
   const { apiBaseUrl, bearerToken, investigationId, edgeTypes } = props;
   const [counts, setCounts] = useState<TypeCounts | null>(null);
@@ -345,6 +452,10 @@ export function ExplorePanel(props: ExplorePanelProps) {
               <GroupsAndBridges {...ranking} />
             </section>
           )}
+          <section aria-labelledby="explore-new">
+            <h3 id="explore-new" style={heading}>What&apos;s new</h3>
+            <WhatIsNew {...ranking} />
+          </section>
           <section aria-labelledby="explore-days">
             <h3 id="explore-days" style={heading}>Busiest days</h3>
             <Paged<BusyDay>

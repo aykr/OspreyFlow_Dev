@@ -253,3 +253,53 @@ def test_the_groups_are_found_with_the_cases_datasets(client) -> None:  # type: 
     assert [p.datasets for p in seen] == [["enron"]]
     assert audit.records[-1]["action"] == "explore_groups"
     assert TestClient(app).get("/v1/investigations/case-e/explore/groups").status_code in (401, 403)
+
+
+def test_whats_new_is_asked_with_the_cases_datasets(client) -> None:  # type: ignore[no-untyped-def]
+    """ADR-100 Amendment 6: the loads, confirmations and each marked node's lookup are all asked
+    with the case's principal, which is what keeps a mark on another dataset's node out."""
+    import services.api.app as app_module
+    from services.api.suppression import SuppressionMark
+
+    from schemas.explore import RecentLoads, RecentlyConfirmed
+
+    http, graph, audit = client
+    seen: list[tuple[str, Principal]] = []
+
+    async def recent_loads(principal, *, limit=10):  # type: ignore[no-untyped-def]
+        seen.append(("loads", principal))
+        return RecentLoads(loads=[], total=3)
+
+    async def recently_confirmed(principal, *, limit=10):  # type: ignore[no-untyped-def]
+        seen.append(("confirmed", principal))
+        return RecentlyConfirmed(nodes=[], total=0)
+
+    async def get_node(node_id, principal, *, include_superseded=False):  # type: ignore[no-untyped-def]
+        seen.append(("node", principal))
+        return None
+
+    class _Marks:
+        async def recent(self) -> list[SuppressionMark]:
+            return [
+                SuppressionMark(
+                    node_id="elsewhere", investigation_id="other", marked_by="colleague",
+                    marked_at=datetime(2026, 10, 8, tzinfo=UTC), reason="proposed",
+                )
+            ]
+
+    graph.recent_loads = recent_loads  # type: ignore[attr-defined]
+    graph.recently_confirmed = recently_confirmed  # type: ignore[attr-defined]
+    graph.get_node = get_node  # type: ignore[attr-defined]
+    app.dependency_overrides[app_module.get_suppression_marks] = _Marks
+    response = http.get("/v1/investigations/case-e/explore/whats-new")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["loads_total"] == 3 and body["marked"] == [] and body["marked_total"] == 0
+    assert [(what, p.datasets) for what, p in seen] == [
+        ("loads", ["enron"]),
+        ("confirmed", ["enron"]),
+        ("node", ["enron"]),
+    ]
+    assert audit.records[-1]["action"] == "explore_whats_new"
+    anonymous = TestClient(app).get("/v1/investigations/case-e/explore/whats-new")
+    assert anonymous.status_code in (401, 403)

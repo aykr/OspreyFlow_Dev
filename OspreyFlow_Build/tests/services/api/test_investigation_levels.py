@@ -97,6 +97,7 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("GET", P + "/explore/busiest-links"): V,
     ("GET", P + "/explore/busiest-days"): V,
     ("GET", P + "/explore/groups"): V,
+    ("GET", P + "/explore/whats-new"): V,
     ("POST", P + "/patterns/preview"): V,
     ("POST", P + "/patterns/run"): V,
     # ADR-099 Amendment 3: a saved pattern is the dataset's, read and saved in a case reading it.

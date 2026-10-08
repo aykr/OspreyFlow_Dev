@@ -522,13 +522,17 @@ the most records, "alice → bob · Communicated with · 50 emails", picking one
 on the canvas); and *Busiest days* (the case's days with the most events, picking one sets the
 timeline's window to that day and opens the timeline); and *Groups and bridges* (the largest groups, each
 "Group of 3,669 · mostly Endpoint · around alice@…", and the nodes whose links reach the most other
-groups, each counted against how many there are; a case too large to group says so with both figures). Every node in it is a button that does what
+groups, each counted against how many there are; a case too large to group says so with both figures); and
+*What's new* (the latest loads into the case's datasets, each with its recipe, what it wrote that the analyst
+can see and when, "The latest 10 of 14 loads"; and the nodes colleagues confirmed, and marked for suppression
+with their reason, the latest first and each counted; a load is named, not picked, since one can hold the whole
+case). Every node in it is a button that does what
 choosing a search result does: puts it on the canvas, draws outwards from it and selects it. The figures are
 the Conduit's (`/explore/counts`, `/explore/most-connected`), kept once counted and counted again after
 a change, and the panel says when ("Counted at 09:05 UTC", ADR-100 Amendment 3); they are never
 reckoned in the browser
-(`keyboard/explore.spec.ts`, `src/explore/ExplorePanel.test.tsx`). What is new and starter questions
-(ADR-100 decisions 7 and 8) are not built yet.
+(`keyboard/explore.spec.ts`, `src/explore/ExplorePanel.test.tsx`). Starter questions (ADR-100 decision 8)
+are not built yet.
 
 ### 3.1c An expansion that adds nothing says so (ADR-077)
 

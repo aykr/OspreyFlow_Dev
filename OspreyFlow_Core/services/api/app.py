@@ -139,7 +139,7 @@ from schemas.domain import (
 # `Path` is already `pathlib.Path` in this module — `GraphPath` is the same alias
 # `adapters/compute_graphology_tier1/adapter.py` already uses for the identical collision.
 from schemas.domain import Path as GraphPath
-from schemas.explore import BusiestDays, Groups, RankedLinks, RankedNodes, TypeCounts
+from schemas.explore import BusiestDays, Groups, RankedLinks, RankedNodes, TypeCounts, WhatsNew
 from schemas.ingest import (
     CONNECTOR_CATALOGUE,
     ConnectDraftInput,
@@ -3022,6 +3022,28 @@ async def explore_groups_route(
         result_cardinality=found.total_groups,
     )
     return found
+
+
+@app.get("/v1/investigations/{investigation_id}/explore/whats-new")
+async def explore_whats_new_route(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    explore: ExploreDep,
+    marks: SuppressionMarksDep,
+    audit: AuditDep,
+) -> WhatsNew:
+    """ADR-100 decision 7 (Amendment 6): the latest loads into the case's datasets, and the nodes
+    colleagues confirmed or marked for suppression in them, each named only where the reader can
+    see it."""
+    news = await explore.whats_new(principal, marks)
+    await audit.record(
+        principal=principal,
+        action="explore_whats_new",
+        investigation_id=investigation.id,
+        resolved_query={},
+        result_cardinality=news.loads_total + news.confirmed_total + news.marked_total,
+    )
+    return news
 
 
 # --- the visual query builder (Phase 7 Stage 4, 06_DECISIONS.md ADR-030) ------

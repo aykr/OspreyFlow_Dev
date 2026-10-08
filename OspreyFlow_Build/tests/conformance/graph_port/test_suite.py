@@ -3211,3 +3211,136 @@ async def test_a_link_structure_past_its_caps_is_refused_with_only_what_is_seen_
         with pytest.raises(SubgraphTooLarge) as edges:
             await adapter.link_structure(EXPLORER, max_nodes=100, max_edges=4)
         assert edges.value.edges == 5
+
+
+# --- ADR-100 decision 7 (Amendment 6): what is new ---------------------------
+
+_T0 = datetime(2026, 10, 1, 9, 0, tzinfo=UTC)
+
+
+def _at(write: NodeWrite | EdgeWrite, hours: int) -> NodeWrite | EdgeWrite:
+    return write.model_copy(update={"created_at": _T0 + timedelta(hours=hours)})
+
+
+def _confirmed(write: NodeWrite, hours: int, by: str = "colleague-1") -> NodeWrite:
+    provenance = write.provenance.model_copy(
+        update={"last_confirmed": _T0 + timedelta(hours=hours), "confirmed_by": by}
+    )
+    return write.model_copy(update={"provenance": provenance})
+
+
+async def _loads_world(adapter: GraphPort) -> dict[str, str]:
+    """Load `old` (two people and their link, at 1h and 2h), load `new` (one person, at 5h) and a
+    person no load wrote (at 3h), all in fixture."""
+    fixture = ["fixture"]
+
+    def person(load: str | None, hours: int) -> NodeWrite:
+        return _at(_node("Person", classification="OFFICIAL", datasets=fixture, load_id=load,
+                         recipe_id="recipe-a" if load else None,
+                         recipe_version=2 if load else None), hours)
+
+    nodes = {"a": person("old", 1), "b": person("old", 2), "c": person("new", 5),
+             "d": person(None, 3)}
+    await _write(adapter, list(nodes.values()), [])
+    link = _at(_edge("ASSOCIATE_OF", nodes["a"].id, nodes["b"].id, classification="OFFICIAL",
+                     datasets=fixture, load_id="old"), 2)
+    await _write(adapter, [], [link])
+    return {name: n.id for name, n in nodes.items()}
+
+
+async def _add_loads_that_must_not_count(adapter: GraphPort, ids: dict[str, str]) -> None:
+    """Later than everything above: a SECRET node in `old` and in a load of its own, an
+    other-dataset node in `new`, a reverted node in `old`, and links in `old` to the hidden ones.
+    Any of them counted would change a count, a `latest` or the order."""
+    secret_old = _at(_node("Person", classification="SECRET", datasets=["fixture"],
+                           load_id="old"), 9)
+    secret_own = _at(_node("Person", classification="SECRET", datasets=["fixture"],
+                           load_id="hidden"), 9)
+    elsewhere = _at(_node("Person", classification="OFFICIAL", datasets=["enron"],
+                          load_id="new"), 9)
+    reverted = _at(_node("Person", classification="OFFICIAL", datasets=["fixture"],
+                         load_id="old"), 9)
+    await _write(adapter, [secret_old, secret_own, elsewhere, reverted], [])
+    await _write(adapter, [], [
+        _at(_edge("ASSOCIATE_OF", ids["a"], secret_old.id, classification="OFFICIAL",
+                  datasets=["fixture"], load_id="old"), 9),
+        _at(_edge("ASSOCIATE_OF", ids["a"], ids["c"], classification="SECRET",
+                  datasets=["fixture"], load_id="new"), 9),
+        # A pair of its own: a link written again for the same pair takes the latest write's
+        # handling and adds its dataset (`schemas.merge`), which is a different case.
+        _at(_edge("ASSOCIATE_OF", ids["b"], ids["c"], classification="OFFICIAL",
+                  datasets=["enron"], load_id="new"), 9),
+    ])
+    tx = await adapter.begin_transaction()
+    await adapter.revert_elements([reverted.id], [], tx)
+    await adapter.commit_transaction(tx)
+
+
+async def test_recent_loads_are_the_latest_first_and_only_what_the_case_can_see(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        ids = await _loads_world(adapter)
+        before = await adapter.recent_loads(EXPLORER)
+        assert [load.load_id for load in before.loads] == ["new", None, "old"]
+        assert before.total == 3
+        new, outside, old = before.loads
+        assert (new.nodes, new.links, new.latest) == (1, 0, _T0 + timedelta(hours=5))
+        assert (outside.nodes, outside.links, outside.recipe_id) == (1, 0, None)
+        assert (old.nodes, old.links, old.latest) == (2, 1, _T0 + timedelta(hours=2))
+        assert (old.recipe_id, old.recipe_version) == ("recipe-a", 2)
+        await _add_loads_that_must_not_count(adapter, ids)
+        assert await adapter.recent_loads(EXPLORER) == before
+        # The filter is real: the other dataset's case sees its own part of `new`.
+        enron = await adapter.recent_loads(EXPLORER_ENRON)
+        assert [(load.load_id, load.nodes) for load in enron.loads] == [("new", 1)]
+        assert await adapter.recent_loads(IN_NOTHING) == type(before)(loads=[], total=0)
+
+
+async def test_recent_loads_say_how_many_beyond_the_ones_shown(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        await _loads_world(adapter)
+        first = await adapter.recent_loads(EXPLORER, limit=2)
+        assert [load.load_id for load in first.loads] == ["new", None]
+        assert first.total == 3
+
+
+async def test_recently_confirmed_is_the_latest_first_and_only_what_the_case_can_see(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        fixture = ["fixture"]
+        early = _confirmed(_node("Person", classification="OFFICIAL", datasets=fixture), 1)
+        late = _confirmed(_node("Person", classification="OFFICIAL", datasets=fixture), 4,
+                          by="colleague-2")
+        plain = _node("Person", classification="OFFICIAL", datasets=fixture)
+        await _write(adapter, [early, late, plain], [])
+        before = await adapter.recently_confirmed(EXPLORER)
+        assert [c.node.id for c in before.nodes] == [late.id, early.id]
+        assert [c.confirmed_by for c in before.nodes] == ["colleague-2", "colleague-1"]
+        assert before.nodes[0].confirmed_at == _T0 + timedelta(hours=4)
+        assert before.total == 2
+
+        # Later confirmations it must not see: SECRET, another dataset, reverted.
+        hidden = [
+            _confirmed(_node("Person", classification="SECRET", datasets=fixture), 9),
+            _confirmed(_node("Person", classification="OFFICIAL", datasets=["enron"]), 9),
+        ]
+        reverted = _confirmed(_node("Person", classification="OFFICIAL", datasets=fixture), 9)
+        await _write(adapter, [*hidden, reverted], [])
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([reverted.id], [], tx)
+        await adapter.commit_transaction(tx)
+        assert await adapter.recently_confirmed(EXPLORER) == before
+
+        # A confirmed node corrected since: only its current revision is listed.
+        tx = await adapter.begin_transaction()
+        replacement = _confirmed(_node("Person", classification="OFFICIAL", datasets=fixture), 6)
+        current = await adapter.supersede_node(late.id, replacement, tx)
+        await adapter.commit_transaction(tx)
+        after = await adapter.recently_confirmed(EXPLORER, limit=1)
+        assert [c.node.id for c in after.nodes] == [current]
+        assert after.total == 2
+        assert (await adapter.recently_confirmed(IN_NOTHING)).total == 0
