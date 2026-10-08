@@ -112,3 +112,34 @@ def test_a_product_adr_citing_adr_049_is_flagged(tmp_path: Path) -> None:
     )
 
     assert find_violations(decisions_path=fixture) == [("006", "049")]
+
+
+def test_an_amendment_belongs_to_the_adr_its_heading_names_not_the_one_above_it(
+    tmp_path: Path,
+) -> None:
+    """Amendments are appended where the log ends, so ADR-049's sat under ADR-055: read as ADR-055's
+    text, ADR-049 naming itself was reported as ADR-055 citing a private ADR. An amendment is its
+    own ADR's, whatever stands above it."""
+    fixture = tmp_path / "06_DECISIONS.md"
+    fixture.write_text(
+        "## ADR-055 — A product decision\n\nIts own text cites nothing private.\n\n"
+        "### ADR-049, Amendment 2 (29 September 2026) — a process note\n\n"
+        "This repairs what ADR-049 Amendment 1 began.\n",
+        encoding="utf-8",
+    )
+    assert find_violations(fixture) == []
+
+
+def test_an_amendment_to_a_product_adr_filed_under_a_process_one_is_still_checked(
+    tmp_path: Path,
+) -> None:
+    """The other direction, which the old reading hid: a product ADR's amendment standing under a
+    process ADR was skipped with it, so its citation of a private ADR went unseen."""
+    fixture = tmp_path / "06_DECISIONS.md"
+    fixture.write_text(
+        "## ADR-049 — A process decision\n\nIt may cite ADR-034.\n\n"
+        "### ADR-052, Amendment 3 (29 September 2026) — a product change\n\n"
+        "This depends on ADR-034, which is private.\n",
+        encoding="utf-8",
+    )
+    assert find_violations(fixture) == [("052", "034")]

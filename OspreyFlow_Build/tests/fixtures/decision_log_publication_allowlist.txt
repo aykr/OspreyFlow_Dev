@@ -6,3 +6,7 @@
 # that verification act itself needs a citation to stand, or can be restated without one, is a
 # judgement call reported to the owner rather than decided unilaterally.
 035	026
+# 052 -> 049: ADR-052 Amendment 6 item 4 names ADR-049's Amendment for the refresh sequence; superseded
+# by ADR-052 Amendment 11, which names the published `make refresh` (05 §3). The text of Amendment 6
+# stays as written (an ADR is amended, never edited), so the pair is known, not new.
+052	049

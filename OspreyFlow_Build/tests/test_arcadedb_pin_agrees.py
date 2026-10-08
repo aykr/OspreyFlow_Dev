@@ -2,9 +2,9 @@
 probes it with a tool the image has (ADR-101 and its Amendment 1).
 
 What a mistake would do, as it did: the pin moved to 26.10.1 in `harness/render.py` and
-`deploy/compose/dev.yaml`, and CI and the Makefile's note stayed on 25.5.1, still probing with `curl`,
-which 26.10.1's image does not have, so CI's store would never report healthy and would still run
-the version whose indexes lose records. Each case reads the files as they are, not a copy."""
+`deploy/compose/dev.yaml`, and CI and the Makefile's note stayed on 25.5.1, still probing with
+`curl`, which 26.10.1's image does not have, so CI's store would never report healthy and would
+still run the version whose indexes lose records. Each case reads the files as they are."""
 
 from __future__ import annotations
 

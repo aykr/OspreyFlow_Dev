@@ -66,20 +66,25 @@ PROCESS_ADR_NUMBERS: frozenset[str] = frozenset(
     }
 )
 
-_HEADING_PATTERN = re.compile(r"^## ADR-(\d{3})", re.MULTILINE)
+#: An ADR's own heading, or an amendment's (`### ADR-049, Amendment 2 ...`). Amendments are appended
+#: where the log ends, so one usually stands under another ADR's heading; it is its own ADR's text,
+#: not the text of whatever stands above it.
+_HEADING_PATTERN = re.compile(r"^(?:## ADR-(\d{3})|### ADR-(\d{3}), Amendment)", re.MULTILINE)
 _ADR_REF_PATTERN = re.compile(r"ADR-(\d{3})")
 
 
 def _sections(text: str) -> dict[str, str]:
-    """Splits `06_DECISIONS.md` into `{adr_number: section_body}` by its own `## ADR-NNN`
-    headings — a pure string operation so the fixture test below can call it against a throwaway
-    document instead of this repository's own real decision log."""
+    """Splits `06_DECISIONS.md` into `{adr_number: section_body}` by its own `## ADR-NNN` and
+    `### ADR-NNN, Amendment` headings, an ADR's amendments joined to its own text — a pure string
+    operation so the fixture test below can call it against a throwaway document instead of this
+    repository's own real decision log."""
     headings = list(_HEADING_PATTERN.finditer(text))
     sections: dict[str, str] = {}
     for i, m in enumerate(headings):
         start = m.end()
         end = headings[i + 1].start() if i + 1 < len(headings) else len(text)
-        sections[m.group(1)] = text[start:end]
+        number = m.group(1) or m.group(2)
+        sections[number] = sections.get(number, "") + text[start:end]
     return sections
 
 

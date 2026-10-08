@@ -10069,3 +10069,9 @@ Status: accepted 8 October 2026 (mine, within the owner's "carry on with stage 3
 2. **A pick is a search result's choice**: drawn, drawn outwards three links (ADR-070, with its large-expansion prompt) and selected, so a hub of thousands asks before it draws, exactly as searching it would.
 3. **Pages ask for what is left**: *Show n more* asks for at most 10 and says how many; the panel never asks for, or shows, more than the ranking holds.
 4. **Not measured yet:** how long `most_connected` takes on the Enron case live (ADR-100 Amendment 1, decision 4). The panel says *Counting…* while it waits; whether the rankings must be kept per dataset is decided on that measurement.
+
+### ADR-052, Amendment 11 (8 October 2026) — a published ADR no longer leans on a private one
+
+Status: accepted 8 October 2026 (the owner: "align these decision logs as needed and supersede the stale one").
+
+Amendment 6 item 4 says the 405 on the case list was "fixed by the refresh sequence (ADR-049 Amendment)". ADR-049 is a process record and is not published with the product, so a published reader cannot follow that reference. It is superseded by this: the fix is the refresh sequence, `make refresh` (`python -m scripts.refresh`, `05_DEPLOYMENT.md` §3), which rebuilds the owned images and brings the deployment up to date. Nothing else in Amendment 6 changes. The decision-log publication gate now reads an amendment as its own ADR's (`tools/decision_log_publication_check.py`), which is how this citation was found: it had been read as ADR-055's, under whose heading ADR-049's own amendments stand.
