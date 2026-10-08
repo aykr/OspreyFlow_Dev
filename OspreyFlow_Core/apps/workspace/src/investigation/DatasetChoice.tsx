@@ -1,7 +1,7 @@
 // Which of the unit's datasets a case reads (ADR-099), as a list of boxes to tick, in the order
 // they were ticked. Shared by a new case's form and a case's own "Data this case reads".
 import { Checkbox } from "../design/primitives/Checkbox";
-import type { Dataset } from "./cases";
+import { datasetLabel, type Dataset } from "./cases";
 
 export interface DatasetChoiceProps {
   datasets: readonly Dataset[];
@@ -33,7 +33,7 @@ export function DatasetChoice({ datasets, chosen, onChange, legend, disabled }: 
               )
             }
           />
-          {dataset.name}
+          {datasetLabel(dataset.id, dataset.name)}
         </label>
       ))}
     </fieldset>

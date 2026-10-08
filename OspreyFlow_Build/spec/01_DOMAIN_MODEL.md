@@ -473,6 +473,9 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
 - **A `SAME_AS` link is in the datasets both its records share**, so a match across two datasets is
   in none and no case reads it (Amendment 2 decision 3, §4).
 - **Events carry no dataset**: they stay keyed by case in the analytics store (decision 7).
+- **A dataset is referred to by its id, and only when registered** (Amendment 6): a write naming a
+  dataset the registry does not hold is refused whole. A unit's dataset names are unique, case and
+  spacing aside, and the Glass shows each with its id.
 
 ### 2.3 Resolution state
 

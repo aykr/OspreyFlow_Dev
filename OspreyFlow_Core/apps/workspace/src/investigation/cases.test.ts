@@ -240,3 +240,11 @@ describe("nestCases", () => {
     expect(nestCases(cases)).toHaveLength(2);
   });
 });
+
+describe("datasetLabel (ADR-099 Amendment 6)", () => {
+  it("is the name and the id, the id shortened to its last five characters past twelve", async () => {
+    const { datasetLabel } = await import("./cases");
+    expect(datasetLabel("enron", "Enron corpus")).toBe("Enron corpus · enron");
+    expect(datasetLabel("01K9XQ0000000000000000ABCD", "Enron corpus")).toBe("Enron corpus · …0ABCD");
+  });
+});

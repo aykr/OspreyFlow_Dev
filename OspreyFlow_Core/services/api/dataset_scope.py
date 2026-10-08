@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from contextvars import ContextVar
-from typing import Any
+from typing import Any, Protocol
 
 from ports.graph import BulkGraphLoader, GraphPort
 from schemas.domain import EdgeWrite, NodeId, NodeWrite, Principal
@@ -86,6 +86,25 @@ def _stamp_edges(edges: Sequence[EdgeWrite], into: str | None) -> list[EdgeWrite
     return [e if e.datasets else e.model_copy(update={"datasets": [into]}) for e in edges]
 
 
+class UnknownDatasetError(Exception):
+    """A write names a dataset the registry does not hold (ADR-099 Amendment 6). Nothing of that
+    write reaches the store: an element in an unregistered dataset is in no case's world, ever."""
+
+    def __init__(self, dataset_ids: Sequence[str]) -> None:
+        self.dataset_ids = sorted(set(dataset_ids))
+        super().__init__("no such dataset: " + ", ".join(self.dataset_ids))
+
+
+class DatasetRegistry(Protocol):
+    """What the stamping graph asks of the dataset store: which of these ids it holds."""
+
+    async def known(self, dataset_ids: Sequence[str]) -> set[str]: ...
+
+
+def _named(writes: Sequence[NodeWrite] | Sequence[EdgeWrite]) -> set[str]:
+    return {d for w in writes for d in w.datasets}
+
+
 class DatasetStampingGraph:
     """The Conduit's `GraphPort`: the adapter itself, with the request's case stamped on every
     write that names no dataset. Every other call goes to the adapter unchanged, and a capability
@@ -94,9 +113,34 @@ class DatasetStampingGraph:
     `dataset`, when given, is stamped instead of the request's case: a seed or a script, which runs
     outside any request, names the one dataset everything it writes belongs to."""
 
-    def __init__(self, inner: GraphPort, *, dataset: str | None = None) -> None:
+    def __init__(
+        self,
+        inner: GraphPort,
+        *,
+        dataset: str | None = None,
+        registry: DatasetRegistry | None = None,
+    ) -> None:
         self._inner = inner
         self._dataset = dataset
+        self._registry = registry
+        #: Ids the registry has confirmed. A dataset is never deleted, so a confirmation holds.
+        self._confirmed: set[str] = set()
+
+    def check_against(self, registry: DatasetRegistry) -> None:
+        """Every later write is checked against `registry` (the Conduit's dataset store, which
+        exists only after the graph is built)."""
+        self._registry = registry
+
+    async def _checked(self, writes: Sequence[Any]) -> None:
+        if self._registry is None:
+            return
+        wanted = _named(writes) - self._confirmed
+        if not wanted:
+            return
+        held = await self._registry.known(sorted(wanted))
+        self._confirmed |= held
+        if missing := wanted - held:
+            raise UnknownDatasetError(sorted(missing))
 
     def _into(self) -> str | None:
         if self._dataset is not None:
@@ -114,10 +158,14 @@ class DatasetStampingGraph:
         return getattr(self._inner, name)
 
     async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: Any) -> list[NodeId]:
-        return await self._inner.upsert_nodes(_stamp_nodes(nodes, self._into()), tx)
+        stamped = _stamp_nodes(nodes, self._into())
+        await self._checked(stamped)
+        return await self._inner.upsert_nodes(stamped, tx)
 
     async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: Any) -> list[str]:
-        return await self._inner.upsert_edges(_stamp_edges(edges, self._into()), tx)
+        stamped = _stamp_edges(edges, self._into())
+        await self._checked(stamped)
+        return await self._inner.upsert_edges(stamped, tx)
 
 
 class BulkDatasetStampingGraph(DatasetStampingGraph):
@@ -128,18 +176,25 @@ class BulkDatasetStampingGraph(DatasetStampingGraph):
 
     async def bulk_load_edges(self, edges: Sequence[EdgeWrite], **kwargs: Any) -> Any:
         inner: Any = self.inner
-        return await inner.bulk_load_edges(_stamp_edges(edges, self._into()), **kwargs)
+        stamped = _stamp_edges(edges, self._into())
+        await self._checked(stamped)
+        return await inner.bulk_load_edges(stamped, **kwargs)
 
 
-def stamping(inner: GraphPort, *, dataset: str | None = None) -> DatasetStampingGraph:
-    """The stamping graph over `inner`: a `BulkGraphLoader` exactly when `inner` is one."""
+def stamping(
+    inner: GraphPort, *, dataset: str | None = None, registry: DatasetRegistry | None = None
+) -> DatasetStampingGraph:
+    """The stamping graph over `inner`: a `BulkGraphLoader` exactly when `inner` is one. With a
+    `registry`, every write's datasets are checked against it first."""
     if isinstance(inner, BulkGraphLoader):
-        return BulkDatasetStampingGraph(inner, dataset=dataset)
-    return DatasetStampingGraph(inner, dataset=dataset)
+        return BulkDatasetStampingGraph(inner, dataset=dataset, registry=registry)
+    return DatasetStampingGraph(inner, dataset=dataset, registry=registry)
 
 
 __all__: Sequence[str] = (
     "BulkDatasetStampingGraph",
+    "DatasetRegistry",
+    "UnknownDatasetError",
     "DatasetStampingGraph",
     "stamping",
     "case_datasets",

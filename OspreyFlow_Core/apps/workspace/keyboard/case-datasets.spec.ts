@@ -62,7 +62,7 @@ test("the Author changes what the case reads by keyboard", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__CASE_DATASETS__?.changed)).toBe(1);
   expect(sent.find((s) => s.method === "PUT")?.body).toEqual({ dataset_ids: ["fixture-corp", "enron"] });
-  await expect(section.getByText("Enron corpus, Fixture Corp")).toBeVisible();
+  await expect(section.getByText("Enron corpus · enron, Fixture Corp · fixture-corp")).toBeVisible();
   registerCovered("CASE_DATASETS_ACTIONS", "change-what-a-case-reads-by-keyboard");
 });
 

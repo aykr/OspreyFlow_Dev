@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { Button } from "../design/primitives/Button";
-import { type Dataset, caseDatasets, listCases, listDatasets, setCaseDatasets } from "./cases";
+import { type Dataset, caseDatasets, datasetLabel, listCases, listDatasets, setCaseDatasets } from "./cases";
 import { DatasetChoice } from "./DatasetChoice";
 
 export interface CaseDatasetsProps {
@@ -80,7 +80,7 @@ export function CaseDatasets({
       </h3>
       {reads === null && !problem && <span className="label">Loading…</span>}
       {reads !== null && !editing && (
-        <p style={{ margin: 0 }}>{reads.length > 0 ? reads.map((d) => d.name).join(", ") : "None"}</p>
+        <p style={{ margin: 0 }}>{reads.length > 0 ? reads.map((d) => datasetLabel(d.id, d.name)).join(", ") : "None"}</p>
       )}
       {editing && (
         <>

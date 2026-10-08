@@ -28,7 +28,8 @@ What it does, in order, each step safe to run again:
    as they were (ADR-099 Amendment 5).
 
 It ends by counting the elements still in no dataset, per type, and names them as such: they are
-in no case's world until something claims them. Nothing is deleted.
+in no case's world until something claims them; and by counting, per dataset id, the elements that
+name a dataset the registry does not hold (ADR-099 Amendment 6). Nothing is deleted.
 """
 
 from __future__ import annotations
@@ -82,6 +83,8 @@ class StampReport:
     derived: int = 0
     refused: list[str] = field(default_factory=list)
     unstamped: dict[str, int] = field(default_factory=dict)
+    #: Elements naming a dataset the registry does not hold, by dataset id (ADR-099 Amendment 6).
+    unregistered: dict[str, int] = field(default_factory=dict)
 
 
 class _Sql:
@@ -377,7 +380,9 @@ async def stamp(
                 ordered = kept
             if not ordered:
                 if write:
-                    own = await datasets.create(seeder, case.name or f"Case {case.id}")
+                    own = await datasets.create(
+                        seeder, case.name or f"Case {case.id}", suffix_if_taken=True
+                    )
                     ordered = [own.id]
                 else:
                     ordered = [f"(new: {case.name or case.id})"]
@@ -445,6 +450,18 @@ async def stamp(
         say("  in no dataset yet (no case reads them):")
         for type_name, left in report.unstamped.items():
             say(f"    {type_name}: {left:,}")
+    # What names a dataset nobody registered: no case can be given it, so none of it can be read.
+    named: dict[str, int] = {}
+    for step in ("V", "E"):
+        for row in await sql.gremlin(f"g.{step}().values('datasets').unfold().groupCount()"):
+            for dataset_id, count in (row or {}).items():
+                named[str(dataset_id)] = named.get(str(dataset_id), 0) + int(count)
+    held = await datasets.known(sorted(named))
+    report.unregistered = {d: n for d, n in sorted(named.items()) if d not in held}
+    if report.unregistered:
+        say("  naming a dataset nobody registered (no case can read them):")
+        for dataset_id, count in report.unregistered.items():
+            say(f"    {dataset_id}: {count:,}")
     for line in report.refused:
         say(f"  not given: {line}")
     return report

@@ -99,9 +99,9 @@ Both engines need explicit indexes; neither will be usable without them.
   and an unindexed filter there costs more than the query.
 - `datasets` (ADR-099) is a top-level list field beside the handling fields. The access step tests
   it with `filter(values("datasets").unfold().is(within(...)))`, not `has("datasets", within(...))`,
-  which compares the whole list with each value and matches nothing. ADR-099 decision 2 calls the
-  field indexed; **no index on it is built yet**, so the test runs on the elements the rest of the
-  step selects.
+  which compares the whole list with each value and matches nothing (still so on 26.10.1). The field
+  is indexed by item on every type (`datasets BY ITEM`, ADR-099 Amendment 6), which answers a SQL read
+  by dataset (`WHERE datasets CONTAINS ...`) from the index.
 - Mixed/full-text index on name-like properties, served by OpenSearch on the cluster profile.
 - Vertex-centric index on `(edge_type, interval.from)` for every temporal edge type. Without
   this, timeline-filtered expansion on a high-degree node scans the whole adjacency list, which

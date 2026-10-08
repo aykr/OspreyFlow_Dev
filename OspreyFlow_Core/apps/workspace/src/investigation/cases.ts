@@ -17,6 +17,8 @@ export interface CaseListing {
   tab_hidden?: boolean;
   /** ADR-099: the names of the datasets the case reads, in order. */
   datasets?: string[];
+  /** Their ids, in the same order, so a name is shown with its id (ADR-099 Amendment 6). */
+  dataset_ids?: string[];
 }
 
 /** A body of data held by the unit (ADR-099): the Enron corpus, Fixture Corp, a Studio load's. */
@@ -263,4 +265,11 @@ export async function setTabHidden(
   if (!response.ok) {
     throw new Error(`The tab could not be ${hidden ? "closed" : "shown"} (${response.status}).`);
   }
+}
+
+/** A dataset as the Glass names it: its name and its id, so two that read alike are told apart
+ * (ADR-099 Amendment 6). An id of twelve characters or fewer (the seeds' `enron`) is shown whole;
+ * a longer one (a ULID) by its last five. */
+export function datasetLabel(id: string, name: string): string {
+  return `${name} · ${id.length <= 12 ? id : `\u2026${id.slice(-5)}`}`;
 }

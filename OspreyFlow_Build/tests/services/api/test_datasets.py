@@ -183,4 +183,6 @@ def test_the_case_list_names_what_each_case_reads(setup) -> None:  # type: ignor
     client.post("/v1/investigations", json={"name": "Both", "dataset_ids": ["fixture", "enron"]})
     (listed,) = client.get("/v1/investigations").json()
     assert listed["datasets"] == ["Fixture Corp", "Enron corpus"]
+    # Their ids, in the same order, so the picker tells alike names apart (ADR-099 Amendment 6).
+    assert listed["dataset_ids"] == ["fixture", "enron"]
 

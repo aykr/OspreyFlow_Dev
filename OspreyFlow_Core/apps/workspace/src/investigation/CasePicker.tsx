@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "../design/primitives/Button";
 import { Panel } from "../design/primitives/Panel";
-import { type CaseListing, caseLabel, listCases, nestCases, removeCase } from "./cases";
+import { type CaseListing, caseLabel, datasetLabel, listCases, nestCases, removeCase } from "./cases";
 import { NewCaseForm } from "./NewCaseForm";
 
 export interface CasePickerProps {
@@ -110,7 +110,14 @@ export function CasePicker({
                     <span className="label">
                       {entry.id === lastCaseId ? "Last opened · " : ""}
                       {branch ? "branch · " : ""}
-                      {entry.datasets && entry.datasets.length > 0 ? `reads ${entry.datasets.join(", ")} · ` : ""}
+                      {entry.datasets && entry.datasets.length > 0
+                        ? `reads ${entry.datasets
+                            .map((name, i) => {
+                              const id = entry.dataset_ids?.[i];
+                              return id ? datasetLabel(id, name) : name;
+                            })
+                            .join(", ")} · `
+                        : ""}
                       {entry.level}
                     </span>
                     {(entry.level === "author" || isAdministrator) &&

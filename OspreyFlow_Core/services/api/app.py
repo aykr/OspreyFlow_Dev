@@ -200,7 +200,14 @@ from .compute_routes import (
     run_compute_metric_job,
 )
 from .config import ApiConfig, DeploymentModels
-from .dataset_scope import made_in, outside_any_case, scope_to_case, stamping
+from .dataset_scope import (
+    DatasetStampingGraph,
+    UnknownDatasetError,
+    made_in,
+    outside_any_case,
+    scope_to_case,
+    stamping,
+)
 from .datasets import (
     CaseDatasetsRequest,
     CreateDatasetRequest,
@@ -467,6 +474,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # ADR-099: the datasets of each unit and of each case.
     datasets_store = await PostgresDatasetStore.connect(config.postgres.dsn)
     app.state.datasets = datasets_store
+    # ADR-099 Amendment 6: no write names a dataset the registry does not hold.
+    cast(DatasetStampingGraph, graph).check_against(datasets_store)
     litellm_client = LiteLLMClient(LiteLLMConfig.from_env())
     # `embed_model` is the only model this adapter needs fixed at construction — `extract()`'s own
     # model is caller-supplied per call (`ExtractionRequest.model`, ADR-005), never this adapter's
@@ -1486,6 +1495,19 @@ async def _document_not_found_handler(request: Request, exc: DocumentNotFoundErr
     )
 
 
+@app.exception_handler(UnknownDatasetError)
+async def _unknown_dataset_handler(request: Request, exc: UnknownDatasetError) -> JSONResponse:
+    """A write named a dataset nobody registered (ADR-099 Amendment 6): nothing was written."""
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "dataset_unknown",
+            "detail": f"No dataset {', '.join(exc.dataset_ids)} is registered; "
+            "nothing was written.",
+        },
+    )
+
+
 @app.exception_handler(DatasetRefusedError)
 async def _dataset_refused_handler(request: Request, exc: DatasetRefusedError) -> JSONResponse:
     """ADR-099: no dataset, or one not of the caller's unit; one answer for both."""
@@ -1746,7 +1768,7 @@ async def create_investigation(
             raise DatasetRefusedError("not every dataset is one of this unit's")
     investigation = await investigations.create(principal, name=name)
     if not named:
-        named = [(await datasets.create(principal, investigation.name)).id]
+        named = [(await datasets.create(principal, investigation.name, suffix_if_taken=True)).id]
     await datasets.set_for_case(investigation.id, named, principal)
     await audit.record(
         principal=principal,
@@ -1825,6 +1847,8 @@ class InvestigationListing(BaseModel):
     tab_hidden: bool = False
     #: ADR-099: the names of the datasets the case reads, in order, for the picker to show.
     datasets: list[str] = Field(default_factory=list)
+    #: Their ids, in the same order, so the picker shows each name with its id (Amendment 6).
+    dataset_ids: list[str] = Field(default_factory=list)
 
 
 @app.get("/v1/investigations")
@@ -1841,9 +1865,11 @@ async def list_investigations(
             created_by=case.created_by,
             branched_from=case.branched_from,
             tab_hidden=case.id in hidden,
-            datasets=[d.name for d in await datasets.of_case(case.id)],
+            datasets=[d.name for d in reads],
+            dataset_ids=[d.id for d in reads],
         )
         for case, level in await investigations.list_for(principal)
+        for reads in [await datasets.of_case(case.id)]
     ]
 
 
@@ -4016,7 +4042,7 @@ async def jump_alert_route(
     elif alert.investigation_id is not None:
         await datasets.copy_case(alert.investigation_id, branch.id)
     if not await datasets.ids_of_case(branch.id):
-        own = await datasets.create(principal, branch.name)
+        own = await datasets.create(principal, branch.name, suffix_if_taken=True)
         await datasets.set_for_case(branch.id, [own.id], principal)
     principal = await scope_to_case(principal, branch.id, datasets)
     nodes, unreadable = await fetch_jumpable_referents(alert, principal=principal, graph=graph)

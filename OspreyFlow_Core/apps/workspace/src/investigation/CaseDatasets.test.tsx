@@ -50,8 +50,8 @@ describe("a new case's data", () => {
     });
     const onCreated = vi.fn();
     render(<NewCaseForm apiBaseUrl="http://api" bearerToken="t" inputLabel="Case name" onCreated={onCreated} />);
-    fireEvent.click(await screen.findByLabelText("Fixture Corp"));
-    fireEvent.click(screen.getByLabelText("Enron corpus"));
+    fireEvent.click(await screen.findByLabelText("Fixture Corp · fixture-corp"));
+    fireEvent.click(screen.getByLabelText("Enron corpus · enron"));
     expect(screen.getByText("The case reads only these. Its Author can change this later.")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Case name"), { target: { value: "Both" } });
     fireEvent.click(screen.getByRole("button", { name: "Create case" }));
@@ -79,7 +79,7 @@ describe("CaseDatasets", () => {
       "GET /v1/investigations": () => json(200, [{ id: "c1", name: "C", level: "editor", created_at: "", created_by: "" }]),
     });
     render(<CaseDatasets apiBaseUrl="http://api" bearerToken="t" investigationId="c1" />);
-    expect(await screen.findByText("Fixture Corp")).toBeTruthy();
+    expect(await screen.findByText("Fixture Corp · fixture-corp")).toBeTruthy();
     await waitFor(() => expect(screen.queryByRole("button", { name: "Change what this case reads" })).toBeNull());
   });
 
@@ -93,7 +93,7 @@ describe("CaseDatasets", () => {
     const onChanged = vi.fn();
     render(<CaseDatasets apiBaseUrl="http://api" bearerToken="t" investigationId="c1" onChanged={onChanged} />);
     fireEvent.click(await screen.findByRole("button", { name: "Change what this case reads" }));
-    fireEvent.click(await screen.findByLabelText("Enron corpus"));
+    fireEvent.click(await screen.findByLabelText("Enron corpus · enron"));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
     expect(calls.find((c) => c.key === "PUT /v1/investigations/c1/datasets")!.body).toEqual({
@@ -109,7 +109,35 @@ describe("CaseDatasets", () => {
     });
     render(<CaseDatasets apiBaseUrl="http://api" bearerToken="t" investigationId="c1" />);
     fireEvent.click(await screen.findByRole("button", { name: "Change what this case reads" }));
-    fireEvent.click(await screen.findByLabelText("Fixture Corp"));
+    fireEvent.click(await screen.findByLabelText("Fixture Corp · fixture-corp"));
     expect((screen.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe("telling datasets apart (ADR-099 Amendment 6)", () => {
+  // Names are unique within a unit now, but a name may still read like another ("Enron corpus" and
+  // "Enron corpus (2)", or two units' datasets offered side by side): each is shown with its id.
+  const ALIKE = [
+    { id: "01K9XQ0000000000000000ABCD", name: "Enron corpus", owning_unit: "unit-1" },
+    { id: "01K9XQ0000000000000000WXYZ", name: "Enron corpus (2)", owning_unit: "unit-1" },
+    { id: "enron", name: "Enron seed", owning_unit: "unit-1" },
+  ];
+
+  it("labels each choice with its name and a short form of its id", async () => {
+    serve({ "GET /v1/datasets": () => json(200, ALIKE) });
+    render(<NewCaseForm apiBaseUrl="http://api" bearerToken="t" inputLabel="Case name" onCreated={vi.fn()} />);
+    expect(await screen.findByLabelText("Enron corpus · …0ABCD")).toBeTruthy();
+    expect(screen.getByLabelText("Enron corpus (2) · …0WXYZ")).toBeTruthy();
+    // A short id, as the seeds' are, is shown whole.
+    expect(screen.getByLabelText("Enron seed · enron")).toBeTruthy();
+  });
+
+  it("says what the case reads with each dataset's id", async () => {
+    serve({
+      "GET /v1/investigations/c1/datasets": () => json(200, ALIKE.slice(0, 2)),
+      "GET /v1/investigations": () => json(200, [{ id: "c1", name: "C", level: "editor", created_at: "", created_by: "" }]),
+    });
+    render(<CaseDatasets apiBaseUrl="http://api" bearerToken="t" investigationId="c1" />);
+    expect(await screen.findByText("Enron corpus · …0ABCD, Enron corpus (2) · …0WXYZ")).toBeTruthy();
   });
 });

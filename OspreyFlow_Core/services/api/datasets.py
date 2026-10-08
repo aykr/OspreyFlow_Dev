@@ -10,6 +10,11 @@ the datasets of each unit, and the datasets of each case.
 another unit and one that does not exist are refused with the same answer, so a refusal says
 nothing about another unit's data. Changing a case's datasets is its Author's (the route's level);
 a branch takes its parent's.
+
+**Names are unique within a unit (ADR-099 Amendment 6),** ignoring case and spacing, so two of a
+unit's datasets never read alike; the id stays what every element and case refers to. A dataset
+asked for by name is refused when the name is taken; the one a case makes for itself, and a seed's,
+take a suffix instead ("Branch of Enron (2)").
 """
 
 from __future__ import annotations
@@ -49,7 +54,10 @@ class DatasetRefusedError(Exception):
 
 
 class DatasetStore(Protocol):
-    async def create(self, principal: Principal, name: str) -> Dataset: ...
+    async def create(
+        self, principal: Principal, name: str, *, suffix_if_taken: bool = False
+    ) -> Dataset: ...
+    async def known(self, dataset_ids: Sequence[str]) -> set[str]: ...
     async def register(self, dataset: Dataset) -> Dataset: ...
     async def list_for_unit(self, unit: str) -> list[Dataset]: ...
     async def of_case(self, investigation_id: str) -> list[Dataset]: ...
@@ -65,6 +73,20 @@ def _clean(name: str) -> str:
     if not cleaned:
         raise DatasetRefusedError("a dataset needs a name")
     return cleaned[:MAX_DATASET_NAME]
+
+
+def name_key(name: str) -> str:
+    """What two names must differ in: case and spacing aside."""
+    return " ".join(name.split()).casefold()
+
+
+def _taken(name: str) -> DatasetRefusedError:
+    return DatasetRefusedError(f"A dataset named {name!r} already exists in your unit.")
+
+
+def _suffixed(name: str, n: int) -> str:
+    suffix = f" ({n})"
+    return name[: MAX_DATASET_NAME - len(suffix)] + suffix
 
 
 def _ordered(dataset_ids: Sequence[str]) -> list[str]:
@@ -85,20 +107,40 @@ class InMemoryDatasetStore:
         self.datasets[dataset.id] = dataset
         return dataset
 
+    def _free_name(self, unit: str, name: str, *, suffix_if_taken: bool) -> str:
+        taken = {name_key(d.name) for d in self.datasets.values() if d.owning_unit == unit}
+        if name_key(name) not in taken:
+            return name
+        if not suffix_if_taken:
+            raise _taken(name)
+        n = 2
+        while name_key(_suffixed(name, n)) in taken:
+            n += 1
+        return _suffixed(name, n)
+
     async def register(self, dataset: Dataset) -> Dataset:
         """A dataset with a chosen id; writing the same id again keeps the first record."""
-        return self.datasets.setdefault(dataset.id, dataset)
+        if dataset.id in self.datasets:
+            return self.datasets[dataset.id]
+        name = self._free_name(dataset.owning_unit, _clean(dataset.name), suffix_if_taken=True)
+        return self.add(dataset.model_copy(update={"name": name}))
 
-    async def create(self, principal: Principal, name: str) -> Dataset:
+    async def create(
+        self, principal: Principal, name: str, *, suffix_if_taken: bool = False
+    ) -> Dataset:
+        cleaned = self._free_name(principal.org_unit, _clean(name), suffix_if_taken=suffix_if_taken)
         return self.add(
             Dataset(
                 id=new_id(),
-                name=_clean(name),
+                name=cleaned,
                 owning_unit=principal.org_unit,
                 created_at=datetime.now(UTC),
                 created_by=principal.id,
             )
         )
+
+    async def known(self, dataset_ids: Sequence[str]) -> set[str]:
+        return {d for d in dataset_ids if d in self.datasets}
 
     async def list_for_unit(self, unit: str) -> list[Dataset]:
         return sorted(
@@ -145,6 +187,40 @@ CREATE TABLE IF NOT EXISTS investigation_datasets (
 
 _COLUMNS = "d.id, d.name, d.owning_unit, d.created_at, d.created_by"
 
+#: The name a unit's datasets may not share, case and spacing aside (`name_key`).
+_NAME_KEY_SQL = "lower(regexp_replace(btrim(name), '\\s+', ' ', 'g'))"
+
+
+async def _tell_apart_and_index(conn: asyncpg.Connection) -> None:
+    """Before the unique index: names a unit already holds twice are told apart, the earliest
+    keeping its name and each later one a suffix, so a deployment made before ADR-099 Amendment 6
+    starts rather than failing to build the index."""
+    exists = await conn.fetchval(
+        "SELECT 1 FROM pg_indexes WHERE indexname = 'datasets_unit_name_unique'"
+    )
+    if exists:
+        return
+    rows = await conn.fetch(
+        f"SELECT id, name, owning_unit, {_NAME_KEY_SQL} AS key FROM datasets "
+        "ORDER BY owning_unit, created_at, id"
+    )
+    taken: dict[str, set[str]] = {}
+    for row in rows:
+        keys = taken.setdefault(row["owning_unit"], set())
+        if row["key"] not in keys:
+            keys.add(row["key"])
+            continue
+        n = 2
+        while name_key(_suffixed(row["name"], n)) in keys:
+            n += 1
+        renamed = _suffixed(row["name"], n)
+        keys.add(name_key(renamed))
+        await conn.execute("UPDATE datasets SET name = $1 WHERE id = $2", renamed, row["id"])
+    await conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS datasets_unit_name_unique "
+        f"ON datasets (owning_unit, {_NAME_KEY_SQL})"
+    )
+
 
 class PostgresDatasetStore:
     def __init__(self, pool: asyncpg.Pool) -> None:
@@ -157,12 +233,15 @@ class PostgresDatasetStore:
         pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=4)
         async with pool.acquire() as conn:
             await conn.execute(_BOOTSTRAP_SQL)
+            await _tell_apart_and_index(conn)
         return cls(pool)
 
     async def close(self) -> None:
         await self._pool.close()
 
-    async def create(self, principal: Principal, name: str) -> Dataset:
+    async def create(
+        self, principal: Principal, name: str, *, suffix_if_taken: bool = False
+    ) -> Dataset:
         dataset = Dataset(
             id=new_id(),
             name=_clean(name),
@@ -170,26 +249,53 @@ class PostgresDatasetStore:
             created_at=datetime.now(UTC),
             created_by=principal.id,
         )
-        await self.add(dataset)
-        return dataset
+        return await self._insert(dataset, suffix_if_taken=suffix_if_taken)
 
     async def register(self, dataset: Dataset) -> Dataset:
-        return await self.add(dataset)
+        """A dataset with a chosen id (`scripts.stamp_datasets` names the seeds' datasets).
+        Writing the same id again leaves the record as it is; a name another of the unit's
+        datasets holds takes a suffix."""
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                f"SELECT {_COLUMNS} FROM datasets d WHERE d.id = $1", dataset.id
+            )
+        if row is not None:
+            return Dataset(**dict(row))
+        return await self._insert(
+            dataset.model_copy(update={"name": _clean(dataset.name)}), suffix_if_taken=True
+        )
 
     async def add(self, dataset: Dataset) -> Dataset:
-        """A dataset with a chosen id (`scripts.stamp_datasets` names the seeds' datasets).
-        Writing the same id again leaves the record as it is."""
+        return await self.register(dataset)
+
+    async def _insert(self, dataset: Dataset, *, suffix_if_taken: bool) -> Dataset:
+        name, n = dataset.name, 2
+        while True:
+            try:
+                async with self._pool.acquire() as conn:
+                    await conn.execute(
+                        "INSERT INTO datasets (id, name, owning_unit, created_at, created_by) "
+                        "VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING",
+                        dataset.id,
+                        name,
+                        dataset.owning_unit,
+                        dataset.created_at,
+                        dataset.created_by,
+                    )
+                return dataset.model_copy(update={"name": name})
+            except asyncpg.UniqueViolationError as exc:
+                if not suffix_if_taken:
+                    raise _taken(dataset.name) from exc
+                name, n = _suffixed(dataset.name, n), n + 1
+
+    async def known(self, dataset_ids: Sequence[str]) -> set[str]:
+        if not dataset_ids:
+            return set()
         async with self._pool.acquire() as conn:
-            await conn.execute(
-                "INSERT INTO datasets (id, name, owning_unit, created_at, created_by) "
-                "VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING",
-                dataset.id,
-                dataset.name,
-                dataset.owning_unit,
-                dataset.created_at,
-                dataset.created_by,
+            rows = await conn.fetch(
+                "SELECT id FROM datasets WHERE id = ANY($1::text[])", list(set(dataset_ids))
             )
-        return dataset
+        return {r["id"] for r in rows}
 
     async def list_for_unit(self, unit: str) -> list[Dataset]:
         async with self._pool.acquire() as conn:

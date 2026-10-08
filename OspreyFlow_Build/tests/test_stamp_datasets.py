@@ -307,3 +307,17 @@ async def test_a_cases_copies_are_refreshed_from_the_graph_not_only_stamped(stor
     assert copy.occurrences == current.occurrences == 1
     assert copy.datasets == ["enron"]
 
+
+
+async def test_a_dataset_named_on_the_graph_but_not_registered_is_counted(store: _Store) -> None:
+    """ADR-099 Amendment 6: the graph cannot hold a foreign key into the registry, so the stamping
+    script counts what names a dataset nobody registered: no case can be given it, so nothing in it
+    can ever be read. Planted here as a write the stamping graph would now refuse, made under it."""
+    ghost = _person("enron-corpus").model_copy(update={"datasets": ["ghost-dataset"]})
+    tx = await store.graph.begin_transaction()
+    await store.graph.upsert_nodes([ghost], tx)
+    await store.graph.commit_transaction(tx)
+    report = await store.run()
+    assert report.unregistered == {"ghost-dataset": 1}
+    # The seeds' datasets it registers itself are not counted.
+    assert "enron" not in report.unregistered
