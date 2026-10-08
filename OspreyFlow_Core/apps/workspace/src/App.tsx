@@ -655,10 +655,13 @@ export function App() {
     };
   }, [investigationId, bearerToken, handleUnauthenticatedResponse]);
 
+  // Keyed by the store itself, not the case: the store is made only once there is a token, which a
+  // sign-in through the identity provider delivers after this first ran (8 October 2026: a brush
+  // dimmed nothing in the deployed Glass, while `npm run dev`'s token was there from the start).
+  const crossFilterForDimming = crossFilterRef.current;
   useEffect(() => {
-    const crossFilter = crossFilterRef.current;
-    if (!crossFilter) return;
-    const unsubscribe = crossFilter.store.subscribe((state) => {
+    if (!crossFilterForDimming) return;
+    const unsubscribe = crossFilterForDimming.store.subscribe((state) => {
       setDimming({
         dimmedNodeIds: state.dimmedNodeIds,
         dimmedEdgeIds: state.dimmedEdgeIds,
@@ -667,7 +670,7 @@ export function App() {
       });
     });
     return () => unsubscribe();
-  }, [investigationId]);
+  }, [crossFilterForDimming]);
 
   useEffect(() => {
     const crossFilter = crossFilterRef.current;

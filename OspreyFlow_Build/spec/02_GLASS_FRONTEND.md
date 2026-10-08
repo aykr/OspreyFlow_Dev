@@ -211,6 +211,9 @@ set of widgets:
 3. **Everything cross-filters.** A brush on the timeline dims the graph, restricts the map and
    recomputes the histograms. A lasso on the canvas filters the timeline. A histogram bar click
    filters everything. This is the Gotham pattern and it is the core interaction of the product.
+   It holds however the analyst signed in: the deployed Glass gets its token after it opens, so
+   the brush's dimming is proven to reach the status bar on that path
+   (`App.crossfilter.test.tsx`; found 8 October 2026, when it dimmed nothing there).
 4. **The status bar never lies.** Counts of dimmed and handling-hidden items are always visible. Each
    count is a pair, its number in mono beside its words in the UI face, with a quiet separator between
    pairs (ADR-097 step 3).
