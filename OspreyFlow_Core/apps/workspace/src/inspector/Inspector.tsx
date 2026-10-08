@@ -17,6 +17,7 @@ import { linkTypeName } from "../canvas/linkLabel";
 import type { EntityVisual } from "../ontology/schema";
 import { SelectionList } from "./SelectionList";
 import { TypeChip } from "./TypeChip";
+import { SharedContacts, type SharedContactsProps } from "./SharedContacts";
 
 function isResolutionLink(type: string): boolean {
   return type === "SAME_AS" || type === "NOT_SAME_AS";
@@ -57,6 +58,8 @@ export interface InspectorProps {
     proposedTypes?: ReadonlySet<string>;
     onTypeProposed?: (definition: EdgeTypeDef) => void;
   };
+  /** ADR-100 Amendment 7: who shares contacts with the selected node. Absent: not offered. */
+  sharedContacts?: Omit<SharedContactsProps, "node">;
   /** Phase 8 Stage 4c: the Judgements tab, `02_GLASS_FRONTEND.md` §9. `undefined` when the
    * caller has not wired assessment production up yet (an existing test harness) — the tab is
    * then simply not offered, the same optional-prop pattern `dimmedNodeIds`/`communityHulls`
@@ -74,7 +77,7 @@ export interface InspectorProps {
 }
 
 type LinkPart = "details" | "change" | "notes" | "events" | "history";
-type NodePart = "properties" | "relationships" | "provenance" | "source" | "judgements";
+type NodePart = "properties" | "relationships" | "shared" | "provenance" | "source" | "judgements";
 
 /** Which parts of a panel are open, starting from `initial`; `toggle` opens or closes one. */
 function useOpenParts<T extends string>(initial: readonly T[]) {
@@ -105,7 +108,15 @@ interface PartRequest {
  *
  * **Judgements does not require a selected node**: assessment production is investigation-scoped,
  * not node-scoped (`02_GLASS_FRONTEND.md` §9). */
-export function Inspector({ node, link, linkEditing, assessment, selection, visualFor }: InspectorProps) {
+export function Inspector({
+  node,
+  link,
+  linkEditing,
+  assessment,
+  selection,
+  visualFor,
+  sharedContacts,
+}: InspectorProps) {
   // The link menu's counters only ever rise; a part opens when one rises, never on a later
   // selection just because a counter is above zero.
   const seen = useRef({ note: 0, change: 0, events: 0, history: 0 });
@@ -164,7 +175,13 @@ export function Inspector({ node, link, linkEditing, assessment, selection, visu
 
   return (
     <Panel title="Inspector" className="inspector">
-      <NodeView key={node?.id ?? "no-node"} node={node} assessment={assessment} visualFor={visualFor} />
+      <NodeView
+        key={node?.id ?? "no-node"}
+        node={node}
+        assessment={assessment}
+        visualFor={visualFor}
+        sharedContacts={sharedContacts}
+      />
     </Panel>
   );
 }
@@ -387,10 +404,12 @@ function NodeView({
   node,
   assessment,
   visualFor,
+  sharedContacts,
 }: {
   node: Node | null;
   assessment: InspectorProps["assessment"];
   visualFor?: InspectorProps["visualFor"];
+  sharedContacts?: InspectorProps["sharedContacts"];
 }) {
   const parts = useOpenParts<NodePart>(node ? ["properties"] : ["judgements"]);
   // Judgements fetches the case's whole list, so it is built the first time its part is opened
@@ -457,6 +476,9 @@ function NodeView({
             );
           })(),
         )}
+      {node &&
+        sharedContacts &&
+        section("shared", "Shares contacts", <SharedContacts {...sharedContacts} node={node} />)}
       {node &&
         section(
           "provenance",

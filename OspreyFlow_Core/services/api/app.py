@@ -144,6 +144,7 @@ from schemas.explore import (
     Groups,
     RankedLinks,
     RankedNodes,
+    SharedContacts,
     StarterQuestions,
     TypeCounts,
     WhatsNew,
@@ -3122,6 +3123,85 @@ async def explore_starter_run_route(
         action="explore_starter_run",
         investigation_id=investigation.id,
         resolved_query={"question_id": question_id},
+        result_cardinality=len(outcome.delta.nodes) + len(outcome.delta.edges),
+    )
+    return StarterRunOutcome(
+        delta=outcome.delta,
+        added_nodes=len(outcome.delta.nodes),
+        added_links=len(outcome.delta.edges),
+    )
+
+
+def _shared_link_type(ontology: OntologySchema, edge_type: str) -> str:
+    """A link type a node's contacts can be shared by: one of the ontology's own, not a system
+    type such as `SAME_AS`."""
+    known = {e.name for e in public_ontology(ontology).edge_types if not e.system}
+    if edge_type not in known:
+        raise HTTPException(status_code=422, detail="edge_type is not a link type of the ontology")
+    return edge_type
+
+
+@app.get("/v1/investigations/{investigation_id}/nodes/{node_id}/shared-contacts")
+async def shared_contacts_route(
+    investigation: InvestigationViewerDep,
+    node_id: str,
+    edge_type: str,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    ontology: OntologyDep,
+    audit: AuditDep,
+    limit: int = Query(default=10, ge=1, le=EXPLORE_MAX_PAGE),
+) -> SharedContacts:
+    """ADR-100 Amendment 7 decision 4: who shares at least two contacts with this node by the
+    link type, most first, counted in the store as the reader (rule 3). A node the reader cannot
+    see shares with nobody."""
+    found = await graph.shared_contacts(
+        node_id, principal, edge_type=_shared_link_type(ontology, edge_type), limit=limit
+    )
+    await audit.record(
+        principal=principal,
+        action="shared_contacts",
+        investigation_id=investigation.id,
+        resolved_query={"node_id": node_id, "edge_type": edge_type},
+        result_cardinality=found.total,
+    )
+    return found
+
+
+@app.post("/v1/investigations/{investigation_id}/nodes/{node_id}/shared-contacts/{other_id}/canvas")
+async def shared_pair_canvas_route(
+    investigation: InvestigationEditorDep,
+    node_id: str,
+    other_id: str,
+    edge_type: str,
+    principal: PrincipalDep,
+    explore: ExploreDep,
+    ontology: OntologyDep,
+    working_set: WorkingSetDep,
+    history: HistoryDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+) -> StarterRunOutcome:
+    """ADR-100 Amendment 7 decision 4: the two nodes, the contacts they share and the links among
+    them onto the canvas, all or, past the cap, none. Editor, since it adds to the working set."""
+    nodes, edges = await explore.shared_pair(
+        principal, node_id, other_id, edge_type=_shared_link_type(ontology, edge_type)
+    )
+    outcome = await working_set.seed(investigation.id, nodes, edges, principal)
+    await publish_delta(valkey, investigation.id, outcome.delta)
+    await _record_history_step(
+        working_set,
+        history,
+        investigation.id,
+        seq=outcome.delta.seq,
+        label=f"Showed two who share contacts: {len(outcome.delta.nodes)} node(s)",
+        principal=principal,
+    )
+    await audit.record(
+        principal=principal,
+        action="shared_pair_canvas",
+        investigation_id=investigation.id,
+        resolved_query={"node_id": node_id, "other_id": other_id, "edge_type": edge_type},
         result_cardinality=len(outcome.delta.nodes) + len(outcome.delta.edges),
     )
     return StarterRunOutcome(

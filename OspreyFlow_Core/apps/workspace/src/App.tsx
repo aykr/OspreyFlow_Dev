@@ -1261,6 +1261,17 @@ export function App() {
                         onRemove: (id) => glassCanvasRef.current?.deselect(id),
                       }}
                       visualFor={(type) => ontology.visualFor(type)}
+                      sharedContacts={
+                        ontologySchema
+                          ? {
+                              apiBaseUrl: API_BASE_URL,
+                              bearerToken,
+                              investigationId,
+                              edgeTypes: ontologySchema.edge_types,
+                              onDelta: applyStarterDelta,
+                            }
+                          : undefined
+                      }
                       link={
                         selectedLink
                           ? {

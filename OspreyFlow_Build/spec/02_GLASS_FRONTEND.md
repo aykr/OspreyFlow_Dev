@@ -533,8 +533,10 @@ choosing a search result does: puts it on the canvas, draws outwards from it and
 the Conduit's (`/explore/counts`, `/explore/most-connected`), kept once counted and counted again after
 a change, and the panel says when ("Counted at 09:05 UTC", ADR-100 Amendment 3); they are never
 reckoned in the browser
-(`keyboard/explore.spec.ts`, `src/explore/ExplorePanel.test.tsx`). "Who shares two contacts with this node", asked
-of one node in the Inspector (ADR-100 Amendment 7), is not built yet.
+(`keyboard/explore.spec.ts`, `src/explore/ExplorePanel.test.tsx`). A node's
+Inspector has *Shares contacts* (ADR-100 Amendment 8): for each link type its type starts, "Who shares two
+contacts by “Communicated with”?", then the ten who share most, "bob · shares 446", of how many; a pick puts
+the two, what they share and the links among them on the canvas (`keyboard/inspector.spec.ts`).
 
 ### 3.1c An expansion that adds nothing says so (ADR-077)
 

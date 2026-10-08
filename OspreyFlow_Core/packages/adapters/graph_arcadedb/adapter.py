@@ -64,6 +64,8 @@ from schemas.explore import (
     RankedNodes,
     RecentLoads,
     RecentlyConfirmed,
+    SharedContact,
+    SharedContacts,
     TypeCounts,
 )
 from schemas.merge import merge_datasets, merge_interval, merge_provenance
@@ -86,6 +88,7 @@ from .builders import (
     render_link_structure_gremlin,
     render_recent_loads_gremlin,
     render_recently_confirmed_gremlin,
+    render_shared_contacts_gremlin,
     render_type_counts_gremlin,
     suggestion_scope,
 )
@@ -832,6 +835,45 @@ class GraphArcadeDBAdapter:
                     confirmed_by=str(r["by"]),
                 )
                 for r in await self._client.gremlin(page_query)
+            ],
+            total=int(counted.get("result") or 0),
+        )
+
+    async def shared_contacts(
+        self,
+        node_id: NodeId,
+        principal: Principal,
+        *,
+        edge_type: str,
+        min_shared: int = 2,
+        limit: int = 10,
+    ) -> SharedContacts:
+        count_query, page_query = render_shared_contacts_gremlin(
+            self._access,
+            principal,
+            node_id,
+            edge_type=edge_type,
+            min_shared=min_shared,
+            limit=limit,
+        )
+        (counted,) = await self._client.gremlin(count_query)
+        page = await self._client.gremlin(page_query)
+        shared = {str(r["id"]): int(r["n"]) for r in page}
+        nodes = {
+            node.id: node
+            for node in map(
+                node_from_element_map,
+                await self._client.gremlin(
+                    f'g.V().has("id",within({groovy_string_list_literal(list(shared))}))'
+                    f".{self._access.gremlin_has_step(principal)}.elementMap()"
+                )
+                if shared
+                else [],
+            )
+        }
+        return SharedContacts(
+            contacts=[
+                SharedContact(node=nodes[i], shared=n) for i, n in shared.items() if i in nodes
             ],
             total=int(counted.get("result") or 0),
         )

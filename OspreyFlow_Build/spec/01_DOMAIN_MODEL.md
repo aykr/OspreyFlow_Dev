@@ -1188,6 +1188,10 @@ seen and reverted, superseded and other-dataset elements count nowhere:
   principal can see, grouped by the load that wrote it (`audit.load_id`; one entry for what no load
   wrote), with its visible nodes, visible links whose ends are visible, newest `created_at` and
   recipe, the newest first, with `total`.
+- **`shared_contacts(node_id, principal, *, edge_type, min_shared=2, limit=10) -> SharedContacts`**
+  (ADR-100 Amendment 8). The nodes linked by `edge_type` to at least `min_shared` of this node's
+  contacts, the most shared first, with `total`; every link and node on the way passes the access
+  step.
 - **`recently_confirmed(principal, *, limit=10) -> RecentlyConfirmed`** (ADR-100 Amendment 6).
   Visible nodes whose provenance records a confirmation, the latest `last_confirmed` first, ties
   by id, each with who confirmed it, with `total`.

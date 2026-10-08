@@ -494,7 +494,7 @@ class MatchBuilder:
     a `.where()` reachability check from each secondary root's own known id. An open (unpinned)
     second root remains unsupported — there is no general join to fall back to on this adapter.
     Every step in both paths is still built exclusively by this compiler, one hop at a time, with
-    `has_access` injected at every `.outE()`/`.inV()`/`.in()` exactly as before — the
+    `has_access` injected at every `.outE()`/`.inV()`/`.inE()`/`.outV()` exactly as before — the
     access-filtering guarantee is that the compiler owns every step, not that the overall shape
     stays one chain, so widening changes what must be *proven*
     (`test_match_intersection_never_leaks_a_hidden_common_endpoint`), not who constructs a step."""
@@ -676,7 +676,7 @@ class MatchBuilder:
         instead of Gremlin's own `match()` step. One root drives the primary traversal exactly
         like `_render_single_chain`; every other root must be pinned to a known `node_id` and
         converge, via its own edge chain, on a variable the primary chain also reaches. Each such
-        chain is reversed into a `.where()` step, walked backward with `.in(edge_type)` in
+        chain is reversed into a `.where()` step, walked backward with `.inE(edge_type).outV()` in
         reverse order, ending in a check against the pinned id — proving "this known node also
         reaches the same convergence point," without ever needing to enumerate or bind a second,
         independent root at all."""
@@ -762,9 +762,13 @@ class MatchBuilder:
             assert root.node_id is not None  # guaranteed by the secondary_roots check above
             reverse_steps = []
             for edge in reversed(secondary_chain):
+                # The link as well as the node (rule 3): `.in()` alone stepped over a link the
+                # reader cannot see (ADR-100 Amendment 7).
                 reverse_steps.append(
-                    f".in({groovy_args_literal(physical_edge_labels(edge.edge_type))})"
+                    f".inE({groovy_args_literal(physical_edge_labels(edge.edge_type))})"
                 )
+                reverse_steps.append(f".{has_access}")
+                reverse_steps.append(".outV()")
                 reverse_steps.append(f".{has_access}")
             reverse_steps.append(f'.has("id",{groovy_string_literal(root.node_id)})')
             steps.append(f".select({groovy_string_literal(join_var)})")
@@ -928,4 +932,35 @@ def render_recently_confirmed_gremlin(
         f'{base}.order().by({_CONFIRMED_AT},desc).by("id").range(0,{limit})'
         '.project("node","at","by").by(elementMap()).by(' + _CONFIRMED_AT + ")"
         '.by(coalesce(values("provenance").select("confirmed_by").is(neq(null)),constant("")))',
+    )
+
+
+def render_shared_contacts_gremlin(
+    access: AccessFilter,
+    principal: Principal,
+    node_id: str,
+    *,
+    edge_type: str,
+    min_shared: int,
+    limit: int,
+) -> tuple[str, str]:
+    """`GraphPort.shared_contacts` (ADR-100 Amendment 7 decision 4): one walk out to the node's
+    contacts and back to whoever else links to them, each (contact, other) pair once, counted per
+    other node. Measured on Enron: 0.5 s for the busiest address, where the same question as a
+    pattern took 73 s. The access step is on every link and node on the way (rule 3)."""
+    has_access = access.gremlin_has_step(principal)
+    labels = groovy_args_literal(physical_edge_labels(edge_type))
+    base = (
+        f'g.V().has("id",{groovy_string_literal(node_id)}).{has_access}.as("a")'
+        f".outE({labels}).{has_access}.inV().{has_access}"
+        '.as("x")'
+        f".inE({labels}).{has_access}.outV().{has_access}"
+        '.where(neq("a")).as("b").dedup().by(select("x","b").by("id"))'
+        '.select("b").groupCount().by("id").unfold()'
+        f".where(select(values).is(gte({min_shared})))"
+    )
+    return (
+        f"{base}.count()",
+        f"{base}.order().by(values,desc).by(keys).limit({limit})"
+        '.project("id","n").by(keys).by(values)',
     )

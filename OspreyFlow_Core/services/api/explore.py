@@ -22,7 +22,15 @@ from ports.compute import ComputePort
 from ports.graph import GraphPort, SubgraphTooLarge
 from schemas.analytics import EventFilter, HistogramBucketing, HistogramRequest
 from schemas.compute import CommunityRequest
-from schemas.domain import Edge, Node, OntologySchema, Principal
+from schemas.domain import (
+    Edge,
+    Node,
+    OntologySchema,
+    PatternEdge,
+    PatternNode,
+    PatternQuery,
+    Principal,
+)
 from schemas.explore import (
     Bridge,
     BusiestDays,
@@ -39,7 +47,7 @@ from schemas.explore import (
 
 from .overview import _breach
 from .starter_questions import starter_questions, suited
-from .suppression import SuppressionMark
+from .suppression import NodeNotVisibleError, SuppressionMark
 from .working_set.models import MAX_EDGES, MAX_NODES, LimitExceededError
 
 #: How many groups and bridges are named; the rest are counted.
@@ -341,6 +349,36 @@ class ExploreService:
         ):
             raise TooManyMatches(STARTER_RUN_LIMIT)
         nodes = (await self._graph.match(pattern, principal)).nodes
+        edges = await self._graph.edges_among([n.id for n in nodes], principal)
+        return nodes, edges
+
+    async def shared_pair(
+        self, principal: Principal, node_id: str, other_id: str, *, edge_type: str
+    ) -> tuple[list[Node], list[Edge]]:
+        """ADR-100 Amendment 7 decision 4: a node, another who shares contacts with it, the
+        contacts they share by `edge_type`, and the links among them, all read as the reader. The
+        shared contacts are ADR-030's two-pinned-roots pattern, bounded by the first node's own
+        contacts. A node the reader cannot see is refused as one that does not exist."""
+        first = await self._graph.get_node(node_id, principal)
+        other = await self._graph.get_node(other_id, principal)
+        if first is None or other is None:
+            raise NodeNotVisibleError(node_id if first is None else other_id)
+        pattern = PatternQuery(
+            nodes=[
+                PatternNode(var="a", entity_type=first.type, node_id=first.id),
+                PatternNode(var="x"),
+                PatternNode(var="b", entity_type=other.type, node_id=other.id),
+            ],
+            edges=[
+                PatternEdge(edge_type=edge_type, from_var="a", to_var="x"),
+                PatternEdge(edge_type=edge_type, from_var="b", to_var="x"),
+            ],
+            limit=STARTER_RUN_LIMIT,
+        )
+        matched = {n.id: n for n in (await self._graph.match(pattern, principal)).nodes}
+        nodes = [first, other, *(n for i, n in matched.items() if i not in (first.id, other.id))]
+        if len(nodes) - 2 >= STARTER_RUN_LIMIT:
+            raise TooManyMatches(STARTER_RUN_LIMIT)
         edges = await self._graph.edges_among([n.id for n in nodes], principal)
         return nodes, edges
 

@@ -142,3 +142,5 @@ export type { MarkedNode } from "./MarkedNode";
 export type { WhatsNew } from "./WhatsNew";
 export type { StarterQuestion } from "./StarterQuestion";
 export type { StarterQuestions } from "./StarterQuestions";
+export type { SharedContact } from "./SharedContact";
+export type { SharedContacts } from "./SharedContacts";

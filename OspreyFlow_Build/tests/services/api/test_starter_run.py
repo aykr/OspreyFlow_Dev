@@ -19,6 +19,7 @@ from typing import Any
 
 import pytest
 from services.api.explore import ExploreService, StarterNotOffered, TooManyMatches
+from services.api.suppression import NodeNotVisibleError
 
 from adapters.graph_arcadedb.testing import arcadedb_adapter
 from conduit_common.identity import new_id
@@ -132,3 +133,36 @@ async def test_only_a_question_offered_for_the_case_runs() -> None:
     for question_id in ("chain:FAMILY_OF:Person:Person:FAMILY_OF:Person", "anything"):
         with pytest.raises(StarterNotOffered):
             await explore.run_starter(READER, ONTOLOGY, question_id)
+
+
+async def test_a_shared_pair_is_the_two_and_their_shared_contacts_as_the_reader_sees_them() -> None:
+    """ADR-100 Amendment 7 decision 4: picking who shares contacts with a node puts both and the
+    contacts they share on the canvas, with the links among them; a contact or link the reader
+    cannot see is not one of them."""
+    async with arcadedb_adapter(ONTOLOGY, load_uk_le_scheme()) as graph:
+        kinds = {"a": "Person", "b": "Person", "x": "Endpoint", "y": "Endpoint", "z": "Endpoint",
+                 "s": "Endpoint"}
+        writes = {n: _node(k, "SECRET" if n == "s" else "OFFICIAL") for n, k in kinds.items()}
+        ids = {n: w.id for n, w in writes.items()}
+        tx = await graph.begin_transaction()
+        await graph.upsert_nodes(list(writes.values()), tx)
+        # a and b share x and y; they share s too, which is SECRET; and z, over b's SECRET link.
+        await graph.upsert_edges(
+            [_link("USES", ids[p], ids[e]) for p, e in [("a", "x"), ("a", "y"), ("b", "x"),
+                                                         ("b", "y"), ("a", "z"), ("a", "s"),
+                                                         ("b", "s")]]
+            + [_link("USES", ids["b"], ids["z"], "SECRET")],
+            tx,
+        )
+        await graph.commit_transaction(tx)
+        explore = ExploreService(graph, None)
+        name = {v: k for k, v in ids.items()}
+        nodes, edges = await explore.shared_pair(READER, ids["a"], ids["b"], edge_type="USES")
+        assert {name[n.id] for n in nodes} == {"a", "b", "x", "y"}
+        assert sorted((name[e.source], name[e.target]) for e in edges) == [
+            ("a", "x"), ("a", "y"), ("b", "x"), ("b", "y"),
+        ]
+        cleared, _ = await explore.shared_pair(CLEARED, ids["a"], ids["b"], edge_type="USES")
+        assert {name[n.id] for n in cleared} == set(kinds)
+        with pytest.raises(NodeNotVisibleError):
+            await explore.shared_pair(READER, ids["a"], ids["s"], edge_type="USES")

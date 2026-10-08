@@ -1106,6 +1106,34 @@ async def test_shared_contacts_never_rest_on_what_the_reader_cannot_see(
 
 
 
+async def test_match_intersection_never_rests_on_a_hidden_link(factory: GraphAdapterFactory) -> None:
+    """Rule 3 for B19's join: a common endpoint reached by the second root over a link the reader
+    cannot see is not common. The reverse walk once stepped over links with `.in()`, checking only
+    the nodes, so a SECRET link made a visible endpoint a common contact for an OFFICIAL reader,
+    which told them the link existed (found building ADR-100 Amendment 7)."""
+    async with factory.context() as adapter:
+        (a, b, e), _ = await _write(
+            adapter,
+            [_node("Person", classification="OFFICIAL"), _node("Person", classification="OFFICIAL"),
+             _node("Endpoint", classification="OFFICIAL")],
+            [],
+        )
+        await _write(adapter, [], [_edge("USES", a, e, classification="OFFICIAL"),
+                                   _edge("USES", b, e, classification="SECRET")])
+        pattern = PatternQuery(
+            nodes=[PatternNode(var="a", entity_type="Person", node_id=a),
+                   PatternNode(var="b", entity_type="Person", node_id=b),
+                   PatternNode(var="e", entity_type="Endpoint")],
+            edges=[PatternEdge(edge_type="USES", from_var="a", to_var="e"),
+                   PatternEdge(edge_type="USES", from_var="b", to_var="e")],
+        )
+        assert (await adapter.match(pattern, OFFICIAL)).nodes == []
+        assert await adapter.match_count(pattern, OFFICIAL, ceiling=100) == 0
+        # The filter is real: cleared, the endpoint is common.
+        assert e in {n.id for n in (await adapter.match(pattern, CLEARED)).nodes}
+
+
+
 async def test_match_count_agrees_with_the_filtered_results_own_count(
     factory: GraphAdapterFactory,
 ) -> None:
@@ -3492,3 +3520,54 @@ async def test_recently_confirmed_is_the_latest_first_and_only_what_the_case_can
         assert [c.node.id for c in after.nodes] == [current]
         assert after.total == 2
         assert (await adapter.recently_confirmed(IN_NOTHING)).total == 0
+
+
+# --- ADR-100 Amendment 7 decision 4: who shares contacts with one node ---------
+
+
+async def test_shared_contacts_are_counted_most_first_and_only_what_the_reader_sees(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        ids = await _shared_world(adapter)  # a and b share x and y; c shares x alone
+        name = {v: k for k, v in ids.items()}
+        found = await adapter.shared_contacts(ids["a"], CLEARED, edge_type="USES")
+        assert [(name[c.node.id], c.shared) for c in found.contacts] == [("b", 2)]
+        assert found.total == 1
+        one = await adapter.shared_contacts(ids["a"], CLEARED, edge_type="USES", min_shared=1)
+        assert [(name[c.node.id], c.shared) for c in one.contacts] == [("b", 2), ("c", 1)]
+
+        # c gains a SECRET third contact with a, and a link to y the reader cannot see.
+        hidden = _node("Endpoint", classification="SECRET")
+        await _write(adapter, [hidden], [])
+        await _write(adapter, [], [
+            _edge("USES", ids["a"], hidden.id, classification="OFFICIAL"),
+            _edge("USES", ids["c"], hidden.id, classification="OFFICIAL"),
+            _edge("USES", ids["c"], ids["y"], classification="SECRET"),
+        ])
+        seen = await adapter.shared_contacts(ids["a"], OFFICIAL, edge_type="USES")
+        assert [(name.get(c.node.id), c.shared) for c in seen.contacts] == [("b", 2)]
+        assert seen.total == 1
+        # A case reading another dataset sees no `a`, so nobody shares with it.
+        elsewhere = OFFICIAL.model_copy(update={"datasets": ["enron"]})
+        assert (await adapter.shared_contacts(ids["a"], elsewhere, edge_type="USES")).total == 0
+        # The filter is real: cleared, c shares three.
+        cleared = await adapter.shared_contacts(ids["a"], CLEARED, edge_type="USES")
+        assert (name[cleared.contacts[0].node.id], cleared.contacts[0].shared) == ("c", 3)
+        # A node the reader cannot see shares with nobody.
+        assert (await adapter.shared_contacts(hidden.id, OFFICIAL, edge_type="USES")).total == 0
+
+
+async def test_shared_contacts_page_and_say_how_many(factory: GraphAdapterFactory) -> None:
+    async with factory.context() as adapter:
+        hub = _node("Person", classification="OFFICIAL")
+        phones = [_node("Endpoint", classification="OFFICIAL") for _ in range(2)]
+        others = [_node("Person", classification="OFFICIAL") for _ in range(4)]
+        await _write(adapter, [hub, *phones, *others], [])
+        await _write(adapter, [], [
+            _edge("USES", p.id, e.id, classification="OFFICIAL")
+            for p in [hub, *others] for e in phones
+        ])
+        first = await adapter.shared_contacts(hub.id, CLEARED, edge_type="USES", limit=3)
+        assert len(first.contacts) == 3 and first.total == 4
+        assert [c.node.id for c in first.contacts] == sorted(o.id for o in others)[:3]

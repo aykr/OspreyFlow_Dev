@@ -33,8 +33,32 @@ const edge = {
 
 const EDGE_TYPES: EdgeTypeDef[] = [{ name: "ASSOCIATE_OF", from: ["Person"], to: ["Person"], basis: "direct" }];
 
+declare global {
+  interface Window {
+    __INSPECTOR__?: { deltas: number[] };
+  }
+}
+window.__INSPECTOR__ = { deltas: [] };
+
+/** `?view=node`: a person selected, with who shares contacts with them (ADR-100 Amendment 7). */
+const NODE_VIEW = new URLSearchParams(window.location.search).get("view") === "node";
+
 function Harness() {
   const [noteSignal, setNoteSignal] = useState(0);
+  if (NODE_VIEW) {
+    return (
+      <Inspector
+        node={person("a", "Lay")}
+        sharedContacts={{
+          apiBaseUrl: "http://keyboard-test.invalid",
+          bearerToken: "unused",
+          investigationId: "inv-1",
+          edgeTypes: EDGE_TYPES,
+          onDelta: (delta) => window.__INSPECTOR__!.deltas.push(delta.seq),
+        }}
+      />
+    );
+  }
   return (
     <>
       <button type="button" data-harness-only="" onClick={() => setNoteSignal((n) => n + 1)}>

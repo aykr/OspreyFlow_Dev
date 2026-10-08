@@ -52,6 +52,30 @@ test("a link-menu hand-over opens its part", async ({ page }) => {
   registerCovered(REGISTRY, "a-menu-hand-over-opens-its-part");
 });
 
+test("who shares contacts with a node is asked, and a pair put on the canvas, by keyboard", async ({ page }) => {
+  await page.route("**/*/v1/investigations/inv-1/nodes/a/shared-contacts**", async (route) => {
+    const post = route.request().method() === "POST";
+    const body = post
+      ? { delta: { op: "add", seq: 5, nodes: [], edges: [] }, added_nodes: 3, added_links: 4 }
+      : {
+          contacts: [{ node: { id: "b", type: "Person", properties: { family_name: "Skilling" }, provenance: { state: "asserted", sources: [], first_seen: "2026-01-01T00:00:00Z" }, handling: { classification: "OFFICIAL", handling_code: "P", originator: "unit-1", owning_unit: "unit-1" }, audit: { created_at: "2026-01-01T00:00:00Z", created_by: "fixture" } }, shared: 7 }],
+          total: 1,
+        };
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("/keyboard/inspector-harness.html?view=node");
+  const header = page.getByRole("button", { name: "Shares contacts" });
+  await header.focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Who shares two contacts by “Associate of”?" }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Skilling · shares 7" }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__INSPECTOR__?.deltas)).toEqual([5]);
+  await expect(page.getByText("3 nodes and 4 links added.")).toBeVisible();
+  registerCovered(REGISTRY, "ask-who-shares-contacts-and-add-a-pair-by-keyboard");
+});
+
 test("every registered Inspector action has its own proving test case above", () => {
   assertAllCovered("INSPECTOR_ACTIONS", INSPECTOR_ACTIONS);
 });

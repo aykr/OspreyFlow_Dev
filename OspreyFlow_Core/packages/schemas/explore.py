@@ -183,6 +183,21 @@ class StarterQuestions(BaseModel):
     total: int
 
 
+class SharedContact(BaseModel):
+    node: Node
+    #: How many of the asked-about node's contacts this node is linked to as well.
+    shared: int
+
+
+class SharedContacts(BaseModel):
+    """Who shares contacts with one node (ADR-100 Amendment 7 decision 4): each node linked by the
+    same link type to at least `min_shared` of that node's contacts, most shared first, ties by id;
+    `total` is how many share that many (rule 2). Everything counted is what the reader can see."""
+
+    contacts: list[SharedContact]
+    total: int
+
+
 ALL_MODELS = (
     TypeCounts,
     RankedNode,
@@ -202,4 +217,6 @@ ALL_MODELS = (
     WhatsNew,
     StarterQuestion,
     StarterQuestions,
+    SharedContact,
+    SharedContacts,
 )

@@ -38,6 +38,7 @@ from schemas.explore import (
     RankedNodes,
     RecentLoads,
     RecentlyConfirmed,
+    SharedContacts,
     TypeCounts,
 )
 
@@ -357,6 +358,22 @@ class GraphPort(Protocol):
         """`06_DECISIONS.md` ADR-100 decision 7, Amendment 6: the nodes `principal` can see whose
         provenance says an analyst confirmed them, the latest first, ties by id; `total` is how
         many. A superseded revision is not one (rule 3's access step excludes it)."""
+        ...
+
+    async def shared_contacts(
+        self,
+        node_id: NodeId,
+        principal: Principal,
+        *,
+        edge_type: str,
+        min_shared: int = 2,
+        limit: int = 10,
+    ) -> SharedContacts:
+        """`06_DECISIONS.md` ADR-100 Amendment 7 decision 4: the nodes linked by `edge_type` to at
+        least `min_shared` of the nodes `node_id` links to by it, most shared first, ties by id,
+        with how many there are. Every link and node on the way passes the access step (rule 3):
+        a hidden contact or link is in no count. A node the principal cannot see shares with
+        nobody."""
         ...
 
     async def apply_schema(self, schema: OntologySchema) -> SchemaReport: ...

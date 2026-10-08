@@ -261,7 +261,8 @@ unchanged once hidden, other-dataset and reverted elements of the same loads, an
 revision, are added (ADR-100 Amendment 6); a pinned node honoured on a chain, two who share two
 contacts walked backwards and joined, in any drawing order, never resting on a hidden node or link
 or another dataset's, and every counted node returned however many ways it matches (ADR-100
-Amendment 7); reverting, correcting and re-writing one
+Amendment 7); `shared_contacts` counting only visible contacts over visible links, and B19's join
+never resting on a hidden link (ADR-100 Amendment 8); reverting, correcting and re-writing one
 of three nodes leaves the others listed (ADR-101).
 
 **AnalyticsPort suite** — identical histogram, geobin and baseline results across adapters,

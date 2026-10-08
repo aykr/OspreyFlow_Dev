@@ -406,3 +406,55 @@ def test_a_starter_question_past_the_limit_adds_nothing_and_says_so(client) -> N
     assert seeded == []
     unknown = http.post("/v1/investigations/case-e/explore/starter-questions/anything/run")
     assert unknown.status_code == 404
+
+
+def test_who_shares_contacts_is_asked_with_the_cases_datasets(client) -> None:  # type: ignore[no-untyped-def]
+    from schemas.explore import SharedContacts
+
+    http, graph, audit = client
+    asked: list[tuple[str, str, Principal]] = []
+
+    async def shared_contacts(node_id, principal, *, edge_type, min_shared=2, limit=10):  # type: ignore[no-untyped-def]
+        asked.append((node_id, edge_type, principal))
+        return SharedContacts(contacts=[], total=4)
+
+    graph.shared_contacts = shared_contacts  # type: ignore[attr-defined]
+    _run_overrides([])
+    response = http.get("/v1/investigations/case-e/nodes/hub/shared-contacts?edge_type=USES")
+    assert response.status_code == 200 and response.json()["total"] == 4
+    assert [(n, e, p.datasets) for n, e, p in asked] == [("hub", "USES", ["enron"])]
+    assert audit.records[-1]["action"] == "shared_contacts"
+    refused = http.get("/v1/investigations/case-e/nodes/hub/shared-contacts?edge_type=SAME_AS")
+    assert refused.status_code == 422
+    assert len(asked) == 1
+
+
+def test_a_shared_pair_goes_onto_the_case_with_its_datasets(client) -> None:  # type: ignore[no-untyped-def]
+    from schemas.domain import Subgraph
+
+    http, graph, audit = client
+    seen: list[Principal] = []
+
+    async def get_node(node_id, principal, *, include_superseded=False):  # type: ignore[no-untyped-def]
+        seen.append(principal)
+        return None if node_id == "hidden" else _node(node_id)
+
+    async def match(pattern, principal):  # type: ignore[no-untyped-def]
+        seen.append(principal)
+        return Subgraph(nodes=[_node("hub"), _node("phone")], edges=[])
+
+    async def edges_among(node_ids, principal, edge_types=None):  # type: ignore[no-untyped-def]
+        seen.append(principal)
+        return []
+
+    graph.get_node, graph.match, graph.edges_among = get_node, match, edges_among  # type: ignore[attr-defined]
+    seeded: list[tuple[str, list[str], list[str], Principal]] = []
+    _run_overrides(seeded)
+    path = "/v1/investigations/case-e/nodes/hub/shared-contacts/{}/canvas?edge_type=USES"
+    response = http.post(path.format("c1"))
+    assert response.status_code == 200, response.text
+    assert [(case, ids) for case, ids, _, _ in seeded] == [("case-e", ["hub", "c1", "phone"])]
+    assert {tuple(p.datasets or []) for p in seen} == {("enron",)}
+    assert {tuple(p.datasets or []) for *_, p in seeded} == {("enron",)}
+    assert audit.records[-1]["action"] == "shared_pair_canvas"
+    assert http.post(path.format("hidden")).status_code == 404
