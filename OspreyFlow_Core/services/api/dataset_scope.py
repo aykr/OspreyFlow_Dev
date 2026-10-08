@@ -19,7 +19,7 @@ nothing is stamped, and those writers name their own.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from contextvars import ContextVar
 from typing import Any, Protocol
 
@@ -125,6 +125,15 @@ class DatasetStampingGraph:
         self._registry = registry
         #: Ids the registry has confirmed. A dataset is never deleted, so a confirmation holds.
         self._confirmed: set[str] = set()
+        #: Called after every write the store accepted (ADR-100 Amendment 3: kept figures cleared).
+        self._after_write: list[Callable[[], Awaitable[None]]] = []
+
+    def after_write(self, hook: Callable[[], Awaitable[None]]) -> None:
+        self._after_write.append(hook)
+
+    async def _written(self) -> None:
+        for hook in self._after_write:
+            await hook()
 
     def check_against(self, registry: DatasetRegistry) -> None:
         """Every later write is checked against `registry` (the Conduit's dataset store, which
@@ -160,12 +169,33 @@ class DatasetStampingGraph:
     async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: Any) -> list[NodeId]:
         stamped = _stamp_nodes(nodes, self._into())
         await self._checked(stamped)
-        return await self._inner.upsert_nodes(stamped, tx)
+        ids = await self._inner.upsert_nodes(stamped, tx)
+        await self._written()
+        return ids
 
     async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: Any) -> list[str]:
         stamped = _stamp_edges(edges, self._into())
         await self._checked(stamped)
-        return await self._inner.upsert_edges(stamped, tx)
+        ids = await self._inner.upsert_edges(stamped, tx)
+        await self._written()
+        return ids
+
+    # A correction or a revert changes what is counted too; each clears what was kept after it.
+    async def supersede_node(self, node_id: NodeId, replacement: NodeWrite, tx: Any) -> NodeId:
+        new_id = await self._inner.supersede_node(node_id, replacement, tx)
+        await self._written()
+        return new_id
+
+    async def supersede_edge(self, edge_id: str, replacement: EdgeWrite, tx: Any) -> str:
+        new_id = await self._inner.supersede_edge(edge_id, replacement, tx)
+        await self._written()
+        return new_id
+
+    async def revert_elements(
+        self, node_ids: Sequence[NodeId], edge_ids: Sequence[str], tx: Any
+    ) -> None:
+        await self._inner.revert_elements(node_ids, edge_ids, tx)
+        await self._written()
 
 
 class BulkDatasetStampingGraph(DatasetStampingGraph):
@@ -178,7 +208,9 @@ class BulkDatasetStampingGraph(DatasetStampingGraph):
         inner: Any = self.inner
         stamped = _stamp_edges(edges, self._into())
         await self._checked(stamped)
-        return await inner.bulk_load_edges(stamped, **kwargs)
+        result = await inner.bulk_load_edges(stamped, **kwargs)
+        await self._written()
+        return result
 
 
 def stamping(

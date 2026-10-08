@@ -10098,3 +10098,13 @@ Status: accepted 8 October 2026 (the owner: "Can we add an index to the datasets
 4. **The Glass shows each dataset with its id** (`datasetLabel`: the name, then the id, whole if twelve characters or fewer, else its last five), in the choice of what a case reads, the Cases drawer and the case picker; the case listing carries `dataset_ids` beside `datasets`.
 
 Tests: `tests/adapters/graph_arcadedb/test_datasets_index.py`, `tests/services/api/test_dataset_integrity.py`, `tests/services/api/test_dataset_names_store.py` (Postgres and in memory), `tests/test_stamp_datasets.py`, `CaseDatasets.test.tsx`, `cases.test.ts`, `keyboard/case-datasets.spec.ts`.
+
+### ADR-100, Amendment 3 (8 October 2026) — stage 4: the figures are measured, then kept
+
+Status: accepted 8 October 2026 (mine, within the owner's "Go ahead all 5 stage on ADR-100"; recorded so it can be overruled).
+
+1. **Measured live on the owner's Enron case** (21,955 nodes in the case's datasets, read-only, through the adapter, OFFICIAL): what the case holds 8.4 s; the top ten 7.8 s; one type's top five 4.8 s. Too slow to count on each opening of an empty canvas, as the cost rule foresaw.
+2. **So each figure is kept** (`services/api/explore.py`): in Valkey, keyed by the reader's access class, which includes the case's datasets and clearance (`cache.principal_class`, so never counted once for everyone and filtered afterwards), and by the page asked for. A later opening of the same case by a reader of the same class is answered from it.
+3. **Kept figures are cleared on every graph write the Conduit makes**, the stamping graph calling back after each write the store accepted, a correction and a revert included. A write the Conduit does not see (a seed run from its own container) is caught by a one-hour limit. This is coarse, deployment-wide clearing, as `CachedQuery`'s own docstring discloses; clearing only the datasets a write touched is not built.
+4. **Each figure says when it was counted** (`computed_at`; the panel: "Counted at 09:05 UTC, and again after any change.").
+5. **Not built:** counting ahead of the first opening after a load. The first reader of a class still waits the measured time once.

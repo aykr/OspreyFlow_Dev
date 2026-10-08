@@ -519,7 +519,9 @@ each link type, types with none left out); *Most connected* (the 10 nodes with t
 "The 10 most connected of N", with *Show n more* until "All N shown"); and *By entity type* (each type and its
 count, opening to its 5 most connected and paging the same way). Every node in it is a button that does what
 choosing a search result does: puts it on the canvas, draws outwards from it and selects it. The figures are
-the Conduit's (`/explore/counts`, `/explore/most-connected`), never reckoned in the browser
+the Conduit's (`/explore/counts`, `/explore/most-connected`), kept once counted and counted again after
+a change, and the panel says when ("Counted at 09:05 UTC", ADR-100 Amendment 3); they are never
+reckoned in the browser
 (`keyboard/explore.spec.ts`, `src/explore/ExplorePanel.test.tsx`). Busiest links and days, groups and
 bridges, what is new and starter questions (ADR-100 decisions 5 to 8) are not built yet.
 

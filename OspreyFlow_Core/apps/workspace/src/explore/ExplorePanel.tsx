@@ -17,6 +17,7 @@ export const TOP_PER_TYPE = 5;
 export const PAGE = 10;
 
 const COUNT = new Intl.NumberFormat("en-GB");
+const AT = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
 
 export interface ExplorePanelProps {
   apiBaseUrl: string;
@@ -166,6 +167,12 @@ export function ExplorePanel(props: ExplorePanelProps) {
             <p style={{ color: "var(--text-secondary)", margin: "0 0 var(--sp-4)" }}>
               {`${plural(entityTotal, "entity", "entities")} and ${plural(linkTotal, "link", "links")}`}
             </p>
+            {counts.computed_at && (
+              // ADR-100 Amendment 3: the figures are kept, so they say when they were counted.
+              <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: "0 0 var(--sp-4)" }}>
+                {`Counted at ${AT.format(new Date(counts.computed_at))} UTC, and again after any change.`}
+              </p>
+            )}
             <ul style={{ margin: 0, paddingLeft: "var(--sp-16)", fontSize: "var(--fs-12)" }}>
               {entities.map(([name, n]) => (
                 <li key={`n:${name}`}>{`${name} · ${COUNT.format(n)}`}</li>

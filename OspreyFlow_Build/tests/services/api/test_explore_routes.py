@@ -95,7 +95,12 @@ def test_the_counts_are_asked_with_the_cases_datasets(client) -> None:  # type: 
     http, graph, audit = client
     response = http.get("/v1/investigations/case-e/explore/counts")
     assert response.status_code == 200
-    assert response.json() == {"nodes": {"Person": 5}, "edges": {"ASSOCIATE_OF": 4}}
+    body = response.json()
+    assert {k: body[k] for k in ("nodes", "edges")} == {
+        "nodes": {"Person": 5},
+        "edges": {"ASSOCIATE_OF": 4},
+    }
+    assert body["computed_at"]  # ADR-100 Amendment 3: the figures say when they were counted
     assert [p.datasets for p in graph.counts] == [["enron"]]
     assert audit.records[-1]["action"] == "explore_counts"
 

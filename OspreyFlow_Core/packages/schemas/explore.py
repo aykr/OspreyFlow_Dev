@@ -7,6 +7,8 @@ count, ranking or degree. Nothing here carries a count of what is hidden.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 from schemas.domain import Node
@@ -18,6 +20,8 @@ class TypeCounts(BaseModel):
 
     nodes: dict[str, int] = Field(default_factory=dict)
     edges: dict[str, int] = Field(default_factory=dict)
+    #: When the Conduit counted them (ADR-100 Amendment 3: they are kept); `None` from the store.
+    computed_at: datetime | None = None
 
 
 class RankedNode(BaseModel):
@@ -34,6 +38,8 @@ class RankedNodes(BaseModel):
     nodes: list[RankedNode]
     total: int
     offset: int
+    #: When the Conduit ranked them (ADR-100 Amendment 3: they are kept); `None` from the store.
+    computed_at: datetime | None = None
 
 
 ALL_MODELS = (TypeCounts, RankedNode, RankedNodes)

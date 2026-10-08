@@ -36,6 +36,7 @@ export type Degree = number;
 export type Nodes = RankedNode[];
 export type Total = number;
 export type Offset = number;
+export type ComputedAt = string | null;
 
 /**
  * One page of nodes by degree, most first (ties by id). `total` is how many nodes the ranking
@@ -46,6 +47,7 @@ export interface RankedNodes {
   nodes: Nodes;
   total: Total;
   offset: Offset;
+  computed_at?: ComputedAt;
   [k: string]: unknown;
 }
 export interface RankedNode {

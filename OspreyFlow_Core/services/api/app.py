@@ -191,6 +191,7 @@ from .assessments import (
 )
 from .audit import AuditWriteError, AuditWriter
 from .auth import PrincipalResolutionError, PrincipalResolver, bearer_scheme
+from .cache import CachedQuery
 from .change_stream import ChangeStreamEntry, ChangeStreamWriter
 from .compute_routes import (
     JOB_TYPE_COMPUTE_METRIC,
@@ -245,6 +246,7 @@ from .email_extraction import (
 )
 from .evaluation import evaluate_hotlists_for_entry, evaluate_monitors_for_entry
 from .event_scope import visible_ancestors, with_inherited
+from .explore import EXPLORE_TTL_SECONDS, ExploreService
 from .export import (
     ComplianceRoleRequiredError,
     ExportBlockedError,
@@ -508,6 +510,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.graph = graph
     app.state.ontology = ontology
     app.state.valkey = valkey
+    # ADR-100 Amendment 3: the Explore panel's figures, kept per access class, cleared on a write.
+    explore_cache = CachedQuery(valkey, prefix="explore", ttl_seconds=EXPLORE_TTL_SECONDS)
+    app.state.explore_cache = explore_cache
+    cast(DatasetStampingGraph, graph).after_write(explore_cache.invalidate_prefix)
     app.state.working_set = WorkingSetService(
         graph, ValkeyWorkingSetStore(valkey), handling_scheme, valkey=valkey
     )
@@ -2893,14 +2899,21 @@ async def suggest_route(
 EXPLORE_MAX_PAGE = 50
 
 
+def get_explore(request: Request, graph: GraphDep) -> ExploreService:
+    return ExploreService(graph, getattr(request.app.state, "explore_cache", None))
+
+
+ExploreDep = Annotated[ExploreService, Depends(get_explore)]
+
+
 @app.get("/v1/investigations/{investigation_id}/explore/counts")
 async def explore_counts_route(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
-    graph: GraphDep,
+    explore: ExploreDep,
     audit: AuditDep,
 ) -> TypeCounts:
-    counts = await graph.type_counts(principal)
+    counts = await explore.counts(principal)
     await audit.record(
         principal=principal,
         action="explore_counts",
@@ -2915,13 +2928,13 @@ async def explore_counts_route(
 async def explore_most_connected_route(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
-    graph: GraphDep,
+    explore: ExploreDep,
     audit: AuditDep,
     entity_type: Annotated[str | None, Query(max_length=100)] = None,
     limit: Annotated[int, Query(ge=1, le=EXPLORE_MAX_PAGE)] = 10,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> RankedNodes:
-    ranked = await graph.most_connected(
+    ranked = await explore.most_connected(
         principal, entity_type=entity_type, limit=limit, offset=offset
     )
     await audit.record(

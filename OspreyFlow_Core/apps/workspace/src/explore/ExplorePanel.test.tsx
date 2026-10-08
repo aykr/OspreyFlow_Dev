@@ -25,7 +25,11 @@ function node(id: string, type: string, name: string): Node {
   } as unknown as Node;
 }
 
-const COUNTS = { nodes: { Person: 12, Organisation: 2, Location: 0 }, edges: { ASSOCIATE_OF: 30 } };
+const COUNTS = {
+  nodes: { Person: 12, Organisation: 2, Location: 0 },
+  edges: { ASSOCIATE_OF: 30 },
+  computed_at: "2026-10-08T09:05:00Z",
+};
 
 function ranked(prefix: string, type: string, offset: number, count: number, total: number) {
   return {
@@ -79,6 +83,12 @@ describe("ExplorePanel", () => {
     expect(within(holds).getByText("14 entities and 30 links")).toBeTruthy();
     const rows = within(holds).getAllByRole("listitem").map((li) => li.textContent);
     expect(rows).toEqual(["Person · 12", "Organisation · 2", "Associate of · 30"]);
+  });
+
+  it("says when the figures were counted, since they are kept (ADR-100 Amendment 3)", async () => {
+    standard();
+    mount();
+    expect(await screen.findByText("Counted at 09:05 UTC, and again after any change.")).toBeTruthy();
   });
 
   it("ranks the most connected and says of how many", async () => {
