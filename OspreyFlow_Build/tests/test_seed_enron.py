@@ -124,6 +124,26 @@ def test_the_enron_seed_can_replace_a_cases_events_after_the_loader_changed() ->
     assert seed_enron.events_plan(already_loaded=False, replace_events=False) == "load"
 
 
+def test_replacing_only_the_links_keeps_the_cases_events() -> None:
+    """Seen 8 Oct 2026: `--replace-links` alone refused on the Enron case, because its events were
+    already loaded and the events guard ran first; it had to be given `--replace-events` too and
+    load 1.36 million events again for nothing. Rewriting the links keeps the events."""
+    from scripts import seed_enron
+
+    assert seed_enron.events_plan(
+        already_loaded=True, replace_events=False, replace_links=True
+    ) == "keep"
+    assert seed_enron.events_plan(
+        already_loaded=True, replace_events=True, replace_links=True
+    ) == "replace"
+    assert seed_enron.events_plan(
+        already_loaded=False, replace_events=False, replace_links=True
+    ) == "load"
+    assert seed_enron.graph_plan(
+        present=True, replace_graph=False, replace_links=True, events="keep"
+    ) == "links"
+
+
 def test_the_graph_plan_for_each_combination_of_options() -> None:
     """Which graph phase the Enron seed runs. Catches `--replace-links` taking the "events only"
     path when the addresses are still there (they are: it keeps them), which would write no link

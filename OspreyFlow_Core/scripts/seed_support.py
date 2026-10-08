@@ -326,13 +326,106 @@ async def _truncate_if_only_this_seed(
         )
 
 
-#: Rows one delete statement removes. Seen on the owner's ArcadeDB 26.10.1 store: one
-#: `DELETE FROM` of 73,577 Enron links outlasted the client's 30 s and the server rolled it back,
-#: deleting nothing. Each statement is a bounded batch, repeated until a batch comes back short.
+#: Rows one delete statement removes at first. Seen on the owner's ArcadeDB 26.10.1 store: one
+#: `DELETE FROM` of 73,577 Enron links outlasted the client's 30 s (it finished on the server
+#: afterwards, the 5553a9a record). Each statement is a bounded batch, repeated until a batch comes
+#: back short.
 DELETE_BATCH = 5_000
+#: The smallest batch a timed-out delete halves down to (`_delete_in_batches`).
+MIN_DELETE_BATCH = 250
 
 
-async def _delete_scoped(client: _Sql, *, kind: str, type_name: str, prefix: str) -> None:
+async def _settle(
+    client: _Sql,
+    type_name: str,
+    prefix: str,
+    *,
+    say: Callable[[str], None],
+    wait_seconds: float,
+    poll_seconds: float,
+    sleep: Callable[[float], Awaitable[object]],
+) -> int:
+    """After a delete outlasted the client: the server may still be deleting, or may have rolled
+    back; the client cannot tell which. Count this seed's rows until two counts agree (a count that
+    itself times out is retried), and return what is left. Past `wait_seconds`, stop and say so."""
+    waited = 0.0
+    last: int | None = None
+    while waited <= wait_seconds:
+        await sleep(poll_seconds)
+        waited += poll_seconds
+        try:
+            left = await _count(client, type_name, prefix)
+        except httpx.TimeoutException:
+            say(f"  clean-up: {type_name} is still busy ({int(waited)}s)")
+            continue
+        if left == last:
+            return left
+        say(f"  clean-up: {type_name} has {left:,} of this seed's rows left ({int(waited)}s)")
+        last = left
+    raise CleanUpIncomplete(
+        f"{type_name} was still changing {int(wait_seconds)}s after a delete timed out; ArcadeDB "
+        "may still be working, so run --inspect to see"
+    )
+
+
+async def _delete_in_batches(
+    client: _Sql,
+    statement: Callable[[int], Awaitable[int | None]],
+    type_name: str,
+    prefix: str,
+    *,
+    say: Callable[[str], None],
+    wait_seconds: float,
+    poll_seconds: float,
+    sleep: Callable[[float], Awaitable[object]],
+) -> None:
+    """Run `statement(batch)` until this seed's rows of the type are gone. It returns how many it
+    deleted, or `None` when it cannot say (a Gremlin `drop()`), and the rows are then counted.
+
+    A statement that outlasts the client is not a failure (seen 8 Oct 2026: a 5,000-link batch on
+    the owner's store, which the server then finished): wait until the count stops changing
+    (`_settle`), then carry on at half the batch, down to `MIN_DELETE_BATCH`. If a timed-out batch
+    at that size removed nothing, stop with an error rather than loop."""
+    batch = DELETE_BATCH
+    while True:
+        before = await _count(client, type_name, prefix)
+        if before == 0:
+            return
+        try:
+            deleted = await statement(batch)
+        except httpx.TimeoutException:
+            say(f"  clean-up: a batch of {batch:,} outlasted the client; waiting for the server")
+            left = await _settle(
+                client,
+                type_name,
+                prefix,
+                say=say,
+                wait_seconds=wait_seconds,
+                poll_seconds=poll_seconds,
+                sleep=sleep,
+            )
+            if left == before and batch == MIN_DELETE_BATCH:
+                raise CleanUpIncomplete(
+                    f"deleting {type_name} timed out in batches as small as {batch:,} and removed "
+                    f"nothing; {left:,} of this seed's rows are left"
+                ) from None
+            batch = max(MIN_DELETE_BATCH, batch // 2)
+            continue
+        if deleted is not None and deleted < batch:
+            return
+
+
+async def _delete_scoped(
+    client: _Sql,
+    *,
+    kind: str,
+    type_name: str,
+    prefix: str,
+    say: Callable[[str], None] = print,
+    wait_seconds: float = 1800.0,
+    poll_seconds: float = 10.0,
+    sleep: Callable[[float], Awaitable[object]] = asyncio.sleep,
+) -> None:
     """Delete this type's rows whose id starts with `prefix`, trying the ways ArcadeDB documents.
 
     Seen: ArcadeDB refused `DELETE EDGE ...` outright (a ParseException), and its SQL differs from
@@ -353,18 +446,25 @@ async def _delete_scoped(client: _Sql, *, kind: str, type_name: str, prefix: str
         try:
             if form.startswith("g."):
                 # `drop()` answers nothing, so the batches run until none of the prefix is left.
-                count = f"SELECT count(*) AS n FROM {type_name} WHERE id LIKE '{prefix}%'"
-                bounded = form.replace(".drop()", f".limit({DELETE_BATCH}).drop()")
-                while True:
-                    await client.gremlin(bounded)
-                    left = await client.sql(count)
-                    if not left or int(left[0].get("n") or 0) == 0:
-                        break
+                async def statement(batch: int, form: str = form) -> int | None:
+                    await client.gremlin(form.replace(".drop()", f".limit({batch}).drop()"))
+                    return None
             else:
-                while True:
-                    rows = await client.sql(f"{form} LIMIT {DELETE_BATCH}")
-                    if int((rows[0] if rows else {}).get("count") or 0) < DELETE_BATCH:
-                        break
+
+                async def statement(batch: int, form: str = form) -> int | None:
+                    rows = await client.sql(f"{form} LIMIT {batch}")
+                    return int((rows[0] if rows else {}).get("count") or 0)
+
+            await _delete_in_batches(
+                client,
+                statement,
+                type_name,
+                prefix,
+                say=say,
+                wait_seconds=wait_seconds,
+                poll_seconds=poll_seconds,
+                sleep=sleep,
+            )
         except ArcadeDBError as error:
             if not _is_parse_error(error):
                 raise
@@ -400,8 +500,20 @@ async def clear_seeded_graph(
     transactions = await _count(client, edge_type, edge_prefix)
     say(f"  clean-up: {accounts:,} accounts and {transactions:,} transactions to remove")
     try:
-        await _delete_scoped(client, kind="EDGE", type_name=edge_type, prefix=edge_prefix)
-        await _delete_scoped(client, kind="VERTEX", type_name=node_type, prefix=node_prefix)
+        for kind, type_name, prefix in (
+            ("EDGE", edge_type, edge_prefix),
+            ("VERTEX", node_type, node_prefix),
+        ):
+            await _delete_scoped(
+                client,
+                kind=kind,
+                type_name=type_name,
+                prefix=prefix,
+                say=say,
+                wait_seconds=wait_seconds,
+                poll_seconds=poll_seconds,
+                sleep=sleep,
+            )
     except ArcadeDBError as error:
         if not _is_missing_record(error):
             raise
@@ -441,7 +553,16 @@ async def clear_seeded_links(
     links = await _count(client, edge_type, edge_prefix)
     say(f"  clean-up: {links:,} links to remove, every node kept")
     try:
-        await _delete_scoped(client, kind="EDGE", type_name=edge_type, prefix=edge_prefix)
+        await _delete_scoped(
+            client,
+            kind="EDGE",
+            type_name=edge_type,
+            prefix=edge_prefix,
+            say=say,
+            wait_seconds=wait_seconds,
+            poll_seconds=poll_seconds,
+            sleep=sleep,
+        )
     except ArcadeDBError as error:
         if not _is_missing_record(error):
             raise

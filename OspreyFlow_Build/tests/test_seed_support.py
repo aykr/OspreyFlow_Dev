@@ -194,6 +194,10 @@ class FakeClient:
         #: `DELETE FROM` of 73,577 links outlasted the client's 30 s and was rolled back): a
         #: statement that would delete more than this times out and deletes nothing.
         self.max_deleted_per_statement: int | None = None
+        #: What the server does with a statement over that cap. Both are seen: the client times out
+        #: either way, and the server either rolls the delete back or (8 Oct 2026, 5,000 Enron
+        #: links on the owner's store; and the 5553a9a record) carries on and finishes it.
+        self.timed_out_delete_completes = False
 
     def _maybe_fail(self, command: str) -> None:
         from adapters.graph_arcadedb.client import ArcadeDBError
@@ -219,7 +223,9 @@ class FakeClient:
             matching = matching[:limit]
         cap = self.max_deleted_per_statement
         if cap is not None and len(matching) > cap:
-            raise httpx.ReadTimeout("read timed out")  # rolled back: nothing deleted
+            if self.timed_out_delete_completes:
+                self.rows[name] = [i for i in self.rows.get(name, []) if i not in matching]
+            raise httpx.ReadTimeout("read timed out")
         if not self.stubborn:
             self.rows[name] = [i for i in self.rows.get(name, []) if i not in matching]
         return len(matching)
@@ -335,6 +341,35 @@ def test_a_delete_too_large_for_one_statement_is_done_in_batches_each_within_the
     assert client.rows == {"Endpoint": [], "TRANSACTED": ["other-tx"]}
     deletes = [s for s in client.statements if s.startswith("DELETE")]
     assert all(s.endswith(f" LIMIT {seed_support.DELETE_BATCH}") for s in deletes)
+
+
+@pytest.mark.parametrize("completes", [False, True], ids=["rolled-back", "finished-later"])
+def test_a_batch_that_outlasts_the_client_is_waited_for_and_the_rest_go_in_smaller_batches(
+    completes: bool,
+) -> None:
+    """Seen 8 Oct 2026: one 5,000-link batch outlasted the client's 30 s on the owner's store and
+    the reload stopped, though the server went on and deleted all 5,000. A timeout is not a
+    failure: the clean-up waits until the count stops changing, whichever the server did, then
+    carries on with half the batch, and every one of the seed's rows goes."""
+    rows = [f"paysim-tx-{i}" for i in range(3 * seed_support.DELETE_BATCH + 7)]
+    client = FakeClient({"Endpoint": ["paysim-acct-1"], "TRANSACTED": [*rows, "other-tx"]})
+    client.max_deleted_per_statement = seed_support.DELETE_BATCH // 2
+    client.timed_out_delete_completes = completes
+    assert _clear(client)[0] == 1
+    assert client.rows == {"Endpoint": [], "TRANSACTED": ["other-tx"]}
+    deletes = [s for s in client.statements if s.startswith("DELETE FROM TRANSACTED")]
+    assert deletes[0].endswith(f" LIMIT {seed_support.DELETE_BATCH}")
+    assert all(s.endswith(f" LIMIT {seed_support.DELETE_BATCH // 2}") for s in deletes[1:])
+
+
+def test_a_delete_that_removes_nothing_even_in_the_smallest_batch_stops_and_says_so() -> None:
+    """Every statement times out and nothing goes: the clean-up halves down to its smallest batch,
+    then stops with an error, never looping and never taking the seed's rows as gone."""
+    client = FakeClient({"Endpoint": [], "TRANSACTED": [f"paysim-tx-{i}" for i in range(50)]})
+    client.max_deleted_per_statement = 0
+    with pytest.raises(seed_support.CleanUpIncomplete, match="nothing"):
+        _clear(client)
+    assert len(client.rows["TRANSACTED"]) == 50
 
 
 def test_an_empty_graph_is_cleared_without_fuss() -> None:

@@ -216,6 +216,7 @@ async def _run(args: argparse.Namespace) -> int:
     plan = events_plan(
         already_loaded=events_already_loaded(args.analytics_db_path, scope),
         replace_events=args.replace_events,
+        replace_links=args.replace_links,
     )
     if plan == "refuse":
         print(
@@ -302,6 +303,10 @@ async def _run(args: argparse.Namespace) -> int:
     finally:
         await client.aclose()
 
+    if plan == "keep":
+        print(f"Seeded {len(nodes)} addresses and {len(edges)} links into the graph.")
+        print("  events: kept as they were; only the links were rewritten")
+        return 0
     Path(args.analytics_db_path).parent.mkdir(parents=True, exist_ok=True)
     if plan == "replace":
         removed = delete_case_events(args.analytics_db_path, scope)
@@ -343,12 +348,18 @@ def graph_plan(*, present: bool, replace_graph: bool, replace_links: bool, event
     return "refuse"
 
 
-def events_plan(*, already_loaded: bool, replace_events: bool) -> str:
+def events_plan(
+    *, already_loaded: bool, replace_events: bool, replace_links: bool = False
+) -> str:
     """What to do about a case's events: load them for the first time, replace them because the
-    caller asked, or refuse because they are there and loading again would double every count."""
+    caller asked, `keep` them when only the links are being rewritten (the events are already
+    right, and loading them again would double every count), or refuse because they are there and
+    loading again would double every count."""
     if not already_loaded:
         return "load"
-    return "replace" if replace_events else "refuse"
+    if replace_events:
+        return "replace"
+    return "keep" if replace_links else "refuse"
 
 
 def main(argv: list[str] | None = None) -> int:
