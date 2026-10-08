@@ -283,11 +283,11 @@ jobs:
     runs-on: ubuntu-latest
     services:
       arcadedb:
-        image: arcadedata/arcadedb:25.5.1
+        image: arcadedata/arcadedb:26.10.1
         ports:
           - 2480:2480
         env:
-          JAVA_OPTS: "-Darcadedb.server.rootPassword=playwithdata123"
+          JAVA_OPTS: "-Darcadedb.server.rootPassword=playwithdata123 -Darcadedb.gremlin.engine=groovy"
           # Same heap override as deploy/compose/dev.yaml, for stack parity
           # (see that file's comment for the full reasoning, including why
           # this value doesn't try to cover two full concurrent suite runs).
@@ -297,7 +297,7 @@ jobs:
           # on a hosted runner's RAM.
           ARCADEDB_OPTS_MEMORY: "-Xms1G -Xmx4G"
         options: >-
-          --health-cmd "curl -sf -u root:playwithdata123 http://localhost:2480/api/v1/ready"
+          --health-cmd "wget -q -O /dev/null http://localhost:2480/api/v1/ready"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -457,6 +457,7 @@ jobs:
           ../OspreyFlow_Build/tests/test_case_seed.py
           ../OspreyFlow_Build/tests/services/api/test_investigation_access_store.py
           ../OspreyFlow_Build/tests/services/api/test_link_notes_store.py
+          ../OspreyFlow_Build/tests/services/api/test_link_type_store.py
           ../OspreyFlow_Build/tests/services/api/test_link_changes_store.py
           ../OspreyFlow_Build/tests/services/api/test_suppression.py
           ../OspreyFlow_Build/tests/services/api/test_assessment_routes.py
@@ -508,14 +509,14 @@ jobs:
     # simulation blind.
     services:
       arcadedb:
-        image: arcadedata/arcadedb:25.5.1
+        image: arcadedata/arcadedb:26.10.1
         ports:
           - 2480:2480
         env:
-          JAVA_OPTS: "-Darcadedb.server.rootPassword=playwithdata123"
+          JAVA_OPTS: "-Darcadedb.server.rootPassword=playwithdata123 -Darcadedb.gremlin.engine=groovy"
           ARCADEDB_OPTS_MEMORY: "-Xms1G -Xmx4G"
         options: >-
-          --health-cmd "curl -sf -u root:playwithdata123 http://localhost:2480/api/v1/ready"
+          --health-cmd "wget -q -O /dev/null http://localhost:2480/api/v1/ready"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -715,6 +716,7 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/test_case_seed.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_investigation_access_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_link_notes_store.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_link_type_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_link_changes_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_suppression.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_assessment_routes.py
