@@ -138,7 +138,9 @@ DELETE /v1/investigations/{id}/nodes           remove from the working set (not 
 token in the URL. This route is the only way to obtain one: authenticated the ordinary way, it
 mints a random, single-use value — bound to the calling principal, redeemable exactly once, and
 expiring in 30 seconds — and returns it. A bearer token placed in the stream's own URL instead of a
-ticket is refused outright, not merely accepted as a fallback.
+ticket is refused outright, not merely accepted as a fallback. The ticket binds the identity only:
+the stream scopes it to its case's datasets when it is redeemed (ADR-099 Amendment 7), as every
+case route's principal is, and everything it sends is projected for that reader.
 
 The delta protocol, client-bound:
 

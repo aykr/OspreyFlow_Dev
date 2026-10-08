@@ -10099,6 +10099,15 @@ Status: accepted 8 October 2026 (the owner: "Can we add an index to the datasets
 
 Tests: `tests/adapters/graph_arcadedb/test_datasets_index.py`, `tests/services/api/test_dataset_integrity.py`, `tests/services/api/test_dataset_names_store.py` (Postgres and in memory), `tests/test_stamp_datasets.py`, `CaseDatasets.test.tsx`, `cases.test.ts`, `keyboard/case-datasets.spec.ts`.
 
+### ADR-099, Amendment 7 (8 October 2026) — the delta stream reads what its case reads
+
+Status: accepted 8 October 2026 (the owner: "Diagnose and fix first", of three faults found capturing the deck's screens).
+
+1. **What was seen.** On the owner's deployment, after any reload the canvas came back empty and the status bar said "285 hidden by handling": every node and link of the working set (126 and 159). Expanding afterwards drew on the canvas but added to the hidden count.
+2. **Why.** Decision 4 scopes a request's principal in `get_principal`, from the case its path names, and to no dataset outside a case. The stream's ticket is minted by `POST /v1/ws-ticket`, outside any case, so the principal it is bound to reads no dataset; the stream redeemed it and never scoped it to the case it streams. Its snapshot, a resync's replay and each live push were projected for a reader of nothing. A client that sends the `Authorization` header had the opposite fault: its principal was never scoped and read every dataset, so a working-set body of another dataset would have reached it.
+3. **Decision.** The stream scopes its principal to the case (`scope_to_case`), after the Viewer check and before it accepts, and uses that principal for the snapshot, the resyncs and the live pushes. The ticket still binds the identity only; what it may read is the case's, decided when it is redeemed.
+4. **Tests:** `tests/services/api/test_stream_scope.py`, the route run for real with the working set's own projection: a ticket's reader is sent the case's working set; a header's reader is kept to the case's datasets; the live-push and resync loops start with the scoped principal. All three red before the fix.
+
 ### ADR-100, Amendment 3 (8 October 2026) — stage 4: the figures are measured, then kept
 
 Status: accepted 8 October 2026 (mine, within the owner's "Go ahead all 5 stage on ADR-100"; recorded so it can be overruled).

@@ -6203,6 +6203,11 @@ async def stream(websocket: WebSocket, investigation_id: str) -> None:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
+    # ADR-099 decision 4, as `get_principal` does for every HTTP route: the stream reads what its
+    # case reads. The ticket's principal was minted outside any case and reads no dataset; the
+    # header's was never scoped and reads every one. The snapshot, a resync and each live push all
+    # use the principal from here on.
+    principal = await scope_to_case(principal, investigation_id, get_datasets(websocket))  # type: ignore[arg-type]
     await websocket.accept()
     await audit.record(
         principal=principal,
