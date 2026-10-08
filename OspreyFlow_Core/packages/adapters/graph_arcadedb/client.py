@@ -101,6 +101,10 @@ class ArcadeDBConfig:
         )
 
 
+class ResultTruncatedError(Exception):
+    """The server cut a result short (`CLAUDE.md` rule 2): refused rather than returned."""
+
+
 class ArcadeDBClient:
     def __init__(self, config: ArcadeDBConfig) -> None:
         self._config = config
@@ -270,7 +274,10 @@ class ArcadeDBClient:
         params: Mapping[str, Any] | None = None,
         session_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        body: dict[str, Any] = {"language": language, "command": command}
+        # Every row (`-1`): left out, the server stops at 20,000 and says so only in `truncated`, so
+        # a larger read came back cut as if whole (rule 2, measured on 26.10.1). The port's reads
+        # bound themselves: the working set's caps are counted first, and bulk reads page.
+        body: dict[str, Any] = {"language": language, "command": command, "limit": -1}
         if params:
             body["params"] = dict(params)
         headers = {"arcadedb-session-id": session_id} if session_id else None
@@ -278,7 +285,13 @@ class ArcadeDBClient:
             f"/api/v1/command/{self._config.database}", json=body, headers=headers
         )
         self._raise_for_error(resp)
-        result = resp.json().get("result", [])
+        answer = resp.json()
+        if answer.get("truncated"):
+            raise ResultTruncatedError(
+                f"ArcadeDB returned {answer.get('returned', '?')} rows and said there were more "
+                f"(limit {answer.get('limit', '?')}); a cut result is never passed on as whole"
+            )
+        result = answer.get("result", [])
         if not isinstance(result, list):
             raise ArcadeDBError(f"unexpected ArcadeDB response shape: {result!r}")
         # Recorded only once the command has actually succeeded, and only

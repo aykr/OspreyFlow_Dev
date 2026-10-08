@@ -73,7 +73,9 @@ Gremlin runs with `-Darcadedb.gremlin.engine=groovy`, because the default gramma
 bound variables and closures the adapter's writes use, and that engine answers over HTTP only to
 `root`. 26.10.1 also sends a Gremlin map as `{"result": [{"key", "value"}, ...]}`; the client turns it
 back into the map the adapter reads, the `id` property winning over the record id
-(`client._gremlin_row`).
+(`client._gremlin_row`). Every command asks for every row (`"limit": -1`): left out, the HTTP endpoint
+stops at 20,000 rows and says so only in a `truncated` flag, which once let a larger read come back cut
+as if whole; a reply still marked truncated is refused (`ResultTruncatedError`, rule 2).
 
 The mitigation is to keep the surface small. The Conduit builds Gremlin from a bounded set of
 composable builders — expand, path, match, aggregate — not free-form traversal strings. The
