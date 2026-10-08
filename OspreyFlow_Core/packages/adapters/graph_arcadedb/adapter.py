@@ -29,7 +29,8 @@ from conduit_common.identity import new_edge_id, now_utc
 from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme
 from ontology.validation import validate_edge_endpoints, validate_properties
-from ports.graph import BulkEdgeResult, NodeSuggestions, SuggestOptions
+from ports.graph import BulkEdgeResult, NodeSuggestions, SubgraphTooLarge, SuggestOptions
+from schemas.compute import LinkStructure, StructureEdge, StructureNode
 from schemas.domain import (
     AuditStub,
     Edge,
@@ -72,6 +73,7 @@ from .builders import (
     SuggestLocationsBuilder,
     SuggestNodesBuilder,
     render_edges_among_gremlin,
+    render_link_structure_gremlin,
     render_type_counts_gremlin,
     suggestion_scope,
 )
@@ -774,6 +776,31 @@ class GraphArcadeDBAdapter:
             ],
             total=int(totals[0].get("result") or 0),
             offset=offset,
+        )
+
+    async def link_structure(
+        self, principal: Principal, *, max_nodes: int, max_edges: int
+    ) -> LinkStructure:
+        queries = render_link_structure_gremlin(self._access, principal)
+        (counted,) = await self._client.gremlin(queries["node_count"])
+        nodes = int(counted.get("result") or 0)
+        if nodes > max_nodes:
+            raise SubgraphTooLarge(nodes=nodes, edges=None)
+        (counted,) = await self._client.gremlin(queries["edge_count"])
+        edges = int(counted.get("result") or 0)
+        if edges > max_edges:
+            raise SubgraphTooLarge(nodes=nodes, edges=edges)
+        return LinkStructure(
+            nodes=[
+                StructureNode(id=str(r["id"]), type=logical_type_name(str(r["type"])))
+                for r in await self._client.gremlin(queries["nodes"])
+            ],
+            edges=[
+                StructureEdge(
+                    id=str(r["id"]), source=str(r["s"]), target=str(r["t"]), weight=float(r["w"])
+                )
+                for r in await self._client.gremlin(queries["edges"])
+            ],
         )
 
     # --- schema ------------------------------------------------------------

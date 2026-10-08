@@ -13,6 +13,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Literal, Protocol, runtime_checkable
 
+from schemas.compute import LinkStructure
 from schemas.domain import (
     Edge,
     EdgeId,
@@ -324,6 +325,16 @@ class GraphPort(Protocol):
         (`occurrences`), most first, ties by id, of one link type when named, each with both its
         ends. Only links `principal` can see whose two ends it can see are ranked or counted in
         `total` (rule 3); a page past the end is empty."""
+        ...
+
+    async def link_structure(
+        self, principal: Principal, *, max_nodes: int, max_edges: int
+    ) -> LinkStructure:
+        """`06_DECISIONS.md` ADR-100 Amendment 5: every node and link `principal` can see, as only
+        its structure (ids, types, ends, weights), for the case's groups. Access in the read
+        (rule 3): a hidden node is absent and so is every link to it. Over a cap it raises
+        `SubgraphTooLarge` with the counts of what the principal can see, never a slice (rule 2);
+        the counts are taken first, so a breach is cheap."""
         ...
 
     async def apply_schema(self, schema: OntologySchema) -> SchemaReport: ...

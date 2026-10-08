@@ -32,6 +32,15 @@ async function serve(page: Page) {
       const edge = { id: "l1", type: "ASSOCIATE_OF", source: "hub0", target: "hub1", occurrences: 9, properties: {} };
       return json({ links: [{ edge, source: node("hub0", "Person"), target: node("hub1", "Person") }], total: 1, offset: 0 });
     }
+    if (url.pathname.endsWith("/groups")) {
+      return json({
+        groups: [{ id: "g1", size: 4, dominant_type: "Person", central: node("hub0", "Person"), central_links: 3 }],
+        total_groups: 1,
+        not_shown_groups: 0,
+        bridges: [{ node: node("hub1", "Person"), groups_reached: 2, links: 5 }],
+        total_bridges: 1,
+      });
+    }
     if (url.pathname.endsWith("/busiest-days")) {
       return json({ days: [{ start: "2001-05-02T00:00:00Z", end: "2001-05-03T00:00:00Z", count: 40 }], total: 1, offset: 0 });
     }
@@ -99,6 +108,24 @@ test("a busiest day becomes the timeline's window by keyboard", async ({ page })
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.days)).toEqual(["2001-05-02T00:00:00Z"]);
   registerCovered(REGISTRY, "set-the-timeline-to-a-busiest-day-by-keyboard");
+});
+
+test("a group's centre goes on the canvas by keyboard", async ({ page }) => {
+  await serve(page);
+  const groups = page.getByRole("region", { name: "Groups and bridges" });
+  await groups.getByRole("button", { name: "Group of 4 · mostly Person · around hub0" }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.picked)).toEqual(["hub0"]);
+  registerCovered(REGISTRY, "put-a-groups-centre-on-the-canvas-by-keyboard");
+});
+
+test("a bridge goes on the canvas by keyboard", async ({ page }) => {
+  await serve(page);
+  const groups = page.getByRole("region", { name: "Groups and bridges" });
+  await groups.getByRole("button", { name: "hub1 · reaches 2 other groups · 5 links" }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.picked)).toEqual(["hub1"]);
+  registerCovered(REGISTRY, "put-a-bridge-on-the-canvas-by-keyboard");
 });
 
 test("every registered explore action has its own proving test case above", () => {

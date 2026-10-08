@@ -34,6 +34,9 @@ from schemas.compute import (
     CentralityRequest,
     CliqueMetricRequest,
     CommunityRequest,
+    LinkStructure,
+    StructureEdge,
+    StructureNode,
 )
 from schemas.domain import (
     AuditStub,
@@ -187,6 +190,52 @@ async def test_communities_never_returns_a_disconnected_group(
     assert result[a] == result[b]
     assert result[c] == result[d]
     assert result[a] != result[c]
+
+
+def _structure_of(subgraph: Subgraph) -> LinkStructure:
+    """The same graph as only its structure (ADR-100 Amendment 5): what the case's groups are found
+    from, since reading every record of a large case in full is hundreds of megabytes."""
+    return LinkStructure(
+        nodes=[StructureNode(id=n.id, type=n.type) for n in subgraph.nodes],
+        edges=[
+            StructureEdge(id=e.id, source=e.source, target=e.target, weight=e.weight)
+            for e in subgraph.edges
+        ],
+    )
+
+
+@_per_adapter
+async def test_communities_from_the_structure_alone_are_those_of_the_whole_records(
+    factory: ComputeAdapterFactory,
+) -> None:
+    a, b, c, d = (new_node_id() for _ in range(4))
+    isolated = new_node_id()
+    subgraph = Subgraph(
+        nodes=[_node(a), _node(b), _node(c), _node(d), _node(isolated)],
+        edges=[_edge(a, b), _edge(c, d)],
+    )
+    async with factory.context() as adapter:
+        whole = await adapter.communities(CommunityRequest(subgraph=subgraph))
+        structure = await adapter.communities(CommunityRequest(structure=_structure_of(subgraph)))
+    assert set(structure) == {a, b, c, d, isolated}
+    assert structure[a] == structure[b] and structure[c] == structure[d]
+    assert len({structure[a], structure[c], structure[isolated]}) == 3
+    # The same partition either way, whatever the labels are called.
+    def groups(labels: dict[str, str]) -> set[frozenset[str]]:
+        found: dict[str, set[str]] = {}
+        for node, label in labels.items():
+            found.setdefault(label, set()).add(node)
+        return {frozenset(g) for g in found.values()}
+
+    assert groups(structure) == groups(whole)
+
+
+def test_a_community_request_is_of_exactly_one_graph() -> None:
+    subgraph, _, _ = _small_subgraph()
+    with pytest.raises(ValueError):
+        CommunityRequest()
+    with pytest.raises(ValueError):
+        CommunityRequest(subgraph=subgraph, structure=_structure_of(subgraph))
 
 
 @_per_adapter

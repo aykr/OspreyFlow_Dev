@@ -77,6 +77,15 @@ function standard() {
       const all = Array.from({ length: 12 }, (_, i) => link(`l${i}`, ALICE, BOB, 50 - i));
       return json(200, { links: all.slice(offset, offset + Number(q.get("limit"))), total: 12, offset });
     }
+    if (path === "groups") {
+      return json(200, {
+        groups: [{ id: "g1", size: 3669, dominant_type: "Endpoint", central: ALICE, central_links: 210 }],
+        total_groups: 36,
+        not_shown_groups: 35,
+        bridges: [{ node: BOB, groups_reached: 5, links: 120 }],
+        total_bridges: 812,
+      });
+    }
     if (path === "busiest-days") {
       return json(200, {
         days: [{ start: "2001-05-02T00:00:00Z", end: "2001-05-03T00:00:00Z", count: 1234 }],
@@ -194,6 +203,28 @@ describe("ExplorePanel", () => {
     expect(await within(days).findByText("All 1 shown.")).toBeTruthy();
     fireEvent.click(within(days).getByRole("button", { name: "Wed 2 May 2001 · 1,234 events" }));
     expect(onPickDay).toHaveBeenCalledWith({ start: "2001-05-02T00:00:00Z", end: "2001-05-03T00:00:00Z", count: 1234 });
+  });
+
+  it("names the largest groups by their centre and the nodes bridging them, and counts the rest", async () => {
+    standard();
+    const onPick = mount();
+    const groups = await screen.findByRole("region", { name: "Groups and bridges" });
+    expect(await within(groups).findByText("The largest 1 of 36 groups; 35 not shown.")).toBeTruthy();
+    fireEvent.click(within(groups).getByRole("button", { name: "Group of 3,669 · mostly Endpoint · around alice@enron.com" }));
+    expect(onPick.mock.calls[0]?.[0].id).toBe("alice");
+    expect(within(groups).getByText("The strongest 1 of 812 bridges.")).toBeTruthy();
+    fireEvent.click(within(groups).getByRole("button", { name: "bob@enron.com · reaches 5 other groups · 120 links" }));
+    expect(onPick.mock.calls[1]?.[0].id).toBe("bob");
+  });
+
+  it("says a case too large to group in words, never a sample", async () => {
+    serve((path) => {
+      if (path === "counts") return json(200, COUNTS);
+      if (path === "groups") return json(409, { error: "limit_exceeded", cap_kind: "edges", cap: 250000, would_be: 300000 });
+      return json(200, { nodes: [], links: [], days: [], total: 0, offset: 0 });
+    });
+    mount();
+    expect(await screen.findByText("Too large to group here: 300,000 links, more than 250,000.")).toBeTruthy();
   });
 
   it("says a refusal in words, and an empty case plainly", async () => {

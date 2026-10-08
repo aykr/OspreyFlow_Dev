@@ -2,6 +2,7 @@
 // Both are under `/v1/investigations/{id}/explore/`, so each figure is of the case's datasets and
 // the analyst's clearance, counted in the store; nothing here widens or reckons them again.
 import type {
+  Groups,
   BusiestDays,
   RankedLinks,
   RankedNodes,
@@ -9,6 +10,9 @@ import type {
 } from "../../../../packages/schemas/generated";
 
 export type {
+  Bridge,
+  Group,
+  Groups,
   BusiestDays,
   BusyDay,
   RankedLink,
@@ -88,4 +92,38 @@ export function loadBusiestDays(
     bearerToken,
     "The busiest days",
   );
+}
+
+/** The case's groups and bridges (ADR-100 decision 6). A case over the working set's caps is
+ * answered `limit_exceeded`, said here in words with both figures. */
+export async function loadGroups(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+): Promise<Groups> {
+  let response: Response;
+  try {
+    response = await fetch(exploreUrl(apiBaseUrl, investigationId, "groups"), {
+      headers: { Authorization: `Bearer ${bearerToken}` },
+    });
+  } catch {
+    throw new Error("The server could not be reached.");
+  }
+  if (response.status === 409) {
+    const body = (await response.json().catch(() => ({}))) as {
+      error?: string;
+      cap_kind?: string;
+      cap?: number;
+      would_be?: number;
+    };
+    if (body.error === "limit_exceeded") {
+      const fmt = new Intl.NumberFormat("en-GB");
+      const what = body.cap_kind === "edges" ? "links" : "nodes";
+      throw new Error(
+        `Too large to group here: ${fmt.format(body.would_be ?? 0)} ${what}, more than ${fmt.format(body.cap ?? 0)}.`,
+      );
+    }
+  }
+  if (!response.ok) throw new Error(`The groups could not be read (${response.status}).`);
+  return (await response.json()) as Groups;
 }

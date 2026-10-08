@@ -139,7 +139,7 @@ from schemas.domain import (
 # `Path` is already `pathlib.Path` in this module — `GraphPath` is the same alias
 # `adapters/compute_graphology_tier1/adapter.py` already uses for the identical collision.
 from schemas.domain import Path as GraphPath
-from schemas.explore import BusiestDays, RankedLinks, RankedNodes, TypeCounts
+from schemas.explore import BusiestDays, Groups, RankedLinks, RankedNodes, TypeCounts
 from schemas.ingest import (
     CONNECTOR_CATALOGUE,
     ConnectDraftInput,
@@ -3001,6 +3001,27 @@ async def explore_busiest_days_route(
         result_cardinality=len(days.days),
     )
     return days
+
+
+@app.get("/v1/investigations/{investigation_id}/explore/groups")
+async def explore_groups_route(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    explore: ExploreDep,
+    compute: ComputeDep,
+    audit: AuditDep,
+) -> Groups:
+    """ADR-100 decision 6: the case's largest groups and the nodes bridging them, within its
+    datasets; a case over the working set's caps is `limit_exceeded`, never a sample."""
+    found = await explore.groups(principal, compute)
+    await audit.record(
+        principal=principal,
+        action="explore_groups",
+        investigation_id=investigation.id,
+        resolved_query={},
+        result_cardinality=found.total_groups,
+    )
+    return found
 
 
 # --- the visual query builder (Phase 7 Stage 4, 06_DECISIONS.md ADR-030) ------

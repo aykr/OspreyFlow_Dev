@@ -1165,6 +1165,11 @@ seen and reverted, superseded and other-dataset elements count nowhere:
   Amendment 1). Nodes by visible degree, most first, ties by id, of one type when named, with
   `total` (how many are ranked) and `offset`; a page past the end is empty, never a short page that
   passes for the whole. Both types are in `schemas/explore.py`.
+- **`busiest_links(principal, *, edge_type=None, limit=10, offset=0) -> RankedLinks`** (ADR-100
+  Amendment 4). Links by `occurrences`, most first, ties by id, each with both ends, with `total`.
+- **`link_structure(principal, *, max_nodes, max_edges) -> LinkStructure`** (ADR-100 Amendment 5).
+  Every visible node (id, type) and link (id, ends, weight), for the case's groups; over a cap,
+  `SubgraphTooLarge` with the counts of what is seen.
 
 One more method closes the `filtered_count` gap this section used to describe as outstanding
 (below):

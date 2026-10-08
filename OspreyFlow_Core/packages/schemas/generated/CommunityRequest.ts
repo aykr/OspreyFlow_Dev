@@ -49,6 +49,10 @@ export type Basis = ("direct" | "probabilistic") | null;
 export type Datasets1 = string[];
 export type Edges = Edge[];
 export type FilteredCount = number;
+export type Type2 = string;
+export type Nodes1 = StructureNode[];
+export type Weight1 = number;
+export type Edges1 = StructureEdge[];
 
 /**
  * Louvain, with a connected-components split pass — `06_DECISIONS.md` ADR-029: Leiden
@@ -58,9 +62,13 @@ export type FilteredCount = number;
  * The split pass closes §6.3's own specific objection to Louvain (it can merge two disconnected
  * components into one labelled community) without restoring Leiden's own partition quality — a
  * disclosed trade, not a free fix. No algorithm choice is exposed; only one is sanctioned.
+ *
+ * Of exactly one graph: the records (`subgraph`, the canvas's own), or only their structure
+ * (`structure`, a whole case's, ADR-100 Amendment 5). The algorithm reads ids and ends alone.
  */
 export interface CommunityRequest {
-  subgraph: Subgraph;
+  subgraph?: Subgraph | null;
+  structure?: LinkStructure | null;
   [k: string]: unknown;
 }
 export interface Subgraph {
@@ -169,5 +177,27 @@ export interface WeightComponents {
   corpus_target_degree: CorpusTargetDegree;
   corpus_total_occurrences: CorpusTotalOccurrences;
   computed_at: ComputedAt;
+  [k: string]: unknown;
+}
+/**
+ * A graph as only its structure (ADR-100 Amendment 5): each node's id and type, each link's
+ * id, ends and weight. What groups are found from in a large case, whose records read in full are
+ * hundreds of megabytes (measured: 1.6 KB a link on the Enron case).
+ */
+export interface LinkStructure {
+  nodes: Nodes1;
+  edges: Edges1;
+  [k: string]: unknown;
+}
+export interface StructureNode {
+  id: NodeId;
+  type: Type2;
+  [k: string]: unknown;
+}
+export interface StructureEdge {
+  id: EdgeId;
+  source: NodeId;
+  target: NodeId;
+  weight?: Weight1;
   [k: string]: unknown;
 }

@@ -77,4 +77,45 @@ class BusiestDays(BaseModel):
     computed_at: datetime | None = None
 
 
-ALL_MODELS = (TypeCounts, RankedNode, RankedNodes, RankedLink, RankedLinks, BusyDay, BusiestDays)
+class Group(BaseModel):
+    """One community of the case (Louvain with the split pass, ADR-029), named by its member with
+    the most links inside it."""
+
+    id: str
+    size: int
+    dominant_type: str
+    central: Node
+    central_links: int
+
+
+class Bridge(BaseModel):
+    """A node whose links reach groups other than its own: how many, and how many links it has."""
+
+    node: Node
+    groups_reached: int
+    links: int
+
+
+class Groups(BaseModel):
+    """The largest groups and the strongest bridges; what is not shown is counted (rule 2)."""
+
+    groups: list[Group]
+    total_groups: int
+    not_shown_groups: int
+    bridges: list[Bridge]
+    total_bridges: int
+    computed_at: datetime | None = None
+
+
+ALL_MODELS = (
+    TypeCounts,
+    RankedNode,
+    RankedNodes,
+    RankedLink,
+    RankedLinks,
+    BusyDay,
+    BusiestDays,
+    Group,
+    Bridge,
+    Groups,
+)

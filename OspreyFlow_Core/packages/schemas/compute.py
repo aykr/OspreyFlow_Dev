@@ -21,9 +21,9 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
-from schemas.domain import Interval, NodeId, Subgraph
+from schemas.domain import EdgeId, Interval, NodeId, Subgraph
 
 CentralityMetric = Literal[
     "degree",
@@ -44,6 +44,27 @@ class CentralityRequest(BaseModel):
     metric: CentralityMetric
 
 
+class StructureNode(BaseModel):
+    id: NodeId
+    type: str
+
+
+class StructureEdge(BaseModel):
+    id: EdgeId
+    source: NodeId
+    target: NodeId
+    weight: float = 1.0
+
+
+class LinkStructure(BaseModel):
+    """A graph as only its structure (ADR-100 Amendment 5): each node's id and type, each link's
+    id, ends and weight. What groups are found from in a large case, whose records read in full are
+    hundreds of megabytes (measured: 1.6 KB a link on the Enron case)."""
+
+    nodes: list[StructureNode]
+    edges: list[StructureEdge]
+
+
 class CommunityRequest(BaseModel):
     """Louvain, with a connected-components split pass — `06_DECISIONS.md` ADR-029: Leiden
     (`01_DOMAIN_MODEL.md` §6.3's own original preference) is unavailable on either compute tier —
@@ -51,9 +72,23 @@ class CommunityRequest(BaseModel):
     Python route (`leidenalg`) is GPL, the same dependency ADR-021 already rejected for Splink.
     The split pass closes §6.3's own specific objection to Louvain (it can merge two disconnected
     components into one labelled community) without restoring Leiden's own partition quality — a
-    disclosed trade, not a free fix. No algorithm choice is exposed; only one is sanctioned."""
+    disclosed trade, not a free fix. No algorithm choice is exposed; only one is sanctioned.
 
-    subgraph: Subgraph
+    Of exactly one graph: the records (`subgraph`, the canvas's own), or only their structure
+    (`structure`, a whole case's, ADR-100 Amendment 5). The algorithm reads ids and ends alone."""
+
+    subgraph: Subgraph | None = None
+    structure: LinkStructure | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_graph(self) -> CommunityRequest:
+        if (self.subgraph is None) == (self.structure is None):
+            raise ValueError("a community request is of exactly one graph: subgraph or structure")
+        return self
+
+    def ids_and_ends(self) -> tuple[list[NodeId], list[tuple[NodeId, NodeId]]]:
+        graph: Subgraph | LinkStructure = self.subgraph or self.structure  # type: ignore[assignment]
+        return [n.id for n in graph.nodes], [(e.source, e.target) for e in graph.edges]
 
 
 class CliqueMetricRequest(BaseModel):
@@ -93,6 +128,9 @@ class MotifMatch(BaseModel):
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     CentralityRequest,
     CommunityRequest,
+    LinkStructure,
+    StructureNode,
+    StructureEdge,
     CliqueMetricRequest,
     MotifRequest,
     MotifMatch,

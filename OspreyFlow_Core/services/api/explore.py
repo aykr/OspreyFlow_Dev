@@ -11,15 +11,33 @@ when it was counted.
 from __future__ import annotations
 
 import hashlib
+from collections import Counter, defaultdict
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from ports.analytics import AnalyticsPort
-from ports.graph import GraphPort
+from ports.compute import ComputePort
+from ports.graph import GraphPort, SubgraphTooLarge
 from schemas.analytics import EventFilter, HistogramBucketing, HistogramRequest
+from schemas.compute import CommunityRequest
 from schemas.domain import Principal
-from schemas.explore import BusiestDays, BusyDay, RankedLinks, RankedNodes, TypeCounts
+from schemas.explore import (
+    Bridge,
+    BusiestDays,
+    BusyDay,
+    Group,
+    Groups,
+    RankedLinks,
+    RankedNodes,
+    TypeCounts,
+)
+
+from .overview import _breach
+from .working_set.models import MAX_EDGES, MAX_NODES, LimitExceededError
+
+#: How many groups and bridges are named; the rest are counted.
+TOP_GROUPS = 10
 
 #: A day, the busiest days' bucket.
 DAY_SECONDS = 86_400
@@ -143,6 +161,81 @@ class ExploreService:
         if self._cache is not None:
             await self._cache.put(signature, principal, days.model_dump(mode="json"))
         return days
+
+    async def groups(
+        self, principal: Principal, compute: ComputePort, *, top: int = TOP_GROUPS
+    ) -> Groups:
+        """ADR-100 decision 6 (Amendment 5): the case's largest groups and the nodes bridging
+        them, from its structure alone (ids, ends), within the working set's caps. A case over
+        them is the typed `limit_exceeded`, never a sample (rule 2)."""
+        signature = f"explore:{_VERSION}:groups:{top}"
+        if self._cache is not None and (held := await self._cache.get(signature, principal)):
+            return Groups.model_validate(held)
+        try:
+            structure = await self._graph.link_structure(
+                principal, max_nodes=MAX_NODES, max_edges=MAX_EDGES
+            )
+        except SubgraphTooLarge as too_large:
+            raise LimitExceededError(
+                _breach(too_large.nodes, too_large.edges, MAX_NODES, MAX_EDGES)
+            ) from too_large
+        labels = await compute.communities(CommunityRequest(structure=structure))
+        group_of = {n.id: labels.get(n.id) or f"singleton:{n.id}" for n in structure.nodes}
+        type_of = {n.id: n.type for n in structure.nodes}
+        members: dict[str, list[str]] = defaultdict(list)
+        for node_id, group in group_of.items():
+            members[group].append(node_id)
+        inside: Counter[str] = Counter()
+        degree: Counter[str] = Counter()
+        reached: dict[str, set[str]] = defaultdict(set)
+        for edge in structure.edges:
+            a, b = edge.source, edge.target
+            if a not in group_of or b not in group_of:
+                continue
+            degree[a] += 1
+            degree[b] += 1
+            if group_of[a] == group_of[b]:
+                inside[a] += 1
+                inside[b] += 1
+            else:
+                reached[a].add(group_of[b])
+                reached[b].add(group_of[a])
+        ranked = sorted(members, key=lambda g: (-len(members[g]), g))
+        shown: list[Group] = []
+        for group in ranked[:top]:
+            central = min(members[group], key=lambda n: (-inside[n], n))
+            node = await self._graph.get_node(central, principal)
+            if node is None:
+                continue
+            types = Counter(type_of[n] for n in members[group])
+            shown.append(
+                Group(
+                    id=group,
+                    size=len(members[group]),
+                    dominant_type=min(types, key=lambda t: (-types[t], t)),
+                    central=node,
+                    central_links=inside[central],
+                )
+            )
+        bridging = sorted(reached, key=lambda n: (-len(reached[n]), -degree[n], n))
+        bridges: list[Bridge] = []
+        for node_id in bridging[:top]:
+            node = await self._graph.get_node(node_id, principal)
+            if node is not None:
+                bridges.append(
+                    Bridge(node=node, groups_reached=len(reached[node_id]), links=degree[node_id])
+                )
+        found = Groups(
+            groups=shown,
+            total_groups=len(members),
+            not_shown_groups=len(members) - len(shown),
+            bridges=bridges,
+            total_bridges=len(bridging),
+            computed_at=self._now(),
+        )
+        if self._cache is not None:
+            await self._cache.put(signature, principal, found.model_dump(mode="json"))
+        return found
 
     async def invalidate(self) -> None:
         if self._cache is not None:

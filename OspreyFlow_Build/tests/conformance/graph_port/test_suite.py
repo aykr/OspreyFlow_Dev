@@ -24,7 +24,7 @@ import pytest
 
 from conduit_common.identity import new_edge_id, new_node_id, now_utc
 from ontology.errors import OntologyError
-from ports.graph import GraphPort, SuggestOptions
+from ports.graph import GraphPort, SubgraphTooLarge, SuggestOptions
 from schemas.domain import (
     EdgeWrite,
     ExpandRequest,
@@ -3181,3 +3181,33 @@ async def test_busiest_links_page_and_filter_by_type(factory: GraphAdapterFactor
         assert none.links == [] and none.total == 0
         some = await adapter.busiest_links(EXPLORER, edge_type="ASSOCIATE_OF")
         assert some.total == 3
+
+
+async def test_the_link_structure_is_what_the_case_can_see(factory: GraphAdapterFactory) -> None:
+    """ADR-100 Amendment 5: the case's groups are found from its structure; a hidden, other-dataset
+    or reverted node or link in it would put something the reader cannot see into a group."""
+    async with factory.context() as adapter:
+        ids = await _explore_world(adapter)
+        before = await adapter.link_structure(EXPLORER, max_nodes=100, max_edges=100)
+        await _add_what_must_not_count(adapter, ids)
+        after = await adapter.link_structure(EXPLORER, max_nodes=100, max_edges=100)
+        for structure in (before, after):
+            assert {n.id for n in structure.nodes} == set(ids.values())
+            assert {n.type for n in structure.nodes} == {"Person", "Endpoint"}
+            assert len(structure.edges) == 5
+            ends = {(e.source, e.target) for e in structure.edges}
+            assert ends <= {(a, b) for a in ids.values() for b in ids.values()}
+
+
+async def test_a_link_structure_past_its_caps_is_refused_with_only_what_is_seen_counted(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        ids = await _explore_world(adapter)
+        await _add_what_must_not_count(adapter, ids)
+        with pytest.raises(SubgraphTooLarge) as nodes:
+            await adapter.link_structure(EXPLORER, max_nodes=5, max_edges=100)
+        assert nodes.value.nodes == 6  # never the SECRET, other-dataset or reverted ones
+        with pytest.raises(SubgraphTooLarge) as edges:
+            await adapter.link_structure(EXPLORER, max_nodes=100, max_edges=4)
+        assert edges.value.edges == 5

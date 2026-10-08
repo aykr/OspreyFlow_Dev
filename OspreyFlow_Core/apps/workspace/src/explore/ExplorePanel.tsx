@@ -12,6 +12,8 @@ import { eventsNoun } from "../inspector/linkEventsApi";
 import {
   loadBusiestDays,
   loadBusiestLinks,
+  loadGroups,
+  type Groups,
   loadMostConnected,
   loadTypeCounts,
   type BusyDay,
@@ -182,6 +184,62 @@ function TypeEntry({ name, count, ...ranking }: Omit<RankingProps, "first" | "en
   );
 }
 
+/** The case's largest groups and the nodes bridging them (ADR-100 decision 6), read once. */
+function GroupsAndBridges({ apiBaseUrl, bearerToken, investigationId, onPick }: Omit<ExplorePanelProps, "edgeTypes">) {
+  const [found, setFound] = useState<Groups | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setFound(null);
+    setProblem(null);
+    loadGroups(apiBaseUrl, bearerToken, investigationId)
+      .then((answer) => !cancelled && setFound(answer))
+      .catch((err: unknown) => {
+        if (!cancelled) setProblem(err instanceof Error ? err.message : "The groups could not be read.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, bearerToken, investigationId]);
+  if (problem) return <p role="alert">{problem}</p>;
+  if (!found) return <p style={{ color: "var(--text-tertiary)" }}>Finding groups…</p>;
+  const caption = { color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 };
+  const list = { margin: 0, paddingLeft: "var(--sp-16)", display: "grid", gap: "var(--sp-4)" };
+  return (
+    <div style={{ display: "grid", gap: "var(--sp-8)" }}>
+      <p style={caption}>
+        {`The largest ${COUNT.format(found.groups.length)} of ${COUNT.format(found.total_groups)} groups` +
+          (found.not_shown_groups > 0 ? `; ${COUNT.format(found.not_shown_groups)} not shown.` : ".")}
+      </p>
+      <ol style={list}>
+        {found.groups.map((group) => (
+          <li key={group.id}>
+            <button type="button" className="btn btn--quiet" onClick={() => onPick(group.central)}>
+              {`Group of ${COUNT.format(group.size)} · mostly ${group.dominant_type} · around ${nodeLabel(group.central)}`}
+            </button>
+          </li>
+        ))}
+      </ol>
+      {found.total_bridges > 0 && (
+        <>
+          <p style={caption}>
+            {`The strongest ${COUNT.format(found.bridges.length)} of ${COUNT.format(found.total_bridges)} bridges.`}
+          </p>
+          <ol style={list}>
+            {found.bridges.map((bridge) => (
+              <li key={bridge.node.id}>
+                <button type="button" className="btn btn--quiet" onClick={() => onPick(bridge.node)}>
+                  {`${nodeLabel(bridge.node)} · reaches ${plural(bridge.groups_reached, "other group", "other groups")} · ${plural(bridge.links, "link", "links")}`}
+                </button>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function ExplorePanel(props: ExplorePanelProps) {
   const { apiBaseUrl, bearerToken, investigationId, edgeTypes } = props;
   const [counts, setCounts] = useState<TypeCounts | null>(null);
@@ -279,6 +337,12 @@ export function ExplorePanel(props: ExplorePanelProps) {
                 }
                 onPick={(link) => props.onPickLink?.(link)}
               />
+            </section>
+          )}
+          {links.length > 0 && (
+            <section aria-labelledby="explore-groups">
+              <h3 id="explore-groups" style={heading}>Groups and bridges</h3>
+              <GroupsAndBridges {...ranking} />
             </section>
           )}
           <section aria-labelledby="explore-days">

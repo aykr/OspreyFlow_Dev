@@ -822,3 +822,20 @@ class BusiestLinksBuilder:
             '.project("edge","source","target")'
             ".by(elementMap()).by(outV().elementMap()).by(inV().elementMap())"
         )
+
+
+def render_link_structure_gremlin(access: AccessFilter, principal: Principal) -> dict[str, str]:
+    """`GraphPort.link_structure` (ADR-100 Amendment 5): counts, then ids and ends only."""
+    has_access = access.gremlin_has_step(principal)
+    nodes = f"g.V().{has_access}"
+    edges = f"g.E().{has_access}.where(outV().{has_access}).where(inV().{has_access})"
+    return {
+        "node_count": f"{nodes}.count()",
+        "edge_count": f"{edges}.count()",
+        "nodes": f'{nodes}.project("id","type").by(values("id")).by(label())',
+        "edges": (
+            f'{edges}.project("id","s","t","w").by(values("id"))'
+            '.by(outV().values("id")).by(inV().values("id"))'
+            '.by(coalesce(values("weight"),constant(1.0)))'
+        ),
+    }

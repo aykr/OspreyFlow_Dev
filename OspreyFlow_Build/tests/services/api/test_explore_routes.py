@@ -227,3 +227,29 @@ def test_the_new_routes_do_not_answer_without_a_principal(client) -> None:  # ty
     for path in ("busiest-links", "busiest-days"):
         assert anonymous.get(f"/v1/investigations/case-e/explore/{path}").status_code in (401, 403)
     assert graph.busiest == []
+
+
+def test_the_groups_are_found_with_the_cases_datasets(client) -> None:  # type: ignore[no-untyped-def]
+    import services.api.app as app_module
+
+    from schemas.compute import LinkStructure
+
+    http, graph, audit = client
+    seen: list[Principal] = []
+
+    async def link_structure(principal, *, max_nodes, max_edges):  # type: ignore[no-untyped-def]
+        seen.append(principal)
+        return LinkStructure(nodes=[], edges=[])
+
+    class _Compute:
+        async def communities(self, req):  # type: ignore[no-untyped-def]
+            return {}
+
+    graph.link_structure = link_structure  # type: ignore[attr-defined]
+    app.dependency_overrides[app_module.get_compute] = _Compute
+    response = http.get("/v1/investigations/case-e/explore/groups")
+    assert response.status_code == 200
+    assert response.json()["groups"] == [] and response.json()["total_groups"] == 0
+    assert [p.datasets for p in seen] == [["enron"]]
+    assert audit.records[-1]["action"] == "explore_groups"
+    assert TestClient(app).get("/v1/investigations/case-e/explore/groups").status_code in (401, 403)

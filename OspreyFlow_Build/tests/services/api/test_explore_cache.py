@@ -19,6 +19,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
+import pytest
 from services.api.cache import principal_class
 from services.api.dataset_scope import stamping
 from services.api.explore import ExploreService
@@ -201,3 +202,84 @@ async def test_the_busiest_links_are_kept_like_the_rest() -> None:
     await service.busiest_links(ENRON)
     again = await service.busiest_links(ENRON)
     assert calls == [(None, 10, 0)] and again.computed_at == T0
+
+
+def _structure(groups: dict[str, list[str]], links: list[tuple[str, str]]) -> Any:
+    from schemas.compute import LinkStructure, StructureEdge, StructureNode
+
+    nodes = [StructureNode(id=n, type="Endpoint") for members in groups.values() for n in members]
+    edges = [StructureEdge(id=f"{a}-{b}", source=a, target=b) for a, b in links]
+    return LinkStructure(nodes=nodes, edges=edges)
+
+
+class _Compute:
+    def __init__(self, labels: dict[str, str]) -> None:
+        self.labels = labels
+        self.asked = 0
+
+    async def communities(self, req: Any) -> dict[str, str]:
+        self.asked += 1
+        assert req.structure is not None  # the structure, never the whole records
+        return dict(self.labels)
+
+
+def _grouped_world() -> tuple[ExploreService, _Graph, _Compute]:
+    """Two groups, A (a1 a2 a3, a1 at its centre) and B (b1 b2), and x, which links to both."""
+    groups = {"A": ["a1", "a2", "a3"], "B": ["b1", "b2"], "X": ["x"]}
+    links = [("a1", "a2"), ("a1", "a3"), ("b1", "b2"), ("x", "a2"), ("x", "b1")]
+    labels = {n: g for g, members in groups.items() for n in members}
+    service, graph, _ = _service()
+    structure = _structure(groups, links)
+
+    async def link_structure(principal, *, max_nodes, max_edges):  # type: ignore[no-untyped-def]
+        graph.counted.append(principal)
+        return structure
+
+    async def get_node(node_id, principal):  # type: ignore[no-untyped-def]
+        from tests.services.api.test_search_route import _node
+
+        return _node(node_id)
+
+    graph.link_structure = link_structure  # type: ignore[attr-defined]
+    graph.get_node = get_node  # type: ignore[attr-defined]
+    return service, graph, _Compute(labels)
+
+
+async def test_the_largest_groups_come_first_each_named_by_its_most_connected_member() -> None:
+    service, _, compute = _grouped_world()
+    found = await service.groups(ENRON, compute, top=2)  # type: ignore[arg-type]
+    assert [(g.size, g.central.id) for g in found.groups] == [(3, "a1"), (2, "b1")]
+    assert found.total_groups == 3 and found.not_shown_groups == 1
+    assert found.groups[0].dominant_type == "Endpoint"
+
+
+async def test_a_bridge_is_a_node_whose_links_reach_other_groups() -> None:
+    service, _, compute = _grouped_world()
+    found = await service.groups(ENRON, compute)  # type: ignore[arg-type]
+    # x reaches A and B; a2 and b1 each reach one other group (x's).
+    assert [(b.node.id, b.groups_reached) for b in found.bridges][:1] == [("x", 2)]
+    assert {b.node.id for b in found.bridges} == {"x", "a2", "b1"}
+    assert found.total_bridges == 3
+
+
+async def test_the_groups_are_found_once_and_kept() -> None:
+    service, _, compute = _grouped_world()
+    await service.groups(ENRON, compute)  # type: ignore[arg-type]
+    again = await service.groups(ENRON, compute)  # type: ignore[arg-type]
+    assert compute.asked == 1 and again.computed_at == T0
+
+
+async def test_a_case_too_large_to_group_is_said_so_never_sampled() -> None:
+    from services.api.working_set.models import LimitExceededError
+
+    from ports.graph import SubgraphTooLarge
+
+    service, graph, compute = _grouped_world()
+
+    async def too_large(principal, *, max_nodes, max_edges):  # type: ignore[no-untyped-def]
+        raise SubgraphTooLarge(nodes=max_nodes + 1, edges=None)
+
+    graph.link_structure = too_large  # type: ignore[attr-defined]
+    with pytest.raises(LimitExceededError):
+        await service.groups(ENRON, compute)  # type: ignore[arg-type]
+    assert compute.asked == 0

@@ -144,8 +144,7 @@ class ComputeRustworkxAdapter:
         raise ValueError(f"unsupported centrality metric: {req.metric!r}")
 
     async def communities(self, req: CommunityRequest) -> dict[NodeId, CommunityId]:
-        node_ids = [n.id for n in req.subgraph.nodes]
-        edges = [(e.source, e.target) for e in req.subgraph.edges]
+        node_ids, edges = req.ids_and_ends()
 
         nx_graph: nx.Graph[NodeId] = nx.Graph()
         nx_graph.add_nodes_from(node_ids)

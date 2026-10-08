@@ -63,9 +63,11 @@ class ComputeGraphologyTier1Adapter:
         return {node_id: float(value) for node_id, value in result.items()}  # type: ignore[arg-type]
 
     async def communities(self, req: CommunityRequest) -> dict[NodeId, CommunityId]:
-        result = await _call_harness(
-            "communities", {"subgraph": req.subgraph.model_dump(mode="json")}
-        )
+        # The harness reads `nodes[].id` and `edges[].source/target/weight` alone, which the
+        # structure (ADR-100 Amendment 5) has in the same shape as the records.
+        graph = req.subgraph if req.subgraph is not None else req.structure
+        assert graph is not None
+        result = await _call_harness("communities", {"subgraph": graph.model_dump(mode="json")})
         return {node_id: str(value) for node_id, value in result.items()}
 
     async def clique_metric(self, req: CliqueMetricRequest) -> dict[NodeId, CliqueScore]:
