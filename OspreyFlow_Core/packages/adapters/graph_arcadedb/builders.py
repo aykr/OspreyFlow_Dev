@@ -17,6 +17,7 @@ from schemas.domain import (
     OntologySchema,
     PathRequest,
     PatternEdge,
+    PatternNode,
     PatternQuery,
     Principal,
     PropertyType,
@@ -455,6 +456,19 @@ class NeighbourhoodStatsBuilder:
         )
 
 
+def _pin(node: PatternNode) -> str:
+    """A pinned variable binds that one node: the analyst's "this node", not its type."""
+    return f'.has("id",{groovy_string_literal(node.node_id)})' if node.node_id else ""
+
+
+def _could_be_one(a: PatternNode | None, b: PatternNode | None) -> bool:
+    """Whether two variables could bind the same node, and so need telling apart: not when both
+    name a type and the types differ, which keeps a chain across types exactly as it compiled."""
+    if a is None or b is None or not a.entity_type or not b.entity_type:
+        return True
+    return a.entity_type == b.entity_type
+
+
 @dataclass(frozen=True)
 class MatchBuilder:
     """Compiles a bounded `PatternQuery` into Gremlin — `01_DOMAIN_MODEL.md` §8.1, widened in
@@ -539,30 +553,73 @@ class MatchBuilder:
         if first.entity_type:
             physical_first = physical_type_name(first.entity_type)
             steps.append(f".hasLabel({groovy_string_literal(physical_first)})")
+        steps.append(_pin(first))
         steps.append(f".{has_access}")
         steps.append(f".as({groovy_string_literal(first.var)})")
 
-        bound = {first.var}
-        for edge in self.pattern.edges:
-            if edge.from_var not in bound:
+        # In order, as each variable is bound: a later one never binds a node an earlier one of a
+        # type it could share has bound (ADR-100 Amendment 7).
+        bound = [first.var]
+
+        def arrive(var: str) -> None:
+            node = node_by_var.get(var)
+            if node and node.entity_type:
+                steps.append(
+                    f".hasLabel({groovy_string_literal(physical_type_name(node.entity_type))})"
+                )
+            if node:
+                steps.append(_pin(node))
+            steps.extend(
+                f".where(neq({groovy_string_literal(earlier)}))"
+                for earlier in bound
+                if _could_be_one(node_by_var.get(earlier), node)
+            )
+            steps.append(f".as({groovy_string_literal(var)})")
+            bound.append(var)
+
+        def walkable(edge: PatternEdge) -> bool:
+            # Backwards only to an unpinned variable: a pinned one stays with `_render_matched`,
+            # B19's own path, so that shape compiles as it always has.
+            from_node = node_by_var.get(edge.from_var)
+            return edge.from_var in bound or (
+                edge.to_var in bound and (from_node is None or from_node.node_id is None)
+            )
+
+        # The next link touching what is already reached, in whatever order they were drawn.
+        pending = list(self.pattern.edges)
+        while pending:
+            edge = next((e for e in pending if walkable(e)), None)
+            if edge is None:
                 return None
-            to_node = node_by_var.get(edge.to_var)
+            pending.remove(edge)
             edge_labels = physical_edge_labels(edge.edge_type)
-            steps.append(f".select({groovy_string_literal(edge.from_var)})")
-            steps.append(f".outE({groovy_args_literal(edge_labels)})")
-            steps.append(f".{has_access}")
-            steps.append(".inV()")
-            steps.append(f".{has_access}")
-            if to_node and to_node.entity_type:
-                physical_to = physical_type_name(to_node.entity_type)
-                steps.append(f".hasLabel({groovy_string_literal(physical_to)})")
-            steps.append(f".as({groovy_string_literal(edge.to_var)})")
-            bound.add(edge.to_var)
+            if edge.from_var in bound and edge.to_var in bound:
+                # A join (ADR-100 Amendment 7): the two already-bound nodes are linked.
+                steps.append(
+                    f".where(select({groovy_string_literal(edge.from_var)})"
+                    f".outE({groovy_args_literal(edge_labels)}).{has_access}"
+                    f".inV().{has_access}.where(eq({groovy_string_literal(edge.to_var)})))"
+                )
+            elif edge.from_var in bound:
+                steps.append(f".select({groovy_string_literal(edge.from_var)})")
+                steps.append(f".outE({groovy_args_literal(edge_labels)})")
+                steps.append(f".{has_access}")
+                steps.append(".inV()")
+                steps.append(f".{has_access}")
+                arrive(edge.to_var)
+            else:
+                # Walked backwards to a new variable (ADR-100 Amendment 7).
+                steps.append(f".select({groovy_string_literal(edge.to_var)})")
+                steps.append(f".inE({groovy_args_literal(edge_labels)})")
+                steps.append(f".{has_access}")
+                steps.append(".outV()")
+                steps.append(f".{has_access}")
+                arrive(edge.from_var)
 
         # Every declared node must actually be bound by the walk above — a pattern with more
         # than one fully-disconnected root (no edge ever references the second one at all) would
         # otherwise emit a `.select()` naming a step label nothing ever produced.
-        if bound != {n.var for n in self.pattern.nodes}:
+        if set(bound) != {n.var for n in self.pattern.nodes}:
             return None
 
         if count_only:
@@ -570,29 +627,22 @@ class MatchBuilder:
             steps.append(self._count_tail(sorted(n.var for n in self.pattern.nodes), ceiling))
             return "".join(steps)
 
-        # **`project`, not `select`, for a single variable.** Gremlin's `select` is overloaded on
-        # arity in a way that changes the *shape* of what comes back, not just its size:
-        # `select('a','b')` yields a map keyed by variable name, while `select('a')` yields the
-        # bare projected value. `GraphArcadeDBAdapter.match` reads every record as the former —
-        # `for value in record.values()` — so a one-variable pattern handed it an element map and
-        # it iterated that map's own values, calling `node_from_element_map` on the string
-        # `"mx_Person"` and raising `TypeError: string indices must be integers`. A 500 from
-        # `POST /v1/patterns/run` for the simplest pattern the visual query builder can express:
-        # one entity type, no edges, which is exactly what a first-time user draws.
-        #
-        # Found 26 September 2026 driving the query builder against a real stack. Nothing caught
-        # it because every existing case for this path binds two or more variables, so the
-        # one-variable arity — the only one whose wire shape differs — had never been rendered
-        # and parsed end to end. `project` yields the keyed map for any arity, so the shape is
-        # uniform and `match`'s own loop is right as it stands.
-        node_vars = [n.var for n in self.pattern.nodes]
-        if len(node_vars) == 1:
-            steps.append(f".project({groovy_string_literal(node_vars[0])})")
-        else:
-            steps.append(f".select({groovy_args_literal(node_vars)})")
-        steps.append(".by(elementMap())")
-        steps.append(f".dedup().limit({self.pattern.limit})")
+        # The nodes, each once, as `_count_tail` counts them (rule 2): `limit` bounds nodes, not the
+        # ways of matching. A row per binding with `limit` on the rows once returned seven of eight
+        # counted nodes for four people sharing four phones, sixteen ways (ADR-100 Amendment 7).
+        steps.append(
+            self._nodes_tail(sorted(n.var for n in self.pattern.nodes), self.pattern.limit)
+        )
         return "".join(steps)
+
+    @staticmethod
+    def _nodes_tail(labelled_vars: list[str], limit: int) -> str:
+        """Every node a match binds, each once, up to `limit`, as element maps: the same union
+        and dedup as `_count_tail`, so `match` returns exactly what `match_count` counted."""
+        if len(labelled_vars) > 1:
+            branches = ",".join(f"select({groovy_string_literal(v)})" for v in labelled_vars)
+            return f".union({branches}).dedup().limit({limit}).elementMap()"
+        return f".dedup().limit({limit}).elementMap()"
 
     @staticmethod
     def _count_tail(labelled_vars: list[str], ceiling: int) -> str:
@@ -729,25 +779,14 @@ class MatchBuilder:
             missing = sorted(all_vars - primary_bound - pinned_vars)
             raise ValueError(f"pattern variable(s) never bound by any root or edge: {missing}")
 
-        # A pinned *secondary* root's own identity is never returned — it is never itself
-        # `.as()`-labelled outside its own nested `.where()` check, so it could not be selected at
-        # all. The primary root stays in `select()` even when it is also pinned: Gremlin's own
-        # `select(x)` (one argument) returns the bound value directly rather than `{x: value}`, a
-        # different shape from `select(x, y, ...)` (confirmed empirically — dropping the primary
-        # here for a two-node pattern collapses to exactly that single-argument case and the
-        # adapter's own multi-key parsing broke against it). Keeping the primary avoids ever
-        # emitting a single-argument `select()` for the diamond path; a bare single-pinned-node
-        # pattern with no discovered variable at all is `_render_single_chain`'s own scope, not
-        # this one, and already shares whatever behaviour that path has for it.
+        # A pinned *secondary* root's own identity is never returned: it is never `.as()`-labelled
+        # outside its own nested `.where()` check, so only what the primary chain binds is.
         if count_only:
             assert ceiling is not None  # always passed together — see `render_count_gremlin`
             steps.append(self._count_tail(sorted(primary_bound), ceiling))
             return "".join(steps)
 
-        select_args = groovy_args_literal(sorted(primary_bound))
-        steps.append(f".select({select_args})")
-        steps.append(".by(elementMap())")
-        steps.append(f".dedup().limit({self.pattern.limit})")
+        steps.append(self._nodes_tail(sorted(primary_bound), self.pattern.limit))
         return "".join(steps)
 
 

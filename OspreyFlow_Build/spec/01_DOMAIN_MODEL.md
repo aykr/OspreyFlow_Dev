@@ -1082,6 +1082,20 @@ one of them is pinned and its own chain converges on a variable the primary chai
 anything else — an unpinned second root, or a chain that never converges — is a compile-time
 error, not a silent wrong answer.
 
+**Widened again (`06_DECISIONS.md` ADR-100 Amendment 7).** The walk from `nodes[0]` takes, in
+whatever order the links were drawn, the next link that touches a variable already reached: from
+it (forward), back from it to a new unpinned variable (`inE`, so an open second root that shares a
+contact is reached), or between two already reached (a join, `.where(...)`). Two variables never
+bind the same node where their types could match, so "the same two contacts" are two, and nobody
+shares a contact with themselves. A pinned variable binds its node wherever it stands; the compiler
+once dropped every pin on this path. A pattern this walk cannot cover still falls to the
+pinned-root path above. **What a match returns** is the nodes it binds, each once, up to `limit`:
+the same set and bound `match_count` counts, so a dense pattern can no longer count 8 nodes and
+return 7 (the rows of a binding were once what `limit` cut). The access step is on every link and
+node each new step reads (`test_shared_contacts_never_rest_on_what_the_reader_cannot_see`). The
+walk is not cheap for every shape: "two who share two contacts" over the whole Enron case ran for
+minutes, which is why that question is asked of one node by its own read.
+
 **`PatternQuery`'s own absence of a negation/"must not exist" clause is load-bearing for
 something outside pattern matching itself, not only a scope limit contained here — read this
 before adding one.** `06_DECISIONS.md` ADR-037's own amendment (the corpus-wide change stream a

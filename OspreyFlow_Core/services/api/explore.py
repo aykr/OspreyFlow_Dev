@@ -22,7 +22,7 @@ from ports.compute import ComputePort
 from ports.graph import GraphPort, SubgraphTooLarge
 from schemas.analytics import EventFilter, HistogramBucketing, HistogramRequest
 from schemas.compute import CommunityRequest
-from schemas.domain import Principal
+from schemas.domain import Edge, Node, OntologySchema, Principal
 from schemas.explore import (
     Bridge,
     BusiestDays,
@@ -32,11 +32,13 @@ from schemas.explore import (
     MarkedNode,
     RankedLinks,
     RankedNodes,
+    StarterQuestions,
     TypeCounts,
     WhatsNew,
 )
 
 from .overview import _breach
+from .starter_questions import starter_questions, suited
 from .suppression import SuppressionMark
 from .working_set.models import MAX_EDGES, MAX_NODES, LimitExceededError
 
@@ -56,6 +58,26 @@ DAY_SECONDS = 86_400
 EXPLORE_TTL_SECONDS = 3600
 #: Bumped when what is kept changes shape, so an older entry is never read as a newer one.
 _VERSION = "v1"
+
+
+#: How many nodes a starter question may match and still be run: the query builder's own limit
+#: (`PatternQuery.limit`). Counting is stopped there, so a question matching more costs no more
+#: than one matching this many (ADR-100 Amendment 7: counted to the working set's cap, a chain over
+#: the Enron case ran for minutes).
+STARTER_RUN_LIMIT = 1000
+
+
+class StarterNotOffered(LookupError):
+    """The question is not one offered for this case, as this reader sees it."""
+
+
+class TooManyMatches(Exception):
+    """At least `at_least` nodes match: nothing is added, and the query builder is where to narrow
+    it (rule 2: never the first slice of a larger answer)."""
+
+    def __init__(self, at_least: int) -> None:
+        super().__init__(f"at least {at_least} nodes match")
+        self.at_least = at_least
 
 
 class MarkSource(Protocol):
@@ -295,6 +317,32 @@ class ExploreService:
 
         found = await asyncio.gather(*(look(m) for m in every))
         return [m for m in found if m is not None]
+
+    async def starter_questions(
+        self, principal: Principal, ontology: OntologySchema
+    ) -> StarterQuestions:
+        """ADR-100 decision 8 (Amendment 7): from the case's kept counts, so a type the reader
+        cannot see, or only another dataset holds, shapes no question."""
+        return starter_questions(await self.counts(principal), ontology)
+
+    async def run_starter(
+        self, principal: Principal, ontology: OntologySchema, question_id: str
+    ) -> tuple[list[Node], list[Edge]]:
+        """ADR-100 Amendment 7: the nodes an offered question matches and the links among them,
+        both read as the reader. Only a question built for this case's own counts runs; it is
+        counted first, and past `STARTER_RUN_LIMIT` refused whole."""
+        offered = {q.id: q for q in suited(await self.counts(principal), ontology)}
+        question = offered.get(question_id)
+        if question is None:
+            raise StarterNotOffered(question_id)
+        pattern = question.pattern.model_copy(update={"limit": STARTER_RUN_LIMIT})
+        if await self._graph.match_count(pattern, principal, ceiling=STARTER_RUN_LIMIT) >= (
+            STARTER_RUN_LIMIT
+        ):
+            raise TooManyMatches(STARTER_RUN_LIMIT)
+        nodes = (await self._graph.match(pattern, principal)).nodes
+        edges = await self._graph.edges_among([n.id for n in nodes], principal)
+        return nodes, edges
 
     async def invalidate(self) -> None:
         if self._cache is not None:

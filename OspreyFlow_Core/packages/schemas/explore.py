@@ -11,7 +11,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from schemas.domain import Edge, Node
+from schemas.domain import Edge, Node, PatternQuery
 
 
 class TypeCounts(BaseModel):
@@ -166,6 +166,23 @@ class WhatsNew(BaseModel):
     computed_at: datetime | None = None
 
 
+class StarterQuestion(BaseModel):
+    """A query-builder pattern that suits the case's types (ADR-100 decision 8, Amendment 7), run
+    with one action."""
+
+    #: Stable for the same types: the run route rebuilds the question from it.
+    id: str
+    question: str
+    pattern: PatternQuery
+
+
+class StarterQuestions(BaseModel):
+    """The first few that suit the case, and how many suit it in all (rule 2)."""
+
+    questions: list[StarterQuestion]
+    total: int
+
+
 ALL_MODELS = (
     TypeCounts,
     RankedNode,
@@ -183,4 +200,6 @@ ALL_MODELS = (
     RecentlyConfirmed,
     MarkedNode,
     WhatsNew,
+    StarterQuestion,
+    StarterQuestions,
 )

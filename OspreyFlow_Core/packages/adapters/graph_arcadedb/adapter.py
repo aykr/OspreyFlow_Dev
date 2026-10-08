@@ -708,11 +708,8 @@ class GraphArcadeDBAdapter:
     async def match(self, pattern: PatternQuery, principal: Principal) -> Subgraph:
         query = MatchBuilder(pattern).render_gremlin(self._access, principal)
         results = await self._client.gremlin(query)
-        nodes: dict[NodeId, Node] = {}
-        for record in results:
-            for value in record.values():
-                node = node_from_element_map(value)
-                nodes[node.id] = node
+        # One element map per node, each once (`MatchBuilder._nodes_tail`).
+        nodes = {node.id: node for node in map(node_from_element_map, results)}
         return Subgraph(nodes=list(nodes.values()), edges=[])
 
     async def match_count(

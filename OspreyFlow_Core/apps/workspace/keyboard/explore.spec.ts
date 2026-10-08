@@ -41,6 +41,15 @@ async function serve(page: Page) {
         total_bridges: 1,
       });
     }
+    if (url.pathname.endsWith("/starter-questions")) {
+      return json({
+        questions: [{ id: "chain:A", question: "Person → Person → Person, by “Associate of” then “Associate of”", pattern: { nodes: [], edges: [] } }],
+        total: 1,
+      });
+    }
+    if (url.pathname.endsWith("/run")) {
+      return json({ delta: { op: "add", seq: 9, nodes: [node("hub0", "Person")], edges: [] }, added_nodes: 1, added_links: 0 });
+    }
     if (url.pathname.endsWith("/whats-new")) {
       return json({
         loads: [{ load_id: "load-1", nodes: 4, links: 4, latest: "2026-10-08T09:00:00Z" }],
@@ -154,6 +163,16 @@ test("a node a colleague marked goes on the canvas by keyboard", async ({ page }
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.picked)).toEqual(["hub3"]);
   registerCovered(REGISTRY, "put-a-marked-node-on-the-canvas-by-keyboard");
+});
+
+test("a starter question runs onto the canvas by keyboard", async ({ page }) => {
+  await serve(page);
+  const starters = page.getByRole("region", { name: "Starter questions" });
+  await starters.getByRole("button", { name: /^Person → Person → Person/ }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.deltas)).toEqual([9]);
+  await expect(starters.getByText("1 node and 0 links added.")).toBeVisible();
+  registerCovered(REGISTRY, "run-a-starter-question-by-keyboard");
 });
 
 test("every registered explore action has its own proving test case above", () => {

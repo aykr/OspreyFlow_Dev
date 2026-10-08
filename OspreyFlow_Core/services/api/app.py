@@ -139,7 +139,15 @@ from schemas.domain import (
 # `Path` is already `pathlib.Path` in this module — `GraphPath` is the same alias
 # `adapters/compute_graphology_tier1/adapter.py` already uses for the identical collision.
 from schemas.domain import Path as GraphPath
-from schemas.explore import BusiestDays, Groups, RankedLinks, RankedNodes, TypeCounts, WhatsNew
+from schemas.explore import (
+    BusiestDays,
+    Groups,
+    RankedLinks,
+    RankedNodes,
+    StarterQuestions,
+    TypeCounts,
+    WhatsNew,
+)
 from schemas.ingest import (
     CONNECTOR_CATALOGUE,
     ConnectDraftInput,
@@ -246,7 +254,12 @@ from .email_extraction import (
 )
 from .evaluation import evaluate_hotlists_for_entry, evaluate_monitors_for_entry
 from .event_scope import visible_ancestors, with_inherited
-from .explore import EXPLORE_TTL_SECONDS, ExploreService
+from .explore import (
+    EXPLORE_TTL_SECONDS,
+    ExploreService,
+    StarterNotOffered,
+    TooManyMatches,
+)
 from .export import (
     ComplianceRoleRequiredError,
     ExportBlockedError,
@@ -419,6 +432,7 @@ from .working_set.models import (
     CardinalityPreview,
     ClusterExplanation,
     ClusterNotFoundError,
+    DeltaAdd,
     DeltaNotice,
     DeltaRemove,
     DeltaReproject,
@@ -3044,6 +3058,90 @@ async def explore_whats_new_route(
         result_cardinality=news.loads_total + news.confirmed_total + news.marked_total,
     )
     return news
+
+
+@app.get("/v1/investigations/{investigation_id}/explore/starter-questions")
+async def explore_starter_questions_route(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    explore: ExploreDep,
+    ontology: OntologyDep,
+    audit: AuditDep,
+) -> StarterQuestions:
+    """ADR-100 decision 8 (Amendment 7): query-builder patterns that suit the types the case's
+    datasets hold, as this reader sees them."""
+    offered = await explore.starter_questions(principal, public_ontology(ontology))
+    await audit.record(
+        principal=principal,
+        action="explore_starter_questions",
+        investigation_id=investigation.id,
+        resolved_query={},
+        result_cardinality=offered.total,
+    )
+    return offered
+
+
+class StarterRunOutcome(BaseModel):
+    """What a starter question put on the canvas (ADR-100 Amendment 7)."""
+
+    delta: DeltaAdd
+    added_nodes: int
+    added_links: int
+
+
+@app.post("/v1/investigations/{investigation_id}/explore/starter-questions/{question_id}/run")
+async def explore_starter_run_route(
+    investigation: InvestigationEditorDep,
+    question_id: str,
+    principal: PrincipalDep,
+    explore: ExploreDep,
+    ontology: OntologyDep,
+    working_set: WorkingSetDep,
+    history: HistoryDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+) -> StarterRunOutcome:
+    """ADR-100 Amendment 7: runs a question offered for this case and puts what it matched, and
+    the links among it, on the canvas: all of it or, past the working set's cap, none
+    (`limit_exceeded`). Counted first: at the query builder's limit, nothing is matched and the
+    answer is `too_many_matches` with how many at least (rule 2). Editor, since it adds to the
+    case's working set."""
+    nodes, edges = await explore.run_starter(principal, public_ontology(ontology), question_id)
+    outcome = await working_set.seed(investigation.id, nodes, edges, principal)
+    await publish_delta(valkey, investigation.id, outcome.delta)
+    await _record_history_step(
+        working_set,
+        history,
+        investigation.id,
+        seq=outcome.delta.seq,
+        label=f"Ran a starter question: {len(outcome.delta.nodes)} node(s)",
+        principal=principal,
+    )
+    await audit.record(
+        principal=principal,
+        action="explore_starter_run",
+        investigation_id=investigation.id,
+        resolved_query={"question_id": question_id},
+        result_cardinality=len(outcome.delta.nodes) + len(outcome.delta.edges),
+    )
+    return StarterRunOutcome(
+        delta=outcome.delta,
+        added_nodes=len(outcome.delta.nodes),
+        added_links=len(outcome.delta.edges),
+    )
+
+
+@app.exception_handler(StarterNotOffered)
+async def _starter_not_offered_handler(request: Request, exc: StarterNotOffered) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "not_offered"})
+
+
+@app.exception_handler(TooManyMatches)
+async def _too_many_matches_handler(request: Request, exc: TooManyMatches) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"error": "too_many_matches", "at_least": exc.at_least},
+    )
 
 
 # --- the visual query builder (Phase 7 Stage 4, 06_DECISIONS.md ADR-030) ------

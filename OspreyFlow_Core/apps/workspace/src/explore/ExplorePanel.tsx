@@ -9,6 +9,7 @@ import type { Node } from "../../../../packages/schemas/generated";
 import { nodeLabel } from "../canvas/nodeAttributes";
 import { linkCaption, linkTypeName, type NamedType } from "../canvas/linkLabel";
 import { eventsNoun } from "../inspector/linkEventsApi";
+import type { WorkingSetDelta } from "../workingset/models";
 import {
   loadBusiestDays,
   loadBusiestLinks,
@@ -16,9 +17,12 @@ import {
   type Groups,
   loadMostConnected,
   loadTypeCounts,
+  loadStarterQuestions,
   loadWhatsNew,
+  runStarterQuestion,
   type BusyDay,
   type LoadSummary,
+  type StarterQuestions,
   type WhatsNew,
   type RankedLink,
   type RankedNode,
@@ -46,6 +50,8 @@ export interface ExplorePanelProps {
   onPickLink?: (link: RankedLink) => void;
   /** Sets the timeline's window to the day. */
   onPickDay?: (day: BusyDay) => void;
+  /** Applies what a starter question put in the case's working set to the canvas. */
+  onApplyDelta?: (delta: WorkingSetDelta) => void;
 }
 
 const WHEN = new Intl.DateTimeFormat("en-GB", {
@@ -347,6 +353,73 @@ function WhatIsNew({ apiBaseUrl, bearerToken, investigationId, onPick }: Omit<Ex
   );
 }
 
+/** ADR-100 decision 8 (Amendment 7): chains that suit the case's types, each run onto the
+ * canvas with one action, all of what it matches or nothing. */
+function StarterQuestionList({
+  apiBaseUrl,
+  bearerToken,
+  investigationId,
+  onApplyDelta,
+}: Pick<ExplorePanelProps, "apiBaseUrl" | "bearerToken" | "investigationId" | "onApplyDelta">) {
+  const [offered, setOffered] = useState<StarterQuestions | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [said, setSaid] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setOffered(null);
+    setProblem(null);
+    loadStarterQuestions(apiBaseUrl, bearerToken, investigationId)
+      .then((answer) => !cancelled && setOffered(answer))
+      .catch((err: unknown) => {
+        if (!cancelled) setProblem(err instanceof Error ? err.message : "The starter questions could not be read.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, bearerToken, investigationId]);
+  async function run(questionId: string) {
+    setRunning(true);
+    setSaid(null);
+    try {
+      const outcome = await runStarterQuestion(apiBaseUrl, bearerToken, investigationId, questionId);
+      onApplyDelta?.(outcome.delta);
+      setSaid(`${plural(outcome.added_nodes, "node", "nodes")} and ${plural(outcome.added_links, "link", "links")} added.`);
+    } catch (err: unknown) {
+      setSaid(err instanceof Error ? err.message : "The question could not be run.");
+    } finally {
+      setRunning(false);
+    }
+  }
+  if (problem) return <p role="alert">{problem}</p>;
+  if (!offered) return <p style={{ color: "var(--text-tertiary)" }}>Looking…</p>;
+  const caption = { color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 };
+  if (offered.total === 0) return <p style={caption}>No question suits what you can see yet.</p>;
+  return (
+    <div style={{ display: "grid", gap: "var(--sp-8)" }}>
+      <p style={caption}>
+        {offered.questions.length < offered.total
+          ? `The first ${COUNT.format(offered.questions.length)} of ${COUNT.format(offered.total)} questions.`
+          : `All ${COUNT.format(offered.total)} shown.`}
+      </p>
+      <ol style={{ margin: 0, paddingLeft: "var(--sp-16)", display: "grid", gap: "var(--sp-4)" }}>
+        {offered.questions.map((q) => (
+          <li key={q.id}>
+            <button type="button" className="btn btn--quiet" disabled={running} onClick={() => void run(q.id)}>
+              {q.question}
+            </button>
+          </li>
+        ))}
+      </ol>
+      {said && (
+        <p aria-live="polite" style={{ margin: 0 }}>
+          {said}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function ExplorePanel(props: ExplorePanelProps) {
   const { apiBaseUrl, bearerToken, investigationId, edgeTypes } = props;
   const [counts, setCounts] = useState<TypeCounts | null>(null);
@@ -455,6 +528,15 @@ export function ExplorePanel(props: ExplorePanelProps) {
           <section aria-labelledby="explore-new">
             <h3 id="explore-new" style={heading}>What&apos;s new</h3>
             <WhatIsNew {...ranking} />
+          </section>
+          <section aria-labelledby="explore-starters">
+            <h3 id="explore-starters" style={heading}>Starter questions</h3>
+            <StarterQuestionList
+              apiBaseUrl={apiBaseUrl}
+              bearerToken={bearerToken}
+              investigationId={investigationId}
+              onApplyDelta={props.onApplyDelta}
+            />
           </section>
           <section aria-labelledby="explore-days">
             <h3 id="explore-days" style={heading}>Busiest days</h3>

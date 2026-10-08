@@ -809,7 +809,9 @@ def test_match_single_chain_pattern_compiles_to_the_same_gremlin_as_before(
     proof, checked as a compiled-string comparison rather than only "the query still returns the
     right nodes," since the latter could pass even if the compiler now takes a slower or
     differently-shaped path to the same answer. This golden string was captured directly from the
-    unmodified `MatchBuilder` before Stage 4's own widening."""
+    unmodified `MatchBuilder` before Stage 4's own widening. Since then the handling scheme gained
+    `PUBLIC` (the access fragment, not the compiler) and ADR-100 Amendment 7 changed the result
+    tail; the walk is as captured."""
     from adapters.graph_arcadedb.access_filter import AccessFilter
     from adapters.graph_arcadedb.builders import MatchBuilder
     from ontology.handling import load_uk_le_scheme
@@ -825,20 +827,23 @@ def test_match_single_chain_pattern_compiles_to_the_same_gremlin_as_before(
     rendered = MatchBuilder(pattern).render_gremlin(access, CLEARED)
     assert rendered == (
         "g.V().hasLabel('mx_Person').has(\"reverted\",false).hasNot(\"superseded_by\")"
-        ".has(\"handling_classification\",within(['OFFICIAL','OFFICIAL-SENSITIVE','SECRET']))"
+        ".has(\"handling_classification\",within(['PUBLIC','OFFICIAL','OFFICIAL-SENSITIVE','SECRET']))"
         '.filter(or(has("handling_code",within([\'P\',\'C\'])),and(has("handling_code",within([])),'
         'or(has("owning_unit",\'unit-1\'),has("originator",\'unit-1\'))))).as(\'p\')'
         ".select('p').outE('mx_USES')"
         '.has("reverted",false).hasNot("superseded_by")'
-        '.has("handling_classification",within([\'OFFICIAL\',\'OFFICIAL-SENSITIVE\',\'SECRET\']))'
+        '.has("handling_classification",within([\'PUBLIC\',\'OFFICIAL\',\'OFFICIAL-SENSITIVE\',\'SECRET\']))'
         '.filter(or(has("handling_code",within([\'P\',\'C\'])),and(has("handling_code",within([])),'
         "or(has(\"owning_unit\",'unit-1'),has(\"originator\",'unit-1')))))"
         ".inV()"
         '.has("reverted",false).hasNot("superseded_by")'
-        '.has("handling_classification",within([\'OFFICIAL\',\'OFFICIAL-SENSITIVE\',\'SECRET\']))'
+        '.has("handling_classification",within([\'PUBLIC\',\'OFFICIAL\',\'OFFICIAL-SENSITIVE\',\'SECRET\']))'
         '.filter(or(has("handling_code",within([\'P\',\'C\'])),and(has("handling_code",within([])),'
         "or(has(\"owning_unit\",'unit-1'),has(\"originator\",'unit-1'))))).hasLabel('mx_Endpoint')"
-        ".as('e').select('p','e').by(elementMap()).dedup().limit(1000)"
+        # The tail alone changed, on purpose: the nodes once each, so `limit` bounds nodes as
+        # `match_count` counts them (ADR-100 Amendment 7,
+        # `test_match_returns_every_node_it_counted_however_many_ways_they_match`).
+        ".as('e').union(select('e'),select('p')).dedup().limit(1000).elementMap()"
     )
 
 
@@ -956,6 +961,149 @@ async def test_match_intersection_never_leaks_a_hidden_common_endpoint(
 
 
 # --- pattern match: cardinality estimate ------------------------------------
+
+
+async def test_match_honours_a_pinned_node_in_a_single_chain(factory: GraphAdapterFactory) -> None:
+    """A pin is the analyst's "this node", so a chain from it is that node's, not its type's. The
+    single-chain compiler once dropped every pin, answering "this person's phones" with every
+    person's (found building ADR-100 stage 8)."""
+    async with factory.context() as adapter:
+        (p1, p2, e1, e2), _ = await _write(
+            adapter,
+            [_node("Person", classification="OFFICIAL"), _node("Person", classification="OFFICIAL"),
+             _node("Endpoint", classification="OFFICIAL"),
+             _node("Endpoint", classification="OFFICIAL")],
+            [],
+        )
+        await _write(adapter, [], [_edge("USES", p1, e1, classification="OFFICIAL"),
+                                   _edge("USES", p2, e2, classification="OFFICIAL")])
+        uses = [PatternEdge(edge_type="USES", from_var="p", to_var="e")]
+        from_pin = PatternQuery(nodes=[PatternNode(var="p", entity_type="Person", node_id=p1),
+                                       PatternNode(var="e", entity_type="Endpoint")], edges=uses)
+        to_pin = PatternQuery(nodes=[PatternNode(var="p", entity_type="Person"),
+                                     PatternNode(var="e", entity_type="Endpoint", node_id=e2)],
+                              edges=uses)
+        assert {n.id for n in (await adapter.match(from_pin, CLEARED)).nodes} == {p1, e1}
+        assert {n.id for n in (await adapter.match(to_pin, CLEARED)).nodes} == {p2, e2}
+        assert await adapter.match_count(from_pin, CLEARED, ceiling=100) == 2
+
+
+async def test_match_returns_every_node_it_counted_however_many_ways_they_match(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Rule 2: `limit` bounds the nodes a match returns, as `match_count` counts them, never the
+    ways of matching. Four people each using the same four phones match sixteen ways; a limit of
+    ten once cut the ways, so `run_pattern`, told 8 < 10, returned seven nodes as the whole
+    answer (found building ADR-100 stage 8, where a shared contact matches many ways)."""
+    async with factory.context() as adapter:
+        people = [_node("Person", classification="OFFICIAL") for _ in range(4)]
+        phones = [_node("Endpoint", classification="OFFICIAL") for _ in range(4)]
+        await _write(adapter, [*people, *phones], [])
+        await _write(adapter, [], [_edge("USES", p.id, e.id, classification="OFFICIAL")
+                                   for p in people for e in phones])
+        pattern = PatternQuery(
+            nodes=[PatternNode(var="p", entity_type="Person"),
+                   PatternNode(var="e", entity_type="Endpoint")],
+            edges=[PatternEdge(edge_type="USES", from_var="p", to_var="e")],
+            limit=10,
+        )
+        assert await adapter.match_count(pattern, CLEARED, ceiling=10) == 8
+        found = await adapter.match(pattern, CLEARED)
+        assert {n.id for n in found.nodes} == {w.id for w in [*people, *phones]}
+        # Past the limit, it stops at the limit in nodes too.
+        fewer = pattern.model_copy(update={"limit": 5})
+        assert len((await adapter.match(fewer, CLEARED)).nodes) == 5
+
+
+
+def _shared_contacts_pattern(*, two: bool) -> PatternQuery:
+    """ADR-100 Amendment 7: `a` and `b` use the same endpoint `x` (`b` reached backwards from
+    `x`), and, when `two`, the same second endpoint `y` (the last link joining two bound
+    variables)."""
+    nodes = [PatternNode(var="a", entity_type="Person"),
+             PatternNode(var="x", entity_type="Endpoint"),
+             PatternNode(var="b", entity_type="Person")]
+    edges = [PatternEdge(edge_type="USES", from_var="a", to_var="x"),
+             PatternEdge(edge_type="USES", from_var="b", to_var="x")]
+    if two:
+        nodes.append(PatternNode(var="y", entity_type="Endpoint"))
+        edges += [PatternEdge(edge_type="USES", from_var="a", to_var="y"),
+                  PatternEdge(edge_type="USES", from_var="b", to_var="y")]
+    return PatternQuery(nodes=nodes, edges=edges)
+
+
+async def _shared_world(adapter: GraphPort) -> dict[str, str]:
+    """`a` and `b` both use `x` and `y`; `c` uses `x` alone; `a` also uses `z`; `d` alone uses
+    `w`."""
+    kinds = {"a": "Person", "b": "Person", "c": "Person", "d": "Person", "x": "Endpoint",
+             "y": "Endpoint", "z": "Endpoint", "w": "Endpoint"}
+    writes = {name: _node(kind, classification="OFFICIAL") for name, kind in kinds.items()}
+    await _write(adapter, list(writes.values()), [])
+    ids = {name: w.id for name, w in writes.items()}
+    await _write(adapter, [], [
+        _edge("USES", ids[s], ids[t], classification="OFFICIAL")
+        for s, t in [("a", "x"), ("a", "y"), ("b", "x"), ("b", "y"), ("c", "x"), ("a", "z"),
+                     ("d", "w")]
+    ])
+    return ids
+
+
+async def test_match_finds_two_who_share_two_contacts(factory: GraphAdapterFactory) -> None:
+    """ADR-100 Amendment 7: a step may walk a link backwards to a new variable and the last may
+    join two bound ones; two variables never bind the same node, so the second shared endpoint is
+    not the first again and nobody shares a contact with themselves."""
+    async with factory.context() as adapter:
+        ids = await _shared_world(adapter)
+        name = {v: k for k, v in ids.items()}
+        two = _shared_contacts_pattern(two=True)
+        found = {name[n.id] for n in (await adapter.match(two, CLEARED)).nodes}
+        assert found == {"a", "b", "x", "y"}
+        assert await adapter.match_count(two, CLEARED, ceiling=100) == 4
+        # Drawn in another order, the same pattern: the next link is whichever touches what is
+        # already reached.
+        redrawn = two.model_copy(update={"edges": list(reversed(two.edges))})
+        assert {name[n.id] for n in (await adapter.match(redrawn, CLEARED)).nodes} == found
+        one = _shared_contacts_pattern(two=False)
+        found = {name[n.id] for n in (await adapter.match(one, CLEARED)).nodes}
+        assert found == {"a", "b", "c", "x", "y"}  # never `d` and `w`: `d` paired with itself
+
+
+async def test_shared_contacts_never_rest_on_what_the_reader_cannot_see(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Rules 3 and 4 for the new steps: a second shared endpoint the reader cannot see, or a link
+    to it they cannot see, or one in another dataset, makes no match and is in no count."""
+    async with factory.context() as adapter:
+        ids = await _shared_world(adapter)
+        two = _shared_contacts_pattern(two=True)
+        hidden_y = _node("Endpoint", classification="SECRET")
+        elsewhere_y = _node("Endpoint", classification="OFFICIAL", datasets=["enron"])
+        q = _node("Person", classification="OFFICIAL")
+        await _write(adapter, [hidden_y, elsewhere_y, q], [])
+        await _write(adapter, [], [
+            # `c` and `q` share `x` and a SECRET endpoint; `c` and `d` share `w` and, by a SECRET
+            # link, `x`.
+            _edge("USES", ids["c"], hidden_y.id, classification="OFFICIAL"),
+            _edge("USES", q.id, ids["x"], classification="OFFICIAL"),
+            _edge("USES", q.id, hidden_y.id, classification="OFFICIAL"),
+            _edge("USES", ids["c"], ids["w"], classification="OFFICIAL"),
+            _edge("USES", ids["d"], ids["x"], classification="SECRET"),
+        ])
+        name = {v: k for k, v in ids.items()}
+        seen = await adapter.match(two, OFFICIAL)
+        assert {name.get(n.id, n.id) for n in seen.nodes} == {"a", "b", "x", "y"}
+        assert await adapter.match_count(two, OFFICIAL, ceiling=100) == 4
+        # The filter is real: cleared, `c` and `q` share two, and so do `c` and `d`.
+        cleared = {n.id for n in (await adapter.match(two, CLEARED)).nodes}
+        assert {ids["c"], q.id, hidden_y.id, ids["d"], ids["w"]} <= cleared
+        # Another dataset's endpoint is no shared contact for a fixture case.
+        await _write(adapter, [], [
+            _edge("USES", ids["c"], elsewhere_y.id, classification="OFFICIAL", datasets=["enron"]),
+            _edge("USES", q.id, elsewhere_y.id, classification="OFFICIAL", datasets=["enron"]),
+        ])
+        in_fixture = OFFICIAL.model_copy(update={"datasets": ["fixture"]})
+        assert (await adapter.match(two, in_fixture)).nodes == []
+
 
 
 async def test_match_count_agrees_with_the_filtered_results_own_count(

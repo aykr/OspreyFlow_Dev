@@ -9,11 +9,11 @@ import { ExplorePanel } from "../src/explore/ExplorePanel";
 
 declare global {
   interface Window {
-    __EXPLORE__?: { picked: string[]; links: string[]; days: string[] };
+    __EXPLORE__?: { picked: string[]; links: string[]; days: string[]; deltas: number[] };
   }
 }
 
-window.__EXPLORE__ = { picked: [], links: [], days: [] };
+window.__EXPLORE__ = { picked: [], links: [], days: [], deltas: [] };
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
@@ -27,5 +27,6 @@ createRoot(container).render(
     onPick={(node) => window.__EXPLORE__!.picked.push(node.id)}
     onPickLink={(link) => window.__EXPLORE__!.links.push(link.edge.id)}
     onPickDay={(day) => window.__EXPLORE__!.days.push(day.start)}
+    onApplyDelta={(delta) => window.__EXPLORE__!.deltas.push(delta.seq)}
   />,
 );

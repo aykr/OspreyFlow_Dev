@@ -526,13 +526,15 @@ groups, each counted against how many there are; a case too large to group says 
 *What's new* (the latest loads into the case's datasets, each with its recipe, what it wrote that the analyst
 can see and when, "The latest 10 of 14 loads"; and the nodes colleagues confirmed, and marked for suppression
 with their reason, the latest first and each counted; a load is named, not picked, since one can hold the whole
-case). Every node in it is a button that does what
+case); and *Starter questions* (chains that suit the case's types, "Person → Endpoint → Endpoint, by “Uses”
+then “Communicated with”", each run with one action: what it matches and the links among them go on the
+canvas, all of it, or nothing with "At least 1,000 match" past the query builder's limit). Every node in it is a button that does what
 choosing a search result does: puts it on the canvas, draws outwards from it and selects it. The figures are
 the Conduit's (`/explore/counts`, `/explore/most-connected`), kept once counted and counted again after
 a change, and the panel says when ("Counted at 09:05 UTC", ADR-100 Amendment 3); they are never
 reckoned in the browser
-(`keyboard/explore.spec.ts`, `src/explore/ExplorePanel.test.tsx`). Starter questions (ADR-100 decision 8)
-are not built yet.
+(`keyboard/explore.spec.ts`, `src/explore/ExplorePanel.test.tsx`). "Who shares two contacts with this node", asked
+of one node in the Inspector (ADR-100 Amendment 7), is not built yet.
 
 ### 3.1c An expansion that adds nothing says so (ADR-077)
 

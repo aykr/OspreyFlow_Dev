@@ -6,9 +6,11 @@ import type {
   BusiestDays,
   RankedLinks,
   RankedNodes,
+  StarterQuestions,
   TypeCounts,
   WhatsNew,
 } from "../../../../packages/schemas/generated";
+import type { WorkingSetDelta } from "../workingset/models";
 
 export type {
   Bridge,
@@ -25,6 +27,8 @@ export type {
   LoadSummary,
   MarkedNode,
   WhatsNew,
+  StarterQuestion,
+  StarterQuestions,
 } from "../../../../packages/schemas/generated";
 
 function exploreUrl(apiBaseUrl: string, investigationId: string, path: string): string {
@@ -141,4 +145,59 @@ export function loadWhatsNew(
   investigationId: string,
 ): Promise<WhatsNew> {
   return get(exploreUrl(apiBaseUrl, investigationId, "whats-new"), bearerToken, "What is new");
+}
+
+/** The query-builder chains that suit the case's types (ADR-100 decision 8, Amendment 7). */
+export function loadStarterQuestions(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+): Promise<StarterQuestions> {
+  return get(exploreUrl(apiBaseUrl, investigationId, "starter-questions"), bearerToken, "The starter questions");
+}
+
+export interface StarterRun {
+  delta: WorkingSetDelta;
+  added_nodes: number;
+  added_links: number;
+}
+
+/** Runs an offered question onto the case's canvas: all of what it matches, or, past the query
+ * builder's limit or the working set's cap, nothing, said in words. */
+export async function runStarterQuestion(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  questionId: string,
+): Promise<StarterRun> {
+  let response: Response;
+  try {
+    response = await fetch(
+      exploreUrl(apiBaseUrl, investigationId, `starter-questions/${encodeURIComponent(questionId)}/run`),
+      { method: "POST", headers: { Authorization: `Bearer ${bearerToken}` } },
+    );
+  } catch {
+    throw new Error("The server could not be reached.");
+  }
+  if (response.ok) return (await response.json()) as StarterRun;
+  const body = (await response.json().catch(() => ({}))) as {
+    error?: string;
+    at_least?: number;
+    cap_kind?: string;
+    cap?: number;
+    would_be?: number;
+  };
+  const fmt = new Intl.NumberFormat("en-GB");
+  if (body.error === "too_many_matches") {
+    throw new Error(
+      `At least ${fmt.format(body.at_least ?? 0)} match, too many to add. Open the Query builder and pin a node to narrow it.`,
+    );
+  }
+  if (body.error === "limit_exceeded") {
+    throw new Error(
+      `Too many for the canvas: ${fmt.format(body.would_be ?? 0)} ${body.cap_kind ?? "nodes"} against a limit of ${fmt.format(body.cap ?? 0)}.`,
+    );
+  }
+  if (response.status === 403) throw new Error("Adding to this case needs Editor access.");
+  throw new Error(`The question could not be run (${response.status}).`);
 }

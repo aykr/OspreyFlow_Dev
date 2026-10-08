@@ -140,3 +140,5 @@ export type { ConfirmedNode } from "./ConfirmedNode";
 export type { RecentlyConfirmed } from "./RecentlyConfirmed";
 export type { MarkedNode } from "./MarkedNode";
 export type { WhatsNew } from "./WhatsNew";
+export type { StarterQuestion } from "./StarterQuestion";
+export type { StarterQuestions } from "./StarterQuestions";

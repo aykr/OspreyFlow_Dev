@@ -303,3 +303,106 @@ def test_whats_new_is_asked_with_the_cases_datasets(client) -> None:  # type: ig
     assert audit.records[-1]["action"] == "explore_whats_new"
     anonymous = TestClient(app).get("/v1/investigations/case-e/explore/whats-new")
     assert anonymous.status_code in (401, 403)
+
+
+def test_the_starter_questions_suit_the_types_the_case_can_see(client) -> None:  # type: ignore[no-untyped-def]
+    """ADR-100 Amendment 7: the questions are built from the case's own counts, asked with the
+    case's datasets, so a type only another dataset holds shapes none."""
+    import services.api.app as app_module
+
+    from ontology.loader import load_default_ontology
+
+    http, graph, audit = client
+    app.dependency_overrides[app_module.get_ontology] = load_default_ontology
+    response = http.get("/v1/investigations/case-e/explore/starter-questions")
+    assert response.status_code == 200
+    body = response.json()
+    # `_FakeGraph.type_counts` answers Person 5 and ASSOCIATE_OF 4.
+    assert body["questions"][0]["id"] == CHAIN
+    assert body["total"] >= 1
+    assert [p.datasets for p in graph.counts] == [["enron"]]
+    assert audit.records[-1]["action"] == "explore_starter_questions"
+    anonymous = TestClient(app).get("/v1/investigations/case-e/explore/starter-questions")
+    assert anonymous.status_code in (401, 403)
+
+
+def _run_overrides(seeded: list[tuple[str, list[str], list[str], Principal]]) -> None:
+    """The working set, its history and the notifier stand in; what is seeded is kept."""
+    import services.api.app as app_module
+    from services.api.working_set.models import DeltaAdd, ExpansionOutcome
+
+    from ontology.loader import load_default_ontology
+
+    class _WorkingSet:
+        async def seed(self, case, nodes, edges, principal):  # type: ignore[no-untyped-def]
+            seeded.append((case, [n.id for n in nodes], [e.id for e in edges], principal))
+            return ExpansionOutcome(
+                delta=DeltaAdd(seq=7, nodes=list(nodes), edges=list(edges)), filtered_count=0
+            )
+
+        async def current_membership(self, case):  # type: ignore[no-untyped-def]
+            return [], []
+
+    class _History:
+        async def record_step(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            return None
+
+    class _Valkey:
+        async def publish(self, *args):  # type: ignore[no-untyped-def]
+            return 1
+
+    app.dependency_overrides[app_module.get_ontology] = load_default_ontology
+    app.dependency_overrides[app_module.get_working_set] = _WorkingSet
+    app.dependency_overrides[app_module.get_history] = _History
+    app.dependency_overrides[app_module.get_valkey] = _Valkey
+
+
+CHAIN = "chain:ASSOCIATE_OF:Person:Person:ASSOCIATE_OF:Person"
+
+
+def test_a_starter_question_runs_onto_the_case_with_its_datasets(client) -> None:  # type: ignore[no-untyped-def]
+    from schemas.domain import Subgraph
+
+    http, graph, audit = client
+    seen: list[Principal] = []
+
+    async def match_count(pattern, principal, *, ceiling):  # type: ignore[no-untyped-def]
+        seen.append(principal)
+        return 2
+
+    async def match(pattern, principal):  # type: ignore[no-untyped-def]
+        seen.append(principal)
+        return Subgraph(nodes=[_node("hub"), _node("c1")], edges=[])
+
+    async def edges_among(node_ids, principal, edge_types=None):  # type: ignore[no-untyped-def]
+        seen.append(principal)
+        return []
+
+    graph.match_count, graph.match, graph.edges_among = match_count, match, edges_among  # type: ignore[attr-defined]
+    seeded: list[tuple[str, list[str], list[str], Principal]] = []
+    _run_overrides(seeded)
+    response = http.post(f"/v1/investigations/case-e/explore/starter-questions/{CHAIN}/run")
+    assert response.status_code == 200, response.text
+    assert response.json()["added_nodes"] == 2
+    assert [p.datasets for p in seen] == [["enron"]] * 3
+    assert [(case, ids, p.datasets) for case, ids, _, p in seeded] == [
+        ("case-e", ["hub", "c1"], ["enron"])
+    ]
+    assert audit.records[-1]["action"] == "explore_starter_run"
+
+
+def test_a_starter_question_past_the_limit_adds_nothing_and_says_so(client) -> None:  # type: ignore[no-untyped-def]
+    http, graph, _ = client
+
+    async def match_count(pattern, principal, *, ceiling):  # type: ignore[no-untyped-def]
+        return ceiling
+
+    graph.match_count = match_count  # type: ignore[attr-defined]
+    seeded: list[tuple[str, list[str], list[str], Principal]] = []
+    _run_overrides(seeded)
+    response = http.post(f"/v1/investigations/case-e/explore/starter-questions/{CHAIN}/run")
+    assert response.status_code == 409
+    assert response.json() == {"error": "too_many_matches", "at_least": 1000}
+    assert seeded == []
+    unknown = http.post("/v1/investigations/case-e/explore/starter-questions/anything/run")
+    assert unknown.status_code == 404

@@ -103,7 +103,30 @@ function roots(state: PatternBuilderState): PatternNodeState[] {
  * is, right now, in the state `MatchBuilder._render_matched` would reject at Run with "an open
  * second root has no general join on this adapter." The canvas surfaces this the instant it
  * becomes true, not only when Preview/Run is pressed. */
+/** Whether the compiler walks the whole pattern from its first variable (`MatchBuilder.
+ * _render_single_chain`, ADR-100 Amendment 7): it takes next any link from a variable already
+ * reached, any link back from one to a new unpinned variable, or any link between two reached, in
+ * whatever order they were drawn. A pattern it cannot walk falls to the pinned-root rule below. */
+function walksFromTheFirst(state: PatternBuilderState): boolean {
+  const first = state.nodes[0];
+  if (!first) return false;
+  const pinned = new Set(state.nodes.filter((n) => n.pinnedNodeId !== null).map((n) => n.var));
+  const reached = new Set([first.var]);
+  const pending = [...state.edges];
+  for (;;) {
+    const next = pending.findIndex(
+      (e) => reached.has(e.fromVar) || (reached.has(e.toVar) && !pinned.has(e.fromVar)),
+    );
+    if (next < 0) break;
+    const [edge] = pending.splice(next, 1);
+    reached.add(edge!.fromVar);
+    reached.add(edge!.toVar);
+  }
+  return pending.length === 0 && state.nodes.every((n) => reached.has(n.var));
+}
+
 export function unpinnedSecondaryRoots(state: PatternBuilderState): PatternNodeState[] {
+  if (walksFromTheFirst(state)) return [];
   const patternRoots = roots(state);
   if (patternRoots.length <= 1) return [];
   // `patternRoots[0]` is guaranteed by the length check above — `noUncheckedIndexedAccess`

@@ -69,6 +69,14 @@ function link(id: string, from: Node, to: Node, occurrences: number) {
 const ALICE = { ...node("alice", "Endpoint", "alice@enron.com"), properties: { name: "alice@enron.com", endpoint_kind: "email" } } as unknown as Node;
 const BOB = node("bob", "Endpoint", "bob@enron.com");
 
+const STARTERS = {
+  questions: [
+    { id: "chain:A", question: "Person → Endpoint → Endpoint, by “Uses” then “Communicated with”", pattern: { nodes: [], edges: [] } },
+    { id: "chain:B", question: "Endpoint → Endpoint → Endpoint, by “Communicated with” then “Communicated with”", pattern: { nodes: [], edges: [] } },
+  ],
+  total: 7,
+};
+
 const WHATS_NEW = {
   loads: [
     { load_id: "load-7", recipe_id: "cdr-carrier-a", recipe_version: 4, nodes: 120, links: 3400, latest: "2026-10-08T14:05:00Z" },
@@ -100,6 +108,7 @@ function standard() {
       });
     }
     if (path === "whats-new") return json(200, WHATS_NEW);
+    if (path === "starter-questions") return json(200, STARTERS);
     if (path === "busiest-days") {
       return json(200, {
         days: [{ start: "2001-05-02T00:00:00Z", end: "2001-05-03T00:00:00Z", count: 1234 }],
@@ -116,9 +125,10 @@ function standard() {
   });
 }
 
-function mount(onPick = vi.fn(), onPickLink = vi.fn(), onPickDay = vi.fn()) {
+function mount(onPick = vi.fn(), onPickLink = vi.fn(), onPickDay = vi.fn(), onApplyDelta = vi.fn()) {
   render(
     <ExplorePanel
+      onApplyDelta={onApplyDelta}
       apiBaseUrl="http://api"
       bearerToken="t"
       investigationId="c1"
@@ -276,6 +286,43 @@ describe("ExplorePanel", () => {
     expect(await within(news).findByText("No loads you can see.")).toBeTruthy();
     expect(within(news).getByText("Nothing confirmed you can see.")).toBeTruthy();
     expect(within(news).getByText("Nothing marked you can see.")).toBeTruthy();
+  });
+
+  it("offers starter questions, says of how many, and runs one onto the canvas with one action", async () => {
+    const delta = { op: "add", seq: 3, nodes: [ALICE, BOB], edges: [] };
+    const calls = serve((path) => {
+      if (path === "counts") return json(200, COUNTS);
+      if (path === "starter-questions") return json(200, STARTERS);
+      if (path === "starter-questions/chain%3AA/run") return json(200, { delta, added_nodes: 2, added_links: 0 });
+      return json(200, { nodes: [], links: [], days: [], groups: [], bridges: [], loads: [], confirmed: [], marked: [], total: 0, offset: 0 });
+    });
+    const onApplyDelta = vi.fn();
+    mount(vi.fn(), vi.fn(), vi.fn(), onApplyDelta);
+    const starters = await screen.findByRole("region", { name: "Starter questions" });
+    expect(await within(starters).findByText("The first 2 of 7 questions.")).toBeTruthy();
+    fireEvent.click(within(starters).getByRole("button", { name: "Person → Endpoint → Endpoint, by “Uses” then “Communicated with”" }));
+    expect(await within(starters).findByText("2 nodes and 0 links added.")).toBeTruthy();
+    expect(onApplyDelta).toHaveBeenCalledWith(delta);
+    expect(calls).toContain("starter-questions/chain%3AA/run?");
+  });
+
+  it("says in words when a starter question matches too many, and adds nothing", async () => {
+    serve((path) => {
+      if (path === "counts") return json(200, COUNTS);
+      if (path === "starter-questions") return json(200, STARTERS);
+      if (path.endsWith("/run")) return json(409, { error: "too_many_matches", at_least: 1000 });
+      return json(200, { nodes: [], links: [], days: [], groups: [], bridges: [], loads: [], confirmed: [], marked: [], total: 0, offset: 0 });
+    });
+    const onApplyDelta = vi.fn();
+    mount(vi.fn(), vi.fn(), vi.fn(), onApplyDelta);
+    const starters = await screen.findByRole("region", { name: "Starter questions" });
+    fireEvent.click(await within(starters).findByRole("button", { name: /^Endpoint → Endpoint/ }));
+    expect(
+      await within(starters).findByText(
+        "At least 1,000 match, too many to add. Open the Query builder and pin a node to narrow it.",
+      ),
+    ).toBeTruthy();
+    expect(onApplyDelta).not.toHaveBeenCalled();
   });
 
   it("says a case too large to group in words, never a sample", async () => {

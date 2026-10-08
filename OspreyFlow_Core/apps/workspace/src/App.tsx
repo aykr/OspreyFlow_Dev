@@ -376,6 +376,10 @@ export function App() {
     });
     setSelectedNode(link.source);
   };
+  /** ADR-100 Amendment 7: what a starter question put in the case's working set, drawn. */
+  const applyStarterDelta = (delta: WorkingSetDelta) => {
+    workingSetRef.current.store.getState().applyDelta(delta);
+  };
   const [timelineOpenSignal, setTimelineOpenSignal] = useState(0);
   /** ADR-100 decision 5: a busiest day becomes the timeline's window, and the timeline opens. */
   const pickDay = (day: BusyDay) => {
@@ -1111,6 +1115,7 @@ export function App() {
                   onPick={pickToStart}
                   onPickLink={pickLinkToStart}
                   onPickDay={pickDay}
+                  onApplyDelta={applyStarterDelta}
                 />
               </div>
             )}
@@ -1409,6 +1414,7 @@ export function App() {
               pickDay(day);
               setExploreOpen(false);
             }}
+            onApplyDelta={applyStarterDelta}
           />
         )}
       </Drawer>

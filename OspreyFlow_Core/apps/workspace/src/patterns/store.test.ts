@@ -5,6 +5,7 @@ import {
   addVariableNode,
   createEmptyPattern,
   fromPatternQuery,
+  isPatternRunnable,
   pinNode,
   removeElement,
   toPatternQuery,
@@ -36,6 +37,36 @@ describe("unpinnedSecondaryRoots", () => {
     state = addEdge(state, "USES", "a", "c");
     state = addEdge(state, "USES", "b", "c");
     expect(unpinnedSecondaryRoots(state)).toEqual([]);
+  });
+
+  it("lets an open second root share a contact with the first (ADR-100 Amendment 7)", () => {
+    let state = createEmptyPattern();
+    state = addVariableNode(state, "Person"); // a
+    state = addVariableNode(state, "Endpoint"); // b, the shared contact
+    state = addVariableNode(state, "Person"); // c, reached backwards from b
+    state = addEdge(state, "USES", "c", "b"); // drawn first: the order it is drawn in is no matter
+    state = addEdge(state, "USES", "a", "b");
+    expect(unpinnedSecondaryRoots(state)).toEqual([]);
+    expect(isPatternRunnable(state)).toBe(true);
+  });
+
+  it("lets a link join two variables already reached: two who share two contacts", () => {
+    let state = createEmptyPattern();
+    for (const type of ["Person", "Endpoint", "Person", "Endpoint"]) state = addVariableNode(state, type);
+    state = addEdge(state, "USES", "a", "b");
+    state = addEdge(state, "USES", "c", "b");
+    state = addEdge(state, "USES", "a", "d");
+    state = addEdge(state, "USES", "c", "d");
+    expect(unpinnedSecondaryRoots(state)).toEqual([]);
+  });
+
+  it("still flags a root that no link reaches", () => {
+    let state = createEmptyPattern();
+    for (const type of ["Person", "Endpoint", "Person", "Endpoint"]) state = addVariableNode(state, type);
+    state = addEdge(state, "USES", "a", "b");
+    state = addEdge(state, "USES", "c", "d"); // c and d are a second, separate pattern
+    expect(unpinnedSecondaryRoots(state).map((n) => n.var)).toEqual(["c"]);
+    expect(isPatternRunnable(state)).toBe(false);
   });
 
   it("removing the connecting edge re-exposes the now-disconnected root as unpinned", () => {
