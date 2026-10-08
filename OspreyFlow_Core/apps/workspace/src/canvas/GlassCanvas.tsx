@@ -207,6 +207,9 @@ export interface GlassCanvasProps {
    * labelled by. Omitted, the Labels control is not drawn. */
   entityTypes?: readonly EntityTypeDef[];
   investigationId: string;
+  /** Where the Conduit is. `""` is this origin (the deployed image, nginx proxying `/v1`), never
+   * "no Conduit", so it is never tested for truth: the menu's counts, links among the view and
+   * adding files were all missing from the deployed Glass for that (8 October 2026). */
   apiBaseUrl: string;
   bearerToken: string;
   /** Node ids the active cross-filter excludes (`crossfilter/store.ts`) —
@@ -2022,7 +2025,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
 
     // ADR-098: the links among the given nodes in the view, or among all of it.
     async function linksAmongOnCanvas(nodeIds: readonly string[] | null): Promise<void> {
-      if (!apiBaseUrl || !bearerToken || !investigationId) return;
+      if (!bearerToken || !investigationId) return;
       const box = containerRef.current?.getBoundingClientRect();
       const [x, y] = box ? [box.width / 2, box.height / 2] : [0, 0];
       try {
@@ -2287,7 +2290,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // `null` — the menu shows `…` and the action stays available, since a preview that cannot be
     // fetched is a reason to say so, not a reason to block the expansion behind it.
     useEffect(() => {
-      if (!radialMenu || !apiBaseUrl || !bearerToken) return;
+      if (!radialMenu || !bearerToken) return;
       const nodeId = radialMenu.nodeId;
       if (!graph.hasNode(nodeId)) return;
       const node = graph.getNodeAttribute(nodeId, "data");
@@ -2494,7 +2497,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
 
       // ADR-094 step 3: a node that can hold content offers to add files it holds.
       const holds = edgeTypes.find((t) => t.name === "HOLDS");
-      if (apiBaseUrl && bearerToken && investigationId && holds?.from.includes(node.type)) {
+      if (bearerToken && investigationId && holds?.from.includes(node.type)) {
         items.push({
           id: "add-files-held",
           label: "Add files held by this…",
@@ -2553,7 +2556,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       y: number,
       noun: "emails" | "messages",
     ): Promise<void> {
-      if (!apiBaseUrl || !bearerToken || !investigationId) return;
+      if (!bearerToken || !investigationId) return;
       try {
         const result = await showEmailsAsDocuments(
           apiBaseUrl,
@@ -2918,8 +2921,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               hiddenLinkCount={hiddenEdges.size}
               onHideLink={hideSelectedLink}
               onShowHiddenLinks={() => setHiddenEdges(new Set())}
-              onAddFiles={apiBaseUrl && bearerToken && investigationId ? () => setAddingFiles({}) : undefined}
-              onLinksAmongAll={apiBaseUrl && bearerToken && investigationId ? () => void linksAmongOnCanvas(null) : undefined}
+              onAddFiles={bearerToken && investigationId ? () => setAddingFiles({}) : undefined}
+              onLinksAmongAll={bearerToken && investigationId ? () => void linksAmongOnCanvas(null) : undefined}
             />
           </div>
         </div>
@@ -3098,7 +3101,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         {/* ADR-097 step 2: the zoom cluster and the legend, after the view's own controls in Tab order. */}
         <ZoomControls onZoomIn={() => zoomBy("in")} onZoomOut={() => zoomBy("out")} onFit={fitToView} />
         <CanvasLegend types={legendTypes} />
-        {addingFiles && apiBaseUrl && bearerToken && investigationId && (
+        {addingFiles && bearerToken && investigationId && (
           <div style={{ position: "absolute", zIndex: 20, top: "var(--sp-40)", right: "var(--sp-8)" }}>
             <AddFiles
               apiBaseUrl={apiBaseUrl}

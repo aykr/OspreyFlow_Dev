@@ -197,6 +197,35 @@ test("backslash opens the radial menu as a keyboard-navigable list", async ({ pa
   registerCovered("CANVAS_ACTIONS", "backslash-open-menu");
 });
 
+// Seen on the owner's deployment, 8 October 2026: every entry read `(…)` for ever and no preview
+// was asked for, because the deployed image's address is `""` (this origin, through nginx) and
+// the canvas took an empty address for no Conduit. The harness's own address had never been empty.
+for (const [shape, query, origin] of [
+  ["the deployed same-origin address", "?api=same-origin", "http://localhost:5185/v1/"],
+  ["an explicit address", "", "http://keyboard-test.invalid/v1/"],
+] as const) {
+  test(`the menu shows each link type's count, asked of the Conduit at ${shape}`, async ({ page }) => {
+    const asked: string[] = [];
+    await page.route("**/v1/investigations/keyboard-fixture/expand/preview", async (route) => {
+      asked.push(route.request().url());
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ candidate_node_count: 500, candidate_edge_count: 0 }),
+      });
+    });
+    await page.goto(`/keyboard/harness.html${query}`);
+    const canvas = page.getByRole("application", { name: "Network canvas" });
+    await canvas.focus();
+    await page.keyboard.press("\\");
+
+    const counts = page.locator(".radial-menu__list[role='menu'] .radial-menu__count");
+    await expect(counts.first()).toHaveText(/^\s*\(\d+\)$/);
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked.every((url) => url.startsWith(origin))).toBe(true);
+  });
+}
+
 test("Enter expands the focused node — a real network call, not a stub", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
 

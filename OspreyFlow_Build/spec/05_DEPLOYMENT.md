@@ -393,6 +393,15 @@ deployment could not talk to it at all. **Both are now decided, differently.**
 and the delta WebSocket to `api:8000` on the internal network; the bundle is built with an empty
 base URL and issues relative paths only.
 
+**An empty base URL is this origin, never "no Conduit".** No Glass code tests the address for
+truth. Found 8 October 2026: the canvas did, so the deployed Glass never asked for the node menu's
+link counts and never offered links among the view or adding files, while every test, run with a
+non-empty address, passed; and the map attached the token to its own Conduit reads only under a
+non-empty address. Which of MapLibre's reads carry the token is decided by resolving the address
+against the page's origin and matching that origin's `/v1/` (`map/conduitRequest.ts`), so a tile
+server's URL never receives it. The keyboard harness runs the canvas in both shapes
+(`?api=same-origin`).
+
 What this replaces: `apps/workspace/src/App.tsx` resolved the address as
 `import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000"`, which Vite inlines during
 `docker build`. Every image therefore shipped `http://localhost:8000` baked into its JavaScript,

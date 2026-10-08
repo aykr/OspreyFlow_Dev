@@ -163,6 +163,7 @@ window.__KEYBOARD__ = {
 // `?fixture=same-as` is the link menu's fixture (ADR-080); every other fixture leaves `SAME_AS` out
 // of the schema, so the node menu's items — and the Tab counts the walkthroughs rely on — stay put.
 const wantsSameAs = new URLSearchParams(window.location.search).get("fixture") === "same-as";
+const sameOrigin = new URLSearchParams(window.location.search).get("api") === "same-origin";
 // `?fixture=link-style` is how links are drawn by basis (ADR-081): five pairs of people, each pair
 // joined by one link of a type that is drawn a different way.
 const wantsLinkStyle = new URLSearchParams(window.location.search).get("fixture") === "link-style";
@@ -359,7 +360,9 @@ createRoot(container).render(
       edgeTypes={SCHEMA.edge_types}
       entityTypes={SCHEMA.entity_types}
       investigationId="keyboard-fixture"
-      apiBaseUrl="http://keyboard-test.invalid"
+      // `?api=same-origin` is the shape the deployed image builds with (`VITE_API_BASE_URL=""`,
+      // nginx proxying `/v1`): an empty address meaning this origin, not a missing one.
+      apiBaseUrl={sameOrigin ? "" : "http://keyboard-test.invalid"}
       bearerToken="unused"
       onFocusChange={(nodeId) => {
         window.__KEYBOARD__!.focused = nodeId;

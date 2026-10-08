@@ -45,6 +45,7 @@ import type {
 import { SEQ_HEX } from "../color/tokens";
 import type { WorkingSetGraph } from "../workingset/store";
 import { BasemapUnavailableError, checkBasemapAvailable } from "./basemapAvailability";
+import { conduitRequest } from "./conduitRequest";
 import { registerAuthorisedPmtilesSource } from "./pmtilesAuth";
 import { resolveBundledStyle, resolvePmtilesSourceUrl } from "./style";
 
@@ -296,16 +297,12 @@ export function MapView({
       // proxy route (`site/api.ts`'s `siteImageUrl`), since that is the one
       // MapLibre-fetched resource this checkpoint puts behind auth. Inert
       // for the PMTiles basemap (fetched through the `pmtiles://` protocol
-      // handler, never this callback) and for any future tier 3/4 provider
-      // URL that doesn't happen to start with this deployment's own
-      // `apiBaseUrl`.
-      const transformRequest =
-        apiBaseUrl && bearerToken
-          ? (url: string): RequestParameters | undefined =>
-              url.startsWith(apiBaseUrl)
-                ? { url, headers: { Authorization: `Bearer ${bearerToken}` } }
-                : undefined
-          : undefined;
+      // handler, never this callback) and for any tier 3/4 provider's URL,
+      // which is not under the Conduit's own `/v1/` (`conduitRequest.ts`).
+      const transformRequest = bearerToken
+        ? (url: string): RequestParameters | undefined =>
+            conduitRequest(url, apiBaseUrl ?? "", bearerToken, window.location.origin)
+        : undefined;
 
       const layer = bindMaplibreLayer(sigma as unknown as Sigma, {
         mapOptions: { style, attributionControl: false, transformRequest },
