@@ -32,6 +32,7 @@ from schemas.domain import (
     Subgraph,
     TxId,
 )
+from schemas.explore import RankedNodes, TypeCounts
 
 
 class SubgraphTooLarge(Exception):
@@ -290,6 +291,26 @@ class GraphPort(Protocol):
     async def neighbourhood_stats(
         self, node_id: NodeId, principal: Principal
     ) -> NeighbourhoodStats: ...
+
+    async def type_counts(self, principal: Principal) -> TypeCounts:
+        """`06_DECISIONS.md` ADR-100: how many nodes of each entity type and links of each link
+        type `principal` can see. Counted in the store with the access step (rule 3): a hidden or
+        other-dataset node is in no count, and a link counts only when both its ends can be seen."""
+        ...
+
+    async def most_connected(
+        self,
+        principal: Principal,
+        *,
+        entity_type: str | None = None,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> RankedNodes:
+        """`06_DECISIONS.md` ADR-100: nodes by degree, most first, ties by id; of one entity type
+        when named. A degree counts only links `principal` can see to nodes it can see, so a
+        ranking is the same as in a graph where nothing hidden existed (rule 3). `total` is how
+        many nodes are ranked; a page past the end is empty, never a slice that looks whole."""
+        ...
 
     async def apply_schema(self, schema: OntologySchema) -> SchemaReport: ...
     async def revert_schema(self, to_version: int) -> SchemaReport: ...

@@ -749,3 +749,45 @@ class MatchBuilder:
         steps.append(".by(elementMap())")
         steps.append(f".dedup().limit({self.pattern.limit})")
         return "".join(steps)
+
+
+@dataclass(frozen=True)
+class MostConnectedBuilder:
+    """`GraphPort.most_connected` (ADR-100). The degree is `NeighbourhoodStatsBuilder`'s: links the
+    principal can see, to nodes it can see. Ordered in the store, then paged, so the page is the
+    principal's own ranking, not a ranking of everything filtered afterwards."""
+
+    entity_type: str | None
+    limit: int
+    offset: int
+
+    def _base(self, access: AccessFilter, principal: Principal) -> str:
+        has_access = access.gremlin_has_step(principal)
+        label = (
+            ""
+            if self.entity_type is None
+            else f".hasLabel({groovy_string_literal(physical_type_name(self.entity_type))})"
+        )
+        return f"g.V(){label}.{has_access}"
+
+    def render_total_gremlin(self, access: AccessFilter, principal: Principal) -> str:
+        return f"{self._base(access, principal)}.count()"
+
+    def render_page_gremlin(self, access: AccessFilter, principal: Principal) -> str:
+        has_access = access.gremlin_has_step(principal)
+        degree = f"bothE().{has_access}.where(otherV().{has_access}).count()"
+        return (
+            f'{self._base(access, principal)}.order().by({degree},desc).by("id")'
+            f".range({self.offset},{self.offset + self.limit})"
+            f'.project("node","degree").by(elementMap()).by({degree})'
+        )
+
+
+def render_type_counts_gremlin(access: AccessFilter, principal: Principal) -> tuple[str, str]:
+    """`GraphPort.type_counts` (ADR-100): nodes, then links with both ends visible."""
+    has_access = access.gremlin_has_step(principal)
+    return (
+        f"g.V().{has_access}.groupCount().by(label())",
+        f"g.E().{has_access}.where(outV().{has_access}).where(inV().{has_access})"
+        ".groupCount().by(label())",
+    )

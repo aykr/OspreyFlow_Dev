@@ -2984,3 +2984,133 @@ async def test_rewriting_one_node_with_new_handling_leaves_the_others_listed(
         changed = people[0].model_copy(update={"handling": handling})
         await _write(adapter, [changed], [])
         assert await _listed(adapter) == {p.id for p in people}
+
+
+# --- ADR-100: what the Explore panel reads ----------------------------------
+#
+# Counts and rankings an analyst starts from. Each is checked twice: right on its own, and equal to
+# itself once hidden and other-dataset nodes and links are added beside it (rule 3: a ranking or a
+# degree that moved because of them would disclose them).
+
+#: OFFICIAL, so the SECRET contacts below are hidden from it by clearance, not only by dataset.
+EXPLORER = Principal(id="analyst-explore", clearance="OFFICIAL", org_unit="unit-1",
+                     datasets=["fixture"])
+EXPLORER_ENRON = EXPLORER.model_copy(update={"datasets": ["enron"]})
+
+
+async def _explore_world(adapter: GraphPort) -> dict[str, str]:
+    """A hub with three visible contacts, a second with two, and a lone Endpoint, all in fixture."""
+    fixture = ["fixture"]
+    nodes = {
+        name: _node(node_type, classification="OFFICIAL", datasets=fixture)
+        for name, node_type in [
+            ("hub", "Person"),
+            ("second", "Person"),
+            ("c1", "Person"),
+            ("c2", "Person"),
+            ("c3", "Person"),
+            ("phone", "Endpoint"),
+        ]
+    }
+    await _write(adapter, list(nodes.values()), [])
+    links = [
+        _edge("ASSOCIATE_OF", nodes["hub"].id, nodes[c].id, classification="OFFICIAL",
+              datasets=fixture)
+        for c in ("c1", "c2", "c3")
+    ] + [
+        _edge("ASSOCIATE_OF", nodes["second"].id, nodes[c].id, classification="OFFICIAL",
+              datasets=fixture)
+        for c in ("c1", "c2")
+    ]
+    await _write(adapter, [], links)
+    return {name: node.id for name, node in nodes.items()}
+
+
+async def _add_what_must_not_count(adapter: GraphPort, ids: dict[str, str]) -> None:
+    """Around `second`: SECRET contacts, contacts in another dataset, a link of another dataset to
+    a node the case sees, and a reverted contact. Enough of them to lift `second` above `hub` if
+    any were counted."""
+    secret = [_node("Person", classification="SECRET", datasets=["fixture"]) for _ in range(3)]
+    elsewhere = [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in range(3)]
+    reverted = _node("Person", classification="OFFICIAL", datasets=["fixture"])
+    await _write(adapter, [*secret, *elsewhere, reverted], [])
+    await _write(
+        adapter,
+        [],
+        [
+            *(
+                _edge("ASSOCIATE_OF", ids["second"], n.id, classification="OFFICIAL",
+                      datasets=["fixture"])
+                for n in secret
+            ),
+            *(
+                _edge("ASSOCIATE_OF", ids["second"], n.id, classification="OFFICIAL",
+                      datasets=["enron"])
+                for n in elsewhere
+            ),
+            _edge("ASSOCIATE_OF", ids["second"], ids["c3"], classification="OFFICIAL",
+                  datasets=["enron"]),
+            _edge("USES", ids["second"], ids["phone"], classification="SECRET",
+                  datasets=["fixture"]),
+            _edge("ASSOCIATE_OF", ids["second"], reverted.id, classification="OFFICIAL",
+                  datasets=["fixture"]),
+        ],
+    )
+    tx = await adapter.begin_transaction()
+    await adapter.revert_elements([reverted.id], [], tx)
+    await adapter.commit_transaction(tx)
+
+
+async def test_type_counts_are_of_what_the_case_can_see(factory: GraphAdapterFactory) -> None:
+    async with factory.context() as adapter:
+        ids = await _explore_world(adapter)
+        before = await adapter.type_counts(EXPLORER)
+        assert before.nodes == {"Person": 5, "Endpoint": 1}
+        assert before.edges == {"ASSOCIATE_OF": 5}
+        await _add_what_must_not_count(adapter, ids)
+        assert await adapter.type_counts(EXPLORER) == before
+        # The filter is real: the other dataset's case counts its own.
+        assert (await adapter.type_counts(EXPLORER_ENRON)).nodes == {"Person": 3}
+        assert await adapter.type_counts(IN_NOTHING) == type(before)()
+
+
+async def test_most_connected_ranks_by_visible_links_and_says_of_how_many(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        ids = await _explore_world(adapter)
+        first = await adapter.most_connected(EXPLORER, limit=2)
+        assert [(r.node.id, r.degree) for r in first.nodes] == [(ids["hub"], 3), (ids["second"], 2)]
+        assert first.total == 6 and first.offset == 0
+        await _add_what_must_not_count(adapter, ids)
+        again = await adapter.most_connected(EXPLORER, limit=2)
+        assert [(r.node.id, r.degree) for r in again.nodes] == [(ids["hub"], 3), (ids["second"], 2)]
+        assert again.total == 6
+
+
+async def test_most_connected_pages_without_gaps_or_repeats(factory: GraphAdapterFactory) -> None:
+    async with factory.context() as adapter:
+        ids = await _explore_world(adapter)
+        pages = [await adapter.most_connected(EXPLORER, limit=2, offset=o) for o in (0, 2, 4, 6)]
+        seen = [r.node.id for p in pages for r in p.nodes]
+        assert sorted(seen) == sorted(ids.values())
+        assert [len(p.nodes) for p in pages] == [2, 2, 2, 0]
+        degrees = [r.degree for p in pages for r in p.nodes]
+        assert degrees == sorted(degrees, reverse=True)
+        # Ties are in id order, so a page boundary is stable.
+        tied = [r.node.id for p in pages for r in p.nodes if r.degree == 2]
+        assert tied == sorted(tied)
+
+
+async def test_most_connected_of_one_type_counts_only_that_type(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        ids = await _explore_world(adapter)
+        await _add_what_must_not_count(adapter, ids)
+        people = await adapter.most_connected(EXPLORER, entity_type="Person", limit=10)
+        assert people.total == 5 and len(people.nodes) == 5
+        assert {r.node.type for r in people.nodes} == {"Person"}
+        phones = await adapter.most_connected(EXPLORER, entity_type="Endpoint", limit=10)
+        assert [(r.node.id, r.degree) for r in phones.nodes] == [(ids["phone"], 0)]
+        assert phones.total == 1

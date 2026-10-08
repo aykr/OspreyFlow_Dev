@@ -10051,3 +10051,12 @@ Status: accepted 7 October 2026 (mine, within the owner's "Upgrade first, then r
 3. **The config volume takes the new release's defaults**: of the eight files a 25.5.1 store holds, seven were its untouched defaults and are replaced with 26.10.1's; `server-users.jsonl` (the root user) is kept, as ArcadeDB's upgrade notes say.
 4. **`REBUILD INDEX *` after the move** repaired the owner's indexes: every type agrees with a scan. 26.10.1 also discarded the record counts 25.5.1 cached, which it says could be wrong.
 5. **A store moved from 25.5.1 is checked before its indexes are rebuilt.** 25.5.1's broken unique indexes let duplicate ids in (on the owner's store, 22 links a replayed commit wrote twice); `REBUILD INDEX *` then drops a unique index it cannot build again, and the Conduit cannot start. The order is: `CHECK DATABASE`; remove duplicates by id (never by record id alone: the two copies can share a stored chunk, and deleting one breaks both, as it did here) or with `CHECK DATABASE FIX`; `CHECK DATABASE` to 0 errors; then `REBUILD INDEX *`.
+
+### ADR-100, Amendment 1 (7 October 2026) — stage 1: the store's two reads
+
+Status: accepted 7 October 2026 (mine, within the owner's "carry on with ADR-100"; recorded so it can be overruled). ADR-100 is unchanged except where this says so.
+
+1. **Two `GraphPort` reads**, the panel's sources for decisions 2 to 4: `type_counts(principal)` (nodes per entity type, links per link type) and `most_connected(principal, *, entity_type=None, limit=10, offset=0)` (nodes by degree, most first, ties by id, with `total` and `offset`). Types in `schemas/explore.py`.
+2. **Every figure is the principal's own, in the traversal** (rule 3): the access step on each node, each link and each link's other end. A link counts, in a type count and in a degree, only when both its ends can be seen; reverted and superseded elements and other datasets count nowhere. The conformance cases check each twice: right on its own, and unchanged once hidden, other-dataset and reverted neighbours are added beside it.
+3. **A ranking says of how many** (rule 2): `total` is the number of nodes ranked, and a page past the end is empty, never a short page that looks whole.
+4. **Computed live for now.** ADR-100's cost constraint (rankings kept per dataset and handling class, recomputed after a load) is not built: whether a live ranking is fast enough is measured on the reloaded Enron case first, and the store kept only if it is not.

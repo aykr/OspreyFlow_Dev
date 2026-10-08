@@ -54,6 +54,7 @@ from schemas.domain import (
     TxId,
     WeightComponents,
 )
+from schemas.explore import RankedNode, RankedNodes, TypeCounts
 from schemas.merge import merge_datasets, merge_interval, merge_provenance
 
 from .access_filter import AccessFilter
@@ -63,12 +64,14 @@ from .builders import (
     GetNodeBuilder,
     ListNodesBuilder,
     MatchBuilder,
+    MostConnectedBuilder,
     NeighbourhoodStatsBuilder,
     PathBuilder,
     SearchNodesBuilder,
     SuggestLocationsBuilder,
     SuggestNodesBuilder,
     render_edges_among_gremlin,
+    render_type_counts_gremlin,
     suggestion_scope,
 )
 from .bulk import BulkEdgeLoader, BulkTransport, GremlinBulkTransport
@@ -721,6 +724,33 @@ class GraphArcadeDBAdapter:
             degree_by_type=degree_by_type,
         )
 
+    async def type_counts(self, principal: Principal) -> TypeCounts:
+        nodes_query, edges_query = render_type_counts_gremlin(self._access, principal)
+        return TypeCounts(
+            nodes=_logical_counts(await self._client.gremlin(nodes_query)),
+            edges=_logical_counts(await self._client.gremlin(edges_query)),
+        )
+
+    async def most_connected(
+        self,
+        principal: Principal,
+        *,
+        entity_type: str | None = None,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> RankedNodes:
+        builder = MostConnectedBuilder(entity_type, limit, offset)
+        totals = await self._client.gremlin(builder.render_total_gremlin(self._access, principal))
+        rows = await self._client.gremlin(builder.render_page_gremlin(self._access, principal))
+        return RankedNodes(
+            nodes=[
+                RankedNode(node=node_from_element_map(r["node"]), degree=int(r["degree"]))
+                for r in rows
+            ],
+            total=int(totals[0].get("result") or 0),
+            offset=offset,
+        )
+
     # --- schema ------------------------------------------------------------
 
     async def apply_schema(self, schema: OntologySchema) -> SchemaReport:
@@ -1041,3 +1071,13 @@ class GraphArcadeDBAdapter:
             session_id=tx,
         )
         return replacement_edge_id
+
+
+def _logical_counts(results: list[Any]) -> dict[str, int]:
+    """A `groupCount().by(label())` by logical type name. Two storage labels of one type (an alias,
+    ADR-090 Amendment 1) are one count."""
+    counts: dict[str, int] = {}
+    for label, count in (results[0] if results else {}).items():
+        name = logical_type_name(label)
+        counts[name] = counts.get(name, 0) + int(count)
+    return counts
